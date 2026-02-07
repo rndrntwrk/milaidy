@@ -7,7 +7,7 @@ const defaultRuntime = { error: console.error, exit: process.exit };
 
 async function startAction() {
   await runCommandWithRuntime(defaultRuntime, async () => {
-    const { startEliza } = await import("../../eliza.js");
+    const { startEliza } = await import("../../runtime/eliza.js");
     await startEliza();
   });
 }
