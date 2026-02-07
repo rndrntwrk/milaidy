@@ -13,6 +13,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "milaidy/plugin-sdk": path.join(repoRoot, "src", "plugin-sdk", "index.ts"),
+      // @elizaos/skills has a broken package.json entry; the code handles the
+      // missing module gracefully (try/catch), so redirect to an empty stub.
+      "@elizaos/skills": path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
     },
   },
   test: {
