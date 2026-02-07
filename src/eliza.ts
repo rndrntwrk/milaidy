@@ -109,22 +109,22 @@ const CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-shell",
   "@elizaos/plugin-personality",
   "@elizaos/plugin-experience",
-  // "@elizaos/plugin-form",            // DISABLED: published without dist/ — npm package is empty
-  // "@elizaos/plugin-browser",         // DISABLED: stale workspace:* dep on @elizaos/plugin-cli causes missing export
+  "@elizaos/plugin-form",
+  "@elizaos/plugin-browser",
   "@elizaos/plugin-cli",
-  // "@elizaos/plugin-code",            // DISABLED: spec name mismatch (coderStatusProvider vs CODER_STATUS) in published package
+  "@elizaos/plugin-code",
   "@elizaos/plugin-computeruse",
   "@elizaos/plugin-edge-tts",
-  // "@elizaos/plugin-goals",           // DISABLED: actions.json has placeholder data — missing CANCEL_GOAL, CREATE_GOAL, etc.
+  "@elizaos/plugin-goals",
   "@elizaos/plugin-knowledge",
   "@elizaos/plugin-mcp",
   "@elizaos/plugin-pdf",
-  // "@elizaos/plugin-scheduling",      // DISABLED: published without dist/ — npm package is empty
+  "@elizaos/plugin-scheduling",
   "@elizaos/plugin-scratchpad",
   "@elizaos/plugin-secrets-manager",
   "@elizaos/plugin-todo",
   "@elizaos/plugin-trust",
-  // "@elizaos/plugin-vision",          // DISABLED: @tensorflow/tfjs-node native addon fails to build on macOS
+  "@elizaos/plugin-vision",
   "@elizaos/plugin-cron",
 ];
 
