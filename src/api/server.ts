@@ -2102,6 +2102,63 @@ async function handleRequest(
     plugin.validationErrors = updated.errors;
     plugin.validationWarnings = updated.warnings;
 
+    // Update config.plugins.allow for hot-reload
+    if (body.enabled !== undefined) {
+      const packageName = `@elizaos/plugin-${pluginId}`;
+
+      // Initialize plugins.allow if it doesn't exist
+      if (!state.config.plugins) {
+        state.config.plugins = {};
+      }
+      if (!state.config.plugins.allow) {
+        state.config.plugins.allow = [];
+      }
+
+      const allowList = state.config.plugins.allow as string[];
+      const index = allowList.indexOf(packageName);
+
+      if (body.enabled && index === -1) {
+        // Add plugin to allow list
+        allowList.push(packageName);
+        addLog("info", `Enabled plugin: ${packageName}`, "milaidy-api");
+      } else if (!body.enabled && index !== -1) {
+        // Remove plugin from allow list
+        allowList.splice(index, 1);
+        addLog("info", `Disabled plugin: ${packageName}`, "milaidy-api");
+      }
+
+      // Save updated config
+      try {
+        saveMilaidyConfig(state.config);
+      } catch (err) {
+        logger.warn(
+          `[milaidy-api] Failed to save config: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+
+      // Trigger runtime restart if available
+      if (callCtx.onRestart) {
+        addLog("info", "Triggering runtime restart...", "milaidy-api");
+        callCtx
+          .onRestart()
+          .then((newRuntime) => {
+            if (newRuntime) {
+              updateRuntime(newRuntime);
+              addLog("info", "Runtime restarted successfully", "milaidy-api");
+            } else {
+              addLog("warn", "Runtime restart returned null", "milaidy-api");
+            }
+          })
+          .catch((err) => {
+            addLog(
+              "error",
+              `Runtime restart failed: ${err instanceof Error ? err.message : err}`,
+              "milaidy-api",
+            );
+          });
+      }
+    }
+
     json(res, { ok: true, plugin });
     return;
   }

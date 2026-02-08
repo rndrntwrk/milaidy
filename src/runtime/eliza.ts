@@ -249,6 +249,16 @@ function extractPlugin(mod: PluginModuleShape): Plugin | null {
  */
 /** @internal Exported for testing. */
 export function collectPluginNames(config: MilaidyConfig): Set<string> {
+  // Check for explicit allow list first
+  const allowList = config.plugins?.allow;
+  const hasExplicitAllowList = allowList && allowList.length > 0;
+
+  // If there's an explicit allow list, respect it and skip auto-detection
+  if (hasExplicitAllowList) {
+    return new Set<string>(allowList);
+  }
+
+  // Otherwise, proceed with auto-detection
   const pluginsToLoad = new Set<string>(CORE_PLUGINS);
 
   // Channel plugins — load when channel has config entries
@@ -1340,7 +1350,7 @@ export async function startEliza(
   // Workspace skills directory (highest precedence for overrides)
   const workspaceSkillsDir = workspaceDir ? `${workspaceDir}/skills` : null;
 
-  const runtime = new AgentRuntime({
+  let runtime = new AgentRuntime({
     character,
     plugins: [milaidyPlugin, ...otherPlugins.map((p) => p.plugin)],
     ...(runtimeLogLevel ? { logLevel: runtimeLogLevel } : {}),
@@ -1465,6 +1475,47 @@ export async function startEliza(
     const { port: actualApiPort } = await startApiServer({
       port: apiPort,
       runtime,
+      onRestart: async () => {
+        logger.info("[milaidy] Hot-reload: Restarting runtime...");
+        try {
+          // Reload config from disk (updated by API)
+          const freshConfig = loadMilaidyConfig();
+
+          // Resolve plugins using same function as startup
+          const resolvedPlugins = await resolvePlugins(freshConfig);
+
+          // Recreate Milaidy plugin with fresh workspace
+          const freshMilaidyPlugin = createMilaidyPlugin({
+            workspaceDir:
+              freshConfig.agents?.defaults?.workspace ?? workspaceDir,
+            bootstrapMaxChars:
+              freshConfig.agents?.defaults?.bootstrapMaxChars,
+            agentId:
+              runtime.character.name?.toLowerCase().replace(/\s+/g, "-") ??
+              "main",
+          });
+
+          // Create new runtime with updated plugins
+          const newRuntime = new AgentRuntime({
+            character: runtime.character,
+            plugins: [
+              freshMilaidyPlugin,
+              ...resolvedPlugins.map((p) => p.plugin),
+            ],
+            ...(runtimeLogLevel ? { logLevel: runtimeLogLevel } : {}),
+            enableAutonomy: true,
+            settings: runtime.settings,
+          });
+
+          await newRuntime.initialize();
+          runtime = newRuntime;
+          logger.info("[milaidy] Hot-reload: Runtime restarted successfully");
+          return newRuntime;
+        } catch (err) {
+          logger.error(`[milaidy] Hot-reload failed: ${formatError(err)}`);
+          return null;
+        }
+      },
     });
     logger.info(
       `[milaidy] API server listening on http://localhost:${actualApiPort}`,
