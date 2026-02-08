@@ -10,7 +10,12 @@ import { CloudRuntimeProxy } from "./cloud-proxy.js";
 import { BackupScheduler } from "./backup.js";
 import { ConnectionMonitor } from "./reconnect.js";
 
-export type CloudConnectionStatus = "disconnected" | "connecting" | "connected" | "reconnecting" | "error";
+export type CloudConnectionStatus =
+  | "disconnected"
+  | "connecting"
+  | "connected"
+  | "reconnecting"
+  | "error";
 
 export interface CloudManagerCallbacks {
   onStatusChange?: (status: CloudConnectionStatus) => void;
@@ -32,7 +37,10 @@ export class CloudManager {
   init(): void {
     const rawUrl = this.cloudConfig.baseUrl ?? "https://www.elizacloud.ai";
     const apiKey = this.cloudConfig.apiKey;
-    if (!apiKey) throw new Error("Cloud API key is not configured. Run cloud login first.");
+    if (!apiKey)
+      throw new Error(
+        "Cloud API key is not configured. Run cloud login first.",
+      );
 
     const siteUrl = rawUrl.replace(/\/api\/v1\/?$/, "").replace(/\/+$/, "");
     this.client = new ElizaCloudClient(siteUrl, apiKey);
@@ -41,23 +49,26 @@ export class CloudManager {
 
   async connect(agentId: string): Promise<CloudRuntimeProxy> {
     if (!this.client) this.init();
+    if (!this.client) throw new Error("Cloud client failed to initialise");
 
     this.setStatus("connecting");
     this.activeAgentId = agentId;
 
-    await this.client!.provision(agentId);
-    const agent = await this.client!.getAgent(agentId);
+    await this.client.provision(agentId);
+    const agent = await this.client.getAgent(agentId);
 
-    this.proxy = new CloudRuntimeProxy(this.client!, agentId, agent.agentName);
+    this.proxy = new CloudRuntimeProxy(this.client, agentId, agent.agentName);
 
     this.backupScheduler = new BackupScheduler(
-      this.client!, agentId,
+      this.client,
+      agentId,
       this.cloudConfig.backup?.autoBackupIntervalMs ?? 60_000,
     );
     this.backupScheduler.start();
 
     this.connectionMonitor = new ConnectionMonitor(
-      this.client!, agentId,
+      this.client,
+      agentId,
       {
         onDisconnect: () => this.setStatus("reconnecting"),
         onReconnect: () => this.setStatus("connected"),
@@ -72,7 +83,10 @@ export class CloudManager {
     this.connectionMonitor.start();
 
     this.setStatus("connected");
-    logger.info("[cloud-manager] Connected to cloud agent", { agentId, agentName: agent.agentName });
+    logger.info("[cloud-manager] Connected to cloud agent", {
+      agentId,
+      agentName: agent.agentName,
+    });
     return this.proxy;
   }
 
@@ -91,11 +105,21 @@ export class CloudManager {
     this.setStatus("disconnected");
   }
 
-  getProxy(): CloudRuntimeProxy | null { return this.proxy; }
-  getClient(): ElizaCloudClient | null { return this.client; }
-  getActiveAgentId(): string | null { return this.activeAgentId; }
-  getStatus(): CloudConnectionStatus { return this.status; }
-  isEnabled(): boolean { return Boolean(this.cloudConfig.enabled && this.cloudConfig.apiKey); }
+  getProxy(): CloudRuntimeProxy | null {
+    return this.proxy;
+  }
+  getClient(): ElizaCloudClient | null {
+    return this.client;
+  }
+  getActiveAgentId(): string | null {
+    return this.activeAgentId;
+  }
+  getStatus(): CloudConnectionStatus {
+    return this.status;
+  }
+  isEnabled(): boolean {
+    return Boolean(this.cloudConfig.enabled && this.cloudConfig.apiKey);
+  }
 
   private setStatus(status: CloudConnectionStatus): void {
     if (this.status === status) return;

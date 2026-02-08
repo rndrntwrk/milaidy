@@ -81,7 +81,11 @@ export interface AgentExportPayload {
   memories: Memory[];
   components: Component[];
   rooms: Room[];
-  participants: Array<{ entityId: string; roomId: string; userState: string | null }>;
+  participants: Array<{
+    entityId: string;
+    roomId: string;
+    userState: string | null;
+  }>;
   relationships: Relationship[];
   worlds: World[];
   tasks: Task[];
@@ -119,7 +123,9 @@ export interface ExportSizeEstimate {
 // ---------------------------------------------------------------------------
 
 // Records that must have an id field for import to work
-const IdRecord = z.record(z.string(), z.unknown()).and(z.object({ id: z.string() }));
+const IdRecord = z
+  .record(z.string(), z.unknown())
+  .and(z.object({ id: z.string() }));
 const IdRecordArray = z.array(IdRecord);
 // Logs don't need IDs (they're created fresh on import)
 const LooseRecordArray = z.array(z.record(z.string(), z.unknown()));
@@ -133,11 +139,13 @@ const PayloadSchema = z.object({
   memories: IdRecordArray,
   components: IdRecordArray,
   rooms: IdRecordArray,
-  participants: z.array(z.object({
-    entityId: z.string(),
-    roomId: z.string(),
-    userState: z.string().nullable(),
-  })),
+  participants: z.array(
+    z.object({
+      entityId: z.string(),
+      roomId: z.string(),
+      userState: z.string().nullable(),
+    }),
+  ),
   relationships: IdRecordArray,
   worlds: IdRecordArray,
   tasks: IdRecordArray,
@@ -155,7 +163,13 @@ function deriveKey(password: string, salt: Buffer, iterations: number): Buffer {
 function encrypt(
   plaintext: Buffer,
   password: string,
-): { salt: Buffer; iv: Buffer; tag: Buffer; ciphertext: Buffer; iterations: number } {
+): {
+  salt: Buffer;
+  iv: Buffer;
+  tag: Buffer;
+  ciphertext: Buffer;
+  iterations: number;
+} {
   const salt = crypto.randomBytes(SALT_LEN);
   const iv = crypto.randomBytes(IV_LEN);
   const key = deriveKey(password, salt, PBKDF2_ITERATIONS);
@@ -180,7 +194,10 @@ function decrypt(
   const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
   decipher.setAuthTag(tag);
 
-  const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  const plaintext = Buffer.concat([
+    decipher.update(ciphertext),
+    decipher.final(),
+  ]);
   return plaintext;
 }
 
@@ -216,7 +233,9 @@ function unpackFile(fileBuffer: Buffer): {
   iterations: number;
 } {
   if (fileBuffer.length < HEADER_SIZE) {
-    throw new AgentExportError("File is too small to be a valid .eliza-agent export.");
+    throw new AgentExportError(
+      "File is too small to be a valid .eliza-agent export.",
+    );
   }
 
   const magic = fileBuffer.subarray(0, MAGIC_BYTES.length);
@@ -287,9 +306,7 @@ async function extractAgentData(
 
   // 2. Worlds owned by this agent
   const allWorlds = await db.getAllWorlds();
-  const agentWorlds = allWorlds.filter(
-    (w) => w.agentId === agentId,
-  );
+  const agentWorlds = allWorlds.filter((w) => w.agentId === agentId);
   logger.info(`[agent-export] Found ${agentWorlds.length} worlds`);
 
   // 3. Rooms — gather from worlds and from participant list
@@ -345,7 +362,9 @@ async function extractAgentData(
   }
 
   const entities = Array.from(entityMap.values());
-  logger.info(`[agent-export] Found ${entities.length} entities, ${participantRecords.length} participant records`);
+  logger.info(
+    `[agent-export] Found ${entities.length} entities, ${participantRecords.length} participant records`,
+  );
 
   // 5. Components for all entities (deduplicated by ID)
   const componentIds = new Set<string>();
@@ -361,7 +380,8 @@ async function extractAgentData(
     for (const c of await db.getComponents(entity.id)) addComponent(c);
     for (const world of agentWorlds) {
       if (!world.id) continue;
-      for (const c of await db.getComponents(entity.id, world.id)) addComponent(c);
+      for (const c of await db.getComponents(entity.id, world.id))
+        addComponent(c);
     }
   }
   logger.info(`[agent-export] Found ${allComponents.length} components`);
@@ -444,7 +464,9 @@ async function extractAgentData(
 // ID remapping for import
 // ---------------------------------------------------------------------------
 
-function createIdRemapper(fixed?: Map<string, string>): (oldId: string) => string {
+function createIdRemapper(
+  fixed?: Map<string, string>,
+): (oldId: string) => string {
   const map = new Map<string, string>(fixed);
   return (oldId: string): string => {
     if (!oldId) return oldId;
@@ -466,9 +488,13 @@ async function restoreAgentData(
 ): Promise<ImportResult> {
   const db = runtime.adapter;
   const newAgentId = crypto.randomUUID() as UUID;
-  const remap = createIdRemapper(new Map([[payload.sourceAgentId, newAgentId]]));
+  const remap = createIdRemapper(
+    new Map([[payload.sourceAgentId, newAgentId]]),
+  );
 
-  logger.info(`[agent-import] Importing agent "${payload.agent.name}" as ${newAgentId}`);
+  logger.info(
+    `[agent-import] Importing agent "${payload.agent.name}" as ${newAgentId}`,
+  );
 
   // 1. Create agent
   const agentData = { ...payload.agent } as Partial<Agent>;
@@ -488,7 +514,7 @@ async function restoreAgentData(
   for (const world of payload.worlds) {
     const newWorld: World = {
       ...world,
-      id: remap(world.id!) as UUID,
+      id: remap(world.id ?? "") as UUID,
       agentId: newAgentId as UUID,
     };
     await db.createWorld(newWorld);
@@ -502,9 +528,9 @@ async function restoreAgentData(
   for (const room of payload.rooms) {
     const newRoom: Room = {
       ...room,
-      id: remap(room.id!) as UUID,
+      id: remap(room.id ?? "") as UUID,
       agentId: newAgentId as UUID,
-      worldId: room.worldId ? remap(room.worldId) as UUID : undefined,
+      worldId: room.worldId ? (remap(room.worldId) as UUID) : undefined,
     };
     roomBatch.push(newRoom);
   }
@@ -520,7 +546,7 @@ async function restoreAgentData(
   for (const entity of payload.entities) {
     const newEntity: Entity = {
       ...entity,
-      id: remap(entity.id!) as UUID,
+      id: remap(entity.id ?? "") as UUID,
       agentId: newAgentId as UUID,
       // Strip components — we'll recreate them separately
       components: undefined,
@@ -551,13 +577,13 @@ async function restoreAgentData(
   for (const comp of payload.components) {
     const newComp: Component = {
       ...comp,
-      id: remap(comp.id!) as UUID,
-      entityId: comp.entityId ? remap(comp.entityId) as UUID : undefined,
+      id: remap(comp.id ?? "") as UUID,
+      entityId: comp.entityId ? (remap(comp.entityId) as UUID) : undefined,
       agentId: comp.agentId ? (newAgentId as UUID) : undefined,
-      roomId: comp.roomId ? remap(comp.roomId) as UUID : undefined,
-      worldId: comp.worldId ? remap(comp.worldId) as UUID : undefined,
+      roomId: comp.roomId ? (remap(comp.roomId) as UUID) : undefined,
+      worldId: comp.worldId ? (remap(comp.worldId) as UUID) : undefined,
       sourceEntityId: comp.sourceEntityId
-        ? remap(comp.sourceEntityId) as UUID
+        ? (remap(comp.sourceEntityId) as UUID)
         : undefined,
     };
     await db.createComponent(newComp);
@@ -571,11 +597,11 @@ async function restoreAgentData(
     const tableName = resolveMemoryTableName(mem);
     const newMem: Memory = {
       ...mem,
-      id: remap(mem.id!) as UUID,
+      id: remap(mem.id ?? "") as UUID,
       agentId: newAgentId as UUID,
-      entityId: mem.entityId ? remap(mem.entityId) as UUID : undefined,
-      roomId: mem.roomId ? remap(mem.roomId) as UUID : undefined,
-      worldId: mem.worldId ? remap(mem.worldId) as UUID : undefined,
+      entityId: mem.entityId ? (remap(mem.entityId) as UUID) : undefined,
+      roomId: mem.roomId ? (remap(mem.roomId) as UUID) : undefined,
+      worldId: mem.worldId ? (remap(mem.worldId) as UUID) : undefined,
       // Embeddings are excluded — they will be regenerated
       embedding: undefined,
     };
@@ -588,8 +614,8 @@ async function restoreAgentData(
   let relationshipsImported = 0;
   for (const rel of payload.relationships) {
     await db.createRelationship({
-      sourceEntityId: remap(rel.sourceEntityId!) as UUID,
-      targetEntityId: remap(rel.targetEntityId!) as UUID,
+      sourceEntityId: remap(rel.sourceEntityId ?? "") as UUID,
+      targetEntityId: remap(rel.targetEntityId ?? "") as UUID,
       tags: rel.tags,
       metadata: rel.metadata,
     });
@@ -605,11 +631,11 @@ async function restoreAgentData(
   for (const task of payload.tasks) {
     const newTask = {
       ...task,
-      id: remap(task.id!) as UUID,
+      id: remap(task.id ?? "") as UUID,
       agentId: newAgentId as UUID,
-      roomId: task.roomId ? remap(task.roomId) as UUID : undefined,
-      worldId: task.worldId ? remap(task.worldId) as UUID : undefined,
-      entityId: task.entityId ? remap(task.entityId) as UUID : undefined,
+      roomId: task.roomId ? (remap(task.roomId) as UUID) : undefined,
+      worldId: task.worldId ? (remap(task.worldId) as UUID) : undefined,
+      entityId: task.entityId ? (remap(task.entityId) as UUID) : undefined,
     } as Task;
     await db.createTask(newTask);
     tasksImported++;
@@ -621,8 +647,12 @@ async function restoreAgentData(
   for (const logEntry of payload.logs) {
     await db.log({
       body: logEntry.body,
-      entityId: logEntry.entityId ? remap(logEntry.entityId) as UUID : logEntry.entityId,
-      roomId: logEntry.roomId ? remap(logEntry.roomId) as UUID : (newAgentId as UUID),
+      entityId: logEntry.entityId
+        ? (remap(logEntry.entityId) as UUID)
+        : logEntry.entityId,
+      roomId: logEntry.roomId
+        ? (remap(logEntry.roomId) as UUID)
+        : (newAgentId as UUID),
       type: logEntry.type ?? "action",
     });
     logsImported++;
@@ -707,9 +737,7 @@ export async function exportAgent(
   const encrypted = encrypt(compressed, password);
   const fileBuffer = packFile(encrypted);
 
-  logger.info(
-    `[agent-export] Final file size: ${fileBuffer.length} bytes`,
-  );
+  logger.info(`[agent-export] Final file size: ${fileBuffer.length} bytes`);
 
   return fileBuffer;
 }
@@ -786,7 +814,9 @@ export async function importAgent(
     const issues = parseResult.error.issues
       .map((i) => `${i.path.join(".")}: ${i.message}`)
       .join("; ");
-    throw new AgentExportError(`Export file schema validation failed: ${issues}`);
+    throw new AgentExportError(
+      `Export file schema validation failed: ${issues}`,
+    );
   }
 
   const payload = rawPayload as unknown as AgentExportPayload;
@@ -818,7 +848,11 @@ export async function estimateExportSize(
 
   let memoriesCount = 0;
   for (const tableName of MEMORY_TABLES) {
-    const mems = await db.getMemories({ agentId, tableName, count: Number.MAX_SAFE_INTEGER });
+    const mems = await db.getMemories({
+      agentId,
+      tableName,
+      count: Number.MAX_SAFE_INTEGER,
+    });
     memoriesCount += mems.length;
   }
 

@@ -809,12 +809,9 @@ async function runFirstTimeSetup(
   let cloudApiKey: string | undefined;
 
   if (runMode === "cloud") {
-    const cloudBaseUrl =
-      config.cloud?.baseUrl ?? "https://www.elizacloud.ai";
+    const cloudBaseUrl = config.cloud?.baseUrl ?? "https://www.elizacloud.ai";
 
-    clack.log.message(
-      "Opening your browser to log in to ELIZA Cloud...",
-    );
+    clack.log.message("Opening your browser to log in to ELIZA Cloud...");
 
     const loginResult = await cloudLogin({
       baseUrl: cloudBaseUrl,
@@ -1095,7 +1092,7 @@ async function runFirstTimeSetup(
   // ── Step 5b: Persist cloud config ──────────────────────────────────────
   if (runMode === "cloud" && cloudApiKey) {
     if (!config.cloud) (config as Record<string, unknown>).cloud = {};
-    const cloud = config.cloud!;
+    const cloud = config.cloud as NonNullable<typeof config.cloud>;
     cloud.enabled = true;
     cloud.apiKey = cloudApiKey;
     cloud.baseUrl = config.cloud?.baseUrl ?? "https://www.elizacloud.ai";

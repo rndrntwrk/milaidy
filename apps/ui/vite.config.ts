@@ -79,12 +79,12 @@ export default defineConfig(() => {
       strictPort: false,
       proxy: {
         "/api": {
-          target: "http://localhost:2138",
+          target: "http://localhost:31337",
           changeOrigin: true,
           configure: withQuietErrors,
         },
         "/ws": {
-          target: "ws://localhost:2138",
+          target: "ws://localhost:31337",
           ws: true,
           configure: withQuietErrors,
         },

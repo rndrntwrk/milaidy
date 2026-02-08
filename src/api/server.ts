@@ -121,6 +121,8 @@ interface PluginEntry {
   configured: boolean;
   envKey: string | null;
   category: "ai-provider" | "connector" | "database" | "feature";
+  /** Where the plugin comes from: "bundled" (ships with Milaidy) or "store" (user-installed from registry). */
+  source: "bundled" | "store";
   configKeys: string[];
   parameters: PluginParamDef[];
   validationErrors: Array<{ field: string; message: string }>;
@@ -209,11 +211,13 @@ function buildParamDefs(
       required: Boolean(def.required),
       sensitive,
       default: def.default as string | undefined,
-      options: Array.isArray(def.options) ? (def.options as string[]) : undefined,
+      options: Array.isArray(def.options)
+        ? (def.options as string[])
+        : undefined,
       currentValue: isSet
         ? sensitive
-          ? maskValue(envValue!)
-          : envValue!
+          ? maskValue(envValue ?? "")
+          : (envValue ?? null)
         : null,
       isSet,
     };
@@ -224,6 +228,88 @@ function buildParamDefs(
  * Discover available plugins from the bundled plugins.json manifest.
  * Falls back to filesystem scanning for monorepo development.
  */
+/**
+ * Build PluginEntry records for user-installed plugins (from the Store).
+ * These are tracked in config.plugins.installs and loaded at runtime,
+ * but don't appear in the bundled plugins.json manifest.
+ *
+ * We read the installed plugin's package.json to extract metadata
+ * (name, description, parameters) so they show up in the Plugins Manager
+ * with the same level of detail as bundled plugins.
+ */
+function discoverInstalledPlugins(
+  config: MilaidyConfig,
+  bundledIds: Set<string>,
+): PluginEntry[] {
+  const installs = config.plugins?.installs;
+  if (!installs || typeof installs !== "object") return [];
+
+  const entries: PluginEntry[] = [];
+
+  for (const [packageName, record] of Object.entries(installs)) {
+    // Derive a short id from the package name (e.g. "@elizaos/plugin-foo" → "foo")
+    const id = packageName
+      .replace(/^@[^/]+\/plugin-/, "")
+      .replace(/^@[^/]+\//, "")
+      .replace(/^plugin-/, "");
+
+    // Skip if it's already covered by the bundled manifest
+    if (bundledIds.has(id)) continue;
+
+    const category = categorizePlugin(id);
+    const installPath = record.installPath;
+
+    // Try to read the plugin's package.json for metadata
+    let name = packageName;
+    let description = `Installed from registry (v${record.version ?? "unknown"})`;
+
+    if (installPath) {
+      // Check npm layout first, then direct layout
+      const candidates = [
+        path.join(
+          installPath,
+          "node_modules",
+          ...packageName.split("/"),
+          "package.json",
+        ),
+        path.join(installPath, "package.json"),
+      ];
+      for (const pkgPath of candidates) {
+        try {
+          if (fs.existsSync(pkgPath)) {
+            const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8")) as {
+              name?: string;
+              description?: string;
+            };
+            if (pkg.name) name = pkg.name;
+            if (pkg.description) description = pkg.description;
+            break;
+          }
+        } catch {
+          // ignore read errors
+        }
+      }
+    }
+
+    entries.push({
+      id,
+      name,
+      description,
+      enabled: false, // Will be updated against the runtime below
+      configured: true,
+      envKey: null,
+      category,
+      source: "store",
+      configKeys: [],
+      parameters: [],
+      validationErrors: [],
+      validationWarnings: [],
+    });
+  }
+
+  return entries.sort((a, b) => a.name.localeCompare(b.name));
+}
+
 function discoverPluginsFromManifest(): PluginEntry[] {
   const thisDir =
     import.meta.dirname ?? path.dirname(new URL(import.meta.url).pathname);
@@ -270,6 +356,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             configured,
             envKey,
             category,
+            source: "bundled" as const,
             configKeys: p.configKeys,
             parameters,
             validationErrors: validation.errors,
@@ -635,7 +722,6 @@ function readBody(req: http.IncomingMessage): Promise<string> {
   });
 }
 
-
 /**
  * Read raw binary request body with a configurable size limit.
  * Used for agent import file uploads.
@@ -652,9 +738,7 @@ function readRawBody(
       if (totalBytes > maxBytes) {
         req.destroy();
         reject(
-          new Error(
-            `Request body exceeds maximum size (${maxBytes} bytes)`,
-          ),
+          new Error(`Request body exceeds maximum size (${maxBytes} bytes)`),
         );
         return;
       }
@@ -831,26 +915,72 @@ function getCloudProviderOptions(): Array<{
     {
       id: "elizacloud",
       name: "Eliza Cloud",
-      description: "Managed cloud infrastructure. Wallets, LLMs, and RPCs included.",
+      description:
+        "Managed cloud infrastructure. Wallets, LLMs, and RPCs included.",
     },
   ];
 }
 
 function getModelOptions(): {
-  small: Array<{ id: string; name: string; provider: string; description: string }>;
-  large: Array<{ id: string; name: string; provider: string; description: string }>;
+  small: Array<{
+    id: string;
+    name: string;
+    provider: string;
+    description: string;
+  }>;
+  large: Array<{
+    id: string;
+    name: string;
+    provider: string;
+    description: string;
+  }>;
 } {
   return {
     small: [
-      { id: "claude-haiku", name: "Claude Haiku (latest)", provider: "anthropic", description: "Fast and efficient. Default small model." },
-      { id: "gpt-4o-mini", name: "GPT-4o Mini", provider: "openai", description: "OpenAI's compact model." },
-      { id: "gemini-flash", name: "Gemini Flash", provider: "google", description: "Google's fast model." },
+      {
+        id: "claude-haiku",
+        name: "Claude Haiku (latest)",
+        provider: "anthropic",
+        description: "Fast and efficient. Default small model.",
+      },
+      {
+        id: "gpt-4o-mini",
+        name: "GPT-4o Mini",
+        provider: "openai",
+        description: "OpenAI's compact model.",
+      },
+      {
+        id: "gemini-flash",
+        name: "Gemini Flash",
+        provider: "google",
+        description: "Google's fast model.",
+      },
     ],
     large: [
-      { id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", provider: "anthropic", description: "Powerful reasoning. Default large model." },
-      { id: "gpt-4o", name: "GPT-4o", provider: "openai", description: "OpenAI's flagship model." },
-      { id: "claude-opus", name: "Claude Opus", provider: "anthropic", description: "Most capable Claude model." },
-      { id: "gemini-pro", name: "Gemini Pro", provider: "google", description: "Google's advanced model." },
+      {
+        id: "claude-sonnet-4-5",
+        name: "Claude Sonnet 4.5",
+        provider: "anthropic",
+        description: "Powerful reasoning. Default large model.",
+      },
+      {
+        id: "gpt-4o",
+        name: "GPT-4o",
+        provider: "openai",
+        description: "OpenAI's flagship model.",
+      },
+      {
+        id: "claude-opus",
+        name: "Claude Opus",
+        provider: "anthropic",
+        description: "Most capable Claude model.",
+      },
+      {
+        id: "gemini-pro",
+        name: "Gemini Pro",
+        provider: "google",
+        description: "Google's advanced model.",
+      },
     ],
   };
 }
@@ -873,10 +1003,34 @@ function getInventoryProviderOptions(): Array<{
       name: "EVM",
       description: "Ethereum, Base, Arbitrum, Optimism, Polygon.",
       rpcProviders: [
-        { id: "elizacloud", name: "Eliza Cloud", description: "Managed RPC. No setup needed.", envKey: null, requiresKey: false },
-        { id: "infura", name: "Infura", description: "Reliable EVM infrastructure.", envKey: "INFURA_API_KEY", requiresKey: true },
-        { id: "alchemy", name: "Alchemy", description: "Full-featured EVM data platform.", envKey: "ALCHEMY_API_KEY", requiresKey: true },
-        { id: "ankr", name: "Ankr", description: "Decentralized RPC provider.", envKey: "ANKR_API_KEY", requiresKey: true },
+        {
+          id: "elizacloud",
+          name: "Eliza Cloud",
+          description: "Managed RPC. No setup needed.",
+          envKey: null,
+          requiresKey: false,
+        },
+        {
+          id: "infura",
+          name: "Infura",
+          description: "Reliable EVM infrastructure.",
+          envKey: "INFURA_API_KEY",
+          requiresKey: true,
+        },
+        {
+          id: "alchemy",
+          name: "Alchemy",
+          description: "Full-featured EVM data platform.",
+          envKey: "ALCHEMY_API_KEY",
+          requiresKey: true,
+        },
+        {
+          id: "ankr",
+          name: "Ankr",
+          description: "Decentralized RPC provider.",
+          envKey: "ANKR_API_KEY",
+          requiresKey: true,
+        },
       ],
     },
     {
@@ -884,8 +1038,20 @@ function getInventoryProviderOptions(): Array<{
       name: "Solana",
       description: "Solana mainnet tokens and NFTs.",
       rpcProviders: [
-        { id: "elizacloud", name: "Eliza Cloud", description: "Managed RPC. No setup needed.", envKey: null, requiresKey: false },
-        { id: "helius", name: "Helius", description: "Solana-native data platform.", envKey: "HELIUS_API_KEY", requiresKey: true },
+        {
+          id: "elizacloud",
+          name: "Eliza Cloud",
+          description: "Managed RPC. No setup needed.",
+          envKey: null,
+          requiresKey: false,
+        },
+        {
+          id: "helius",
+          name: "Helius",
+          description: "Solana-native data platform.",
+          envKey: "HELIUS_API_KEY",
+          requiresKey: true,
+        },
       ],
     },
   ];
@@ -1255,10 +1421,16 @@ async function handleRequest(
     if (Array.isArray(body.inventoryProviders)) {
       if (!config.env) config.env = {};
       const allInventory = getInventoryProviderOptions();
-      for (const inv of body.inventoryProviders as Array<{ chain: string; rpcProvider: string; rpcApiKey?: string }>) {
+      for (const inv of body.inventoryProviders as Array<{
+        chain: string;
+        rpcProvider: string;
+        rpcApiKey?: string;
+      }>) {
         const chainDef = allInventory.find((ip) => ip.id === inv.chain);
         if (!chainDef) continue;
-        const rpcDef = chainDef.rpcProviders.find((rp) => rp.id === inv.rpcProvider);
+        const rpcDef = chainDef.rpcProviders.find(
+          (rp) => rp.id === inv.rpcProvider,
+        );
         if (rpcDef?.envKey && inv.rpcApiKey) {
           (config.env as Record<string, string>)[rpcDef.envKey] = inv.rpcApiKey;
           process.env[rpcDef.envKey] = inv.rpcApiKey;
@@ -1300,11 +1472,15 @@ async function handleRequest(
     try {
       saveMilaidyConfig(config);
     } catch (err) {
-      logger.error(`[milaidy-api] Failed to save config after onboarding: ${err}`);
+      logger.error(
+        `[milaidy-api] Failed to save config after onboarding: ${err}`,
+      );
       error(res, "Failed to save configuration", 500);
       return;
     }
-    logger.info(`[milaidy-api] Onboarding complete for agent "${body.name}" (mode: ${(body.runMode as string) || "local"})`);
+    logger.info(
+      `[milaidy-api] Onboarding complete for agent "${body.name}" (mode: ${(body.runMode as string) || "local"})`,
+    );
     json(res, { ok: true });
     return;
   }
@@ -1504,7 +1680,11 @@ async function handleRequest(
     }>(req, res);
     if (!body) return;
 
-    if (!body.password || typeof body.password !== "string" || body.password.length < 4) {
+    if (
+      !body.password ||
+      typeof body.password !== "string" ||
+      body.password.length < 4
+    ) {
       error(res, "A password of at least 4 characters is required.", 400);
       return;
     }
@@ -1517,12 +1697,18 @@ async function handleRequest(
       const agentName = (state.runtime.character.name ?? "agent")
         .replace(/[^a-zA-Z0-9_-]/g, "_")
         .toLowerCase();
-      const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const timestamp = new Date()
+        .toISOString()
+        .replace(/[:.]/g, "-")
+        .slice(0, 19);
       const filename = `${agentName}-${timestamp}.eliza-agent`;
 
       res.statusCode = 200;
       res.setHeader("Content-Type", "application/octet-stream");
-      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${filename}"`,
+      );
       res.setHeader("Content-Length", fileBuffer.length);
       res.end(fileBuffer);
     } catch (err) {
@@ -1572,7 +1758,11 @@ async function handleRequest(
     }
 
     if (rawBody.length < 5) {
-      error(res, "Request body is too small — expected password + file data.", 400);
+      error(
+        res,
+        "Request body is too small — expected password + file data.",
+        400,
+      );
       return;
     }
 
@@ -1583,7 +1773,11 @@ async function handleRequest(
       return;
     }
     if (rawBody.length < 4 + passwordLength + 1) {
-      error(res, "Request body is incomplete — missing file data after password.", 400);
+      error(
+        res,
+        "Request body is incomplete — missing file data after password.",
+        400,
+      );
       return;
     }
 
@@ -1591,7 +1785,11 @@ async function handleRequest(
     const fileBuffer = rawBody.subarray(4 + passwordLength);
 
     try {
-      const result = await importAgent(state.runtime, fileBuffer as Buffer, password);
+      const result = await importAgent(
+        state.runtime,
+        fileBuffer as Buffer,
+        password,
+      );
       json(res, result);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -1764,10 +1962,25 @@ async function handleRequest(
 
   // ── GET /api/plugins ────────────────────────────────────────────────────
   if (method === "GET" && pathname === "/api/plugins") {
+    // Re-read config from disk so we pick up plugins installed since server start.
+    // The install endpoint writes to milaidy.json but state.config is only loaded
+    // once at server startup, so it would be stale without this refresh.
+    let freshConfig: MilaidyConfig;
+    try {
+      freshConfig = loadMilaidyConfig();
+    } catch {
+      freshConfig = state.config;
+    }
+
+    // Merge user-installed plugins into the list (they don't exist in plugins.json)
+    const bundledIds = new Set(state.plugins.map((p) => p.id));
+    const installedEntries = discoverInstalledPlugins(freshConfig, bundledIds);
+    const allPlugins = [...state.plugins, ...installedEntries];
+
     // Update enabled status from runtime (if available)
     if (state.runtime) {
       const loadedNames = state.runtime.plugins.map((p) => p.name);
-      for (const plugin of state.plugins) {
+      for (const plugin of allPlugins) {
         const suffix = `plugin-${plugin.id}`;
         plugin.enabled = loadedNames.some(
           (name) =>
@@ -1779,7 +1992,7 @@ async function handleRequest(
     }
 
     // Always refresh current env values and re-validate
-    for (const plugin of state.plugins) {
+    for (const plugin of allPlugins) {
       for (const param of plugin.parameters) {
         const envValue = process.env[param.key];
         param.isSet = Boolean(envValue && envValue.trim());
@@ -1809,7 +2022,7 @@ async function handleRequest(
       plugin.validationWarnings = validation.warnings;
     }
 
-    json(res, { plugins: state.plugins });
+    json(res, { plugins: allPlugins });
     return;
   }
 
@@ -1897,9 +2110,38 @@ async function handleRequest(
     const { getRegistryPlugins } = await import(
       "../services/registry-client.js"
     );
+    const { listInstalledPlugins } = await import(
+      "../services/plugin-installer.js"
+    );
     try {
       const registry = await getRegistryPlugins();
-      const plugins = Array.from(registry.values());
+      const installed = await listInstalledPlugins();
+      const installedNames = new Set(installed.map((p) => p.name));
+
+      // Also check which plugins are loaded in the runtime
+      const loadedNames = state.runtime
+        ? new Set(state.runtime.plugins.map((p) => p.name))
+        : new Set<string>();
+
+      // Cross-reference with bundled manifest so the Store can hide them
+      const bundledIds = new Set(state.plugins.map((p) => p.id));
+
+      const plugins = Array.from(registry.values()).map((p) => {
+        const shortId = p.name
+          .replace(/^@[^/]+\/plugin-/, "")
+          .replace(/^@[^/]+\//, "")
+          .replace(/^plugin-/, "");
+        return {
+          ...p,
+          installed: installedNames.has(p.name),
+          installedVersion:
+            installed.find((i) => i.name === p.name)?.version ?? null,
+          loaded:
+            loadedNames.has(p.name) ||
+            loadedNames.has(p.name.replace("@elizaos/", "")),
+          bundled: bundledIds.has(shortId),
+        };
+      });
       json(res, { count: plugins.length, plugins });
     } catch (err) {
       error(
@@ -2116,6 +2358,308 @@ async function handleRequest(
       error(
         res,
         `Failed to list installed plugins: ${err instanceof Error ? err.message : String(err)}`,
+        500,
+      );
+    }
+    return;
+  }
+
+  // ── GET /api/skills/catalog ───────────────────────────────────────────
+  // Browse the full skill catalog (paginated).
+  if (method === "GET" && pathname === "/api/skills/catalog") {
+    try {
+      const { getCatalogSkills } = await import(
+        "../services/skill-catalog-client.js"
+      );
+      const all = await getCatalogSkills();
+      const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
+      const perPage = Math.min(
+        100,
+        Math.max(1, Number(url.searchParams.get("perPage")) || 50),
+      );
+      const sort = url.searchParams.get("sort") ?? "downloads";
+      const sorted = [...all];
+      if (sort === "downloads")
+        sorted.sort(
+          (a, b) =>
+            b.stats.downloads - a.stats.downloads || b.updatedAt - a.updatedAt,
+        );
+      else if (sort === "stars")
+        sorted.sort(
+          (a, b) => b.stats.stars - a.stats.stars || b.updatedAt - a.updatedAt,
+        );
+      else if (sort === "updated")
+        sorted.sort((a, b) => b.updatedAt - a.updatedAt);
+      else if (sort === "name")
+        sorted.sort((a, b) =>
+          (a.displayName ?? a.slug).localeCompare(b.displayName ?? b.slug),
+        );
+
+      // Resolve installed status from the AgentSkillsService
+      const installedSlugs = new Set<string>();
+      if (state.runtime) {
+        try {
+          const svc = state.runtime.getService("AGENT_SKILLS_SERVICE") as
+            | {
+                getLoadedSkills?: () => Array<{ slug: string; source: string }>;
+              }
+            | undefined;
+          if (svc && typeof svc.getLoadedSkills === "function") {
+            for (const s of svc.getLoadedSkills()) {
+              installedSlugs.add(s.slug);
+            }
+          }
+        } catch {
+          /* service may not be available */
+        }
+      }
+      // Also check locally discovered skills
+      for (const s of state.skills) {
+        installedSlugs.add(s.id);
+      }
+
+      const start = (page - 1) * perPage;
+      const skills = sorted.slice(start, start + perPage).map((s) => ({
+        ...s,
+        installed: installedSlugs.has(s.slug),
+      }));
+      json(res, {
+        total: all.length,
+        page,
+        perPage,
+        totalPages: Math.ceil(all.length / perPage),
+        installedCount: installedSlugs.size,
+        skills,
+      });
+    } catch (err) {
+      error(
+        res,
+        `Failed to load skill catalog: ${err instanceof Error ? err.message : String(err)}`,
+        500,
+      );
+    }
+    return;
+  }
+
+  // ── GET /api/skills/catalog/search ─────────────────────────────────────
+  if (method === "GET" && pathname === "/api/skills/catalog/search") {
+    const q = url.searchParams.get("q");
+    if (!q) {
+      error(res, "Missing query parameter ?q=", 400);
+      return;
+    }
+    try {
+      const { searchCatalogSkills } = await import(
+        "../services/skill-catalog-client.js"
+      );
+      const limit = Math.min(
+        100,
+        Math.max(1, Number(url.searchParams.get("limit")) || 30),
+      );
+      const results = await searchCatalogSkills(q, limit);
+      json(res, { query: q, count: results.length, results });
+    } catch (err) {
+      error(
+        res,
+        `Skill catalog search failed: ${err instanceof Error ? err.message : String(err)}`,
+        500,
+      );
+    }
+    return;
+  }
+
+  // ── GET /api/skills/catalog/:slug ──────────────────────────────────────
+  if (method === "GET" && pathname.startsWith("/api/skills/catalog/")) {
+    const slug = decodeURIComponent(
+      pathname.slice("/api/skills/catalog/".length),
+    );
+    // Exclude "search" which is handled above
+    if (slug && slug !== "search") {
+      try {
+        const { getCatalogSkill } = await import(
+          "../services/skill-catalog-client.js"
+        );
+        const skill = await getCatalogSkill(slug);
+        if (!skill) {
+          error(res, `Skill "${slug}" not found in catalog`, 404);
+          return;
+        }
+        json(res, { skill });
+      } catch (err) {
+        error(
+          res,
+          `Failed to fetch skill: ${err instanceof Error ? err.message : String(err)}`,
+          500,
+        );
+      }
+      return;
+    }
+  }
+
+  // ── POST /api/skills/catalog/refresh ───────────────────────────────────
+  if (method === "POST" && pathname === "/api/skills/catalog/refresh") {
+    try {
+      const { refreshCatalog } = await import(
+        "../services/skill-catalog-client.js"
+      );
+      const skills = await refreshCatalog();
+      json(res, { ok: true, count: skills.length });
+    } catch (err) {
+      error(
+        res,
+        `Catalog refresh failed: ${err instanceof Error ? err.message : String(err)}`,
+        500,
+      );
+    }
+    return;
+  }
+
+  // ── POST /api/skills/catalog/install ───────────────────────────────────
+  if (method === "POST" && pathname === "/api/skills/catalog/install") {
+    const body = await readJsonBody<{ slug: string; version?: string }>(
+      req,
+      res,
+    );
+    if (!body) return;
+    if (!body.slug) {
+      error(res, "Missing required field: slug", 400);
+      return;
+    }
+
+    if (!state.runtime) {
+      error(res, "Agent runtime not available — start the agent first", 503);
+      return;
+    }
+
+    try {
+      // eslint-disable-next-line -- service is loosely typed; cast via unknown
+      const service = state.runtime.getService("AGENT_SKILLS_SERVICE") as
+        | {
+            install?: (
+              slug: string,
+              opts?: { version?: string; force?: boolean },
+            ) => Promise<boolean>;
+            isInstalled?: (slug: string) => Promise<boolean>;
+          }
+        | undefined;
+
+      if (!service || typeof service.install !== "function") {
+        error(
+          res,
+          "AgentSkillsService not available — ensure @elizaos/plugin-agent-skills is loaded",
+          501,
+        );
+        return;
+      }
+
+      const alreadyInstalled =
+        typeof service.isInstalled === "function"
+          ? await service.isInstalled(body.slug)
+          : false;
+
+      if (alreadyInstalled) {
+        json(res, {
+          ok: true,
+          slug: body.slug,
+          message: `Skill "${body.slug}" is already installed`,
+          alreadyInstalled: true,
+        });
+        return;
+      }
+
+      const success = await service.install(body.slug, {
+        version: body.version,
+      });
+
+      if (success) {
+        // Refresh the skills list so the UI picks up the new skill
+        const workspaceDir =
+          state.config.agents?.defaults?.workspace ??
+          resolveDefaultAgentWorkspaceDir();
+        state.skills = await discoverSkills(
+          workspaceDir,
+          state.config,
+          state.runtime,
+        );
+
+        json(res, {
+          ok: true,
+          slug: body.slug,
+          message: `Skill "${body.slug}" installed successfully`,
+        });
+      } else {
+        error(res, `Failed to install skill "${body.slug}"`, 500);
+      }
+    } catch (err) {
+      error(
+        res,
+        `Skill install failed: ${err instanceof Error ? err.message : String(err)}`,
+        500,
+      );
+    }
+    return;
+  }
+
+  // ── POST /api/skills/catalog/uninstall ─────────────────────────────────
+  if (method === "POST" && pathname === "/api/skills/catalog/uninstall") {
+    const body = await readJsonBody<{ slug: string }>(req, res);
+    if (!body) return;
+    if (!body.slug) {
+      error(res, "Missing required field: slug", 400);
+      return;
+    }
+
+    if (!state.runtime) {
+      error(res, "Agent runtime not available — start the agent first", 503);
+      return;
+    }
+
+    try {
+      // eslint-disable-next-line -- service is loosely typed; cast via unknown
+      const service = state.runtime.getService("AGENT_SKILLS_SERVICE") as
+        | {
+            uninstall?: (slug: string) => Promise<boolean>;
+          }
+        | undefined;
+
+      if (!service || typeof service.uninstall !== "function") {
+        error(
+          res,
+          "AgentSkillsService not available — ensure @elizaos/plugin-agent-skills is loaded",
+          501,
+        );
+        return;
+      }
+
+      const success = await service.uninstall(body.slug);
+
+      if (success) {
+        // Refresh the skills list
+        const workspaceDir =
+          state.config.agents?.defaults?.workspace ??
+          resolveDefaultAgentWorkspaceDir();
+        state.skills = await discoverSkills(
+          workspaceDir,
+          state.config,
+          state.runtime,
+        );
+
+        json(res, {
+          ok: true,
+          slug: body.slug,
+          message: `Skill "${body.slug}" uninstalled successfully`,
+        });
+      } else {
+        error(
+          res,
+          `Failed to uninstall skill "${body.slug}" — it may be a bundled skill`,
+          400,
+        );
+      }
+    } catch (err) {
+      error(
+        res,
+        `Skill uninstall failed: ${err instanceof Error ? err.message : String(err)}`,
         500,
       );
     }
@@ -2348,7 +2892,8 @@ async function handleRequest(
     // Persist to config.env so it survives restarts
     if (!state.config.env) state.config.env = {};
     const envKey = chain === "evm" ? "EVM_PRIVATE_KEY" : "SOLANA_PRIVATE_KEY";
-    (state.config.env as Record<string, string>)[envKey] = process.env[envKey]!;
+    (state.config.env as Record<string, string>)[envKey] =
+      process.env[envKey] ?? "";
 
     try {
       saveMilaidyConfig(state.config);
@@ -2525,7 +3070,13 @@ async function handleRequest(
       config: state.config,
       cloudManager: state.cloudManager,
     };
-    const handled = await handleCloudRoute(req, res, pathname, method, cloudState);
+    const handled = await handleCloudRoute(
+      req,
+      res,
+      pathname,
+      method,
+      cloudState,
+    );
     if (handled) return;
   }
 
@@ -2548,17 +3099,21 @@ async function handleRequest(
         return;
       }
 
-      const wantsStream = (req.headers.accept ?? "").includes("text/event-stream");
+      const wantsStream = (req.headers.accept ?? "").includes(
+        "text/event-stream",
+      );
 
       if (wantsStream) {
         res.writeHead(200, {
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache, no-transform",
-          "Connection": "keep-alive",
+          Connection: "keep-alive",
           "X-Accel-Buffering": "no",
         });
 
-        for await (const chunk of proxy.handleChatMessageStream(body.text.trim())) {
+        for await (const chunk of proxy.handleChatMessageStream(
+          body.text.trim(),
+        )) {
           res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
         }
         res.write(`event: done\ndata: {}\n\n`);
@@ -2642,10 +3197,14 @@ async function handleRequest(
 
   // ── Database management API ─────────────────────────────────────────────
   if (pathname.startsWith("/api/database/")) {
-    const handled = await handleDatabaseRoute(req, res, state.runtime, pathname);
+    const handled = await handleDatabaseRoute(
+      req,
+      res,
+      state.runtime,
+      pathname,
+    );
     if (handled) return;
   }
-
 
   // ── GET /api/cloud/status ─────────────────────────────────────────────
   if (method === "GET" && pathname === "/api/cloud/status") {

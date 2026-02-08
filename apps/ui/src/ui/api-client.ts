@@ -206,6 +206,7 @@ export interface PluginInfo {
   configured: boolean;
   envKey: string | null;
   category: "ai-provider" | "connector" | "database" | "feature";
+  source: "bundled" | "store";
   parameters: PluginParamDef[];
   validationErrors: Array<{ field: string; message: string }>;
   validationWarnings: Array<{ field: string; message: string }>;
@@ -224,6 +225,46 @@ export interface SkillInfo {
   enabled: boolean;
 }
 
+// Skill Catalog types
+
+export interface CatalogSkillStats {
+  comments: number;
+  downloads: number;
+  installsAllTime: number;
+  installsCurrent: number;
+  stars: number;
+  versions: number;
+}
+
+export interface CatalogSkillVersion {
+  version: string;
+  createdAt: number;
+  changelog: string;
+}
+
+export interface CatalogSkill {
+  slug: string;
+  displayName: string;
+  summary: string | null;
+  tags: Record<string, string>;
+  stats: CatalogSkillStats;
+  createdAt: number;
+  updatedAt: number;
+  latestVersion: CatalogSkillVersion | null;
+  installed?: boolean;
+}
+
+export interface CatalogSearchResult {
+  slug: string;
+  displayName: string;
+  summary: string | null;
+  score: number;
+  latestVersion: string | null;
+  downloads: number;
+  stars: number;
+  installs: number;
+}
+
 export interface LogEntry {
   timestamp: number;
   level: string;
@@ -235,6 +276,61 @@ export interface ExtensionStatus {
   relayReachable: boolean;
   relayPort: number;
   extensionPath: string | null;
+}
+
+// Registry / Plugin Store types
+
+export interface RegistryPlugin {
+  name: string;
+  gitRepo: string;
+  gitUrl: string;
+  description: string;
+  homepage: string | null;
+  topics: string[];
+  stars: number;
+  language: string;
+  npm: {
+    package: string;
+    v0Version: string | null;
+    v1Version: string | null;
+    v2Version: string | null;
+  };
+  git: {
+    v0Branch: string | null;
+    v1Branch: string | null;
+    v2Branch: string | null;
+  };
+  supports: { v0: boolean; v1: boolean; v2: boolean };
+  installed: boolean;
+  installedVersion: string | null;
+  loaded: boolean;
+  bundled: boolean;
+}
+
+export interface RegistrySearchResult {
+  name: string;
+  description: string;
+  score: number;
+  tags: string[];
+  latestVersion: string | null;
+  stars: number;
+  supports: { v0: boolean; v1: boolean; v2: boolean };
+  repository: string;
+}
+
+export interface InstalledPlugin {
+  name: string;
+  version: string;
+  installPath: string;
+  installedAt: string;
+}
+
+export interface PluginInstallResult {
+  ok: boolean;
+  plugin?: { name: string; version: string; installPath: string };
+  requiresRestart?: boolean;
+  message?: string;
+  error?: string;
 }
 
 // Wallet types
@@ -448,12 +544,104 @@ export class MilaidyClient {
     return this.fetch("/api/skills/refresh", { method: "POST" });
   }
 
+  // Skill Catalog
+
+  async getSkillCatalog(opts?: { page?: number; perPage?: number; sort?: string }): Promise<{
+    total: number;
+    page: number;
+    perPage: number;
+    totalPages: number;
+    skills: CatalogSkill[];
+  }> {
+    const params = new URLSearchParams();
+    if (opts?.page) params.set("page", String(opts.page));
+    if (opts?.perPage) params.set("perPage", String(opts.perPage));
+    if (opts?.sort) params.set("sort", opts.sort);
+    const qs = params.toString();
+    return this.fetch(`/api/skills/catalog${qs ? `?${qs}` : ""}`);
+  }
+
+  async searchSkillCatalog(query: string, limit = 30): Promise<{
+    query: string;
+    count: number;
+    results: CatalogSearchResult[];
+  }> {
+    return this.fetch(`/api/skills/catalog/search?q=${encodeURIComponent(query)}&limit=${limit}`);
+  }
+
+  async getSkillCatalogDetail(slug: string): Promise<{ skill: CatalogSkill }> {
+    return this.fetch(`/api/skills/catalog/${encodeURIComponent(slug)}`);
+  }
+
+  async refreshSkillCatalog(): Promise<{ ok: boolean; count: number }> {
+    return this.fetch("/api/skills/catalog/refresh", { method: "POST" });
+  }
+
+  async installCatalogSkill(slug: string, version?: string): Promise<{
+    ok: boolean;
+    slug: string;
+    message: string;
+    alreadyInstalled?: boolean;
+  }> {
+    return this.fetch("/api/skills/catalog/install", {
+      method: "POST",
+      body: JSON.stringify({ slug, version }),
+    });
+  }
+
+  async uninstallCatalogSkill(slug: string): Promise<{
+    ok: boolean;
+    slug: string;
+    message: string;
+  }> {
+    return this.fetch("/api/skills/catalog/uninstall", {
+      method: "POST",
+      body: JSON.stringify({ slug }),
+    });
+  }
+
   async getLogs(): Promise<{ entries: LogEntry[] }> {
     return this.fetch("/api/logs");
   }
 
   async getExtensionStatus(): Promise<ExtensionStatus> {
     return this.fetch("/api/extension/status");
+  }
+
+  // Registry / Plugin Store
+
+  async getRegistryPlugins(): Promise<{ count: number; plugins: RegistryPlugin[] }> {
+    return this.fetch("/api/registry/plugins");
+  }
+
+  async searchRegistryPlugins(query: string, limit = 15): Promise<{ query: string; count: number; results: RegistrySearchResult[] }> {
+    return this.fetch(`/api/registry/search?q=${encodeURIComponent(query)}&limit=${limit}`);
+  }
+
+  async getRegistryPluginInfo(name: string): Promise<{ plugin: RegistryPlugin }> {
+    return this.fetch(`/api/registry/plugins/${encodeURIComponent(name)}`);
+  }
+
+  async getInstalledPlugins(): Promise<{ count: number; plugins: InstalledPlugin[] }> {
+    return this.fetch("/api/plugins/installed");
+  }
+
+  async installRegistryPlugin(name: string, autoRestart = true): Promise<PluginInstallResult> {
+    return this.fetch("/api/plugins/install", {
+      method: "POST",
+      body: JSON.stringify({ name, autoRestart }),
+    });
+  }
+
+  async uninstallRegistryPlugin(name: string, autoRestart = true): Promise<{ ok: boolean; pluginName: string; message: string; error?: string }> {
+    return this.fetch("/api/plugins/uninstall", {
+      method: "POST",
+      body: JSON.stringify({ name, autoRestart }),
+    });
+  }
+
+  async refreshRegistry(): Promise<{ count: number }> {
+    return this.fetch("/api/registry/refresh", { method: "POST" });
   }
 
   // Agent Export / Import
