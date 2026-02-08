@@ -9,6 +9,74 @@
 // Types
 // ---------------------------------------------------------------------------
 
+// Database types
+export type DatabaseProviderType = "pglite" | "postgres";
+
+export interface DatabaseStatus {
+  provider: DatabaseProviderType;
+  connected: boolean;
+  serverVersion: string | null;
+  tableCount: number;
+  pgliteDataDir: string | null;
+  postgresHost: string | null;
+}
+
+export interface DatabaseConfigResponse {
+  config: {
+    provider?: DatabaseProviderType;
+    pglite?: { dataDir?: string };
+    postgres?: {
+      connectionString?: string;
+      host?: string;
+      port?: number;
+      database?: string;
+      user?: string;
+      password?: string;
+      ssl?: boolean;
+    };
+  };
+  activeProvider: DatabaseProviderType;
+  needsRestart: boolean;
+}
+
+export interface ConnectionTestResult {
+  success: boolean;
+  serverVersion: string | null;
+  error: string | null;
+  durationMs: number;
+}
+
+export interface TableInfo {
+  name: string;
+  schema: string;
+  rowCount: number;
+  columns: ColumnInfo[];
+}
+
+export interface ColumnInfo {
+  name: string;
+  type: string;
+  nullable: boolean;
+  defaultValue: string | null;
+  isPrimaryKey: boolean;
+}
+
+export interface TableRowsResponse {
+  table: string;
+  rows: Record<string, unknown>[];
+  columns: string[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+export interface QueryResult {
+  columns: string[];
+  rows: Record<string, unknown>[];
+  rowCount: number;
+  durationMs: number;
+}
+
 export type AgentState = "not_started" | "running" | "paused" | "stopped" | "restarting" | "error";
 
 export interface AgentStatus {
@@ -48,15 +116,51 @@ export interface ProviderOption {
   description: string;
 }
 
+export interface CloudProviderOption {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export interface ModelOption {
+  id: string;
+  name: string;
+  provider: string;
+  description: string;
+}
+
+export interface RpcProviderOption {
+  id: string;
+  name: string;
+  description: string;
+  envKey: string | null;
+  requiresKey: boolean;
+}
+
+export interface InventoryProviderOption {
+  id: string;
+  name: string;
+  description: string;
+  rpcProviders: RpcProviderOption[];
+}
+
 export interface OnboardingOptions {
   names: string[];
   styles: StylePreset[];
   providers: ProviderOption[];
+  cloudProviders: CloudProviderOption[];
+  models: {
+    small: ModelOption[];
+    large: ModelOption[];
+  };
+  inventoryProviders: InventoryProviderOption[];
   sharedStyleRules: string;
 }
 
 export interface OnboardingData {
   name: string;
+  theme: "light" | "dark";
+  runMode: "local" | "cloud";
   bio: string[];
   systemPrompt: string;
   style?: {
@@ -67,10 +171,19 @@ export interface OnboardingData {
   adjectives?: string[];
   topics?: string[];
   messageExamples?: MessageExample[][];
+  // Cloud-specific
+  cloudProvider?: string;
+  smallModel?: string;
+  largeModel?: string;
+  // Local-specific
   provider?: string;
   providerApiKey?: string;
-  telegramBotToken?: string;
-  discordBotToken?: string;
+  // Inventory / wallet setup
+  inventoryProviders?: Array<{
+    chain: string;
+    rpcProvider: string;
+    rpcApiKey?: string;
+  }>;
 }
 
 export interface PluginParamDef {
@@ -138,6 +251,10 @@ export interface SolanaNft { mint: string; name: string; description: string; im
 export interface WalletNftsResponse { evm: Array<{ chain: string; nfts: EvmNft[] }>; solana: { nfts: SolanaNft[] } | null }
 export interface WalletConfigStatus { alchemyKeySet: boolean; heliusKeySet: boolean; birdeyeKeySet: boolean; evmChains: string[]; evmAddress: string | null; solanaAddress: string | null }
 export interface WalletExportResult { evm: { privateKey: string; address: string | null } | null; solana: { privateKey: string; address: string | null } | null }
+
+// Cloud
+export interface CloudStatus { connected: boolean; userId?: string; organizationId?: string; topUpUrl?: string; reason?: string }
+export interface CloudCredits { connected: boolean; balance: number | null; low?: boolean; critical?: boolean; topUpUrl?: string }
 
 // WebSocket
 
@@ -338,6 +455,97 @@ export class MilaidyClient {
     return this.fetch("/api/extension/status");
   }
 
+  // Agent Export / Import
+
+  /**
+   * Export the agent as a password-encrypted .eliza-agent file.
+   * Returns the raw Response so the caller can stream the binary body.
+   */
+  async exportAgent(password: string, includeLogs = false): Promise<Response> {
+    if (!this.apiAvailable) {
+      throw new Error("API not available (no HTTP origin)");
+    }
+    const token = this.apiToken;
+    const res = await fetch(`${this.baseUrl}/api/agent/export`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ password, includeLogs }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: res.statusText })) as Record<string, string>;
+      const err = new Error(body.error ?? `HTTP ${res.status}`);
+      (err as Error & { status?: number }).status = res.status;
+      throw err;
+    }
+    return res;
+  }
+
+  /** Get an estimate of the export size. */
+  async getExportEstimate(): Promise<{
+    estimatedBytes: number;
+    memoriesCount: number;
+    entitiesCount: number;
+    roomsCount: number;
+    worldsCount: number;
+    tasksCount: number;
+  }> {
+    return this.fetch("/api/agent/export/estimate");
+  }
+
+  /**
+   * Import an agent from a password-encrypted .eliza-agent file.
+   * Encodes the password and file into a binary envelope.
+   */
+  async importAgent(
+    password: string,
+    fileBuffer: ArrayBuffer,
+  ): Promise<{
+    success: boolean;
+    agentId: string;
+    agentName: string;
+    counts: Record<string, number>;
+  }> {
+    if (!this.apiAvailable) {
+      throw new Error("API not available (no HTTP origin)");
+    }
+    const passwordBytes = new TextEncoder().encode(password);
+    const envelope = new Uint8Array(4 + passwordBytes.length + fileBuffer.byteLength);
+    const view = new DataView(envelope.buffer);
+    view.setUint32(0, passwordBytes.length, false);
+    envelope.set(passwordBytes, 4);
+    envelope.set(new Uint8Array(fileBuffer), 4 + passwordBytes.length);
+
+    const token = this.apiToken;
+    const res = await fetch(`${this.baseUrl}/api/agent/import`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: envelope,
+    });
+
+    const data = await res.json() as {
+      error?: string;
+      success?: boolean;
+      agentId?: string;
+      agentName?: string;
+      counts?: Record<string, number>;
+    };
+    if (!res.ok || !data.success) {
+      throw new Error(data.error ?? `Import failed (${res.status})`);
+    }
+    return data as {
+      success: boolean;
+      agentId: string;
+      agentName: string;
+      counts: Record<string, number>;
+    };
+  }
+
   // Wallet
 
   async getWalletAddresses(): Promise<WalletAddresses> { return this.fetch("/api/wallet/addresses"); }
@@ -346,6 +554,10 @@ export class MilaidyClient {
   async getWalletConfig(): Promise<WalletConfigStatus> { return this.fetch("/api/wallet/config"); }
   async updateWalletConfig(config: Record<string, string>): Promise<{ ok: boolean }> { return this.fetch("/api/wallet/config", { method: "PUT", body: JSON.stringify(config) }); }
   async exportWalletKeys(): Promise<WalletExportResult> { return this.fetch("/api/wallet/export", { method: "POST", body: JSON.stringify({ confirm: true }) }); }
+
+  // Cloud
+  async getCloudStatus(): Promise<CloudStatus> { return this.fetch("/api/cloud/status"); }
+  async getCloudCredits(): Promise<CloudCredits> { return this.fetch("/api/cloud/credits"); }
 
   // WebSocket
 
@@ -441,6 +653,109 @@ export class MilaidyClient {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type: "chat", text }));
     }
+  }
+
+  // ── Database API ──────────────────────────────────────────────────────
+
+  async getDatabaseStatus(): Promise<DatabaseStatus> {
+    return this.fetch("/api/database/status");
+  }
+
+  async getDatabaseConfig(): Promise<DatabaseConfigResponse> {
+    return this.fetch("/api/database/config");
+  }
+
+  async saveDatabaseConfig(config: {
+    provider?: DatabaseProviderType;
+    pglite?: { dataDir?: string };
+    postgres?: {
+      connectionString?: string;
+      host?: string;
+      port?: number;
+      database?: string;
+      user?: string;
+      password?: string;
+      ssl?: boolean;
+    };
+  }): Promise<{ saved: boolean; needsRestart: boolean }> {
+    return this.fetch("/api/database/config", {
+      method: "PUT",
+      body: JSON.stringify(config),
+    });
+  }
+
+  async testDatabaseConnection(creds: {
+    connectionString?: string;
+    host?: string;
+    port?: number;
+    database?: string;
+    user?: string;
+    password?: string;
+    ssl?: boolean;
+  }): Promise<ConnectionTestResult> {
+    return this.fetch("/api/database/test", {
+      method: "POST",
+      body: JSON.stringify(creds),
+    });
+  }
+
+  async getDatabaseTables(): Promise<{ tables: TableInfo[] }> {
+    return this.fetch("/api/database/tables");
+  }
+
+  async getDatabaseRows(
+    table: string,
+    opts?: { offset?: number; limit?: number; sort?: string; order?: "asc" | "desc"; search?: string },
+  ): Promise<TableRowsResponse> {
+    const params = new URLSearchParams();
+    if (opts?.offset != null) params.set("offset", String(opts.offset));
+    if (opts?.limit != null) params.set("limit", String(opts.limit));
+    if (opts?.sort) params.set("sort", opts.sort);
+    if (opts?.order) params.set("order", opts.order);
+    if (opts?.search) params.set("search", opts.search);
+    const qs = params.toString();
+    return this.fetch(`/api/database/tables/${encodeURIComponent(table)}/rows${qs ? `?${qs}` : ""}`);
+  }
+
+  async insertDatabaseRow(
+    table: string,
+    data: Record<string, unknown>,
+  ): Promise<{ inserted: boolean; row: Record<string, unknown> | null }> {
+    return this.fetch(`/api/database/tables/${encodeURIComponent(table)}/rows`, {
+      method: "POST",
+      body: JSON.stringify({ data }),
+    });
+  }
+
+  async updateDatabaseRow(
+    table: string,
+    where: Record<string, unknown>,
+    data: Record<string, unknown>,
+  ): Promise<{ updated: boolean; row: Record<string, unknown> }> {
+    return this.fetch(`/api/database/tables/${encodeURIComponent(table)}/rows`, {
+      method: "PUT",
+      body: JSON.stringify({ where, data }),
+    });
+  }
+
+  async deleteDatabaseRow(
+    table: string,
+    where: Record<string, unknown>,
+  ): Promise<{ deleted: boolean; row: Record<string, unknown> }> {
+    return this.fetch(`/api/database/tables/${encodeURIComponent(table)}/rows`, {
+      method: "DELETE",
+      body: JSON.stringify({ where }),
+    });
+  }
+
+  async executeDatabaseQuery(
+    sql: string,
+    readOnly = true,
+  ): Promise<QueryResult> {
+    return this.fetch("/api/database/query", {
+      method: "POST",
+      body: JSON.stringify({ sql, readOnly }),
+    });
   }
 
   disconnectWs(): void {

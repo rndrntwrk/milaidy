@@ -15,6 +15,7 @@ import {
   type SkillInfo,
   type LogEntry,
   type OnboardingOptions,
+  type InventoryProviderOption,
   type ExtensionStatus,
   type WalletAddresses,
   type WalletBalancesResponse,
@@ -23,6 +24,7 @@ import {
   type WalletExportResult,
 } from "./api-client.js";
 import { tabFromPath, pathForTab, type Tab, TAB_GROUPS, titleForTab } from "./navigation.js";
+import "./database-viewer.js";
 
 const CHAT_STORAGE_KEY = "milaidy:chatMessages";
 const THEME_STORAGE_KEY = "milaidy:theme";
@@ -40,7 +42,7 @@ export class MilaidyApp extends LitElement {
   @state() chatInput = "";
   @state() chatSending = false;
   @state() plugins: PluginInfo[] = [];
-  @state() pluginFilter: "all" | "ai-provider" | "connector" | "database" | "feature" = "all";
+  @state() pluginFilter: "all" | "ai-provider" | "connector" | "feature" = "all";
   @state() pluginSearch = "";
   @state() pluginSettingsOpen: Set<string> = new Set();
   @state() skills: SkillInfo[] = [];
@@ -57,6 +59,14 @@ export class MilaidyApp extends LitElement {
   @state() extensionChecking = false;
 
   // Wallet / Inventory state
+
+  // Cloud state
+  @state() cloudConnected = false;
+  @state() cloudCredits: number | null = null;
+  @state() cloudCreditsLow = false;
+  @state() cloudCreditsCritical = false;
+  @state() cloudTopUpUrl = "https://www.elizacloud.ai/dashboard/billing";
+  private cloudPollInterval: ReturnType<typeof setInterval> | null = null;
   @state() walletAddresses: WalletAddresses | null = null;
   @state() walletConfig: WalletConfigStatus | null = null;
   @state() walletBalances: WalletBalancesResponse | null = null;
@@ -70,15 +80,34 @@ export class MilaidyApp extends LitElement {
   @state() inventorySort: "chain" | "symbol" | "value" = "value";
   @state() walletError: string | null = null;
 
+  // Agent export/import state
+  @state() exportBusy = false;
+  @state() exportPassword = "";
+  @state() exportIncludeLogs = false;
+  @state() exportError: string | null = null;
+  @state() exportSuccess: string | null = null;
+  @state() importBusy = false;
+  @state() importPassword = "";
+  @state() importFile: File | null = null;
+  @state() importError: string | null = null;
+  @state() importSuccess: string | null = null;
+
   // Onboarding wizard state
-  @state() onboardingStep = 0;
+  @state() onboardingStep: "welcome" | "name" | "style" | "theme" | "runMode" | "cloudProvider" | "modelSelection" | "llmProvider" | "inventorySetup" = "welcome";
   @state() onboardingOptions: OnboardingOptions | null = null;
   @state() onboardingName = "";
   @state() onboardingStyle = "";
+  @state() onboardingTheme: "light" | "dark" = "light";
+  @state() onboardingRunMode: "local" | "cloud" | "" = "";
+  @state() onboardingCloudProvider = "";
+  @state() onboardingSmallModel = "claude-haiku";
+  @state() onboardingLargeModel = "claude-sonnet-4-5";
   @state() onboardingProvider = "";
   @state() onboardingApiKey = "";
-  @state() onboardingTelegramToken = "";
-  @state() onboardingDiscordToken = "";
+  @state() onboardingSelectedChains: Set<string> = new Set(["evm", "solana"]);
+  @state() onboardingRpcSelections: Record<string, string> = {};
+  @state() onboardingRpcKeys: Record<string, string> = {};
+  @state() private isMobileDevice = false;
 
   static styles = css`
     :host {
@@ -294,6 +323,20 @@ export class MilaidyApp extends LitElement {
       font-family: var(--mono);
     }
 
+
+    /* Cloud credit badge */
+    .credit-badge-wrapper { display: inline-flex; }
+    .credit-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 10px; border: 1px solid var(--border);
+      background: var(--bg); font-family: var(--mono);
+      font-size: 12px; line-height: 1; text-decoration: none;
+      color: var(--fg); transition: border-color 0.15s, color 0.15s;
+    }
+    .credit-badge:hover { border-color: var(--accent); color: var(--accent); }
+    .credit-badge.credit-ok { border-color: #2d8a4e; color: #2d8a4e; }
+    .credit-badge.credit-low { border-color: #b8860b; color: #b8860b; }
+    .credit-badge.credit-critical { border-color: #c0392b; color: #c0392b; }
     .copy-btn {
       padding: 2px 6px;
       border: 1px solid var(--border);
@@ -743,6 +786,40 @@ export class MilaidyApp extends LitElement {
       outline: none;
     }
 
+    .onboarding-options-scroll {
+      max-height: 300px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .theme-option {
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .inventory-chain-block {
+      margin-bottom: 12px;
+    }
+
+    .inventory-chain-block:last-child {
+      margin-bottom: 0;
+    }
+
+    @media (max-width: 768px) {
+      .onboarding {
+        margin: 20px auto;
+        padding: 0 8px;
+      }
+
+      .onboarding-options-scroll {
+        max-height: 240px;
+      }
+
+      .onboarding-avatar {
+        width: 80px !important;
+        height: 80px !important;
+      }
+    }
+
     .btn {
       padding: 8px 24px;
       border: 1px solid var(--accent);
@@ -1025,6 +1102,7 @@ export class MilaidyApp extends LitElement {
   disconnectedCallback(): void {
     super.disconnectedCallback();
     window.removeEventListener("popstate", this.handlePopState);
+    if (this.cloudPollInterval) clearInterval(this.cloudPollInterval);
     client.disconnectWs();
   }
 
@@ -1108,6 +1186,10 @@ export class MilaidyApp extends LitElement {
       // Wallet may not be configured yet
     }
 
+
+    // Load cloud credit status and start polling
+    this.pollCloudCredits();
+    this.cloudPollInterval = setInterval(() => this.pollCloudCredits(), 60_000);
     // Load tab from URL and trigger data loading for it
     const tab = tabFromPath(window.location.pathname);
     if (tab) {
@@ -1239,13 +1321,19 @@ export class MilaidyApp extends LitElement {
       // Reset local UI state and show onboarding
       this.agentStatus = null;
       this.onboardingComplete = false;
-      this.onboardingStep = 0;
+      this.onboardingStep = "welcome";
       this.onboardingName = "";
       this.onboardingStyle = "";
+      this.onboardingTheme = this.isDarkMode ? "dark" : "light";
+      this.onboardingRunMode = "";
+      this.onboardingCloudProvider = "";
+      this.onboardingSmallModel = "claude-haiku";
+      this.onboardingLargeModel = "claude-sonnet-4-5";
       this.onboardingProvider = "";
       this.onboardingApiKey = "";
-      this.onboardingTelegramToken = "";
-      this.onboardingDiscordToken = "";
+      this.onboardingSelectedChains = new Set(["evm", "solana"]);
+      this.onboardingRpcSelections = {};
+      this.onboardingRpcKeys = {};
       this.chatMessages = [];
       localStorage.removeItem(CHAT_STORAGE_KEY);
       this.configRaw = {};
@@ -1261,6 +1349,73 @@ export class MilaidyApp extends LitElement {
       } catch { /* ignore */ }
     } catch {
       window.alert("Reset failed. Check the console for details.");
+    }
+  }
+
+  // --- Agent Export / Import ---
+
+  private async handleAgentExport(): Promise<void> {
+    if (this.exportBusy || this.exportPassword.length < 4) return;
+
+    this.exportBusy = true;
+    this.exportError = null;
+    this.exportSuccess = null;
+
+    try {
+      const resp = await client.exportAgent(this.exportPassword, this.exportIncludeLogs);
+
+      const blob = await resp.blob();
+      const disposition = resp.headers.get("Content-Disposition") ?? "";
+      const filenameMatch = /filename="?([^"]+)"?/.exec(disposition);
+      const filename = filenameMatch?.[1] ?? "agent-export.eliza-agent";
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      this.exportSuccess = `Exported successfully (${(blob.size / 1024).toFixed(0)} KB)`;
+      this.exportPassword = "";
+    } catch (err) {
+      this.exportError = err instanceof Error ? err.message : "Export failed";
+    } finally {
+      this.exportBusy = false;
+    }
+  }
+
+  private async handleAgentImport(): Promise<void> {
+    if (this.importBusy || !this.importFile || this.importPassword.length < 4) return;
+
+    this.importBusy = true;
+    this.importError = null;
+    this.importSuccess = null;
+
+    try {
+      const fileBuffer = await this.importFile.arrayBuffer();
+      const result = await client.importAgent(this.importPassword, fileBuffer);
+
+      const counts = result.counts;
+      const summary = [
+        counts.memories ? `${counts.memories} memories` : null,
+        counts.entities ? `${counts.entities} entities` : null,
+        counts.rooms ? `${counts.rooms} rooms` : null,
+        counts.relationships ? `${counts.relationships} relationships` : null,
+        counts.worlds ? `${counts.worlds} worlds` : null,
+        counts.tasks ? `${counts.tasks} tasks` : null,
+        counts.logs ? `${counts.logs} logs` : null,
+      ].filter(Boolean).join(", ");
+
+      this.importSuccess = `Imported "${result.agentName}" successfully: ${summary || "no data"}. Restart the agent to activate.`;
+      this.importPassword = "";
+      this.importFile = null;
+    } catch (err) {
+      this.importError = err instanceof Error ? err.message : "Import failed";
+    } finally {
+      this.importBusy = false;
     }
   }
 
@@ -1348,42 +1503,158 @@ export class MilaidyApp extends LitElement {
 
   // --- Onboarding ---
 
+  /** Detect if running on a mobile device (Capacitor native or small screen). */
+  private detectMobile(): boolean {
+    const cap = (window as Record<string, unknown>).Capacitor as Record<string, unknown> | undefined;
+    if (cap && typeof cap.getPlatform === "function") {
+      const platform = (cap.getPlatform as () => string)();
+      if (platform === "ios" || platform === "android") return true;
+    }
+    return window.matchMedia("(max-width: 768px)").matches;
+  }
+
   private async handleOnboardingNext(): Promise<void> {
-    this.onboardingStep += 1;
+    const opts = this.onboardingOptions;
+    switch (this.onboardingStep) {
+      case "welcome":
+        this.onboardingStep = "name";
+        break;
+      case "name":
+        this.onboardingStep = "style";
+        break;
+      case "style":
+        this.onboardingStep = "theme";
+        break;
+      case "theme": {
+        this.isDarkMode = this.onboardingTheme === "dark";
+        this.updateThemeAttribute();
+        localStorage.setItem(THEME_STORAGE_KEY, this.onboardingTheme);
+        if (this.isMobileDevice) {
+          this.onboardingRunMode = "cloud";
+          if (opts && opts.cloudProviders.length === 1) {
+            this.onboardingCloudProvider = opts.cloudProviders[0].id;
+            this.onboardingStep = "modelSelection";
+          } else {
+            this.onboardingStep = "cloudProvider";
+          }
+        } else {
+          this.onboardingStep = "runMode";
+        }
+        break;
+      }
+      case "runMode":
+        if (this.onboardingRunMode === "cloud") {
+          if (opts && opts.cloudProviders.length === 1) {
+            this.onboardingCloudProvider = opts.cloudProviders[0].id;
+            this.onboardingStep = "modelSelection";
+          } else {
+            this.onboardingStep = "cloudProvider";
+          }
+        } else {
+          this.onboardingStep = "llmProvider";
+        }
+        break;
+      case "cloudProvider":
+        this.onboardingStep = "modelSelection";
+        break;
+      case "modelSelection":
+        await this.handleOnboardingFinish();
+        break;
+      case "llmProvider":
+        this.onboardingStep = "inventorySetup";
+        break;
+      case "inventorySetup":
+        await this.handleOnboardingFinish();
+        break;
+    }
+  }
+
+  private handleOnboardingBack(): void {
+    switch (this.onboardingStep) {
+      case "name":
+        this.onboardingStep = "welcome";
+        break;
+      case "style":
+        this.onboardingStep = "name";
+        break;
+      case "theme":
+        this.onboardingStep = "style";
+        break;
+      case "runMode":
+        this.onboardingStep = "theme";
+        break;
+      case "cloudProvider":
+        this.onboardingStep = this.isMobileDevice ? "theme" : "runMode";
+        break;
+      case "modelSelection":
+        if (this.onboardingOptions && this.onboardingOptions.cloudProviders.length > 1) {
+          this.onboardingStep = "cloudProvider";
+        } else {
+          this.onboardingStep = this.isMobileDevice ? "theme" : "runMode";
+        }
+        break;
+      case "llmProvider":
+        this.onboardingStep = "runMode";
+        break;
+      case "inventorySetup":
+        this.onboardingStep = "llmProvider";
+        break;
+    }
   }
 
   private async handleOnboardingFinish(): Promise<void> {
     if (!this.onboardingOptions) return;
 
+    // Find the style the user selected during onboarding
     const style = this.onboardingOptions.styles.find(
       (s) => s.catchphrase === this.onboardingStyle,
     );
 
     const systemPrompt = style?.system
-      ? style.system.replace(/\{name\}/g, this.onboardingName)
+      ? style.system.replace(/\{\{name\}\}/g, this.onboardingName)
       : `You are ${this.onboardingName}, an autonomous AI agent powered by ElizaOS. ${this.onboardingOptions.sharedStyleRules}`;
 
-    await client.submitOnboarding({
-      name: this.onboardingName,
-      bio: style?.bio ?? ["An autonomous AI agent."],
-      systemPrompt,
-      style: style?.style,
-      adjectives: style?.adjectives,
-      topics: style?.topics,
-      messageExamples: style?.messageExamples,
-      provider: this.onboardingProvider || undefined,
-      providerApiKey: this.onboardingApiKey || undefined,
-      telegramBotToken: this.onboardingTelegramToken || undefined,
-      discordBotToken: this.onboardingDiscordToken || undefined,
-    });
+    // Build inventory providers array
+    const inventoryProviders: Array<{ chain: string; rpcProvider: string; rpcApiKey?: string }> = [];
+    if (this.onboardingRunMode === "local") {
+      for (const chain of this.onboardingSelectedChains) {
+        const rpcProvider = this.onboardingRpcSelections[chain] || "elizacloud";
+        const rpcApiKey = this.onboardingRpcKeys[`${chain}:${rpcProvider}`] || undefined;
+        inventoryProviders.push({ chain, rpcProvider, rpcApiKey });
+      }
+    }
+
+    try {
+      await client.submitOnboarding({
+        name: this.onboardingName,
+        theme: this.onboardingTheme,
+        runMode: (this.onboardingRunMode || "local") as "local" | "cloud",
+        bio: style?.bio ?? ["An autonomous AI agent."],
+        systemPrompt,
+        style: style?.style,
+        adjectives: style?.adjectives,
+        topics: style?.topics,
+        messageExamples: style?.messageExamples,
+        cloudProvider: this.onboardingRunMode === "cloud" ? this.onboardingCloudProvider : undefined,
+        smallModel: this.onboardingRunMode === "cloud" ? this.onboardingSmallModel : undefined,
+        largeModel: this.onboardingRunMode === "cloud" ? this.onboardingLargeModel : undefined,
+        provider: this.onboardingRunMode === "local" ? this.onboardingProvider || undefined : undefined,
+        providerApiKey: this.onboardingRunMode === "local" ? this.onboardingApiKey || undefined : undefined,
+        inventoryProviders: inventoryProviders.length > 0 ? inventoryProviders : undefined,
+      });
+    } catch (err) {
+      console.error("[milaidy] Onboarding submission failed:", err);
+      window.alert(`Setup failed: ${err instanceof Error ? err.message : "network error"}. Please try again.`);
+      return;
+    }
 
     this.onboardingComplete = true;
 
-    // Restart the agent so the runtime picks up the new config
-    // (name, provider keys, etc.) that was just saved by submitOnboarding.
     try {
       this.agentStatus = await client.restartAgent();
-    } catch { /* ignore */ }
+    } catch {
+      // Agent restart may fail if not yet running — non-fatal
+    }
   }
 
   // --- Render ---
@@ -1459,6 +1730,50 @@ export class MilaidyApp extends LitElement {
             <button class="lifecycle-btn" @click=${this.handlePairingSubmit} ?disabled=${this.pairingBusy}>
               ${this.pairingBusy ? "Pairing..." : "Pair"}
             </button>
+
+  private async pollCloudCredits(): Promise<void> {
+    const cloudStatus = await client.getCloudStatus().catch(() => null);
+    if (!cloudStatus) return;
+    this.cloudConnected = cloudStatus.connected;
+    if (cloudStatus.topUpUrl) this.cloudTopUpUrl = cloudStatus.topUpUrl;
+    if (cloudStatus.connected) {
+      const credits = await client.getCloudCredits().catch(() => null);
+      if (credits) {
+        this.cloudCredits = credits.balance;
+        this.cloudCreditsLow = credits.low ?? false;
+        this.cloudCreditsCritical = credits.critical ?? false;
+        if (credits.topUpUrl) this.cloudTopUpUrl = credits.topUpUrl;
+      }
+    }
+  }
+
+  private renderCloudCreditBadge() {
+    if (!this.cloudConnected || this.cloudCredits === null) return html``;
+    const formatted = `$${this.cloudCredits.toFixed(2)}`;
+    const colorClass = this.cloudCreditsCritical
+      ? "credit-critical"
+      : this.cloudCreditsLow
+        ? "credit-low"
+        : "credit-ok";
+    return html`
+      <div class="credit-badge-wrapper">
+        <a
+          class="credit-badge ${colorClass}"
+          href=${this.cloudTopUpUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="ElizaCloud credits"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/>
+            <path d="M12 18V6"/>
+          </svg>
+          <span>${formatted}</span>
+        </a>
+      </div>
+    `;
+  }
           </div>
           ${this.pairingError ? html`<div class="pairing-error">${this.pairingError}</div>` : null}
         </div>
@@ -1476,6 +1791,7 @@ export class MilaidyApp extends LitElement {
         <div style="display:flex;align-items:center;gap:12px;">
           <span class="logo">${name}</span>
           ${this.renderWalletIcon()}
+          ${this.renderCloudCreditBadge()}
         </div>
         <div style="display:flex;align-items:center;gap:12px;">
           ${this.renderThemeToggle()}
@@ -1605,6 +1921,7 @@ export class MilaidyApp extends LitElement {
       case "inventory": return this.renderInventory();
       case "plugins": return this.renderPlugins();
       case "skills": return this.renderSkills();
+      case "database": return this.renderDatabase();
       case "config": return this.renderConfig();
       case "logs": return this.renderLogs();
       default: return this.renderChat();
@@ -1663,17 +1980,18 @@ export class MilaidyApp extends LitElement {
   }
 
   private renderPlugins() {
-    const categories = ["all", "ai-provider", "connector", "database", "feature"] as const;
+    const categories = ["all", "ai-provider", "connector", "feature"] as const;
     const categoryLabels: Record<string, string> = {
       "all": "All",
       "ai-provider": "AI Provider",
       "connector": "Connector",
-      "database": "Database",
       "feature": "Feature",
     };
 
     const searchLower = this.pluginSearch.toLowerCase();
     const filtered = this.plugins.filter((p) => {
+      // Database plugins are managed via the dedicated Database tab
+      if (p.category === "database") return false;
       const matchesCategory = this.pluginFilter === "all" || p.category === this.pluginFilter;
       const matchesSearch = !searchLower
         || p.name.toLowerCase().includes(searchLower)
@@ -2357,6 +2675,10 @@ export class MilaidyApp extends LitElement {
   // Config
   // ═══════════════════════════════════════════════════════════════════════
 
+  private renderDatabase() {
+    return html`<milaidy-database @request-restart=${() => this.handleRestart()}></milaidy-database>`;
+  }
+
   private renderConfig() {
     const ext = this.extensionStatus;
     const relayOk = ext?.relayReachable === true;
@@ -2494,6 +2816,88 @@ export class MilaidyApp extends LitElement {
         </div>
       </div>
 
+      <!-- Agent Export / Import Section -->
+      <div style="margin-top:24px;padding:16px;border:1px solid var(--border);background:var(--card);">
+        <div style="margin-bottom:16px;">
+          <div style="font-weight:bold;font-size:14px;">Agent Export / Import</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px;">
+            Migrate your entire agent (character, memories, chats, secrets, relationships) to another machine.
+            The export is password-encrypted.
+          </div>
+        </div>
+
+        <!-- Export -->
+        <div style="padding:12px;border:1px solid var(--border);background:var(--bg-muted);margin-bottom:12px;">
+          <div style="font-weight:bold;font-size:13px;margin-bottom:8px;">Export Agent</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <input
+                type="password"
+                placeholder="Encryption password (min 4 characters)"
+                .value=${this.exportPassword}
+                @input=${(e: Event) => { this.exportPassword = (e.target as HTMLInputElement).value; }}
+                style="flex:1;padding:6px 10px;border:1px solid var(--border);background:var(--card);font-size:12px;font-family:var(--mono);"
+              />
+              <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);white-space:nowrap;">
+                <input
+                  type="checkbox"
+                  .checked=${this.exportIncludeLogs}
+                  @change=${(e: Event) => { this.exportIncludeLogs = (e.target as HTMLInputElement).checked; }}
+                />
+                Include logs
+              </label>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <button
+                class="btn"
+                style="font-size:12px;padding:6px 16px;"
+                ?disabled=${this.exportBusy || this.exportPassword.length < 4}
+                @click=${() => this.handleAgentExport()}
+              >${this.exportBusy ? "Exporting..." : "Download Export"}</button>
+              ${this.exportError ? html`<span style="font-size:11px;color:var(--danger, #e74c3c);">${this.exportError}</span>` : ""}
+              ${this.exportSuccess ? html`<span style="font-size:11px;color:var(--ok, #16a34a);">${this.exportSuccess}</span>` : ""}
+            </div>
+          </div>
+        </div>
+
+        <!-- Import -->
+        <div style="padding:12px;border:1px solid var(--border);background:var(--bg-muted);">
+          <div style="font-weight:bold;font-size:13px;margin-bottom:8px;">Import Agent</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <input
+                type="file"
+                accept=".eliza-agent"
+                @change=${(e: Event) => {
+                  const input = e.target as HTMLInputElement;
+                  this.importFile = input.files?.[0] ?? null;
+                  this.importError = null;
+                  this.importSuccess = null;
+                }}
+                style="flex:1;font-size:12px;"
+              />
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <input
+                type="password"
+                placeholder="Decryption password"
+                .value=${this.importPassword}
+                @input=${(e: Event) => { this.importPassword = (e.target as HTMLInputElement).value; }}
+                style="flex:1;padding:6px 10px;border:1px solid var(--border);background:var(--card);font-size:12px;font-family:var(--mono);"
+              />
+              <button
+                class="btn"
+                style="font-size:12px;padding:6px 16px;"
+                ?disabled=${this.importBusy || !this.importFile || this.importPassword.length < 4}
+                @click=${() => this.handleAgentImport()}
+              >${this.importBusy ? "Importing..." : "Import Agent"}</button>
+            </div>
+            ${this.importError ? html`<div style="font-size:11px;color:var(--danger, #e74c3c);margin-top:4px;">${this.importError}</div>` : ""}
+            ${this.importSuccess ? html`<div style="font-size:11px;color:var(--ok, #16a34a);margin-top:4px;">${this.importSuccess}</div>` : ""}
+          </div>
+        </div>
+      </div>
+
       <div style="margin-top:48px;padding-top:24px;border-top:1px solid var(--border);">
         <h2 style="color:var(--danger, #e74c3c);">Danger Zone</h2>
         <p class="subtitle">Irreversible actions. Proceed with caution.</p>
@@ -2608,11 +3012,15 @@ export class MilaidyApp extends LitElement {
     return html`
       <div class="app-shell">
         <div class="onboarding">
-          ${this.onboardingStep === 0 ? this.renderOnboardingWelcome() : ""}
-          ${this.onboardingStep === 1 ? this.renderOnboardingName(opts) : ""}
-          ${this.onboardingStep === 2 ? this.renderOnboardingStyle(opts) : ""}
-          ${this.onboardingStep === 3 ? this.renderOnboardingProvider(opts) : ""}
-          ${this.onboardingStep === 4 ? this.renderOnboardingChannels() : ""}
+          ${this.onboardingStep === "welcome" ? this.renderOnboardingWelcome() : ""}
+          ${this.onboardingStep === "name" ? this.renderOnboardingName(opts) : ""}
+          ${this.onboardingStep === "style" ? this.renderOnboardingStyle(opts) : ""}
+          ${this.onboardingStep === "theme" ? this.renderOnboardingTheme() : ""}
+          ${this.onboardingStep === "runMode" ? this.renderOnboardingRunMode() : ""}
+          ${this.onboardingStep === "cloudProvider" ? this.renderOnboardingCloudProvider(opts) : ""}
+          ${this.onboardingStep === "modelSelection" ? this.renderOnboardingModelSelection(opts) : ""}
+          ${this.onboardingStep === "llmProvider" ? this.renderOnboardingLlmProvider(opts) : ""}
+          ${this.onboardingStep === "inventorySetup" ? this.renderOnboardingInventory(opts) : ""}
         </div>
       </div>
     `;
@@ -2669,11 +3077,14 @@ export class MilaidyApp extends LitElement {
           />
         </div>
       </div>
-      <button
-        class="btn"
-        @click=${this.handleOnboardingNext}
-        ?disabled=${!this.onboardingName.trim()}
-      >Next</button>
+      <div class="btn-row">
+        <button class="btn btn-outline" @click=${() => this.handleOnboardingBack()}>Back</button>
+        <button
+          class="btn"
+          @click=${this.handleOnboardingNext}
+          ?disabled=${!this.onboardingName.trim()}
+        >Next</button>
+      </div>
     `;
   }
 
@@ -2694,22 +3105,159 @@ export class MilaidyApp extends LitElement {
           `,
         )}
       </div>
-      <button
-        class="btn"
-        @click=${this.handleOnboardingNext}
-        ?disabled=${!this.onboardingStyle}
-      >Next</button>
+      <div class="btn-row">
+        <button class="btn btn-outline" @click=${() => this.handleOnboardingBack()}>Back</button>
+        <button
+          class="btn"
+          @click=${this.handleOnboardingNext}
+          ?disabled=${!this.onboardingStyle}
+        >Next</button>
+      </div>
     `;
   }
 
-  private renderOnboardingProvider(opts: OnboardingOptions) {
+  private renderOnboardingTheme() {
+    return html`
+      <img class="onboarding-avatar" src="/pfp.jpg" alt="milAIdy" style="width:100px;height:100px;" />
+      <div class="onboarding-speech">do you prefer it light or dark?</div>
+      <div class="onboarding-options" style="flex-direction:row;gap:12px;">
+        <div
+          class="onboarding-option theme-option ${this.onboardingTheme === "light" ? "selected" : ""}"
+          @click=${() => { this.onboardingTheme = "light"; }}
+          style="flex:1;text-align:center;padding:20px 16px;"
+        >
+          <div style="font-size:28px;margin-bottom:8px;">&#9728;</div>
+          <div class="label">Light</div>
+        </div>
+        <div
+          class="onboarding-option theme-option ${this.onboardingTheme === "dark" ? "selected" : ""}"
+          @click=${() => { this.onboardingTheme = "dark"; }}
+          style="flex:1;text-align:center;padding:20px 16px;"
+        >
+          <div style="font-size:28px;margin-bottom:8px;">&#9790;</div>
+          <div class="label">Dark</div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-outline" @click=${() => this.handleOnboardingBack()}>Back</button>
+        <button class="btn" @click=${this.handleOnboardingNext}>Next</button>
+      </div>
+    `;
+  }
+
+  private renderOnboardingRunMode() {
+    return html`
+      <img class="onboarding-avatar" src="/pfp.jpg" alt="milAIdy" style="width:100px;height:100px;" />
+      <div class="onboarding-speech">where should I run?</div>
+      <div class="onboarding-options">
+        <div
+          class="onboarding-option ${this.onboardingRunMode === "local" ? "selected" : ""}"
+          @click=${() => { this.onboardingRunMode = "local"; }}
+        >
+          <div class="label">Local</div>
+          <div class="hint">Run on this device. You configure your own LLM provider and wallets.</div>
+        </div>
+        <div
+          class="onboarding-option ${this.onboardingRunMode === "cloud" ? "selected" : ""}"
+          @click=${() => { this.onboardingRunMode = "cloud"; }}
+        >
+          <div class="label">Cloud</div>
+          <div class="hint">Run in the cloud. Wallets, LLMs, and RPCs managed for you.</div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-outline" @click=${() => this.handleOnboardingBack()}>Back</button>
+        <button
+          class="btn"
+          @click=${this.handleOnboardingNext}
+          ?disabled=${!this.onboardingRunMode}
+        >Next</button>
+      </div>
+    `;
+  }
+
+  private renderOnboardingCloudProvider(opts: OnboardingOptions) {
+    return html`
+      <img class="onboarding-avatar" src="/pfp.jpg" alt="milAIdy" style="width:100px;height:100px;" />
+      <div class="onboarding-speech">which cloud provider?</div>
+      <div class="onboarding-options">
+        ${opts.cloudProviders.map(
+          (cp) => html`
+            <div
+              class="onboarding-option ${this.onboardingCloudProvider === cp.id ? "selected" : ""}"
+              @click=${() => { this.onboardingCloudProvider = cp.id; }}
+            >
+              <div class="label">${cp.name}</div>
+              <div class="hint">${cp.description}</div>
+            </div>
+          `,
+        )}
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-outline" @click=${() => this.handleOnboardingBack()}>Back</button>
+        <button
+          class="btn"
+          @click=${this.handleOnboardingNext}
+          ?disabled=${!this.onboardingCloudProvider}
+        >Next</button>
+      </div>
+    `;
+  }
+
+  private renderOnboardingModelSelection(opts: OnboardingOptions) {
+    return html`
+      <img class="onboarding-avatar" src="/pfp.jpg" alt="milAIdy" style="width:100px;height:100px;" />
+      <div class="onboarding-speech">pick your models</div>
+
+      <div style="text-align:left;margin-bottom:16px;">
+        <label style="font-size:13px;font-weight:bold;color:var(--text-strong);display:block;margin-bottom:8px;">Small Model <span style="font-weight:normal;color:var(--muted);">(fast tasks)</span></label>
+        <div class="onboarding-options">
+          ${opts.models.small.map(
+            (m) => html`
+              <div
+                class="onboarding-option ${this.onboardingSmallModel === m.id ? "selected" : ""}"
+                @click=${() => { this.onboardingSmallModel = m.id; }}
+              >
+                <div class="label">${m.name}</div>
+                <div class="hint">${m.description}</div>
+              </div>
+            `,
+          )}
+        </div>
+      </div>
+
+      <div style="text-align:left;margin-bottom:8px;">
+        <label style="font-size:13px;font-weight:bold;color:var(--text-strong);display:block;margin-bottom:8px;">Large Model <span style="font-weight:normal;color:var(--muted);">(complex reasoning)</span></label>
+        <div class="onboarding-options">
+          ${opts.models.large.map(
+            (m) => html`
+              <div
+                class="onboarding-option ${this.onboardingLargeModel === m.id ? "selected" : ""}"
+                @click=${() => { this.onboardingLargeModel = m.id; }}
+              >
+                <div class="label">${m.name}</div>
+                <div class="hint">${m.description}</div>
+              </div>
+            `,
+          )}
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-outline" @click=${() => this.handleOnboardingBack()}>Back</button>
+        <button class="btn" @click=${this.handleOnboardingNext}>Finish</button>
+      </div>
+    `;
+  }
+
+  private renderOnboardingLlmProvider(opts: OnboardingOptions) {
     const selected = opts.providers.find((p) => p.id === this.onboardingProvider);
     const needsKey = selected && selected.envKey && selected.id !== "elizacloud" && selected.id !== "ollama";
 
     return html`
       <img class="onboarding-avatar" src="/pfp.jpg" alt="milAIdy" style="width:100px;height:100px;" />
       <div class="onboarding-speech">which AI provider do you want to use?</div>
-      <div class="onboarding-options">
+      <div class="onboarding-options onboarding-options-scroll">
         ${opts.providers.map(
           (provider) => html`
             <div
@@ -2733,44 +3281,83 @@ export class MilaidyApp extends LitElement {
             />
           `
         : ""}
-      <button
-        class="btn"
-        @click=${this.handleOnboardingNext}
-        ?disabled=${!this.onboardingProvider || (needsKey && !this.onboardingApiKey.trim())}
-      >Next</button>
+      <div class="btn-row">
+        <button class="btn btn-outline" @click=${() => this.handleOnboardingBack()}>Back</button>
+        <button
+          class="btn"
+          @click=${this.handleOnboardingNext}
+          ?disabled=${!this.onboardingProvider || (needsKey && !this.onboardingApiKey.trim())}
+        >Next</button>
+      </div>
     `;
   }
 
-  private renderOnboardingChannels() {
+  private renderOnboardingInventory(opts: OnboardingOptions) {
     return html`
-      <h1>Connect to messaging</h1>
-      <p>Optionally connect Telegram and/or Discord. You can skip this.</p>
+      <img class="onboarding-avatar" src="/pfp.jpg" alt="milAIdy" style="width:100px;height:100px;" />
+      <div class="onboarding-speech">want to set up wallets?</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">Select which chains to enable and pick an RPC provider for each. You can skip this and set it up later.</p>
 
-      <div style="text-align: left; margin-bottom: 16px;">
-        <label style="font-size: 13px; color: var(--muted-strong);">Telegram Bot Token</label>
-        <input
-          class="onboarding-input"
-          type="password"
-          placeholder="Paste token from @BotFather"
-          .value=${this.onboardingTelegramToken}
-          @input=${(e: Event) => { this.onboardingTelegramToken = (e.target as HTMLInputElement).value; }}
-        />
-      </div>
-
-      <div style="text-align: left; margin-bottom: 16px;">
-        <label style="font-size: 13px; color: var(--muted-strong);">Discord Bot Token</label>
-        <input
-          class="onboarding-input"
-          type="password"
-          placeholder="Paste token from Discord Developer Portal"
-          .value=${this.onboardingDiscordToken}
-          @input=${(e: Event) => { this.onboardingDiscordToken = (e.target as HTMLInputElement).value; }}
-        />
+      <div class="onboarding-options onboarding-options-scroll" style="text-align:left;">
+        ${opts.inventoryProviders.map(
+          (inv: InventoryProviderOption) => html`
+            <div class="inventory-chain-block">
+              <div
+                class="onboarding-option ${this.onboardingSelectedChains.has(inv.id) ? "selected" : ""}"
+                @click=${() => {
+                  const next = new Set(this.onboardingSelectedChains);
+                  if (next.has(inv.id)) { next.delete(inv.id); } else { next.add(inv.id); }
+                  this.onboardingSelectedChains = next;
+                }}
+              >
+                <div class="label">${inv.name}</div>
+                <div class="hint">${inv.description}</div>
+              </div>
+              ${this.onboardingSelectedChains.has(inv.id) ? html`
+                <div style="margin-top:8px;margin-left:16px;">
+                  <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;">RPC Provider</label>
+                  <div class="onboarding-options" style="margin-top:4px;gap:4px;">
+                    ${inv.rpcProviders.map(
+                      (rpc) => html`
+                        <div
+                          class="onboarding-option ${(this.onboardingRpcSelections[inv.id] || "elizacloud") === rpc.id ? "selected" : ""}"
+                          @click=${() => { this.onboardingRpcSelections = { ...this.onboardingRpcSelections, [inv.id]: rpc.id }; }}
+                          style="padding:8px 12px;"
+                        >
+                          <div class="label" style="font-size:13px;">${rpc.name}</div>
+                          <div class="hint">${rpc.description}</div>
+                        </div>
+                      `,
+                    )}
+                  </div>
+                  ${(() => {
+                    const selRpc = inv.rpcProviders.find((r) => r.id === (this.onboardingRpcSelections[inv.id] || "elizacloud"));
+                    if (selRpc && selRpc.requiresKey) {
+                      const keyId = `${inv.id}:${selRpc.id}`;
+                      return html`
+                        <input
+                          class="onboarding-input"
+                          type="password"
+                          placeholder="${selRpc.name} API Key"
+                          .value=${this.onboardingRpcKeys[keyId] || ""}
+                          @input=${(e: Event) => { this.onboardingRpcKeys = { ...this.onboardingRpcKeys, [keyId]: (e.target as HTMLInputElement).value }; }}
+                          style="margin-top:6px;"
+                        />
+                      `;
+                    }
+                    return "";
+                  })()}
+                </div>
+              ` : ""}
+            </div>
+          `,
+        )}
       </div>
 
       <div class="btn-row">
-        <button class="btn btn-outline" @click=${this.handleOnboardingFinish}>Skip</button>
-        <button class="btn" @click=${this.handleOnboardingFinish}>Finish</button>
+        <button class="btn btn-outline" @click=${() => this.handleOnboardingBack()}>Back</button>
+        <button class="btn btn-outline" @click=${() => this.handleOnboardingFinish()}>Skip</button>
+        <button class="btn" @click=${this.handleOnboardingNext}>Finish</button>
       </div>
     `;
   }
@@ -2782,11 +3369,15 @@ export class MilaidyApp extends LitElement {
     const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
     if (savedTheme === "dark" || savedTheme === "light") {
       this.isDarkMode = savedTheme === "dark";
+      this.onboardingTheme = savedTheme;
     } else {
       // Detect system preference if no saved preference
       this.isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      this.onboardingTheme = this.isDarkMode ? "dark" : "light";
     }
     this.updateThemeAttribute();
+    // Detect mobile device for onboarding flow
+    this.isMobileDevice = this.detectMobile();
   }
 
   private updateThemeAttribute(): void {
