@@ -1,10 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const isCI = !!process.env.CI;
+
 export default defineConfig({
   testDir: "./e2e",
-  fullyParallel: false,
-  workers: 1,
-  retries: process.env.CI ? 2 : 0,
+  fullyParallel: isCI,
+  workers: isCI ? 2 : 1,
+  retries: isCI ? 1 : 0,
   timeout: 30_000,
   reporter: "html",
   use: {
