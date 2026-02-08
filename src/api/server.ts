@@ -9,6 +9,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { WebSocketServer, type WebSocket } from "ws";
 import {
   AgentRuntime,
   ChannelType,
@@ -30,6 +31,7 @@ import {
 } from "../providers/workspace.js";
 import { resolveStateDir } from "../config/paths.js";
 import { validatePluginConfig, type PluginParamInfo } from "./plugin-validation.js";
+import { CORE_PLUGINS } from "../runtime/eliza.js";
 import {
   generateWalletKeys,
   generateWalletForChain,
@@ -103,6 +105,8 @@ interface PluginEntry {
   parameters: PluginParamDef[];
   validationErrors: Array<{ field: string; message: string }>;
   validationWarnings: Array<{ field: string; message: string }>;
+  isCore?: boolean; // True if plugin is in CORE_PLUGINS (essential for app)
+  isActive?: boolean; // True if plugin is currently loaded in runtime
 }
 
 interface SkillEntry {
@@ -212,6 +216,10 @@ function discoverPluginsFromManifest(): PluginEntry[] {
         }));
         const validation = validatePluginConfig(p.id, category, envKey, p.configKeys, undefined, paramInfos);
 
+        // Check if this plugin is in CORE_PLUGINS
+        const pluginPackageName = `@elizaos/plugin-${p.id}`;
+        const isCore = CORE_PLUGINS.includes(pluginPackageName);
+
         return {
           id: p.id,
           name: p.name,
@@ -224,6 +232,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
           parameters,
           validationErrors: validation.errors,
           validationWarnings: validation.warnings,
+          isCore,
+          isActive: false, // Will be updated when runtime is available
         };
       }).sort((a, b) => a.name.localeCompare(b.name));
     } catch (err) {
@@ -955,14 +965,31 @@ async function handleRequest(
 
   // ── GET /api/plugins ────────────────────────────────────────────────────
   if (method === "GET" && pathname === "/api/plugins") {
-    // Update enabled status from runtime (if available)
+    // Update enabled status and active status from runtime (if available)
     if (state.runtime) {
       const loadedNames = state.runtime.plugins.map((p) => p.name);
+      // Log for debugging
+      logger.debug(`[milaidy-api] Loaded plugin names: ${loadedNames.join(", ")}`);
+
       for (const plugin of state.plugins) {
         const suffix = `plugin-${plugin.id}`;
-        plugin.enabled = loadedNames.some(
-          (name) => name === plugin.id || name === suffix || name.endsWith(`/${suffix}`),
+        const packageName = `@elizaos/plugin-${plugin.id}`;
+        const isLoaded = loadedNames.some(
+          (name) => {
+            // Check various name formats
+            return name === plugin.id
+              || name === suffix
+              || name === packageName
+              || name.endsWith(`/${suffix}`)
+              || name.includes(plugin.id);
+          },
         );
+        plugin.enabled = isLoaded;
+        plugin.isActive = isLoaded; // Mark as active if currently loaded in runtime
+
+        if (isLoaded) {
+          logger.debug(`[milaidy-api] Plugin ${plugin.id} is active`);
+        }
       }
     }
 
@@ -1000,8 +1027,84 @@ async function handleRequest(
       return;
     }
 
+    // Handle plugin enable/disable with hot-reload
     if (body.enabled !== undefined) {
       plugin.enabled = body.enabled;
+
+      // Update config.plugins.allow to control which plugins load on next restart
+      const pluginPackageName = `@elizaos/plugin-${pluginId}`;
+
+      if (!state.config.plugins) {
+        state.config.plugins = {};
+      }
+      if (!state.config.plugins.allow) {
+        // Initialize with currently loaded plugins
+        if (state.runtime) {
+          // Normalize all plugin names to @elizaos/plugin-* format
+          state.config.plugins.allow = state.runtime.plugins
+            .map((p) => {
+              const name = p.name;
+              // If already in full package format, keep it
+              if (name.startsWith("@elizaos/plugin-")) {
+                return name;
+              }
+              // Otherwise, convert short name to full package name
+              return `@elizaos/plugin-${name}`;
+            })
+            .filter((name) => {
+              // Filter out internal pseudo-plugins that aren't real npm packages
+              const internalPlugins = [
+                "@elizaos/plugin-bootstrap",
+                "@elizaos/plugin-milaidy",
+              ];
+              return !internalPlugins.includes(name);
+            });
+        } else {
+          // Fallback to CORE_PLUGINS if runtime not available
+          const { CORE_PLUGINS } = await import("../runtime/eliza.js");
+          state.config.plugins.allow = [...CORE_PLUGINS];
+        }
+      }
+
+      // Add or remove plugin from allow list
+      if (body.enabled) {
+        if (!state.config.plugins.allow.includes(pluginPackageName)) {
+          state.config.plugins.allow.push(pluginPackageName);
+          logger.info(`[milaidy-api] Enabled plugin: ${pluginPackageName}`);
+        }
+      } else {
+        state.config.plugins.allow = state.config.plugins.allow.filter(
+          (p) => p !== pluginPackageName
+        );
+        logger.info(`[milaidy-api] Disabled plugin: ${pluginPackageName}`);
+      }
+
+      // Save config with updated plugin list
+      try {
+        saveMilaidyConfig(state.config);
+        logger.info(`[milaidy-api] Saved plugin configuration`);
+      } catch (err) {
+        logger.warn(`[milaidy-api] Failed to save config: ${err instanceof Error ? err.message : String(err)}`);
+      }
+
+      // Trigger runtime restart to apply plugin changes
+      if (ctx?.onRestart) {
+        const onRestartFn = ctx.onRestart;
+        logger.info(`[milaidy-api] Restarting runtime to apply plugin changes...`);
+        setImmediate(async () => {
+          try {
+            const newRuntime = await onRestartFn();
+            if (newRuntime) {
+              state.runtime = newRuntime;
+              state.agentState = "running";
+              logger.info(`[milaidy-api] Runtime restarted successfully with updated plugins`);
+            }
+          } catch (err) {
+            logger.error(`[milaidy-api] Runtime restart failed: ${err instanceof Error ? err.message : String(err)}`);
+            state.agentState = "not_started";
+          }
+        });
+      }
     }
     if (body.config) {
       const pluginParamInfos: PluginParamInfo[] = plugin.parameters.map((p) => ({
@@ -1768,6 +1871,93 @@ export async function startApiServer(opts?: {
     }
   });
 
+  // ---------------------------------------------------------------------------
+  // WebSocket Server
+  // ---------------------------------------------------------------------------
+
+  const wss = new WebSocketServer({ noServer: true });
+  const wsClients = new Set<WebSocket>();
+
+  // Handle WebSocket upgrade
+  server.on("upgrade", (request, socket, head) => {
+    const { pathname } = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
+
+    if (pathname === "/ws") {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit("connection", ws, request);
+      });
+    } else {
+      socket.destroy();
+    }
+  });
+
+  // Handle WebSocket connections
+  wss.on("connection", (ws: WebSocket) => {
+    wsClients.add(ws);
+    addLog("info", `WebSocket client connected (total: ${wsClients.size})`, "websocket");
+
+    // Send initial status
+    const uptime = state.startedAt ? Date.now() - state.startedAt : undefined;
+    ws.send(JSON.stringify({
+      type: "status",
+      state: state.agentState,
+      agentName: state.agentName,
+      model: state.model,
+      uptime,
+      startedAt: state.startedAt,
+    }));
+
+    ws.on("message", (data) => {
+      try {
+        const message = JSON.parse(data.toString()) as Record<string, unknown>;
+        // Handle incoming messages if needed (currently UI only receives, doesn't send)
+        addLog("debug", `WebSocket message received: ${message.type}`, "websocket");
+      } catch (err) {
+        addLog("error", `WebSocket message parse error: ${err}`, "websocket");
+      }
+    });
+
+    ws.on("close", () => {
+      wsClients.delete(ws);
+      addLog("info", `WebSocket client disconnected (remaining: ${wsClients.size})`, "websocket");
+    });
+
+    ws.on("error", (err) => {
+      addLog("error", `WebSocket error: ${err.message}`, "websocket");
+      wsClients.delete(ws);
+    });
+  });
+
+  /** Broadcast message to all connected WebSocket clients */
+  function broadcast(message: Record<string, unknown>): void {
+    const data = JSON.stringify(message);
+    for (const client of wsClients) {
+      if (client.readyState === 1) { // OPEN
+        try {
+          client.send(data);
+        } catch (err) {
+          addLog("error", `WebSocket send error: ${err}`, "websocket");
+        }
+      }
+    }
+  }
+
+  /** Broadcast status updates to connected clients */
+  function broadcastStatus(): void {
+    const uptime = state.startedAt ? Date.now() - state.startedAt : undefined;
+    broadcast({
+      type: "status",
+      state: state.agentState,
+      agentName: state.agentName,
+      model: state.model,
+      uptime,
+      startedAt: state.startedAt,
+    });
+  }
+
+  // Send status updates every 5 seconds
+  const statusInterval = setInterval(broadcastStatus, 5000);
+
   /** Hot-swap the runtime reference (used after an in-process restart). */
   const updateRuntime = (rt: AgentRuntime): void => {
     state.runtime = rt;
@@ -1775,6 +1965,7 @@ export async function startApiServer(opts?: {
     state.agentName = rt.character.name ?? "Milaidy";
     state.startedAt = Date.now();
     addLog("info", `Runtime restarted — agent: ${state.agentName}`, "system");
+    broadcastStatus(); // Notify WebSocket clients of restart
   };
 
   return new Promise((resolve) => {
@@ -1785,7 +1976,11 @@ export async function startApiServer(opts?: {
       logger.info(`[milaidy-api] Listening on http://localhost:${actualPort}`);
       resolve({
         port: actualPort,
-        close: () => new Promise<void>((r) => { server.close(() => r()); }),
+        close: () => new Promise<void>((r) => {
+          clearInterval(statusInterval);
+          wss.close();
+          server.close(() => r());
+        }),
         updateRuntime,
       });
     });

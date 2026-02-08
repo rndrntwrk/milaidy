@@ -38,6 +38,7 @@ export class MilaidyApp extends LitElement {
   @state() chatInput = "";
   @state() chatSending = false;
   @state() plugins: PluginInfo[] = [];
+  @state() pluginViewMode: "active" | "core" | "all" = "active";
   @state() pluginFilter: "all" | "ai-provider" | "connector" | "database" | "feature" = "all";
   @state() pluginSearch = "";
   @state() pluginSettingsOpen: Set<string> = new Set();
@@ -71,6 +72,10 @@ export class MilaidyApp extends LitElement {
   @state() onboardingApiKey = "";
   @state() onboardingTelegramToken = "";
   @state() onboardingDiscordToken = "";
+
+  // Config state
+  @state() configRaw: unknown = null;
+  @state() configText = "";
 
   static styles = css`
     :host {
@@ -978,7 +983,7 @@ export class MilaidyApp extends LitElement {
     // Restore persisted chat messages
     this.loadChatMessages();
 
-    // Connect WebSocket
+    // Connect WebSocket for real-time status updates
     client.connectWs();
     client.onWsEvent("status", (data) => {
       this.agentStatus = data as unknown as AgentStatus;
@@ -1482,8 +1487,16 @@ export class MilaidyApp extends LitElement {
       "feature": "Feature",
     };
 
+    // Filter by view mode first
+    let pluginsByMode = this.plugins;
+    if (this.pluginViewMode === "active") {
+      pluginsByMode = this.plugins.filter((p) => p.isActive);
+    } else if (this.pluginViewMode === "core") {
+      pluginsByMode = this.plugins.filter((p) => p.isCore);
+    }
+
     const searchLower = this.pluginSearch.toLowerCase();
-    const filtered = this.plugins.filter((p) => {
+    const filtered = pluginsByMode.filter((p) => {
       const matchesCategory = this.pluginFilter === "all" || p.category === this.pluginFilter;
       const matchesSearch = !searchLower
         || p.name.toLowerCase().includes(searchLower)
@@ -1502,9 +1515,64 @@ export class MilaidyApp extends LitElement {
       this.pluginSettingsOpen = next;
     };
 
+    const activeCount = this.plugins.filter((p) => p.isActive).length;
+    const coreCount = this.plugins.filter((p) => p.isCore).length;
+
     return html`
       <h2>Plugins</h2>
       <p class="subtitle">Manage plugins and integrations. ${this.plugins.length} plugins discovered.</p>
+
+      <!-- View Mode Tabs -->
+      <div style="display:flex;gap:8px;margin-bottom:16px;border-bottom:2px solid var(--border);padding-bottom:8px;">
+        <button
+          class="view-mode-tab ${this.pluginViewMode === "active" ? "active" : ""}"
+          @click=${() => { this.pluginViewMode = "active"; }}
+          style="
+            padding: 8px 16px;
+            border: none;
+            background: ${this.pluginViewMode === "active" ? "var(--accent)" : "transparent"};
+            color: ${this.pluginViewMode === "active" ? "#fff" : "var(--text)"};
+            cursor: pointer;
+            font-weight: ${this.pluginViewMode === "active" ? "600" : "400"};
+            border-radius: 6px;
+            transition: all 0.2s;
+          "
+        >
+          Active (${activeCount})
+        </button>
+        <button
+          class="view-mode-tab ${this.pluginViewMode === "core" ? "active" : ""}"
+          @click=${() => { this.pluginViewMode = "core"; }}
+          style="
+            padding: 8px 16px;
+            border: none;
+            background: ${this.pluginViewMode === "core" ? "var(--accent)" : "transparent"};
+            color: ${this.pluginViewMode === "core" ? "#fff" : "var(--text)"};
+            cursor: pointer;
+            font-weight: ${this.pluginViewMode === "core" ? "600" : "400"};
+            border-radius: 6px;
+            transition: all 0.2s;
+          "
+        >
+          Core (${coreCount})
+        </button>
+        <button
+          class="view-mode-tab ${this.pluginViewMode === "all" ? "active" : ""}"
+          @click=${() => { this.pluginViewMode = "all"; }}
+          style="
+            padding: 8px 16px;
+            border: none;
+            background: ${this.pluginViewMode === "all" ? "var(--accent)" : "transparent"};
+            color: ${this.pluginViewMode === "all" ? "#fff" : "var(--text)"};
+            cursor: pointer;
+            font-weight: ${this.pluginViewMode === "all" ? "600" : "400"};
+            border-radius: 6px;
+            transition: all 0.2s;
+          "
+        >
+          All (${this.plugins.length})
+        </button>
+      </div>
 
       <input
         class="plugin-search"
@@ -1550,7 +1618,7 @@ export class MilaidyApp extends LitElement {
                   <div class="plugin-item" data-plugin-id=${p.id} style="flex-direction:column;align-items:stretch;">
                     <div style="display:flex;justify-content:space-between;align-items:center;">
                       <div style="flex:1;min-width:0;">
-                        <div style="display:flex;align-items:center;gap:8px;">
+                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                           <div class="plugin-name">${p.name}</div>
                           <span style="font-size:10px;padding:2px 6px;border-radius:8px;background:var(--surface);border:1px solid var(--border);color:var(--muted);">${
                             p.category === "ai-provider" ? "ai provider"
@@ -1558,6 +1626,16 @@ export class MilaidyApp extends LitElement {
                             : p.category === "database" ? "database"
                             : "feature"
                           }</span>
+                          ${p.isCore ? html`
+                            <span style="font-size:9px;padding:2px 6px;border-radius:6px;background:#ff6b35;color:#fff;font-weight:600;letter-spacing:0.5px;">
+                              CORE
+                            </span>
+                          ` : ""}
+                          ${p.isActive ? html`
+                            <span style="font-size:9px;padding:2px 6px;border-radius:6px;background:#4CAF50;color:#fff;font-weight:600;letter-spacing:0.5px;">
+                              ACTIVE
+                            </span>
+                          ` : ""}
                         </div>
                         <div class="plugin-desc">${p.description || "No description"}</div>
                       </div>
@@ -1701,6 +1779,36 @@ export class MilaidyApp extends LitElement {
         plugin.enabled = enabled;
         this.requestUpdate();
       }
+
+      // Refresh plugins after a delay to show updated runtime state
+      // The runtime restarts in background, so we poll to catch when it's done
+      const pollForRuntimeUpdate = async (attempts = 0) => {
+        if (attempts >= 5) return; // Stop after 5 attempts (10 seconds total)
+
+        await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2s
+
+        try {
+          const { plugins } = await client.getPlugins();
+          this.plugins = plugins;
+          this.requestUpdate();
+
+          // Check if the plugin's isActive state matches enabled state
+          const updatedPlugin = plugins.find((p) => p.id === pluginId);
+          if (updatedPlugin && updatedPlugin.isActive === enabled) {
+            // Runtime has updated successfully - stop polling
+            console.log(`Plugin ${pluginId} is now ${enabled ? 'active' : 'inactive'}`);
+            return;
+          }
+
+          // Keep polling if state hasn't updated yet
+          await pollForRuntimeUpdate(attempts + 1);
+        } catch (err) {
+          console.error("Failed to refresh plugins:", err);
+        }
+      };
+
+      // Start polling in background
+      pollForRuntimeUpdate();
     } catch (err) {
       console.error("Failed to toggle plugin:", err);
     }
@@ -1741,10 +1849,6 @@ export class MilaidyApp extends LitElement {
       this.extensionStatus = { relayReachable: false, relayPort: 18792, extensionPath: null };
     }
     this.extensionChecking = false;
-  }
-
-  private handleOpenExtensionsPage(): void {
-    window.open("chrome://extensions", "_blank");
   }
 
   // ═══════════════════════════════════════════════════════════════════════

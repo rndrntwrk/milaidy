@@ -123,30 +123,42 @@ const CHANNEL_ENV_MAP: Readonly<Record<string, Readonly<Record<string, string>>>
 // ---------------------------------------------------------------------------
 
 /** Core plugins that should always be loaded. */
-const CORE_PLUGINS: readonly string[] = [
-  "@elizaos/plugin-sql",
-  "@elizaos/plugin-local-embedding",
-  "@elizaos/plugin-agent-skills",
-  "@elizaos/plugin-agent-orchestrator",
-  "@elizaos/plugin-directives",
-  "@elizaos/plugin-commands",
-  "@elizaos/plugin-shell",
-  "@elizaos/plugin-personality",
-  "@elizaos/plugin-experience",
-  "@elizaos/plugin-plugin-manager",
-  "@elizaos/plugin-cli",
-  "@elizaos/plugin-code",
-  "@elizaos/plugin-edge-tts",
-  "@elizaos/plugin-knowledge",
-  "@elizaos/plugin-mcp",
-  "@elizaos/plugin-pdf",
-  "@elizaos/plugin-scratchpad",
-  "@elizaos/plugin-secrets-manager",
-  "@elizaos/plugin-todo",
-  "@elizaos/plugin-trust",
-  "@elizaos/plugin-form",
-  "@elizaos/plugin-goals",
-  "@elizaos/plugin-scheduling",
+// MINIMAL PLUGIN SET - Optimized for Haiku performance
+// Reduced from 23 to 2 plugins to minimize context (was 4.5k tokens, now ~500)
+// This makes responses fast (2-3s) and cheap ($0.001/msg with Haiku)
+export const CORE_PLUGINS: readonly string[] = [
+  "@elizaos/plugin-sql",  // Database adapter (memory/persistence)
+  "@elizaos/plugin-local-embedding",  // Embeddings
+
+  // ALL OTHER PLUGINS DISABLED TO REDUCE CONTEXT
+  // Each plugin adds ~50-200 tokens to every request
+  // Uncomment individual plugins if you need their features:
+
+  // "@elizaos/plugin-personality",  // Agent personality/character
+  // "@elizaos/plugin-commands",  // Slash commands
+  // "@elizaos/plugin-directives",  // Directive system
+
+  // NEVER re-enable these (huge context):
+  // "@elizaos/plugin-agent-skills",  // 4938 skills = 4.5k tokens!
+  // "@elizaos/plugin-knowledge",  // Knowledge base (can be large)
+
+  // Other disabled plugins:
+  // "@elizaos/plugin-agent-orchestrator",
+  // "@elizaos/plugin-shell",
+  // "@elizaos/plugin-experience",
+  // "@elizaos/plugin-plugin-manager",
+  // "@elizaos/plugin-cli",
+  // "@elizaos/plugin-code",
+  // "@elizaos/plugin-edge-tts",
+  // "@elizaos/plugin-mcp",
+  // "@elizaos/plugin-pdf",
+  // "@elizaos/plugin-scratchpad",
+  // "@elizaos/plugin-secrets-manager",
+  // "@elizaos/plugin-todo",
+  // "@elizaos/plugin-trust",
+  // "@elizaos/plugin-form",
+  // "@elizaos/plugin-goals",
+  // "@elizaos/plugin-scheduling",
 ];
 
 /**
@@ -234,7 +246,22 @@ function extractPlugin(mod: PluginModuleShape): Plugin | null {
  */
 /** @internal Exported for testing. */
 export function collectPluginNames(config: MilaidyConfig): Set<string> {
-  const pluginsToLoad = new Set<string>(CORE_PLUGINS);
+  // If config.plugins.allow is set, use it as the explicit plugin list
+  // This allows UI to control which plugins are loaded without editing code
+  const allowList = config.plugins?.allow;
+  const hasExplicitAllowList = allowList && allowList.length > 0;
+
+  const pluginsToLoad = new Set<string>(
+    hasExplicitAllowList ? allowList : CORE_PLUGINS
+  );
+
+  // If user has explicitly set an allow list, respect it and don't auto-add plugins
+  // This allows UI toggle to work correctly
+  if (hasExplicitAllowList) {
+    return pluginsToLoad;
+  }
+
+  // Below this point: auto-detection (only when no explicit allow list)
 
   // Channel plugins — load when channel has config entries
   const channels = config.channels ?? {};
@@ -1078,7 +1105,7 @@ export async function startEliza(opts?: StartElizaOptions): Promise<AgentRuntime
   // Workspace skills directory (highest precedence for overrides)
   const workspaceSkillsDir = workspaceDir ? `${workspaceDir}/skills` : null;
 
-  const runtime = new AgentRuntime({
+  let runtime = new AgentRuntime({
     character,
     plugins: [milaidyPlugin, ...otherPlugins.map((p) => p.plugin)],
     ...(runtimeLogLevel ? { logLevel: runtimeLogLevel } : {}),
@@ -1098,32 +1125,28 @@ export async function startEliza(opts?: StartElizaOptions): Promise<AgentRuntime
   });
 
   // 7b. Pre-register plugin-sql so the adapter is ready before other plugins init.
-  //     This MUST succeed before initialize() — otherwise other plugins (e.g.
-  //     plugin-todo) will crash when accessing runtime.db because the adapter
-  //     hasn't been set yet.  runtime.db is a getter that does this.adapter.db
-  //     and throws when this.adapter is undefined.
+  //     This is OPTIONAL — without it, some features (memory, todos) won't work.
+  //     runtime.db is a getter that returns this.adapter.db and throws when
+  //     this.adapter is undefined, so plugins that use runtime.db will fail.
   if (sqlPlugin) {
     await runtime.registerPlugin(sqlPlugin.plugin);
+
+    // 7c. Eagerly initialize the database adapter so it's fully ready (connection
+    //     open, schema bootstrapped) BEFORE other plugins run their init().
+    //     runtime.initialize() also calls adapter.init() but that happens AFTER
+    //     all plugin inits — too late for plugins that need runtime.db during init.
+    //     The call is idempotent (runtime.initialize checks adapter.isReady()).
+    if (runtime.adapter && !(await runtime.adapter.isReady())) {
+      await runtime.adapter.init();
+      logger.info("[milaidy] Database adapter initialized early (before plugin inits)");
+    }
   } else {
     const loadedNames = resolvedPlugins.map((p) => p.name).join(", ");
-    logger.error(
-      `[milaidy] @elizaos/plugin-sql was NOT found among resolved plugins. ` +
+    logger.warn(
+      `[milaidy] @elizaos/plugin-sql was NOT loaded. ` +
+      `Some features (memory, todos) will not work. ` +
       `Loaded: [${loadedNames}]`,
     );
-    throw new Error(
-      "@elizaos/plugin-sql is required but was not loaded. " +
-      "Ensure the package is installed and built (check for import errors above).",
-    );
-  }
-
-  // 7c. Eagerly initialize the database adapter so it's fully ready (connection
-  //     open, schema bootstrapped) BEFORE other plugins run their init().
-  //     runtime.initialize() also calls adapter.init() but that happens AFTER
-  //     all plugin inits — too late for plugins that need runtime.db during init.
-  //     The call is idempotent (runtime.initialize checks adapter.isReady()).
-  if (runtime.adapter && !(await runtime.adapter.isReady())) {
-    await runtime.adapter.init();
-    logger.info("[milaidy] Database adapter initialized early (before plugin inits)");
   }
 
   // 8. Initialize the runtime (registers remaining plugins, starts services)
@@ -1185,7 +1208,60 @@ export async function startEliza(opts?: StartElizaOptions): Promise<AgentRuntime
   try {
     const { startApiServer } = await import("../api/server.js");
     const apiPort = Number(process.env.MILAIDY_PORT) || 2138;
-    const { port: actualApiPort } = await startApiServer({ port: apiPort, runtime });
+    const { port: actualApiPort, updateRuntime } = await startApiServer({
+      port: apiPort,
+      runtime,
+      onRestart: async () => {
+        logger.info("[milaidy] Hot-reload: Restarting runtime with updated configuration...");
+        try {
+          // Reload config from disk (will have updated plugin list)
+          const freshConfig = loadMilaidyConfig();
+          logger.debug(`[milaidy] Reloaded config with plugins: ${freshConfig.plugins?.allow?.join(", ") ?? "none"}`);
+
+          // Resolve plugins using the same function that initial startup uses
+          const resolvedPlugins = await resolvePlugins(freshConfig);
+
+          // Recreate Milaidy plugin (workspace context + session keys)
+          const freshWorkspaceDir = freshConfig.agents?.defaults?.workspace ?? workspaceDir;
+          const freshAgentId = runtime.character.name?.toLowerCase().replace(/\s+/g, "-") ?? "main";
+          const freshMilaidyPlugin = createMilaidyPlugin({
+            workspaceDir: freshWorkspaceDir,
+            bootstrapMaxChars: freshConfig.agents?.defaults?.bootstrapMaxChars,
+            agentId: freshAgentId,
+          });
+
+          // Sort plugins: sql first, then others
+          const sqlPlugin = resolvedPlugins.find((p) => p.name === "@elizaos/plugin-sql");
+          const otherPlugins = resolvedPlugins.filter((p) => p.name !== "@elizaos/plugin-sql");
+
+          // Create new runtime with same character but new plugins
+          const newRuntime = new AgentRuntime({
+            character: runtime.character,
+            plugins: [freshMilaidyPlugin, ...otherPlugins.map((p) => p.plugin)],
+            logLevel: runtime.logLevel ?? "info",
+            enableAutonomy: true,
+            settings: runtime.settings,
+          });
+
+          // Register SQL plugin first if it exists
+          if (sqlPlugin) {
+            await newRuntime.registerPlugin(sqlPlugin.plugin);
+          }
+
+          // Initialize the new runtime
+          await newRuntime.initialize();
+
+          logger.info("[milaidy] Hot-reload: Runtime restarted successfully");
+
+          // Update the runtime reference so chat loop uses new runtime
+          runtime = newRuntime;
+          return newRuntime;
+        } catch (err) {
+          logger.error(`[milaidy] Hot-reload failed: ${formatError(err)}`);
+          return null;
+        }
+      },
+    });
     logger.info(`[milaidy] API server listening on http://localhost:${actualApiPort}`);
   } catch (apiErr) {
     logger.warn(`[milaidy] Could not start API server: ${formatError(apiErr)}`);
