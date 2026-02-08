@@ -193,6 +193,7 @@ export interface PluginParamDef {
   required: boolean;
   sensitive: boolean;
   default?: string;
+  options?: string[];
   currentValue: string | null;
   isSet: boolean;
 }

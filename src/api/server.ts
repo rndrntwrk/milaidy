@@ -105,6 +105,8 @@ interface PluginParamDef {
   required: boolean;
   sensitive: boolean;
   default?: string;
+  /** Predefined options for dropdown selection (e.g. model names). */
+  options?: string[];
   /** Current value from process.env (masked if sensitive). */
   currentValue: string | null;
   /** Whether a value is currently set in the environment. */
@@ -207,6 +209,7 @@ function buildParamDefs(
       required: Boolean(def.required),
       sensitive,
       default: def.default as string | undefined,
+      options: Array.isArray(def.options) ? (def.options as string[]) : undefined,
       currentValue: isSet
         ? sensitive
           ? maskValue(envValue!)
@@ -308,6 +311,7 @@ function categorizePlugin(
     "perplexity",
     "qwen",
     "minimax",
+    "zai",
   ];
   const connectors = [
     "telegram",
@@ -806,6 +810,14 @@ function getProviderOptions(): Array<{
       pluginName: "@elizaos/plugin-ollama",
       keyPrefix: null,
       description: "Local models, no API key needed.",
+    },
+    {
+      id: "zai",
+      name: "z.ai (GLM Coding Plan)",
+      envKey: "ZAI_API_KEY",
+      pluginName: "@homunculuslabs/plugin-zai",
+      keyPrefix: null,
+      description: "GLM models via z.ai Coding Plan.",
     },
   ];
 }
