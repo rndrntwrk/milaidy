@@ -80,8 +80,10 @@ export class MilaidyApp extends LitElement {
 
   static styles = css`
     :host {
-      display: block;
-      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
       font-family: var(--font-body);
       color: var(--text);
       background: var(--bg);
@@ -89,9 +91,15 @@ export class MilaidyApp extends LitElement {
 
     /* Layout */
     .app-shell {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
       max-width: 900px;
       margin: 0 auto;
       padding: 0 20px;
+      width: 100%;
+      box-sizing: border-box;
     }
 
     .pairing-shell {
@@ -557,8 +565,20 @@ export class MilaidyApp extends LitElement {
 
     /* Main content */
     main {
+      flex: 1;
+      min-height: 0;
       padding: 24px 0;
-      min-height: 60vh;
+      overflow-y: auto;
+    }
+
+    /* When chat is active, main becomes a flex column so chat-container fills it
+       and only .chat-messages scrolls — no double scrollbar */
+    main.chat-active {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding-top: 12px;
+      padding-bottom: 0;
     }
 
     h2 {
@@ -574,11 +594,9 @@ export class MilaidyApp extends LitElement {
       margin-bottom: 20px;
     }
 
-    /* Footer */
+    /* Footer (removed) */
     footer {
-      border-top: 1px solid var(--border);
-      padding: 16px 0;
-      font-size: 12px;
+      display: none;
       color: var(--muted);
       text-align: center;
     }
@@ -740,8 +758,8 @@ export class MilaidyApp extends LitElement {
     .chat-container {
       display: flex;
       flex-direction: column;
-      height: calc(100vh - 200px);
-      min-height: 400px;
+      flex: 1;
+      min-height: 0;
     }
 
     .chat-header-row {
@@ -1361,8 +1379,7 @@ export class MilaidyApp extends LitElement {
       <div class="app-shell">
         ${this.renderHeader()}
         ${this.renderNav()}
-        <main>${this.renderView()}</main>
-        <footer>milaidy</footer>
+        <main class=${this.tab === "chat" ? "chat-active" : ""}>${this.renderView()}</main>
       </div>
     `;
   }
