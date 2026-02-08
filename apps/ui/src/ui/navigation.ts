@@ -2,11 +2,11 @@
  * Navigation — tabs + onboarding.
  */
 
-export type Tab = "chat" | "inventory" | "plugins" | "store" | "skills" | "config" | "logs";
+export type Tab = "chat" | "inventory" | "plugins" | "store" | "skills" | "database" | "config" | "logs";
 
 export const TAB_GROUPS = [
   { label: "Chat", tabs: ["chat"] as Tab[] },
-  { label: "Manage", tabs: ["inventory", "plugins", "store", "skills"] as Tab[] },
+  { label: "Manage", tabs: ["inventory", "plugins", "store", "skills", "database"] as Tab[] },
   { label: "Settings", tabs: ["config", "logs"] as Tab[] },
 ] as const;
 
@@ -16,6 +16,7 @@ const TAB_PATHS: Record<Tab, string> = {
   plugins: "/plugins",
   store: "/store",
   skills: "/skills",
+  database: "/database",
   config: "/config",
   logs: "/logs",
 };
@@ -67,6 +68,7 @@ export function titleForTab(tab: Tab): string {
     case "plugins": return "Plugins";
     case "store": return "Store";
     case "skills": return "Skills";
+    case "database": return "Database";
     case "config": return "Config";
     case "logs": return "Logs";
     default: return "Milaidy";
@@ -80,6 +82,7 @@ export function subtitleForTab(tab: Tab): string {
     case "plugins": return "Manage plugins and integrations.";
     case "store": return "Browse and install plugins from the registry.";
     case "skills": return "View available skills.";
+    case "database": return "Browse, edit, and configure your database.";
     case "config": return "Agent settings and configuration.";
     case "logs": return "View agent logs.";
     default: return "";
