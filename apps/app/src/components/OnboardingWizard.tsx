@@ -139,10 +139,10 @@ export function OnboardingWizard() {
       case "name":
         return (
           <div className="max-w-[500px] mx-auto mt-10 text-center font-body">
-            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[360px] relative text-[15px] text-txt leading-relaxed">
+            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[480px] relative text-[15px] text-txt leading-relaxed">
               <h2 className="text-[28px] font-normal mb-1 text-txt-strong">Choose a Name</h2>
             </div>
-            <div className="flex flex-col gap-2 text-left max-w-[360px] mx-auto">
+            <div className="flex flex-col gap-2 text-left max-w-[480px] mx-auto">
               {onboardingOptions?.names.map((name: string) => (
                 <button
                   key={name}
@@ -157,7 +157,7 @@ export function OnboardingWizard() {
                 </button>
               ))}
             </div>
-            <div className="max-w-[360px] mx-auto mt-4">
+            <div className="max-w-[480px] mx-auto mt-4">
               <label className="text-xs text-muted block mb-2 text-left">Or enter custom name:</label>
               <div
                 className={`px-4 py-3 border-2 cursor-pointer transition-colors ${
@@ -181,10 +181,10 @@ export function OnboardingWizard() {
       case "style":
         return (
           <div className="max-w-[500px] mx-auto mt-10 text-center font-body">
-            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[360px] relative text-[15px] text-txt leading-relaxed">
+            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[480px] relative text-[15px] text-txt leading-relaxed">
               <h2 className="text-[28px] font-normal mb-1 text-txt-strong">Choose a Style</h2>
             </div>
-            <div className="flex flex-col gap-2 text-left max-w-[360px] mx-auto">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-left max-w-[480px] mx-auto">
               {onboardingOptions?.styles.map((style: StylePreset) => (
                 <div
                   key={style.catchphrase}
@@ -206,10 +206,10 @@ export function OnboardingWizard() {
       case "theme":
         return (
           <div className="max-w-[500px] mx-auto mt-10 text-center font-body">
-            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[360px] relative text-[15px] text-txt leading-relaxed">
+            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[480px] relative text-[15px] text-txt leading-relaxed">
               <h2 className="text-[28px] font-normal mb-1 text-txt-strong">Choose a Theme</h2>
             </div>
-            <div className="grid grid-cols-3 gap-2 text-left max-w-[360px] mx-auto">
+            <div className="grid grid-cols-3 gap-2 text-left max-w-[480px] mx-auto">
               {THEMES.map((theme) => (
                 <button
                   key={theme.id}
@@ -230,10 +230,10 @@ export function OnboardingWizard() {
       case "runMode":
         return (
           <div className="max-w-[500px] mx-auto mt-10 text-center font-body">
-            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[360px] relative text-[15px] text-txt leading-relaxed">
+            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[480px] relative text-[15px] text-txt leading-relaxed">
               <h2 className="text-[28px] font-normal mb-1 text-txt-strong">Run Mode</h2>
             </div>
-            <div className="flex flex-col gap-2 text-left max-w-[360px] mx-auto">
+            <div className="flex flex-col gap-2 text-left max-w-[480px] mx-auto">
               <button
                 className={`px-4 py-3 border-2 cursor-pointer transition-colors ${
                   onboardingRunMode === "local"
@@ -267,10 +267,10 @@ export function OnboardingWizard() {
       case "cloudProvider":
         return (
           <div className="max-w-[500px] mx-auto mt-10 text-center font-body">
-            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[360px] relative text-[15px] text-txt leading-relaxed">
+            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[480px] relative text-[15px] text-txt leading-relaxed">
               <h2 className="text-[28px] font-normal mb-1 text-txt-strong">Cloud Provider</h2>
             </div>
-            <div className="flex flex-col gap-2 text-left max-w-[360px] mx-auto">
+            <div className="flex flex-col gap-2 text-left max-w-[480px] mx-auto">
               {onboardingOptions?.cloudProviders.map((provider: CloudProviderOption) => (
                 <div
                   key={provider.id}
@@ -296,10 +296,10 @@ export function OnboardingWizard() {
       case "modelSelection":
         return (
           <div className="max-w-[500px] mx-auto mt-10 text-center font-body">
-            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[360px] relative text-[15px] text-txt leading-relaxed">
+            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[480px] relative text-[15px] text-txt leading-relaxed">
               <h2 className="text-[28px] font-normal mb-1 text-txt-strong">Model Selection</h2>
             </div>
-            <div className="flex flex-col gap-4 text-left max-w-[360px] mx-auto">
+            <div className="flex flex-col gap-4 text-left max-w-[480px] mx-auto">
               <div>
                 <label className="text-[13px] font-bold text-txt-strong block mb-2 text-left">
                   Small Model:
@@ -339,16 +339,16 @@ export function OnboardingWizard() {
       case "cloudLogin":
         return (
           <div className="max-w-[500px] mx-auto mt-10 text-center font-body">
-            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[360px] relative text-[15px] text-txt leading-relaxed">
+            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[480px] relative text-[15px] text-txt leading-relaxed">
               <h2 className="text-[28px] font-normal mb-1 text-txt-strong">Cloud Login</h2>
             </div>
             {cloudConnected ? (
-              <div className="max-w-[360px] mx-auto">
+              <div className="max-w-[480px] mx-auto">
                 <p className="text-txt mb-2">Logged in successfully!</p>
                 {cloudUserId && <p className="text-muted text-sm">User ID: {cloudUserId}</p>}
               </div>
             ) : (
-              <div className="max-w-[360px] mx-auto">
+              <div className="max-w-[480px] mx-auto">
                 <p className="text-txt mb-4">Click the button below to log in to Eliza Cloud</p>
                 <button
                   className="px-6 py-2 border border-accent bg-accent text-accent-fg text-sm cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed mt-5"
@@ -450,7 +450,7 @@ export function OnboardingWizard() {
             {subscriptionProviders.length > 0 && (
               <div className="mb-4 text-left">
                 <div className="text-[11px] uppercase tracking-wide text-muted mb-2">Subscriptions</div>
-                <div className="grid grid-cols-1 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {subscriptionProviders.map((provider: ProviderOption) => {
                     const display = getProviderDisplay(provider);
                     return (
@@ -621,7 +621,7 @@ export function OnboardingWizard() {
 
         return (
           <div className="max-w-[500px] mx-auto mt-10 text-center font-body">
-            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[360px] relative text-[15px] text-txt leading-relaxed">
+            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[480px] relative text-[15px] text-txt leading-relaxed">
               <h2 className="text-[28px] font-normal mb-1 text-txt-strong">Connect a Chat Channel</h2>
               <p className="text-xs text-muted mt-2">
                 Talk to your agent on Telegram, Discord, or Slack. You can skip this and add channels later.
@@ -678,7 +678,7 @@ export function OnboardingWizard() {
             </button>
 
             {onboardingChannelType && (
-              <div className="max-w-[360px] mx-auto mt-4 text-left">
+              <div className="max-w-[480px] mx-auto mt-4 text-left">
                 <div className="border border-border bg-card px-3 py-2 text-xs text-muted whitespace-pre-line">
                   {helperText.join("\n")}
                 </div>
@@ -699,11 +699,12 @@ export function OnboardingWizard() {
       case "inventorySetup":
         return (
           <div className="max-w-[500px] mx-auto mt-10 text-center font-body">
-            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[360px] relative text-[15px] text-txt leading-relaxed">
+            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[480px] relative text-[15px] text-txt leading-relaxed">
               <h2 className="text-[28px] font-normal mb-1 text-txt-strong">Inventory Setup</h2>
             </div>
-            <div className="flex flex-col gap-3 text-left max-w-[360px] mx-auto">
+            <div className="text-left max-w-[480px] mx-auto">
               <h3 className="text-[13px] font-bold text-txt-strong block mb-2 text-left">Select Chains:</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {onboardingOptions?.inventoryProviders.map((provider: InventoryProviderOption) => (
                 <div
                   key={provider.id}
@@ -767,6 +768,7 @@ export function OnboardingWizard() {
                   )}
                 </div>
               ))}
+              </div>
             </div>
           </div>
         );
@@ -817,7 +819,7 @@ export function OnboardingWizard() {
   const canGoBack = onboardingStep !== "welcome";
 
   return (
-    <div className={`${onboardingStep === "llmProvider" ? "max-w-[820px]" : "max-w-[500px]"} mx-auto py-10 px-4 text-center font-body min-h-screen overflow-y-auto`}>
+    <div className={`${onboardingStep === "llmProvider" ? "max-w-[820px]" : "max-w-[700px]"} mx-auto py-10 px-4 text-center font-body min-h-screen overflow-y-auto`}>
       {renderStep(onboardingStep)}
       <div className="flex gap-2 mt-4 justify-center pb-8">
         {canGoBack && (
