@@ -99,6 +99,10 @@ import { handleKnowledgeRoutes } from "./knowledge-routes";
 import { handleModelsRoutes } from "./models-routes";
 import { handlePermissionRoutes } from "./permissions-routes";
 import {
+  createRateLimitMiddleware,
+  type RateLimitMiddleware,
+} from "./middleware/rate-limiter.js";
+import {
   type PluginParamInfo,
   validatePluginConfig,
 } from "./plugin-validation";
@@ -4301,6 +4305,19 @@ async function maybeRouteAutonomyEventToConversation(
   await routeAutonomyTextToUser(state, text, source);
 }
 
+// Rate limiter middleware instance (created lazily)
+let _rateLimiter: RateLimitMiddleware | null = null;
+
+function getRateLimiter(): RateLimitMiddleware {
+  if (!_rateLimiter) {
+    _rateLimiter = createRateLimitMiddleware({
+      // Skip rate limiting for health checks
+      skipPaths: ["/api/health", "/api/status"],
+    });
+  }
+  return _rateLimiter;
+}
+
 async function handleRequest(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -4480,6 +4497,12 @@ async function handleRequest(
     return;
   }
 
+  // Apply rate limiting (before auth to prevent brute force)
+  const rateLimiter = getRateLimiter();
+  if (!rateLimiter(req, res)) {
+    return; // Rate limited - response already sent
+  }
+
   if (method !== "OPTIONS" && !isAuthEndpoint && !isAuthorized(req)) {
     json(res, { error: "Unauthorized" }, 401);
     return;
@@ -4492,6 +4515,93 @@ async function handleRequest(
     return;
   }
 
+  // ── GET /api/auth/status ───────────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/auth/status") {
+    const required = Boolean(process.env.MILAIDY_API_TOKEN?.trim());
+    const enabled = pairingEnabled();
+    if (enabled) ensurePairingCode();
+    json(res, {
+      required,
+      pairingEnabled: enabled,
+      expiresAt: enabled ? pairingExpiresAt : null,
+    });
+    return;
+  }
+
+  // ── POST /api/auth/pair ────────────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/auth/pair") {
+    const body = await readJsonBody<{ code?: string }>(req, res);
+    if (!body) return;
+
+    const token = process.env.MILAIDY_API_TOKEN?.trim();
+    if (!token) {
+      error(res, "Pairing not enabled", 400);
+      return;
+    }
+    if (!pairingEnabled()) {
+      error(res, "Pairing disabled", 403);
+      return;
+    }
+    if (!rateLimitPairing(req.socket.remoteAddress ?? null)) {
+      error(res, "Too many attempts. Try again later.", 429);
+      return;
+    }
+
+    const provided = normalizePairingCode(body.code ?? "");
+    const current = ensurePairingCode();
+    if (!current || Date.now() > pairingExpiresAt) {
+      ensurePairingCode();
+      error(
+        res,
+        "Pairing code expired. Check server logs for a new code.",
+        410,
+      );
+      return;
+    }
+
+    const expected = normalizePairingCode(current);
+    const a = Buffer.from(expected, "utf8");
+    const b = Buffer.from(provided, "utf8");
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+      error(res, "Invalid pairing code", 403);
+      return;
+    }
+
+    pairingCode = null;
+    pairingExpiresAt = 0;
+    json(res, { token });
+    return;
+  }
+
+  // ── GET /api/subscription/status ──────────────────────────────────────
+  // Returns the status of subscription-based auth providers
+  if (method === "GET" && pathname === "/api/subscription/status") {
+    try {
+      const { getSubscriptionStatus } = await import("../auth/index.js");
+      json(res, { providers: await getSubscriptionStatus() });
+    } catch (err) {
+      error(res, `Failed to get subscription status: ${err}`, 500);
+    }
+    return;
+  }
+
+  // ── POST /api/subscription/anthropic/start ──────────────────────────────
+  // Start Anthropic OAuth flow — returns URL for user to visit
+  if (method === "POST" && pathname === "/api/subscription/anthropic/start") {
+    try {
+      const { startAnthropicLogin } = await import("../auth/index.js");
+      const flow = await startAnthropicLogin();
+      // Store flow in server state for the exchange step
+      state._anthropicFlow = flow;
+      json(res, { authUrl: flow.authUrl });
+    } catch (err) {
+      error(res, `Failed to start Anthropic login: ${err}`, 500);
+    }
+    return;
+  }
+
+  // ── POST /api/subscription/anthropic/exchange ───────────────────────────
+  // Exchange Anthropic auth code for tokens
   if (
     await handleAuthRoutes({
       req,
@@ -4512,6 +4622,31 @@ async function handleRequest(
       },
     })
   ) {
+    const body = await readJsonBody<{ code: string }>(req, res);
+    if (!body) return;
+    if (!body.code) {
+      error(res, "Missing code", 400);
+      return;
+    }
+    try {
+      const { saveCredentials, applySubscriptionCredentials } = await import(
+        "../auth/index.js"
+      );
+      const flow = state._anthropicFlow;
+      if (!flow) {
+        error(res, "No active flow — call /start first", 400);
+        return;
+      }
+      // Submit the code and wait for credentials
+      flow.submitCode(body.code);
+      const credentials = await flow.credentials;
+      await saveCredentials("anthropic-subscription", credentials);
+      await applySubscriptionCredentials();
+      delete state._anthropicFlow;
+      json(res, { success: true, expiresAt: credentials.expires });
+    } catch (err) {
+      error(res, `Anthropic exchange failed: ${err}`, 500);
+    }
     return;
   }
 
@@ -4528,6 +4663,151 @@ async function handleRequest(
       saveConfig: saveMiladyConfig,
     })
   ) {
+    const body = await readJsonBody<{ token: string }>(req, res);
+    if (!body) return;
+    if (!body.token || !body.token.startsWith("sk-ant-")) {
+      error(res, "Invalid token format — expected sk-ant-oat01-...", 400);
+      return;
+    }
+    try {
+      // Setup tokens are direct API keys — set in env immediately
+      process.env.ANTHROPIC_API_KEY = body.token.trim();
+      // Also save to config so it persists across restarts
+      if (!state.config.env) state.config.env = {};
+      (state.config.env as Record<string, string>).ANTHROPIC_API_KEY =
+        body.token.trim();
+      saveMilaidyConfig(state.config);
+      json(res, { success: true });
+    } catch (err) {
+      error(res, `Failed to save setup token: ${err}`, 500);
+    }
+    return;
+  }
+
+  // ── POST /api/subscription/openai/start ─────────────────────────────────
+  // Start OpenAI Codex OAuth flow — returns URL and starts callback server
+  if (method === "POST" && pathname === "/api/subscription/openai/start") {
+    try {
+      const { startCodexLogin } = await import("../auth/index.js");
+      // Clean up any stale flow from a previous attempt
+      if (state._codexFlow) {
+        try {
+          state._codexFlow.close();
+        } catch (err) {
+          logger.debug(
+            `[api] OAuth flow cleanup failed: ${err instanceof Error ? err.message : err}`,
+          );
+        }
+      }
+      clearTimeout(state._codexFlowTimer);
+
+      const flow = await startCodexLogin();
+      // Store flow state + auto-cleanup after 10 minutes
+      state._codexFlow = flow;
+      state._codexFlowTimer = setTimeout(
+        () => {
+          try {
+            flow.close();
+          } catch (err) {
+            logger.debug(
+              `[api] OAuth flow cleanup failed: ${err instanceof Error ? err.message : err}`,
+            );
+          }
+          delete state._codexFlow;
+          delete state._codexFlowTimer;
+        },
+        10 * 60 * 1000,
+      );
+      json(res, {
+        authUrl: flow.authUrl,
+        state: flow.state,
+        instructions:
+          "Open the URL in your browser. After login, if auto-redirect doesn't work, paste the full redirect URL.",
+      });
+    } catch (err) {
+      error(res, `Failed to start OpenAI login: ${err}`, 500);
+    }
+    return;
+  }
+
+  // ── POST /api/subscription/openai/exchange ──────────────────────────────
+  // Exchange OpenAI auth code or wait for callback
+  if (method === "POST" && pathname === "/api/subscription/openai/exchange") {
+    const body = await readJsonBody<{
+      code?: string;
+      waitForCallback?: boolean;
+    }>(req, res);
+    if (!body) return;
+    let flow: import("../auth/index.js").CodexFlow | undefined;
+    try {
+      const { saveCredentials, applySubscriptionCredentials } = await import(
+        "../auth/index.js"
+      );
+      flow = state._codexFlow;
+
+      if (!flow) {
+        error(res, "No active flow — call /start first", 400);
+        return;
+      }
+
+      if (body.code) {
+        // Manual code/URL paste — submit to flow
+        flow.submitCode(body.code);
+      } else if (!body.waitForCallback) {
+        error(res, "Provide either code or set waitForCallback: true", 400);
+        return;
+      }
+
+      // Wait for credentials (either from callback server or manual submission)
+      let credentials: import("../auth/index.js").OAuthCredentials;
+      try {
+        credentials = await flow.credentials;
+      } catch (err) {
+        try {
+          flow.close();
+        } catch (closeErr) {
+          logger.debug(
+            `[api] OAuth flow cleanup failed: ${closeErr instanceof Error ? closeErr.message : closeErr}`,
+          );
+        }
+        delete state._codexFlow;
+        clearTimeout(state._codexFlowTimer);
+        delete state._codexFlowTimer;
+        error(res, `OpenAI exchange failed: ${err}`, 500);
+        return;
+      }
+      await saveCredentials("openai-codex", credentials);
+      await applySubscriptionCredentials();
+      flow.close();
+      delete state._codexFlow;
+      clearTimeout(state._codexFlowTimer);
+      delete state._codexFlowTimer;
+      json(res, {
+        success: true,
+        expiresAt: credentials.expires,
+        accountId: credentials.accountId,
+      });
+    } catch (err) {
+      error(res, `OpenAI exchange failed: ${err}`, 500);
+    }
+    return;
+  }
+
+  // ── DELETE /api/subscription/:provider ───────────────────────────────────
+  // Remove subscription credentials
+  if (method === "DELETE" && pathname.startsWith("/api/subscription/")) {
+    const provider = pathname.split("/").pop();
+    if (provider === "anthropic-subscription" || provider === "openai-codex") {
+      try {
+        const { deleteCredentials } = await import("../auth/index.js");
+        await deleteCredentials(provider);
+        json(res, { success: true });
+      } catch (err) {
+        error(res, `Failed to delete credentials: ${err}`, 500);
+      }
+    } else {
+      error(res, `Unknown provider: ${provider}`, 400);
+    }
     return;
   }
 

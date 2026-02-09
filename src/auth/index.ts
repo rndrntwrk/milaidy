@@ -1,8 +1,10 @@
 /**
  * Auth module — subscription-based OAuth for Claude Max and Codex Pro.
  *
- * OAuth flows are disabled.
- * Credential storage and env var injection remain for future use.
+ * Uses @mariozechner/pi-ai for OAuth flows (PKCE, token exchange, refresh).
+ * Credentials are stored securely using system keychain or AES-256-GCM encryption.
+ *
+ * @module auth
  */
 
 export type { AnthropicFlow } from "./anthropic";
@@ -23,9 +25,32 @@ export type { CodexFlow } from "./openai-codex";
 // OpenAI Codex (ChatGPT Plus/Pro)
 export { refreshCodexToken, startCodexLogin } from "./openai-codex";
 
+// Secure storage layer
+export {
+  type SecureStorageBackend,
+  type EncryptedPayload,
+  encrypt,
+  decrypt,
+  isEncryptedPayload,
+  getSecureStorage,
+  resetSecureStorage,
+  setSecureStorageBackend,
+} from "./secure-storage.js";
+
+// Migration utilities
+export {
+  migrateCredentials,
+  needsMigration,
+  getProvidersPendingMigration,
+  type MigrationResult,
+} from "./migration.js";
+
+// Key derivation
+export { getMachineId, resetMachineId } from "./key-derivation.js";
+
 // Types
 export type {
   OAuthCredentials,
-  StoredCredentials,
   SubscriptionProvider,
-} from "./types";
+  StoredCredentials,
+} from "./types.js";
