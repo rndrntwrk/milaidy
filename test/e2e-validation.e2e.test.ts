@@ -14,7 +14,7 @@
  *
  * NO MOCKS — all tests use real production code paths.
  */
-import { spawn, } from "node:child_process";
+import { spawn } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
@@ -34,9 +34,7 @@ import {
   type UUID,
 } from "@elizaos/core";
 import { startApiServer } from "../src/api/server.js";
-import {
-  validateRuntimeContext,
-} from "../src/api/plugin-validation.js";
+import { validateRuntimeContext } from "../src/api/plugin-validation.js";
 import { ensureAgentWorkspace } from "../src/providers/workspace.js";
 
 // ---------------------------------------------------------------------------
@@ -233,7 +231,6 @@ function runSubprocess(
     }, timeout);
   });
 }
-
 
 // ===================================================================
 //  1. FRESH INSTALL SIMULATION
@@ -1381,7 +1378,9 @@ describe("Fresh Machine Validation (non-Docker)", () => {
   it("dist/ contains expected entry files", () => {
     const distDir = path.join(packageRoot, "dist");
     if (!fs.existsSync(distDir)) {
-      logger.warn("[e2e-validation] dist/ not found — run `bun run build` first");
+      logger.warn(
+        "[e2e-validation] dist/ not found — run `bun run build` first",
+      );
       return;
     }
 

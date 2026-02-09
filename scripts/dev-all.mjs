@@ -50,11 +50,7 @@ const hasBun = !!which("bun");
 const services = [
   {
     name: "app",
-    cmd: hasBun
-      ? "bun"
-      : process.platform === "win32"
-        ? "npm.cmd"
-        : "npm",
+    cmd: hasBun ? "bun" : process.platform === "win32" ? "npm.cmd" : "npm",
     args: ["run", "dev"],
     cwd: path.join(repoRoot, "apps/app"),
   },
