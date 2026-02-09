@@ -90,6 +90,10 @@
     "tui": "scripts/rt.sh scripts/run-node.mjs tui",
     "tui:dev": "MILAIDY_PROFILE=dev scripts/rt.sh scripts/run-node.mjs --dev tui"
   },
+  "optionalDependencies": {
+    "keytar": "^7.9.0",
+    "node-machine-id": "^1.1.12"
+  },
   "dependencies": {
     "@capacitor/core": "^8.0.2",
     "@clack/prompts": "^1.0.0",
@@ -202,6 +206,7 @@
     "@lydell/node-pty",
     "@whiskeysockets/baileys",
     "esbuild",
+    "keytar",
     "protobufjs",
     "sharp"
   ],
