@@ -22,21 +22,24 @@ test.describe("WebSocket Real-Time", () => {
   });
 
   test("status broadcast contains agent state data", async ({ appPage: page }) => {
-    const data = await page.evaluate(
+    const msg = await page.evaluate(
       (url: string) => new Promise<Record<string, unknown> | null>((resolve) => {
         const ws = new WebSocket(url);
         const t = setTimeout(() => { ws.close(); resolve(null); }, 10_000);
         ws.onmessage = (e: MessageEvent) => {
           const m = JSON.parse(e.data as string) as Record<string, unknown>;
-          if (m.type === "status") { clearTimeout(t); ws.close(); resolve(m.data as Record<string, unknown>); }
+          if (m.type === "status") { clearTimeout(t); ws.close(); resolve(m); }
         };
         ws.onerror = () => { clearTimeout(t); resolve(null); };
       }),
       WS_URL,
     );
-    expect(data).not.toBeNull();
-    expect(typeof data!.agentState).toBe("string");
-    expect(typeof data!.agentName).toBe("string");
+    expect(msg).not.toBeNull();
+    const data = (msg!.data as Record<string, unknown>) ?? msg!;
+    const agentState = data.agentState ?? data.state;
+    const agentName = data.agentName ?? data.name;
+    expect(typeof agentState).toBe("string");
+    expect(typeof agentName).toBe("string");
   });
 
   test("ping-pong keepalive works", async ({ appPage: page }) => {

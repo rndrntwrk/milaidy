@@ -77,7 +77,7 @@ test.describe("Conversations sidebar (left panel on chat tab)", () => {
 
     // Sidebars should not be present
     await expect(page.locator("conversations-sidebar")).not.toBeVisible();
-    await expect(page.locator("workbench-sidebar")).not.toBeVisible();
+    await expect(page.locator("widget-sidebar")).not.toBeVisible();
   });
 
   test("both sidebars visible together on chat tab", async ({ page }) => {
@@ -85,7 +85,7 @@ test.describe("Conversations sidebar (left panel on chat tab)", () => {
     await page.goto("/chat");
 
     await expect(page.locator("conversations-sidebar")).toBeVisible();
-    await expect(page.locator("workbench-sidebar")).toBeVisible();
+    await expect(page.locator("widget-sidebar")).toBeVisible();
   });
 
   test("sending a message auto-creates a conversation if none exists", async ({ page }) => {

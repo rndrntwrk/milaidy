@@ -1,6 +1,6 @@
 import { test, expect, waitForApp, navigateToTab } from "./fixtures.js";
 
-const TABS = ["Chat", "Workbench", "Inventory", "Plugins", "Marketplace", "Skills", "Database", "Config", "Logs"];
+const TABS = ["Chat", "Apps", "Inventory", "Plugins", "Skills", "Database", "Config", "Logs"];
 
 test.describe("Navigation", () => {
   test("defaults to chat", async ({ appPage: page }) => {
@@ -29,7 +29,7 @@ test.describe("Navigation", () => {
 
   test("back button", async ({ appPage: page }) => {
     await navigateToTab(page, "Plugins");
-    await navigateToTab(page, "Workbench");
+    await navigateToTab(page, "Skills");
     await page.goBack();
     await page.waitForTimeout(500);
     await expect(page).toHaveURL(/\/plugins/);

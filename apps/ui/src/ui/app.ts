@@ -45,7 +45,7 @@ import "./database-viewer.js";
 import "./apps-view.js";
 import "./game-view.js";
 import "./conversations-sidebar.js";
-import "./workbench-sidebar.js";
+import "./widget-sidebar.js";
 
 const THEME_STORAGE_KEY = "milaidy:theme";
 
@@ -87,6 +87,11 @@ export class MilaidyApp extends LitElement {
   @state() pluginSaveSuccess: Set<string> = new Set();
   @state() skills: SkillInfo[] = [];
   @state() logs: LogEntry[] = [];
+  @state() logSources: string[] = [];
+  @state() logTags: string[] = [];
+  @state() logTagFilter = "";
+  @state() logLevelFilter = "";
+  @state() logSourceFilter = "";
   @state() authRequired = false;
   @state() pairingEnabled = false;
   @state() pairingExpiresAt: number | null = null;
@@ -208,6 +213,7 @@ export class MilaidyApp extends LitElement {
   @state() skillsMarketplaceManualGithubUrl = "";
   @state() skillToggleAction = "";
   @state() skillsSubTab: "my" | "browse" = "my";
+  @state() skillCreateFormOpen = false;
   @state() skillCreateName = "";
   @state() skillCreateDescription = "";
   @state() skillCreating = false;
@@ -422,7 +428,7 @@ export class MilaidyApp extends LitElement {
 
     /* Theme selector (in config) */
     .theme-btn {
-      padding: 14px 8px;
+      padding: 6px 14px;
       text-align: center;
       cursor: pointer;
       font-family: inherit;
@@ -469,7 +475,6 @@ export class MilaidyApp extends LitElement {
       position: absolute;
       top: 100%;
       right: 0;
-      margin-top: 6px;
       padding: 10px 14px;
       border: 1px solid var(--border);
       background: var(--bg);
@@ -478,8 +483,24 @@ export class MilaidyApp extends LitElement {
       box-shadow: 0 2px 8px rgba(0,0,0,0.12);
     }
 
+    /* Invisible bridge so the hover doesn't break crossing the gap */
+    .wallet-wrapper::after {
+      content: "";
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      height: 8px;
+    }
+
+    .wallet-wrapper:hover::after {
+      display: block;
+    }
+
     .wallet-wrapper:hover .wallet-tooltip {
       display: block;
+      margin-top: 8px;
     }
 
     .wallet-addr-row {
@@ -1092,6 +1113,25 @@ export class MilaidyApp extends LitElement {
 
     .chat-msg.user .role { color: var(--text-strong); }
     .chat-msg.assistant .role { color: var(--accent); }
+
+    .typing-indicator {
+      display: flex;
+      gap: 4px;
+      padding: 4px 0;
+    }
+    .typing-indicator span {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--muted-strong);
+      animation: typing-bounce 1.2s ease-in-out infinite;
+    }
+    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes typing-bounce {
+      0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+      30% { opacity: 1; transform: translateY(-4px); }
+    }
 
     .chat-input-row {
       display: flex;
@@ -1785,7 +1825,7 @@ export class MilaidyApp extends LitElement {
     .logs-container {
       font-family: var(--mono);
       font-size: 12px;
-      max-height: 500px;
+      max-height: 600px;
       overflow-y: auto;
       border: 1px solid var(--border);
       padding: 8px;
@@ -1795,6 +1835,92 @@ export class MilaidyApp extends LitElement {
     .log-entry {
       padding: 2px 0;
       border-bottom: 1px solid var(--bg-muted);
+    }
+
+    .log-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 10px;
+      align-items: center;
+    }
+
+    .log-filters select {
+      font-size: 12px;
+      padding: 4px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--card);
+      color: var(--fg);
+    }
+
+    .log-tag-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .log-tag-pill {
+      font-size: 11px;
+      padding: 2px 10px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--bg-muted);
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .log-tag-pill:hover {
+      border-color: var(--accent);
+      color: var(--fg);
+    }
+
+    .log-tag-pill[data-active] {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    .log-tag-badge {
+      display: inline-block;
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 8px;
+      background: var(--bg-muted);
+      color: var(--muted);
+      margin-right: 2px;
+      font-family: var(--font-sans, sans-serif);
+    }
+
+    .log-tag-badge[data-tag="agent"] {
+      background: rgba(99, 102, 241, 0.15);
+      color: rgb(99, 102, 241);
+    }
+    .log-tag-badge[data-tag="server"] {
+      background: rgba(34, 197, 94, 0.15);
+      color: rgb(34, 197, 94);
+    }
+    .log-tag-badge[data-tag="system"] {
+      background: rgba(156, 163, 175, 0.15);
+      color: rgb(156, 163, 175);
+    }
+    .log-tag-badge[data-tag="cloud"] {
+      background: rgba(59, 130, 246, 0.15);
+      color: rgb(59, 130, 246);
+    }
+    .log-tag-badge[data-tag="plugins"] {
+      background: rgba(168, 85, 247, 0.15);
+      color: rgb(168, 85, 247);
+    }
+    .log-tag-badge[data-tag="autonomy"] {
+      background: rgba(245, 158, 11, 0.15);
+      color: rgb(245, 158, 11);
+    }
+    .log-tag-badge[data-tag="websocket"] {
+      background: rgba(20, 184, 166, 0.15);
+      color: rgb(20, 184, 166);
     }
 
     .empty-state {
@@ -1901,8 +2027,14 @@ export class MilaidyApp extends LitElement {
       return;
     }
 
-    // Load conversations and workbench data
-    void this.loadConversations();
+    // Load conversations (select latest on refresh) and workbench data
+    void this.loadConversations().then(() => {
+      if (!this.activeConversationId && this.conversations.length > 0) {
+        const latest = this.conversations[0];
+        this.activeConversationId = latest.id;
+        void this.loadConversationMessages(latest.id);
+      }
+    });
     void this.loadWorkbench();
 
     // Connect WebSocket
@@ -3183,6 +3315,13 @@ export class MilaidyApp extends LitElement {
 
   // --- Chat ---
 
+  private scrollChatToBottom(): void {
+    requestAnimationFrame(() => {
+      const el = this.shadowRoot?.querySelector(".chat-messages");
+      if (el) el.scrollTop = el.scrollHeight;
+    });
+  }
+
   private async handleChatSend(): Promise<void> {
     const text = this.chatInput.trim();
     if (!text || this.chatSending) return;
@@ -3201,6 +3340,7 @@ export class MilaidyApp extends LitElement {
     ];
     this.chatInput = "";
     this.chatSending = true;
+    this.scrollChatToBottom();
 
     try {
       const data = await client.sendConversationMessage(convId, text);
@@ -3208,16 +3348,21 @@ export class MilaidyApp extends LitElement {
         ...this.conversationMessages,
         { id: `temp-resp-${Date.now()}`, role: "assistant", text: data.text, timestamp: Date.now() },
       ];
+      this.scrollChatToBottom();
 
-      // Auto-title: if this is the first exchange, rename the conversation
+      // Auto-title: if this is the first exchange, rename from the agent's response
       const conv = this.conversations.find((c) => c.id === convId);
-      if (conv && conv.title === "New Chat" && text.length > 0) {
-        const title = text.length > 40 ? `${text.slice(0, 40)}...` : text;
+      if (conv && conv.title === "New Chat" && data.text.length > 0) {
+        const title = data.text.length > 50 ? `${data.text.slice(0, 50)}...` : data.text;
         await client.renameConversation(convId, title);
         await this.loadConversations();
       }
-    } catch {
-      // Error sending — keep the user message but don't add response
+    } catch (err) {
+      console.error("[milaidy] Failed to send message:", err);
+      // Fallback: reload messages from the server so any response that was
+      // saved to memory (but whose HTTP reply failed) still appears.
+      await this.loadConversationMessages(convId);
+      this.scrollChatToBottom();
     } finally {
       this.chatSending = false;
     }
@@ -3497,15 +3642,15 @@ export class MilaidyApp extends LitElement {
               @rename-conversation=${this.handleRenameConversation}
             ></conversations-sidebar>
             <main class="chat-active">${this.renderChat()}</main>
-            <workbench-sidebar
+            <widget-sidebar
               .goals=${this.workbench?.goals ?? []}
               .todos=${this.workbench?.todos ?? []}
               .loading=${this.workbenchLoading}
               .agentRunning=${(this.agentStatus?.state ?? "not_started") === "running"}
               .goalsAvailable=${this.workbenchGoalsAvailable}
               .todosAvailable=${this.workbenchTodosAvailable}
-              @refresh-workbench=${() => this.loadWorkbench()}
-            ></workbench-sidebar>
+              @refresh-sidebar=${() => this.loadWorkbench()}
+            ></widget-sidebar>
           </div>
         </div>
         ${this.renderCommandPalette()}
@@ -3667,7 +3812,6 @@ export class MilaidyApp extends LitElement {
       <header>
         <div style="display:flex;align-items:center;gap:12px;">
           <span class="logo">${name}</span>
-          ${this.renderWalletIcon()}
           ${this.renderCloudCreditBadge()}
         </div>
         <div style="display:flex;align-items:center;gap:12px;">
@@ -3685,6 +3829,7 @@ export class MilaidyApp extends LitElement {
               `}
           <button class="lifecycle-btn" @click=${this.handleRestart} ?disabled=${state === "restarting" || state === "not_started"} title="Restart the agent (reload code, config, plugins)">Restart</button>
           </div>
+          ${this.renderWalletIcon()}
         </div>
       </header>
     `;
@@ -3878,6 +4023,12 @@ export class MilaidyApp extends LitElement {
                   </div>
                 `,
               )}
+          ${this.chatSending
+            ? html`<div class="chat-msg assistant">
+                <div class="role">${this.agentStatus?.agentName ?? "Agent"}</div>
+                <div class="typing-indicator"><span></span><span></span><span></span></div>
+              </div>`
+            : ""}
         </div>
         <div class="chat-input-row">
           <textarea
@@ -4671,6 +4822,7 @@ export class MilaidyApp extends LitElement {
       const result = await client.createSkill(name, this.skillCreateDescription.trim() || "");
       this.skillCreateName = "";
       this.skillCreateDescription = "";
+      this.skillCreateFormOpen = false;
       this.setActionNotice(`Skill "${name}" created.`, "success");
       await this.refreshSkills();
       if (result.path) await client.openSkill(result.skill?.id ?? name).catch(() => undefined);
@@ -4797,22 +4949,39 @@ export class MilaidyApp extends LitElement {
       </div>
 
       ${this.skillsSubTab === "my" ? html`
-        <section style="border:1px solid var(--border);padding:12px;margin-bottom:14px;">
-          <div style="font-weight:bold;font-size:13px;margin-bottom:8px;">Create New Skill</div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <input class="plugin-search" style="flex:1;min-width:180px;" placeholder="Skill name" .value=${this.skillCreateName}
-              @input=${(e: Event) => { this.skillCreateName = (e.target as HTMLInputElement).value; }} />
-            <input class="plugin-search" style="flex:2;min-width:200px;" placeholder="Description (optional)" .value=${this.skillCreateDescription}
-              @input=${(e: Event) => { this.skillCreateDescription = (e.target as HTMLInputElement).value; }} />
-            <button class="btn" style="font-size:12px;padding:4px 12px;" @click=${() => this.handleCreateSkill()}
-              ?disabled=${this.skillCreating || !this.skillCreateName.trim()}>${this.skillCreating ? "Creating..." : "+ Create"}</button>
-          </div>
-        </section>
-
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <div></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <button class="btn" style="font-size:12px;padding:6px 16px;font-weight:bold;" @click=${() => { this.skillCreateFormOpen = !this.skillCreateFormOpen; }}>
+            ${this.skillCreateFormOpen ? "Cancel" : "+ New Skill"}
+          </button>
           <button class="btn" @click=${this.refreshSkills} style="font-size:12px;padding:4px 12px;">Refresh</button>
         </div>
+
+        ${this.skillCreateFormOpen ? html`
+          <section style="border:1px solid var(--accent,#888);padding:16px;margin-bottom:14px;border-radius:4px;background:var(--bg-secondary,rgba(255,255,255,0.03));">
+            <div style="font-weight:bold;font-size:14px;margin-bottom:12px;">Create New Skill</div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div>
+                <label style="display:block;font-size:12px;margin-bottom:4px;color:var(--muted);">Skill Name <span style="color:var(--danger,#e74c3c);">*</span></label>
+                <input class="plugin-search" style="width:100%;box-sizing:border-box;" placeholder="e.g. my-awesome-skill"
+                  .value=${this.skillCreateName}
+                  @input=${(e: Event) => { this.skillCreateName = (e.target as HTMLInputElement).value; }}
+                  @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter" && this.skillCreateName.trim()) void this.handleCreateSkill(); }} />
+              </div>
+              <div>
+                <label style="display:block;font-size:12px;margin-bottom:4px;color:var(--muted);">Description</label>
+                <input class="plugin-search" style="width:100%;box-sizing:border-box;" placeholder="Brief description of what this skill does (optional)"
+                  .value=${this.skillCreateDescription}
+                  @input=${(e: Event) => { this.skillCreateDescription = (e.target as HTMLInputElement).value; }}
+                  @keydown=${(e: KeyboardEvent) => { if (e.key === "Enter" && this.skillCreateName.trim()) void this.handleCreateSkill(); }} />
+              </div>
+              <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px;">
+                <button class="btn" style="font-size:12px;padding:5px 16px;" @click=${() => { this.skillCreateFormOpen = false; this.skillCreateName = ""; this.skillCreateDescription = ""; }}>Cancel</button>
+                <button class="btn" style="font-size:12px;padding:5px 16px;font-weight:bold;" @click=${() => this.handleCreateSkill()}
+                  ?disabled=${this.skillCreating || !this.skillCreateName.trim()}>${this.skillCreating ? "Creating..." : "Create Skill"}</button>
+              </div>
+            </div>
+          </section>
+        ` : ""}
 
         ${this.skills.length === 0
           ? html`<div class="empty-state">No skills loaded. Create one above or install from Browse tab.</div>`
@@ -4915,6 +5084,10 @@ export class MilaidyApp extends LitElement {
         if (s.chat && s.chat.length === 0) delete s.chat;
         if (s.post && s.post.length === 0) delete s.post;
         if (!s.all && !s.chat && !s.post) delete draft.style;
+      }
+      // Auto-set username to name
+      if (draft.name) {
+        draft.username = draft.name;
       }
       // Remove empty string values
       if (!draft.name) delete draft.name;
@@ -5405,17 +5578,178 @@ export class MilaidyApp extends LitElement {
       <h2>Settings</h2>
       <p class="subtitle">Agent settings and configuration.</p>
 
+      <!-- Character Settings Section -->
+      <div style="margin-top:24px;padding:16px;border:1px solid var(--border);background:var(--card);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <div>
+            <div style="font-weight:bold;font-size:14px;">Character</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px;">
+              Define your agent's name, personality, knowledge, and communication style.
+            </div>
+          </div>
+          <button
+            class="btn"
+            style="white-space:nowrap;margin-top:0;font-size:12px;padding:6px 14px;"
+            @click=${() => this.loadCharacter()}
+            ?disabled=${this.characterLoading}
+          >${this.characterLoading ? "Loading..." : "Reload"}</button>
+        </div>
+
+        ${this.characterLoading && !this.characterData
+          ? html`<div style="text-align:center;padding:24px;color:var(--muted);font-size:13px;">Loading character data...</div>`
+          : html`
+            <div style="display:flex;flex-direction:column;gap:16px;">
+
+              <!-- Name -->
+              <div style="display:flex;flex-direction:column;gap:4px;">
+                <label style="font-weight:600;font-size:12px;">Name</label>
+                <div style="font-size:11px;color:var(--muted);">Agent display name (max 100 characters)</div>
+                <input
+                  type="text"
+                  .value=${d.name ?? ""}
+                  maxlength="100"
+                  placeholder="Agent name"
+                  @input=${(e: Event) => this.handleCharacterFieldInput("name", (e.target as HTMLInputElement).value)}
+                  style="padding:6px 10px;border:1px solid var(--border);background:var(--card);font-size:13px;"
+                />
+              </div>
+
+              <!-- Username is hidden; auto-set to name on save -->
+
+              <!-- Bio -->
+              <div style="display:flex;flex-direction:column;gap:4px;">
+                <label style="font-weight:600;font-size:12px;">Bio</label>
+                <div style="font-size:11px;color:var(--muted);">Biography — one paragraph per line</div>
+                <textarea
+                  .value=${bioText}
+                  rows="4"
+                  placeholder="Write your agent's bio here. One paragraph per line."
+                  @input=${(e: Event) => this.handleCharacterFieldInput("bio", (e.target as HTMLTextAreaElement).value)}
+                  style="padding:6px 10px;border:1px solid var(--border);background:var(--card);font-size:12px;font-family:inherit;resize:vertical;line-height:1.5;"
+                ></textarea>
+              </div>
+
+              <!-- System Prompt -->
+              <div style="display:flex;flex-direction:column;gap:4px;">
+                <label style="font-weight:600;font-size:12px;">System Prompt</label>
+                <div style="font-size:11px;color:var(--muted);">Core behavior instructions for the agent (max 10,000 characters)</div>
+                <textarea
+                  .value=${d.system ?? ""}
+                  rows="6"
+                  maxlength="10000"
+                  placeholder="You are..."
+                  @input=${(e: Event) => this.handleCharacterFieldInput("system", (e.target as HTMLTextAreaElement).value)}
+                  style="padding:6px 10px;border:1px solid var(--border);background:var(--card);font-size:12px;font-family:var(--mono);resize:vertical;line-height:1.5;"
+                ></textarea>
+              </div>
+
+              <!-- Adjectives & Topics (side by side) -->
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div style="display:flex;flex-direction:column;gap:4px;">
+                  <label style="font-weight:600;font-size:12px;">Adjectives</label>
+                  <div style="font-size:11px;color:var(--muted);">Personality adjectives — one per line</div>
+                  <textarea
+                    .value=${adjectivesText}
+                    rows="3"
+                    placeholder="curious\nwitty\nfriendly"
+                    @input=${(e: Event) => this.handleCharacterArrayInput("adjectives", (e.target as HTMLTextAreaElement).value)}
+                    style="padding:6px 10px;border:1px solid var(--border);background:var(--card);font-size:12px;font-family:inherit;resize:vertical;line-height:1.5;"
+                  ></textarea>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px;">
+                  <label style="font-weight:600;font-size:12px;">Topics</label>
+                  <div style="font-size:11px;color:var(--muted);">Topics the agent knows — one per line</div>
+                  <textarea
+                    .value=${topicsText}
+                    rows="3"
+                    placeholder="artificial intelligence\nblockchain\ncreative writing"
+                    @input=${(e: Event) => this.handleCharacterArrayInput("topics", (e.target as HTMLTextAreaElement).value)}
+                    style="padding:6px 10px;border:1px solid var(--border);background:var(--card);font-size:12px;font-family:inherit;resize:vertical;line-height:1.5;"
+                  ></textarea>
+                </div>
+              </div>
+
+              <!-- Style -->
+              <div style="display:flex;flex-direction:column;gap:4px;">
+                <label style="font-weight:600;font-size:12px;">Style</label>
+                <div style="font-size:11px;color:var(--muted);">Communication style guidelines — one rule per line</div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:4px;padding:12px;border:1px solid var(--border);background:var(--bg-muted);">
+                  <div style="display:flex;flex-direction:column;gap:4px;">
+                    <label style="font-weight:600;font-size:11px;color:var(--muted);">All</label>
+                    <textarea
+                      .value=${styleAllText}
+                      rows="3"
+                      placeholder="Keep responses concise\nUse casual tone"
+                      @input=${(e: Event) => this.handleCharacterStyleInput("all", (e.target as HTMLTextAreaElement).value)}
+                      style="padding:6px 10px;border:1px solid var(--border);background:var(--card);font-size:12px;font-family:inherit;resize:vertical;line-height:1.5;"
+                    ></textarea>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:4px;">
+                    <label style="font-weight:600;font-size:11px;color:var(--muted);">Chat</label>
+                    <textarea
+                      .value=${styleChatText}
+                      rows="3"
+                      placeholder="Be conversational\nAsk follow-up questions"
+                      @input=${(e: Event) => this.handleCharacterStyleInput("chat", (e.target as HTMLTextAreaElement).value)}
+                      style="padding:6px 10px;border:1px solid var(--border);background:var(--card);font-size:12px;font-family:inherit;resize:vertical;line-height:1.5;"
+                    ></textarea>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:4px;">
+                    <label style="font-weight:600;font-size:11px;color:var(--muted);">Post</label>
+                    <textarea
+                      .value=${stylePostText}
+                      rows="3"
+                      placeholder="Use hashtags sparingly\nKeep under 280 characters"
+                      @input=${(e: Event) => this.handleCharacterStyleInput("post", (e.target as HTMLTextAreaElement).value)}
+                      style="padding:6px 10px;border:1px solid var(--border);background:var(--card);font-size:12px;font-family:inherit;resize:vertical;line-height:1.5;"
+                    ></textarea>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Post Examples -->
+              <div style="display:flex;flex-direction:column;gap:4px;">
+                <label style="font-weight:600;font-size:12px;">Post Examples</label>
+                <div style="font-size:11px;color:var(--muted);">Example social media posts — one per line</div>
+                <textarea
+                  .value=${postExamplesText}
+                  rows="3"
+                  placeholder="Just shipped a new feature! Excited to see what you build with it."
+                  @input=${(e: Event) => this.handleCharacterArrayInput("postExamples", (e.target as HTMLTextAreaElement).value)}
+                  style="padding:6px 10px;border:1px solid var(--border);background:var(--card);font-size:12px;font-family:inherit;resize:vertical;line-height:1.5;"
+                ></textarea>
+              </div>
+
+              <!-- Save Button -->
+              <div style="display:flex;align-items:center;gap:12px;margin-top:4px;">
+                <button
+                  class="btn"
+                  style="font-size:13px;padding:8px 24px;"
+                  ?disabled=${this.characterSaving}
+                  @click=${() => this.handleSaveCharacter()}
+                >
+                  ${this.characterSaving ? "Saving..." : "Save Character"}
+                </button>
+                ${this.characterSaveSuccess ? html`<span style="font-size:12px;color:var(--ok, #16a34a);">${this.characterSaveSuccess}</span>` : ""}
+                ${this.characterSaveError ? html`<span style="font-size:12px;color:var(--danger, #e74c3c);">${this.characterSaveError}</span>` : ""}
+              </div>
+            </div>
+          `}
+      </div>
+
       <!-- Theme -->
       <div style="margin-top:24px;padding:16px;border:1px solid var(--border);background:var(--card);">
         <div style="font-weight:bold;font-size:14px;margin-bottom:4px;">Theme</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Choose your visual style.</div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Choose your visual style.</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">
           ${THEMES.map(t => html`
             <button
               class="theme-btn ${this.currentTheme === t.id ? "active" : ""}"
               @click=${() => this.setTheme(t.id)}
+              style="padding:6px 14px;"
             >
-              <div style="font-size:13px;font-weight:bold;color:var(--text);">${t.label}</div>
+              <div style="font-size:12px;font-weight:bold;color:var(--text);white-space:nowrap;">${t.label}</div>
             </button>
           `)}
         </div>
@@ -5514,178 +5848,6 @@ export class MilaidyApp extends LitElement {
         `}
       </div>
 
-      <!-- Character Settings Section -->
-      <div style="margin-top:24px;padding:16px;border:1px solid var(--border);background:var(--card);">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-          <div>
-            <div style="font-weight:bold;font-size:14px;">Character</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:2px;">
-              Define your agent's name, personality, knowledge, and communication style.
-            </div>
-          </div>
-          <button
-            class="btn"
-            style="white-space:nowrap;margin-top:0;font-size:12px;padding:6px 14px;"
-            @click=${() => this.loadCharacter()}
-            ?disabled=${this.characterLoading}
-          >${this.characterLoading ? "Loading..." : "Reload"}</button>
-        </div>
-
-        ${this.characterLoading && !this.characterData
-          ? html`<div style="text-align:center;padding:24px;color:var(--muted);font-size:13px;">Loading character data...</div>`
-          : html`
-            <div style="display:flex;flex-direction:column;gap:16px;">
-
-              <!-- Name -->
-              <div style="display:flex;flex-direction:column;gap:4px;">
-                <label style="font-weight:600;font-size:12px;">Name</label>
-                <div style="font-size:11px;color:var(--muted);">Agent display name (max 100 characters)</div>
-                <input
-                  type="text"
-                  .value=${d.name ?? ""}
-                  maxlength="100"
-                  placeholder="Agent name"
-                  @input=${(e: Event) => this.handleCharacterFieldInput("name", (e.target as HTMLInputElement).value)}
-                  style="padding:6px 10px;border:1px solid var(--border);background:var(--card);font-size:13px;"
-                />
-              </div>
-
-              <!-- Username -->
-              <div style="display:flex;flex-direction:column;gap:4px;">
-                <label style="font-weight:600;font-size:12px;">Username</label>
-                <div style="font-size:11px;color:var(--muted);">Username for platforms (max 50 characters)</div>
-                <input
-                  type="text"
-                  .value=${d.username ?? ""}
-                  maxlength="50"
-                  placeholder="username"
-                  @input=${(e: Event) => this.handleCharacterFieldInput("username", (e.target as HTMLInputElement).value)}
-                  style="padding:6px 10px;border:1px solid var(--border);background:var(--card);font-size:13px;"
-                />
-              </div>
-
-              <!-- Bio -->
-              <div style="display:flex;flex-direction:column;gap:4px;">
-                <label style="font-weight:600;font-size:12px;">Bio</label>
-                <div style="font-size:11px;color:var(--muted);">Biography — one paragraph per line</div>
-                <textarea
-                  .value=${bioText}
-                  rows="4"
-                  placeholder="Write your agent's bio here. One paragraph per line."
-                  @input=${(e: Event) => this.handleCharacterFieldInput("bio", (e.target as HTMLTextAreaElement).value)}
-                  style="padding:6px 10px;border:1px solid var(--border);background:var(--card);font-size:12px;font-family:inherit;resize:vertical;line-height:1.5;"
-                ></textarea>
-              </div>
-
-              <!-- System Prompt -->
-              <div style="display:flex;flex-direction:column;gap:4px;">
-                <label style="font-weight:600;font-size:12px;">System Prompt</label>
-                <div style="font-size:11px;color:var(--muted);">Core behavior instructions for the agent (max 10,000 characters)</div>
-                <textarea
-                  .value=${d.system ?? ""}
-                  rows="6"
-                  maxlength="10000"
-                  placeholder="You are..."
-                  @input=${(e: Event) => this.handleCharacterFieldInput("system", (e.target as HTMLTextAreaElement).value)}
-                  style="padding:6px 10px;border:1px solid var(--border);background:var(--card);font-size:12px;font-family:var(--mono);resize:vertical;line-height:1.5;"
-                ></textarea>
-              </div>
-
-              <!-- Adjectives -->
-              <div style="display:flex;flex-direction:column;gap:4px;">
-                <label style="font-weight:600;font-size:12px;">Adjectives</label>
-                <div style="font-size:11px;color:var(--muted);">Personality adjectives — one per line (e.g. curious, witty, friendly)</div>
-                <textarea
-                  .value=${adjectivesText}
-                  rows="3"
-                  placeholder="curious\nwitty\nfriendly"
-                  @input=${(e: Event) => this.handleCharacterArrayInput("adjectives", (e.target as HTMLTextAreaElement).value)}
-                  style="padding:6px 10px;border:1px solid var(--border);background:var(--card);font-size:12px;font-family:inherit;resize:vertical;line-height:1.5;"
-                ></textarea>
-              </div>
-
-              <!-- Topics -->
-              <div style="display:flex;flex-direction:column;gap:4px;">
-                <label style="font-weight:600;font-size:12px;">Topics</label>
-                <div style="font-size:11px;color:var(--muted);">Topics the agent is knowledgeable about — one per line</div>
-                <textarea
-                  .value=${topicsText}
-                  rows="3"
-                  placeholder="artificial intelligence\nblockchain\ncreative writing"
-                  @input=${(e: Event) => this.handleCharacterArrayInput("topics", (e.target as HTMLTextAreaElement).value)}
-                  style="padding:6px 10px;border:1px solid var(--border);background:var(--card);font-size:12px;font-family:inherit;resize:vertical;line-height:1.5;"
-                ></textarea>
-              </div>
-
-              <!-- Style -->
-              <div style="display:flex;flex-direction:column;gap:4px;">
-                <label style="font-weight:600;font-size:12px;">Style</label>
-                <div style="font-size:11px;color:var(--muted);">Communication style guidelines — one rule per line</div>
-
-                <div style="display:flex;flex-direction:column;gap:12px;margin-top:4px;padding:12px;border:1px solid var(--border);background:var(--bg-muted);">
-                  <div style="display:flex;flex-direction:column;gap:4px;">
-                    <label style="font-weight:600;font-size:11px;color:var(--muted);">All (applied to all responses)</label>
-                    <textarea
-                      .value=${styleAllText}
-                      rows="3"
-                      placeholder="Keep responses concise\nUse casual tone"
-                      @input=${(e: Event) => this.handleCharacterStyleInput("all", (e.target as HTMLTextAreaElement).value)}
-                      style="padding:6px 10px;border:1px solid var(--border);background:var(--card);font-size:12px;font-family:inherit;resize:vertical;line-height:1.5;"
-                    ></textarea>
-                  </div>
-                  <div style="display:flex;flex-direction:column;gap:4px;">
-                    <label style="font-weight:600;font-size:11px;color:var(--muted);">Chat (chat responses only)</label>
-                    <textarea
-                      .value=${styleChatText}
-                      rows="2"
-                      placeholder="Be conversational\nAsk follow-up questions"
-                      @input=${(e: Event) => this.handleCharacterStyleInput("chat", (e.target as HTMLTextAreaElement).value)}
-                      style="padding:6px 10px;border:1px solid var(--border);background:var(--card);font-size:12px;font-family:inherit;resize:vertical;line-height:1.5;"
-                    ></textarea>
-                  </div>
-                  <div style="display:flex;flex-direction:column;gap:4px;">
-                    <label style="font-weight:600;font-size:11px;color:var(--muted);">Post (social media posts only)</label>
-                    <textarea
-                      .value=${stylePostText}
-                      rows="2"
-                      placeholder="Use hashtags sparingly\nKeep under 280 characters"
-                      @input=${(e: Event) => this.handleCharacterStyleInput("post", (e.target as HTMLTextAreaElement).value)}
-                      style="padding:6px 10px;border:1px solid var(--border);background:var(--card);font-size:12px;font-family:inherit;resize:vertical;line-height:1.5;"
-                    ></textarea>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Post Examples -->
-              <div style="display:flex;flex-direction:column;gap:4px;">
-                <label style="font-weight:600;font-size:12px;">Post Examples</label>
-                <div style="font-size:11px;color:var(--muted);">Example social media posts — one per line</div>
-                <textarea
-                  .value=${postExamplesText}
-                  rows="3"
-                  placeholder="Just shipped a new feature! Excited to see what you build with it."
-                  @input=${(e: Event) => this.handleCharacterArrayInput("postExamples", (e.target as HTMLTextAreaElement).value)}
-                  style="padding:6px 10px;border:1px solid var(--border);background:var(--card);font-size:12px;font-family:inherit;resize:vertical;line-height:1.5;"
-                ></textarea>
-              </div>
-
-              <!-- Save Button -->
-              <div style="display:flex;align-items:center;gap:12px;margin-top:4px;">
-                <button
-                  class="btn"
-                  style="font-size:13px;padding:8px 24px;"
-                  ?disabled=${this.characterSaving}
-                  @click=${() => this.handleSaveCharacter()}
-                >
-                  ${this.characterSaving ? "Saving..." : "Save Character"}
-                </button>
-                ${this.characterSaveSuccess ? html`<span style="font-size:12px;color:var(--ok, #16a34a);">${this.characterSaveSuccess}</span>` : ""}
-                ${this.characterSaveError ? html`<span style="font-size:12px;color:var(--danger, #e74c3c);">${this.characterSaveError}</span>` : ""}
-              </div>
-            </div>
-          `}
-      </div>
-
       <!-- Chrome Extension Section -->
       <div style="margin-top:24px;padding:16px;border:1px solid var(--border);background:var(--card);">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
@@ -5775,7 +5937,7 @@ export class MilaidyApp extends LitElement {
             </div>
           </div>
         </div>
-        <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
           <div style="display:flex;flex-direction:column;gap:2px;font-size:12px;">
             <div style="display:flex;align-items:center;gap:6px;">
               <code style="font-size:11px;font-weight:600;">ALCHEMY_API_KEY</code>
@@ -5784,7 +5946,7 @@ export class MilaidyApp extends LitElement {
             <div style="color:var(--muted);font-size:11px;">EVM chain data — <a href="https://dashboard.alchemy.com/" target="_blank" rel="noopener" style="color:var(--accent);">Get key</a></div>
             <input type="password" data-wallet-config="ALCHEMY_API_KEY"
                    placeholder="${this.walletConfig?.alchemyKeySet ? "Already set — leave blank to keep" : "Enter Alchemy API key"}"
-                   style="padding:4px 8px;border:1px solid var(--border);background:var(--card);font-size:12px;font-family:var(--mono);" />
+                   style="padding:4px 8px;border:1px solid var(--border);background:var(--card);font-size:12px;font-family:var(--mono);width:100%;box-sizing:border-box;" />
           </div>
           <div style="display:flex;flex-direction:column;gap:2px;font-size:12px;">
             <div style="display:flex;align-items:center;gap:6px;">
@@ -5794,7 +5956,7 @@ export class MilaidyApp extends LitElement {
             <div style="color:var(--muted);font-size:11px;">Solana chain data — <a href="https://dev.helius.xyz/" target="_blank" rel="noopener" style="color:var(--accent);">Get key</a></div>
             <input type="password" data-wallet-config="HELIUS_API_KEY"
                    placeholder="${this.walletConfig?.heliusKeySet ? "Already set — leave blank to keep" : "Enter Helius API key"}"
-                   style="padding:4px 8px;border:1px solid var(--border);background:var(--card);font-size:12px;font-family:var(--mono);" />
+                   style="padding:4px 8px;border:1px solid var(--border);background:var(--card);font-size:12px;font-family:var(--mono);width:100%;box-sizing:border-box;" />
           </div>
           <div style="display:flex;flex-direction:column;gap:2px;font-size:12px;">
             <div style="display:flex;align-items:center;gap:6px;">
@@ -5805,11 +5967,13 @@ export class MilaidyApp extends LitElement {
             <div style="color:var(--muted);font-size:11px;">Solana price data — <a href="https://birdeye.so/" target="_blank" rel="noopener" style="color:var(--accent);">Get key</a></div>
             <input type="password" data-wallet-config="BIRDEYE_API_KEY"
                    placeholder="${this.walletConfig?.birdeyeKeySet ? "Already set — leave blank to keep" : "Enter Birdeye API key (optional)"}"
-                   style="padding:4px 8px;border:1px solid var(--border);background:var(--card);font-size:12px;font-family:var(--mono);" />
+                   style="padding:4px 8px;border:1px solid var(--border);background:var(--card);font-size:12px;font-family:var(--mono);width:100%;box-sizing:border-box;" />
           </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:12px;">
           <button class="btn" @click=${() => this.handleWalletApiKeySave()}
                   ?disabled=${this.walletApiKeySaving}
-                  style="align-self:flex-end;font-size:11px;padding:4px 14px;margin-top:4px;">
+                  style="font-size:11px;padding:4px 14px;margin-top:0;">
             ${this.walletApiKeySaving ? "Saving..." : "Save API Keys"}
           </button>
         </div>
@@ -5957,12 +6121,65 @@ export class MilaidyApp extends LitElement {
     return html`
       <h2>Logs</h2>
       <p class="subtitle">Agent log output. ${this.logs.length > 0 ? `${this.logs.length} entries.` : ""}</p>
-      <div style="margin-bottom:8px;">
+
+      <!-- Filters row -->
+      <div class="log-filters">
         <button class="btn" data-action="refresh-logs" @click=${this.loadLogs} style="font-size:12px;padding:4px 12px;">Refresh</button>
+
+        <select .value=${this.logLevelFilter} @change=${(e: Event) => {
+          this.logLevelFilter = (e.target as HTMLSelectElement).value;
+          this.loadLogs();
+        }}>
+          <option value="">All levels</option>
+          <option value="debug">Debug</option>
+          <option value="info">Info</option>
+          <option value="warn">Warn</option>
+          <option value="error">Error</option>
+        </select>
+
+        <select .value=${this.logSourceFilter} @change=${(e: Event) => {
+          this.logSourceFilter = (e.target as HTMLSelectElement).value;
+          this.loadLogs();
+        }}>
+          <option value="">All sources</option>
+          ${this.logSources.map((s) => html`<option value=${s}>${s}</option>`)}
+        </select>
+
+        ${(this.logTagFilter || this.logLevelFilter || this.logSourceFilter)
+          ? html`<button class="btn" style="font-size:11px;padding:3px 10px;" @click=${() => {
+              this.logTagFilter = "";
+              this.logLevelFilter = "";
+              this.logSourceFilter = "";
+              this.loadLogs();
+            }}>Clear filters</button>`
+          : ""}
       </div>
+
+      <!-- Tag pills -->
+      ${this.logTags.length > 0
+        ? html`
+            <div class="log-tag-pills" style="margin-bottom:10px;">
+              <span style="font-size:12px;color:var(--muted);margin-right:4px;">Tags:</span>
+              <span
+                class="log-tag-pill"
+                ?data-active=${this.logTagFilter === ""}
+                @click=${() => { this.logTagFilter = ""; this.loadLogs(); }}
+              >all</span>
+              ${this.logTags.map((tag) => html`
+                <span
+                  class="log-tag-pill"
+                  ?data-active=${this.logTagFilter === tag}
+                  @click=${() => { this.logTagFilter = tag; this.loadLogs(); }}
+                >${tag}</span>
+              `)}
+            </div>
+          `
+        : ""}
+
+      <!-- Log entries -->
       <div class="logs-container">
         ${this.logs.length === 0
-          ? html`<div class="empty-state">No log entries yet.</div>`
+          ? html`<div class="empty-state">No log entries${this.logTagFilter || this.logLevelFilter || this.logSourceFilter ? " matching filters" : " yet"}.</div>`
           : html`
               ${this.logs.map(
                 (entry) => html`
@@ -5973,15 +6190,20 @@ export class MilaidyApp extends LitElement {
                     border-bottom: 1px solid var(--border);
                     display: flex;
                     gap: 8px;
+                    align-items: baseline;
                   ">
                     <span style="color:var(--muted);white-space:nowrap;">${new Date(entry.timestamp).toLocaleTimeString()}</span>
                     <span style="
                       font-weight:600;
-                      width:48px;
+                      width:44px;
                       text-transform:uppercase;
+                      font-size:11px;
                       color: ${entry.level === "error" ? "var(--danger)" : entry.level === "warn" ? "var(--warn)" : "var(--muted)"};
                     ">${entry.level}</span>
-                    <span style="color:var(--muted);width:60px;overflow:hidden;text-overflow:ellipsis;">[${entry.source}]</span>
+                    <span style="color:var(--muted);width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;">[${entry.source}]</span>
+                    <span style="display:inline-flex;gap:2px;flex-shrink:0;">
+                      ${(entry.tags ?? []).map((t) => html`<span class="log-tag-badge" data-tag=${t}>${t}</span>`)}
+                    </span>
                     <span style="flex:1;word-break:break-all;">${entry.message}</span>
                   </div>
                 `,
@@ -5993,8 +6215,17 @@ export class MilaidyApp extends LitElement {
 
   private async loadLogs(): Promise<void> {
     try {
-      const data = await client.getLogs();
+      const filter: Record<string, string> = {};
+      if (this.logTagFilter) filter.tag = this.logTagFilter;
+      if (this.logLevelFilter) filter.level = this.logLevelFilter;
+      if (this.logSourceFilter) filter.source = this.logSourceFilter;
+      const data = await client.getLogs(
+        Object.keys(filter).length > 0 ? filter : undefined,
+      );
       this.logs = data.entries;
+      // Preserve full source/tag lists even when filtering
+      if (data.sources?.length) this.logSources = data.sources;
+      if (data.tags?.length) this.logTags = data.tags;
     } catch {
       // silent
     }
@@ -6281,7 +6512,7 @@ export class MilaidyApp extends LitElement {
         ${THEMES.map(t => html`
           <div
             class="onboarding-option ${this.onboardingTheme === t.id ? "selected" : ""}"
-            @click=${() => { this.onboardingTheme = t.id; }}
+            @click=${() => { this.onboardingTheme = t.id; this.setTheme(t.id); }}
             style="text-align:center;padding:14px 8px;"
           >
             <div class="label">${t.label}</div>
@@ -6403,34 +6634,59 @@ export class MilaidyApp extends LitElement {
   private renderOnboardingLlmProvider(opts: OnboardingOptions) {
     const selected = opts.providers.find((p) => p.id === this.onboardingProvider);
     const needsKey = selected && selected.envKey && selected.id !== "elizacloud" && selected.id !== "ollama";
+    const freeProvider = opts.providers.find((p) => p.id === "elizacloud");
+    const paidProviders = opts.providers.filter((p) => p.id !== "elizacloud");
 
     return html`
       <img class="onboarding-avatar" src="/pfp.jpg" alt="milAIdy" style="width:100px;height:100px;" />
       <div class="onboarding-speech">which AI provider do you want to use?</div>
+
       <div class="onboarding-options onboarding-options-scroll">
-        ${opts.providers.map(
-          (provider) => html`
-            <div
-              class="onboarding-option ${this.onboardingProvider === provider.id ? "selected" : ""}"
-              @click=${() => { this.onboardingProvider = provider.id; this.onboardingApiKey = ""; }}
-            >
-              <div class="label">${provider.name}</div>
-              <div class="hint">${provider.description}</div>
+        ${freeProvider ? html`
+          <div
+            class="onboarding-option ${this.onboardingProvider === "elizacloud" ? "selected" : ""}"
+            @click=${() => { this.onboardingProvider = "elizacloud"; this.onboardingApiKey = ""; }}
+            style="position:relative;"
+          >
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <div class="label">${freeProvider.name}</div>
+              <span style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;padding:2px 8px;background:var(--accent);color:var(--bg);font-weight:bold;">free</span>
             </div>
-          `,
-        )}
+            <div class="hint">${freeProvider.description}</div>
+          </div>
+        ` : ""}
+
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">
+          ${paidProviders.map(
+            (provider) => html`
+              <div
+                class="onboarding-option ${this.onboardingProvider === provider.id ? "selected" : ""}"
+                @click=${() => { this.onboardingProvider = provider.id; this.onboardingApiKey = ""; }}
+              >
+                <div class="label">${provider.name}</div>
+                <div class="hint">${provider.description}</div>
+              </div>
+            `,
+          )}
+        </div>
       </div>
-      ${needsKey
+
+      ${needsKey && selected
         ? html`
-            <input
-              class="onboarding-input"
-              type="password"
-              placeholder="API Key"
-              .value=${this.onboardingApiKey}
-              @input=${(e: Event) => { this.onboardingApiKey = (e.target as HTMLInputElement).value; }}
-            />
+            <div style="margin-top:12px;padding:12px 14px;border:1px solid var(--border);background:var(--card);">
+              <label style="display:block;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--muted);margin-bottom:6px;">${selected.name} API Key</label>
+              <input
+                class="onboarding-input"
+                type="password"
+                placeholder="${selected.keyPrefix ? `${selected.keyPrefix}...` : "Paste your API key"}"
+                .value=${this.onboardingApiKey}
+                @input=${(e: Event) => { this.onboardingApiKey = (e.target as HTMLInputElement).value; }}
+                style="margin-top:0;"
+              />
+            </div>
           `
         : ""}
+
       <div class="btn-row">
         <button class="btn btn-outline" @click=${() => this.handleOnboardingBack()}>Back</button>
         <button

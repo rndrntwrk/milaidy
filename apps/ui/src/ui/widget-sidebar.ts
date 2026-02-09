@@ -1,5 +1,5 @@
 /**
- * Workbench Sidebar — Right sidebar for viewing goals and tasks.
+ * Right sidebar for viewing goals and tasks.
  *
  * Read-only view with collapsible sections for Goals and Tasks.
  * Shows status messages when agent is off or plugins aren't loaded.
@@ -9,8 +9,8 @@ import { LitElement, html, css } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import type { WorkbenchGoal, WorkbenchTodo } from "./api-client.js";
 
-@customElement("workbench-sidebar")
-export class WorkbenchSidebar extends LitElement {
+@customElement("widget-sidebar")
+export class WidgetSidebar extends LitElement {
   @property({ type: Array }) goals: WorkbenchGoal[] = [];
   @property({ type: Array }) todos: WorkbenchTodo[] = [];
   @property({ type: Boolean }) loading = false;
@@ -30,18 +30,10 @@ export class WorkbenchSidebar extends LitElement {
       font-size: 13px;
     }
 
-    .sidebar-header {
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--border);
+    .sidebar-toolbar {
+      padding: 6px 8px;
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .sidebar-title {
-      font-weight: 600;
-      font-size: 13px;
-      color: var(--text);
+      justify-content: flex-end;
     }
 
     .refresh-btn {
@@ -204,7 +196,7 @@ export class WorkbenchSidebar extends LitElement {
   `;
 
   private fireRefresh() {
-    this.dispatchEvent(new CustomEvent("refresh-workbench", { bubbles: true, composed: true }));
+    this.dispatchEvent(new CustomEvent("refresh-sidebar", { bubbles: true, composed: true }));
   }
 
   private sortedGoals(): WorkbenchGoal[] {
@@ -231,17 +223,13 @@ export class WorkbenchSidebar extends LitElement {
   render() {
     if (!this.agentRunning) {
       return html`
-        <div class="sidebar-header">
-          <span class="sidebar-title">Workbench</span>
-        </div>
         <div class="status-msg">Agent is not running. Start the agent to see goals and tasks.</div>
       `;
     }
 
     if (this.loading && this.goals.length === 0 && this.todos.length === 0) {
       return html`
-        <div class="sidebar-header">
-          <span class="sidebar-title">Workbench</span>
+        <div class="sidebar-toolbar">
           <button class="refresh-btn" @click=${this.fireRefresh} title="Refresh">&#x21bb;</button>
         </div>
         <div class="loading-hint">Loading...</div>
@@ -254,8 +242,7 @@ export class WorkbenchSidebar extends LitElement {
     const completedTodos = this.sortedTodos().filter((t) => t.isCompleted);
 
     return html`
-      <div class="sidebar-header">
-        <span class="sidebar-title">Workbench</span>
+      <div class="sidebar-toolbar">
         <button class="refresh-btn" @click=${this.fireRefresh} title="Refresh">&#x21bb;</button>
       </div>
 
@@ -345,6 +332,6 @@ export class WorkbenchSidebar extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    "workbench-sidebar": WorkbenchSidebar;
+    "widget-sidebar": WidgetSidebar;
   }
 }

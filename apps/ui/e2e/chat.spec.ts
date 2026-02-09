@@ -138,6 +138,6 @@ test.describe("Chat page", () => {
     // All three panels should be visible
     await expect(page.locator("conversations-sidebar")).toBeVisible();
     await expect(page.locator(".chat-container")).toBeVisible();
-    await expect(page.locator("workbench-sidebar")).toBeVisible();
+    await expect(page.locator("widget-sidebar")).toBeVisible();
   });
 });

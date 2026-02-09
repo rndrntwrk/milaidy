@@ -185,6 +185,7 @@ interface LogEntry {
   level: string;
   message: string;
   source: string;
+  tags: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -1531,8 +1532,9 @@ async function handleRequest(
       error(res, "Missing or invalid agent name", 400);
       return;
     }
-    if (body.theme && body.theme !== "light" && body.theme !== "dark") {
-      error(res, "Invalid theme: must be 'light' or 'dark'", 400);
+    const VALID_THEMES = ["milady", "qt314", "web2000", "programmer", "haxor", "psycho"];
+    if (body.theme && !VALID_THEMES.includes(body.theme as string)) {
+      error(res, `Invalid theme: must be one of ${VALID_THEMES.join(", ")}`, 400);
       return;
     }
     if (body.runMode && body.runMode !== "local" && body.runMode !== "cloud") {
@@ -1563,7 +1565,7 @@ async function handleRequest(
     // ── Theme preference ──────────────────────────────────────────────────
     if (body.theme) {
       if (!config.ui) config.ui = {};
-      config.ui.theme = body.theme as "light" | "dark";
+      config.ui.theme = body.theme as "milady" | "qt314" | "web2000" | "programmer" | "haxor" | "psycho";
     }
 
     // ── Run mode & cloud configuration ────────────────────────────────────
@@ -3437,6 +3439,10 @@ async function handleRequest(
     const levelFilter = url.searchParams.get("level");
     if (levelFilter) entries = entries.filter((e) => e.level === levelFilter);
 
+    // Filter by tag — entries must contain the requested tag
+    const tagFilter = url.searchParams.get("tag");
+    if (tagFilter) entries = entries.filter((e) => e.tags.includes(tagFilter));
+
     const sinceFilter = url.searchParams.get("since");
     if (sinceFilter) {
       const sinceTs = Number(sinceFilter);
@@ -3445,7 +3451,10 @@ async function handleRequest(
     }
 
     const sources = [...new Set(state.logBuffer.map((e) => e.source))].sort();
-    json(res, { entries: entries.slice(-200), sources });
+    const tags = [
+      ...new Set(state.logBuffer.flatMap((e) => e.tags)),
+    ].sort();
+    json(res, { entries: entries.slice(-200), sources, tags });
     return;
   }
 
@@ -4019,7 +4028,7 @@ async function handleRequest(
       });
 
       let responseText = "";
-      await runtime.messageService?.handleMessage(
+      const result = await runtime.messageService?.handleMessage(
         runtime,
         message,
         async (content: Content) => {
@@ -4029,6 +4038,13 @@ async function handleRequest(
           return [];
         },
       );
+
+      // Fallback: if the callback didn't capture text (e.g. "actions" mode
+      // where processActions drives the callback), pull it from the return
+      // value which always carries the primary responseContent.
+      if (!responseText && result?.responseContent?.text) {
+        responseText = result.responseContent.text;
+      }
 
       conv.updatedAt = new Date().toISOString();
       json(res, {
@@ -4200,7 +4216,7 @@ async function handleRequest(
       // Collect the agent's response text from the callback.
       let responseText = "";
 
-      await runtime.messageService?.handleMessage(
+      const result = await runtime.messageService?.handleMessage(
         runtime,
         message,
         async (content: Content) => {
@@ -4210,6 +4226,12 @@ async function handleRequest(
           return [];
         },
       );
+
+      // Fallback: use the return value's responseContent when the callback
+      // didn't capture text (e.g. "actions" mode).
+      if (!responseText && result?.responseContent?.text) {
+        responseText = result.responseContent.text;
+      }
 
       json(res, {
         text: responseText || "(no response)",
@@ -4815,6 +4837,81 @@ async function handleRequest(
 }
 
 // ---------------------------------------------------------------------------
+// Early log capture
+// ---------------------------------------------------------------------------
+// Call `captureEarlyLogs()` BEFORE starting the runtime to buffer logs from
+// the global @elizaos/core logger.  The buffered entries are flushed into
+// the API server's logBuffer when `startApiServer` runs.
+// ---------------------------------------------------------------------------
+
+interface EarlyLogEntry {
+  timestamp: number;
+  level: string;
+  message: string;
+  source: string;
+  tags: string[];
+}
+
+let earlyLogBuffer: EarlyLogEntry[] | null = null;
+let earlyPatchCleanup: (() => void) | null = null;
+
+/**
+ * Start capturing logs from the global @elizaos/core logger before the API
+ * server is up.  Call this once, early in the startup flow (e.g. before
+ * `startEliza`).  When `startApiServer` runs it will flush and take over.
+ */
+export function captureEarlyLogs(): void {
+  if (earlyLogBuffer) return; // already capturing
+  // If the global logger is already fully patched (e.g. dev-server started
+  // the API server before calling startEliza), skip early capture entirely.
+  if ((logger as unknown as Record<string, unknown>).__milaidyLogPatched) return;
+  earlyLogBuffer = [];
+  const EARLY_PATCHED = "__milaidyEarlyPatched";
+  if ((logger as unknown as Record<string, unknown>)[EARLY_PATCHED]) return;
+
+  const LEVELS = ["debug", "info", "warn", "error"] as const;
+  const originals = new Map<string, (...args: unknown[]) => void>();
+
+  for (const lvl of LEVELS) {
+    const original = logger[lvl].bind(logger);
+    originals.set(lvl, original as (...args: unknown[]) => void);
+    const earlyPatched: (typeof logger)[typeof lvl] = (
+      ...args: Parameters<typeof original>
+    ) => {
+      let msg = "";
+      let source = "agent";
+      const tags = ["agent"];
+      if (typeof args[0] === "string") {
+        msg = args[0];
+      } else if (args[0] && typeof args[0] === "object") {
+        const obj = args[0] as Record<string, unknown>;
+        if (typeof obj.src === "string") source = obj.src;
+        msg = typeof args[1] === "string" ? args[1] : JSON.stringify(obj);
+      }
+      const bracketMatch = /^\[([^\]]+)\]\s*/.exec(msg);
+      if (bracketMatch && source === "agent") source = bracketMatch[1];
+      if (source !== "agent" && !tags.includes(source)) tags.push(source);
+      earlyLogBuffer?.push({ timestamp: Date.now(), level: lvl, message: msg, source, tags });
+      return original(...args);
+    };
+    logger[lvl] = earlyPatched;
+  }
+
+  (logger as unknown as Record<string, unknown>)[EARLY_PATCHED] = true;
+
+  earlyPatchCleanup = () => {
+    // Restore originals so `patchLogger` inside `startApiServer` can re-patch
+    for (const lvl of LEVELS) {
+      const orig = originals.get(lvl);
+      if (orig) logger[lvl] = orig as (typeof logger)[typeof lvl];
+    }
+    delete (logger as unknown as Record<string, unknown>)[EARLY_PATCHED];
+    // Don't set the main PATCHED_MARKER — `patchLogger` will do that
+    delete (logger as unknown as Record<string, unknown>).__milaidyLogPatched;
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Server start
 // ---------------------------------------------------------------------------
 
@@ -4885,77 +4982,167 @@ export async function startApiServer(opts?: {
     // AppManager doesn't need a runtime reference — it just installs plugins
   }
 
-  const addLog = (level: string, message: string, source = "system") => {
+  const addLog = (
+    level: string,
+    message: string,
+    source = "system",
+    tags: string[] = [],
+  ) => {
     let resolvedSource = source;
     if (source === "auto" || source === "system") {
       const bracketMatch = /^\[([^\]]+)\]\s*/.exec(message);
       if (bracketMatch) resolvedSource = bracketMatch[1];
     }
+    // Auto-tag based on source when no explicit tags provided
+    const resolvedTags =
+      tags.length > 0
+        ? tags
+        : resolvedSource === "runtime" ||
+            resolvedSource === "autonomy"
+          ? ["agent"]
+          : resolvedSource === "api" || resolvedSource === "websocket"
+            ? ["server"]
+            : resolvedSource === "cloud"
+              ? ["server", "cloud"]
+              : ["system"];
     state.logBuffer.push({
       timestamp: Date.now(),
       level,
       message,
       source: resolvedSource,
+      tags: resolvedTags,
     });
     if (state.logBuffer.length > 1000) state.logBuffer.shift();
   };
+
+  // ── Flush early-captured logs into the main buffer ────────────────────
+  if (earlyLogBuffer && earlyLogBuffer.length > 0) {
+    for (const entry of earlyLogBuffer) {
+      state.logBuffer.push(entry);
+    }
+    if (state.logBuffer.length > 1000) {
+      state.logBuffer.splice(0, state.logBuffer.length - 1000);
+    }
+    addLog(
+      "info",
+      `Flushed ${earlyLogBuffer.length} early startup log entries`,
+      "system",
+      ["system"],
+    );
+  }
+  // Clean up early capture so the main patchLogger can take over
+  if (earlyPatchCleanup) {
+    earlyPatchCleanup();
+    earlyPatchCleanup = null;
+  }
+  earlyLogBuffer = null;
 
   // ── Cloud Manager initialisation ──────────────────────────────────────
   if (config.cloud?.enabled && config.cloud?.apiKey) {
     const mgr = new CloudManager(config.cloud, {
       onStatusChange: (s) => {
-        addLog("info", `Cloud connection status: ${s}`, "cloud");
+        addLog("info", `Cloud connection status: ${s}`, "cloud", ["server", "cloud"]);
       },
     });
     mgr.init();
     state.cloudManager = mgr;
-    addLog("info", "Cloud manager initialised (ELIZA Cloud enabled)", "cloud");
+    addLog("info", "Cloud manager initialised (ELIZA Cloud enabled)", "cloud", ["server", "cloud"]);
   }
 
   addLog(
     "info",
     `Discovered ${plugins.length} plugins, ${skills.length} skills`,
+    "system",
+    ["system", "plugins"],
   );
 
-  // ── Intercept runtime logger so all plugin/autonomy logs appear in the UI ─
-  // Guard against double-patching: if the logger was already patched (e.g.
-  // after a hot-restart) we skip to avoid stacking wrapper functions that
-  // would leak memory and slow down every log call.
+  // ── Intercept loggers so ALL agent/plugin/service logs appear in the UI ──
+  // We patch both the global `logger` singleton from @elizaos/core (used by
+  // eliza.ts, services, plugins, etc.) AND the runtime instance logger.
+  // A marker prevents double-patching on hot-restart and avoids stacking
+  // wrapper functions that would leak memory.
   const PATCHED_MARKER = "__milaidyLogPatched";
-  if (
-    opts?.runtime?.logger &&
-    !(opts.runtime.logger as unknown as Record<string, unknown>)[PATCHED_MARKER]
-  ) {
-    const rtLogger = opts.runtime.logger;
-    const LEVELS = ["debug", "info", "warn", "error"] as const;
+  const LEVELS = ["debug", "info", "warn", "error"] as const;
+
+  /**
+   * Patch a logger object so every log call also feeds into the UI log buffer.
+   * Returns true if patching was performed, false if already patched.
+   */
+  const patchLogger = (
+    target: typeof logger,
+    defaultSource: string,
+    defaultTags: string[],
+  ): boolean => {
+    if (
+      (target as unknown as Record<string, unknown>)[PATCHED_MARKER]
+    ) {
+      return false;
+    }
 
     for (const lvl of LEVELS) {
-      const original = rtLogger[lvl].bind(rtLogger);
-      // pino signature: logger.info(obj, msg) or logger.info(msg)
-      const patched: (typeof rtLogger)[typeof lvl] = (
+      const original = target[lvl].bind(target);
+      // pino / adze signature: logger.info(obj, msg) or logger.info(msg)
+      const patched: (typeof target)[typeof lvl] = (
         ...args: Parameters<typeof original>
       ) => {
         let msg = "";
-        let source = "runtime";
+        let source = defaultSource;
+        let tags = [...defaultTags];
         if (typeof args[0] === "string") {
           msg = args[0];
         } else if (args[0] && typeof args[0] === "object") {
           const obj = args[0] as Record<string, unknown>;
           if (typeof obj.src === "string") source = obj.src;
+          // Extract tags from structured log objects
+          if (Array.isArray(obj.tags)) {
+            tags = [...tags, ...(obj.tags as string[])];
+          }
           msg = typeof args[1] === "string" ? args[1] : JSON.stringify(obj);
         }
-        if (msg) addLog(lvl, msg, source);
+        // Auto-extract source from [bracket] prefixes (e.g. "[milaidy] ...")
+        const bracketMatch = /^\[([^\]]+)\]\s*/.exec(msg);
+        if (bracketMatch && source === defaultSource) {
+          source = bracketMatch[1];
+        }
+        // Auto-tag based on source context
+        if (source !== defaultSource && !tags.includes(source)) {
+          tags.push(source);
+        }
+        if (msg) addLog(lvl, msg, source, tags);
         return original(...args);
       };
-      rtLogger[lvl] = patched;
+      target[lvl] = patched;
     }
 
-    (rtLogger as unknown as Record<string, unknown>)[PATCHED_MARKER] = true;
+    (target as unknown as Record<string, unknown>)[PATCHED_MARKER] = true;
+    return true;
+  };
+
+  // 1) Patch the global @elizaos/core logger — this captures ALL log calls
+  //    from eliza.ts, services, plugins, cloud, hooks, etc.
+  if (patchLogger(logger, "agent", ["agent"])) {
     addLog(
       "info",
-      "Runtime logger connected — logs will stream to the UI",
+      "Global logger connected — all agent logs will stream to the UI",
       "system",
+      ["system", "agent"],
     );
+  }
+
+  // 2) Patch the runtime instance logger (if it's a different object)
+  //    This catches logs from runtime internals that use their own logger child.
+  if (
+    opts?.runtime?.logger &&
+    opts.runtime.logger !== logger
+  ) {
+    if (patchLogger(opts.runtime.logger, "runtime", ["agent", "runtime"])) {
+      addLog(
+        "info",
+        "Runtime logger connected — runtime logs will stream to the UI",
+        "system",
+        ["system", "agent"],
+      );
+    }
   }
 
   // Autonomy is managed by the core AutonomyService + TaskService.
@@ -4967,6 +5154,7 @@ export async function startApiServer(opts?: {
       "info",
       "Autonomy is always enabled — managed by the core task system",
       "autonomy",
+      ["agent", "autonomy"],
     );
   }
 
@@ -4978,7 +5166,7 @@ export async function startApiServer(opts?: {
       await handleRequest(req, res, state, { onRestart });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "internal error";
-      addLog("error", msg, "api");
+      addLog("error", msg, "api", ["server", "api"]);
       error(res, msg, 500);
     }
   });
@@ -5012,7 +5200,7 @@ export async function startApiServer(opts?: {
   // Handle WebSocket connections
   wss.on("connection", (ws: WebSocket) => {
     wsClients.add(ws);
-    addLog("info", "WebSocket client connected", "websocket");
+    addLog("info", "WebSocket client connected", "websocket", ["server", "websocket"]);
 
     // Send initial status (flattened shape — matches UI AgentStatus)
     try {
@@ -5046,7 +5234,7 @@ export async function startApiServer(opts?: {
 
     ws.on("close", () => {
       wsClients.delete(ws);
-      addLog("info", "WebSocket client disconnected", "websocket");
+      addLog("info", "WebSocket client disconnected", "websocket", ["server", "websocket"]);
     });
 
     ws.on("error", (err) => {
@@ -5091,7 +5279,7 @@ export async function startApiServer(opts?: {
     state.agentState = "running";
     state.agentName = rt.character.name ?? "Milaidy";
     state.startedAt = Date.now();
-    addLog("info", `Runtime restarted — agent: ${state.agentName}`, "system");
+    addLog("info", `Runtime restarted — agent: ${state.agentName}`, "system", ["system", "agent"]);
     // Broadcast status update immediately after restart
     broadcastStatus();
   };
@@ -5105,6 +5293,8 @@ export async function startApiServer(opts?: {
       addLog(
         "info",
         `API server listening on http://${displayHost}:${actualPort}`,
+        "system",
+        ["server", "system"],
       );
       logger.info(
         `[milaidy-api] Listening on http://${displayHost}:${actualPort}`,

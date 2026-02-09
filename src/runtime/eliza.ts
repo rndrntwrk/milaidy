@@ -1414,6 +1414,10 @@ export interface StartElizaOptions {
 export async function startEliza(
   opts?: StartElizaOptions,
 ): Promise<AgentRuntime | undefined> {
+  // Start buffering logs early so startup messages appear in the UI log viewer
+  const { captureEarlyLogs } = await import("../api/server.js");
+  captureEarlyLogs();
+
   // 1. Load Milaidy config from ~/.milaidy/milaidy.json
   let config: MilaidyConfig;
   try {

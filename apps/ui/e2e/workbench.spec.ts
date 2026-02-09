@@ -7,9 +7,8 @@ test.describe("Workbench sidebar (right panel on chat tab)", () => {
     await page.goto("/chat");
 
     // The right sidebar should be visible with goals and tasks
-    const sidebar = page.locator("workbench-sidebar");
+    const sidebar = page.locator("widget-sidebar");
     await expect(sidebar).toBeVisible();
-    await expect(sidebar.getByText("Workbench")).toBeVisible();
 
     // Goals section with default mock data
     await expect(sidebar.getByText("Ship native integrations")).toBeVisible();
@@ -24,7 +23,7 @@ test.describe("Workbench sidebar (right panel on chat tab)", () => {
     await mockApi(page, { agentState: "not_started" });
     await page.goto("/chat");
 
-    const sidebar = page.locator("workbench-sidebar");
+    const sidebar = page.locator("widget-sidebar");
     await expect(sidebar).toBeVisible();
     await expect(
       sidebar.getByText("Agent is not running"),
@@ -35,7 +34,7 @@ test.describe("Workbench sidebar (right panel on chat tab)", () => {
     await mockApi(page, { agentState: "running", goalsAvailable: false });
     await page.goto("/chat");
 
-    const sidebar = page.locator("workbench-sidebar");
+    const sidebar = page.locator("widget-sidebar");
     await expect(
       sidebar.getByText("Goals plugin not loaded"),
     ).toBeVisible();
@@ -45,7 +44,7 @@ test.describe("Workbench sidebar (right panel on chat tab)", () => {
     await mockApi(page, { agentState: "running", todosAvailable: false });
     await page.goto("/chat");
 
-    const sidebar = page.locator("workbench-sidebar");
+    const sidebar = page.locator("widget-sidebar");
     await expect(
       sidebar.getByText("Tasks plugin not loaded"),
     ).toBeVisible();
@@ -59,7 +58,7 @@ test.describe("Workbench sidebar (right panel on chat tab)", () => {
     });
     await page.goto("/chat");
 
-    const sidebar = page.locator("workbench-sidebar");
+    const sidebar = page.locator("widget-sidebar");
     await expect(sidebar.getByText("Goals plugin not loaded")).toBeVisible();
     await expect(sidebar.getByText("Tasks plugin not loaded")).toBeVisible();
   });
@@ -68,7 +67,7 @@ test.describe("Workbench sidebar (right panel on chat tab)", () => {
     await mockApi(page, { agentState: "running" });
     await page.goto("/chat");
 
-    const sidebar = page.locator("workbench-sidebar");
+    const sidebar = page.locator("widget-sidebar");
     await expect(sidebar).toBeVisible();
 
     // Should NOT have any input fields or add buttons
@@ -80,7 +79,7 @@ test.describe("Workbench sidebar (right panel on chat tab)", () => {
     await mockApi(page, { agentState: "running" });
     await page.goto("/chat");
 
-    const sidebar = page.locator("workbench-sidebar");
+    const sidebar = page.locator("widget-sidebar");
     await expect(sidebar.getByText("Urgent")).toBeVisible();
   });
 
@@ -88,7 +87,7 @@ test.describe("Workbench sidebar (right panel on chat tab)", () => {
     await mockApi(page, { agentState: "running" });
     await page.goto("/chat");
 
-    const sidebar = page.locator("workbench-sidebar");
+    const sidebar = page.locator("widget-sidebar");
     const refreshBtn = sidebar.locator("button[title='Refresh']");
     await expect(refreshBtn).toBeVisible();
   });

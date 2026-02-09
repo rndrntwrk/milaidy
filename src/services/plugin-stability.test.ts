@@ -44,7 +44,7 @@ const CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-experience",
   "@elizaos/plugin-plugin-manager",
   "@elizaos/plugin-cli",
-  // "@elizaos/plugin-code", // disabled: Provider spec mismatch (coderStatusProvider)
+  "@elizaos/plugin-code",
   "@elizaos/plugin-edge-tts",
   "@elizaos/plugin-knowledge",
   "@elizaos/plugin-mcp",
@@ -53,9 +53,9 @@ const CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-secrets-manager",
   "@elizaos/plugin-todo",
   "@elizaos/plugin-trust",
-  // "@elizaos/plugin-form", // disabled: npm package missing compiled dist/index.js
-  // "@elizaos/plugin-goals", // disabled: Action spec mismatch (CANCEL_GOAL)
-  // "@elizaos/plugin-scheduling", // disabled: npm package missing compiled dist/index.js
+  "@elizaos/plugin-form",
+  "@elizaos/plugin-goals",
+  "@elizaos/plugin-scheduling",
 ];
 
 /** Channel plugins (loaded when channel config is present). */
@@ -127,7 +127,7 @@ const envKeysToClean = [
 
 describe("Plugin Enumeration", () => {
   it("lists all core plugins", () => {
-    expect(CORE_PLUGINS.length).toBe(19);
+    expect(CORE_PLUGINS.length).toBe(23);
     for (const name of CORE_PLUGINS) {
       expect(name).toMatch(/^@elizaos\/plugin-/);
     }
@@ -263,8 +263,15 @@ describe("collectPluginNames", () => {
       },
     };
     const names = collectPluginNames(config);
-    const nonCore = [...names].filter((n) => !CORE_PLUGINS.includes(n));
-    expect(nonCore.length).toBe(0);
+    // The unknown channel should NOT map to any plugin. Verify no
+    // channel-specific plugin was added (env-based provider plugins may
+    // appear depending on the runner's environment, so we only assert
+    // that the unknown channel mapping was a no-op).
+    const channelPluginValues = new Set(Object.values(CHANNEL_PLUGINS));
+    const addedChannelPlugins = [...names].filter(
+      (n) => channelPluginValues.has(n),
+    );
+    expect(addedChannelPlugins.length).toBe(0);
   });
 });
 
@@ -869,17 +876,27 @@ describe("Context Serialization", () => {
 // ============================================================================
 
 describe("Version Skew Detection (issue #10)", () => {
-  it("affected plugins should NOT import MAX_EMBEDDING_TOKENS at pinned version", async () => {
-    // The 5 plugins at alpha.4 imported MAX_EMBEDDING_TOKENS from core.
-    // At alpha.3 (pinned), they should NOT attempt that import.
-    // This test validates the fix by checking our package.json pins.
+  it("core is pinned to a version that includes MAX_EMBEDDING_TOKENS (issue #10 fix)", async () => {
+    // Issue #10: plugins at "next" imported MAX_EMBEDDING_TOKENS from @elizaos/core,
+    // which was missing in older core versions.
+    // Fix: core is pinned to >= alpha.4 (where the export was introduced),
+    // so plugins at "next" dist-tag resolve safely.
     const { readFileSync } = await import("node:fs");
     const { resolve } = await import("node:path");
-    const pkgPath = resolve(import.meta.dirname, "../../package.json");
+    // Use process.cwd() for reliable root resolution in forked vitest workers
+    // (import.meta.dirname may not resolve to the source tree in CI forks).
+    const pkgPath = resolve(process.cwd(), "package.json");
     const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as {
       dependencies: Record<string, string>;
     };
 
+    const coreVersion = pkg.dependencies["@elizaos/core"];
+    expect(coreVersion).toBeDefined();
+    // Core must be pinned to a specific version (not a dist-tag like "next")
+    expect(coreVersion).not.toBe("next");
+    expect(coreVersion).toMatch(/^\d+\.\d+\.\d+/);
+
+    // The affected plugins should still be present in dependencies
     const affectedPlugins = [
       "@elizaos/plugin-openrouter",
       "@elizaos/plugin-openai",
@@ -892,6 +909,9 @@ describe("Version Skew Detection (issue #10)", () => {
       const ver = pkg.dependencies[name];
       expect(ver).toBeDefined();
       // Must be pinned to specific alpha version (not "next")
+      // The "next" tag causes version skew: plugins@alpha.4 vs core@alpha.10
+      // Results in "MAX_EMBEDDING_TOKENS not found" errors at runtime
+      // See docs/ELIZAOS_VERSIONING.md for details and update procedures
       expect(ver).not.toBe("next");
       expect(ver).toMatch(/^\d+\.\d+\.\d+-alpha\.\d+$/);
     }

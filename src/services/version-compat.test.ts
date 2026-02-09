@@ -347,14 +347,36 @@ describe("Package.json version pinning (issue #10)", () => {
    *
    * This test reads the actual package.json to ensure the fix stays in place.
    */
-  it("affected plugins are pinned to compatible versions", async () => {
+  it("core is pinned to a version that includes MAX_EMBEDDING_TOKENS", async () => {
     const { readFileSync } = await import("node:fs");
     const { resolve } = await import("node:path");
-    const pkgPath = resolve(import.meta.dirname, "../../package.json");
+    // Use process.cwd() for reliable root resolution in forked vitest workers
+    // (import.meta.dirname may not resolve to the source tree in CI forks).
+    const pkgPath = resolve(process.cwd(), "package.json");
     const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as {
       dependencies: Record<string, string>;
     };
 
+    const coreVersion = pkg.dependencies["@elizaos/core"];
+    expect(coreVersion).toBeDefined();
+    // Core must be pinned (not "next") to prevent version skew
+    expect(coreVersion).not.toBe("next");
+    // Should be a specific version
+    expect(coreVersion).toMatch(/^\d+\.\d+\.\d+/);
+    // Must be >= alpha.4 (when MAX_EMBEDDING_TOKENS was introduced)
+    expect(versionSatisfies(coreVersion, "2.0.0-alpha.4")).toBe(true);
+  });
+
+  it("affected plugins are present in dependencies (core pin makes next safe)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    // Use process.cwd() for reliable root resolution in forked vitest workers.
+    const pkgPath = resolve(process.cwd(), "package.json");
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as {
+      dependencies: Record<string, string>;
+    };
+
+    // With core pinned to >= alpha.4, plugins at "next" are safe
     const affectedPlugins = [
       "@elizaos/plugin-openrouter",
       "@elizaos/plugin-openai",
@@ -367,6 +389,9 @@ describe("Package.json version pinning (issue #10)", () => {
       const version = pkg.dependencies[plugin];
       expect(version).toBeDefined();
       // Must be pinned to a specific version (not "next")
+      // Reason: "next" tag resolves to alpha.4 for plugins but alpha.10 for core,
+      // causing version skew errors like "Export named 'MAX_EMBEDDING_TOKENS' not found"
+      // See docs/ELIZAOS_VERSIONING.md for full explanation
       expect(version).not.toBe("next");
       // Should be pinned to latest stable alpha version
       expect(version).toMatch(/^\d+\.\d+\.\d+-alpha\.\d+$/);
@@ -382,6 +407,8 @@ describe("Package.json version pinning (issue #10)", () => {
     };
 
     // Core should be pinned to a specific alpha version (not "next")
+    // Reason: Core releases (alpha.10) are ahead of plugin releases (alpha.4),
+    // so we pin both to ensure compatibility. See docs/ELIZAOS_VERSIONING.md
     const coreVersion = pkg.dependencies["@elizaos/core"];
     expect(coreVersion).toBeDefined();
     expect(coreVersion).not.toBe("next");

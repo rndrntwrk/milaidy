@@ -1,8 +1,8 @@
-import { test, expect, navigateToTab, ensureAgentRunning } from "./fixtures.js";
+import { test, expect, ensureAgentRunning } from "./fixtures.js";
 
 test.describe("Marketplace — MCP", () => {
   test.describe.configure({ timeout: 120_000 });
-  test.beforeEach(async ({ appPage: page }) => { await ensureAgentRunning(page); await navigateToTab(page, "Marketplace"); });
+  test.beforeEach(async ({ appPage: page }) => { await ensureAgentRunning(page); });
 
   test("MCP search returns results", async ({ appPage: page }) => {
     const resp = await page.request.get("/api/mcp/marketplace/search?limit=10");

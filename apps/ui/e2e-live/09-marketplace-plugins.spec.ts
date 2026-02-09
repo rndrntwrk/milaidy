@@ -1,8 +1,8 @@
-import { test, expect, navigateToTab, ensureAgentRunning } from "./fixtures.js";
+import { test, expect, ensureAgentRunning } from "./fixtures.js";
 
 test.describe("Marketplace — Plugins", () => {
   test.describe.configure({ timeout: 120_000 });
-  test.beforeEach(async ({ appPage: page }) => { await ensureAgentRunning(page); await navigateToTab(page, "Marketplace"); });
+  test.beforeEach(async ({ appPage: page }) => { await ensureAgentRunning(page); });
 
   test("registry plugins load", async ({ appPage: page }) => {
     const resp = await page.request.get("/api/registry/plugins");

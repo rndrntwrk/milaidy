@@ -1,6 +1,6 @@
 name: Nightly Build
 
-# Automated nightly builds from the dev branch.
+# Automated nightly builds from the main branch.
 # Publishes to npm with the "nightly" dist-tag and creates a GitHub pre-release.
 # Skips if no new commits since the last nightly.
 on:
@@ -38,7 +38,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: dev
+          ref: main
           fetch-depth: 0
 
       - name: Check for new commits since last nightly
@@ -86,7 +86,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: dev
+          ref: main
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -164,7 +164,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: dev
+          ref: main
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -210,7 +210,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: dev
+          ref: main
           fetch-depth: 0
 
       - name: Create nightly tag
@@ -248,7 +248,7 @@ jobs:
             milaidy update --channel nightly
             ```
 
-            > This is an automated nightly build from the `dev` branch.
+            > This is an automated nightly build from the `main` branch.
             > It may contain experimental features and known issues.
             > For stable releases, use `npm install -g milaidy@latest`.
         env:
@@ -283,7 +283,7 @@ jobs:
           DELETE_COUNT=$((COUNT - KEEP))
           echo "Cleaning up $DELETE_COUNT old nightly releases (keeping $KEEP)"
 
-          echo "$RELEASES" | head -n "$DELETE_COUNT" | while IFS= read -r TAG; do
+          echo "$RELEASES" | tail -n "$DELETE_COUNT" | while IFS= read -r TAG; do
             echo "Deleting release: $TAG"
             gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
           done

@@ -191,9 +191,17 @@ jobs:
         run: |
           echo "⚠️  Signing failed — building unsigned fallback"
           rm -rf dist/win-unpacked dist/mac dist/mac-arm64 dist/linux-unpacked 2>/dev/null || true
+          # Strip signing config so electron-builder doesn't attempt code signing
+          node -e "
+            const fs = require('fs');
+            const c = JSON.parse(fs.readFileSync('./electron-builder.config.json', 'utf8'));
+            if (c.win) { delete c.win.azureSignOptions; delete c.win.signingHashAlgorithms; }
+            if (c.mac) { c.mac.notarize = false; delete c.mac.entitlements; delete c.mac.entitlementsInherit; }
+            fs.writeFileSync('./eb-unsigned.json', JSON.stringify(c, null, 2));
+          "
           unset CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
           unset AZURE_TENANT_ID AZURE_CLIENT_ID AZURE_CLIENT_SECRET
-          CSC_IDENTITY_AUTO_DISCOVERY=false bunx electron-builder build ${{ matrix.platform.electron-args }} -c ./electron-builder.config.json -p never
+          CSC_IDENTITY_AUTO_DISCOVERY=false bunx electron-builder build ${{ matrix.platform.electron-args }} -c ./eb-unsigned.json -p never
         working-directory: apps/app/electron
         shell: bash
         env:

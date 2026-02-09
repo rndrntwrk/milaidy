@@ -300,6 +300,20 @@ export interface LogEntry {
   level: string;
   message: string;
   source: string;
+  tags: string[];
+}
+
+export interface LogsResponse {
+  entries: LogEntry[];
+  sources: string[];
+  tags: string[];
+}
+
+export interface LogsFilter {
+  source?: string;
+  level?: string;
+  tag?: string;
+  since?: number;
 }
 
 export interface ExtensionStatus {
@@ -735,8 +749,14 @@ export class MilaidyClient {
     return this.fetch("/api/skills/refresh", { method: "POST" });
   }
 
-  async getLogs(): Promise<{ entries: LogEntry[] }> {
-    return this.fetch("/api/logs");
+  async getLogs(filter?: LogsFilter): Promise<LogsResponse> {
+    const params = new URLSearchParams();
+    if (filter?.source) params.set("source", filter.source);
+    if (filter?.level) params.set("level", filter.level);
+    if (filter?.tag) params.set("tag", filter.tag);
+    if (filter?.since) params.set("since", String(filter.since));
+    const qs = params.toString();
+    return this.fetch(`/api/logs${qs ? `?${qs}` : ""}`);
   }
 
   async getExtensionStatus(): Promise<ExtensionStatus> {

@@ -155,8 +155,9 @@ export default async function globalSetup(): Promise<void> {
   if (uiInUse) {
     console.log(`  [e2e-live] Vite on :${UI_PORT} — reusing`);
   } else {
+    const viteEnv = { ...(process.env as Record<string, string>), MILAIDY_API_PORT: String(API_PORT) };
     const proc = spawn("npx", ["vite", "--port", String(UI_PORT), "--strictPort"], {
-      cwd: UI_ROOT, env: process.env as Record<string, string>, stdio: ["pipe", "pipe", "pipe"],
+      cwd: UI_ROOT, env: viteEnv, stdio: ["pipe", "pipe", "pipe"],
     });
     await waitForPort(UI_PORT, 60_000);
     console.log(`  [e2e-live] Vite ready`);

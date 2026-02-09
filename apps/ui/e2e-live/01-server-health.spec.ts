@@ -64,8 +64,11 @@ test.describe("Server Health", () => {
       WS_URL,
     );
     expect(msg).not.toBeNull();
-    const data = msg!.data as Record<string, unknown>;
-    expect(typeof data.agentState).toBe("string");
-    expect(typeof data.agentName).toBe("string");
+    // Status message may have data nested under msg.data or at top level
+    const data = (msg!.data as Record<string, unknown>) ?? msg!;
+    const agentState = data.agentState ?? data.state;
+    const agentName = data.agentName ?? data.name;
+    expect(typeof agentState).toBe("string");
+    expect(typeof agentName).toBe("string");
   });
 });

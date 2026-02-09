@@ -1,10 +1,10 @@
 import { test as base, expect, type Page } from "@playwright/test";
 
-const WS_URL = "ws://127.0.0.1:2138/ws";
+const WS_URL = "ws://127.0.0.1:18790/ws";
 
 const TAB_PATHS: Record<string, string> = {
-  chat: "/chat", workbench: "/workbench", inventory: "/inventory",
-  plugins: "/plugins", marketplace: "/marketplace", skills: "/skills",
+  chat: "/chat", apps: "/apps", game: "/game", inventory: "/inventory",
+  plugins: "/plugins", skills: "/skills",
   database: "/database", config: "/config", logs: "/logs",
 };
 
