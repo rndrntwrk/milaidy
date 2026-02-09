@@ -54,13 +54,15 @@ export type ThemeName =
   | "web2000"
   | "programmer"
   | "haxor"
-  | "psycho";
+  | "psycho"
+  | "dark";
 
 export const THEMES: ReadonlyArray<{
   id: ThemeName;
   label: string;
   hint: string;
 }> = [
+  { id: "dark", label: "dark", hint: "modern dark mode" },
   { id: "milady", label: "milady", hint: "clean black & white" },
   { id: "qt314", label: "qt3.14", hint: "soft pastels" },
   { id: "web2000", label: "web2000", hint: "green hacker vibes" },
@@ -78,7 +80,7 @@ function loadTheme(): ThemeName {
   } catch {
     /* ignore */
   }
-  return "milady";
+  return "dark";
 }
 
 function applyTheme(name: ThemeName) {
@@ -102,8 +104,8 @@ export type OnboardingStep =
   | "modelSelection"
   | "cloudLogin"
   | "llmProvider"
-  | "channels"
-  | "inventorySetup";
+  | "inventorySetup"
+  | "connectors";
 
 // ── Action notice ──────────────────────────────────────────────────────
 
@@ -272,16 +274,12 @@ export interface AppState {
   onboardingLargeModel: string;
   onboardingProvider: string;
   onboardingApiKey: string;
-  onboardingSubscriptionTab: "token" | "oauth";
-  onboardingOAuthBusy: boolean;
-  onboardingOAuthError: string;
-  onboardingOAuthSuccess: boolean;
-  onboardingOAuthPasteUrl: string;
-  onboardingChannelType: string;
-  onboardingChannelToken: string;
+  onboardingOpenRouterModel: string;
+  onboardingTelegramToken: string;
   onboardingSelectedChains: Set<string>;
   onboardingRpcSelections: Record<string, string>;
   onboardingRpcKeys: Record<string, string>;
+  onboardingRestarting: boolean;
 
   // Command palette
   commandPaletteOpen: boolean;
@@ -317,8 +315,6 @@ export interface AppState {
 }
 
 export interface AppActions {
-  client: typeof client;
-
   // Navigation
   setTab: (tab: Tab) => void;
   setTheme: (theme: ThemeName) => void;
@@ -577,23 +573,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [onboardingOptions, setOnboardingOptions] = useState<OnboardingOptions | null>(null);
   const [onboardingName, setOnboardingName] = useState("");
   const [onboardingStyle, setOnboardingStyle] = useState("");
-  const [onboardingTheme, setOnboardingTheme] = useState<ThemeName>("milady");
+  const [onboardingTheme, setOnboardingTheme] = useState<ThemeName>("dark");
   const [onboardingRunMode, setOnboardingRunMode] = useState<"local" | "cloud" | "">("");
   const [onboardingCloudProvider, setOnboardingCloudProvider] = useState("");
   const [onboardingSmallModel, setOnboardingSmallModel] = useState("claude-haiku");
   const [onboardingLargeModel, setOnboardingLargeModel] = useState("claude-sonnet-4-5");
   const [onboardingProvider, setOnboardingProvider] = useState("");
   const [onboardingApiKey, setOnboardingApiKey] = useState("");
-  const [onboardingSubscriptionTab, setOnboardingSubscriptionTab] = useState<"token" | "oauth">("token");
-  const [onboardingOAuthBusy, setOnboardingOAuthBusy] = useState(false);
-  const [onboardingOAuthError, setOnboardingOAuthError] = useState("");
-  const [onboardingOAuthSuccess, setOnboardingOAuthSuccess] = useState(false);
-  const [onboardingOAuthPasteUrl, setOnboardingOAuthPasteUrl] = useState("");
-  const [onboardingChannelType, setOnboardingChannelType] = useState("");
-  const [onboardingChannelToken, setOnboardingChannelToken] = useState("");
+  const [onboardingOpenRouterModel, setOnboardingOpenRouterModel] = useState("anthropic/claude-sonnet-4");
+  const [onboardingTelegramToken, setOnboardingTelegramToken] = useState("");
   const [onboardingSelectedChains, setOnboardingSelectedChains] = useState<Set<string>>(new Set(["evm", "solana"]));
   const [onboardingRpcSelections, setOnboardingRpcSelections] = useState<Record<string, string>>({});
   const [onboardingRpcKeys, setOnboardingRpcKeys] = useState<Record<string, string>>({});
+  const [onboardingRestarting, setOnboardingRestarting] = useState(false);
 
   // --- Command palette ---
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -1487,15 +1479,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setOnboardingStep("cloudLogin");
         break;
       case "cloudLogin":
-        setOnboardingStep("channels");
+        setOnboardingStep("connectors");
         break;
       case "llmProvider":
-        setOnboardingStep("channels");
-        break;
-      case "channels":
         setOnboardingStep("inventorySetup");
         break;
       case "inventorySetup":
+        setOnboardingStep("connectors");
+        break;
+      case "connectors":
         await handleOnboardingFinish();
         break;
     }
@@ -1537,15 +1529,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       case "llmProvider":
         setOnboardingStep("runMode");
         break;
-      case "channels":
+      case "inventorySetup":
+        setOnboardingStep("llmProvider");
+        break;
+      case "connectors":
         if (onboardingRunMode === "cloud") {
           setOnboardingStep("cloudLogin");
         } else {
-          setOnboardingStep("llmProvider");
+          setOnboardingStep("inventorySetup");
         }
-        break;
-      case "inventorySetup":
-        setOnboardingStep("channels");
         break;
     }
   }, [onboardingStep, onboardingOptions, onboardingRunMode]);
@@ -1566,15 +1558,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    const channels: Record<string, unknown> = {};
-    if (onboardingChannelType === "telegram" && onboardingChannelToken) {
-      channels.telegram = { botToken: onboardingChannelToken, enabled: true };
-    } else if (onboardingChannelType === "discord" && onboardingChannelToken) {
-      channels.discord = { token: onboardingChannelToken, enabled: true };
-    } else if (onboardingChannelType === "slack" && onboardingChannelToken) {
-      channels.slack = { botToken: onboardingChannelToken, enabled: true };
-    }
-
     try {
       await client.submitOnboarding({
         name: onboardingName,
@@ -1590,12 +1573,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         smallModel: onboardingRunMode === "cloud" ? onboardingSmallModel : undefined,
         largeModel: onboardingRunMode === "cloud" ? onboardingLargeModel : undefined,
         provider: onboardingRunMode === "local" ? onboardingProvider || undefined : undefined,
-        providerApiKey:
-          onboardingRunMode === "local" && onboardingProvider !== "elizacloud" && onboardingProvider !== "openai-subscription"
-            ? onboardingApiKey || undefined
-            : undefined,
-        channels: Object.keys(channels).length > 0 ? channels : undefined,
+        providerApiKey: onboardingRunMode === "local" ? onboardingApiKey || undefined : undefined,
+        openrouterModel: onboardingRunMode === "local" && onboardingProvider === "openrouter" ? onboardingOpenRouterModel || undefined : undefined,
         inventoryProviders: inventoryProviders.length > 0 ? inventoryProviders : undefined,
+        connectors: onboardingTelegramToken.trim()
+          ? { telegram: { botToken: onboardingTelegramToken.trim() } }
+          : undefined,
       });
     } catch (err) {
       window.alert(`Setup failed: ${err instanceof Error ? err.message : "network error"}. Please try again.`);
@@ -1612,7 +1595,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     onboardingOptions, onboardingStyle, onboardingName, onboardingTheme,
     onboardingRunMode, onboardingCloudProvider, onboardingSmallModel,
     onboardingLargeModel, onboardingProvider, onboardingApiKey,
-    onboardingChannelType, onboardingChannelToken,
+    onboardingOpenRouterModel, onboardingTelegramToken,
     onboardingSelectedChains, onboardingRpcSelections, onboardingRpcKeys,
   ]);
 
@@ -1795,16 +1778,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       onboardingLargeModel: setOnboardingLargeModel as (v: never) => void,
       onboardingProvider: setOnboardingProvider as (v: never) => void,
       onboardingApiKey: setOnboardingApiKey as (v: never) => void,
-      onboardingSubscriptionTab: setOnboardingSubscriptionTab as (v: never) => void,
-      onboardingOAuthBusy: setOnboardingOAuthBusy as (v: never) => void,
-      onboardingOAuthError: setOnboardingOAuthError as (v: never) => void,
-      onboardingOAuthSuccess: setOnboardingOAuthSuccess as (v: never) => void,
-      onboardingOAuthPasteUrl: setOnboardingOAuthPasteUrl as (v: never) => void,
-      onboardingChannelType: setOnboardingChannelType as (v: never) => void,
-      onboardingChannelToken: setOnboardingChannelToken as (v: never) => void,
+      onboardingOpenRouterModel: setOnboardingOpenRouterModel as (v: never) => void,
+      onboardingTelegramToken: setOnboardingTelegramToken as (v: never) => void,
       onboardingSelectedChains: setOnboardingSelectedChains as (v: never) => void,
       onboardingRpcSelections: setOnboardingRpcSelections as (v: never) => void,
       onboardingRpcKeys: setOnboardingRpcKeys as (v: never) => void,
+      onboardingRestarting: setOnboardingRestarting as (v: never) => void,
       commandQuery: setCommandQuery as (v: never) => void,
       commandActiveIndex: setCommandActiveIndex as (v: never) => void,
       storeSearch: setStoreSearch as (v: never) => void,
@@ -2011,10 +1990,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     importBusy, importPassword, importFile, importError, importSuccess,
     onboardingStep, onboardingOptions, onboardingName, onboardingStyle, onboardingTheme,
     onboardingRunMode, onboardingCloudProvider, onboardingSmallModel, onboardingLargeModel,
-    onboardingProvider, onboardingApiKey, onboardingSubscriptionTab,
-    onboardingOAuthBusy, onboardingOAuthError, onboardingOAuthSuccess, onboardingOAuthPasteUrl,
-    onboardingChannelType, onboardingChannelToken,
-    onboardingSelectedChains, onboardingRpcSelections, onboardingRpcKeys,
+    onboardingProvider, onboardingApiKey, onboardingOpenRouterModel,
+    onboardingTelegramToken,
+    onboardingSelectedChains, onboardingRpcSelections, onboardingRpcKeys, onboardingRestarting,
     commandPaletteOpen, commandQuery, commandActiveIndex,
     mcpConfiguredServers, mcpServerStatuses, mcpMarketplaceQuery, mcpMarketplaceResults,
     mcpMarketplaceLoading, mcpAction, mcpAddingServer, mcpAddingResult,
@@ -2025,7 +2003,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     configRaw, configText,
 
     // Actions
-    client,
     setTab, setTheme,
     handleStart, handleStop, handlePauseResume, handleRestart, handleReset,
     handleChatSend, handleChatClear, handleNewConversation,

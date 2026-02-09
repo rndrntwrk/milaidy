@@ -9,13 +9,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { logger } from "@elizaos/core";
+import { refreshAnthropicToken } from "./anthropic.js";
+import { refreshCodexToken } from "./openai-codex.js";
 import type {
   OAuthCredentials,
   StoredCredentials,
   SubscriptionProvider,
 } from "./types.js";
-import { refreshAnthropicToken } from "./anthropic.js";
-import { refreshCodexToken } from "./openai-codex.js";
 
 const AUTH_DIR = path.join(
   process.env.MILAIDY_HOME || path.join(os.homedir(), ".milaidy"),

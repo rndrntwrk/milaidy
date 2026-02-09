@@ -2,9 +2,10 @@
  * Onboarding wizard component — multi-step onboarding flow.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 import { useApp, THEMES, type OnboardingStep } from "../AppContext.js";
-import type { StylePreset, ProviderOption, CloudProviderOption, ModelOption, InventoryProviderOption, RpcProviderOption } from "../api-client";
+import type { StylePreset, ProviderOption, CloudProviderOption, ModelOption, InventoryProviderOption, RpcProviderOption, OpenRouterModelOption } from "../api-client";
+import { getProviderLogo } from "../provider-logos.js";
 
 export function OnboardingWizard() {
   const {
@@ -19,16 +20,12 @@ export function OnboardingWizard() {
     onboardingLargeModel,
     onboardingProvider,
     onboardingApiKey,
-    onboardingSubscriptionTab,
-    onboardingOAuthBusy,
-    onboardingOAuthError,
-    onboardingOAuthSuccess,
-    onboardingOAuthPasteUrl,
-    onboardingChannelType,
-    onboardingChannelToken,
+    onboardingOpenRouterModel,
+    onboardingTelegramToken,
     onboardingSelectedChains,
     onboardingRpcSelections,
     onboardingRpcKeys,
+    onboardingRestarting,
     cloudConnected,
     cloudLoginBusy,
     cloudLoginError,
@@ -38,10 +35,11 @@ export function OnboardingWizard() {
     setState,
     setTheme,
     handleCloudLogin,
-    client,
   } = useApp();
 
-  const [oauthInstructions, setOauthInstructions] = useState("");
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [showProviderConfirmModal, setShowProviderConfirmModal] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState<ProviderOption | null>(null);
 
   useEffect(() => {
     if (onboardingStep === "theme") {
@@ -78,142 +76,12 @@ export function OnboardingWizard() {
     setState("onboardingLargeModel", e.target.value);
   };
 
-  const handleProviderSelect = (providerId: string) => {
-    setState("onboardingProvider", providerId);
-    setState("onboardingApiKey", "");
-    setState("onboardingOAuthBusy", false);
-    setState("onboardingOAuthError", "");
-    setState("onboardingOAuthSuccess", false);
-    setState("onboardingOAuthPasteUrl", "");
-    setOauthInstructions("");
-    if (providerId === "anthropic-subscription") {
-      setState("onboardingSubscriptionTab", "token");
-    }
-  };
-
-  const handleSubscriptionTabSelect = (tab: "token" | "oauth") => {
-    setState("onboardingSubscriptionTab", tab);
-    setState("onboardingOAuthError", "");
-    if (tab === "oauth") {
-      setState("onboardingApiKey", "");
-    }
-  };
-
   const handleApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setState("onboardingApiKey", e.target.value);
   };
 
-  const handleOAuthPasteInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setState("onboardingOAuthPasteUrl", e.target.value);
-  };
-
-  const handleAnthropicOAuthStart = async () => {
-    setState("onboardingOAuthBusy", true);
-    setState("onboardingOAuthError", "");
-    setState("onboardingOAuthSuccess", false);
-    setState("onboardingOAuthPasteUrl", "");
-    try {
-      const { authUrl } = await client.startAnthropicLogin();
-      window.open(authUrl, "anthropic-oauth", "width=600,height=700,left=200,top=100");
-    } catch (err) {
-      setState("onboardingOAuthError", err instanceof Error ? err.message : "Failed to start Anthropic login");
-    } finally {
-      setState("onboardingOAuthBusy", false);
-    }
-  };
-
-  const handleAnthropicOAuthSubmit = async () => {
-    const code = onboardingOAuthPasteUrl.trim();
-    if (!code) {
-      setState("onboardingOAuthError", "Paste the authorization code first.");
-      return;
-    }
-    setState("onboardingOAuthBusy", true);
-    setState("onboardingOAuthError", "");
-    try {
-      const res = await client.exchangeAnthropicCode(code);
-      if (!res.success) {
-        throw new Error("Anthropic login did not complete.");
-      }
-      setState("onboardingOAuthSuccess", true);
-    } catch (err) {
-      setState("onboardingOAuthSuccess", false);
-      setState("onboardingOAuthError", err instanceof Error ? err.message : "Failed to connect Anthropic subscription");
-    } finally {
-      setState("onboardingOAuthBusy", false);
-    }
-  };
-
-  const handleVerifyAnthropicSetupToken = async () => {
-    const token = onboardingApiKey.trim();
-    if (!token) {
-      setState("onboardingOAuthError", "Enter a setup token first.");
-      setState("onboardingOAuthSuccess", false);
-      return;
-    }
-    setState("onboardingOAuthBusy", true);
-    setState("onboardingOAuthError", "");
-    setState("onboardingOAuthSuccess", false);
-    try {
-      const res = await client.submitAnthropicSetupToken(token);
-      if (!res.success) {
-        throw new Error("Token verification failed.");
-      }
-      setState("onboardingOAuthSuccess", true);
-    } catch (err) {
-      setState("onboardingOAuthError", err instanceof Error ? err.message : "Failed to verify setup token");
-      setState("onboardingOAuthSuccess", false);
-    } finally {
-      setState("onboardingOAuthBusy", false);
-    }
-  };
-
-  const handleOpenAIOAuthStart = async () => {
-    setState("onboardingOAuthBusy", true);
-    setState("onboardingOAuthError", "");
-    setState("onboardingOAuthSuccess", false);
-    setState("onboardingOAuthPasteUrl", "");
-    setOauthInstructions("");
-    try {
-      const { authUrl, instructions } = await client.startOpenAILogin();
-      setOauthInstructions(instructions ?? "");
-      window.open(authUrl, "openai-oauth", "width=600,height=700,left=200,top=100");
-    } catch (err) {
-      setState("onboardingOAuthError", err instanceof Error ? err.message : "Failed to start OpenAI login");
-    } finally {
-      setState("onboardingOAuthBusy", false);
-    }
-  };
-
-  const handleOpenAIOAuthSubmit = async () => {
-    const redirectUrl = onboardingOAuthPasteUrl.trim();
-    if (!redirectUrl) {
-      setState("onboardingOAuthError", "Paste the redirect URL first.");
-      return;
-    }
-    setState("onboardingOAuthBusy", true);
-    setState("onboardingOAuthError", "");
-    try {
-      const res = await client.exchangeOpenAICode(redirectUrl);
-      if (!res.success) {
-        throw new Error("OpenAI login did not complete.");
-      }
-      setState("onboardingOAuthSuccess", true);
-    } catch (err) {
-      setState("onboardingOAuthSuccess", false);
-      setState("onboardingOAuthError", err instanceof Error ? err.message : "Failed to connect OpenAI subscription");
-    } finally {
-      setState("onboardingOAuthBusy", false);
-    }
-  };
-
-  const handleChannelSelect = (type: string) => {
-    setState("onboardingChannelType", type);
-    setState("onboardingChannelToken", "");
-  };
-
-  const handleChannelTokenChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setState("onboardingChannelToken", e.target.value);
+  const handleOpenRouterModelSelect = (modelId: string) => {
+    setState("onboardingOpenRouterModel", modelId);
   };
 
   const handleChainToggle = (chain: string) => {
@@ -235,13 +103,15 @@ export function OnboardingWizard() {
     setState("onboardingRpcKeys", { ...onboardingRpcKeys, [keyName]: key });
   };
 
+  /* Telegram token is handled by onboardingTelegramToken state */
+
   const renderStep = (step: OnboardingStep) => {
     switch (step) {
       case "welcome":
         return (
           <div className="max-w-[500px] mx-auto mt-10 text-center font-body">
             <img
-              src="/android-chrome-512x512.png"
+              src="/pfp.jpg"
               alt="Avatar"
               className="w-[140px] h-[140px] rounded-full object-cover border-[3px] border-border mx-auto mb-5 block"
             />
@@ -253,17 +123,17 @@ export function OnboardingWizard() {
       case "name":
         return (
           <div className="max-w-[500px] mx-auto mt-10 text-center font-body">
-            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[480px] relative text-[15px] text-txt leading-relaxed">
+            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[360px] relative text-[15px] text-txt leading-relaxed">
               <h2 className="text-[28px] font-normal mb-1 text-txt-strong">Choose a Name</h2>
             </div>
-            <div className="flex flex-col gap-2 text-left max-w-[480px] mx-auto">
+            <div className="flex flex-col gap-2 text-left max-w-[360px] mx-auto">
               {onboardingOptions?.names.map((name: string) => (
                 <button
                   key={name}
-                  className={`px-4 py-3 border-2 cursor-pointer transition-colors text-left ${
+                  className={`px-4 py-3 border cursor-pointer bg-card transition-colors text-left ${
                     onboardingName === name
-                      ? "border-accent bg-accent text-accent-fg"
-                      : "border-border bg-card hover:border-accent"
+                      ? "border-accent bg-accent-subtle"
+                      : "border-border hover:border-accent"
                   }`}
                   onClick={() => setState("onboardingName", name)}
                 >
@@ -271,13 +141,13 @@ export function OnboardingWizard() {
                 </button>
               ))}
             </div>
-            <div className="max-w-[480px] mx-auto mt-4">
+            <div className="max-w-[360px] mx-auto mt-4">
               <label className="text-xs text-muted block mb-2 text-left">Or enter custom name:</label>
               <div
-                className={`px-4 py-3 border-2 cursor-pointer transition-colors ${
+                className={`px-4 py-3 border cursor-pointer bg-card transition-colors ${
                   onboardingName && !onboardingOptions?.names.includes(onboardingName)
-                    ? "border-accent bg-accent text-accent-fg"
-                    : "border-border bg-card hover:border-accent"
+                    ? "border-accent bg-accent-subtle"
+                    : "border-border hover:border-accent"
                 }`}
               >
                 <input
@@ -295,22 +165,22 @@ export function OnboardingWizard() {
       case "style":
         return (
           <div className="max-w-[500px] mx-auto mt-10 text-center font-body">
-            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[480px] relative text-[15px] text-txt leading-relaxed">
+            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[360px] relative text-[15px] text-txt leading-relaxed">
               <h2 className="text-[28px] font-normal mb-1 text-txt-strong">Choose a Style</h2>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-left max-w-[480px] mx-auto">
+            <div className="flex flex-col gap-2 text-left max-w-[360px] mx-auto">
               {onboardingOptions?.styles.map((style: StylePreset) => (
                 <div
                   key={style.catchphrase}
-                  className={`px-4 py-3 border-2 cursor-pointer transition-colors ${
+                  className={`px-4 py-3 border cursor-pointer bg-card transition-colors ${
                     onboardingStyle === style.catchphrase
-                      ? "border-accent bg-accent text-accent-fg"
-                      : "border-border bg-card hover:border-accent"
+                      ? "border-accent bg-accent-subtle"
+                      : "border-border hover:border-accent"
                   }`}
                   onClick={() => handleStyleSelect(style.catchphrase)}
                 >
                   <div className="font-bold text-sm">{style.catchphrase}</div>
-                  {style.hint && <div className={`text-xs mt-0.5 ${onboardingStyle === style.catchphrase ? "opacity-80" : "text-muted"}`}>{style.hint}</div>}
+                  {style.hint && <div className="text-xs text-muted mt-0.5">{style.hint}</div>}
                 </div>
               ))}
             </div>
@@ -320,17 +190,17 @@ export function OnboardingWizard() {
       case "theme":
         return (
           <div className="max-w-[500px] mx-auto mt-10 text-center font-body">
-            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[480px] relative text-[15px] text-txt leading-relaxed">
+            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[360px] relative text-[15px] text-txt leading-relaxed">
               <h2 className="text-[28px] font-normal mb-1 text-txt-strong">Choose a Theme</h2>
             </div>
-            <div className="grid grid-cols-3 gap-2 text-left max-w-[480px] mx-auto">
+            <div className="grid grid-cols-3 gap-2 text-left max-w-[360px] mx-auto">
               {THEMES.map((theme) => (
                 <button
                   key={theme.id}
-                  className={`px-2 py-3.5 border-2 cursor-pointer transition-colors text-center ${
+                  className={`px-2 py-3.5 border cursor-pointer bg-card transition-colors text-center ${
                     onboardingTheme === theme.id
-                      ? "border-accent bg-accent text-accent-fg"
-                      : "border-border bg-card hover:border-accent"
+                      ? "border-accent bg-accent-subtle"
+                      : "border-border hover:border-accent"
                   }`}
                   onClick={() => handleThemeSelect(theme.id)}
                 >
@@ -344,35 +214,31 @@ export function OnboardingWizard() {
       case "runMode":
         return (
           <div className="max-w-[500px] mx-auto mt-10 text-center font-body">
-            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[480px] relative text-[15px] text-txt leading-relaxed">
+            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[360px] relative text-[15px] text-txt leading-relaxed">
               <h2 className="text-[28px] font-normal mb-1 text-txt-strong">Run Mode</h2>
             </div>
-            <div className="flex flex-col gap-2 text-left max-w-[480px] mx-auto">
+            <div className="flex flex-col gap-2 text-left max-w-[360px] mx-auto">
               <button
-                className={`px-4 py-3 border-2 cursor-pointer transition-colors ${
+                className={`px-4 py-3 border cursor-pointer bg-card transition-colors ${
                   onboardingRunMode === "local"
-                    ? "border-accent bg-accent text-accent-fg"
-                    : "border-border bg-card hover:border-accent"
+                    ? "border-accent bg-accent-subtle"
+                    : "border-border hover:border-accent"
                 }`}
                 onClick={() => handleRunModeSelect("local")}
               >
                 <div className="font-bold text-sm">Local</div>
-                <div className={`text-xs mt-0.5 ${onboardingRunMode === "local" ? "opacity-80" : "text-muted"}`}>
-                  Run on your machine with your own API keys
-                </div>
+                <div className="text-xs text-muted mt-0.5">Run on your machine with your own API keys</div>
               </button>
               <button
-                className={`px-4 py-3 border-2 cursor-pointer transition-colors ${
+                className={`px-4 py-3 border cursor-pointer bg-card transition-colors ${
                   onboardingRunMode === "cloud"
-                    ? "border-accent bg-accent text-accent-fg"
-                    : "border-border bg-card hover:border-accent"
+                    ? "border-accent bg-accent-subtle"
+                    : "border-border hover:border-accent"
                 }`}
                 onClick={() => handleRunModeSelect("cloud")}
               >
                 <div className="font-bold text-sm">Cloud</div>
-                <div className={`text-xs mt-0.5 ${onboardingRunMode === "cloud" ? "opacity-80" : "text-muted"}`}>
-                  Use Eliza Cloud managed services
-                </div>
+                <div className="text-xs text-muted mt-0.5">Use Eliza Cloud managed services</div>
               </button>
             </div>
           </div>
@@ -381,26 +247,22 @@ export function OnboardingWizard() {
       case "cloudProvider":
         return (
           <div className="max-w-[500px] mx-auto mt-10 text-center font-body">
-            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[480px] relative text-[15px] text-txt leading-relaxed">
+            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[360px] relative text-[15px] text-txt leading-relaxed">
               <h2 className="text-[28px] font-normal mb-1 text-txt-strong">Cloud Provider</h2>
             </div>
-            <div className="flex flex-col gap-2 text-left max-w-[480px] mx-auto">
+            <div className="flex flex-col gap-2 text-left max-w-[360px] mx-auto">
               {onboardingOptions?.cloudProviders.map((provider: CloudProviderOption) => (
                 <div
                   key={provider.id}
-                  className={`px-4 py-3 border-2 cursor-pointer transition-colors ${
+                  className={`px-4 py-3 border cursor-pointer bg-card transition-colors ${
                     onboardingCloudProvider === provider.id
-                      ? "border-accent bg-accent text-accent-fg"
-                      : "border-border bg-card hover:border-accent"
+                      ? "border-accent bg-accent-subtle"
+                      : "border-border hover:border-accent"
                   }`}
                   onClick={() => handleCloudProviderSelect(provider.id)}
                 >
                   <div className="font-bold text-sm">{provider.name}</div>
-                  {provider.description && (
-                    <div className={`text-xs mt-0.5 ${onboardingCloudProvider === provider.id ? "opacity-80" : "text-muted"}`}>
-                      {provider.description}
-                    </div>
-                  )}
+                  {provider.description && <div className="text-xs text-muted mt-0.5">{provider.description}</div>}
                 </div>
               ))}
             </div>
@@ -410,10 +272,10 @@ export function OnboardingWizard() {
       case "modelSelection":
         return (
           <div className="max-w-[500px] mx-auto mt-10 text-center font-body">
-            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[480px] relative text-[15px] text-txt leading-relaxed">
+            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[360px] relative text-[15px] text-txt leading-relaxed">
               <h2 className="text-[28px] font-normal mb-1 text-txt-strong">Model Selection</h2>
             </div>
-            <div className="flex flex-col gap-4 text-left max-w-[480px] mx-auto">
+            <div className="flex flex-col gap-4 text-left max-w-[360px] mx-auto">
               <div>
                 <label className="text-[13px] font-bold text-txt-strong block mb-2 text-left">
                   Small Model:
@@ -453,16 +315,16 @@ export function OnboardingWizard() {
       case "cloudLogin":
         return (
           <div className="max-w-[500px] mx-auto mt-10 text-center font-body">
-            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[480px] relative text-[15px] text-txt leading-relaxed">
+            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[360px] relative text-[15px] text-txt leading-relaxed">
               <h2 className="text-[28px] font-normal mb-1 text-txt-strong">Cloud Login</h2>
             </div>
             {cloudConnected ? (
-              <div className="max-w-[480px] mx-auto">
+              <div className="max-w-[360px] mx-auto">
                 <p className="text-txt mb-2">Logged in successfully!</p>
                 {cloudUserId && <p className="text-muted text-sm">User ID: {cloudUserId}</p>}
               </div>
             ) : (
-              <div className="max-w-[480px] mx-auto">
+              <div className="max-w-[360px] mx-auto">
                 <p className="text-txt mb-4">Click the button below to log in to Eliza Cloud</p>
                 <button
                   className="px-6 py-2 border border-accent bg-accent text-accent-fg text-sm cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed mt-5"
@@ -485,420 +347,76 @@ export function OnboardingWizard() {
         );
 
       case "llmProvider": {
-        const providers = onboardingOptions?.providers ?? [];
-        const cloudProviders = providers.filter((provider: ProviderOption) => provider.id === "elizacloud");
-        const subscriptionProviders = providers.filter((provider: ProviderOption) =>
-          provider.id === "anthropic-subscription" || provider.id === "openai-subscription",
-        );
-        const apiProviders = providers.filter(
-          (provider: ProviderOption) => !subscriptionProviders.some((item) => item.id === provider.id) && provider.id !== "elizacloud",
-        );
-
-        const providerOverrides: Record<string, { name: string; description?: string }> = {
-          elizacloud: { name: "Eliza Cloud" },
-          "anthropic-subscription": {
-            name: "Claude Subscription",
-            description: "$20-200/mo Claude Pro/Max subscription",
-          },
-          "openai-subscription": {
-            name: "ChatGPT Subscription",
-            description: "$20-200/mo ChatGPT Plus/Pro subscription",
-          },
-          anthropic: { name: "Anthropic API Key" },
-          openai: { name: "OpenAI API Key" },
-          openrouter: { name: "OpenRouter" },
-          gemini: { name: "Google Gemini" },
-          grok: { name: "xAI (Grok)" },
-          groq: { name: "Groq" },
-          deepseek: { name: "DeepSeek" },
-        };
-
-        const getProviderDisplay = (provider: ProviderOption) => {
-          const override = providerOverrides[provider.id];
-          return {
-            name: override?.name ?? provider.name,
-            description: override?.description ?? provider.description,
-          };
-        };
-
-        return (
-          <div className="max-w-[760px] mx-auto mt-10 text-center font-body">
-            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-4 max-w-[420px] relative text-[15px] text-txt leading-relaxed">
-              <h2 className="text-[28px] font-normal mb-1 text-txt-strong">LLM Provider</h2>
-            </div>
-
-            <div className="border border-border bg-card text-xs text-muted p-3 rounded text-left max-w-[760px] mx-auto mb-4">
-              Most providers need an API key or subscription. Free options like Eliza Cloud have limited credits.
-              Subscriptions (Claude/ChatGPT) are the easiest way to get started if you already pay for one.
-            </div>
-
-            {cloudProviders.length > 0 && (
-              <div className="mb-3 text-left">
-                <div className="text-[11px] uppercase tracking-wide text-muted mb-2">Cloud</div>
-                <div className="grid grid-cols-1 gap-2">
-                  {cloudProviders.map((provider: ProviderOption) => {
-                    const display = getProviderDisplay(provider);
-                    return (
-                      <button
-                        key={provider.id}
-                        className={`px-5 py-4 border-2 cursor-pointer transition-colors text-left ${
-                          onboardingProvider === provider.id
-                            ? "border-accent bg-accent text-accent-fg"
-                            : "border-border bg-card hover:border-accent"
-                        }`}
-                        onClick={() => handleProviderSelect(provider.id)}
-                      >
-                        <div className="flex items-center gap-2">
-                          <div className="font-bold text-sm">{display.name}</div>
-                          {onboardingProvider === provider.id && onboardingOAuthSuccess && (
-                            <span className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-600 text-white">✓ Connected</span>
-                          )}
-                        </div>
-                        {display.description && (
-                          <div className={`text-xs mt-0.5 ${onboardingProvider === provider.id ? "opacity-80" : "text-muted"}`}>
-                            {display.description}
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {subscriptionProviders.length > 0 && (
-              <div className="mb-4 text-left">
-                <div className="text-[11px] uppercase tracking-wide text-muted mb-2">Subscriptions</div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {subscriptionProviders.map((provider: ProviderOption) => {
-                    const display = getProviderDisplay(provider);
-                    return (
-                      <button
-                        key={provider.id}
-                        className={`px-5 py-4 border-2 cursor-pointer transition-colors text-left ${
-                          onboardingProvider === provider.id
-                            ? "border-accent bg-accent text-accent-fg"
-                            : "border-border bg-card hover:border-accent"
-                        }`}
-                        onClick={() => handleProviderSelect(provider.id)}
-                      >
-                        <div className="flex items-center gap-2">
-                          <div className="font-bold text-sm">{display.name}</div>
-                          {onboardingProvider === provider.id && onboardingOAuthSuccess && (
-                            <span className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-600 text-white">✓ Connected</span>
-                          )}
-                        </div>
-                        {display.description && (
-                          <div className={`text-xs mt-0.5 ${onboardingProvider === provider.id ? "opacity-80" : "text-muted"}`}>
-                            {display.description}
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {apiProviders.length > 0 && (
-              <div className="text-left">
-                <div className="text-[11px] uppercase tracking-wide text-muted mb-2">API Keys</div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {apiProviders.map((provider: ProviderOption) => {
-                    const display = getProviderDisplay(provider);
-                    return (
-                      <button
-                        key={provider.id}
-                        className={`px-4 py-3 border-2 cursor-pointer transition-colors text-left ${
-                          onboardingProvider === provider.id
-                            ? "border-accent bg-accent text-accent-fg"
-                            : "border-border bg-card hover:border-accent"
-                        }`}
-                        onClick={() => handleProviderSelect(provider.id)}
-                      >
-                        <div className="font-bold text-sm">{display.name}</div>
-                        {display.description && (
-                          <div className={`text-xs mt-0.5 ${onboardingProvider === provider.id ? "opacity-80" : "text-muted"}`}>
-                            {display.description}
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {onboardingProvider === "anthropic-subscription" && (
-              <div className="max-w-[520px] mx-auto mt-4 text-left">
-                <div className="flex items-center gap-4 border-b border-border mb-3">
-                  <button
-                    className={`text-sm pb-2 border-b-2 ${
-                      onboardingSubscriptionTab === "token"
-                        ? "border-accent text-accent"
-                        : "border-transparent text-muted hover:text-txt"
-                    }`}
-                    onClick={() => handleSubscriptionTabSelect("token")}
-                  >
-                    Setup Token
-                  </button>
-                  <button
-                    className={`text-sm pb-2 border-b-2 ${
-                      onboardingSubscriptionTab === "oauth"
-                        ? "border-accent text-accent"
-                        : "border-transparent text-muted hover:text-txt"
-                    }`}
-                    onClick={() => handleSubscriptionTabSelect("oauth")}
-                  >
-                    OAuth Login
-                  </button>
-                </div>
-
-                {onboardingSubscriptionTab === "token" ? (
-                  <>
-                    <label className="text-[13px] font-bold text-txt-strong block mb-2 text-left">Setup Token:</label>
-                    <input
-                      type="password"
-                      value={onboardingApiKey}
-                      onChange={handleApiKeyChange}
-                      placeholder="sk-ant-oat01-..."
-                      className="w-full px-3 py-2 border border-border bg-card text-sm mt-2 focus:border-accent focus:outline-none"
-                    />
-                    <div className="mt-3">
-                      <button
-                        className="px-4 py-2 border border-accent bg-accent text-accent-fg text-sm cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed"
-                        onClick={() => void handleVerifyAnthropicSetupToken()}
-                        disabled={onboardingOAuthBusy}
-                      >
-                        {onboardingOAuthBusy ? (
-                          <span className="flex items-center justify-center gap-2">
-                            <span className="inline-block w-4 h-4 border-2 border-border border-t-accent rounded-full animate-spin"></span>
-                            Verifying...
-                          </span>
-                        ) : (
-                          "Verify"
-                        )}
-                      </button>
-                    </div>
-                    <p className="text-xs text-muted mt-2 whitespace-pre-line">
-                      Paste your Claude Code setup token.{"\n"}
-                      Get it from: claude.ai/settings/api → "Claude Code" → "Use setup token"
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      className="px-6 py-2 border border-accent bg-accent text-accent-fg text-sm cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed"
-                      onClick={() => void handleAnthropicOAuthStart()}
-                      disabled={onboardingOAuthBusy}
-                    >
-                      {onboardingOAuthBusy ? (
-                        <span className="flex items-center justify-center gap-2">
-                          <span className="inline-block w-4 h-4 border-2 border-border border-t-accent rounded-full animate-spin"></span>
-                          Opening...
-                        </span>
-                      ) : (
-                        "Login with Anthropic"
-                      )}
-                    </button>
-                    <p className="text-xs text-muted mt-2">
-                      Opens Anthropic login in your browser to connect your subscription.
-                    </p>
-                    <div className="mt-3">
-                      <label className="text-[13px] font-bold text-txt-strong block mb-2 text-left">
-                        After logging in, paste the authorization code here:
-                      </label>
-                      <input
-                        type="text"
-                        value={onboardingOAuthPasteUrl}
-                        onChange={handleOAuthPasteInputChange}
-                        placeholder="Paste authorization code"
-                        className="w-full px-3 py-2 border border-border bg-card text-sm focus:border-accent focus:outline-none"
-                      />
-                      <button
-                        className="mt-3 px-4 py-2 border border-border bg-card text-txt text-sm cursor-pointer hover:border-accent disabled:opacity-40 disabled:cursor-not-allowed"
-                        onClick={() => void handleAnthropicOAuthSubmit()}
-                        disabled={onboardingOAuthBusy}
-                      >
-                        {onboardingOAuthBusy ? "Connecting..." : "Connect Anthropic"}
-                      </button>
-                    </div>
-                  </>
-                )}
-                {onboardingOAuthSuccess && (
-                  <p className="text-[13px] text-emerald-600 mt-2">✓ Connected</p>
-                )}
-                {onboardingOAuthError && (
-                  <p className="text-[13px] text-danger mt-2">{onboardingOAuthError}</p>
-                )}
-              </div>
-            )}
-
-            {onboardingProvider === "openai-subscription" && (
-              <div className="max-w-[520px] mx-auto mt-4 text-left">
-                <button
-                  className="px-6 py-2 border border-accent bg-accent text-accent-fg text-sm cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed"
-                  onClick={() => void handleOpenAIOAuthStart()}
-                  disabled={onboardingOAuthBusy}
-                >
-                  {onboardingOAuthBusy ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <span className="inline-block w-4 h-4 border-2 border-border border-t-accent rounded-full animate-spin"></span>
-                      Opening...
-                    </span>
-                  ) : (
-                    "Login with OpenAI"
-                  )}
-                </button>
-                <p className="text-xs text-muted mt-2">
-                  Opens OpenAI login in your browser. Requires ChatGPT Plus ($20/mo) or Pro ($200/mo).
-                </p>
-                {oauthInstructions && (
-                  <p className="text-xs text-muted mt-2 whitespace-pre-line">{oauthInstructions}</p>
-                )}
-                <div className="mt-3">
-                  <label className="text-[13px] font-bold text-txt-strong block mb-2 text-left">
-                    After logging in, paste the redirect URL here:
-                  </label>
-                  <input
-                    type="text"
-                    value={onboardingOAuthPasteUrl}
-                    onChange={handleOAuthPasteInputChange}
-                    placeholder="https://..."
-                    className="w-full px-3 py-2 border border-border bg-card text-sm focus:border-accent focus:outline-none"
-                  />
-                  <button
-                    className="mt-3 px-4 py-2 border border-border bg-card text-txt text-sm cursor-pointer hover:border-accent disabled:opacity-40 disabled:cursor-not-allowed"
-                    onClick={() => void handleOpenAIOAuthSubmit()}
-                    disabled={onboardingOAuthBusy}
-                  >
-                    {onboardingOAuthBusy ? "Connecting..." : "Connect OpenAI"}
-                  </button>
-                </div>
-                {onboardingOAuthSuccess && (
-                  <p className="text-[13px] text-emerald-600 mt-2">✓ Connected</p>
-                )}
-                {onboardingOAuthError && (
-                  <p className="text-[13px] text-danger mt-2">{onboardingOAuthError}</p>
-                )}
-              </div>
-            )}
-
-            {onboardingProvider &&
-              onboardingProvider !== "anthropic-subscription" &&
-              onboardingProvider !== "openai-subscription" &&
-              onboardingProvider !== "elizacloud" && (
-                <div className="max-w-[520px] mx-auto mt-4">
-                  <label className="text-[13px] font-bold text-txt-strong block mb-2 text-left">API Key:</label>
-                  <input
-                    type="password"
-                    value={onboardingApiKey}
-                    onChange={handleApiKeyChange}
-                    placeholder="Enter your API key"
-                    className="w-full px-3 py-2 border border-border bg-card text-sm mt-2 focus:border-accent focus:outline-none"
-                  />
-                </div>
-              )}
-          </div>
-        );
-      }
-
-      case "channels": {
-        const helperText =
-          onboardingChannelType === "telegram"
-            ? [
-                "1. Open Telegram and message @BotFather",
-                "2. Send /newbot and follow the prompts",
-                "3. Copy the token (looks like 123456:ABC-DEF...)",
-              ]
-            : onboardingChannelType === "discord"
-              ? [
-                  "1. Go to discord.com/developers/applications",
-                  "2. Create New Application → Bot → Add Bot",
-                  "3. Reset Token → copy it",
-                  '4. Enable "Message Content Intent" under Privileged Gateway Intents',
-                  "5. Use OAuth2 URL Generator (scope: bot) to invite to your server",
-                ]
-              : onboardingChannelType === "slack"
-                ? [
-                    "1. Go to api.slack.com/apps → Create New App",
-                    "2. OAuth & Permissions → add chat:write, app_mentions:read scopes",
-                    "3. Install to workspace → copy Bot User OAuth Token",
-                    "4. Also copy App-Level Token from Basic Information",
-                  ]
-                : [];
-
+        const isDark = onboardingTheme === "dark";
         return (
           <div className="max-w-[500px] mx-auto mt-10 text-center font-body">
-            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[480px] relative text-[15px] text-txt leading-relaxed">
-              <h2 className="text-[28px] font-normal mb-1 text-txt-strong">Connect a Chat Channel</h2>
-              <p className="text-xs text-muted mt-2">
-                Talk to your agent on Telegram, Discord, or Slack. You can skip this and add channels later.
-              </p>
+            <img
+              src="/pfp.jpg"
+              alt="milAIdy"
+              className="w-[80px] h-[80px] rounded-full object-cover border-2 border-border mx-auto mb-4 block"
+            />
+            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[360px] relative text-[15px] text-txt leading-relaxed">
+              which AI provider should I use?
+            </div>
+            <div className="max-w-[360px] mx-auto mb-6 max-h-[400px] overflow-y-auto pr-2">
+              <div className="grid grid-cols-2 gap-3 text-left">
+              {onboardingOptions?.providers.map((provider: ProviderOption) => (
+                <div
+                  key={provider.id}
+                  className={`p-5 border-[1.5px] cursor-pointer bg-card transition-all rounded-lg flex flex-col gap-3 ${
+                    onboardingProvider === provider.id
+                      ? "border-accent bg-accent-subtle shadow-[0_0_0_3px_var(--accent-subtle),var(--shadow-md)]"
+                      : "border-border hover:border-border-hover hover:bg-bg-hover hover:shadow-md hover:-translate-y-0.5"
+                  }`}
+                  onClick={() => {
+                    setSelectedProvider(provider);
+                    setState("onboardingProvider", provider.id);
+                    setState("onboardingApiKey", "");
+
+                    // Check if provider needs API key
+                    const needsKey = provider.envKey && provider.id !== "elizacloud" && provider.id !== "ollama";
+                    if (needsKey) {
+                      setShowApiKeyModal(true);
+                    } else {
+                      setShowProviderConfirmModal(true);
+                    }
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={getProviderLogo(provider.id, isDark)}
+                      alt={provider.name}
+                      className="w-10 h-10 rounded-md object-contain bg-bg-muted p-1.5 shrink-0"
+                    />
+                    <div className="font-semibold text-sm text-txt-strong">{provider.name}</div>
+                  </div>
+                  {provider.description && <div className="text-xs text-muted-strong leading-relaxed">{provider.description}</div>}
+                </div>
+              ))}
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-left max-w-[500px] mx-auto">
-              <button
-                className={`px-4 py-3 border-2 cursor-pointer transition-colors text-left ${
-                  onboardingChannelType === "telegram"
-                    ? "border-accent bg-accent text-accent-fg"
-                    : "border-border bg-card hover:border-accent"
-                }`}
-                onClick={() => handleChannelSelect("telegram")}
-              >
-                <div className="font-bold text-sm">Telegram</div>
-                <div className={`text-xs mt-0.5 ${onboardingChannelType === "telegram" ? "opacity-80" : "text-muted"}`}>
-                  Recommended · Easy setup
+            {showApiKeyModal && selectedProvider && renderApiKeyModal()}
+            {showProviderConfirmModal && selectedProvider && renderProviderConfirmModal()}
+            {onboardingProvider === "openrouter" && onboardingApiKey.trim() && onboardingOptions?.openrouterModels && (
+              <div className="max-w-[360px] mx-auto mt-4">
+                <label className="text-[13px] font-bold text-txt-strong block mb-2 text-left">Select Model:</label>
+                <div className="flex flex-col gap-2">
+                  {onboardingOptions.openrouterModels.map((model: OpenRouterModelOption) => (
+                    <div
+                      key={model.id}
+                      className={`px-4 py-3 border cursor-pointer transition-colors text-left rounded-lg ${
+                        onboardingOpenRouterModel === model.id
+                          ? "border-accent bg-accent-subtle"
+                          : "border-border bg-card hover:border-accent/50"
+                      }`}
+                      onClick={() => handleOpenRouterModelSelect(model.id)}
+                    >
+                      <div className="font-bold text-sm">{model.name}</div>
+                      {model.description && <div className="text-xs text-muted mt-0.5">{model.description}</div>}
+                    </div>
+                  ))}
                 </div>
-              </button>
-              <button
-                className={`px-4 py-3 border-2 cursor-pointer transition-colors text-left ${
-                  onboardingChannelType === "discord"
-                    ? "border-accent bg-accent text-accent-fg"
-                    : "border-border bg-card hover:border-accent"
-                }`}
-                onClick={() => handleChannelSelect("discord")}
-              >
-                <div className="font-bold text-sm">Discord</div>
-                <div className={`text-xs mt-0.5 ${onboardingChannelType === "discord" ? "opacity-80" : "text-muted"}`}>
-                  Great for communities
-                </div>
-              </button>
-              <button
-                className={`px-4 py-3 border-2 cursor-pointer transition-colors text-left ${
-                  onboardingChannelType === "slack"
-                    ? "border-accent bg-accent text-accent-fg"
-                    : "border-border bg-card hover:border-accent"
-                }`}
-                onClick={() => handleChannelSelect("slack")}
-              >
-                <div className="font-bold text-sm">Slack</div>
-                <div className={`text-xs mt-0.5 ${onboardingChannelType === "slack" ? "opacity-80" : "text-muted"}`}>
-                  For teams
-                </div>
-              </button>
-            </div>
-
-            <button
-              className="text-xs text-muted hover:text-accent mt-4"
-              onClick={() => void handleOnboardingNext()}
-            >
-              Skip for now — you can add channels later in Settings
-            </button>
-
-            {onboardingChannelType && (
-              <div className="max-w-[480px] mx-auto mt-4 text-left">
-                <div className="border border-border bg-card px-3 py-2 text-xs text-muted whitespace-pre-line">
-                  {helperText.join("\n")}
-                </div>
-                <label className="text-[13px] font-bold text-txt-strong block mb-2 mt-3 text-left">Bot Token:</label>
-                <input
-                  type="password"
-                  value={onboardingChannelToken}
-                  onChange={handleChannelTokenChange}
-                  placeholder="Paste your bot token"
-                  className="w-full px-3 py-2 border border-border bg-card text-sm mt-2 focus:border-accent focus:outline-none"
-                />
               </div>
             )}
           </div>
@@ -908,45 +426,34 @@ export function OnboardingWizard() {
       case "inventorySetup":
         return (
           <div className="max-w-[500px] mx-auto mt-10 text-center font-body">
-            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[480px] relative text-[15px] text-txt leading-relaxed">
+            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[360px] relative text-[15px] text-txt leading-relaxed">
               <h2 className="text-[28px] font-normal mb-1 text-txt-strong">Inventory Setup</h2>
             </div>
-            <div className="text-left max-w-[480px] mx-auto">
+            <div className="flex flex-col gap-3 text-left max-w-[360px] mx-auto">
               <h3 className="text-[13px] font-bold text-txt-strong block mb-2 text-left">Select Chains:</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {onboardingOptions?.inventoryProviders.map((provider: InventoryProviderOption) => (
-                <div
-                  key={provider.id}
-                  className={`px-4 py-3 border-2 transition-colors cursor-pointer ${
-                    onboardingSelectedChains.has(provider.id)
-                      ? "border-accent bg-card"
-                      : "border-border bg-card hover:border-accent"
-                  }`}
-                  onClick={() => handleChainToggle(provider.id)}
-                >
+                <div key={provider.id} className="px-4 py-3 border border-border bg-card">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={onboardingSelectedChains.has(provider.id)}
                       onChange={() => handleChainToggle(provider.id)}
-                      className="cursor-pointer accent-[var(--accent)]"
+                      className="cursor-pointer"
                     />
-                    <span className="font-bold text-sm text-txt-strong">{provider.name}</span>
+                    <span className="font-bold text-sm">{provider.name}</span>
                   </label>
                   {provider.description && (
-                    <p className="text-xs mt-0.5 ml-6 text-muted">
-                      {provider.description}
-                    </p>
+                    <p className="text-xs text-muted mt-0.5 ml-6">{provider.description}</p>
                   )}
                   {onboardingSelectedChains.has(provider.id) && (
-                    <div className="mt-3 ml-6" onClick={(e) => e.stopPropagation()}>
-                      <label className="text-[13px] font-bold text-txt-strong block mb-1 text-left">
+                    <div className="mt-3 ml-6">
+                      <label className="text-[13px] font-bold text-txt-strong block mb-2 text-left">
                         RPC Provider:
                       </label>
                       <select
                         value={onboardingRpcSelections[provider.id] ?? "elizacloud"}
                         onChange={(e) => handleRpcSelectionChange(provider.id, e.target.value)}
-                        className="w-full px-3 py-2 border border-border bg-bg text-txt text-sm focus:border-accent focus:outline-none rounded"
+                        className="w-full px-3 py-2 border border-border bg-card text-sm mt-2 focus:border-accent focus:outline-none"
                       >
                         {provider.rpcProviders.map((rpc: RpcProviderOption) => (
                           <option key={rpc.id} value={rpc.id}>
@@ -956,7 +463,7 @@ export function OnboardingWizard() {
                       </select>
                       {onboardingRpcSelections[provider.id] && (
                         <div className="mt-3">
-                          <label className="text-[13px] font-bold text-txt-strong block mb-1 text-left">
+                          <label className="text-[13px] font-bold text-txt-strong block mb-2 text-left">
                             RPC API Key (optional):
                           </label>
                           <input
@@ -970,7 +477,7 @@ export function OnboardingWizard() {
                               )
                             }
                             placeholder="Optional API key"
-                            className="w-full px-3 py-2 border border-border bg-bg text-txt text-sm focus:border-accent focus:outline-none rounded"
+                            className="w-full px-3 py-2 border border-border bg-card text-sm mt-2 focus:border-accent focus:outline-none"
                           />
                         </div>
                       )}
@@ -978,14 +485,187 @@ export function OnboardingWizard() {
                   )}
                 </div>
               ))}
+            </div>
+          </div>
+        );
+
+      case "connectors":
+        return (
+          <div className="max-w-[500px] mx-auto mt-10 text-center font-body">
+            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[360px] relative text-[15px] text-txt leading-relaxed">
+              <h2 className="text-[28px] font-normal mb-1 text-txt-strong">Connectors</h2>
+              <p className="text-xs text-muted mt-1">Optional — connect your agent to messaging platforms</p>
+            </div>
+            <div className="flex flex-col gap-3 text-left max-w-[360px] mx-auto">
+              {/* Telegram */}
+              <div className="px-4 py-3 border border-border bg-card">
+                <div className="font-bold text-sm text-txt-strong mb-1">Telegram</div>
+                <p className="text-xs text-muted mb-3">
+                  Get a bot token from{" "}
+                  <a
+                    href="https://t.me/BotFather"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-accent underline"
+                  >
+                    @BotFather
+                  </a>{" "}
+                  on Telegram
+                </p>
+                <input
+                  type="password"
+                  value={onboardingTelegramToken}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setState("onboardingTelegramToken", e.target.value)}
+                  placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+                  className="w-full px-3 py-2 border border-border bg-card text-sm focus:border-accent focus:outline-none"
+                />
+              </div>
+
+              {/* Discord — Coming Soon */}
+              <div className="px-4 py-3 border border-border bg-card opacity-50">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold text-sm text-txt-strong">Discord</div>
+                  <span className="text-[10px] uppercase tracking-wider text-muted border border-border px-1.5 py-0.5">Coming Soon</span>
+                </div>
+                <p className="text-xs text-muted mt-1">Plugin not yet available</p>
+              </div>
+
+              {/* WhatsApp — Coming Soon */}
+              <div className="px-4 py-3 border border-border bg-card opacity-50">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold text-sm text-txt-strong">WhatsApp</div>
+                  <span className="text-[10px] uppercase tracking-wider text-muted border border-border px-1.5 py-0.5">Coming Soon</span>
+                </div>
+                <p className="text-xs text-muted mt-1">Plugin not yet available</p>
               </div>
             </div>
           </div>
         );
 
+      /* "channels" step removed — consolidated into "connectors" above */
+
       default:
         return null;
     }
+  };
+
+  const renderApiKeyModal = () => {
+    if (!selectedProvider) return null;
+    const isDark = onboardingTheme === "dark";
+
+    return (
+      <div
+        className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-[fade-in_0.2s_ease-out]"
+        onClick={() => setShowApiKeyModal(false)}
+      >
+        <div
+          className="bg-card border border-border rounded-lg p-6 max-w-[450px] w-[90%] shadow-[0_20px_25px_-5px_rgb(0_0_0/0.3),0_8px_10px_-6px_rgb(0_0_0/0.3)] animate-[slideUp_0.2s_ease-out]"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center gap-3 mb-4">
+            <img
+              src={getProviderLogo(selectedProvider.id, isDark)}
+              alt={selectedProvider.name}
+              className="w-10 h-10 rounded-md object-contain bg-bg-muted p-1.5"
+            />
+            <div className="text-lg font-semibold text-txt-strong">{selectedProvider.name} API Key</div>
+          </div>
+          <div className="text-sm text-muted-strong mb-4 leading-relaxed">
+            Enter your API key for {selectedProvider.name}. You can get one from their website.
+          </div>
+          <input
+            type="password"
+            value={onboardingApiKey}
+            onChange={handleApiKeyChange}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && onboardingApiKey.trim()) {
+                setShowApiKeyModal(false);
+                void handleOnboardingNext();
+              }
+            }}
+            placeholder="Paste your API key here"
+            className="w-full px-3 py-2 border border-border bg-card text-sm focus:border-accent focus:outline-none rounded"
+          />
+          <div className="flex gap-2.5 justify-end mt-5">
+            <button
+              className="px-6 py-2 border border-border bg-transparent text-txt text-sm cursor-pointer hover:bg-accent-subtle hover:text-accent rounded-md"
+              onClick={() => setShowApiKeyModal(false)}
+            >
+              Cancel
+            </button>
+            <button
+              className="px-6 py-2 border border-accent bg-accent text-accent-foreground text-sm cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed rounded-md"
+              onClick={() => {
+                setShowApiKeyModal(false);
+                void handleOnboardingNext();
+              }}
+              disabled={!onboardingApiKey.trim()}
+            >
+              Confirm
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderProviderConfirmModal = () => {
+    if (!selectedProvider) return null;
+    const isDark = onboardingTheme === "dark";
+
+    const getProviderMessage = () => {
+      if (selectedProvider.id === "elizacloud") {
+        return "ElizaCloud provides managed AI inference. No API key required.";
+      }
+      if (selectedProvider.id === "ollama") {
+        return "Ollama runs models locally on your machine. No API key required.";
+      }
+      return `Would you like to use ${selectedProvider.name} as your AI provider?`;
+    };
+
+    return (
+      <div
+        className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-[fade-in_0.2s_ease-out]"
+        onClick={() => setShowProviderConfirmModal(false)}
+      >
+        <div
+          className="bg-card border border-border rounded-lg p-6 max-w-[450px] w-[90%] shadow-[0_20px_25px_-5px_rgb(0_0_0/0.3),0_8px_10px_-6px_rgb(0_0_0/0.3)] animate-[slideUp_0.2s_ease-out]"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center gap-3 mb-4">
+            <img
+              src={getProviderLogo(selectedProvider.id, isDark)}
+              alt={selectedProvider.name}
+              className="w-10 h-10 rounded-md object-contain bg-bg-muted p-1.5"
+            />
+            <div className="text-lg font-semibold text-txt-strong">Use {selectedProvider.name}?</div>
+          </div>
+          <div className="text-sm text-muted-strong mb-4 leading-relaxed">
+            {getProviderMessage()}
+          </div>
+          <div className="flex gap-2.5 justify-end mt-5">
+            <button
+              className="px-6 py-2 border border-border bg-transparent text-txt text-sm cursor-pointer hover:bg-accent-subtle hover:text-accent rounded-md"
+              onClick={() => {
+                setShowProviderConfirmModal(false);
+                setState("onboardingProvider", "");
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              className="px-6 py-2 border border-accent bg-accent text-accent-foreground text-sm cursor-pointer hover:bg-accent-hover rounded-md"
+              onClick={() => {
+                setShowProviderConfirmModal(false);
+                void handleOnboardingNext();
+              }}
+            >
+              Confirm
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const canGoNext = () => {
@@ -1007,20 +687,12 @@ export function OnboardingWizard() {
       case "cloudLogin":
         return cloudConnected;
       case "llmProvider":
-        if (onboardingProvider === "anthropic-subscription") {
-          return onboardingApiKey.length > 0 || onboardingOAuthSuccess;
-        }
-        if (onboardingProvider === "openai-subscription") {
-          return onboardingOAuthSuccess;
-        }
-        if (onboardingProvider === "elizacloud") {
-          return true;
-        }
-        return onboardingProvider.length > 0 && onboardingApiKey.length > 0;
-      case "channels":
-        return true;
+        // Provider selection is handled by modals which auto-progress
+        return onboardingProvider.length > 0;
       case "inventorySetup":
         return true;
+      case "connectors":
+        return true; // fully optional — user can skip
       default:
         return false;
     }
@@ -1029,13 +701,14 @@ export function OnboardingWizard() {
   const canGoBack = onboardingStep !== "welcome";
 
   return (
-    <div className={`${onboardingStep === "llmProvider" ? "max-w-[820px]" : "max-w-[700px]"} mx-auto py-10 px-4 text-center font-body min-h-screen overflow-y-auto`}>
+    <div className="max-w-[500px] mx-auto mt-10 text-center font-body">
       {renderStep(onboardingStep)}
-      <div className="flex gap-2 mt-4 justify-center pb-8">
+      <div className="flex gap-2 mt-4 justify-center">
         {canGoBack && (
           <button
             className="px-6 py-2 border border-border bg-transparent text-txt text-sm cursor-pointer hover:bg-accent-subtle hover:text-accent mt-5"
             onClick={handleOnboardingBack}
+            disabled={onboardingRestarting}
           >
             Back
           </button>
@@ -1043,9 +716,9 @@ export function OnboardingWizard() {
         <button
           className="px-6 py-2 border border-accent bg-accent text-accent-fg text-sm cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed mt-5"
           onClick={() => void handleOnboardingNext()}
-          disabled={!canGoNext()}
+          disabled={!canGoNext() || onboardingRestarting}
         >
-          Next
+          {onboardingRestarting ? "Restarting agent..." : "Next"}
         </button>
       </div>
     </div>

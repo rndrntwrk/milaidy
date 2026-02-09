@@ -13,8 +13,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { findPluginExport } from "../cli/plugins-cli.js";
 import type { MilaidyConfig } from "../config/config.js";
 import {
-  applyChannelSecretsToEnv,
   applyCloudConfigToEnv,
+  applyConnectorSecretsToEnv,
   buildCharacterFromConfig,
   CUSTOM_PLUGINS_DIRNAME,
   collectPluginNames,
@@ -131,9 +131,9 @@ describe("collectPluginNames", () => {
     expect(names.has("@elizaos/plugin-groq")).toBe(false);
   });
 
-  it("adds channel plugins when config.channels is populated", () => {
+  it("adds connector plugins when config.connectors is populated", () => {
     const config = {
-      channels: { telegram: { botToken: "tok" }, discord: { token: "tok" } },
+      connectors: { telegram: { botToken: "tok" }, discord: { token: "tok" } },
     } as MilaidyConfig;
     const names = collectPluginNames(config);
     expect(names.has("@elizaos/plugin-telegram")).toBe(true);
@@ -141,8 +141,10 @@ describe("collectPluginNames", () => {
     expect(names.has("@elizaos/plugin-slack")).toBe(false);
   });
 
-  it("does not add channel plugins for empty channel configs", () => {
-    const config = { channels: { telegram: null } } as unknown as MilaidyConfig;
+  it("does not add connector plugins for empty connector configs", () => {
+    const config = {
+      connectors: { telegram: null },
+    } as unknown as MilaidyConfig;
     const names = collectPluginNames(config);
     expect(names.has("@elizaos/plugin-telegram")).toBe(false);
   });
@@ -229,7 +231,7 @@ describe("collectPluginNames", () => {
   it("user-installed plugins coexist with core and channel plugins", () => {
     process.env.ANTHROPIC_API_KEY = "sk-test";
     const config = {
-      channels: { discord: { token: "tok" } },
+      connectors: { discord: { token: "tok" } },
       plugins: {
         installs: {
           "@elizaos/plugin-weather": {
@@ -254,10 +256,10 @@ describe("collectPluginNames", () => {
 });
 
 // ---------------------------------------------------------------------------
-// applyChannelSecretsToEnv
+// applyConnectorSecretsToEnv
 // ---------------------------------------------------------------------------
 
-describe("applyChannelSecretsToEnv", () => {
+describe("applyConnectorSecretsToEnv", () => {
   const envKeys = [
     "DISCORD_BOT_TOKEN",
     "TELEGRAM_BOT_TOKEN",
@@ -280,27 +282,27 @@ describe("applyChannelSecretsToEnv", () => {
 
   it("copies Discord token from config to env", () => {
     const config = {
-      channels: { discord: { token: "discord-tok-123" } },
+      connectors: { discord: { token: "discord-tok-123" } },
     } as MilaidyConfig;
-    applyChannelSecretsToEnv(config);
+    applyConnectorSecretsToEnv(config);
     expect(process.env.DISCORD_BOT_TOKEN).toBe("discord-tok-123");
   });
 
   it("copies Telegram botToken from config to env", () => {
     const config = {
-      channels: { telegram: { botToken: "tg-tok-456" } },
+      connectors: { telegram: { botToken: "tg-tok-456" } },
     } as MilaidyConfig;
-    applyChannelSecretsToEnv(config);
+    applyConnectorSecretsToEnv(config);
     expect(process.env.TELEGRAM_BOT_TOKEN).toBe("tg-tok-456");
   });
 
   it("copies all Slack tokens from config to env", () => {
     const config = {
-      channels: {
+      connectors: {
         slack: { botToken: "xoxb-1", appToken: "xapp-1", userToken: "xoxp-1" },
       },
     } as MilaidyConfig;
-    applyChannelSecretsToEnv(config);
+    applyConnectorSecretsToEnv(config);
     expect(process.env.SLACK_BOT_TOKEN).toBe("xoxb-1");
     expect(process.env.SLACK_APP_TOKEN).toBe("xapp-1");
     expect(process.env.SLACK_USER_TOKEN).toBe("xoxp-1");
@@ -309,27 +311,37 @@ describe("applyChannelSecretsToEnv", () => {
   it("does not overwrite existing env values", () => {
     process.env.TELEGRAM_BOT_TOKEN = "already-set";
     const config = {
-      channels: { telegram: { botToken: "new-tok" } },
+      connectors: { telegram: { botToken: "new-tok" } },
     } as MilaidyConfig;
-    applyChannelSecretsToEnv(config);
+    applyConnectorSecretsToEnv(config);
     expect(process.env.TELEGRAM_BOT_TOKEN).toBe("already-set");
   });
 
   it("skips empty or whitespace-only values", () => {
-    const config = { channels: { discord: { token: "  " } } } as MilaidyConfig;
-    applyChannelSecretsToEnv(config);
+    const config = {
+      connectors: { discord: { token: "  " } },
+    } as MilaidyConfig;
+    applyConnectorSecretsToEnv(config);
     expect(process.env.DISCORD_BOT_TOKEN).toBeUndefined();
   });
 
-  it("handles missing channels gracefully", () => {
-    expect(() => applyChannelSecretsToEnv({} as MilaidyConfig)).not.toThrow();
+  it("handles missing connectors gracefully", () => {
+    expect(() => applyConnectorSecretsToEnv({} as MilaidyConfig)).not.toThrow();
   });
 
-  it("handles unknown channel names gracefully", () => {
+  it("handles unknown connector names gracefully", () => {
     const config = {
-      channels: { unknownChannel: { token: "tok" } },
+      connectors: { unknownConnector: { token: "tok" } },
     } as unknown as MilaidyConfig;
-    expect(() => applyChannelSecretsToEnv(config)).not.toThrow();
+    expect(() => applyConnectorSecretsToEnv(config)).not.toThrow();
+  });
+
+  it("supports legacy channels key for backward compat", () => {
+    const config = {
+      channels: { telegram: { botToken: "legacy-tg-tok" } },
+    } as MilaidyConfig;
+    applyConnectorSecretsToEnv(config);
+    expect(process.env.TELEGRAM_BOT_TOKEN).toBe("legacy-tg-tok");
   });
 });
 

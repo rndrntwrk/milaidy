@@ -17,7 +17,7 @@
  * These tests exercise REAL production code, not mocks.
  */
 import http from "node:http";
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startApiServer } from "../src/api/server.js";
 import { AGENT_NAME_POOL } from "../src/runtime/onboarding-names.js";
 

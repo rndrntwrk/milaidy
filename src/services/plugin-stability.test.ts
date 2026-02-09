@@ -19,8 +19,8 @@ import type { MilaidyConfig } from "../config/types.milaidy.js";
 import { createSessionKeyProvider } from "../providers/session-bridge.js";
 import { createWorkspaceProvider } from "../providers/workspace-provider.js";
 import {
-  applyChannelSecretsToEnv,
   applyCloudConfigToEnv,
+  applyConnectorSecretsToEnv,
   buildCharacterFromConfig,
   collectPluginNames,
   resolvePrimaryModel,
@@ -58,8 +58,8 @@ const CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-scheduling",
 ];
 
-/** Channel plugins (loaded when channel config is present). */
-const CHANNEL_PLUGINS: Record<string, string> = {
+/** Connector plugins (loaded when connector config is present). */
+const CONNECTOR_PLUGINS: Record<string, string> = {
   discord: "@elizaos/plugin-discord",
   telegram: "@elizaos/plugin-telegram",
   slack: "@elizaos/plugin-slack",
@@ -92,7 +92,7 @@ const PROVIDER_PLUGINS: Record<string, string> = {
 const ALL_KNOWN_PLUGINS: readonly string[] = [
   ...new Set([
     ...CORE_PLUGINS,
-    ...Object.values(CHANNEL_PLUGINS),
+    ...Object.values(CONNECTOR_PLUGINS),
     ...Object.values(PROVIDER_PLUGINS),
   ]),
 ].sort();
@@ -133,10 +133,10 @@ describe("Plugin Enumeration", () => {
     }
   });
 
-  it("lists all channel plugins", () => {
-    expect(Object.keys(CHANNEL_PLUGINS).length).toBe(10);
-    for (const [channel, pluginName] of Object.entries(CHANNEL_PLUGINS)) {
-      expect(typeof channel).toBe("string");
+  it("lists all connector plugins", () => {
+    expect(Object.keys(CONNECTOR_PLUGINS).length).toBe(10);
+    for (const [connector, pluginName] of Object.entries(CONNECTOR_PLUGINS)) {
+      expect(typeof connector).toBe("string");
       expect(pluginName).toMatch(/^@elizaos\/plugin-/);
     }
   });
@@ -263,15 +263,15 @@ describe("collectPluginNames", () => {
       },
     };
     const names = collectPluginNames(config);
-    // The unknown channel should NOT map to any plugin. Verify no
-    // channel-specific plugin was added (env-based provider plugins may
+    // The unknown connector should NOT map to any plugin. Verify no
+    // connector-specific plugin was added (env-based provider plugins may
     // appear depending on the runner's environment, so we only assert
-    // that the unknown channel mapping was a no-op).
-    const channelPluginValues = new Set(Object.values(CHANNEL_PLUGINS));
-    const addedChannelPlugins = [...names].filter((n) =>
-      channelPluginValues.has(n),
+    // that the unknown connector mapping was a no-op).
+    const connectorPluginValues = new Set(Object.values(CONNECTOR_PLUGINS));
+    const addedConnectorPlugins = [...names].filter((n) =>
+      connectorPluginValues.has(n),
     );
-    expect(addedChannelPlugins.length).toBe(0);
+    expect(addedConnectorPlugins.length).toBe(0);
   });
 });
 
@@ -682,24 +682,24 @@ describe("Environment Propagation", () => {
     }
   });
 
-  it("applyChannelSecretsToEnv sets DISCORD_BOT_TOKEN from config", () => {
+  it("applyConnectorSecretsToEnv sets DISCORD_BOT_TOKEN from config", () => {
     const config: MilaidyConfig = {
-      channels: {
+      connectors: {
         discord: { token: "test-discord-token-123" },
       },
     };
-    applyChannelSecretsToEnv(config);
+    applyConnectorSecretsToEnv(config);
     expect(process.env.DISCORD_BOT_TOKEN).toBe("test-discord-token-123");
   });
 
-  it("applyChannelSecretsToEnv does not overwrite existing env vars", () => {
+  it("applyConnectorSecretsToEnv does not overwrite existing env vars", () => {
     process.env.DISCORD_BOT_TOKEN = "existing-token";
     const config: MilaidyConfig = {
-      channels: {
+      connectors: {
         discord: { token: "new-token" },
       },
     };
-    applyChannelSecretsToEnv(config);
+    applyConnectorSecretsToEnv(config);
     expect(process.env.DISCORD_BOT_TOKEN).toBe("existing-token");
   });
 

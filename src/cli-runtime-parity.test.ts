@@ -14,8 +14,8 @@ import type { MilaidyConfig } from "./config/config.js";
 // Shared presets used by both CLI and API server
 import { SHARED_STYLE_RULES, STYLE_PRESETS } from "./onboarding-presets.js";
 import {
-  applyChannelSecretsToEnv,
   applyCloudConfigToEnv,
+  applyConnectorSecretsToEnv,
   buildCharacterFromConfig,
   collectPluginNames,
   resolvePrimaryModel,
@@ -271,16 +271,16 @@ describe("config env propagation parity", () => {
   });
   afterEach(() => snap.restore());
 
-  it("channel secrets are applied from config to env identically", () => {
+  it("connector secrets are applied from config to env identically", () => {
     const config = {
-      channels: {
+      connectors: {
         discord: { token: "dc-tok-123" },
         telegram: { botToken: "tg-tok-456" },
         slack: { botToken: "xoxb-1", appToken: "xapp-1" },
       },
     } as MilaidyConfig;
 
-    applyChannelSecretsToEnv(config);
+    applyConnectorSecretsToEnv(config);
     expect(process.env.DISCORD_BOT_TOKEN).toBe("dc-tok-123");
     expect(process.env.TELEGRAM_BOT_TOKEN).toBe("tg-tok-456");
     expect(process.env.SLACK_BOT_TOKEN).toBe("xoxb-1");
@@ -306,8 +306,8 @@ describe("config env propagation parity", () => {
     process.env.TELEGRAM_BOT_TOKEN = "already-set";
     process.env.ELIZAOS_CLOUD_API_KEY = "existing";
 
-    applyChannelSecretsToEnv({
-      channels: { telegram: { botToken: "new" } },
+    applyConnectorSecretsToEnv({
+      connectors: { telegram: { botToken: "new" } },
     } as MilaidyConfig);
     applyCloudConfigToEnv({ cloud: { apiKey: "new-key" } } as MilaidyConfig);
 

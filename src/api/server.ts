@@ -22,6 +22,7 @@ import {
 import { type WebSocket, WebSocketServer } from "ws";
 import { CloudManager } from "../cloud/cloud-manager.js";
 import {
+  type ConnectorConfig,
   configFileExists,
   loadMilaidyConfig,
   type MilaidyConfig,
@@ -276,6 +277,154 @@ function buildParamDefs(
 }
 
 /**
+ * Infer parameter definitions from bare config key names when explicit
+ * pluginParameters metadata is not provided.  Uses naming conventions to
+ * determine type, sensitivity, requirement level, and a human-readable
+ * description.
+ */
+function inferParamDefs(configKeys: string[]): PluginParamDef[] {
+  return configKeys.map((key) => {
+    const upper = key.toUpperCase();
+
+    // Detect sensitive keys
+    const sensitive =
+      upper.includes("_API_KEY") ||
+      upper.includes("_SECRET") ||
+      upper.includes("_TOKEN") ||
+      upper.includes("_PASSWORD") ||
+      upper.includes("_PRIVATE_KEY") ||
+      upper.includes("_SIGNING_") ||
+      upper.includes("ENCRYPTION_");
+
+    // Detect booleans
+    const isBoolean =
+      upper.includes("ENABLED") ||
+      upper.includes("_ENABLE_") ||
+      upper.startsWith("ENABLE_") ||
+      upper.includes("DRY_RUN") ||
+      upper.includes("_DEBUG") ||
+      upper.includes("_VERBOSE") ||
+      upper.includes("AUTO_") ||
+      upper.includes("FORCE_") ||
+      upper.includes("DISABLE_") ||
+      upper.includes("SHOULD_") ||
+      upper.endsWith("_SSL");
+
+    // Detect numbers
+    const isNumber =
+      upper.endsWith("_PORT") ||
+      upper.endsWith("_INTERVAL") ||
+      upper.endsWith("_TIMEOUT") ||
+      upper.endsWith("_MS") ||
+      upper.endsWith("_MINUTES") ||
+      upper.endsWith("_SECONDS") ||
+      upper.endsWith("_LIMIT") ||
+      upper.endsWith("_MAX") ||
+      upper.endsWith("_MIN") ||
+      upper.includes("_MAX_") ||
+      upper.includes("_MIN_") ||
+      upper.endsWith("_COUNT") ||
+      upper.endsWith("_SIZE") ||
+      upper.endsWith("_STEPS");
+
+    const type = isBoolean ? "boolean" : isNumber ? "number" : "string";
+
+    // Primary keys are required (API keys, tokens, bot tokens, account IDs)
+    const required =
+      sensitive &&
+      (upper.endsWith("_API_KEY") ||
+        upper.endsWith("_BOT_TOKEN") ||
+        upper.endsWith("_TOKEN") ||
+        upper.endsWith("_PRIVATE_KEY"));
+
+    // Generate a human-readable description from the key name
+    const description = inferDescription(key);
+
+    const envValue = process.env[key];
+    const isSet = Boolean(envValue?.trim());
+
+    return {
+      key,
+      type,
+      description,
+      required,
+      sensitive,
+      default: undefined,
+      options: undefined,
+      currentValue: isSet
+        ? sensitive
+          ? maskValue(envValue ?? "")
+          : (envValue ?? "")
+        : null,
+      isSet,
+    };
+  });
+}
+
+/** Derive a human-readable description from an environment variable key. */
+function inferDescription(key: string): string {
+  const upper = key.toUpperCase();
+
+  // Special well-known suffixes
+  if (upper.endsWith("_API_KEY"))
+    return `API key for ${prefixLabel(key, "_API_KEY")}`;
+  if (upper.endsWith("_BOT_TOKEN"))
+    return `Bot token for ${prefixLabel(key, "_BOT_TOKEN")}`;
+  if (upper.endsWith("_TOKEN"))
+    return `Authentication token for ${prefixLabel(key, "_TOKEN")}`;
+  if (upper.endsWith("_SECRET"))
+    return `Secret for ${prefixLabel(key, "_SECRET")}`;
+  if (upper.endsWith("_PRIVATE_KEY"))
+    return `Private key for ${prefixLabel(key, "_PRIVATE_KEY")}`;
+  if (upper.endsWith("_PASSWORD"))
+    return `Password for ${prefixLabel(key, "_PASSWORD")}`;
+  if (upper.endsWith("_RPC_URL"))
+    return `RPC endpoint URL for ${prefixLabel(key, "_RPC_URL")}`;
+  if (upper.endsWith("_BASE_URL"))
+    return `Base URL for ${prefixLabel(key, "_BASE_URL")}`;
+  if (upper.endsWith("_URL")) return `URL for ${prefixLabel(key, "_URL")}`;
+  if (upper.endsWith("_ENDPOINT"))
+    return `Endpoint for ${prefixLabel(key, "_ENDPOINT")}`;
+  if (upper.endsWith("_HOST"))
+    return `Host address for ${prefixLabel(key, "_HOST")}`;
+  if (upper.endsWith("_PORT"))
+    return `Port number for ${prefixLabel(key, "_PORT")}`;
+  if (upper.endsWith("_MODEL") || upper.includes("_MODEL_"))
+    return `Model identifier for ${prefixLabel(key, "_MODEL")}`;
+  if (upper.endsWith("_VOICE") || upper.includes("_VOICE_"))
+    return `Voice setting for ${prefixLabel(key, "_VOICE")}`;
+  if (upper.endsWith("_DIR") || upper.endsWith("_PATH"))
+    return `Directory path for ${prefixLabel(key, "_DIR").replace(/_PATH$/i, "")}`;
+  if (upper.endsWith("_ENABLED") || upper.startsWith("ENABLE_"))
+    return `Enable/disable ${prefixLabel(key, "_ENABLED").replace(/^ENABLE_/i, "")}`;
+  if (upper.includes("DRY_RUN")) return `Dry-run mode (no real actions)`;
+  if (upper.endsWith("_INTERVAL") || upper.endsWith("_INTERVAL_MINUTES"))
+    return `Check interval for ${prefixLabel(key, "_INTERVAL")}`;
+  if (upper.endsWith("_TIMEOUT") || upper.endsWith("_TIMEOUT_MS"))
+    return `Timeout setting for ${prefixLabel(key, "_TIMEOUT")}`;
+
+  // Generic: convert KEY_NAME to "Key name"
+  return key
+    .split("_")
+    .map((w, i) =>
+      i === 0
+        ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+        : w.toLowerCase(),
+    )
+    .join(" ");
+}
+
+/** Extract the plugin/service prefix label from a key by removing a known suffix. */
+function prefixLabel(key: string, suffix: string): string {
+  const raw = key.replace(new RegExp(`${suffix}$`, "i"), "").replace(/_+$/, "");
+  if (!raw) return key;
+  return raw
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
+
+/**
  * Discover user-installed plugins from the Store (not bundled in the manifest).
  * Reads from config.plugins.installs and tries to enrich with package.json metadata.
  */
@@ -387,9 +536,14 @@ function discoverPluginsFromManifest(): PluginEntry[] {
                 ),
               )
             : undefined;
+          // Use explicit pluginParameters when available; otherwise infer
+          // parameter definitions from the bare configKeys list so that
+          // every plugin with known env vars gets a configuration UI.
           const parameters = filteredParams
             ? buildParamDefs(filteredParams)
-            : [];
+            : filteredConfigKeys.length > 0
+              ? inferParamDefs(filteredConfigKeys)
+              : [];
           const paramInfos: PluginParamInfo[] = parameters.map((pd) => ({
             key: pd.key,
             required: pd.required,
@@ -698,7 +852,25 @@ async function discoverSkills(
   // ── Primary path: pull from AgentSkillsService (most accurate) ──────────
   if (runtime) {
     try {
-      const service = runtime.getService("AGENT_SKILLS_SERVICE");
+      // If the service isn't registered yet (it starts asynchronously after
+      // runtime.initialize()), wait briefly for it to finish loading so the
+      // first UI request doesn't return an empty skill list.
+      let service = runtime.getService("AGENT_SKILLS_SERVICE");
+      if (!service) {
+        try {
+          const loadTimeout = new Promise<never>((_resolve, reject) =>
+            setTimeout(() => reject(new Error("timeout")), 10_000),
+          );
+          await Promise.race([
+            runtime.getServiceLoadPromise("AGENT_SKILLS_SERVICE"),
+            loadTimeout,
+          ]);
+          service = runtime.getService("AGENT_SKILLS_SERVICE");
+        } catch {
+          // Timeout or promise rejected — continue to fallback.
+        }
+      }
+
       // eslint-disable-next-line -- runtime service is loosely typed; cast via unknown
       const svc = service as unknown as
         | {
@@ -1084,6 +1256,150 @@ function validateSkillId(
 }
 
 // ---------------------------------------------------------------------------
+// MCP server config validation — prevent arbitrary command execution
+// ---------------------------------------------------------------------------
+
+/**
+ * Allowed commands for MCP stdio servers.  These are the standard package
+ * runners and runtimes used by MCP server packages.  Anything outside this
+ * list is rejected — an attacker cannot register `/bin/bash` or arbitrary
+ * binaries as MCP servers via the API.
+ */
+const ALLOWED_MCP_COMMANDS = new Set([
+  "npx",
+  "node",
+  "bun",
+  "bunx",
+  "deno",
+  "python",
+  "python3",
+  "uvx",
+  "uv",
+  "docker",
+  "podman",
+]);
+
+/**
+ * Environment variables that must never be set via MCP server config because
+ * they enable code injection into spawned processes.
+ */
+const BLOCKED_MCP_ENV_KEYS = new Set([
+  "LD_PRELOAD",
+  "LD_LIBRARY_PATH",
+  "DYLD_INSERT_LIBRARIES",
+  "DYLD_LIBRARY_PATH",
+  "NODE_OPTIONS",
+  "NODE_EXTRA_CA_CERTS",
+  "ELECTRON_RUN_AS_NODE",
+  "PYTHONPATH",
+  "PYTHONSTARTUP",
+  "RUBYOPT",
+  "PERL5OPT",
+  "PATH",
+  "HOME",
+  "SHELL",
+]);
+
+/**
+ * Validate an MCP server config object.  Returns an error string if invalid,
+ * or `null` if the config is acceptable.
+ */
+function validateMcpServerConfig(
+  config: Record<string, unknown>,
+): string | null {
+  const configType = config.type as string | undefined;
+  const validTypes = ["stdio", "http", "streamable-http", "sse"];
+  if (!configType || !validTypes.includes(configType)) {
+    return `Invalid config type. Must be one of: ${validTypes.join(", ")}`;
+  }
+
+  if (configType === "stdio") {
+    const command = config.command as string | undefined;
+    if (!command) {
+      return "Command is required for stdio servers";
+    }
+    // Extract the base binary name (strip path components)
+    const baseName = command.replace(/\\/g, "/").split("/").pop() ?? "";
+    // Strip common extensions (.exe, .cmd, .bat) for Windows compatibility
+    const normalized = baseName.replace(/\.(exe|cmd|bat)$/i, "");
+    if (!ALLOWED_MCP_COMMANDS.has(normalized)) {
+      return (
+        `Command "${baseName}" is not allowed. ` +
+        `Permitted commands: ${[...ALLOWED_MCP_COMMANDS].join(", ")}`
+      );
+    }
+    // Validate args are strings (no object injection)
+    if (config.args !== undefined) {
+      if (!Array.isArray(config.args)) {
+        return "args must be an array of strings";
+      }
+      for (const arg of config.args) {
+        if (typeof arg !== "string") {
+          return "Each arg must be a string";
+        }
+      }
+    }
+  }
+
+  if (
+    configType === "http" ||
+    configType === "streamable-http" ||
+    configType === "sse"
+  ) {
+    if (!config.url) {
+      return "URL is required for remote servers";
+    }
+    if (typeof config.url !== "string") {
+      return "URL must be a string";
+    }
+    const urlLower = config.url.toLowerCase();
+    if (!urlLower.startsWith("http://") && !urlLower.startsWith("https://")) {
+      return "URL must use http:// or https:// scheme";
+    }
+  }
+
+  // Validate env vars — block keys that enable code injection
+  if (config.env !== undefined) {
+    if (
+      typeof config.env !== "object" ||
+      config.env === null ||
+      Array.isArray(config.env)
+    ) {
+      return "env must be a plain object of string key-value pairs";
+    }
+    for (const [key, val] of Object.entries(
+      config.env as Record<string, unknown>,
+    )) {
+      if (typeof val !== "string") {
+        return `env.${key} must be a string`;
+      }
+      if (BLOCKED_MCP_ENV_KEYS.has(key.toUpperCase())) {
+        return `env variable "${key}" is not allowed for security reasons`;
+      }
+    }
+  }
+
+  // Validate cwd if present — must be a string, no path traversal to root
+  if (config.cwd !== undefined) {
+    if (typeof config.cwd !== "string") {
+      return "cwd must be a string";
+    }
+  }
+
+  // Validate timeoutInMillis if present
+  if (config.timeoutInMillis !== undefined) {
+    if (
+      typeof config.timeoutInMillis !== "number" ||
+      config.timeoutInMillis < 0
+    ) {
+      return "timeoutInMillis must be a non-negative number";
+    }
+  }
+
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Onboarding helpers
 // ---------------------------------------------------------------------------
 
@@ -1294,6 +1610,40 @@ function getModelOptions(): {
       },
     ],
   };
+}
+
+function getOpenRouterModelOptions(): Array<{
+  id: string;
+  name: string;
+  description: string;
+}> {
+  return [
+    {
+      id: "anthropic/claude-sonnet-4",
+      name: "Claude Sonnet 4",
+      description: "Balanced speed & intelligence (recommended)",
+    },
+    {
+      id: "anthropic/claude-opus-4",
+      name: "Claude Opus 4",
+      description: "Most capable, slower",
+    },
+    {
+      id: "openai/gpt-4o",
+      name: "GPT-4o",
+      description: "OpenAI's flagship model",
+    },
+    {
+      id: "google/gemini-2.5-pro-preview",
+      name: "Gemini 2.5 Pro",
+      description: "Google's latest model",
+    },
+    {
+      id: "deepseek/deepseek-chat-v3",
+      name: "DeepSeek V3",
+      description: "Cost-effective alternative",
+    },
+  ];
 }
 
 function getInventoryProviderOptions(): Array<{
@@ -1852,6 +2202,7 @@ async function handleRequest(
       providers: getProviderOptions(),
       cloudProviders: getCloudProviderOptions(),
       models: getModelOptions(),
+      openrouterModels: getOpenRouterModelOptions(),
       inventoryProviders: getInventoryProviderOptions(),
       sharedStyleRules: "Keep responses brief. Be helpful and concise.",
     });
@@ -1938,6 +2289,24 @@ async function handleRequest(
           process.env[providerOpt.envKey] = body.providerApiKey as string;
         }
       }
+
+      // OpenRouter requires explicit model selection — persist the chosen model
+      if (body.provider === "openrouter" && body.openrouterModel) {
+        const agentEntry = config.agents?.list?.[0] as
+          | Record<string, unknown>
+          | undefined;
+        if (agentEntry) {
+          agentEntry.model = body.openrouterModel as string;
+        }
+        // Also persist in config.agent.model (OpenRouter format)
+        (config as Record<string, unknown>).agent = {
+          ...(((config as Record<string, unknown>).agent as Record<
+            string,
+            unknown
+          >) || {}),
+          model: `openrouter/${body.openrouterModel}`,
+        };
+      }
     }
 
     // ── Subscription providers (no API key needed — uses OAuth) ──────────
@@ -1965,9 +2334,9 @@ async function handleRequest(
       !Array.isArray(body.channels) &&
       Object.keys(body.channels).length > 0
     ) {
-      config.channels = {
-        ...(config.channels ?? {}),
-        ...(body.channels as Record<string, unknown>),
+      config.connectors = {
+        ...(config.connectors ?? {}),
+        ...(body.channels as Record<string, ConnectorConfig>),
       };
     }
 
@@ -1988,6 +2357,18 @@ async function handleRequest(
         if (rpcDef?.envKey && inv.rpcApiKey) {
           (config.env as Record<string, string>)[rpcDef.envKey] = inv.rpcApiKey;
           process.env[rpcDef.envKey] = inv.rpcApiKey;
+        }
+      }
+    }
+
+    // ── Connectors (Telegram, Discord, etc.) ────────────────────────────
+    if (body.connectors && typeof body.connectors === "object") {
+      if (!config.connectors) config.connectors = {};
+      for (const [name, cfg] of Object.entries(
+        body.connectors as Record<string, Record<string, unknown>>,
+      )) {
+        if (cfg && typeof cfg === "object") {
+          config.connectors[name] = cfg as ConnectorConfig;
         }
       }
     }
@@ -4286,6 +4667,78 @@ async function handleRequest(
     return;
   }
 
+  // ── GET /api/connectors ──────────────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/connectors") {
+    const connectors = state.config.connectors ?? state.config.channels ?? {};
+    json(res, {
+      connectors: redactConfigSecrets(connectors as Record<string, unknown>),
+    });
+    return;
+  }
+
+  // ── POST /api/connectors ─────────────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/connectors") {
+    const body = await readJsonBody(req, res);
+    if (!body) return;
+    const name = body.name;
+    const config = body.config;
+    if (!name || typeof name !== "string" || !name.trim()) {
+      error(res, "Missing connector name", 400);
+      return;
+    }
+    if (!config || typeof config !== "object") {
+      error(res, "Missing connector config", 400);
+      return;
+    }
+    if (!state.config.connectors) state.config.connectors = {};
+    state.config.connectors[name.trim()] = config as ConnectorConfig;
+    try {
+      saveMilaidyConfig(state.config);
+    } catch {
+      /* test envs */
+    }
+    json(res, {
+      connectors: redactConfigSecrets(
+        (state.config.connectors ?? {}) as Record<string, unknown>,
+      ),
+    });
+    return;
+  }
+
+  // ── DELETE /api/connectors/:name ─────────────────────────────────────────
+  if (method === "DELETE" && pathname.startsWith("/api/connectors/")) {
+    const name = decodeURIComponent(pathname.slice("/api/connectors/".length));
+    if (!name) {
+      error(res, "Missing connector name", 400);
+      return;
+    }
+    if (state.config.connectors) {
+      delete state.config.connectors[name];
+    }
+    // Also remove from legacy channels key
+    if (state.config.channels) {
+      delete state.config.channels[name];
+    }
+    try {
+      saveMilaidyConfig(state.config);
+    } catch {
+      /* test envs */
+    }
+    json(res, {
+      connectors: redactConfigSecrets(
+        (state.config.connectors ?? {}) as Record<string, unknown>,
+      ),
+    });
+    return;
+  }
+
+  // ── POST /api/restart ───────────────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/restart") {
+    json(res, { ok: true, message: "Restarting..." });
+    setTimeout(() => process.exit(0), 1000);
+    return;
+  }
+
   // ── GET /api/config ──────────────────────────────────────────────────────
   if (method === "GET" && pathname === "/api/config") {
     json(res, redactConfigSecrets(state.config));
@@ -4325,7 +4778,8 @@ async function handleRequest(
       "approvals",
       "session",
       "web",
-      "channels",
+      "connectors",
+      "channels", // backward compat
       "cron",
       "hooks",
       "discovery",
@@ -4379,6 +4833,30 @@ async function handleRequest(
     for (const key of Object.keys(body)) {
       if (ALLOWED_TOP_KEYS.has(key) && !BLOCKED_KEYS.has(key)) {
         filtered[key] = body[key];
+      }
+    }
+
+    // Validate MCP server configs BEFORE merging — prevent bypassing
+    // the dedicated MCP endpoints' command allowlist via PUT /api/config.
+    if (filtered.mcp && typeof filtered.mcp === "object") {
+      const mcpObj = filtered.mcp as Record<string, unknown>;
+      const servers = mcpObj.servers as Record<string, unknown> | undefined;
+      if (servers && typeof servers === "object") {
+        for (const [name, cfg] of Object.entries(servers)) {
+          if (["__proto__", "constructor", "prototype"].includes(name)) {
+            error(res, `Invalid MCP server name: "${name}"`, 400);
+            return;
+          }
+          if (cfg && typeof cfg === "object") {
+            const mcpErr = validateMcpServerConfig(
+              cfg as Record<string, unknown>,
+            );
+            if (mcpErr) {
+              error(res, `MCP server "${name}": ${mcpErr}`, 400);
+              return;
+            }
+          }
+        }
       }
     }
 
@@ -5270,35 +5748,21 @@ async function handleRequest(
       return;
     }
 
+    // Block prototype pollution via server name
+    if (["__proto__", "constructor", "prototype"].includes(serverName)) {
+      error(res, "Invalid server name", 400);
+      return;
+    }
+
     const config = body.config as Record<string, unknown> | undefined;
     if (!config || typeof config !== "object") {
       error(res, "Server config object is required", 400);
       return;
     }
 
-    const configType = config.type as string | undefined;
-    const validTypes = ["stdio", "http", "streamable-http", "sse"];
-    if (!configType || !validTypes.includes(configType)) {
-      error(
-        res,
-        `Invalid config type. Must be one of: ${validTypes.join(", ")}`,
-        400,
-      );
-      return;
-    }
-
-    if (configType === "stdio" && !config.command) {
-      error(res, "Command is required for stdio servers", 400);
-      return;
-    }
-
-    if (
-      (configType === "http" ||
-        configType === "streamable-http" ||
-        configType === "sse") &&
-      !config.url
-    ) {
-      error(res, "URL is required for remote servers", 400);
+    const mcpErr = validateMcpServerConfig(config);
+    if (mcpErr) {
+      error(res, mcpErr, 400);
       return;
     }
 
@@ -5346,6 +5810,22 @@ async function handleRequest(
 
     if (!state.config.mcp) state.config.mcp = {};
     if (body.servers && typeof body.servers === "object") {
+      // Validate every server config in the bulk update
+      for (const [name, cfg] of Object.entries(body.servers)) {
+        if (["__proto__", "constructor", "prototype"].includes(name)) {
+          error(res, `Invalid server name: "${name}"`, 400);
+          return;
+        }
+        if (cfg && typeof cfg === "object") {
+          const mcpErr = validateMcpServerConfig(
+            cfg as Record<string, unknown>,
+          );
+          if (mcpErr) {
+            error(res, `Server "${name}": ${mcpErr}`, 400);
+            return;
+          }
+        }
+      }
       state.config.mcp.servers = body.servers as NonNullable<
         NonNullable<typeof state.config.mcp>["servers"]
       >;

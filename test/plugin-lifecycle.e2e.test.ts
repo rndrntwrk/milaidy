@@ -6,7 +6,7 @@
  * flow end-to-end through HTTP.
  */
 import http from "node:http";
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startApiServer } from "../src/api/server.js";
 
 // ---------------------------------------------------------------------------
