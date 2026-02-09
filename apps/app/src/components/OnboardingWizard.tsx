@@ -2,7 +2,7 @@
  * Onboarding wizard component — multi-step onboarding flow.
  */
 
-import { useEffect } from "react";
+import { useEffect, type ChangeEvent } from "react";
 import { useApp, THEMES, type OnboardingStep } from "../AppContext.js";
 import type { StylePreset, ProviderOption, CloudProviderOption, ModelOption, InventoryProviderOption, RpcProviderOption, OpenRouterModelOption } from "../api-client";
 
@@ -20,6 +20,7 @@ export function OnboardingWizard() {
     onboardingProvider,
     onboardingApiKey,
     onboardingOpenRouterModel,
+    onboardingTelegramToken,
     onboardingSelectedChains,
     onboardingRpcSelections,
     onboardingRpcKeys,
@@ -465,6 +466,59 @@ export function OnboardingWizard() {
           </div>
         );
 
+      case "connectors":
+        return (
+          <div className="max-w-[500px] mx-auto mt-10 text-center font-body">
+            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[360px] relative text-[15px] text-txt leading-relaxed">
+              <h2 className="text-[28px] font-normal mb-1 text-txt-strong">Connect Channels</h2>
+              <p className="text-xs text-muted mt-1">Optional — connect your agent to messaging platforms</p>
+            </div>
+            <div className="flex flex-col gap-3 text-left max-w-[360px] mx-auto">
+              {/* Telegram */}
+              <div className="px-4 py-3 border border-border bg-card">
+                <div className="font-bold text-sm text-txt-strong mb-1">Telegram</div>
+                <p className="text-xs text-muted mb-3">
+                  Get a bot token from{" "}
+                  <a
+                    href="https://t.me/BotFather"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-accent underline"
+                  >
+                    @BotFather
+                  </a>{" "}
+                  on Telegram
+                </p>
+                <input
+                  type="password"
+                  value={onboardingTelegramToken}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setState("onboardingTelegramToken", e.target.value)}
+                  placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+                  className="w-full px-3 py-2 border border-border bg-card text-sm focus:border-accent focus:outline-none"
+                />
+              </div>
+
+              {/* Discord — Coming Soon */}
+              <div className="px-4 py-3 border border-border bg-card opacity-50">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold text-sm text-txt-strong">Discord</div>
+                  <span className="text-[10px] uppercase tracking-wider text-muted border border-border px-1.5 py-0.5">Coming Soon</span>
+                </div>
+                <p className="text-xs text-muted mt-1">Plugin not yet available</p>
+              </div>
+
+              {/* WhatsApp — Coming Soon */}
+              <div className="px-4 py-3 border border-border bg-card opacity-50">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold text-sm text-txt-strong">WhatsApp</div>
+                  <span className="text-[10px] uppercase tracking-wider text-muted border border-border px-1.5 py-0.5">Coming Soon</span>
+                </div>
+                <p className="text-xs text-muted mt-1">Plugin not yet available</p>
+              </div>
+            </div>
+          </div>
+        );
+
       default:
         return null;
     }
@@ -492,6 +546,8 @@ export function OnboardingWizard() {
         return onboardingProvider.length > 0 && onboardingApiKey.length > 0;
       case "inventorySetup":
         return true;
+      case "connectors":
+        return true; // fully optional — user can skip
       default:
         return false;
     }

@@ -164,6 +164,15 @@ export interface OnboardingOptions {
   sharedStyleRules: string;
 }
 
+/** Configuration for a single messaging connector. */
+export interface ConnectorConfig {
+  enabled?: boolean;
+  botToken?: string;
+  token?: string;
+  apiKey?: string;
+  [key: string]: string | boolean | number | string[] | Record<string, unknown> | undefined;
+}
+
 export interface OnboardingData {
   name: string;
   theme: string;
@@ -192,6 +201,8 @@ export interface OnboardingData {
     rpcProvider: string;
     rpcApiKey?: string;
   }>;
+  // Connector setup (Telegram, Discord, etc.)
+  connectors?: Record<string, ConnectorConfig>;
 }
 
 export interface PluginParamDef {
@@ -763,6 +774,25 @@ export class MilaidyClient {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch),
+    });
+  }
+
+  // ── Connectors ──────────────────────────────────────────────────────
+
+  async getConnectors(): Promise<{ connectors: Record<string, ConnectorConfig> }> {
+    return this.fetch("/api/connectors");
+  }
+
+  async saveConnector(name: string, config: ConnectorConfig): Promise<{ connectors: Record<string, ConnectorConfig> }> {
+    return this.fetch("/api/connectors", {
+      method: "POST",
+      body: JSON.stringify({ name, config }),
+    });
+  }
+
+  async deleteConnector(name: string): Promise<{ connectors: Record<string, ConnectorConfig> }> {
+    return this.fetch(`/api/connectors/${encodeURIComponent(name)}`, {
+      method: "DELETE",
     });
   }
 

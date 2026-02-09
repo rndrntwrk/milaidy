@@ -2043,6 +2043,18 @@ async function handleRequest(
       }
     }
 
+    // ── Connectors (Telegram, Discord, etc.) ────────────────────────────
+    if (body.connectors && typeof body.connectors === "object") {
+      if (!config.connectors) config.connectors = {};
+      for (const [name, cfg] of Object.entries(
+        body.connectors as Record<string, Record<string, unknown>>,
+      )) {
+        if (cfg && typeof cfg === "object") {
+          config.connectors[name] = cfg as Record<string, unknown>;
+        }
+      }
+    }
+
     // ── Generate wallet keys if not already present ───────────────────────
     if (!process.env.EVM_PRIVATE_KEY || !process.env.SOLANA_PRIVATE_KEY) {
       try {
@@ -4337,6 +4349,53 @@ async function handleRequest(
     return;
   }
 
+  // ── GET /api/connectors ──────────────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/connectors") {
+    const connectors = state.config.connectors ?? state.config.channels ?? {};
+    json(res, { connectors: redactConfigSecrets(connectors as Record<string, unknown>) });
+    return;
+  }
+
+  // ── POST /api/connectors ─────────────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/connectors") {
+    const body = await readJsonBody(req, res);
+    if (!body) return;
+    const name = body.name;
+    const config = body.config;
+    if (!name || typeof name !== "string" || !name.trim()) {
+      error(res, "Missing connector name", 400);
+      return;
+    }
+    if (!config || typeof config !== "object") {
+      error(res, "Missing connector config", 400);
+      return;
+    }
+    if (!state.config.connectors) state.config.connectors = {};
+    state.config.connectors[name.trim()] = config as Record<string, unknown>;
+    try { saveMilaidyConfig(state.config); } catch { /* test envs */ }
+    json(res, { connectors: redactConfigSecrets((state.config.connectors ?? {}) as Record<string, unknown>) });
+    return;
+  }
+
+  // ── DELETE /api/connectors/:name ─────────────────────────────────────────
+  if (method === "DELETE" && pathname.startsWith("/api/connectors/")) {
+    const name = decodeURIComponent(pathname.slice("/api/connectors/".length));
+    if (!name) {
+      error(res, "Missing connector name", 400);
+      return;
+    }
+    if (state.config.connectors) {
+      delete state.config.connectors[name];
+    }
+    // Also remove from legacy channels key
+    if (state.config.channels) {
+      delete state.config.channels[name];
+    }
+    try { saveMilaidyConfig(state.config); } catch { /* test envs */ }
+    json(res, { connectors: redactConfigSecrets((state.config.connectors ?? {}) as Record<string, unknown>) });
+    return;
+  }
+
   // ── GET /api/config ──────────────────────────────────────────────────────
   if (method === "GET" && pathname === "/api/config") {
     json(res, redactConfigSecrets(state.config));
@@ -4376,7 +4435,8 @@ async function handleRequest(
       "approvals",
       "session",
       "web",
-      "channels",
+      "connectors",
+      "channels", // backward compat
       "cron",
       "hooks",
       "discovery",

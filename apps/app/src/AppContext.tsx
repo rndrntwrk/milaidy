@@ -102,7 +102,8 @@ export type OnboardingStep =
   | "modelSelection"
   | "cloudLogin"
   | "llmProvider"
-  | "inventorySetup";
+  | "inventorySetup"
+  | "connectors";
 
 // ── Action notice ──────────────────────────────────────────────────────
 
@@ -272,6 +273,7 @@ export interface AppState {
   onboardingProvider: string;
   onboardingApiKey: string;
   onboardingOpenRouterModel: string;
+  onboardingTelegramToken: string;
   onboardingSelectedChains: Set<string>;
   onboardingRpcSelections: Record<string, string>;
   onboardingRpcKeys: Record<string, string>;
@@ -576,6 +578,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [onboardingProvider, setOnboardingProvider] = useState("");
   const [onboardingApiKey, setOnboardingApiKey] = useState("");
   const [onboardingOpenRouterModel, setOnboardingOpenRouterModel] = useState("anthropic/claude-sonnet-4");
+  const [onboardingTelegramToken, setOnboardingTelegramToken] = useState("");
   const [onboardingSelectedChains, setOnboardingSelectedChains] = useState<Set<string>>(new Set(["evm", "solana"]));
   const [onboardingRpcSelections, setOnboardingRpcSelections] = useState<Record<string, string>>({});
   const [onboardingRpcKeys, setOnboardingRpcKeys] = useState<Record<string, string>>({});
@@ -1472,13 +1475,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setOnboardingStep("cloudLogin");
         break;
       case "cloudLogin":
-        // Finish onboarding
-        await handleOnboardingFinish();
+        setOnboardingStep("connectors");
         break;
       case "llmProvider":
         setOnboardingStep("inventorySetup");
         break;
       case "inventorySetup":
+        setOnboardingStep("connectors");
+        break;
+      case "connectors":
         await handleOnboardingFinish();
         break;
     }
@@ -1523,8 +1528,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       case "inventorySetup":
         setOnboardingStep("llmProvider");
         break;
+      case "connectors":
+        if (onboardingRunMode === "cloud") {
+          setOnboardingStep("cloudLogin");
+        } else {
+          setOnboardingStep("inventorySetup");
+        }
+        break;
     }
-  }, [onboardingStep, onboardingOptions]);
+  }, [onboardingStep, onboardingOptions, onboardingRunMode]);
 
   const handleOnboardingFinish = useCallback(async () => {
     if (!onboardingOptions) return;
@@ -1560,6 +1572,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         providerApiKey: onboardingRunMode === "local" ? onboardingApiKey || undefined : undefined,
         openrouterModel: onboardingRunMode === "local" && onboardingProvider === "openrouter" ? onboardingOpenRouterModel || undefined : undefined,
         inventoryProviders: inventoryProviders.length > 0 ? inventoryProviders : undefined,
+        connectors: onboardingTelegramToken.trim()
+          ? { telegram: { botToken: onboardingTelegramToken.trim() } }
+          : undefined,
       });
     } catch (err) {
       window.alert(`Setup failed: ${err instanceof Error ? err.message : "network error"}. Please try again.`);
@@ -1576,7 +1591,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     onboardingOptions, onboardingStyle, onboardingName, onboardingTheme,
     onboardingRunMode, onboardingCloudProvider, onboardingSmallModel,
     onboardingLargeModel, onboardingProvider, onboardingApiKey,
-    onboardingOpenRouterModel,
+    onboardingOpenRouterModel, onboardingTelegramToken,
     onboardingSelectedChains, onboardingRpcSelections, onboardingRpcKeys,
   ]);
 
@@ -1760,6 +1775,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       onboardingProvider: setOnboardingProvider as (v: never) => void,
       onboardingApiKey: setOnboardingApiKey as (v: never) => void,
       onboardingOpenRouterModel: setOnboardingOpenRouterModel as (v: never) => void,
+      onboardingTelegramToken: setOnboardingTelegramToken as (v: never) => void,
       onboardingSelectedChains: setOnboardingSelectedChains as (v: never) => void,
       onboardingRpcSelections: setOnboardingRpcSelections as (v: never) => void,
       onboardingRpcKeys: setOnboardingRpcKeys as (v: never) => void,
@@ -1970,6 +1986,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     onboardingStep, onboardingOptions, onboardingName, onboardingStyle, onboardingTheme,
     onboardingRunMode, onboardingCloudProvider, onboardingSmallModel, onboardingLargeModel,
     onboardingProvider, onboardingApiKey, onboardingOpenRouterModel,
+    onboardingTelegramToken,
     onboardingSelectedChains, onboardingRpcSelections, onboardingRpcKeys,
     commandPaletteOpen, commandQuery, commandActiveIndex,
     mcpConfiguredServers, mcpServerStatuses, mcpMarketplaceQuery, mcpMarketplaceResults,

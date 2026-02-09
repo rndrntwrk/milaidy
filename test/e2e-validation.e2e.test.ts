@@ -455,7 +455,7 @@ describe("Plugin Stress Test", () => {
     "@elizaos/plugin-ollama",
   ];
 
-  const CHANNEL_PLUGINS: readonly string[] = [
+  const CONNECTOR_PLUGINS: readonly string[] = [
     "@elizaos/plugin-discord",
     "@elizaos/plugin-telegram",
     "@elizaos/plugin-slack",
@@ -524,10 +524,10 @@ describe("Plugin Stress Test", () => {
     expect(loaded.length).toBeGreaterThan(0);
   }, 30_000);
 
-  it("channel plugins load without crashing each other", async () => {
+  it("connector plugins load without crashing each other", async () => {
     const results: Array<{ name: string; ok: boolean }> = [];
 
-    for (const name of CHANNEL_PLUGINS) {
+    for (const name of CONNECTOR_PLUGINS) {
       try {
         const mod = (await import(name)) as PluginModule;
         results.push({ name, ok: extractPlugin(mod) !== null });
@@ -538,7 +538,7 @@ describe("Plugin Stress Test", () => {
 
     const loaded = results.filter((r) => r.ok);
     logger.info(
-      `[e2e-validation] Channel plugins: ${loaded.length}/${CHANNEL_PLUGINS.length} loaded`,
+      `[e2e-validation] Connector plugins: ${loaded.length}/${CONNECTOR_PLUGINS.length} loaded`,
     );
 
     // Channel plugins may fail without credentials, but loading should not crash

@@ -102,13 +102,13 @@ function cancelOnboarding(): never {
 // ---------------------------------------------------------------------------
 
 /**
- * Maps Milaidy channel config fields to the environment variable names
+ * Maps Milaidy connector config fields to the environment variable names
  * that ElizaOS plugins expect.
  *
- * Milaidy stores channel credentials under `config.channels.<name>.<field>`,
+ * Milaidy stores connector credentials under `config.connectors.<name>.<field>`,
  * while ElizaOS plugins read them from process.env.
  */
-const CHANNEL_ENV_MAP: Readonly<
+const CONNECTOR_ENV_MAP: Readonly<
   Record<string, Readonly<Record<string, string>>>
 > = {
   discord: {
@@ -181,8 +181,8 @@ const _OPTIONAL_NATIVE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-computeruse", // requires platform-specific binaries
 ];
 
-/** Maps Milaidy channel names to ElizaOS plugin package names. */
-const CHANNEL_PLUGIN_MAP: Readonly<Record<string, string>> = {
+/** Maps Milaidy connector names to ElizaOS plugin package names. */
+const CONNECTOR_PLUGIN_MAP: Readonly<Record<string, string>> = {
   discord: "@elizaos/plugin-discord",
   telegram: "@elizaos/plugin-telegram",
   slack: "@elizaos/plugin-slack",
@@ -276,11 +276,11 @@ export function collectPluginNames(config: MilaidyConfig): Set<string> {
   // Otherwise, proceed with auto-detection
   const pluginsToLoad = new Set<string>(CORE_PLUGINS);
 
-  // Channel plugins — load when channel has config entries
-  const channels = config.channels ?? {};
-  for (const [channelName, channelConfig] of Object.entries(channels)) {
-    if (channelConfig && typeof channelConfig === "object") {
-      const pluginName = CHANNEL_PLUGIN_MAP[channelName];
+  // Connector plugins — load when connector has config entries
+  const connectors = config.connectors ?? config.channels ?? {};
+  for (const [connectorName, connectorConfig] of Object.entries(connectors)) {
+    if (connectorConfig && typeof connectorConfig === "object") {
+      const pluginName = CONNECTOR_PLUGIN_MAP[connectorName];
       if (pluginName) {
         pluginsToLoad.add(pluginName);
       }
@@ -727,20 +727,21 @@ export async function resolvePackageEntry(pkgRoot: string): Promise<string> {
 // ---------------------------------------------------------------------------
 
 /**
- * Propagate channel credentials from Milaidy config into process.env so
+ * Propagate connector credentials from Milaidy config into process.env so
  * that ElizaOS plugins can find them.
  */
 /** @internal Exported for testing. */
-export function applyChannelSecretsToEnv(config: MilaidyConfig): void {
-  const channels = config.channels ?? {};
+export function applyConnectorSecretsToEnv(config: MilaidyConfig): void {
+  // Support both `connectors` and legacy `channels` key
+  const connectors = config.connectors ?? config.channels ?? {};
 
-  for (const [channelName, channelConfig] of Object.entries(channels)) {
-    if (!channelConfig || typeof channelConfig !== "object") continue;
+  for (const [connectorName, connectorConfig] of Object.entries(connectors)) {
+    if (!connectorConfig || typeof connectorConfig !== "object") continue;
 
-    const envMap = CHANNEL_ENV_MAP[channelName];
+    const envMap = CONNECTOR_ENV_MAP[connectorName];
     if (!envMap) continue;
 
-    const configObj = channelConfig as Record<string, unknown>;
+    const configObj = connectorConfig as Record<string, unknown>;
     for (const [configField, envKey] of Object.entries(envMap)) {
       const value = configObj[configField];
       if (typeof value === "string" && value.trim() && !process.env[envKey]) {
@@ -1499,8 +1500,8 @@ export async function startEliza(
     process.env.LOG_LEVEL = config.logging?.level ?? "info";
   }
 
-  // 2. Push channel secrets into process.env for plugin discovery
-  applyChannelSecretsToEnv(config);
+  // 2. Push connector secrets into process.env for plugin discovery
+  applyConnectorSecretsToEnv(config);
 
   // 2b. Propagate cloud config into process.env for ElizaCloud plugin
   applyCloudConfigToEnv(config);
