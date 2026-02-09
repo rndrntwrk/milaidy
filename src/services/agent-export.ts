@@ -43,6 +43,7 @@ import { z } from "zod";
 const MAGIC_HEADER = "ELIZA_AGENT_V1\n";
 const MAGIC_BYTES = Buffer.from(MAGIC_HEADER, "utf-8"); // 15 bytes
 const PBKDF2_ITERATIONS = 600_000; // OWASP 2024 recommendation for SHA-256
+const MAX_PBKDF2_ITERATIONS = 10_000_000; // Cap imported iteration counts to prevent DoS
 const SALT_LEN = 32;
 const IV_LEN = 12; // AES-256-GCM standard nonce
 const TAG_LEN = 16; // AES-GCM authentication tag
@@ -249,6 +250,13 @@ function unpackFile(fileBuffer: Buffer): {
 
   const iterations = fileBuffer.readUInt32BE(offset);
   offset += 4;
+
+  if (iterations < 1 || iterations > MAX_PBKDF2_ITERATIONS) {
+    throw new AgentExportError(
+      `Invalid PBKDF2 iteration count (${iterations}). ` +
+        `Expected between 1 and ${MAX_PBKDF2_ITERATIONS.toLocaleString()}.`,
+    );
+  }
 
   const salt = fileBuffer.subarray(offset, offset + SALT_LEN);
   offset += SALT_LEN;
