@@ -1381,7 +1381,7 @@ describe("Fresh Machine Validation (non-Docker)", () => {
   it("dist/ contains expected entry files", () => {
     const distDir = path.join(packageRoot, "dist");
     if (!fs.existsSync(distDir)) {
-      logger.warn("[e2e-validation] dist/ not found — run `pnpm build` first");
+      logger.warn("[e2e-validation] dist/ not found — run `bun run build` first");
       return;
     }
 

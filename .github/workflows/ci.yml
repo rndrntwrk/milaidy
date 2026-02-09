@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main] # runs after merge to keep status visible
+    branches: [main]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -12,7 +12,6 @@ concurrency:
 
 env:
   NODE_VERSION: "22"
-  PNPM_VERSION: "9"
 
 jobs:
   lint:
@@ -21,22 +20,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
+      - uses: oven-sh/setup-bun@v2
 
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - run: bun install
 
       - name: Biome lint
-        run: pnpm lint
+        run: bun run lint
 
       - name: Biome format check
-        run: pnpm format
+        run: bun run format
 
   typecheck:
     name: Type Check
@@ -44,19 +40,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
+      - uses: oven-sh/setup-bun@v2
 
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - run: bun install
 
       - name: Run type checker
-        run: pnpm typecheck
+        run: bun run typecheck
 
   test:
     name: Unit Tests
@@ -64,19 +57,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
+      - uses: oven-sh/setup-bun@v2
 
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - run: bun install
 
       - name: Run tests
-        run: pnpm test
+        run: bun run test
 
   build:
     name: Build
@@ -84,16 +74,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
+      - uses: oven-sh/setup-bun@v2
 
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - run: bun install
 
       - name: Build project
-        run: pnpm build
+        run: bun run build
