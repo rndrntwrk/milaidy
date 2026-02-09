@@ -272,6 +272,7 @@ export interface AppState {
   onboardingLargeModel: string;
   onboardingProvider: string;
   onboardingApiKey: string;
+  onboardingSubscriptionTab: "token" | "oauth";
   onboardingChannelType: string;
   onboardingChannelToken: string;
   onboardingSelectedChains: Set<string>;
@@ -577,6 +578,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [onboardingLargeModel, setOnboardingLargeModel] = useState("claude-sonnet-4-5");
   const [onboardingProvider, setOnboardingProvider] = useState("");
   const [onboardingApiKey, setOnboardingApiKey] = useState("");
+  const [onboardingSubscriptionTab, setOnboardingSubscriptionTab] = useState<"token" | "oauth">("token");
   const [onboardingChannelType, setOnboardingChannelType] = useState("");
   const [onboardingChannelToken, setOnboardingChannelToken] = useState("");
   const [onboardingSelectedChains, setOnboardingSelectedChains] = useState<Set<string>>(new Set(["evm", "solana"]));
@@ -1578,7 +1580,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         smallModel: onboardingRunMode === "cloud" ? onboardingSmallModel : undefined,
         largeModel: onboardingRunMode === "cloud" ? onboardingLargeModel : undefined,
         provider: onboardingRunMode === "local" ? onboardingProvider || undefined : undefined,
-        providerApiKey: onboardingRunMode === "local" ? onboardingApiKey || undefined : undefined,
+        providerApiKey:
+          onboardingRunMode === "local" && onboardingProvider !== "elizacloud" && onboardingProvider !== "openai-subscription"
+            ? onboardingApiKey || undefined
+            : undefined,
         channels: Object.keys(channels).length > 0 ? channels : undefined,
         inventoryProviders: inventoryProviders.length > 0 ? inventoryProviders : undefined,
       });
@@ -1780,6 +1785,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       onboardingLargeModel: setOnboardingLargeModel as (v: never) => void,
       onboardingProvider: setOnboardingProvider as (v: never) => void,
       onboardingApiKey: setOnboardingApiKey as (v: never) => void,
+      onboardingSubscriptionTab: setOnboardingSubscriptionTab as (v: never) => void,
       onboardingChannelType: setOnboardingChannelType as (v: never) => void,
       onboardingChannelToken: setOnboardingChannelToken as (v: never) => void,
       onboardingSelectedChains: setOnboardingSelectedChains as (v: never) => void,
@@ -1991,7 +1997,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     importBusy, importPassword, importFile, importError, importSuccess,
     onboardingStep, onboardingOptions, onboardingName, onboardingStyle, onboardingTheme,
     onboardingRunMode, onboardingCloudProvider, onboardingSmallModel, onboardingLargeModel,
-    onboardingProvider, onboardingApiKey, onboardingChannelType, onboardingChannelToken,
+    onboardingProvider, onboardingApiKey, onboardingSubscriptionTab, onboardingChannelType, onboardingChannelToken,
     onboardingSelectedChains, onboardingRpcSelections, onboardingRpcKeys,
     commandPaletteOpen, commandQuery, commandActiveIndex,
     mcpConfiguredServers, mcpServerStatuses, mcpMarketplaceQuery, mcpMarketplaceResults,

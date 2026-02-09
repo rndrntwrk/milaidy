@@ -19,6 +19,7 @@ export function OnboardingWizard() {
     onboardingLargeModel,
     onboardingProvider,
     onboardingApiKey,
+    onboardingSubscriptionTab,
     onboardingChannelType,
     onboardingChannelToken,
     onboardingSelectedChains,
@@ -72,6 +73,20 @@ export function OnboardingWizard() {
 
   const handleProviderSelect = (providerId: string) => {
     setState("onboardingProvider", providerId);
+    if (providerId === "anthropic-subscription") {
+      setState("onboardingSubscriptionTab", "token");
+      return;
+    }
+    if (providerId === "openai-subscription" || providerId === "elizacloud") {
+      setState("onboardingApiKey", "");
+    }
+  };
+
+  const handleSubscriptionTabSelect = (tab: "token" | "oauth") => {
+    setState("onboardingSubscriptionTab", tab);
+    if (tab === "oauth") {
+      setState("onboardingApiKey", "");
+    }
   };
 
   const handleApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -355,46 +370,229 @@ export function OnboardingWizard() {
           </div>
         );
 
-      case "llmProvider":
+      case "llmProvider": {
+        const providers = onboardingOptions?.providers ?? [];
+        const cloudProviders = providers.filter((provider: ProviderOption) => provider.id === "elizacloud");
+        const subscriptionProviders = providers.filter((provider: ProviderOption) =>
+          provider.id === "anthropic-subscription" || provider.id === "openai-subscription",
+        );
+        const apiProviders = providers.filter(
+          (provider: ProviderOption) => !subscriptionProviders.some((item) => item.id === provider.id) && provider.id !== "elizacloud",
+        );
+
+        const providerOverrides: Record<string, { name: string; description?: string }> = {
+          elizacloud: { name: "Eliza Cloud" },
+          "anthropic-subscription": {
+            name: "Claude Subscription",
+            description: "$20-200/mo Claude Pro/Max subscription",
+          },
+          "openai-subscription": {
+            name: "ChatGPT Subscription",
+            description: "$20-200/mo ChatGPT Plus/Pro subscription",
+          },
+          anthropic: { name: "Anthropic API Key" },
+          openai: { name: "OpenAI API Key" },
+          openrouter: { name: "OpenRouter" },
+          gemini: { name: "Google Gemini" },
+          grok: { name: "xAI (Grok)" },
+          groq: { name: "Groq" },
+          deepseek: { name: "DeepSeek" },
+        };
+
+        const getProviderDisplay = (provider: ProviderOption) => {
+          const override = providerOverrides[provider.id];
+          return {
+            name: override?.name ?? provider.name,
+            description: override?.description ?? provider.description,
+          };
+        };
+
         return (
-          <div className="max-w-[500px] mx-auto mt-10 text-center font-body">
-            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[360px] relative text-[15px] text-txt leading-relaxed">
+          <div className="max-w-[760px] mx-auto mt-10 text-center font-body">
+            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-4 max-w-[420px] relative text-[15px] text-txt leading-relaxed">
               <h2 className="text-[28px] font-normal mb-1 text-txt-strong">LLM Provider</h2>
             </div>
-            <div className="flex flex-col gap-2 text-left max-w-[360px] mx-auto max-h-[50vh] overflow-y-auto">
-              {onboardingOptions?.providers.map((provider: ProviderOption) => (
-                <div
-                  key={provider.id}
-                  className={`px-4 py-3 border-2 cursor-pointer transition-colors ${
-                    onboardingProvider === provider.id
-                      ? "border-accent bg-accent text-accent-fg"
-                      : "border-border bg-card hover:border-accent"
-                  }`}
-                  onClick={() => handleProviderSelect(provider.id)}
-                >
-                  <div className="font-bold text-sm">{provider.name}</div>
-                  {provider.description && (
-                    <div className={`text-xs mt-0.5 ${onboardingProvider === provider.id ? "opacity-80" : "text-muted"}`}>
-                      {provider.description}
-                    </div>
-                  )}
-                </div>
-              ))}
+
+            <div className="border border-border bg-card text-xs text-muted p-3 rounded text-left max-w-[760px] mx-auto mb-4">
+              Most providers need an API key or subscription. Free options like Eliza Cloud have limited credits.
+              Subscriptions (Claude/ChatGPT) are the easiest way to get started if you already pay for one.
             </div>
-            {onboardingProvider && (
-              <div className="max-w-[360px] mx-auto mt-4">
-                <label className="text-[13px] font-bold text-txt-strong block mb-2 text-left">API Key:</label>
-                <input
-                  type="password"
-                  value={onboardingApiKey}
-                  onChange={handleApiKeyChange}
-                  placeholder="Enter your API key"
-                  className="w-full px-3 py-2 border border-border bg-card text-sm mt-2 focus:border-accent focus:outline-none"
-                />
+
+            {cloudProviders.length > 0 && (
+              <div className="mb-3 text-left">
+                <div className="text-[11px] uppercase tracking-wide text-muted mb-2">Cloud</div>
+                <div className="grid grid-cols-1 gap-2">
+                  {cloudProviders.map((provider: ProviderOption) => {
+                    const display = getProviderDisplay(provider);
+                    return (
+                      <button
+                        key={provider.id}
+                        className={`px-5 py-4 border-2 cursor-pointer transition-colors text-left ${
+                          onboardingProvider === provider.id
+                            ? "border-accent bg-accent text-accent-fg"
+                            : "border-border bg-card hover:border-accent"
+                        }`}
+                        onClick={() => handleProviderSelect(provider.id)}
+                      >
+                        <div className="font-bold text-sm">{display.name}</div>
+                        {display.description && (
+                          <div className={`text-xs mt-0.5 ${onboardingProvider === provider.id ? "opacity-80" : "text-muted"}`}>
+                            {display.description}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
+
+            {subscriptionProviders.length > 0 && (
+              <div className="mb-4 text-left">
+                <div className="text-[11px] uppercase tracking-wide text-muted mb-2">Subscriptions</div>
+                <div className="grid grid-cols-1 gap-2">
+                  {subscriptionProviders.map((provider: ProviderOption) => {
+                    const display = getProviderDisplay(provider);
+                    return (
+                      <button
+                        key={provider.id}
+                        className={`px-5 py-4 border-2 cursor-pointer transition-colors text-left ${
+                          onboardingProvider === provider.id
+                            ? "border-accent bg-accent text-accent-fg"
+                            : "border-border bg-card hover:border-accent"
+                        }`}
+                        onClick={() => handleProviderSelect(provider.id)}
+                      >
+                        <div className="font-bold text-sm">{display.name}</div>
+                        {display.description && (
+                          <div className={`text-xs mt-0.5 ${onboardingProvider === provider.id ? "opacity-80" : "text-muted"}`}>
+                            {display.description}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {apiProviders.length > 0 && (
+              <div className="text-left">
+                <div className="text-[11px] uppercase tracking-wide text-muted mb-2">API Keys</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {apiProviders.map((provider: ProviderOption) => {
+                    const display = getProviderDisplay(provider);
+                    return (
+                      <button
+                        key={provider.id}
+                        className={`px-4 py-3 border-2 cursor-pointer transition-colors text-left ${
+                          onboardingProvider === provider.id
+                            ? "border-accent bg-accent text-accent-fg"
+                            : "border-border bg-card hover:border-accent"
+                        }`}
+                        onClick={() => handleProviderSelect(provider.id)}
+                      >
+                        <div className="font-bold text-sm">{display.name}</div>
+                        {display.description && (
+                          <div className={`text-xs mt-0.5 ${onboardingProvider === provider.id ? "opacity-80" : "text-muted"}`}>
+                            {display.description}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {onboardingProvider === "anthropic-subscription" && (
+              <div className="max-w-[520px] mx-auto mt-4 text-left">
+                <div className="flex items-center gap-4 border-b border-border mb-3">
+                  <button
+                    className={`text-sm pb-2 border-b-2 ${
+                      onboardingSubscriptionTab === "token"
+                        ? "border-accent text-accent"
+                        : "border-transparent text-muted hover:text-txt"
+                    }`}
+                    onClick={() => handleSubscriptionTabSelect("token")}
+                  >
+                    Setup Token
+                  </button>
+                  <button
+                    className={`text-sm pb-2 border-b-2 ${
+                      onboardingSubscriptionTab === "oauth"
+                        ? "border-accent text-accent"
+                        : "border-transparent text-muted hover:text-txt"
+                    }`}
+                    onClick={() => handleSubscriptionTabSelect("oauth")}
+                  >
+                    OAuth Login
+                  </button>
+                </div>
+
+                {onboardingSubscriptionTab === "token" ? (
+                  <>
+                    <label className="text-[13px] font-bold text-txt-strong block mb-2 text-left">Setup Token:</label>
+                    <input
+                      type="password"
+                      value={onboardingApiKey}
+                      onChange={handleApiKeyChange}
+                      placeholder="sk-ant-oat01-..."
+                      className="w-full px-3 py-2 border border-border bg-card text-sm mt-2 focus:border-accent focus:outline-none"
+                    />
+                    <p className="text-xs text-muted mt-2 whitespace-pre-line">
+                      Paste your Claude Code setup token.{"\n"}
+                      Get it from: claude.ai/settings/api → "Claude Code" → "Use setup token"
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      className="px-6 py-2 border border-accent bg-accent text-accent-fg text-sm cursor-pointer hover:bg-accent-hover"
+                      onClick={() => undefined}
+                    >
+                      Login with Anthropic
+                    </button>
+                    <p className="text-xs text-muted mt-2">
+                      Opens Anthropic login in your browser to connect your subscription.
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+
+            {onboardingProvider === "openai-subscription" && (
+              <div className="max-w-[520px] mx-auto mt-4 text-left">
+                <button
+                  className="px-6 py-2 border border-accent bg-accent text-accent-fg text-sm cursor-pointer hover:bg-accent-hover"
+                  onClick={() => undefined}
+                >
+                  Login with OpenAI
+                </button>
+                <p className="text-xs text-muted mt-2">
+                  Opens OpenAI login in your browser. Requires ChatGPT Plus ($20/mo) or Pro ($200/mo).
+                </p>
+              </div>
+            )}
+
+            {onboardingProvider &&
+              onboardingProvider !== "anthropic-subscription" &&
+              onboardingProvider !== "openai-subscription" &&
+              onboardingProvider !== "elizacloud" && (
+                <div className="max-w-[520px] mx-auto mt-4">
+                  <label className="text-[13px] font-bold text-txt-strong block mb-2 text-left">API Key:</label>
+                  <input
+                    type="password"
+                    value={onboardingApiKey}
+                    onChange={handleApiKeyChange}
+                    placeholder="Enter your API key"
+                    className="w-full px-3 py-2 border border-border bg-card text-sm mt-2 focus:border-accent focus:outline-none"
+                  />
+                </div>
+              )}
           </div>
         );
+      }
 
       case "channels": {
         const helperText =
@@ -597,6 +795,15 @@ export function OnboardingWizard() {
       case "cloudLogin":
         return cloudConnected;
       case "llmProvider":
+        if (onboardingProvider === "anthropic-subscription") {
+          return onboardingApiKey.length > 0;
+        }
+        if (onboardingProvider === "openai-subscription") {
+          return true;
+        }
+        if (onboardingProvider === "elizacloud") {
+          return true;
+        }
         return onboardingProvider.length > 0 && onboardingApiKey.length > 0;
       case "channels":
         return true;
@@ -610,7 +817,7 @@ export function OnboardingWizard() {
   const canGoBack = onboardingStep !== "welcome";
 
   return (
-    <div className="max-w-[500px] mx-auto py-10 px-4 text-center font-body min-h-screen overflow-y-auto">
+    <div className={`${onboardingStep === "llmProvider" ? "max-w-[820px]" : "max-w-[500px]"} mx-auto py-10 px-4 text-center font-body min-h-screen overflow-y-auto`}>
       {renderStep(onboardingStep)}
       <div className="flex gap-2 mt-4 justify-center pb-8">
         {canGoBack && (
