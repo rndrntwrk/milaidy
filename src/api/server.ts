@@ -78,6 +78,10 @@ import { handleDatabaseRoute } from "./database.js";
 import { DropService } from "./drop-service.js";
 import { handleKnowledgeRoutes } from "./knowledge-routes.js";
 import {
+  createRateLimitMiddleware,
+  type RateLimitMiddleware,
+} from "./middleware/rate-limiter.js";
+import {
   type PluginParamInfo,
   validatePluginConfig,
 } from "./plugin-validation.js";
@@ -4039,6 +4043,19 @@ function patchMessageServiceForAutonomy(state: ServerState): void {
   };
 }
 
+// Rate limiter middleware instance (created lazily)
+let _rateLimiter: RateLimitMiddleware | null = null;
+
+function getRateLimiter(): RateLimitMiddleware {
+  if (!_rateLimiter) {
+    _rateLimiter = createRateLimitMiddleware({
+      // Skip rate limiting for health checks
+      skipPaths: ["/api/health", "/api/status"],
+    });
+  }
+  return _rateLimiter;
+}
+
 async function handleRequest(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -4220,6 +4237,12 @@ async function handleRequest(
     return;
   }
 
+  // Apply rate limiting (before auth to prevent brute force)
+  const rateLimiter = getRateLimiter();
+  if (!rateLimiter(req, res)) {
+    return; // Rate limited - response already sent
+  }
+
   if (method !== "OPTIONS" && !isAuthEndpoint && !isAuthorized(req)) {
     json(res, { error: "Unauthorized" }, 401);
     return;
@@ -4295,7 +4318,7 @@ async function handleRequest(
   if (method === "GET" && pathname === "/api/subscription/status") {
     try {
       const { getSubscriptionStatus } = await import("../auth/index.js");
-      json(res, { providers: getSubscriptionStatus() });
+      json(res, { providers: await getSubscriptionStatus() });
     } catch (err) {
       error(res, `Failed to get subscription status: ${err}`, 500);
     }
@@ -4341,7 +4364,7 @@ async function handleRequest(
       // Submit the code and wait for credentials
       flow.submitCode(body.code);
       const credentials = await flow.credentials;
-      saveCredentials("anthropic-subscription", credentials);
+      await saveCredentials("anthropic-subscription", credentials);
       await applySubscriptionCredentials();
       delete state._anthropicFlow;
       json(res, { success: true, expiresAt: credentials.expires });
@@ -4470,7 +4493,7 @@ async function handleRequest(
         error(res, `OpenAI exchange failed: ${err}`, 500);
         return;
       }
-      saveCredentials("openai-codex", credentials);
+      await saveCredentials("openai-codex", credentials);
       await applySubscriptionCredentials();
       flow.close();
       delete state._codexFlow;
@@ -4494,7 +4517,7 @@ async function handleRequest(
     if (provider === "anthropic-subscription" || provider === "openai-codex") {
       try {
         const { deleteCredentials } = await import("../auth/index.js");
-        deleteCredentials(provider);
+        await deleteCredentials(provider);
         json(res, { success: true });
       } catch (err) {
         error(res, `Failed to delete credentials: ${err}`, 500);

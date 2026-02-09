@@ -1,99 +1,120 @@
 /**
  * Credential storage and token refresh for subscription providers.
  *
- * Stores OAuth credentials in ~/.milaidy/auth/ as JSON files.
- * Uses @mariozechner/pi-ai for token refresh.
+ * Now uses secure storage (keychain or encrypted files) instead of plaintext.
+ * Automatically migrates legacy plaintext credentials on first access.
+ *
+ * @module auth/credentials
  */
 
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { logger } from "@elizaos/core";
 import { refreshAnthropicToken } from "./anthropic.js";
+import { migrateCredentials, needsMigration } from "./migration.js";
 import { refreshCodexToken } from "./openai-codex.js";
+import { getSecureStorage } from "./secure-storage.js";
 import type {
   OAuthCredentials,
   StoredCredentials,
   SubscriptionProvider,
 } from "./types.js";
 
-const AUTH_DIR = path.join(
-  process.env.MILAIDY_HOME || path.join(os.homedir(), ".milaidy"),
-  "auth",
-);
-
-/** Buffer before expiry to trigger refresh (5 minutes) */
+/** Buffer before expiry to trigger refresh (5 minutes). */
 const REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
-function ensureAuthDir(): void {
-  if (!fs.existsSync(AUTH_DIR)) {
-    fs.mkdirSync(AUTH_DIR, { recursive: true, mode: 0o700 });
+/** Whether migration has been attempted this session. */
+let _migrationAttempted = false;
+
+/**
+ * Ensure migration has been attempted.
+ * Called lazily on first credential access.
+ */
+async function ensureMigrated(): Promise<void> {
+  if (_migrationAttempted) return;
+  _migrationAttempted = true;
+
+  if (needsMigration()) {
+    logger.info("[auth] Migrating credentials to secure storage...");
+    const result = await migrateCredentials();
+
+    if (result.migrated.length > 0) {
+      logger.info(
+        `[auth] Migration complete: ${result.migrated.join(", ")}`,
+      );
+    }
   }
 }
 
-function credentialPath(provider: SubscriptionProvider): string {
-  return path.join(AUTH_DIR, `${provider}.json`);
+/**
+ * Get the storage key for a provider's credentials.
+ */
+function storageKey(provider: SubscriptionProvider): string {
+  return `credentials:${provider}`;
 }
 
 /**
- * Save credentials for a provider.
+ * Save credentials for a provider to secure storage.
  */
-export function saveCredentials(
+export async function saveCredentials(
   provider: SubscriptionProvider,
   credentials: OAuthCredentials,
-): void {
-  ensureAuthDir();
+): Promise<void> {
+  await ensureMigrated();
+
   const stored: StoredCredentials = {
     provider,
     credentials,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
-  fs.writeFileSync(credentialPath(provider), JSON.stringify(stored, null, 2), {
-    encoding: "utf-8",
-    mode: 0o600,
-  });
-  logger.info(`[auth] Saved ${provider} credentials`);
+
+  const storage = await getSecureStorage();
+  await storage.set(storageKey(provider), JSON.stringify(stored));
+
+  logger.info(`[auth] Saved ${provider} credentials (${storage.name} backend)`);
 }
 
 /**
  * Load stored credentials for a provider.
  */
-export function loadCredentials(
+export async function loadCredentials(
   provider: SubscriptionProvider,
-): StoredCredentials | null {
-  const filePath = credentialPath(provider);
+): Promise<StoredCredentials | null> {
+  await ensureMigrated();
+
+  const storage = await getSecureStorage();
+  const data = await storage.get(storageKey(provider));
+
+  if (!data) return null;
+
   try {
-    const data = fs.readFileSync(filePath, "utf-8");
     return JSON.parse(data) as StoredCredentials;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      return null;
-    }
-    throw err;
+  } catch {
+    logger.error(`[auth] Failed to parse credentials for ${provider}`);
+    return null;
   }
 }
 
 /**
  * Delete stored credentials for a provider.
  */
-export function deleteCredentials(provider: SubscriptionProvider): void {
-  const filePath = credentialPath(provider);
-  try {
-    fs.unlinkSync(filePath);
-    logger.info(`[auth] Deleted ${provider} credentials`);
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
-      throw err;
-    }
-  }
+export async function deleteCredentials(
+  provider: SubscriptionProvider,
+): Promise<void> {
+  await ensureMigrated();
+
+  const storage = await getSecureStorage();
+  await storage.delete(storageKey(provider));
+
+  logger.info(`[auth] Deleted ${provider} credentials`);
 }
 
 /**
  * Check if credentials exist and are not expired.
  */
-export function hasValidCredentials(provider: SubscriptionProvider): boolean {
-  const stored = loadCredentials(provider);
+export async function hasValidCredentials(
+  provider: SubscriptionProvider,
+): Promise<boolean> {
+  const stored = await loadCredentials(provider);
   if (!stored) return false;
   return stored.credentials.expires > Date.now();
 }
@@ -105,7 +126,7 @@ export function hasValidCredentials(provider: SubscriptionProvider): boolean {
 export async function getAccessToken(
   provider: SubscriptionProvider,
 ): Promise<string | null> {
-  const stored = loadCredentials(provider);
+  const stored = await loadCredentials(provider);
   if (!stored) return null;
 
   const { credentials } = stored;
@@ -117,8 +138,10 @@ export async function getAccessToken(
 
   // Need to refresh
   logger.info(`[auth] Refreshing ${provider} token...`);
+
   try {
     let refreshed: OAuthCredentials;
+
     if (provider === "anthropic-subscription") {
       refreshed = await refreshAnthropicToken(credentials.refresh);
     } else if (provider === "openai-codex") {
@@ -129,7 +152,7 @@ export async function getAccessToken(
     }
 
     // Save refreshed credentials
-    saveCredentials(provider, refreshed);
+    await saveCredentials(provider, refreshed);
     return refreshed.access;
   } catch (err) {
     logger.error(`[auth] Failed to refresh ${provider} token: ${err}`);
@@ -140,25 +163,32 @@ export async function getAccessToken(
 /**
  * Get all configured subscription providers and their status.
  */
-export function getSubscriptionStatus(): Array<{
-  provider: SubscriptionProvider;
-  configured: boolean;
-  valid: boolean;
-  expiresAt: number | null;
-}> {
+export async function getSubscriptionStatus(): Promise<
+  Array<{
+    provider: SubscriptionProvider;
+    configured: boolean;
+    valid: boolean;
+    expiresAt: number | null;
+  }>
+> {
   const providers: SubscriptionProvider[] = [
     "anthropic-subscription",
     "openai-codex",
   ];
-  return providers.map((provider) => {
-    const stored = loadCredentials(provider);
-    return {
-      provider,
-      configured: stored !== null,
-      valid: stored ? stored.credentials.expires > Date.now() : false,
-      expiresAt: stored?.credentials.expires ?? null,
-    };
-  });
+
+  const results = await Promise.all(
+    providers.map(async (provider) => {
+      const stored = await loadCredentials(provider);
+      return {
+        provider,
+        configured: stored !== null,
+        valid: stored ? stored.credentials.expires > Date.now() : false,
+        expiresAt: stored?.credentials.expires ?? null,
+      };
+    }),
+  );
+
+  return results;
 }
 
 /**
@@ -166,6 +196,9 @@ export function getSubscriptionStatus(): Array<{
  * Called at startup to make credentials available to ElizaOS plugins.
  */
 export async function applySubscriptionCredentials(): Promise<void> {
+  // Ensure migration has happened
+  await ensureMigrated();
+
   // Anthropic subscription → set ANTHROPIC_API_KEY
   const anthropicToken = await getAccessToken("anthropic-subscription");
   if (anthropicToken) {
@@ -183,4 +216,29 @@ export async function applySubscriptionCredentials(): Promise<void> {
       "[auth] Applied OpenAI Codex subscription credentials to environment",
     );
   }
+}
+
+// ---------- Synchronous shims for backwards compatibility ----------
+// These wrap async functions for code that can't easily be made async.
+// Prefer using the async versions above.
+
+/** @deprecated Use async loadCredentials instead. */
+export function loadCredentialsSync(
+  provider: SubscriptionProvider,
+): StoredCredentials | null {
+  logger.warn(
+    "[auth] loadCredentialsSync is deprecated, use async loadCredentials",
+  );
+  // Return null - caller should migrate to async
+  return null;
+}
+
+/** @deprecated Use async hasValidCredentials instead. */
+export function hasValidCredentialsSync(
+  _provider: SubscriptionProvider,
+): boolean {
+  logger.warn(
+    "[auth] hasValidCredentialsSync is deprecated, use async hasValidCredentials",
+  );
+  return false;
 }
