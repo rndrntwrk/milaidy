@@ -1,6 +1,5 @@
 /**
  * Plugins management view — configure and enable/disable plugins.
- * Tailwind 1:1 mirror of the Lit `renderPlugins()` / `renderPluginCard()` UI.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -375,95 +374,83 @@ export function PluginsView() {
       >
         {/* Header */}
         <div
-          className={`flex flex-col p-[14px_18px] gap-2.5 flex-1 ${hasParams ? "cursor-pointer hover:bg-bg-hover" : ""}`}
+          className={`relative p-[14px_18px] flex-1 ${hasParams ? "cursor-pointer hover:bg-bg-hover" : ""}`}
           onClick={hasParams ? () => toggleSettings(p.id) : undefined}
         >
-          <div className="flex-1 min-w-0">
-            {/* Title row */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-bold text-sm">{p.name}</span>
-              <span className="text-[10px] px-1.5 py-px border border-border bg-surface text-muted lowercase tracking-wide whitespace-nowrap">
-                {categoryLabel}
+          {/* ON / OFF toggle — top-right corner */}
+          <button
+            type="button"
+            data-plugin-toggle={p.id}
+            className={`absolute top-3 right-3 text-[10px] font-bold tracking-wider px-2 py-[2px] border cursor-pointer transition-colors duration-150 ${
+              p.enabled
+                ? "bg-accent text-accent-fg border-accent"
+                : "bg-transparent text-muted border-border hover:text-txt"
+            }`}
+            onClick={(e) => {
+              e.stopPropagation();
+              handlePluginToggle(p.id, !p.enabled);
+            }}
+          >
+            {p.enabled ? "ON" : "OFF"}
+          </button>
+
+          {/* Title row */}
+          <div className="flex items-center gap-2 flex-wrap pr-14">
+            <span className="font-bold text-sm">{p.name}</span>
+            <span className="text-[10px] px-1.5 py-px border border-border bg-surface text-muted lowercase tracking-wide whitespace-nowrap">
+              {categoryLabel}
+            </span>
+            {!allParamsSet && hasParams && (
+              <span className="text-[10px] px-1.5 py-px border border-warn bg-warn-subtle text-warn lowercase tracking-wide whitespace-nowrap">
+                {setCount}/{totalCount}
               </span>
-              {!allParamsSet && hasParams && (
-                <span className="text-[10px] px-1.5 py-px border border-warn bg-warn-subtle text-warn lowercase tracking-wide whitespace-nowrap">
-                  {setCount}/{totalCount}
-                </span>
+            )}
+          </div>
+
+          {/* Description */}
+          <div className="text-xs text-muted mt-[3px] line-clamp-3">
+            {p.description || "No description available"}
+          </div>
+
+          {/* Version / npm meta */}
+          {(p.version || p.npmName) && (
+            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+              {p.version && (
+                <span className="text-[10px] font-mono text-muted opacity-70">v{p.version}</span>
+              )}
+              {p.npmName && (
+                <span className="text-[10px] font-mono text-muted opacity-60">{p.npmName}</span>
               )}
             </div>
+          )}
 
-            {/* Description */}
-            <div className="text-xs text-muted mt-[3px] line-clamp-3">
-              {p.description || "No description available"}
+          {/* Dependencies */}
+          {p.pluginDeps && p.pluginDeps.length > 0 && (
+            <div className="flex gap-1 flex-wrap mt-1">
+              <span className="text-[9px] text-muted opacity-70">depends on:</span>
+              {p.pluginDeps.map((dep: string) => (
+                <span
+                  key={dep}
+                  className="text-[9px] px-[5px] py-px border border-border bg-accent-subtle text-muted tracking-wide"
+                >
+                  {dep}
+                </span>
+              ))}
             </div>
+          )}
 
-            {/* Version / npm meta */}
-            {(p.version || p.npmName) && (
-              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                {p.version && (
-                  <span className="text-[10px] font-mono text-muted opacity-70">v{p.version}</span>
-                )}
-                {p.npmName && (
-                  <span className="text-[10px] font-mono text-muted opacity-60">{p.npmName}</span>
-                )}
-              </div>
-            )}
-
-            {/* Dependencies */}
-            {p.pluginDeps && p.pluginDeps.length > 0 && (
-              <div className="flex gap-1 flex-wrap mt-1">
-                <span className="text-[9px] text-muted opacity-70">depends on:</span>
-                {p.pluginDeps.map((dep: string) => (
-                  <span
-                    key={dep}
-                    className="text-[9px] px-[5px] py-px border border-border bg-accent-subtle text-muted tracking-wide"
-                  >
-                    {dep}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Controls */}
-          <div
-            className="flex items-center justify-end gap-3 shrink-0"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Progress bar */}
-            {hasParams && (
+          {/* Progress bar */}
+          {hasParams && (
+            <div
+              className="w-[52px] h-[5px] bg-surface border border-border overflow-hidden mt-2"
+              title={`${setCount}/${totalCount} configured`}
+            >
               <div
-                className="w-[52px] h-[5px] bg-surface border border-border overflow-hidden"
-                title={`${setCount}/${totalCount} configured`}
-              >
-                <div
-                  className="h-full bg-accent transition-[width] duration-300"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-            )}
-
-            {/* Toggle switch */}
-            <label className="relative inline-flex cursor-pointer">
-              <input
-                type="checkbox"
-                className="sr-only"
-                checked={p.enabled}
-                onChange={(e) => handlePluginToggle(p.id, e.target.checked)}
+                className="h-full bg-accent transition-[width] duration-300"
+                style={{ width: `${progress}%` }}
               />
-              <div
-                className={`relative w-9 h-[18px] transition-colors duration-150 ${
-                  p.enabled ? "bg-accent" : "bg-muted"
-                }`}
-              >
-                <div
-                  className={`absolute w-3.5 h-3.5 bg-white top-[2px] transition-[left] duration-150 ${
-                    p.enabled ? "left-5" : "left-[2px]"
-                  }`}
-                />
-              </div>
-            </label>
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Settings bar */}
@@ -658,14 +645,14 @@ export function PluginsView() {
         </button>
       </div>
 
-      {/* Plugin grid */}
+      {/* Plugin list */}
       <div className="overflow-y-auto">
         {sorted.length === 0 ? (
           <div className="text-center py-10 px-5 text-muted border border-dashed border-border">
             {pluginSearch ? "No plugins match your search." : "No plugins in this category."}
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+          <div className="flex flex-col gap-[1px]">
             {sorted.map((p: PluginInfo) => renderCard(p))}
           </div>
         )}

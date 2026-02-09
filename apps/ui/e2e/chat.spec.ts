@@ -5,7 +5,7 @@ test.describe("Chat page", () => {
   test("shows chat interface when agent is running", async ({ page }) => {
     await mockApi(page, { agentState: "running" });
     await page.goto("/chat");
-    await expect(page.locator(".chat-input")).toBeVisible();
+    await expect(page.getByPlaceholder("Type a message...")).toBeVisible();
   });
 
   test("shows Start button when agent is not running", async ({ page }) => {
@@ -23,7 +23,7 @@ test.describe("Chat page", () => {
   test("can type a message in the input", async ({ page }) => {
     await mockApi(page, { agentState: "running" });
     await page.goto("/chat");
-    const input = page.locator(".chat-input");
+    const input = page.getByPlaceholder("Type a message...");
     await input.fill("Hello agent");
     await expect(input).toHaveValue("Hello agent");
   });
@@ -38,30 +38,30 @@ test.describe("Chat page", () => {
     await mockApi(page, { agentState: "running" });
     await page.goto("/chat");
 
-    const input = page.locator(".chat-input");
+    const input = page.getByPlaceholder("Type a message...");
     await input.fill("Hello!");
     await page.locator("button").filter({ hasText: "Send" }).click();
 
-    await expect(page.locator(".chat-msg.user").filter({ hasText: "Hello!" })).toBeVisible({ timeout: 5000 });
+    await expect(page.locator("[data-testid='chat-message'][data-role='user']").filter({ hasText: "Hello!" })).toBeVisible({ timeout: 5000 });
   });
 
   test("agent name shows in header", async ({ page }) => {
     await mockApi(page, { agentName: "TestBot" });
     await page.goto("/chat");
-    await expect(page.locator(".logo")).toHaveText("TestBot");
+    await expect(page.locator("[data-testid='agent-name']")).toHaveText("TestBot");
   });
 
   test("status pill shows running state", async ({ page }) => {
     await mockApi(page, { agentState: "running" });
     await page.goto("/chat");
-    await expect(page.locator(".status-pill")).toHaveText("running");
+    await expect(page.locator("[data-testid='status-pill']")).toHaveText("running");
   });
 
   test("input clears after sending a message", async ({ page }) => {
     await mockApi(page, { agentState: "running" });
     await page.goto("/chat");
 
-    const input = page.locator(".chat-input");
+    const input = page.getByPlaceholder("Type a message...");
     await input.fill("Hi there");
     await page.locator("button").filter({ hasText: "Send" }).click();
 
@@ -72,34 +72,36 @@ test.describe("Chat page", () => {
     await mockApi(page, { agentState: "running" });
     await page.goto("/chat");
 
-    const input = page.locator(".chat-input");
+    const input = page.getByPlaceholder("Type a message...");
     await input.fill("Role test");
     await page.locator("button").filter({ hasText: "Send" }).click();
 
-    await expect(page.locator(".chat-msg.user .role").first()).toHaveText("You", { timeout: 5000 });
+    const userMsg = page.locator("[data-testid='chat-message'][data-role='user']").first();
+    await expect(userMsg).toBeVisible({ timeout: 5000 });
+    await expect(userMsg.getByText("You")).toBeVisible();
   });
 
   test("agent response appears in the chat", async ({ page }) => {
     await mockApi(page, { agentState: "running" });
     await page.goto("/chat");
 
-    const input = page.locator(".chat-input");
+    const input = page.getByPlaceholder("Type a message...");
     await input.fill("Hello agent!");
     await page.locator("button").filter({ hasText: "Send" }).click();
 
     // The mock sends back the agent response automatically
-    await expect(page.locator(".chat-msg.assistant")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator("[data-testid='chat-message'][data-role='assistant']")).toBeVisible({ timeout: 5000 });
   });
 
   test("pressing Enter sends a message", async ({ page }) => {
     await mockApi(page, { agentState: "running" });
     await page.goto("/chat");
 
-    const input = page.locator(".chat-input");
+    const input = page.getByPlaceholder("Type a message...");
     await input.fill("Enter key test");
     await input.press("Enter");
 
-    await expect(page.locator(".chat-msg.user").filter({ hasText: "Enter key test" })).toBeVisible({ timeout: 5000 });
+    await expect(page.locator("[data-testid='chat-message'][data-role='user']").filter({ hasText: "Enter key test" })).toBeVisible({ timeout: 5000 });
   });
 
   test("empty input does not send a message", async ({ page }) => {
@@ -116,7 +118,7 @@ test.describe("Chat page", () => {
 
     await expect(page.getByText("Send a message to start chatting")).toBeVisible();
 
-    const input = page.locator(".chat-input");
+    const input = page.getByPlaceholder("Type a message...");
     await input.fill("Goodbye empty state");
     await page.locator("button").filter({ hasText: "Send" }).click();
 
@@ -128,7 +130,7 @@ test.describe("Chat page", () => {
     await page.goto("/chat");
 
     await page.locator("button").filter({ hasText: "Start Agent" }).click();
-    await expect(page.locator(".chat-input")).toBeVisible();
+    await expect(page.getByPlaceholder("Type a message...")).toBeVisible();
   });
 
   test("three-column layout: left sidebar, chat, right sidebar", async ({ page }) => {
@@ -136,8 +138,8 @@ test.describe("Chat page", () => {
     await page.goto("/chat");
 
     // All three panels should be visible
-    await expect(page.locator("conversations-sidebar")).toBeVisible();
-    await expect(page.locator(".chat-container")).toBeVisible();
-    await expect(page.locator("widget-sidebar")).toBeVisible();
+    await expect(page.locator("[data-testid='conversations-sidebar']")).toBeVisible();
+    await expect(page.getByPlaceholder("Type a message...")).toBeVisible();
+    await expect(page.locator("[data-testid='widget-sidebar']")).toBeVisible();
   });
 });

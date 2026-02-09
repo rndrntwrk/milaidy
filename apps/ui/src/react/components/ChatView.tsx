@@ -1,5 +1,5 @@
 /**
- * Chat view — matches the original Lit renderChat() design exactly.
+ * Chat view component.
  *
  * Layout: flex column filling parent. Header row (title + clear).
  * Scrollable messages area. Share/file notices below messages.
@@ -102,7 +102,7 @@ export function ChatView() {
           </div>
         ) : (
           msgs.map((msg) => (
-            <div key={msg.id} className="mb-4 leading-relaxed">
+            <div key={msg.id} className="mb-4 leading-relaxed" data-testid="chat-message" data-role={msg.role}>
               <div
                 className={`font-bold text-[13px] mb-0.5 ${
                   msg.role === "user"

@@ -15,7 +15,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useApp, THEMES } from "../AppContext.js";
-import type { PluginInfo, PluginParamDef } from "../../ui/api-client.js";
+import { client, type PluginInfo, type PluginParamDef, type OnboardingOptions } from "../../ui/api-client.js";
 
 /* ── Modal shell ─────────────────────────────────────────────────────── */
 
@@ -54,7 +54,7 @@ function Modal({
   );
 }
 
-/* ── Auto-detection helpers (mirrors Lit autoLabel / autoFieldType) ─── */
+/* ── Auto-detection helpers ────────────────────────────────────────── */
 
 const ACRONYMS = new Set([
   "API", "URL", "ID", "SSH", "SSL", "HTTP", "HTTPS", "RPC",
@@ -339,6 +339,7 @@ export function ConfigView() {
     handleCharacterFieldInput,
     handleCharacterArrayInput,
     handleCharacterStyleInput,
+    handleCharacterMessageExamplesInput,
     handleSaveCharacter,
     loadCharacter,
     loadPlugins,
@@ -360,17 +361,84 @@ export function ConfigView() {
     setState,
   } = useApp();
 
+  /* ── Model selection state ─────────────────────────────────────────── */
+  const [modelOptions, setModelOptions] = useState<OnboardingOptions["models"] | null>(null);
+  const [currentSmallModel, setCurrentSmallModel] = useState("");
+  const [currentLargeModel, setCurrentLargeModel] = useState("");
+  const [modelSaving, setModelSaving] = useState(false);
+  const [modelSaveSuccess, setModelSaveSuccess] = useState(false);
+
   useEffect(() => {
     void loadCharacter();
     void loadPlugins();
     void loadUpdateStatus();
     void checkExtensionStatus();
+
+    /* Load model options and current model config */
+    void (async () => {
+      try {
+        const opts = await client.getOnboardingOptions();
+        setModelOptions(opts.models);
+      } catch { /* ignore */ }
+      try {
+        const cfg = await client.getConfig();
+        const models = cfg.models as Record<string, string> | undefined;
+        if (models?.small) setCurrentSmallModel(models.small);
+        if (models?.large) setCurrentLargeModel(models.large);
+      } catch { /* ignore */ }
+    })();
   }, [loadCharacter, loadPlugins, loadUpdateStatus, checkExtensionStatus]);
+
+  const handleModelSave = useCallback(async () => {
+    setModelSaving(true);
+    setModelSaveSuccess(false);
+    try {
+      await client.updateConfig({
+        models: { small: currentSmallModel, large: currentLargeModel },
+      });
+      setModelSaveSuccess(true);
+      setTimeout(() => setModelSaveSuccess(false), 2000);
+    } catch { /* ignore */ }
+    setModelSaving(false);
+  }, [currentSmallModel, currentLargeModel]);
 
   /* ── Derived ──────────────────────────────────────────────────────── */
 
   const allAiProviders = plugins.filter((p) => p.category === "ai-provider");
   const enabledAiProviders = allAiProviders.filter((p) => p.enabled);
+
+  /* Track which provider is selected for showing settings inline */
+  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
+
+  /* Resolve the actually-selected provider: fall back to the first enabled one */
+  const resolvedSelectedId =
+    selectedProviderId && allAiProviders.some((p) => p.id === selectedProviderId)
+      ? selectedProviderId
+      : enabledAiProviders[0]?.id ?? null;
+
+  const selectedProvider = allAiProviders.find((p) => p.id === resolvedSelectedId) ?? null;
+
+  /* Switch provider: enable the new one, disable all others */
+  const handleSwitchProvider = useCallback(
+    async (newId: string) => {
+      setSelectedProviderId(newId);
+      const target = allAiProviders.find((p) => p.id === newId);
+      if (!target) return;
+
+      /* Enable the new provider if not already */
+      if (!target.enabled) {
+        await handlePluginToggle(newId, true);
+      }
+
+      /* Disable all other enabled ai-providers */
+      for (const p of enabledAiProviders) {
+        if (p.id !== newId) {
+          await handlePluginToggle(p.id, false);
+        }
+      }
+    },
+    [allAiProviders, enabledAiProviders, handlePluginToggle],
+  );
 
   const d = characterDraft;
   const bioText = typeof d.bio === "string" ? d.bio : Array.isArray(d.bio) ? d.bio.join("\n") : "";
@@ -380,6 +448,11 @@ export function ConfigView() {
   const styleChatText = (d.style?.chat ?? []).join("\n");
   const stylePostText = (d.style?.post ?? []).join("\n");
   const postExamplesText = (d.postExamples ?? []).join("\n");
+  const chatExamplesText = (d.messageExamples ?? [])
+    .map((convo) =>
+      convo.examples.map((ex) => `${ex.name}: ${ex.content.text}`).join("\n"),
+    )
+    .join("\n\n");
 
   const ext = extensionStatus;
   const relayOk = ext?.relayReachable === true;
@@ -517,91 +590,117 @@ export function ConfigView() {
               />
             </div>
 
-            {/* Adjectives & Topics (side by side) */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1">
-                <label className="font-semibold text-xs">Adjectives</label>
-                <div className="text-[11px] text-[var(--muted)]">
-                  Personality adjectives — one per line
-                </div>
-                <textarea
-                  value={adjectivesText}
-                  rows={3}
-                  placeholder={"curious\nwitty\nfriendly"}
-                  onChange={(e) => handleCharacterArrayInput("adjectives", e.target.value)}
-                  className="px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-xs font-inherit resize-y leading-relaxed focus:border-[var(--accent)] focus:outline-none"
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="font-semibold text-xs">Topics</label>
-                <div className="text-[11px] text-[var(--muted)]">
-                  Topics the agent knows — one per line
-                </div>
-                <textarea
-                  value={topicsText}
-                  rows={3}
-                  placeholder={"artificial intelligence\nblockchain\ncreative writing"}
-                  onChange={(e) => handleCharacterArrayInput("topics", e.target.value)}
-                  className="px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-xs font-inherit resize-y leading-relaxed focus:border-[var(--accent)] focus:outline-none"
-                />
-              </div>
-            </div>
+            {/* Advanced */}
+            <details className="group">
+              <summary className="flex items-center gap-1.5 cursor-pointer select-none text-xs font-semibold list-none [&::-webkit-details-marker]:hidden">
+                <span className="inline-block transition-transform group-open:rotate-90">&#9654;</span>
+                Advanced
+                <span className="font-normal text-[var(--muted)]">— adjectives, topics, style, examples</span>
+              </summary>
 
-            {/* Style */}
-            <div className="flex flex-col gap-1">
-              <label className="font-semibold text-xs">Style</label>
-              <div className="text-[11px] text-[var(--muted)]">
-                Communication style guidelines — one rule per line
-              </div>
+              <div className="flex flex-col gap-4 mt-3 pl-0.5">
+                {/* Adjectives & Topics (side by side) */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="font-semibold text-xs">Adjectives</label>
+                    <div className="text-[11px] text-[var(--muted)]">
+                      Personality adjectives — one per line
+                    </div>
+                    <textarea
+                      value={adjectivesText}
+                      rows={3}
+                      placeholder={"curious\nwitty\nfriendly"}
+                      onChange={(e) => handleCharacterArrayInput("adjectives", e.target.value)}
+                      className="px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-xs font-inherit resize-y leading-relaxed focus:border-[var(--accent)] focus:outline-none"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="font-semibold text-xs">Topics</label>
+                    <div className="text-[11px] text-[var(--muted)]">
+                      Topics the agent knows — one per line
+                    </div>
+                    <textarea
+                      value={topicsText}
+                      rows={3}
+                      placeholder={"artificial intelligence\nblockchain\ncreative writing"}
+                      onChange={(e) => handleCharacterArrayInput("topics", e.target.value)}
+                      className="px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-xs font-inherit resize-y leading-relaxed focus:border-[var(--accent)] focus:outline-none"
+                    />
+                  </div>
+                </div>
 
-              <div className="grid grid-cols-3 gap-3 mt-1 p-3 border border-[var(--border)] bg-[var(--bg-muted)]">
+                {/* Style */}
                 <div className="flex flex-col gap-1">
-                  <label className="font-semibold text-[11px] text-[var(--muted)]">All</label>
+                  <label className="font-semibold text-xs">Style</label>
+                  <div className="text-[11px] text-[var(--muted)]">
+                    Communication style guidelines — one rule per line
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3 mt-1 p-3 border border-[var(--border)] bg-[var(--bg-muted)]">
+                    <div className="flex flex-col gap-1">
+                      <label className="font-semibold text-[11px] text-[var(--muted)]">All</label>
+                      <textarea
+                        value={styleAllText}
+                        rows={3}
+                        placeholder={"Keep responses concise\nUse casual tone"}
+                        onChange={(e) => handleCharacterStyleInput("all", e.target.value)}
+                        className="px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-xs font-inherit resize-y leading-relaxed focus:border-[var(--accent)] focus:outline-none"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="font-semibold text-[11px] text-[var(--muted)]">Chat</label>
+                      <textarea
+                        value={styleChatText}
+                        rows={3}
+                        placeholder={"Be conversational\nAsk follow-up questions"}
+                        onChange={(e) => handleCharacterStyleInput("chat", e.target.value)}
+                        className="px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-xs font-inherit resize-y leading-relaxed focus:border-[var(--accent)] focus:outline-none"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="font-semibold text-[11px] text-[var(--muted)]">Post</label>
+                      <textarea
+                        value={stylePostText}
+                        rows={3}
+                        placeholder={"Use hashtags sparingly\nKeep under 280 characters"}
+                        onChange={(e) => handleCharacterStyleInput("post", e.target.value)}
+                        className="px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-xs font-inherit resize-y leading-relaxed focus:border-[var(--accent)] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Chat Examples */}
+                <div className="flex flex-col gap-1">
+                  <label className="font-semibold text-xs">Chat Examples</label>
+                  <div className="text-[11px] text-[var(--muted)]">
+                    Example conversations — format as &quot;Name: message&quot;, separate conversations with a blank line
+                  </div>
                   <textarea
-                    value={styleAllText}
+                    value={chatExamplesText}
+                    rows={5}
+                    placeholder={"User: Hello, what can you help me with?\nAgent: I can help with research, writing, and creative projects!\n\nUser: Tell me something interesting.\nAgent: Did you know octopuses have three hearts?"}
+                    onChange={(e) => handleCharacterMessageExamplesInput(e.target.value)}
+                    className="px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-xs font-[var(--mono)] resize-y leading-relaxed focus:border-[var(--accent)] focus:outline-none"
+                  />
+                </div>
+
+                {/* Post Examples */}
+                <div className="flex flex-col gap-1">
+                  <label className="font-semibold text-xs">Post Examples</label>
+                  <div className="text-[11px] text-[var(--muted)]">
+                    Example social media posts — one per line
+                  </div>
+                  <textarea
+                    value={postExamplesText}
                     rows={3}
-                    placeholder={"Keep responses concise\nUse casual tone"}
-                    onChange={(e) => handleCharacterStyleInput("all", e.target.value)}
+                    placeholder="Just shipped a new feature! Excited to see what you build with it."
+                    onChange={(e) => handleCharacterArrayInput("postExamples", e.target.value)}
                     className="px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-xs font-inherit resize-y leading-relaxed focus:border-[var(--accent)] focus:outline-none"
                   />
                 </div>
-                <div className="flex flex-col gap-1">
-                  <label className="font-semibold text-[11px] text-[var(--muted)]">Chat</label>
-                  <textarea
-                    value={styleChatText}
-                    rows={3}
-                    placeholder={"Be conversational\nAsk follow-up questions"}
-                    onChange={(e) => handleCharacterStyleInput("chat", e.target.value)}
-                    className="px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-xs font-inherit resize-y leading-relaxed focus:border-[var(--accent)] focus:outline-none"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="font-semibold text-[11px] text-[var(--muted)]">Post</label>
-                  <textarea
-                    value={stylePostText}
-                    rows={3}
-                    placeholder={"Use hashtags sparingly\nKeep under 280 characters"}
-                    onChange={(e) => handleCharacterStyleInput("post", e.target.value)}
-                    className="px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-xs font-inherit resize-y leading-relaxed focus:border-[var(--accent)] focus:outline-none"
-                  />
-                </div>
               </div>
-            </div>
-
-            {/* Post Examples */}
-            <div className="flex flex-col gap-1">
-              <label className="font-semibold text-xs">Post Examples</label>
-              <div className="text-[11px] text-[var(--muted)]">
-                Example social media posts — one per line
-              </div>
-              <textarea
-                value={postExamplesText}
-                rows={3}
-                placeholder="Just shipped a new feature! Excited to see what you build with it."
-                onChange={(e) => handleCharacterArrayInput("postExamples", e.target.value)}
-                className="px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-xs font-inherit resize-y leading-relaxed focus:border-[var(--accent)] focus:outline-none"
-              />
-            </div>
+            </details>
 
             {/* Save Button */}
             <div className="flex items-center gap-3 mt-1">
@@ -751,58 +850,148 @@ export function ConfigView() {
 
         {/* Local provider cards */}
         {allAiProviders.length > 0 ? (
-          <div className="flex flex-col gap-2">
-            {allAiProviders.map((provider) => {
-              const isActive = provider.enabled;
+          <>
+            <div
+              className="grid gap-1.5"
+              style={{ gridTemplateColumns: `repeat(${allAiProviders.length}, 1fr)` }}
+            >
+              {allAiProviders.map((provider) => {
+                const isSelected = provider.id === resolvedSelectedId;
+                return (
+                  <button
+                    key={provider.id}
+                    className={`text-center px-2 py-2 border cursor-pointer transition-colors ${
+                      isSelected
+                        ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]"
+                        : "border-[var(--border)] bg-[var(--card)] hover:border-[var(--accent)]"
+                    }`}
+                    onClick={() => void handleSwitchProvider(provider.id)}
+                  >
+                    <div className={`text-xs font-bold whitespace-nowrap ${isSelected ? "" : "text-[var(--text)]"}`}>
+                      {provider.name}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Model selection dropdowns */}
+            {modelOptions && (modelOptions.small.length > 0 || modelOptions.large.length > 0) && (
+              <div className="mt-4 pt-4 border-t border-[var(--border)]">
+                <div className="grid grid-cols-2 gap-4">
+                  {modelOptions.small.length > 0 && (
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-semibold">Small Model</label>
+                      <div className="text-[10px] text-[var(--muted)]">
+                        Fast model for simple tasks
+                      </div>
+                      <select
+                        value={currentSmallModel}
+                        onChange={(e) => setCurrentSmallModel(e.target.value)}
+                        className="px-2.5 py-[7px] border border-[var(--border)] bg-[var(--card)] text-[13px] focus:border-[var(--accent)] focus:outline-none"
+                      >
+                        <option value="">Select model...</option>
+                        {modelOptions.small.map((m) => (
+                          <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  {modelOptions.large.length > 0 && (
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-semibold">Large Model</label>
+                      <div className="text-[10px] text-[var(--muted)]">
+                        Powerful model for complex reasoning
+                      </div>
+                      <select
+                        value={currentLargeModel}
+                        onChange={(e) => setCurrentLargeModel(e.target.value)}
+                        className="px-2.5 py-[7px] border border-[var(--border)] bg-[var(--card)] text-[13px] focus:border-[var(--accent)] focus:outline-none"
+                      >
+                        <option value="">Select model...</option>
+                        {modelOptions.large.map((m) => (
+                          <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 mt-3">
+                  <button
+                    className={`btn text-xs py-[5px] px-4 !mt-0 ${modelSaveSuccess ? "!bg-[var(--ok,#16a34a)] !border-[var(--ok,#16a34a)]" : ""}`}
+                    onClick={() => void handleModelSave()}
+                    disabled={modelSaving || (!currentSmallModel && !currentLargeModel)}
+                  >
+                    {modelSaving ? "Saving..." : modelSaveSuccess ? "Saved" : "Save Models"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Inline settings for the selected provider */}
+            {selectedProvider && selectedProvider.parameters.length > 0 && (() => {
+              const isSaving = pluginSaving.has(selectedProvider.id);
+              const saveSuccess = pluginSaveSuccess.has(selectedProvider.id);
+              const params = selectedProvider.parameters;
+              const setCount = params.filter((p: PluginParamDef) => p.isSet).length;
+
               return (
-                <button
-                  key={provider.id}
-                  className={`w-full text-left px-4 py-3 border cursor-pointer bg-[var(--card)] transition-colors ${
-                    isActive
-                      ? "border-[var(--accent)] bg-[var(--accent-subtle)]"
-                      : "border-[var(--border)] hover:border-[var(--accent)]"
-                  }`}
-                  onClick={() => void handlePluginToggle(provider.id, !isActive)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-bold text-sm">{provider.name}</div>
-                      {provider.description && (
-                        <div className="text-xs text-[var(--muted)] mt-0.5">
-                          {provider.description}
-                        </div>
-                      )}
+                <div className="mt-4 pt-4 border-t border-[var(--border)]">
+                  <div className="flex justify-between items-center mb-3">
+                    <div className="text-xs font-semibold">
+                      {selectedProvider.name} Settings
                     </div>
                     <div className="flex items-center gap-2">
-                      {isActive && provider.configured && (
-                        <span
-                          className="text-[11px] px-2 py-[3px] border"
-                          style={{ borderColor: "#2d8a4e", color: "#2d8a4e" }}
-                        >
-                          Configured
-                        </span>
-                      )}
-                      {isActive && !provider.configured && (
-                        <span
-                          className="text-[11px] px-2 py-[3px] border"
-                          style={{ borderColor: "var(--warning,#f39c12)", color: "var(--warning,#f39c12)" }}
-                        >
-                          Needs Setup
-                        </span>
-                      )}
+                      <span className="text-[11px] text-[var(--muted)]">
+                        {setCount}/{params.length} configured
+                      </span>
                       <span
-                        className={`inline-block w-3 h-3 rounded-full border-2 transition-colors ${
-                          isActive
-                            ? "bg-[var(--accent)] border-[var(--accent)]"
-                            : "bg-transparent border-[var(--muted)]"
-                        }`}
-                      />
+                        className="text-[11px] px-2 py-[3px] border"
+                        style={{
+                          borderColor: selectedProvider.configured ? "#2d8a4e" : "var(--warning,#f39c12)",
+                          color: selectedProvider.configured ? "#2d8a4e" : "var(--warning,#f39c12)",
+                        }}
+                      >
+                        {selectedProvider.configured ? "Configured" : "Needs Setup"}
+                      </span>
                     </div>
                   </div>
-                </button>
+
+                  {params.map((param: PluginParamDef) => (
+                    <PluginField
+                      key={param.key}
+                      plugin={selectedProvider}
+                      param={param}
+                      onChange={(key, value) =>
+                        handlePluginFieldChange(selectedProvider.id, key, value)
+                      }
+                    />
+                  ))}
+
+                  <div className="flex items-center gap-3 mt-3">
+                    <button
+                      className={`btn text-xs py-[5px] px-4 !mt-0 ${saveSuccess ? "!bg-[var(--ok,#16a34a)] !border-[var(--ok,#16a34a)]" : ""}`}
+                      onClick={() => handlePluginSave(selectedProvider.id)}
+                      disabled={isSaving}
+                    >
+                      {isSaving ? "Saving..." : saveSuccess ? "Saved" : "Save"}
+                    </button>
+                    <span className="flex-1" />
+                    <a
+                      href="#"
+                      className="text-[11px] text-[var(--muted)] underline"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setTab("plugins");
+                      }}
+                    >
+                      All plugins
+                    </a>
+                  </div>
+                </div>
               );
-            })}
-          </div>
+            })()}
+          </>
         ) : (
           <div className="p-4 border border-[var(--warning,#f39c12)] bg-[var(--card)]">
             <div className="text-xs text-[var(--warning,#f39c12)]">
@@ -822,84 +1011,6 @@ export function ConfigView() {
           </div>
         )}
       </div>
-
-      {/* ═══════════════════════════════════════════════════════════════
-          4. MODEL PROVIDER SETTINGS  (detailed config for active providers)
-          ═══════════════════════════════════════════════════════════════ */}
-      {enabledAiProviders.length > 0 && (
-        <>
-          {enabledAiProviders.map((provider) => {
-            const isSaving = pluginSaving.has(provider.id);
-            const saveSuccess = pluginSaveSuccess.has(provider.id);
-            const params = provider.parameters;
-            const setCount = params.filter((p: PluginParamDef) => p.isSet).length;
-
-            if (params.length === 0) return null;
-
-            return (
-              <div
-                key={provider.id}
-                className="mt-6 p-4 border border-[var(--border)] bg-[var(--card)]"
-              >
-                <div className="flex justify-between items-center mb-3">
-                  <div>
-                    <div className="font-bold text-sm">{provider.name} Settings</div>
-                    <div className="text-xs text-[var(--muted)] mt-0.5">
-                      Configure API keys and parameters for {provider.name}.
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="text-[11px] px-2 py-[3px] border"
-                      style={{
-                        borderColor: provider.configured ? "#2d8a4e" : "var(--warning,#f39c12)",
-                        color: provider.configured ? "#2d8a4e" : "var(--warning,#f39c12)",
-                      }}
-                    >
-                      {provider.configured ? "Configured" : "Needs Setup"}
-                    </span>
-                  </div>
-                </div>
-
-                {params.map((param: PluginParamDef) => (
-                  <PluginField
-                    key={param.key}
-                    plugin={provider}
-                    param={param}
-                    onChange={(key, value) =>
-                      handlePluginFieldChange(provider.id, key, value)
-                    }
-                  />
-                ))}
-
-                <div className="flex items-center gap-3 mt-3">
-                  <button
-                    className={`btn text-xs py-[5px] px-4 !mt-0 ${saveSuccess ? "!bg-[var(--ok,#16a34a)] !border-[var(--ok,#16a34a)]" : ""}`}
-                    onClick={() => handlePluginSave(provider.id)}
-                    disabled={isSaving}
-                  >
-                    {isSaving ? "Saving..." : saveSuccess ? "Saved" : "Save"}
-                  </button>
-                  <span className="flex-1" />
-                  <span className="text-[11px] text-[var(--muted)]">
-                    {setCount}/{params.length} configured
-                  </span>
-                  <a
-                    href="#"
-                    className="text-[11px] text-[var(--muted)] ml-3 underline"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setTab("plugins");
-                    }}
-                  >
-                    All plugins
-                  </a>
-                </div>
-              </div>
-            );
-          })}
-        </>
-      )}
 
       {/* ═══════════════════════════════════════════════════════════════
           5. WALLET PROVIDERS & API KEYS
@@ -1203,7 +1314,7 @@ export function ConfigView() {
           <div>
             <div className="font-bold text-sm">Agent Export / Import</div>
             <div className="text-xs text-[var(--muted)] mt-0.5">
-              Migrate your agent to another machine. Exports are password-encrypted.
+              Migrate your agent to another machine. Optionally encrypt with a password.
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -1227,14 +1338,16 @@ export function ConfigView() {
       <Modal open={exportModalOpen} onClose={() => setExportModalOpen(false)} title="Export Agent">
         <div className="flex flex-col gap-3">
           <div className="text-xs text-[var(--muted)]">
-            Your character, memories, chats, secrets, and relationships will be encrypted and
-            downloaded as a single file.
+            Your character, memories, chats, secrets, and relationships will be downloaded as a
+            single file. Optionally set a password to encrypt the export.
           </div>
           <div className="flex flex-col gap-1">
-            <label className="font-semibold text-xs">Encryption Password</label>
+            <label className="font-semibold text-xs">
+              Encryption Password <span className="font-normal text-[var(--muted)]">(optional)</span>
+            </label>
             <input
               type="password"
-              placeholder="Min 4 characters"
+              placeholder="Leave blank to skip encryption"
               value={exportPassword}
               onChange={(e) => setState("exportPassword", e.target.value)}
               className="px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-xs font-[var(--mono)] focus:border-[var(--accent)] focus:outline-none"
@@ -1263,7 +1376,7 @@ export function ConfigView() {
             </button>
             <button
               className="btn text-xs py-1.5 px-4 !mt-0"
-              disabled={exportBusy || exportPassword.length < 4}
+              disabled={exportBusy || (exportPassword.length > 0 && exportPassword.length < 4)}
               onClick={() => void handleAgentExport()}
             >
               {exportBusy ? "Exporting..." : "Download Export"}
@@ -1276,8 +1389,8 @@ export function ConfigView() {
       <Modal open={importModalOpen} onClose={() => setImportModalOpen(false)} title="Import Agent">
         <div className="flex flex-col gap-3">
           <div className="text-xs text-[var(--muted)]">
-            Select an <code className="text-[11px]">.eliza-agent</code> export file and enter the
-            password used during export.
+            Select an <code className="text-[11px]">.eliza-agent</code> export file. If it was
+            encrypted, enter the password used during export.
           </div>
           <div className="flex flex-col gap-1">
             <label className="font-semibold text-xs">Export File</label>
@@ -1294,10 +1407,12 @@ export function ConfigView() {
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="font-semibold text-xs">Decryption Password</label>
+            <label className="font-semibold text-xs">
+              Decryption Password <span className="font-normal text-[var(--muted)]">(optional)</span>
+            </label>
             <input
               type="password"
-              placeholder="Enter password"
+              placeholder="Leave blank if export was not encrypted"
               value={importPassword}
               onChange={(e) => setState("importPassword", e.target.value)}
               className="px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-xs font-[var(--mono)] focus:border-[var(--accent)] focus:outline-none"
@@ -1318,7 +1433,7 @@ export function ConfigView() {
             </button>
             <button
               className="btn text-xs py-1.5 px-4 !mt-0"
-              disabled={importBusy || !importFile || importPassword.length < 4}
+              disabled={importBusy || !importFile || (importPassword.length > 0 && importPassword.length < 4)}
               onClick={() => void handleAgentImport()}
             >
               {importBusy ? "Importing..." : "Import Agent"}

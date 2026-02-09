@@ -6,7 +6,7 @@ import { useEffect } from "react";
 import { useApp } from "../AppContext.js";
 import type { LogEntry } from "../../ui/api-client.js";
 
-/** Per-tag badge colour map (mirrors Lit CSS `data-tag` selectors). */
+/** Per-tag badge colour map. */
 const TAG_COLORS: Record<string, { bg: string; fg: string }> = {
   agent: { bg: "rgba(99, 102, 241, 0.15)", fg: "rgb(99, 102, 241)" },
   server: { bg: "rgba(34, 197, 94, 0.15)", fg: "rgb(34, 197, 94)" },
@@ -53,26 +53,17 @@ export function LogsView() {
   const hasActiveFilters =
     logTagFilter !== "" || logLevelFilter !== "" || logSourceFilter !== "";
 
+  const handleTagChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setState("logTagFilter", e.target.value);
+    void loadLogs();
+  };
+
   return (
-    <div>
-      {/* Header — matches Lit: <h2>Logs</h2> <p class="subtitle">...</p> */}
-      <h2 className="text-lg font-normal text-txt-strong mb-1">Logs</h2>
-      <p className="text-sm text-muted mb-2.5">
-        Agent log output.
-        {logs.length > 0 ? ` ${logs.length} entries.` : ""}
-      </p>
-
-      {/* Filters row — Lit: .log-filters (flex wrap gap-1.5 mb-2.5 center) */}
+    <div className="flex flex-col h-full">
+      {/* Filters row — filters left, refresh right */}
       <div className="flex flex-wrap gap-1.5 mb-2.5 items-center">
-        <button
-          className="text-xs px-3 py-1 border border-border bg-card text-txt cursor-pointer hover:bg-bg-hover"
-          onClick={() => void loadLogs()}
-        >
-          Refresh
-        </button>
-
         <select
-          className="text-xs px-2 py-1 border border-border rounded-md bg-card text-txt"
+          className="text-xs px-3 py-1.5 border border-border bg-card text-txt cursor-pointer"
           value={logLevelFilter}
           onChange={handleLevelChange}
         >
@@ -84,7 +75,7 @@ export function LogsView() {
         </select>
 
         <select
-          className="text-xs px-2 py-1 border border-border rounded-md bg-card text-txt"
+          className="text-xs px-3 py-1.5 border border-border bg-card text-txt cursor-pointer"
           value={logSourceFilter}
           onChange={handleSourceChange}
         >
@@ -96,54 +87,40 @@ export function LogsView() {
           ))}
         </select>
 
+        {logTags.length > 0 && (
+          <select
+            className="text-xs px-3 py-1.5 border border-border bg-card text-txt cursor-pointer"
+            value={logTagFilter}
+            onChange={handleTagChange}
+          >
+            <option value="">All tags</option>
+            {logTags.map((tag) => (
+              <option key={tag} value={tag}>
+                {tag}
+              </option>
+            ))}
+          </select>
+        )}
+
         {hasActiveFilters && (
           <button
-            className="text-[11px] px-2.5 py-[3px] border border-border bg-card text-txt cursor-pointer hover:bg-bg-hover"
+            className="text-xs px-3 py-1.5 border border-border bg-card text-txt cursor-pointer hover:border-accent hover:text-accent"
             onClick={handleClearFilters}
           >
             Clear filters
           </button>
         )}
+
+        <button
+          className="text-xs px-3 py-1.5 border border-border bg-card text-txt cursor-pointer hover:border-accent hover:text-accent ml-auto"
+          onClick={() => void loadLogs()}
+        >
+          Refresh
+        </button>
       </div>
 
-      {/* Tag pills — Lit: .log-tag-pills with "Tags:" label + "all" pill */}
-      {logTags.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-2.5 items-center">
-          <span className="text-xs text-muted mr-1">Tags:</span>
-          <span
-            className={`text-[11px] px-2.5 py-0.5 rounded-xl border cursor-pointer transition-all duration-150 whitespace-nowrap ${
-              logTagFilter === ""
-                ? "bg-accent text-white border-accent"
-                : "bg-bg-muted text-muted border-border hover:border-accent hover:text-txt"
-            }`}
-            onClick={() => {
-              setState("logTagFilter", "");
-              void loadLogs();
-            }}
-          >
-            all
-          </span>
-          {logTags.map((tag) => (
-            <span
-              key={tag}
-              className={`text-[11px] px-2.5 py-0.5 rounded-xl border cursor-pointer transition-all duration-150 whitespace-nowrap ${
-                logTagFilter === tag
-                  ? "bg-accent text-white border-accent"
-                  : "bg-bg-muted text-muted border-border hover:border-accent hover:text-txt"
-              }`}
-              onClick={() => {
-                setState("logTagFilter", tag);
-                void loadLogs();
-              }}
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Log entries — Lit: .logs-container (mono, 12px, max-h-600, scroll, border, card bg) */}
-      <div className="font-mono text-xs max-h-[600px] overflow-y-auto border border-border p-2 bg-card">
+      {/* Log entries — full remaining height */}
+      <div className="font-mono text-xs flex-1 min-h-0 overflow-y-auto border border-border p-2 bg-card">
         {logs.length === 0 ? (
           <div className="text-center py-8 text-muted">
             No log entries
@@ -154,6 +131,7 @@ export function LogsView() {
             <div
               key={idx}
               className="font-mono text-xs px-2 py-1 border-b border-border flex gap-2 items-baseline"
+              data-testid="log-entry"
             >
               {/* Timestamp */}
               <span className="text-muted whitespace-nowrap">

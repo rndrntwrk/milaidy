@@ -746,6 +746,18 @@ export class MilaidyClient {
     await this.fetch("/api/agent/reset", { method: "POST" });
   }
 
+  async getConfig(): Promise<Record<string, unknown>> {
+    return this.fetch("/api/config");
+  }
+
+  async updateConfig(patch: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.fetch("/api/config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+  }
+
   async getPlugins(): Promise<{ plugins: PluginInfo[] }> {
     return this.fetch("/api/plugins");
   }

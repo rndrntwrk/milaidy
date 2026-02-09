@@ -1,11 +1,13 @@
 /**
  * Skills management view — create, enable/disable, and install skills.
- * Mirrors the Lit version in app.ts (renderSkills + renderSkillCard) 1:1.
  */
 
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../AppContext.js";
 import type { SkillInfo, SkillMarketplaceResult, SkillScanReportSummary } from "../../ui/api-client.js";
+
+/** Inline color for accent-filled buttons — bypasses CSS layer specificity issues */
+const accentFg: React.CSSProperties = { color: "var(--accent-foreground)" };
 
 /* ── Skill Card ──────────────────────────────────────────────────────── */
 
@@ -39,7 +41,7 @@ function SkillCard({
   const isReviewing = skillReviewId === skill.id;
 
   return (
-    <div className="flex flex-col items-stretch p-4 px-5 border border-border bg-card">
+    <div className="flex flex-col items-stretch p-4 px-5 border border-border bg-card" style={{ color: "var(--card-foreground)" }} data-skill-id={skill.id}>
       {/* Header row */}
       <div className="flex items-center gap-1.5">
         <div className="flex-1 min-w-0">
@@ -74,7 +76,8 @@ function SkillCard({
 
         {/* Edit button */}
         <button
-          className="px-2 py-0.5 border border-accent bg-accent text-accent-fg cursor-pointer text-[11px] hover:bg-accent-hover hover:border-accent-hover"
+          className="px-2 py-0.5 border border-accent bg-accent cursor-pointer text-[11px] hover:bg-accent-hover hover:border-accent-hover"
+          style={accentFg}
           onClick={() => onOpen(skill.id)}
         >
           Edit
@@ -82,7 +85,7 @@ function SkillCard({
 
         {/* Delete button */}
         <button
-          className="px-2 py-0.5 border border-accent bg-accent text-accent-fg cursor-pointer text-[11px] hover:bg-accent-hover hover:border-accent-hover"
+          className="px-2 py-0.5 border border-accent bg-accent cursor-pointer text-[11px] hover:bg-accent-hover hover:border-accent-hover"
           style={{ color: "var(--danger, #e74c3c)" }}
           onClick={() => onDelete(skill.id, skill.name)}
         >
@@ -92,7 +95,7 @@ function SkillCard({
         {/* Status / Toggle / Review */}
         {isQuarantined && !isReviewing ? (
           <button
-            className="px-2 py-0.5 border border-accent bg-accent text-accent-fg cursor-pointer text-[11px] hover:bg-accent-hover hover:border-accent-hover"
+            className="px-2 py-0.5 border border-accent bg-accent cursor-pointer text-[11px] hover:bg-accent-hover hover:border-accent-hover"
             style={{ color: "var(--warn, #f39c12)" }}
             onClick={() => onReview(skill.id)}
           >
@@ -118,6 +121,7 @@ function SkillCard({
               <input
                 type="checkbox"
                 className="opacity-0 w-0 h-0 absolute"
+                data-skill-toggle={skill.id}
                 checked={skill.enabled}
                 disabled={skillToggleAction === skill.id || isQuarantined}
                 onChange={(e) => onToggle(skill.id, e.target.checked)}
@@ -137,7 +141,7 @@ function SkillCard({
         )}
       </div>
 
-      {/* Inline review panel (not a modal — matches Lit version) */}
+      {/* Inline review panel (not a modal) */}
       {isReviewing && skillReviewReport ? (
         <div className="mt-2 p-2 border border-border text-xs">
           <div className="mb-1.5">
@@ -168,13 +172,15 @@ function SkillCard({
           )}
           <div className="flex gap-1.5">
             <button
-              className="px-6 py-2 border border-accent bg-accent text-accent-fg cursor-pointer text-sm mt-0 hover:bg-accent-hover hover:border-accent-hover"
+              className="px-6 py-2 border border-accent bg-accent cursor-pointer text-sm mt-0 hover:bg-accent-hover hover:border-accent-hover"
+              style={accentFg}
               onClick={() => onAcknowledge(skill.id)}
             >
               Acknowledge &amp; Enable
             </button>
             <button
-              className="px-6 py-2 border border-accent bg-accent text-accent-fg cursor-pointer text-sm mt-0 hover:bg-accent-hover hover:border-accent-hover"
+              className="px-6 py-2 border border-accent bg-accent cursor-pointer text-sm mt-0 hover:bg-accent-hover hover:border-accent-hover"
+              style={accentFg}
               onClick={onDismissReview}
             >
               Dismiss
@@ -204,7 +210,7 @@ function MarketplaceCard({
   onUninstall: (skillId: string, name: string) => void;
 }) {
   return (
-    <div className="flex flex-col items-stretch p-4 px-5 border border-border bg-card">
+    <div className="flex flex-col items-stretch p-4 px-5 border border-border bg-card" style={{ color: "var(--card-foreground)" }}>
       <div className="flex justify-between gap-2.5">
         <div className="min-w-0 flex-1">
           <div className="font-bold text-sm">{item.name}</div>
@@ -218,7 +224,8 @@ function MarketplaceCard({
         </div>
         {isInstalled ? (
           <button
-            className="self-center px-6 py-2 border border-accent bg-accent text-accent-fg cursor-pointer text-sm hover:bg-accent-hover hover:border-accent-hover disabled:opacity-40 disabled:cursor-not-allowed"
+            className="self-center px-6 py-2 border border-accent bg-accent cursor-pointer text-sm hover:bg-accent-hover hover:border-accent-hover disabled:opacity-40 disabled:cursor-not-allowed"
+            style={accentFg}
             onClick={() => onUninstall(item.id, item.name)}
             disabled={skillsMarketplaceAction === `uninstall:${item.id}`}
           >
@@ -228,7 +235,8 @@ function MarketplaceCard({
           </button>
         ) : (
           <button
-            className="self-center px-6 py-2 border border-accent bg-accent text-accent-fg cursor-pointer text-sm hover:bg-accent-hover hover:border-accent-hover disabled:opacity-40 disabled:cursor-not-allowed"
+            className="self-center px-6 py-2 border border-accent bg-accent cursor-pointer text-sm hover:bg-accent-hover hover:border-accent-hover disabled:opacity-40 disabled:cursor-not-allowed"
+            style={accentFg}
             onClick={() => onInstall(item)}
             disabled={skillsMarketplaceAction === `install:${item.id}`}
           >
@@ -293,7 +301,8 @@ function InstallModal({
             </p>
           </div>
           <button
-            className="px-3 py-1 border border-accent bg-accent text-accent-fg cursor-pointer text-xs hover:bg-accent-hover hover:border-accent-hover"
+            className="px-3 py-1 border border-accent bg-accent cursor-pointer text-xs hover:bg-accent-hover hover:border-accent-hover"
+            style={accentFg}
             onClick={onClose}
           >
             Close
@@ -314,7 +323,8 @@ function InstallModal({
               }}
             />
             <button
-              className="px-6 py-2 border border-accent bg-accent text-accent-fg cursor-pointer text-sm hover:bg-accent-hover hover:border-accent-hover disabled:opacity-40 disabled:cursor-not-allowed mt-0"
+              className="px-6 py-2 border border-accent bg-accent cursor-pointer text-sm hover:bg-accent-hover hover:border-accent-hover disabled:opacity-40 disabled:cursor-not-allowed mt-0"
+              style={accentFg}
               onClick={() => searchSkillsMarketplace()}
               disabled={skillsMarketplaceLoading}
             >
@@ -347,7 +357,8 @@ function InstallModal({
               }}
             />
             <button
-              className="px-6 py-2 border border-accent bg-accent text-accent-fg cursor-pointer text-sm hover:bg-accent-hover hover:border-accent-hover disabled:opacity-40 disabled:cursor-not-allowed mt-0"
+              className="px-6 py-2 border border-accent bg-accent cursor-pointer text-sm hover:bg-accent-hover hover:border-accent-hover disabled:opacity-40 disabled:cursor-not-allowed mt-0"
+              style={accentFg}
               onClick={() => installSkillFromGithubUrl()}
               disabled={
                 skillsMarketplaceAction === "install:manual" ||
@@ -474,19 +485,22 @@ export function SkillsView() {
       {/* Action bar: + New Skill, Install, Refresh */}
       <div className="flex items-center gap-2 mb-3">
         <button
-          className="px-4 py-1.5 border border-accent bg-accent text-accent-fg cursor-pointer text-xs font-bold hover:bg-accent-hover hover:border-accent-hover mt-0"
+          className="px-4 py-1.5 border border-accent bg-accent cursor-pointer text-xs font-bold hover:bg-accent-hover hover:border-accent-hover mt-0"
+          style={accentFg}
           onClick={() => setState("skillCreateFormOpen", !skillCreateFormOpen)}
         >
           {skillCreateFormOpen ? "Cancel" : "+ New Skill"}
         </button>
         <button
-          className="px-4 py-1.5 border border-accent bg-accent text-accent-fg cursor-pointer text-xs font-bold hover:bg-accent-hover hover:border-accent-hover mt-0"
+          className="px-4 py-1.5 border border-accent bg-accent cursor-pointer text-xs font-bold hover:bg-accent-hover hover:border-accent-hover mt-0"
+          style={accentFg}
           onClick={() => setInstallModalOpen(true)}
         >
           Install
         </button>
         <button
-          className="px-3 py-1 border border-accent bg-accent text-accent-fg cursor-pointer text-xs hover:bg-accent-hover hover:border-accent-hover mt-0 ml-auto"
+          className="px-3 py-1 border border-accent bg-accent cursor-pointer text-xs hover:bg-accent-hover hover:border-accent-hover mt-0 ml-auto"
+          style={accentFg}
           onClick={() => refreshSkills()}
         >
           Refresh
@@ -534,7 +548,8 @@ export function SkillsView() {
             </div>
             <div className="flex gap-2 justify-end mt-1">
               <button
-                className="px-4 py-1.5 border border-accent bg-accent text-accent-fg cursor-pointer text-xs hover:bg-accent-hover hover:border-accent-hover mt-0"
+                className="px-4 py-1.5 border border-accent bg-accent cursor-pointer text-xs hover:bg-accent-hover hover:border-accent-hover mt-0"
+                style={accentFg}
                 onClick={() => {
                   setState("skillCreateFormOpen", false);
                   setState("skillCreateName", "");
@@ -544,7 +559,8 @@ export function SkillsView() {
                 Cancel
               </button>
               <button
-                className="px-4 py-1.5 border border-accent bg-accent text-accent-fg cursor-pointer text-xs font-bold hover:bg-accent-hover hover:border-accent-hover disabled:opacity-40 disabled:cursor-not-allowed mt-0"
+                className="px-4 py-1.5 border border-accent bg-accent cursor-pointer text-xs font-bold hover:bg-accent-hover hover:border-accent-hover disabled:opacity-40 disabled:cursor-not-allowed mt-0"
+                style={accentFg}
                 onClick={() => handleCreateSkill()}
                 disabled={skillCreating || !skillCreateName.trim()}
               >

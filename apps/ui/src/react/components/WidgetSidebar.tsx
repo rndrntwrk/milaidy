@@ -28,7 +28,7 @@ export function WidgetSidebar() {
   const todos = workbench?.todos ?? [];
 
   return (
-    <aside className="w-[260px] min-w-[260px] border-l border-border flex flex-col h-full font-body text-[13px]">
+    <aside className="w-[260px] min-w-[260px] border-l border-border flex flex-col h-full font-body text-[13px]" data-testid="widget-sidebar">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
         <h3 className="text-txt-strong font-semibold">Workbench</h3>
         <button

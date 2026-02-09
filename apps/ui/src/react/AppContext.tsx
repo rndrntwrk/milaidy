@@ -365,6 +365,7 @@ export interface AppActions {
   handleCharacterFieldInput: (field: keyof CharacterData, value: string) => void;
   handleCharacterArrayInput: (field: "adjectives" | "topics" | "postExamples", value: string) => void;
   handleCharacterStyleInput: (subfield: "all" | "chat" | "post", value: string) => void;
+  handleCharacterMessageExamplesInput: (value: string) => void;
 
   // Onboarding
   handleOnboardingNext: () => Promise<void>;
@@ -1051,16 +1052,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const handlePluginToggle = useCallback(
     async (pluginId: string, enabled: boolean) => {
-      const plugin = plugins.find((p) => p.id === pluginId);
-      if (enabled && plugin?.validationErrors && plugin.validationErrors.length > 0) {
-        setPluginSettingsOpen((prev) => new Set([...prev, pluginId]));
-        setActionNotice(
-          `Cannot enable ${plugin?.name ?? pluginId}: required settings are missing.`,
-          "error",
-          3000,
-        );
-        return;
-      }
       try {
         await client.updatePlugin(pluginId, { enabled });
         setPlugins((prev: PluginInfo[]) =>
@@ -1360,6 +1351,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (Array.isArray(draft.adjectives) && draft.adjectives.length === 0) delete draft.adjectives;
       if (Array.isArray(draft.topics) && draft.topics.length === 0) delete draft.topics;
       if (Array.isArray(draft.postExamples) && draft.postExamples.length === 0) delete draft.postExamples;
+      if (Array.isArray(draft.messageExamples) && draft.messageExamples.length === 0) delete draft.messageExamples;
       if (draft.style) {
         const s = draft.style;
         if (s.all && s.all.length === 0) delete s.all;
@@ -1405,6 +1397,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...prev,
         style: { ...(prev.style ?? {}), [subfield]: items },
       }));
+    },
+    [],
+  );
+
+  const handleCharacterMessageExamplesInput = useCallback(
+    (value: string) => {
+      if (!value.trim()) {
+        setCharacterDraft((prev: CharacterData) => ({ ...prev, messageExamples: [] }));
+        return;
+      }
+      const blocks = value.split(/\n\s*\n/).filter((b) => b.trim().length > 0);
+      const parsed = blocks.map((block) => {
+        const lines = block.split("\n").filter((l) => l.trim().length > 0);
+        const examples = lines.map((line) => {
+          const colonIdx = line.indexOf(":");
+          if (colonIdx > 0) {
+            return {
+              name: line.slice(0, colonIdx).trim(),
+              content: { text: line.slice(colonIdx + 1).trim() },
+            };
+          }
+          return { name: "User", content: { text: line.trim() } };
+        });
+        return { examples };
+      });
+      setCharacterDraft((prev: CharacterData) => ({ ...prev, messageExamples: parsed }));
     },
     [],
   );
@@ -1965,7 +1983,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadLogs,
     loadInventory, loadBalances, loadNfts, handleWalletApiKeySave, handleExportKeys,
     loadCharacter, handleSaveCharacter, handleCharacterFieldInput,
-    handleCharacterArrayInput, handleCharacterStyleInput,
+    handleCharacterArrayInput, handleCharacterStyleInput, handleCharacterMessageExamplesInput,
     handleOnboardingNext, handleOnboardingBack,
     handleCloudLogin, handleCloudDisconnect,
     loadUpdateStatus, handleChannelChange,

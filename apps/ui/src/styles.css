@@ -141,7 +141,7 @@
 .wallet-wrapper:hover::after { display: block; }
 .wallet-wrapper:hover .wallet-tooltip { display: block !important; }
 
-/* ── Button base classes (migrated from Lit shadow DOM) ────────────── */
+/* ── Button base classes ───────────────────────────────────────────── */
 
 .btn {
   display: inline-flex;

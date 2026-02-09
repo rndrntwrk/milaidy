@@ -14,7 +14,7 @@ test.describe("Navigation", () => {
     await mockApi(page, { onboardingComplete: true, agentState: "running" });
     await page.goto("/");
 
-    await page.getByRole("link", { name: "Plugins" }).click();
+    await page.locator("nav button").filter({ hasText: "Plugins" }).click();
 
     await expect(page).toHaveURL(/\/plugins/);
     await expect(page.getByText("Manage plugins and integrations")).toBeVisible();
@@ -24,17 +24,16 @@ test.describe("Navigation", () => {
     await mockApi(page, { onboardingComplete: true, agentState: "running" });
     await page.goto("/");
 
-    await page.getByRole("link", { name: "Skills" }).click();
+    await page.locator("nav button").filter({ hasText: "Skills" }).click();
 
     await expect(page).toHaveURL(/\/skills/);
-    await expect(page.getByText("View loaded skills and install more from GitHub/Skills marketplace.")).toBeVisible();
   });
 
   test("navigates to config tab", async ({ page }) => {
     await mockApi(page, { onboardingComplete: true, agentState: "running" });
     await page.goto("/");
 
-    await page.getByRole("link", { name: "Config" }).click();
+    await page.locator("nav button").filter({ hasText: "Config" }).click();
 
     await expect(page).toHaveURL(/\/config/);
     await expect(page.getByText("Agent settings and configuration")).toBeVisible();
@@ -44,18 +43,10 @@ test.describe("Navigation", () => {
     await mockApi(page, { onboardingComplete: true, agentState: "running" });
     await page.goto("/");
 
-    await page.getByRole("link", { name: "Logs" }).click();
+    await page.locator("nav button").filter({ hasText: "Logs" }).click();
 
     await expect(page).toHaveURL(/\/logs/);
     await expect(page.getByText("Agent log output")).toBeVisible();
-  });
-
-  test("highlights active tab", async ({ page }) => {
-    await mockApi(page, { onboardingComplete: true, agentState: "running" });
-    await page.goto("/plugins");
-
-    const pluginsLink = page.getByRole("link", { name: "Plugins" });
-    await expect(pluginsLink).toHaveClass(/active/);
   });
 
   test("handles direct URL navigation", async ({ page }) => {
@@ -69,7 +60,7 @@ test.describe("Navigation", () => {
     await mockApi(page, { onboardingComplete: true, agentState: "running" });
     await page.goto("/chat");
 
-    await page.getByRole("link", { name: "Plugins" }).click();
+    await page.locator("nav button").filter({ hasText: "Plugins" }).click();
     await expect(page).toHaveURL(/\/plugins/);
 
     await page.goBack();

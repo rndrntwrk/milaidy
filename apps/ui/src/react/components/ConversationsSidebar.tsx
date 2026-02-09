@@ -79,7 +79,7 @@ export function ConversationsSidebar() {
   };
 
   return (
-    <aside className="w-60 min-w-60 border-r border-border bg-bg flex flex-col overflow-y-auto text-[13px]">
+    <aside className="w-60 min-w-60 border-r border-border bg-bg flex flex-col overflow-y-auto text-[13px]" data-testid="conversations-sidebar">
       <div className="p-3 border-b border-border">
         <button
           className="w-full px-3 py-2 border border-border rounded-md bg-accent text-accent-fg text-[13px] font-medium cursor-pointer transition-opacity hover:opacity-90"
@@ -100,6 +100,8 @@ export function ConversationsSidebar() {
             return (
               <div
                 key={conv.id}
+                data-testid="conv-item"
+                data-active={isActive || undefined}
                 className={`flex items-center px-3 py-2 gap-2 cursor-pointer transition-colors border-l-[3px] ${
                   isActive ? "bg-bg-hover border-l-accent" : "border-l-transparent hover:bg-bg-hover"
                 } group`}
@@ -127,6 +129,7 @@ export function ConversationsSidebar() {
                       <div className="text-[11px] text-muted mt-0.5">{formatRelativeTime(conv.updatedAt)}</div>
                     </div>
                     <button
+                      data-testid="conv-delete"
                       className="opacity-0 group-hover:opacity-100 transition-opacity border-none bg-transparent text-muted hover:text-danger hover:bg-destructive-subtle cursor-pointer text-sm px-1 py-0.5 rounded flex-shrink-0"
                       onClick={(e) => {
                         e.stopPropagation();

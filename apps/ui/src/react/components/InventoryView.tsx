@@ -1,13 +1,12 @@
 /**
  * Inventory view — wallet balances and NFTs.
- * Mirrors the Lit version in app.ts 1:1.
  */
 
 import { useMemo, useState } from "react";
 import { useApp } from "../AppContext.js";
 import type { EvmChainBalance } from "../../ui/api-client.js";
 
-/* ── Chain icon helper (matches Lit chainIcon) ──────────────────────── */
+/* ── Chain icon helper ─────────────────────────────────────────────── */
 
 function chainIcon(chain: string): { code: string; cls: string } {
   const c = chain.toLowerCase();
@@ -20,7 +19,7 @@ function chainIcon(chain: string): { code: string; cls: string } {
   return { code: chain.charAt(0).toUpperCase(), cls: "bg-bg-muted" };
 }
 
-/* ── Balance formatter (matches Lit formatBalance) ───────────────────── */
+/* ── Balance formatter ────────────────────────────────────────────── */
 
 function formatBalance(balance: string): string {
   const num = Number.parseFloat(balance);
@@ -184,7 +183,7 @@ export function InventoryView() {
     return items;
   }, [walletNfts]);
 
-  // ── Save all API keys at once (matches Lit single-button behavior) ──
+  // ── Save all API keys at once ──────────────────────────────────────
 
   const handleSaveAllKeys = async () => {
     const config: Record<string, string> = {};
@@ -202,7 +201,7 @@ export function InventoryView() {
 
   return (
     <div>
-      {/* Top-level error (always shown, matches Lit) */}
+      {/* Top-level error (always shown) */}
       {walletError && (
         <div className="mt-3 px-3.5 py-2.5 border border-danger bg-[rgba(231,76,60,0.06)] text-xs text-danger">
           {walletError}
@@ -213,7 +212,7 @@ export function InventoryView() {
     </div>
   );
 
-  /* ── Setup view (matches Lit renderInventorySetup) ─────────────────── */
+  /* ── Setup view ──────────────────────────────────────────────────── */
 
   function renderSetup() {
     return (
@@ -363,7 +362,7 @@ export function InventoryView() {
         {/* Single save button */}
         <div className="mt-4">
           <button
-            className="px-6 py-2 border border-accent bg-accent text-accent-fg cursor-pointer text-sm hover:bg-accent-hover hover:border-accent-hover disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-6 py-2 border border-border bg-bg text-txt cursor-pointer font-mono hover:border-accent hover:text-accent disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={handleSaveAllKeys}
             disabled={walletApiKeySaving}
           >
@@ -374,7 +373,7 @@ export function InventoryView() {
     );
   }
 
-  /* ── Content view (matches Lit renderInventoryContent) ─────────────── */
+  /* ── Content view ────────────────────────────────────────────────── */
 
   function renderContent() {
     return (
@@ -451,7 +450,7 @@ export function InventoryView() {
     );
   }
 
-  /* ── Tokens table (matches Lit renderTokensView) ───────────────────── */
+  /* ── Tokens table ────────────────────────────────────────────────── */
 
   function renderTokensView() {
     if (walletLoading) {
@@ -567,7 +566,7 @@ export function InventoryView() {
           </table>
         </div>
 
-        {/* Per-chain errors (matches Lit) */}
+        {/* Per-chain errors */}
         {chainErrors.length > 0 && (
           <div className="mt-2 text-[11px] text-muted">
             {chainErrors.map((c: EvmChainBalance) => {
@@ -604,7 +603,7 @@ export function InventoryView() {
     );
   }
 
-  /* ── NFTs grid (matches Lit renderNftsView) ────────────────────────── */
+  /* ── NFTs grid ───────────────────────────────────────────────────── */
 
   function renderNftsView() {
     if (walletNftsLoading) {
