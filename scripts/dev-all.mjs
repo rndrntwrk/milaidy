@@ -28,10 +28,20 @@ const repoRoot = path.resolve(here, "..");
 // ---------------------------------------------------------------------------
 
 function which(cmd) {
-  const dirs = (process.env.PATH ?? "").split(path.delimiter).filter(Boolean);
+  const pathEnv = process.env.PATH ?? "";
+  if (!pathEnv) return null;
+
+  const dirs = pathEnv.split(path.delimiter).filter(Boolean);
+  const isWindows = process.platform === "win32";
+  const pathExts = isWindows
+    ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM").split(";").filter(Boolean)
+    : [""];
+
   for (const dir of dirs) {
-    const candidate = path.join(dir, cmd);
-    if (existsSync(candidate)) return candidate;
+    for (const ext of pathExts) {
+      const candidate = path.join(dir, cmd + ext);
+      if (existsSync(candidate)) return candidate;
+    }
   }
   return null;
 }
