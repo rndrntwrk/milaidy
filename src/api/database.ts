@@ -15,6 +15,7 @@
 
 import dns from "node:dns";
 import type http from "node:http";
+import net from "node:net";
 import { promisify } from "node:util";
 import { type AgentRuntime, logger } from "@elizaos/core";
 import { loadMilaidyConfig, saveMilaidyConfig } from "../config/config.js";
@@ -187,8 +188,31 @@ const PRIVATE_IP_PATTERNS: RegExp[] = [
   /^172\.(1[6-9]|2\d|3[01])\./, // RFC 1918 Class B
   /^192\.168\./, // RFC 1918 Class C
   /^::1$/, // IPv6 loopback
-  /^fc00:/i, // IPv6 ULA
+  /^f[cd][0-9a-f]{2}:/i, // IPv6 ULA (fc00::/7)
 ];
+
+function normalizeHostLike(value: string): string {
+  return value.trim().toLowerCase().replace(/^\[|\]$/g, "");
+}
+
+function decodeIpv6MappedHex(mapped: string): string | null {
+  const match = /^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(mapped);
+  if (!match) return null;
+  const hi = Number.parseInt(match[1], 16);
+  const lo = Number.parseInt(match[2], 16);
+  if (!Number.isFinite(hi) || !Number.isFinite(lo)) return null;
+  const octets = [hi >> 8, hi & 0xff, lo >> 8, lo & 0xff];
+  return octets.join(".");
+}
+
+function normalizeIpForPolicy(ip: string): string {
+  const base = normalizeHostLike(ip).split("%")[0];
+  if (!base.startsWith("::ffff:")) return base;
+
+  const mapped = base.slice("::ffff:".length);
+  if (net.isIP(mapped) === 4) return mapped;
+  return decodeIpv6MappedHex(mapped) ?? mapped;
+}
 
 /**
  * Returns true when the API server is bound to a loopback-only address.
@@ -211,12 +235,12 @@ function extractHost(creds: PostgresCredentials): string | null {
   if (creds.connectionString) {
     try {
       const url = new URL(creds.connectionString);
-      return url.hostname || null;
+      return url.hostname ? normalizeHostLike(url.hostname) : null;
     } catch {
       return null; // Unparseable — will be rejected
     }
   }
-  return creds.host ?? null;
+  return creds.host ? normalizeHostLike(creds.host) : null;
 }
 
 /**
@@ -224,8 +248,12 @@ function extractHost(creds: PostgresCredentials): string | null {
  * When the API is remotely reachable, private ranges are also blocked.
  */
 function isBlockedIp(ip: string): boolean {
-  if (ALWAYS_BLOCKED_IP_PATTERNS.some((p) => p.test(ip))) return true;
-  if (!isApiLoopbackOnly() && PRIVATE_IP_PATTERNS.some((p) => p.test(ip)))
+  const normalized = normalizeIpForPolicy(ip);
+  if (ALWAYS_BLOCKED_IP_PATTERNS.some((p) => p.test(normalized))) return true;
+  if (
+    !isApiLoopbackOnly() &&
+    PRIVATE_IP_PATTERNS.some((p) => p.test(normalized))
+  )
     return true;
   return false;
 }
@@ -261,9 +289,7 @@ async function validateDbHost(
         typeof entry === "string"
           ? entry
           : (entry as { address: string }).address;
-      // Strip IPv6-mapped IPv4 prefix (::ffff:169.254.x.y → 169.254.x.y)
-      const normalized = ip.replace(/^::ffff:/i, "");
-      if (isBlockedIp(normalized)) {
+      if (isBlockedIp(ip)) {
         return (
           `Connection to "${host}" is blocked: it resolves to ${ip} ` +
           `which is a link-local or metadata address.`

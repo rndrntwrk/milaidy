@@ -318,6 +318,44 @@ describe("Database API E2E (no runtime)", () => {
       expect(data.success).toBe(false);
       expect(data.serverVersion).toBeNull();
     });
+
+    it("blocks private IPv6 targets for remote API binds", async () => {
+      const previousBind = process.env.MILAIDY_API_BIND;
+      process.env.MILAIDY_API_BIND = "0.0.0.0";
+      try {
+        const blockedBodies: Array<Record<string, unknown>> = [
+          { host: "fc12::1", port: 5432, database: "postgres", user: "postgres" },
+          { host: "fd12::1", port: 5432, database: "postgres", user: "postgres" },
+          {
+            host: "::ffff:7f00:1",
+            port: 5432,
+            database: "postgres",
+            user: "postgres",
+          },
+          {
+            connectionString: "postgresql://postgres@[fc12::1]:5432/postgres",
+          },
+          {
+            connectionString:
+              "postgresql://postgres@[::ffff:7f00:1]:5432/postgres",
+          },
+        ];
+
+        for (const payload of blockedBodies) {
+          const { status, data } = await req(
+            port,
+            "POST",
+            "/api/database/test",
+            payload,
+          );
+          expect(status).toBe(400);
+          expect(String(data.error ?? "")).toContain("blocked");
+        }
+      } finally {
+        if (previousBind === undefined) delete process.env.MILAIDY_API_BIND;
+        else process.env.MILAIDY_API_BIND = previousBind;
+      }
+    });
   });
 
   // ── Group 4: Data endpoints — 503 without runtime ─────────────────────
