@@ -14,8 +14,7 @@ import type { Action, HandlerOptions } from "@elizaos/core";
 import { EMOTE_BY_ID } from "../emotes/catalog.js";
 
 /** API port for posting emote requests. */
-const API_PORT =
-  process.env.API_PORT || process.env.SERVER_PORT || "2138";
+const API_PORT = process.env.API_PORT || process.env.SERVER_PORT || "2138";
 
 export const emoteAction: Action = {
   name: "PLAY_EMOTE",
@@ -83,7 +82,7 @@ export const emoteAction: Action = {
         success: true,
         data: { emoteId: emote.id },
       };
-    } catch (err) {
+    } catch (_err) {
       return {
         text: "",
         success: false,

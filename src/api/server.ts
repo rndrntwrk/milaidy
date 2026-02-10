@@ -30,6 +30,7 @@ import {
 } from "../config/config.js";
 import { resolveStateDir } from "../config/paths.js";
 import { CharacterSchema } from "../config/zod-schema.js";
+import { EMOTE_BY_ID, EMOTE_CATALOG } from "../emotes/catalog.js";
 import { resolveDefaultAgentWorkspaceDir } from "../providers/workspace.js";
 import {
   AgentExportError,
@@ -69,7 +70,6 @@ import {
   type WalletConfigStatus,
   type WalletNftsResponse,
 } from "./wallet.js";
-import { EMOTE_BY_ID, EMOTE_CATALOG } from "../emotes/catalog.js";
 
 // ---------------------------------------------------------------------------
 // Types

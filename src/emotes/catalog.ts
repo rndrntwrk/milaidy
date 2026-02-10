@@ -303,7 +303,7 @@ export const EMOTE_CATALOG: EmoteDef[] = [
  * Map for O(1) emote lookup by ID
  */
 export const EMOTE_BY_ID = new Map<string, EmoteDef>(
-  EMOTE_CATALOG.map((emote) => [emote.id, emote])
+  EMOTE_CATALOG.map((emote) => [emote.id, emote]),
 );
 
 /**
