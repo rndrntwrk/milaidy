@@ -112,6 +112,12 @@ import {
   type WalletConfigStatus,
   type WalletNftsResponse,
 } from "./wallet.js";
+import {
+  createHealthChecks,
+  createHealthHandler,
+  type HealthCheck,
+} from "./health.js";
+import { initTelemetry } from "../telemetry/setup.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -4050,10 +4056,40 @@ function getRateLimiter(): RateLimitMiddleware {
   if (!_rateLimiter) {
     _rateLimiter = createRateLimitMiddleware({
       // Skip rate limiting for health checks
-      skipPaths: ["/api/health", "/api/status"],
+      skipPaths: ["/api/health", "/api/status", "/health", "/health/live", "/health/ready"],
     });
   }
   return _rateLimiter;
+}
+
+// Health check handler (created lazily per state)
+let _healthHandler: ReturnType<typeof createHealthHandler> | null = null;
+let _healthHandlerState: ServerState | null = null;
+
+function getHealthHandler(state: ServerState): ReturnType<typeof createHealthHandler> {
+  // Recreate if state changed (e.g., runtime updated)
+  if (!_healthHandler || _healthHandlerState !== state) {
+    const checks = createHealthChecks({
+      runtime: state.runtime
+        ? {
+            getLoadedPlugins: () =>
+              state.plugins
+                .filter((p) => p.enabled && p.isActive)
+                .map((p) => ({ name: p.name })),
+            getFailedPlugins: () =>
+              state.plugins
+                .filter((p) => p.enabled && !p.isActive && p.validationErrors.length > 0)
+                .map((p) => ({
+                  name: p.name,
+                  error: p.validationErrors.map((e) => e.message).join("; ") || "Failed to load",
+                })),
+          }
+        : undefined,
+    });
+    _healthHandler = createHealthHandler(checks);
+    _healthHandlerState = state;
+  }
+  return _healthHandler;
 }
 
 async function handleRequest(
@@ -4235,6 +4271,14 @@ async function handleRequest(
   if (!applyCors(req, res)) {
     json(res, { error: "Origin not allowed" }, 403);
     return;
+  }
+
+  // Health endpoints (before auth so Kubernetes probes work)
+  if (pathname.startsWith("/health")) {
+    const healthHandler = getHealthHandler(state);
+    if (await healthHandler(req, res)) {
+      return; // Health endpoint handled
+    }
   }
 
   // Apply rate limiting (before auth to prevent brute force)
@@ -12001,20 +12045,19 @@ export async function startApiServer(opts?: {
       startDeferredStartupWork();
       resolve({
         port: actualPort,
-        close: () =>
-          new Promise<void>((r) => {
-            clearInterval(statusInterval);
-            if (detachRuntimeStreams) {
-              detachRuntimeStreams();
-              detachRuntimeStreams = null;
-            }
-            if (detachTrainingStream) {
-              detachTrainingStream();
-              detachTrainingStream = null;
-            }
-            wss.close();
-            server.close(() => r());
-          }),
+        close: async () => {
+          clearInterval(statusInterval);
+          if (detachRuntimeStreams) {
+            detachRuntimeStreams();
+            detachRuntimeStreams = null;
+          }
+          if (detachTrainingStream) {
+            detachTrainingStream();
+            detachTrainingStream = null;
+          }
+          wss.close();
+          await new Promise<void>((r) => server.close(() => r()));
+        },
         updateRuntime,
       });
     });
