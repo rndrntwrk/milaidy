@@ -53,3 +53,11 @@ export {
   type WorkerMessage,
   type PluginWorkerStats,
 } from "./worker-pool.js";
+
+export {
+  // Container sandbox
+  ContainerSandbox,
+  isDockerAvailable,
+  type ContainerSandboxConfig,
+  type ContainerStatus,
+} from "./container-sandbox.js";

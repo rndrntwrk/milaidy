@@ -25,7 +25,7 @@ export default defineConfig({
       concurrent: false,
       shuffle: false,
     },
-    include: ["test/**/*.e2e.test.ts"],
+    include: ["test/**/*.e2e.test.ts", "test/e2e/**/*.test.ts", "src/**/*.e2e.test.ts"],
     setupFiles: ["test/setup.ts"],
     exclude: ["dist/**", "**/node_modules/**"],
   },
