@@ -6,69 +6,57 @@
  * Input row at bottom with mic + textarea + send button.
  */
 
-import { useRef, useEffect, useCallback, useState } from "react";
+import { useRef, useEffect, useCallback, useState, type ReactNode, type KeyboardEvent } from "react";
 import { useApp } from "../AppContext.js";
 import { ChatAvatar } from "./ChatAvatar.js";
 import { useVoiceChat } from "../hooks/useVoiceChat.js";
 import { client, type VoiceConfig } from "../api-client.js";
 
-// ── Typewriter streaming component ────────────────────────────────────
-// Reveals text progressively using direct DOM manipulation (no React
-// re-renders per frame).  Speed auto-scales so streaming never takes
-// longer than ~3 seconds regardless of text length.
+function renderInlineMarkdown(line: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const tokenRe = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
 
-interface StreamingTextProps {
-  text: string;
-  onComplete?: () => void;
-  /** Called every frame so the parent can auto-scroll. */
-  onProgress?: () => void;
+  while ((match = tokenRe.exec(line)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(line.slice(lastIndex, match.index));
+    }
+
+    const token = match[0];
+    const key = `${match.index}-${token}`;
+    if (token.startsWith("**") && token.endsWith("**")) {
+      nodes.push(<strong key={key}>{token.slice(2, -2)}</strong>);
+    } else if (token.startsWith("*") && token.endsWith("*")) {
+      nodes.push(<em key={key}>{token.slice(1, -1)}</em>);
+    } else if (token.startsWith("`") && token.endsWith("`")) {
+      nodes.push(
+        <code key={key} className="px-1 py-0.5 rounded bg-bg text-[0.95em] font-mono">
+          {token.slice(1, -1)}
+        </code>,
+      );
+    } else {
+      nodes.push(token);
+    }
+
+    lastIndex = tokenRe.lastIndex;
+  }
+
+  if (lastIndex < line.length) {
+    nodes.push(line.slice(lastIndex));
+  }
+
+  return nodes;
 }
 
-function StreamingText({ text, onComplete, onProgress }: StreamingTextProps) {
-  const spanRef = useRef<HTMLSpanElement>(null);
-  const onCompleteRef = useRef(onComplete);
-  const onProgressRef = useRef(onProgress);
-  onCompleteRef.current = onComplete;
-  onProgressRef.current = onProgress;
-
-  useEffect(() => {
-    const span = spanRef.current;
-    if (!span) return;
-
-    let current = 0;
-    let cancelled = false;
-
-    // Auto-scale: at least 4 chars/frame, but cap total duration at ~3 s
-    const MAX_DURATION_MS = 3000;
-    const framesAtMax = MAX_DURATION_MS / 16.67; // ~180 frames
-    const charsPerFrame = Math.max(4, Math.ceil(text.length / framesAtMax));
-
-    const frame = () => {
-      if (cancelled) return;
-      current = Math.min(current + charsPerFrame, text.length);
-      span.textContent = text.slice(0, current);
-      onProgressRef.current?.();
-      if (current < text.length) {
-        requestAnimationFrame(frame);
-      } else {
-        onCompleteRef.current?.();
-      }
-    };
-    requestAnimationFrame(frame);
-
-    return () => {
-      cancelled = true;
-      // On unmount / text change, show full text immediately
-      if (span) span.textContent = text;
-    };
-  }, [text]);
-
-  return (
-    <>
-      <span ref={spanRef} />
-      <span className="inline-block w-[2px] h-[1em] bg-current ml-[1px] align-text-bottom opacity-70 animate-pulse" />
-    </>
-  );
+function renderMessageText(text: string): ReactNode {
+  const lines = text.split(/\r?\n/);
+  return lines.map((line, i) => (
+    <span key={i}>
+      {renderInlineMarkdown(line)}
+      {i < lines.length - 1 ? <br /> : null}
+    </span>
+  ));
 }
 
 export function ChatView() {
@@ -76,8 +64,10 @@ export function ChatView() {
     agentStatus,
     chatInput,
     chatSending,
+    chatFirstTokenReceived,
     conversationMessages,
     handleChatSend,
+    handleChatStop,
     setState,
     droppedFiles,
     shareIngestNotice,
@@ -109,13 +99,6 @@ export function ChatView() {
     try { localStorage.setItem("milaidy:chat:voiceMuted", String(agentVoiceMuted)); } catch { /* ignore */ }
   }, [agentVoiceMuted]);
 
-  // ── Streaming text reveal ──────────────────────────────────────────
-  // Tracks the ID of the message currently being "streamed in" via
-  // typewriter.  Set during render (React bail-out) so the very first
-  // frame already renders StreamingText — no flash.
-  const [streamingMsgId, setStreamingMsgId] = useState<string | null>(null);
-  const lastStreamedIdRef = useRef<string | null>(null);
-
   // ── Voice config (ElevenLabs / browser TTS) ────────────────────────
   const [voiceConfig, setVoiceConfig] = useState<VoiceConfig | null>(null);
 
@@ -143,62 +126,25 @@ export function ChatView() {
 
   const voice = useVoiceChat({ onTranscript: handleVoiceTranscript, voiceConfig });
 
-  // ── Detect new assistant messages ────────────────────────────────
-  const lastMsg = conversationMessages.length > 0
-    ? conversationMessages[conversationMessages.length - 1]
-    : null;
-
-  // Initialise refs to the current last assistant message so we don't
-  // replay old history or re-stream on mount.
-  const lastSpokenIdRef = useRef<string | null>(
-    lastMsg?.role === "assistant" ? lastMsg.id : null,
-  );
-  if (lastStreamedIdRef.current === null && lastMsg?.role === "assistant") {
-    lastStreamedIdRef.current = lastMsg.id;
-  }
-
-  // When a new assistant message appears:
-  // 1. Start typewriter streaming (text appears progressively)
-  // 2. Start voice immediately in parallel (full text, non-blocking)
-  if (
-    lastMsg &&
-    lastMsg.role === "assistant" &&
-    lastMsg.id !== lastStreamedIdRef.current &&
-    !chatSending
-  ) {
-    lastStreamedIdRef.current = lastMsg.id;
-
-    // Start typewriter — React bails out of this render and immediately
-    // re-renders with the new streamingMsgId, so the first visible frame
-    // already shows StreamingText (no flash of full text).
-    if (streamingMsgId !== lastMsg.id) {
-      setStreamingMsgId(lastMsg.id);
-    }
-
-    // Start voice (independently of typewriter)
-    if (lastMsg.id !== lastSpokenIdRef.current && !agentVoiceMuted) {
-      lastSpokenIdRef.current = lastMsg.id;
-      voice.speak(lastMsg.text);
-    }
-  }
-
-  const handleStreamComplete = useCallback(() => {
-    setStreamingMsgId(null);
-  }, []);
-
-  const handleStreamProgress = useCallback(() => {
-    const el = messagesRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, []);
-
   const agentName = agentStatus?.agentName ?? "Agent";
   const agentState = agentStatus?.state ?? "not_started";
   const msgs = conversationMessages;
 
-  // Scroll to bottom when messages change
+  const lastSpokenIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const lastAssistant = [...msgs].reverse().find((m) => m.role === "assistant" && m.text.trim());
+    if (!lastAssistant || chatSending || agentVoiceMuted) return;
+    if (lastAssistant.id === lastSpokenIdRef.current) return;
+    lastSpokenIdRef.current = lastAssistant.id;
+    voice.speak(lastAssistant.text);
+  }, [msgs, chatSending, agentVoiceMuted, voice]);
+
+  // Smooth auto-scroll while streaming and on new messages.
   useEffect(() => {
     const el = messagesRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [conversationMessages, chatSending]);
 
   // Auto-resize textarea
@@ -212,7 +158,13 @@ export function ChatView() {
     ta.style.overflowY = ta.scrollHeight > 200 ? "auto" : "hidden";
   }, [chatInput]);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  // Keep input focused for fast multi-turn chat.
+  useEffect(() => {
+    if (chatSending) return;
+    textareaRef.current?.focus();
+  }, [chatSending]);
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void handleChatSend();
@@ -259,43 +211,59 @@ export function ChatView() {
             Send a message to start chatting.
           </div>
         ) : (
-          msgs.map((msg) => (
-            <div
-              key={msg.id}
-              className="mb-4 leading-relaxed max-w-[65%]"
-              data-testid="chat-message"
-              data-role={msg.role}
-            >
-              <div
-                className={`font-bold text-[13px] mb-0.5 ${
-                  msg.role === "user" ? "text-txt-strong" : "text-accent"
-                }`}
-              >
-                {msg.role === "user" ? "You" : agentName}
-              </div>
-              <div className="text-txt">
-                {msg.id === streamingMsgId ? (
-                  <StreamingText
-                    text={msg.text}
-                    onComplete={handleStreamComplete}
-                    onProgress={handleStreamProgress}
-                  />
-                ) : (
-                  msg.text
-                )}
-              </div>
-            </div>
-          ))
-        )}
+          <div className="mx-auto w-full max-w-[720px] px-1">
+            {msgs.map((msg, i) => {
+              const prev = i > 0 ? msgs[i - 1] : null;
+              const grouped = prev?.role === msg.role;
+              const isUser = msg.role === "user";
+              const hoverTs = new Date(msg.timestamp).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              });
 
-        {chatSending && (
-          <div className="mb-4 leading-relaxed">
-            <div className="font-bold text-[13px] mb-0.5 text-accent">{agentName}</div>
-            <div className="flex gap-1 py-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-muted-strong animate-[typing-bounce_1.2s_ease-in-out_infinite]" />
-              <span className="w-1.5 h-1.5 rounded-full bg-muted-strong animate-[typing-bounce_1.2s_ease-in-out_infinite_0.2s]" />
-              <span className="w-1.5 h-1.5 rounded-full bg-muted-strong animate-[typing-bounce_1.2s_ease-in-out_infinite_0.4s]" />
-            </div>
+              return (
+                <div
+                  key={msg.id}
+                  className={`group flex ${isUser ? "justify-end" : "justify-start"} ${grouped ? "mt-1" : "mt-3"}`}
+                  data-testid="chat-message"
+                  data-role={msg.role}
+                >
+                  <div
+                    title={new Date(msg.timestamp).toLocaleString()}
+                    className={`max-w-[85%] rounded-2xl px-3 py-2 border text-sm leading-relaxed whitespace-pre-wrap break-words ${
+                      isUser
+                        ? "bg-accent text-accent-fg border-accent"
+                        : "bg-card text-txt border-border"
+                    }`}
+                  >
+                    {!grouped && (
+                      <div
+                        className={`font-bold text-[12px] mb-1 ${isUser ? "text-accent-fg/80" : "text-accent"}`}
+                      >
+                        {isUser ? "You" : agentName}
+                      </div>
+                    )}
+                    <div>{renderMessageText(msg.text)}</div>
+                    <div className="mt-1 text-[10px] opacity-0 group-hover:opacity-70 transition-opacity">
+                      {hoverTs}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {chatSending && !chatFirstTokenReceived && (
+              <div className="mt-3 flex justify-start">
+                <div className="rounded-2xl px-3 py-2 border border-border bg-card">
+                  <div className="font-bold text-[12px] mb-1 text-accent">{agentName}</div>
+                  <div className="flex gap-1 py-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-muted-strong animate-[typing-bounce_1.2s_ease-in-out_infinite]" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-muted-strong animate-[typing-bounce_1.2s_ease-in-out_infinite_0.2s]" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-muted-strong animate-[typing-bounce_1.2s_ease-in-out_infinite_0.4s]" />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -411,14 +379,22 @@ export function ChatView() {
           />
         )}
 
-        {/* Send (or Stop if agent is speaking) */}
-        {voice.isSpeaking ? (
+        {/* Send / Stop */}
+        {chatSending ? (
+          <button
+            className="h-[38px] px-4 py-2 border border-danger bg-danger/10 text-danger text-sm cursor-pointer hover:bg-danger/20 self-end"
+            onClick={handleChatStop}
+            title="Stop generation"
+          >
+            Stop
+          </button>
+        ) : voice.isSpeaking ? (
           <button
             className="h-[38px] px-4 py-2 border border-danger bg-danger/10 text-danger text-sm cursor-pointer hover:bg-danger/20 self-end"
             onClick={voice.stopSpeaking}
             title="Stop speaking"
           >
-            Stop
+            Stop Voice
           </button>
         ) : (
           <button
@@ -426,7 +402,7 @@ export function ChatView() {
             onClick={handleChatSend}
             disabled={chatSending}
           >
-            {chatSending ? "..." : "Send"}
+            Send
           </button>
         )}
       </div>
