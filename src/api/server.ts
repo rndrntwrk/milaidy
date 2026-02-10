@@ -2324,6 +2324,17 @@ async function handleRequest(
       if (!config.agents.defaults) config.agents.defaults = {};
       (config.agents.defaults as Record<string, unknown>).subscriptionProvider =
         body.provider;
+
+      // Default model for OpenAI subscription → Codex 5.3
+      if (body.provider === "openai-subscription") {
+        const agentEntry = config.agents?.list?.[0] as
+          | Record<string, unknown>
+          | undefined;
+        if (agentEntry) {
+          agentEntry.model = "gpt-5.3-codex";
+        }
+      }
+
       logger.info(
         `[milaidy-api] Subscription provider selected: ${body.provider} — complete OAuth via /api/subscription/ endpoints`,
       );
