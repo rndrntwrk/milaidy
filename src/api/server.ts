@@ -977,6 +977,69 @@ function error(res: http.ServerResponse, message: string, status = 400): void {
   json(res, { error: message }, status);
 }
 
+interface ChatGenerationResult {
+  text: string;
+  agentName: string;
+}
+
+interface ChatGenerateOptions {
+  onChunk?: (chunk: string) => void;
+  isAborted?: () => boolean;
+}
+
+function initSse(res: http.ServerResponse): void {
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache, no-transform",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+}
+
+function writeSse(
+  res: http.ServerResponse,
+  payload: Record<string, unknown>,
+): void {
+  if (res.writableEnded || res.destroyed) return;
+  res.write(`data: ${JSON.stringify(payload)}\n\n`);
+}
+
+async function generateChatResponse(
+  runtime: AgentRuntime,
+  message: ReturnType<typeof createMessageMemory>,
+  agentName: string,
+  opts?: ChatGenerateOptions,
+): Promise<ChatGenerationResult> {
+  let responseText = "";
+
+  const result = await runtime.messageService?.handleMessage(
+    runtime,
+    message,
+    async (content: Content) => {
+      if (opts?.isAborted?.()) {
+        throw new Error("client_disconnected");
+      }
+
+      if (content?.text) {
+        responseText += content.text;
+        opts?.onChunk?.(content.text);
+      }
+      return [];
+    },
+  );
+
+  // Fallback: if callback wasn't used for text, stream + return the final text.
+  if (!responseText && result?.responseContent?.text) {
+    responseText = result.responseContent.text;
+    opts?.onChunk?.(result.responseContent.text);
+  }
+
+  return {
+    text: responseText || "(no response)",
+    agentName,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Config redaction
 // ---------------------------------------------------------------------------
@@ -4890,6 +4953,114 @@ async function handleRequest(
     return;
   }
 
+  // ── POST /api/conversations/:id/messages/stream ─────────────────────
+  if (
+    method === "POST" &&
+    /^\/api\/conversations\/[^/]+\/messages\/stream$/.test(pathname)
+  ) {
+    const convId = decodeURIComponent(pathname.split("/")[3]);
+    const conv = state.conversations.get(convId);
+    if (!conv) {
+      error(res, "Conversation not found", 404);
+      return;
+    }
+
+    const body = await readJsonBody<{ text?: string }>(req, res);
+    if (!body) return;
+    if (!body.text?.trim()) {
+      error(res, "text is required");
+      return;
+    }
+
+    // Cloud proxy path
+    const proxy = state.cloudManager?.getProxy();
+    if (proxy) {
+      initSse(res);
+      const prompt = body.text.trim();
+      let fullText = "";
+
+      try {
+        for await (const chunk of proxy.handleChatMessageStream(prompt)) {
+          fullText += chunk;
+          writeSse(res, { type: "token", text: chunk });
+        }
+
+        conv.updatedAt = new Date().toISOString();
+        writeSse(res, {
+          type: "done",
+          fullText,
+          agentName: proxy.agentName,
+        });
+      } catch (err) {
+        writeSse(res, {
+          type: "error",
+          message: err instanceof Error ? err.message : "generation failed",
+        });
+      } finally {
+        res.end();
+      }
+      return;
+    }
+
+    if (!state.runtime) {
+      error(res, "Agent is not running", 503);
+      return;
+    }
+
+    initSse(res);
+
+    let aborted = false;
+    req.on("close", () => {
+      aborted = true;
+    });
+
+    try {
+      const runtime = state.runtime;
+      const userId = await ensureChatUser();
+      await ensureConversationRoom(conv);
+
+      const message = createMessageMemory({
+        id: crypto.randomUUID() as UUID,
+        entityId: userId,
+        roomId: conv.roomId,
+        content: {
+          text: body.text.trim(),
+          source: "client_chat",
+          channelType: ChannelType.DM,
+        },
+      });
+
+      const result = await generateChatResponse(
+        runtime,
+        message,
+        state.agentName,
+        {
+          isAborted: () => aborted,
+          onChunk: (chunk) => {
+            writeSse(res, { type: "token", text: chunk });
+          },
+        },
+      );
+
+      if (!aborted) {
+        conv.updatedAt = new Date().toISOString();
+        writeSse(res, {
+          type: "done",
+          fullText: result.text,
+          agentName: result.agentName,
+        });
+      }
+    } catch (err) {
+      if (!aborted) {
+        const msg = err instanceof Error ? err.message : "generation failed";
+        writeSse(res, { type: "error", message: msg });
+      }
+    } finally {
+      res.end();
+    }
+    return;
+  }
+
   // ── POST /api/conversations/:id/messages ────────────────────────────
   if (
     method === "POST" &&
@@ -4937,29 +5108,16 @@ async function handleRequest(
         },
       });
 
-      let responseText = "";
-      const result = await runtime.messageService?.handleMessage(
+      const result = await generateChatResponse(
         runtime,
         message,
-        async (content: Content) => {
-          if (content?.text) {
-            responseText += content.text;
-          }
-          return [];
-        },
+        state.agentName,
       );
-
-      // Fallback: if the callback didn't capture text (e.g. "actions" mode
-      // where processActions drives the callback), pull it from the return
-      // value which always carries the primary responseContent.
-      if (!responseText && result?.responseContent?.text) {
-        responseText = result.responseContent.text;
-      }
 
       conv.updatedAt = new Date().toISOString();
       json(res, {
-        text: responseText || "(no response)",
-        agentName: state.agentName,
+        text: result.text,
+        agentName: result.agentName,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "generation failed";
@@ -5056,6 +5214,136 @@ async function handleRequest(
     const convId = decodeURIComponent(pathname.split("/")[3]);
     state.conversations.delete(convId);
     json(res, { ok: true });
+    return;
+  }
+
+  // ── POST /api/chat/stream ────────────────────────────────────────────
+  // SSE streaming endpoint for web chat.
+  if (method === "POST" && pathname === "/api/chat/stream") {
+    const body = await readJsonBody<{ text?: string }>(req, res);
+    if (!body) return;
+    if (!body.text?.trim()) {
+      error(res, "text is required");
+      return;
+    }
+
+    const prompt = body.text.trim();
+
+    // Cloud proxy path
+    const proxy = state.cloudManager?.getProxy();
+    if (proxy) {
+      initSse(res);
+      let fullText = "";
+      try {
+        for await (const chunk of proxy.handleChatMessageStream(prompt)) {
+          fullText += chunk;
+          writeSse(res, { type: "token", text: chunk });
+        }
+        writeSse(res, {
+          type: "done",
+          fullText,
+          agentName: proxy.agentName,
+        });
+      } catch (err) {
+        writeSse(res, {
+          type: "error",
+          message: err instanceof Error ? err.message : "generation failed",
+        });
+      } finally {
+        res.end();
+      }
+      return;
+    }
+
+    if (!state.runtime) {
+      error(res, "Agent is not running", 503);
+      return;
+    }
+
+    initSse(res);
+    let aborted = false;
+    req.on("close", () => {
+      aborted = true;
+    });
+
+    try {
+      const runtime = state.runtime;
+      const agentName = runtime.character.name ?? "Milaidy";
+
+      if (!state.chatUserId || !state.chatRoomId) {
+        state.chatUserId = crypto.randomUUID() as UUID;
+        state.chatRoomId = stringToUuid(`${agentName}-web-chat-room`);
+        const worldId = stringToUuid(`${agentName}-web-chat-world`);
+        const messageServerId = stringToUuid(`${agentName}-web-server`) as UUID;
+        await runtime.ensureConnection({
+          entityId: state.chatUserId,
+          roomId: state.chatRoomId,
+          worldId,
+          userName: "User",
+          source: "client_chat",
+          channelId: `${agentName}-web-chat`,
+          type: ChannelType.DM,
+          messageServerId,
+          metadata: { ownership: { ownerId: state.chatUserId } },
+        });
+
+        const world = await runtime.getWorld(worldId);
+        if (world) {
+          let needsUpdate = false;
+          if (!world.metadata) {
+            world.metadata = {};
+            needsUpdate = true;
+          }
+          if (
+            !world.metadata.ownership ||
+            typeof world.metadata.ownership !== "object" ||
+            (world.metadata.ownership as { ownerId: string }).ownerId !==
+              state.chatUserId
+          ) {
+            world.metadata.ownership = {
+              ownerId: state.chatUserId ?? "",
+            };
+            needsUpdate = true;
+          }
+          if (needsUpdate) {
+            await runtime.updateWorld(world);
+          }
+        }
+      }
+
+      const message = createMessageMemory({
+        id: crypto.randomUUID() as UUID,
+        entityId: state.chatUserId,
+        roomId: state.chatRoomId,
+        content: {
+          text: prompt,
+          source: "client_chat",
+          channelType: ChannelType.DM,
+        },
+      });
+
+      const result = await generateChatResponse(runtime, message, state.agentName, {
+        isAborted: () => aborted,
+        onChunk: (chunk) => {
+          writeSse(res, { type: "token", text: chunk });
+        },
+      });
+
+      if (!aborted) {
+        writeSse(res, {
+          type: "done",
+          fullText: result.text,
+          agentName: result.agentName,
+        });
+      }
+    } catch (err) {
+      if (!aborted) {
+        const msg = err instanceof Error ? err.message : "generation failed";
+        writeSse(res, { type: "error", message: msg });
+      }
+    } finally {
+      res.end();
+    }
     return;
   }
 
