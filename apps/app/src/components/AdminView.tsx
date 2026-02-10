@@ -22,9 +22,6 @@ export function AdminView() {
 
   return (
     <div>
-      <h2 className="text-lg font-bold">Admin</h2>
-      <p className="text-[13px] text-[var(--muted)] mb-4">Logs and database.</p>
-
       {/* Sub-tab bar */}
       <div className="flex gap-1 border-b border-[var(--border)] mb-5">
         {ADMIN_TABS.map((t) => (

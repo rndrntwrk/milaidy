@@ -608,8 +608,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [onboardingTheme, setOnboardingTheme] = useState<ThemeName>("milady");
   const [onboardingRunMode, setOnboardingRunMode] = useState<"local" | "cloud" | "">("");
   const [onboardingCloudProvider, setOnboardingCloudProvider] = useState("");
-  const [onboardingSmallModel, setOnboardingSmallModel] = useState("claude-haiku");
-  const [onboardingLargeModel, setOnboardingLargeModel] = useState("claude-sonnet-4-5");
+  const [onboardingSmallModel, setOnboardingSmallModel] = useState("openai/gpt-5-mini");
+  const [onboardingLargeModel, setOnboardingLargeModel] = useState("anthropic/claude-sonnet-4.5");
   const [onboardingProvider, setOnboardingProvider] = useState("");
   const [onboardingApiKey, setOnboardingApiKey] = useState("");
   const [onboardingOpenRouterModel, setOnboardingOpenRouterModel] = useState("anthropic/claude-sonnet-4");
@@ -1674,33 +1674,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const handleOnboardingFinish = useCallback(async () => {
     if (!onboardingOptions) return;
 
-    // Try to fetch archetype character data if an archetype was selected
-    let archetypeChar: any = null;
-    if (onboardingStyle === "__blended" && (window as any).__blendedCharacter) {
-      // Use blended character from multi-select blend
-      archetypeChar = (window as any).__blendedCharacter;
-      delete (window as any).__blendedCharacter;
-    } else if (onboardingStyle && onboardingStyle !== "custom") {
-      try {
-        const res = await fetch(`/api/archetypes/${onboardingStyle}`);
-        if (res.ok) {
-          const data = await res.json();
-          archetypeChar = data.character;
-        }
-      } catch { /* fall back to style presets */ }
-    }
+    // Find the selected style preset
+    const style = onboardingOptions.styles.find(
+      (s: StylePreset) => s.catchphrase === onboardingStyle,
+    );
 
-    // Fall back to legacy style presets if no archetype
-    const style = !archetypeChar
-      ? onboardingOptions.styles.find((s: StylePreset) => s.catchphrase === onboardingStyle)
-      : null;
-
-    const bio = archetypeChar?.bio ?? style?.bio ?? ["An autonomous AI agent."];
-    const systemPrompt = archetypeChar?.system
-      ? archetypeChar.system.replace(/\{\{name\}\}/g, onboardingName)
-      : style?.system
-        ? style.system.replace(/\{\{name\}\}/g, onboardingName)
-        : `You are ${onboardingName}, an autonomous AI agent powered by ElizaOS. ${onboardingOptions.sharedStyleRules}`;
+    const bio = style?.bio ?? ["An autonomous AI agent."];
+    const systemPrompt = style?.system
+      ? style.system.replace(/\{\{name\}\}/g, onboardingName)
+      : `You are ${onboardingName}, an autonomous AI agent powered by ElizaOS.`;
 
     const inventoryProviders: Array<{ chain: string; rpcProvider: string; rpcApiKey?: string }> = [];
     if (onboardingRunMode === "local") {
@@ -1718,10 +1700,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         runMode: (onboardingRunMode || "local") as "local" | "cloud",
         bio,
         systemPrompt,
-        style: archetypeChar?.style ?? style?.style,
-        adjectives: archetypeChar?.adjectives ?? style?.adjectives,
-        topics: archetypeChar?.topics ?? style?.topics,
-        messageExamples: archetypeChar?.messageExamples ?? style?.messageExamples,
+        style: style?.style,
+        adjectives: style?.adjectives,
+        topics: style?.topics,
+        postExamples: style?.postExamples,
+        messageExamples: style?.messageExamples,
         cloudProvider: onboardingRunMode === "cloud" ? onboardingCloudProvider : undefined,
         smallModel: onboardingRunMode === "cloud" ? onboardingSmallModel : undefined,
         largeModel: onboardingRunMode === "cloud" ? onboardingLargeModel : undefined,
@@ -2109,36 +2092,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         /* ignore */
       }
 
-      // Request agent greeting after status is loaded (so runtime is ready)
-      const doGreeting = async (convId: string) => {
-        // Wait briefly for the agent to be running before requesting greeting
-        let ready = false;
-        for (let i = 0; i < 10; i++) {
-          try {
-            const s = await client.getStatus();
-            if (s.state === "running") {
-              ready = true;
-              break;
-            }
-          } catch { /* keep trying */ }
-          await new Promise((r) => setTimeout(r, 1000));
-        }
-        if (ready) {
-          setChatSending(true);
-          try {
-            const data = await client.requestGreeting(convId);
-            if (data.text) {
-              setConversationMessages((prev: ConversationMessage[]) => [
-                ...prev,
-                { id: `greeting-${Date.now()}`, role: "assistant", text: data.text, timestamp: Date.now() },
-              ]);
-            }
-          } catch { /* ignore */ }
-          setChatSending(false);
-        }
-      };
+      // If the agent is already running and we have a conversation needing a
+      // greeting, fire it now. Otherwise the agent-state-transition effect
+      // below will trigger it once the agent starts.
       if (greetConvId) {
-        void doGreeting(greetConvId);
+        try {
+          const s = await client.getStatus();
+          if (s.state === "running") {
+            void fetchGreeting(greetConvId);
+          }
+          // If not running, the useEffect watching agentStatus will handle it
+        } catch { /* ignore */ }
       }
 
       void loadWorkbench();
@@ -2177,7 +2141,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (window.location.pathname !== canonicalPath) {
           window.history.replaceState(null, "", canonicalPath);
         }
-        if (urlTab === "plugins") void loadPlugins();
+        if (urlTab === "features" || urlTab === "connectors") void loadPlugins();
         if (urlTab === "skills") void loadSkills();
         if (urlTab === "character") void loadCharacter();
         if (urlTab === "config") {
@@ -2211,7 +2175,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Reload workbench when agent transitions to "running" (e.g. after restart)
+  // Reload workbench when agent transitions to "running" (e.g. after restart).
+  // Also send a greeting if the active conversation has no messages yet.
   useEffect(() => {
     const current = agentStatus?.state ?? null;
     const prev = prevAgentStateRef.current;
@@ -2219,8 +2184,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     if (current === "running" && prev !== null && prev !== "running") {
       void loadWorkbench();
+
+      // Agent just started — greet if conversation is empty
+      if (activeConversationId && conversationMessages.length === 0 && !chatSending) {
+        void fetchGreeting(activeConversationId);
+      }
     }
-  }, [agentStatus?.state, loadWorkbench]);
+  }, [agentStatus?.state, loadWorkbench, activeConversationId, conversationMessages.length, chatSending, fetchGreeting]);
 
   // ── Context value ──────────────────────────────────────────────────
 

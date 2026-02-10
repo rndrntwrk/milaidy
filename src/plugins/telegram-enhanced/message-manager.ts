@@ -1,16 +1,26 @@
 import { logger } from "@elizaos/core";
-import { Markup } from "telegraf";
 // @ts-expect-error - plugin package currently ships without type declarations
 import { MessageManager } from "@elizaos/plugin-telegram";
+import { Markup } from "telegraf";
 import { smartChunkTelegramText } from "./chunking.js";
 
 const TYPING_INTERVAL_MS = 4000;
 const RECEIPT_REACTIONS = ["👀", "⏳"] as const;
 
-function toTelegramButtons(buttons: any[] | undefined) {
+/** Minimal shape for a Telegram inline button. */
+interface TelegramButton {
+  text: string;
+  url: string;
+  kind?: string;
+}
+
+function toTelegramButtons(buttons: TelegramButton[] | undefined) {
   if (!Array.isArray(buttons)) return [];
 
-  const rows: any[] = [];
+  const rows: (
+    | ReturnType<typeof Markup.button.url>
+    | ReturnType<typeof Markup.button.login>
+  )[] = [];
   for (const button of buttons) {
     if (!button || !button.text || !button.url) continue;
 
@@ -25,8 +35,39 @@ function toTelegramButtons(buttons: any[] | undefined) {
   return rows;
 }
 
+/** Minimal Telegram context shape for message handling. */
+interface TelegramContext {
+  chat?: { id: number };
+  from?: Record<string, unknown>;
+  message?: { message_id?: number };
+  telegram: {
+    sendMessage: (
+      chatId: number,
+      text: string,
+      extra?: Record<string, unknown>,
+    ) => Promise<unknown>;
+    setMessageReaction?: (
+      chatId: number,
+      messageId: number,
+      reactions: Array<{ type: string; emoji: string }>,
+    ) => Promise<unknown>;
+    sendChatAction: (chatId: number, action: string) => Promise<unknown>;
+  };
+}
+
+/** Minimal content shape for message sending. */
+interface MessageContent {
+  text?: string;
+  attachments?: unknown[];
+  buttons?: TelegramButton[];
+}
+
 export class EnhancedTelegramMessageManager extends MessageManager {
-  async sendMessageInChunks(ctx: any, content: any, replyToMessageId?: number) {
+  async sendMessageInChunks(
+    ctx: TelegramContext,
+    content: MessageContent,
+    replyToMessageId?: number,
+  ) {
     if (content?.attachments?.length) {
       return super.sendMessageInChunks(ctx, content, replyToMessageId);
     }
@@ -37,7 +78,7 @@ export class EnhancedTelegramMessageManager extends MessageManager {
     }
 
     const telegramButtons = toTelegramButtons(content?.buttons);
-    const sentMessages: any[] = [];
+    const sentMessages: unknown[] = [];
 
     for (let i = 0; i < chunks.length; i += 1) {
       const chunk = chunks[i];
@@ -57,6 +98,7 @@ export class EnhancedTelegramMessageManager extends MessageManager {
     return sentMessages;
   }
 
+  // biome-ignore lint/suspicious/noExplicitAny: Telegram context type from untyped external library
   async handleMessage(ctx: any) {
     if (!ctx?.message || !ctx?.from || !ctx?.chat) {
       return;
@@ -67,7 +109,10 @@ export class EnhancedTelegramMessageManager extends MessageManager {
       RECEIPT_REACTIONS[Math.floor(Math.random() * RECEIPT_REACTIONS.length)];
 
     try {
-      if (ctx.message?.message_id && typeof ctx.telegram?.setMessageReaction === "function") {
+      if (
+        ctx.message?.message_id &&
+        typeof ctx.telegram?.setMessageReaction === "function"
+      ) {
         await ctx.telegram.setMessageReaction(chatId, ctx.message.message_id, [
           { type: "emoji", emoji: reactionEmoji },
         ]);

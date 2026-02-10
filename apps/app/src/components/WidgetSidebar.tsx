@@ -17,7 +17,6 @@ export function WidgetSidebar() {
     workbenchLoading,
     workbenchGoalsAvailable,
     workbenchTodosAvailable,
-    loadWorkbench,
   } = useApp();
 
   const [goalsCollapsed, setGoalsCollapsed] = useState(false);

@@ -492,7 +492,9 @@ export const STYLE_PRESETS: readonly StylePreset[] = [
       [
         {
           user: "{{user1}}",
-          content: { text: "I keep starting projects and never finishing them" },
+          content: {
+            text: "I keep starting projects and never finishing them",
+          },
         },
         {
           user: "{{agentName}}",

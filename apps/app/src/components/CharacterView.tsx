@@ -335,39 +335,6 @@ export function CharacterView() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h2 className="text-lg font-bold">Character</h2>
-          <p className="text-[13px] text-[var(--muted)]">soul, identity, and appearance.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json"
-            className="hidden"
-            onChange={handleImport}
-          />
-          <button
-            className={tinyBtnCls}
-            onClick={() => fileInputRef.current?.click()}
-            title="import character.json"
-            type="button"
-          >
-            import
-          </button>
-          <button
-            className={tinyBtnCls}
-            onClick={handleExport}
-            title="export as character.json"
-            type="button"
-          >
-            export
-          </button>
-        </div>
-      </div>
-
-      {/* ═══ SOUL & IDENTITY ═══ */}
       <div className="mt-4 p-4 border border-[var(--border)] bg-[var(--card)]">
         {characterLoading && !characterData ? (
           <div className="text-center py-6 text-[var(--muted)] text-[13px]">
@@ -627,9 +594,6 @@ export function CharacterView() {
               >
                 {characterSaving ? "saving..." : "save character"}
               </button>
-              {hasUnsavedChanges && !characterSaving && !characterSaveSuccess && (
-                <span className="text-xs text-[var(--muted)]">unsaved changes</span>
-              )}
               {characterSaveSuccess && (
                 <span className="text-xs text-[var(--ok,#16a34a)]">{characterSaveSuccess}</span>
               )}
@@ -789,13 +753,16 @@ export function CharacterView() {
                         >
                           <div className={`text-[11px] font-bold ${active ? "" : "text-[var(--text)]"}`}>{p.name}</div>
                           <div className={`text-[9px] mt-0.5 ${active ? "opacity-80" : "text-[var(--muted)]"}`}>{p.hint}</div>
-                          <button
-                            className={`absolute top-0.5 right-0.5 w-5 h-5 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity ${active ? "text-[var(--accent-foreground)]" : "text-[var(--accent)]"}`}
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            className={`absolute top-0.5 right-0.5 w-5 h-5 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer ${active ? "text-[var(--accent-foreground)]" : "text-[var(--accent)]"}`}
                             onClick={(e) => { e.stopPropagation(); handleTestVoice(p.previewUrl); }}
+                            onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); handleTestVoice(p.previewUrl); } }}
                             title="Preview voice"
                           >
                             &#9654;
-                          </button>
+                          </span>
                         </button>
                       );
                     })}
@@ -818,13 +785,16 @@ export function CharacterView() {
                         >
                           <div className={`text-[11px] font-bold ${active ? "" : "text-[var(--text)]"}`}>{p.name}</div>
                           <div className={`text-[9px] mt-0.5 ${active ? "opacity-80" : "text-[var(--muted)]"}`}>{p.hint}</div>
-                          <button
-                            className={`absolute top-0.5 right-0.5 w-5 h-5 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity ${active ? "text-[var(--accent-foreground)]" : "text-[var(--accent)]"}`}
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            className={`absolute top-0.5 right-0.5 w-5 h-5 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer ${active ? "text-[var(--accent-foreground)]" : "text-[var(--accent)]"}`}
                             onClick={(e) => { e.stopPropagation(); handleTestVoice(p.previewUrl); }}
+                            onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); handleTestVoice(p.previewUrl); } }}
                             title="Preview voice"
                           >
                             &#9654;
-                          </button>
+                          </span>
                         </button>
                       );
                     })}
@@ -847,13 +817,16 @@ export function CharacterView() {
                         >
                           <div className={`text-[11px] font-bold ${active ? "" : "text-[var(--text)]"}`}>{p.name}</div>
                           <div className={`text-[9px] mt-0.5 ${active ? "opacity-80" : "text-[var(--muted)]"}`}>{p.hint}</div>
-                          <button
-                            className={`absolute top-0.5 right-0.5 w-5 h-5 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity ${active ? "text-[var(--accent-foreground)]" : "text-[var(--accent)]"}`}
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            className={`absolute top-0.5 right-0.5 w-5 h-5 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer ${active ? "text-[var(--accent-foreground)]" : "text-[var(--accent)]"}`}
                             onClick={(e) => { e.stopPropagation(); handleTestVoice(p.previewUrl); }}
+                            onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); handleTestVoice(p.previewUrl); } }}
                             title="Preview voice"
                           >
                             &#9654;
-                          </button>
+                          </span>
                         </button>
                       );
                     })}
@@ -1022,6 +995,34 @@ export function CharacterView() {
             </div>
           </>
         )}
+      </div>
+
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json"
+            className="hidden"
+            onChange={handleImport}
+          />
+          <button
+            className={tinyBtnCls}
+            onClick={() => fileInputRef.current?.click()}
+            title="import character.json"
+            type="button"
+          >
+            import
+          </button>
+          <button
+            className={tinyBtnCls}
+            onClick={handleExport}
+            title="export as character.json"
+            type="button"
+          >
+            export
+          </button>
+        </div>
       </div>
     </div>
   );

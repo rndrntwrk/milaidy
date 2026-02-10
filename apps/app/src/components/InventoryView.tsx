@@ -2,7 +2,7 @@
  * Inventory view — wallet balances and NFTs.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useApp } from "../AppContext";
 import type { EvmChainBalance } from "../api-client";
 
@@ -63,17 +63,10 @@ export function InventoryView() {
     walletError,
     loadBalances,
     loadNfts,
-    handleWalletApiKeySave,
     cloudConnected,
     setTab,
     setState,
   } = useApp();
-
-  const [apiKeyInputs, setApiKeyInputs] = useState<Record<string, string>>({
-    alchemy: "",
-    helius: "",
-    birdeye: "",
-  });
 
   // ── Setup detection ──────────────────────────────────────────────────
   // If connected to Eliza Cloud, RPCs are managed — no local keys needed.
@@ -185,23 +178,6 @@ export function InventoryView() {
   }, [walletNfts]);
 
   // ── Save a single API key ──────────────────────────────────────────
-
-  const [savingKey, setSavingKey] = useState<string | null>(null);
-
-  const envMap: Record<string, string> = {
-    alchemy: "ALCHEMY_API_KEY",
-    helius: "HELIUS_API_KEY",
-    birdeye: "BIRDEYE_API_KEY",
-  };
-
-  const handleSaveKey = async (key: "alchemy" | "helius" | "birdeye") => {
-    const value = apiKeyInputs[key].trim();
-    if (!value) return;
-    setSavingKey(key);
-    await handleWalletApiKeySave({ [envMap[key]]: value });
-    setApiKeyInputs((prev) => ({ ...prev, [key]: "" }));
-    setSavingKey(null);
-  };
 
   // ════════════════════════════════════════════════════════════════════════
   // Render

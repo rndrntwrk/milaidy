@@ -691,9 +691,7 @@ export async function installMarketplaceSkill(
   let repository = input.repository?.trim()
     ? normalizeRepo(input.repository)
     : null;
-  let requestedPath = input.path?.trim()
-    ? sanitizeSkillPath(input.path)
-    : null;
+  let requestedPath = input.path?.trim() ? sanitizeSkillPath(input.path) : null;
   let gitRef = "main";
 
   if (input.githubUrl?.trim()) {

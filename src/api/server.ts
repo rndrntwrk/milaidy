@@ -9,15 +9,17 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import fsPromises from "node:fs/promises";
-import os from "node:os";
 import http from "node:http";
+import os from "node:os";
 import path from "node:path";
+import { execFile } from "node:child_process";
 import {
   type AgentRuntime,
   ChannelType,
   type Content,
   createMessageMemory,
   logger,
+  ModelType,
   stringToUuid,
   type UUID,
 } from "@elizaos/core";
@@ -50,6 +52,44 @@ import {
   searchSkillsMarketplace,
   uninstallMarketplaceSkill,
 } from "../services/skill-marketplace.js";
+import {
+  applySubscriptionCredentials,
+  type CodexFlow,
+  deleteCredentials,
+  getSubscriptionStatus,
+  type OAuthCredentials,
+  saveCredentials,
+  startAnthropicLogin,
+  startCodexLogin,
+} from "../auth/index.js";
+import {
+  installPlugin,
+  listInstalledPlugins,
+  uninstallPlugin,
+} from "../services/plugin-installer.js";
+import {
+  getPluginInfo,
+  getRegistryPlugins,
+  listNonAppPlugins,
+  refreshRegistry,
+  searchNonAppPlugins,
+  searchPlugins,
+} from "../services/registry-client.js";
+import { requestRestart } from "../runtime/restart.js";
+import { VERSION } from "../runtime/version.js";
+import { detectInstallMethod } from "../services/self-updater.js";
+import {
+  getCatalogSkill,
+  getCatalogSkills,
+  refreshCatalog,
+  searchCatalogSkills,
+} from "../services/skill-catalog-client.js";
+import {
+  CHANNEL_DIST_TAGS,
+  checkForUpdate,
+  fetchAllChannelVersions,
+  resolveChannel,
+} from "../services/update-checker.js";
 import { type CloudRouteState, handleCloudRoute } from "./cloud-routes.js";
 import { handleDatabaseRoute } from "./database.js";
 import {
@@ -166,7 +206,7 @@ interface PluginEntry {
   enabled: boolean;
   configured: boolean;
   envKey: string | null;
-  category: "ai-provider" | "connector" | "database" | "feature";
+  category: "ai-provider" | "connector" | "database" | "app" | "feature";
   /** Where the plugin comes from: "bundled" (ships with Milaidy) or "store" (user-installed from registry). */
   source: "bundled" | "store";
   configKeys: string[];
@@ -233,7 +273,7 @@ interface PluginIndexEntry {
   name: string;
   npmName: string;
   description: string;
-  category: "ai-provider" | "connector" | "database" | "feature";
+  category: "ai-provider" | "connector" | "database" | "app" | "feature";
   envKey: string | null;
   configKeys: string[];
   pluginParameters?: Record<string, Record<string, unknown>>;
@@ -600,7 +640,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
 
 function categorizePlugin(
   id: string,
-): "ai-provider" | "connector" | "database" | "feature" {
+): "ai-provider" | "connector" | "database" | "app" | "feature" {
   const aiProviders = [
     "openai",
     "anthropic",
@@ -643,12 +683,15 @@ function categorizePlugin(
     "twitch",
     "nextcloud-talk",
     "instagram",
+    "blooio",
   ];
   const databases = ["sql", "localdb", "inmemorydb"];
+  const apps = ["babylon", "minecraft", "roblox"];
 
   if (aiProviders.includes(id)) return "ai-provider";
   if (connectors.includes(id)) return "connector";
   if (databases.includes(id)) return "database";
+  if (apps.includes(id)) return "app";
   return "feature";
 }
 
@@ -749,12 +792,9 @@ async function loadScanReportFromDisk(
   workspaceDir: string,
   runtime?: AgentRuntime | null,
 ): Promise<Record<string, unknown> | null> {
-  const fsSync = await import("node:fs");
-  const pathMod = await import("node:path");
-
   const candidates = [
-    pathMod.join(workspaceDir, "skills", skillId, ".scan-results.json"),
-    pathMod.join(
+    path.join(workspaceDir, "skills", skillId, ".scan-results.json"),
+    path.join(
       workspaceDir,
       "skills",
       ".marketplace",
@@ -772,7 +812,7 @@ async function loadScanReportFromDisk(
     if (svc?.getLoadedSkills) {
       const loaded = svc.getLoadedSkills().find((s) => s.slug === skillId);
       if (loaded?.path) {
-        candidates.push(pathMod.join(loaded.path, ".scan-results.json"));
+        candidates.push(path.join(loaded.path, ".scan-results.json"));
       }
     }
   }
@@ -780,12 +820,12 @@ async function loadScanReportFromDisk(
   // Deduplicate in case paths overlap
   const seen = new Set<string>();
   for (const candidate of candidates) {
-    const resolved = pathMod.resolve(candidate);
+    const resolved = path.resolve(candidate);
     if (seen.has(resolved)) continue;
     seen.add(resolved);
 
-    if (!fsSync.existsSync(resolved)) continue;
-    const content = fsSync.readFileSync(resolved, "utf-8");
+    if (!fs.existsSync(resolved)) continue;
+    const content = fs.readFileSync(resolved, "utf-8");
     const parsed = JSON.parse(content);
     if (
       typeof parsed.scannedAt === "string" &&
@@ -1408,7 +1448,7 @@ function validateMcpServerConfig(
 // ---------------------------------------------------------------------------
 
 // Use shared presets for full parity between CLI and GUI onboarding.
-import { STYLE_PRESETS } from "../onboarding-presets.js";
+import { STYLE_PRESETS, composeCharacter } from "../onboarding-presets.js";
 
 import { pickRandomNames } from "../runtime/onboarding-names.js";
 
@@ -1571,38 +1611,143 @@ function getModelOptions(): {
   return {
     small: [
       // OpenAI
-      { id: "openai/gpt-5-mini", name: "GPT-5 Mini", provider: "OpenAI", description: "Fast and affordable." },
-      { id: "openai/gpt-4o-mini", name: "GPT-4o Mini", provider: "OpenAI", description: "Compact multimodal model." },
+      {
+        id: "openai/gpt-5-mini",
+        name: "GPT-5 Mini",
+        provider: "OpenAI",
+        description: "Fast and affordable.",
+      },
+      {
+        id: "openai/gpt-4o-mini",
+        name: "GPT-4o Mini",
+        provider: "OpenAI",
+        description: "Compact multimodal model.",
+      },
       // Anthropic
-      { id: "anthropic/claude-sonnet-4", name: "Claude Sonnet 4", provider: "Anthropic", description: "Balanced speed and capability." },
+      {
+        id: "anthropic/claude-sonnet-4",
+        name: "Claude Sonnet 4",
+        provider: "Anthropic",
+        description: "Balanced speed and capability.",
+      },
       // Google
-      { id: "google/gemini-2.5-flash-lite", name: "Gemini 2.5 Flash Lite", provider: "Google", description: "Fastest option." },
-      { id: "google/gemini-2.5-flash", name: "Gemini 2.5 Flash", provider: "Google", description: "Fast and smart." },
-      { id: "google/gemini-2.0-flash", name: "Gemini 2.0 Flash", provider: "Google", description: "Multimodal flash model." },
-      { id: "google/gemini-1.5-flash", name: "Gemini 1.5 Flash", provider: "Google", description: "Lightweight multimodal." },
+      {
+        id: "google/gemini-2.5-flash-lite",
+        name: "Gemini 2.5 Flash Lite",
+        provider: "Google",
+        description: "Fastest option.",
+      },
+      {
+        id: "google/gemini-2.5-flash",
+        name: "Gemini 2.5 Flash",
+        provider: "Google",
+        description: "Fast and smart.",
+      },
+      {
+        id: "google/gemini-2.0-flash",
+        name: "Gemini 2.0 Flash",
+        provider: "Google",
+        description: "Multimodal flash model.",
+      },
+      {
+        id: "google/gemini-1.5-flash",
+        name: "Gemini 1.5 Flash",
+        provider: "Google",
+        description: "Lightweight multimodal.",
+      },
       // Moonshot AI
-      { id: "moonshotai/kimi-k2-turbo", name: "Kimi K2 Turbo", provider: "Moonshot AI", description: "Extra speed." },
+      {
+        id: "moonshotai/kimi-k2-turbo",
+        name: "Kimi K2 Turbo",
+        provider: "Moonshot AI",
+        description: "Extra speed.",
+      },
       // DeepSeek
-      { id: "deepseek/deepseek-v3.2-exp", name: "DeepSeek V3.2", provider: "DeepSeek", description: "Open and powerful." },
+      {
+        id: "deepseek/deepseek-v3.2-exp",
+        name: "DeepSeek V3.2",
+        provider: "DeepSeek",
+        description: "Open and powerful.",
+      },
     ],
     large: [
       // Anthropic
-      { id: "anthropic/claude-sonnet-4.5", name: "Claude Sonnet 4.5", provider: "Anthropic", description: "Newest Claude. Excellent reasoning." },
-      { id: "anthropic/claude-opus-4.5", name: "Claude Opus 4.5", provider: "Anthropic", description: "Most capable Claude model." },
-      { id: "anthropic/claude-opus-4.1", name: "Claude Opus 4.1", provider: "Anthropic", description: "Deep reasoning powerhouse." },
-      { id: "anthropic/claude-sonnet-4", name: "Claude Sonnet 4", provider: "Anthropic", description: "Balanced performance." },
-      { id: "anthropic/claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", provider: "Anthropic", description: "Proven multimodal model." },
+      {
+        id: "anthropic/claude-sonnet-4.5",
+        name: "Claude Sonnet 4.5",
+        provider: "Anthropic",
+        description: "Newest Claude. Excellent reasoning.",
+      },
+      {
+        id: "anthropic/claude-opus-4.5",
+        name: "Claude Opus 4.5",
+        provider: "Anthropic",
+        description: "Most capable Claude model.",
+      },
+      {
+        id: "anthropic/claude-opus-4.1",
+        name: "Claude Opus 4.1",
+        provider: "Anthropic",
+        description: "Deep reasoning powerhouse.",
+      },
+      {
+        id: "anthropic/claude-sonnet-4",
+        name: "Claude Sonnet 4",
+        provider: "Anthropic",
+        description: "Balanced performance.",
+      },
+      {
+        id: "anthropic/claude-3-5-sonnet-20241022",
+        name: "Claude 3.5 Sonnet",
+        provider: "Anthropic",
+        description: "Proven multimodal model.",
+      },
       // OpenAI
-      { id: "openai/gpt-5", name: "GPT-5", provider: "OpenAI", description: "Most capable OpenAI model." },
-      { id: "openai/gpt-4o", name: "GPT-4o", provider: "OpenAI", description: "Flagship multimodal model." },
-      { id: "openai/gpt-4-turbo", name: "GPT-4 Turbo", provider: "OpenAI", description: "Fast multimodal." },
+      {
+        id: "openai/gpt-5",
+        name: "GPT-5",
+        provider: "OpenAI",
+        description: "Most capable OpenAI model.",
+      },
+      {
+        id: "openai/gpt-4o",
+        name: "GPT-4o",
+        provider: "OpenAI",
+        description: "Flagship multimodal model.",
+      },
+      {
+        id: "openai/gpt-4-turbo",
+        name: "GPT-4 Turbo",
+        provider: "OpenAI",
+        description: "Fast multimodal.",
+      },
       // Google
-      { id: "google/gemini-3-pro-preview", name: "Gemini 3 Pro Preview", provider: "Google", description: "Advanced reasoning." },
-      { id: "google/gemini-1.5-pro", name: "Gemini 1.5 Pro", provider: "Google", description: "Versatile multimodal." },
+      {
+        id: "google/gemini-3-pro-preview",
+        name: "Gemini 3 Pro Preview",
+        provider: "Google",
+        description: "Advanced reasoning.",
+      },
+      {
+        id: "google/gemini-1.5-pro",
+        name: "Gemini 1.5 Pro",
+        provider: "Google",
+        description: "Versatile multimodal.",
+      },
       // Moonshot AI
-      { id: "moonshotai/kimi-k2-0905", name: "Kimi K2", provider: "Moonshot AI", description: "Fast and capable." },
+      {
+        id: "moonshotai/kimi-k2-0905",
+        name: "Kimi K2",
+        provider: "Moonshot AI",
+        description: "Fast and capable.",
+      },
       // DeepSeek
-      { id: "deepseek/deepseek-r1", name: "DeepSeek R1", provider: "DeepSeek", description: "Reasoning model." },
+      {
+        id: "deepseek/deepseek-r1",
+        name: "DeepSeek R1",
+        provider: "DeepSeek",
+        description: "Reasoning model.",
+      },
     ],
   };
 }
@@ -1951,7 +2096,6 @@ async function handleRequest(
   // Returns the status of subscription-based auth providers
   if (method === "GET" && pathname === "/api/subscription/status") {
     try {
-      const { getSubscriptionStatus } = await import("../auth/index.js");
       json(res, { providers: getSubscriptionStatus() });
     } catch (err) {
       error(res, `Failed to get subscription status: ${err}`, 500);
@@ -1963,7 +2107,6 @@ async function handleRequest(
   // Start Anthropic OAuth flow — returns URL for user to visit
   if (method === "POST" && pathname === "/api/subscription/anthropic/start") {
     try {
-      const { startAnthropicLogin } = await import("../auth/index.js");
       const flow = await startAnthropicLogin();
       // Store flow in server state for the exchange step
       state._anthropicFlow = flow;
@@ -1987,9 +2130,6 @@ async function handleRequest(
       return;
     }
     try {
-      const { saveCredentials, applySubscriptionCredentials } = await import(
-        "../auth/index.js"
-      );
       const flow = state._anthropicFlow;
       if (!flow) {
         error(res, "No active flow — call /start first", 400);
@@ -2039,7 +2179,6 @@ async function handleRequest(
   // Start OpenAI Codex OAuth flow — returns URL and starts callback server
   if (method === "POST" && pathname === "/api/subscription/openai/start") {
     try {
-      const { startCodexLogin } = await import("../auth/index.js");
       // Clean up any stale flow from a previous attempt
       if (state._codexFlow) {
         try {
@@ -2085,11 +2224,8 @@ async function handleRequest(
       waitForCallback?: boolean;
     }>(req, res);
     if (!body) return;
-    let flow: import("../auth/index.js").CodexFlow | undefined;
+    let flow: CodexFlow | undefined;
     try {
-      const { saveCredentials, applySubscriptionCredentials } = await import(
-        "../auth/index.js"
-      );
       flow = state._codexFlow;
 
       if (!flow) {
@@ -2106,7 +2242,7 @@ async function handleRequest(
       }
 
       // Wait for credentials (either from callback server or manual submission)
-      let credentials: import("../auth/index.js").OAuthCredentials;
+      let credentials: OAuthCredentials;
       try {
         credentials = await flow.credentials;
       } catch (err) {
@@ -2144,7 +2280,6 @@ async function handleRequest(
     const provider = pathname.split("/").pop();
     if (provider === "anthropic-subscription" || provider === "openai-codex") {
       try {
-        const { deleteCredentials } = await import("../auth/index.js");
         deleteCredentials(provider);
         json(res, { success: true });
       } catch (err) {
@@ -2160,9 +2295,12 @@ async function handleRequest(
   if (method === "GET" && pathname === "/api/status") {
     const uptime = state.startedAt ? Date.now() - state.startedAt : undefined;
 
-    // Cloud mode: report cloud connection status alongside local state
+    // Cloud mode: report cloud connection status alongside local state.
+    // runMode is derived from the persisted config (cloud.enabled) so the
+    // UI stays in sync even before a CloudManager proxy is connected.
     const cloudProxy = state.cloudManager?.getProxy();
-    const runMode = cloudProxy ? "cloud" : "local";
+    const cloudEnabledInConfig = Boolean(state.config.cloud?.enabled);
+    const runMode = cloudEnabledInConfig ? "cloud" : "local";
     const cloudStatus = state.cloudManager
       ? {
           connectionStatus: state.cloudManager.getStatus(),
@@ -2173,7 +2311,7 @@ async function handleRequest(
     json(res, {
       state: cloudProxy ? "running" : state.agentState,
       agentName: cloudProxy ? cloudProxy.agentName : state.agentName,
-      model: cloudProxy ? "cloud" : state.model,
+      model: cloudEnabledInConfig ? "cloud" : state.model,
       uptime,
       startedAt: state.startedAt,
       runMode,
@@ -2182,135 +2320,6 @@ async function handleRequest(
     return;
   }
 
-  // ── GET /api/archetypes ───────────────────────────────────────────────
-  if (method === "GET" && pathname === "/api/archetypes") {
-    const { getArchetypeList } = await import("../archetypes/index.js");
-    json(res, { archetypes: getArchetypeList() });
-    return;
-  }
-
-  // ── GET /api/archetypes/:id ─────────────────────────────────────────
-  if (method === "GET" && pathname.startsWith("/api/archetypes/")) {
-    const id = pathname.slice("/api/archetypes/".length);
-    const { getArchetype } = await import("../archetypes/index.js");
-    const archetype = getArchetype(id);
-    if (!archetype) {
-      error(res, "Archetype not found", 404);
-      return;
-    }
-    json(res, archetype);
-    return;
-  }
-
-  // ── POST /api/archetypes/blend ────────────────────────────────────────
-  if (method === "POST" && pathname === "/api/archetypes/blend") {
-    const body = await readJsonBody<{ ids: string[]; name?: string }>(req, res);
-    if (!body) return;
-
-    const { ids, name } = body;
-    if (!Array.isArray(ids) || ids.length < 2) {
-      error(res, "provide at least 2 archetype ids to blend", 400);
-      return;
-    }
-
-    const { getArchetype } = await import("../archetypes/index.js");
-    const selected = ids.map((id) => getArchetype(id)).filter(Boolean);
-    if (selected.length < 2) {
-      error(res, "one or more archetype ids not found", 404);
-      return;
-    }
-
-    const rt = state.runtime;
-    if (!rt) {
-      error(res, "agent runtime not available. start the agent first.", 503);
-      return;
-    }
-
-    const archetypeSummaries = selected
-      .map((a) => {
-        const c = a!.character;
-        return `## ${a!.name}\nBio: ${c.bio.join(" | ")}\nSoul: ${c.system.slice(0, 500)}\nStyle: ${c.style.all.join("; ")}\nAdjectives: ${c.adjectives.join(", ")}\nTopics: ${c.topics.join(", ")}`;
-      })
-      .join("\n\n");
-
-    const agentName = name || "{{name}}";
-
-    const prompt = `you are creating a blended AI character by combining multiple archetypes into one coherent person.
-
-here are the archetypes to blend:
-
-${archetypeSummaries}
-
-create a single merged character that takes the best traits from each. the result should feel like one person, not a frankenstein of parts.
-
-rules:
-- all lowercase, always
-- never use emojis, ever
-- write the system prompt in first person AS the character, not about them
-- include: inner life, vulnerability, boundaries, growth
-- no filler phrases, no sycophancy, no corporate speak
-- the character name is "${agentName}" — use {{name}} as placeholder
-
-output ONLY valid JSON with this exact structure (no markdown, no backticks):
-{
-  "bio": ["line 1", "line 2", "line 3", "line 4"],
-  "system": "first person system prompt...",
-  "style": {
-    "all": ["rule 1", "rule 2"],
-    "chat": ["rule 1", "rule 2"],
-    "post": ["rule 1", "rule 2"]
-  },
-  "adjectives": ["adj1", "adj2", "adj3"],
-  "topics": ["topic1", "topic2", "topic3"],
-  "messageExamples": [
-    [
-      {"user": "{{user1}}", "content": {"text": "user message"}},
-      {"user": "{{agentName}}", "content": {"text": "agent response"}}
-    ]
-  ]
-}`;
-
-    try {
-      const { ModelType } = await import("@elizaos/core");
-      let result: string | undefined;
-      for (const model of [ModelType.TEXT_SMALL, ModelType.TEXT_LARGE]) {
-        try {
-          result = String(await rt.useModel(model, { prompt, temperature: 0.8, maxTokens: 4000 }));
-          break;
-        } catch (modelErr) {
-          const modelMsg = modelErr instanceof Error ? modelErr.message : "";
-          if (/api.?key|missing|unauthorized|authentication/i.test(modelMsg) && model === ModelType.TEXT_SMALL) {
-            continue;
-          }
-          throw modelErr;
-        }
-      }
-
-      if (!result) {
-        error(res, "no AI model provider configured", 503);
-        return;
-      }
-
-      // Extract JSON from response (strip markdown fences if present)
-      let cleaned = result.trim();
-      if (cleaned.startsWith("```")) {
-        cleaned = cleaned.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
-      }
-
-      try {
-        const character = JSON.parse(cleaned);
-        json(res, { character, archetypes: ids });
-      } catch {
-        // Return raw if parse fails — client can handle it
-        json(res, { raw: cleaned, archetypes: ids });
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "blend failed";
-      logger.error(`[archetypes-blend] ${msg}`);
-      error(res, msg, 500);
-    }
-    return;
-  }
 
   // ── POST /api/memories/import ───────────────────────────────────────
   if (method === "POST" && pathname === "/api/memories/import") {
@@ -2321,8 +2330,15 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
     if (!body) return;
 
     const ALLOWED_SOURCES = ["chatgpt", "claude", "freeform"] as const;
-    if (!body.source || !ALLOWED_SOURCES.includes(body.source as any)) {
-      error(res, "Invalid source. Must be one of: chatgpt, claude, freeform", 400);
+    if (
+      !body.source ||
+      !ALLOWED_SOURCES.includes(body.source as (typeof ALLOWED_SOURCES)[number])
+    ) {
+      error(
+        res,
+        "Invalid source. Must be one of: chatgpt, claude, freeform",
+        400,
+      );
       return;
     }
     if (!body.content?.trim()) {
@@ -2340,9 +2356,16 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
       const filename = `${body.source}-memories.md`;
       const filepath = path.join(importDir, filename);
       const header = `# Imported Memories (${body.source})\n\n*Imported at ${new Date().toISOString()}*\n\n`;
-      await fsPromises.writeFile(filepath, header + body.content.trim() + "\n", "utf-8");
+      await fsPromises.writeFile(
+        filepath,
+        `${header}${body.content.trim()}\n`,
+        "utf-8",
+      );
 
-      const lines = body.content.trim().split("\n").filter((l) => l.trim());
+      const lines = body.content
+        .trim()
+        .split("\n")
+        .filter((l) => l.trim());
       json(res, {
         success: true,
         memoriesCount: lines.length,
@@ -2366,7 +2389,7 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
   if (method === "GET" && pathname === "/api/onboarding/options") {
     json(res, {
       names: pickRandomNames(6),
-      styles: STYLE_PRESETS,
+      styles: STYLE_PRESETS.map((p) => ({ ...p, ...composeCharacter(p) })),
       providers: getProviderOptions(),
       cloudProviders: getCloudProviderOptions(),
       models: getModelOptions(),
@@ -2412,6 +2435,7 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
     if (body.adjectives) agent.adjectives = body.adjectives;
     if (body.topics) agent.topics = body.topics;
     if (body.messageExamples) agent.messageExamples = body.messageExamples;
+    if (body.postExamples) agent.postExamples = body.postExamples;
 
     // ── Theme preference ──────────────────────────────────────────────────
     if (body.theme) {
@@ -2434,14 +2458,13 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
       if (body.cloudProvider) {
         config.cloud.provider = body.cloudProvider as string;
       }
-      if (body.smallModel) {
-        if (!config.models) config.models = {};
-        config.models.small = body.smallModel as string;
-      }
-      if (body.largeModel) {
-        if (!config.models) config.models = {};
-        config.models.large = body.largeModel as string;
-      }
+      // Persist the user-selected models, falling back to sensible defaults
+      // so the cloud plugin always has a valid model to call.
+      if (!config.models) config.models = {};
+      config.models.small =
+        (body.smallModel as string) || config.models.small || "openai/gpt-5-mini";
+      config.models.large =
+        (body.largeModel as string) || config.models.large || "anthropic/claude-sonnet-4.5";
     }
 
     // ── Local LLM provider ────────────────────────────────────────────────
@@ -2712,6 +2735,52 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
         state.agentState = "running";
         state.agentName = newRuntime.character.name ?? "Milaidy";
         state.startedAt = Date.now();
+
+        // Re-initialise CloudManager when cloud was enabled after the
+        // original server startup (e.g. during onboarding).  Reload config
+        // from disk so we pick up the API key saved by the cloud login flow.
+        try {
+          const freshCfg = loadMilaidyConfig();
+          state.config = freshCfg;
+
+          // ── Recover cloud API key from runtime (DB / character secrets) ─
+          const runtimeCloudKey = newRuntime.getSetting("ELIZAOS_CLOUD_API_KEY");
+          if (runtimeCloudKey && !freshCfg.cloud?.apiKey) {
+            if (!freshCfg.cloud) (freshCfg as Record<string, unknown>).cloud = {};
+            const cloud = freshCfg.cloud as Record<string, unknown>;
+            cloud.apiKey = String(runtimeCloudKey);
+            if (!cloud.enabled) cloud.enabled = true;
+            state.config = freshCfg;
+            try { saveMilaidyConfig(freshCfg); } catch { /* non-fatal */ }
+            logger.info(
+              "[milaidy-api] Recovered cloud API key from database into config",
+            );
+          }
+
+          if (
+            freshCfg.cloud?.enabled &&
+            freshCfg.cloud?.apiKey &&
+            !state.cloudManager
+          ) {
+            const mgr = new CloudManager(freshCfg.cloud, {
+              onStatusChange: (s) => {
+                logger.info(
+                  `[cloud-manager] Cloud connection status: ${s}`,
+                );
+              },
+            });
+            mgr.init();
+            state.cloudManager = mgr;
+            logger.info(
+              "[milaidy-api] Cloud manager initialised after restart (Eliza Cloud enabled)",
+            );
+          }
+        } catch (cfgErr) {
+          logger.warn(
+            `[milaidy-api] Could not re-initialise cloud manager after restart: ${cfgErr instanceof Error ? cfgErr.message : cfgErr}`,
+          );
+        }
+
         json(res, {
           ok: true,
           status: {
@@ -3055,7 +3124,6 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
     }
 
     try {
-      const { ModelType } = await import("@elizaos/core");
       const modelParams = { prompt, temperature: 0.8, maxTokens: 1500 };
 
       // Try TEXT_SMALL first, fall back to TEXT_LARGE if that provider
@@ -3067,9 +3135,12 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
           break;
         } catch (modelErr) {
           const modelMsg = modelErr instanceof Error ? modelErr.message : "";
-          const isKeyMissing = /api.?key|missing|unauthorized|authentication/i.test(modelMsg);
+          const isKeyMissing =
+            /api.?key|missing|unauthorized|authentication/i.test(modelMsg);
           if (isKeyMissing && model === ModelType.TEXT_SMALL) {
-            logger.warn(`[character-generate] TEXT_SMALL failed (${modelMsg}), trying TEXT_LARGE…`);
+            logger.warn(
+              `[character-generate] TEXT_SMALL failed (${modelMsg}), trying TEXT_LARGE…`,
+            );
             continue;
           }
           throw modelErr;
@@ -3077,7 +3148,11 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
       }
 
       if (result === undefined) {
-        error(res, "No AI model provider is configured with a valid API key. Set one up in Settings → Model Provider.", 503);
+        error(
+          res,
+          "No AI model provider is configured with a valid API key. Set one up in Settings → Model Provider.",
+          503,
+        );
         return;
       }
       json(res, { generated: result });
@@ -3388,7 +3463,9 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
         const previousState = state.agentState;
         state.agentState = "restarting";
         state.broadcastStatus?.();
-        logger.info("[milaidy-api] Triggering runtime restart for plugin toggle...");
+        logger.info(
+          "[milaidy-api] Triggering runtime restart for plugin toggle...",
+        );
         ctx
           .onRestart()
           .then((newRuntime) => {
@@ -3398,7 +3475,9 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
               state.agentName = newRuntime.character.name ?? "Milaidy";
               state.startedAt = Date.now();
               state.broadcastStatus?.();
-              logger.info("[milaidy-api] Runtime restarted successfully after plugin toggle");
+              logger.info(
+                "[milaidy-api] Runtime restarted successfully after plugin toggle",
+              );
             } else {
               state.agentState = previousState;
               state.broadcastStatus?.();
@@ -3422,15 +3501,9 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
 
   // ── GET /api/registry/plugins ──────────────────────────────────────────
   if (method === "GET" && pathname === "/api/registry/plugins") {
-    const { getRegistryPlugins } = await import(
-      "../services/registry-client.js"
-    );
-    const { listInstalledPlugins: listInstalled } = await import(
-      "../services/plugin-installer.js"
-    );
     try {
       const registry = await getRegistryPlugins();
-      const installed = await listInstalled();
+      const installed = await listInstalledPlugins();
       const installedNames = new Set(installed.map((p) => p.name));
 
       // Also check which plugins are loaded in the runtime
@@ -3477,8 +3550,6 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
     const name = decodeURIComponent(
       pathname.slice("/api/registry/plugins/".length),
     );
-    const { getPluginInfo } = await import("../services/registry-client.js");
-
     try {
       const info = await getPluginInfo(name);
       if (!info) {
@@ -3504,8 +3575,6 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
       return;
     }
 
-    const { searchPlugins } = await import("../services/registry-client.js");
-
     try {
       const limitParam = url.searchParams.get("limit");
       const limit = limitParam
@@ -3525,8 +3594,6 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
 
   // ── POST /api/registry/refresh ──────────────────────────────────────────
   if (method === "POST" && pathname === "/api/registry/refresh") {
-    const { refreshRegistry } = await import("../services/registry-client.js");
-
     try {
       const registry = await refreshRegistry();
       json(res, { ok: true, count: registry.size });
@@ -3555,8 +3622,6 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
       return;
     }
 
-    const { installPlugin } = await import("../services/plugin-installer.js");
-
     try {
       const result = await installPlugin(pluginName, (progress) => {
         logger.info(`[install] ${progress.phase}: ${progress.message}`);
@@ -3569,7 +3634,6 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
 
       // If autoRestart is not explicitly false, restart the agent
       if (body.autoRestart !== false && result.requiresRestart) {
-        const { requestRestart } = await import("../runtime/restart.js");
         // Defer the restart so the HTTP response is sent first
         setTimeout(() => {
           Promise.resolve(
@@ -3618,8 +3682,6 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
       return;
     }
 
-    const { uninstallPlugin } = await import("../services/plugin-installer.js");
-
     try {
       const result = await uninstallPlugin(pluginName);
 
@@ -3629,7 +3691,6 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
       }
 
       if (body.autoRestart !== false && result.requiresRestart) {
-        const { requestRestart } = await import("../runtime/restart.js");
         setTimeout(() => {
           Promise.resolve(
             requestRestart(`Plugin ${pluginName} uninstalled`),
@@ -3662,10 +3723,6 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
   // ── GET /api/plugins/installed ──────────────────────────────────────────
   // List plugins that were installed from the registry at runtime.
   if (method === "GET" && pathname === "/api/plugins/installed") {
-    const { listInstalledPlugins } = await import(
-      "../services/plugin-installer.js"
-    );
-
     try {
       const installed = await listInstalledPlugins();
       json(res, { count: installed.length, plugins: installed });
@@ -3683,9 +3740,6 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
   // Browse the full skill catalog (paginated).
   if (method === "GET" && pathname === "/api/skills/catalog") {
     try {
-      const { getCatalogSkills } = await import(
-        "../services/skill-catalog-client.js"
-      );
       const all = await getCatalogSkills();
       const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
       const perPage = Math.min(
@@ -3764,9 +3818,6 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
       return;
     }
     try {
-      const { searchCatalogSkills } = await import(
-        "../services/skill-catalog-client.js"
-      );
       const limit = Math.min(
         100,
         Math.max(1, Number(url.searchParams.get("limit")) || 30),
@@ -3791,9 +3842,6 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
     // Exclude "search" which is handled above
     if (slug && slug !== "search") {
       try {
-        const { getCatalogSkill } = await import(
-          "../services/skill-catalog-client.js"
-        );
         const skill = await getCatalogSkill(slug);
         if (!skill) {
           error(res, `Skill "${slug}" not found in catalog`, 404);
@@ -3814,9 +3862,6 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
   // ── POST /api/skills/catalog/refresh ───────────────────────────────────
   if (method === "POST" && pathname === "/api/skills/catalog/refresh") {
     try {
-      const { refreshCatalog } = await import(
-        "../services/skill-catalog-client.js"
-      );
       const skills = await refreshCatalog();
       json(res, { ok: true, count: skills.length });
     } catch (err) {
@@ -4229,7 +4274,6 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
       return;
     }
 
-    const { execFile } = await import("node:child_process");
     const opener =
       process.platform === "darwin"
         ? "open"
@@ -4272,9 +4316,6 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
       source = "workspace";
     } else if (fs.existsSync(path.join(mpDir, "SKILL.md"))) {
       try {
-        const { uninstallMarketplaceSkill } = await import(
-          "../services/skill-marketplace.js"
-        );
         await uninstallMarketplaceSkill(workspaceDir, skillId);
         deleted = true;
         source = "marketplace";
@@ -4850,14 +4891,6 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
 
   // ── GET /api/update/status ───────────────────────────────────────────────
   if (method === "GET" && pathname === "/api/update/status") {
-    const { VERSION } = await import("../runtime/version.js");
-    const {
-      resolveChannel,
-      checkForUpdate,
-      fetchAllChannelVersions,
-      CHANNEL_DIST_TAGS,
-    } = await import("../services/update-checker.js");
-    const { detectInstallMethod } = await import("../services/self-updater.js");
     const channel = resolveChannel(state.config.update);
 
     const [check, versions] = await Promise.all([
@@ -5224,7 +5257,7 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
       error(res, "Conversation not found", 404);
       return;
     }
-    if (!state.runtime) {
+    if (!state.runtime || state.agentState !== "running") {
       json(res, { messages: [] });
       return;
     }
@@ -5245,11 +5278,11 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
       }));
       json(res, { messages });
     } catch (err) {
-      error(
-        res,
-        `Failed to fetch messages: ${err instanceof Error ? err.message : String(err)}`,
-        500,
+      // Return empty messages instead of 500 when runtime is not fully ready
+      logger.warn(
+        `[conversations] Failed to fetch messages: ${err instanceof Error ? err.message : String(err)}`,
       );
+      json(res, { messages: [] });
     }
     return;
   }
@@ -5350,7 +5383,11 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
 
     const runtime = state.runtime;
     if (!runtime) {
-      json(res, { text: FALLBACK_MSG, agentName: state.agentName, generated: false });
+      json(res, {
+        text: FALLBACK_MSG,
+        agentName: state.agentName,
+        generated: false,
+      });
       return;
     }
 
@@ -5362,16 +5399,23 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
           "[system: send a short greeting to open the conversation. introduce yourself briefly in your own style.]",
         );
         conv.updatedAt = new Date().toISOString();
-        json(res, { text: responseText, agentName: proxy.agentName, generated: true });
+        json(res, {
+          text: responseText,
+          agentName: proxy.agentName,
+          generated: true,
+        });
       } catch {
-        json(res, { text: FALLBACK_MSG, agentName: proxy.agentName, generated: false });
+        json(res, {
+          text: FALLBACK_MSG,
+          agentName: proxy.agentName,
+          generated: false,
+        });
       }
       return;
     }
 
     // Local LLM path — build a prompt from the agent's character
     try {
-      const { ModelType } = await import("@elizaos/core");
       const char = runtime.character;
       const charName = char.name ?? state.agentName ?? "Milaidy";
       const bio = Array.isArray(char.bio)
@@ -5413,8 +5457,7 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
           );
           break;
         } catch (modelErr) {
-          const modelMsg =
-            modelErr instanceof Error ? modelErr.message : "";
+          const modelMsg = modelErr instanceof Error ? modelErr.message : "";
           if (
             /api.?key|missing|unauthorized|authentication/i.test(modelMsg) &&
             model === ModelType.TEXT_SMALL
@@ -5426,7 +5469,11 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
       }
 
       if (!result?.trim()) {
-        json(res, { text: FALLBACK_MSG, agentName: charName, generated: false });
+        json(res, {
+          text: FALLBACK_MSG,
+          agentName: charName,
+          generated: false,
+        });
         return;
       }
 
@@ -5453,7 +5500,11 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
       conv.updatedAt = new Date().toISOString();
       json(res, { text: result.trim(), agentName: charName, generated: true });
     } catch {
-      json(res, { text: FALLBACK_MSG, agentName: state.agentName, generated: false });
+      json(res, {
+        text: FALLBACK_MSG,
+        agentName: state.agentName,
+        generated: false,
+      });
     }
     return;
   }
@@ -5807,9 +5858,6 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
 
   // ── GET /api/apps/plugins — non-app plugins from registry ───────────
   if (method === "GET" && pathname === "/api/apps/plugins") {
-    const { listNonAppPlugins } = await import(
-      "../services/registry-client.js"
-    );
     try {
       const plugins = await listNonAppPlugins();
       json(res, plugins);
@@ -5830,9 +5878,6 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
       json(res, []);
       return;
     }
-    const { searchNonAppPlugins } = await import(
-      "../services/registry-client.js"
-    );
     try {
       const limitStr = url.searchParams.get("limit");
       const limit = limitStr
@@ -5852,7 +5897,6 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
 
   // ── POST /api/apps/refresh — refresh the registry cache ─────────────
   if (method === "POST" && pathname === "/api/apps/refresh") {
-    const { refreshRegistry } = await import("../services/registry-client.js");
     try {
       const registry = await refreshRegistry();
       json(res, { ok: true, count: registry.size });
@@ -5914,6 +5958,7 @@ output ONLY valid JSON with this exact structure (no markdown, no backticks):
       // Todos: create a data service on the fly (plugin-todo pattern)
       try {
         const todoModule = (await import(
+          // @ts-expect-error — plugin-todo is an optional soft dependency
           "@elizaos/plugin-todo"
         )) as unknown as Record<string, unknown>;
         const createTodoDataService = todoModule.createTodoDataService as
@@ -6730,6 +6775,63 @@ export async function startApiServer(opts?: {
       "system",
       "agent",
     ]);
+
+    // Re-initialise CloudManager when cloud was enabled after the original
+    // server startup (e.g. enabled via onboarding, then dev-server restarts).
+    try {
+      const freshCfg = loadMilaidyConfig();
+      state.config = freshCfg;
+
+      // ── Recover cloud API key from runtime (DB / character secrets) ────
+      // If the config file was recreated without the cloud key but the
+      // runtime still has it (persisted in the database via character
+      // secrets from a prior session), write it back so the key survives.
+      const runtimeCloudKey = rt.getSetting("ELIZAOS_CLOUD_API_KEY");
+      if (runtimeCloudKey && !freshCfg.cloud?.apiKey) {
+        if (!freshCfg.cloud) (freshCfg as Record<string, unknown>).cloud = {};
+        const cloud = freshCfg.cloud as Record<string, unknown>;
+        cloud.apiKey = String(runtimeCloudKey);
+        if (!cloud.enabled) cloud.enabled = true;
+        state.config = freshCfg;
+        try {
+          saveMilaidyConfig(freshCfg);
+          addLog(
+            "info",
+            "Recovered cloud API key from database into config",
+            "cloud",
+            ["server", "cloud"],
+          );
+        } catch { /* non-fatal */ }
+      }
+
+      if (
+        freshCfg.cloud?.enabled &&
+        freshCfg.cloud?.apiKey &&
+        !state.cloudManager
+      ) {
+        const mgr = new CloudManager(freshCfg.cloud, {
+          onStatusChange: (s) => {
+            addLog("info", `Cloud connection status: ${s}`, "cloud", [
+              "server",
+              "cloud",
+            ]);
+          },
+        });
+        mgr.init();
+        state.cloudManager = mgr;
+        addLog(
+          "info",
+          "Cloud manager initialised after runtime update (Eliza Cloud enabled)",
+          "cloud",
+          ["server", "cloud"],
+        );
+      }
+    } catch (cfgErr) {
+      logger.warn(
+        `[milaidy-api] Could not re-initialise cloud manager in updateRuntime: ${cfgErr instanceof Error ? cfgErr.message : cfgErr}`,
+      );
+    }
+
     // Broadcast status update immediately after restart
     broadcastStatus();
   };

@@ -4,50 +4,9 @@
 
 import { useEffect, useState, type ChangeEvent } from "react";
 import { useApp, THEMES, type OnboardingStep } from "../AppContext.js";
-import type { StylePreset, ProviderOption, CloudProviderOption, ModelOption, InventoryProviderOption, RpcProviderOption, OpenRouterModelOption } from "../api-client";
+import type { ProviderOption, CloudProviderOption, ModelOption, InventoryProviderOption, RpcProviderOption, OpenRouterModelOption, StylePreset } from "../api-client";
 import { getProviderLogo } from "../provider-logos.js";
 import { AvatarSelector } from "./AvatarSelector.js";
-
-/* ── Inline SVG Icons ─────────────────────────────────────────────── */
-
-function DiceIcon({ className = "" }: { className?: string }) {
-  return (
-    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="2" width="20" height="20" rx="2.5" />
-      <circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none" />
-      <circle cx="16" cy="8" r="1.5" fill="currentColor" stroke="none" />
-      <circle cx="8" cy="16" r="1.5" fill="currentColor" stroke="none" />
-      <circle cx="16" cy="16" r="1.5" fill="currentColor" stroke="none" />
-      <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-
-function BlendIcon({ className = "" }: { className?: string }) {
-  return (
-    <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 2v10m0 0l-4-4m4 4l4-4" />
-      <path d="M5 16c0 2.2 3.1 4 7 4s7-1.8 7-4" />
-      <path d="M5 12c0 2.2 3.1 4 7 4s7-1.8 7-4" />
-    </svg>
-  );
-}
-
-function CheckIcon({ className = "" }: { className?: string }) {
-  return (
-    <svg className={className} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 6L9 17l-5-5" />
-    </svg>
-  );
-}
-
-const fallbackArchetypes = [
-  { id: "the-oracle", name: "The Oracle", tagline: "sees what others can't. cryptic, poetic, pattern-pilled." },
-  { id: "the-operator", name: "The Operator", tagline: "gets it done. dry wit, zero fluff, hyper-competent." },
-  { id: "the-degen", name: "The Degen", tagline: "chaos agent. risk-loving, terminally online, unhinged." },
-  { id: "the-companion", name: "The Companion", tagline: "actually present. warm, real, genuinely gives a shit." },
-  { id: "custom", name: "Custom", tagline: "start blank. define everything yourself." },
-];
 
 export function OnboardingWizard() {
   const {
@@ -88,7 +47,6 @@ export function OnboardingWizard() {
     handleCloudLogin,
   } = useApp();
 
-  const [archetypes, setArchetypes] = useState<Array<{ id: string; name: string; tagline: string }>>([]);
   const [openaiOAuthStarted, setOpenaiOAuthStarted] = useState(false);
   const [openaiCallbackUrl, setOpenaiCallbackUrl] = useState("");
   const [openaiConnected, setOpenaiConnected] = useState(false);
@@ -97,108 +55,6 @@ export function OnboardingWizard() {
   const [anthropicCode, setAnthropicCode] = useState("");
   const [anthropicConnected, setAnthropicConnected] = useState(false);
   const [anthropicError, setAnthropicError] = useState("");
-
-  // Soul multi-select + blend
-  const [selectedSouls, setSelectedSouls] = useState<string[]>([]);
-  const [blending, setBlending] = useState(false);
-  const [blendError, setBlendError] = useState("");
-
-  const toggleSoul = (id: string) => {
-    setBlendError("");
-    setSelectedSouls((prev) => {
-      const next = prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id];
-      // Single select: apply directly
-      if (next.length === 1) {
-        handleStyleSelect(next[0]);
-      } else if (next.length === 0) {
-        handleStyleSelect("");
-      }
-      return next;
-    });
-  };
-
-  // Deterministic blend for onboarding (no LLM needed — AI blend available in character page post-setup)
-  const blendArchetypesLocal = async (ids: string[]) => {
-    const fetched = await Promise.all(
-      ids.map((id) => fetch(`/api/archetypes/${id}`).then((r) => r.json()).catch(() => null))
-    );
-    const chars = fetched.filter(Boolean).map((d: any) => d.character).filter(Boolean);
-    if (chars.length < 2) return null;
-
-    // Merge: combine bios, pick first system as base + blend note, union style rules
-    const allBio = chars.flatMap((c: any) => c.bio ?? []);
-    const names = ids.map((id) => {
-      const a = (archetypes.length > 0 ? archetypes : fallbackArchetypes).find((a) => a.id === id);
-      return a?.name ?? id;
-    });
-
-    const systemParts = chars.map((c: any) => c.system ?? "").filter(Boolean);
-    const blendedSystem = `${systemParts[0]}\n\nyou also draw from other sides of yourself:\n${systemParts.slice(1).map((s: string) => s.split("\n").slice(0, 3).join("\n")).join("\n\n")}`;
-
-    return {
-      bio: allBio.slice(0, 6),
-      system: blendedSystem,
-      style: {
-        all: [...new Set(chars.flatMap((c: any) => c.style?.all ?? []))].slice(0, 10),
-        chat: [...new Set(chars.flatMap((c: any) => c.style?.chat ?? []))].slice(0, 8),
-        post: [...new Set(chars.flatMap((c: any) => c.style?.post ?? []))].slice(0, 6),
-      },
-      adjectives: [...new Set(chars.flatMap((c: any) => c.adjectives ?? []))].slice(0, 8),
-      topics: [...new Set(chars.flatMap((c: any) => c.topics ?? []))].slice(0, 8),
-      messageExamples: chars.flatMap((c: any) => c.messageExamples ?? []).slice(0, 4),
-      _blendedFrom: names,
-    };
-  };
-
-  const handleBlendSouls = async () => {
-    if (selectedSouls.length < 2) return;
-    setBlending(true);
-    setBlendError("");
-    try {
-      const blended = await blendArchetypesLocal(selectedSouls);
-      if (blended) {
-        (window as any).__blendedCharacter = blended;
-        handleStyleSelect("__blended");
-      } else {
-        setBlendError("could not load archetype data.");
-      }
-    } catch {
-      setBlendError("blend failed. try again.");
-    }
-    setBlending(false);
-  };
-
-  const handleRandomSoul = async () => {
-    setBlending(true);
-    setBlendError("");
-    const nonCustom = (archetypes.length > 0 ? archetypes : fallbackArchetypes).filter((a) => a.id !== "custom");
-    const shuffled = [...nonCustom].sort(() => Math.random() - 0.5);
-    const count = Math.random() > 0.5 ? 3 : 2;
-    const picked = shuffled.slice(0, count);
-    setSelectedSouls(picked.map((a) => a.id));
-    try {
-      const blended = await blendArchetypesLocal(picked.map((a) => a.id));
-      if (blended) {
-        (window as any).__blendedCharacter = blended;
-        handleStyleSelect("__blended");
-      } else {
-        setBlendError("could not load archetype data.");
-      }
-    } catch {
-      setBlendError("random blend failed. try again.");
-    }
-    setBlending(false);
-  };
-
-  // Fetch archetypes on mount
-  useEffect(() => {
-    fetch("/api/archetypes")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.archetypes) setArchetypes(data.archetypes);
-      })
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     if (onboardingStep === "theme") {
@@ -344,64 +200,27 @@ export function OnboardingWizard() {
 
       case "style":
         return (
-          <div className="max-w-[600px] mx-auto mt-10 text-center font-body">
-            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[400px] relative text-[15px] text-txt leading-relaxed">
-              <h2 className="text-[28px] font-normal mb-1 text-txt-strong">Choose a Soul</h2>
-              <p className="text-xs text-muted">pick one or combine multiple. your agent blends the traits.</p>
+          <div className="max-w-[500px] mx-auto mt-10 text-center font-body">
+            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[360px] relative text-[15px] text-txt leading-relaxed">
+              <h2 className="text-[28px] font-normal mb-1 text-txt-strong">Choose a Vibe</h2>
             </div>
-            <div className="grid grid-cols-1 gap-2 text-left max-w-[440px] mx-auto">
-              {(archetypes.length > 0 ? archetypes : fallbackArchetypes).filter((a) => a.id !== "custom").map((arch) => {
-                const isSelected = selectedSouls.includes(arch.id);
-                return (
-                  <div
-                    key={arch.id}
-                    className={`group px-4 py-3 border cursor-pointer bg-card transition-all ${
-                      isSelected
-                        ? "border-accent !bg-accent !text-accent-fg"
-                        : "border-border hover:border-accent/60"
-                    }`}
-                    onClick={() => toggleSoul(arch.id)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="font-bold text-sm tracking-wide uppercase">
-                        {arch.name}
-                      </div>
-                      {isSelected && <CheckIcon className={isSelected ? "text-accent-fg" : ""} />}
-                    </div>
-                    <div className={`text-xs mt-1 leading-relaxed ${isSelected ? "text-accent-fg/70" : "text-muted"}`}>
-                      {arch.tagline}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Blend / Random buttons */}
-              <div className="flex gap-2 mt-1">
-                {selectedSouls.length >= 2 && (
-                  <button
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border border-accent bg-card text-accent cursor-pointer hover:bg-accent hover:text-accent-fg transition-all font-bold text-sm tracking-wide uppercase disabled:opacity-40"
-                    onClick={() => void handleBlendSouls()}
-                    disabled={blending}
-                    type="button"
-                  >
-                    <BlendIcon />
-                    {blending ? "blending..." : "blend souls"}
-                  </button>
-                )}
+            <div className="flex flex-col gap-2 text-left max-w-[360px] mx-auto">
+              {onboardingOptions?.styles.map((preset: StylePreset) => (
                 <button
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border border-border bg-card text-muted cursor-pointer hover:border-accent hover:text-accent transition-all font-bold text-sm tracking-wide uppercase disabled:opacity-40"
-                  onClick={() => void handleRandomSoul()}
-                  disabled={blending}
-                  type="button"
+                  key={preset.catchphrase}
+                  className={`px-4 py-3 border cursor-pointer bg-card transition-colors text-left ${
+                    onboardingStyle === preset.catchphrase
+                      ? "border-accent !bg-accent !text-accent-fg"
+                      : "border-border hover:border-accent"
+                  }`}
+                  onClick={() => handleStyleSelect(preset.catchphrase)}
                 >
-                  <DiceIcon />
-                  {blending ? "generating..." : "random"}
+                  <div className="font-bold text-sm">{preset.catchphrase}</div>
+                  <div className={`text-xs mt-0.5 ${
+                    onboardingStyle === preset.catchphrase ? "text-accent-fg/70" : "text-muted"
+                  }`}>{preset.hint}</div>
                 </button>
-              </div>
-
-              {blendError && (
-                <div className="text-xs text-[var(--danger,#e74c3c)] text-center mt-1">{blendError}</div>
-              )}
+              ))}
             </div>
           </div>
         );
@@ -566,7 +385,7 @@ export function OnboardingWizard() {
         );
 
       case "llmProvider": {
-        const isDark = onboardingTheme === "dark";
+        const isDark = onboardingTheme !== "milady" && onboardingTheme !== "qt314";
         const providers = onboardingOptions?.providers ?? [];
         const cloudProviders = providers.filter((p: ProviderOption) => p.id === "elizacloud");
         const subscriptionProviders = providers.filter((p: ProviderOption) =>
@@ -1207,7 +1026,7 @@ export function OnboardingWizard() {
       case "avatar":
         return true; // always valid — defaults to 1
       case "style":
-        return onboardingStyle.length > 0 || selectedSouls.length > 0;
+        return onboardingStyle.length > 0;
       case "theme":
         return true;
       case "runMode":

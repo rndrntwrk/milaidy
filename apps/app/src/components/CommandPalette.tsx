@@ -68,7 +68,8 @@ export function CommandPalette() {
     // Navigation commands
     commands.push(
       { id: "nav-chat", label: "Open Chat", action: () => setTab("chat") },
-      { id: "nav-plugins", label: "Open Plugins", action: () => setTab("plugins") },
+      { id: "nav-features", label: "Open Features", action: () => setTab("features") },
+      { id: "nav-connectors", label: "Open Connectors", action: () => setTab("connectors") },
       { id: "nav-skills", label: "Open Skills", action: () => setTab("skills") },
       { id: "nav-character", label: "Open Character", action: () => setTab("character") },
       { id: "nav-config", label: "Open Config", action: () => setTab("config") },
@@ -79,7 +80,7 @@ export function CommandPalette() {
 
     // Refresh commands
     commands.push(
-      { id: "refresh-plugins", label: "Refresh Plugins", action: loadPlugins },
+      { id: "refresh-plugins", label: "Refresh Features", action: loadPlugins },
       { id: "refresh-skills", label: "Refresh Skills", action: loadSkills },
       { id: "refresh-logs", label: "Refresh Logs", action: loadLogs },
       { id: "refresh-workbench", label: "Refresh Workbench", action: loadWorkbench }

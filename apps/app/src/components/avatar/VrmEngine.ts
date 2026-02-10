@@ -318,10 +318,7 @@ export class VrmEngine {
     const fitDistance = (upperBodyHeight * 0.5) / Math.tan(fovRad * 0.5);
     const distance = fitDistance * 1.0;
 
-    // Compute visible width at the model plane, shift to push model right
-    const visibleH = 2 * distance * Math.tan(fovRad * 0.5);
-    const visibleW = visibleH * (camera.aspect || 1);
-    const rightShift = visibleW * 0.10;
+    const rightShift = 0;
 
     this.lookAtTarget.set(-rightShift, shoulderHeight, 0);
 
@@ -336,7 +333,7 @@ export class VrmEngine {
   private async loadAndPlayIdle(vrm: VRM): Promise<void> {
     if (this.loadingAborted) return;
 
-    const { retargetMixamoGltfToVrm } = await import("./retargetMixamoGltfToVrm");
+    const { retargetMixamoGltfToVrm } = await import("./retargetMixamoGltfToVrm.ts");
 
     if (this.loadingAborted || this.vrm !== vrm) return;
 

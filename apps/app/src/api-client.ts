@@ -104,6 +104,7 @@ export interface StylePreset {
   };
   adjectives: string[];
   topics: string[];
+  postExamples: string[];
   messageExamples: MessageExample[][];
 }
 
@@ -186,6 +187,7 @@ export interface OnboardingData {
   };
   adjectives?: string[];
   topics?: string[];
+  postExamples?: string[];
   messageExamples?: MessageExample[][];
   // Cloud-specific
   cloudProvider?: string;
@@ -228,7 +230,7 @@ export interface PluginInfo {
   enabled: boolean;
   configured: boolean;
   envKey: string | null;
-  category: "ai-provider" | "connector" | "database" | "feature";
+  category: "ai-provider" | "connector" | "database" | "app" | "feature";
   source: "bundled" | "store";
   parameters: PluginParamDef[];
   validationErrors: Array<{ field: string; message: string }>;

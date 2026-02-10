@@ -30,8 +30,8 @@ const MODEL_REMAP = {
   "gpt-4-turbo": DEFAULT_CODEX_MODEL,
   "gpt-3.5-turbo": DEFAULT_CODEX_MODEL,
   "o3-mini": DEFAULT_CODEX_MODEL,
-  "o3": DEFAULT_CODEX_MODEL,
-  "o1": DEFAULT_CODEX_MODEL,
+  o3: DEFAULT_CODEX_MODEL,
+  o1: DEFAULT_CODEX_MODEL,
   "o1-mini": DEFAULT_CODEX_MODEL,
   "o1-preview": DEFAULT_CODEX_MODEL,
   // ElizaOS defaults (plugin-openai alpha.3)
@@ -97,12 +97,20 @@ function convertMessagesToInput(messages) {
     if (typeof msg.content === "string") {
       input.push({
         role,
-        content: [{ type: role === "user" ? "input_text" : "output_text", text: msg.content }],
+        content: [
+          {
+            type: role === "user" ? "input_text" : "output_text",
+            text: msg.content,
+          },
+        ],
       });
     } else if (Array.isArray(msg.content)) {
       const parts = msg.content.map((part) => {
         if (part.type === "text") {
-          return { type: role === "user" ? "input_text" : "output_text", text: part.text };
+          return {
+            type: role === "user" ? "input_text" : "output_text",
+            text: part.text,
+          };
         }
         if (part.type === "image_url") {
           return { type: "input_image", image_url: part.image_url.url };
@@ -130,7 +138,10 @@ function convertMessagesToInput(messages) {
       input.push({
         type: "function_call_output",
         call_id: msg.tool_call_id,
-        output: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content),
+        output:
+          typeof msg.content === "string"
+            ? msg.content
+            : JSON.stringify(msg.content),
       });
     }
   }
@@ -152,7 +163,9 @@ function buildResponsesBody(chatBody) {
   // Extract system prompt from messages
   const systemMessages = (chatBody.messages || [])
     .filter((m) => m.role === "system")
-    .map((m) => (typeof m.content === "string" ? m.content : JSON.stringify(m.content)));
+    .map((m) =>
+      typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+    );
   const instructions = systemMessages.join("\n\n") || undefined;
 
   const mappedModel = remapModel(chatBody.model);
@@ -206,7 +219,7 @@ function createChatCompletionChunk(id, model, delta, finishReason = null) {
   };
 }
 
-function transformResponsesStream(responsesBody, model) {
+function transformResponsesStream(_responsesBody, model) {
   const id = `chatcmpl-${Date.now()}`;
   let sentRole = false;
   let currentToolCallIndex = -1;
@@ -222,9 +235,7 @@ function transformResponsesStream(responsesBody, model) {
         const data = line.slice(5).trim();
         if (!data || data === "[DONE]") {
           if (data === "[DONE]") {
-            controller.enqueue(
-              new TextEncoder().encode("data: [DONE]\n\n")
-            );
+            controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
           }
           continue;
         }
@@ -250,25 +261,31 @@ function transformResponsesStream(responsesBody, model) {
             content: "",
           });
           controller.enqueue(
-            new TextEncoder().encode(`data: ${JSON.stringify(chunk)}\n\n`)
+            new TextEncoder().encode(`data: ${JSON.stringify(chunk)}\n\n`),
           );
         }
 
         // Text content delta
-        if (type === "response.output_text.delta" || type === "response.content_part.delta") {
+        if (
+          type === "response.output_text.delta" ||
+          type === "response.content_part.delta"
+        ) {
           const deltaText = event.delta?.text ?? event.delta ?? "";
           if (typeof deltaText === "string" && deltaText) {
             const chunk = createChatCompletionChunk(id, model, {
               content: deltaText,
             });
             controller.enqueue(
-              new TextEncoder().encode(`data: ${JSON.stringify(chunk)}\n\n`)
+              new TextEncoder().encode(`data: ${JSON.stringify(chunk)}\n\n`),
             );
           }
         }
 
         // Function call added
-        if (type === "response.output_item.added" && event.item?.type === "function_call") {
+        if (
+          type === "response.output_item.added" &&
+          event.item?.type === "function_call"
+        ) {
           currentToolCallIndex++;
           toolCallIds.set(event.item.id, currentToolCallIndex);
           const chunk = createChatCompletionChunk(id, model, {
@@ -285,14 +302,13 @@ function transformResponsesStream(responsesBody, model) {
             ],
           });
           controller.enqueue(
-            new TextEncoder().encode(`data: ${JSON.stringify(chunk)}\n\n`)
+            new TextEncoder().encode(`data: ${JSON.stringify(chunk)}\n\n`),
           );
         }
 
         // Function call arguments delta
         if (type === "response.function_call_arguments.delta") {
-          const idx =
-            toolCallIds.get(event.item_id) ?? currentToolCallIndex;
+          const idx = toolCallIds.get(event.item_id) ?? currentToolCallIndex;
           const chunk = createChatCompletionChunk(id, model, {
             tool_calls: [
               {
@@ -304,18 +320,13 @@ function transformResponsesStream(responsesBody, model) {
             ],
           });
           controller.enqueue(
-            new TextEncoder().encode(`data: ${JSON.stringify(chunk)}\n\n`)
+            new TextEncoder().encode(`data: ${JSON.stringify(chunk)}\n\n`),
           );
         }
 
         // Done
         if (type === "response.completed" || type === "response.done") {
-          const finishChunk = createChatCompletionChunk(
-            id,
-            model,
-            {},
-            "stop"
-          );
+          const finishChunk = createChatCompletionChunk(id, model, {}, "stop");
 
           // Add usage if available
           const usage = event.response?.usage;
@@ -330,20 +341,16 @@ function transformResponsesStream(responsesBody, model) {
 
           controller.enqueue(
             new TextEncoder().encode(
-              `data: ${JSON.stringify(finishChunk)}\n\n`
-            )
+              `data: ${JSON.stringify(finishChunk)}\n\n`,
+            ),
           );
-          controller.enqueue(
-            new TextEncoder().encode("data: [DONE]\n\n")
-          );
+          controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
         }
 
         // Error
         if (type === "error" || type === "response.failed") {
           const msg =
-            event.message ||
-            event.response?.error?.message ||
-            "Unknown error";
+            event.message || event.response?.error?.message || "Unknown error";
           console.error(`[openai-stealth] Codex error: ${msg}`);
         }
       }
@@ -354,7 +361,7 @@ function transformResponsesStream(responsesBody, model) {
 }
 
 // Non-streaming response conversion
-function convertResponsesResultToCompletion(responsesResult, model) {
+function _convertResponsesResultToCompletion(responsesResult, model) {
   const id = `chatcmpl-${Date.now()}`;
   const output = responsesResult.output || [];
 
@@ -403,8 +410,7 @@ function convertResponsesResultToCompletion(responsesResult, model) {
       ? {
           prompt_tokens: usage.input_tokens || 0,
           completion_tokens: usage.output_tokens || 0,
-          total_tokens:
-            (usage.input_tokens || 0) + (usage.output_tokens || 0),
+          total_tokens: (usage.input_tokens || 0) + (usage.output_tokens || 0),
         }
       : undefined,
   };
@@ -455,7 +461,7 @@ globalThis.fetch = async function openaiStealthFetch(input, init) {
     const responsesBody = buildResponsesBody(chatBody);
 
     console.log(
-      `[openai-stealth] ${originalModel}${originalModel !== chatBody.model ? ` → ${chatBody.model}` : ""} → chatgpt.com/backend-api/codex/responses (${isStreaming ? "stream" : "sync"})`
+      `[openai-stealth] ${originalModel}${originalModel !== chatBody.model ? ` → ${chatBody.model}` : ""} → chatgpt.com/backend-api/codex/responses (${isStreaming ? "stream" : "sync"})`,
     );
 
     const codexUrl = `${CODEX_BASE_URL}/codex/responses`;
@@ -479,7 +485,9 @@ globalThis.fetch = async function openaiStealthFetch(input, init) {
     if (!response.ok) {
       // Return error in OpenAI format
       const errorText = await response.text();
-      console.error(`[openai-stealth] Codex API error ${response.status}: ${errorText}`);
+      console.error(
+        `[openai-stealth] Codex API error ${response.status}: ${errorText}`,
+      );
 
       // Try to parse friendly error
       let errorMessage = errorText;
@@ -505,16 +513,13 @@ globalThis.fetch = async function openaiStealthFetch(input, init) {
         {
           status: response.status,
           headers: { "content-type": "application/json" },
-        }
+        },
       );
     }
 
     if (isStreaming && response.body) {
       // Transform the responses stream → chat completions stream
-      const transform = transformResponsesStream(
-        responsesBody,
-        chatBody.model
-      );
+      const transform = transformResponsesStream(responsesBody, chatBody.model);
       const transformedStream = response.body.pipeThrough(transform);
 
       return new Response(transformedStream, {
@@ -544,7 +549,10 @@ globalThis.fetch = async function openaiStealthFetch(input, init) {
           const type = event.type;
 
           // Collect text deltas
-          if (type === "response.output_text.delta" || type === "response.content_part.delta") {
+          if (
+            type === "response.output_text.delta" ||
+            type === "response.content_part.delta"
+          ) {
             const deltaText = event.delta?.text ?? event.delta ?? "";
             if (typeof deltaText === "string") content += deltaText;
           }
@@ -556,7 +564,9 @@ globalThis.fetch = async function openaiStealthFetch(input, init) {
               usage = {
                 prompt_tokens: resp.usage.input_tokens || 0,
                 completion_tokens: resp.usage.output_tokens || 0,
-                total_tokens: (resp.usage.input_tokens || 0) + (resp.usage.output_tokens || 0),
+                total_tokens:
+                  (resp.usage.input_tokens || 0) +
+                  (resp.usage.output_tokens || 0),
               };
             }
             // Extract any function calls from output
@@ -581,11 +591,13 @@ globalThis.fetch = async function openaiStealthFetch(input, init) {
         object: "chat.completion",
         created: Math.floor(Date.now() / 1000),
         model: chatBody.model,
-        choices: [{
-          index: 0,
-          message,
-          finish_reason: toolCalls.length > 0 ? "tool_calls" : "stop",
-        }],
+        choices: [
+          {
+            index: 0,
+            message,
+            finish_reason: toolCalls.length > 0 ? "tool_calls" : "stop",
+          },
+        ],
         usage,
       };
 
@@ -611,7 +623,7 @@ globalThis.fetch = async function openaiStealthFetch(input, init) {
     const dimensions = body.dimensions || 1536;
 
     console.log(
-      `[openai-stealth] Embeddings not supported with subscription token, returning zero vectors (${inputs.length} inputs)`
+      `[openai-stealth] Embeddings not supported with subscription token, returning zero vectors (${inputs.length} inputs)`,
     );
 
     const data = inputs.map((_, i) => ({
@@ -630,7 +642,7 @@ globalThis.fetch = async function openaiStealthFetch(input, init) {
       {
         status: 200,
         headers: { "content-type": "application/json" },
-      }
+      },
     );
   }
 
@@ -638,7 +650,9 @@ globalThis.fetch = async function openaiStealthFetch(input, init) {
   if (url.includes("/models")) {
     // Models endpoint doesn't work with subscription tokens either
     // Return a minimal list so the runtime can check model availability
-    console.log("[openai-stealth] Models list → returning defaults for subscription");
+    console.log(
+      "[openai-stealth] Models list → returning defaults for subscription",
+    );
     return new Response(
       JSON.stringify({
         object: "list",
@@ -653,7 +667,7 @@ globalThis.fetch = async function openaiStealthFetch(input, init) {
       {
         status: 200,
         headers: { "content-type": "application/json" },
-      }
+      },
     );
   }
 
@@ -662,5 +676,5 @@ globalThis.fetch = async function openaiStealthFetch(input, init) {
 };
 
 console.log(
-  "[openai-stealth] OpenAI Codex stealth mode active — ChatGPT subscription requests will be routed to chatgpt.com/backend-api"
+  "[openai-stealth] OpenAI Codex stealth mode active — ChatGPT subscription requests will be routed to chatgpt.com/backend-api",
 );

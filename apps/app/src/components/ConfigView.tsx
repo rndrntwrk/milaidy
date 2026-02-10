@@ -295,6 +295,7 @@ function PluginField({
 export function ConfigView() {
   const {
     // Cloud
+    cloudEnabled,
     cloudConnected,
     cloudCredits,
     cloudCreditsLow,
@@ -398,8 +399,23 @@ export function ConfigView() {
   const allAiProviders = plugins.filter((p) => p.category === "ai-provider");
   const enabledAiProviders = allAiProviders.filter((p) => p.enabled);
 
-  /* Track which provider is selected for showing settings inline */
-  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
+  /* Track which provider is selected for showing settings inline.
+   * Initialise to __cloud__ when cloud is the active model provider so the
+   * selection survives component remounts (e.g. tab switches). */
+  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(
+    () => (cloudEnabled ? "__cloud__" : null),
+  );
+
+  /* Keep in sync: when cloudEnabled changes (e.g. after onboarding or
+   * disconnect), update the local selection if the user hasn't already
+   * picked something manually. */
+  const hasManualSelection = useRef(false);
+  useEffect(() => {
+    if (hasManualSelection.current) return;
+    if (cloudEnabled && selectedProviderId !== "__cloud__") {
+      setSelectedProviderId("__cloud__");
+    }
+  }, [cloudEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Resolve the actually-selected provider: accept __cloud__ or fall back to first enabled */
   const resolvedSelectedId =
@@ -413,12 +429,19 @@ export function ConfigView() {
     ? allAiProviders.find((p) => p.id === resolvedSelectedId) ?? null
     : null;
 
-  /* Switch provider: enable the new one, disable all others */
+  /* Switch to a local provider: enable the new one, disable all others,
+   * and turn off cloud mode so the runtime picks up the correct plugin. */
   const handleSwitchProvider = useCallback(
     async (newId: string) => {
+      hasManualSelection.current = true;
       setSelectedProviderId(newId);
       const target = allAiProviders.find((p) => p.id === newId);
       if (!target) return;
+
+      /* Turn off cloud mode when switching to a local provider */
+      try {
+        await client.updateConfig({ cloud: { enabled: false } });
+      } catch { /* non-fatal */ }
 
       /* Enable the new provider if not already */
       if (!target.enabled) {
@@ -434,6 +457,24 @@ export function ConfigView() {
     },
     [allAiProviders, enabledAiProviders, handlePluginToggle],
   );
+
+  /* Switch to Eliza Cloud: persist the selection to config and restart
+   * the runtime so the cloud plugin loads with the saved API key.
+   * Also ensures sensible model defaults are present in config. */
+  const handleSelectCloud = useCallback(async () => {
+    hasManualSelection.current = true;
+    setSelectedProviderId("__cloud__");
+    try {
+      await client.updateConfig({
+        cloud: { enabled: true },
+        models: {
+          small: currentSmallModel || "openai/gpt-5-mini",
+          large: currentLargeModel || "anthropic/claude-sonnet-4.5",
+        },
+      });
+      await client.restartAgent();
+    } catch { /* non-fatal */ }
+  }, [currentSmallModel, currentLargeModel]);
 
   const ext = extensionStatus;
   const relayOk = ext?.relayReachable === true;
@@ -546,10 +587,10 @@ export function ConfigView() {
                     className="text-[var(--accent)] underline"
                     onClick={(e: React.MouseEvent) => {
                       e.preventDefault();
-                      setTab("plugins");
+                      setTab("features");
                     }}
                   >
-                    Plugins
+                    Features
                   </a>{" "}
                   page.
                 </div>
@@ -570,7 +611,7 @@ export function ConfigView() {
                       ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]"
                       : "border-[var(--border)] bg-[var(--card)] hover:border-[var(--accent)]"
                   }`}
-                  onClick={() => setSelectedProviderId("__cloud__")}
+                  onClick={() => void handleSelectCloud()}
                 >
                   <div className={`text-xs font-bold whitespace-nowrap ${isCloudSelected ? "" : "text-[var(--text)]"}`}>
                     Eliza Cloud

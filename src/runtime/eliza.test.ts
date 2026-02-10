@@ -136,7 +136,8 @@ describe("collectPluginNames", () => {
       connectors: { telegram: { botToken: "tok" }, discord: { token: "tok" } },
     } as MilaidyConfig;
     const names = collectPluginNames(config);
-    expect(names.has("@elizaos/plugin-telegram")).toBe(true);
+    // Telegram maps to the local enhanced plugin, not the upstream one
+    expect(names.has("@milaidy/plugin-telegram-enhanced")).toBe(true);
     expect(names.has("@elizaos/plugin-discord")).toBe(true);
     expect(names.has("@elizaos/plugin-slack")).toBe(false);
   });
@@ -372,11 +373,11 @@ describe("applyCloudConfigToEnv", () => {
     expect(process.env.ELIZAOS_CLOUD_BASE_URL).toBe("https://cloud.test");
   });
 
-  it("does not overwrite existing env values", () => {
-    process.env.ELIZAOS_CLOUD_API_KEY = "existing";
+  it("overwrites stale env values with fresh config (hot-reload safety)", () => {
+    process.env.ELIZAOS_CLOUD_API_KEY = "old-key";
     const config = { cloud: { apiKey: "new-key" } } as MilaidyConfig;
     applyCloudConfigToEnv(config);
-    expect(process.env.ELIZAOS_CLOUD_API_KEY).toBe("existing");
+    expect(process.env.ELIZAOS_CLOUD_API_KEY).toBe("new-key");
   });
 
   it("handles missing cloud config gracefully", () => {

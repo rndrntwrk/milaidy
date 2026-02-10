@@ -11,7 +11,7 @@ import { OnboardingWizard } from "./components/OnboardingWizard.js";
 import { ChatView } from "./components/ChatView.js";
 import { ConversationsSidebar } from "./components/ConversationsSidebar.js";
 import { WidgetSidebar } from "./components/WidgetSidebar.js";
-import { PluginsView } from "./components/PluginsView.js";
+import { FeaturesView, ConnectorsView } from "./components/PluginsView.js";
 import { SkillsView } from "./components/SkillsView.js";
 import { InventoryView } from "./components/InventoryView.js";
 import { CharacterView } from "./components/CharacterView.js";
@@ -26,7 +26,8 @@ function ViewRouter() {
     case "chat": return <ChatView />;
     case "apps": return <AppsView />;
     case "inventory": return <InventoryView />;
-    case "plugins": return <PluginsView />;
+    case "features": return <FeaturesView />;
+    case "connectors": return <ConnectorsView />;
     case "skills": return <SkillsView />;
     case "character": return <CharacterView />;
     case "config": return <ConfigView />;

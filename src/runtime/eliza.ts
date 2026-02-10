@@ -49,6 +49,7 @@ import {
   loadHooks,
   triggerHook,
 } from "../hooks/index.js";
+import telegramEnhancedPlugin from "../plugins/telegram-enhanced/index.js";
 import {
   ensureAgentWorkspace,
   resolveDefaultAgentWorkspaceDir,
@@ -59,7 +60,17 @@ import {
   createPhettaCompanionPlugin,
   resolvePhettaCompanionOptionsFromEnv,
 } from "./phetta-companion-plugin.js";
-import telegramEnhancedPlugin from "../plugins/telegram-enhanced/index.js";
+
+// ---------------------------------------------------------------------------
+// Module augmentation: register plugin service types in the core registry
+// so calls to getServiceLoadPromise() are type-safe.
+// ---------------------------------------------------------------------------
+
+declare module "@elizaos/core" {
+  interface ServiceTypeRegistry {
+    AGENT_SKILLS: "AGENT_SKILLS_SERVICE";
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -291,22 +302,15 @@ export function collectPluginNames(config: MilaidyConfig): Set<string> {
   }
 
   // Model-provider plugins — load when env key is present
-  let hasRemoteModelProvider = false;
   for (const [envKey, pluginName] of Object.entries(PROVIDER_PLUGIN_MAP)) {
     if (process.env[envKey]) {
       pluginsToLoad.add(pluginName);
-      hasRemoteModelProvider = true;
     }
   }
 
-  // Why: plugin-local-embedding downloads a ~400 MB GGUF model and runs it
-  // via node-llama-cpp on CPU.  In containers or machines without a GPU this
-  // burns several GB of RAM for no benefit when a remote provider (Ollama,
-  // OpenAI, etc.) already supplies embeddings.  Keeping it in CORE_PLUGINS
-  // ensures offline / zero-config setups still work.
-  if (hasRemoteModelProvider) {
-    pluginsToLoad.delete("@elizaos/plugin-local-embedding");
-  }
+  // Always keep plugin-local-embedding loaded regardless of remote providers.
+  // We want deterministic, cost-free local embeddings even when remote model
+  // providers (OpenAI, Anthropic, etc.) are configured for chat/completion.
 
   // ElizaCloud plugin — also load when cloud config is explicitly enabled
   if (config.cloud?.enabled) {
@@ -767,14 +771,38 @@ export function applyCloudConfigToEnv(config: MilaidyConfig): void {
   const cloud = config.cloud;
   if (!cloud) return;
 
-  if (cloud.enabled && !process.env.ELIZAOS_CLOUD_ENABLED) {
+  // Config file is the source of truth.  Always overwrite env vars so that
+  // hot-reloads within the same process pick up config changes (e.g. cloud
+  // enabled mid-session during onboarding, or API key rotated).
+  if (cloud.enabled) {
     process.env.ELIZAOS_CLOUD_ENABLED = "true";
   }
-  if (cloud.apiKey && !process.env.ELIZAOS_CLOUD_API_KEY) {
+  if (cloud.apiKey) {
     process.env.ELIZAOS_CLOUD_API_KEY = cloud.apiKey;
   }
-  if (cloud.baseUrl && !process.env.ELIZAOS_CLOUD_BASE_URL) {
+  if (cloud.baseUrl) {
     process.env.ELIZAOS_CLOUD_BASE_URL = cloud.baseUrl;
+  }
+
+  // Propagate user-selected model names so the cloud plugin picks them up.
+  // Falls back to sensible defaults when cloud is enabled but no models were
+  // explicitly chosen (e.g. cloud enabled from the config page rather than
+  // the onboarding wizard).
+  const models = (config as Record<string, unknown>).models as
+    | { small?: string; large?: string }
+    | undefined;
+  if (cloud.enabled) {
+    const small = models?.small || "openai/gpt-5-mini";
+    const large = models?.large || "anthropic/claude-sonnet-4.5";
+    process.env.SMALL_MODEL = small;
+    process.env.LARGE_MODEL = large;
+    // Also set the cloud-specific variants so the plugin finds them first
+    if (!process.env.ELIZAOS_CLOUD_SMALL_MODEL) {
+      process.env.ELIZAOS_CLOUD_SMALL_MODEL = small;
+    }
+    if (!process.env.ELIZAOS_CLOUD_LARGE_MODEL) {
+      process.env.ELIZAOS_CLOUD_LARGE_MODEL = large;
+    }
   }
 }
 
@@ -945,7 +973,7 @@ import { pickRandomNames } from "./onboarding-names.js";
 // Style presets — shared between CLI and GUI onboarding
 // ---------------------------------------------------------------------------
 
-import { STYLE_PRESETS } from "../onboarding-presets.js";
+import { STYLE_PRESETS, composeCharacter } from "../onboarding-presets.js";
 
 /**
  * Detect whether this is the first run (no agent name configured)
@@ -1404,8 +1432,9 @@ async function runFirstTimeSetup(
   // Apply the chosen style template to the agent config entry so the
   // personality is persisted — not just the name.
   if (chosenTemplate) {
-    agentConfigEntry.bio = chosenTemplate.bio;
-    agentConfigEntry.system = chosenTemplate.system;
+    const composed = composeCharacter(chosenTemplate);
+    agentConfigEntry.bio = composed.bio;
+    agentConfigEntry.system = composed.system;
     agentConfigEntry.style = chosenTemplate.style;
     agentConfigEntry.adjectives = chosenTemplate.adjectives;
     agentConfigEntry.topics = chosenTemplate.topics;
@@ -1701,7 +1730,6 @@ export async function startEliza(
       ...otherPlugins.map((p) => p.plugin),
     ],
     ...(runtimeLogLevel ? { logLevel: runtimeLogLevel } : {}),
-    enableAutonomy: false,
     settings: {
       // Forward Milaidy config env vars as runtime settings
       ...(primaryModel ? { MODEL_PROVIDER: primaryModel } : {}),
@@ -1883,6 +1911,16 @@ export async function startEliza(
           // Reload config from disk (updated by API)
           const freshConfig = loadMilaidyConfig();
 
+          // Propagate secrets & cloud config into process.env so plugins
+          // (especially plugin-elizacloud) can discover them.  The initial
+          // startup does this in startEliza(); the hot-reload must repeat it
+          // because the config may have changed (e.g. cloud enabled during
+          // onboarding).
+          applyConnectorSecretsToEnv(freshConfig);
+          applyCloudConfigToEnv(freshConfig);
+          applyX402ConfigToEnv(freshConfig);
+          applyDatabaseConfigToEnv(freshConfig);
+
           // Resolve plugins using same function as startup
           const resolvedPlugins = await resolvePlugins(freshConfig);
 
@@ -1931,7 +1969,6 @@ export async function startEliza(
               ...freshOtherPlugins.map((p) => p.plugin),
             ],
             ...(runtimeLogLevel ? { logLevel: runtimeLogLevel } : {}),
-            enableAutonomy: false,
             settings: {
               ...(freshBundledSkillsDir
                 ? { BUNDLED_SKILLS_DIRS: freshBundledSkillsDir }
