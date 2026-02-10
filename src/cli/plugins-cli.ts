@@ -657,13 +657,13 @@ export function registerPluginsCli(program: Command): void {
         const tokens: string[] = [];
         let current = "";
         let quote: '"' | "'" | null = null;
-        let escape = false;
+        let escaped = false;
 
         for (let i = 0; i < trimmed.length; i++) {
           const char = trimmed[i];
-          if (escape) {
+          if (escaped) {
             current += char;
-            escape = false;
+            escaped = false;
             continue;
           }
 
@@ -674,12 +674,12 @@ export function registerPluginsCli(program: Command): void {
             }
             const next = trimmed[i + 1];
             if (
-              next === "\"" ||
+              next === '"' ||
               next === "'" ||
               next === "\\" ||
               (next && /\s/.test(next))
             ) {
-              escape = true;
+              escaped = true;
               continue;
             }
             current += char;
@@ -695,7 +695,7 @@ export function registerPluginsCli(program: Command): void {
             continue;
           }
 
-          if (char === "\"" || char === "'") {
+          if (char === '"' || char === "'") {
             quote = char;
             continue;
           }
