@@ -34,6 +34,7 @@ import {
 } from "../api/plugin-validation.js";
 import { cloudLogin } from "../cloud/auth.js";
 import {
+  configFileExists,
   loadMilaidyConfig,
   type MilaidyConfig,
   saveMilaidyConfig,
@@ -1605,6 +1606,35 @@ export interface StartElizaOptions {
    * server (used by `dev-server.ts`).
    */
   headless?: boolean;
+}
+
+export interface BootElizaRuntimeOptions {
+  /**
+   * When true, require an existing ~/.milaidy/milaidy.json config file.
+   * This is used by non-CLI UIs (like the pi-tui interface) where interactive
+   * onboarding prompts would break the alternate screen.
+   */
+  requireConfig?: boolean;
+}
+
+/**
+ * Boot the ElizaOS runtime without starting the readline chat loop.
+ *
+ * This is a convenience wrapper around {@link startEliza} in headless mode,
+ * with optional config guards.
+ */
+export async function bootElizaRuntime(
+  opts: BootElizaRuntimeOptions = {},
+): Promise<AgentRuntime> {
+  if (opts.requireConfig && !configFileExists()) {
+    throw new Error("No config found. Run `milaidy start` first to set up.");
+  }
+
+  const runtime = await startEliza({ headless: true });
+  if (!runtime) {
+    throw new Error("Failed to boot runtime");
+  }
+  return runtime;
 }
 
 /**
