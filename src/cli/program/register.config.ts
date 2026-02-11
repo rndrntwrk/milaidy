@@ -1,4 +1,6 @@
 import type { Command } from "commander";
+import { loadMilaidyConfig } from "../../config/config.js";
+import { resolveConfigPath } from "../../config/paths.js";
 import type { MilaidyConfig } from "../../config/types.milaidy.js";
 import { theme } from "../../terminal/theme.js";
 
@@ -11,7 +13,6 @@ export function registerConfigCli(program: Command) {
     .command("get <key>")
     .description("Get a config value")
     .action(async (key: string) => {
-      const { loadMilaidyConfig } = await import("../../config/config.js");
       let milaidyConfig: ReturnType<typeof loadMilaidyConfig> | undefined;
       try {
         milaidyConfig = loadMilaidyConfig();
@@ -45,7 +46,6 @@ export function registerConfigCli(program: Command) {
     .command("path")
     .description("Print the resolved config file path")
     .action(async () => {
-      const { resolveConfigPath } = await import("../../config/paths.js");
       console.log(resolveConfigPath());
     });
 

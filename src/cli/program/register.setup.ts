@@ -1,4 +1,9 @@
 import type { Command } from "commander";
+import { loadMilaidyConfig } from "../../config/config.js";
+import {
+  ensureAgentWorkspace,
+  resolveDefaultAgentWorkspaceDir,
+} from "../../providers/workspace.js";
 import { formatDocsLink } from "../../terminal/links.js";
 import { theme } from "../../terminal/theme.js";
 import { runCommandWithRuntime } from "../cli-utils.js";
@@ -17,10 +22,6 @@ export function registerSetupCommand(program: Command) {
     .option("--workspace <dir>", "Agent workspace directory")
     .action(async (opts: { workspace?: string }) => {
       await runCommandWithRuntime(defaultRuntime, async () => {
-        const { loadMilaidyConfig } = await import("../../config/config.js");
-        const { ensureAgentWorkspace, resolveDefaultAgentWorkspaceDir } =
-          await import("../../providers/workspace.js");
-
         let config: Record<string, unknown> = {};
         try {
           config = loadMilaidyConfig() as Record<string, unknown>;

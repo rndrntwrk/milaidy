@@ -1,5 +1,7 @@
 import chalk from "chalk";
 import type { Command } from "commander";
+import { loadMilaidyConfig, saveMilaidyConfig } from "../config/config.js";
+import { resolveStateDir, resolveUserPath } from "../config/paths.js";
 
 /**
  * Normalize a user-provided plugin name to its fully-qualified form.
@@ -408,10 +410,6 @@ export function registerPluginsCli(program: Command): void {
       const nodePath = await import("node:path");
       const { pathToFileURL } = await import("node:url");
       const fsPromises = await import("node:fs/promises");
-      const { resolveStateDir, resolveUserPath } = await import(
-        "../config/paths.js"
-      );
-      const { loadMilaidyConfig } = await import("../config/config.js");
       const { CUSTOM_PLUGINS_DIRNAME, scanDropInPlugins, resolvePackageEntry } =
         await import("../runtime/eliza.js");
 
@@ -549,12 +547,7 @@ export function registerPluginsCli(program: Command): void {
     .command("add-path <path>")
     .description("Register an additional plugin search directory in config")
     .action(async (rawPath: string) => {
-      const _nodePath = await import("node:path");
       const nodeFs = await import("node:fs");
-      const { resolveUserPath } = await import("../config/paths.js");
-      const { loadMilaidyConfig, saveMilaidyConfig } = await import(
-        "../config/config.js"
-      );
 
       const resolved = resolveUserPath(rawPath);
 
@@ -601,10 +594,6 @@ export function registerPluginsCli(program: Command): void {
     .description("List all plugin search directories and their contents")
     .action(async () => {
       const nodePath = await import("node:path");
-      const { resolveStateDir, resolveUserPath } = await import(
-        "../config/paths.js"
-      );
-      const { loadMilaidyConfig } = await import("../config/config.js");
       const { CUSTOM_PLUGINS_DIRNAME, scanDropInPlugins } = await import(
         "../runtime/eliza.js"
       );
@@ -855,9 +844,6 @@ export function registerPluginsCli(program: Command): void {
       const nodePath = await import("node:path");
       const nodeFs = await import("node:fs");
       const { spawnSync } = await import("node:child_process");
-      const { resolveStateDir, resolveUserPath } = await import(
-        "../config/paths.js"
-      );
       const { CUSTOM_PLUGINS_DIRNAME, scanDropInPlugins } = await import(
         "../runtime/eliza.js"
       );
