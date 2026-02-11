@@ -270,7 +270,7 @@ describe("Agent Runtime E2E", () => {
 
   beforeAll(async () => {
     if (!hasModelProvider) return;
-    process.env.LOG_LEVEL = "info";
+    process.env.LOG_LEVEL = process.env.MILAIDY_E2E_LOG_LEVEL ?? "error";
     process.env.PGLITE_DATA_DIR = pgliteDir;
 
     const secrets: Record<string, string> = {};

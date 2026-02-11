@@ -624,17 +624,22 @@ describe("API Server E2E (no runtime)", () => {
               "dataset_built",
         );
 
-        const response = await req(port, "POST", "/api/training/datasets/build", {
-          limit: 5,
-          minLlmCallsPerTrajectory: 1,
-        });
+        const response = await req(
+          port,
+          "POST",
+          "/api/training/datasets/build",
+          {
+            limit: 5,
+            minLlmCallsPerTrajectory: 1,
+          },
+        );
         expect(response.status).toBe(201);
 
         const message = await waitForDatasetBuilt;
         expect(message.type).toBe("training_event");
-        expect(
-          (message.payload as Record<string, unknown>)?.kind,
-        ).toBe("dataset_built");
+        expect((message.payload as Record<string, unknown>)?.kind).toBe(
+          "dataset_built",
+        );
       } finally {
         ws.close();
       }

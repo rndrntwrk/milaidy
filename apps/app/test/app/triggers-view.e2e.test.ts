@@ -489,10 +489,13 @@ describe("TriggersView UI E2E", () => {
     await flush();
 
     const root = tree!.root;
-    const displayNameInput = findInputByPlaceholder(root, "Display name");
+    const displayNameInput = findInputByPlaceholder(
+      root,
+      "e.g. Daily Digest, Heartbeat Check",
+    );
     const instructionsInput = findTextareaByPlaceholder(
       root,
-      "Instructions to inject into autonomy",
+      "What should the agent do when this trigger fires?",
     );
 
     await act(async () => {
@@ -509,7 +512,7 @@ describe("TriggersView UI E2E", () => {
 
     expect(
       root.findAll(
-        (node) => node.type === "div" && nodeText(node) === triggerDisplayName,
+        (node) => node.type === "span" && nodeText(node) === triggerDisplayName,
       ).length,
     ).toBe(1);
 
@@ -537,7 +540,7 @@ describe("TriggersView UI E2E", () => {
 
     expect(
       root.findAll(
-        (node) => node.type === "div" && nodeText(node) === triggerDisplayName,
+        (node) => node.type === "span" && nodeText(node) === triggerDisplayName,
       ).length,
     ).toBe(0);
   });

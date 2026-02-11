@@ -33,6 +33,20 @@ const emptyForm: TriggerFormState = {
   enabled: true,
 };
 
+const accentFg: React.CSSProperties = { color: "var(--accent-foreground)" };
+
+function formatMs(ms?: number): string {
+  if (!ms || ms <= 0) return "—";
+  if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
+  if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m`;
+  if (ms < 86_400_000) {
+    const h = ms / 3_600_000;
+    return h === Math.floor(h) ? `${h}h` : `${h.toFixed(1)}h`;
+  }
+  const d = ms / 86_400_000;
+  return d === Math.floor(d) ? `${d}d` : `${d.toFixed(1)}d`;
+}
+
 function formatTimestamp(value?: number): string {
   if (!value || !Number.isFinite(value)) return "—";
   return new Date(value).toLocaleString();
@@ -40,11 +54,16 @@ function formatTimestamp(value?: number): string {
 
 function parsePositiveNumber(value: string): number | undefined {
   const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  if (!/^\d+$/.test(trimmed)) return undefined;
+  if (!trimmed || !/^\d+$/.test(trimmed)) return undefined;
   const parsed = Number(trimmed);
-  if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
-  return parsed;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function scheduleLabel(t: TriggerSummary): string {
+  if (t.triggerType === "interval") return `Every ${formatMs(t.intervalMs)}`;
+  if (t.triggerType === "once") return t.scheduledAtIso ? `Once at ${new Date(t.scheduledAtIso).toLocaleString()}` : "Once";
+  if (t.triggerType === "cron") return `Cron: ${t.cronExpression ?? "—"}`;
+  return t.triggerType;
 }
 
 function formFromTrigger(trigger: TriggerSummary): TriggerFormState {
@@ -78,299 +97,262 @@ function buildCreateRequest(form: TriggerFormState): CreateTriggerRequest {
 }
 
 function buildUpdateRequest(form: TriggerFormState): UpdateTriggerRequest {
-  const create = buildCreateRequest(form);
-  return {
-    displayName: create.displayName,
-    instructions: create.instructions,
-    triggerType: create.triggerType,
-    wakeMode: create.wakeMode,
-    enabled: create.enabled,
-    intervalMs: create.intervalMs,
-    scheduledAtIso: create.scheduledAtIso,
-    cronExpression: create.cronExpression,
-    maxRuns: create.maxRuns,
-  };
+  const req = buildCreateRequest(form);
+  return { ...req };
 }
 
 function validateForm(form: TriggerFormState): string | null {
   if (!form.displayName.trim()) return "Display name is required.";
   if (!form.instructions.trim()) return "Instructions are required.";
-  if (form.triggerType === "interval") {
-    if (!parsePositiveNumber(form.intervalMs)) {
-      return "Interval must be a positive integer in milliseconds.";
-    }
+  if (form.triggerType === "interval" && !parsePositiveNumber(form.intervalMs)) {
+    return "Interval must be a positive number in milliseconds.";
   }
   if (form.triggerType === "once") {
     const raw = form.scheduledAtIso.trim();
     if (!raw) return "Scheduled time is required for once triggers.";
-    if (!Number.isFinite(Date.parse(raw))) return "Scheduled time must be valid ISO date-time.";
+    if (!Number.isFinite(Date.parse(raw))) return "Scheduled time must be a valid ISO date-time.";
   }
   if (form.triggerType === "cron") {
     const cronTrimmed = form.cronExpression.trim();
-    if (!cronTrimmed) {
-      return "Cron expression is required for cron triggers.";
-    }
+    if (!cronTrimmed) return "Cron expression is required.";
     const cronParts = cronTrimmed.split(/\s+/);
-    if (cronParts.length !== 5) {
-      return "Cron expression must have exactly 5 fields (minute hour day month weekday).";
-    }
-    // Basic field range validation
-    const cronRanges = [
-      { name: "minute", min: 0, max: 59 },
-      { name: "hour", min: 0, max: 23 },
-      { name: "day", min: 1, max: 31 },
-      { name: "month", min: 1, max: 12 },
-      { name: "weekday", min: 0, max: 6 },
-    ];
+    if (cronParts.length !== 5) return "Cron expression must have exactly 5 fields (minute hour day month weekday).";
+    const ranges = [{ n: "minute" }, { n: "hour" }, { n: "day" }, { n: "month" }, { n: "weekday" }];
     for (let i = 0; i < 5; i++) {
-      const part = cronParts[i];
-      if (!/^[\d,\-\*\/]+$/.test(part)) {
-        return `Invalid cron ${cronRanges[i].name} field: "${part}". Use digits, commas, dashes, *, or /.`;
-      }
+      if (!/^[\d,\-\*\/]+$/.test(cronParts[i])) return `Invalid cron ${ranges[i].n} field: "${cronParts[i]}"`;
     }
   }
-  if (form.maxRuns.trim() && !parsePositiveNumber(form.maxRuns)) {
-    return "Max runs must be a positive integer.";
-  }
+  if (form.maxRuns.trim() && !parsePositiveNumber(form.maxRuns)) return "Max runs must be a positive integer.";
   return null;
 }
 
+/* ── Stat card ──────────────────────────────────────────────────────── */
+
+function Stat({ label, value, accent }: { label: string; value: string | number; accent?: boolean }) {
+  return (
+    <div className="flex flex-col items-center justify-center p-3 border border-border bg-bg min-w-[80px]">
+      <div className={`text-lg font-bold tabular-nums ${accent ? "text-accent" : ""}`}>{value}</div>
+      <div className="text-[10px] text-muted uppercase tracking-wide mt-0.5">{label}</div>
+    </div>
+  );
+}
+
+/* ── Status badge ────────────────────────────────────────────────── */
+
+function StatusBadge({ enabled }: { enabled: boolean }) {
+  return (
+    <span
+      className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 ${
+        enabled
+          ? "text-ok border border-ok/30 bg-ok/10"
+          : "text-muted border border-border bg-bg"
+      }`}
+    >
+      {enabled ? "active" : "paused"}
+    </span>
+  );
+}
+
+/* ── Run status dot ──────────────────────────────────────────────── */
+
+function RunDot({ status }: { status: string }) {
+  const color = status === "success" ? "bg-ok" : status === "error" ? "bg-danger" : "bg-muted";
+  return <span className={`inline-block w-2 h-2 rounded-full ${color}`} />;
+}
+
+/* ── Main view ──────────────────────────────────────────────────── */
+
 export function TriggersView() {
   const {
-    triggers,
-    triggersLoading,
-    triggersSaving,
-    triggerRunsById,
-    triggerHealth,
-    triggerError,
-    loadTriggers,
-    createTrigger,
-    updateTrigger,
-    deleteTrigger,
-    runTriggerNow,
-    loadTriggerRuns,
-    loadTriggerHealth,
+    triggers, triggersLoading, triggersSaving,
+    triggerRunsById, triggerHealth, triggerError,
+    loadTriggers, createTrigger, updateTrigger, deleteTrigger,
+    runTriggerNow, loadTriggerRuns, loadTriggerHealth,
   } = useApp();
 
   const [form, setForm] = useState<TriggerFormState>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedRunsId, setSelectedRunsId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [expandedInstructions, setExpandedInstructions] = useState<Set<string>>(new Set());
 
   const selectedRuns = useMemo(() => {
     if (!selectedRunsId) return [];
     return triggerRunsById[selectedRunsId] ?? [];
   }, [selectedRunsId, triggerRunsById]);
 
-  const clearForm = () => {
-    setForm(emptyForm);
-    setEditingId(null);
-    setFormError(null);
-  };
+  const clearForm = () => { setForm(emptyForm); setEditingId(null); setFormError(null); };
 
   const onSubmit = async () => {
-    const validationError = validateForm(form);
-    if (validationError) {
-      setFormError(validationError);
-      return;
-    }
+    const err = validateForm(form);
+    if (err) { setFormError(err); return; }
     setFormError(null);
     if (editingId) {
       const updated = await updateTrigger(editingId, buildUpdateRequest(form));
-      if (updated) {
-        setForm(formFromTrigger(updated));
-      }
+      if (updated) setForm(formFromTrigger(updated));
       return;
     }
     const created = await createTrigger(buildCreateRequest(form));
-    if (created) {
-      clearForm();
-    }
+    if (created) clearForm();
   };
 
-  const startEdit = (trigger: TriggerSummary) => {
-    setEditingId(trigger.id);
-    setForm(formFromTrigger(trigger));
-    setFormError(null);
-  };
+  const setField = <K extends keyof TriggerFormState>(key: K, value: TriggerFormState[K]) =>
+    setForm((prev) => ({ ...prev, [key]: value }));
 
-  const toggleEnabled = async (trigger: TriggerSummary) => {
-    await updateTrigger(trigger.id, { enabled: !trigger.enabled });
-  };
-
-  const openRuns = async (triggerId: string) => {
-    setSelectedRunsId(triggerId);
-    await loadTriggerRuns(triggerId);
+  const toggleInstructions = (id: string) => {
+    setExpandedInstructions((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 max-w-4xl mx-auto">
+      {/* ── Health stats ──────────────────────────────────────────── */}
       <section className="border border-border bg-card p-4">
         <div className="flex items-center justify-between gap-2 mb-3">
           <h2 className="text-sm font-bold">Trigger Health</h2>
           <button
-            className="px-2 py-1 text-xs border border-border hover:border-accent"
-            onClick={() => {
-              void loadTriggerHealth();
-              void loadTriggers();
-            }}
+            className="px-2.5 py-1 text-[11px] border border-accent bg-accent hover:bg-accent-hover cursor-pointer"
+            style={accentFg}
+            onClick={() => { void loadTriggerHealth(); void loadTriggers(); }}
           >
             Refresh
           </button>
         </div>
         {triggerHealth ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-            <div>Enabled: {triggerHealth.triggersEnabled ? "yes" : "no"}</div>
-            <div>Active: {triggerHealth.activeTriggers}</div>
-            <div>Failures: {triggerHealth.totalFailures}</div>
-            <div>Last exec: {formatTimestamp(triggerHealth.lastExecutionAt)}</div>
+          <div className="flex gap-2 flex-wrap">
+            <Stat label="Active" value={triggerHealth.activeTriggers} accent />
+            <Stat label="Disabled" value={triggerHealth.disabledTriggers} />
+            <Stat label="Executions" value={triggerHealth.totalExecutions} />
+            <Stat label="Failures" value={triggerHealth.totalFailures} />
+            <Stat label="Last Exec" value={formatTimestamp(triggerHealth.lastExecutionAt)} />
           </div>
         ) : (
-          <div className="text-xs text-muted">No health data available.</div>
+          <div className="text-xs text-muted py-2">No health data yet — triggers will report here after first execution.</div>
         )}
       </section>
 
-      <section className="border border-border bg-card p-4">
+      {/* ── Create / Edit form ────────────────────────────────────── */}
+      <section className="border border-border bg-card p-4 px-5">
         <h2 className="text-sm font-bold mb-3">
-          {editingId ? "Edit Trigger" : "Create Trigger"}
+          {editingId ? "Edit Trigger" : "New Trigger"}
         </h2>
-        <div className="grid gap-2">
-          <input
-            className="px-2 py-1 border border-border bg-bg text-sm"
-            value={form.displayName}
-            onChange={(event) =>
-              setForm((prev: TriggerFormState) => ({
-                ...prev,
-                displayName: event.target.value,
-              }))
-            }
-            placeholder="Display name"
-          />
-          <textarea
-            className="px-2 py-1 border border-border bg-bg text-sm min-h-24"
-            value={form.instructions}
-            onChange={(event) =>
-              setForm((prev: TriggerFormState) => ({
-                ...prev,
-                instructions: event.target.value,
-              }))
-            }
-            placeholder="Instructions to inject into autonomy"
-          />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-            <select
-              className="px-2 py-1 border border-border bg-bg text-sm"
-              value={form.triggerType}
-              onChange={(event) =>
-                setForm((prev: TriggerFormState) => ({
-                  ...prev,
-                  triggerType: event.target.value as TriggerType,
-                }))
-              }
-            >
-              <option value="interval">Interval</option>
-              <option value="once">Once</option>
-              <option value="cron">Cron</option>
-            </select>
-            <select
-              className="px-2 py-1 border border-border bg-bg text-sm"
-              value={form.wakeMode}
-              onChange={(event) =>
-                setForm((prev: TriggerFormState) => ({
-                  ...prev,
-                  wakeMode: event.target.value as TriggerWakeMode,
-                }))
-              }
-            >
-              <option value="inject_now">Inject now</option>
-              <option value="next_autonomy_cycle">Next autonomy cycle</option>
-            </select>
+        <div className="grid gap-3">
+          <div>
+            <label className="block text-[11px] text-muted mb-1">Name</label>
             <input
-              className="px-2 py-1 border border-border bg-bg text-sm"
-              value={form.maxRuns}
-              onChange={(event) =>
-                setForm((prev: TriggerFormState) => ({
-                  ...prev,
-                  maxRuns: event.target.value,
-                }))
-              }
-              placeholder="Max runs (optional)"
+              className="w-full px-3 py-1.5 border border-border bg-bg text-sm focus:border-accent outline-none"
+              value={form.displayName}
+              onChange={(e) => setField("displayName", e.target.value)}
+              placeholder="e.g. Daily Digest, Heartbeat Check"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] text-muted mb-1">Instructions</label>
+            <textarea
+              className="w-full px-3 py-1.5 border border-border bg-bg text-sm min-h-[80px] focus:border-accent outline-none resize-y"
+              value={form.instructions}
+              onChange={(e) => setField("instructions", e.target.value)}
+              placeholder="What should the agent do when this trigger fires?"
             />
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div>
+              <label className="block text-[11px] text-muted mb-1">Schedule Type</label>
+              <select
+                className="w-full px-3 py-1.5 border border-border bg-bg text-sm focus:border-accent outline-none"
+                value={form.triggerType}
+                onChange={(e) => setField("triggerType", e.target.value as TriggerType)}
+              >
+                <option value="interval">Repeating Interval</option>
+                <option value="once">One-time</option>
+                <option value="cron">Cron Schedule</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] text-muted mb-1">Wake Mode</label>
+              <select
+                className="w-full px-3 py-1.5 border border-border bg-bg text-sm focus:border-accent outline-none"
+                value={form.wakeMode}
+                onChange={(e) => setField("wakeMode", e.target.value as TriggerWakeMode)}
+              >
+                <option value="inject_now">Inject &amp; wake immediately</option>
+                <option value="next_autonomy_cycle">Queue for next cycle</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] text-muted mb-1">Max Runs (optional)</label>
+              <input
+                className="w-full px-3 py-1.5 border border-border bg-bg text-sm focus:border-accent outline-none"
+                value={form.maxRuns}
+                onChange={(e) => setField("maxRuns", e.target.value)}
+                placeholder="∞"
+              />
+            </div>
+          </div>
+
           {form.triggerType === "interval" && (
-            <input
-              className="px-2 py-1 border border-border bg-bg text-sm"
-              value={form.intervalMs}
-              onChange={(event) =>
-                setForm((prev: TriggerFormState) => ({
-                  ...prev,
-                  intervalMs: event.target.value,
-                }))
-              }
-              placeholder="Interval in ms"
-            />
+            <div>
+              <label className="block text-[11px] text-muted mb-1">
+                Interval (ms) — {formatMs(parsePositiveNumber(form.intervalMs))}
+              </label>
+              <input
+                className="w-full px-3 py-1.5 border border-border bg-bg text-sm focus:border-accent outline-none"
+                value={form.intervalMs}
+                onChange={(e) => setField("intervalMs", e.target.value)}
+                placeholder="3600000"
+              />
+            </div>
           )}
           {form.triggerType === "once" && (
-            <input
-              className="px-2 py-1 border border-border bg-bg text-sm"
-              value={form.scheduledAtIso}
-              onChange={(event) =>
-                setForm((prev: TriggerFormState) => ({
-                  ...prev,
-                  scheduledAtIso: event.target.value,
-                }))
-              }
-              placeholder="ISO datetime, e.g. 2026-02-15T10:00:00.000Z"
-            />
+            <div>
+              <label className="block text-[11px] text-muted mb-1">Scheduled Time (ISO)</label>
+              <input
+                className="w-full px-3 py-1.5 border border-border bg-bg text-sm focus:border-accent outline-none"
+                value={form.scheduledAtIso}
+                onChange={(e) => setField("scheduledAtIso", e.target.value)}
+                placeholder="2026-02-15T10:00:00.000Z"
+              />
+            </div>
           )}
           {form.triggerType === "cron" && (
-            <input
-              className="px-2 py-1 border border-border bg-bg text-sm"
-              value={form.cronExpression}
-              onChange={(event) =>
-                setForm((prev: TriggerFormState) => ({
-                  ...prev,
-                  cronExpression: event.target.value,
-                }))
-              }
-              placeholder="Cron expression"
-            />
+            <div>
+              <label className="block text-[11px] text-muted mb-1">Cron Expression (5-field)</label>
+              <input
+                className="w-full px-3 py-1.5 border border-border bg-bg text-sm font-mono focus:border-accent outline-none"
+                value={form.cronExpression}
+                onChange={(e) => setField("cronExpression", e.target.value)}
+                placeholder="*/15 * * * *"
+              />
+              <div className="text-[10px] text-muted mt-1">minute hour day month weekday — e.g. "0 9 * * 1-5" = weekdays at 9am</div>
+            </div>
           )}
 
-          <label className="inline-flex items-center gap-2 text-xs">
-            <input
-              type="checkbox"
-              checked={form.enabled}
-              onChange={(event) =>
-                setForm((prev: TriggerFormState) => ({
-                  ...prev,
-                  enabled: event.target.checked,
-                }))
-              }
-            />
-            Enabled
+          <label className="inline-flex items-center gap-2 text-xs cursor-pointer select-none">
+            <input type="checkbox" checked={form.enabled} onChange={(e) => setField("enabled", e.target.checked)} />
+            Start enabled
           </label>
 
           {(formError || triggerError) && (
-            <div className="text-xs text-danger">{formError ?? triggerError}</div>
+            <div className="text-xs px-3 py-2 border border-danger/30 bg-danger/10 text-danger">
+              {formError ?? triggerError}
+            </div>
           )}
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 pt-1">
             <button
-              className="px-3 py-1.5 text-sm border border-accent bg-accent text-[var(--accent-foreground)] hover:bg-accent-hover disabled:opacity-50"
+              className="px-4 py-1.5 text-sm border border-accent bg-accent hover:bg-accent-hover disabled:opacity-40 cursor-pointer"
+              style={accentFg}
               disabled={triggersSaving}
-              onClick={() => {
-                void onSubmit();
-              }}
+              onClick={() => { void onSubmit(); }}
             >
-              {editingId ? "Save Trigger" : "Create Trigger"}
+              {triggersSaving ? "Saving…" : editingId ? "Save Changes" : "Create Trigger"}
             </button>
             {editingId && (
-              <button
-                className="px-3 py-1.5 text-sm border border-border hover:border-accent"
-                onClick={clearForm}
-              >
+              <button className="px-4 py-1.5 text-sm border border-border hover:border-accent cursor-pointer" onClick={clearForm}>
                 Cancel
               </button>
             )}
@@ -378,107 +360,136 @@ export function TriggersView() {
         </div>
       </section>
 
+      {/* ── Trigger list ──────────────────────────────────────────── */}
       <section className="border border-border bg-card p-4">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-bold">Triggers</h2>
-          <span className="text-xs text-muted">
-            {triggersLoading ? "Loading..." : `${triggers.length} total`}
+          <span className="text-[11px] text-muted">
+            {triggersLoading ? "Loading…" : `${triggers.length} configured`}
           </span>
         </div>
-        <div className="space-y-2">
-          {triggers.map((trigger: TriggerSummary) => (
-            <div
-              key={trigger.id}
-              className="border border-border bg-bg px-3 py-2 space-y-1"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold truncate">
-                    {trigger.displayName}
+
+        {triggers.length === 0 && !triggersLoading ? (
+          <div className="py-8 text-center">
+            <div className="text-2xl mb-2">⏰</div>
+            <div className="text-sm text-muted">No triggers configured yet</div>
+            <div className="text-xs text-muted mt-1">Create one above to schedule autonomous agent tasks</div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {triggers.map((trigger: TriggerSummary) => {
+              const isExpanded = expandedInstructions.has(trigger.id);
+              const instructionPreview = trigger.instructions.length > 120 && !isExpanded
+                ? `${trigger.instructions.slice(0, 120)}…`
+                : trigger.instructions;
+
+              return (
+                <div key={trigger.id} className="border border-border bg-bg p-4 space-y-2">
+                  {/* Header */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold truncate">{trigger.displayName}</span>
+                        <StatusBadge enabled={trigger.enabled} />
+                      </div>
+                      <div className="text-xs text-muted mt-1">
+                        {scheduleLabel(trigger)}
+                        {trigger.runCount > 0 && <> · {trigger.runCount} run{trigger.runCount !== 1 ? "s" : ""}</>}
+                        {trigger.nextRunAtMs && trigger.enabled && <> · next {formatTimestamp(trigger.nextRunAtMs)}</>}
+                      </div>
+                    </div>
+                    {/* Actions */}
+                    <div className="flex gap-1 flex-shrink-0 flex-wrap justify-end">
+                      <button
+                        className="px-2 py-1 text-[11px] border border-accent bg-accent hover:bg-accent-hover cursor-pointer"
+                        style={accentFg}
+                        onClick={() => { setEditingId(trigger.id); setForm(formFromTrigger(trigger)); setFormError(null); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="px-2 py-1 text-[11px] border border-border hover:border-accent cursor-pointer"
+                        onClick={() => { void updateTrigger(trigger.id, { enabled: !trigger.enabled }); }}
+                      >
+                        {trigger.enabled ? "Disable" : "Enable"}
+                      </button>
+                      <button
+                        className="px-2 py-1 text-[11px] border border-border hover:border-accent cursor-pointer"
+                        onClick={() => { void runTriggerNow(trigger.id); }}
+                      >
+                        Run now
+                      </button>
+                      <button
+                        className="px-2 py-1 text-[11px] border border-border hover:border-accent cursor-pointer"
+                        onClick={() => {
+                          if (selectedRunsId === trigger.id) { setSelectedRunsId(null); }
+                          else { setSelectedRunsId(trigger.id); void loadTriggerRuns(trigger.id); }
+                        }}
+                      >
+                        {selectedRunsId === trigger.id ? "Hide runs" : "Runs"}
+                      </button>
+                      <button
+                        className="px-2 py-1 text-[11px] border border-border hover:border-danger text-danger cursor-pointer"
+                        onClick={() => { if (confirm(`Delete "${trigger.displayName}"?`)) void deleteTrigger(trigger.id); }}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
-                  <div className="text-xs text-muted">
-                    {trigger.triggerType} •{" "}
-                    {trigger.enabled ? "enabled" : "disabled"} • next run{" "}
-                    {formatTimestamp(trigger.nextRunAtMs)}
+
+                  {/* Instructions */}
+                  <div className="text-xs text-muted whitespace-pre-wrap">
+                    {instructionPreview}
+                    {trigger.instructions.length > 120 && (
+                      <button
+                        className="ml-1 text-accent hover:underline cursor-pointer bg-transparent border-0 p-0 text-xs"
+                        onClick={() => toggleInstructions(trigger.id)}
+                      >
+                        {isExpanded ? "show less" : "show more"}
+                      </button>
+                    )}
                   </div>
-                </div>
-                <div className="flex gap-1">
-                  <button
-                    className="px-2 py-1 text-xs border border-border hover:border-accent"
-                    onClick={() => startEdit(trigger)}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    className="px-2 py-1 text-xs border border-border hover:border-accent"
-                    onClick={() => {
-                      void toggleEnabled(trigger);
-                    }}
-                  >
-                    {trigger.enabled ? "Disable" : "Enable"}
-                  </button>
-                  <button
-                    className="px-2 py-1 text-xs border border-border hover:border-accent"
-                    onClick={() => {
-                      void runTriggerNow(trigger.id);
-                    }}
-                  >
-                    Run now
-                  </button>
-                  <button
-                    className="px-2 py-1 text-xs border border-border hover:border-accent"
-                    onClick={() => {
-                      void openRuns(trigger.id);
-                    }}
-                  >
-                    Runs
-                  </button>
-                  <button
-                    className="px-2 py-1 text-xs border border-border hover:border-danger text-danger"
-                    onClick={() => {
-                      void deleteTrigger(trigger.id);
-                    }}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-              <div className="text-xs whitespace-pre-wrap">{trigger.instructions}</div>
-              {selectedRunsId === trigger.id && (
-                <div className="border border-border bg-card p-2 mt-1">
-                  <div className="text-xs font-semibold mb-1">Recent runs</div>
-                  {selectedRuns.length === 0 ? (
-                    <div className="text-xs text-muted">No runs yet.</div>
-                  ) : (
-                    <div className="space-y-1">
-                      {selectedRuns
-                        .slice()
-                        .reverse()
-                        .map((run) => (
-                          <div
-                            key={run.triggerRunId}
-                            className="text-xs border border-border px-2 py-1"
-                          >
-                            <div>
-                              {run.status} • {formatTimestamp(run.finishedAt)} •{" "}
-                              {run.latencyMs}ms
+
+                  {/* Last run status */}
+                  {trigger.lastStatus && (
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <RunDot status={trigger.lastStatus} />
+                      <span className="text-muted">
+                        Last run {trigger.lastStatus} {trigger.lastRunAtIso && `at ${new Date(trigger.lastRunAtIso).toLocaleString()}`}
+                      </span>
+                      {trigger.lastError && <span className="text-danger">— {trigger.lastError}</span>}
+                    </div>
+                  )}
+
+                  {/* Run history */}
+                  {selectedRunsId === trigger.id && (
+                    <div className="border border-border bg-card p-3 mt-1">
+                      <div className="text-[11px] font-bold mb-2 uppercase tracking-wide text-muted">Run History</div>
+                      {selectedRuns.length === 0 ? (
+                        <div className="text-xs text-muted py-2">No runs recorded yet.</div>
+                      ) : (
+                        <div className="space-y-1">
+                          {selectedRuns.slice().reverse().map((run) => (
+                            <div key={run.triggerRunId} className="flex items-start gap-2 text-xs border border-border px-3 py-1.5">
+                              <RunDot status={run.status} />
+                              <div className="flex-1 min-w-0">
+                                <span className="font-medium">{run.status}</span>
+                                <span className="text-muted"> · {formatTimestamp(run.finishedAt)} · {run.latencyMs}ms · {run.source}</span>
+                                {run.error && <div className="text-danger mt-0.5">{run.error}</div>}
+                              </div>
                             </div>
-                            {run.error && (
-                              <div className="text-danger">{run.error}</div>
-                            )}
-                          </div>
-                        ))}
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              )}
-            </div>
-          ))}
-          {triggers.length === 0 && !triggersLoading && (
-            <div className="text-xs text-muted">No triggers configured yet.</div>
-          )}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </section>
     </div>
   );
 }
+
