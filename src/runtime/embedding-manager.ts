@@ -151,27 +151,59 @@ function checkDimensionMigration(model: string, dimensions: number): void {
 // Model downloader (simplified from upstream DownloadManager)
 // ---------------------------------------------------------------------------
 
-function downloadFile(url: string, dest: string): Promise<void> {
+function safeUnlink(filepath: string): void {
+  try {
+    if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
+  } catch {
+    // best-effort cleanup
+  }
+}
+
+function downloadFile(
+  url: string,
+  dest: string,
+  maxRedirects = 5,
+): Promise<void> {
   return new Promise<void>((resolve, reject) => {
-    const file = fs.createWriteStream(dest);
+    let redirectCount = 0;
+
     const request = (reqUrl: string) => {
+      // Open a fresh write stream for each attempt
+      const file = fs.createWriteStream(dest);
+
+      const cleanup = () => {
+        file.close();
+        safeUnlink(dest);
+      };
+
       https
         .get(reqUrl, { headers: { "User-Agent": "milaidy" } }, (res) => {
-          // Follow redirects
+          // Follow redirects (open new stream each time)
           if (
             res.statusCode &&
             res.statusCode >= 300 &&
             res.statusCode < 400 &&
             res.headers.location
           ) {
+            res.resume(); // drain the response
             file.close();
-            fs.unlinkSync(dest);
-            request(res.headers.location);
+            safeUnlink(dest);
+            redirectCount += 1;
+            if (redirectCount > maxRedirects) {
+              reject(
+                new Error(
+                  `Download failed: too many redirects (>${maxRedirects})`,
+                ),
+              );
+              return;
+            }
+            // Resolve relative redirect URLs
+            const next = new URL(res.headers.location, reqUrl).toString();
+            request(next);
             return;
           }
           if (res.statusCode !== 200) {
-            file.close();
-            fs.unlinkSync(dest);
+            cleanup();
             reject(
               new Error(
                 `Download failed: HTTP ${res.statusCode} for ${reqUrl}`,
@@ -184,10 +216,13 @@ function downloadFile(url: string, dest: string): Promise<void> {
             file.close();
             resolve();
           });
+          file.on("error", (err) => {
+            cleanup();
+            reject(err);
+          });
         })
         .on("error", (err) => {
-          file.close();
-          fs.unlinkSync(dest);
+          cleanup();
           reject(err);
         });
     };
@@ -237,6 +272,10 @@ export class MilaidyEmbeddingManager {
   private lastUsedAt: number | null = null;
   private idleTimer: ReturnType<typeof setInterval> | null = null;
   private disposed = false;
+  /** Track in-flight generateEmbedding calls to prevent idle unload during use. */
+  private inFlightCount = 0;
+  /** Only write dimension metadata on the very first init (not idle re-inits). */
+  private dimensionCheckDone = false;
 
   constructor(config: EmbeddingManagerConfig = {}) {
     this.model = config.model ?? DEFAULT_MODEL;
@@ -256,19 +295,24 @@ export class MilaidyEmbeddingManager {
     }
 
     await this.ensureInitialized();
+
+    // Guard against idle unload racing with an active embedding call.
+    this.inFlightCount += 1;
     this.lastUsedAt = Date.now();
 
-    if (!this.embeddingContext) {
-      throw new Error("[milaidy] Embedding context not available after init");
-    }
-
     try {
+      if (!this.embeddingContext) {
+        throw new Error("[milaidy] Embedding context not available after init");
+      }
+
       const result = await this.embeddingContext.getEmbeddingFor(text);
       return Array.from(result.vector);
     } catch (err) {
       getLogger().error(`[milaidy] Embedding generation failed: ${err}`);
       // Return zero vector as fallback (correct dimensions)
       return new Array(this.dimensions).fill(0);
+    } finally {
+      this.inFlightCount -= 1;
     }
   }
 
@@ -315,8 +359,11 @@ export class MilaidyEmbeddingManager {
   private async doInit(): Promise<void> {
     const log = getLogger();
 
-    // Check dimension migration on first init
-    checkDimensionMigration(this.model, this.dimensions);
+    // Only check dimension migration on the very first init, not idle re-inits
+    if (!this.dimensionCheckDone) {
+      checkDimensionMigration(this.model, this.dimensions);
+      this.dimensionCheckDone = true;
+    }
 
     // Download model if needed
     const modelPath = await ensureModel(
@@ -337,14 +384,30 @@ export class MilaidyEmbeddingManager {
       this.llama = await getLlama();
     }
 
-    this.embeddingModel = await this.llama.loadModel({
+    // Load model + create context with cleanup guard: if context creation
+    // fails after model loads, dispose the model to avoid leaking native
+    // allocations.
+    const model = await this.llama.loadModel({
       modelPath,
       // node-llama-cpp accepts gpuLayers as number | "auto" | "max"
       gpuLayers: this.gpuLayers as number,
     });
 
-    this.embeddingContext = await this.embeddingModel.createEmbeddingContext();
+    let context: LlamaEmbeddingContextInstance;
+    try {
+      context = await model.createEmbeddingContext();
+    } catch (err) {
+      // Clean up the successfully loaded model before rethrowing
+      try {
+        await model.dispose();
+      } catch {
+        // best-effort
+      }
+      throw err;
+    }
 
+    this.embeddingModel = model;
+    this.embeddingContext = context;
     this.initialized = true;
     log.info(`[milaidy] Embedding model loaded: ${this.model}`);
 
@@ -361,6 +424,8 @@ export class MilaidyEmbeddingManager {
     // Check every minute if idle timeout has been exceeded
     const checkIntervalMs = Math.min(this.idleTimeoutMs, 60_000);
     this.idleTimer = setInterval(() => {
+      // Don't unload while embedding calls are in-flight
+      if (this.inFlightCount > 0) return;
       if (
         this.lastUsedAt &&
         Date.now() - this.lastUsedAt > this.idleTimeoutMs

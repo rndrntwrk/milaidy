@@ -2235,14 +2235,22 @@ export async function startEliza(
 
           // Pre-register plugin-sql + local-embedding before initialize()
           // to avoid the same race condition as the initial startup.
-          if (sqlPlugin) {
-            await newRuntime.registerPlugin(sqlPlugin.plugin);
+          // Re-derive from freshly resolved plugins (not outer closure) so
+          // hot-reload picks up any plugin updates.
+          const freshSqlPlugin = resolvedPlugins.find(
+            (p) => p.name === "@elizaos/plugin-sql",
+          );
+          const freshLocalEmbeddingPlugin = resolvedPlugins.find(
+            (p) => p.name === "@elizaos/plugin-local-embedding",
+          );
+          if (freshSqlPlugin) {
+            await newRuntime.registerPlugin(freshSqlPlugin.plugin);
             if (newRuntime.adapter && !(await newRuntime.adapter.isReady())) {
               await newRuntime.adapter.init();
             }
           }
-          if (localEmbeddingPlugin) {
-            await newRuntime.registerPlugin(localEmbeddingPlugin.plugin);
+          if (freshLocalEmbeddingPlugin) {
+            await newRuntime.registerPlugin(freshLocalEmbeddingPlugin.plugin);
           }
 
           // Re-create embedding manager with fresh config and register
