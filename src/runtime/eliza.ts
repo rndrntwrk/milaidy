@@ -689,7 +689,7 @@ async function resolvePlugins(
           `[milaidy] Failed to load core plugin ${pluginName}: ${msg}`,
         );
       } else {
-        logger.warn(`[milaidy] Could not load plugin ${pluginName}: ${msg}`);
+        logger.info(`[milaidy] Could not load plugin ${pluginName}: ${msg}`);
       }
     }
   }
@@ -700,7 +700,7 @@ async function resolvePlugins(
       (failedPlugins.length > 0 ? `, ${failedPlugins.length} failed` : ""),
   );
   if (failedPlugins.length > 0) {
-    logger.debug(
+    logger.info(
       `[milaidy] Failed plugins: ${failedPlugins.map((f) => `${f.name} (${f.error})`).join(", ")}`,
     );
   }
