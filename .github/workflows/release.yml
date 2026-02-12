@@ -124,7 +124,7 @@ jobs:
           echo '{"type":"module"}' > dist/package.json
 
       - name: Install Capacitor app dependencies
-        run: bun install --frozen-lockfile
+        run: bun install
         working-directory: apps/app
 
       - name: Build Capacitor plugins
@@ -137,7 +137,7 @@ jobs:
         shell: bash
 
       - name: Refresh Capacitor app dependencies
-        run: bun install --frozen-lockfile
+        run: bun install
         working-directory: apps/app
 
       - name: Build Capacitor app

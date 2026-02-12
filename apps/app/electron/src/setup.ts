@@ -117,12 +117,15 @@ export class ElectronCapacitorApp {
   private async loadMainWindow(thisRef: ElectronCapacitorApp): Promise<void> {
     if (!thisRef.MainWindow || thisRef.MainWindow.isDestroyed()) return;
 
+    const customSchemeUrl = `${thisRef.customScheme}://-/`;
     try {
-      await thisRef.loadWebApp(thisRef.MainWindow);
+      // Explicitly await the initial custom-scheme navigation so load failures
+      // are handled here instead of surfacing as unhandled Promise rejections.
+      await thisRef.MainWindow.loadURL(customSchemeUrl);
       return;
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      console.error(`[Milaidy] Failed to load web app via ${thisRef.customScheme}:// (${reason})`);
+      console.error(`[Milaidy] Failed to load web app via ${customSchemeUrl} (${reason})`);
     }
 
     // Fallback: attempt direct file:// load when the custom protocol fails.
