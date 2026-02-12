@@ -84,6 +84,14 @@ function autoLabel(key: string, pluginId: string): string {
     .join(" ");
 }
 
+function formatByteSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return "unknown";
+  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${bytes} B`;
+}
+
 /* ── SettingsView ─────────────────────────────────────────────────────── */
 
 export function SettingsView() {
@@ -123,7 +131,6 @@ export function SettingsView() {
     exportSuccess,
     importBusy,
     importPassword,
-    importFile,
     importError,
     importSuccess,
     // Actions
@@ -371,13 +378,38 @@ export function SettingsView() {
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
+  const [exportEstimateLoading, setExportEstimateLoading] = useState(false);
+  const [exportEstimateError, setExportEstimateError] = useState<string | null>(null);
+  const [exportEstimate, setExportEstimate] = useState<{
+    estimatedBytes: number;
+    memoriesCount: number;
+    entitiesCount: number;
+    roomsCount: number;
+    worldsCount: number;
+    tasksCount: number;
+  } | null>(null);
 
   const openExportModal = useCallback(() => {
     setState("exportPassword", "");
     setState("exportIncludeLogs", false);
     setState("exportError", null);
     setState("exportSuccess", null);
+    setExportEstimate(null);
+    setExportEstimateError(null);
+    setExportEstimateLoading(true);
     setExportModalOpen(true);
+    void (async () => {
+      try {
+        const estimate = await client.getExportEstimate();
+        setExportEstimate(estimate);
+      } catch (err) {
+        setExportEstimateError(
+          err instanceof Error ? err.message : "Failed to estimate export size.",
+        );
+      } finally {
+        setExportEstimateLoading(false);
+      }
+    })();
   }, [setState]);
 
   const openImportModal = useCallback(() => {
@@ -1197,19 +1229,36 @@ export function SettingsView() {
         <div className="flex flex-col gap-3">
           <div className="text-xs text-[var(--muted)]">
             Your character, memories, chats, secrets, and relationships will be downloaded as a
-            single file. Optionally set a password to encrypt the export.
+            single file. Exports are encrypted and require a password.
           </div>
+          {exportEstimateLoading && (
+            <div className="text-[11px] text-[var(--muted)]">Estimating export size…</div>
+          )}
+          {!exportEstimateLoading && exportEstimate && (
+            <div className="text-[11px] text-[var(--muted)] border border-[var(--border)] bg-[var(--bg-muted)] px-2.5 py-2">
+              <div>Estimated file size: {formatByteSize(exportEstimate.estimatedBytes)}</div>
+              <div>
+                Contains {exportEstimate.memoriesCount} memories, {exportEstimate.entitiesCount} entities, {exportEstimate.roomsCount} rooms, {exportEstimate.worldsCount} worlds, {exportEstimate.tasksCount} tasks.
+              </div>
+            </div>
+          )}
+          {!exportEstimateLoading && exportEstimateError && (
+            <div className="text-[11px] text-[var(--danger,#e74c3c)]">
+              Could not estimate export size: {exportEstimateError}
+            </div>
+          )}
           <div className="flex flex-col gap-1">
-            <label className="font-semibold text-xs">
-              Encryption Password <span className="font-normal text-[var(--muted)]">(optional)</span>
-            </label>
+            <label className="font-semibold text-xs">Encryption Password</label>
             <input
               type="password"
-              placeholder="Leave blank to skip encryption"
+              placeholder="Enter password (minimum 4 characters)"
               value={exportPassword}
               onChange={(e) => setState("exportPassword", e.target.value)}
               className="px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-xs font-[var(--mono)] focus:border-[var(--accent)] focus:outline-none"
             />
+            <div className="text-[11px] text-[var(--muted)]">
+              Password must be at least 4 characters.
+            </div>
           </div>
           <label className="flex items-center gap-2 text-xs text-[var(--muted)] cursor-pointer">
             <input
@@ -1234,7 +1283,7 @@ export function SettingsView() {
             </button>
             <button
               className="btn text-xs py-1.5 px-4 !mt-0"
-              disabled={exportBusy || (exportPassword.length > 0 && exportPassword.length < 4)}
+              disabled={exportBusy}
               onClick={() => void handleAgentExport()}
             >
               {exportBusy ? "Exporting..." : "Download Export"}
@@ -1246,8 +1295,8 @@ export function SettingsView() {
       <Modal open={importModalOpen} onClose={() => setImportModalOpen(false)} title="Import Agent">
         <div className="flex flex-col gap-3">
           <div className="text-xs text-[var(--muted)]">
-            Select an <code className="text-[11px]">.eliza-agent</code> export file. If it was
-            encrypted, enter the password used during export.
+            Select an <code className="text-[11px]">.eliza-agent</code> export file and enter the
+            password used during export.
           </div>
           <div className="flex flex-col gap-1">
             <label className="font-semibold text-xs">Export File</label>
@@ -1264,16 +1313,17 @@ export function SettingsView() {
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="font-semibold text-xs">
-              Decryption Password <span className="font-normal text-[var(--muted)]">(optional)</span>
-            </label>
+            <label className="font-semibold text-xs">Decryption Password</label>
             <input
               type="password"
-              placeholder="Leave blank if export was not encrypted"
+              placeholder="Enter password (minimum 4 characters)"
               value={importPassword}
               onChange={(e) => setState("importPassword", e.target.value)}
               className="px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-xs font-[var(--mono)] focus:border-[var(--accent)] focus:outline-none"
             />
+            <div className="text-[11px] text-[var(--muted)]">
+              Password must be at least 4 characters.
+            </div>
           </div>
           {importError && (
             <div className="text-[11px] text-[var(--danger,#e74c3c)]">{importError}</div>
@@ -1290,7 +1340,7 @@ export function SettingsView() {
             </button>
             <button
               className="btn text-xs py-1.5 px-4 !mt-0"
-              disabled={importBusy || !importFile || (importPassword.length > 0 && importPassword.length < 4)}
+              disabled={importBusy}
               onClick={() => void handleAgentImport()}
             >
               {importBusy ? "Importing..." : "Import Agent"}

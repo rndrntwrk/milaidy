@@ -1530,6 +1530,8 @@ function scanSkillsDir(
 /** Maximum request body size (1 MB) — prevents memory-based DoS. */
 const MAX_BODY_BYTES = 1_048_576;
 const MAX_IMPORT_BYTES = 512 * 1_048_576; // 512 MB for agent imports
+const AGENT_TRANSFER_MIN_PASSWORD_LENGTH = 4;
+const AGENT_TRANSFER_MAX_PASSWORD_LENGTH = 1024;
 
 function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -5266,12 +5268,21 @@ async function handleRequest(
     }>(req, res);
     if (!body) return;
 
-    if (
-      !body.password ||
-      typeof body.password !== "string" ||
-      body.password.length < 4
-    ) {
-      error(res, "A password of at least 4 characters is required.", 400);
+    if (!body.password || typeof body.password !== "string") {
+      error(
+        res,
+        `A password of at least ${AGENT_TRANSFER_MIN_PASSWORD_LENGTH} characters is required.`,
+        400,
+      );
+      return;
+    }
+
+    if (body.password.length < AGENT_TRANSFER_MIN_PASSWORD_LENGTH) {
+      error(
+        res,
+        `A password of at least ${AGENT_TRANSFER_MIN_PASSWORD_LENGTH} characters is required.`,
+        400,
+      );
       return;
     }
 
@@ -5354,8 +5365,20 @@ async function handleRequest(
 
     // Parse binary envelope: [4 bytes password length][password][file data]
     const passwordLength = rawBody.readUInt32BE(0);
-    if (passwordLength < 4 || passwordLength > 1024) {
-      error(res, "Invalid password length in request envelope.", 400);
+    if (passwordLength < AGENT_TRANSFER_MIN_PASSWORD_LENGTH) {
+      error(
+        res,
+        `Password must be at least ${AGENT_TRANSFER_MIN_PASSWORD_LENGTH} characters.`,
+        400,
+      );
+      return;
+    }
+    if (passwordLength > AGENT_TRANSFER_MAX_PASSWORD_LENGTH) {
+      error(
+        res,
+        `Password is too long (max ${AGENT_TRANSFER_MAX_PASSWORD_LENGTH} bytes).`,
+        400,
+      );
       return;
     }
     if (rawBody.length < 4 + passwordLength + 1) {

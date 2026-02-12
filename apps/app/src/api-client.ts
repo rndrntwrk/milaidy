@@ -1488,6 +1488,7 @@ declare global {
 
 const GENERIC_NO_RESPONSE_TEXT =
   "Sorry, I couldn't generate a response right now. Please try again.";
+const AGENT_TRANSFER_MIN_PASSWORD_LENGTH = 4;
 
 export class MilaidyClient {
   private _baseUrl: string;
@@ -2153,6 +2154,11 @@ export class MilaidyClient {
    * Returns the raw Response so the caller can stream the binary body.
    */
   async exportAgent(password: string, includeLogs = false): Promise<Response> {
+    if (password.length < AGENT_TRANSFER_MIN_PASSWORD_LENGTH) {
+      throw new Error(
+        `Password must be at least ${AGENT_TRANSFER_MIN_PASSWORD_LENGTH} characters.`,
+      );
+    }
     if (!this.apiAvailable) {
       throw new Error("API not available (no HTTP origin)");
     }
@@ -2199,6 +2205,11 @@ export class MilaidyClient {
     agentName: string;
     counts: Record<string, number>;
   }> {
+    if (password.length < AGENT_TRANSFER_MIN_PASSWORD_LENGTH) {
+      throw new Error(
+        `Password must be at least ${AGENT_TRANSFER_MIN_PASSWORD_LENGTH} characters.`,
+      );
+    }
     if (!this.apiAvailable) {
       throw new Error("API not available (no HTTP origin)");
     }

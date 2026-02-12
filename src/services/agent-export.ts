@@ -49,6 +49,7 @@ const SALT_LEN = 32;
 const IV_LEN = 12; // AES-256-GCM standard nonce
 const TAG_LEN = 16; // AES-GCM authentication tag
 const KEY_LEN = 32; // AES-256
+const MIN_PASSWORD_LENGTH = 4;
 const HEADER_SIZE = MAGIC_BYTES.length + 4 + SALT_LEN + IV_LEN + TAG_LEN; // 15 + 4 + 32 + 12 + 16 = 79
 const EXPORT_VERSION = 1;
 const MAX_IMPORT_DECOMPRESSED_BYTES = 16 * 1024 * 1024; // 16 MiB safety cap
@@ -761,8 +762,10 @@ export async function exportAgent(
   password: string,
   options: AgentExportOptions = {},
 ): Promise<Buffer> {
-  if (!password || password.length < 1) {
-    throw new AgentExportError("A password is required to encrypt the export.");
+  if (!password || password.length < MIN_PASSWORD_LENGTH) {
+    throw new AgentExportError(
+      `A password of at least ${MIN_PASSWORD_LENGTH} characters is required to encrypt the export.`,
+    );
   }
 
   if (!runtime.adapter) {
@@ -802,8 +805,10 @@ export async function importAgent(
   fileBuffer: Buffer,
   password: string,
 ): Promise<ImportResult> {
-  if (!password || password.length < 1) {
-    throw new AgentExportError("A password is required to decrypt the import.");
+  if (!password || password.length < MIN_PASSWORD_LENGTH) {
+    throw new AgentExportError(
+      `A password of at least ${MIN_PASSWORD_LENGTH} characters is required to decrypt the import.`,
+    );
   }
 
   if (!runtime.adapter) {

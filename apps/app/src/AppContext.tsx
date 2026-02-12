@@ -97,6 +97,7 @@ export const THEMES: ReadonlyArray<{
 ];
 
 const VALID_THEMES = new Set<string>(THEMES.map((t) => t.id));
+const AGENT_TRANSFER_MIN_PASSWORD_LENGTH = 4;
 
 function loadTheme(): ThemeName {
   try {
@@ -2472,7 +2473,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ── Agent export/import ────────────────────────────────────────────
 
   const handleAgentExport = useCallback(async () => {
-    if (exportBusy || exportPassword.length < 4) return;
+    if (exportBusy) return;
+    if (!exportPassword) {
+      setExportError("Password is required.");
+      setExportSuccess(null);
+      return;
+    }
+    if (exportPassword.length < AGENT_TRANSFER_MIN_PASSWORD_LENGTH) {
+      setExportError(
+        `Password must be at least ${AGENT_TRANSFER_MIN_PASSWORD_LENGTH} characters.`,
+      );
+      setExportSuccess(null);
+      return;
+    }
     setExportBusy(true);
     setExportError(null);
     setExportSuccess(null);
@@ -2500,7 +2513,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [exportBusy, exportPassword, exportIncludeLogs]);
 
   const handleAgentImport = useCallback(async () => {
-    if (importBusy || !importFile || importPassword.length < 4) return;
+    if (importBusy) return;
+    if (!importFile) {
+      setImportError("Select an export file before importing.");
+      setImportSuccess(null);
+      return;
+    }
+    if (!importPassword) {
+      setImportError("Password is required.");
+      setImportSuccess(null);
+      return;
+    }
+    if (importPassword.length < AGENT_TRANSFER_MIN_PASSWORD_LENGTH) {
+      setImportError(
+        `Password must be at least ${AGENT_TRANSFER_MIN_PASSWORD_LENGTH} characters.`,
+      );
+      setImportSuccess(null);
+      return;
+    }
     setImportBusy(true);
     setImportError(null);
     setImportSuccess(null);
@@ -2572,8 +2602,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       inventorySort: setInventorySort,
       exportPassword: setExportPassword,
       exportIncludeLogs: setExportIncludeLogs,
+      exportError: setExportError,
+      exportSuccess: setExportSuccess,
       importPassword: setImportPassword,
       importFile: setImportFile,
+      importError: setImportError,
+      importSuccess: setImportSuccess,
       onboardingName: setOnboardingName,
       onboardingStyle: setOnboardingStyle,
       onboardingTheme: setOnboardingTheme,

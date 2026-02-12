@@ -731,7 +731,14 @@ describe("agent-export", () => {
     it("rejects export with empty password", async () => {
       populateDb(sourceDb);
       await expect(exportAgent(sourceRuntime, "")).rejects.toThrow(
-        /password.*required/i,
+        /at least 4|password.*required/i,
+      );
+    });
+
+    it("rejects export with a short password", async () => {
+      populateDb(sourceDb);
+      await expect(exportAgent(sourceRuntime, "abc")).rejects.toThrow(
+        /at least 4/i,
       );
     });
 
@@ -744,7 +751,20 @@ describe("agent-export", () => {
       const targetRuntime = createMockRuntime(targetDb);
 
       await expect(importAgent(targetRuntime, fileBuffer, "")).rejects.toThrow(
-        /password.*required/i,
+        /at least 4|password.*required/i,
+      );
+    });
+
+    it("rejects import with a short password", async () => {
+      populateDb(sourceDb);
+      const fileBuffer = await exportAgent(sourceRuntime, "valid-pass");
+
+      const targetDb = createMockDb();
+      targetDb.agents.set(AGENT_ID, makeAgent());
+      const targetRuntime = createMockRuntime(targetDb);
+
+      await expect(importAgent(targetRuntime, fileBuffer, "abc")).rejects.toThrow(
+        /at least 4/i,
       );
     });
   });
