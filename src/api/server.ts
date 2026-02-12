@@ -3266,6 +3266,37 @@ export function resolveWebSocketUpgradeRejection(
   return null;
 }
 
+const RESET_STATE_ALLOWED_SEGMENTS = new Set([".milaidy", "milaidy"]);
+
+function hasAllowedResetSegment(resolvedState: string): boolean {
+  return resolvedState
+    .split(path.sep)
+    .some((segment) =>
+      RESET_STATE_ALLOWED_SEGMENTS.has(segment.trim().toLowerCase()),
+    );
+}
+
+export function isSafeResetStateDir(
+  resolvedState: string,
+  homeDir: string,
+): boolean {
+  const normalizedState = path.resolve(resolvedState);
+  const normalizedHome = path.resolve(homeDir);
+  const parsedRoot = path.parse(normalizedState).root;
+
+  if (normalizedState === parsedRoot) return false;
+  if (normalizedState === normalizedHome) return false;
+
+  const relativeToHome = path.relative(normalizedHome, normalizedState);
+  const isUnderHome =
+    relativeToHome.length > 0 &&
+    !relativeToHome.startsWith("..") &&
+    !path.isAbsolute(relativeToHome);
+  if (!isUnderHome) return false;
+
+  return hasAllowedResetSegment(normalizedState);
+}
+
 function rejectWebSocketUpgrade(
   socket: import("node:stream").Duplex,
   statusCode: number,
@@ -5094,14 +5125,7 @@ async function handleRequest(
       // "/" or another sensitive path, rmSync would wipe the filesystem.
       const resolvedState = path.resolve(stateDir);
       const home = os.homedir();
-      const isRoot =
-        resolvedState === "/" || /^[A-Za-z]:\\?$/.test(resolvedState);
-      const isSafe =
-        !isRoot &&
-        resolvedState !== home &&
-        resolvedState.length > home.length &&
-        (resolvedState.includes(`${path.sep}.milaidy`) ||
-          resolvedState.includes(`${path.sep}milaidy`));
+      const isSafe = isSafeResetStateDir(resolvedState, home);
       if (!isSafe) {
         logger.warn(
           `[milaidy-api] Refusing to delete unsafe state dir: "${resolvedState}"`,
