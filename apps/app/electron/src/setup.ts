@@ -395,7 +395,7 @@ export function setupContentSecurityPolicy(customScheme: string): void {
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const base = [
       `default-src 'self' ${customScheme}://* https://*`,
-      `script-src 'self' ${customScheme}://* 'unsafe-inline'${electronIsDev ? " 'unsafe-eval' devtools://*" : ''}`,
+      `script-src 'self' ${customScheme}://* 'unsafe-inline'${electronIsDev ? " devtools://*" : ""}`,
       `style-src 'self' ${customScheme}://* 'unsafe-inline'`,
       `connect-src 'self' ${customScheme}://* blob: http://localhost:* ws://localhost:* wss://localhost:* http://127.0.0.1:* ws://127.0.0.1:* wss://127.0.0.1:* https://* wss://*`,
       `img-src 'self' ${customScheme}://* data: blob: https://*`,

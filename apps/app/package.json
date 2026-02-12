@@ -8,6 +8,7 @@
     "preview": "vite preview",
     "test": "npx --prefix ../.. vitest run --config vitest.config.ts",
     "test:watch": "npx --prefix ../.. vitest --config vitest.config.ts",
+    "test:electron:e2e": "playwright test --config playwright.electron.config.ts",
     "plugin:build": "for d in gateway swabble camera screencapture canvas desktop location talkmode agent; do echo \"[plugin:$d] building...\" && (cd plugins/$d && ../../../../scripts/rt.sh run build) || exit 1; done",
     "build": "../../scripts/rt.sh run plugin:build && ../../scripts/rt.sh install && vite build",
     "build:ios": "../../scripts/rt.sh run build && capacitor sync ios",
@@ -50,6 +51,7 @@
   },
   "devDependencies": {
     "@capacitor/cli": "8.0.2",
+    "@playwright/test": "^1.55.0",
     "@tailwindcss/vite": "^4.1.18",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

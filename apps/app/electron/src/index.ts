@@ -21,8 +21,9 @@ if (userDataOverride) {
 }
 
 // Electron 26 (Node 18) can miss global File, which breaks undici-based deps.
-if (typeof (globalThis as { File?: unknown }).File === 'undefined' && typeof NodeFile === 'function') {
-  (globalThis as { File?: typeof NodeFile }).File = NodeFile;
+const globalWithFile = globalThis as unknown as { File?: typeof NodeFile };
+if (typeof globalWithFile.File === 'undefined' && typeof NodeFile === 'function') {
+  globalWithFile.File = NodeFile;
 }
 
 // Define our menu templates (these are optional)

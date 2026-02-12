@@ -72,6 +72,3 @@ declare global {
     electron: typeof electronAPI;
   }
 }
-
-console.log("[Preload] Milaidy Electron bridge initialized");
-console.log(`[Preload] Platform: ${process.platform} (${process.arch})`);

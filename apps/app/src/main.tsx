@@ -115,8 +115,6 @@ async function initializePlatform(): Promise<void> {
     await initializeAgent();
   }
 
-  // Log platform info
-  console.log(`[Milaidy] Platform: ${platform}, Native: ${isNative}`);
 }
 
 /**
@@ -274,6 +272,15 @@ async function initializeElectron(): Promise<void> {
   document.body.classList.add("electron");
 
   try {
+    const version = await Desktop.getVersion();
+    const desktopNativeReady =
+      typeof version.electron === "string" &&
+      version.electron !== "N/A" &&
+      version.electron !== "unknown";
+    if (!desktopNativeReady) {
+      return;
+    }
+
     // Global command palette shortcut
     await Desktop.registerShortcut({
       id: "command-palette",
@@ -316,8 +323,7 @@ async function initializeElectron(): Promise<void> {
         }),
       );
     });
-  } catch (err) {
-    console.warn("[Milaidy] Electron native integrations not fully available:", err);
+  } catch {
   }
 }
 

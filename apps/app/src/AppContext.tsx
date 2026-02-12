@@ -3106,9 +3106,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           break;
         } catch {
           backendAttempts += 1;
-          if (backendAttempts === 1 || backendAttempts % 20 === 0) {
-            console.info("[milaidy] Waiting for backend to become reachable...");
-          }
           const delay = Math.min(BASE_DELAY_MS * 2 ** Math.min(backendAttempts, 2), MAX_DELAY_MS);
           await sleep(delay);
         }
@@ -3127,17 +3124,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // On fresh installs, unblock to onboarding as soon as options are available.
       if (onboardingNeedsOptions) {
         let optionsLoaded = false;
-        let optionsAttempts = 0;
         while (!cancelled && !optionsLoaded) {
           try {
             const options = await client.getOnboardingOptions();
             setOnboardingOptions(options);
             optionsLoaded = true;
           } catch {
-            optionsAttempts += 1;
-            if (optionsAttempts === 1 || optionsAttempts % 20 === 0) {
-              console.info("[milaidy] Waiting for onboarding options...");
-            }
             await sleep(500);
           }
         }
@@ -3177,17 +3169,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setConnected(false);
         }
         agentAttempts += 1;
-        if (agentAttempts === 1 || agentAttempts % 40 === 0) {
-          console.info("[milaidy] Waiting for agent runtime to initialize...");
-        }
         await sleep(500);
       }
       if (cancelled) return;
 
       if (!agentReady) {
-        console.warn(
-          "[milaidy] Agent did not reach running/paused state during startup.",
-        );
+        if (import.meta.env.DEV) {
+          console.debug(
+            "[milaidy] Agent did not reach running/paused state during startup.",
+          );
+        }
       }
 
       setOnboardingLoading(false);
