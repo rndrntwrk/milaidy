@@ -991,6 +991,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const prevAgentStateRef = useRef<string | null>(null);
   const lifecycleBusyRef = useRef(false);
   const lifecycleActionRef = useRef<LifecycleAction | null>(null);
+  /** Synchronous lock for onboarding finish to prevent duplicate same-tick submits. */
+  const onboardingFinishBusyRef = useRef(false);
   const pairingBusyRef = useRef(false);
   /** Guards against double-greeting when both init and state-transition paths fire. */
   const greetingFiredRef = useRef(false);
@@ -2728,6 +2730,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [onboardingStep, onboardingOptions, onboardingRunMode]);
 
   const handleOnboardingFinish = useCallback(async () => {
+    if (onboardingFinishBusyRef.current || onboardingRestarting) return;
     if (!onboardingOptions) return;
     if (onboardingFinishSavingRef.current || onboardingRestarting) return;
     const style = onboardingOptions.styles.find((s: StylePreset) => s.catchphrase === onboardingStyle);
@@ -2750,6 +2753,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Sandbox mode is additionally stored as a separate flag
     const apiRunMode = onboardingRunMode === "cloud" ? "cloud" : "local";
 
+    onboardingFinishBusyRef.current = true;
     setOnboardingRestarting(true);
     onboardingFinishSavingRef.current = true;
 
@@ -2782,22 +2786,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
         blooioApiKey: onboardingBlooioApiKey.trim() || undefined,
         blooioPhoneNumber: onboardingBlooioPhoneNumber.trim() || undefined,
       });
+      setOnboardingComplete(true);
+      setTab("chat");
+      try {
+        setAgentStatus(await client.restartAgent());
+      } catch {
+        /* ignore */
+      }
     } catch (err) {
       window.alert(`Setup failed: ${err instanceof Error ? err.message : "network error"}. Please try again.`);
-      return;
     } finally {
       onboardingFinishSavingRef.current = false;
+      onboardingFinishBusyRef.current = false;
       setOnboardingRestarting(false);
     }
-
-    setOnboardingComplete(true);
-    setTab("chat");
-    try {
-      setAgentStatus(await client.restartAgent());
-    } catch {
-      /* ignore */
-    }
   }, [
+    onboardingRestarting,
     onboardingOptions, onboardingStyle, onboardingName, onboardingTheme,
     onboardingRunMode, onboardingCloudProvider, onboardingSmallModel,
     onboardingLargeModel, onboardingProvider, onboardingApiKey,
