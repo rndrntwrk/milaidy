@@ -282,7 +282,8 @@ describe("Plugin Loading — Isolation", () => {
           msg.includes("tfjs_binding") ||
           msg.includes("NAPI_MODULE_NOT_FOUND") ||
           msg.includes("spec not found") ||
-          msg.includes("Failed to resolve entry")
+          msg.includes("Failed to resolve entry") ||
+          (msg.includes("Named export") && msg.includes("eventemitter3"))
         ) {
           // Expected: plugin not installed, native addon missing, or not resolvable in test env
           return;

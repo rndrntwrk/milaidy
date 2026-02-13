@@ -78,7 +78,18 @@ test("electron app startup: onboarding -> chat -> all pages", async () => {
       requestFailures.push(`${request.method()} ${request.url()} :: ${failure?.errorText ?? "failed"}`);
     });
 
-    await expect(page.getByText(/starting backend|initializing agent/i)).toBeVisible({ timeout: 60_000 });
+    // Startup can be fast enough to skip the loading text and render onboarding directly.
+    await expect.poll(async () => {
+      const loadingVisible = await page
+        .getByText(/starting backend|initializing agent/i)
+        .isVisible()
+        .catch(() => false);
+      const onboardingVisible = await page
+        .getByText(/welcome to milaidy/i)
+        .isVisible()
+        .catch(() => false);
+      return loadingVisible || onboardingVisible;
+    }, { timeout: 60_000 }).toBe(true);
     await expect.poll(async () => {
       return page.evaluate(() => (window as { __MILAIDY_API_BASE__?: string }).__MILAIDY_API_BASE__ ?? null);
     }, { timeout: 30_000 }).not.toBeNull();

@@ -23,6 +23,7 @@ import {
   CloudConnectionStatus,
   CloudSourceModeToggle,
 } from "./CloudSourceControls";
+import { ConfigSaveFooter } from "./ConfigSaveFooter";
 
 type MediaCategory = "image" | "video" | "audio" | "vision";
 
@@ -539,25 +540,13 @@ export function MediaSettingsSection() {
         </div>
       )}
 
-      {/* Save button */}
-      {dirty && (
-        <div className="flex items-center justify-end gap-3 pt-2 border-t border-[var(--border)]">
-          {saveError && (
-            <span className="text-xs text-red-500">{saveError}</span>
-          )}
-          {saveSuccess && (
-            <span className="text-xs text-green-600">Saved!</span>
-          )}
-          <button
-            type="button"
-            className="px-4 py-1.5 text-xs font-semibold bg-[var(--accent)] text-[var(--accent-foreground)] cursor-pointer hover:opacity-90 disabled:opacity-50"
-            disabled={saving}
-            onClick={handleSave}
-          >
-            {saving ? "Saving..." : "Save Changes"}
-          </button>
-        </div>
-      )}
+      <ConfigSaveFooter
+        dirty={dirty}
+        saving={saving}
+        saveError={saveError}
+        saveSuccess={saveSuccess}
+        onSave={() => void handleSave()}
+      />
     </div>
   );
 }
