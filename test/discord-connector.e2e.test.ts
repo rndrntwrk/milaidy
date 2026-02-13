@@ -63,6 +63,44 @@ logger.info(
 // ---------------------------------------------------------------------------
 
 const TEST_TIMEOUT = 30_000; // 30 seconds for Discord API operations
+const messageHandlingTodos = [
+  "can receive text messages",
+  "can send text messages",
+  "handles DM functionality",
+  "handles long message chunking (2000 char limit)",
+  "renders markdown correctly",
+  "supports threading",
+] as const;
+
+const discordSpecificTodos = [
+  "implements slash commands",
+  "renders embeds",
+  "handles reactions",
+  "processes user mentions (@user)",
+  "processes role mentions (@role)",
+  "processes @everyone/@here mentions",
+] as const;
+
+const mediaAttachmentTodos = [
+  "receives images",
+  "receives files",
+  "sends images",
+  "sends files",
+  "sends images via embeds",
+] as const;
+
+const permissionsAndChannelsTodos = [
+  "enforces channel permissions",
+  "works in threads",
+  "supports voice channel text chat",
+  "handles multiple guilds",
+] as const;
+
+const errorHandlingTodos = [
+  "handles rate limiting with backoff",
+  "implements reconnection logic",
+  "provides helpful error messages for permission issues",
+] as const;
 
 // ---------------------------------------------------------------------------
 // 1. Setup & Authentication Tests
@@ -216,83 +254,9 @@ describeIfPluginAvailable("Discord Connector - Setup & Authentication", () => {
 // ---------------------------------------------------------------------------
 
 describeIfLive("Discord Connector - Message Handling", () => {
-  it(
-    "can receive text messages",
-    async () => {
-      // TODO: Implement with real Discord message simulation
-      // This requires setting up a test channel and sending a message
-      logger.info(
-        "[discord-connector] Text message reception test - requires manual validation",
-      );
-      expect(true).toBe(true);
-    },
-    TEST_TIMEOUT,
-  );
-
-  it(
-    "can send text messages",
-    async () => {
-      // TODO: Implement with real Discord API call
-      logger.info(
-        "[discord-connector] Text message sending test - requires manual validation",
-      );
-      expect(true).toBe(true);
-    },
-    TEST_TIMEOUT,
-  );
-
-  it(
-    "handles DM functionality",
-    async () => {
-      // TODO: Test direct message sending and receiving
-      logger.info(
-        "[discord-connector] DM functionality test - requires manual validation",
-      );
-      expect(true).toBe(true);
-    },
-    TEST_TIMEOUT,
-  );
-
-  it(
-    "handles long message chunking (2000 char limit)",
-    async () => {
-      // Discord has a 2000 character limit per message
-      const longMessage = "A".repeat(3000);
-
-      // TODO: Send long message and verify it's split into chunks
-      // Expected: Message should be split into multiple messages
-      logger.info(
-        "[discord-connector] Long message chunking test - requires implementation",
-      );
-      expect(longMessage.length).toBeGreaterThan(2000);
-    },
-    TEST_TIMEOUT,
-  );
-
-  it(
-    "renders markdown correctly",
-    async () => {
-      // TODO: Send markdown-formatted message and verify rendering
-      const markdownMessage = "**bold** *italic* `code` ```code block```";
-      logger.info(
-        "[discord-connector] Markdown rendering test - requires manual validation",
-      );
-      expect(markdownMessage).toContain("**bold**");
-    },
-    TEST_TIMEOUT,
-  );
-
-  it(
-    "supports threading",
-    async () => {
-      // TODO: Test thread creation and message threading
-      logger.info(
-        "[discord-connector] Threading test - requires manual validation",
-      );
-      expect(true).toBe(true);
-    },
-    TEST_TIMEOUT,
-  );
+  for (const title of messageHandlingTodos) {
+    it.todo(title);
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -300,77 +264,9 @@ describeIfLive("Discord Connector - Message Handling", () => {
 // ---------------------------------------------------------------------------
 
 describeIfLive("Discord Connector - Discord-Specific Features", () => {
-  it(
-    "implements slash commands",
-    async () => {
-      // TODO: Register and test slash commands
-      logger.info(
-        "[discord-connector] Slash commands test - requires manual validation",
-      );
-      expect(true).toBe(true);
-    },
-    TEST_TIMEOUT,
-  );
-
-  it(
-    "renders embeds",
-    async () => {
-      // TODO: Send embed and verify rendering
-      logger.info(
-        "[discord-connector] Embed rendering test - requires manual validation",
-      );
-      expect(true).toBe(true);
-    },
-    TEST_TIMEOUT,
-  );
-
-  it(
-    "handles reactions",
-    async () => {
-      // TODO: Add reaction to message and verify
-      logger.info(
-        "[discord-connector] Reaction handling test - requires manual validation",
-      );
-      expect(true).toBe(true);
-    },
-    TEST_TIMEOUT,
-  );
-
-  it(
-    "processes user mentions (@user)",
-    async () => {
-      // TODO: Send message with user mention and verify
-      logger.info(
-        "[discord-connector] User mention test - requires manual validation",
-      );
-      expect(true).toBe(true);
-    },
-    TEST_TIMEOUT,
-  );
-
-  it(
-    "processes role mentions (@role)",
-    async () => {
-      // TODO: Send message with role mention and verify
-      logger.info(
-        "[discord-connector] Role mention test - requires manual validation",
-      );
-      expect(true).toBe(true);
-    },
-    TEST_TIMEOUT,
-  );
-
-  it(
-    "processes @everyone/@here mentions",
-    async () => {
-      // TODO: Send message with @everyone/@here and verify
-      logger.info(
-        "[discord-connector] @everyone/@here mention test - requires manual validation",
-      );
-      expect(true).toBe(true);
-    },
-    TEST_TIMEOUT,
-  );
+  for (const title of discordSpecificTodos) {
+    it.todo(title);
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -378,65 +274,9 @@ describeIfLive("Discord Connector - Discord-Specific Features", () => {
 // ---------------------------------------------------------------------------
 
 describeIfLive("Discord Connector - Media & Attachments", () => {
-  it(
-    "receives images",
-    async () => {
-      // TODO: Test receiving image attachments
-      logger.info(
-        "[discord-connector] Image reception test - requires manual validation",
-      );
-      expect(true).toBe(true);
-    },
-    TEST_TIMEOUT,
-  );
-
-  it(
-    "receives files",
-    async () => {
-      // TODO: Test receiving file attachments
-      logger.info(
-        "[discord-connector] File reception test - requires manual validation",
-      );
-      expect(true).toBe(true);
-    },
-    TEST_TIMEOUT,
-  );
-
-  it(
-    "sends images",
-    async () => {
-      // TODO: Test sending image attachments
-      logger.info(
-        "[discord-connector] Image sending test - requires manual validation",
-      );
-      expect(true).toBe(true);
-    },
-    TEST_TIMEOUT,
-  );
-
-  it(
-    "sends files",
-    async () => {
-      // TODO: Test sending file attachments
-      logger.info(
-        "[discord-connector] File sending test - requires manual validation",
-      );
-      expect(true).toBe(true);
-    },
-    TEST_TIMEOUT,
-  );
-
-  it(
-    "sends images via embeds",
-    async () => {
-      // TODO: Test sending images embedded in Discord embeds
-      logger.info(
-        "[discord-connector] Embed image sending test - requires manual validation",
-      );
-      expect(true).toBe(true);
-    },
-    TEST_TIMEOUT,
-  );
+  for (const title of mediaAttachmentTodos) {
+    it.todo(title);
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -444,53 +284,9 @@ describeIfLive("Discord Connector - Media & Attachments", () => {
 // ---------------------------------------------------------------------------
 
 describeIfLive("Discord Connector - Permissions & Channels", () => {
-  it(
-    "enforces channel permissions",
-    async () => {
-      // TODO: Test that bot respects channel permissions
-      logger.info(
-        "[discord-connector] Channel permissions test - requires manual validation",
-      );
-      expect(true).toBe(true);
-    },
-    TEST_TIMEOUT,
-  );
-
-  it(
-    "works in threads",
-    async () => {
-      // TODO: Test bot functionality in thread channels
-      logger.info(
-        "[discord-connector] Thread compatibility test - requires manual validation",
-      );
-      expect(true).toBe(true);
-    },
-    TEST_TIMEOUT,
-  );
-
-  it(
-    "supports voice channel text chat",
-    async () => {
-      // TODO: Test bot in voice channel text areas
-      logger.info(
-        "[discord-connector] Voice channel text chat test - requires manual validation",
-      );
-      expect(true).toBe(true);
-    },
-    TEST_TIMEOUT,
-  );
-
-  it(
-    "handles multiple guilds",
-    async () => {
-      // TODO: Test bot connected to multiple Discord servers
-      logger.info(
-        "[discord-connector] Multi-guild test - requires manual validation",
-      );
-      expect(true).toBe(true);
-    },
-    TEST_TIMEOUT,
-  );
+  for (const title of permissionsAndChannelsTodos) {
+    it.todo(title);
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -498,41 +294,9 @@ describeIfLive("Discord Connector - Permissions & Channels", () => {
 // ---------------------------------------------------------------------------
 
 describeIfLive("Discord Connector - Error Handling", () => {
-  it(
-    "handles rate limiting with backoff",
-    async () => {
-      // TODO: Trigger rate limit and verify backoff behavior
-      logger.info(
-        "[discord-connector] Rate limiting test - requires manual validation",
-      );
-      expect(true).toBe(true);
-    },
-    TEST_TIMEOUT,
-  );
-
-  it(
-    "implements reconnection logic",
-    async () => {
-      // TODO: Simulate connection loss and verify reconnection
-      logger.info(
-        "[discord-connector] Reconnection logic test - requires manual validation",
-      );
-      expect(true).toBe(true);
-    },
-    TEST_TIMEOUT,
-  );
-
-  it(
-    "provides helpful error messages for permission issues",
-    async () => {
-      // TODO: Trigger permission error and verify error message
-      logger.info(
-        "[discord-connector] Permission error messages test - requires manual validation",
-      );
-      expect(true).toBe(true);
-    },
-    TEST_TIMEOUT,
-  );
+  for (const title of errorHandlingTodos) {
+    it.todo(title);
+  }
 });
 
 // ---------------------------------------------------------------------------
