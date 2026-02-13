@@ -5911,7 +5911,7 @@ async function handleRequest(
         pluginId,
         plugin.category,
         plugin.envKey,
-        Object.keys(body.config),
+        plugin.configKeys,
         body.config,
         submittedParamInfos,
       );
