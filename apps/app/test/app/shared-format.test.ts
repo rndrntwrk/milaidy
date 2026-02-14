@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatByteSize, formatDateTime, formatDurationMs, formatShortDate } from "../../src/components/shared/format";
+import { formatByteSize, formatDateTime, formatDurationMs, formatShortDate, formatTime } from "../../src/components/shared/format";
 import { autoLabel } from "../../src/components/shared/labels";
 
 describe("shared format helpers", () => {
@@ -23,6 +23,7 @@ describe("shared format helpers", () => {
 
     expect(formatDateTime(value, { locale: "en-US" })).toContain("2026");
     expect(formatShortDate(value, { locale: "en-US" })).toContain("2026");
+    expect(formatTime(value, { locale: "en-US" })).toContain(":");
   });
 });
 

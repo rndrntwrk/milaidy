@@ -16,6 +16,7 @@ import {
   parsePositiveFloat,
   parsePositiveInteger,
 } from "../../../../src/utils/number-parsing.js";
+import { formatTime } from "./shared/format";
 
 const TRAINING_EVENT_KINDS = new Set<TrainingStreamEvent["kind"]>([
   "job_started",
@@ -926,7 +927,7 @@ export function FineTuningView() {
             trainingEvents.map((event, index) => (
               <div key={`${event.ts}-${event.kind}-${index}`} className="px-2 py-1.5 border-b border-border text-xs">
                 <span className="font-mono text-muted mr-2">
-                  {new Date(event.ts).toLocaleTimeString()}
+                  {formatTime(event.ts, { fallback: "—" })}
                 </span>
                 <span className="font-semibold">{event.kind}</span>
                 {typeof event.progress === "number" && (

@@ -80,6 +80,20 @@ export function formatDateTime(
 }
 
 /**
+ * Format timestamp / date as locale time only (`toLocaleTimeString`).
+ */
+export function formatTime(
+  value: number | string | Date | null | undefined,
+  options: DateFormatOptions = {},
+): string {
+  const { fallback = "—", locale } = options;
+  if (value == null || value === "") return fallback;
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (!Number.isFinite(parsed.getTime())) return fallback;
+  return parsed.toLocaleTimeString(locale);
+}
+
+/**
  * Format timestamp / date as locale date only (`toLocaleDateString`).
  */
 export function formatShortDate(
