@@ -103,7 +103,9 @@ describe("MemoryGateImpl", () => {
       );
 
       expect(decision.action).toBe("allow");
-      expect(decision.reason).toBe("Gate disabled");
+      expect(decision.reason).toContain("Gate disabled");
+      // Trust score should be -1 sentinel (not fabricated 1.0)
+      expect(decision.trustScore.score).toBe(-1);
       disabledGate.dispose();
     });
   });

@@ -32,6 +32,9 @@ import { installPluginAction } from "../actions/install-plugin.js";
 import { mediaActions } from "../actions/media.js";
 import { restartAction } from "../actions/restart.js";
 import { terminalAction } from "../actions/terminal.js";
+import { createDriftWatchEvaluator } from "../autonomy/evaluators/drift-watch.js";
+import { createTrustGateEvaluator } from "../autonomy/evaluators/trust-gate.js";
+import { MilaidyAutonomyService, setAutonomyConfig } from "../autonomy/service.js";
 import { EMOTE_CATALOG } from "../emotes/catalog.js";
 import { createAdminTrustProvider } from "../providers/admin-trust.js";
 import {
@@ -43,6 +46,7 @@ import {
   resolveSessionKeyFromRoom,
 } from "../providers/session-bridge.js";
 import { createSimpleModeProvider } from "../providers/simple-mode.js";
+import { createTrustRetrievalProvider } from "../providers/trust-retrieval-provider.js";
 import { DEFAULT_AGENT_WORKSPACE_DIR } from "../providers/workspace.js";
 import { createWorkspaceProvider } from "../providers/workspace-provider.js";
 import {
@@ -82,6 +86,8 @@ export type MilaidyPluginConfig = {
    * @default true
    */
   enableBootstrapProviders?: boolean;
+  /** Autonomy kernel config from MilaidyConfig.autonomy. */
+  autonomyConfig?: import("../autonomy/config.js").AutonomyConfig;
 };
 
 /**
@@ -166,6 +172,9 @@ export function createMilaidyPlugin(config?: MilaidyPluginConfig): Plugin {
     }
   };
 
+  // Hand off autonomy config to the service module before ElizaOS calls start()
+  setAutonomyConfig(config?.autonomyConfig);
+
   const baseProviders = [
     createSimpleModeProvider(),
     createWorkspaceProvider({
@@ -176,6 +185,7 @@ export function createMilaidyPlugin(config?: MilaidyPluginConfig): Plugin {
     createAutonomousStateProvider(),
     createSessionKeyProvider({ defaultAgentId: agentId }),
     ...getSessionProviders({ storePath: sessionStorePath }),
+    createTrustRetrievalProvider(),
   ];
 
   // Optionally add bootstrap providers (can be heavy for small context windows)
@@ -425,6 +435,10 @@ export function createMilaidyPlugin(config?: MilaidyPluginConfig): Plugin {
     ],
 
     // TrajectoryLoggerService is provided by @elizaos/plugin-trajectory-logger (in CORE_PLUGINS)
+
+    services: [MilaidyAutonomyService],
+
+    evaluators: [createTrustGateEvaluator(), createDriftWatchEvaluator()],
 
     events: {
       // Inject Milaidy session keys and trajectory context into inbound messages

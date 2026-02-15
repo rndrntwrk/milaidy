@@ -48,11 +48,14 @@ export interface MemoryGate {
   evaluate(memory: Memory, source: TrustSource): Promise<MemoryGateDecision>;
   /** Get all quarantined memories pending review. */
   getQuarantined(): Promise<TypedMemoryObject[]>;
-  /** Approve or reject a quarantined memory. */
-  reviewQuarantined(memoryId: string, decision: "approve" | "reject"): Promise<void>;
+  /** Approve or reject a quarantined memory. Returns the memory if approved. */
+  reviewQuarantined(memoryId: string, decision: "approve" | "reject"): Promise<TypedMemoryObject | null>;
   /** Get gate statistics. */
   getStats(): MemoryGateStats;
 }
+
+/** Maximum content size (bytes) accepted by the gate to prevent OOM/ReDoS. */
+const MAX_CONTENT_SIZE = 1_000_000; // 1MB
 
 /**
  * Gate statistics.
@@ -123,29 +126,53 @@ export class MemoryGateImpl implements MemoryGate {
   }
 
   async evaluate(memory: Memory, source: TrustSource): Promise<MemoryGateDecision> {
-    // If gate is disabled, allow everything
+    // If gate is disabled, allow but mark as unscored (no fabricated trust)
     if (!this.gateConfig.enabled) {
       return {
         action: "allow",
         trustScore: {
-          score: 1,
+          score: -1, // Sentinel: -1 means "not evaluated"
           dimensions: {
-            sourceReliability: 1,
-            contentConsistency: 1,
-            temporalCoherence: 1,
-            instructionAlignment: 1,
+            sourceReliability: -1,
+            contentConsistency: -1,
+            temporalCoherence: -1,
+            instructionAlignment: -1,
           },
-          reasoning: ["Memory gate disabled — auto-allow"],
+          reasoning: ["Memory gate disabled — content not evaluated"],
           computedAt: Date.now(),
         },
-        reason: "Gate disabled",
+        reason: "Gate disabled — no trust evaluation performed",
       };
     }
 
-    // Score the memory content
+    // Extract content text
     const contentText = typeof memory.content === "string"
       ? memory.content
       : memory.content?.text ?? JSON.stringify(memory.content);
+
+    // Input size limit — reject oversized content to prevent OOM/ReDoS
+    if (contentText.length > MAX_CONTENT_SIZE) {
+      this.stats.rejected++;
+      logger.warn(
+        `[memory-gate] REJECT oversized content from ${source.id} ` +
+        `(${contentText.length} bytes > ${MAX_CONTENT_SIZE} limit)`,
+      );
+      return {
+        action: "reject",
+        trustScore: {
+          score: 0,
+          dimensions: {
+            sourceReliability: 0,
+            contentConsistency: 0,
+            temporalCoherence: 0,
+            instructionAlignment: 0,
+          },
+          reasoning: [`Content too large: ${contentText.length} bytes exceeds ${MAX_CONTENT_SIZE} limit`],
+          computedAt: Date.now(),
+        },
+        reason: `Content size ${contentText.length} exceeds maximum ${MAX_CONTENT_SIZE}`,
+      };
+    }
 
     const trustScore = await this.scorer.score(contentText, source, {
       agentId: memory.agentId ?? "unknown",
@@ -166,7 +193,8 @@ export class MemoryGateImpl implements MemoryGate {
 
     if (trustScore.score >= this.trustConfig.quarantineThreshold) {
       // Quarantine: hold for review
-      const memoryId = memory.id ?? crypto.randomUUID();
+      // Always generate a new UUID for quarantine to prevent ID collision replacement attacks
+      const memoryId = crypto.randomUUID();
       const typed = this.createTypedMemory(memory, memoryId, trustScore, source);
 
       this.addToQuarantine(memoryId, typed);
@@ -206,7 +234,7 @@ export class MemoryGateImpl implements MemoryGate {
   async reviewQuarantined(
     memoryId: string,
     decision: "approve" | "reject",
-  ): Promise<void> {
+  ): Promise<TypedMemoryObject | null> {
     const memory = this.quarantineBuffer.get(memoryId);
     if (!memory) {
       throw new Error(`Memory ${memoryId} not found in quarantine`);
@@ -226,9 +254,11 @@ export class MemoryGateImpl implements MemoryGate {
       memory.verified = true;
       this.stats.allowed++;
       logger.info(`[memory-gate] Quarantined memory ${memoryId} APPROVED`);
+      return memory; // Return approved memory so caller can persist it
     } else {
       this.stats.rejected++;
       logger.info(`[memory-gate] Quarantined memory ${memoryId} REJECTED`);
+      return null;
     }
   }
 

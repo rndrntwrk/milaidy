@@ -40,22 +40,44 @@ export interface GoalEvaluationResult {
 }
 
 /**
+ * Caller identity for mutation operations.
+ *
+ * Omit to indicate a system-level (internal) operation — these bypass
+ * trust gates entirely. When provided, the caller's trust is enforced
+ * against per-source-type floors and, for terminal status transitions,
+ * against the goal creator's trust level.
+ */
+export interface MutationContext {
+  source: "user" | "system" | "agent";
+  sourceTrust: number;
+}
+
+/**
  * Interface for goal lifecycle management.
  */
 export interface GoalManager {
   addGoal(goal: Omit<Goal, "id" | "createdAt" | "updatedAt">): Promise<Goal>;
-  updateGoal(goalId: string, update: Partial<Goal>): Promise<Goal>;
+  updateGoal(goalId: string, update: Partial<Goal>, caller?: MutationContext): Promise<Goal>;
   getActiveGoals(): Promise<Goal[]>;
   getGoalTree(rootGoalId: string): Promise<Goal[]>;
   getGoalById(goalId: string): Promise<Goal | undefined>;
   /** Evaluate whether a goal's success criteria have been met. */
-  evaluateGoal(goalId: string): Promise<GoalEvaluationResult>;
+  evaluateGoal(goalId: string, caller?: MutationContext): Promise<GoalEvaluationResult>;
 }
 
 // ---------- Implementation ----------
 
-/** Minimum trust required for agent-proposed goals (lower trust = needs review). */
-const AGENT_GOAL_TRUST_FLOOR = 0.6;
+/**
+ * Trust floors per source type. Goals below these thresholds are rejected.
+ * System goals are always trusted. Agent goals need moderate trust.
+ * User goals have a lower bar (users are the principal) but still gated
+ * because source identity is caller-supplied and unverified.
+ */
+const GOAL_TRUST_FLOORS: Record<Goal["source"], number> = {
+  system: 0.0,  // System goals always accepted
+  user: 0.3,    // Users are the principal, low bar but not zero
+  agent: 0.6,   // Agent-proposed goals need demonstrated trust
+};
 
 /** Priority ordering for sorting. */
 const PRIORITY_ORDER: Record<GoalPriority, number> = {
@@ -64,6 +86,25 @@ const PRIORITY_ORDER: Record<GoalPriority, number> = {
   medium: 2,
   low: 3,
 };
+
+/**
+ * Valid status transitions. Prevents impossible state changes
+ * (e.g., completed -> active) unless going through proper channels.
+ */
+const VALID_STATUS_TRANSITIONS: Record<GoalStatus, GoalStatus[]> = {
+  active: ["paused", "completed", "failed"],
+  paused: ["active", "failed"],
+  completed: [], // Terminal state — no transitions allowed
+  failed: ["active"], // Can retry a failed goal
+};
+
+/** Deep clone a goal to prevent mutation of nested objects. */
+function deepCloneGoal(goal: Goal): Goal {
+  return {
+    ...goal,
+    successCriteria: [...goal.successCriteria],
+  };
+}
 
 /**
  * In-memory goal manager implementation.
@@ -90,17 +131,24 @@ export class InMemoryGoalManager implements GoalManager {
   }
 
   async addGoal(input: Omit<Goal, "id" | "createdAt" | "updatedAt">): Promise<Goal> {
-    // Trust gate: agent-proposed goals need minimum trust
-    if (input.source === "agent" && input.sourceTrust < AGENT_GOAL_TRUST_FLOOR) {
+    // Trust gate: enforce per-source-type minimum trust
+    const trustFloor = GOAL_TRUST_FLOORS[input.source] ?? 0.6;
+    if (input.sourceTrust < trustFloor) {
       throw new Error(
-        `Agent-proposed goal rejected: trust ${input.sourceTrust.toFixed(3)} ` +
-        `below floor ${AGENT_GOAL_TRUST_FLOOR}`,
+        `Goal from "${input.source}" rejected: trust ${input.sourceTrust.toFixed(3)} ` +
+        `below floor ${trustFloor}`,
       );
     }
 
-    // Validate parent exists if specified
-    if (input.parentGoalId && !this.goals.has(input.parentGoalId)) {
-      throw new Error(`Parent goal ${input.parentGoalId} not found`);
+    // Validate parent exists if specified and isn't in a terminal state
+    if (input.parentGoalId) {
+      const parent = this.goals.get(input.parentGoalId);
+      if (!parent) {
+        throw new Error(`Parent goal ${input.parentGoalId} not found`);
+      }
+      if (parent.status === "completed" || parent.status === "failed") {
+        throw new Error(`Cannot add child to ${parent.status} parent goal ${input.parentGoalId}`);
+      }
     }
 
     // Capacity check
@@ -114,6 +162,7 @@ export class InMemoryGoalManager implements GoalManager {
     const now = Date.now();
     const goal: Goal = {
       ...input,
+      successCriteria: [...input.successCriteria], // Deep copy
       id: crypto.randomUUID(),
       createdAt: now,
       updatedAt: now,
@@ -126,26 +175,74 @@ export class InMemoryGoalManager implements GoalManager {
       `(priority=${goal.priority}, source=${goal.source})`,
     );
 
-    return { ...goal };
+    return deepCloneGoal(goal);
   }
 
-  async updateGoal(goalId: string, update: Partial<Goal>): Promise<Goal> {
+  async updateGoal(goalId: string, update: Partial<Goal>, caller?: MutationContext): Promise<Goal> {
     const goal = this.goals.get(goalId);
     if (!goal) {
       throw new Error(`Goal ${goalId} not found`);
     }
 
-    // Prevent updating immutable fields
-    const { id: _id, createdAt: _ca, source: _src, sourceTrust: _st, ...mutableUpdate } = update;
+    // Trust gate: enforce caller authority (omitted caller = system/internal → always allowed)
+    if (caller) {
+      const trustFloor = GOAL_TRUST_FLOORS[caller.source] ?? 0.6;
+      if (caller.sourceTrust < trustFloor) {
+        throw new Error(
+          `Update from "${caller.source}" rejected: trust ${caller.sourceTrust.toFixed(3)} ` +
+          `below floor ${trustFloor}`,
+        );
+      }
+      // Terminal transitions require at least the goal creator's trust level.
+      // This prevents a low-trust agent from closing a high-trust user's goal.
+      if (update.status && (update.status === "completed" || update.status === "failed")) {
+        if (caller.sourceTrust < goal.sourceTrust) {
+          throw new Error(
+            `Cannot ${update.status} goal: caller trust ${caller.sourceTrust.toFixed(3)} ` +
+            `below goal creator trust ${goal.sourceTrust.toFixed(3)}`,
+          );
+        }
+      }
+    }
+
+    // Prevent updating immutable fields (including completedAt and parentGoalId)
+    const {
+      id: _id,
+      createdAt: _ca,
+      source: _src,
+      sourceTrust: _st,
+      completedAt: _cAt,
+      parentGoalId: _pid,
+      ...mutableUpdate
+    } = update;
+
+    // Enforce status state machine
+    if (update.status && update.status !== goal.status) {
+      const allowed = VALID_STATUS_TRANSITIONS[goal.status];
+      if (!allowed.includes(update.status)) {
+        throw new Error(
+          `Invalid status transition: "${goal.status}" -> "${update.status}". ` +
+          `Allowed: [${allowed.join(", ")}]`,
+        );
+      }
+    }
 
     const updated: Goal = {
       ...goal,
       ...mutableUpdate,
+      // Deep copy successCriteria if provided
+      successCriteria: update.successCriteria
+        ? [...update.successCriteria]
+        : [...goal.successCriteria],
       updatedAt: Date.now(),
     };
 
     // If completing, set completedAt
     if (update.status === "completed" && !goal.completedAt) {
+      updated.completedAt = Date.now();
+    }
+    // If failing, also set completedAt as terminal timestamp
+    if (update.status === "failed" && !goal.completedAt) {
       updated.completedAt = Date.now();
     }
 
@@ -155,27 +252,30 @@ export class InMemoryGoalManager implements GoalManager {
       `[goal-manager] Updated goal ${goalId}: status=${updated.status}`,
     );
 
-    return { ...updated };
+    return deepCloneGoal(updated);
   }
 
   async getActiveGoals(): Promise<Goal[]> {
     return Array.from(this.goals.values())
       .filter((g) => g.status === "active")
-      .sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);
+      .sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority])
+      .map(deepCloneGoal);
   }
 
   async getGoalTree(rootGoalId: string): Promise<Goal[]> {
     const root = this.goals.get(rootGoalId);
     if (!root) return [];
 
-    const tree: Goal[] = [{ ...root }];
+    const tree: Goal[] = [deepCloneGoal(root)];
     const queue = [rootGoalId];
+    const visited = new Set<string>([rootGoalId]); // Cycle protection
 
     while (queue.length > 0) {
       const parentId = queue.shift()!;
       for (const goal of this.goals.values()) {
-        if (goal.parentGoalId === parentId) {
-          tree.push({ ...goal });
+        if (goal.parentGoalId === parentId && !visited.has(goal.id)) {
+          visited.add(goal.id);
+          tree.push(deepCloneGoal(goal));
           queue.push(goal.id);
         }
       }
@@ -186,13 +286,24 @@ export class InMemoryGoalManager implements GoalManager {
 
   async getGoalById(goalId: string): Promise<Goal | undefined> {
     const goal = this.goals.get(goalId);
-    return goal ? { ...goal } : undefined;
+    return goal ? deepCloneGoal(goal) : undefined;
   }
 
-  async evaluateGoal(goalId: string): Promise<GoalEvaluationResult> {
+  async evaluateGoal(goalId: string, caller?: MutationContext): Promise<GoalEvaluationResult> {
     const goal = this.goals.get(goalId);
     if (!goal) {
       throw new Error(`Goal ${goalId} not found`);
+    }
+
+    // Trust gate: enforce caller authority (omitted caller = system/internal → always allowed)
+    if (caller) {
+      const trustFloor = GOAL_TRUST_FLOORS[caller.source] ?? 0.6;
+      if (caller.sourceTrust < trustFloor) {
+        throw new Error(
+          `Evaluate from "${caller.source}" rejected: trust ${caller.sourceTrust.toFixed(3)} ` +
+          `below floor ${trustFloor}`,
+        );
+      }
     }
 
     if (goal.successCriteria.length === 0) {
@@ -236,7 +347,7 @@ export class InMemoryGoalManager implements GoalManager {
    * Get all goals (all statuses). For diagnostics.
    */
   getAllGoals(): Goal[] {
-    return Array.from(this.goals.values()).map((g) => ({ ...g }));
+    return Array.from(this.goals.values()).map(deepCloneGoal);
   }
 
   /**
@@ -291,7 +402,26 @@ export class InMemoryGoalManager implements GoalManager {
     return { met: false, reason: "Cannot evaluate — needs human review or custom evaluator" };
   }
 
-  private async checkParentCompletion(parentGoalId: string): Promise<void> {
+  /**
+   * Check if a parent goal can be completed after a child completes.
+   * Includes cycle detection to prevent stack overflow.
+   */
+  private async checkParentCompletion(
+    parentGoalId: string,
+    visited: Set<string> = new Set(),
+  ): Promise<void> {
+    // Cycle detection
+    if (visited.has(parentGoalId)) {
+      logger.error(
+        `[goal-manager] Cycle detected in goal hierarchy at ${parentGoalId}`,
+      );
+      return;
+    }
+    visited.add(parentGoalId);
+
+    const parent = this.goals.get(parentGoalId);
+    if (!parent || parent.status !== "active") return;
+
     const siblings = Array.from(this.goals.values())
       .filter((g) => g.parentGoalId === parentGoalId);
 
@@ -310,6 +440,10 @@ export class InMemoryGoalManager implements GoalManager {
     }
   }
 
+  /**
+   * Prune completed goals, handling orphaned children by
+   * clearing their parentGoalId references.
+   */
   private pruneCompletedGoals(): void {
     const completed = Array.from(this.goals.entries())
       .filter(([, g]) => g.status === "completed" || g.status === "failed")
@@ -317,12 +451,22 @@ export class InMemoryGoalManager implements GoalManager {
 
     // Remove oldest 25% of completed goals
     const toRemove = Math.ceil(completed.length * 0.25);
+    const removedIds = new Set<string>();
+
     for (let i = 0; i < toRemove; i++) {
-      this.goals.delete(completed[i][0]);
+      const id = completed[i][0];
+      removedIds.add(id);
+      this.goals.delete(id);
     }
 
-    if (toRemove > 0) {
-      logger.debug(`[goal-manager] Pruned ${toRemove} completed goals`);
+    // Fix orphaned children: clear dangling parentGoalId references
+    if (removedIds.size > 0) {
+      for (const goal of this.goals.values()) {
+        if (goal.parentGoalId && removedIds.has(goal.parentGoalId)) {
+          goal.parentGoalId = undefined;
+        }
+      }
+      logger.debug(`[goal-manager] Pruned ${toRemove} completed goals, fixed orphaned children`);
     }
   }
 }

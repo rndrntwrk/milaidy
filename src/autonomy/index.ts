@@ -15,13 +15,47 @@ import {
   validateAutonomyConfig,
 } from "./config.js";
 
-// Re-export types
+// Re-export types and config
 export type { AutonomyConfig } from "./config.js";
 export {
   resolveAutonomyConfig,
   validateAutonomyConfig,
 } from "./config.js";
 export type * from "./types.js";
+
+// Re-export service
+export { MilaidyAutonomyService, setAutonomyConfig } from "./service.js";
+
+// Re-export evaluators
+export { createTrustGateEvaluator } from "./evaluators/trust-gate.js";
+export { createDriftWatchEvaluator } from "./evaluators/drift-watch.js";
+
+// Re-export component classes and interfaces
+export { RuleBasedTrustScorer, type TrustScorer } from "./trust/scorer.js";
+export { MemoryGateImpl, type MemoryGate, type MemoryGateDecision, type MemoryGateStats } from "./memory/gate.js";
+export { RuleBasedDriftMonitor, type PersonaDriftMonitor, type DriftReport } from "./identity/drift-monitor.js";
+export { InMemoryGoalManager, type GoalManager, type Goal, type GoalEvaluationResult, type MutationContext } from "./goals/manager.js";
+
+// Re-export retriever types
+export {
+  TrustAwareRetrieverImpl,
+  type TrustAwareRetriever,
+  type RankedMemory,
+  type RetrievalOptions,
+} from "./memory/retriever.js";
+
+// Re-export identity schema
+export {
+  type AutonomyIdentityConfig,
+  type CommunicationStyle,
+  createDefaultAutonomyIdentity,
+  computeIdentityHash,
+  verifyIdentityIntegrity,
+  validateAutonomyIdentity,
+} from "./identity/schema.js";
+
+// Re-export retrieval config
+export { DEFAULT_RETRIEVAL_CONFIG, type AutonomyRetrievalConfig } from "./config.js";
 
 // ---------- Kernel State ----------
 

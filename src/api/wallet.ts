@@ -129,6 +129,7 @@ export interface WalletConfigStatus {
   evmChains: string[];
   evmAddress: string | null;
   solanaAddress: string | null;
+  solanaRpcProvider: "helius" | "alchemy" | "elizacloud" | null;
 }
 
 export type WalletChain = "evm" | "solana";
@@ -712,7 +713,55 @@ export async function fetchEvmNfts(
   );
 }
 
-// Helius API (Solana tokens + NFTs)
+// Solana RPC Configuration (Helius / Alchemy)
+
+export type SolanaRpcProvider = "helius" | "alchemy" | "elizacloud";
+
+export interface SolanaRpcConfig {
+  url: string;
+  provider: SolanaRpcProvider;
+}
+
+/**
+ * Get the Solana RPC configuration based on environment variables.
+ * Supports Helius and Alchemy as DAS API providers.
+ */
+export function getSolanaRpcConfig(): SolanaRpcConfig | null {
+  const provider = (process.env.SOLANA_RPC_PROVIDER || "helius") as SolanaRpcProvider;
+
+  if (provider === "alchemy" && process.env.ALCHEMY_API_KEY) {
+    return {
+      url: `https://solana-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
+      provider: "alchemy",
+    };
+  }
+
+  if (provider === "helius" && process.env.HELIUS_API_KEY) {
+    return {
+      url: `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`,
+      provider: "helius",
+    };
+  }
+
+  // Fallback: if explicit provider is set but key is missing, try the other provider
+  if (provider === "alchemy" && process.env.HELIUS_API_KEY) {
+    return {
+      url: `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`,
+      provider: "helius",
+    };
+  }
+
+  if (provider === "helius" && process.env.ALCHEMY_API_KEY) {
+    return {
+      url: `https://solana-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`,
+      provider: "alchemy",
+    };
+  }
+
+  return null;
+}
+
+// DAS API (Digital Asset Standard) - shared interface for Helius/Alchemy
 
 interface HeliusAsset {
   id: string;
@@ -735,13 +784,13 @@ interface HeliusAsset {
 
 export async function fetchSolanaBalances(
   address: string,
-  heliusKey: string,
+  rpcConfig: SolanaRpcConfig,
 ): Promise<{
   solBalance: string;
   solValueUsd: string;
   tokens: SolanaTokenBalance[];
 }> {
-  const url = `https://mainnet.helius-rpc.com/?api-key=${heliusKey}`;
+  const { url } = rpcConfig;
   const rpc = (body: string): RequestInit => ({
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -829,9 +878,9 @@ export async function fetchSolanaBalances(
 
 export async function fetchSolanaNfts(
   address: string,
-  heliusKey: string,
+  rpcConfig: SolanaRpcConfig,
 ): Promise<SolanaNft[]> {
-  const url = `https://mainnet.helius-rpc.com/?api-key=${heliusKey}`;
+  const { url } = rpcConfig;
   try {
     const data = await jsonOrThrow<{
       result?: { items?: HeliusAsset[] };

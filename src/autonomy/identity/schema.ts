@@ -43,27 +43,35 @@ export interface AutonomyIdentityConfig extends IdentityConfig {
 }
 
 /**
- * Compute a SHA-256 hash of the immutable identity fields.
- * Used for integrity verification — detects unauthorized identity changes.
+ * Compute a SHA-256 hash of the identity fields that should be tamper-evident.
+ * Includes immutable fields AND softPreferences to detect unauthorized changes.
  */
 export function computeIdentityHash(identity: AutonomyIdentityConfig): string {
-  const immutableFields = {
+  const protectedFields = {
     name: identity.name,
     coreValues: [...identity.coreValues].sort(),
     hardBoundaries: [...identity.hardBoundaries].sort(),
     communicationStyle: identity.communicationStyle,
+    // Include softPreferences — changes should be tracked via identityVersion
+    softPreferences: JSON.stringify(identity.softPreferences, Object.keys(identity.softPreferences).sort()),
   };
   return createHash("sha256")
-    .update(JSON.stringify(immutableFields))
+    .update(JSON.stringify(protectedFields))
     .digest("hex");
 }
 
 /**
- * Verify that an identity's hash matches its current immutable fields.
+ * Verify that an identity's hash matches its current fields.
  * Returns false if the identity has been tampered with.
+ *
+ * SECURITY: A missing hash is treated as a FAILURE, not a pass.
+ * Uninitialized identities must be explicitly initialized with computeIdentityHash.
  */
 export function verifyIdentityIntegrity(identity: AutonomyIdentityConfig): boolean {
-  if (!identity.identityHash) return true; // No hash stored yet
+  if (!identity.identityHash) {
+    // Missing hash = unverifiable = fail-closed
+    return false;
+  }
   return computeIdentityHash(identity) === identity.identityHash;
 }
 

@@ -1090,6 +1090,7 @@ export function buildCharacterFromConfig(config: MilaidyConfig): Character {
     "HELIUS_API_KEY",
     "BIRDEYE_API_KEY",
     "SOLANA_RPC_URL",
+    "SOLANA_RPC_PROVIDER",
     "X402_PRIVATE_KEY",
     "X402_NETWORK",
     "X402_PAY_TO",
@@ -1873,6 +1874,7 @@ export async function startEliza(
     bootstrapMaxChars: config.agents?.defaults?.bootstrapMaxChars,
     enableBootstrapProviders: config.agents?.defaults?.enableBootstrapProviders,
     agentId,
+    autonomyConfig: config.autonomy,
   });
 
   // 5b. Optional: Phetta Companion bridge (VRM desktop pet)
@@ -2092,6 +2094,8 @@ export async function startEliza(
             : undefined,
         }
       : {}),
+    // Disabled: Milaidy manages autonomy via MilaidyAutonomyService in milaidy-plugin
+    enableAutonomy: false,
     settings: {
       // Forward Milaidy config env vars as runtime settings
       ...(primaryModel ? { MODEL_PROVIDER: primaryModel } : {}),
@@ -2466,6 +2470,7 @@ export async function startEliza(
               freshConfig.agents?.defaults?.enableBootstrapProviders,
             agentId:
               freshCharacter.name?.toLowerCase().replace(/\s+/g, "-") ?? "main",
+            autonomyConfig: freshConfig.autonomy,
           });
 
           // Create new runtime with updated plugins.
@@ -2483,6 +2488,8 @@ export async function startEliza(
               ...freshOtherPlugins.map((p) => p.plugin),
             ],
             ...(runtimeLogLevel ? { logLevel: runtimeLogLevel } : {}),
+            // Disabled: Milaidy manages autonomy via MilaidyAutonomyService in milaidy-plugin
+            enableAutonomy: false,
             settings: {
               ...(freshPrimaryModel
                 ? { MODEL_PROVIDER: freshPrimaryModel }
