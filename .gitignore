@@ -55,6 +55,11 @@ biome-report.json
 # Local audit outputs
 report/
 
+# Planning docs (local only)
+TECHNICAL_PLAN.md
+IMPROVEMENT_PLAN.md
+*_PLAN.md
+
 # Agent learning docs & knowledge base
 knowledge/
 scripts/knowledge-loop.mjs
