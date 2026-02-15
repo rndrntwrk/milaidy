@@ -62,10 +62,10 @@ describe("AutonomyIdentitySchema", () => {
       expect(verifyIdentityIntegrity(identity)).toBe(true);
     });
 
-    it("returns true when no hash stored", () => {
+    it("returns false when no hash stored (fail-closed)", () => {
       const identity = createDefaultAutonomyIdentity();
       identity.identityHash = undefined;
-      expect(verifyIdentityIntegrity(identity)).toBe(true);
+      expect(verifyIdentityIntegrity(identity)).toBe(false);
     });
 
     it("returns false when identity is tampered", () => {

@@ -12,7 +12,7 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 import { InMemoryGoalManager } from "./manager.js";
-import type { Goal } from "./manager.js";
+import type { Goal, MutationContext } from "./manager.js";
 
 type GoalInput = Omit<Goal, "id" | "createdAt" | "updatedAt">;
 
@@ -66,13 +66,22 @@ describe("InMemoryGoalManager", () => {
       expect(goal.source).toBe("agent");
     });
 
-    it("allows user goals regardless of trust", async () => {
+    it("allows user goals above trust floor", async () => {
       const goal = await manager.addGoal(makeGoalInput({
         source: "user",
-        sourceTrust: 0.1,
+        sourceTrust: 0.5,
       }));
 
       expect(goal.source).toBe("user");
+    });
+
+    it("rejects user goals below trust floor", async () => {
+      await expect(
+        manager.addGoal(makeGoalInput({
+          source: "user",
+          sourceTrust: 0.1, // Below 0.3 floor
+        })),
+      ).rejects.toThrow("below floor");
     });
 
     it("validates parent goal exists", async () => {
@@ -304,6 +313,103 @@ describe("InMemoryGoalManager", () => {
       // Should prune oldest completed to make room
       const newGoal = await small.addGoal(makeGoalInput({ status: "active" }));
       expect(newGoal).toBeDefined();
+    });
+  });
+
+  describe("updateGoal caller trust gate", () => {
+    it("allows update with no caller (system operation)", async () => {
+      const goal = await manager.addGoal(makeGoalInput());
+      const updated = await manager.updateGoal(goal.id, { status: "paused" });
+      expect(updated.status).toBe("paused");
+    });
+
+    it("allows update from high-trust caller", async () => {
+      const goal = await manager.addGoal(makeGoalInput());
+      const caller: MutationContext = { source: "user", sourceTrust: 0.9 };
+      const updated = await manager.updateGoal(goal.id, { status: "paused" }, caller);
+      expect(updated.status).toBe("paused");
+    });
+
+    it("rejects update from low-trust agent caller", async () => {
+      const goal = await manager.addGoal(makeGoalInput());
+      const caller: MutationContext = { source: "agent", sourceTrust: 0.3 };
+      await expect(
+        manager.updateGoal(goal.id, { status: "paused" }, caller),
+      ).rejects.toThrow("below floor");
+    });
+
+    it("rejects terminal transition when caller trust below goal creator trust", async () => {
+      // Goal created with trust 0.9
+      const goal = await manager.addGoal(makeGoalInput({ sourceTrust: 0.9 }));
+      // Caller has trust 0.7 — above floor but below creator
+      const caller: MutationContext = { source: "user", sourceTrust: 0.7 };
+      await expect(
+        manager.updateGoal(goal.id, { status: "completed" }, caller),
+      ).rejects.toThrow("below goal creator trust");
+    });
+
+    it("allows terminal transition when caller trust meets creator trust", async () => {
+      const goal = await manager.addGoal(makeGoalInput({ sourceTrust: 0.9 }));
+      const caller: MutationContext = { source: "user", sourceTrust: 0.9 };
+      const completed = await manager.updateGoal(goal.id, { status: "completed" }, caller);
+      expect(completed.status).toBe("completed");
+    });
+
+    it("allows non-terminal transition regardless of creator trust", async () => {
+      // Goal created with trust 0.9
+      const goal = await manager.addGoal(makeGoalInput({ sourceTrust: 0.9 }));
+      // Caller has trust 0.5 — above user floor (0.3) but below creator (0.9)
+      const caller: MutationContext = { source: "user", sourceTrust: 0.5 };
+      // Pausing is not terminal, so creator-trust check doesn't apply
+      const paused = await manager.updateGoal(goal.id, { status: "paused" }, caller);
+      expect(paused.status).toBe("paused");
+    });
+  });
+
+  describe("evaluateGoal caller trust gate", () => {
+    it("allows evaluation with no caller (system operation)", async () => {
+      const goal = await manager.addGoal(makeGoalInput({
+        successCriteria: ["Task is done"],
+      }));
+      const result = await manager.evaluateGoal(goal.id);
+      expect(result.met).toBe(true);
+    });
+
+    it("allows evaluation from high-trust caller", async () => {
+      const goal = await manager.addGoal(makeGoalInput({
+        successCriteria: ["Task is done"],
+      }));
+      const caller: MutationContext = { source: "user", sourceTrust: 0.9 };
+      const result = await manager.evaluateGoal(goal.id, caller);
+      expect(result.met).toBe(true);
+    });
+
+    it("rejects evaluation from low-trust agent caller", async () => {
+      const goal = await manager.addGoal(makeGoalInput({
+        successCriteria: ["Task is done"],
+      }));
+      const caller: MutationContext = { source: "agent", sourceTrust: 0.3 };
+      await expect(
+        manager.evaluateGoal(goal.id, caller),
+      ).rejects.toThrow("below floor");
+    });
+
+    it("auto-completion uses system context (no caller) internally", async () => {
+      // Goal created by high-trust user (0.9)
+      const goal = await manager.addGoal(makeGoalInput({
+        sourceTrust: 0.9,
+        successCriteria: ["Task is done", "Feature is complete"],
+      }));
+
+      // Evaluate with a lower-trust caller — evaluation itself should be allowed
+      // (0.5 is above user floor 0.3), and auto-completion is internal (system)
+      const caller: MutationContext = { source: "user", sourceTrust: 0.5 };
+      const result = await manager.evaluateGoal(goal.id, caller);
+      expect(result.met).toBe(true);
+
+      // Goal should be auto-completed because internal updateGoal has no caller
+      const updated = await manager.getGoalById(goal.id);
+      expect(updated!.status).toBe("completed");
     });
   });
 

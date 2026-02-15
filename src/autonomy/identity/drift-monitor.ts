@@ -11,6 +11,7 @@
 import { logger } from "@elizaos/core";
 import type { DriftSeverity } from "../types.js";
 import type { AutonomyDriftMonitorConfig } from "../config.js";
+import { verifyIdentityIntegrity } from "./schema.js";
 import type { AutonomyIdentityConfig, CommunicationStyle } from "./schema.js";
 
 /**
@@ -107,6 +108,28 @@ export class RuleBasedDriftMonitor implements PersonaDriftMonitor {
   ): Promise<DriftReport> {
     if (!this.config.enabled || recentOutputs.length === 0) {
       return this.createNullReport(recentOutputs.length);
+    }
+
+    // Verify identity integrity before analysis
+    if (!verifyIdentityIntegrity(identity)) {
+      logger.error("[drift-monitor] Identity integrity check FAILED — identity may be tampered");
+      return {
+        driftScore: 1.0,
+        dimensions: {
+          valueAlignment: 0,
+          styleConsistency: 0,
+          boundaryRespect: 0,
+          topicFocus: 0,
+        },
+        windowSize: recentOutputs.length,
+        severity: "critical",
+        corrections: [
+          "CRITICAL: Identity integrity verification failed — identity hash mismatch",
+          "Agent identity may have been tampered with",
+          "Recommend immediate investigation and identity re-initialization",
+        ],
+        analyzedAt: Date.now(),
+      };
     }
 
     // Trim to analysis window
@@ -220,7 +243,10 @@ export class RuleBasedDriftMonitor implements PersonaDriftMonitor {
         /\b(ignore safety|bypass (security|protection)|who cares about (risk|danger))\b/i,
       ],
       accuracy: [
-        /\b(probably|I guess|not sure but|might be wrong)\b/i,
+        // NOTE: Epistemic humility ("probably", "I think", "not sure") is NOT a drift signal.
+        // Only flag explicit fabrication/indifference to truth.
+        /\b(I'll make (something|it) up|let me fabricate|doesn't matter if it's (true|accurate))\b/i,
+        /\b(who cares (about|if).{0,20}(accurate|correct|true))\b/i,
       ],
       respect: [
         /\b(stupid|idiot|dumb|pathetic)\b/i,
@@ -322,21 +348,42 @@ export class RuleBasedDriftMonitor implements PersonaDriftMonitor {
 
     let violations = 0;
 
+    // Compliance/refusal phrases — if output contains these near a boundary keyword,
+    // it's likely RESPECTING the boundary, not violating it.
+    const compliancePatterns = [
+      /\b(I (?:can't|cannot|won't|will not|don't|do not|shouldn't|should not))\b/i,
+      /\b(not (?:able|allowed|permitted|going) to)\b/i,
+      /\b((?:against|outside|beyond) my (?:guidelines|boundaries|rules|scope))\b/i,
+      /\b(I (?:need to|have to|must) (?:decline|refuse|avoid))\b/i,
+    ];
+
     for (const output of outputs) {
+      const outputLower = output.toLowerCase();
+
       for (const boundary of hardBoundaries) {
-        // Try the boundary string as a simple keyword match
-        // (boundaries like "never discuss politics" → check for "politics")
+        // Extract meaningful keywords from the boundary definition
         const keywords = boundary
           .toLowerCase()
-          .replace(/\b(never|don't|do not|must not|shall not|avoid)\b/gi, "")
+          .replace(/\b(never|don't|do not|must not|shall not|avoid|always|ensure)\b/gi, "")
           .trim()
           .split(/\s+/)
           .filter((word) => word.length > 3);
 
+        let boundaryMentioned = false;
         for (const keyword of keywords) {
-          if (output.toLowerCase().includes(keyword)) {
-            violations++;
+          // Use word-boundary matching instead of substring includes
+          const wordBoundaryPattern = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+          if (wordBoundaryPattern.test(outputLower)) {
+            boundaryMentioned = true;
             break;
+          }
+        }
+
+        if (boundaryMentioned) {
+          // Check if the output is COMPLYING with the boundary (refusal/acknowledgment)
+          const isCompliance = compliancePatterns.some((p) => p.test(output));
+          if (!isCompliance) {
+            violations++;
           }
         }
       }
@@ -374,8 +421,9 @@ export class RuleBasedDriftMonitor implements PersonaDriftMonitor {
       corrections.push("Agent appears to be topic-thrashing across outputs");
     }
 
-    // Transform: 0.0 similarity → 0.5 focus, 0.5+ similarity → 1.0 focus
-    return Math.min(1, avgSimilarity * 2 + 0.5);
+    // Transform: scale similarity to focus score without artificial floor
+    // 0.0 similarity → 0.2 focus, 1.0 similarity → 1.0 focus
+    return Math.min(1, avgSimilarity * 0.8 + 0.2);
   }
 
   // ---------- Helpers ----------

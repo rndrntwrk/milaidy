@@ -40,6 +40,9 @@ export class SourceTracker {
 
   /**
    * Record an interaction with a source.
+   *
+   * Source type is frozen at first registration to prevent type escalation attacks
+   * (e.g., an "external" source claiming to be "system" in later interactions).
    */
   record(source: TrustSource, feedback: "positive" | "negative" | "neutral"): void {
     const now = Date.now();
@@ -53,18 +56,18 @@ export class SourceTracker {
 
       record = {
         id: source.id,
-        type: source.type,
+        type: source.type, // Frozen at registration
         positive: 0,
         negative: 0,
         firstSeen: now,
         lastSeen: now,
-        reliability: source.reliability,
+        reliability: 0.5, // Start at neutral — don't trust caller-supplied reliability
       };
       this.sources.set(source.id, record);
     }
 
     record.lastSeen = now;
-    record.type = source.type;
+    // Type is frozen — do NOT update: record.type = source.type;
 
     if (feedback === "positive") {
       record.positive++;
@@ -72,25 +75,38 @@ export class SourceTracker {
       record.negative++;
     }
 
-    // Update reliability
+    // Bayesian reliability update (Beta distribution prior: alpha=2, beta=2)
     const total = record.positive + record.negative;
     if (total > 0) {
-      record.reliability = record.positive / total;
+      const alpha = record.positive + 2;
+      const beta = record.negative + 2;
+      record.reliability = alpha / (alpha + beta);
     }
   }
 
   /**
    * Get the record for a source, or undefined if unknown.
+   * Updates lastSeen for true LRU eviction behavior.
    */
   get(sourceId: string): SourceRecord | undefined {
-    return this.sources.get(sourceId);
+    const record = this.sources.get(sourceId);
+    if (record) {
+      record.lastSeen = Date.now();
+    }
+    return record;
   }
 
   /**
    * Get reliability for a source (0.5 for unknown sources).
+   * Updates lastSeen for true LRU eviction behavior.
    */
   getReliability(sourceId: string): number {
-    return this.sources.get(sourceId)?.reliability ?? 0.5;
+    const record = this.sources.get(sourceId);
+    if (record) {
+      record.lastSeen = Date.now();
+      return record.reliability;
+    }
+    return 0.5;
   }
 
   /**

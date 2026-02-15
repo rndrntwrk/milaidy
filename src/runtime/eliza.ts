@@ -1820,6 +1820,7 @@ export function buildCharacterFromConfig(config: MiladyConfig): Character {
     "HELIUS_API_KEY",
     "BIRDEYE_API_KEY",
     "SOLANA_RPC_URL",
+    "SOLANA_RPC_PROVIDER",
     "X402_PRIVATE_KEY",
     "X402_NETWORK",
     "X402_PAY_TO",
@@ -2500,6 +2501,7 @@ export async function startEliza(
     bootstrapMaxChars: config.agents?.defaults?.bootstrapMaxChars,
 
     agentId,
+    autonomyConfig: config.autonomy,
   });
 
   // 6. Resolve and load plugins
@@ -2710,6 +2712,8 @@ export async function startEliza(
             : undefined,
         }
       : {}),
+    // Disabled: Milaidy manages autonomy via MilaidyAutonomyService in milaidy-plugin
+    enableAutonomy: false,
     settings: {
       VALIDATION_LEVEL: "fast",
       // Forward Milady config env vars as runtime settings
@@ -3033,6 +3037,7 @@ export async function startEliza(
 
             agentId:
               freshCharacter.name?.toLowerCase().replace(/\s+/g, "-") ?? "main",
+            autonomyConfig: freshConfig.autonomy,
           });
 
           // Create new runtime with updated plugins.
@@ -3050,6 +3055,8 @@ export async function startEliza(
               ...freshOtherPlugins.map((p) => p.plugin),
             ],
             ...(runtimeLogLevel ? { logLevel: runtimeLogLevel } : {}),
+            // Disabled: Milaidy manages autonomy via MilaidyAutonomyService in milaidy-plugin
+            enableAutonomy: false,
             settings: {
               ...(freshPrimaryModel
                 ? { MODEL_PROVIDER: freshPrimaryModel }

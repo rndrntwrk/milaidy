@@ -9,9 +9,11 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_AUTONOMY_CONFIG,
+  DEFAULT_RETRIEVAL_CONFIG,
   resolveAutonomyConfig,
   validateAutonomyConfig,
 } from "./config.js";
+import { createDefaultAutonomyIdentity } from "./identity/schema.js";
 
 describe("resolveAutonomyConfig", () => {
   it("returns defaults when no config provided", () => {
@@ -21,6 +23,9 @@ describe("resolveAutonomyConfig", () => {
     expect(config.trust.quarantineThreshold).toBe(0.3);
     expect(config.memoryGate.enabled).toBe(true);
     expect(config.driftMonitor.analysisWindowSize).toBe(20);
+    expect(config.identity).toBeUndefined();
+    expect(config.retrieval.trustWeight).toBe(0.3);
+    expect(config.retrieval.maxResults).toBe(20);
   });
 
   it("merges user values over defaults", () => {
@@ -119,5 +124,72 @@ describe("validateAutonomyConfig", () => {
       driftMonitor: { alertThreshold: 2.0 },
     });
     expect(issues.some((i) => i.path.includes("alertThreshold"))).toBe(true);
+  });
+
+  it("catches retrieval weight out of range", () => {
+    const issues = validateAutonomyConfig({
+      retrieval: { trustWeight: 1.5 },
+    });
+    expect(issues.some((i) => i.path.includes("trustWeight"))).toBe(true);
+  });
+
+  it("catches retrieval weights that do not sum to ~1.0", () => {
+    const issues = validateAutonomyConfig({
+      retrieval: { trustWeight: 0.1, recencyWeight: 0.1, relevanceWeight: 0.1, typeWeight: 0.1 },
+    });
+    expect(issues.some((i) => i.message.includes("sum to"))).toBe(true);
+  });
+
+  it("accepts retrieval weights that sum to ~1.0", () => {
+    const issues = validateAutonomyConfig({
+      retrieval: { trustWeight: 0.3, recencyWeight: 0.25, relevanceWeight: 0.3, typeWeight: 0.15 },
+    });
+    expect(issues.filter((i) => i.path.includes("retrieval"))).toHaveLength(0);
+  });
+
+  it("catches retrieval maxResults < 1", () => {
+    const issues = validateAutonomyConfig({
+      retrieval: { maxResults: 0 },
+    });
+    expect(issues.some((i) => i.path.includes("maxResults"))).toBe(true);
+  });
+
+  it("catches retrieval minTrustThreshold out of range", () => {
+    const issues = validateAutonomyConfig({
+      retrieval: { minTrustThreshold: -0.1 },
+    });
+    expect(issues.some((i) => i.path.includes("minTrustThreshold"))).toBe(true);
+  });
+
+  it("validates identity config when present", () => {
+    const identity = createDefaultAutonomyIdentity();
+    identity.coreValues = []; // invalid — requires at least one
+    const issues = validateAutonomyConfig({ identity });
+    expect(issues.some((i) => i.path.includes("coreValues"))).toBe(true);
+  });
+
+  it("accepts valid identity config", () => {
+    const identity = createDefaultAutonomyIdentity();
+    const issues = validateAutonomyConfig({ identity });
+    expect(issues.filter((i) => i.path.includes("identity"))).toHaveLength(0);
+  });
+});
+
+describe("resolveAutonomyConfig — retrieval & identity", () => {
+  it("merges user retrieval overrides", () => {
+    const config = resolveAutonomyConfig({
+      retrieval: { trustWeight: 0.5, maxResults: 10 },
+    });
+    expect(config.retrieval.trustWeight).toBe(0.5);
+    expect(config.retrieval.maxResults).toBe(10);
+    // Other fields keep defaults
+    expect(config.retrieval.recencyWeight).toBe(DEFAULT_RETRIEVAL_CONFIG.recencyWeight);
+  });
+
+  it("passes through identity config", () => {
+    const identity = createDefaultAutonomyIdentity();
+    const config = resolveAutonomyConfig({ identity });
+    expect(config.identity).toBe(identity);
+    expect(config.identity!.coreValues).toEqual(["helpfulness", "honesty", "safety"]);
   });
 });

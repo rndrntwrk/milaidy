@@ -150,8 +150,9 @@ describe("RuleBasedTrustScorer", () => {
       scorer.updateSourceReliability("user-1", "positive");
       scorer.updateSourceReliability("user-1", "negative");
 
+      // Bayesian: (2+2)/(2+1+4) = 4/7 ≈ 0.571
       const trust = scorer.getSourceTrust("user-1");
-      expect(trust).toBeCloseTo(2 / 3, 1);
+      expect(trust).toBeCloseTo(4 / 7, 1);
     });
 
     it("returns 0.5 for unknown sources", () => {
@@ -163,9 +164,10 @@ describe("RuleBasedTrustScorer", () => {
       for (let i = 0; i < 20; i++) {
         smallScorer.updateSourceReliability("user-1", "positive");
       }
-      // After trimming, counts should be reduced
+      // After trimming, counts should be reduced but all positive → high trust
+      // Bayesian: (10+2)/(10+0+4) = 12/14 ≈ 0.857
       const trust = smallScorer.getSourceTrust("user-1");
-      expect(trust).toBe(1.0); // All positive → still 1.0
+      expect(trust).toBeGreaterThan(0.8);
     });
   });
 

@@ -59,12 +59,13 @@ describe("SourceTracker", () => {
       expect(record.negative).toBe(0);
     });
 
-    it("updates reliability based on feedback ratio", () => {
+    it("updates reliability based on Bayesian feedback ratio", () => {
       tracker.record(makeSource("user-1"), "positive");
       tracker.record(makeSource("user-1"), "positive");
       tracker.record(makeSource("user-1"), "negative");
 
-      expect(tracker.getReliability("user-1")).toBeCloseTo(2 / 3, 1);
+      // Bayesian: (2+2)/(2+1+4) = 4/7 ≈ 0.571
+      expect(tracker.getReliability("user-1")).toBeCloseTo(4 / 7, 1);
     });
 
     it("updates lastSeen timestamp", () => {
@@ -88,7 +89,8 @@ describe("SourceTracker", () => {
       tracker.record(makeSource("user-1"), "positive");
       tracker.record(makeSource("user-1"), "positive");
 
-      expect(tracker.getReliability("user-1")).toBe(1.0);
+      // Bayesian: (2+2)/(2+0+4) = 4/6 ≈ 0.667
+      expect(tracker.getReliability("user-1")).toBeCloseTo(2 / 3, 2);
     });
   });
 
