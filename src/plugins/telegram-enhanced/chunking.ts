@@ -1,52 +1,63 @@
 import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
+import { logger } from "@elizaos/core";
 
 const TELEGRAM_MESSAGE_LIMIT = 4096;
 const DEFAULT_HEADROOM = 120;
+
+type TelegramChunkCandidate = { html?: string; text?: string };
+type MarkdownChunker = (
+  markdownText: string,
+  maxChars?: number,
+) => TelegramChunkCandidate[] | undefined;
+type TelegramPluginLike = { markdownToTelegramChunks?: MarkdownChunker };
+
+function fallbackMarkdownChunker(
+  markdownText: string,
+  maxChars?: number,
+): TelegramChunkCandidate[] {
+  const safeMax = maxChars ?? TELEGRAM_MESSAGE_LIMIT - DEFAULT_HEADROOM;
+  const limit = Math.max(1, safeMax);
+  const chunks: TelegramChunkCandidate[] = [];
+
+  for (let offset = 0; offset < markdownText.length; offset += limit) {
+    const end = offset + limit;
+    const piece = markdownText.slice(offset, end);
+    chunks.push({ html: piece, text: piece });
+  }
+  return chunks;
+}
+
+const markdownToTelegramChunks = (() => {
+  try {
+    const requireFromModule = createRequire(import.meta.url);
+    const pluginModule = requireFromModule(
+      "@elizaos/plugin-telegram",
+    ) as TelegramPluginLike;
+
+    const chunker = pluginModule?.markdownToTelegramChunks;
+    if (typeof chunker === "function") {
+      return chunker;
+    }
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : String(error?.message ?? error?.toString?.() ?? error);
+    logger.warn(
+      `[milaidy] Telegram plugin load failed: ${errorMessage
+      }; using fallback chunker`,
+    );
+    return fallbackMarkdownChunker;
+  }
+  return fallbackMarkdownChunker;
+})();
 
 export type TelegramChunk = {
   html: string;
   text: string;
 };
 
-type MarkdownToTelegramChunk = (
-  markdown: string,
-  maxChars: number,
-) => Array<{ html?: string; text?: string }>;
 
-function fallbackMarkdownToTelegramChunks(
-  markdown: string,
-  maxChars: number,
-): TelegramChunk[] {
-  const trimmed = (markdown ?? "").trim();
-  if (!trimmed) return [];
-
-  const chunks: TelegramChunk[] = [];
-  for (let i = 0; i < trimmed.length; i += maxChars) {
-    const segment = trimmed.slice(i, i + maxChars);
-    chunks.push({ html: segment, text: segment });
-  }
-
-  return chunks;
-}
-
-function loadMarkdownChunker(): MarkdownToTelegramChunk {
-  const require = createRequire(fileURLToPath(import.meta.url));
-  try {
-    const plugin = require("@elizaos/plugin-telegram") as {
-      markdownToTelegramChunks?: MarkdownToTelegramChunk;
-    };
-    if (typeof plugin.markdownToTelegramChunks === "function") {
-      return plugin.markdownToTelegramChunks;
-    }
-  } catch {
-    // package is optional in environments without @elizaos/plugin-telegram
-  }
-
-  return fallbackMarkdownToTelegramChunks;
-}
-
-const markdownToTelegramChunks = loadMarkdownChunker();
 
 export function smartChunkTelegramText(
   markdown: string,

@@ -1,7 +1,7 @@
 name: Auto Label
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize]
   issues:
     types: [opened, edited]
@@ -13,13 +13,13 @@ permissions:
 
 jobs:
   label-pr:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
       - uses: actions/labeler@v5
         with:
           repo-token: "${{ secrets.GITHUB_TOKEN }}"
+          pr-number: "${{ github.event.pull_request.number }}"
 
   label-issue:
     if: github.event_name == 'issues'

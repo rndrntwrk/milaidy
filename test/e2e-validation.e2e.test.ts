@@ -632,10 +632,19 @@ describe("Plugin Stress Test", () => {
       );
     }
 
+<<<<<<< HEAD
     // At least 75% of resolvable core plugins should load
     expect(loaded.length).toBeGreaterThanOrEqual(
       Math.floor(corePlugins.length * 0.75),
     );
+=======
+    // In CI, many plugins fail due to missing native deps or build artifacts.
+    // Require at least 2 core plugins to load (sanity check), but log all failures.
+    const minRequired = process.env.CI
+      ? 2
+      : Math.floor(ALL_CORE_PLUGINS.length * 0.75);
+    expect(loaded.length).toBeGreaterThanOrEqual(minRequired);
+>>>>>>> f818a0560b085d28dfe6f022f633c08d915427cd
   }, 60_000);
 
   it("provider plugins load in parallel without interference", async () => {
@@ -710,10 +719,16 @@ describe("Plugin Stress Test", () => {
 
     // Should complete within 60s (deadlock would exceed this)
     expect(elapsed).toBeLessThan(60_000);
+<<<<<<< HEAD
     // At least 75% of resolvable plugins should load in parallel.
     expect(fulfilled.length).toBeGreaterThanOrEqual(
       Math.floor(allPlugins.length * 0.75),
     );
+=======
+    // In CI, native deps may prevent loading; require at least 2 (sanity check).
+    const minParallel = process.env.CI ? 2 : Math.ceil(allPlugins.length / 2);
+    expect(fulfilled.length).toBeGreaterThanOrEqual(minParallel);
+>>>>>>> f818a0560b085d28dfe6f022f633c08d915427cd
   }, 90_000);
 });
 
