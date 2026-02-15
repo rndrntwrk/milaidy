@@ -49,6 +49,11 @@ milady-workspace/
 # Temporary capture files
 temp_capture_*.jpg
 
+# Planning docs (local only)
+TECHNICAL_PLAN.md
+IMPROVEMENT_PLAN.md
+*_PLAN.md
+
 # Agent learning docs & knowledge base
 knowledge/
 scripts/knowledge-loop.mjs
