@@ -1,4 +1,5 @@
 import type { SessionConfig, SessionSendPolicyConfig } from "@elizaos/core";
+import type { AutonomyConfig } from "../autonomy/config.js";
 import type { AgentBinding, AgentsConfig } from "./types.agents.js";
 import type {
   DiscoveryConfig,
@@ -847,6 +848,8 @@ export type MilaidyConfig = {
   >;
   /** User-defined custom actions for the agent. */
   customActions?: CustomActionDef[];
+  /** Autonomy Kernel configuration (identity perimeter, memory gates, verification). */
+  autonomy?: AutonomyConfig;
 };
 
 export type ConfigValidationIssue = {

@@ -212,6 +212,48 @@ export interface MilaidyEvents {
     clientId: string;
     reason: string;
   };
+
+  // ── Autonomy Kernel Events ─────────────────────────────────────────
+  "autonomy:trust:scored": {
+    sourceId: string;
+    contentHash: string;
+    score: number;
+    dimensions: Record<string, number>;
+  };
+  "autonomy:memory:gated": {
+    memoryId: string;
+    decision: "allow" | "quarantine" | "reject";
+    trustScore: number;
+    reason: string;
+  };
+  "autonomy:memory:quarantine:reviewed": {
+    memoryId: string;
+    decision: "approve" | "reject";
+    reviewedBy: string;
+  };
+  "autonomy:identity:drift": {
+    agentId: string;
+    driftScore: number;
+    severity: string;
+    corrections: string[];
+  };
+  "autonomy:goal:created": {
+    goalId: string;
+    description: string;
+    priority: string;
+    source: string;
+  };
+  "autonomy:goal:completed": {
+    goalId: string;
+    evidence: string[];
+  };
+  "autonomy:kernel:initialized": {
+    enabled: boolean;
+    configIssues: number;
+  };
+  "autonomy:kernel:shutdown": {
+    reason: string;
+  };
 }
 
 // ---------- Event Names Type ----------
