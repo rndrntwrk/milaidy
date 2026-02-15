@@ -81,6 +81,7 @@ export const TOKENS = {
   MemoryGate: createToken<import("../autonomy/memory/gate.js").MemoryGate>("MemoryGate"),
   DriftMonitor: createToken<import("../autonomy/identity/drift-monitor.js").PersonaDriftMonitor>("DriftMonitor"),
   GoalManager: createToken<import("../autonomy/goals/manager.js").GoalManager>("GoalManager"),
+  TrustAwareRetriever: createToken<import("../autonomy/memory/retriever.js").TrustAwareRetriever>("TrustAwareRetriever"),
 } as const;
 
 // ---------- Service Container ----------
@@ -376,6 +377,10 @@ export function createMilaidyContainer(
     const { PluginWorkerPool } = require("../plugins/worker-pool.js");
     return new PluginWorkerPool();
   });
+
+  // NOTE: Autonomy Kernel components (TrustScorer, MemoryGate, DriftMonitor,
+  // GoalManager) are registered into the DI container by MilaidyAutonomyService
+  // during start(). The service is the single owner of component instances.
 
   return builder.build();
 }
