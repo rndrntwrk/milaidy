@@ -75,6 +75,12 @@ export const TOKENS = {
 
   // Auth
   AuthService: createToken<unknown>("AuthService"),
+
+  // Autonomy Kernel
+  TrustScorer: createToken<import("../autonomy/trust/scorer.js").TrustScorer>("TrustScorer"),
+  MemoryGate: createToken<import("../autonomy/memory/gate.js").MemoryGate>("MemoryGate"),
+  DriftMonitor: createToken<import("../autonomy/identity/drift-monitor.js").PersonaDriftMonitor>("DriftMonitor"),
+  GoalManager: createToken<import("../autonomy/goals/manager.js").GoalManager>("GoalManager"),
 } as const;
 
 // ---------- Service Container ----------

@@ -1,11 +1,6 @@
 import type { SessionConfig, SessionSendPolicyConfig } from "@elizaos/core";
-import type {
-  CustomActionDef,
-  DatabaseProviderType,
-  MediaConfig,
-  ReleaseChannel,
-} from "../contracts/config";
-import type { AgentBinding, AgentsConfig } from "./types.agents";
+import type { AutonomyConfig } from "../autonomy/config.js";
+import type { AgentBinding, AgentsConfig } from "./types.agents.js";
 import type {
   DiscoveryConfig,
   GatewayConfig,
@@ -703,6 +698,8 @@ export type MiladyConfig = {
   >;
   /** User-defined custom actions for the agent. */
   customActions?: CustomActionDef[];
+  /** Autonomy Kernel configuration (identity perimeter, memory gates, verification). */
+  autonomy?: AutonomyConfig;
 };
 
 export type ConfigValidationIssue = {
