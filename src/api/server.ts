@@ -129,9 +129,11 @@ import {
   fetchSolanaNfts,
   generateWalletForChain,
   generateWalletKeys,
+  getSolanaRpcConfig,
   getWalletAddresses,
   importWallet,
   validatePrivateKey,
+  type SolanaRpcProvider,
   type WalletBalancesResponse,
   type WalletChain,
   type WalletConfigStatus,
@@ -147,6 +149,25 @@ import { initTelemetry } from "../telemetry/setup.js";
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+/** Subset of the core AutonomyService interface we use for lifecycle control. */
+interface AutonomyServiceLike {
+  enableAutonomy(): Promise<void>;
+  disableAutonomy(): Promise<void>;
+  isLoopRunning(): boolean;
+  getGoalManager?(): import("../autonomy/goals/manager.js").GoalManager | null;
+  getMemoryGate?(): import("../autonomy/memory/gate.js").MemoryGate | null;
+  getIdentityConfig?(): import("../autonomy/identity/schema.js").AutonomyIdentityConfig | null;
+  updateIdentityConfig?(update: Partial<import("../autonomy/identity/schema.js").AutonomyIdentityConfig>): Promise<import("../autonomy/identity/schema.js").AutonomyIdentityConfig>;
+}
+
+/** Helper to retrieve the AutonomyService from a runtime (may be null). */
+function getAutonomySvc(
+  runtime: AgentRuntime | null,
+): AutonomyServiceLike | null {
+  if (!runtime) return null;
+  return runtime.getService("AUTONOMY") as AutonomyServiceLike | null;
+}
 
 function getAgentEventSvc(
   runtime: AgentRuntime | null,
@@ -3202,6 +3223,13 @@ function getInventoryProviderOptions(): Array<{
           envKey: "HELIUS_API_KEY",
           requiresKey: true,
         },
+        {
+          id: "alchemy",
+          name: "Alchemy",
+          description: "Multi-chain RPC provider with Solana support.",
+          envKey: "ALCHEMY_API_KEY",
+          requiresKey: true,
+        },
       ],
     },
   ];
@@ -5465,22 +5493,347 @@ async function handleRequest(
     return;
   }
 
-  if (
-    await handleRegistryRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      url,
-      json,
-      error,
-      getPluginManager: () => requirePluginManager(state.runtime),
-      getLoadedPluginNames: () =>
-        state.runtime?.plugins.map((plugin) => plugin.name) ?? [],
-      getBundledPluginIds: () =>
-        new Set(state.plugins.map((plugin) => plugin.id)),
-    })
-  ) {
+  // ── GET /api/agent/autonomy ─────────────────────────────────────────────
+  // Autonomy is always enabled.
+  if (method === "GET" && pathname === "/api/agent/autonomy") {
+    json(res, { enabled: true });
+    return;
+  }
+
+  // ── GET /api/agent/identity ───────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/agent/identity") {
+    try {
+      const autonomySvc = getAutonomySvc(state.runtime);
+      const identity = autonomySvc?.getIdentityConfig?.() ?? null;
+      json(res, { identity });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      error(res, msg, 500);
+    }
+    return;
+  }
+
+  // ── PUT /api/agent/identity ───────────────────────────────────────────
+  if (method === "PUT" && pathname === "/api/agent/identity") {
+    const body = await readJsonBody(req, res);
+    if (!body) return;
+
+    try {
+      const autonomySvc = getAutonomySvc(state.runtime);
+      if (!autonomySvc?.updateIdentityConfig) {
+        error(res, "Autonomy service not available", 503);
+        return;
+      }
+
+      const updated = await autonomySvc.updateIdentityConfig(body as Partial<import("../autonomy/identity/schema.js").AutonomyIdentityConfig>);
+
+      // Persist to config file
+      try {
+        const currentConfig = loadMilaidyConfig();
+        if (!currentConfig.autonomy) currentConfig.autonomy = {};
+        currentConfig.autonomy.identity = updated;
+        saveMilaidyConfig(currentConfig);
+      } catch (persistErr) {
+        logger.warn(`[api] Failed to persist identity to config: ${persistErr instanceof Error ? persistErr.message : persistErr}`);
+      }
+
+      json(res, { identity: updated });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      error(res, msg, 400);
+    }
+    return;
+  }
+
+  // ── GET /api/agent/identity/history ───────────────────────────────────
+  // NOTE: Currently returns only the latest version snapshot (single entry).
+  // Full audit trail with persisted history is deferred to Phase 2.
+  if (method === "GET" && pathname === "/api/agent/identity/history") {
+    try {
+      const autonomySvc = getAutonomySvc(state.runtime);
+      const identity = autonomySvc?.getIdentityConfig?.() ?? null;
+      if (!identity) {
+        json(res, { version: 0, hash: null, history: [] });
+        return;
+      }
+      json(res, {
+        version: identity.identityVersion,
+        hash: identity.identityHash ?? null,
+        history: [
+          {
+            version: identity.identityVersion,
+            hash: identity.identityHash ?? null,
+            timestamp: Date.now(),
+          },
+        ],
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      error(res, msg, 500);
+    }
+    return;
+  }
+
+  // ── GET /api/character ──────────────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/character") {
+    // Character data lives in the runtime / database, not the config file.
+    const rt = state.runtime;
+    const merged: Record<string, unknown> = {};
+    if (rt) {
+      const c = rt.character;
+      if (c.name) merged.name = c.name;
+      if (c.bio) merged.bio = c.bio;
+      if (c.system) merged.system = c.system;
+      if (c.adjectives) merged.adjectives = c.adjectives;
+      if (c.topics) merged.topics = c.topics;
+      if (c.style) merged.style = c.style;
+      if (c.postExamples) merged.postExamples = c.postExamples;
+    }
+
+    json(res, { character: merged, agentName: state.agentName });
+    return;
+  }
+
+  // ── PUT /api/character ──────────────────────────────────────────────────
+  if (method === "PUT" && pathname === "/api/character") {
+    const body = await readJsonBody(req, res);
+    if (!body) return;
+
+    const result = CharacterSchema.safeParse(body);
+    if (!result.success) {
+      const issues = result.error.issues.map((issue) => ({
+        path: issue.path.join("."),
+        message: issue.message,
+      }));
+      json(res, { ok: false, validationErrors: issues }, 422);
+      return;
+    }
+
+    // Character data lives in the runtime (backed by DB), not the config file.
+    if (state.runtime) {
+      const c = state.runtime.character;
+      if (body.name != null) c.name = body.name as string;
+      if (body.bio != null)
+        c.bio = Array.isArray(body.bio)
+          ? (body.bio as string[])
+          : [String(body.bio)];
+      if (body.system != null) c.system = body.system as string;
+      if (body.adjectives != null) c.adjectives = body.adjectives as string[];
+      if (body.topics != null) c.topics = body.topics as string[];
+      if (body.style != null)
+        c.style = body.style as NonNullable<typeof c.style>;
+      if (body.postExamples != null)
+        c.postExamples = body.postExamples as string[];
+    }
+    if (body.name) {
+      state.agentName = body.name as string;
+    }
+    json(res, { ok: true, character: body, agentName: state.agentName });
+    return;
+  }
+
+  // ── GET /api/character/random-name ────────────────────────────────────
+  if (method === "GET" && pathname === "/api/character/random-name") {
+    const names = pickRandomNames(1);
+    json(res, { name: names[0] ?? "Reimu" });
+    return;
+  }
+
+  // ── POST /api/character/generate ────────────────────────────────────
+  if (method === "POST" && pathname === "/api/character/generate") {
+    const body = await readJsonBody<{
+      field: string;
+      context: {
+        name?: string;
+        system?: string;
+        bio?: string;
+        style?: { all?: string[]; chat?: string[]; post?: string[] };
+        postExamples?: string[];
+      };
+      mode?: "append" | "replace";
+    }>(req, res);
+    if (!body) return;
+
+    const { field, context: ctx, mode } = body;
+    if (!field || !ctx) {
+      error(res, "field and context are required", 400);
+      return;
+    }
+
+    const rt = state.runtime;
+    if (!rt) {
+      error(res, "Agent runtime not available. Start the agent first.", 503);
+      return;
+    }
+
+    const charSummary = [
+      ctx.name ? `Name: ${ctx.name}` : "",
+      ctx.system ? `System prompt: ${ctx.system}` : "",
+      ctx.bio ? `Bio: ${ctx.bio}` : "",
+      ctx.style?.all?.length ? `Style rules: ${ctx.style.all.join("; ")}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    let prompt = "";
+
+    if (field === "bio") {
+      prompt = `Given this character:\n${charSummary}\n\nWrite a concise, compelling bio for this character (3-4 short paragraphs, one per line). Just output the bio lines, nothing else. Match the character's voice and personality.`;
+    } else if (field === "style") {
+      const existing =
+        mode === "append" && ctx.style?.all?.length
+          ? `\nExisting style rules (add to these, don't repeat):\n${ctx.style.all.join("\n")}`
+          : "";
+      prompt = `Given this character:\n${charSummary}${existing}\n\nGenerate 4-6 communication style rules for this character. Output a JSON object with keys "all", "chat", "post", each containing an array of short rule strings. Just output the JSON, nothing else.`;
+    } else if (field === "chatExamples") {
+      prompt = `Given this character:\n${charSummary}\n\nGenerate 3 example chat conversations showing how this character responds. Output a JSON array where each element is an array of message objects like [{"user":"{{user1}}","content":{"text":"..."}},{"user":"{{agentName}}","content":{"text":"..."}}]. Just output the JSON array, nothing else.`;
+    } else if (field === "postExamples") {
+      const existing =
+        mode === "append" && ctx.postExamples?.length
+          ? `\nExisting posts (add new ones, don't repeat):\n${ctx.postExamples.join("\n")}`
+          : "";
+      prompt = `Given this character:\n${charSummary}${existing}\n\nGenerate 3-5 example social media posts this character would write. Output a JSON array of strings. Just output the JSON array, nothing else.`;
+    } else {
+      error(res, `Unknown field: ${field}`, 400);
+      return;
+    }
+
+    try {
+      const { ModelType } = await import("@elizaos/core");
+      const result = await rt.useModel(ModelType.TEXT_SMALL, {
+        prompt,
+        temperature: 0.8,
+        maxTokens: 1500,
+      });
+      json(res, { generated: String(result) });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "generation failed";
+      logger.error(`[character-generate] ${msg}`);
+      error(res, msg, 500);
+    }
+    return;
+  }
+
+  // ── GET /api/character/schema ───────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/character/schema") {
+    json(res, {
+      fields: [
+        {
+          key: "name",
+          type: "string",
+          label: "Name",
+          description: "Agent display name",
+          maxLength: 100,
+        },
+        {
+          key: "username",
+          type: "string",
+          label: "Username",
+          description: "Agent username for platforms",
+          maxLength: 50,
+        },
+        {
+          key: "bio",
+          type: "string | string[]",
+          label: "Bio",
+          description: "Biography — single string or array of points",
+        },
+        {
+          key: "system",
+          type: "string",
+          label: "System Prompt",
+          description: "System prompt defining core behavior",
+          maxLength: 10000,
+        },
+        {
+          key: "adjectives",
+          type: "string[]",
+          label: "Adjectives",
+          description: "Personality adjectives (e.g. curious, witty)",
+        },
+        {
+          key: "topics",
+          type: "string[]",
+          label: "Topics",
+          description: "Topics the agent is knowledgeable about",
+        },
+        {
+          key: "style",
+          type: "object",
+          label: "Style",
+          description: "Communication style guides",
+          children: [
+            {
+              key: "all",
+              type: "string[]",
+              label: "All",
+              description: "Style guidelines for all responses",
+            },
+            {
+              key: "chat",
+              type: "string[]",
+              label: "Chat",
+              description: "Style guidelines for chat responses",
+            },
+            {
+              key: "post",
+              type: "string[]",
+              label: "Post",
+              description: "Style guidelines for social media posts",
+            },
+          ],
+        },
+        {
+          key: "messageExamples",
+          type: "array",
+          label: "Message Examples",
+          description: "Example conversations demonstrating the agent's voice",
+        },
+        {
+          key: "postExamples",
+          type: "string[]",
+          label: "Post Examples",
+          description: "Example social media posts",
+        },
+      ],
+    });
+    return;
+  }
+
+  // ── GET /api/models ─────────────────────────────────────────────────────
+  // Optional ?provider=openai to fetch a single provider, or all if omitted.
+  // ?refresh=true busts the cache for the requested provider(s).
+  if (method === "GET" && pathname === "/api/models") {
+    const force = url.searchParams.get("refresh") === "true";
+    const specificProvider = url.searchParams.get("provider");
+
+    if (specificProvider) {
+      if (force) {
+        try {
+          fs.unlinkSync(providerCachePath(specificProvider));
+        } catch {
+          /* ok */
+        }
+      }
+      const models = await getOrFetchProvider(specificProvider, force);
+      json(res, { provider: specificProvider, models });
+    } else {
+      if (force) {
+        // Bust all cache files
+        try {
+          const dir = resolveModelsCacheDir();
+          if (fs.existsSync(dir)) {
+            for (const f of fs.readdirSync(dir)) {
+              if (f.endsWith(".json")) fs.unlinkSync(path.join(dir, f));
+            }
+          }
+        } catch {
+          /* ok */
+        }
+      }
+      const all = await getOrFetchAllProviders(force);
+      json(res, { providers: all });
+    }
     return;
   }
 
@@ -7445,21 +7798,287 @@ async function handleRequest(
   // ═══════════════════════════════════════════════════════════════════════
   // Wallet / Inventory routes
   // ═══════════════════════════════════════════════════════════════════════
-  if (
-    await handleWalletRoutes({
+
+  // ── GET /api/wallet/addresses ──────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/wallet/addresses") {
+    const addrs = getWalletAddresses();
+    json(res, addrs);
+    return;
+  }
+
+  // ── GET /api/wallet/balances ───────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/wallet/balances") {
+    const addrs = getWalletAddresses();
+    const alchemyKey = process.env.ALCHEMY_API_KEY;
+    const solanaRpcConfig = getSolanaRpcConfig();
+
+    const result: WalletBalancesResponse = { evm: null, solana: null };
+
+    if (addrs.evmAddress && alchemyKey) {
+      try {
+        const chains = await fetchEvmBalances(addrs.evmAddress, alchemyKey);
+        result.evm = { address: addrs.evmAddress, chains };
+      } catch (err) {
+        logger.warn(`[wallet] EVM balance fetch failed: ${err}`);
+      }
+    }
+
+    if (addrs.solanaAddress && solanaRpcConfig) {
+      try {
+        const solData = await fetchSolanaBalances(
+          addrs.solanaAddress,
+          solanaRpcConfig,
+        );
+        result.solana = { address: addrs.solanaAddress, ...solData };
+      } catch (err) {
+        logger.warn(`[wallet] Solana balance fetch failed: ${err}`);
+      }
+    }
+
+    json(res, result);
+    return;
+  }
+
+  // ── GET /api/wallet/nfts ───────────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/wallet/nfts") {
+    const addrs = getWalletAddresses();
+    const alchemyKey = process.env.ALCHEMY_API_KEY;
+    const solanaRpcConfig = getSolanaRpcConfig();
+
+    const result: WalletNftsResponse = { evm: [], solana: null };
+
+    if (addrs.evmAddress && alchemyKey) {
+      try {
+        result.evm = await fetchEvmNfts(addrs.evmAddress, alchemyKey);
+      } catch (err) {
+        logger.warn(`[wallet] EVM NFT fetch failed: ${err}`);
+      }
+    }
+
+    if (addrs.solanaAddress && solanaRpcConfig) {
+      try {
+        const nfts = await fetchSolanaNfts(addrs.solanaAddress, solanaRpcConfig);
+        result.solana = { nfts };
+      } catch (err) {
+        logger.warn(`[wallet] Solana NFT fetch failed: ${err}`);
+      }
+    }
+
+    json(res, result);
+    return;
+  }
+
+  // ── POST /api/wallet/import ──────────────────────────────────────────
+  // Import a wallet by providing a private key + chain.
+  if (method === "POST" && pathname === "/api/wallet/import") {
+    const body = await readJsonBody<{ chain?: string; privateKey?: string }>(
       req,
       res,
-      method,
-      pathname,
-      config: state.config,
-      saveConfig: saveMiladyConfig,
-      ensureWalletKeysInEnvAndConfig,
-      resolveWalletExportRejection,
-      readJsonBody,
-      json,
-      error,
-    })
-  ) {
+    );
+    if (!body) return;
+
+    if (!body.privateKey?.trim()) {
+      error(res, "privateKey is required");
+      return;
+    }
+
+    // Auto-detect chain if not specified
+    let chain: WalletChain;
+    if (body.chain === "evm" || body.chain === "solana") {
+      chain = body.chain;
+    } else if (body.chain) {
+      error(
+        res,
+        `Unsupported chain: ${body.chain}. Must be "evm" or "solana".`,
+      );
+      return;
+    } else {
+      // Auto-detect from key format
+      const detection = validatePrivateKey(body.privateKey.trim());
+      chain = detection.chain;
+    }
+
+    const result = importWallet(chain, body.privateKey.trim());
+
+    if (!result.success) {
+      error(res, result.error ?? "Import failed", 422);
+      return;
+    }
+
+    // Persist to config.env so it survives restarts
+    if (!state.config.env) state.config.env = {};
+    const envKey = chain === "evm" ? "EVM_PRIVATE_KEY" : "SOLANA_PRIVATE_KEY";
+    (state.config.env as Record<string, string>)[envKey] =
+      process.env[envKey] ?? "";
+
+    try {
+      saveMilaidyConfig(state.config);
+    } catch (err) {
+      logger.warn(
+        `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
+    json(res, {
+      ok: true,
+      chain,
+      address: result.address,
+    });
+    return;
+  }
+
+  // ── POST /api/wallet/generate ──────────────────────────────────────────
+  // Generate a new wallet for a specific chain (or both).
+  if (method === "POST" && pathname === "/api/wallet/generate") {
+    const body = await readJsonBody<{ chain?: string }>(req, res);
+    if (!body) return;
+
+    const chain = body.chain as string | undefined;
+    const validChains: Array<WalletChain | "both"> = ["evm", "solana", "both"];
+
+    if (chain && !validChains.includes(chain as WalletChain | "both")) {
+      error(
+        res,
+        `Unsupported chain: ${chain}. Must be "evm", "solana", or "both".`,
+      );
+      return;
+    }
+
+    const targetChain = (chain ?? "both") as WalletChain | "both";
+
+    if (!state.config.env) state.config.env = {};
+
+    const generated: Array<{ chain: WalletChain; address: string }> = [];
+
+    if (targetChain === "both" || targetChain === "evm") {
+      const result = generateWalletForChain("evm");
+      process.env.EVM_PRIVATE_KEY = result.privateKey;
+      (state.config.env as Record<string, string>).EVM_PRIVATE_KEY =
+        result.privateKey;
+      generated.push({ chain: "evm", address: result.address });
+      logger.info(`[milaidy-api] Generated EVM wallet: ${result.address}`);
+    }
+
+    if (targetChain === "both" || targetChain === "solana") {
+      const result = generateWalletForChain("solana");
+      process.env.SOLANA_PRIVATE_KEY = result.privateKey;
+      (state.config.env as Record<string, string>).SOLANA_PRIVATE_KEY =
+        result.privateKey;
+      generated.push({ chain: "solana", address: result.address });
+      logger.info(`[milaidy-api] Generated Solana wallet: ${result.address}`);
+    }
+
+    try {
+      saveMilaidyConfig(state.config);
+    } catch (err) {
+      logger.warn(
+        `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
+    json(res, { ok: true, wallets: generated });
+    return;
+  }
+
+  // ── GET /api/wallet/config ─────────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/wallet/config") {
+    const addrs = getWalletAddresses();
+    const solanaRpcConfig = getSolanaRpcConfig();
+    const configStatus: WalletConfigStatus = {
+      alchemyKeySet: Boolean(process.env.ALCHEMY_API_KEY),
+      infuraKeySet: Boolean(process.env.INFURA_API_KEY),
+      ankrKeySet: Boolean(process.env.ANKR_API_KEY),
+      heliusKeySet: Boolean(process.env.HELIUS_API_KEY),
+      birdeyeKeySet: Boolean(process.env.BIRDEYE_API_KEY),
+      evmChains: ["Ethereum", "Base", "Arbitrum", "Optimism", "Polygon"],
+      evmAddress: addrs.evmAddress,
+      solanaAddress: addrs.solanaAddress,
+      solanaRpcProvider: solanaRpcConfig?.provider ?? null,
+    };
+    json(res, configStatus);
+    return;
+  }
+
+  // ── PUT /api/wallet/config ─────────────────────────────────────────────
+  if (method === "PUT" && pathname === "/api/wallet/config") {
+    const body = await readJsonBody<Record<string, string>>(req, res);
+    if (!body) return;
+    const allowedKeys = [
+      "ALCHEMY_API_KEY",
+      "INFURA_API_KEY",
+      "ANKR_API_KEY",
+      "HELIUS_API_KEY",
+      "BIRDEYE_API_KEY",
+      "SOLANA_RPC_PROVIDER",
+    ];
+
+    if (!state.config.env) state.config.env = {};
+
+    for (const key of allowedKeys) {
+      const value = body[key];
+      if (typeof value === "string" && value.trim()) {
+        process.env[key] = value.trim();
+        (state.config.env as Record<string, string>)[key] = value.trim();
+      }
+    }
+
+    // Generate SOLANA_RPC_URL based on the provider selection
+    const provider = (body.SOLANA_RPC_PROVIDER || process.env.SOLANA_RPC_PROVIDER || "helius") as SolanaRpcProvider;
+    let rpcUrl: string | null = null;
+
+    if (provider === "alchemy") {
+      const alchemyKey = body.ALCHEMY_API_KEY?.trim() || process.env.ALCHEMY_API_KEY;
+      if (alchemyKey) {
+        rpcUrl = `https://solana-mainnet.g.alchemy.com/v2/${alchemyKey}`;
+      }
+    } else if (provider === "helius") {
+      const heliusKey = body.HELIUS_API_KEY?.trim() || process.env.HELIUS_API_KEY;
+      if (heliusKey) {
+        rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${heliusKey}`;
+      }
+    }
+
+    if (rpcUrl) {
+      process.env.SOLANA_RPC_URL = rpcUrl;
+      (state.config.env as Record<string, string>).SOLANA_RPC_URL = rpcUrl;
+    }
+
+    try {
+      saveMilaidyConfig(state.config);
+    } catch (err) {
+      logger.warn(
+        `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+
+    json(res, { ok: true });
+    return;
+  }
+
+  // ── POST /api/wallet/export ────────────────────────────────────────────
+  // SECURITY: Requires explicit confirmation + a dedicated export token.
+  if (method === "POST" && pathname === "/api/wallet/export") {
+    const body = await readJsonBody<WalletExportRequestBody>(req, res);
+    if (!body) return;
+
+    const rejection = resolveWalletExportRejection(req, body);
+    if (rejection) {
+      error(res, rejection.reason, rejection.status);
+      return;
+    }
+
+    const evmKey = process.env.EVM_PRIVATE_KEY ?? null;
+    const solKey = process.env.SOLANA_PRIVATE_KEY ?? null;
+    const addrs = getWalletAddresses();
+
+    logger.warn("[wallet] Private keys exported via API");
+
+    json(res, {
+      evm: evmKey ? { privateKey: evmKey, address: addrs.evmAddress } : null,
+      solana: solKey
+        ? { privateKey: solKey, address: addrs.solanaAddress }
+        : null,
+    });
     return;
   }
 
@@ -9634,6 +10253,7 @@ async function handleRequest(
     };
     let tasksAvailable = false;
     let triggersAvailable = false;
+    let goalsAvailable = false;
     let todosAvailable = false;
     let runtimeTasks: Task[] = [];
     let todoData: TodoDataServiceLike | null = null;
@@ -9658,6 +10278,19 @@ async function handleRequest(
       } catch {
         tasksAvailable = false;
         todosAvailable = false;
+      }
+
+      // Autonomy Kernel goals (from our GoalManager)
+      const gm = autonomySvc?.getGoalManager?.();
+      if (gm) {
+        try {
+          const kernelGoals = await gm.getActiveGoals();
+          goals.push(...kernelGoals);
+          summary.totalGoals += kernelGoals.length;
+          goalsAvailable = true;
+        } catch {
+          // GoalManager errored — non-fatal
+        }
       }
 
       try {
@@ -10217,6 +10850,76 @@ async function handleRequest(
       return;
     }
     json(res, { todo: refreshedTodo });
+    return;
+  }
+
+  // ── GET /api/workbench/quarantine ─────────────────────────────────────
+  if (method === "GET" && pathname === "/api/workbench/quarantine") {
+    if (!state.runtime) {
+      error(res, "Agent runtime is not available", 503);
+      return;
+    }
+    const gate = getAutonomySvc(state.runtime)?.getMemoryGate?.();
+    if (gate) {
+      try {
+        const quarantined = await gate.getQuarantined();
+        const stats = gate.getStats();
+        json(res, { ok: true, quarantined, stats });
+      } catch (err) {
+        error(res, err instanceof Error ? err.message : "Failed to get quarantine", 500);
+      }
+    } else {
+      json(res, { ok: true, quarantined: [], stats: null });
+    }
+    return;
+  }
+
+  // ── POST /api/workbench/quarantine/:id/review ──────────────────────
+  if (
+    method === "POST" &&
+    pathname.startsWith("/api/workbench/quarantine/") &&
+    pathname.endsWith("/review")
+  ) {
+    if (!state.runtime) {
+      error(res, "Agent runtime is not available", 503);
+      return;
+    }
+    // Extract memory ID: /api/workbench/quarantine/<id>/review
+    const segments = pathname.slice("/api/workbench/quarantine/".length);
+    const memoryId = segments.slice(0, -"/review".length);
+    if (!memoryId) {
+      error(res, "Missing memory ID", 400);
+      return;
+    }
+
+    const body = await readJsonBody<{ decision?: string }>(req, res);
+    if (!body) return;
+    const decision = body.decision;
+    if (decision !== "approve" && decision !== "reject") {
+      error(res, 'decision must be "approve" or "reject"', 400);
+      return;
+    }
+
+    const gate = getAutonomySvc(state.runtime)?.getMemoryGate?.();
+    if (gate) {
+      try {
+        const result = await gate.reviewQuarantined(memoryId, decision);
+        // Emit quarantine:reviewed event
+        try {
+          const { getEventBus } = await import("../events/event-bus.js");
+          getEventBus().emit("autonomy:memory:quarantine:reviewed", {
+            memoryId,
+            decision,
+            reviewedBy: "api",
+          });
+        } catch { /* event bus not available */ }
+        json(res, { ok: true, memoryId, decision, memory: result });
+      } catch (err) {
+        error(res, err instanceof Error ? err.message : "Review failed", 400);
+      }
+    } else {
+      error(res, "Memory gate not available", 404);
+    }
     return;
   }
 
