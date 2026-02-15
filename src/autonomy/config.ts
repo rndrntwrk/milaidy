@@ -4,6 +4,9 @@
  * @module autonomy/config
  */
 
+import type { AutonomyIdentityConfig } from "./identity/schema.js";
+import { validateAutonomyIdentity } from "./identity/schema.js";
+
 // ---------- Config Types ----------
 
 /**
@@ -47,6 +50,26 @@ export interface AutonomyDriftMonitorConfig {
 }
 
 /**
+ * Trust-aware retrieval ranking configuration.
+ */
+export interface AutonomyRetrievalConfig {
+  /** Weight for trust dimension in ranking (default: 0.3). */
+  trustWeight?: number;
+  /** Weight for recency dimension in ranking (default: 0.25). */
+  recencyWeight?: number;
+  /** Weight for relevance dimension in ranking (default: 0.3). */
+  relevanceWeight?: number;
+  /** Weight for memory type dimension in ranking (default: 0.15). */
+  typeWeight?: number;
+  /** Maximum number of results to return (default: 20). */
+  maxResults?: number;
+  /** Minimum trust score to include in results (default: 0.1). */
+  minTrustThreshold?: number;
+  /** Per-type boost multipliers. */
+  typeBoosts?: Partial<Record<string, number>>;
+}
+
+/**
  * Baseline metrics configuration.
  */
 export interface AutonomyMetricsConfig {
@@ -70,11 +93,33 @@ export interface AutonomyConfig {
   driftMonitor?: AutonomyDriftMonitorConfig;
   /** Baseline metrics settings. */
   metrics?: AutonomyMetricsConfig;
+  /** Identity configuration. */
+  identity?: AutonomyIdentityConfig;
+  /** Trust-aware retrieval ranking settings. */
+  retrieval?: AutonomyRetrievalConfig;
 }
 
 // ---------- Defaults ----------
 
-export const DEFAULT_AUTONOMY_CONFIG: Required<AutonomyConfig> = {
+export const DEFAULT_RETRIEVAL_CONFIG: Required<AutonomyRetrievalConfig> = {
+  trustWeight: 0.3,
+  recencyWeight: 0.25,
+  relevanceWeight: 0.3,
+  typeWeight: 0.15,
+  maxResults: 20,
+  minTrustThreshold: 0.1,
+  typeBoosts: {},
+};
+
+export const DEFAULT_AUTONOMY_CONFIG: {
+  enabled: boolean;
+  trust: Required<AutonomyTrustConfig>;
+  memoryGate: Required<AutonomyMemoryGateConfig>;
+  driftMonitor: Required<AutonomyDriftMonitorConfig>;
+  metrics: Required<AutonomyMetricsConfig>;
+  identity: AutonomyIdentityConfig | undefined;
+  retrieval: Required<AutonomyRetrievalConfig>;
+} = {
   enabled: false,
   trust: {
     writeThreshold: 0.7,
@@ -94,9 +139,11 @@ export const DEFAULT_AUTONOMY_CONFIG: Required<AutonomyConfig> = {
     correctionThreshold: 0.25,
   },
   metrics: {
-    storagePath: undefined as unknown as string,
+    storagePath: "",
     autoMeasureIntervalMs: 0,
   },
+  identity: undefined,
+  retrieval: { ...DEFAULT_RETRIEVAL_CONFIG },
 };
 
 // ---------- Validation ----------
@@ -106,8 +153,8 @@ export const DEFAULT_AUTONOMY_CONFIG: Required<AutonomyConfig> = {
  */
 export function resolveAutonomyConfig(
   userConfig?: AutonomyConfig,
-): Required<AutonomyConfig> {
-  if (!userConfig) return { ...DEFAULT_AUTONOMY_CONFIG };
+) {
+  if (!userConfig) return { ...DEFAULT_AUTONOMY_CONFIG, retrieval: { ...DEFAULT_RETRIEVAL_CONFIG } };
 
   return {
     enabled: userConfig.enabled ?? DEFAULT_AUTONOMY_CONFIG.enabled,
@@ -115,6 +162,8 @@ export function resolveAutonomyConfig(
     memoryGate: { ...DEFAULT_AUTONOMY_CONFIG.memoryGate, ...userConfig.memoryGate },
     driftMonitor: { ...DEFAULT_AUTONOMY_CONFIG.driftMonitor, ...userConfig.driftMonitor },
     metrics: { ...DEFAULT_AUTONOMY_CONFIG.metrics, ...userConfig.metrics },
+    identity: userConfig.identity ?? DEFAULT_AUTONOMY_CONFIG.identity,
+    retrieval: { ...DEFAULT_RETRIEVAL_CONFIG, ...userConfig.retrieval },
   };
 }
 
@@ -164,6 +213,62 @@ export function validateAutonomyConfig(
   if (config.driftMonitor?.alertThreshold !== undefined) {
     if (config.driftMonitor.alertThreshold < 0 || config.driftMonitor.alertThreshold > 1) {
       issues.push({ path: "autonomy.driftMonitor.alertThreshold", message: "Must be between 0 and 1" });
+    }
+  }
+
+  if (config.driftMonitor?.correctionThreshold !== undefined) {
+    if (config.driftMonitor.correctionThreshold < 0 || config.driftMonitor.correctionThreshold > 1) {
+      issues.push({ path: "autonomy.driftMonitor.correctionThreshold", message: "Must be between 0 and 1" });
+    }
+  }
+
+  if (
+    config.driftMonitor?.alertThreshold !== undefined &&
+    config.driftMonitor?.correctionThreshold !== undefined &&
+    config.driftMonitor.alertThreshold >= config.driftMonitor.correctionThreshold
+  ) {
+    issues.push({
+      path: "autonomy.driftMonitor",
+      message: "alertThreshold must be less than correctionThreshold",
+    });
+  }
+
+  // Validate retrieval weights
+  if (config.retrieval) {
+    const r = config.retrieval;
+    const weightFields = ["trustWeight", "recencyWeight", "relevanceWeight", "typeWeight"] as const;
+    for (const field of weightFields) {
+      if (r[field] !== undefined && (r[field]! < 0 || r[field]! > 1)) {
+        issues.push({ path: `autonomy.retrieval.${field}`, message: "Must be between 0 and 1" });
+      }
+    }
+
+    const sum =
+      (r.trustWeight ?? DEFAULT_RETRIEVAL_CONFIG.trustWeight) +
+      (r.recencyWeight ?? DEFAULT_RETRIEVAL_CONFIG.recencyWeight) +
+      (r.relevanceWeight ?? DEFAULT_RETRIEVAL_CONFIG.relevanceWeight) +
+      (r.typeWeight ?? DEFAULT_RETRIEVAL_CONFIG.typeWeight);
+    if (Math.abs(sum - 1.0) > 0.05) {
+      issues.push({
+        path: "autonomy.retrieval",
+        message: `Retrieval weights should sum to ~1.0 (got ${sum.toFixed(3)})`,
+      });
+    }
+
+    if (r.maxResults !== undefined && r.maxResults < 1) {
+      issues.push({ path: "autonomy.retrieval.maxResults", message: "Must be at least 1" });
+    }
+
+    if (r.minTrustThreshold !== undefined && (r.minTrustThreshold < 0 || r.minTrustThreshold > 1)) {
+      issues.push({ path: "autonomy.retrieval.minTrustThreshold", message: "Must be between 0 and 1" });
+    }
+  }
+
+  // Validate identity config if present (delegates to canonical validator)
+  if (config.identity) {
+    const identityIssues = validateAutonomyIdentity(config.identity);
+    for (const issue of identityIssues) {
+      issues.push({ path: `autonomy.identity.${issue.field}`, message: issue.message });
     }
   }
 
