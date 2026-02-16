@@ -1,0 +1,55 @@
+groups:
+  - name: milaidy_autonomy
+    rules:
+      - alert: AutonomyKernelDown
+        expr: milaidy_autonomy_kernel_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Autonomy kernel is down"
+          description: "The autonomy kernel has been down for more than 1 minute."
+
+      - alert: HighDriftScore
+        expr: milaidy_autonomy_drift_score{quantile="0.95"} > 0.25
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High persona drift detected"
+          description: "95th percentile drift score has exceeded 0.25 for 5 minutes."
+
+      - alert: SafeModeActive
+        expr: increase(milaidy_autonomy_safe_mode_events_total{action="enter"}[5m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Agent entered safe mode"
+          description: "The autonomy kernel has entered safe mode due to consecutive errors."
+
+      - alert: HighConsecutiveErrors
+        expr: milaidy_autonomy_consecutive_errors > 2
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High consecutive error count"
+          description: "The autonomy kernel has {{ $value }} consecutive errors."
+
+      - alert: ApprovalBacklog
+        expr: increase(milaidy_autonomy_approval_requests_total[5m]) - increase(milaidy_autonomy_approval_decisions_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Approval request backlog growing"
+          description: "More than 10 approval requests are pending resolution."
+
+      - alert: HighPipelineLatency
+        expr: milaidy_autonomy_pipeline_latency_ms{quantile="0.95"} > 10000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High pipeline latency"
+          description: "95th percentile pipeline latency exceeds 10 seconds."
