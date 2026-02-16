@@ -1,0 +1,170 @@
+/**
+ * Workflow engine types — event store, pipeline, and compensation interfaces.
+ *
+ * @module autonomy/workflow/types
+ */
+
+import type { ToolCallSource } from "../tools/types.js";
+
+// ---------- Execution Events ----------
+
+/**
+ * Types of events recorded during tool execution.
+ */
+export type ExecutionEventType =
+  | "tool:proposed"
+  | "tool:validated"
+  | "tool:approval:requested"
+  | "tool:approval:resolved"
+  | "tool:executing"
+  | "tool:executed"
+  | "tool:verified"
+  | "tool:failed"
+  | "tool:compensated";
+
+/**
+ * A single event in the execution log.
+ */
+export interface ExecutionEvent {
+  /** Monotonically increasing sequence ID. */
+  sequenceId: number;
+  /** The request ID this event belongs to. */
+  requestId: string;
+  /** The type of execution event. */
+  type: ExecutionEventType;
+  /** Event-specific payload. */
+  payload: Record<string, unknown>;
+  /** When the event was recorded. */
+  timestamp: number;
+}
+
+// ---------- Event Store Interface ----------
+
+/**
+ * Interface for the append-only execution event store.
+ */
+export interface EventStoreInterface {
+  /** Append an event and return its assigned sequence ID. */
+  append(
+    requestId: string,
+    type: ExecutionEventType,
+    payload: Record<string, unknown>,
+  ): number;
+  /** Get all events for a given request ID. */
+  getByRequestId(requestId: string): ExecutionEvent[];
+  /** Get the N most recent events. */
+  getRecent(n: number): ExecutionEvent[];
+  /** Current number of events in the store. */
+  readonly size: number;
+  /** Clear all events. */
+  clear(): void;
+}
+
+// ---------- Pipeline Types ----------
+
+/**
+ * Configuration for the execution pipeline.
+ */
+export interface PipelineConfig {
+  /** Whether the pipeline is enabled. */
+  enabled: boolean;
+  /** Maximum concurrent executions. */
+  maxConcurrent: number;
+  /** Default timeout for tool execution in ms. */
+  defaultTimeoutMs: number;
+  /** Timeout for approval requests in ms. */
+  approvalTimeoutMs: number;
+  /** Auto-approve read-only tools. */
+  autoApproveReadOnly: boolean;
+  /** Sources that are auto-approved. */
+  autoApproveSources: ToolCallSource[];
+  /** Maximum events in the event store. */
+  eventStoreMaxEvents: number;
+}
+
+/**
+ * Result of a pipeline execution.
+ */
+export interface PipelineResult {
+  /** Unique request identifier. */
+  requestId: string;
+  /** The tool that was executed. */
+  toolName: string;
+  /** Whether the execution was successful. */
+  success: boolean;
+  /** The tool execution result (if successful). */
+  result?: unknown;
+  /** Validation result from schema validation. */
+  validation: {
+    valid: boolean;
+    errors: Array<{ field: string; message: string }>;
+  };
+  /** Approval details (if approval was required). */
+  approval?: { required: boolean; decision?: string; decidedBy?: string };
+  /** Verification result (if execution reached verification). */
+  verification?: { status: string; hasCriticalFailure: boolean };
+  /** Compensation details (if compensation was attempted). */
+  compensation?: { attempted: boolean; success: boolean; detail?: string };
+  /** Total pipeline duration in milliseconds. */
+  durationMs: number;
+  /** Error message (if failed). */
+  error?: string;
+}
+
+/**
+ * Handler function that performs the actual tool execution.
+ */
+export type ToolActionHandler = (
+  toolName: string,
+  validatedParams: unknown,
+  requestId: string,
+) => Promise<{ result: unknown; durationMs: number }>;
+
+// ---------- Pipeline Interface ----------
+
+/**
+ * Interface for the tool execution pipeline.
+ */
+export interface ToolExecutionPipelineInterface {
+  execute(
+    call: import("../tools/types.js").ProposedToolCall,
+    actionHandler: ToolActionHandler,
+  ): Promise<PipelineResult>;
+}
+
+// ---------- Compensation Types ----------
+
+/**
+ * Context passed to compensation functions.
+ */
+export interface CompensationContext {
+  /** The tool that was executed. */
+  toolName: string;
+  /** The parameters that were passed. */
+  params: Record<string, unknown>;
+  /** The result that was returned (if any). */
+  result?: unknown;
+  /** The request ID. */
+  requestId: string;
+}
+
+/**
+ * A compensation function that attempts to reverse a tool's effects.
+ */
+export type CompensationFn = (
+  ctx: CompensationContext,
+) => Promise<{ success: boolean; detail?: string }>;
+
+/**
+ * Interface for the compensation function registry.
+ */
+export interface CompensationRegistryInterface {
+  /** Register a compensation function for a tool. */
+  register(toolName: string, fn: CompensationFn): void;
+  /** Check if a compensation function is registered. */
+  has(toolName: string): boolean;
+  /** Attempt compensation for a tool execution. */
+  compensate(
+    ctx: CompensationContext,
+  ): Promise<{ success: boolean; detail?: string }>;
+}
