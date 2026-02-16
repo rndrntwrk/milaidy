@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema",
+  "$id": "https://milaidy.dev/schemas/autonomy-config.json",
+  "title": "AutonomyConfig",
+  "description": "Configuration schema for the Milaidy Autonomy Kernel. All fields are optional with sensible defaults.",
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "description": "Enable or disable the autonomy kernel.",
+      "default": false
+    },
+    "apiKey": {
+      "type": "string",
+      "description": "API key for autonomy endpoint authentication. Falls back to env.vars.AUTONOMY_API_KEY."
+    },
+    "trust": {
+      "type": "object",
+      "description": "Trust scoring configuration.",
+      "properties": {
+        "defaultScore": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.5 },
+        "decayRate": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.1 },
+        "verifiedBonus": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.2 },
+        "minScore": { "type": "number", "minimum": 0, "maximum": 1, "default": 0 },
+        "maxScore": { "type": "number", "minimum": 0, "maximum": 1, "default": 1 }
+      }
+    },
+    "memoryGate": {
+      "type": "object",
+      "description": "Memory gate configuration.",
+      "properties": {
+        "quarantineThreshold": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.3 },
+        "maxQuarantineSize": { "type": "integer", "minimum": 1, "default": 100 },
+        "autoReviewMs": { "type": "integer", "minimum": 0, "default": 3600000 }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "description": "Agent identity configuration.",
+      "properties": {
+        "name": { "type": "string" },
+        "coreValues": { "type": "array", "items": { "type": "string" } },
+        "communicationStyle": {
+          "type": "object",
+          "properties": {
+            "tone": { "type": "string", "enum": ["formal", "casual", "professional", "friendly"] },
+            "verbosity": { "type": "string", "enum": ["concise", "balanced", "verbose"] },
+            "personaVoice": { "type": "string" }
+          }
+        },
+        "hardBoundaries": { "type": "array", "items": { "type": "string" } },
+        "softPreferences": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "approval": {
+      "type": "object",
+      "description": "Approval gate configuration.",
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "timeoutMs": { "type": "integer", "minimum": 0, "default": 30000 },
+        "autoApproveReadOnly": { "type": "boolean", "default": true }
+      }
+    },
+    "safeMode": {
+      "type": "object",
+      "description": "Safe mode configuration.",
+      "properties": {
+        "maxConsecutiveErrors": { "type": "integer", "minimum": 1, "default": 3 },
+        "cooldownMs": { "type": "integer", "minimum": 0, "default": 60000 }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "description": "Metrics and monitoring configuration.",
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "autoMeasureIntervalMs": { "type": "integer", "minimum": 0, "default": 0 },
+        "prometheusEnabled": { "type": "boolean", "default": false }
+      }
+    },
+    "persistence": {
+      "type": "object",
+      "description": "Persistence layer configuration.",
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "eventRetentionMs": { "type": "integer", "minimum": 0, "default": 604800000 },
+        "auditRetentionMs": { "type": "integer", "minimum": 0, "default": 2592000000 }
+      }
+    },
+    "domains": {
+      "type": "object",
+      "description": "Domain-specific configuration.",
+      "properties": {
+        "governance": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean", "default": true },
+            "defaultEventRetentionMs": { "type": "integer", "default": 604800000 },
+            "defaultAuditRetentionMs": { "type": "integer", "default": 2592000000 }
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}
