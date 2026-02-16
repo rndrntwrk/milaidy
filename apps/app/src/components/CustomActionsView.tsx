@@ -123,7 +123,7 @@ export function CustomActionsView() {
       case "code":
         return "bg-purple-500/20 text-purple-400";
       default:
-        return "bg-gray-500/20 text-gray-400";
+        return "bg-bg-muted text-muted";
     }
   };
 

@@ -48,7 +48,9 @@
   --color-warn: var(--warn);
   --color-warn-muted: var(--warn-muted);
   --color-warn-subtle: var(--warn-subtle);
+  --color-warning: var(--warn);
   --color-danger: var(--danger);
+  --color-info: var(--info);
   --color-destructive: var(--destructive);
   --color-destructive-fg: var(--destructive-foreground);
   --color-destructive-subtle: var(--destructive-subtle);
@@ -138,8 +140,10 @@
   height: 8px;
 }
 
-.wallet-wrapper:hover::after { display: block; }
-.wallet-wrapper:hover .wallet-tooltip { display: block !important; }
+.wallet-wrapper:hover::after,
+.wallet-wrapper:focus-within::after { display: block; }
+.wallet-wrapper:hover .wallet-tooltip,
+.wallet-wrapper:focus-within .wallet-tooltip { display: block !important; }
 
 /* ── Button base classes ───────────────────────────────────────────── */
 

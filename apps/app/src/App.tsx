@@ -4,6 +4,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useApp } from "./AppContext.js";
+import { TAB_GROUPS } from "./navigation.js";
 import { Header } from "./components/Header.js";
 import { Nav } from "./components/Nav.js";
 import { CommandPalette } from "./components/CommandPalette.js";
@@ -30,7 +31,6 @@ import { TerminalPanel } from "./components/TerminalPanel.js";
 function ViewRouter() {
   const { tab } = useApp();
   switch (tab) {
-    case "chat": return <ChatView />;
     case "apps": return <AppsPageView />;
     case "character": return <CharacterView />;
     case "wallets": return <InventoryView />;
@@ -51,7 +51,6 @@ function ViewRouter() {
     case "database":
     case "logs":
       return <AdvancedPageView />;
-    case "voice":
     case "settings": return <SettingsView />;
     default: return <ChatView />;
   }
@@ -93,31 +92,21 @@ export function App() {
   if (!onboardingComplete) return <OnboardingWizard />;
 
   const isChat = tab === "chat";
-  const isAdvancedTab =
-    tab === "advanced" ||
-    tab === "plugins" ||
-    tab === "skills" ||
-    tab === "actions" ||
-    tab === "triggers" ||
-    tab === "identity" ||
-    tab === "approvals" ||
-    tab === "safe-mode" ||
-    tab === "governance" ||
-    tab === "fine-tuning" ||
-    tab === "trajectories" ||
-    tab === "runtime" ||
-    tab === "database" ||
-    tab === "logs";
+  const advancedTabs = new Set(TAB_GROUPS.find(g => g.label === "Advanced")?.tabs ?? []);
+  const isAdvancedTab = advancedTabs.has(tab);
 
   return (
     <>
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[10001] focus:px-4 focus:py-2 focus:bg-accent focus:text-accent-fg focus:rounded">
+        Skip to content
+      </a>
       {isChat ? (
         <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
           <Header />
           <Nav />
           <div className="flex flex-1 min-h-0 relative">
             <ConversationsSidebar />
-            <main className="flex flex-col flex-1 min-w-0 overflow-visible pt-3 px-5">
+            <main id="main-content" className="flex flex-col flex-1 min-w-0 overflow-visible pt-3 px-5">
               <ChatView />
             </main>
             <AutonomousPanel />
@@ -136,7 +125,7 @@ export function App() {
         <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
           <Header />
           <Nav />
-          <main className={`flex-1 min-h-0 py-6 px-5 ${isAdvancedTab ? "overflow-hidden" : "overflow-y-auto"}`}>
+          <main id="main-content" className={`flex-1 min-h-0 py-6 px-5 ${isAdvancedTab ? "overflow-hidden" : "overflow-y-auto"}`}>
             <ViewRouter />
           </main>
           <TerminalPanel />

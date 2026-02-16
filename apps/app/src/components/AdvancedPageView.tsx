@@ -180,13 +180,15 @@ export function AdvancedPageView() {
     <div className="flex flex-col h-full min-h-0">
       {/* Sub-tab navigation (fixed) */}
       <div className="mb-4 shrink-0">
-        <div className="flex gap-1 border-b border-border">
+        <div className="flex gap-1 border-b border-border overflow-x-auto" role="tablist" aria-label="Advanced settings">
           {SUB_TABS.map((subTab) => {
             const isActive = currentSubTab === subTab.id;
             return (
               <button
                 key={subTab.id}
-                className={`px-4 py-2 text-xs font-medium border-b-2 -mb-px transition-colors ${
+                role="tab"
+                aria-selected={isActive}
+                className={`px-4 py-2 text-xs font-medium border-b-2 -mb-px transition-colors shrink-0 ${
                   isActive
                     ? "border-accent text-accent"
                     : "border-transparent text-muted hover:text-txt hover:border-border"
@@ -202,7 +204,7 @@ export function AdvancedPageView() {
       </div>
 
       {/* Content area (scrolls, header stays fixed) */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto" role="tabpanel">
         {renderContent()}
       </div>
     </div>
