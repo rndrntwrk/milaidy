@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { client, type CustomActionDef, type CustomActionHandler } from "../api-client";
+import { Dialog } from "./ui/Dialog.js";
 
 interface CustomActionEditorProps {
   open: boolean;
@@ -263,18 +264,17 @@ export function CustomActionEditor({ open, action, onSave, onClose }: CustomActi
     }
   };
 
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <Dialog open={open} onClose={onClose} ariaLabelledBy="action-editor-title">
       <div className="w-full max-w-2xl border border-border bg-card shadow-lg flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center px-5 py-3 border-b border-border shrink-0">
-          <h2 className="flex-1 text-sm font-medium text-txt">
+          <h2 id="action-editor-title" className="flex-1 text-sm font-medium text-txt">
             {action ? "Edit Custom Action" : "New Custom Action"}
           </h2>
           <button
             onClick={onClose}
+            aria-label="Close"
             className="text-muted hover:text-txt text-xl leading-none cursor-pointer"
           >
             &times;
@@ -564,6 +564,6 @@ export function CustomActionEditor({ open, action, onSave, onClose }: CustomActi
           </button>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

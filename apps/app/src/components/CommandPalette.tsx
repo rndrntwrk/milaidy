@@ -1,5 +1,6 @@
 import { useEffect, useRef, useMemo } from "react";
 import { useApp } from "../AppContext.js";
+import { Dialog } from "./ui/Dialog.js";
 
 interface CommandItem {
   id: string;
@@ -140,12 +141,6 @@ export function CommandPalette() {
     if (!commandPaletteOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        closeCommandPalette();
-        return;
-      }
-
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setState(
@@ -192,30 +187,24 @@ export function CommandPalette() {
     }
   }, [commandQuery, setState]);
 
-  if (!commandPaletteOpen) return null;
-
   return (
-    <div
-      className="fixed inset-0 bg-black/40 z-[9999] flex items-start justify-center pt-30"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          closeCommandPalette();
-        }
-      }}
+    <Dialog
+      open={commandPaletteOpen}
+      onClose={closeCommandPalette}
+      ariaLabel="Command palette"
+      backdropClassName="items-start pt-30"
     >
-      <div
-        className="bg-bg border border-border w-[520px] max-h-[420px] flex flex-col shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="bg-bg border border-border w-[520px] max-h-[420px] flex flex-col shadow-2xl">
         <input
           ref={inputRef}
           type="text"
           className="w-full px-4 py-3.5 border-b border-border bg-transparent text-[15px] text-txt outline-none font-body"
           placeholder="Type to search commands..."
+          aria-label="Search commands"
           value={commandQuery}
           onChange={(e) => setState("commandQuery", e.target.value)}
         />
-        <div className="flex-1 overflow-y-auto py-1">
+        <div className="flex-1 overflow-y-auto py-1" role="listbox">
           {filteredCommands.length === 0 ? (
             <div className="py-5 text-center text-muted text-[13px]">
               No commands found
@@ -224,6 +213,8 @@ export function CommandPalette() {
             filteredCommands.map((cmd, idx) => (
               <button
                 key={cmd.id}
+                role="option"
+                aria-selected={idx === commandActiveIndex}
                 className={`w-full px-4 py-2.5 cursor-pointer flex justify-between items-center text-left text-sm font-body ${
                   idx === commandActiveIndex ? "bg-bg-hover" : "hover:bg-bg-hover"
                 }`}
@@ -240,6 +231,6 @@ export function CommandPalette() {
           )}
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }
