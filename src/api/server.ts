@@ -5502,24 +5502,24 @@ async function handleRequest(
     return;
   }
 
-  if (
-    await handleModelsRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      url,
-      json,
-      providerCachePath,
-      getOrFetchProvider,
-      getOrFetchAllProviders,
-      resolveModelsCacheDir,
-      pathExists: fs.existsSync,
-      readDir: fs.readdirSync,
-      unlinkFile: fs.unlinkSync,
-      joinPath: path.join,
-    })
-  ) {
+  // ── Autonomy auth guard ──────────────────────────────────────────────
+  // Apply auth guard to /api/agent/ autonomy endpoints.
+  if (pathname.startsWith("/api/agent/autonomy") ||
+      pathname.startsWith("/api/agent/identity") ||
+      pathname.startsWith("/api/agent/approvals") ||
+      pathname.startsWith("/api/agent/safe-mode")) {
+    const { createAuthGuard } = await import("./middleware/auth-guard.js");
+    const autonomyCfg = state.runtime?.character?.settings?.autonomy as
+      import("../autonomy/config.js").AutonomyConfig | undefined;
+    const guard = createAuthGuard({ apiKey: autonomyCfg?.apiKey });
+    const authResult = guard(req, res);
+    if (!authResult.authenticated) return;
+  }
+
+  // ── POST /api/agent/autonomy ────────────────────────────────────────────
+  // Autonomy is always enabled; kept for backward compat.
+  if (method === "POST" && pathname === "/api/agent/autonomy") {
+    json(res, { ok: true, autonomy: true });
     return;
   }
 

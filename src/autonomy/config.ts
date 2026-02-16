@@ -239,6 +239,8 @@ export interface AutonomyRolesConfig {
 export interface AutonomyConfig {
   /** Enable the Autonomy Kernel (default: false). */
   enabled?: boolean;
+  /** API key for autonomy endpoint authentication. Falls back to env.vars.AUTONOMY_API_KEY. */
+  apiKey?: string;
   /** Trust scoring settings. */
   trust?: AutonomyTrustConfig;
   /** Memory gate settings. */
