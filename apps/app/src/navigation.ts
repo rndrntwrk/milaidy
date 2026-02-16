@@ -20,7 +20,11 @@ export type Tab =
   | "runtime"
   | "database"
   | "settings"
-  | "logs";
+  | "logs"
+  | "identity"
+  | "approvals"
+  | "safe-mode"
+  | "governance";
 
 export const TAB_GROUPS = [
   { label: "Chat", tabs: ["chat"] as Tab[] },
@@ -38,6 +42,10 @@ export const TAB_GROUPS = [
       "skills",
       "actions",
       "triggers",
+      "identity",
+      "approvals",
+      "safe-mode",
+      "governance",
       "fine-tuning",
       "trajectories",
       "runtime",
@@ -66,6 +74,10 @@ const TAB_PATHS: Record<Tab, string> = {
   database: "/database",
   settings: "/settings",
   logs: "/logs",
+  identity: "/identity",
+  approvals: "/approvals",
+  "safe-mode": "/safe-mode",
+  governance: "/governance",
 };
 
 /** Legacy path redirects — old paths that now map to new tabs. */
@@ -141,6 +153,10 @@ export function titleForTab(tab: Tab): string {
     case "database": return "Databases";
     case "settings": return "Settings";
     case "logs": return "Logs";
+    case "identity": return "Identity";
+    case "approvals": return "Approvals";
+    case "safe-mode": return "Safe Mode";
+    case "governance": return "Governance";
     default: return "Milaidy";
   }
 }
