@@ -270,6 +270,49 @@ export interface MilaidyEvents {
     checkCount: number;
     requestId: string;
   };
+
+  // ── Autonomy Workflow Engine Events ─────────────────────────────────
+  "autonomy:state:transition": {
+    from: string;
+    to: string;
+    trigger: string;
+    requestId?: string;
+  };
+  "autonomy:approval:requested": {
+    requestId: string;
+    toolName: string;
+    riskClass: string;
+    expiresAt: number;
+  };
+  "autonomy:approval:resolved": {
+    requestId: string;
+    toolName: string;
+    decision: string;
+    decidedBy?: string;
+  };
+  "autonomy:pipeline:started": {
+    requestId: string;
+    toolName: string;
+    source: string;
+  };
+  "autonomy:pipeline:completed": {
+    requestId: string;
+    toolName: string;
+    success: boolean;
+    durationMs: number;
+    compensationAttempted?: boolean;
+  };
+  "autonomy:event:appended": {
+    sequenceId: number;
+    requestId: string;
+    type: string;
+  };
+  "autonomy:compensation:attempted": {
+    requestId: string;
+    toolName: string;
+    success: boolean;
+    detail?: string;
+  };
 }
 
 // ---------- Event Names Type ----------

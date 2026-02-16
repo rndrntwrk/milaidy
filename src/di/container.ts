@@ -87,6 +87,13 @@ export const TOKENS = {
   ToolRegistry: createToken<import("../autonomy/tools/types.js").ToolRegistryInterface>("ToolRegistry"),
   SchemaValidator: createToken<import("../autonomy/verification/schema-validator.js").SchemaValidator>("SchemaValidator"),
   PostConditionVerifier: createToken<import("../autonomy/verification/postcondition-verifier.js").PostConditionVerifier>("PostConditionVerifier"),
+
+  // Autonomy Workflow Engine
+  ExecutionPipeline: createToken<import("../autonomy/workflow/types.js").ToolExecutionPipelineInterface>("ExecutionPipeline"),
+  ApprovalGate: createToken<import("../autonomy/approval/types.js").ApprovalGateInterface>("ApprovalGate"),
+  StateMachine: createToken<import("../autonomy/state-machine/types.js").KernelStateMachineInterface>("StateMachine"),
+  EventStore: createToken<import("../autonomy/workflow/types.js").EventStoreInterface>("EventStore"),
+  CompensationRegistry: createToken<import("../autonomy/workflow/types.js").CompensationRegistryInterface>("CompensationRegistry"),
 } as const;
 
 // ---------- Service Container ----------
