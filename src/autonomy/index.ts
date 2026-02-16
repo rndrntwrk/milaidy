@@ -149,7 +149,10 @@ export {
 } from "./roles/index.js";
 
 // Re-export role config
-export type { AutonomyRolesConfig } from "./config.js";
+export type { AutonomyRolesConfig, AutonomyLearningConfig } from "./config.js";
+
+// Re-export learning infrastructure (Phase 4)
+export * from "./learning/index.js";
 
 // Re-export metrics
 export {

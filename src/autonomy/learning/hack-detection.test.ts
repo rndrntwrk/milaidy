@@ -78,7 +78,7 @@ describe("superficialPassInvariant", () => {
         toolName: "test",
         result: null,
         durationMs: 10,
-        details: "",
+        error: "",
       },
     } as any);
     expect(result).toBe(false);
@@ -96,7 +96,7 @@ describe("superficialPassInvariant", () => {
         toolName: "test",
         result: { data: "real output" },
         durationMs: 10,
-        details: "",
+        error: "",
       },
     } as any);
     expect(result).toBe(true);
@@ -114,7 +114,7 @@ describe("superficialPassInvariant", () => {
         toolName: "test",
         result: null,
         durationMs: 10,
-        details: "",
+        error: "",
       },
     } as any);
     expect(result).toBe(true);
@@ -137,7 +137,7 @@ describe("stepInflationInvariant", () => {
         toolName: "greet",
         result: "hi",
         durationMs: 10,
-        details: "Executed plan with 20 steps",
+        error: "Executed plan with 20 steps",
       },
     } as any);
     expect(result).toBe(false);
@@ -155,7 +155,7 @@ describe("stepInflationInvariant", () => {
         toolName: "complex analysis tool",
         result: "done",
         durationMs: 100,
-        details: "Executed plan with 5 steps",
+        error: "Executed plan with 5 steps",
       },
     } as any);
     expect(result).toBe(true);
