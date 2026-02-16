@@ -33,5 +33,8 @@ export {
   type DrizzleDb,
 } from "./db-adapter.js";
 
+// Persistent implementations
+export { PgEventStore } from "./pg-event-store.js";
+
 // Migrations
 export { createAutonomyTables } from "./migrations/001_autonomy_tables.js";
