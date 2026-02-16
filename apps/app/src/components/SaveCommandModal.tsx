@@ -44,8 +44,7 @@ export function SaveCommandModal({ open, text, onSave, onClose }: SaveCommandMod
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleSubmit();
-    if (e.key === "Escape") onClose();
-  }, [handleSubmit, onClose]);
+  }, [handleSubmit]);
 
   const preview = text.length > 120 ? `${text.slice(0, 120)}...` : text;
 

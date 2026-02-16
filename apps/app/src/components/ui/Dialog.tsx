@@ -5,6 +5,9 @@
 
 import { useEffect, useRef, useCallback, type ReactNode } from "react";
 
+/** Stack-safe scroll lock: only restore scroll when all dialogs have closed. */
+let scrollLockCount = 0;
+
 interface DialogProps {
   open: boolean;
   onClose: () => void;
@@ -34,15 +37,20 @@ export function Dialog({
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
-  // Save previous focus and lock scroll on open
+  // Save previous focus and lock scroll on open (stack-safe)
   useEffect(() => {
     if (!open) return;
 
     previousFocusRef.current = document.activeElement as HTMLElement | null;
+    scrollLockCount++;
     document.body.style.overflow = "hidden";
 
     return () => {
-      document.body.style.overflow = "";
+      scrollLockCount--;
+      if (scrollLockCount <= 0) {
+        scrollLockCount = 0;
+        document.body.style.overflow = "";
+      }
       previousFocusRef.current?.focus();
     };
   }, [open]);
@@ -122,7 +130,6 @@ export function Dialog({
     <div
       className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 ${backdropClassName}`}
       onClick={handleBackdropClick}
-      aria-hidden="true"
     >
       <div
         ref={dialogRef}

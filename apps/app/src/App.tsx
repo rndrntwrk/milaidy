@@ -30,6 +30,8 @@ import { TerminalPanel } from "./components/TerminalPanel.js";
 import { ToastContainer } from "./components/ui/Toast.js";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary.js";
 
+const advancedTabs = new Set(TAB_GROUPS.find(g => g.label === "Advanced")?.tabs ?? []);
+
 function ViewRouter() {
   const { tab } = useApp();
   switch (tab) {
@@ -95,7 +97,6 @@ export function App() {
   if (!onboardingComplete) return <ErrorBoundary><OnboardingWizard /></ErrorBoundary>;
 
   const isChat = tab === "chat";
-  const advancedTabs = new Set(TAB_GROUPS.find(g => g.label === "Advanced")?.tabs ?? []);
   const isAdvancedTab = advancedTabs.has(tab);
 
   return (
