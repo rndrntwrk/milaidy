@@ -118,6 +118,18 @@ export interface AutonomyApprovalConfig {
 }
 
 /**
+ * Cross-system invariant checker configuration.
+ */
+export interface AutonomyInvariantsConfig {
+  /** Enable invariant checking (default: true). */
+  enabled?: boolean;
+  /** Per-check timeout in ms (default: 5000). */
+  checkTimeoutMs?: number;
+  /** Fail the pipeline on critical invariant violations (default: false). */
+  failOnCritical?: boolean;
+}
+
+/**
  * Event store configuration.
  */
 export interface AutonomyEventStoreConfig {
@@ -153,6 +165,8 @@ export interface AutonomyConfig {
   approval?: AutonomyApprovalConfig;
   /** Event store settings. */
   eventStore?: AutonomyEventStoreConfig;
+  /** Cross-system invariant checker settings. */
+  invariants?: AutonomyInvariantsConfig;
 }
 
 // ---------- Defaults ----------
@@ -235,6 +249,11 @@ export function resolveAutonomyConfig(
     eventStore: {
       maxEvents: userConfig.eventStore?.maxEvents ?? 10_000,
       retentionMs: userConfig.eventStore?.retentionMs ?? 0,
+    },
+    invariants: {
+      enabled: userConfig.invariants?.enabled ?? true,
+      checkTimeoutMs: userConfig.invariants?.checkTimeoutMs ?? 5_000,
+      failOnCritical: userConfig.invariants?.failOnCritical ?? false,
     },
   };
 }
@@ -352,6 +371,11 @@ export function validateAutonomyConfig(
   // Validate event store config
   if (config.eventStore?.maxEvents !== undefined && config.eventStore.maxEvents < 100) {
     issues.push({ path: "autonomy.eventStore.maxEvents", message: "Must be at least 100" });
+  }
+
+  // Validate invariants config
+  if (config.invariants?.checkTimeoutMs !== undefined && config.invariants.checkTimeoutMs < 100) {
+    issues.push({ path: "autonomy.invariants.checkTimeoutMs", message: "Must be at least 100" });
   }
 
   // Validate identity config if present (delegates to canonical validator)

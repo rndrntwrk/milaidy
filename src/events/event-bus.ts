@@ -294,6 +294,7 @@ export interface MilaidyEvents {
     requestId: string;
     toolName: string;
     source: string;
+    correlationId?: string;
   };
   "autonomy:pipeline:completed": {
     requestId: string;
@@ -301,6 +302,7 @@ export interface MilaidyEvents {
     success: boolean;
     durationMs: number;
     compensationAttempted?: boolean;
+    correlationId?: string;
   };
   "autonomy:event:appended": {
     sequenceId: number;
@@ -312,6 +314,14 @@ export interface MilaidyEvents {
     toolName: string;
     success: boolean;
     detail?: string;
+    correlationId?: string;
+  };
+  "autonomy:invariants:checked": {
+    requestId: string;
+    status: string;
+    hasCriticalViolation: boolean;
+    checkCount: number;
+    correlationId?: string;
   };
 }
 

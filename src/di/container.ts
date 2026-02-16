@@ -94,6 +94,7 @@ export const TOKENS = {
   StateMachine: createToken<import("../autonomy/state-machine/types.js").KernelStateMachineInterface>("StateMachine"),
   EventStore: createToken<import("../autonomy/workflow/types.js").EventStoreInterface>("EventStore"),
   CompensationRegistry: createToken<import("../autonomy/workflow/types.js").CompensationRegistryInterface>("CompensationRegistry"),
+  InvariantChecker: createToken<import("../autonomy/verification/invariants/invariant-checker.js").InvariantChecker>("InvariantChecker"),
 } as const;
 
 // ---------- Service Container ----------
