@@ -69,6 +69,10 @@ vi.mock("../di/container.js", () => ({
     PromptBuilder: Symbol.for("PromptBuilder"),
     CheckpointManager: Symbol.for("CheckpointManager"),
     AdversarialGenerator: Symbol.for("AdversarialGenerator"),
+    DomainPackRegistry: Symbol.for("DomainPackRegistry"),
+    PolicyEngine: Symbol.for("PolicyEngine"),
+    AuditRetentionManager: Symbol.for("AuditRetentionManager"),
+    PilotRunner: Symbol.for("PilotRunner"),
   },
 }));
 
@@ -579,6 +583,28 @@ describe("MilaidyAutonomyService", () => {
       expect(svc.getPromptBuilder()).not.toBeNull();
       expect(svc.getCheckpointManager()).toBeNull();
       expect(svc.getAdversarialGenerator()).toBeNull();
+    });
+
+    it("returns domain accessors when domains enabled", async () => {
+      setAutonomyConfig({ enabled: true, domains: { enabled: true } });
+      const runtime = createMockRuntime();
+      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+
+      expect(svc.getDomainPackRegistry()).not.toBeNull();
+      expect(svc.getPolicyEngine()).not.toBeNull();
+      expect(svc.getAuditRetentionManager()).not.toBeNull();
+      expect(svc.getPilotRunner()).not.toBeNull();
+    });
+
+    it("returns null domain accessors when domains disabled", async () => {
+      setAutonomyConfig({ enabled: true });
+      const runtime = createMockRuntime();
+      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+
+      expect(svc.getDomainPackRegistry()).toBeNull();
+      expect(svc.getPolicyEngine()).toBeNull();
+      expect(svc.getAuditRetentionManager()).toBeNull();
+      expect(svc.getPilotRunner()).toBeNull();
     });
 
     it("GoalManager can create and retrieve goals", async () => {

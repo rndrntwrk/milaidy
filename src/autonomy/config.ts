@@ -140,6 +140,34 @@ export interface AutonomyEventStoreConfig {
 }
 
 /**
+ * Domain capability packs and governance configuration (Phase 5).
+ */
+export interface AutonomyDomainsConfig {
+  /** Enable domain pack infrastructure (default: false). */
+  enabled?: boolean;
+  /** Domain IDs to auto-load on initialization. */
+  autoLoadDomains?: string[];
+  /** Coding domain configuration overrides. */
+  coding?: import("./domains/coding/types.js").CodingDomainConfig;
+  /** Governance settings. */
+  governance?: {
+    /** Enable governance policy engine (default: true). */
+    enabled?: boolean;
+    /** Default event retention in ms (default: 604800000 = 7 days). */
+    defaultEventRetentionMs?: number;
+    /** Default audit retention in ms (default: 2592000000 = 30 days). */
+    defaultAuditRetentionMs?: number;
+  };
+  /** Pilot evaluation settings. */
+  pilot?: {
+    /** Scenario timeout in ms (default: 30000). */
+    scenarioTimeoutMs?: number;
+    /** Maximum scenarios to run (0 = all, default: 0). */
+    maxScenarios?: number;
+  };
+}
+
+/**
  * Learning infrastructure configuration (Phase 4).
  */
 export interface AutonomyLearningConfig {
@@ -227,6 +255,8 @@ export interface AutonomyConfig {
   roles?: AutonomyRolesConfig;
   /** Learning infrastructure settings (Phase 4). */
   learning?: AutonomyLearningConfig;
+  /** Domain capability packs and governance settings (Phase 5). */
+  domains?: AutonomyDomainsConfig;
 }
 
 // ---------- Defaults ----------
@@ -345,6 +375,20 @@ export function resolveAutonomyConfig(
         threshold: userConfig.learning?.hackDetection?.threshold ?? 0.5,
       },
       modelProvider: userConfig.learning?.modelProvider,
+    },
+    domains: {
+      enabled: userConfig.domains?.enabled ?? false,
+      autoLoadDomains: userConfig.domains?.autoLoadDomains ?? [],
+      coding: userConfig.domains?.coding,
+      governance: {
+        enabled: userConfig.domains?.governance?.enabled ?? true,
+        defaultEventRetentionMs: userConfig.domains?.governance?.defaultEventRetentionMs ?? 604_800_000,
+        defaultAuditRetentionMs: userConfig.domains?.governance?.defaultAuditRetentionMs ?? 2_592_000_000,
+      },
+      pilot: {
+        scenarioTimeoutMs: userConfig.domains?.pilot?.scenarioTimeoutMs ?? 30_000,
+        maxScenarios: userConfig.domains?.pilot?.maxScenarios ?? 0,
+      },
     },
   };
 }
@@ -492,6 +536,17 @@ export function validateAutonomyConfig(
     if (config.learning.adversarial.injectionRate < 0 || config.learning.adversarial.injectionRate > 1) {
       issues.push({ path: "autonomy.learning.adversarial.injectionRate", message: "Must be between 0 and 1" });
     }
+  }
+
+  // Validate domains config
+  if (config.domains?.governance?.defaultEventRetentionMs !== undefined && config.domains.governance.defaultEventRetentionMs < 0) {
+    issues.push({ path: "autonomy.domains.governance.defaultEventRetentionMs", message: "Must be non-negative" });
+  }
+  if (config.domains?.governance?.defaultAuditRetentionMs !== undefined && config.domains.governance.defaultAuditRetentionMs < 0) {
+    issues.push({ path: "autonomy.domains.governance.defaultAuditRetentionMs", message: "Must be non-negative" });
+  }
+  if (config.domains?.pilot?.scenarioTimeoutMs !== undefined && config.domains.pilot.scenarioTimeoutMs < 1000) {
+    issues.push({ path: "autonomy.domains.pilot.scenarioTimeoutMs", message: "Must be at least 1000" });
   }
 
   // Validate identity config if present (delegates to canonical validator)
