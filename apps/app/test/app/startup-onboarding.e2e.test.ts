@@ -24,6 +24,8 @@ type AppHarnessState = {
   onboardingComplete: boolean;
   tab: string;
   actionNotice: null;
+  toasts: never[];
+  dismissToast: () => void;
   onboardingStep: OnboardingStep;
   onboardingOptions: {
     names: string[];
@@ -279,6 +281,8 @@ function createHarnessState(): AppHarnessState {
     onboardingComplete: false,
     tab: "chat",
     actionNotice: null,
+    toasts: [],
+    dismissToast: () => {},
     onboardingStep: "welcome",
     onboardingOptions: onboardingOptions(),
     onboardingName: "",

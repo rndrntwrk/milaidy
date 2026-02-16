@@ -190,8 +190,10 @@ export function AdvancedPageView() {
               <button
                 type="button"
                 key={subTab.id}
+                id={`adv-tab-${subTab.id}`}
                 role="tab"
                 aria-selected={isActive}
+                aria-controls="adv-tabpanel"
                 className={`px-4 py-2 text-xs font-medium border-b-2 -mb-px transition-colors shrink-0 ${
                   isActive
                     ? "border-accent text-accent"
@@ -208,7 +210,7 @@ export function AdvancedPageView() {
       </div>
 
       {/* Content area (scrolls, header stays fixed) */}
-      <div className="flex-1 min-h-0 overflow-y-auto" role="tabpanel">
+      <div className="flex-1 min-h-0 overflow-y-auto" role="tabpanel" id="adv-tabpanel" aria-labelledby={`adv-tab-${currentSubTab}`}>
         {renderContent()}
       </div>
     </div>

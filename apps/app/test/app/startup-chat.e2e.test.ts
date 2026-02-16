@@ -98,6 +98,8 @@ describe("app startup routing (e2e)", () => {
       onboardingComplete: true,
       tab: "chat",
       actionNotice: null,
+      toasts: [],
+      dismissToast: () => {},
     });
   });
 
@@ -129,6 +131,8 @@ describe("app startup routing (e2e)", () => {
       onboardingComplete: true,
       tab: "wallets",
       actionNotice: null,
+      toasts: [],
+      dismissToast: () => {},
     });
 
     let tree: TestRenderer.ReactTestRenderer;

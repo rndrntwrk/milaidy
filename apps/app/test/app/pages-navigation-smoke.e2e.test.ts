@@ -163,6 +163,8 @@ type HarnessState = {
   onboardingComplete: boolean;
   tab: Tab;
   actionNotice: null;
+  toasts: never[];
+  dismissToast: () => void;
   setTab: (tab: Tab) => void;
 };
 
@@ -237,6 +239,8 @@ describe("pages navigation smoke (e2e)", () => {
       onboardingComplete: true,
       tab: "chat",
       actionNotice: null,
+      toasts: [],
+      dismissToast: () => {},
       setTab: (tab: Tab) => {
         state.tab = tab;
       },
@@ -273,7 +277,6 @@ describe("pages navigation smoke (e2e)", () => {
       runtime: "RuntimeView Ready",
       database: "DatabasePageView Ready",
       logs: "LogsPageView Ready",
-      voice: "SettingsView Ready",
     };
 
     for (const group of TAB_GROUPS) {
@@ -376,7 +379,6 @@ describe("pages navigation smoke (e2e)", () => {
       { tab: "advanced", token: "PluginsPageView Ready" },
       { tab: "fine-tuning", token: "FineTuningView Ready" },
       { tab: "trajectories", token: "TrajectoriesView Ready" },
-      { tab: "voice", token: "SettingsView Ready" },
       { tab: "runtime", token: "RuntimeView Ready" },
       { tab: "database", token: "DatabasePageView Ready" },
       { tab: "settings", token: "SettingsView Ready" },

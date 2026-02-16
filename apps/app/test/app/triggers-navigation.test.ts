@@ -16,9 +16,8 @@ describe("navigation", () => {
     expect(tabFromPath("/trajectories")).toBe("trajectories");
     expect(titleForTab("trajectories")).toBe("Trajectories");
 
-    expect(pathForTab("voice")).toBe("/voice");
+    // voice was removed as a top-level tab; /voice is a legacy redirect to settings
     expect(tabFromPath("/voice")).toBe("settings");
-    expect(titleForTab("voice")).toBe("Voice");
 
     expect(pathForTab("runtime")).toBe("/runtime");
     expect(tabFromPath("/runtime")).toBe("runtime");

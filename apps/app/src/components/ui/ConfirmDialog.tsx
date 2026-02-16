@@ -2,6 +2,7 @@
  * Accessible confirmation dialog — replaces window.confirm() and alert().
  */
 
+import { useId } from "react";
 import { Dialog } from "./Dialog.js";
 
 interface ConfirmDialogProps {
@@ -25,16 +26,17 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const titleId = useId();
   const confirmClass =
     tone === "danger"
       ? "bg-danger text-destructive-fg hover:opacity-90"
       : "bg-accent text-accent-fg hover:opacity-90";
 
   return (
-    <Dialog open={open} onClose={onCancel} ariaLabelledBy="confirm-dialog-title">
+    <Dialog open={open} onClose={onCancel} ariaLabelledBy={titleId}>
       <div className="w-full max-w-sm border border-border bg-card shadow-lg flex flex-col overflow-hidden">
         <div className="px-5 py-4">
-          <h2 id="confirm-dialog-title" className="text-sm font-bold text-txt mb-2">
+          <h2 id={titleId} className="text-sm font-bold text-txt mb-2">
             {title}
           </h2>
           <p className="text-[13px] text-muted">{message}</p>
