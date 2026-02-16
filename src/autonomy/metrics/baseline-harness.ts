@@ -8,6 +8,7 @@
 import { logger } from "@elizaos/core";
 import { emit } from "../../events/event-bus.js";
 import { metrics } from "../../telemetry/setup.js";
+import type { KernelComponents, ScenarioEvaluator } from "./evaluator-types.js";
 import type {
   BaselineMetrics,
   EvaluationScenario,
@@ -33,11 +34,19 @@ export interface BaselineHarness {
 /**
  * In-memory baseline harness implementation.
  *
- * For production use, snapshots should be persisted to disk or database.
- * This implementation stores them in memory for development/testing.
+ * When constructed with a ScenarioEvaluator and KernelComponents,
+ * measure() will exercise the kernel components to produce real scores.
+ * Without them, it falls back to zero scores (stub behavior).
  */
 export class InMemoryBaselineHarness implements BaselineHarness {
   private snapshots = new Map<string, BaselineMetrics>();
+  private evaluator?: ScenarioEvaluator;
+  private components?: KernelComponents;
+
+  constructor(evaluator?: ScenarioEvaluator, components?: KernelComponents) {
+    this.evaluator = evaluator;
+    this.components = components;
+  }
 
   async measure(
     agentId: string,
@@ -54,20 +63,28 @@ export class InMemoryBaselineHarness implements BaselineHarness {
     }
 
     // Compute per-metric scores
-    // In a full implementation, each scenario would be run against the agent
-    // and scored. For now, we provide the measurement framework.
     const metricScores: Record<string, number[]> = {};
 
     for (const [metric, metricScenarios] of byMetric) {
       metricScores[metric] = [];
       for (const scenario of metricScenarios) {
-        // Placeholder: actual evaluation would call the agent here
-        // and score the response against expectedBehavior
-        logger.debug(
-          `[baseline] Evaluating scenario ${scenario.id} for metric ${metric}`,
-        );
-        // Score will be filled in by actual evaluation logic
-        metricScores[metric].push(0);
+        if (this.evaluator && this.components) {
+          // Real evaluation: delegate to evaluator
+          const result = await this.evaluator.evaluate(
+            scenario,
+            this.components,
+          );
+          metricScores[metric].push(result.score);
+          logger.debug(
+            `[baseline] Scenario ${scenario.id}: score=${result.score.toFixed(3)}${result.details ? ` (${result.details})` : ""}`,
+          );
+        } else {
+          // Stub: no evaluator provided
+          logger.debug(
+            `[baseline] Evaluating scenario ${scenario.id} for metric ${metric} (stub)`,
+          );
+          metricScores[metric].push(0);
+        }
       }
     }
 
