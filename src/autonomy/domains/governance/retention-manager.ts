@@ -38,25 +38,28 @@ export interface ComplianceSummary {
 
 /**
  * Interface for the audit retention manager.
+ *
+ * All data methods return Promises to support both in-memory and
+ * persistent (e.g. Postgres) implementations.
  */
 export interface AuditRetentionManagerInterface {
   /** Add execution events with retention policy. */
-  addEvents(events: ExecutionEvent[], policy: RetentionPolicy): void;
+  addEvents(events: ExecutionEvent[], policy: RetentionPolicy): Promise<void>;
   /** Add an audit report with retention policy. */
   addAuditReport(
     report: Record<string, unknown>,
     policy: RetentionPolicy,
-  ): void;
+  ): Promise<void>;
   /** Export records that have expired (past retention period). */
-  exportExpired(): RetentionExport;
+  exportExpired(): Promise<RetentionExport>;
   /** Evict expired records. Returns number of records evicted. */
-  evictExpired(): number;
+  evictExpired(): Promise<number>;
   /** Export all records as JSONL string. */
-  toJsonl(): string;
+  toJsonl(): Promise<string>;
   /** Get count of retained records. */
   readonly size: number;
   /** Get compliance metadata summary. */
-  getComplianceSummary(): ComplianceSummary;
+  getComplianceSummary(): Promise<ComplianceSummary>;
 }
 
 // ---------- Implementation ----------
@@ -70,7 +73,7 @@ export interface AuditRetentionManagerInterface {
 export class AuditRetentionManager implements AuditRetentionManagerInterface {
   private records: RetentionRecord[] = [];
 
-  addEvents(events: ExecutionEvent[], policy: RetentionPolicy): void {
+  async addEvents(events: ExecutionEvent[], policy: RetentionPolicy): Promise<void> {
     const now = Date.now();
     for (const event of events) {
       this.records.push({
@@ -81,10 +84,10 @@ export class AuditRetentionManager implements AuditRetentionManagerInterface {
     }
   }
 
-  addAuditReport(
+  async addAuditReport(
     report: Record<string, unknown>,
     policy: RetentionPolicy,
-  ): void {
+  ): Promise<void> {
     const now = Date.now();
     this.records.push({
       type: "audit",
@@ -93,7 +96,7 @@ export class AuditRetentionManager implements AuditRetentionManagerInterface {
     });
   }
 
-  exportExpired(): RetentionExport {
+  async exportExpired(): Promise<RetentionExport> {
     const now = Date.now();
     const expired = this.records.filter((r) => r.retainUntil <= now);
     const exportedAt = now;
@@ -110,14 +113,14 @@ export class AuditRetentionManager implements AuditRetentionManagerInterface {
     };
   }
 
-  evictExpired(): number {
+  async evictExpired(): Promise<number> {
     const now = Date.now();
     const before = this.records.length;
     this.records = this.records.filter((r) => r.retainUntil > now);
     return before - this.records.length;
   }
 
-  toJsonl(): string {
+  async toJsonl(): Promise<string> {
     return this.records.map((r) => JSON.stringify(r)).join("\n");
   }
 
@@ -125,7 +128,7 @@ export class AuditRetentionManager implements AuditRetentionManagerInterface {
     return this.records.length;
   }
 
-  getComplianceSummary(): ComplianceSummary {
+  async getComplianceSummary(): Promise<ComplianceSummary> {
     let eventRecords = 0;
     let auditRecords = 0;
     let oldest = Number.POSITIVE_INFINITY;

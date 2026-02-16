@@ -109,23 +109,23 @@ describe("Phase 5 integration", () => {
     expect(irrevResult.approvalRequirement).toBe("human");
   });
 
-  it("AuditRetentionManager JSONL round-trip", () => {
+  it("AuditRetentionManager JSONL round-trip", async () => {
     const manager = new AuditRetentionManager();
 
-    manager.addEvents(
+    await manager.addEvents(
       [
         { sequenceId: 1, requestId: "r1", type: "tool:executed", payload: { tool: "READ_FILE" }, timestamp: Date.now() } as any,
       ],
       { eventRetentionMs: 60_000, auditRetentionMs: 120_000, exportBeforeEviction: true },
     );
-    manager.addAuditReport(
+    await manager.addAuditReport(
       { policyId: "coding-governance", passed: true },
       { eventRetentionMs: 60_000, auditRetentionMs: 120_000, exportBeforeEviction: true },
     );
 
     expect(manager.size).toBe(2);
 
-    const jsonl = manager.toJsonl();
+    const jsonl = await manager.toJsonl();
     const lines = jsonl.split("\n");
     expect(lines).toHaveLength(2);
 
@@ -137,7 +137,7 @@ describe("Phase 5 integration", () => {
       expect(parsed.retainUntil).toBeGreaterThan(0);
     }
 
-    const summary = manager.getComplianceSummary();
+    const summary = await manager.getComplianceSummary();
     expect(summary.totalRecords).toBe(2);
     expect(summary.eventRecords).toBe(1);
     expect(summary.auditRecords).toBe(1);
@@ -243,11 +243,11 @@ describe("Phase 5 integration", () => {
 
     // Retention manager should accept the audit data
     const retention = new AuditRetentionManager();
-    retention.addAuditReport(
+    await retention.addAuditReport(
       { compliance, report: report.benchmarkResults },
       CODING_GOVERNANCE_POLICY.retention,
     );
     expect(retention.size).toBe(1);
-    expect(retention.getComplianceSummary().auditRecords).toBe(1);
+    expect((await retention.getComplianceSummary()).auditRecords).toBe(1);
   });
 });
