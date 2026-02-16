@@ -57,8 +57,8 @@ const stepInflationInvariant: Invariant = {
   check: async (ctx) => {
     const result = ctx.pipelineResult;
 
-    // Check if result metadata contains plan info
-    const details = result.details ?? "";
+    // Check if result metadata contains plan info (encoded in error or tool name)
+    const details = result.error ?? "";
     const stepCountMatch = details.match(/(\d+)\s*steps?/i);
     const descriptionWords = (result.toolName ?? "").split(/\s+/).length;
 
