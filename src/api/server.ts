@@ -159,6 +159,9 @@ interface AutonomyServiceLike {
   getMemoryGate?(): import("../autonomy/memory/gate.js").MemoryGate | null;
   getIdentityConfig?(): import("../autonomy/identity/schema.js").AutonomyIdentityConfig | null;
   updateIdentityConfig?(update: Partial<import("../autonomy/identity/schema.js").AutonomyIdentityConfig>): Promise<import("../autonomy/identity/schema.js").AutonomyIdentityConfig>;
+  getApprovalGate?(): import("../autonomy/approval/types.js").ApprovalGateInterface | null;
+  getApprovalLog?(): import("../autonomy/persistence/pg-approval-log.js").ApprovalLogInterface | null;
+  getStateMachine?(): import("../autonomy/state-machine/types.js").KernelStateMachineInterface | null;
 }
 
 /** Helper to retrieve the AutonomyService from a runtime (may be null). */
@@ -5594,6 +5597,112 @@ async function handleRequest(
           },
         ],
       });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      error(res, msg, 500);
+    }
+    return;
+  }
+
+  // ── GET /api/agent/approvals ──────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/agent/approvals") {
+    try {
+      const autonomySvc = getAutonomySvc(state.runtime);
+
+      // Return pending approvals from the gate + recent from persistent log
+      const gate = autonomySvc?.getApprovalGate?.();
+      const pending = gate?.getPending() ?? [];
+      const approvalLog = autonomySvc?.getApprovalLog?.();
+      let recent: unknown[] = [];
+      if (approvalLog) {
+        const limitParam = url.searchParams.get("limit");
+        const limit = limitParam ? Math.min(Math.max(1, Number(limitParam)), 200) : 50;
+        recent = await approvalLog.getRecent(limit);
+      }
+
+      json(res, { pending, recent });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      error(res, msg, 500);
+    }
+    return;
+  }
+
+  // ── POST /api/agent/approvals/:id/resolve ──────────────────────────────
+  if (method === "POST" && pathname.startsWith("/api/agent/approvals/") && pathname.endsWith("/resolve")) {
+    const parts = pathname.split("/");
+    const approvalId = parts[4]; // /api/agent/approvals/<id>/resolve
+
+    if (!approvalId) {
+      error(res, "Missing approval ID", 400);
+      return;
+    }
+
+    const body = await readJsonBody(req, res);
+    if (!body) return;
+
+    const { decision, decidedBy } = body as { decision?: string; decidedBy?: string };
+    if (!decision || !["approved", "denied"].includes(decision)) {
+      error(res, "decision must be 'approved' or 'denied'", 400);
+      return;
+    }
+
+    try {
+      const autonomySvc = getAutonomySvc(state.runtime);
+      const gate = autonomySvc?.getApprovalGate?.();
+      if (!gate) {
+        error(res, "Approval gate not available", 503);
+        return;
+      }
+
+      const resolved = gate.resolve(
+        approvalId,
+        decision as "approved" | "denied",
+        decidedBy,
+      );
+
+      if (!resolved) {
+        error(res, "Approval not found or already resolved", 404);
+        return;
+      }
+
+      json(res, { ok: true, id: approvalId, decision });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      error(res, msg, 500);
+    }
+    return;
+  }
+
+  // ── GET /api/agent/safe-mode ──────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/agent/safe-mode") {
+    try {
+      const autonomySvc = getAutonomySvc(state.runtime);
+      const sm = autonomySvc?.getStateMachine?.();
+      json(res, {
+        active: sm?.currentState === "safe_mode",
+        state: sm?.currentState ?? "unknown",
+        consecutiveErrors: sm?.consecutiveErrors ?? 0,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      error(res, msg, 500);
+    }
+    return;
+  }
+
+  // ── POST /api/agent/safe-mode/exit ────────────────────────────────────
+  if (method === "POST" && pathname === "/api/agent/safe-mode/exit") {
+    try {
+      const autonomySvc = getAutonomySvc(state.runtime);
+      const sm = autonomySvc?.getStateMachine?.();
+      if (!sm || sm.currentState !== "safe_mode") {
+        error(res, "Not in safe mode", 409);
+        return;
+      }
+      // Attempt to transition out of safe mode
+      const result = sm.transition("safe_mode_exit");
+      json(res, { ok: result.accepted, state: sm.currentState });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       error(res, msg, 500);
