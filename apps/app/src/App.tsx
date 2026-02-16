@@ -49,6 +49,10 @@ function ViewRouter() {
     case "skills":
     case "actions":
     case "triggers":
+    case "identity":
+    case "approvals":
+    case "safe-mode":
+    case "governance":
     case "fine-tuning":
     case "trajectories":
     case "runtime":
@@ -96,6 +100,10 @@ export function App() {
     tab === "skills" ||
     tab === "actions" ||
     tab === "triggers" ||
+    tab === "identity" ||
+    tab === "approvals" ||
+    tab === "safe-mode" ||
+    tab === "governance" ||
     tab === "fine-tuning" ||
     tab === "trajectories" ||
     tab === "runtime" ||

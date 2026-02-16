@@ -151,14 +151,59 @@ export interface QueryResult {
   durationMs: number;
 }
 
-export type AgentState =
-  | "not_started"
-  | "starting"
-  | "running"
-  | "paused"
-  | "stopped"
-  | "restarting"
-  | "error";
+// Custom actions types
+export type CustomActionHandler =
+  | { type: "http"; method: string; url: string; headers?: Record<string, string>; bodyTemplate?: string }
+  | { type: "shell"; command: string }
+  | { type: "code"; code: string };
+
+export interface CustomActionDef {
+  id: string;
+  name: string;
+  description: string;
+  similes?: string[];
+  parameters: Array<{ name: string; description: string; required: boolean }>;
+  handler: CustomActionHandler;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Autonomy types
+export interface AutonomyIdentity {
+  name?: string;
+  coreValues?: string[];
+  communicationStyle?: {
+    tone?: string;
+    verbosity?: string;
+    personaVoice?: string;
+  };
+  hardBoundaries?: string[];
+  softPreferences?: Record<string, unknown>;
+  identityHash?: string | null;
+  identityVersion?: number;
+}
+
+export interface AutonomyApproval {
+  id: string;
+  toolName: string;
+  riskClass: string;
+  callPayload: Record<string, unknown>;
+  createdAt: number;
+  expiresAt: number;
+}
+
+export interface AutonomyApprovalLogEntry {
+  id: string;
+  toolName: string;
+  riskClass: string;
+  decision: string;
+  decidedBy?: string;
+  createdAt: number;
+  decidedAt?: number;
+}
+
+export type AgentState = "not_started" | "starting" | "running" | "paused" | "stopped" | "restarting" | "error";
 
 export interface AgentStatus {
   state: AgentState;
@@ -3773,6 +3818,36 @@ export class MiladyClient {
       method: "POST",
       body: JSON.stringify({ prompt }),
     });
+  }
+
+  // Autonomy — Identity
+  async getIdentityConfig(): Promise<{ identity: AutonomyIdentity | null }> {
+    return this.fetch("/api/agent/identity");
+  }
+  async updateIdentityConfig(patch: Partial<AutonomyIdentity>): Promise<{ identity: AutonomyIdentity }> {
+    return this.fetch("/api/agent/identity", { method: "PUT", body: JSON.stringify(patch) });
+  }
+  async getIdentityHistory(): Promise<{ version: number; hash: string | null; history: AutonomyIdentity[] }> {
+    return this.fetch("/api/agent/identity/history");
+  }
+
+  // Autonomy — Approvals
+  async getApprovals(): Promise<{ pending: AutonomyApproval[]; recent: AutonomyApprovalLogEntry[] }> {
+    return this.fetch("/api/agent/approvals");
+  }
+  async resolveApproval(id: string, decision: "approved" | "denied", decidedBy?: string): Promise<{ ok: boolean }> {
+    return this.fetch(`/api/agent/approvals/${encodeURIComponent(id)}/resolve`, {
+      method: "POST",
+      body: JSON.stringify({ decision, decidedBy }),
+    });
+  }
+
+  // Autonomy — Safe Mode
+  async getSafeModeStatus(): Promise<{ active: boolean; consecutiveErrors: number; state: string }> {
+    return this.fetch("/api/agent/safe-mode");
+  }
+  async exitSafeMode(): Promise<{ ok: boolean; state?: string; error?: string }> {
+    return this.fetch("/api/agent/safe-mode/exit", { method: "POST" });
   }
 }
 

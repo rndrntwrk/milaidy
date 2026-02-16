@@ -25,12 +25,21 @@ import { SkillsView } from "./SkillsView";
 import { TrajectoriesView } from "./TrajectoriesView";
 import { TrajectoryDetailView } from "./TrajectoryDetailView";
 import { TriggersView } from "./TriggersView";
+import { IdentityPanel } from "./IdentityPanel";
+import { ApprovalPanel } from "./ApprovalPanel";
+import { SafeModePanel } from "./SafeModePanel";
+import { GovernancePanel } from "./GovernancePanel";
+import type { Tab } from "../navigation";
 
 type SubTab =
   | "plugins"
   | "skills"
   | "actions"
   | "triggers"
+  | "identity"
+  | "approvals"
+  | "safe-mode"
+  | "governance"
   | "fine-tuning"
   | "trajectories"
   | "runtime"
@@ -41,56 +50,34 @@ const SUB_TABS: Array<{ id: SubTab; label: string; description: string }> = [
   { id: "plugins", label: "Plugins", description: "Features and connectors" },
   { id: "skills", label: "Skills", description: "Custom agent skills" },
   { id: "actions", label: "Actions", description: "Custom agent actions" },
-  {
-    id: "triggers",
-    label: "Triggers",
-    description: "Scheduled and event-based automations",
-  },
-  {
-    id: "fine-tuning",
-    label: "Fine-Tuning",
-    description: "Dataset and model training workflows",
-  },
-  {
-    id: "trajectories",
-    label: "Trajectories",
-    description: "LLM call history and analysis",
-  },
-  {
-    id: "runtime",
-    label: "Runtime",
-    description: "Deep runtime object introspection and load order",
-  },
-  {
-    id: "database",
-    label: "Databases",
-    description: "Tables, media, and vector browser",
-  },
+  { id: "triggers", label: "Triggers", description: "Scheduled and event-based automations" },
+  { id: "identity", label: "Identity", description: "Agent identity and preferences" },
+  { id: "approvals", label: "Approvals", description: "Pending approval queue" },
+  { id: "safe-mode", label: "Safe Mode", description: "Safe mode status and controls" },
+  { id: "governance", label: "Governance", description: "Policies, compliance, and retention" },
+  { id: "fine-tuning", label: "Fine-Tuning", description: "Dataset and model training workflows" },
+  { id: "trajectories", label: "Trajectories", description: "LLM call history and analysis" },
+  { id: "runtime", label: "Runtime", description: "Deep runtime object introspection and load order" },
+  { id: "database", label: "Databases", description: "Tables, media, and vector browser" },
   { id: "logs", label: "Logs", description: "Runtime and service logs" },
 ];
 
 function mapTabToSubTab(tab: Tab): SubTab {
   switch (tab) {
-    case "plugins":
-      return "plugins";
-    case "skills":
-      return "skills";
-    case "actions":
-      return "actions";
-    case "triggers":
-      return "triggers";
-    case "fine-tuning":
-      return "fine-tuning";
-    case "trajectories":
-      return "trajectories";
-    case "runtime":
-      return "runtime";
-    case "database":
-      return "database";
-    case "logs":
-      return "logs";
-    default:
-      return "plugins";
+    case "plugins": return "plugins";
+    case "skills": return "skills";
+    case "actions": return "actions";
+    case "triggers": return "triggers";
+    case "identity": return "identity";
+    case "approvals": return "approvals";
+    case "safe-mode": return "safe-mode";
+    case "governance": return "governance";
+    case "fine-tuning": return "fine-tuning";
+    case "trajectories": return "trajectories";
+    case "runtime": return "runtime";
+    case "database": return "database";
+    case "logs": return "logs";
+    default: return "plugins";
   }
 }
 
@@ -116,6 +103,18 @@ export function AdvancedPageView() {
         break;
       case "triggers":
         setTab("triggers");
+        break;
+      case "identity":
+        setTab("identity");
+        break;
+      case "approvals":
+        setTab("approvals");
+        break;
+      case "safe-mode":
+        setTab("safe-mode");
+        break;
+      case "governance":
+        setTab("governance");
         break;
       case "fine-tuning":
         setTab("fine-tuning");
@@ -147,6 +146,14 @@ export function AdvancedPageView() {
         return <CustomActionsView />;
       case "triggers":
         return <TriggersView />;
+      case "identity":
+        return <IdentityPanel />;
+      case "approvals":
+        return <ApprovalPanel />;
+      case "safe-mode":
+        return <SafeModePanel />;
+      case "governance":
+        return <GovernancePanel />;
       case "fine-tuning":
         return <FineTuningView />;
       case "trajectories":

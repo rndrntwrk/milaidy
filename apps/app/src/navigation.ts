@@ -20,7 +20,11 @@ export type Tab =
   | "runtime"
   | "database"
   | "settings"
-  | "logs";
+  | "logs"
+  | "identity"
+  | "approvals"
+  | "safe-mode"
+  | "governance";
 
 export const TAB_GROUPS = [
   { label: "Chat", tabs: ["chat"] as Tab[] },
@@ -38,6 +42,10 @@ export const TAB_GROUPS = [
       "skills",
       "actions",
       "triggers",
+      "identity",
+      "approvals",
+      "safe-mode",
+      "governance",
       "fine-tuning",
       "trajectories",
       "runtime",
@@ -66,6 +74,10 @@ const TAB_PATHS: Record<Tab, string> = {
   database: "/database",
   settings: "/settings",
   logs: "/logs",
+  identity: "/identity",
+  approvals: "/approvals",
+  "safe-mode": "/safe-mode",
+  governance: "/governance",
 };
 
 /** Legacy path redirects — old paths that now map to new tabs. */
@@ -124,43 +136,28 @@ function normalizePath(p: string): string {
 
 export function titleForTab(tab: Tab): string {
   switch (tab) {
-    case "chat":
-      return "Chat";
-    case "apps":
-      return "Apps";
-    case "character":
-      return "Character";
-    case "triggers":
-      return "Triggers";
-    case "wallets":
-      return "Wallets";
-    case "knowledge":
-      return "Knowledge";
-    case "connectors":
-      return "Social";
-    case "plugins":
-      return "Plugins";
-    case "skills":
-      return "Skills";
-    case "actions":
-      return "Actions";
-    case "advanced":
-      return "Advanced";
-    case "fine-tuning":
-      return "Fine-Tuning";
-    case "trajectories":
-      return "Trajectories";
-    case "voice":
-      return "Voice";
-    case "runtime":
-      return "Runtime";
-    case "database":
-      return "Databases";
-    case "settings":
-      return "Settings";
-    case "logs":
-      return "Logs";
-    default:
-      return "Milady";
+    case "chat": return "Chat";
+    case "apps": return "Apps";
+    case "character": return "Character";
+    case "triggers": return "Triggers";
+    case "wallets": return "Wallets";
+    case "knowledge": return "Knowledge";
+    case "connectors": return "Social";
+    case "plugins": return "Plugins";
+    case "skills": return "Skills";
+    case "actions": return "Actions";
+    case "advanced": return "Advanced";
+    case "fine-tuning": return "Fine-Tuning";
+    case "trajectories": return "Trajectories";
+    case "voice": return "Voice";
+    case "runtime": return "Runtime";
+    case "database": return "Databases";
+    case "settings": return "Settings";
+    case "logs": return "Logs";
+    case "identity": return "Identity";
+    case "approvals": return "Approvals";
+    case "safe-mode": return "Safe Mode";
+    case "governance": return "Governance";
+    default: return "Milaidy";
   }
 }
