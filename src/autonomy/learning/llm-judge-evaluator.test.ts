@@ -6,7 +6,11 @@ import type {
 import type { EvaluationScenario } from "../metrics/types.js";
 import { LLMJudgeEvaluator } from "./llm-judge-evaluator.js";
 import { StubModelProvider } from "./model-provider.js";
-import type { ModelProvider, ScoringRequest, ScoringResponse } from "./types.js";
+import type {
+  ModelProvider,
+  ScoringRequest,
+  ScoringResponse,
+} from "./types.js";
 
 // ---------- Helpers ----------
 
@@ -180,10 +184,7 @@ describe("LLMJudgeEvaluator", () => {
       makeScenario({ metric: "preferenceFollowingAccuracy" }),
       makeComponents(),
     );
-    expect(capturedDimensions).toEqual([
-      "preference_alignment",
-      "consistency",
-    ]);
+    expect(capturedDimensions).toEqual(["preference_alignment", "consistency"]);
 
     // Test sycophancyScore dimensions
     await evaluator.evaluate(

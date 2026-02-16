@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import {
+  createHackDetectionInvariants,
+  HackDetector,
+} from "./hack-detection.js";
 import type { Episode, RewardSignal, TrainingExample } from "./types.js";
-import { HackDetector, createHackDetectionInvariants } from "./hack-detection.js";
 
 // ---------- Helpers ----------
 
@@ -208,9 +211,7 @@ describe("HackDetector", () => {
     });
 
     const report = detector.analyze(episode);
-    const inflation = report.signals.filter(
-      (s) => s.type === "step_inflation",
-    );
+    const inflation = report.signals.filter((s) => s.type === "step_inflation");
     expect(inflation.length).toBeGreaterThan(0);
     expect(report.hackLikelihood).toBeGreaterThan(0);
   });
@@ -269,9 +270,7 @@ describe("HackDetector", () => {
 
   it("aggregates multiple signals correctly", () => {
     const episode = makeEpisode({
-      steps: [
-        makeStep({ output: { result: null, durationMs: 0 } }),
-      ],
+      steps: [makeStep({ output: { result: null, durationMs: 0 } })],
       success: false,
     });
 

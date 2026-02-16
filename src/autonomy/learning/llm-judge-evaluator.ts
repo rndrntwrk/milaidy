@@ -7,15 +7,15 @@
  * @module autonomy/learning/llm-judge-evaluator
  */
 
-import { KernelScenarioEvaluator } from "../metrics/kernel-evaluator.js";
 import type {
   KernelComponents,
   ScenarioEvaluator,
   ScenarioResult,
 } from "../metrics/evaluator-types.js";
+import { KernelScenarioEvaluator } from "../metrics/kernel-evaluator.js";
 import type { EvaluationScenario } from "../metrics/types.js";
-import type { ModelProvider } from "./types.js";
 import { SystemPromptBuilder } from "./prompt-builder.js";
+import type { ModelProvider } from "./types.js";
 
 // ---------- LLM-Judge Evaluator ----------
 
