@@ -4582,6 +4582,17 @@ async function handleRequest(
     }
   }
 
+  // OpenAPI spec endpoint (before auth for documentation access)
+  if (method === "GET" && (pathname === "/api/docs/openapi.json" || pathname === "/api/docs")) {
+    try {
+      const { buildOpenApiSpec } = await import("./openapi/spec.js");
+      json(res, buildOpenApiSpec());
+    } catch {
+      error(res, "Failed to generate OpenAPI spec", 500);
+    }
+    return;
+  }
+
   // Prometheus metrics endpoint (before auth so scrapers work)
   if (method === "GET" && pathname === "/metrics") {
     try {
