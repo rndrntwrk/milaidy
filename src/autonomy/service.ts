@@ -66,9 +66,15 @@ let _SchemaValidator: typeof import("./verification/schema-validator.js").Schema
 let _PostConditionVerifier: typeof import("./verification/postcondition-verifier.js").PostConditionVerifier;
 let _registerBuiltinToolContracts: typeof import("./tools/schemas/index.js").registerBuiltinToolContracts;
 let _registerBuiltinPostConditions: typeof import("./verification/postconditions/index.js").registerBuiltinPostConditions;
+let _KernelStateMachine: typeof import("./state-machine/kernel-state-machine.js").KernelStateMachine;
+let _ApprovalGate: typeof import("./approval/approval-gate.js").ApprovalGate;
+let _InMemoryEventStore: typeof import("./workflow/event-store.js").InMemoryEventStore;
+let _CompensationRegistry: typeof import("./workflow/compensation-registry.js").CompensationRegistry;
+let _ToolExecutionPipeline: typeof import("./workflow/execution-pipeline.js").ToolExecutionPipeline;
+let _registerBuiltinCompensations: typeof import("./workflow/compensations/index.js").registerBuiltinCompensations;
 
 async function loadImplementations() {
-  const [trustMod, memMod, driftMod, goalMod, toolRegMod, schemaValMod, pcvMod, toolSchemasMod, pcMod] = await Promise.all([
+  const [trustMod, memMod, driftMod, goalMod, toolRegMod, schemaValMod, pcvMod, toolSchemasMod, pcMod, smMod, approvalMod, esMod, compRegMod, pipelineMod, compsMod] = await Promise.all([
     import("./trust/scorer.js"),
     import("./memory/gate.js"),
     import("./identity/drift-monitor.js"),
@@ -78,6 +84,12 @@ async function loadImplementations() {
     import("./verification/postcondition-verifier.js"),
     import("./tools/schemas/index.js"),
     import("./verification/postconditions/index.js"),
+    import("./state-machine/kernel-state-machine.js"),
+    import("./approval/approval-gate.js"),
+    import("./workflow/event-store.js"),
+    import("./workflow/compensation-registry.js"),
+    import("./workflow/execution-pipeline.js"),
+    import("./workflow/compensations/index.js"),
   ]);
   _RuleBasedTrustScorer = trustMod.RuleBasedTrustScorer;
   _MemoryGateImpl = memMod.MemoryGateImpl;
@@ -88,6 +100,12 @@ async function loadImplementations() {
   _PostConditionVerifier = pcvMod.PostConditionVerifier;
   _registerBuiltinToolContracts = toolSchemasMod.registerBuiltinToolContracts;
   _registerBuiltinPostConditions = pcMod.registerBuiltinPostConditions;
+  _KernelStateMachine = smMod.KernelStateMachine;
+  _ApprovalGate = approvalMod.ApprovalGate;
+  _InMemoryEventStore = esMod.InMemoryEventStore;
+  _CompensationRegistry = compRegMod.CompensationRegistry;
+  _ToolExecutionPipeline = pipelineMod.ToolExecutionPipeline;
+  _registerBuiltinCompensations = compsMod.registerBuiltinCompensations;
 }
 
 // ---------- Service ----------
@@ -104,6 +122,11 @@ export class MilaidyAutonomyService extends Service {
   private toolRegistry: import("./tools/types.js").ToolRegistryInterface | null = null;
   private schemaValidator: import("./verification/schema-validator.js").SchemaValidator | null = null;
   private postConditionVerifier: import("./verification/postcondition-verifier.js").PostConditionVerifier | null = null;
+  private stateMachine: import("./state-machine/types.js").KernelStateMachineInterface | null = null;
+  private approvalGate: import("./approval/approval-gate.js").ApprovalGate | null = null;
+  private eventStore: import("./workflow/types.js").EventStoreInterface | null = null;
+  private compensationRegistry: import("./workflow/types.js").CompensationRegistryInterface | null = null;
+  private executionPipeline: import("./workflow/types.js").ToolExecutionPipelineInterface | null = null;
   private identityConfig: AutonomyIdentityConfig | null = null;
   private resolvedRetrievalConfig: import("./config.js").AutonomyRetrievalConfig | null = null;
   private enabled = false;
@@ -169,6 +192,43 @@ export class MilaidyAutonomyService extends Service {
     );
     _registerBuiltinPostConditions(this.postConditionVerifier);
 
+    // Instantiate workflow engine components
+    this.stateMachine = new _KernelStateMachine();
+    let eventBusRef: { emit: (event: string, payload: unknown) => void } | undefined;
+    try {
+      const { getEventBus } = await import("../events/event-bus.js");
+      eventBusRef = getEventBus() as unknown as { emit: (event: string, payload: unknown) => void };
+    } catch {
+      // Event bus not available — non-fatal
+    }
+    this.approvalGate = new _ApprovalGate({
+      timeoutMs: config.approval?.timeoutMs ?? 300_000,
+      eventBus: eventBusRef,
+    });
+    this.eventStore = new _InMemoryEventStore(
+      config.eventStore?.maxEvents ?? 10_000,
+    );
+    this.compensationRegistry = new _CompensationRegistry();
+    _registerBuiltinCompensations(this.compensationRegistry);
+    this.executionPipeline = new _ToolExecutionPipeline({
+      schemaValidator: this.schemaValidator,
+      approvalGate: this.approvalGate,
+      postConditionVerifier: this.postConditionVerifier,
+      compensationRegistry: this.compensationRegistry,
+      stateMachine: this.stateMachine,
+      eventStore: this.eventStore,
+      config: {
+        enabled: config.workflow?.enabled ?? true,
+        maxConcurrent: config.workflow?.maxConcurrent ?? 1,
+        defaultTimeoutMs: config.workflow?.defaultTimeoutMs ?? 30_000,
+        approvalTimeoutMs: config.approval?.timeoutMs ?? 300_000,
+        autoApproveReadOnly: config.approval?.autoApproveReadOnly ?? true,
+        autoApproveSources: config.approval?.autoApproveSources ?? [],
+        eventStoreMaxEvents: config.eventStore?.maxEvents ?? 10_000,
+      },
+      eventBus: eventBusRef,
+    });
+
     this.enabled = true;
 
     // Register into DI container (single source of truth for components)
@@ -221,6 +281,11 @@ export class MilaidyAutonomyService extends Service {
       if (this.toolRegistry) container.registerValue(TOKENS.ToolRegistry, this.toolRegistry);
       if (this.schemaValidator) container.registerValue(TOKENS.SchemaValidator, this.schemaValidator);
       if (this.postConditionVerifier) container.registerValue(TOKENS.PostConditionVerifier, this.postConditionVerifier);
+      if (this.stateMachine) container.registerValue(TOKENS.StateMachine, this.stateMachine);
+      if (this.approvalGate) container.registerValue(TOKENS.ApprovalGate, this.approvalGate);
+      if (this.eventStore) container.registerValue(TOKENS.EventStore, this.eventStore);
+      if (this.compensationRegistry) container.registerValue(TOKENS.CompensationRegistry, this.compensationRegistry);
+      if (this.executionPipeline) container.registerValue(TOKENS.ExecutionPipeline, this.executionPipeline);
 
       // Register trust-aware retriever
       try {
@@ -255,6 +320,21 @@ export class MilaidyAutonomyService extends Service {
     this.postConditionVerifier = new _PostConditionVerifier();
     _registerBuiltinPostConditions(this.postConditionVerifier);
 
+    // Initialize workflow engine components
+    this.stateMachine = new _KernelStateMachine();
+    this.approvalGate = new _ApprovalGate();
+    this.eventStore = new _InMemoryEventStore();
+    this.compensationRegistry = new _CompensationRegistry();
+    _registerBuiltinCompensations(this.compensationRegistry);
+    this.executionPipeline = new _ToolExecutionPipeline({
+      schemaValidator: this.schemaValidator,
+      approvalGate: this.approvalGate,
+      postConditionVerifier: this.postConditionVerifier,
+      compensationRegistry: this.compensationRegistry,
+      stateMachine: this.stateMachine,
+      eventStore: this.eventStore,
+    });
+
     // Initialize identity if not already set
     const { createDefaultAutonomyIdentity } = await import("./identity/schema.js");
     this.identityConfig = createDefaultAutonomyIdentity();
@@ -266,6 +346,7 @@ export class MilaidyAutonomyService extends Service {
   async disableAutonomy(): Promise<void> {
     if (!this.enabled) return;
     this.memoryGate?.dispose();
+    this.approvalGate?.dispose();
     this.trustScorer = null;
     this.memoryGate = null;
     this.driftMonitor = null;
@@ -273,6 +354,11 @@ export class MilaidyAutonomyService extends Service {
     this.toolRegistry = null;
     this.schemaValidator = null;
     this.postConditionVerifier = null;
+    this.stateMachine = null;
+    this.approvalGate = null;
+    this.eventStore = null;
+    this.compensationRegistry = null;
+    this.executionPipeline = null;
     this.identityConfig = null;
     this.enabled = false;
     logger.info("[autonomy-service] Autonomy disabled");
@@ -350,10 +436,27 @@ export class MilaidyAutonomyService extends Service {
     return this.goalManager;
   }
 
+  getStateMachine(): import("./state-machine/types.js").KernelStateMachineInterface | null {
+    return this.stateMachine;
+  }
+
+  getApprovalGate(): import("./approval/types.js").ApprovalGateInterface | null {
+    return this.approvalGate;
+  }
+
+  getEventStore(): import("./workflow/types.js").EventStoreInterface | null {
+    return this.eventStore;
+  }
+
+  getExecutionPipeline(): import("./workflow/types.js").ToolExecutionPipelineInterface | null {
+    return this.executionPipeline;
+  }
+
   // ---------- Lifecycle ----------
 
   async stop(): Promise<void> {
     this.memoryGate?.dispose();
+    this.approvalGate?.dispose();
     this.trustScorer = null;
     this.memoryGate = null;
     this.driftMonitor = null;
@@ -361,6 +464,11 @@ export class MilaidyAutonomyService extends Service {
     this.toolRegistry = null;
     this.schemaValidator = null;
     this.postConditionVerifier = null;
+    this.stateMachine = null;
+    this.approvalGate = null;
+    this.eventStore = null;
+    this.compensationRegistry = null;
+    this.executionPipeline = null;
     this.identityConfig = null;
     this.enabled = false;
 
