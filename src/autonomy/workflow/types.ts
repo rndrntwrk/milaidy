@@ -20,7 +20,8 @@ export type ExecutionEventType =
   | "tool:executed"
   | "tool:verified"
   | "tool:failed"
-  | "tool:compensated";
+  | "tool:compensated"
+  | "tool:invariants:checked";
 
 /**
  * A single event in the execution log.
@@ -36,6 +37,8 @@ export interface ExecutionEvent {
   payload: Record<string, unknown>;
   /** When the event was recorded. */
   timestamp: number;
+  /** Correlation ID linking related events across subsystems. */
+  correlationId?: string;
 }
 
 // ---------- Event Store Interface ----------
@@ -49,9 +52,12 @@ export interface EventStoreInterface {
     requestId: string,
     type: ExecutionEventType,
     payload: Record<string, unknown>,
+    correlationId?: string,
   ): number;
   /** Get all events for a given request ID. */
   getByRequestId(requestId: string): ExecutionEvent[];
+  /** Get all events for a given correlation ID. */
+  getByCorrelationId(correlationId: string): ExecutionEvent[];
   /** Get the N most recent events. */
   getRecent(n: number): ExecutionEvent[];
   /** Current number of events in the store. */
@@ -105,6 +111,10 @@ export interface PipelineResult {
   verification?: { status: string; hasCriticalFailure: boolean };
   /** Compensation details (if compensation was attempted). */
   compensation?: { attempted: boolean; success: boolean; detail?: string };
+  /** Invariant check results (if invariant checker is configured). */
+  invariants?: { status: string; hasCriticalViolation: boolean };
+  /** Correlation ID linking all events from this execution. */
+  correlationId?: string;
   /** Total pipeline duration in milliseconds. */
   durationMs: number;
   /** Error message (if failed). */
