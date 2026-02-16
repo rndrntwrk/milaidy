@@ -38,9 +38,14 @@ export class FileBaselineHarness implements BaselineHarness {
     evaluator?: ScenarioEvaluator,
     components?: KernelComponents,
   ) {
-    this.inner = new InMemoryBaselineHarness(evaluator, components);
     this.filePath = join(storagePath, SNAPSHOT_FILENAME);
-    this.loadFromDisk();
+    this.snapshotCache = this.readFromDisk();
+    const initialSnapshots = new Map(Object.entries(this.snapshotCache));
+    this.inner = new InMemoryBaselineHarness(
+      evaluator,
+      components,
+      initialSnapshots,
+    );
   }
 
   async measure(
@@ -71,34 +76,31 @@ export class FileBaselineHarness implements BaselineHarness {
   }
 
   /**
-   * Load snapshots from disk into the inner harness and local cache.
+   * Read snapshots from disk and return them as a record.
+   * Returns an empty record if no file exists or on parse error.
    */
-  private loadFromDisk(): void {
+  private readFromDisk(): Record<string, BaselineMetrics> {
     try {
       if (!existsSync(this.filePath)) {
         logger.debug(
           `[file-harness] No snapshot file at ${this.filePath}, starting fresh`,
         );
-        return;
+        return {};
       }
 
       const raw = readFileSync(this.filePath, "utf-8");
       const data = JSON.parse(raw) as Record<string, BaselineMetrics>;
-
-      let count = 0;
-      for (const [label, metrics] of Object.entries(data)) {
-        void this.inner.snapshot(metrics, label);
-        this.snapshotCache[label] = metrics;
-        count++;
-      }
+      const count = Object.keys(data).length;
 
       logger.info(
         `[file-harness] Loaded ${count} snapshots from ${this.filePath}`,
       );
+      return data;
     } catch (err) {
       logger.warn(
         `[file-harness] Failed to load snapshots from ${this.filePath}: ${err instanceof Error ? err.message : err}`,
       );
+      return {};
     }
   }
 
