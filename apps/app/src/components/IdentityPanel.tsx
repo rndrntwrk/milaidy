@@ -137,6 +137,8 @@ export function IdentityPanel() {
         <Section title="Name">
           {editing ? (
             <input
+              id="identity-name"
+              aria-label="Agent name"
               className="border border-border bg-bg px-2 py-1 text-sm w-full"
               value={draft.name ?? ""}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}

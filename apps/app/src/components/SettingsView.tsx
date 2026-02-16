@@ -24,9 +24,9 @@ import type { JsonSchemaObject } from "./config-catalog";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer";
 import { MediaSettingsSection } from "./MediaSettingsSection";
 import { PermissionsSection } from "./PermissionsSection";
-import { formatByteSize } from "./shared/format";
-import { autoLabel } from "./shared/labels";
-import { VoiceConfigView } from "./VoiceConfigView";
+import { Dialog } from "./ui/Dialog.js";
+import type { ConfigUiHint } from "../types";
+import type { JsonSchemaObject } from "./config-catalog";
 
 /* ── Modal shell ─────────────────────────────────────────────────────── */
 
@@ -41,36 +41,23 @@ function Modal({
   title: string;
   children: React.ReactNode;
 }) {
-  if (!open) return null;
+  const titleId = `modal-${title.toLowerCase().replace(/\s+/g, "-")}`;
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onClose();
-        }
-      }}
-      role="dialog"
-      aria-modal="true"
-    >
-      <div className="w-full max-w-md border border-[var(--border)] bg-[var(--card)] p-5 shadow-lg">
+    <Dialog open={open} onClose={onClose} ariaLabelledBy={titleId}>
+      <div className="w-full max-w-md border border-border bg-card p-5 shadow-lg">
         <div className="flex items-center justify-between mb-4">
-          <div className="font-bold text-sm">{title}</div>
+          <div id={titleId} className="font-bold text-sm">{title}</div>
           <button
-            type="button"
-            className="text-[var(--muted)] hover:text-[var(--txt)] text-lg leading-none px-1"
+            className="text-muted hover:text-txt text-lg leading-none px-1"
             onClick={onClose}
+            aria-label="Close"
           >
             &times;
           </button>
         </div>
         {children}
       </div>
-    </div>
+    </Dialog>
   );
 }
 

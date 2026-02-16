@@ -55,9 +55,9 @@ import {
   type WhitelistStatus,
   type WorkbenchOverview,
 } from "./api-client";
-import { resolveAppAssetUrl } from "./asset-url";
-import { pathForTab, type Tab, tabFromPath } from "./navigation";
-import { getMissingOnboardingPermissions } from "./onboarding-permissions";
+import { tabFromPath, pathForTab, type Tab } from "./navigation";
+import { SkillScanReportSummary } from "./api-client";
+import type { ToastItem } from "./components/ui/Toast";
 
 // ── VRM helpers ─────────────────────────────────────────────────────────
 
@@ -451,6 +451,7 @@ export interface AppState {
   startupPhase: StartupPhase;
   authRequired: boolean;
   actionNotice: ActionNotice | null;
+  toasts: ToastItem[];
   lifecycleBusy: boolean;
   lifecycleAction: LifecycleAction | null;
 
@@ -822,12 +823,9 @@ export interface AppActions {
   handleAgentExport: () => Promise<void>;
   handleAgentImport: () => Promise<void>;
 
-  // Action notice
-  setActionNotice: (
-    text: string,
-    tone?: "info" | "success" | "error",
-    ttlMs?: number,
-  ) => void;
+  // Action notice / toasts
+  setActionNotice: (text: string, tone?: "info" | "success" | "error", ttlMs?: number) => void;
+  dismissToast: (id: string) => void;
 
   // Generic state setter
   setState: <K extends keyof AppState>(key: K, value: AppState[K]) => void;
@@ -859,9 +857,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [startupPhase, setStartupPhase] =
     useState<StartupPhase>("starting-backend");
   const [authRequired, setAuthRequired] = useState(false);
-  const [actionNotice, setActionNoticeState] = useState<ActionNotice | null>(
-    null,
-  );
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const actionNotice: ActionNotice | null = toasts.length > 0 ? { tone: toasts[0].tone, text: toasts[0].text } : null;
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [lifecycleAction, setLifecycleAction] =
     useState<LifecycleAction | null>(null);
@@ -1246,7 +1243,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [configText, setConfigText] = useState("");
 
   // --- Refs for timers ---
-  const actionNoticeTimer = useRef<number | null>(null);
+  const toastIdCounter = useRef(0);
   const cloudPollInterval = useRef<number | null>(null);
   const cloudLoginPollTimer = useRef<number | null>(null);
   const prevAgentStateRef = useRef<string | null>(null);
@@ -1273,21 +1270,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /** Synchronous lock for onboarding completion submit to prevent duplicate clicks. */
   const onboardingFinishSavingRef = useRef(false);
 
-  // ── Action notice ──────────────────────────────────────────────────
+  // ── Action notice / toasts ─────────────────────────────────────────
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev: ToastItem[]) => prev.filter((t: ToastItem) => t.id !== id));
+  }, []);
 
   const setActionNotice = useCallback(
-    (
-      text: string,
-      tone: "info" | "success" | "error" = "info",
-      ttlMs = 2800,
-    ) => {
-      setActionNoticeState({ tone, text });
-      if (actionNoticeTimer.current != null) {
-        window.clearTimeout(actionNoticeTimer.current);
-      }
-      actionNoticeTimer.current = window.setTimeout(() => {
-        setActionNoticeState(null);
-        actionNoticeTimer.current = null;
+    (text: string, tone: "info" | "success" | "error" = "info", ttlMs = 2800) => {
+      const id = `toast-${++toastIdCounter.current}`;
+      setToasts((prev: ToastItem[]) => [...prev.slice(-2), { id, text, tone }]);
+      window.setTimeout(() => {
+        setToasts((prev: ToastItem[]) => prev.filter((t: ToastItem) => t.id !== id));
       }, ttlMs);
     },
     [],
@@ -1355,8 +1349,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const { plugins: p } = await client.getPlugins();
       setPlugins(p);
-    } catch {
-      /* ignore */
+    } catch (err) {
+      console.error("[loadPlugins]", err);
     }
   }, []);
 
@@ -1364,8 +1358,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const { skills: s } = await client.getSkills();
       setSkills(s);
-    } catch {
-      /* ignore */
+    } catch (err) {
+      console.error("[loadSkills]", err);
     }
   }, []);
 
@@ -1377,8 +1371,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const { skills: s } = await client.getSkills();
         setSkills(s);
-      } catch {
-        /* ignore */
+      } catch (err) {
+        console.error("[refreshSkills]", err);
       }
     }
   }, []);
@@ -1395,8 +1389,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setLogs(data.entries);
       if (data.sources?.length) setLogSources(data.sources);
       if (data.tags?.length) setLogTags(data.tags);
-    } catch {
-      /* ignore */
+    } catch (err) {
+      console.error("[loadLogs]", err);
     }
   }, [logTagFilter, logLevelFilter, logSourceFilter]);
 
@@ -1698,7 +1692,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         },
         postExamples: character.postExamples ?? [],
       });
-    } catch {
+    } catch (err) {
+      console.error("[loadCharacter]", err);
       setCharacterData(null);
       setCharacterDraft({});
     }
@@ -1713,7 +1708,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setWorkbenchTasksAvailable(result.tasksAvailable ?? false);
       setWorkbenchTriggersAvailable(result.triggersAvailable ?? false);
       setWorkbenchTodosAvailable(result.todosAvailable ?? false);
-    } catch {
+    } catch (err) {
+      console.error("[loadWorkbench]", err);
       setWorkbench(null);
       setWorkbenchTasksAvailable(false);
       setWorkbenchTriggersAvailable(false);
@@ -1728,8 +1724,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const status = await client.getUpdateStatus(force);
       setUpdateStatus(status);
-    } catch {
-      /* ignore */
+    } catch (err) {
+      console.error("[loadUpdateStatus]", err);
     }
     setUpdateLoading(false);
   }, []);
@@ -4150,202 +4146,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value: AppContextValue = {
     // State
-    tab,
-    currentTheme,
-    connected,
-    agentStatus,
-    onboardingComplete,
-    onboardingLoading,
-    startupPhase,
-    authRequired,
-    actionNotice,
-    lifecycleBusy,
-    lifecycleAction,
-    pairingEnabled,
-    pairingExpiresAt,
-    pairingCodeInput,
-    pairingError,
-    pairingBusy,
-    chatInput,
-    chatSending,
-    chatFirstTokenReceived,
-    chatAvatarVisible,
-    chatAgentVoiceMuted,
-    chatAvatarSpeaking,
-    conversations,
-    activeConversationId,
-    conversationMessages,
-    autonomousEvents,
-    autonomousLatestEventId,
-    unreadConversations,
-    triggers,
-    triggersLoading,
-    triggersSaving,
-    triggerRunsById,
-    triggerHealth,
-    triggerError,
-    plugins,
-    pluginFilter,
-    pluginStatusFilter,
-    pluginSearch,
-    pluginSettingsOpen,
-    pluginAdvancedOpen,
-    pluginSaving,
-    pluginSaveSuccess,
-    skills,
-    skillsSubTab,
-    skillCreateFormOpen,
-    skillCreateName,
-    skillCreateDescription,
-    skillCreating,
-    skillReviewReport,
-    skillReviewId,
-    skillReviewLoading,
-    skillToggleAction,
-    skillsMarketplaceQuery,
-    skillsMarketplaceResults,
-    skillsMarketplaceError,
-    skillsMarketplaceLoading,
-    skillsMarketplaceAction,
-    skillsMarketplaceManualGithubUrl,
-    logs,
-    logSources,
-    logTags,
-    logTagFilter,
-    logLevelFilter,
-    logSourceFilter,
-    walletAddresses,
-    walletConfig,
-    walletBalances,
-    walletNfts,
-    walletLoading,
-    walletNftsLoading,
-    inventoryView,
-    walletExportData,
-    walletExportVisible,
-    walletApiKeySaving,
-    inventorySort,
-    walletError,
-    registryStatus,
-    registryLoading,
-    registryRegistering,
-    registryError,
-    dropStatus,
-    dropLoading,
-    mintInProgress,
-    mintResult,
-    mintError,
-    mintShiny,
-    whitelistStatus,
-    whitelistLoading,
-    twitterVerifyMessage,
-    twitterVerifyUrl,
-    twitterVerifying,
-    characterData,
-    characterLoading,
-    characterSaving,
-    characterSaveSuccess,
-    characterSaveError,
-    characterDraft,
-    selectedVrmIndex,
-    customVrmUrl,
-    cloudEnabled,
-    cloudConnected,
-    cloudCredits,
-    cloudCreditsLow,
-    cloudCreditsCritical,
-    cloudTopUpUrl,
-    cloudUserId,
-    cloudLoginBusy,
-    cloudLoginError,
-    cloudDisconnecting,
-    updateStatus,
-    updateLoading,
-    updateChannelSaving,
-    extensionStatus,
-    extensionChecking,
-    storePlugins,
-    storeSearch,
-    storeFilter,
-    storeLoading,
-    storeInstalling,
-    storeUninstalling,
-    storeError,
-    storeDetailPlugin,
-    storeSubTab,
-    catalogSkills,
-    catalogTotal,
-    catalogPage,
-    catalogTotalPages,
-    catalogSort,
-    catalogSearch,
-    catalogLoading,
-    catalogError,
-    catalogDetailSkill,
-    catalogInstalling,
-    catalogUninstalling,
-    workbenchLoading,
-    workbench,
-    workbenchTasksAvailable,
-    workbenchTriggersAvailable,
-    workbenchTodosAvailable,
-    exportBusy,
-    exportPassword,
-    exportIncludeLogs,
-    exportError,
-    exportSuccess,
-    importBusy,
-    importPassword,
-    importFile,
-    importError,
-    importSuccess,
-    onboardingStep,
-    onboardingOptions,
-    onboardingName,
-    onboardingStyle,
-    onboardingTheme,
-    onboardingRunMode,
-    onboardingCloudProvider,
-    onboardingSmallModel,
-    onboardingLargeModel,
-    onboardingProvider,
-    onboardingApiKey,
-    onboardingOpenRouterModel,
-    onboardingPrimaryModel,
-    onboardingTelegramToken,
-    onboardingDiscordToken,
-    onboardingWhatsAppSessionPath,
-    onboardingTwilioAccountSid,
-    onboardingTwilioAuthToken,
-    onboardingTwilioPhoneNumber,
-    onboardingBlooioApiKey,
-    onboardingBlooioPhoneNumber,
-    onboardingSubscriptionTab,
-    onboardingSelectedChains,
-    onboardingRpcSelections,
-    onboardingRpcKeys,
-    onboardingAvatar,
-    onboardingRestarting,
-    commandPaletteOpen,
-    commandQuery,
-    commandActiveIndex,
-    emotePickerOpen,
-    mcpConfiguredServers,
-    mcpServerStatuses,
-    mcpMarketplaceQuery,
-    mcpMarketplaceResults,
-    mcpMarketplaceLoading,
-    mcpAction,
-    mcpAddingServer,
-    mcpAddingResult,
-    mcpEnvInputs,
-    mcpHeaderInputs,
-    droppedFiles,
-    shareIngestNotice,
-    activeGameApp,
-    activeGameDisplayName,
-    activeGameViewerUrl,
-    activeGameSandbox,
+    tab, currentTheme, connected, agentStatus, onboardingComplete, onboardingLoading,
+    startupPhase, authRequired, actionNotice, toasts, lifecycleBusy, lifecycleAction,
+    pairingEnabled, pairingExpiresAt, pairingCodeInput, pairingError, pairingBusy,
+    chatInput, chatSending, chatFirstTokenReceived, conversations, activeConversationId, conversationMessages,
+    autonomousEvents, autonomousLatestEventId, unreadConversations,
+    triggers, triggersLoading, triggersSaving, triggerRunsById, triggerHealth, triggerError,
+    plugins, pluginFilter, pluginStatusFilter, pluginSearch, pluginSettingsOpen,
+    pluginAdvancedOpen, pluginSaving, pluginSaveSuccess,
+    skills, skillsSubTab, skillCreateFormOpen, skillCreateName, skillCreateDescription,
+    skillCreating, skillReviewReport, skillReviewId, skillReviewLoading, skillToggleAction,
+    skillsMarketplaceQuery, skillsMarketplaceResults, skillsMarketplaceError,
+    skillsMarketplaceLoading, skillsMarketplaceAction, skillsMarketplaceManualGithubUrl,
+    logs, logSources, logTags, logTagFilter, logLevelFilter, logSourceFilter,
+    walletAddresses, walletConfig, walletBalances, walletNfts, walletLoading,
+    walletNftsLoading, inventoryView, walletExportData, walletExportVisible,
+    walletApiKeySaving, inventorySort, walletError,
+    registryStatus, registryLoading, registryRegistering, registryError,
+    dropStatus, dropLoading, mintInProgress, mintResult, mintError, mintShiny,
+    whitelistStatus, whitelistLoading, twitterVerifyMessage, twitterVerifyUrl, twitterVerifying,
+    characterData, characterLoading, characterSaving, characterSaveSuccess,
+    characterSaveError, characterDraft, selectedVrmIndex, customVrmUrl,
+    cloudEnabled, cloudConnected, cloudCredits, cloudCreditsLow, cloudCreditsCritical,
+    cloudTopUpUrl, cloudUserId, cloudLoginBusy, cloudLoginError, cloudDisconnecting,
+    updateStatus, updateLoading, updateChannelSaving,
+    extensionStatus, extensionChecking,
+    storePlugins, storeSearch, storeFilter, storeLoading, storeInstalling,
+    storeUninstalling, storeError, storeDetailPlugin, storeSubTab,
+    catalogSkills, catalogTotal, catalogPage, catalogTotalPages, catalogSort,
+    catalogSearch, catalogLoading, catalogError, catalogDetailSkill,
+    catalogInstalling, catalogUninstalling,
+    workbenchLoading, workbench, workbenchTasksAvailable, workbenchTriggersAvailable, workbenchTodosAvailable,
+    exportBusy, exportPassword, exportIncludeLogs, exportError, exportSuccess,
+    importBusy, importPassword, importFile, importError, importSuccess,
+    onboardingStep, onboardingOptions, onboardingName, onboardingStyle, onboardingTheme,
+    onboardingRunMode, onboardingCloudProvider, onboardingSmallModel, onboardingLargeModel,
+    onboardingProvider, onboardingApiKey, onboardingOpenRouterModel, onboardingPrimaryModel,
+    onboardingTelegramToken, onboardingDiscordToken, onboardingWhatsAppSessionPath,
+    onboardingTwilioAccountSid, onboardingTwilioAuthToken, onboardingTwilioPhoneNumber,
+    onboardingBlooioApiKey, onboardingBlooioPhoneNumber, onboardingSubscriptionTab,
+    onboardingSelectedChains, onboardingRpcSelections, onboardingRpcKeys,
+    onboardingAvatar, onboardingRestarting,
+    commandPaletteOpen, commandQuery, commandActiveIndex, emotePickerOpen,
+    mcpConfiguredServers, mcpServerStatuses, mcpMarketplaceQuery, mcpMarketplaceResults,
+    mcpMarketplaceLoading, mcpAction, mcpAddingServer, mcpAddingResult,
+    mcpEnvInputs, mcpHeaderInputs,
+    droppedFiles, shareIngestNotice,
+    activeGameApp, activeGameDisplayName, activeGameViewerUrl, activeGameSandbox,
     activeGamePostMessageAuth,
     appsSubTab,
     agentSubTab,
@@ -4424,6 +4271,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     handleAgentExport,
     handleAgentImport,
     setActionNotice,
+    dismissToast,
     setState,
     copyToClipboard,
   };

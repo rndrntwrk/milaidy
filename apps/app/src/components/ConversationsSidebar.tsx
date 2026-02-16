@@ -91,7 +91,7 @@ export function ConversationsSidebar({
   };
 
   return (
-    <aside className="w-60 min-w-60 border-r border-border bg-bg flex flex-col overflow-y-auto text-[13px]" data-testid="conversations-sidebar" role="complementary" aria-label="Conversations">
+    <aside className="hidden md:flex w-60 min-w-60 border-r border-border bg-bg flex-col overflow-y-auto text-[13px]" data-testid="conversations-sidebar" role="complementary" aria-label="Conversations">
       <div className="p-3 border-b border-border">
         <button
           type="button"

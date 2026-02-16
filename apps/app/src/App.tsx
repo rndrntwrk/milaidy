@@ -27,6 +27,8 @@ import { SettingsView } from "./components/SettingsView.js";
 import { LoadingScreen } from "./components/LoadingScreen.js";
 import { useContextMenu } from "./hooks/useContextMenu.js";
 import { TerminalPanel } from "./components/TerminalPanel.js";
+import { ToastContainer } from "./components/ui/Toast.js";
+import { ErrorBoundary } from "./components/ui/ErrorBoundary.js";
 
 function ViewRouter() {
   const { tab } = useApp();
@@ -63,24 +65,34 @@ export function App() {
     authRequired,
     onboardingComplete,
     tab,
-    actionNotice,
-    agentStatus,
-    unreadConversations,
+    toasts,
+    dismissToast,
   } = useApp();
   const contextMenu = useContextMenu();
 
   const [customActionsPanelOpen, setCustomActionsPanelOpen] = useState(false);
   const [customActionsEditorOpen, setCustomActionsEditorOpen] = useState(false);
-  const [editingAction, setEditingAction] = useState<
-    import("./api-client").CustomActionDef | null
-  >(null);
-  const [isChatMobileLayout, setIsChatMobileLayout] = useState(() =>
-    typeof window !== "undefined"
-      ? window.innerWidth < CHAT_MOBILE_BREAKPOINT_PX
-      : false,
-  );
-  const [mobileConversationsOpen, setMobileConversationsOpen] = useState(false);
-  const [mobileAutonomousOpen, setMobileAutonomousOpen] = useState(false);
+  const [editingAction, setEditingAction] = useState<import("./api-client").CustomActionDef | null>(null);
+
+  // Keep hook order stable across onboarding/auth state transitions.
+  // Otherwise React can throw when onboarding completes and the main shell mounts.
+  useEffect(() => {
+    const handler = () => setCustomActionsPanelOpen((v) => !v);
+    window.addEventListener("toggle-custom-actions-panel", handler);
+    return () => window.removeEventListener("toggle-custom-actions-panel", handler);
+  }, []);
+
+  const handleEditorSave = useCallback(() => {
+    setCustomActionsEditorOpen(false);
+    setEditingAction(null);
+  }, []);
+
+  if (onboardingLoading) {
+    return <LoadingScreen phase={startupPhase} />;
+  }
+
+  if (authRequired) return <PairingView />;
+  if (!onboardingComplete) return <ErrorBoundary><OnboardingWizard /></ErrorBoundary>;
 
   const isChat = tab === "chat";
   const advancedTabs = new Set(TAB_GROUPS.find(g => g.label === "Advanced")?.tabs ?? []);
@@ -98,7 +110,7 @@ export function App() {
           <div className="flex flex-1 min-h-0 relative">
             <ConversationsSidebar />
             <main id="main-content" className="flex flex-col flex-1 min-w-0 overflow-visible pt-3 px-5">
-              <ChatView />
+              <ErrorBoundary><ChatView /></ErrorBoundary>
             </main>
             <AutonomousPanel />
             <CustomActionsPanel
@@ -117,7 +129,7 @@ export function App() {
           <Header />
           <Nav />
           <main id="main-content" className={`flex-1 min-h-0 py-6 px-5 ${isAdvancedTab ? "overflow-hidden" : "overflow-y-auto"}`}>
-            <ViewRouter />
+            <ErrorBoundary><ViewRouter /></ErrorBoundary>
           </main>
           <TerminalPanel />
         </div>
@@ -139,19 +151,7 @@ export function App() {
           setEditingAction(null);
         }}
       />
-      {actionNotice && (
-        <div
-          className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-2 rounded-lg text-[13px] font-medium z-[10000] text-white ${
-            actionNotice.tone === "error"
-              ? "bg-danger"
-              : actionNotice.tone === "success"
-                ? "bg-ok"
-                : "bg-accent"
-          }`}
-        >
-          {actionNotice.text}
-        </div>
-      )}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </>
   );
 }
