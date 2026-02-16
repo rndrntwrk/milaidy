@@ -367,16 +367,16 @@ export function EmotePicker() {
   return (
     <div
       ref={panelRef}
-      className="fixed bottom-4 left-4 z-[9999] w-[320px] rounded-lg border border-gray-700 bg-gray-900/95 shadow-2xl backdrop-blur-md"
+      className="fixed bottom-4 left-4 z-[9999] w-[320px] rounded-lg border border-border bg-card shadow-2xl backdrop-blur-md"
     >
       {/* Header */}
       <div
-        className="flex cursor-move items-center justify-between border-b border-gray-700 px-3 py-2"
+        className="flex cursor-move items-center justify-between border-b border-border px-3 py-2"
         onPointerDown={onPointerDown}
       >
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-400">☰</span>
-          <span className="text-sm font-semibold text-white">Emotes</span>
+          <span className="text-sm text-muted">☰</span>
+          <span className="text-sm font-semibold text-txt">Emotes</span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -384,19 +384,20 @@ export function EmotePicker() {
           <button
             type="button"
             onClick={stopEmote}
-            className="rounded bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-700"
+            className="rounded bg-danger px-2 py-1 text-xs font-medium text-destructive-fg hover:opacity-90"
           >
             Stop
           </button>
 
           {/* Shortcut label */}
-          <span className="text-xs text-gray-400">⌘E</span>
+          <span className="text-xs text-muted">⌘E</span>
 
           {/* Close button */}
           <button
             type="button"
             onClick={closeEmotePicker}
-            className="text-gray-400 hover:text-white"
+            className="text-muted hover:text-txt"
+            aria-label="Close emote picker"
           >
             ✕
           </button>
@@ -404,26 +405,29 @@ export function EmotePicker() {
       </div>
 
       {/* Search */}
-      <div className="border-b border-gray-700 px-3 py-2">
+      <div className="border-b border-border px-3 py-2">
         <input
           ref={inputRef}
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search emotes..."
-          className="w-full rounded bg-gray-800 px-2 py-1 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          aria-label="Search emotes"
+          className="w-full rounded bg-bg-accent px-2 py-1 text-sm text-txt placeholder-muted focus:outline-none focus:ring-1 focus:ring-accent"
         />
       </div>
 
       {/* Category tabs */}
-      <div className="flex gap-1 overflow-x-auto border-b border-gray-700 px-3 py-2">
+      <div className="flex gap-1 overflow-x-auto border-b border-border px-3 py-2" role="tablist" aria-label="Emote categories">
         <button
           type="button"
           onClick={() => setActiveCategory(null)}
+          role="tab"
+          aria-selected={activeCategory === null}
           className={`shrink-0 rounded px-2 py-1 text-xs font-medium ${
             activeCategory === null
-              ? "bg-blue-600 text-white"
-              : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+              ? "bg-accent text-accent-fg"
+              : "bg-bg-accent text-txt hover:bg-bg-hover"
           }`}
         >
           All
@@ -433,10 +437,12 @@ export function EmotePicker() {
             type="button"
             key={cat}
             onClick={() => setActiveCategory(cat)}
+            role="tab"
+            aria-selected={activeCategory === cat}
             className={`shrink-0 rounded px-2 py-1 text-xs font-medium ${
               activeCategory === cat
-                ? "bg-blue-600 text-white"
-                : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                ? "bg-accent text-accent-fg"
+                : "bg-bg-accent text-txt hover:bg-bg-hover"
             }`}
           >
             <span className="mr-1">{CATEGORY_ICONS[cat]}</span>
@@ -446,7 +452,7 @@ export function EmotePicker() {
       </div>
 
       {/* Emote grid */}
-      <div className="max-h-[400px] overflow-y-auto p-3">
+      <div className="max-h-[400px] overflow-y-auto p-3" role="tabpanel">
         <div className="grid grid-cols-5 gap-2">
           {filteredEmotes.map((emote) => (
             <button
@@ -457,8 +463,8 @@ export function EmotePicker() {
               title={emote.name}
               className={`flex aspect-square items-center justify-center rounded text-2xl transition-colors ${
                 playing === emote.id
-                  ? "bg-blue-600"
-                  : "bg-gray-800 hover:bg-gray-700"
+                  ? "bg-accent"
+                  : "bg-bg-accent hover:bg-bg-hover"
               }`}
             >
               {emote.icon}
@@ -467,7 +473,7 @@ export function EmotePicker() {
         </div>
 
         {filteredEmotes.length === 0 && (
-          <div className="py-8 text-center text-sm text-gray-500">
+          <div className="py-8 text-center text-sm text-muted">
             No emotes found
           </div>
         )}

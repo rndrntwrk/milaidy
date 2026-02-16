@@ -91,25 +91,7 @@ export function ConversationsSidebar({
   };
 
   return (
-    <aside
-      className={`${mobile ? "w-full min-w-0 h-full" : "w-48 min-w-48 xl:w-60 xl:min-w-60 border-r"} border-border bg-bg flex flex-col overflow-y-auto text-[13px]`}
-      data-testid="conversations-sidebar"
-    >
-      {mobile && (
-        <div className="px-3 py-2 border-b border-border flex items-center justify-between">
-          <div className="text-xs uppercase tracking-wide text-muted">
-            Chats
-          </div>
-          <button
-            type="button"
-            className="inline-flex items-center justify-center w-7 h-7 border border-border bg-card text-sm text-muted cursor-pointer hover:border-accent hover:text-accent transition-colors"
-            onClick={onClose}
-            aria-label="Close chats panel"
-          >
-            &times;
-          </button>
-        </div>
-      )}
+    <aside className="w-60 min-w-60 border-r border-border bg-bg flex flex-col overflow-y-auto text-[13px]" data-testid="conversations-sidebar" role="complementary" aria-label="Conversations">
       <div className="p-3 border-b border-border">
         <button
           type="button"
@@ -123,7 +105,7 @@ export function ConversationsSidebar({
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto py-1">
+      <nav className="flex-1 overflow-y-auto py-1" aria-label="Conversation list">
         {sortedConversations.length === 0 ? (
           <div className="px-3 py-6 text-center text-muted text-xs">
             No conversations yet
@@ -138,10 +120,8 @@ export function ConversationsSidebar({
                 key={conv.id}
                 data-testid="conv-item"
                 data-active={isActive || undefined}
-                className={`flex items-center px-3 py-2 gap-2 cursor-pointer transition-colors border-l-[3px] ${
-                  isActive
-                    ? "bg-bg-hover border-l-accent"
-                    : "border-l-transparent hover:bg-bg-hover"
+                className={`flex items-center px-3 py-2 gap-2 transition-colors border-l-[3px] ${
+                  isActive ? "bg-bg-hover border-l-accent" : "border-l-transparent hover:bg-bg-hover"
                 } group`}
               >
                 {isEditing ? (
@@ -152,10 +132,25 @@ export function ConversationsSidebar({
                     onChange={(e) => setEditingTitle(e.target.value)}
                     onBlur={() => void handleEditSubmit(conv.id)}
                     onKeyDown={(e) => handleEditKeyDown(e, conv.id)}
-                    onClick={(e) => e.stopPropagation()}
+                    aria-label="Rename conversation"
                   />
                 ) : (
                   <>
+                    <button
+                      className="flex items-center gap-2 flex-1 min-w-0 bg-transparent border-none cursor-pointer text-left p-0"
+                      onClick={() => void handleSelectConversation(conv.id)}
+                      onDoubleClick={() => handleDoubleClick(conv)}
+                      aria-current={isActive ? "true" : undefined}
+                      aria-label={`${conv.title}${unreadConversations.has(conv.id) ? " (unread)" : ""}`}
+                    >
+                      {unreadConversations.has(conv.id) && (
+                        <span className="w-2 h-2 rounded-full bg-accent shrink-0" aria-hidden="true" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate text-txt">{conv.title}</div>
+                        <div className="text-[11px] text-muted mt-0.5">{formatRelativeTime(conv.updatedAt)}</div>
+                      </div>
+                    </button>
                     <button
                       type="button"
                       className="flex items-center gap-2 flex-1 min-w-0 bg-transparent border-0 p-0 m-0 text-left cursor-pointer"
@@ -180,12 +175,12 @@ export function ConversationsSidebar({
                     <button
                       type="button"
                       data-testid="conv-delete"
-                      className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity border-none bg-transparent text-muted hover:text-danger hover:bg-destructive-subtle cursor-pointer text-sm px-1 py-0.5 rounded flex-shrink-0"
+                      className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity border-none bg-transparent text-muted hover:text-danger hover:bg-destructive-subtle cursor-pointer text-sm px-1 py-0.5 rounded flex-shrink-0"
                       onClick={(e) => {
                         e.stopPropagation();
                         void handleDeleteConversation(conv.id);
                       }}
-                      title="Delete conversation"
+                      aria-label={`Delete ${conv.title}`}
                     >
                       ×
                     </button>
@@ -195,7 +190,7 @@ export function ConversationsSidebar({
             );
           })
         )}
-      </div>
+      </nav>
     </aside>
   );
 }

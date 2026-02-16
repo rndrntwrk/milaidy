@@ -16,7 +16,6 @@ export type Tab =
   | "advanced"
   | "fine-tuning"
   | "trajectories"
-  | "voice"
   | "runtime"
   | "database"
   | "settings"
@@ -69,7 +68,6 @@ const TAB_PATHS: Record<Tab, string> = {
   advanced: "/advanced",
   "fine-tuning": "/fine-tuning",
   trajectories: "/trajectories",
-  voice: "/voice",
   runtime: "/runtime",
   database: "/database",
   settings: "/settings",
@@ -89,6 +87,7 @@ const LEGACY_PATHS: Record<string, Tab> = {
   "/admin": "advanced",
   "/config": "settings",
   "/triggers": "triggers",
+  "/voice": "settings",
 };
 
 const PATH_TO_TAB = new Map(
@@ -111,7 +110,6 @@ export function tabFromPath(pathname: string, basePath = ""): Tab | null {
   let normalized = normalizePath(p).toLowerCase();
   if (normalized.endsWith("/index.html")) normalized = "/";
   if (normalized === "/") return "chat";
-  if (normalized === "/voice") return "settings";
   // Check current paths first, then legacy redirects
   return PATH_TO_TAB.get(normalized) ?? LEGACY_PATHS[normalized] ?? null;
 }
@@ -149,7 +147,6 @@ export function titleForTab(tab: Tab): string {
     case "advanced": return "Advanced";
     case "fine-tuning": return "Fine-Tuning";
     case "trajectories": return "Trajectories";
-    case "voice": return "Voice";
     case "runtime": return "Runtime";
     case "database": return "Databases";
     case "settings": return "Settings";
