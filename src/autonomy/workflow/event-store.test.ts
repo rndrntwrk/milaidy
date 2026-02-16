@@ -158,4 +158,57 @@ describe("InMemoryEventStore", () => {
       expect(events[1].sequenceId).toBeLessThan(events[2].sequenceId);
     });
   });
+
+  describe("correlation ID", () => {
+    it("stores correlationId when provided", () => {
+      const store = new InMemoryEventStore();
+      store.append("req-1", "tool:proposed", {}, "corr-1");
+
+      const events = store.getByRequestId("req-1");
+      expect(events[0].correlationId).toBe("corr-1");
+    });
+
+    it("omits correlationId when not provided", () => {
+      const store = new InMemoryEventStore();
+      store.append("req-1", "tool:proposed", {});
+
+      const events = store.getByRequestId("req-1");
+      expect(events[0].correlationId).toBeUndefined();
+    });
+
+    it("returns events by correlation ID", () => {
+      const store = new InMemoryEventStore();
+      store.append("req-1", "tool:proposed", {}, "corr-A");
+      store.append("req-1", "tool:validated", {}, "corr-A");
+      store.append("req-2", "tool:proposed", {}, "corr-B");
+
+      const corrA = store.getByCorrelationId("corr-A");
+      expect(corrA).toHaveLength(2);
+      expect(corrA[0].type).toBe("tool:proposed");
+      expect(corrA[1].type).toBe("tool:validated");
+
+      const corrB = store.getByCorrelationId("corr-B");
+      expect(corrB).toHaveLength(1);
+    });
+
+    it("returns empty array for unknown correlation ID", () => {
+      const store = new InMemoryEventStore();
+      expect(store.getByCorrelationId("unknown")).toEqual([]);
+    });
+
+    it("maintains correlation index after eviction", () => {
+      const store = new InMemoryEventStore(2);
+      store.append("req-1", "tool:proposed", {}, "corr-1");
+      store.append("req-1", "tool:validated", {}, "corr-1");
+      // Full — next append evicts first
+      store.append("req-2", "tool:proposed", {}, "corr-2");
+
+      const corr1 = store.getByCorrelationId("corr-1");
+      expect(corr1).toHaveLength(1);
+      expect(corr1[0].type).toBe("tool:validated");
+
+      const corr2 = store.getByCorrelationId("corr-2");
+      expect(corr2).toHaveLength(1);
+    });
+  });
 });
