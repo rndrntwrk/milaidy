@@ -684,13 +684,14 @@ export function OnboardingWizard() {
               {onboardingOptions?.cloudProviders.map((provider: CloudProviderOption) => (
                 <button
                   key={provider.id}
+                  role="radio"
                   className={`px-4 py-3 border cursor-pointer bg-card transition-colors rounded-lg text-left ${
                     onboardingCloudProvider === provider.id
                       ? "border-accent !bg-accent !text-accent-fg"
                       : "border-border hover:border-accent"
                   }`}
                   onClick={() => handleCloudProviderSelect(provider.id)}
-                  aria-pressed={onboardingCloudProvider === provider.id}
+                  aria-checked={onboardingCloudProvider === provider.id}
                 >
                   <div className="font-bold text-sm">{provider.name}</div>
                   {provider.description && (
@@ -1300,13 +1301,14 @@ export function OnboardingWizard() {
                   {onboardingOptions.openrouterModels.map((model: OpenRouterModelOption) => (
                     <button
                       key={model.id}
+                      role="radio"
                       className={`px-4 py-3 border cursor-pointer transition-colors text-left rounded-lg ${
                         onboardingOpenRouterModel === model.id
                           ? "border-accent !bg-accent !text-accent-fg"
                           : "border-border bg-card hover:border-accent/50"
                       }`}
                       onClick={() => handleOpenRouterModelSelect(model.id)}
-                      aria-pressed={onboardingOpenRouterModel === model.id}
+                      aria-checked={onboardingOpenRouterModel === model.id}
                     >
                       <div className="font-bold text-sm">{model.name}</div>
                       {model.description && <div className="text-xs text-muted mt-0.5">{model.description}</div>}

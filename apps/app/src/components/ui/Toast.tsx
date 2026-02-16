@@ -9,7 +9,6 @@ export interface ToastItem {
   id: string;
   text: string;
   tone: "info" | "success" | "error";
-  dismissedAt?: number;
 }
 
 interface ToastContainerProps {
@@ -40,9 +39,9 @@ export function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
       {visible.map((toast) => (
         <div
           key={toast.id}
-          className={`flex items-center gap-3 px-4 py-2.5 text-xs text-white shadow-lg transition-opacity ${
+          className={`flex items-center gap-3 px-4 py-2.5 text-xs text-white shadow-lg ${
             toneBg[toast.tone]
-          } ${toast.dismissedAt ? "opacity-0" : "opacity-100"}`}
+          }`}
         >
           <span>{toast.text}</span>
           <button

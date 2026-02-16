@@ -1272,7 +1272,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ── Action notice / toasts ─────────────────────────────────────────
 
+  const toastTimers = useRef<Map<string, number>>(new Map());
+
+  // Clean up all toast timers on unmount
+  useEffect(() => {
+    const timers = toastTimers.current;
+    return () => { timers.forEach((t) => window.clearTimeout(t)); timers.clear(); };
+  }, []);
+
   const dismissToast = useCallback((id: string) => {
+    const handle = toastTimers.current.get(id);
+    if (handle != null) { window.clearTimeout(handle); toastTimers.current.delete(id); }
     setToasts((prev: ToastItem[]) => prev.filter((t: ToastItem) => t.id !== id));
   }, []);
 
@@ -1280,9 +1290,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     (text: string, tone: "info" | "success" | "error" = "info", ttlMs = 2800) => {
       const id = `toast-${++toastIdCounter.current}`;
       setToasts((prev: ToastItem[]) => [...prev.slice(-2), { id, text, tone }]);
-      window.setTimeout(() => {
+      const handle = window.setTimeout(() => {
+        toastTimers.current.delete(id);
         setToasts((prev: ToastItem[]) => prev.filter((t: ToastItem) => t.id !== id));
       }, ttlMs);
+      toastTimers.current.set(id, handle);
     },
     [],
   );
