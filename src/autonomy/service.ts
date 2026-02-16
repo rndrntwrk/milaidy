@@ -517,6 +517,14 @@ export class MilaidyAutonomyService extends Service {
 
     this.enabled = true;
 
+    // Emit kernel-up metric
+    try {
+      const { recordKernelUp } = await import("./metrics/prometheus-metrics.js");
+      recordKernelUp();
+    } catch {
+      // Metrics not available — non-fatal
+    }
+
     // Register into DI container (single source of truth for components)
     await this.registerInContainer();
 
