@@ -1,6 +1,5 @@
 import type { AgentRuntime } from "@elizaos/core";
 import {
-  type AutocompleteItem,
   CombinedAutocompleteProvider,
   type Component,
   Container,
@@ -119,9 +118,6 @@ export class MiladyTUI {
     this.editor.onCtrlP = () => {
       this.showModelSelector();
     };
-
-    const getModelCompletions = (_argumentPrefix: string): AutocompleteItem[] =>
-      [];
 
     const slashCommands: SlashCommand[] = [
       {

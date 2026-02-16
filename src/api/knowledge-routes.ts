@@ -621,8 +621,7 @@ async function fetchUrlContent(
   const response = await fetch(url, {
     redirect: "manual",
     headers: {
-      "User-Agent":
-        "Mozilla/5.0 (compatible; Milady/1.0; +https://milady.ai)",
+      "User-Agent": "Mozilla/5.0 (compatible; Milady/1.0; +https://milady.ai)",
     },
   });
 

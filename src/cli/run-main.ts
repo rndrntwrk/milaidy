@@ -35,10 +35,7 @@ export async function runCli(argv: string[] = process.argv) {
   const program = buildProgram();
 
   process.on("unhandledRejection", (reason) => {
-    console.error(
-      "[milady] Unhandled rejection:",
-      formatUncaughtError(reason),
-    );
+    console.error("[milady] Unhandled rejection:", formatUncaughtError(reason));
     process.exit(1);
   });
 

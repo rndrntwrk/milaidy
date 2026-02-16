@@ -17,9 +17,7 @@ export function registerConfigureCommand(program: Command) {
       console.log(
         `  ${theme.command("milady config get <key>")}     Read a config value`,
       );
-      console.log(
-        `  Edit ~/.milady/milady.json directly for full control.\n`,
-      );
+      console.log(`  Edit ~/.milady/milady.json directly for full control.\n`);
       console.log("Common environment variables:");
       console.log(
         `  ${theme.command("ANTHROPIC_API_KEY")}    Anthropic (Claude)`,

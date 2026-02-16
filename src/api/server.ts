@@ -1701,9 +1701,7 @@ function resolveUiDir(): string | null {
   }
 
   uiDir = null;
-  logger.info(
-    "[milady-api] No built UI found — dashboard routes are disabled",
-  );
+  logger.info("[milady-api] No built UI found — dashboard routes are disabled");
   return null;
 }
 
@@ -3591,15 +3589,6 @@ async function getOrFetchAllProviders(
   return result;
 }
 
-function getPiModelOptions(): Array<{
-  id: string;
-  name: string;
-  provider: string;
-  description: string;
-}> {
-  return [];
-}
-
 function getInventoryProviderOptions(): Array<{
   id: string;
   name: string;
@@ -4835,9 +4824,7 @@ async function handleRequest(
         `[milady-api] No in-process restart handler; exiting for external restart (${reason})`,
       );
       if (process.env.VITEST || process.env.NODE_ENV === "test") {
-        logger.info(
-          "[milady-api] Skipping process.exit during test execution",
-        );
+        logger.info("[milady-api] Skipping process.exit during test execution");
         return;
       }
       process.exit(API_RESTART_EXIT_CODE);
@@ -7761,9 +7748,7 @@ async function handleRequest(
           : "xdg-open";
     execFile(opener, [skillPath], (err) => {
       if (err)
-        logger.warn(
-          `[milady-api] Failed to open skill folder: ${err.message}`,
-        );
+        logger.warn(`[milady-api] Failed to open skill folder: ${err.message}`);
     });
     json(res, { ok: true, path: skillPath });
     return;

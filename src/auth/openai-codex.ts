@@ -15,17 +15,11 @@ export interface CodexFlow {
 }
 
 export function startCodexLogin(): Promise<CodexFlow> {
-  return Promise.reject(
-    new Error(
-      "OpenAI Codex OAuth is disabled.",
-    ),
-  );
+  return Promise.reject(new Error("OpenAI Codex OAuth is disabled."));
 }
 
 export async function refreshCodexToken(
   _refreshToken: string,
 ): Promise<OAuthCredentials> {
-  throw new Error(
-    "Codex token refresh is disabled.",
-  );
+  throw new Error("Codex token refresh is disabled.");
 }

@@ -72,6 +72,7 @@ import { diagnoseNoAIProvider } from "../services/version-compat.js";
 import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins.js";
 
 import { createMiladyPlugin } from "./milady-plugin.js";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -713,9 +714,7 @@ export function ensureBrowserServerLink(): boolean {
     );
     return true;
   } catch (err) {
-    logger.debug(
-      `[milady] Could not link browser server: ${formatError(err)}`,
-    );
+    logger.debug(`[milady] Could not link browser server: ${formatError(err)}`);
     return false;
   }
 }
@@ -1658,9 +1657,7 @@ import { STYLE_PRESETS } from "../onboarding-presets.js";
  *
  * Subsequent runs skip this entirely.
  */
-async function runFirstTimeSetup(
-  config: MiladyConfig,
-): Promise<MiladyConfig> {
+async function runFirstTimeSetup(config: MiladyConfig): Promise<MiladyConfig> {
   const agentEntry = config.agents?.list?.[0];
   const hasName = Boolean(agentEntry?.name || config.ui?.assistant?.name);
   if (hasName) return config;
@@ -2428,10 +2425,7 @@ export async function startEliza(
     advancedCapabilities: true,
     actionPlanning: true,
     // advancedMemory: true, // Not supported in this version of AgentRuntime
-    plugins: [
-      miladyPlugin,
-      ...otherPlugins.map((p) => p.plugin),
-    ],
+    plugins: [miladyPlugin, ...otherPlugins.map((p) => p.plugin)],
     ...(runtimeLogLevel ? { logLevel: runtimeLogLevel } : {}),
     // Sandbox options — only active when mode != "off"
     ...(isSandboxActive

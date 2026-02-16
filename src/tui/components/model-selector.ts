@@ -78,11 +78,7 @@ export class ModelSelectorComponent implements Component, Focusable {
   render(width: number): string[] {
     this.filterInput.focused = this.focused;
 
-    const header = [
-      chalk.bold(" Select model"),
-      chalk.dim(" (no models)"),
-      "",
-    ];
+    const header = [chalk.bold(" Select model"), chalk.dim(" (no models)"), ""];
 
     const filterLine = this.filterInput.render(width).map((l) => `  ${l}`);
 

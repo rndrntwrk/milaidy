@@ -166,9 +166,7 @@ export function registerPluginsCli(program: Command): void {
         console.log();
       }
 
-      console.log(
-        chalk.dim("Install a plugin: milady plugins install <name>"),
-      );
+      console.log(chalk.dim("Install a plugin: milady plugins install <name>"));
       console.log(
         chalk.dim("Search:           milady plugins list -q <keyword>"),
       );
@@ -228,9 +226,7 @@ export function registerPluginsCli(program: Command): void {
       if (!info) {
         console.log(`\n${chalk.red("Not found:")} ${normalizedName}`);
         console.log(
-          chalk.dim(
-            "Run 'milady plugins search <keyword>' to find plugins.\n",
-          ),
+          chalk.dim("Run 'milady plugins search <keyword>' to find plugins.\n"),
         );
         return;
       }
@@ -397,9 +393,7 @@ export function registerPluginsCli(program: Command): void {
   // ── test ─────────────────────────────────────────────────────────────
   pluginsCommand
     .command("test")
-    .description(
-      "Validate custom drop-in plugins in ~/.milady/plugins/custom/",
-    )
+    .description("Validate custom drop-in plugins in ~/.milady/plugins/custom/")
     .action(async () => {
       const nodePath = await import("node:path");
       const { pathToFileURL } = await import("node:url");

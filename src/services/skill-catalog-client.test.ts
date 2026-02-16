@@ -142,10 +142,7 @@ describe("skill-catalog-client", () => {
     it("returns empty array when no catalog file exists", async () => {
       // Point env at a non-existent file — since MILADY_SKILLS_CATALOG is
       // set, the client won't fall back to other paths.
-      process.env.MILADY_SKILLS_CATALOG = path.join(
-        tmpDir,
-        "nonexistent.json",
-      );
+      process.env.MILADY_SKILLS_CATALOG = path.join(tmpDir, "nonexistent.json");
 
       const { getCatalogSkills } = await loadModule();
       const skills = await getCatalogSkills();

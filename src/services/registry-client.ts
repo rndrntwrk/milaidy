@@ -316,8 +316,7 @@ function mergeAppMeta(
 
 function cacheFilePath(): string {
   const base =
-    process.env.MILADY_STATE_DIR?.trim() ||
-    path.join(os.homedir(), ".milady");
+    process.env.MILADY_STATE_DIR?.trim() || path.join(os.homedir(), ".milady");
   return path.join(base, "cache", "registry.json");
 }
 
@@ -511,8 +510,7 @@ async function discoverLocalWorkspaceApps(): Promise<
 
   // 2. Scan user-installed plugins (~/.milady/plugins/installed/) for kind: "app"
   const stateDir =
-    process.env.MILADY_STATE_DIR?.trim() ||
-    path.join(os.homedir(), ".milady");
+    process.env.MILADY_STATE_DIR?.trim() || path.join(os.homedir(), ".milady");
   const installedBase = path.join(stateDir, "plugins", "installed");
   try {
     const installedEntries = await fs.readdir(installedBase, {

@@ -445,9 +445,7 @@ if (uiOnly) {
 
   apiProcess.on("exit", (code) => {
     if (code !== 0) {
-      console.error(
-        `\n  ${green("[milady]")} Server exited with code ${code}`,
-      );
+      console.error(`\n  ${green("[milady]")} Server exited with code ${code}`);
       if (viteProcess) viteProcess.kill();
       process.exit(code ?? 1);
     }

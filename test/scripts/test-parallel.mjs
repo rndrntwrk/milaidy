@@ -70,10 +70,7 @@ const isMacOS =
 const isWindows =
   process.platform === "win32" || process.env.RUNNER_OS === "Windows";
 const isWindowsCi = isCI && isWindows;
-const shardOverride = Number.parseInt(
-  process.env.MILADY_TEST_SHARDS ?? "",
-  10,
-);
+const shardOverride = Number.parseInt(process.env.MILADY_TEST_SHARDS ?? "", 10);
 const shardCount = isWindowsCi
   ? Number.isFinite(shardOverride) && shardOverride > 1
     ? shardOverride

@@ -12,15 +12,11 @@ export interface AnthropicFlow {
 }
 
 export async function startAnthropicLogin(): Promise<AnthropicFlow> {
-  throw new Error(
-    "Anthropic OAuth is disabled.",
-  );
+  throw new Error("Anthropic OAuth is disabled.");
 }
 
 export async function refreshAnthropicToken(
   _refreshToken: string,
 ): Promise<OAuthCredentials> {
-  throw new Error(
-    "Anthropic token refresh is disabled.",
-  );
+  throw new Error("Anthropic token refresh is disabled.");
 }

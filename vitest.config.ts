@@ -12,12 +12,7 @@ const ciWorkers = isWindows ? 2 : 3;
 export default defineConfig({
   resolve: {
     alias: {
-      "milady/plugin-sdk": path.join(
-        repoRoot,
-        "src",
-        "plugin-sdk",
-        "index.ts",
-      ),
+      "milady/plugin-sdk": path.join(repoRoot, "src", "plugin-sdk", "index.ts"),
       // @elizaos/skills has a broken package.json entry; the code handles the
       // missing module gracefully (try/catch), so redirect to an empty stub.
       "@elizaos/skills": path.join(

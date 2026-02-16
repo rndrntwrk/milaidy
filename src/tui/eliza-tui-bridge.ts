@@ -11,6 +11,7 @@ import {
   type UUID,
 } from "@elizaos/core";
 import { Loader, Spacer, Text } from "@elizaos/tui";
+
 /** Stream event shape (TUI disabled). */
 type StreamEvent = {
   type: "token" | "thinking" | "done" | "error" | "usage";
@@ -19,6 +20,7 @@ type StreamEvent = {
   error?: string;
   reason?: string;
 };
+
 import {
   AssistantMessageComponent,
   ToolExecutionComponent,

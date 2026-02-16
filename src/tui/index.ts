@@ -1,6 +1,4 @@
 import type { AgentRuntime } from "@elizaos/core";
-import { ElizaTUIBridge } from "./eliza-tui-bridge.js";
-import { MiladyTUI } from "./tui-app.js";
 
 export { ElizaTUIBridge } from "./eliza-tui-bridge.js";
 export { MiladyTUI } from "./tui-app.js";
@@ -14,7 +12,5 @@ export async function launchTUI(
   _runtime: AgentRuntime,
   _options: LaunchTUIOptions = {},
 ): Promise<void> {
-  throw new Error(
-    "TUI is disabled.",
-  );
+  throw new Error("TUI is disabled.");
 }

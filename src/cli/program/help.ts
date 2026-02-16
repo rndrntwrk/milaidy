@@ -10,10 +10,7 @@ const EXAMPLES = [
   ["milady", "Start Milady in the interactive TUI."],
   ["milady start", "Start the classic runtime/chat loop."],
   ["milady dashboard", "Open the Control UI in your browser."],
-  [
-    "milady setup",
-    "Initialize ~/.milady/milady.json and the agent workspace.",
-  ],
+  ["milady setup", "Initialize ~/.milady/milady.json and the agent workspace."],
   ["milady config get agents.defaults.model.primary", "Read a config value."],
   ["milady models", "Show configured model providers."],
   ["milady plugins list", "List available plugins."],
