@@ -22,11 +22,17 @@ import { SOW_TARGETS as TARGETS } from "./types.js";
  */
 export interface BaselineHarness {
   /** Run a structured evaluation suite and return metrics. */
-  measure(agentId: string, scenarios: EvaluationScenario[]): Promise<BaselineMetrics>;
+  measure(
+    agentId: string,
+    scenarios: EvaluationScenario[],
+  ): Promise<BaselineMetrics>;
   /** Store a baseline snapshot for comparison. */
   snapshot(metrics: BaselineMetrics, label: string): Promise<void>;
   /** Compare current metrics against a stored baseline. */
-  compare(current: BaselineMetrics, baselineLabel: string): Promise<MetricsDelta | null>;
+  compare(
+    current: BaselineMetrics,
+    baselineLabel: string,
+  ): Promise<MetricsDelta | null>;
   /** List all stored snapshot labels. */
   listSnapshots(): string[];
 }
@@ -94,10 +100,16 @@ export class InMemoryBaselineHarness implements BaselineHarness {
     const totalTurns = scenarios.reduce((sum, s) => sum + s.turns, 0);
 
     const result: BaselineMetrics = {
-      preferenceFollowingAccuracy: avg(metricScores["preferenceFollowingAccuracy"] ?? []),
-      instructionCompletionRate: avg(metricScores["instructionCompletionRate"] ?? []),
+      preferenceFollowingAccuracy: avg(
+        metricScores["preferenceFollowingAccuracy"] ?? [],
+      ),
+      instructionCompletionRate: avg(
+        metricScores["instructionCompletionRate"] ?? [],
+      ),
       personaDriftScore: avg(metricScores["personaDriftScore"] ?? []),
-      memoryPoisoningResistance: avg(metricScores["memoryPoisoningResistance"] ?? []),
+      memoryPoisoningResistance: avg(
+        metricScores["memoryPoisoningResistance"] ?? [],
+      ),
       compoundingErrorRate: avg(metricScores["compoundingErrorRate"] ?? []),
       sycophancyScore: avg(metricScores["sycophancyScore"] ?? []),
       turnCount: totalTurns,
@@ -106,19 +118,30 @@ export class InMemoryBaselineHarness implements BaselineHarness {
 
     // Record to telemetry
     const durationMs = Date.now() - startTime;
-    metrics.histogram("autonomy.baseline.measurement_duration_ms", durationMs, { agentId });
+    metrics.histogram("autonomy.baseline.measurement_duration_ms", durationMs, {
+      agentId,
+    });
     for (const [metric, value] of Object.entries(result)) {
-      if (typeof value === "number" && metric !== "turnCount" && metric !== "measuredAt") {
+      if (
+        typeof value === "number" &&
+        metric !== "turnCount" &&
+        metric !== "measuredAt"
+      ) {
         metrics.gauge(`autonomy.baseline.${metric}`, value, { agentId });
       }
     }
 
-    logger.info(`[baseline] Measurement complete for agent ${agentId} (${durationMs}ms, ${totalTurns} turns)`);
+    logger.info(
+      `[baseline] Measurement complete for agent ${agentId} (${durationMs}ms, ${totalTurns} turns)`,
+    );
 
     return result;
   }
 
-  async snapshot(baselineMetrics: BaselineMetrics, label: string): Promise<void> {
+  async snapshot(
+    baselineMetrics: BaselineMetrics,
+    label: string,
+  ): Promise<void> {
     this.snapshots.set(label, { ...baselineMetrics, label });
     logger.info(`[baseline] Snapshot saved: "${label}"`);
   }
@@ -148,13 +171,9 @@ export class InMemoryBaselineHarness implements BaselineHarness {
       const delta = currentValue - baselineValue;
       const target = TARGETS[metric];
       const improved =
-        target.direction === "higher"
-          ? delta > 0.001
-          : delta < -0.001;
+        target.direction === "higher" ? delta > 0.001 : delta < -0.001;
       const regressed =
-        target.direction === "higher"
-          ? delta < -0.001
-          : delta > 0.001;
+        target.direction === "higher" ? delta < -0.001 : delta > 0.001;
       const targetMet =
         target.direction === "higher"
           ? currentValue >= target.target
@@ -165,7 +184,11 @@ export class InMemoryBaselineHarness implements BaselineHarness {
         baseline: baselineValue,
         current: currentValue,
         delta,
-        direction: improved ? "improved" as const : regressed ? "regressed" as const : "unchanged" as const,
+        direction: improved
+          ? ("improved" as const)
+          : regressed
+            ? ("regressed" as const)
+            : ("unchanged" as const),
         targetMet,
       };
     });

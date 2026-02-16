@@ -74,9 +74,11 @@ let _ToolExecutionPipeline: typeof import("./workflow/execution-pipeline.js").To
 let _registerBuiltinCompensations: typeof import("./workflow/compensations/index.js").registerBuiltinCompensations;
 let _InvariantChecker: typeof import("./verification/invariants/invariant-checker.js").InvariantChecker;
 let _registerBuiltinInvariants: typeof import("./verification/invariants/index.js").registerBuiltinInvariants;
+let _InMemoryBaselineHarness: typeof import("./metrics/baseline-harness.js").InMemoryBaselineHarness;
+let _KernelScenarioEvaluator: typeof import("./metrics/kernel-evaluator.js").KernelScenarioEvaluator;
 
 async function loadImplementations() {
-  const [trustMod, memMod, driftMod, goalMod, toolRegMod, schemaValMod, pcvMod, toolSchemasMod, pcMod, smMod, approvalMod, esMod, compRegMod, pipelineMod, compsMod, invMod, invRegMod] = await Promise.all([
+  const [trustMod, memMod, driftMod, goalMod, toolRegMod, schemaValMod, pcvMod, toolSchemasMod, pcMod, smMod, approvalMod, esMod, compRegMod, pipelineMod, compsMod, invMod, invRegMod, harnMod, evalMod] = await Promise.all([
     import("./trust/scorer.js"),
     import("./memory/gate.js"),
     import("./identity/drift-monitor.js"),
@@ -94,6 +96,8 @@ async function loadImplementations() {
     import("./workflow/compensations/index.js"),
     import("./verification/invariants/invariant-checker.js"),
     import("./verification/invariants/index.js"),
+    import("./metrics/baseline-harness.js"),
+    import("./metrics/kernel-evaluator.js"),
   ]);
   _RuleBasedTrustScorer = trustMod.RuleBasedTrustScorer;
   _MemoryGateImpl = memMod.MemoryGateImpl;
@@ -112,6 +116,8 @@ async function loadImplementations() {
   _registerBuiltinCompensations = compsMod.registerBuiltinCompensations;
   _InvariantChecker = invMod.InvariantChecker;
   _registerBuiltinInvariants = invRegMod.registerBuiltinInvariants;
+  _InMemoryBaselineHarness = harnMod.InMemoryBaselineHarness;
+  _KernelScenarioEvaluator = evalMod.KernelScenarioEvaluator;
 }
 
 // ---------- Service ----------
@@ -134,6 +140,7 @@ export class MilaidyAutonomyService extends Service {
   private compensationRegistry: import("./workflow/types.js").CompensationRegistryInterface | null = null;
   private executionPipeline: import("./workflow/types.js").ToolExecutionPipelineInterface | null = null;
   private invariantChecker: import("./verification/invariants/invariant-checker.js").InvariantChecker | null = null;
+  private baselineHarness: import("./metrics/baseline-harness.js").BaselineHarness | null = null;
   private identityConfig: AutonomyIdentityConfig | null = null;
   private resolvedRetrievalConfig: import("./config.js").AutonomyRetrievalConfig | null = null;
   private enabled = false;
@@ -247,6 +254,15 @@ export class MilaidyAutonomyService extends Service {
       eventBus: eventBusRef,
     });
 
+    // Instantiate baseline harness with evaluator and components
+    const evaluator = new _KernelScenarioEvaluator();
+    this.baselineHarness = new _InMemoryBaselineHarness(evaluator, {
+      trustScorer: this.trustScorer,
+      memoryGate: this.memoryGate,
+      driftMonitor: this.driftMonitor,
+      goalManager: this.goalManager,
+    });
+
     this.enabled = true;
 
     // Register into DI container (single source of truth for components)
@@ -305,6 +321,7 @@ export class MilaidyAutonomyService extends Service {
       if (this.compensationRegistry) container.registerValue(TOKENS.CompensationRegistry, this.compensationRegistry);
       if (this.executionPipeline) container.registerValue(TOKENS.ExecutionPipeline, this.executionPipeline);
       if (this.invariantChecker) container.registerValue(TOKENS.InvariantChecker, this.invariantChecker);
+      if (this.baselineHarness) container.registerValue(TOKENS.BaselineHarness, this.baselineHarness);
 
       // Register trust-aware retriever
       try {
@@ -357,6 +374,15 @@ export class MilaidyAutonomyService extends Service {
       invariantChecker: this.invariantChecker,
     });
 
+    // Initialize baseline harness
+    const evaluator = new _KernelScenarioEvaluator();
+    this.baselineHarness = new _InMemoryBaselineHarness(evaluator, {
+      trustScorer: this.trustScorer,
+      memoryGate: this.memoryGate,
+      driftMonitor: this.driftMonitor,
+      goalManager: this.goalManager,
+    });
+
     // Initialize identity if not already set
     const { createDefaultAutonomyIdentity } = await import("./identity/schema.js");
     this.identityConfig = createDefaultAutonomyIdentity();
@@ -382,6 +408,7 @@ export class MilaidyAutonomyService extends Service {
     this.compensationRegistry = null;
     this.executionPipeline = null;
     this.invariantChecker = null;
+    this.baselineHarness = null;
     this.identityConfig = null;
     this.enabled = false;
     logger.info("[autonomy-service] Autonomy disabled");
@@ -479,6 +506,10 @@ export class MilaidyAutonomyService extends Service {
     return this.invariantChecker;
   }
 
+  getBaselineHarness(): import("./metrics/baseline-harness.js").BaselineHarness | null {
+    return this.baselineHarness;
+  }
+
   // ---------- Lifecycle ----------
 
   async stop(): Promise<void> {
@@ -497,6 +528,7 @@ export class MilaidyAutonomyService extends Service {
     this.compensationRegistry = null;
     this.executionPipeline = null;
     this.invariantChecker = null;
+    this.baselineHarness = null;
     this.identityConfig = null;
     this.enabled = false;
 

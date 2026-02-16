@@ -8,7 +8,7 @@
  * @module autonomy/metrics/kernel-evaluator
  */
 
-import { type Memory, logger } from "@elizaos/core";
+import { logger, type Memory } from "@elizaos/core";
 import { createDefaultAutonomyIdentity } from "../identity/schema.js";
 import type { TrustSource } from "../types.js";
 import type {
@@ -259,8 +259,7 @@ export class KernelScenarioEvaluator implements ScenarioEvaluator {
     }
 
     // Error rate: lower is better, so we return the raw rate
-    const errorRate =
-      totalEvaluations > 0 ? errorCount / totalEvaluations : 0;
+    const errorRate = totalEvaluations > 0 ? errorCount / totalEvaluations : 0;
 
     return {
       score: Math.max(0, Math.min(1, errorRate)),

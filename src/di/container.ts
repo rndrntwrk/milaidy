@@ -95,6 +95,9 @@ export const TOKENS = {
   EventStore: createToken<import("../autonomy/workflow/types.js").EventStoreInterface>("EventStore"),
   CompensationRegistry: createToken<import("../autonomy/workflow/types.js").CompensationRegistryInterface>("CompensationRegistry"),
   InvariantChecker: createToken<import("../autonomy/verification/invariants/invariant-checker.js").InvariantChecker>("InvariantChecker"),
+
+  // Autonomy Metrics
+  BaselineHarness: createToken<import("../autonomy/metrics/baseline-harness.js").BaselineHarness>("BaselineHarness"),
 } as const;
 
 // ---------- Service Container ----------
