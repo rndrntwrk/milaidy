@@ -120,7 +120,7 @@ describe("Integration: Full Pipeline", () => {
     expect(handler).toHaveBeenCalledOnce();
 
     // Check events were recorded
-    const events = eventStore.getByRequestId(call.requestId);
+    const events = await eventStore.getByRequestId(call.requestId);
     expect(events.length).toBeGreaterThanOrEqual(4);
     expect(events[0].type).toBe("tool:proposed");
   });
@@ -131,7 +131,7 @@ describe("Integration: Full Pipeline", () => {
 
     await pipeline.execute(call, successHandler());
 
-    const events = eventStore.getByRequestId(call.requestId);
+    const events = await eventStore.getByRequestId(call.requestId);
     const types = events.map((e) => e.type);
 
     expect(types).toContain("tool:proposed");
@@ -162,7 +162,7 @@ describe("Integration: Full Pipeline", () => {
     expect(result.validation.errors.length).toBeGreaterThan(0);
     expect(handler).not.toHaveBeenCalled();
 
-    const events = eventStore.getByRequestId(call.requestId);
+    const events = await eventStore.getByRequestId(call.requestId);
     const types = events.map((e) => e.type);
     expect(types).toContain("tool:proposed");
     expect(types).toContain("tool:validated");
@@ -273,7 +273,7 @@ describe("Integration: Full Pipeline", () => {
     const result = await pipeline.execute(call, successHandler());
 
     expect(result.correlationId).toBeDefined();
-    const correlatedEvents = eventStore.getByCorrelationId(result.correlationId!);
+    const correlatedEvents = await eventStore.getByCorrelationId(result.correlationId!);
     expect(correlatedEvents.length).toBeGreaterThanOrEqual(4);
 
     // All events should have the same correlation ID
@@ -282,7 +282,7 @@ describe("Integration: Full Pipeline", () => {
     }
 
     // Events should match request ID events
-    const requestEvents = eventStore.getByRequestId(call.requestId);
+    const requestEvents = await eventStore.getByRequestId(call.requestId);
     expect(correlatedEvents.length).toBe(requestEvents.length);
   });
 
@@ -299,8 +299,8 @@ describe("Integration: Full Pipeline", () => {
     expect(result2.success).toBe(true);
     expect(result1.correlationId).not.toBe(result2.correlationId);
 
-    const events1 = eventStore.getByRequestId("iso-1");
-    const events2 = eventStore.getByRequestId("iso-2");
+    const events1 = await eventStore.getByRequestId("iso-1");
+    const events2 = await eventStore.getByRequestId("iso-2");
     expect(events1.length).toBeGreaterThan(0);
     expect(events2.length).toBeGreaterThan(0);
 

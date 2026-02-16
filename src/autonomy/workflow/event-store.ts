@@ -32,12 +32,12 @@ export class InMemoryEventStore implements EventStoreInterface {
     return this.events.length;
   }
 
-  append(
+  async append(
     requestId: string,
     type: ExecutionEventType,
     payload: Record<string, unknown>,
     correlationId?: string,
-  ): number {
+  ): Promise<number> {
     const sequenceId = this.nextSequenceId++;
     const event: ExecutionEvent = {
       sequenceId,
@@ -75,7 +75,7 @@ export class InMemoryEventStore implements EventStoreInterface {
     return sequenceId;
   }
 
-  getByRequestId(requestId: string): ExecutionEvent[] {
+  async getByRequestId(requestId: string): Promise<ExecutionEvent[]> {
     const indices = this.requestIndex.get(requestId);
     if (!indices) return [];
     return indices
@@ -83,7 +83,7 @@ export class InMemoryEventStore implements EventStoreInterface {
       .map((i) => this.events[i]);
   }
 
-  getByCorrelationId(correlationId: string): ExecutionEvent[] {
+  async getByCorrelationId(correlationId: string): Promise<ExecutionEvent[]> {
     const indices = this.correlationIndex.get(correlationId);
     if (!indices) return [];
     return indices
@@ -91,7 +91,7 @@ export class InMemoryEventStore implements EventStoreInterface {
       .map((i) => this.events[i]);
   }
 
-  getRecent(n: number): ExecutionEvent[] {
+  async getRecent(n: number): Promise<ExecutionEvent[]> {
     if (n <= 0) return [];
     const start = Math.max(0, this.events.length - n);
     return this.events.slice(start);

@@ -352,7 +352,7 @@ describe("ToolExecutionPipeline", () => {
 
       await pipeline.execute(makeCall({ requestId: "trace-1" }), handler);
 
-      const events = eventStore.getByRequestId("trace-1");
+      const events = await eventStore.getByRequestId("trace-1");
       const types = events.map((e) => e.type);
 
       expect(types).toEqual([

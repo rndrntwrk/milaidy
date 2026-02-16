@@ -233,7 +233,7 @@ export interface AuditorRole {
   /** Get the most recent drift report. */
   getDriftReport(): DriftReport | null;
   /** Query events for a specific request. */
-  queryEvents(requestId: string): ExecutionEvent[];
+  queryEvents(requestId: string): Promise<ExecutionEvent[]>;
 }
 
 // ========== SafeModeController ==========

@@ -85,7 +85,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
     const correlationId = `corr-${requestId}-${Date.now()}`;
 
     // 1. Record proposed event
-    this.eventStore.append(requestId, "tool:proposed", {
+    await this.eventStore.append(requestId, "tool:proposed", {
       toolName,
       source: call.source,
       params: call.params,
@@ -99,7 +99,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
 
     // 2. Schema validation
     const validation = this.schemaValidator.validate(call);
-    this.eventStore.append(requestId, "tool:validated", {
+    await this.eventStore.append(requestId, "tool:validated", {
       valid: validation.valid,
       errorCount: validation.errors.length,
       errors: validation.errors.map((e) => ({
@@ -110,7 +110,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
     }, correlationId);
 
     if (!validation.valid) {
-      this.eventStore.append(requestId, "tool:failed", {
+      await this.eventStore.append(requestId, "tool:failed", {
         reason: "validation_failed",
         errors: validation.errors,
       }, correlationId);
@@ -153,7 +153,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
         );
       }
 
-      this.eventStore.append(requestId, "tool:approval:requested", {
+      await this.eventStore.append(requestId, "tool:approval:requested", {
         riskClass: validation.riskClass,
         source: call.source,
         toolName,
@@ -164,7 +164,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
         validation.riskClass ?? "irreversible",
       );
 
-      this.eventStore.append(requestId, "tool:approval:resolved", {
+      await this.eventStore.append(requestId, "tool:approval:resolved", {
         decision: approvalResult.decision,
         decidedBy: approvalResult.decidedBy,
       }, correlationId);
@@ -221,7 +221,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
     }
 
     // 4. Execute the action
-    this.eventStore.append(requestId, "tool:executing", { toolName }, correlationId);
+    await this.eventStore.append(requestId, "tool:executing", { toolName }, correlationId);
 
     let execResult: { result: unknown; durationMs: number };
     try {
@@ -231,7 +231,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
         requestId,
       );
     } catch (err) {
-      this.eventStore.append(requestId, "tool:failed", {
+      await this.eventStore.append(requestId, "tool:failed", {
         reason: "execution_error",
         error: err instanceof Error ? err.message : String(err),
       }, correlationId);
@@ -249,7 +249,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
       };
     }
 
-    this.eventStore.append(requestId, "tool:executed", {
+    await this.eventStore.append(requestId, "tool:executed", {
       durationMs: execResult.durationMs,
     }, correlationId);
 
@@ -266,7 +266,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
     };
 
     const verification = await this.postConditionVerifier.verify(verifierCtx);
-    this.eventStore.append(requestId, "tool:verified", {
+    await this.eventStore.append(requestId, "tool:verified", {
       status: verification.status,
       hasCriticalFailure: verification.hasCriticalFailure,
       checks: verification.checks,
@@ -285,7 +285,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
           requestId,
         });
 
-        this.eventStore.append(requestId, "tool:compensated", {
+        await this.eventStore.append(requestId, "tool:compensated", {
           success: compResult.success,
           detail: compResult.detail,
         }, correlationId);
@@ -407,14 +407,14 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
       executionSucceeded,
       currentState: this.stateMachine.currentState,
       pendingApprovalCount: this.approvalGate.getPending().length,
-      eventCount: this.eventStore.getByRequestId(requestId).length,
+      eventCount: (await this.eventStore.getByRequestId(requestId)).length,
       pipelineResult,
     };
 
     const invariantResult: InvariantResult =
       await this.invariantChecker.check(invariantCtx);
 
-    this.eventStore.append(requestId, "tool:invariants:checked", {
+    await this.eventStore.append(requestId, "tool:invariants:checked", {
       status: invariantResult.status,
       hasCriticalViolation: invariantResult.hasCriticalViolation,
       checkCount: invariantResult.checks.length,
@@ -454,7 +454,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
     return true;
   }
 
-  private failResult(
+  private async failResult(
     requestId: string,
     toolName: string,
     validation: {
@@ -464,8 +464,8 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
     startTime: number,
     correlationId: string,
     error: string,
-  ): PipelineResult {
-    this.eventStore.append(requestId, "tool:failed", { reason: error }, correlationId);
+  ): Promise<PipelineResult> {
+    await this.eventStore.append(requestId, "tool:failed", { reason: error }, correlationId);
 
     return {
       requestId,

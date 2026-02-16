@@ -45,10 +45,10 @@ function createMockEventStore(
   }));
 
   return {
-    append: vi.fn(() => 0),
-    getByRequestId: vi.fn(() => fullEvents),
-    getByCorrelationId: vi.fn(() => []),
-    getRecent: vi.fn(() => fullEvents),
+    append: vi.fn(async () => 0),
+    getByRequestId: vi.fn(async () => fullEvents),
+    getByCorrelationId: vi.fn(async () => []),
+    getRecent: vi.fn(async () => fullEvents),
     get size() {
       return fullEvents.length;
     },
@@ -179,14 +179,14 @@ describe("DriftAwareAuditor", () => {
   });
 
   describe("queryEvents()", () => {
-    it("delegates to EventStore", () => {
+    it("delegates to EventStore", async () => {
       const dm = createMockDriftMonitor();
       const es = createMockEventStore([
         { requestId: "req-42", type: "tool:executed" },
       ]);
       const auditor = new DriftAwareAuditor(dm, es);
 
-      const events = auditor.queryEvents("req-42");
+      const events = await auditor.queryEvents("req-42");
       expect(es.getByRequestId).toHaveBeenCalledWith("req-42");
     });
   });

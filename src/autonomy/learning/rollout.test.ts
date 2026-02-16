@@ -97,9 +97,7 @@ function makeRequest(): OrchestratedRequest {
   } as any;
 }
 
-function makeMockOrchestrator(
-  result?: OrchestratedResult,
-): RoleOrchestrator {
+function makeMockOrchestrator(result?: OrchestratedResult): RoleOrchestrator {
   return {
     execute: vi.fn().mockResolvedValue(result ?? makeOrchestratedResult()),
     getCurrentPhase: () => "idle" as const,
@@ -109,10 +107,10 @@ function makeMockOrchestrator(
 
 function makeMockEventStore() {
   return {
-    append: vi.fn(),
-    query: vi.fn().mockReturnValue([]),
-    getAll: vi.fn().mockReturnValue([]),
-    getByRequestId: vi.fn().mockReturnValue([]),
+    append: vi.fn().mockResolvedValue(0),
+    query: vi.fn().mockResolvedValue([]),
+    getAll: vi.fn().mockResolvedValue([]),
+    getByRequestId: vi.fn().mockResolvedValue([]),
     clear: vi.fn(),
   };
 }
@@ -354,7 +352,7 @@ describe("CheckpointManager", () => {
 
     const improved = makeMetrics({
       preferenceFollowingAccuracy: 0.95,
-      instructionCompletionRate: 0.90,
+      instructionCompletionRate: 0.9,
       personaDriftScore: 0.03,
       memoryPoisoningResistance: 0.97,
       compoundingErrorRate: 0.01,
@@ -376,7 +374,7 @@ describe("CheckpointManager", () => {
 
     const regressed = makeMetrics({
       preferenceFollowingAccuracy: 0.95, // improved
-      instructionCompletionRate: 0.70, // regressed
+      instructionCompletionRate: 0.7, // regressed
     });
 
     const gate = await manager.meetsGate(regressed, "baseline");
@@ -398,8 +396,12 @@ describe("CheckpointManager", () => {
 
     const gate = await manager.meetsGate(mixed, "baseline");
     expect(gate.passed).toBe(false);
-    expect(gate.improvements.some((s) => s.includes("preferenceFollowingAccuracy"))).toBe(true);
-    expect(gate.regressions.some((s) => s.includes("sycophancyScore"))).toBe(true);
+    expect(
+      gate.improvements.some((s) => s.includes("preferenceFollowingAccuracy")),
+    ).toBe(true);
+    expect(gate.regressions.some((s) => s.includes("sycophancyScore"))).toBe(
+      true,
+    );
   });
 
   it("meetsGate fails when baseline not found", async () => {
