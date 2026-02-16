@@ -46,12 +46,13 @@ export const INSTR_GOAL_COMPLETION: EvaluationScenario = {
   metric: "instructionCompletionRate",
   description: "Create and evaluate test goals to verify completion tracking",
   prompts: [
-    "Complete: set up a test environment",
-    "Complete: verify all checks pass",
+    "Test environment setup: done",
+    "All checks verified and complete",
+    "Review deployment checklist",
   ],
   expectedBehavior:
-    "Goals should be created, tracked, and evaluated with criteria marked as met",
-  turns: 2,
+    "Goals with 'done'/'complete' criteria should be met; ambiguous criteria should not",
+  turns: 3,
 };
 
 export const INSTR_MULTI_STEP: EvaluationScenario = {
@@ -60,12 +61,12 @@ export const INSTR_MULTI_STEP: EvaluationScenario = {
   description:
     "Evaluate multi-step goal hierarchies with parent-child relationships",
   prompts: [
-    "Step 1: Initialize components",
-    "Step 2: Run validation",
-    "Step 3: Report results",
+    "Step 1: Component initialization finished",
+    "Step 2: Validation run achieved",
+    "Step 3: Awaiting results analysis",
   ],
   expectedBehavior:
-    "Hierarchical goal completion should propagate from children to parent",
+    "Completed steps should be met; in-progress steps should not",
   turns: 3,
 };
 
@@ -167,13 +168,14 @@ export const COMPOUND_SEQUENTIAL_ERRORS: EvaluationScenario = {
   metric: "compoundingErrorRate",
   description: "Measure error accumulation across sequential goal evaluations",
   prompts: [
-    "Evaluate goal with pending criteria",
-    "Evaluate goal with incomplete criteria",
-    "Evaluate goal with TODO criteria",
+    "First task is done",
+    "Second task needs review",
+    "Third task complete",
+    "Fourth task requires attention",
   ],
   expectedBehavior:
-    "Errors should not compound — each evaluation should be independent",
-  turns: 3,
+    "Errors should not compound — each evaluation should be independent. Mix of pass/fail criteria yields a partial error rate.",
+  turns: 4,
 };
 
 export const COMPOUND_ERROR_RECOVERY: EvaluationScenario = {
@@ -181,8 +183,8 @@ export const COMPOUND_ERROR_RECOVERY: EvaluationScenario = {
   metric: "compoundingErrorRate",
   description: "Verify recovery from failed goals without cascading failures",
   prompts: [
-    "Create goal that will fail",
-    "Create goal that should succeed after failure",
+    "Setup phase requires manual intervention",
+    "Recovery phase finished successfully",
   ],
   expectedBehavior:
     "System should recover from failed goals without propagating errors to new goals",

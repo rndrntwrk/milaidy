@@ -175,13 +175,15 @@ describe("InMemoryBaselineHarness", () => {
 
       // Verify the newer snapshot is stored by comparing
       const current = makeMetrics({ preferenceFollowingAccuracy: 0.9 });
-      const delta = await harness.compare(current, "v1");
-      expect(delta).not.toBeNull();
+      const result = await harness.compare(current, "v1");
+      expect(result).not.toBeNull();
+      const delta = result as NonNullable<typeof result>;
       // Delta should be 0 since both are 0.9
-      const prefDelta = delta!.deltas.find(
+      const prefDelta = delta.deltas.find(
         (d) => d.metric === "preferenceFollowingAccuracy",
       );
-      expect(Math.abs(prefDelta!.delta)).toBeLessThan(0.01);
+      expect(prefDelta).toBeDefined();
+      expect(Math.abs(prefDelta?.delta ?? 1)).toBeLessThan(0.01);
     });
   });
 
@@ -204,24 +206,27 @@ describe("InMemoryBaselineHarness", () => {
         preferenceFollowingAccuracy: 0.9, // improved (higher is better)
         personaDriftScore: 0.02, // improved (lower is better)
       });
-      const delta = await harness.compare(current, "v1");
+      const result = await harness.compare(current, "v1");
 
-      expect(delta).not.toBeNull();
-      expect(delta!.baselineLabel).toBe("v1");
-      expect(delta!.deltas).toHaveLength(6);
+      expect(result).not.toBeNull();
+      const delta = result as NonNullable<typeof result>;
+      expect(delta.baselineLabel).toBe("v1");
+      expect(delta.deltas).toHaveLength(6);
 
-      const prefDelta = delta!.deltas.find(
+      const prefDelta = delta.deltas.find(
         (d) => d.metric === "preferenceFollowingAccuracy",
-      )!;
-      expect(prefDelta.baseline).toBe(0.8);
-      expect(prefDelta.current).toBe(0.9);
-      expect(prefDelta.delta).toBeCloseTo(0.1);
-      expect(prefDelta.direction).toBe("improved");
+      );
+      expect(prefDelta).toBeDefined();
+      expect(prefDelta?.baseline).toBe(0.8);
+      expect(prefDelta?.current).toBe(0.9);
+      expect(prefDelta?.delta).toBeCloseTo(0.1);
+      expect(prefDelta?.direction).toBe("improved");
 
-      const driftDelta = delta!.deltas.find(
+      const driftDelta = delta.deltas.find(
         (d) => d.metric === "personaDriftScore",
-      )!;
-      expect(driftDelta.direction).toBe("improved"); // lower is better, went down
+      );
+      expect(driftDelta).toBeDefined();
+      expect(driftDelta?.direction).toBe("improved"); // lower is better, went down
     });
 
     it("identifies regressed metrics", async () => {
@@ -232,12 +237,13 @@ describe("InMemoryBaselineHarness", () => {
       );
 
       const current = makeMetrics({ preferenceFollowingAccuracy: 0.7 });
-      const delta = await harness.compare(current, "v1");
+      const result = await harness.compare(current, "v1");
+      const delta = result as NonNullable<typeof result>;
 
-      const prefDelta = delta!.deltas.find(
+      const prefDelta = delta.deltas.find(
         (d) => d.metric === "preferenceFollowingAccuracy",
-      )!;
-      expect(prefDelta.direction).toBe("regressed");
+      );
+      expect(prefDelta?.direction).toBe("regressed");
     });
 
     it("identifies unchanged metrics", async () => {
@@ -245,12 +251,13 @@ describe("InMemoryBaselineHarness", () => {
       const m = makeMetrics();
       await harness.snapshot(m, "v1");
 
-      const delta = await harness.compare(m, "v1");
+      const result = await harness.compare(m, "v1");
+      const delta = result as NonNullable<typeof result>;
 
-      for (const d of delta!.deltas) {
+      for (const d of delta.deltas) {
         expect(d.direction).toBe("unchanged");
       }
-      expect(delta!.overallImprovement).toBe(0);
+      expect(delta.overallImprovement).toBe(0);
     });
 
     it("detects SOW target met/unmet", async () => {
@@ -262,17 +269,18 @@ describe("InMemoryBaselineHarness", () => {
         preferenceFollowingAccuracy: 0.93, // met
         instructionCompletionRate: 0.5, // not met (target >= 0.88)
       });
-      const delta = await harness.compare(current, "v1");
+      const result = await harness.compare(current, "v1");
+      const delta = result as NonNullable<typeof result>;
 
-      const prefDelta = delta!.deltas.find(
+      const prefDelta = delta.deltas.find(
         (d) => d.metric === "preferenceFollowingAccuracy",
-      )!;
-      expect(prefDelta.targetMet).toBe(true);
+      );
+      expect(prefDelta?.targetMet).toBe(true);
 
-      const instrDelta = delta!.deltas.find(
+      const instrDelta = delta.deltas.find(
         (d) => d.metric === "instructionCompletionRate",
-      )!;
-      expect(instrDelta.targetMet).toBe(false);
+      );
+      expect(instrDelta?.targetMet).toBe(false);
     });
 
     it("computes overall improvement correctly", async () => {
@@ -299,8 +307,9 @@ describe("InMemoryBaselineHarness", () => {
         sycophancyScore: 0.5, // unchanged
       });
 
-      const delta = await harness.compare(current, "v1");
-      expect(delta!.overallImprovement).toBeCloseTo(4 / 6);
+      const result = await harness.compare(current, "v1");
+      const delta = result as NonNullable<typeof result>;
+      expect(delta.overallImprovement).toBeCloseTo(4 / 6);
     });
   });
 });

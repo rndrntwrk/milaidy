@@ -5,7 +5,7 @@
  * produces a valid score between 0 and 1.
  */
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { InMemoryGoalManager } from "../goals/manager.js";
 import { RuleBasedDriftMonitor } from "../identity/drift-monitor.js";
 import { MemoryGateImpl } from "../memory/gate.js";
@@ -47,7 +47,9 @@ describe("KernelScenarioEvaluator", () => {
   let components: KernelComponents;
 
   afterEach(() => {
-    (components.memoryGate as MemoryGateImpl).dispose();
+    if (components) {
+      (components.memoryGate as MemoryGateImpl).dispose();
+    }
   });
 
   describe("preferenceFollowingAccuracy", () => {
@@ -82,7 +84,7 @@ describe("KernelScenarioEvaluator", () => {
   });
 
   describe("instructionCompletionRate", () => {
-    it("completes goals with done criteria", async () => {
+    it("completes goals with done/complete criteria and fails ambiguous ones", async () => {
       components = createComponents();
       const result = await evaluator.evaluate(
         INSTR_GOAL_COMPLETION,
@@ -93,8 +95,8 @@ describe("KernelScenarioEvaluator", () => {
       expect(result.metric).toBe("instructionCompletionRate");
       expect(result.score).toBeGreaterThanOrEqual(0);
       expect(result.score).toBeLessThanOrEqual(1);
-      // Goals with "done" in criteria should be completed
-      expect(result.score).toBeGreaterThan(0);
+      // 2 of 3 prompts contain "done"/"complete"; 1 is ambiguous
+      expect(result.score).toBeCloseTo(2 / 3, 1);
     });
 
     it("evaluates multi-step goal hierarchies", async () => {
@@ -105,6 +107,8 @@ describe("KernelScenarioEvaluator", () => {
       expect(result.metric).toBe("instructionCompletionRate");
       expect(result.score).toBeGreaterThanOrEqual(0);
       expect(result.score).toBeLessThanOrEqual(1);
+      // 2 of 3 prompts contain "finished"/"achieved"; 1 is ambiguous
+      expect(result.score).toBeCloseTo(2 / 3, 1);
     });
   });
 
@@ -183,7 +187,7 @@ describe("KernelScenarioEvaluator", () => {
   });
 
   describe("compoundingErrorRate", () => {
-    it("measures sequential error rate", async () => {
+    it("measures sequential error rate with mix of pass/fail", async () => {
       components = createComponents();
       const result = await evaluator.evaluate(
         COMPOUND_SEQUENTIAL_ERRORS,
@@ -194,9 +198,11 @@ describe("KernelScenarioEvaluator", () => {
       expect(result.metric).toBe("compoundingErrorRate");
       expect(result.score).toBeGreaterThanOrEqual(0);
       expect(result.score).toBeLessThanOrEqual(1);
+      // 2 of 4 prompts contain "done"/"complete"; 2 are ambiguous → 0.5 error rate
+      expect(result.score).toBeCloseTo(0.5);
     });
 
-    it("measures error recovery", async () => {
+    it("measures error recovery with partial success", async () => {
       components = createComponents();
       const result = await evaluator.evaluate(
         COMPOUND_ERROR_RECOVERY,
@@ -206,6 +212,8 @@ describe("KernelScenarioEvaluator", () => {
       expect(result.scenarioId).toBe("compound:error-recovery");
       expect(result.score).toBeGreaterThanOrEqual(0);
       expect(result.score).toBeLessThanOrEqual(1);
+      // 1 of 2 fails, 1 succeeds (contains "finished") → 0.5 error rate
+      expect(result.score).toBeCloseTo(0.5);
     });
   });
 
@@ -257,7 +265,6 @@ describe("KernelScenarioEvaluator", () => {
     });
 
     it("includes scenarioId and metric in all results", async () => {
-      components = createComponents();
       const allScenarios = [
         PREF_IDENTITY_ALIGNMENT,
         INSTR_GOAL_COMPLETION,
@@ -268,9 +275,12 @@ describe("KernelScenarioEvaluator", () => {
       ];
 
       for (const scenario of allScenarios) {
+        // Fresh components per scenario to avoid state leaks
+        components = createComponents();
         const result = await evaluator.evaluate(scenario, components);
         expect(result.scenarioId).toBe(scenario.id);
         expect(result.metric).toBe(scenario.metric);
+        (components.memoryGate as MemoryGateImpl).dispose();
       }
     });
   });

@@ -123,14 +123,16 @@ export class KernelScenarioEvaluator implements ScenarioEvaluator {
     const goals = [];
     let completedCount = 0;
 
-    // Create a goal for each prompt with "done" in criteria for testability
+    // Create a goal for each prompt with criteria derived from the prompt text.
+    // The heuristic evaluator checks for keywords like "done"/"complete" vs
+    // "TODO"/"pending", so scenario prompts control which goals pass or fail.
     for (const prompt of scenario.prompts) {
       try {
         const goal = await components.goalManager.addGoal({
           description: prompt,
           priority: "medium",
           status: "active",
-          successCriteria: [`${prompt}: done`],
+          successCriteria: [prompt],
           source: "system",
           sourceTrust: 1.0,
         });
@@ -150,8 +152,7 @@ export class KernelScenarioEvaluator implements ScenarioEvaluator {
       }
     }
 
-    const score =
-      goals.length > 0 ? completedCount / scenario.prompts.length : 0;
+    const score = goals.length > 0 ? completedCount / goals.length : 0;
 
     return {
       score: Math.max(0, Math.min(1, score)),

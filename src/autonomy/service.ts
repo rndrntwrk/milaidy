@@ -388,6 +388,10 @@ export class MilaidyAutonomyService extends Service {
     this.identityConfig = createDefaultAutonomyIdentity();
 
     this.enabled = true;
+
+    // Register newly created components into DI container
+    await this.registerInContainer();
+
     logger.info("[autonomy-service] Autonomy enabled");
   }
 

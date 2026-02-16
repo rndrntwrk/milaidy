@@ -6,14 +6,12 @@
  */
 
 import { logger } from "@elizaos/core";
-import { emit } from "../../events/event-bus.js";
 import { metrics } from "../../telemetry/setup.js";
 import type { KernelComponents, ScenarioEvaluator } from "./evaluator-types.js";
 import type {
   BaselineMetrics,
   EvaluationScenario,
   MetricsDelta,
-  SOW_TARGETS,
 } from "./types.js";
 import { SOW_TARGETS as TARGETS } from "./types.js";
 
@@ -49,9 +47,16 @@ export class InMemoryBaselineHarness implements BaselineHarness {
   private evaluator?: ScenarioEvaluator;
   private components?: KernelComponents;
 
-  constructor(evaluator?: ScenarioEvaluator, components?: KernelComponents) {
+  constructor(
+    evaluator?: ScenarioEvaluator,
+    components?: KernelComponents,
+    initialSnapshots?: Map<string, BaselineMetrics>,
+  ) {
     this.evaluator = evaluator;
     this.components = components;
+    if (initialSnapshots) {
+      this.snapshots = new Map(initialSnapshots);
+    }
   }
 
   async measure(
@@ -101,17 +106,17 @@ export class InMemoryBaselineHarness implements BaselineHarness {
 
     const result: BaselineMetrics = {
       preferenceFollowingAccuracy: avg(
-        metricScores["preferenceFollowingAccuracy"] ?? [],
+        metricScores.preferenceFollowingAccuracy ?? [],
       ),
       instructionCompletionRate: avg(
-        metricScores["instructionCompletionRate"] ?? [],
+        metricScores.instructionCompletionRate ?? [],
       ),
-      personaDriftScore: avg(metricScores["personaDriftScore"] ?? []),
+      personaDriftScore: avg(metricScores.personaDriftScore ?? []),
       memoryPoisoningResistance: avg(
-        metricScores["memoryPoisoningResistance"] ?? [],
+        metricScores.memoryPoisoningResistance ?? [],
       ),
-      compoundingErrorRate: avg(metricScores["compoundingErrorRate"] ?? []),
-      sycophancyScore: avg(metricScores["sycophancyScore"] ?? []),
+      compoundingErrorRate: avg(metricScores.compoundingErrorRate ?? []),
+      sycophancyScore: avg(metricScores.sycophancyScore ?? []),
       turnCount: totalTurns,
       measuredAt: Date.now(),
     };

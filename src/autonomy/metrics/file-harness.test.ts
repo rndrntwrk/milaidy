@@ -145,17 +145,19 @@ describe("FileBaselineHarness", () => {
     const harness = new FileBaselineHarness("/tmp/metrics");
 
     const current = makeMetrics({ preferenceFollowingAccuracy: 0.95 });
-    const delta = await harness.compare(current, "v1");
+    const result = await harness.compare(current, "v1");
 
-    expect(delta).not.toBeNull();
-    expect(delta!.baselineLabel).toBe("v1");
+    expect(result).not.toBeNull();
+    const delta = result as NonNullable<typeof result>;
+    expect(delta.baselineLabel).toBe("v1");
 
-    const prefDelta = delta!.deltas.find(
+    const prefDelta = delta.deltas.find(
       (d) => d.metric === "preferenceFollowingAccuracy",
-    )!;
-    expect(prefDelta.baseline).toBe(0.8);
-    expect(prefDelta.current).toBe(0.95);
-    expect(prefDelta.direction).toBe("improved");
+    );
+    expect(prefDelta).toBeDefined();
+    expect(prefDelta?.baseline).toBe(0.8);
+    expect(prefDelta?.current).toBe(0.95);
+    expect(prefDelta?.direction).toBe("improved");
   });
 
   it("creates directory if it does not exist", async () => {
