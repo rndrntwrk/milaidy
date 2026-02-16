@@ -53,5 +53,11 @@ export {
 // Pack
 export { CODING_DOMAIN_PACK, createCodingDomainPack } from "./pack.js";
 
+// Governance policy
+export {
+  CODING_COMPLIANCE_CHECKS,
+  CODING_GOVERNANCE_POLICY,
+} from "./governance-policy.js";
+
 // Types
 export type { CodingDomainConfig } from "./types.js";
