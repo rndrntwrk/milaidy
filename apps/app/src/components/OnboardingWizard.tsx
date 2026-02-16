@@ -200,6 +200,7 @@ export function OnboardingWizard() {
                   }}
                   className="border-none bg-transparent text-sm font-bold w-full p-0 outline-none text-txt text-center placeholder:text-muted"
                   placeholder="enter custom name..."
+                  aria-label="Custom agent name"
                 />
               </div>
             </div>
@@ -394,16 +395,17 @@ export function OnboardingWizard() {
             <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[600px] relative text-[15px] text-txt leading-relaxed">
               <h2 className="text-[28px] font-normal mb-1 text-txt-strong">okay which cloud?</h2>
             </div>
-            <div className="flex flex-col gap-2 text-left max-w-[600px] mx-auto">
+            <div className="flex flex-col gap-2 text-left max-w-[600px] mx-auto" role="radiogroup" aria-label="Cloud provider">
               {onboardingOptions?.cloudProviders.map((provider: CloudProviderOption) => (
-                <div
+                <button
                   key={provider.id}
-                  className={`px-4 py-3 border cursor-pointer bg-card transition-colors rounded-lg ${
+                  className={`px-4 py-3 border cursor-pointer bg-card transition-colors rounded-lg text-left ${
                     onboardingCloudProvider === provider.id
                       ? "border-accent !bg-accent !text-accent-fg"
                       : "border-border hover:border-accent"
                   }`}
                   onClick={() => handleCloudProviderSelect(provider.id)}
+                  aria-pressed={onboardingCloudProvider === provider.id}
                 >
                   <div className="font-bold text-sm">{provider.name}</div>
                   {provider.description && (
@@ -411,7 +413,7 @@ export function OnboardingWizard() {
                       onboardingCloudProvider === provider.id ? "text-accent-fg/70" : "text-muted"
                     }`}>{provider.description}</div>
                   )}
-                </div>
+                </button>
               ))}
             </div>
             {onboardingCloudProvider === "elizacloud" && (
@@ -451,10 +453,11 @@ export function OnboardingWizard() {
             </div>
             <div className="flex flex-col gap-4 text-left max-w-[600px] mx-auto">
               <div>
-                <label className="text-[13px] font-bold text-txt-strong block mb-2 text-left">
+                <label htmlFor="onboarding-small-model" className="text-[13px] font-bold text-txt-strong block mb-2 text-left">
                   Small Model:
                 </label>
                 <select
+                  id="onboarding-small-model"
                   value={onboardingSmallModel}
                   onChange={handleSmallModelChange}
                   className="w-full px-3 py-2 border border-border bg-card text-sm mt-2 focus:border-accent focus:outline-none"
@@ -467,10 +470,11 @@ export function OnboardingWizard() {
                 </select>
               </div>
               <div>
-                <label className="text-[13px] font-bold text-txt-strong block mb-2 text-left">
+                <label htmlFor="onboarding-large-model" className="text-[13px] font-bold text-txt-strong block mb-2 text-left">
                   Large Model:
                 </label>
                 <select
+                  id="onboarding-large-model"
                   value={onboardingLargeModel}
                   onChange={handleLargeModelChange}
                   className="w-full px-3 py-2 border border-border bg-card text-sm mt-2 focus:border-accent focus:outline-none"
@@ -996,9 +1000,9 @@ export function OnboardingWizard() {
             {onboardingProvider === "openrouter" && onboardingApiKey.trim() && onboardingOptions?.openrouterModels && (
               <div className="mt-4 text-left">
                 <label className="text-[13px] font-bold text-txt-strong block mb-2">Select Model:</label>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-2" role="radiogroup" aria-label="OpenRouter model">
                   {onboardingOptions.openrouterModels.map((model: OpenRouterModelOption) => (
-                    <div
+                    <button
                       key={model.id}
                       className={`px-4 py-3 border cursor-pointer transition-colors text-left rounded-lg ${
                         onboardingOpenRouterModel === model.id
@@ -1006,10 +1010,11 @@ export function OnboardingWizard() {
                           : "border-border bg-card hover:border-accent/50"
                       }`}
                       onClick={() => handleOpenRouterModelSelect(model.id)}
+                      aria-pressed={onboardingOpenRouterModel === model.id}
                     >
                       <div className="font-bold text-sm">{model.name}</div>
                       {model.description && <div className="text-xs text-muted mt-0.5">{model.description}</div>}
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -1162,6 +1167,7 @@ export function OnboardingWizard() {
                   onChange={(e: ChangeEvent<HTMLInputElement>) => setState("onboardingTelegramToken", e.target.value)}
                   placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
                   className="w-full px-3 py-2 border border-border bg-card text-sm focus:border-accent focus:outline-none rounded"
+                  aria-label="Telegram bot token"
                 />
               </div>
 
@@ -1191,6 +1197,7 @@ export function OnboardingWizard() {
                   onChange={(e: ChangeEvent<HTMLInputElement>) => setState("onboardingDiscordToken", e.target.value)}
                   placeholder="Discord bot token"
                   className="w-full px-3 py-2 border border-border bg-card text-sm focus:border-accent focus:outline-none rounded"
+                  aria-label="Discord bot token"
                 />
               </div>
 
@@ -1220,6 +1227,7 @@ export function OnboardingWizard() {
                     onChange={(e: ChangeEvent<HTMLInputElement>) => setState("onboardingTwilioAccountSid", e.target.value)}
                     placeholder="Account SID"
                     className="w-full px-3 py-2 border border-border bg-card text-sm focus:border-accent focus:outline-none rounded"
+                    aria-label="Twilio Account SID"
                   />
                   <input
                     type="password"
@@ -1227,6 +1235,7 @@ export function OnboardingWizard() {
                     onChange={(e: ChangeEvent<HTMLInputElement>) => setState("onboardingTwilioAuthToken", e.target.value)}
                     placeholder="Auth Token"
                     className="w-full px-3 py-2 border border-border bg-card text-sm focus:border-accent focus:outline-none rounded"
+                    aria-label="Twilio Auth Token"
                   />
                   <input
                     type="tel"
@@ -1234,6 +1243,7 @@ export function OnboardingWizard() {
                     onChange={(e: ChangeEvent<HTMLInputElement>) => setState("onboardingTwilioPhoneNumber", e.target.value)}
                     placeholder="+1234567890 (Twilio phone number)"
                     className="w-full px-3 py-2 border border-border bg-card text-sm focus:border-accent focus:outline-none rounded"
+                    aria-label="Twilio phone number"
                   />
                 </div>
               </div>
@@ -1264,6 +1274,7 @@ export function OnboardingWizard() {
                     onChange={(e: ChangeEvent<HTMLInputElement>) => setState("onboardingBlooioApiKey", e.target.value)}
                     placeholder="Blooio API key"
                     className="w-full px-3 py-2 border border-border bg-card text-sm focus:border-accent focus:outline-none rounded"
+                    aria-label="Blooio API key"
                   />
                   <input
                     type="tel"
@@ -1271,6 +1282,7 @@ export function OnboardingWizard() {
                     onChange={(e: ChangeEvent<HTMLInputElement>) => setState("onboardingBlooioPhoneNumber", e.target.value)}
                     placeholder="+1234567890 (your phone number)"
                     className="w-full px-3 py-2 border border-border bg-card text-sm focus:border-accent focus:outline-none rounded"
+                    aria-label="Blooio phone number"
                   />
                 </div>
               </div>

@@ -80,7 +80,7 @@ export function ConversationsSidebar() {
   };
 
   return (
-    <aside className="w-60 min-w-60 border-r border-border bg-bg flex flex-col overflow-y-auto text-[13px]" data-testid="conversations-sidebar" role="complementary" aria-label="Conversations">
+    <aside className="hidden md:flex w-60 min-w-60 border-r border-border bg-bg flex-col overflow-y-auto text-[13px]" data-testid="conversations-sidebar" role="complementary" aria-label="Conversations">
       <div className="p-3 border-b border-border">
         <button
           className="w-full px-3 py-2 border border-border rounded-md bg-accent text-accent-fg text-[13px] font-medium cursor-pointer transition-opacity hover:opacity-90"
