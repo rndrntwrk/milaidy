@@ -140,6 +140,40 @@ export interface AutonomyEventStoreConfig {
 }
 
 /**
+ * Learning infrastructure configuration (Phase 4).
+ */
+export interface AutonomyLearningConfig {
+  /** Enable learning infrastructure (default: false). */
+  enabled?: boolean;
+  /** Path for JSONL dataset export. */
+  dataPath?: string;
+  /** Reward signal weights. */
+  reward?: {
+    validationWeight?: number;
+    verificationWeight?: number;
+    efficiencyWeight?: number;
+    driftPenalty?: number;
+    completionWeight?: number;
+  };
+  /** Adversarial scenario generation settings. */
+  adversarial?: {
+    enabled?: boolean;
+    injectionRate?: number;
+  };
+  /** Hack detection settings. */
+  hackDetection?: {
+    enabled?: boolean;
+    threshold?: number;
+  };
+  /** Model provider settings. */
+  modelProvider?: {
+    baseUrl?: string;
+    model?: string;
+    timeoutMs?: number;
+  };
+}
+
+/**
  * Role separation configuration.
  */
 export interface AutonomyRolesConfig {
@@ -191,6 +225,8 @@ export interface AutonomyConfig {
   invariants?: AutonomyInvariantsConfig;
   /** Role separation settings. */
   roles?: AutonomyRolesConfig;
+  /** Learning infrastructure settings (Phase 4). */
+  learning?: AutonomyLearningConfig;
 }
 
 // ---------- Defaults ----------
@@ -289,6 +325,26 @@ export function resolveAutonomyConfig(
         errorThreshold: userConfig.roles?.safeMode?.errorThreshold ?? 3,
         exitTrustFloor: userConfig.roles?.safeMode?.exitTrustFloor ?? 0.8,
       },
+    },
+    learning: {
+      enabled: userConfig.learning?.enabled ?? false,
+      dataPath: userConfig.learning?.dataPath ?? "",
+      reward: {
+        validationWeight: userConfig.learning?.reward?.validationWeight ?? 0.2,
+        verificationWeight: userConfig.learning?.reward?.verificationWeight ?? 0.3,
+        efficiencyWeight: userConfig.learning?.reward?.efficiencyWeight ?? 0.1,
+        driftPenalty: userConfig.learning?.reward?.driftPenalty ?? 0.2,
+        completionWeight: userConfig.learning?.reward?.completionWeight ?? 0.2,
+      },
+      adversarial: {
+        enabled: userConfig.learning?.adversarial?.enabled ?? false,
+        injectionRate: userConfig.learning?.adversarial?.injectionRate ?? 0.1,
+      },
+      hackDetection: {
+        enabled: userConfig.learning?.hackDetection?.enabled ?? true,
+        threshold: userConfig.learning?.hackDetection?.threshold ?? 0.5,
+      },
+      modelProvider: userConfig.learning?.modelProvider,
     },
   };
 }
@@ -423,6 +479,18 @@ export function validateAutonomyConfig(
   if (config.roles?.safeMode?.exitTrustFloor !== undefined) {
     if (config.roles.safeMode.exitTrustFloor < 0 || config.roles.safeMode.exitTrustFloor > 1) {
       issues.push({ path: "autonomy.roles.safeMode.exitTrustFloor", message: "Must be between 0 and 1" });
+    }
+  }
+
+  // Validate learning config
+  if (config.learning?.hackDetection?.threshold !== undefined) {
+    if (config.learning.hackDetection.threshold < 0 || config.learning.hackDetection.threshold > 1) {
+      issues.push({ path: "autonomy.learning.hackDetection.threshold", message: "Must be between 0 and 1" });
+    }
+  }
+  if (config.learning?.adversarial?.injectionRate !== undefined) {
+    if (config.learning.adversarial.injectionRate < 0 || config.learning.adversarial.injectionRate > 1) {
+      issues.push({ path: "autonomy.learning.adversarial.injectionRate", message: "Must be between 0 and 1" });
     }
   }
 
