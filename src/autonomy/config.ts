@@ -80,6 +80,18 @@ export interface AutonomyMetricsConfig {
 }
 
 /**
+ * Tool contracts and schema validation configuration.
+ */
+export interface AutonomyToolsConfig {
+  /** Reject unknown fields in tool params (default: true). */
+  strictMode?: boolean;
+  /** Default execution timeout in ms for tools that don't specify one (default: 30000). */
+  defaultTimeoutMs?: number;
+  /** Per-check timeout in ms for post-condition verification (default: 5000). */
+  checkTimeoutMs?: number;
+}
+
+/**
  * Top-level Autonomy Kernel configuration.
  */
 export interface AutonomyConfig {
@@ -97,6 +109,8 @@ export interface AutonomyConfig {
   identity?: AutonomyIdentityConfig;
   /** Trust-aware retrieval ranking settings. */
   retrieval?: AutonomyRetrievalConfig;
+  /** Tool contracts and schema validation settings. */
+  tools?: AutonomyToolsConfig;
 }
 
 // ---------- Defaults ----------
@@ -164,6 +178,7 @@ export function resolveAutonomyConfig(
     metrics: { ...DEFAULT_AUTONOMY_CONFIG.metrics, ...userConfig.metrics },
     identity: userConfig.identity ?? DEFAULT_AUTONOMY_CONFIG.identity,
     retrieval: { ...DEFAULT_RETRIEVAL_CONFIG, ...userConfig.retrieval },
+    tools: userConfig.tools,
   };
 }
 

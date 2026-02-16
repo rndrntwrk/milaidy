@@ -82,6 +82,11 @@ export const TOKENS = {
   DriftMonitor: createToken<import("../autonomy/identity/drift-monitor.js").PersonaDriftMonitor>("DriftMonitor"),
   GoalManager: createToken<import("../autonomy/goals/manager.js").GoalManager>("GoalManager"),
   TrustAwareRetriever: createToken<import("../autonomy/memory/retriever.js").TrustAwareRetriever>("TrustAwareRetriever"),
+
+  // Autonomy Tool Contracts & Verification
+  ToolRegistry: createToken<import("../autonomy/tools/types.js").ToolRegistryInterface>("ToolRegistry"),
+  SchemaValidator: createToken<import("../autonomy/verification/schema-validator.js").SchemaValidator>("SchemaValidator"),
+  PostConditionVerifier: createToken<import("../autonomy/verification/postcondition-verifier.js").PostConditionVerifier>("PostConditionVerifier"),
 } as const;
 
 // ---------- Service Container ----------

@@ -254,6 +254,22 @@ export interface MilaidyEvents {
   "autonomy:kernel:shutdown": {
     reason: string;
   };
+
+  // ── Autonomy Tool Contract Events ──────────────────────────────────
+  "autonomy:tool:validated": {
+    toolName: string;
+    valid: boolean;
+    errorCount: number;
+    riskClass: string | undefined;
+    requestId: string;
+  };
+  "autonomy:tool:postcondition:checked": {
+    toolName: string;
+    status: "passed" | "failed" | "partial";
+    criticalFailure: boolean;
+    checkCount: number;
+    requestId: string;
+  };
 }
 
 // ---------- Event Names Type ----------

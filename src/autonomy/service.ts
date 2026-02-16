@@ -61,18 +61,33 @@ let _RuleBasedTrustScorer: typeof import("./trust/scorer.js").RuleBasedTrustScor
 let _MemoryGateImpl: typeof import("./memory/gate.js").MemoryGateImpl;
 let _RuleBasedDriftMonitor: typeof import("./identity/drift-monitor.js").RuleBasedDriftMonitor;
 let _InMemoryGoalManager: typeof import("./goals/manager.js").InMemoryGoalManager;
+let _ToolRegistry: typeof import("./tools/registry.js").ToolRegistry;
+let _SchemaValidator: typeof import("./verification/schema-validator.js").SchemaValidator;
+let _PostConditionVerifier: typeof import("./verification/postcondition-verifier.js").PostConditionVerifier;
+let _registerBuiltinToolContracts: typeof import("./tools/schemas/index.js").registerBuiltinToolContracts;
+let _registerBuiltinPostConditions: typeof import("./verification/postconditions/index.js").registerBuiltinPostConditions;
 
 async function loadImplementations() {
-  const [trustMod, memMod, driftMod, goalMod] = await Promise.all([
+  const [trustMod, memMod, driftMod, goalMod, toolRegMod, schemaValMod, pcvMod, toolSchemasMod, pcMod] = await Promise.all([
     import("./trust/scorer.js"),
     import("./memory/gate.js"),
     import("./identity/drift-monitor.js"),
     import("./goals/manager.js"),
+    import("./tools/registry.js"),
+    import("./verification/schema-validator.js"),
+    import("./verification/postcondition-verifier.js"),
+    import("./tools/schemas/index.js"),
+    import("./verification/postconditions/index.js"),
   ]);
   _RuleBasedTrustScorer = trustMod.RuleBasedTrustScorer;
   _MemoryGateImpl = memMod.MemoryGateImpl;
   _RuleBasedDriftMonitor = driftMod.RuleBasedDriftMonitor;
   _InMemoryGoalManager = goalMod.InMemoryGoalManager;
+  _ToolRegistry = toolRegMod.ToolRegistry;
+  _SchemaValidator = schemaValMod.SchemaValidator;
+  _PostConditionVerifier = pcvMod.PostConditionVerifier;
+  _registerBuiltinToolContracts = toolSchemasMod.registerBuiltinToolContracts;
+  _registerBuiltinPostConditions = pcMod.registerBuiltinPostConditions;
 }
 
 // ---------- Service ----------
@@ -86,6 +101,9 @@ export class MilaidyAutonomyService extends Service {
   private memoryGate: (MemoryGate & { dispose(): void }) | null = null;
   private driftMonitor: PersonaDriftMonitor | null = null;
   private goalManager: GoalManager | null = null;
+  private toolRegistry: import("./tools/types.js").ToolRegistryInterface | null = null;
+  private schemaValidator: import("./verification/schema-validator.js").SchemaValidator | null = null;
+  private postConditionVerifier: import("./verification/postcondition-verifier.js").PostConditionVerifier | null = null;
   private identityConfig: AutonomyIdentityConfig | null = null;
   private resolvedRetrievalConfig: import("./config.js").AutonomyRetrievalConfig | null = null;
   private enabled = false;
@@ -141,6 +159,16 @@ export class MilaidyAutonomyService extends Service {
     );
     this.driftMonitor = new _RuleBasedDriftMonitor(config.driftMonitor);
     this.goalManager = new _InMemoryGoalManager();
+
+    // Instantiate tool contracts & verification components
+    this.toolRegistry = new _ToolRegistry();
+    _registerBuiltinToolContracts(this.toolRegistry);
+    this.schemaValidator = new _SchemaValidator(this.toolRegistry);
+    this.postConditionVerifier = new _PostConditionVerifier(
+      config.tools?.checkTimeoutMs,
+    );
+    _registerBuiltinPostConditions(this.postConditionVerifier);
+
     this.enabled = true;
 
     // Register into DI container (single source of truth for components)
@@ -190,6 +218,9 @@ export class MilaidyAutonomyService extends Service {
       if (this.memoryGate) container.registerValue(TOKENS.MemoryGate, this.memoryGate);
       if (this.driftMonitor) container.registerValue(TOKENS.DriftMonitor, this.driftMonitor);
       if (this.goalManager) container.registerValue(TOKENS.GoalManager, this.goalManager);
+      if (this.toolRegistry) container.registerValue(TOKENS.ToolRegistry, this.toolRegistry);
+      if (this.schemaValidator) container.registerValue(TOKENS.SchemaValidator, this.schemaValidator);
+      if (this.postConditionVerifier) container.registerValue(TOKENS.PostConditionVerifier, this.postConditionVerifier);
 
       // Register trust-aware retriever
       try {
@@ -217,6 +248,13 @@ export class MilaidyAutonomyService extends Service {
     this.driftMonitor = new _RuleBasedDriftMonitor();
     this.goalManager = new _InMemoryGoalManager();
 
+    // Initialize tool contracts & verification
+    this.toolRegistry = new _ToolRegistry();
+    _registerBuiltinToolContracts(this.toolRegistry);
+    this.schemaValidator = new _SchemaValidator(this.toolRegistry);
+    this.postConditionVerifier = new _PostConditionVerifier();
+    _registerBuiltinPostConditions(this.postConditionVerifier);
+
     // Initialize identity if not already set
     const { createDefaultAutonomyIdentity } = await import("./identity/schema.js");
     this.identityConfig = createDefaultAutonomyIdentity();
@@ -232,6 +270,9 @@ export class MilaidyAutonomyService extends Service {
     this.memoryGate = null;
     this.driftMonitor = null;
     this.goalManager = null;
+    this.toolRegistry = null;
+    this.schemaValidator = null;
+    this.postConditionVerifier = null;
     this.identityConfig = null;
     this.enabled = false;
     logger.info("[autonomy-service] Autonomy disabled");
@@ -317,6 +358,9 @@ export class MilaidyAutonomyService extends Service {
     this.memoryGate = null;
     this.driftMonitor = null;
     this.goalManager = null;
+    this.toolRegistry = null;
+    this.schemaValidator = null;
+    this.postConditionVerifier = null;
     this.identityConfig = null;
     this.enabled = false;
 
