@@ -15,9 +15,13 @@ import {
 } from "react";
 import { getVrmPreviewUrl, useApp } from "../AppContext.js";
 import { ChatAvatar } from "./ChatAvatar.js";
-import { useVoiceChat } from "../hooks/useVoiceChat.js";
+import { useVoiceChat, type VoicePlaybackStartEvent } from "../hooks/useVoiceChat.js";
 import { client, type ConversationMode, type VoiceConfig } from "../api-client.js";
 import { MessageContent } from "./MessageContent.js";
+
+function nowMs(): number {
+  return typeof performance !== "undefined" ? performance.now() : Date.now();
+}
 
 export function ChatView() {
   const {
@@ -106,16 +110,60 @@ export function ChatView() {
   }, []);
 
   // ── Voice chat ────────────────────────────────────────────────────
+  const pendingVoiceTurnRef = useRef<{
+    speechEndedAtMs: number;
+    expiresAtMs: number;
+    firstTokenAtMs?: number;
+    voiceStartedAtMs?: number;
+    firstSegmentCached?: boolean;
+  } | null>(null);
+
+  const [voiceLatency, setVoiceLatency] = useState<{
+    speechEndToFirstTokenMs: number | null;
+    speechEndToVoiceStartMs: number | null;
+    firstSegmentCached: boolean | null;
+  } | null>(null);
+
   const handleVoiceTranscript = useCallback(
     (text: string) => {
       if (chatSending) return;
+      const speechEndedAtMs = nowMs();
+      pendingVoiceTurnRef.current = {
+        speechEndedAtMs,
+        expiresAtMs: speechEndedAtMs + 15000,
+      };
+      setVoiceLatency(null);
       setState("chatInput", text);
       setTimeout(() => void handleChatSend(chatMode), 50);
     },
     [chatMode, chatSending, setState, handleChatSend],
   );
 
-  const voice = useVoiceChat({ onTranscript: handleVoiceTranscript, voiceConfig });
+  const handleVoicePlaybackStart = useCallback((event: VoicePlaybackStartEvent) => {
+    const pending = pendingVoiceTurnRef.current;
+    if (!pending) return;
+    if (event.startedAtMs > pending.expiresAtMs) {
+      pendingVoiceTurnRef.current = null;
+      return;
+    }
+    if (pending.voiceStartedAtMs != null) return;
+
+    pending.voiceStartedAtMs = event.startedAtMs;
+    pending.firstSegmentCached = event.cached;
+
+    const silenceMs = Math.max(0, Math.round(event.startedAtMs - pending.speechEndedAtMs));
+    setVoiceLatency((prev) => ({
+      speechEndToFirstTokenMs: prev?.speechEndToFirstTokenMs ?? null,
+      speechEndToVoiceStartMs: silenceMs,
+      firstSegmentCached: event.cached,
+    }));
+  }, []);
+
+  const voice = useVoiceChat({
+    onTranscript: handleVoiceTranscript,
+    onPlaybackStart: handleVoicePlaybackStart,
+    voiceConfig,
+  });
 
   const agentName = agentStatus?.agentName ?? "Agent";
   const msgs = conversationMessages;
@@ -131,17 +179,44 @@ export function ChatView() {
   const agentAvatarSrc = selectedVrmIndex > 0 ? getVrmPreviewUrl(selectedVrmIndex) : null;
   const agentInitial = agentName.trim().charAt(0).toUpperCase() || "A";
 
-  const lastSpokenIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (agentVoiceMuted) return;
+
+    const latestAssistant = [...msgs]
+      .reverse()
+      .find((message) => message.role === "assistant");
+    if (!latestAssistant || !latestAssistant.text.trim()) return;
+
+    voice.queueAssistantSpeech(latestAssistant.id, latestAssistant.text, !chatSending);
+  }, [msgs, chatSending, agentVoiceMuted, voice]);
 
   useEffect(() => {
-    const lastAssistant = [...msgs]
-      .reverse()
-      .find((message) => message.role === "assistant" && message.text.trim());
-    if (!lastAssistant || chatSending || agentVoiceMuted) return;
-    if (lastAssistant.id === lastSpokenIdRef.current) return;
-    lastSpokenIdRef.current = lastAssistant.id;
-    voice.speak(lastAssistant.text);
-  }, [msgs, chatSending, agentVoiceMuted, voice]);
+    const pending = pendingVoiceTurnRef.current;
+    if (!pending || !chatFirstTokenReceived) return;
+    if (nowMs() > pending.expiresAtMs) {
+      pendingVoiceTurnRef.current = null;
+      return;
+    }
+    if (pending.firstTokenAtMs != null) return;
+
+    const firstTokenAtMs = nowMs();
+    pending.firstTokenAtMs = firstTokenAtMs;
+    const ttftMs = Math.max(0, Math.round(firstTokenAtMs - pending.speechEndedAtMs));
+
+    setVoiceLatency((prev) => ({
+      speechEndToFirstTokenMs: ttftMs,
+      speechEndToVoiceStartMs: prev?.speechEndToVoiceStartMs ?? null,
+      firstSegmentCached: prev?.firstSegmentCached ?? null,
+    }));
+  }, [chatFirstTokenReceived]);
+
+  useEffect(() => {
+    const pending = pendingVoiceTurnRef.current;
+    if (!pending) return;
+    if (nowMs() > pending.expiresAtMs) {
+      pendingVoiceTurnRef.current = null;
+    }
+  }, [chatSending, msgs]);
 
   // Smooth auto-scroll while streaming and on new messages.
   useEffect(() => {
@@ -379,6 +454,18 @@ export function ChatView() {
           </button>
         </div>
       </div>
+
+      {voiceLatency && (
+        <div className="pb-1 text-[10px] text-muted relative" style={{ zIndex: 1 }}>
+          Silence end→first token: {voiceLatency.speechEndToFirstTokenMs ?? "—"}ms · end→voice start:{" "}
+          {voiceLatency.speechEndToVoiceStartMs ?? "—"}ms · first sentence:{" "}
+          {voiceLatency.firstSegmentCached == null
+            ? "—"
+            : voiceLatency.firstSegmentCached
+              ? "cached"
+              : "uncached"}
+        </div>
+      )}
 
       {/* ── Input row: mic + textarea + send ───────────────────────── */}
       <div className="flex gap-2 items-end border-t border-border pt-3 pb-4 relative" style={{ zIndex: 1 }}>

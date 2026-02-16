@@ -319,7 +319,7 @@ export class TalkModeElectron implements TalkModePlugin {
   private async speakWithElevenLabs(text: string, options: SpeakOptions): Promise<SpeakResult> {
     const voiceId = options.directive?.voiceId || this.config.tts?.voiceId;
     const apiKey = this.config.tts?.apiKey;
-    const modelId = options.directive?.modelId || this.config.tts?.modelId || "eleven_v3";
+    const modelId = options.directive?.modelId || this.config.tts?.modelId || "eleven_flash_v2_5";
 
     if (!voiceId || !apiKey) {
       throw new Error("Missing voiceId or apiKey for ElevenLabs");
@@ -340,7 +340,7 @@ export class TalkModeElectron implements TalkModePlugin {
         body: JSON.stringify({
           text,
           model_id: modelId,
-          output_format: "mp3_44100_128",
+          output_format: "mp3_22050_32",
           voice_settings: {
             stability: options.directive?.stability ?? 0.5,
             similarity_boost: options.directive?.similarity ?? 0.75,

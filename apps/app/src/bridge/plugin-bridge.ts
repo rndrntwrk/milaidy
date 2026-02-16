@@ -106,7 +106,7 @@ export function getPluginCapabilities(): PluginCapabilities {
     },
     talkMode: {
       available: isNative || hasWebSpeechAPI(),
-      elevenlabs: isNative, // ElevenLabs streaming not available on web (CORS)
+      elevenlabs: true, // Web app can call ElevenLabs directly with user API key
       systemTts: isNative || hasWebSpeechSynthesis(),
     },
     camera: {

@@ -17,6 +17,8 @@ import { ConfigRenderer, defaultRegistry } from "./config-renderer";
 import type { ConfigUiHint } from "../types";
 import type { JsonSchemaObject } from "./config-catalog";
 
+const DEFAULT_ELEVEN_FAST_MODEL = "eleven_flash_v2_5";
+
 /* ── Tag Editor ─────────────────────────────────────────────────────── */
 
 function TagEditor({
@@ -508,6 +510,10 @@ export function CharacterView() {
           tts: {
             ...voiceConfig,
             provider: voiceConfig.provider ?? "elevenlabs",
+            elevenlabs: {
+              ...voiceConfig.elevenlabs,
+              modelId: voiceConfig.elevenlabs?.modelId ?? DEFAULT_ELEVEN_FAST_MODEL,
+            },
           },
         },
       });
@@ -517,7 +523,7 @@ export function CharacterView() {
       setVoiceSaveError(err instanceof Error ? err.message : "Failed to save — is the agent running?");
     }
     setVoiceSaving(false);
-  }, [voiceConfig]);
+  }, [voiceConfig, DEFAULT_ELEVEN_FAST_MODEL]);
 
   const d = characterDraft;
   const bioText = typeof d.bio === "string" ? d.bio : Array.isArray(d.bio) ? d.bio.join("\n") : "";
@@ -1132,7 +1138,7 @@ export function CharacterView() {
                   schema={{
                     type: "object",
                     properties: {
-                      modelId: { type: "string", enum: ["", "eleven_multilingual_v2", "eleven_turbo_v2_5", "eleven_turbo_v2", "eleven_monolingual_v1"] },
+                      modelId: { type: "string", enum: ["", "eleven_flash_v2_5", "eleven_turbo_v2_5", "eleven_multilingual_v2", "eleven_turbo_v2", "eleven_monolingual_v1"] },
                       stability: { type: "number", minimum: 0, maximum: 1 },
                       similarityBoost: { type: "number", minimum: 0, maximum: 1 },
                       speed: { type: "number", minimum: 0.5, maximum: 2 },
@@ -1140,9 +1146,10 @@ export function CharacterView() {
                   } satisfies JsonSchemaObject}
                   hints={{
                     modelId: { label: "Model", type: "select", width: "full", options: [
-                      { value: "", label: "Default (Multilingual v2)" },
-                      { value: "eleven_multilingual_v2", label: "Multilingual v2" },
+                      { value: "", label: "Default (Flash v2.5)" },
+                      { value: "eleven_flash_v2_5", label: "Flash v2.5 (Fastest)" },
                       { value: "eleven_turbo_v2_5", label: "Turbo v2.5" },
+                      { value: "eleven_multilingual_v2", label: "Multilingual v2" },
                       { value: "eleven_turbo_v2", label: "Turbo v2" },
                       { value: "eleven_monolingual_v1", label: "Monolingual v1" },
                     ] } satisfies ConfigUiHint,

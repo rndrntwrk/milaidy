@@ -25,6 +25,7 @@ import {
 } from "@elizaos/core";
 import * as piAi from "@mariozechner/pi-ai";
 import { type WebSocket, WebSocketServer } from "ws";
+import type { CloudManager } from "../cloud/cloud-manager.js";
 
 import {
   configFileExists,
@@ -74,6 +75,7 @@ import {
   taskToTriggerSummary,
 } from "../triggers/runtime.js";
 import { parseClampedInteger } from "../utils/number-parsing.js";
+import { type CloudRouteState, handleCloudRoute } from "./cloud-routes.js";
 
 import {
   extractAnthropicSystemAndLastUser,
@@ -214,7 +216,7 @@ interface ServerState {
   /** Conversation metadata by conversation id. */
   conversations: Map<string, ConversationMeta>;
   /** Cloud manager for Eliza Cloud integration (null when cloud is disabled). */
-
+  cloudManager: CloudManager | null;
   sandboxManager: SandboxManager | null;
   /** App manager for launching and managing ElizaOS apps. */
   appManager: AppManager;
@@ -9248,6 +9250,23 @@ async function handleRequest(
     return;
   }
 
+  // ── Cloud routes (/api/cloud/*) ─────────────────────────────────────────
+  if (pathname.startsWith("/api/cloud/")) {
+    const cloudState: CloudRouteState = {
+      config: state.config,
+      cloudManager: state.cloudManager,
+      runtime: state.runtime,
+    };
+    const handled = await handleCloudRoute(
+      req,
+      res,
+      pathname,
+      method,
+      cloudState,
+    );
+    if (handled) return;
+  }
+
   // ── Sandbox routes (/api/sandbox/*) ────────────────────────────────────
   if (pathname.startsWith("/api/sandbox")) {
     const handled = await handleSandboxRoute(req, res, pathname, method, {
@@ -12399,7 +12418,7 @@ export async function startApiServer(opts?: {
     chatConnectionPromise: null,
     adminEntityId: null,
     conversations: new Map(),
-
+    cloudManager: null,
     sandboxManager: null,
     appManager: new AppManager(),
     trainingService: null,

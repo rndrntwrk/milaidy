@@ -54,6 +54,8 @@ const PROVIDERS: Array<{ id: VoiceProvider; label: string; hint: string; needsKe
   { id: "simple-voice", label: "Simple Voice", hint: "Basic browser TTS", needsKey: false },
 ];
 
+const DEFAULT_ELEVEN_FAST_MODEL = "eleven_flash_v2_5";
+
 export function VoiceConfigView() {
   const { cloudConnected } = useApp();
   const [voiceConfig, setVoiceConfig] = useState<VoiceConfig>({});
@@ -148,17 +150,23 @@ export function VoiceConfigView() {
     try {
       const cfg = await client.getConfig();
       const messages = (cfg.messages ?? {}) as Record<string, unknown>;
+      const provider = voiceConfig.provider ?? "elevenlabs";
+      const normalizedVoiceConfig: VoiceConfig = {
+        ...voiceConfig,
+        provider,
+        mode: provider === "elevenlabs" ? (voiceConfig.mode ?? "own-key") : undefined,
+        elevenlabs:
+          provider === "elevenlabs"
+            ? {
+                ...voiceConfig.elevenlabs,
+                modelId: voiceConfig.elevenlabs?.modelId ?? DEFAULT_ELEVEN_FAST_MODEL,
+              }
+            : voiceConfig.elevenlabs,
+      };
       await client.updateConfig({
         messages: {
           ...messages,
-          tts: {
-            ...voiceConfig,
-            provider: voiceConfig.provider ?? "elevenlabs",
-            mode:
-              (voiceConfig.provider ?? "elevenlabs") === "elevenlabs"
-                ? (voiceConfig.mode ?? "own-key")
-                : undefined,
-          },
+          tts: normalizedVoiceConfig,
         },
       });
       setSaveSuccess(true);
@@ -269,6 +277,9 @@ export function VoiceConfigView() {
                 >
                   elevenlabs.io
                 </a>
+              </div>
+              <div className="text-[10px] text-[var(--muted)]">
+                Fast path default: ElevenLabs Flash v2.5 streaming (`{DEFAULT_ELEVEN_FAST_MODEL}`).
               </div>
             </div>
           )}
