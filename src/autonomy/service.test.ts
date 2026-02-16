@@ -56,6 +56,12 @@ vi.mock("../di/container.js", () => ({
     ExecutionPipeline: Symbol.for("ExecutionPipeline"),
     InvariantChecker: Symbol.for("InvariantChecker"),
     BaselineHarness: Symbol.for("BaselineHarness"),
+    Planner: Symbol.for("Planner"),
+    Verifier: Symbol.for("Verifier"),
+    MemoryWriter: Symbol.for("MemoryWriter"),
+    Auditor: Symbol.for("Auditor"),
+    SafeMode: Symbol.for("SafeMode"),
+    Orchestrator: Symbol.for("Orchestrator"),
   },
 }));
 
@@ -230,8 +236,8 @@ describe("MilaidyAutonomyService", () => {
       const runtime = createMockRuntime();
       const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
 
-      // 4 core + 3 tool contracts + 5 workflow + InvariantChecker + BaselineHarness + TrustAwareRetriever = 15
-      expect(mockRegisterValue).toHaveBeenCalledTimes(15);
+      // 4 core + 3 tool contracts + 5 workflow + InvariantChecker + BaselineHarness + TrustAwareRetriever + 6 roles = 21
+      expect(mockRegisterValue).toHaveBeenCalledTimes(21);
 
       // Verify the registered values are the same instances as the service's
       const registeredTokens = mockRegisterValue.mock.calls.map((c: unknown[]) => c[0]);
@@ -250,6 +256,12 @@ describe("MilaidyAutonomyService", () => {
       expect(registeredTokens).toContain(Symbol.for("InvariantChecker"));
       expect(registeredTokens).toContain(Symbol.for("BaselineHarness"));
       expect(registeredTokens).toContain(Symbol.for("TrustAwareRetriever"));
+      expect(registeredTokens).toContain(Symbol.for("Planner"));
+      expect(registeredTokens).toContain(Symbol.for("Verifier"));
+      expect(registeredTokens).toContain(Symbol.for("MemoryWriter"));
+      expect(registeredTokens).toContain(Symbol.for("Auditor"));
+      expect(registeredTokens).toContain(Symbol.for("SafeMode"));
+      expect(registeredTokens).toContain(Symbol.for("Orchestrator"));
 
       // Verify the values are the actual component instances
       const goalManagerCall = mockRegisterValue.mock.calls.find(
@@ -488,6 +500,31 @@ describe("MilaidyAutonomyService", () => {
       expect(gm).toBeDefined();
       expect(typeof gm!.addGoal).toBe("function");
       expect(typeof gm!.updateGoal).toBe("function");
+    });
+
+    it("returns role accessors when enabled", async () => {
+      setAutonomyConfig({ enabled: true });
+      const runtime = createMockRuntime();
+      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+
+      expect(svc.getPlanner()).not.toBeNull();
+      expect(svc.getVerifier()).not.toBeNull();
+      expect(svc.getMemoryWriter()).not.toBeNull();
+      expect(svc.getAuditor()).not.toBeNull();
+      expect(svc.getSafeModeController()).not.toBeNull();
+      expect(svc.getOrchestrator()).not.toBeNull();
+    });
+
+    it("returns null role accessors when disabled", async () => {
+      const runtime = createMockRuntime();
+      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+
+      expect(svc.getPlanner()).toBeNull();
+      expect(svc.getVerifier()).toBeNull();
+      expect(svc.getMemoryWriter()).toBeNull();
+      expect(svc.getAuditor()).toBeNull();
+      expect(svc.getSafeModeController()).toBeNull();
+      expect(svc.getOrchestrator()).toBeNull();
     });
 
     it("GoalManager can create and retrieve goals", async () => {

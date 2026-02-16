@@ -98,6 +98,14 @@ export const TOKENS = {
 
   // Autonomy Metrics
   BaselineHarness: createToken<import("../autonomy/metrics/baseline-harness.js").BaselineHarness>("BaselineHarness"),
+
+  // Autonomy Roles (Phase 3)
+  Planner: createToken<import("../autonomy/roles/types.js").PlannerRole>("Planner"),
+  Verifier: createToken<import("../autonomy/roles/types.js").VerifierRole>("Verifier"),
+  MemoryWriter: createToken<import("../autonomy/roles/types.js").MemoryWriterRole>("MemoryWriter"),
+  Auditor: createToken<import("../autonomy/roles/types.js").AuditorRole>("Auditor"),
+  SafeMode: createToken<import("../autonomy/roles/types.js").SafeModeController>("SafeMode"),
+  Orchestrator: createToken<import("../autonomy/roles/types.js").RoleOrchestrator>("Orchestrator"),
 } as const;
 
 // ---------- Service Container ----------
