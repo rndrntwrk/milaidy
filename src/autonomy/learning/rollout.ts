@@ -12,8 +12,8 @@ import type {
   OrchestratedResult,
   RoleOrchestrator,
 } from "../roles/types.js";
-import { HackDetector } from "./hack-detection.js";
-import { TraceCollector } from "./trace-collector.js";
+import type { HackDetector } from "./hack-detection.js";
+import type { TraceCollector } from "./trace-collector.js";
 import type { CollectedEpisode, GateResult } from "./types.js";
 
 // ---------- Rollout Collector ----------
@@ -43,9 +43,7 @@ export class RolloutCollector {
   /**
    * Collect a single episode by executing a request.
    */
-  async collectOne(
-    request: OrchestratedRequest,
-  ): Promise<CollectedEpisode> {
+  async collectOne(request: OrchestratedRequest): Promise<CollectedEpisode> {
     const result = await this.orchestrator.execute(request);
     return this.buildCollectedEpisode(request, result);
   }
@@ -70,11 +68,11 @@ export class RolloutCollector {
     return episodes;
   }
 
-  private buildCollectedEpisode(
+  private async buildCollectedEpisode(
     request: OrchestratedRequest,
     result: OrchestratedResult,
-  ): CollectedEpisode {
-    const episode = this.traceCollector.collectEpisode(result, request);
+  ): Promise<CollectedEpisode> {
+    const episode = await this.traceCollector.collectEpisode(result, request);
     const hackReport = this.hackDetector.analyze(episode);
 
     return {
@@ -148,9 +146,13 @@ export class CheckpointManager {
 
     for (const d of delta.deltas) {
       if (d.direction === "improved") {
-        improvements.push(`${d.metric}: ${d.baseline.toFixed(3)} → ${d.current.toFixed(3)}`);
+        improvements.push(
+          `${d.metric}: ${d.baseline.toFixed(3)} → ${d.current.toFixed(3)}`,
+        );
       } else if (d.direction === "regressed") {
-        regressions.push(`${d.metric}: ${d.baseline.toFixed(3)} → ${d.current.toFixed(3)}`);
+        regressions.push(
+          `${d.metric}: ${d.baseline.toFixed(3)} → ${d.current.toFixed(3)}`,
+        );
       }
     }
 

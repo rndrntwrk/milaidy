@@ -28,7 +28,7 @@ export class DriftAwareAuditor implements AuditorRole {
     );
 
     // 2. Query events for this request
-    const events = this.eventStore.getByRequestId(context.requestId);
+    const events = await this.eventStore.getByRequestId(context.requestId);
 
     // 3. Detect anomalies
     const anomalies: string[] = [];
@@ -72,7 +72,7 @@ export class DriftAwareAuditor implements AuditorRole {
     return this.driftMonitor.getCurrentDrift();
   }
 
-  queryEvents(requestId: string): ExecutionEvent[] {
+  async queryEvents(requestId: string): Promise<ExecutionEvent[]> {
     return this.eventStore.getByRequestId(requestId);
   }
 }

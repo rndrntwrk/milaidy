@@ -45,6 +45,9 @@ export interface ExecutionEvent {
 
 /**
  * Interface for the append-only execution event store.
+ *
+ * All data methods return Promises to support both in-memory and
+ * persistent (e.g. Postgres) implementations.
  */
 export interface EventStoreInterface {
   /** Append an event and return its assigned sequence ID. */
@@ -53,13 +56,13 @@ export interface EventStoreInterface {
     type: ExecutionEventType,
     payload: Record<string, unknown>,
     correlationId?: string,
-  ): number;
+  ): Promise<number>;
   /** Get all events for a given request ID. */
-  getByRequestId(requestId: string): ExecutionEvent[];
+  getByRequestId(requestId: string): Promise<ExecutionEvent[]>;
   /** Get all events for a given correlation ID. */
-  getByCorrelationId(correlationId: string): ExecutionEvent[];
+  getByCorrelationId(correlationId: string): Promise<ExecutionEvent[]>;
   /** Get the N most recent events. */
-  getRecent(n: number): ExecutionEvent[];
+  getRecent(n: number): Promise<ExecutionEvent[]>;
   /** Current number of events in the store. */
   readonly size: number;
   /** Clear all events. */

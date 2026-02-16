@@ -119,7 +119,7 @@ function createMockAuditor(driftScore = 0.05): AuditorRole {
       auditedAt: Date.now(),
     })),
     getDriftReport: vi.fn(() => null),
-    queryEvents: vi.fn(() => []),
+    queryEvents: vi.fn(async () => []),
   };
 }
 
@@ -249,7 +249,7 @@ describe("KernelOrchestrator", () => {
           throw new Error("audit boom");
         }),
         getDriftReport: vi.fn(() => null),
-        queryEvents: vi.fn(() => []),
+        queryEvents: vi.fn(async () => []),
       };
       const { orchestrator, sm } = createOrchestrator({ auditor });
 
