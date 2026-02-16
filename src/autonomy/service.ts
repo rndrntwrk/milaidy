@@ -91,6 +91,15 @@ let _PilotRunner: typeof import("./domains/pilot/pilot-runner.js").PilotRunner;
 let _createCodingDomainPack: typeof import("./domains/coding/pack.js").createCodingDomainPack;
 let _CODING_GOVERNANCE_POLICY: typeof import("./domains/coding/governance-policy.js").CODING_GOVERNANCE_POLICY;
 
+// Persistence
+let _AutonomyDbAdapter: typeof import("./persistence/db-adapter.js").AutonomyDbAdapter;
+let _PgEventStore: typeof import("./persistence/pg-event-store.js").PgEventStore;
+let _PgGoalManager: typeof import("./persistence/pg-goal-manager.js").PgGoalManager;
+let _PgRetentionManager: typeof import("./persistence/pg-retention-manager.js").PgRetentionManager;
+let _PersistentStateMachine: typeof import("./persistence/persistent-state-machine.js").PersistentStateMachine;
+let _PgApprovalLog: typeof import("./persistence/pg-approval-log.js").PgApprovalLog;
+let _PgIdentityStore: typeof import("./persistence/pg-identity-store.js").PgIdentityStore;
+
 // Phase 4 — Learning
 let _CheckpointReward: typeof import("./learning/reward.js").CheckpointReward;
 let _EpisodeReward: typeof import("./learning/reward.js").EpisodeReward;
@@ -195,6 +204,24 @@ async function loadImplementations() {
   _PilotRunner = pilotMod.PilotRunner;
   _createCodingDomainPack = codingPackMod.createCodingDomainPack;
   _CODING_GOVERNANCE_POLICY = codingGovMod.CODING_GOVERNANCE_POLICY;
+
+  // Persistence (lazy — only used when persistence.enabled)
+  const [dbAdapterMod, pgEventMod, pgGoalMod, pgRetentionMod, psmMod, pgApprovalMod, pgIdentityMod] = await Promise.all([
+    import("./persistence/db-adapter.js"),
+    import("./persistence/pg-event-store.js"),
+    import("./persistence/pg-goal-manager.js"),
+    import("./persistence/pg-retention-manager.js"),
+    import("./persistence/persistent-state-machine.js"),
+    import("./persistence/pg-approval-log.js"),
+    import("./persistence/pg-identity-store.js"),
+  ]);
+  _AutonomyDbAdapter = dbAdapterMod.AutonomyDbAdapter;
+  _PgEventStore = pgEventMod.PgEventStore;
+  _PgGoalManager = pgGoalMod.PgGoalManager;
+  _PgRetentionManager = pgRetentionMod.PgRetentionManager;
+  _PersistentStateMachine = psmMod.PersistentStateMachine;
+  _PgApprovalLog = pgApprovalMod.PgApprovalLog;
+  _PgIdentityStore = pgIdentityMod.PgIdentityStore;
 }
 
 // ---------- Service ----------
@@ -233,6 +260,11 @@ export class MilaidyAutonomyService extends Service {
   private policyEngine: import("./domains/governance/policy-engine.js").PolicyEngine | null = null;
   private auditRetentionManager: import("./domains/governance/retention-manager.js").AuditRetentionManager | null = null;
   private pilotRunner: import("./domains/pilot/pilot-runner.js").PilotRunner | null = null;
+
+  // Persistence components
+  private dbAdapter: import("./persistence/db-adapter.js").AutonomyDbAdapter | null = null;
+  private approvalLog: import("./persistence/pg-approval-log.js").ApprovalLogInterface | null = null;
+  private identityStore: import("./persistence/pg-identity-store.js").IdentityStoreInterface | null = null;
 
   // Phase 4 — Learning components
   private traceCollector: import("./learning/trace-collector.js").TraceCollector | null = null;
@@ -285,6 +317,27 @@ export class MilaidyAutonomyService extends Service {
     const { createDefaultAutonomyIdentity } = await import("./identity/schema.js");
     this.identityConfig = config.identity ?? createDefaultAutonomyIdentity();
 
+    // ---------- Persistence Setup ----------
+    const persistenceEnabled = config.persistence?.enabled ?? false;
+    if (persistenceEnabled) {
+      try {
+        const db = (runtime as unknown as { adapter?: { db?: unknown } }).adapter?.db;
+        if (db) {
+          this.dbAdapter = new _AutonomyDbAdapter(
+            db as import("./persistence/db-adapter.js").DrizzleDb,
+            { autoMigrate: config.persistence?.autoMigrate ?? true, agentId: runtime.agentId },
+          );
+          await this.dbAdapter.initialize();
+          logger.info("[autonomy-service] Persistence layer initialized");
+        } else {
+          logger.warn("[autonomy-service] persistence.enabled but no database available — falling back to in-memory");
+        }
+      } catch (err) {
+        logger.error(`[autonomy-service] Persistence init failed — falling back to in-memory: ${err instanceof Error ? err.message : err}`);
+        this.dbAdapter = null;
+      }
+    }
+
     // Instantiate components
     this.trustScorer = new _RuleBasedTrustScorer(config.trust);
     this.memoryGate = new _MemoryGateImpl(
@@ -293,7 +346,11 @@ export class MilaidyAutonomyService extends Service {
       config.memoryGate,
     );
     this.driftMonitor = new _RuleBasedDriftMonitor(config.driftMonitor);
-    this.goalManager = new _InMemoryGoalManager();
+
+    // Goal manager: Pg-backed or in-memory
+    this.goalManager = this.dbAdapter
+      ? new _PgGoalManager(this.dbAdapter)
+      : new _InMemoryGoalManager();
 
     // Instantiate tool contracts & verification components
     this.toolRegistry = new _ToolRegistry();
@@ -305,7 +362,11 @@ export class MilaidyAutonomyService extends Service {
     _registerBuiltinPostConditions(this.postConditionVerifier);
 
     // Instantiate workflow engine components
-    this.stateMachine = new _KernelStateMachine();
+    const innerStateMachine = new _KernelStateMachine();
+    this.stateMachine = this.dbAdapter
+      ? new _PersistentStateMachine(innerStateMachine, this.dbAdapter)
+      : innerStateMachine;
+
     let eventBusRef: { emit: (event: string, payload: unknown) => void } | undefined;
     try {
       const { getEventBus } = await import("../events/event-bus.js");
@@ -317,11 +378,20 @@ export class MilaidyAutonomyService extends Service {
       timeoutMs: config.approval?.timeoutMs ?? 300_000,
       eventBus: eventBusRef,
     });
-    this.eventStore = new _InMemoryEventStore(
-      config.eventStore?.maxEvents ?? 10_000,
-    );
+
+    // Event store: Pg-backed or in-memory
+    this.eventStore = this.dbAdapter
+      ? new _PgEventStore(this.dbAdapter)
+      : new _InMemoryEventStore(config.eventStore?.maxEvents ?? 10_000);
+
     this.compensationRegistry = new _CompensationRegistry();
     _registerBuiltinCompensations(this.compensationRegistry);
+
+    // Approval log and identity store (Pg-only, null when in-memory)
+    if (this.dbAdapter) {
+      this.approvalLog = new _PgApprovalLog(this.dbAdapter);
+      this.identityStore = new _PgIdentityStore(this.dbAdapter);
+    }
 
     // Instantiate invariant checker
     const invariantsConfig = config.invariants;
@@ -416,7 +486,9 @@ export class MilaidyAutonomyService extends Service {
     if (domainsConfig?.enabled) {
       this.domainPackRegistry = new _DomainPackRegistry();
       this.policyEngine = new _PolicyEngine();
-      this.auditRetentionManager = new _AuditRetentionManager();
+      this.auditRetentionManager = this.dbAdapter
+        ? new _PgRetentionManager(this.dbAdapter) as unknown as import("./domains/governance/retention-manager.js").AuditRetentionManager
+        : new _AuditRetentionManager();
 
       // Register coding domain pack
       const codingPack = _createCodingDomainPack(domainsConfig.coding);
@@ -508,6 +580,11 @@ export class MilaidyAutonomyService extends Service {
       if (this.auditorRole) container.registerValue(TOKENS.Auditor, this.auditorRole);
       if (this.safeModeController) container.registerValue(TOKENS.SafeMode, this.safeModeController);
       if (this.orchestrator) container.registerValue(TOKENS.Orchestrator, this.orchestrator);
+
+      // Persistence components
+      if (this.dbAdapter) container.registerValue(TOKENS.AutonomyDbAdapter, this.dbAdapter);
+      if (this.approvalLog) container.registerValue(TOKENS.ApprovalLog, this.approvalLog);
+      if (this.identityStore) container.registerValue(TOKENS.IdentityStore, this.identityStore);
 
       // Phase 4 — Learning components
       if (this.traceCollector) container.registerValue(TOKENS.TraceCollector, this.traceCollector);
@@ -650,6 +727,9 @@ export class MilaidyAutonomyService extends Service {
     this.policyEngine = null;
     this.auditRetentionManager = null;
     this.pilotRunner = null;
+    this.dbAdapter = null;
+    this.approvalLog = null;
+    this.identityStore = null;
     this.identityConfig = null;
     this.enabled = false;
     logger.info("[autonomy-service] Autonomy disabled");
@@ -702,6 +782,16 @@ export class MilaidyAutonomyService extends Service {
     }
 
     this.identityConfig = updated;
+
+    // Persist to identity store if available
+    if (this.identityStore) {
+      try {
+        await this.identityStore.saveVersion(updated);
+      } catch (err) {
+        logger.warn(`[autonomy-service] Failed to persist identity version: ${err instanceof Error ? err.message : err}`);
+      }
+    }
+
     logger.info(
       `[autonomy-service] Identity updated to v${updated.identityVersion}`,
     );
@@ -773,6 +863,20 @@ export class MilaidyAutonomyService extends Service {
 
   getOrchestrator(): import("./roles/types.js").RoleOrchestrator | null {
     return this.orchestrator;
+  }
+
+  // ---------- Persistence Accessors ----------
+
+  getDbAdapter(): import("./persistence/db-adapter.js").AutonomyDbAdapter | null {
+    return this.dbAdapter;
+  }
+
+  getApprovalLog(): import("./persistence/pg-approval-log.js").ApprovalLogInterface | null {
+    return this.approvalLog;
+  }
+
+  getIdentityStore(): import("./persistence/pg-identity-store.js").IdentityStoreInterface | null {
+    return this.identityStore;
   }
 
   // ---------- Phase 4 — Learning Accessors ----------
@@ -859,6 +963,9 @@ export class MilaidyAutonomyService extends Service {
     this.policyEngine = null;
     this.auditRetentionManager = null;
     this.pilotRunner = null;
+    this.dbAdapter = null;
+    this.approvalLog = null;
+    this.identityStore = null;
     this.identityConfig = null;
     this.enabled = false;
 

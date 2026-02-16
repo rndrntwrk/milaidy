@@ -140,6 +140,16 @@ export interface AutonomyEventStoreConfig {
 }
 
 /**
+ * Persistence layer configuration.
+ */
+export interface AutonomyPersistenceConfig {
+  /** Enable durable persistence via Postgres/PGLite (default: false — uses in-memory). */
+  enabled?: boolean;
+  /** Auto-run schema migrations on startup (default: true). */
+  autoMigrate?: boolean;
+}
+
+/**
  * Domain capability packs and governance configuration (Phase 5).
  */
 export interface AutonomyDomainsConfig {
@@ -257,6 +267,8 @@ export interface AutonomyConfig {
   learning?: AutonomyLearningConfig;
   /** Domain capability packs and governance settings (Phase 5). */
   domains?: AutonomyDomainsConfig;
+  /** Persistence layer settings (database-backed stores). */
+  persistence?: AutonomyPersistenceConfig;
 }
 
 // ---------- Defaults ----------
@@ -389,6 +401,10 @@ export function resolveAutonomyConfig(
         scenarioTimeoutMs: userConfig.domains?.pilot?.scenarioTimeoutMs ?? 30_000,
         maxScenarios: userConfig.domains?.pilot?.maxScenarios ?? 0,
       },
+    },
+    persistence: {
+      enabled: userConfig.persistence?.enabled ?? false,
+      autoMigrate: userConfig.persistence?.autoMigrate ?? true,
     },
   };
 }

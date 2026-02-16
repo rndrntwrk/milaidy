@@ -113,6 +113,11 @@ export const TOKENS = {
   AuditRetentionManager: createToken<import("../autonomy/domains/governance/retention-manager.js").AuditRetentionManager>("AuditRetentionManager"),
   PilotRunner: createToken<import("../autonomy/domains/pilot/pilot-runner.js").PilotRunner>("PilotRunner"),
 
+  // Autonomy Persistence
+  AutonomyDbAdapter: createToken<import("../autonomy/persistence/db-adapter.js").AutonomyDbAdapter>("AutonomyDbAdapter"),
+  ApprovalLog: createToken<import("../autonomy/persistence/pg-approval-log.js").ApprovalLogInterface>("ApprovalLog"),
+  IdentityStore: createToken<import("../autonomy/persistence/pg-identity-store.js").IdentityStoreInterface>("IdentityStore"),
+
   // Autonomy Learning (Phase 4)
   TraceCollector: createToken<import("../autonomy/learning/trace-collector.js").TraceCollector>("TraceCollector"),
   HackDetector: createToken<import("../autonomy/learning/hack-detection.js").HackDetector>("HackDetector"),
