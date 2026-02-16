@@ -92,6 +92,42 @@ export interface AutonomyToolsConfig {
 }
 
 /**
+ * Workflow execution pipeline configuration.
+ */
+export interface AutonomyWorkflowConfig {
+  /** Whether the pipeline is enabled (default: true). */
+  enabled?: boolean;
+  /** Maximum concurrent tool executions (default: 1). */
+  maxConcurrent?: number;
+  /** Default timeout for tool execution in ms (default: 30000). */
+  defaultTimeoutMs?: number;
+}
+
+/**
+ * Approval gate configuration.
+ */
+export interface AutonomyApprovalConfig {
+  /** Whether approval gating is enabled (default: true). */
+  enabled?: boolean;
+  /** Timeout for approval requests in ms (default: 300000). */
+  timeoutMs?: number;
+  /** Auto-approve read-only tools (default: true). */
+  autoApproveReadOnly?: boolean;
+  /** Tool call sources that are auto-approved (default: []). */
+  autoApproveSources?: Array<import("./tools/types.js").ToolCallSource>;
+}
+
+/**
+ * Event store configuration.
+ */
+export interface AutonomyEventStoreConfig {
+  /** Maximum number of events to retain (default: 10000). */
+  maxEvents?: number;
+  /** Retention period in ms (0 = no time-based eviction, default: 0). */
+  retentionMs?: number;
+}
+
+/**
  * Top-level Autonomy Kernel configuration.
  */
 export interface AutonomyConfig {
@@ -111,6 +147,12 @@ export interface AutonomyConfig {
   retrieval?: AutonomyRetrievalConfig;
   /** Tool contracts and schema validation settings. */
   tools?: AutonomyToolsConfig;
+  /** Workflow execution pipeline settings. */
+  workflow?: AutonomyWorkflowConfig;
+  /** Approval gate settings. */
+  approval?: AutonomyApprovalConfig;
+  /** Event store settings. */
+  eventStore?: AutonomyEventStoreConfig;
 }
 
 // ---------- Defaults ----------
@@ -179,6 +221,21 @@ export function resolveAutonomyConfig(
     identity: userConfig.identity ?? DEFAULT_AUTONOMY_CONFIG.identity,
     retrieval: { ...DEFAULT_RETRIEVAL_CONFIG, ...userConfig.retrieval },
     tools: userConfig.tools,
+    workflow: {
+      enabled: userConfig.workflow?.enabled ?? true,
+      maxConcurrent: userConfig.workflow?.maxConcurrent ?? 1,
+      defaultTimeoutMs: userConfig.workflow?.defaultTimeoutMs ?? 30_000,
+    },
+    approval: {
+      enabled: userConfig.approval?.enabled ?? true,
+      timeoutMs: userConfig.approval?.timeoutMs ?? 300_000,
+      autoApproveReadOnly: userConfig.approval?.autoApproveReadOnly ?? true,
+      autoApproveSources: userConfig.approval?.autoApproveSources ?? [],
+    },
+    eventStore: {
+      maxEvents: userConfig.eventStore?.maxEvents ?? 10_000,
+      retentionMs: userConfig.eventStore?.retentionMs ?? 0,
+    },
   };
 }
 
@@ -277,6 +334,24 @@ export function validateAutonomyConfig(
     if (r.minTrustThreshold !== undefined && (r.minTrustThreshold < 0 || r.minTrustThreshold > 1)) {
       issues.push({ path: "autonomy.retrieval.minTrustThreshold", message: "Must be between 0 and 1" });
     }
+  }
+
+  // Validate workflow config
+  if (config.workflow?.maxConcurrent !== undefined && config.workflow.maxConcurrent < 1) {
+    issues.push({ path: "autonomy.workflow.maxConcurrent", message: "Must be at least 1" });
+  }
+  if (config.workflow?.defaultTimeoutMs !== undefined && config.workflow.defaultTimeoutMs < 1000) {
+    issues.push({ path: "autonomy.workflow.defaultTimeoutMs", message: "Must be at least 1000" });
+  }
+
+  // Validate approval config
+  if (config.approval?.timeoutMs !== undefined && config.approval.timeoutMs < 5000) {
+    issues.push({ path: "autonomy.approval.timeoutMs", message: "Must be at least 5000" });
+  }
+
+  // Validate event store config
+  if (config.eventStore?.maxEvents !== undefined && config.eventStore.maxEvents < 100) {
+    issues.push({ path: "autonomy.eventStore.maxEvents", message: "Must be at least 100" });
   }
 
   // Validate identity config if present (delegates to canonical validator)
