@@ -115,6 +115,42 @@ export {
   type CompensationRegistryInterface,
 } from "./workflow/index.js";
 
+// Re-export roles (Phase 3)
+export {
+  GoalDrivenPlanner,
+  UnifiedVerifier,
+  GatedMemoryWriter,
+  DriftAwareAuditor,
+  SafeModeControllerImpl,
+  KernelOrchestrator,
+  type PlanRequest,
+  type PlanStep,
+  type ExecutionPlan,
+  type PlanValidation,
+  type PlannerRole,
+  type PlannerConfig,
+  type ExecutorRole,
+  type VerificationContext,
+  type VerificationReport,
+  type VerifierRole,
+  type MemoryWriteRequest,
+  type MemoryWriteReport,
+  type MemoryWriterRole,
+  type AuditContext,
+  type AuditReport,
+  type AuditorRole,
+  type SafeModeStatus,
+  type SafeModeExitResult,
+  type SafeModeController,
+  type SafeModeConfig,
+  type OrchestratedRequest,
+  type OrchestratedResult,
+  type RoleOrchestrator,
+} from "./roles/index.js";
+
+// Re-export role config
+export type { AutonomyRolesConfig } from "./config.js";
+
 // Re-export metrics
 export {
   InMemoryBaselineHarness,
