@@ -38,6 +38,8 @@ export { PgEventStore } from "./pg-event-store.js";
 export { PgGoalManager } from "./pg-goal-manager.js";
 export { PgRetentionManager } from "./pg-retention-manager.js";
 export { PersistentStateMachine } from "./persistent-state-machine.js";
+export { PgApprovalLog, type ApprovalLogEntry, type ApprovalLogInterface } from "./pg-approval-log.js";
+export { PgIdentityStore, type IdentityVersionEntry, type IdentityStoreInterface } from "./pg-identity-store.js";
 
 // Migrations
 export { createAutonomyTables } from "./migrations/001_autonomy_tables.js";
