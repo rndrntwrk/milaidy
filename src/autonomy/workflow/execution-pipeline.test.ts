@@ -403,6 +403,7 @@ describe("ToolExecutionPipeline", () => {
         requestId: "evt-1",
         toolName: "PLAY_EMOTE",
         source: "llm",
+        correlationId: expect.any(String),
       });
 
       expect(mockEmit).toHaveBeenCalledWith("autonomy:pipeline:completed", {
@@ -410,6 +411,7 @@ describe("ToolExecutionPipeline", () => {
         toolName: "PLAY_EMOTE",
         success: true,
         durationMs: expect.any(Number),
+        correlationId: expect.any(String),
       });
     });
 
@@ -434,6 +436,7 @@ describe("ToolExecutionPipeline", () => {
         toolName: "GENERATE_IMAGE",
         success: true,
         detail: expect.any(String),
+        correlationId: expect.any(String),
       });
     });
   });
