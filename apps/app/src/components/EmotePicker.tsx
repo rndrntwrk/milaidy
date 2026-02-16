@@ -321,9 +321,11 @@ export function EmotePicker() {
       {/* Category tabs */}
       <div className="flex gap-1 overflow-x-auto border-b border-border px-3 py-2" role="tablist" aria-label="Emote categories">
         <button
+          id="emote-tab-all"
           onClick={() => setActiveCategory(null)}
           role="tab"
           aria-selected={activeCategory === null}
+          aria-controls="emote-tabpanel"
           className={`shrink-0 rounded px-2 py-1 text-xs font-medium ${
             activeCategory === null
               ? "bg-accent text-accent-fg"
@@ -335,9 +337,11 @@ export function EmotePicker() {
         {CATEGORIES.map((cat) => (
           <button
             key={cat}
+            id={`emote-tab-${cat}`}
             onClick={() => setActiveCategory(cat)}
             role="tab"
             aria-selected={activeCategory === cat}
+            aria-controls="emote-tabpanel"
             className={`shrink-0 rounded px-2 py-1 text-xs font-medium ${
               activeCategory === cat
                 ? "bg-accent text-accent-fg"
@@ -351,7 +355,7 @@ export function EmotePicker() {
       </div>
 
       {/* Emote grid */}
-      <div className="max-h-[400px] overflow-y-auto p-3" role="tabpanel">
+      <div className="max-h-[400px] overflow-y-auto p-3" role="tabpanel" id="emote-tabpanel" aria-labelledby={activeCategory ? `emote-tab-${activeCategory}` : "emote-tab-all"}>
         <div className="grid grid-cols-5 gap-2">
           {filteredEmotes.map((emote) => (
             <button
