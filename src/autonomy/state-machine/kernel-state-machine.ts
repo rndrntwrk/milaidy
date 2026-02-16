@@ -37,6 +37,17 @@ const TRANSITION_TABLE: ReadonlyArray<StateTransition> = [
   { trigger: "fatal_error", from: "*", to: "error" },
   { trigger: "escalate_safe_mode", from: "*", to: "safe_mode" },
   { trigger: "recover", from: "error", to: "idle" },
+  // Phase 3: planning, memory writing, auditing, and safe-mode exit
+  { trigger: "plan_requested", from: "idle", to: "planning" },
+  { trigger: "plan_approved", from: "planning", to: "idle" },
+  { trigger: "plan_rejected", from: "planning", to: "idle" },
+  { trigger: "write_memory", from: "idle", to: "writing_memory" },
+  { trigger: "memory_written", from: "writing_memory", to: "idle" },
+  { trigger: "memory_write_failed", from: "writing_memory", to: "error" },
+  { trigger: "audit_requested", from: "idle", to: "auditing" },
+  { trigger: "audit_complete", from: "auditing", to: "idle" },
+  { trigger: "audit_failed", from: "auditing", to: "error" },
+  { trigger: "safe_mode_exit", from: "safe_mode", to: "idle" },
 ];
 
 // ---------- Implementation ----------
@@ -83,8 +94,8 @@ export class KernelStateMachine implements KernelStateMachineInterface {
       }
     }
 
-    // Reset error count on successful verification (full cycle completed)
-    if (trigger === "verification_passed") {
+    // Reset error count on successful verification or safe mode exit
+    if (trigger === "verification_passed" || trigger === "safe_mode_exit") {
       this._consecutiveErrors = 0;
     }
 
