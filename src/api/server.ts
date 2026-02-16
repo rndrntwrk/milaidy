@@ -4582,6 +4582,22 @@ async function handleRequest(
     }
   }
 
+  // Prometheus metrics endpoint (before auth so scrapers work)
+  if (method === "GET" && pathname === "/metrics") {
+    try {
+      const { metrics } = await import("../telemetry/setup.js");
+      const { exportPrometheusText } = await import("../telemetry/prometheus-exporter.js");
+      const text = exportPrometheusText(metrics.getSnapshot());
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
+      res.end(text);
+    } catch {
+      res.statusCode = 500;
+      res.end("# Error generating metrics\n");
+    }
+    return;
+  }
+
   // Apply rate limiting (before auth to prevent brute force)
   const rateLimiter = getRateLimiter();
   if (!rateLimiter(req, res)) {
