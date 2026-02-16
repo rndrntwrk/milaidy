@@ -12,8 +12,7 @@ import type { Invariant } from "./types.js";
  */
 export const stateMachineConsistencyInvariant: Invariant = {
   id: "invariant:state-machine:consistency",
-  description:
-    "State machine is in a valid state after pipeline execution",
+  description: "State machine is in a valid state after pipeline execution",
   check: async (ctx) => {
     if (ctx.executionSucceeded) {
       return ctx.currentState === "idle";

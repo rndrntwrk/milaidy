@@ -10,8 +10,8 @@
 import { logger } from "@elizaos/core";
 import type {
   Invariant,
-  InvariantCheckResult,
   InvariantCheckerInterface,
+  InvariantCheckResult,
   InvariantContext,
   InvariantResult,
   InvariantStatus,
@@ -69,8 +69,7 @@ export class InvariantChecker implements InvariantCheckerInterface {
       try {
         const timeout = new Promise<never>((_, reject) => {
           timerId = setTimeout(
-            () =>
-              reject(new Error(`Invariant "${invariant.id}" timed out`)),
+            () => reject(new Error(`Invariant "${invariant.id}" timed out`)),
             this.checkTimeoutMs,
           );
         });

@@ -7,9 +7,7 @@ import type { PipelineResult } from "../../workflow/types.js";
 import { InvariantChecker } from "./invariant-checker.js";
 import type { Invariant, InvariantContext } from "./types.js";
 
-function makeCtx(
-  overrides: Partial<InvariantContext> = {},
-): InvariantContext {
+function makeCtx(overrides: Partial<InvariantContext> = {}): InvariantContext {
   const pipelineResult: PipelineResult = {
     requestId: "req-1",
     toolName: "PLAY_EMOTE",
@@ -152,7 +150,10 @@ describe("InvariantChecker", () => {
   it("registers via register() and registerMany()", async () => {
     const checker = new InvariantChecker();
     checker.register(passingInvariant("single"));
-    checker.registerMany([passingInvariant("batch-1"), passingInvariant("batch-2")]);
+    checker.registerMany([
+      passingInvariant("batch-1"),
+      passingInvariant("batch-2"),
+    ]);
 
     const result = await checker.check(makeCtx());
 
