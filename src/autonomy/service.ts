@@ -72,9 +72,11 @@ let _InMemoryEventStore: typeof import("./workflow/event-store.js").InMemoryEven
 let _CompensationRegistry: typeof import("./workflow/compensation-registry.js").CompensationRegistry;
 let _ToolExecutionPipeline: typeof import("./workflow/execution-pipeline.js").ToolExecutionPipeline;
 let _registerBuiltinCompensations: typeof import("./workflow/compensations/index.js").registerBuiltinCompensations;
+let _InvariantChecker: typeof import("./verification/invariants/invariant-checker.js").InvariantChecker;
+let _registerBuiltinInvariants: typeof import("./verification/invariants/index.js").registerBuiltinInvariants;
 
 async function loadImplementations() {
-  const [trustMod, memMod, driftMod, goalMod, toolRegMod, schemaValMod, pcvMod, toolSchemasMod, pcMod, smMod, approvalMod, esMod, compRegMod, pipelineMod, compsMod] = await Promise.all([
+  const [trustMod, memMod, driftMod, goalMod, toolRegMod, schemaValMod, pcvMod, toolSchemasMod, pcMod, smMod, approvalMod, esMod, compRegMod, pipelineMod, compsMod, invMod, invRegMod] = await Promise.all([
     import("./trust/scorer.js"),
     import("./memory/gate.js"),
     import("./identity/drift-monitor.js"),
@@ -90,6 +92,8 @@ async function loadImplementations() {
     import("./workflow/compensation-registry.js"),
     import("./workflow/execution-pipeline.js"),
     import("./workflow/compensations/index.js"),
+    import("./verification/invariants/invariant-checker.js"),
+    import("./verification/invariants/index.js"),
   ]);
   _RuleBasedTrustScorer = trustMod.RuleBasedTrustScorer;
   _MemoryGateImpl = memMod.MemoryGateImpl;
@@ -106,6 +110,8 @@ async function loadImplementations() {
   _CompensationRegistry = compRegMod.CompensationRegistry;
   _ToolExecutionPipeline = pipelineMod.ToolExecutionPipeline;
   _registerBuiltinCompensations = compsMod.registerBuiltinCompensations;
+  _InvariantChecker = invMod.InvariantChecker;
+  _registerBuiltinInvariants = invRegMod.registerBuiltinInvariants;
 }
 
 // ---------- Service ----------
@@ -127,6 +133,7 @@ export class MilaidyAutonomyService extends Service {
   private eventStore: import("./workflow/types.js").EventStoreInterface | null = null;
   private compensationRegistry: import("./workflow/types.js").CompensationRegistryInterface | null = null;
   private executionPipeline: import("./workflow/types.js").ToolExecutionPipelineInterface | null = null;
+  private invariantChecker: import("./verification/invariants/invariant-checker.js").InvariantChecker | null = null;
   private identityConfig: AutonomyIdentityConfig | null = null;
   private resolvedRetrievalConfig: import("./config.js").AutonomyRetrievalConfig | null = null;
   private enabled = false;
@@ -210,6 +217,16 @@ export class MilaidyAutonomyService extends Service {
     );
     this.compensationRegistry = new _CompensationRegistry();
     _registerBuiltinCompensations(this.compensationRegistry);
+
+    // Instantiate invariant checker
+    const invariantsConfig = config.invariants;
+    if (invariantsConfig?.enabled !== false) {
+      this.invariantChecker = new _InvariantChecker(
+        invariantsConfig?.checkTimeoutMs,
+      );
+      _registerBuiltinInvariants(this.invariantChecker);
+    }
+
     this.executionPipeline = new _ToolExecutionPipeline({
       schemaValidator: this.schemaValidator,
       approvalGate: this.approvalGate,
@@ -217,6 +234,7 @@ export class MilaidyAutonomyService extends Service {
       compensationRegistry: this.compensationRegistry,
       stateMachine: this.stateMachine,
       eventStore: this.eventStore,
+      invariantChecker: this.invariantChecker ?? undefined,
       config: {
         enabled: config.workflow?.enabled ?? true,
         maxConcurrent: config.workflow?.maxConcurrent ?? 1,
@@ -286,6 +304,7 @@ export class MilaidyAutonomyService extends Service {
       if (this.eventStore) container.registerValue(TOKENS.EventStore, this.eventStore);
       if (this.compensationRegistry) container.registerValue(TOKENS.CompensationRegistry, this.compensationRegistry);
       if (this.executionPipeline) container.registerValue(TOKENS.ExecutionPipeline, this.executionPipeline);
+      if (this.invariantChecker) container.registerValue(TOKENS.InvariantChecker, this.invariantChecker);
 
       // Register trust-aware retriever
       try {
@@ -326,6 +345,8 @@ export class MilaidyAutonomyService extends Service {
     this.eventStore = new _InMemoryEventStore();
     this.compensationRegistry = new _CompensationRegistry();
     _registerBuiltinCompensations(this.compensationRegistry);
+    this.invariantChecker = new _InvariantChecker();
+    _registerBuiltinInvariants(this.invariantChecker);
     this.executionPipeline = new _ToolExecutionPipeline({
       schemaValidator: this.schemaValidator,
       approvalGate: this.approvalGate,
@@ -333,6 +354,7 @@ export class MilaidyAutonomyService extends Service {
       compensationRegistry: this.compensationRegistry,
       stateMachine: this.stateMachine,
       eventStore: this.eventStore,
+      invariantChecker: this.invariantChecker,
     });
 
     // Initialize identity if not already set
@@ -359,6 +381,7 @@ export class MilaidyAutonomyService extends Service {
     this.eventStore = null;
     this.compensationRegistry = null;
     this.executionPipeline = null;
+    this.invariantChecker = null;
     this.identityConfig = null;
     this.enabled = false;
     logger.info("[autonomy-service] Autonomy disabled");
@@ -452,6 +475,10 @@ export class MilaidyAutonomyService extends Service {
     return this.executionPipeline;
   }
 
+  getInvariantChecker(): import("./verification/invariants/invariant-checker.js").InvariantChecker | null {
+    return this.invariantChecker;
+  }
+
   // ---------- Lifecycle ----------
 
   async stop(): Promise<void> {
@@ -469,6 +496,7 @@ export class MilaidyAutonomyService extends Service {
     this.eventStore = null;
     this.compensationRegistry = null;
     this.executionPipeline = null;
+    this.invariantChecker = null;
     this.identityConfig = null;
     this.enabled = false;
 
