@@ -11,12 +11,17 @@ const fetchMock =
   vi.fn<
     (input: string | URL | Request, init?: RequestInit) => Promise<Response>
   >();
-const { validateCloudBaseUrlMock } = vi.hoisted(() => ({
+const { saveMilaidyConfigMock, validateCloudBaseUrlMock } = vi.hoisted(() => ({
+  saveMilaidyConfigMock: vi.fn<(config: unknown) => void>(),
   validateCloudBaseUrlMock: vi.fn<(rawUrl: string) => Promise<string | null>>(),
 }));
 
 vi.mock("../cloud/validate-url.js", () => ({
   validateCloudBaseUrl: validateCloudBaseUrlMock,
+}));
+
+vi.mock("../config/config.js", () => ({
+  saveMilaidyConfig: saveMilaidyConfigMock,
 }));
 
 function createState(createAgent: (args: unknown) => Promise<unknown>) {
@@ -107,6 +112,66 @@ describe("handleCloudRoute", () => {
     expect(createAgent).toHaveBeenCalledTimes(1);
     expect(getJson()).toEqual({ ok: true, agent: { id: "agent-1" } });
   });
+
+  it("clears cached cloud auth state for POST /api/cloud/disconnect", async () => {
+    saveMilaidyConfigMock.mockClear();
+    process.env.ELIZAOS_CLOUD_API_KEY = "ck-test";
+    process.env.ELIZAOS_CLOUD_ENABLED = "true";
+
+    const disconnectMock = vi.fn(async () => undefined);
+    const updateAgentMock = vi.fn(async () => undefined);
+    const state = {
+      config: {
+        cloud: {
+          enabled: true,
+          apiKey: "ck-test",
+        },
+      },
+      runtime: {
+        agentId: "00000000-0000-0000-0000-000000000001",
+        character: {
+          secrets: {
+            ELIZAOS_CLOUD_API_KEY: "ck-test",
+            ELIZAOS_CLOUD_ENABLED: "true",
+          },
+        },
+        updateAgent: updateAgentMock,
+      },
+      cloudManager: {
+        disconnect: disconnectMock,
+      },
+    } as unknown as CloudRouteState;
+
+    const { res, getStatus, getJson } = createMockHttpResponse();
+    const handled = await handleCloudRoute(
+      createMockIncomingMessage({
+        method: "POST",
+        url: "/api/cloud/disconnect",
+      }),
+      res,
+      "/api/cloud/disconnect",
+      "POST",
+      state,
+    );
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(200);
+    expect(getJson()).toEqual({ ok: true, status: "disconnected" });
+    expect(disconnectMock).toHaveBeenCalledTimes(1);
+    expect(saveMilaidyConfigMock).toHaveBeenCalledTimes(1);
+
+    expect(state.config.cloud?.enabled).toBe(false);
+    expect(state.config.cloud?.apiKey).toBeUndefined();
+    expect(process.env.ELIZAOS_CLOUD_API_KEY).toBeUndefined();
+    expect(process.env.ELIZAOS_CLOUD_ENABLED).toBeUndefined();
+
+    expect(updateAgentMock).toHaveBeenCalledTimes(1);
+    const updatePayload = updateAgentMock.mock.calls[0]?.[1] as {
+      secrets?: Record<string, unknown>;
+    };
+    expect(updatePayload.secrets?.ELIZAOS_CLOUD_API_KEY).toBeUndefined();
+    expect(updatePayload.secrets?.ELIZAOS_CLOUD_ENABLED).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -135,6 +200,8 @@ describe("handleCloudRoute timeout behavior", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    delete process.env.ELIZAOS_CLOUD_API_KEY;
+    delete process.env.ELIZAOS_CLOUD_ENABLED;
   });
 
   it("returns 504 when cloud login session creation times out", async () => {

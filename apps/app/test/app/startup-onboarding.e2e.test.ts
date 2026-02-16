@@ -175,7 +175,15 @@ vi.mock("../../src/components/AvatarSelector.js", () => ({
   AvatarSelector: () => React.createElement("div", null, "AvatarSelector"),
 }));
 vi.mock("../../src/components/PermissionsSection.js", () => ({
-  PermissionsOnboardingSection: () => React.createElement("div", null, "PermissionsOnboardingSection"),
+  PermissionsOnboardingSection: ({
+    onContinue,
+  }: {
+    onContinue: (options?: { allowPermissionBypass?: boolean }) => void;
+  }) => React.createElement(
+    "button",
+    { onClick: () => onContinue() },
+    "permissions-continue",
+  ),
 }));
 
 import { App } from "../../src/App";
@@ -430,7 +438,11 @@ describe("app startup onboarding flow (e2e)", () => {
         await rerender(tree!);
       }
 
-      clickButton(tree!, "next");
+      if (state.onboardingStep === "permissions") {
+        clickButton(tree!, "permissions-continue");
+      } else {
+        clickButton(tree!, "next");
+      }
       await rerender(tree!);
     }
 

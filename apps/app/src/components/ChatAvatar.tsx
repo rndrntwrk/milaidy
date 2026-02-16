@@ -1,11 +1,8 @@
 /**
- * Chat avatar overlay component.
+ * Chat avatar panel component.
  *
- * Renders a 3D VRM avatar on the right side of the chat area.
- * The avatar sits behind the chat text (lower z-index) and does not scroll.
- *
- * Voice controls are managed externally — this component accepts mouthOpen
- * and renders the VRM viewer.
+ * Renders a 3D VRM avatar within the parent container (used in the
+ * Autonomous Loop sidebar). Voice controls are managed externally.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -84,33 +81,23 @@ export function ChatAvatar({ mouthOpen = 0, isSpeaking = false }: ChatAvatarProp
   }, [engineReady]);
 
   return (
-    <div
-      className="absolute pointer-events-none"
-      style={{
-        inset: 0,
-        zIndex: 2,
-        opacity: avatarVisible ? 0.92 : 0,
-        transition: "opacity 0.8s ease-in-out",
-        background: "linear-gradient(to left, rgba(0, 0, 0, 0.08), transparent 55%)",
-      }}
-    >
-      {/* Right sidebar avatar panel */}
+    <div className="relative h-full w-full pointer-events-none">
       <div
-        className="absolute bottom-0"
+        className="absolute inset-0"
         style={{
-          width: "min(42vw, 540px)",
-          right: 0,
-          top: "6%",
           opacity: avatarVisible ? 0.95 : 0,
-          transition: "opacity 0.8s ease-in-out",
+          transition: "opacity 0.45s ease-in-out",
+          background: "radial-gradient(circle at 50% 100%, rgba(255,255,255,0.08), transparent 60%)",
         }}
       >
-        <div className="relative w-full h-full">
+        <div className="absolute inset-0 overflow-hidden">
           <div
-            className="w-full h-full"
+            className="absolute inset-0"
             style={{
               opacity: vrmLoaded ? 1 : 0,
               transition: "opacity 0.45s ease",
+              transform: "scale(1.22) translateY(-8%)",
+              transformOrigin: "50% 28%",
             }}
           >
             <VrmViewer
@@ -126,7 +113,7 @@ export function ChatAvatar({ mouthOpen = 0, isSpeaking = false }: ChatAvatarProp
             <img
               src={fallbackPreviewUrl}
               alt="avatar preview"
-              className="absolute right-[14%] bottom-[8%] h-[70%] object-contain opacity-90"
+              className="absolute left-1/2 -translate-x-1/2 bottom-[-2%] h-[122%] object-contain opacity-90"
             />
           )}
         </div>

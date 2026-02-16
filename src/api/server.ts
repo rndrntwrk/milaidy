@@ -1829,6 +1829,9 @@ interface TrajectoryLoggerForChat {
     status?: string,
   ) => Promise<void> | void;
   logLlmCall?: (params: Record<string, unknown>) => void;
+  logProviderAccess?: (params: Record<string, unknown>) => void;
+  getProviderAccessLogs?: () => readonly unknown[];
+  getLlmCallLogs?: () => readonly unknown[];
 }
 
 interface TrajectorySpanContext {
@@ -1878,24 +1881,27 @@ function getTrajectoryLoggerForRuntime(
   };
 
   const candidates: TrajectoryLoggerForChat[] = [];
+  const seen = new Set<unknown>();
+  const pushCandidate = (candidate: unknown): void => {
+    if (!candidate || seen.has(candidate)) return;
+    seen.add(candidate);
+    candidates.push(candidate as TrajectoryLoggerForChat);
+  };
 
   if (typeof runtimeLike.getServicesByType === "function") {
     const byType = runtimeLike.getServicesByType("trajectory_logger");
     if (Array.isArray(byType) && byType.length > 0) {
       for (const service of byType) {
-        if (service) {
-          candidates.push(service as TrajectoryLoggerForChat);
-        }
+        pushCandidate(service);
       }
     }
     if (byType && !Array.isArray(byType)) {
-      candidates.push(byType as TrajectoryLoggerForChat);
+      pushCandidate(byType);
     }
   }
 
   if (typeof runtimeLike.getService === "function") {
-    const single = runtimeLike.getService("trajectory_logger");
-    if (single) candidates.push(single as TrajectoryLoggerForChat);
+    pushCandidate(runtimeLike.getService("trajectory_logger"));
   }
 
   let best: TrajectoryLoggerForChat | null = null;
@@ -1921,6 +1927,155 @@ function getTrajectoryLoggerForRuntime(
     }
   }
   return best;
+}
+
+function readTrajectoryLlmLogs(
+  logger: TrajectoryLoggerForChat | null,
+): readonly unknown[] {
+  if (!logger || typeof logger.getLlmCallLogs !== "function") return [];
+  const logs = logger.getLlmCallLogs();
+  return Array.isArray(logs) ? logs : [];
+}
+
+function readTrajectoryProviderLogs(
+  logger: TrajectoryLoggerForChat | null,
+): readonly unknown[] {
+  if (!logger || typeof logger.getProviderAccessLogs !== "function") return [];
+  const logs = logger.getProviderAccessLogs();
+  return Array.isArray(logs) ? logs : [];
+}
+
+function getTrajectoryStepId(entry: unknown): string | null {
+  if (!entry || typeof entry !== "object") return null;
+  const raw = (entry as { stepId?: unknown }).stepId;
+  return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+}
+
+function copyTrajectoryLogsToLogger(
+  source: TrajectoryLoggerForChat | null,
+  target: TrajectoryLoggerForChat | null,
+): { llmCalls: number; providerAccesses: number } {
+  if (!source || !target || source === target) {
+    return { llmCalls: 0, providerAccesses: 0 };
+  }
+
+  const sourceLlm = readTrajectoryLlmLogs(source);
+  const sourceProvider = readTrajectoryProviderLogs(source);
+  if (sourceLlm.length === 0 && sourceProvider.length === 0) {
+    return { llmCalls: 0, providerAccesses: 0 };
+  }
+
+  const existingLlmKeys = new Set(
+    readTrajectoryLlmLogs(target).map((entry) => JSON.stringify(entry)),
+  );
+  const existingProviderKeys = new Set(
+    readTrajectoryProviderLogs(target).map((entry) => JSON.stringify(entry)),
+  );
+
+  let copiedLlm = 0;
+  let copiedProvider = 0;
+
+  const targetAny = target as TrajectoryLoggerForChat & {
+    llmCalls?: unknown[];
+    providerAccess?: unknown[];
+  };
+
+  const targetLlmArray = Array.isArray(targetAny.llmCalls)
+    ? targetAny.llmCalls
+    : null;
+  const targetProviderArray = Array.isArray(targetAny.providerAccess)
+    ? targetAny.providerAccess
+    : null;
+
+  for (const entry of sourceLlm) {
+    const stepId = getTrajectoryStepId(entry);
+    if (!stepId) continue;
+    const key = JSON.stringify(entry);
+    if (existingLlmKeys.has(key)) continue;
+    existingLlmKeys.add(key);
+
+    if (targetLlmArray) {
+      targetLlmArray.push(entry);
+      copiedLlm += 1;
+      continue;
+    }
+
+    if (typeof target.logLlmCall === "function") {
+      const row =
+        entry && typeof entry === "object"
+          ? (entry as Record<string, unknown>)
+          : {};
+      target.logLlmCall({
+        stepId,
+        model:
+          typeof row.model === "string" && row.model.trim()
+            ? row.model
+            : "unknown",
+        systemPrompt:
+          typeof row.systemPrompt === "string" ? row.systemPrompt : "",
+        userPrompt: typeof row.userPrompt === "string" ? row.userPrompt : "",
+        response: typeof row.response === "string" ? row.response : "",
+        temperature: typeof row.temperature === "number" ? row.temperature : 0,
+        maxTokens: typeof row.maxTokens === "number" ? row.maxTokens : 0,
+        purpose: typeof row.purpose === "string" ? row.purpose : "action",
+        actionType:
+          typeof row.actionType === "string"
+            ? row.actionType
+            : "runtime.useModel",
+        latencyMs: typeof row.latencyMs === "number" ? row.latencyMs : 0,
+      });
+      copiedLlm += 1;
+    }
+  }
+
+  for (const entry of sourceProvider) {
+    const stepId = getTrajectoryStepId(entry);
+    if (!stepId) continue;
+    const key = JSON.stringify(entry);
+    if (existingProviderKeys.has(key)) continue;
+    existingProviderKeys.add(key);
+
+    if (targetProviderArray) {
+      targetProviderArray.push(entry);
+      copiedProvider += 1;
+      continue;
+    }
+
+    if (typeof target.logProviderAccess === "function") {
+      const row =
+        entry && typeof entry === "object"
+          ? (entry as Record<string, unknown>)
+          : {};
+      target.logProviderAccess({
+        stepId,
+        providerName:
+          typeof row.providerName === "string" && row.providerName.trim()
+            ? row.providerName
+            : "unknown",
+        purpose: typeof row.purpose === "string" ? row.purpose : "provider",
+        data:
+          row.data && typeof row.data === "object"
+            ? (row.data as Record<string, unknown>)
+            : {},
+        query:
+          row.query && typeof row.query === "object"
+            ? (row.query as Record<string, unknown>)
+            : undefined,
+      });
+      copiedProvider += 1;
+    }
+  }
+
+  return { llmCalls: copiedLlm, providerAccesses: copiedProvider };
+}
+
+function carryOverTrajectoryLogsBetweenRuntimes(
+  previousRuntime: AgentRuntime | null,
+  nextRuntime: AgentRuntime | null,
+): { llmCalls: number; providerAccesses: number } {
+  const previousLogger = getTrajectoryLoggerForRuntime(previousRuntime);
+  const nextLogger = getTrajectoryLoggerForRuntime(nextRuntime);
+  return copyTrajectoryLogsToLogger(previousLogger, nextLogger);
 }
 
 function createRuntimeWithTrajectoryLogger(
@@ -3547,6 +3702,54 @@ function getInventoryProviderOptions(): Array<{
       ],
     },
   ];
+}
+
+function ensureWalletKeysInEnvAndConfig(config: MilaidyConfig): boolean {
+  const missingEvm =
+    typeof process.env.EVM_PRIVATE_KEY !== "string" ||
+    !process.env.EVM_PRIVATE_KEY.trim();
+  const missingSolana =
+    typeof process.env.SOLANA_PRIVATE_KEY !== "string" ||
+    !process.env.SOLANA_PRIVATE_KEY.trim();
+
+  if (!missingEvm && !missingSolana) {
+    return false;
+  }
+
+  try {
+    const walletKeys = generateWalletKeys();
+    if (
+      !config.env ||
+      typeof config.env !== "object" ||
+      Array.isArray(config.env)
+    ) {
+      config.env = {};
+    }
+    const envConfig = config.env as Record<string, string>;
+
+    if (missingEvm) {
+      envConfig.EVM_PRIVATE_KEY = walletKeys.evmPrivateKey;
+      process.env.EVM_PRIVATE_KEY = walletKeys.evmPrivateKey;
+      logger.info(
+        `[milaidy-api] Generated EVM wallet: ${walletKeys.evmAddress}`,
+      );
+    }
+
+    if (missingSolana) {
+      envConfig.SOLANA_PRIVATE_KEY = walletKeys.solanaPrivateKey;
+      process.env.SOLANA_PRIVATE_KEY = walletKeys.solanaPrivateKey;
+      logger.info(
+        `[milaidy-api] Generated Solana wallet: ${walletKeys.solanaAddress}`,
+      );
+    }
+
+    return true;
+  } catch (err) {
+    logger.warn(
+      `[milaidy-api] Failed to generate wallet keys: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -5533,34 +5736,8 @@ async function handleRequest(
       }
     }
 
-    // ── Generate wallet keys if not already present ───────────────────────
-    if (!process.env.EVM_PRIVATE_KEY || !process.env.SOLANA_PRIVATE_KEY) {
-      try {
-        const walletKeys = generateWalletKeys();
-
-        if (!process.env.EVM_PRIVATE_KEY) {
-          if (!config.env) config.env = {};
-          (config.env as Record<string, string>).EVM_PRIVATE_KEY =
-            walletKeys.evmPrivateKey;
-          process.env.EVM_PRIVATE_KEY = walletKeys.evmPrivateKey;
-          logger.info(
-            `[milaidy-api] Generated EVM wallet: ${walletKeys.evmAddress}`,
-          );
-        }
-
-        if (!process.env.SOLANA_PRIVATE_KEY) {
-          if (!config.env) config.env = {};
-          (config.env as Record<string, string>).SOLANA_PRIVATE_KEY =
-            walletKeys.solanaPrivateKey;
-          process.env.SOLANA_PRIVATE_KEY = walletKeys.solanaPrivateKey;
-          logger.info(
-            `[milaidy-api] Generated Solana wallet: ${walletKeys.solanaAddress}`,
-          );
-        }
-      } catch (err) {
-        logger.warn(`[milaidy-api] Failed to generate wallet keys: ${err}`);
-      }
-    }
+    // ── Ensure wallet keys exist so inventory can resolve addresses ───────
+    ensureWalletKeysInEnvAndConfig(config);
 
     state.config = config;
     state.agentName = (body.name as string) ?? state.agentName;
@@ -8517,6 +8694,10 @@ async function handleRequest(
       (state.config.env as Record<string, string>).SOLANA_RPC_URL = rpcUrl;
     }
 
+    // Preserve onboarding behavior for users who configure RPC keys later:
+    // provision wallet keys automatically when none exist.
+    ensureWalletKeysInEnvAndConfig(state.config);
+
     try {
       saveMilaidyConfig(state.config);
     } catch (err) {
@@ -10657,40 +10838,52 @@ async function handleRequest(
   // ── GET /api/cloud/status ─────────────────────────────────────────────
   if (method === "GET" && pathname === "/api/cloud/status") {
     const cloudEnabled = Boolean(state.config.cloud?.enabled);
-    const hasApiKey = Boolean(state.config.cloud?.apiKey);
+    const hasApiKey = Boolean(state.config.cloud?.apiKey?.trim());
+    const effectivelyEnabled = cloudEnabled || hasApiKey;
     const rt = state.runtime;
+    const cloudAuth = rt
+      ? (rt.getService("CLOUD_AUTH") as {
+          isAuthenticated: () => boolean;
+          getUserId: () => string | undefined;
+          getOrganizationId: () => string | undefined;
+        } | null)
+      : null;
+    const authConnected = Boolean(cloudAuth?.isAuthenticated());
+
+    if (authConnected || hasApiKey) {
+      json(res, {
+        connected: true,
+        enabled: effectivelyEnabled,
+        hasApiKey,
+        userId: authConnected ? cloudAuth?.getUserId() : undefined,
+        organizationId: authConnected
+          ? cloudAuth?.getOrganizationId()
+          : undefined,
+        topUpUrl: "https://www.elizacloud.ai/dashboard/billing",
+        reason: authConnected
+          ? undefined
+          : rt
+            ? "api_key_present_not_authenticated"
+            : "api_key_present_runtime_not_started",
+      });
+      return;
+    }
+
     if (!rt) {
       json(res, {
         connected: false,
-        enabled: cloudEnabled,
+        enabled: effectivelyEnabled,
         hasApiKey,
         reason: "runtime_not_started",
       });
       return;
     }
-    const cloudAuth = rt.getService("CLOUD_AUTH") as {
-      isAuthenticated: () => boolean;
-      getUserId: () => string | undefined;
-      getOrganizationId: () => string | undefined;
-    } | null;
-    if (cloudAuth?.isAuthenticated()) {
-      json(res, {
-        connected: true,
-        enabled: cloudEnabled,
-        hasApiKey,
-        userId: cloudAuth.getUserId(),
-        organizationId: cloudAuth.getOrganizationId(),
-        topUpUrl: "https://www.elizacloud.ai/dashboard/billing",
-      });
-      return;
-    }
+
     json(res, {
       connected: false,
-      enabled: cloudEnabled,
+      enabled: effectivelyEnabled,
       hasApiKey,
-      reason: hasApiKey
-        ? "api_key_present_not_authenticated"
-        : "not_authenticated",
+      reason: "not_authenticated",
     });
     return;
   }
@@ -12384,6 +12577,18 @@ export async function startApiServer(opts?: {
     }
   }
 
+  // Self-heal older configs where wallet keys were never provisioned
+  // (e.g. RPC/cloud configured outside onboarding).
+  if (ensureWalletKeysInEnvAndConfig(config)) {
+    try {
+      saveMilaidyConfig(config);
+    } catch (err) {
+      logger.warn(
+        `[milaidy-api] Failed to persist generated wallet keys: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+  }
+
   const plugins = discoverPluginsFromManifest();
   const workspaceDir =
     config.agents?.defaults?.workspace ?? resolveDefaultAgentWorkspaceDir();
@@ -13012,6 +13217,7 @@ export async function startApiServer(opts?: {
 
   /** Hot-swap the runtime reference (used after an in-process restart). */
   const updateRuntime = (rt: AgentRuntime): void => {
+    const carryOver = carryOverTrajectoryLogsBetweenRuntimes(state.runtime, rt);
     state.runtime = rt;
     state.chatConnectionReady = null;
     state.chatConnectionPromise = null;
@@ -13024,6 +13230,14 @@ export async function startApiServer(opts?: {
       "system",
       "agent",
     ]);
+    if (carryOver.llmCalls > 0 || carryOver.providerAccesses > 0) {
+      addLog(
+        "info",
+        `Carried over ${carryOver.llmCalls} LLM call(s) and ${carryOver.providerAccesses} provider access log(s) after runtime restart`,
+        "system",
+        ["system", "agent", "trajectory"],
+      );
+    }
 
     // Restore conversations from DB so they survive restarts
     void restoreConversationsFromDb(rt);

@@ -18,6 +18,7 @@ import {
   type PermissionStatus,
   type PluginInfo,
 } from "../api-client";
+import { hasRequiredOnboardingPermissions } from "../onboarding-permissions";
 import { StatusBadge } from "./shared/ui-badges";
 import { Switch } from "./shared/ui-switch";
 
@@ -456,7 +457,7 @@ export function PermissionsSection() {
 export function PermissionsOnboardingSection({
   onContinue,
 }: {
-  onContinue: () => void;
+  onContinue: (options?: { allowPermissionBypass?: boolean }) => void;
 }) {
   const [permissions, setPermissions] = useState<AllPermissionsState | null>(null);
   const [loading, setLoading] = useState(true);
@@ -477,12 +478,7 @@ export function PermissionsOnboardingSection({
   }, []);
 
   /** Check if all critical permissions are granted (or not applicable). */
-  const allGranted = permissions
-    ? ["accessibility", "screen-recording", "microphone"].every((id) => {
-        const state = permissions[id as SystemPermissionId];
-        return state?.status === "granted" || state?.status === "not-applicable";
-      })
-    : false;
+  const allGranted = hasRequiredOnboardingPermissions(permissions);
 
   if (loading) {
     return (
@@ -498,7 +494,11 @@ export function PermissionsOnboardingSection({
         <div className="text-[var(--muted)] text-sm mb-4">
           Unable to check permissions. You can configure them later in Settings.
         </div>
-        <button type="button" className="btn" onClick={onContinue}>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => onContinue({ allowPermissionBypass: true })}
+        >
           Continue
         </button>
       </div>
@@ -574,7 +574,7 @@ export function PermissionsOnboardingSection({
         <button
           type="button"
           className="btn text-xs py-2 px-6 opacity-70"
-          onClick={onContinue}
+          onClick={() => onContinue({ allowPermissionBypass: true })}
         >
           Skip for Now
         </button>
@@ -586,7 +586,7 @@ export function PermissionsOnboardingSection({
               background: "var(--accent)",
               borderColor: "var(--accent)",
             }}
-            onClick={onContinue}
+            onClick={() => onContinue()}
           >
             Continue
           </button>

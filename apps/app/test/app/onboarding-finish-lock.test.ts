@@ -38,6 +38,13 @@ const { mockClient } = vi.hoisted(() => ({
     getConfig: vi.fn(async () => ({})),
     getCloudStatus: vi.fn(async () => ({ enabled: false, connected: false })),
     getWorkbenchOverview: vi.fn(async () => ({ tasks: [], triggers: [], todos: [] })),
+    getPermissions: vi.fn(async () => ({
+      accessibility: { id: "accessibility", status: "granted", lastChecked: Date.now(), canRequest: false },
+      "screen-recording": { id: "screen-recording", status: "granted", lastChecked: Date.now(), canRequest: false },
+      microphone: { id: "microphone", status: "granted", lastChecked: Date.now(), canRequest: false },
+      camera: { id: "camera", status: "granted", lastChecked: Date.now(), canRequest: false },
+      shell: { id: "shell", status: "granted", lastChecked: Date.now(), canRequest: false },
+    })),
     submitOnboarding: vi.fn(async () => ({ ok: true })),
     restartAgent: vi.fn(async () => ({
       state: "running",
@@ -65,7 +72,7 @@ function createDeferred<T>() {
 }
 
 type ProbeApi = {
-  handleOnboardingNext: () => Promise<void>;
+  handleOnboardingNext: (options?: { allowPermissionBypass?: boolean }) => Promise<void>;
   hasOnboardingOptions: () => boolean;
   getOnboardingStep: () => string;
 };
@@ -83,6 +90,13 @@ function Probe(props: { onReady: (api: ProbeApi) => void }) {
   }, [app, onReady]);
 
   return null;
+}
+
+function permissionState(
+  status: "granted" | "denied" | "not-determined" | "restricted" | "not-applicable",
+  canRequest = false,
+) {
+  return { status, canRequest, lastChecked: Date.now() };
 }
 
 async function advanceToPermissions(getApi: () => ProbeApi) {
@@ -157,6 +171,13 @@ describe("onboarding finish locking", () => {
     mockClient.getConfig.mockResolvedValue({});
     mockClient.getCloudStatus.mockResolvedValue({ enabled: false, connected: false });
     mockClient.getWorkbenchOverview.mockResolvedValue({ tasks: [], triggers: [], todos: [] });
+    mockClient.getPermissions.mockResolvedValue({
+      accessibility: { id: "accessibility", ...permissionState("granted") },
+      "screen-recording": { id: "screen-recording", ...permissionState("granted") },
+      microphone: { id: "microphone", ...permissionState("granted") },
+      camera: { id: "camera", ...permissionState("granted") },
+      shell: { id: "shell", ...permissionState("granted") },
+    });
     mockClient.submitOnboarding.mockResolvedValue({ ok: true });
     mockClient.restartAgent.mockResolvedValue({
       state: "running",
@@ -243,6 +264,51 @@ describe("onboarding finish locking", () => {
     });
 
     expect(mockClient.submitOnboarding).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      tree!.unmount();
+    });
+  });
+
+  it("requires permissions check before finishing unless user explicitly skips", async () => {
+    mockClient.getPermissions.mockResolvedValue({
+      accessibility: { id: "accessibility", ...permissionState("granted") },
+      "screen-recording": { id: "screen-recording", ...permissionState("denied", true) },
+      microphone: { id: "microphone", ...permissionState("granted") },
+      camera: { id: "camera", ...permissionState("granted") },
+      shell: { id: "shell", ...permissionState("granted") },
+    });
+
+    let api: ProbeApi | null = null;
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(
+          AppProvider,
+          null,
+          React.createElement(Probe, {
+            onReady: (nextApi) => {
+              api = nextApi;
+            },
+          }),
+        ),
+      );
+    });
+
+    expect(api).not.toBeNull();
+
+    await waitForOnboardingOptions(() => api!);
+    await advanceToPermissions(() => api!);
+
+    await act(async () => {
+      await api!.handleOnboardingNext();
+    });
+    expect(mockClient.submitOnboarding).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await api!.handleOnboardingNext({ allowPermissionBypass: true });
+    });
+    expect(mockClient.submitOnboarding).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       tree!.unmount();

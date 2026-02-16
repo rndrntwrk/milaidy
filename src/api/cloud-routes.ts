@@ -382,6 +382,45 @@ export async function handleCloudRoute(
   // POST /api/cloud/disconnect
   if (method === "POST" && pathname === "/api/cloud/disconnect") {
     if (state.cloudManager) await state.cloudManager.disconnect();
+    const cloud = (state.config.cloud ?? {}) as NonNullable<
+      typeof state.config.cloud
+    >;
+    cloud.enabled = false;
+    delete cloud.apiKey;
+    (state.config as Record<string, unknown>).cloud = cloud;
+
+    try {
+      saveMilaidyConfig(state.config);
+    } catch (saveErr) {
+      logger.warn(
+        `[cloud-login] Failed to save cloud disconnect state: ${saveErr instanceof Error ? saveErr.message : saveErr}`,
+      );
+    }
+
+    delete process.env.ELIZAOS_CLOUD_API_KEY;
+    delete process.env.ELIZAOS_CLOUD_ENABLED;
+
+    if (state.runtime) {
+      try {
+        if (!state.runtime.character.secrets) {
+          state.runtime.character.secrets = {};
+        }
+        const secrets = state.runtime.character.secrets as Record<
+          string,
+          string | number | boolean
+        >;
+        delete secrets.ELIZAOS_CLOUD_API_KEY;
+        delete secrets.ELIZAOS_CLOUD_ENABLED;
+        await state.runtime.updateAgent(state.runtime.agentId, {
+          secrets: { ...secrets },
+        });
+      } catch (dbErr) {
+        logger.warn(
+          `[cloud-login] Failed to clear cloud secrets from agent DB: ${dbErr instanceof Error ? dbErr.message : dbErr}`,
+        );
+      }
+    }
+
     sendJson(res, { ok: true, status: "disconnected" });
     return true;
   }

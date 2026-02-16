@@ -52,10 +52,12 @@ import {
   type DropStatus,
   type MintResult,
   type WhitelistStatus,
+  type SystemPermissionId,
 } from "./api-client";
 import { tabFromPath, pathForTab, type Tab } from "./navigation";
 import { SkillScanReportSummary } from "./api-client";
 import { resolveAppAssetUrl } from "./asset-url";
+import { getMissingOnboardingPermissions } from "./onboarding-permissions";
 
 // ── VRM helpers ─────────────────────────────────────────────────────────
 
@@ -151,6 +153,62 @@ function saveAvatarIndex(index: number) {
   } catch { /* ignore */ }
 }
 
+/* ── Chat UI persistence ──────────────────────────────────────────────── */
+const CHAT_AVATAR_VISIBLE_KEY = "milaidy:chat:avatarVisible";
+const CHAT_VOICE_MUTED_KEY = "milaidy:chat:voiceMuted";
+const CHAT_MODE_KEY = "milaidy:chat:mode";
+
+function loadChatAvatarVisible(): boolean {
+  try {
+    const stored = localStorage.getItem(CHAT_AVATAR_VISIBLE_KEY);
+    return stored === null ? true : stored === "true";
+  } catch {
+    return true;
+  }
+}
+
+function loadChatVoiceMuted(): boolean {
+  try {
+    const stored = localStorage.getItem(CHAT_VOICE_MUTED_KEY);
+    return stored === null ? true : stored === "true";
+  } catch {
+    return true;
+  }
+}
+
+function loadChatMode(): ConversationMode {
+  try {
+    const stored = localStorage.getItem(CHAT_MODE_KEY);
+    return stored === "power" ? "power" : "simple";
+  } catch {
+    return "simple";
+  }
+}
+
+function saveChatAvatarVisible(value: boolean): void {
+  try {
+    localStorage.setItem(CHAT_AVATAR_VISIBLE_KEY, String(value));
+  } catch {
+    /* ignore */
+  }
+}
+
+function saveChatVoiceMuted(value: boolean): void {
+  try {
+    localStorage.setItem(CHAT_VOICE_MUTED_KEY, String(value));
+  } catch {
+    /* ignore */
+  }
+}
+
+function saveChatMode(value: ConversationMode): void {
+  try {
+    localStorage.setItem(CHAT_MODE_KEY, value);
+  } catch {
+    /* ignore */
+  }
+}
+
 // ── Onboarding step type ───────────────────────────────────────────────
 
 export type OnboardingStep =
@@ -168,6 +226,18 @@ export type OnboardingStep =
   | "inventorySetup"
   | "connectors"
   | "permissions";
+
+interface OnboardingNextOptions {
+  allowPermissionBypass?: boolean;
+}
+
+const ONBOARDING_PERMISSION_LABELS: Record<SystemPermissionId, string> = {
+  accessibility: "Accessibility",
+  "screen-recording": "Screen Recording",
+  microphone: "Microphone",
+  camera: "Camera",
+  shell: "Shell Access",
+};
 
 // ── Action notice ──────────────────────────────────────────────────────
 
@@ -367,6 +437,10 @@ export interface AppState {
   chatInput: string;
   chatSending: boolean;
   chatFirstTokenReceived: boolean;
+  chatAvatarVisible: boolean;
+  chatAgentVoiceMuted: boolean;
+  chatMode: ConversationMode;
+  chatAvatarSpeaking: boolean;
   conversations: Conversation[];
   activeConversationId: string | null;
   conversationMessages: ConversationMessage[];
@@ -682,7 +756,7 @@ export interface AppActions {
   handleCharacterMessageExamplesInput: (value: string) => void;
 
   // Onboarding
-  handleOnboardingNext: () => Promise<void>;
+  handleOnboardingNext: (options?: OnboardingNextOptions) => Promise<void>;
   handleOnboardingBack: () => void;
 
   // Cloud
@@ -759,6 +833,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [chatInput, setChatInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
   const [chatFirstTokenReceived, setChatFirstTokenReceived] = useState(false);
+  const [chatAvatarVisible, setChatAvatarVisible] = useState(loadChatAvatarVisible);
+  const [chatAgentVoiceMuted, setChatAgentVoiceMuted] = useState(loadChatVoiceMuted);
+  const [chatMode, setChatMode] = useState<ConversationMode>(loadChatMode);
+  const [chatAvatarSpeaking, setChatAvatarSpeaking] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [conversationMessages, setConversationMessages] = useState<ConversationMessage[]>([]);
@@ -771,6 +849,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     conversationsRef.current = conversations;
   }, [conversations]);
+
+  useEffect(() => {
+    saveChatAvatarVisible(chatAvatarVisible);
+  }, [chatAvatarVisible]);
+
+  useEffect(() => {
+    saveChatVoiceMuted(chatAgentVoiceMuted);
+  }, [chatAgentVoiceMuted]);
+
+  useEffect(() => {
+    saveChatMode(chatMode);
+  }, [chatMode]);
 
 
   // --- Triggers ---
@@ -1469,10 +1559,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setCloudCreditsCritical(false);
       return;
     }
-    setCloudEnabled(cloudStatus.enabled ?? false);
-    // "Connected" should reflect authenticated cloud availability, not just
-    // whether an API key is present in config.
-    const isConnected = Boolean(cloudStatus.connected);
+    // A cached cloud API key represents a completed login and should be shared
+    // across all views, even before runtime CLOUD_AUTH fully initializes.
+    const isConnected = Boolean(cloudStatus.connected || cloudStatus.hasApiKey);
+    setCloudEnabled(Boolean((cloudStatus.enabled ?? false) || cloudStatus.hasApiKey));
     setCloudConnected(Boolean(isConnected));
     setCloudUserId(cloudStatus.userId ?? null);
     if (cloudStatus.topUpUrl) setCloudTopUpUrl(cloudStatus.topUpUrl);
@@ -2620,7 +2710,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ── Onboarding ─────────────────────────────────────────────────────
 
-  const handleOnboardingNext = useCallback(async () => {
+  const handleOnboardingNext = useCallback(async (options?: OnboardingNextOptions) => {
     const opts = onboardingOptions;
     switch (onboardingStep) {
       case "welcome":
@@ -2678,11 +2768,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
       case "connectors":
         setOnboardingStep("permissions");
         break;
-      case "permissions":
+      case "permissions": {
+        if (options?.allowPermissionBypass) {
+          await handleOnboardingFinish();
+          break;
+        }
+        try {
+          const permissions = await client.getPermissions();
+          const missingPermissions = getMissingOnboardingPermissions(permissions);
+          if (missingPermissions.length > 0) {
+            const missingLabels = missingPermissions
+              .map((id) => ONBOARDING_PERMISSION_LABELS[id] ?? id)
+              .join(", ");
+            setActionNotice(
+              `Missing required permissions: ${missingLabels}. Grant them or use "Skip for Now".`,
+              "error",
+              5200,
+            );
+            return;
+          }
+        } catch (err) {
+          setActionNotice(
+            `Could not verify permissions (${err instanceof Error ? err.message : "unknown error"}). Use "Skip for Now" to continue.`,
+            "error",
+            5200,
+          );
+          return;
+        }
         await handleOnboardingFinish();
         break;
+      }
     }
-  }, [onboardingStep, onboardingOptions, onboardingRunMode, onboardingTheme, setTheme, cloudConnected]);
+  }, [onboardingStep, onboardingOptions, onboardingRunMode, onboardingTheme, setTheme, cloudConnected, setActionNotice]);
 
   const handleOnboardingBack = useCallback(() => {
     switch (onboardingStep) {
@@ -3037,6 +3154,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const setterMap: Partial<{ [S in keyof AppState]: (v: AppState[S]) => void }> = {
       tab: setTabRaw,
       chatInput: setChatInput,
+      chatAvatarVisible: setChatAvatarVisible,
+      chatAgentVoiceMuted: setChatAgentVoiceMuted,
+      chatMode: setChatMode,
+      chatAvatarSpeaking: setChatAvatarSpeaking,
       pairingCodeInput: setPairingCodeInput,
       pluginFilter: setPluginFilter,
       pluginStatusFilter: setPluginStatusFilter,
@@ -3483,7 +3604,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     tab, currentTheme, connected, agentStatus, onboardingComplete, onboardingLoading,
     startupPhase, authRequired, actionNotice, lifecycleBusy, lifecycleAction,
     pairingEnabled, pairingExpiresAt, pairingCodeInput, pairingError, pairingBusy,
-    chatInput, chatSending, chatFirstTokenReceived, conversations, activeConversationId, conversationMessages,
+    chatInput, chatSending, chatFirstTokenReceived,
+    chatAvatarVisible, chatAgentVoiceMuted, chatMode, chatAvatarSpeaking,
+    conversations, activeConversationId, conversationMessages,
     autonomousEvents, autonomousLatestEventId, unreadConversations,
     triggers, triggersLoading, triggersSaving, triggerRunsById, triggerHealth, triggerError,
     plugins, pluginFilter, pluginStatusFilter, pluginSearch, pluginSettingsOpen,

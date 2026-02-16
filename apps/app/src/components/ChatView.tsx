@@ -14,9 +14,8 @@ import {
   type KeyboardEvent,
 } from "react";
 import { getVrmPreviewUrl, useApp } from "../AppContext.js";
-import { ChatAvatar } from "./ChatAvatar.js";
 import { useVoiceChat, type VoicePlaybackStartEvent } from "../hooks/useVoiceChat.js";
-import { client, type ConversationMode, type VoiceConfig } from "../api-client.js";
+import { client, type VoiceConfig } from "../api-client.js";
 import { MessageContent } from "./MessageContent.js";
 
 function nowMs(): number {
@@ -35,60 +34,13 @@ export function ChatView() {
     setState,
     droppedFiles,
     shareIngestNotice,
+    chatMode,
+    chatAgentVoiceMuted,
     selectedVrmIndex,
   } = useApp();
 
   const messagesRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // ── Toggles (persisted in localStorage) ──────────────────────────
-  const [avatarVisible, setAvatarVisible] = useState(() => {
-    try {
-      const v = localStorage.getItem("milaidy:chat:avatarVisible");
-      return v === null ? true : v === "true";
-    } catch {
-      return true;
-    }
-  });
-  const [agentVoiceMuted, setAgentVoiceMuted] = useState(() => {
-    try {
-      const v = localStorage.getItem("milaidy:chat:voiceMuted");
-      return v === null ? true : v === "true"; // muted by default
-    } catch {
-      return true;
-    }
-  });
-  const [chatMode, setChatMode] = useState<ConversationMode>(() => {
-    try {
-      const v = localStorage.getItem("milaidy:chat:mode");
-      return v === "power" ? "power" : "simple";
-    } catch {
-      return "simple";
-    }
-  });
-
-  // Persist toggle changes
-  useEffect(() => {
-    try {
-      localStorage.setItem("milaidy:chat:avatarVisible", String(avatarVisible));
-    } catch {
-      /* ignore */
-    }
-  }, [avatarVisible]);
-  useEffect(() => {
-    try {
-      localStorage.setItem("milaidy:chat:voiceMuted", String(agentVoiceMuted));
-    } catch {
-      /* ignore */
-    }
-  }, [agentVoiceMuted]);
-  useEffect(() => {
-    try {
-      localStorage.setItem("milaidy:chat:mode", chatMode);
-    } catch {
-      /* ignore */
-    }
-  }, [chatMode]);
 
   // ── Voice config (ElevenLabs / browser TTS) ────────────────────────
   const [voiceConfig, setVoiceConfig] = useState<VoiceConfig | null>(null);
@@ -164,6 +116,7 @@ export function ChatView() {
     onPlaybackStart: handleVoicePlaybackStart,
     voiceConfig,
   });
+  const { queueAssistantSpeech, stopSpeaking } = voice;
 
   const agentName = agentStatus?.agentName ?? "Agent";
   const msgs = conversationMessages;
@@ -180,15 +133,27 @@ export function ChatView() {
   const agentInitial = agentName.trim().charAt(0).toUpperCase() || "A";
 
   useEffect(() => {
-    if (agentVoiceMuted) return;
+    if (chatAgentVoiceMuted) return;
 
     const latestAssistant = [...msgs]
       .reverse()
       .find((message) => message.role === "assistant");
     if (!latestAssistant || !latestAssistant.text.trim()) return;
 
-    voice.queueAssistantSpeech(latestAssistant.id, latestAssistant.text, !chatSending);
-  }, [msgs, chatSending, agentVoiceMuted, voice]);
+    queueAssistantSpeech(latestAssistant.id, latestAssistant.text, !chatSending);
+  }, [msgs, chatSending, chatAgentVoiceMuted, queueAssistantSpeech]);
+
+  useEffect(() => {
+    if (!chatAgentVoiceMuted) return;
+    stopSpeaking();
+  }, [chatAgentVoiceMuted, stopSpeaking]);
+
+  useEffect(() => {
+    setState("chatAvatarSpeaking", voice.isSpeaking && !voice.usingAudioAnalysis);
+    return () => {
+      setState("chatAvatarSpeaking", false);
+    };
+  }, [setState, voice.isSpeaking, voice.usingAudioAnalysis]);
 
   useEffect(() => {
     const pending = pendingVoiceTurnRef.current;
@@ -251,17 +216,6 @@ export function ChatView() {
 
   return (
     <div className="flex flex-col flex-1 min-h-0 px-3 relative">
-      {/* 3D Avatar — behind chat on the right side */}
-      {/* When using ElevenLabs audio analysis, mouthOpen carries real volume
-          data — don't pass isSpeaking so the engine uses the external values
-          instead of its own sine waves. */}
-      {avatarVisible && (
-        <ChatAvatar
-          mouthOpen={voice.mouthOpen}
-          isSpeaking={voice.isSpeaking && !voice.usingAudioAnalysis}
-        />
-      )}
-
       {/* ── Messages ───────────────────────────────────────────────── */}
       <div ref={messagesRef} className="flex-1 overflow-y-auto py-2 relative" style={{ zIndex: 1 }}>
         {visibleMsgs.length === 0 && !chatSending ? (
@@ -365,96 +319,6 @@ export function ChatView() {
         </div>
       )}
 
-      {/* ── Avatar / voice toggles ────────────────────────────────── */}
-      <div
-        className="flex items-center justify-between gap-2 pb-1.5 relative"
-        style={{ zIndex: 1 }}
-      >
-        <div className="flex items-center gap-1">
-          <button
-            className={`px-2 py-1 text-xs border rounded cursor-pointer transition-all ${
-              chatMode === "simple"
-                ? "border-accent bg-accent text-accent-fg"
-                : "border-border text-muted bg-card hover:border-accent hover:text-accent text-accent-fg"
-            }`}
-            onClick={() => setChatMode("simple")}
-            title="Simple mode: reply only, no tools"
-            disabled={chatSending}
-          >
-            Conversational (Fast)
-          </button>
-          <button
-            className={`px-2 py-1 text-xs border rounded cursor-pointer transition-all ${
-              chatMode === "power"
-                ? "border-accent bg-accent text-accent-fg"
-                : "border-border text-muted bg-card hover:border-accent hover:text-accent text-accent-fg"
-            }`}
-            onClick={() => setChatMode("power")}
-            title="Power mode: tools/actions allowed"
-            disabled={chatSending}
-          >
-            Powerful (Slow)
-          </button>
-        </div>
-        <div className="flex gap-1.5">
-          {/* Custom Actions panel toggle */}
-          <button
-            className="w-7 h-7 flex items-center justify-center border rounded cursor-pointer transition-all bg-card border-border text-muted hover:border-accent hover:text-accent"
-            onClick={() => window.dispatchEvent(new Event("toggle-custom-actions-panel"))}
-            title="Custom Actions"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-            </svg>
-          </button>
-
-          {/* Show / hide avatar */}
-          <button
-            className={`w-7 h-7 flex items-center justify-center border rounded cursor-pointer transition-all bg-card ${
-              avatarVisible
-                ? "border-accent text-accent"
-                : "border-border text-muted hover:border-accent hover:text-accent"
-            }`}
-            onClick={() => setAvatarVisible((v) => !v)}
-            title={avatarVisible ? "Hide avatar" : "Show avatar"}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-              <circle cx="12" cy="7" r="4" />
-              {!avatarVisible && <line x1="3" y1="3" x2="21" y2="21" />}
-            </svg>
-          </button>
-
-          {/* Mute / unmute agent voice */}
-          <button
-            className={`w-7 h-7 flex items-center justify-center border rounded cursor-pointer transition-all bg-card ${
-              agentVoiceMuted
-                ? "border-border text-muted hover:border-accent hover:text-accent"
-                : "border-accent text-accent"
-            }`}
-            onClick={() => {
-              const muting = !agentVoiceMuted;
-              setAgentVoiceMuted(muting);
-              if (muting) voice.stopSpeaking();
-            }}
-            title={agentVoiceMuted ? "Unmute agent voice" : "Mute agent voice"}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-              {agentVoiceMuted ? (
-                <line x1="23" y1="9" x2="17" y2="15" />
-              ) : (
-                <>
-                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                </>
-              )}
-              {agentVoiceMuted && <line x1="17" y1="9" x2="23" y2="15" />}
-            </svg>
-          </button>
-        </div>
-      </div>
-
       {voiceLatency && (
         <div className="pb-1 text-[10px] text-muted relative" style={{ zIndex: 1 }}>
           Silence end→first token: {voiceLatency.speechEndToFirstTokenMs ?? "—"}ms · end→voice start:{" "}
@@ -528,7 +392,7 @@ export function ChatView() {
         ) : voice.isSpeaking ? (
           <button
             className="h-[38px] px-4 py-2 border border-danger bg-danger/10 text-danger text-sm cursor-pointer hover:bg-danger/20 self-end"
-            onClick={voice.stopSpeaking}
+            onClick={stopSpeaking}
             title="Stop speaking"
           >
             Stop Voice

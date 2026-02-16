@@ -147,7 +147,7 @@ test("electron app startup: onboarding -> chat -> all pages", async () => {
     await clickOnboardingNext(page); // llm provider -> inventory setup
     await clickOnboardingNext(page); // inventory setup -> connectors
     await clickOnboardingNext(page); // connectors -> permissions
-    await clickOnboardingNext(page); // permissions -> finish
+    await page.getByRole("button", { name: /^continue$/i }).click(); // permissions -> finish
 
     await expect(page.getByPlaceholder("Type a message...")).toBeVisible({ timeout: 45_000 });
     await expect(page).toHaveURL(/\/chat$/);

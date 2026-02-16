@@ -333,6 +333,88 @@ function toObject(value: unknown): Record<string, unknown> | undefined {
   return record ?? undefined;
 }
 
+function readTextField(
+  record: Record<string, unknown>,
+  keys: string[],
+  fallback = "",
+): string {
+  for (const key of keys) {
+    if (!(key in record)) continue;
+    const value = record[key];
+    if (typeof value === "string") return value;
+    if (typeof value === "number" || typeof value === "boolean") {
+      return String(value);
+    }
+  }
+  return fallback;
+}
+
+function readLlmModel(record: Record<string, unknown>): string {
+  return readTextField(
+    record,
+    ["model", "modelKey", "model_key", "modelType", "model_type"],
+    "unknown",
+  );
+}
+
+function readLlmUserPrompt(record: Record<string, unknown>): string {
+  return readTextField(
+    record,
+    ["userPrompt", "user_prompt", "prompt", "input"],
+    "",
+  );
+}
+
+function readLlmResponse(record: Record<string, unknown>): string {
+  return readTextField(record, ["response", "output", "text"], "");
+}
+
+function isNumericVectorString(value: string): boolean {
+  const trimmed = value.trim();
+  if (trimmed === "[array]") return true;
+  if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) return false;
+  const inner = trimmed.slice(1, -1).trim();
+  if (!inner) return false;
+  const parts = inner
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  if (parts.length < 8) return false;
+  const sampleSize = Math.min(parts.length, 16);
+  for (let i = 0; i < sampleSize; i += 1) {
+    const numeric = Number(parts[i]);
+    if (!Number.isFinite(numeric)) return false;
+  }
+  return true;
+}
+
+function isEmbeddingLikeLlmCall(record: Record<string, unknown>): boolean {
+  const model = readLlmModel(record).toLowerCase();
+  const actionType = toText(
+    readRecordValue(record, ["actionType", "action_type"]),
+    "",
+  ).toLowerCase();
+  const purpose = toText(
+    readRecordValue(record, ["purpose"]),
+    "",
+  ).toLowerCase();
+  return (
+    model.includes("embed") ||
+    actionType.includes("embed") ||
+    purpose.includes("embed")
+  );
+}
+
+function shouldSuppressNoInputEmbeddingCall(
+  record: Record<string, unknown>,
+): boolean {
+  if (!isEmbeddingLikeLlmCall(record)) return false;
+  if (readLlmUserPrompt(record).trim().length > 0) return false;
+  const response = readLlmResponse(record);
+  if (!response.trim()) return true;
+  return isNumericVectorString(response);
+}
+
 function uniqueStrings(values: string[]): string[] {
   const seen = new Set<string>();
   const unique: string[] = [];
@@ -367,6 +449,8 @@ function redactTrajectoryPrompts(value: unknown): unknown {
       key === "system_prompt" ||
       key === "userPrompt" ||
       key === "user_prompt" ||
+      key === "prompt" ||
+      key === "input" ||
       key === "response"
     ) {
       redacted[key] = "[redacted]";
@@ -654,14 +738,16 @@ function aggregateTrajectoryTokenUsage(traj: Trajectory): {
   const steps = toArray(traj.steps as unknown);
   for (const step of steps) {
     for (const call of stepCalls(step)) {
+      const row = asRecord(call);
+      if (!row || shouldSuppressNoInputEmbeddingCall(row)) continue;
       llmCalls += 1;
       prompt +=
         toOptionalNumber(
-          readRecordValue(asRecord(call) ?? {}, ["promptTokens"]),
+          readRecordValue(row, ["promptTokens", "prompt_tokens"]),
         ) ?? 0;
       completion +=
         toOptionalNumber(
-          readRecordValue(asRecord(call) ?? {}, ["completionTokens"]),
+          readRecordValue(row, ["completionTokens", "completion_tokens"]),
         ) ?? 0;
     }
   }
@@ -692,24 +778,25 @@ function buildCoreTrajectories(
   for (let i = 0; i < llmLogs.length; i += 1) {
     const row = asRecord(llmLogs[i]);
     if (!row) continue;
+    if (shouldSuppressNoInputEmbeddingCall(row)) continue;
     const stepId = toText(
       readRecordValue(row, ["stepId", "step_id"]),
       `step-${i + 1}`,
     );
     if (!stepId) continue;
+    const model = readLlmModel(row);
+    const userPrompt = readLlmUserPrompt(row);
+    const response = readLlmResponse(row);
     ensureGroup(stepId).llmCalls.push({
       callId: `${stepId}-call-${i + 1}`,
       timestamp: toNumber(readRecordValue(row, ["timestamp"]), Date.now()),
-      model: toText(readRecordValue(row, ["model"]), "unknown"),
+      model,
       systemPrompt: toText(
         readRecordValue(row, ["systemPrompt", "system_prompt"]),
         "",
       ),
-      userPrompt: toText(
-        readRecordValue(row, ["userPrompt", "user_prompt"]),
-        "",
-      ),
-      response: toText(readRecordValue(row, ["response"]), ""),
+      userPrompt,
+      response,
       temperature: toNumber(readRecordValue(row, ["temperature"]), 0),
       maxTokens: toNumber(readRecordValue(row, ["maxTokens", "max_tokens"]), 0),
       purpose: toText(readRecordValue(row, ["purpose"]), "action"),
@@ -825,10 +912,11 @@ function filterCoreTrajectories(
         for (const call of stepCalls(step)) {
           const row = asRecord(call);
           if (!row) continue;
+          if (shouldSuppressNoInputEmbeddingCall(row)) continue;
           const haystack = [
-            toText(readRecordValue(row, ["model"]), ""),
-            toText(readRecordValue(row, ["userPrompt", "user_prompt"]), ""),
-            toText(readRecordValue(row, ["response"]), ""),
+            readLlmModel(row),
+            readLlmUserPrompt(row),
+            readLlmResponse(row),
           ]
             .join(" ")
             .toLowerCase();
@@ -1282,6 +1370,7 @@ function trajectoryToUIDetail(traj: Trajectory): UITrajectoryDetailResult {
     for (let callIndex = 0; callIndex < calls.length; callIndex += 1) {
       const call = asRecord(calls[callIndex]);
       if (!call) continue;
+      if (shouldSuppressNoInputEmbeddingCall(call)) continue;
 
       const timestamp = toNumber(
         readRecordValue(call, ["timestamp", "createdAt", "created_at"]),
@@ -1301,19 +1390,13 @@ function trajectoryToUIDetail(traj: Trajectory): UITrajectoryDetailResult {
         ),
         trajectoryId: traj.trajectoryId,
         stepId,
-        model: toText(readRecordValue(call, ["model"]), "unknown"),
+        model: readLlmModel(call),
         systemPrompt: toText(
           readRecordValue(call, ["systemPrompt", "system_prompt"]),
           "",
         ),
-        userPrompt: toText(
-          readRecordValue(call, ["userPrompt", "user_prompt", "prompt"]),
-          "",
-        ),
-        response: toText(
-          readRecordValue(call, ["response", "output", "text"]),
-          "",
-        ),
+        userPrompt: readLlmUserPrompt(call),
+        response: readLlmResponse(call),
         temperature: toNumber(readRecordValue(call, ["temperature"]), 0),
         maxTokens: toNumber(
           readRecordValue(call, ["maxTokens", "max_tokens"]),

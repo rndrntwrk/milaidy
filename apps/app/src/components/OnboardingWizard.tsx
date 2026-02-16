@@ -1316,7 +1316,7 @@ export function OnboardingWizard() {
       case "permissions":
         return (
           <div className="max-w-[600px] mx-auto mt-10 font-body">
-            <PermissionsOnboardingSection onContinue={() => void handleOnboardingNext()} />
+            <PermissionsOnboardingSection onContinue={(options) => void handleOnboardingNext(options)} />
           </div>
         );
 
@@ -1375,6 +1375,7 @@ export function OnboardingWizard() {
   };
 
   const canGoBack = onboardingStep !== "welcome";
+  const showPrimaryNext = onboardingStep !== "permissions";
 
   /** On the llmProvider config screen, "back" returns to the provider grid. */
   const handleBack = () => {
@@ -1400,13 +1401,15 @@ export function OnboardingWizard() {
             back
           </button>
         )}
-        <button
-          className="px-6 py-2 border border-accent bg-accent text-accent-fg text-sm cursor-pointer rounded-full hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed"
-          onClick={() => void handleOnboardingNext()}
-          disabled={!canGoNext() || onboardingRestarting}
-        >
-          {onboardingRestarting ? "restarting..." : "next"}
-        </button>
+        {showPrimaryNext && (
+          <button
+            className="px-6 py-2 border border-accent bg-accent text-accent-fg text-sm cursor-pointer rounded-full hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed"
+            onClick={() => void handleOnboardingNext()}
+            disabled={!canGoNext() || onboardingRestarting}
+          >
+            {onboardingRestarting ? "restarting..." : "next"}
+          </button>
+        )}
       </div>
     </div>
   );
