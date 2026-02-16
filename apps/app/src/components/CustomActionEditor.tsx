@@ -1,9 +1,6 @@
-import { useEffect, useState } from "react";
-import {
-  type CustomActionDef,
-  type CustomActionHandler,
-  client,
-} from "../api-client";
+import { useState, useEffect } from "react";
+import { client, type CustomActionDef, type CustomActionHandler } from "../api-client";
+import { Dialog } from "./ui/Dialog.js";
 
 interface CustomActionEditorProps {
   open: boolean;
@@ -701,19 +698,77 @@ export function CustomActionEditor({
     }
   };
 
-  if (!open) return null;
+  const handleSave = async () => {
+    if (!name.trim()) {
+      alert("Name is required");
+      return;
+    }
+
+    let handler: CustomActionHandler;
+
+    if (handlerType === "http") {
+      const headers: Record<string, string> = {};
+      httpHeaders.forEach(h => {
+        if (h.key.trim()) {
+          headers[h.key.trim()] = h.value;
+        }
+      });
+
+      handler = {
+        type: "http",
+        method: httpMethod,
+        url: httpUrl,
+        headers: Object.keys(headers).length > 0 ? headers : undefined,
+        bodyTemplate: httpBody || undefined
+      };
+    } else if (handlerType === "shell") {
+      handler = {
+        type: "shell",
+        command: shellCommand
+      };
+    } else {
+      handler = {
+        type: "code",
+        code
+      };
+    }
+
+    const actionDef = {
+      name: name.trim(),
+      description: description.trim(),
+      similes: [] as string[],
+      parameters: parameters.filter(p => p.name.trim()).map(p => ({
+        name: p.name.trim(),
+        description: p.description.trim(),
+        required: p.required
+      })),
+      handler,
+      enabled: action?.enabled ?? true,
+    };
+
+    try {
+      const saved = action?.id
+        ? await client.updateCustomAction(action.id, actionDef)
+        : await client.createCustomAction(actionDef);
+
+      onSave(saved);
+    } catch (err: any) {
+      alert(`Failed to save: ${err.message || String(err)}`);
+    }
+  };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <Dialog open={open} onClose={onClose} ariaLabelledBy="action-editor-title">
       <div className="w-full max-w-2xl border border-border bg-card shadow-lg flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center px-5 py-3 border-b border-border shrink-0">
-          <h2 className="flex-1 text-sm font-medium text-txt">
+          <h2 id="action-editor-title" className="flex-1 text-sm font-medium text-txt">
             {action ? "Edit Custom Action" : "New Custom Action"}
           </h2>
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close"
             className="text-muted hover:text-txt text-xl leading-none cursor-pointer"
           >
             &times;
@@ -1096,6 +1151,6 @@ export function CustomActionEditor({
           </button>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }
