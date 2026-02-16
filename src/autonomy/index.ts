@@ -115,6 +115,23 @@ export {
   type CompensationRegistryInterface,
 } from "./workflow/index.js";
 
+// Re-export metrics
+export {
+  InMemoryBaselineHarness,
+  FileBaselineHarness,
+  KernelScenarioEvaluator,
+  BUILTIN_SCENARIOS,
+  SCENARIOS_BY_METRIC,
+  SOW_TARGETS,
+  type BaselineHarness,
+  type BaselineMetrics,
+  type EvaluationScenario,
+  type KernelComponents,
+  type MetricsDelta,
+  type ScenarioEvaluator,
+  type ScenarioResult,
+} from "./metrics/index.js";
+
 // ---------- Kernel State ----------
 
 let _kernelInitialized = false;

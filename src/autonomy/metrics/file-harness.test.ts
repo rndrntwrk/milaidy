@@ -30,7 +30,9 @@ const { FileBaselineHarness } = await import("./file-harness.js");
 
 // ---------- Helpers ----------
 
-function makeMetrics(overrides: Partial<BaselineMetrics> = {}): BaselineMetrics {
+function makeMetrics(
+  overrides: Partial<BaselineMetrics> = {},
+): BaselineMetrics {
   return {
     preferenceFollowingAccuracy: 0.9,
     instructionCompletionRate: 0.85,
@@ -63,7 +65,10 @@ describe("FileBaselineHarness", () => {
   it("loads existing snapshots from disk on construction", () => {
     const diskData = {
       "baseline-v1": makeMetrics({ label: "baseline-v1" }),
-      "post-phase1": makeMetrics({ preferenceFollowingAccuracy: 0.95, label: "post-phase1" }),
+      "post-phase1": makeMetrics({
+        preferenceFollowingAccuracy: 0.95,
+        label: "post-phase1",
+      }),
     };
 
     vi.mocked(fs.existsSync).mockReturnValue(true);
@@ -83,7 +88,11 @@ describe("FileBaselineHarness", () => {
     await harness.snapshot(m, "v1");
 
     expect(fs.writeFileSync).toHaveBeenCalledOnce();
-    const [filePath, content] = vi.mocked(fs.writeFileSync).mock.calls[0] as [string, string, string];
+    const [filePath, content] = vi.mocked(fs.writeFileSync).mock.calls[0] as [
+      string,
+      string,
+      string,
+    ];
     expect(filePath).toContain("baseline-snapshots.json");
 
     const parsed = JSON.parse(content);
@@ -124,7 +133,7 @@ describe("FileBaselineHarness", () => {
 
   it("compare() works with disk-loaded snapshots", async () => {
     const diskData = {
-      "v1": makeMetrics({
+      v1: makeMetrics({
         preferenceFollowingAccuracy: 0.8,
         label: "v1",
       }),
@@ -141,7 +150,9 @@ describe("FileBaselineHarness", () => {
     expect(delta).not.toBeNull();
     expect(delta!.baselineLabel).toBe("v1");
 
-    const prefDelta = delta!.deltas.find((d) => d.metric === "preferenceFollowingAccuracy")!;
+    const prefDelta = delta!.deltas.find(
+      (d) => d.metric === "preferenceFollowingAccuracy",
+    )!;
     expect(prefDelta.baseline).toBe(0.8);
     expect(prefDelta.current).toBe(0.95);
     expect(prefDelta.direction).toBe("improved");

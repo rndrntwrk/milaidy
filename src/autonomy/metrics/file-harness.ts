@@ -76,7 +76,9 @@ export class FileBaselineHarness implements BaselineHarness {
   private loadFromDisk(): void {
     try {
       if (!existsSync(this.filePath)) {
-        logger.debug(`[file-harness] No snapshot file at ${this.filePath}, starting fresh`);
+        logger.debug(
+          `[file-harness] No snapshot file at ${this.filePath}, starting fresh`,
+        );
         return;
       }
 
@@ -90,7 +92,9 @@ export class FileBaselineHarness implements BaselineHarness {
         count++;
       }
 
-      logger.info(`[file-harness] Loaded ${count} snapshots from ${this.filePath}`);
+      logger.info(
+        `[file-harness] Loaded ${count} snapshots from ${this.filePath}`,
+      );
     } catch (err) {
       logger.warn(
         `[file-harness] Failed to load snapshots from ${this.filePath}: ${err instanceof Error ? err.message : err}`,

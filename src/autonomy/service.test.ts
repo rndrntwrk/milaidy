@@ -55,6 +55,7 @@ vi.mock("../di/container.js", () => ({
     CompensationRegistry: Symbol.for("CompensationRegistry"),
     ExecutionPipeline: Symbol.for("ExecutionPipeline"),
     InvariantChecker: Symbol.for("InvariantChecker"),
+    BaselineHarness: Symbol.for("BaselineHarness"),
   },
 }));
 
@@ -229,8 +230,8 @@ describe("MilaidyAutonomyService", () => {
       const runtime = createMockRuntime();
       const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
 
-      // 4 core + 3 tool contracts + 5 workflow + InvariantChecker + TrustAwareRetriever = 14
-      expect(mockRegisterValue).toHaveBeenCalledTimes(14);
+      // 4 core + 3 tool contracts + 5 workflow + InvariantChecker + BaselineHarness + TrustAwareRetriever = 15
+      expect(mockRegisterValue).toHaveBeenCalledTimes(15);
 
       // Verify the registered values are the same instances as the service's
       const registeredTokens = mockRegisterValue.mock.calls.map((c: unknown[]) => c[0]);
@@ -247,6 +248,7 @@ describe("MilaidyAutonomyService", () => {
       expect(registeredTokens).toContain(Symbol.for("CompensationRegistry"));
       expect(registeredTokens).toContain(Symbol.for("ExecutionPipeline"));
       expect(registeredTokens).toContain(Symbol.for("InvariantChecker"));
+      expect(registeredTokens).toContain(Symbol.for("BaselineHarness"));
       expect(registeredTokens).toContain(Symbol.for("TrustAwareRetriever"));
 
       // Verify the values are the actual component instances

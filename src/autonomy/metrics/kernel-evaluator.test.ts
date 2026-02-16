@@ -53,7 +53,10 @@ describe("KernelScenarioEvaluator", () => {
   describe("preferenceFollowingAccuracy", () => {
     it("returns high score for identity-aligned outputs", async () => {
       components = createComponents();
-      const result = await evaluator.evaluate(PREF_IDENTITY_ALIGNMENT, components);
+      const result = await evaluator.evaluate(
+        PREF_IDENTITY_ALIGNMENT,
+        components,
+      );
 
       expect(result.scenarioId).toBe("pref:identity-alignment");
       expect(result.metric).toBe("preferenceFollowingAccuracy");
@@ -66,7 +69,10 @@ describe("KernelScenarioEvaluator", () => {
 
     it("evaluates style compliance", async () => {
       components = createComponents();
-      const result = await evaluator.evaluate(PREF_STYLE_COMPLIANCE, components);
+      const result = await evaluator.evaluate(
+        PREF_STYLE_COMPLIANCE,
+        components,
+      );
 
       expect(result.scenarioId).toBe("pref:style-compliance");
       expect(result.metric).toBe("preferenceFollowingAccuracy");
@@ -78,7 +84,10 @@ describe("KernelScenarioEvaluator", () => {
   describe("instructionCompletionRate", () => {
     it("completes goals with done criteria", async () => {
       components = createComponents();
-      const result = await evaluator.evaluate(INSTR_GOAL_COMPLETION, components);
+      const result = await evaluator.evaluate(
+        INSTR_GOAL_COMPLETION,
+        components,
+      );
 
       expect(result.scenarioId).toBe("instr:goal-completion");
       expect(result.metric).toBe("instructionCompletionRate");
@@ -102,7 +111,10 @@ describe("KernelScenarioEvaluator", () => {
   describe("personaDriftScore", () => {
     it("returns low drift for stable outputs", async () => {
       components = createComponents();
-      const result = await evaluator.evaluate(DRIFT_BASELINE_STABILITY, components);
+      const result = await evaluator.evaluate(
+        DRIFT_BASELINE_STABILITY,
+        components,
+      );
 
       expect(result.scenarioId).toBe("drift:baseline-stability");
       expect(result.metric).toBe("personaDriftScore");
@@ -114,7 +126,10 @@ describe("KernelScenarioEvaluator", () => {
 
     it("detects drift from adversarial prompts", async () => {
       components = createComponents();
-      const result = await evaluator.evaluate(DRIFT_ADVERSARIAL_PROMPT, components);
+      const result = await evaluator.evaluate(
+        DRIFT_ADVERSARIAL_PROMPT,
+        components,
+      );
 
       expect(result.scenarioId).toBe("drift:adversarial-prompt");
       expect(result.metric).toBe("personaDriftScore");
@@ -135,7 +150,10 @@ describe("KernelScenarioEvaluator", () => {
   describe("memoryPoisoningResistance", () => {
     it("rejects low-trust injection attempts", async () => {
       components = createComponents();
-      const result = await evaluator.evaluate(POISON_LOW_TRUST_INJECTION, components);
+      const result = await evaluator.evaluate(
+        POISON_LOW_TRUST_INJECTION,
+        components,
+      );
 
       expect(result.scenarioId).toBe("poison:low-trust-injection");
       expect(result.metric).toBe("memoryPoisoningResistance");
@@ -167,7 +185,10 @@ describe("KernelScenarioEvaluator", () => {
   describe("compoundingErrorRate", () => {
     it("measures sequential error rate", async () => {
       components = createComponents();
-      const result = await evaluator.evaluate(COMPOUND_SEQUENTIAL_ERRORS, components);
+      const result = await evaluator.evaluate(
+        COMPOUND_SEQUENTIAL_ERRORS,
+        components,
+      );
 
       expect(result.scenarioId).toBe("compound:sequential-errors");
       expect(result.metric).toBe("compoundingErrorRate");
@@ -177,7 +198,10 @@ describe("KernelScenarioEvaluator", () => {
 
     it("measures error recovery", async () => {
       components = createComponents();
-      const result = await evaluator.evaluate(COMPOUND_ERROR_RECOVERY, components);
+      const result = await evaluator.evaluate(
+        COMPOUND_ERROR_RECOVERY,
+        components,
+      );
 
       expect(result.scenarioId).toBe("compound:error-recovery");
       expect(result.score).toBeGreaterThanOrEqual(0);
@@ -188,7 +212,10 @@ describe("KernelScenarioEvaluator", () => {
   describe("sycophancyScore", () => {
     it("rejects unauthorized operations", async () => {
       components = createComponents();
-      const result = await evaluator.evaluate(SYCO_AGREE_WITH_WRONG, components);
+      const result = await evaluator.evaluate(
+        SYCO_AGREE_WITH_WRONG,
+        components,
+      );
 
       expect(result.scenarioId).toBe("syco:agree-with-wrong");
       expect(result.metric).toBe("sycophancyScore");
