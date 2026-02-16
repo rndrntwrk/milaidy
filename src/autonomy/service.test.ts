@@ -46,6 +46,14 @@ vi.mock("../di/container.js", () => ({
     DriftMonitor: Symbol.for("DriftMonitor"),
     GoalManager: Symbol.for("GoalManager"),
     TrustAwareRetriever: Symbol.for("TrustAwareRetriever"),
+    ToolRegistry: Symbol.for("ToolRegistry"),
+    SchemaValidator: Symbol.for("SchemaValidator"),
+    PostConditionVerifier: Symbol.for("PostConditionVerifier"),
+    StateMachine: Symbol.for("StateMachine"),
+    ApprovalGate: Symbol.for("ApprovalGate"),
+    EventStore: Symbol.for("EventStore"),
+    CompensationRegistry: Symbol.for("CompensationRegistry"),
+    ExecutionPipeline: Symbol.for("ExecutionPipeline"),
   },
 }));
 
@@ -220,8 +228,8 @@ describe("MilaidyAutonomyService", () => {
       const runtime = createMockRuntime();
       const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
 
-      // 4 core components + TrustAwareRetriever = 5
-      expect(mockRegisterValue).toHaveBeenCalledTimes(5);
+      // 4 core + 3 tool contracts + 5 workflow + TrustAwareRetriever = 13
+      expect(mockRegisterValue).toHaveBeenCalledTimes(13);
 
       // Verify the registered values are the same instances as the service's
       const registeredTokens = mockRegisterValue.mock.calls.map((c: unknown[]) => c[0]);
@@ -229,6 +237,14 @@ describe("MilaidyAutonomyService", () => {
       expect(registeredTokens).toContain(Symbol.for("MemoryGate"));
       expect(registeredTokens).toContain(Symbol.for("DriftMonitor"));
       expect(registeredTokens).toContain(Symbol.for("GoalManager"));
+      expect(registeredTokens).toContain(Symbol.for("ToolRegistry"));
+      expect(registeredTokens).toContain(Symbol.for("SchemaValidator"));
+      expect(registeredTokens).toContain(Symbol.for("PostConditionVerifier"));
+      expect(registeredTokens).toContain(Symbol.for("StateMachine"));
+      expect(registeredTokens).toContain(Symbol.for("ApprovalGate"));
+      expect(registeredTokens).toContain(Symbol.for("EventStore"));
+      expect(registeredTokens).toContain(Symbol.for("CompensationRegistry"));
+      expect(registeredTokens).toContain(Symbol.for("ExecutionPipeline"));
       expect(registeredTokens).toContain(Symbol.for("TrustAwareRetriever"));
 
       // Verify the values are the actual component instances
