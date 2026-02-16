@@ -62,6 +62,7 @@ export type {
   AutonomyWorkflowConfig,
   AutonomyApprovalConfig,
   AutonomyEventStoreConfig,
+  AutonomyInvariantsConfig,
 } from "./config.js";
 
 // Re-export state machine
@@ -82,6 +83,19 @@ export {
   type ApprovalDecision,
   type ApprovalResult,
 } from "./approval/index.js";
+
+// Re-export verification invariants
+export {
+  InvariantChecker,
+  registerBuiltinInvariants,
+  type Invariant,
+  type InvariantCheckResult,
+  type InvariantCheckerInterface,
+  type InvariantContext,
+  type InvariantResult,
+  type InvariantSeverity,
+  type InvariantStatus,
+} from "./verification/index.js";
 
 // Re-export workflow engine
 export {
