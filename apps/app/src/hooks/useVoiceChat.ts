@@ -490,8 +490,8 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
       };
       const apiToken =
         typeof window !== "undefined" &&
-        typeof window.__MILAIDY_API_TOKEN__ === "string"
-          ? window.__MILAIDY_API_TOKEN__.trim()
+        typeof window.__MILADY_API_TOKEN__ === "string"
+          ? window.__MILADY_API_TOKEN__.trim()
           : "";
 
       const fetchViaProxy = async () => {

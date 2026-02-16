@@ -125,20 +125,11 @@ export function SettingsView() {
 
   /* ── Model selection state ─────────────────────────────────────────── */
   const [modelOptions, setModelOptions] = useState<OnboardingOptions["models"] | null>(null);
-  const [piModels, setPiModels] = useState<NonNullable<OnboardingOptions["piModels"]>>([]);
-  const [piDefaultModel, setPiDefaultModel] = useState<string>("");
 
   const [currentSmallModel, setCurrentSmallModel] = useState("");
   const [currentLargeModel, setCurrentLargeModel] = useState("");
   const [modelSaving, setModelSaving] = useState(false);
   const [modelSaveSuccess, setModelSaveSuccess] = useState(false);
-
-  /* ── pi-ai provider state ─────────────────────────────────────────── */
-  const [piAiEnabled, setPiAiEnabled] = useState(false);
-  const [piAiSmallModel, setPiAiSmallModel] = useState("");
-  const [piAiLargeModel, setPiAiLargeModel] = useState("");
-  const [piAiSaving, setPiAiSaving] = useState(false);
-  const [piAiSaveSuccess, setPiAiSaveSuccess] = useState(false);
 
   useEffect(() => {
     void loadPlugins();
@@ -149,8 +140,6 @@ export function SettingsView() {
       try {
         const opts = await client.getOnboardingOptions();
         setModelOptions(opts.models);
-        setPiModels(opts.piModels ?? []);
-        setPiDefaultModel(opts.piDefaultModel ?? "");
       } catch { /* ignore */ }
       try {
         const cfg = await client.getConfig();
@@ -161,25 +150,6 @@ export function SettingsView() {
         const defaultLarge = "moonshotai/kimi-k2-0905";
         setCurrentSmallModel(models?.small || (cloudEnabledCfg ? defaultSmall : ""));
         setCurrentLargeModel(models?.large || (cloudEnabledCfg ? defaultLarge : ""));
-
-        // pi-ai enabled flag + optional primary model
-        const env = cfg.env as Record<string, unknown> | undefined;
-        const vars = (env?.vars as Record<string, unknown> | undefined) ?? {};
-        const rawPiAi = vars.MILAIDY_USE_PI_AI;
-        const piAiOn = typeof rawPiAi === "string" && ["1", "true", "yes"].includes(rawPiAi.trim().toLowerCase());
-        setPiAiEnabled(piAiOn);
-
-        const agents = cfg.agents as Record<string, unknown> | undefined;
-        const defaults = agents?.defaults as Record<string, unknown> | undefined;
-        const modelCfg = defaults?.model as Record<string, unknown> | undefined;
-        const primary = typeof modelCfg?.primary === "string" ? modelCfg.primary : "";
-
-        const modelsCfg = (cfg.models as Record<string, unknown> | undefined) ?? {};
-        const small = typeof modelsCfg.piAiSmall === "string" ? (modelsCfg.piAiSmall as string) : "";
-        const large = typeof modelsCfg.piAiLarge === "string" ? (modelsCfg.piAiLarge as string) : primary;
-
-        setPiAiSmallModel(small);
-        setPiAiLargeModel(large);
       } catch { /* ignore */ }
     })();
   }, [loadPlugins, loadUpdateStatus, checkExtensionStatus]);
@@ -201,29 +171,20 @@ export function SettingsView() {
       if (selectedProviderId !== "__cloud__") setSelectedProviderId("__cloud__");
       return;
     }
+  }, [cloudEnabled, selectedProviderId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    if (piAiEnabled) {
-      if (selectedProviderId !== "pi-ai") setSelectedProviderId("pi-ai");
-      return;
-    }
-  }, [cloudEnabled, piAiEnabled, selectedProviderId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  /* Resolve the actually-selected provider: accept __cloud__ / pi-ai or fall back */
+  /* Resolve the actually-selected provider: accept __cloud__ or fall back */
   const resolvedSelectedId =
     selectedProviderId === "__cloud__"
       ? "__cloud__"
-      : selectedProviderId === "pi-ai"
-        ? "pi-ai"
-        : selectedProviderId && allAiProviders.some((p) => p.id === selectedProviderId)
-          ? selectedProviderId
-          : cloudEnabled
-            ? "__cloud__"
-            : piAiEnabled
-              ? "pi-ai"
-              : enabledAiProviders[0]?.id ?? null;
+      : selectedProviderId && allAiProviders.some((p) => p.id === selectedProviderId)
+        ? selectedProviderId
+        : cloudEnabled
+          ? "__cloud__"
+          : enabledAiProviders[0]?.id ?? null;
 
   const selectedProvider =
-    resolvedSelectedId && resolvedSelectedId !== "__cloud__" && resolvedSelectedId !== "pi-ai"
+    resolvedSelectedId && resolvedSelectedId !== "__cloud__"
       ? allAiProviders.find((p) => p.id === resolvedSelectedId) ?? null
       : null;
 
@@ -231,15 +192,13 @@ export function SettingsView() {
     async (newId: string) => {
       hasManualSelection.current = true;
       setSelectedProviderId(newId);
-      setPiAiEnabled(false);
       const target = allAiProviders.find((p) => p.id === newId);
       if (!target) return;
 
-      /* Turn off cloud mode (and pi-ai mode) when switching to a local provider */
+      /* Turn off cloud mode when switching to a local provider */
       try {
         await client.updateConfig({
           cloud: { enabled: false },
-          env: { vars: { MILAIDY_USE_PI_AI: "" } },
           agents: { defaults: { model: { primary: null } } },
         });
       } catch { /* non-fatal */ }
@@ -258,12 +217,9 @@ export function SettingsView() {
   const handleSelectCloud = useCallback(async () => {
     hasManualSelection.current = true;
     setSelectedProviderId("__cloud__");
-    setPiAiEnabled(false);
     try {
       await client.updateConfig({
         cloud: { enabled: true },
-        // Ensure local pi-ai mode is disabled when switching to cloud.
-        env: { vars: { MILAIDY_USE_PI_AI: "" } },
         agents: { defaults: { model: { primary: null } } },
         models: {
           small: currentSmallModel || "moonshotai/kimi-k2-turbo",
@@ -273,74 +229,6 @@ export function SettingsView() {
       await client.restartAgent();
     } catch { /* non-fatal */ }
   }, [currentSmallModel, currentLargeModel]);
-
-  const piAiAvailable = piModels.length > 0 || Boolean(piDefaultModel);
-
-  const handleSelectPiAi = useCallback(async () => {
-    hasManualSelection.current = true;
-    setSelectedProviderId("pi-ai");
-    setPiAiEnabled(true);
-
-    setPiAiSaving(true);
-    setPiAiSaveSuccess(false);
-    try {
-      await client.updateConfig({
-        cloud: { enabled: false },
-        env: { vars: { MILAIDY_USE_PI_AI: "1" } },
-        models: {
-          piAiSmall: piAiSmallModel.trim() || null,
-          piAiLarge: piAiLargeModel.trim() || null,
-        },
-        agents: {
-          defaults: {
-            model: {
-              // Keep primary aligned with the pi-ai large model override so
-              // any code that reads MODEL_PROVIDER as a modelSpec still works.
-              primary: piAiLargeModel.trim() || null,
-            },
-          },
-        },
-      });
-      await client.restartAgent();
-      setPiAiSaveSuccess(true);
-      setTimeout(() => setPiAiSaveSuccess(false), 2000);
-    } catch {
-      /* ignore */
-    } finally {
-      setPiAiSaving(false);
-    }
-  }, [piAiSmallModel, piAiLargeModel]);
-
-  const handlePiAiSave = useCallback(async () => {
-    // Save pi-ai small/large overrides; keep pi-ai enabled.
-    setPiAiSaving(true);
-    setPiAiSaveSuccess(false);
-    try {
-      await client.updateConfig({
-        cloud: { enabled: false },
-        env: { vars: { MILAIDY_USE_PI_AI: "1" } },
-        models: {
-          piAiSmall: piAiSmallModel.trim() || null,
-          piAiLarge: piAiLargeModel.trim() || null,
-        },
-        agents: {
-          defaults: {
-            model: {
-              primary: piAiLargeModel.trim() || null,
-            },
-          },
-        },
-      });
-      await client.restartAgent();
-      setPiAiEnabled(true);
-      setPiAiSaveSuccess(true);
-      setTimeout(() => setPiAiSaveSuccess(false), 2000);
-    } catch {
-      /* ignore */
-    } finally {
-      setPiAiSaving(false);
-    }
-  }, [piAiSmallModel, piAiLargeModel]);
 
   const ext = extensionStatus;
   const relayOk = ext?.relayReachable === true;
@@ -472,16 +360,10 @@ export function SettingsView() {
         <div className="font-bold text-sm mb-4">AI Model</div>
 
         {(() => {
-          const totalCols = allAiProviders.length + 2; /* +2 for Eliza Cloud + Pi */
+          const totalCols = allAiProviders.length + 1; /* +1 for Eliza Cloud */
           const isCloudSelected = resolvedSelectedId === "__cloud__";
-          const isPiAiSelected = resolvedSelectedId === "pi-ai";
           const providerChoices = [
             { id: "__cloud__", label: "Eliza Cloud", disabled: false },
-            {
-              id: "pi-ai",
-              label: !piAiAvailable && !isPiAiSelected ? "Pi (pi-ai) — unavailable" : "Pi (pi-ai)",
-              disabled: !piAiAvailable && !isPiAiSelected,
-            },
             ...allAiProviders.map((provider) => ({
               id: provider.id,
               label: provider.name,
@@ -523,11 +405,6 @@ export function SettingsView() {
                       void handleSelectCloud();
                       return;
                     }
-                    if (nextId === "pi-ai") {
-                      if (!piAiAvailable && !isPiAiSelected) return;
-                      void handleSelectPiAi();
-                      return;
-                    }
                     void handleSwitchProvider(nextId);
                   }}
                 >
@@ -556,33 +433,8 @@ export function SettingsView() {
                   </div>
                 </button>
 
-                {/* pi-ai (local credentials) */}
-                <button
-                  className={`text-center px-2 py-2 border cursor-pointer transition-colors ${
-                    isPiAiSelected
-                      ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]"
-                      : "border-[var(--border)] bg-[var(--card)] hover:border-[var(--accent)]"
-                  } ${!piAiAvailable && !isPiAiSelected ? "opacity-50 cursor-not-allowed" : ""}`}
-                  onClick={() => {
-                    if (!piAiAvailable && !isPiAiSelected) return;
-                    void handleSelectPiAi();
-                  }}
-                  disabled={!piAiAvailable && !isPiAiSelected}
-                  title={
-                    piAiAvailable
-                      ? "Use local Pi credentials (~/.pi/agent)"
-                      : isPiAiSelected
-                        ? "Using pi-ai (model list still loading)"
-                        : "pi-ai is not available (no models detected)"
-                  }
-                >
-                  <div className={`text-xs font-bold whitespace-nowrap ${isPiAiSelected ? "" : "text-[var(--text)]"}`}>
-                    Pi (pi-ai)
-                  </div>
-                </button>
-
                 {allAiProviders.map((provider) => {
-                  const isSelected = !isCloudSelected && !isPiAiSelected && provider.id === resolvedSelectedId;
+                  const isSelected = !isCloudSelected && provider.id === resolvedSelectedId;
                   return (
                     <button
                       key={provider.id}
@@ -739,78 +591,6 @@ export function SettingsView() {
                       )}
                     </div>
                   )}
-                </div>
-              )}
-
-              {/* ── pi-ai settings (local credentials) ───────────────── */}
-              {!isCloudSelected && isPiAiSelected && (
-                <div className="mt-4 pt-4 border-t border-[var(--border)]">
-                  <div className="flex justify-between items-center mb-2">
-                    <div className="text-xs font-semibold">Pi (pi-ai) Settings</div>
-                    <span
-                      className={`text-[11px] px-2 py-[3px] border ${piAiEnabled ? "" : "opacity-70"}`}
-                      style={{
-                        borderColor: piAiEnabled ? "#2d8a4e" : "var(--warning,#f39c12)",
-                        color: piAiEnabled ? "#2d8a4e" : "var(--warning,#f39c12)",
-                      }}
-                    >
-                      {piAiEnabled ? "Enabled" : "Disabled"}
-                    </span>
-                  </div>
-
-                  <div className="text-[11px] text-[var(--muted)] mb-3">
-                    Uses credentials from <code className="font-[var(--mono)]">~/.pi/agent/auth.json</code>.
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-semibold">Small Model (optional)</label>
-                    <div className="text-[10px] text-[var(--muted)]">
-                      Used for fast tasks. Leave blank to use pi default{piDefaultModel ? ` (${piDefaultModel})` : ""}.
-                    </div>
-                    <input
-                      className="w-full px-2.5 py-[7px] border border-[var(--border)] bg-[var(--card)] text-[13px] font-[var(--mono)] transition-colors focus:border-[var(--accent)] focus:outline-none"
-                      type="text"
-                      value={piAiSmallModel}
-                      onChange={(e) => setPiAiSmallModel(e.target.value)}
-                      placeholder={piDefaultModel ? `e.g. ${piDefaultModel}` : "provider/modelId"}
-                      list="pi-ai-models-config"
-                    />
-                    <datalist id="pi-ai-models-config">
-                      {piModels.slice(0, 400).map((m) => (
-                        <option key={m.id} value={m.id} />
-                      ))}
-                    </datalist>
-                  </div>
-
-                  <div className="flex flex-col gap-1 mt-3">
-                    <label className="text-xs font-semibold">Large Model (optional)</label>
-                    <div className="text-[10px] text-[var(--muted)]">
-                      Used for complex reasoning. Leave blank to use pi default{piDefaultModel ? ` (${piDefaultModel})` : ""}.
-                    </div>
-                    <input
-                      className="w-full px-2.5 py-[7px] border border-[var(--border)] bg-[var(--card)] text-[13px] font-[var(--mono)] transition-colors focus:border-[var(--accent)] focus:outline-none"
-                      type="text"
-                      value={piAiLargeModel}
-                      onChange={(e) => setPiAiLargeModel(e.target.value)}
-                      placeholder={piDefaultModel ? `e.g. ${piDefaultModel}` : "provider/modelId"}
-                      list="pi-ai-models-config-large"
-                    />
-                    <datalist id="pi-ai-models-config-large">
-                      {piModels.slice(0, 400).map((m) => (
-                        <option key={m.id} value={m.id} />
-                      ))}
-                    </datalist>
-                  </div>
-
-                  <div className="flex justify-end mt-3">
-                    <button
-                      className={`btn text-xs py-[5px] px-4 !mt-0 ${piAiSaveSuccess ? "!bg-[var(--ok,#16a34a)] !border-[var(--ok,#16a34a)]" : ""}`}
-                      onClick={() => void handlePiAiSave()}
-                      disabled={piAiSaving}
-                    >
-                      {piAiSaving ? "Saving..." : piAiSaveSuccess ? "Saved" : "Save & Restart"}
-                    </button>
-                  </div>
                 </div>
               )}
 
@@ -1015,7 +795,7 @@ export function SettingsView() {
                 <div className="text-[11px] text-[var(--muted)] text-right">
                   Run{" "}
                   <code className="bg-[var(--bg-hover,rgba(255,255,255,0.05))] px-1.5 py-0.5 rounded-sm">
-                    milaidy update
+                    milady update
                   </code>
                 </div>
               </div>
@@ -1108,13 +888,13 @@ export function SettingsView() {
                     <code className="text-[11px] px-1.5 border border-[var(--border)] bg-[var(--bg-muted)] inline-block mt-1">
                       apps/chrome-extension/
                     </code>
-                    <span className="italic"> (relative to milaidy package root)</span>
+                    <span className="italic"> (relative to milady package root)</span>
                   </>
                 )}
               </li>
               <li className="mb-1.5">Pin the extension icon in Chrome&apos;s toolbar</li>
               <li>
-                Click the extension icon on any tab to attach/detach the Milaidy browser relay
+                Click the extension icon on any tab to attach/detach the Milady browser relay
               </li>
             </ol>
           </div>

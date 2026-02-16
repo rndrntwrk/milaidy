@@ -28,7 +28,6 @@ declare module "@elizaos/tui" {
   export type SlashCommand = {
     name: string;
     description?: string;
-    getArgumentCompletions?: (argumentPrefix: string) => AutocompleteItem[];
   };
 
   export interface SelectListTheme {

@@ -76,8 +76,8 @@ export function ChatAvatar({ mouthOpen = 0, isSpeaking = false }: ChatAvatarProp
   useEffect(() => {
     if (!engineReady) return;
     const handler = () => vrmEngineRef.current?.stopEmote();
-    document.addEventListener("milaidy:stop-emote", handler);
-    return () => document.removeEventListener("milaidy:stop-emote", handler);
+    document.addEventListener("milady:stop-emote", handler);
+    return () => document.removeEventListener("milady:stop-emote", handler);
   }, [engineReady]);
 
   return (

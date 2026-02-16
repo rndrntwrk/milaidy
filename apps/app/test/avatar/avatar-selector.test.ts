@@ -42,7 +42,7 @@ describe("Avatar VRM Utilities", () => {
 });
 
 describe("Avatar Selection State", () => {
-  const AVATAR_STORAGE_KEY = "milaidy:selectedVrm";
+  const AVATAR_STORAGE_KEY = "milady:selectedVrm";
 
   beforeEach(() => {
     vi.restoreAllMocks();

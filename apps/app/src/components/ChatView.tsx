@@ -81,8 +81,8 @@ export function ChatView() {
       void loadVoiceConfig();
     };
 
-    window.addEventListener("milaidy:voice-config-updated", handler);
-    return () => window.removeEventListener("milaidy:voice-config-updated", handler);
+    window.addEventListener("milady:voice-config-updated", handler);
+    return () => window.removeEventListener("milady:voice-config-updated", handler);
   }, [loadVoiceConfig]);
 
   // ── Voice chat ────────────────────────────────────────────────────

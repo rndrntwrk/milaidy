@@ -166,24 +166,6 @@ export type MockRequestOptions = {
   json?: boolean;
 };
 
-type ModelRegistrationCapture = {
-  calls: Array<{
-    modelType: string;
-    provider: string;
-    priority: number;
-    handler: unknown;
-  }>;
-  getLargeHandler: () => unknown | null;
-  runtime: {
-    registerModel: (
-      modelType: string,
-      handler: unknown,
-      provider: string,
-      priority?: number,
-    ) => void;
-  };
-};
-
 /** Create a lightweight mocked HTTP response used by handler tests. */
 export function createMockHttpResponse<T = unknown>(): MockResponsePayload<T> {
   let statusCode = 200;
@@ -313,32 +295,3 @@ export async function tryOptionalDynamicImport<T>(
   }
 }
 
-/** Shared helper to capture handlers registered by runtime schema handlers. */
-export function createModelRegistrationContext(): ModelRegistrationCapture {
-  const calls: ModelRegistrationCapture["calls"] = [];
-
-  const runtime = {
-    registerModel: (
-      modelType: string,
-      handler: unknown,
-      provider: string,
-      priority?: number,
-    ) => {
-      calls.push({
-        modelType,
-        handler,
-        provider,
-        priority: priority ?? 0,
-      });
-    },
-  };
-
-  const getLargeHandler = (): unknown => {
-    const entry = calls.find(
-      (value) => value.modelType === "TEXT_LARGE" && value.provider === "pi-ai",
-    );
-    return entry ? entry.handler : null;
-  };
-
-  return { calls, getLargeHandler: () => getLargeHandler(), runtime };
-}

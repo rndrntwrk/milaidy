@@ -3,14 +3,14 @@
  */
 import { describe, it, expect, vi } from "vitest";
 
-vi.mock("@milaidy/capacitor-gateway", () => ({ Gateway: {} }));
-vi.mock("@milaidy/capacitor-swabble", () => ({ Swabble: {} }));
-vi.mock("@milaidy/capacitor-talkmode", () => ({ TalkMode: {} }));
-vi.mock("@milaidy/capacitor-camera", () => ({ Camera: {} }));
-vi.mock("@milaidy/capacitor-location", () => ({ Location: {} }));
-vi.mock("@milaidy/capacitor-screencapture", () => ({ ScreenCapture: {} }));
-vi.mock("@milaidy/capacitor-canvas", () => ({ Canvas: {} }));
-vi.mock("@milaidy/capacitor-desktop", () => ({ Desktop: {} }));
+vi.mock("@milady/capacitor-gateway", () => ({ Gateway: {} }));
+vi.mock("@milady/capacitor-swabble", () => ({ Swabble: {} }));
+vi.mock("@milady/capacitor-talkmode", () => ({ TalkMode: {} }));
+vi.mock("@milady/capacitor-camera", () => ({ Camera: {} }));
+vi.mock("@milady/capacitor-location", () => ({ Location: {} }));
+vi.mock("@milady/capacitor-screencapture", () => ({ ScreenCapture: {} }));
+vi.mock("@milady/capacitor-canvas", () => ({ Canvas: {} }));
+vi.mock("@milady/capacitor-desktop", () => ({ Desktop: {} }));
 import {
   getPluginCapabilities,
   isFeatureAvailable,

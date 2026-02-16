@@ -1,4 +1,4 @@
-package ai.milaidy.plugins.talkmode
+package ai.milady.plugins.talkmode
 
 import android.Manifest
 import android.content.Intent

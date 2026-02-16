@@ -185,7 +185,7 @@ export function VoiceConfigView() {
         },
       });
       window.dispatchEvent(
-        new CustomEvent("milaidy:voice-config-updated", {
+        new CustomEvent("milady:voice-config-updated", {
           detail: normalizedVoiceConfig,
         }),
       );

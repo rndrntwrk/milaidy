@@ -1,8 +1,8 @@
 /**
  * Auth module — subscription-based OAuth for Claude Max and Codex Pro.
  *
- * Uses @mariozechner/pi-ai for OAuth flows (PKCE, token exchange, refresh).
- * Adds server-side credential storage and env var injection on top.
+ * OAuth flows are disabled.
+ * Credential storage and env var injection remain for future use.
  */
 
 export type { AnthropicFlow } from "./anthropic.js";

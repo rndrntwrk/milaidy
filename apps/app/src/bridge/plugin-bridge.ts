@@ -1,7 +1,7 @@
 /**
  * Plugin Bridge
  *
- * This module provides a unified interface to all Milaidy Capacitor plugins
+ * This module provides a unified interface to all Milady Capacitor plugins
  * with platform-specific fallbacks and capability detection.
  *
  * When a native plugin is unavailable, it provides graceful degradation
@@ -10,24 +10,24 @@
 
 import { Capacitor } from "@capacitor/core";
 
-// Import all Milaidy plugins
-import { Gateway as GatewayPlugin } from "@milaidy/capacitor-gateway";
-import { Swabble as SwabblePlugin } from "@milaidy/capacitor-swabble";
-import { TalkMode as TalkModePlugin } from "@milaidy/capacitor-talkmode";
-import { Camera as CameraPlugin } from "@milaidy/capacitor-camera";
-import { Location as LocationPlugin } from "@milaidy/capacitor-location";
-import { ScreenCapture as ScreenCapturePlugin } from "@milaidy/capacitor-screencapture";
-import { Canvas as CanvasPlugin } from "@milaidy/capacitor-canvas";
-import { Desktop as DesktopPlugin } from "@milaidy/capacitor-desktop";
+// Import all Milady plugins
+import { Gateway as GatewayPlugin } from "@milady/capacitor-gateway";
+import { Swabble as SwabblePlugin } from "@milady/capacitor-swabble";
+import { TalkMode as TalkModePlugin } from "@milady/capacitor-talkmode";
+import { Camera as CameraPlugin } from "@milady/capacitor-camera";
+import { Location as LocationPlugin } from "@milady/capacitor-location";
+import { ScreenCapture as ScreenCapturePlugin } from "@milady/capacitor-screencapture";
+import { Canvas as CanvasPlugin } from "@milady/capacitor-canvas";
+import { Desktop as DesktopPlugin } from "@milady/capacitor-desktop";
 // Import types
-import type { GatewayPlugin as IGatewayPlugin } from "@milaidy/capacitor-gateway";
-import type { SwabblePlugin as ISwabblePlugin } from "@milaidy/capacitor-swabble";
-import type { TalkModePlugin as ITalkModePlugin } from "@milaidy/capacitor-talkmode";
-import type { CameraPlugin as ICameraPlugin } from "@milaidy/capacitor-camera";
-import type { LocationPlugin as ILocationPlugin } from "@milaidy/capacitor-location";
-import type { ScreenCapturePlugin as IScreenCapturePlugin } from "@milaidy/capacitor-screencapture";
-import type { CanvasPlugin as ICanvasPlugin } from "@milaidy/capacitor-canvas";
-import type { DesktopPlugin as IDesktopPlugin } from "@milaidy/capacitor-desktop";
+import type { GatewayPlugin as IGatewayPlugin } from "@milady/capacitor-gateway";
+import type { SwabblePlugin as ISwabblePlugin } from "@milady/capacitor-swabble";
+import type { TalkModePlugin as ITalkModePlugin } from "@milady/capacitor-talkmode";
+import type { CameraPlugin as ICameraPlugin } from "@milady/capacitor-camera";
+import type { LocationPlugin as ILocationPlugin } from "@milady/capacitor-location";
+import type { ScreenCapturePlugin as IScreenCapturePlugin } from "@milady/capacitor-screencapture";
+import type { CanvasPlugin as ICanvasPlugin } from "@milady/capacitor-canvas";
+import type { DesktopPlugin as IDesktopPlugin } from "@milady/capacitor-desktop";
 
 // Platform detection
 const platform = Capacitor.getPlatform();
@@ -201,9 +201,9 @@ function wrapPlugin<T extends Record<string, unknown>>(
 }
 
 /**
- * The plugin bridge providing access to all Milaidy plugins
+ * The plugin bridge providing access to all Milady plugins
  */
-export interface MilaidyPlugins {
+export interface MiladyPlugins {
   /** Gateway connection plugin */
   gateway: WrappedPlugin<IGatewayPlugin>;
   /** Voice wake word plugin */
@@ -225,12 +225,12 @@ export interface MilaidyPlugins {
 }
 
 // Singleton instance
-let pluginsInstance: MilaidyPlugins | null = null;
+let pluginsInstance: MiladyPlugins | null = null;
 
 /**
  * Initialize and get the plugins interface
  */
-export function getPlugins(): MilaidyPlugins {
+export function getPlugins(): MiladyPlugins {
   if (pluginsInstance) {
     return pluginsInstance;
   }
