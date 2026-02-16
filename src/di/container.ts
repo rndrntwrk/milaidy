@@ -106,6 +106,15 @@ export const TOKENS = {
   Auditor: createToken<import("../autonomy/roles/types.js").AuditorRole>("Auditor"),
   SafeMode: createToken<import("../autonomy/roles/types.js").SafeModeController>("SafeMode"),
   Orchestrator: createToken<import("../autonomy/roles/types.js").RoleOrchestrator>("Orchestrator"),
+
+  // Autonomy Learning (Phase 4)
+  TraceCollector: createToken<import("../autonomy/learning/trace-collector.js").TraceCollector>("TraceCollector"),
+  HackDetector: createToken<import("../autonomy/learning/hack-detection.js").HackDetector>("HackDetector"),
+  RolloutCollector: createToken<import("../autonomy/learning/rollout.js").RolloutCollector>("RolloutCollector"),
+  ModelProvider: createToken<import("../autonomy/learning/types.js").ModelProvider>("ModelProvider"),
+  PromptBuilder: createToken<import("../autonomy/learning/prompt-builder.js").SystemPromptBuilder>("PromptBuilder"),
+  CheckpointManager: createToken<import("../autonomy/learning/rollout.js").CheckpointManager>("CheckpointManager"),
+  AdversarialGenerator: createToken<import("../autonomy/learning/adversarial.js").AdversarialScenarioGenerator>("AdversarialGenerator"),
 } as const;
 
 // ---------- Service Container ----------

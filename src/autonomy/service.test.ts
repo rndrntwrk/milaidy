@@ -62,6 +62,13 @@ vi.mock("../di/container.js", () => ({
     Auditor: Symbol.for("Auditor"),
     SafeMode: Symbol.for("SafeMode"),
     Orchestrator: Symbol.for("Orchestrator"),
+    TraceCollector: Symbol.for("TraceCollector"),
+    HackDetector: Symbol.for("HackDetector"),
+    RolloutCollector: Symbol.for("RolloutCollector"),
+    ModelProvider: Symbol.for("ModelProvider"),
+    PromptBuilder: Symbol.for("PromptBuilder"),
+    CheckpointManager: Symbol.for("CheckpointManager"),
+    AdversarialGenerator: Symbol.for("AdversarialGenerator"),
   },
 }));
 
@@ -236,8 +243,8 @@ describe("MilaidyAutonomyService", () => {
       const runtime = createMockRuntime();
       const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
 
-      // 4 core + 3 tool contracts + 5 workflow + InvariantChecker + BaselineHarness + TrustAwareRetriever + 6 roles = 21
-      expect(mockRegisterValue).toHaveBeenCalledTimes(21);
+      // 4 core + 3 tool contracts + 5 workflow + InvariantChecker + BaselineHarness + TrustAwareRetriever + 6 roles + PromptBuilder = 22
+      expect(mockRegisterValue).toHaveBeenCalledTimes(22);
 
       // Verify the registered values are the same instances as the service's
       const registeredTokens = mockRegisterValue.mock.calls.map((c: unknown[]) => c[0]);
@@ -263,11 +270,29 @@ describe("MilaidyAutonomyService", () => {
       expect(registeredTokens).toContain(Symbol.for("SafeMode"));
       expect(registeredTokens).toContain(Symbol.for("Orchestrator"));
 
+      expect(registeredTokens).toContain(Symbol.for("PromptBuilder"));
+
       // Verify the values are the actual component instances
       const goalManagerCall = mockRegisterValue.mock.calls.find(
         (c: unknown[]) => c[0] === Symbol.for("GoalManager"),
       );
       expect(goalManagerCall![1]).toBe(svc.getGoalManager());
+    });
+
+    it("registers learning components when learning is enabled", async () => {
+      setAutonomyConfig({ enabled: true, learning: { enabled: true } });
+      const runtime = createMockRuntime();
+      await MilaidyAutonomyService.start(runtime);
+
+      // 22 (base) + 6 (learning: TraceCollector, HackDetector, RolloutCollector, ModelProvider, CheckpointManager, AdversarialGenerator) = 28
+      expect(mockRegisterValue).toHaveBeenCalledTimes(28);
+      const registeredTokens = mockRegisterValue.mock.calls.map((c: unknown[]) => c[0]);
+      expect(registeredTokens).toContain(Symbol.for("TraceCollector"));
+      expect(registeredTokens).toContain(Symbol.for("HackDetector"));
+      expect(registeredTokens).toContain(Symbol.for("RolloutCollector"));
+      expect(registeredTokens).toContain(Symbol.for("ModelProvider"));
+      expect(registeredTokens).toContain(Symbol.for("CheckpointManager"));
+      expect(registeredTokens).toContain(Symbol.for("AdversarialGenerator"));
     });
   });
 
@@ -525,6 +550,35 @@ describe("MilaidyAutonomyService", () => {
       expect(svc.getAuditor()).toBeNull();
       expect(svc.getSafeModeController()).toBeNull();
       expect(svc.getOrchestrator()).toBeNull();
+    });
+
+    it("returns learning accessors when learning enabled", async () => {
+      setAutonomyConfig({ enabled: true, learning: { enabled: true } });
+      const runtime = createMockRuntime();
+      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+
+      expect(svc.getTraceCollector()).not.toBeNull();
+      expect(svc.getHackDetector()).not.toBeNull();
+      expect(svc.getRolloutCollector()).not.toBeNull();
+      expect(svc.getModelProvider()).not.toBeNull();
+      expect(svc.getPromptBuilder()).not.toBeNull();
+      expect(svc.getCheckpointManager()).not.toBeNull();
+      expect(svc.getAdversarialGenerator()).not.toBeNull();
+    });
+
+    it("returns null learning accessors when learning disabled", async () => {
+      setAutonomyConfig({ enabled: true });
+      const runtime = createMockRuntime();
+      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+
+      expect(svc.getTraceCollector()).toBeNull();
+      expect(svc.getHackDetector()).toBeNull();
+      expect(svc.getRolloutCollector()).toBeNull();
+      expect(svc.getModelProvider()).toBeNull();
+      // PromptBuilder is always created
+      expect(svc.getPromptBuilder()).not.toBeNull();
+      expect(svc.getCheckpointManager()).toBeNull();
+      expect(svc.getAdversarialGenerator()).toBeNull();
     });
 
     it("GoalManager can create and retrieve goals", async () => {

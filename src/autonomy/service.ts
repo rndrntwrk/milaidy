@@ -83,6 +83,19 @@ let _DriftAwareAuditor: typeof import("./roles/auditor.js").DriftAwareAuditor;
 let _SafeModeControllerImpl: typeof import("./roles/safe-mode.js").SafeModeControllerImpl;
 let _KernelOrchestrator: typeof import("./roles/orchestrator.js").KernelOrchestrator;
 
+// Phase 4 — Learning
+let _CheckpointReward: typeof import("./learning/reward.js").CheckpointReward;
+let _EpisodeReward: typeof import("./learning/reward.js").EpisodeReward;
+let _TraceCollector: typeof import("./learning/trace-collector.js").TraceCollector;
+let _HackDetector: typeof import("./learning/hack-detection.js").HackDetector;
+let _createHackDetectionInvariants: typeof import("./learning/hack-detection.js").createHackDetectionInvariants;
+let _RolloutCollector: typeof import("./learning/rollout.js").RolloutCollector;
+let _CheckpointManager: typeof import("./learning/rollout.js").CheckpointManager;
+let _StubModelProvider: typeof import("./learning/model-provider.js").StubModelProvider;
+let _HttpModelProvider: typeof import("./learning/model-provider.js").HttpModelProvider;
+let _SystemPromptBuilder: typeof import("./learning/prompt-builder.js").SystemPromptBuilder;
+let _AdversarialScenarioGenerator: typeof import("./learning/adversarial.js").AdversarialScenarioGenerator;
+
 async function loadImplementations() {
   const [trustMod, memMod, driftMod, goalMod, toolRegMod, schemaValMod, pcvMod, toolSchemasMod, pcMod, smMod, approvalMod, esMod, compRegMod, pipelineMod, compsMod, invMod, invRegMod, harnMod, evalMod, plannerMod, verifierMod, memWriterMod, auditorMod, safeModeMod, orchestratorMod] = await Promise.all([
     import("./trust/scorer.js"),
@@ -136,6 +149,28 @@ async function loadImplementations() {
   _DriftAwareAuditor = auditorMod.DriftAwareAuditor;
   _SafeModeControllerImpl = safeModeMod.SafeModeControllerImpl;
   _KernelOrchestrator = orchestratorMod.KernelOrchestrator;
+
+  // Phase 4 — Learning (lazy, non-blocking)
+  const [rewardMod, traceMod, hackMod, rolloutMod, modelMod, promptMod, advMod] = await Promise.all([
+    import("./learning/reward.js"),
+    import("./learning/trace-collector.js"),
+    import("./learning/hack-detection.js"),
+    import("./learning/rollout.js"),
+    import("./learning/model-provider.js"),
+    import("./learning/prompt-builder.js"),
+    import("./learning/adversarial.js"),
+  ]);
+  _CheckpointReward = rewardMod.CheckpointReward;
+  _EpisodeReward = rewardMod.EpisodeReward;
+  _TraceCollector = traceMod.TraceCollector;
+  _HackDetector = hackMod.HackDetector;
+  _createHackDetectionInvariants = hackMod.createHackDetectionInvariants;
+  _RolloutCollector = rolloutMod.RolloutCollector;
+  _CheckpointManager = rolloutMod.CheckpointManager;
+  _StubModelProvider = modelMod.StubModelProvider;
+  _HttpModelProvider = modelMod.HttpModelProvider;
+  _SystemPromptBuilder = promptMod.SystemPromptBuilder;
+  _AdversarialScenarioGenerator = advMod.AdversarialScenarioGenerator;
 }
 
 // ---------- Service ----------
@@ -168,6 +203,15 @@ export class MilaidyAutonomyService extends Service {
   private identityConfig: AutonomyIdentityConfig | null = null;
   private resolvedRetrievalConfig: import("./config.js").AutonomyRetrievalConfig | null = null;
   private enabled = false;
+
+  // Phase 4 — Learning components
+  private traceCollector: import("./learning/trace-collector.js").TraceCollector | null = null;
+  private hackDetector: import("./learning/hack-detection.js").HackDetector | null = null;
+  private rolloutCollector: import("./learning/rollout.js").RolloutCollector | null = null;
+  private modelProvider: import("./learning/types.js").ModelProvider | null = null;
+  private promptBuilder: import("./learning/prompt-builder.js").SystemPromptBuilder | null = null;
+  private checkpointManager: import("./learning/rollout.js").CheckpointManager | null = null;
+  private adversarialGenerator: import("./learning/adversarial.js").AdversarialScenarioGenerator | null = null;
 
   /**
    * ElizaOS calls this static method during plugin initialization.
@@ -310,6 +354,33 @@ export class MilaidyAutonomyService extends Service {
       this.safeModeController,
     );
 
+    // Initialize learning infrastructure (Phase 4)
+    this.promptBuilder = new _SystemPromptBuilder();
+    const learningConfig = config.learning;
+    if (learningConfig?.enabled) {
+      const checkpointReward = new _CheckpointReward();
+      const episodeReward = new _EpisodeReward(checkpointReward);
+      this.traceCollector = new _TraceCollector(this.eventStore!, checkpointReward, episodeReward);
+      this.hackDetector = new _HackDetector(_createHackDetectionInvariants());
+      if (learningConfig.modelProvider?.baseUrl && learningConfig.modelProvider?.model) {
+        this.modelProvider = new _HttpModelProvider({
+          baseUrl: learningConfig.modelProvider.baseUrl,
+          model: learningConfig.modelProvider.model,
+          timeoutMs: learningConfig.modelProvider.timeoutMs,
+        });
+      } else {
+        this.modelProvider = new _StubModelProvider();
+      }
+      this.rolloutCollector = new _RolloutCollector(
+        this.orchestrator!,
+        this.traceCollector,
+        this.hackDetector,
+        learningConfig.hackDetection?.threshold ?? 0.5,
+      );
+      this.checkpointManager = new _CheckpointManager(this.baselineHarness!);
+      this.adversarialGenerator = new _AdversarialScenarioGenerator();
+    }
+
     this.enabled = true;
 
     // Register into DI container (single source of truth for components)
@@ -375,6 +446,15 @@ export class MilaidyAutonomyService extends Service {
       if (this.auditorRole) container.registerValue(TOKENS.Auditor, this.auditorRole);
       if (this.safeModeController) container.registerValue(TOKENS.SafeMode, this.safeModeController);
       if (this.orchestrator) container.registerValue(TOKENS.Orchestrator, this.orchestrator);
+
+      // Phase 4 — Learning components
+      if (this.traceCollector) container.registerValue(TOKENS.TraceCollector, this.traceCollector);
+      if (this.hackDetector) container.registerValue(TOKENS.HackDetector, this.hackDetector);
+      if (this.rolloutCollector) container.registerValue(TOKENS.RolloutCollector, this.rolloutCollector);
+      if (this.modelProvider) container.registerValue(TOKENS.ModelProvider, this.modelProvider);
+      if (this.promptBuilder) container.registerValue(TOKENS.PromptBuilder, this.promptBuilder);
+      if (this.checkpointManager) container.registerValue(TOKENS.CheckpointManager, this.checkpointManager);
+      if (this.adversarialGenerator) container.registerValue(TOKENS.AdversarialGenerator, this.adversarialGenerator);
 
       // Register trust-aware retriever
       try {
@@ -491,6 +571,13 @@ export class MilaidyAutonomyService extends Service {
     this.auditorRole = null;
     this.safeModeController = null;
     this.orchestrator = null;
+    this.traceCollector = null;
+    this.hackDetector = null;
+    this.rolloutCollector = null;
+    this.modelProvider = null;
+    this.promptBuilder = null;
+    this.checkpointManager = null;
+    this.adversarialGenerator = null;
     this.identityConfig = null;
     this.enabled = false;
     logger.info("[autonomy-service] Autonomy disabled");
@@ -616,6 +703,36 @@ export class MilaidyAutonomyService extends Service {
     return this.orchestrator;
   }
 
+  // ---------- Phase 4 — Learning Accessors ----------
+
+  getTraceCollector(): import("./learning/trace-collector.js").TraceCollector | null {
+    return this.traceCollector;
+  }
+
+  getHackDetector(): import("./learning/hack-detection.js").HackDetector | null {
+    return this.hackDetector;
+  }
+
+  getRolloutCollector(): import("./learning/rollout.js").RolloutCollector | null {
+    return this.rolloutCollector;
+  }
+
+  getModelProvider(): import("./learning/types.js").ModelProvider | null {
+    return this.modelProvider;
+  }
+
+  getPromptBuilder(): import("./learning/prompt-builder.js").SystemPromptBuilder | null {
+    return this.promptBuilder;
+  }
+
+  getCheckpointManager(): import("./learning/rollout.js").CheckpointManager | null {
+    return this.checkpointManager;
+  }
+
+  getAdversarialGenerator(): import("./learning/adversarial.js").AdversarialScenarioGenerator | null {
+    return this.adversarialGenerator;
+  }
+
   // ---------- Lifecycle ----------
 
   async stop(): Promise<void> {
@@ -641,6 +758,13 @@ export class MilaidyAutonomyService extends Service {
     this.auditorRole = null;
     this.safeModeController = null;
     this.orchestrator = null;
+    this.traceCollector = null;
+    this.hackDetector = null;
+    this.rolloutCollector = null;
+    this.modelProvider = null;
+    this.promptBuilder = null;
+    this.checkpointManager = null;
+    this.adversarialGenerator = null;
     this.identityConfig = null;
     this.enabled = false;
 
