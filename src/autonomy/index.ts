@@ -57,6 +57,50 @@ export {
 // Re-export retrieval config
 export { DEFAULT_RETRIEVAL_CONFIG, type AutonomyRetrievalConfig } from "./config.js";
 
+// Re-export workflow config types
+export type {
+  AutonomyWorkflowConfig,
+  AutonomyApprovalConfig,
+  AutonomyEventStoreConfig,
+} from "./config.js";
+
+// Re-export state machine
+export {
+  KernelStateMachine,
+  type KernelStateMachineInterface,
+  type StateTrigger,
+  type StateTransition,
+  type TransitionResult,
+  type StateChangeListener,
+} from "./state-machine/index.js";
+
+// Re-export approval gate
+export {
+  ApprovalGate,
+  type ApprovalGateInterface,
+  type ApprovalRequest,
+  type ApprovalDecision,
+  type ApprovalResult,
+} from "./approval/index.js";
+
+// Re-export workflow engine
+export {
+  InMemoryEventStore,
+  CompensationRegistry,
+  ToolExecutionPipeline,
+  registerBuiltinCompensations,
+  type EventStoreInterface,
+  type ExecutionEvent,
+  type ExecutionEventType,
+  type PipelineConfig,
+  type PipelineResult,
+  type ToolActionHandler,
+  type ToolExecutionPipelineInterface,
+  type CompensationContext,
+  type CompensationFn,
+  type CompensationRegistryInterface,
+} from "./workflow/index.js";
+
 // ---------- Kernel State ----------
 
 let _kernelInitialized = false;
