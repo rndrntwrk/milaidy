@@ -19,10 +19,7 @@ export class SystemPromptBuilder {
   /**
    * Build a system prompt from identity config.
    */
-  build(
-    identity: AutonomyIdentityConfig,
-    options?: PromptOptions,
-  ): string {
+  build(identity: AutonomyIdentityConfig, options?: PromptOptions): string {
     const opts: Required<PromptOptions> = {
       cotEnabled: options?.cotEnabled ?? true,
       includeToolInstructions: options?.includeToolInstructions ?? true,
@@ -135,9 +132,7 @@ export class SystemPromptBuilder {
 
     // Drift warning
     if (context.driftWarning) {
-      contextSections.push(
-        `## Drift Warning\n${context.driftWarning}`,
-      );
+      contextSections.push(`## Drift Warning\n${context.driftWarning}`);
     }
 
     // Safe mode notice

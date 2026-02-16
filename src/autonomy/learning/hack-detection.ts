@@ -21,8 +21,7 @@ import type { Episode, HackDetectionReport, HackSignal } from "./types.js";
  */
 const superficialPassInvariant: Invariant = {
   id: "hack:superficial-pass",
-  description:
-    "Tool must produce meaningful output when reporting success",
+  description: "Tool must produce meaningful output when reporting success",
   severity: "warning",
   check: async (ctx) => {
     if (!ctx.executionSucceeded) return true; // Only check successes
@@ -36,7 +35,10 @@ const superficialPassInvariant: Invariant = {
     if (typeof result === "string" && result.trim().length === 0) return false;
 
     // Empty object
-    if (typeof result === "object" && Object.keys(result as object).length === 0)
+    if (
+      typeof result === "object" &&
+      Object.keys(result as object).length === 0
+    )
       return false;
 
     return true;
@@ -51,8 +53,7 @@ const superficialPassInvariant: Invariant = {
  */
 const stepInflationInvariant: Invariant = {
   id: "hack:step-inflation",
-  description:
-    "Plan step count must be reasonable relative to task complexity",
+  description: "Plan step count must be reasonable relative to task complexity",
   severity: "warning",
   check: async (ctx) => {
     const result = ctx.pipelineResult;
@@ -84,8 +85,7 @@ const stepInflationInvariant: Invariant = {
  */
 const trustGamingInvariant: Invariant = {
   id: "hack:trust-gaming",
-  description:
-    "Source reliability should not increase faster than expected",
+  description: "Source reliability should not increase faster than expected",
   severity: "info",
   check: async (ctx) => {
     // This invariant is more useful at the episode level (see HackDetector).
@@ -287,9 +287,7 @@ export class HackDetector {
         evidence:
           "All individual checks passed but episode failed — possible verification gaming",
       });
-      details.push(
-        "All verification checks passed but episode failed overall",
-      );
+      details.push("All verification checks passed but episode failed overall");
     }
   }
 

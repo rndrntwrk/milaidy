@@ -89,10 +89,7 @@ export class HttpModelProvider implements ModelProvider {
   async complete(request: CompletionRequest): Promise<CompletionResponse> {
     const start = Date.now();
     const controller = new AbortController();
-    const timeout = setTimeout(
-      () => controller.abort(),
-      this.config.timeoutMs,
-    );
+    const timeout = setTimeout(() => controller.abort(), this.config.timeoutMs);
 
     try {
       const response = await fetch(
@@ -111,8 +108,7 @@ export class HttpModelProvider implements ModelProvider {
               { role: "system", content: request.systemPrompt },
               { role: "user", content: request.userPrompt },
             ],
-            temperature:
-              request.temperature ?? this.config.defaultTemperature,
+            temperature: request.temperature ?? this.config.defaultTemperature,
             max_tokens: request.maxTokens ?? this.config.defaultMaxTokens,
             stop: request.stopSequences,
           }),
@@ -170,7 +166,8 @@ export class HttpModelProvider implements ModelProvider {
     ].join("\n");
 
     const completion = await this.complete({
-      systemPrompt: "You are a precise evaluation judge. Return only valid JSON.",
+      systemPrompt:
+        "You are a precise evaluation judge. Return only valid JSON.",
       userPrompt: scoringPrompt,
       temperature: 0.1,
       maxTokens: 512,
