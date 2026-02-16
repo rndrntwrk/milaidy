@@ -107,6 +107,12 @@ export const TOKENS = {
   SafeMode: createToken<import("../autonomy/roles/types.js").SafeModeController>("SafeMode"),
   Orchestrator: createToken<import("../autonomy/roles/types.js").RoleOrchestrator>("Orchestrator"),
 
+  // Autonomy Domains & Governance (Phase 5)
+  DomainPackRegistry: createToken<import("../autonomy/domains/registry.js").DomainPackRegistry>("DomainPackRegistry"),
+  PolicyEngine: createToken<import("../autonomy/domains/governance/policy-engine.js").PolicyEngine>("PolicyEngine"),
+  AuditRetentionManager: createToken<import("../autonomy/domains/governance/retention-manager.js").AuditRetentionManager>("AuditRetentionManager"),
+  PilotRunner: createToken<import("../autonomy/domains/pilot/pilot-runner.js").PilotRunner>("PilotRunner"),
+
   // Autonomy Learning (Phase 4)
   TraceCollector: createToken<import("../autonomy/learning/trace-collector.js").TraceCollector>("TraceCollector"),
   HackDetector: createToken<import("../autonomy/learning/hack-detection.js").HackDetector>("HackDetector"),

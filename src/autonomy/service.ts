@@ -83,6 +83,14 @@ let _DriftAwareAuditor: typeof import("./roles/auditor.js").DriftAwareAuditor;
 let _SafeModeControllerImpl: typeof import("./roles/safe-mode.js").SafeModeControllerImpl;
 let _KernelOrchestrator: typeof import("./roles/orchestrator.js").KernelOrchestrator;
 
+// Phase 5 — Domains & Governance
+let _DomainPackRegistry: typeof import("./domains/registry.js").DomainPackRegistry;
+let _PolicyEngine: typeof import("./domains/governance/policy-engine.js").PolicyEngine;
+let _AuditRetentionManager: typeof import("./domains/governance/retention-manager.js").AuditRetentionManager;
+let _PilotRunner: typeof import("./domains/pilot/pilot-runner.js").PilotRunner;
+let _createCodingDomainPack: typeof import("./domains/coding/pack.js").createCodingDomainPack;
+let _CODING_GOVERNANCE_POLICY: typeof import("./domains/coding/governance-policy.js").CODING_GOVERNANCE_POLICY;
+
 // Phase 4 — Learning
 let _CheckpointReward: typeof import("./learning/reward.js").CheckpointReward;
 let _EpisodeReward: typeof import("./learning/reward.js").EpisodeReward;
@@ -171,6 +179,22 @@ async function loadImplementations() {
   _HttpModelProvider = modelMod.HttpModelProvider;
   _SystemPromptBuilder = promptMod.SystemPromptBuilder;
   _AdversarialScenarioGenerator = advMod.AdversarialScenarioGenerator;
+
+  // Phase 5 — Domains & Governance (lazy, non-blocking)
+  const [domRegMod, polEngMod, retMgrMod, pilotMod, codingPackMod, codingGovMod] = await Promise.all([
+    import("./domains/registry.js"),
+    import("./domains/governance/policy-engine.js"),
+    import("./domains/governance/retention-manager.js"),
+    import("./domains/pilot/pilot-runner.js"),
+    import("./domains/coding/pack.js"),
+    import("./domains/coding/governance-policy.js"),
+  ]);
+  _DomainPackRegistry = domRegMod.DomainPackRegistry;
+  _PolicyEngine = polEngMod.PolicyEngine;
+  _AuditRetentionManager = retMgrMod.AuditRetentionManager;
+  _PilotRunner = pilotMod.PilotRunner;
+  _createCodingDomainPack = codingPackMod.createCodingDomainPack;
+  _CODING_GOVERNANCE_POLICY = codingGovMod.CODING_GOVERNANCE_POLICY;
 }
 
 // ---------- Service ----------
@@ -203,6 +227,12 @@ export class MilaidyAutonomyService extends Service {
   private identityConfig: AutonomyIdentityConfig | null = null;
   private resolvedRetrievalConfig: import("./config.js").AutonomyRetrievalConfig | null = null;
   private enabled = false;
+
+  // Phase 5 — Domains & Governance components
+  private domainPackRegistry: import("./domains/registry.js").DomainPackRegistry | null = null;
+  private policyEngine: import("./domains/governance/policy-engine.js").PolicyEngine | null = null;
+  private auditRetentionManager: import("./domains/governance/retention-manager.js").AuditRetentionManager | null = null;
+  private pilotRunner: import("./domains/pilot/pilot-runner.js").PilotRunner | null = null;
 
   // Phase 4 — Learning components
   private traceCollector: import("./learning/trace-collector.js").TraceCollector | null = null;
@@ -381,6 +411,38 @@ export class MilaidyAutonomyService extends Service {
       this.adversarialGenerator = new _AdversarialScenarioGenerator();
     }
 
+    // Initialize domain packs (Phase 5)
+    const domainsConfig = config.domains;
+    if (domainsConfig?.enabled) {
+      this.domainPackRegistry = new _DomainPackRegistry();
+      this.policyEngine = new _PolicyEngine();
+      this.auditRetentionManager = new _AuditRetentionManager();
+
+      // Register coding domain pack
+      const codingPack = _createCodingDomainPack(domainsConfig.coding);
+      this.domainPackRegistry.register(codingPack);
+      this.policyEngine.registerPolicy(_CODING_GOVERNANCE_POLICY);
+
+      // Auto-load configured domains
+      for (const domainId of domainsConfig.autoLoadDomains ?? []) {
+        if (this.domainPackRegistry.has(domainId)) {
+          this.domainPackRegistry.load(domainId, this.toolRegistry!, this.invariantChecker!);
+        }
+      }
+
+      // Create pilot runner
+      this.pilotRunner = new _PilotRunner(
+        this.domainPackRegistry,
+        evaluator,
+        {
+          trustScorer: this.trustScorer!,
+          memoryGate: this.memoryGate!,
+          driftMonitor: this.driftMonitor!,
+          goalManager: this.goalManager!,
+        },
+      );
+    }
+
     this.enabled = true;
 
     // Register into DI container (single source of truth for components)
@@ -455,6 +517,12 @@ export class MilaidyAutonomyService extends Service {
       if (this.promptBuilder) container.registerValue(TOKENS.PromptBuilder, this.promptBuilder);
       if (this.checkpointManager) container.registerValue(TOKENS.CheckpointManager, this.checkpointManager);
       if (this.adversarialGenerator) container.registerValue(TOKENS.AdversarialGenerator, this.adversarialGenerator);
+
+      // Phase 5 — Domain & Governance components
+      if (this.domainPackRegistry) container.registerValue(TOKENS.DomainPackRegistry, this.domainPackRegistry);
+      if (this.policyEngine) container.registerValue(TOKENS.PolicyEngine, this.policyEngine);
+      if (this.auditRetentionManager) container.registerValue(TOKENS.AuditRetentionManager, this.auditRetentionManager);
+      if (this.pilotRunner) container.registerValue(TOKENS.PilotRunner, this.pilotRunner);
 
       // Register trust-aware retriever
       try {
@@ -578,6 +646,10 @@ export class MilaidyAutonomyService extends Service {
     this.promptBuilder = null;
     this.checkpointManager = null;
     this.adversarialGenerator = null;
+    this.domainPackRegistry = null;
+    this.policyEngine = null;
+    this.auditRetentionManager = null;
+    this.pilotRunner = null;
     this.identityConfig = null;
     this.enabled = false;
     logger.info("[autonomy-service] Autonomy disabled");
@@ -733,6 +805,24 @@ export class MilaidyAutonomyService extends Service {
     return this.adversarialGenerator;
   }
 
+  // ---------- Phase 5 — Domains & Governance Accessors ----------
+
+  getDomainPackRegistry(): import("./domains/registry.js").DomainPackRegistry | null {
+    return this.domainPackRegistry;
+  }
+
+  getPolicyEngine(): import("./domains/governance/policy-engine.js").PolicyEngine | null {
+    return this.policyEngine;
+  }
+
+  getAuditRetentionManager(): import("./domains/governance/retention-manager.js").AuditRetentionManager | null {
+    return this.auditRetentionManager;
+  }
+
+  getPilotRunner(): import("./domains/pilot/pilot-runner.js").PilotRunner | null {
+    return this.pilotRunner;
+  }
+
   // ---------- Lifecycle ----------
 
   async stop(): Promise<void> {
@@ -765,6 +855,10 @@ export class MilaidyAutonomyService extends Service {
     this.promptBuilder = null;
     this.checkpointManager = null;
     this.adversarialGenerator = null;
+    this.domainPackRegistry = null;
+    this.policyEngine = null;
+    this.auditRetentionManager = null;
+    this.pilotRunner = null;
     this.identityConfig = null;
     this.enabled = false;
 
