@@ -304,4 +304,174 @@ describe("KernelStateMachine", () => {
       expect(sm.currentState).toBe("idle");
     });
   });
+
+  // ---------- Phase 3: Planning, Memory, Audit, Safe-Mode Exit ----------
+
+  describe("planning transitions", () => {
+    it("transitions idle → planning via plan_requested", () => {
+      create();
+      const result = sm.transition("plan_requested");
+      expect(result.accepted).toBe(true);
+      expect(result.from).toBe("idle");
+      expect(result.to).toBe("planning");
+      expect(sm.currentState).toBe("planning");
+    });
+
+    it("transitions planning → idle via plan_approved", () => {
+      create();
+      sm.transition("plan_requested");
+      const result = sm.transition("plan_approved");
+      expect(result.accepted).toBe(true);
+      expect(result.from).toBe("planning");
+      expect(result.to).toBe("idle");
+    });
+
+    it("transitions planning → idle via plan_rejected", () => {
+      create();
+      sm.transition("plan_requested");
+      const result = sm.transition("plan_rejected");
+      expect(result.accepted).toBe(true);
+      expect(result.from).toBe("planning");
+      expect(result.to).toBe("idle");
+    });
+
+    it("rejects plan_approved from idle", () => {
+      create();
+      const result = sm.transition("plan_approved");
+      expect(result.accepted).toBe(false);
+    });
+  });
+
+  describe("memory writing transitions", () => {
+    it("transitions idle → writing_memory via write_memory", () => {
+      create();
+      const result = sm.transition("write_memory");
+      expect(result.accepted).toBe(true);
+      expect(result.from).toBe("idle");
+      expect(result.to).toBe("writing_memory");
+    });
+
+    it("transitions writing_memory → idle via memory_written", () => {
+      create();
+      sm.transition("write_memory");
+      const result = sm.transition("memory_written");
+      expect(result.accepted).toBe(true);
+      expect(result.from).toBe("writing_memory");
+      expect(result.to).toBe("idle");
+    });
+
+    it("transitions writing_memory → error via memory_write_failed", () => {
+      create();
+      sm.transition("write_memory");
+      const result = sm.transition("memory_write_failed");
+      expect(result.accepted).toBe(true);
+      expect(result.from).toBe("writing_memory");
+      expect(result.to).toBe("error");
+    });
+  });
+
+  describe("auditing transitions", () => {
+    it("transitions idle → auditing via audit_requested", () => {
+      create();
+      const result = sm.transition("audit_requested");
+      expect(result.accepted).toBe(true);
+      expect(result.from).toBe("idle");
+      expect(result.to).toBe("auditing");
+    });
+
+    it("transitions auditing → idle via audit_complete", () => {
+      create();
+      sm.transition("audit_requested");
+      const result = sm.transition("audit_complete");
+      expect(result.accepted).toBe(true);
+      expect(result.from).toBe("auditing");
+      expect(result.to).toBe("idle");
+    });
+
+    it("transitions auditing → error via audit_failed", () => {
+      create();
+      sm.transition("audit_requested");
+      const result = sm.transition("audit_failed");
+      expect(result.accepted).toBe(true);
+      expect(result.from).toBe("auditing");
+      expect(result.to).toBe("error");
+    });
+  });
+
+  describe("safe mode exit", () => {
+    it("transitions safe_mode → idle via safe_mode_exit", () => {
+      create();
+      sm.transition("escalate_safe_mode");
+      expect(sm.currentState).toBe("safe_mode");
+      const result = sm.transition("safe_mode_exit");
+      expect(result.accepted).toBe(true);
+      expect(result.from).toBe("safe_mode");
+      expect(result.to).toBe("idle");
+    });
+
+    it("resets consecutiveErrors on safe_mode_exit", () => {
+      create();
+      // Build up errors to enter safe_mode
+      sm.transition("tool_validated");
+      sm.transition("execution_complete");
+      sm.transition("verification_failed"); // error 1
+      sm.transition("recover");
+      sm.transition("tool_validated");
+      sm.transition("execution_complete");
+      sm.transition("verification_failed"); // error 2
+      sm.transition("recover");
+      sm.transition("tool_validated");
+      sm.transition("execution_complete");
+      sm.transition("verification_failed"); // error 3 → safe_mode
+      expect(sm.currentState).toBe("safe_mode");
+      expect(sm.consecutiveErrors).toBe(3);
+
+      sm.transition("safe_mode_exit");
+      expect(sm.currentState).toBe("idle");
+      expect(sm.consecutiveErrors).toBe(0);
+    });
+
+    it("rejects safe_mode_exit from idle", () => {
+      create();
+      const result = sm.transition("safe_mode_exit");
+      expect(result.accepted).toBe(false);
+    });
+  });
+
+  describe("full orchestrated lifecycle", () => {
+    it("completes: idle → planning → idle → executing → verifying → idle → writing_memory → idle → auditing → idle", () => {
+      create();
+      const transitions: Array<[string, string, string]> = [];
+      sm.onStateChange((from, to, trigger) => {
+        transitions.push([from, to, trigger]);
+      });
+
+      // Plan
+      sm.transition("plan_requested");
+      sm.transition("plan_approved");
+      // Execute (pipeline internal transitions)
+      sm.transition("tool_validated");
+      sm.transition("execution_complete");
+      sm.transition("verification_passed");
+      // Write memory
+      sm.transition("write_memory");
+      sm.transition("memory_written");
+      // Audit
+      sm.transition("audit_requested");
+      sm.transition("audit_complete");
+
+      expect(sm.currentState).toBe("idle");
+      expect(transitions).toEqual([
+        ["idle", "planning", "plan_requested"],
+        ["planning", "idle", "plan_approved"],
+        ["idle", "executing", "tool_validated"],
+        ["executing", "verifying", "execution_complete"],
+        ["verifying", "idle", "verification_passed"],
+        ["idle", "writing_memory", "write_memory"],
+        ["writing_memory", "idle", "memory_written"],
+        ["idle", "auditing", "audit_requested"],
+        ["auditing", "idle", "audit_complete"],
+      ]);
+    });
+  });
 });

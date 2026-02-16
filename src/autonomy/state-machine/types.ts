@@ -25,7 +25,17 @@ export type StateTrigger =
   | "verification_failed"
   | "fatal_error"
   | "escalate_safe_mode"
-  | "recover";
+  | "recover"
+  | "plan_requested"
+  | "plan_approved"
+  | "plan_rejected"
+  | "write_memory"
+  | "memory_written"
+  | "memory_write_failed"
+  | "audit_requested"
+  | "audit_complete"
+  | "audit_failed"
+  | "safe_mode_exit";
 
 // ---------- Transition Types ----------
 
