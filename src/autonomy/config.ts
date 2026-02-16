@@ -140,6 +140,28 @@ export interface AutonomyEventStoreConfig {
 }
 
 /**
+ * Role separation configuration.
+ */
+export interface AutonomyRolesConfig {
+  /** Enable role-based orchestration (default: true). */
+  enabled?: boolean;
+  /** Planner role settings. */
+  planner?: {
+    /** Maximum number of steps in a plan (default: 20). */
+    maxPlanSteps?: number;
+    /** Auto-approve plans with 3 or fewer steps (default: false). */
+    autoApproveSimplePlans?: boolean;
+  };
+  /** Safe mode settings. */
+  safeMode?: {
+    /** Consecutive error threshold for safe mode (default: 3). */
+    errorThreshold?: number;
+    /** Minimum trust to exit safe mode (default: 0.8). */
+    exitTrustFloor?: number;
+  };
+}
+
+/**
  * Top-level Autonomy Kernel configuration.
  */
 export interface AutonomyConfig {
@@ -167,6 +189,8 @@ export interface AutonomyConfig {
   eventStore?: AutonomyEventStoreConfig;
   /** Cross-system invariant checker settings. */
   invariants?: AutonomyInvariantsConfig;
+  /** Role separation settings. */
+  roles?: AutonomyRolesConfig;
 }
 
 // ---------- Defaults ----------
@@ -254,6 +278,17 @@ export function resolveAutonomyConfig(
       enabled: userConfig.invariants?.enabled ?? true,
       checkTimeoutMs: userConfig.invariants?.checkTimeoutMs ?? 5_000,
       failOnCritical: userConfig.invariants?.failOnCritical ?? false,
+    },
+    roles: {
+      enabled: userConfig.roles?.enabled ?? true,
+      planner: {
+        maxPlanSteps: userConfig.roles?.planner?.maxPlanSteps ?? 20,
+        autoApproveSimplePlans: userConfig.roles?.planner?.autoApproveSimplePlans ?? false,
+      },
+      safeMode: {
+        errorThreshold: userConfig.roles?.safeMode?.errorThreshold ?? 3,
+        exitTrustFloor: userConfig.roles?.safeMode?.exitTrustFloor ?? 0.8,
+      },
     },
   };
 }
@@ -376,6 +411,19 @@ export function validateAutonomyConfig(
   // Validate invariants config
   if (config.invariants?.checkTimeoutMs !== undefined && config.invariants.checkTimeoutMs < 100) {
     issues.push({ path: "autonomy.invariants.checkTimeoutMs", message: "Must be at least 100" });
+  }
+
+  // Validate roles config
+  if (config.roles?.planner?.maxPlanSteps !== undefined && config.roles.planner.maxPlanSteps < 1) {
+    issues.push({ path: "autonomy.roles.planner.maxPlanSteps", message: "Must be at least 1" });
+  }
+  if (config.roles?.safeMode?.errorThreshold !== undefined && config.roles.safeMode.errorThreshold < 1) {
+    issues.push({ path: "autonomy.roles.safeMode.errorThreshold", message: "Must be at least 1" });
+  }
+  if (config.roles?.safeMode?.exitTrustFloor !== undefined) {
+    if (config.roles.safeMode.exitTrustFloor < 0 || config.roles.safeMode.exitTrustFloor > 1) {
+      issues.push({ path: "autonomy.roles.safeMode.exitTrustFloor", message: "Must be between 0 and 1" });
+    }
   }
 
   // Validate identity config if present (delegates to canonical validator)
