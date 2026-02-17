@@ -525,6 +525,57 @@ describe("ToolExecutionPipeline", () => {
     });
   });
 
+  describe("safe mode restrictions", () => {
+    it("blocks irreversible tool execution in safe mode", async () => {
+      const validator = createMockValidator({
+        riskClass: "irreversible",
+        requiresApproval: false,
+      });
+      const handler = createSuccessHandler();
+      const { pipeline, stateMachine, eventStore } = createPipeline({ validator });
+      stateMachine.transition("escalate_safe_mode");
+
+      const result = await pipeline.execute(
+        makeCall({ tool: "RUN_IN_TERMINAL", requestId: "safe-block-1" }),
+        handler,
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Safe mode blocks irreversible tools");
+      expect(handler).not.toHaveBeenCalled();
+      expect(stateMachine.currentState).toBe("safe_mode");
+
+      const events = await eventStore.getByRequestId("safe-block-1");
+      expect(
+        events.some(
+          (event) =>
+            event.type === "tool:failed" &&
+            event.payload.reason === "safe_mode_restricted",
+        ),
+      ).toBe(true);
+      const decision = events.find((event) => event.type === "tool:decision:logged");
+      expect(decision?.payload.approval).toEqual({
+        outcome: "skipped",
+        required: false,
+      });
+    });
+
+    it("allows read-only tools in safe mode and keeps the state in safe_mode", async () => {
+      const handler = createSuccessHandler({ status: "ok" });
+      const { pipeline, stateMachine } = createPipeline();
+      stateMachine.transition("escalate_safe_mode");
+
+      const result = await pipeline.execute(
+        makeCall({ tool: "GET_STATUS", requestId: "safe-allow-1" }),
+        handler,
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.result).toEqual({ status: "ok" });
+      expect(stateMachine.currentState).toBe("safe_mode");
+    });
+  });
+
   describe("invariant fail-closed behavior", () => {
     it("records invariant check metrics", async () => {
       const invariantChecker: InvariantCheckerInterface = {

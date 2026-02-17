@@ -43,11 +43,12 @@ threshold.
 
 ## Behavior in Safe Mode
 
-1. All `execute()` calls return immediately with a safe-mode error
-2. Read-only operations continue (getConfig, getStatus, etc.)
-3. Safe mode status is exposed via `GET /api/agent/safe-mode`
-4. Exit requires explicit `POST /api/agent/safe-mode/exit`
-5. Consecutive error counter resets on successful exit
+1. `read-only` tools are allowed to execute while the kernel remains in `safe_mode`.
+2. `reversible` and `irreversible` tools return immediately with `safe_mode_restricted`.
+3. If risk classification is unknown, execution is denied fail-closed.
+4. Safe mode status is exposed via `GET /api/agent/safe-mode`.
+5. Exit requires explicit `POST /api/agent/safe-mode/exit`.
+6. Consecutive error counter resets on successful exit.
 
 ## UI Integration
 

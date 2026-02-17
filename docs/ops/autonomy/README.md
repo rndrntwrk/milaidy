@@ -23,6 +23,7 @@ Contents:
 - `phase3-threshold-tuning-2026-02-17.md`: `P3-039` empirical threshold tuning and alert-rule updates.
 - `phase3-reduction-demonstration-2026-02-17.md`: `P3-040` PSD/identity-violation reduction demonstration artifact.
 - `phase3-safe-mode-incident-demo-2026-02-17.md`: `P3-041` induced-incident safe-mode demonstration evidence.
+- `phase3-safe-mode-tool-restrictions-2026-02-17.md`: `P3-017` safe-mode tool-class restriction policy + enforcement evidence.
 - `phase3-acceptance-report-2026-02-17.md`: `P3-042` Phase 3 gate report and sign-off decision.
 - `reports/`: generated run artifacts (`.json` and `.md` outputs).
 
@@ -58,6 +59,7 @@ Provisioned observability:
 - Event bus: `autonomy:decision:logged` emits normalized validation/approval/verification/invariant outcomes per pipeline execution.
 - Event bus: `autonomy:tool:postcondition:checked` includes `failureTaxonomy` (`check_failed`, `check_error`, `timeout`) for verification analytics.
 - Event bus: `autonomy:safe-mode:entered`, `autonomy:safe-mode:exited`, and `autonomy:safe-mode:exit-denied` emit safe-mode lifecycle notifications.
+- Event bus: `autonomy:safe-mode:tool-blocked` emits denied execution attempts for blocked tool classes during safe mode.
 - Metric: `autonomy_invariant_checks_total{result=pass|fail|error}` increments on every invariant check run.
 - Metric: `autonomy_role_executions_total{role,outcome}` tracks role-level success/failure outcomes.
 - Metric: `autonomy_role_latency_ms{role}` tracks planner/executor/verifier/memory_writer/auditor/orchestrator latencies.

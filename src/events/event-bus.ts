@@ -347,6 +347,14 @@ export interface MilaidyEvents {
     enteredAt?: number;
     active: boolean;
   };
+  "autonomy:safe-mode:tool-blocked": {
+    requestId: string;
+    toolName: string;
+    riskClass: string;
+    source: string;
+    reason: string;
+    correlationId?: string;
+  };
   "autonomy:invariants:checked": {
     requestId: string;
     status: string;
