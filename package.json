@@ -41,6 +41,7 @@
     "autonomy:contracts:inventory": "node --import tsx scripts/autonomy/tool-contract-inventory.ts",
     "autonomy:postconditions:coverage": "node --import tsx scripts/autonomy/postcondition-coverage.ts",
     "autonomy:compensation:coverage": "node --import tsx scripts/autonomy/compensation-coverage.ts",
+    "autonomy:pipeline:latency": "node --import tsx scripts/autonomy/measure-pipeline-latency.ts",
     "autonomy:events:rebuild": "node --import tsx scripts/autonomy/rebuild-event-projections.ts",
     "autonomy:events:verify": "node --import tsx scripts/autonomy/verify-event-chain.ts",
     "build": "tsdown && cp src/plugins/telegram-enhanced/package.json dist/plugins/telegram-enhanced/package.json && scripts/rt.sh scripts/write-build-info.ts && cd apps/app && ../../scripts/rt.sh run build",
