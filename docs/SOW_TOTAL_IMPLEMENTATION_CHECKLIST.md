@@ -342,7 +342,7 @@ Sprint chunks:
 - [ ] P2-057 Add unit tests for contracts, validator, verifier, invariants, approvals. [STATUS: CODED]
 - [ ] P2-058 Add integration tests for full pipeline success/failure/compensation. [STATUS: CODED]
 - [ ] P2-059 Add durability tests across restarts. [STATUS: CODED]
-- [ ] P2-060 Add benchmark-driven tests where available. [STATUS: PARTIAL]
+- [ ] P2-060 Add benchmark-driven tests where available. [STATUS: CODED]
 - [ ] P2-061 Measure latency impact of validation/workflow orchestration. [STATUS: PARTIAL]
 - [ ] P2-062 Optimize bottlenecks and document before/after results. [STATUS: PARTIAL]
 
