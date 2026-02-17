@@ -17,6 +17,7 @@ import type {
   OrchestratedRequest,
   PlannerRole,
   SafeModeController,
+  VerifierRole,
 } from "./types.js";
 
 // --- Mocks ---
@@ -125,6 +126,22 @@ function createMockAuditor(driftScore = 0.05): AuditorRole {
   };
 }
 
+function createMockVerifier(overallPassed = true): VerifierRole {
+  return {
+    verify: vi.fn(async () => ({
+      schema: { valid: true, errors: [] },
+      postConditions: { status: "passed", hasCriticalFailure: false },
+      invariants: { status: "passed", hasCriticalViolation: false },
+      overallPassed,
+    })),
+    checkInvariants: vi.fn(async () => ({
+      status: "passed",
+      checks: [],
+      hasCriticalViolation: false,
+    })),
+  };
+}
+
 const mockActionHandler: ToolActionHandler = async () => ({
   result: "done",
   durationMs: 10,
@@ -163,6 +180,7 @@ describe("KernelOrchestrator", () => {
   function createOrchestrator(overrides?: {
     planner?: PlannerRole;
     pipeline?: ExecutorRole;
+    verifier?: VerifierRole;
     memoryWriter?: MemoryWriterRole;
     auditor?: AuditorRole;
     safeMode?: SafeModeController;
@@ -173,6 +191,7 @@ describe("KernelOrchestrator", () => {
       orchestrator: new KernelOrchestrator(
         overrides?.planner ?? createMockPlanner(),
         overrides?.pipeline ?? createMockPipeline(),
+        overrides?.verifier ?? createMockVerifier(),
         overrides?.memoryWriter ?? createMockMemoryWriter(),
         overrides?.auditor ?? createMockAuditor(),
         sm,
@@ -193,6 +212,7 @@ describe("KernelOrchestrator", () => {
       expect(result.plan).toBeDefined();
       expect(result.plan.status).toBe("complete");
       expect(result.executions).toHaveLength(1);
+      expect(result.verificationReports).toHaveLength(1);
       expect(result.auditReport).toBeDefined();
       expect(result.durationMs).toBeGreaterThanOrEqual(0);
       expect(sm.currentState).toBe("idle");
@@ -217,6 +237,17 @@ describe("KernelOrchestrator", () => {
 
       expect(result.success).toBe(false);
       expect(result.executions[0].success).toBe(false);
+    });
+
+    it("verification failure sets orchestration success=false", async () => {
+      const verifier = createMockVerifier(false);
+      const { orchestrator } = createOrchestrator({ verifier });
+
+      const result = await orchestrator.execute(createRequest());
+
+      expect(result.executions[0].success).toBe(true);
+      expect(result.verificationReports?.[0]?.overallPassed).toBe(false);
+      expect(result.success).toBe(false);
     });
 
     it("memory write failure still allows audit to complete", async () => {
@@ -288,6 +319,7 @@ describe("KernelOrchestrator", () => {
       const orchestrator = new KernelOrchestrator(
         createMockPlanner(),
         createMockPipeline(),
+        createMockVerifier(),
         createMockMemoryWriter(),
         createMockAuditor(),
         sm,
@@ -417,6 +449,7 @@ describe("KernelOrchestrator", () => {
       const orchestrator = new KernelOrchestrator(
         createMockPlanner(),
         failPipeline,
+        createMockVerifier(),
         createMockMemoryWriter(),
         createMockAuditor(),
         sm,
@@ -442,6 +475,7 @@ describe("KernelOrchestrator", () => {
       const orchestrator = new KernelOrchestrator(
         createMockPlanner(),
         createMockPipeline(),
+        createMockVerifier(),
         createMockMemoryWriter(),
         createMockAuditor(),
         sm,

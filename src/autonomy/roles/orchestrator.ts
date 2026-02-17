@@ -27,12 +27,15 @@ import type {
   PlannerRole,
   RoleOrchestrator,
   SafeModeController,
+  VerificationReport,
+  VerifierRole,
 } from "./types.js";
 
 export class KernelOrchestrator implements RoleOrchestrator {
   constructor(
     private readonly planner: PlannerRole,
     private readonly executor: ExecutorRole,
+    private readonly verifier: VerifierRole,
     private readonly memoryWriter: MemoryWriterRole,
     private readonly auditor: AuditorRole,
     private readonly stateMachine: KernelStateMachineInterface,
@@ -43,6 +46,7 @@ export class KernelOrchestrator implements RoleOrchestrator {
   async execute(request: OrchestratedRequest): Promise<OrchestratedResult> {
     const startTime = Date.now();
     const executions: PipelineResult[] = [];
+    const verificationReports: VerificationReport[] = [];
     let plan: ExecutionPlan | undefined;
 
     try {
@@ -125,6 +129,9 @@ export class KernelOrchestrator implements RoleOrchestrator {
           }
         }
       }
+      verificationReports.push(
+        ...(await this.verifyExecutedSteps(plan, executions, request)),
+      );
       plan.status = "complete";
 
       // Phase 3: Memory Writing (idle → writing_memory → idle)
@@ -216,14 +223,16 @@ export class KernelOrchestrator implements RoleOrchestrator {
       }
 
       const allSucceeded = executions.every((e) => e.success);
+      const allVerified = verificationReports.every((v) => v.overallPassed);
 
       return {
         plan,
         executions,
+        verificationReports,
         memoryReport,
         auditReport,
         durationMs: Date.now() - startTime,
-        success: allSucceeded,
+        success: allSucceeded && allVerified,
       };
     } catch (error) {
       // Handle errors during orchestration
@@ -258,6 +267,7 @@ export class KernelOrchestrator implements RoleOrchestrator {
           status: "rejected",
         },
         executions,
+        verificationReports,
         auditReport: {
           driftReport: {
             driftScore: 0,
@@ -362,5 +372,28 @@ export class KernelOrchestrator implements RoleOrchestrator {
         workflowId: plan.id,
       },
     };
+  }
+
+  private async verifyExecutedSteps(
+    plan: ExecutionPlan,
+    executions: PipelineResult[],
+    request: OrchestratedRequest,
+  ): Promise<VerificationReport[]> {
+    const reports: VerificationReport[] = [];
+    for (const execution of executions) {
+      const step = plan.steps.find(
+        (candidate) => `${plan.id}-${candidate.id}` === execution.requestId,
+      );
+      const report = await this.verifier.verify({
+        requestId: execution.requestId,
+        toolName: execution.toolName,
+        params: step?.params ?? {},
+        result: execution.result,
+        durationMs: execution.durationMs,
+        agentId: request.agentId,
+      });
+      reports.push(report);
+    }
+    return reports;
   }
 }
