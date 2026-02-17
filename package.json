@@ -36,6 +36,7 @@
     "autonomy:long-horizon:run": "node --import tsx scripts/autonomy/run-long-horizon-suite.ts",
     "autonomy:phase3:reductions": "node --import tsx scripts/autonomy/phase3-reduction-report.ts",
     "autonomy:redteam:run": "node --import tsx scripts/autonomy/run-redteam-baseline.ts",
+    "autonomy:retrieval:quality": "node --import tsx scripts/autonomy/validate-retrieval-quality.ts",
     "autonomy:metrics:cardinality": "node --import tsx scripts/autonomy/check-metrics-cardinality.ts",
     "autonomy:metrics:retention-cost": "node --import tsx scripts/autonomy/estimate-retention-cost.ts",
     "autonomy:contracts:inventory": "node --import tsx scripts/autonomy/tool-contract-inventory.ts",

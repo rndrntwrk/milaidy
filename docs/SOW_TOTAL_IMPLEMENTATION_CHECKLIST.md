@@ -13,9 +13,9 @@ Current status pre-check snapshot:
 - Evidence basis: static repo review of autonomy kernel, API, persistence, and app UI code paths.
 - Summary counts:
 - `307` total checklist items.
-- `164` items tagged `STATUS: CODED`.
+- `165` items tagged `STATUS: CODED`.
 - `37` items tagged `STATUS: PARTIAL`.
-- `106` items currently untagged.
+- `105` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
 - `STATUS: PARTIAL` means implementation exists but is incomplete, scoped down, optional, or not yet acceptance-ready.
@@ -231,7 +231,7 @@ Sprint chunks:
 - [ ] P1-033 Implement trust-aware retrieval rank formula. [STATUS: CODED]
 - [ ] P1-034 Implement rank tuning configuration and guardrails. [STATUS: CODED]
 - [ ] P1-035 Implement user trust-override policy with auditing. [STATUS: CODED]
-- [ ] P1-036 Validate retrieval quality against baseline tasks.
+- [ ] P1-036 Validate retrieval quality against baseline tasks. [STATUS: CODED]
 
 ### 1.E UI, Docs, and Training
 
