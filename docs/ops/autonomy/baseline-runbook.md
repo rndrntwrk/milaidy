@@ -104,6 +104,12 @@ npm run autonomy:metrics:cardinality -- --file /tmp/metrics.txt --out docs/ops/a
 
 Non-zero exit means cardinality threshold violations were detected.
 
+Estimate retention storage cost from cardinality report:
+
+```bash
+npm run autonomy:metrics:retention-cost -- --cardinality-file docs/ops/autonomy/reports/cardinality.sample.json --retention-days 30 --scrape-interval-seconds 15 --out docs/ops/autonomy/reports/retention-cost.json
+```
+
 ## 5) Long-Horizon Comparison Run (Phase 3)
 
 ```bash

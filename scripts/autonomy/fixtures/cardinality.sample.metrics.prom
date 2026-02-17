@@ -1,0 +1,5 @@
+autonomy_pipeline_executions_total{outcome="success"} 120
+autonomy_pipeline_executions_total{outcome="failure"} 3
+autonomy_memory_gate_decisions_total{decision="accepted"} 45
+autonomy_memory_gate_decisions_total{decision="rejected"} 4
+autonomy_quarantine_size 2
