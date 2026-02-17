@@ -13,9 +13,9 @@ Current status pre-check snapshot:
 - Evidence basis: static repo review of autonomy kernel, API, persistence, and app UI code paths.
 - Summary counts:
 - `307` total checklist items.
-- `166` items tagged `STATUS: CODED`.
+- `169` items tagged `STATUS: CODED`.
 - `38` items tagged `STATUS: PARTIAL`.
-- `103` items currently untagged.
+- `100` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
 - `STATUS: PARTIAL` means implementation exists but is incomplete, scoped down, optional, or not yet acceptance-ready.
@@ -360,9 +360,9 @@ Sprint chunks:
 
 - [ ] P3-001 Define Planner, Executor, Verifier, Memory Writer, Auditor responsibility boundaries. [STATUS: CODED]
 - [ ] P3-002 Define request/response schemas for each role boundary. [STATUS: CODED]
-- [ ] P3-003 Define role authn/authz model and trust boundaries.
-- [ ] P3-004 Define rate limiting and backpressure strategy between roles.
-- [ ] P3-005 Publish role interaction sequence diagrams.
+- [ ] P3-003 Define role authn/authz model and trust boundaries. [STATUS: CODED]
+- [ ] P3-004 Define rate limiting and backpressure strategy between roles. [STATUS: CODED]
+- [ ] P3-005 Publish role interaction sequence diagrams. [STATUS: CODED]
 
 ### 3.B Service Scaffolding and Runtime Isolation
 
