@@ -21,6 +21,7 @@ import type {
   PostConditionVerifierInterface,
   VerifierContext,
 } from "../verification/types.js";
+import { recordInvariantCheck } from "../metrics/prometheus-metrics.js";
 import type {
   CompensationRegistryInterface,
   EventStoreInterface,
@@ -40,6 +41,17 @@ const DEFAULT_CONFIG: PipelineConfig = {
   autoApproveSources: [],
   eventStoreMaxEvents: 10_000,
 };
+
+type ApprovalOutcome =
+  | "skipped"
+  | "not_required"
+  | "approved"
+  | "denied"
+  | "expired"
+  | "error";
+
+type VerificationOutcome = "skipped" | "passed" | "failed";
+type InvariantOutcome = "skipped" | "passed" | "failed";
 
 export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
   private config: PipelineConfig;
@@ -114,6 +126,20 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
         reason: "validation_failed",
         errors: validation.errors,
       }, correlationId);
+      const errorMsg = "Validation failed";
+      await this.appendDecisionLog({
+        requestId,
+        toolName,
+        correlationId,
+        success: false,
+        validationOutcome: "failed",
+        validationErrorCount: validation.errors.length,
+        approvalOutcome: "skipped",
+        approvalRequired: false,
+        verificationOutcome: "skipped",
+        invariantOutcome: "skipped",
+        error: errorMsg,
+      });
 
       return {
         requestId,
@@ -128,7 +154,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
         },
         correlationId,
         durationMs: Date.now() - startTime,
-        error: "Validation failed",
+        error: errorMsg,
       };
     }
 
@@ -139,6 +165,9 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
       validation.riskClass,
       call.source,
     );
+    let approvalOutcome: ApprovalOutcome = needsApproval
+      ? "skipped"
+      : "not_required";
 
     if (needsApproval) {
       const smResult = this.stateMachine.transition("approval_required");
@@ -150,6 +179,10 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
           startTime,
           correlationId,
           `State machine rejected approval_required: ${smResult.reason}`,
+          {
+            approvalOutcome: "error",
+            approvalRequired: true,
+          },
         );
       }
 
@@ -174,9 +207,24 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
         decision: approvalResult.decision,
         decidedBy: approvalResult.decidedBy,
       };
+      approvalOutcome = this.toApprovalOutcome(approvalResult.decision);
 
       if (approvalResult.decision === "denied") {
         this.stateMachine.transition("approval_denied");
+        const errorMsg = "Approval denied";
+        await this.appendDecisionLog({
+          requestId,
+          toolName,
+          correlationId,
+          success: false,
+          validationOutcome: "passed",
+          validationErrorCount: 0,
+          approvalOutcome,
+          approvalRequired: true,
+          verificationOutcome: "skipped",
+          invariantOutcome: "skipped",
+          error: errorMsg,
+        });
         return {
           requestId,
           toolName,
@@ -185,12 +233,26 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
           approval: approvalInfo,
           correlationId,
           durationMs: Date.now() - startTime,
-          error: "Approval denied",
+          error: errorMsg,
         };
       }
 
       if (approvalResult.decision === "expired") {
         this.stateMachine.transition("approval_expired");
+        const errorMsg = "Approval expired";
+        await this.appendDecisionLog({
+          requestId,
+          toolName,
+          correlationId,
+          success: false,
+          validationOutcome: "passed",
+          validationErrorCount: 0,
+          approvalOutcome,
+          approvalRequired: true,
+          verificationOutcome: "skipped",
+          invariantOutcome: "skipped",
+          error: errorMsg,
+        });
         return {
           requestId,
           toolName,
@@ -199,7 +261,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
           approval: approvalInfo,
           correlationId,
           durationMs: Date.now() - startTime,
-          error: "Approval expired",
+          error: errorMsg,
         };
       }
 
@@ -216,6 +278,10 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
           startTime,
           correlationId,
           `State machine rejected tool_validated: ${smResult.reason}`,
+          {
+            approvalOutcome: "not_required",
+            approvalRequired: false,
+          },
         );
       }
     }
@@ -236,6 +302,20 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
         error: err instanceof Error ? err.message : String(err),
       }, correlationId);
       this.stateMachine.transition("fatal_error");
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      await this.appendDecisionLog({
+        requestId,
+        toolName,
+        correlationId,
+        success: false,
+        validationOutcome: "passed",
+        validationErrorCount: 0,
+        approvalOutcome,
+        approvalRequired: needsApproval,
+        verificationOutcome: "skipped",
+        invariantOutcome: "skipped",
+        error: errorMsg,
+      });
 
       return {
         requestId,
@@ -245,7 +325,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
         approval: approvalInfo,
         correlationId,
         durationMs: Date.now() - startTime,
-        error: err instanceof Error ? err.message : String(err),
+        error: errorMsg,
       };
     }
 
@@ -304,6 +384,23 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
         compensationAttempted: compensationInfo?.attempted ?? false,
         correlationId,
       });
+      await this.appendDecisionLog({
+        requestId,
+        toolName,
+        correlationId,
+        success: false,
+        validationOutcome: "passed",
+        validationErrorCount: 0,
+        approvalOutcome,
+        approvalRequired: needsApproval,
+        verificationOutcome: "failed",
+        verificationStatus: verification.status,
+        verificationCritical: true,
+        invariantOutcome: this.toInvariantOutcome(invariantInfo),
+        invariantStatus: invariantInfo?.status,
+        invariantCritical: invariantInfo?.hasCriticalViolation,
+        error: "Critical verification failure",
+      });
 
       return {
         requestId,
@@ -358,6 +455,23 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
         durationMs: Date.now() - startTime,
         correlationId,
       });
+      await this.appendDecisionLog({
+        requestId,
+        toolName,
+        correlationId,
+        success: false,
+        validationOutcome: "passed",
+        validationErrorCount: 0,
+        approvalOutcome,
+        approvalRequired: needsApproval,
+        verificationOutcome: this.toVerificationOutcome(verification),
+        verificationStatus: verification.status,
+        verificationCritical: verification.hasCriticalFailure,
+        invariantOutcome: "failed",
+        invariantStatus: invariantInfo.status,
+        invariantCritical: true,
+        error: "Critical invariant violation",
+      });
 
       return {
         requestId,
@@ -384,6 +498,22 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
       success: true,
       durationMs: Date.now() - startTime,
       correlationId,
+    });
+    await this.appendDecisionLog({
+      requestId,
+      toolName,
+      correlationId,
+      success: true,
+      validationOutcome: "passed",
+      validationErrorCount: 0,
+      approvalOutcome,
+      approvalRequired: needsApproval,
+      verificationOutcome: this.toVerificationOutcome(verification),
+      verificationStatus: verification.status,
+      verificationCritical: verification.hasCriticalFailure,
+      invariantOutcome: this.toInvariantOutcome(invariantInfo),
+      invariantStatus: invariantInfo?.status,
+      invariantCritical: invariantInfo?.hasCriticalViolation,
     });
 
     return {
@@ -434,6 +564,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
 
     const invariantResult: InvariantResult =
       await this.invariantChecker.check(invariantCtx);
+    recordInvariantCheck(this.toInvariantMetricResult(invariantResult));
 
     await this.eventStore.append(requestId, "tool:invariants:checked", {
       status: invariantResult.status,
@@ -485,8 +616,25 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
     startTime: number,
     correlationId: string,
     error: string,
+    options?: {
+      approvalOutcome: ApprovalOutcome;
+      approvalRequired: boolean;
+    },
   ): Promise<PipelineResult> {
     await this.eventStore.append(requestId, "tool:failed", { reason: error }, correlationId);
+    await this.appendDecisionLog({
+      requestId,
+      toolName,
+      correlationId,
+      success: false,
+      validationOutcome: validation.valid ? "passed" : "failed",
+      validationErrorCount: validation.errors.length,
+      approvalOutcome: options?.approvalOutcome ?? "skipped",
+      approvalRequired: options?.approvalRequired ?? false,
+      verificationOutcome: "skipped",
+      invariantOutcome: "skipped",
+      error,
+    });
 
     return {
       requestId,
@@ -503,6 +651,104 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
       durationMs: Date.now() - startTime,
       error,
     };
+  }
+
+  private toApprovalOutcome(decision: string | undefined): ApprovalOutcome {
+    if (decision === "approved") return "approved";
+    if (decision === "denied") return "denied";
+    if (decision === "expired") return "expired";
+    return "error";
+  }
+
+  private toVerificationOutcome(
+    verification: PipelineResult["verification"] | undefined,
+  ): VerificationOutcome {
+    if (!verification) return "skipped";
+    if (verification.hasCriticalFailure || verification.status !== "passed") {
+      return "failed";
+    }
+    return "passed";
+  }
+
+  private toInvariantOutcome(
+    invariants: PipelineResult["invariants"] | undefined,
+  ): InvariantOutcome {
+    if (!invariants) return "skipped";
+    if (invariants.hasCriticalViolation || invariants.status !== "passed") {
+      return "failed";
+    }
+    return "passed";
+  }
+
+  private toInvariantMetricResult(
+    invariants: InvariantResult,
+  ): "pass" | "fail" | "error" {
+    if (invariants.status === "passed") return "pass";
+    const hasCheckError = invariants.checks.some(
+      (check) => typeof check.error === "string" && check.error.length > 0,
+    );
+    if (hasCheckError) return "error";
+    return "fail";
+  }
+
+  private async appendDecisionLog(input: {
+    requestId: string;
+    toolName: string;
+    correlationId: string;
+    success: boolean;
+    validationOutcome: "passed" | "failed";
+    validationErrorCount: number;
+    approvalOutcome: ApprovalOutcome;
+    approvalRequired: boolean;
+    verificationOutcome: VerificationOutcome;
+    verificationStatus?: string;
+    verificationCritical?: boolean;
+    invariantOutcome: InvariantOutcome;
+    invariantStatus?: string;
+    invariantCritical?: boolean;
+    error?: string;
+  }): Promise<void> {
+    const payload = {
+      toolName: input.toolName,
+      success: input.success,
+      validation: {
+        outcome: input.validationOutcome,
+        errorCount: input.validationErrorCount,
+      },
+      approval: {
+        outcome: input.approvalOutcome,
+        required: input.approvalRequired,
+      },
+      verification: {
+        outcome: input.verificationOutcome,
+        status:
+          input.verificationOutcome === "skipped"
+            ? "skipped"
+            : (input.verificationStatus ?? "unknown"),
+        hasCriticalFailure: input.verificationCritical === true,
+      },
+      invariants: {
+        outcome: input.invariantOutcome,
+        status:
+          input.invariantOutcome === "skipped"
+            ? "skipped"
+            : (input.invariantStatus ?? "unknown"),
+        hasCriticalViolation: input.invariantCritical === true,
+      },
+      ...(input.error ? { error: input.error } : {}),
+    } satisfies Record<string, unknown>;
+
+    await this.eventStore.append(
+      input.requestId,
+      "tool:decision:logged",
+      payload,
+      input.correlationId,
+    );
+    this.eventBus?.emit("autonomy:decision:logged", {
+      requestId: input.requestId,
+      correlationId: input.correlationId,
+      ...payload,
+    });
   }
 
   private async attemptCompensation(input: {

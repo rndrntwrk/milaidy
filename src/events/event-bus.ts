@@ -314,6 +314,7 @@ export interface MilaidyEvents {
     toolName: string;
     success: boolean;
     detail?: string;
+    reason?: string;
     correlationId?: string;
   };
   "autonomy:invariants:checked": {
@@ -321,6 +322,37 @@ export interface MilaidyEvents {
     status: string;
     hasCriticalViolation: boolean;
     checkCount: number;
+    correlationId?: string;
+  };
+  "autonomy:decision:logged": {
+    requestId: string;
+    toolName: string;
+    success: boolean;
+    validation: {
+      outcome: "passed" | "failed";
+      errorCount: number;
+    };
+    approval: {
+      outcome:
+        | "skipped"
+        | "not_required"
+        | "approved"
+        | "denied"
+        | "expired"
+        | "error";
+      required: boolean;
+    };
+    verification: {
+      outcome: "skipped" | "passed" | "failed";
+      status: string;
+      hasCriticalFailure: boolean;
+    };
+    invariants: {
+      outcome: "skipped" | "passed" | "failed";
+      status: string;
+      hasCriticalViolation: boolean;
+    };
+    error?: string;
     correlationId?: string;
   };
 }

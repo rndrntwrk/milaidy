@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { metrics } from "../../telemetry/setup.js";
 import { ApprovalGate } from "../approval/approval-gate.js";
 import { KernelStateMachine } from "../state-machine/kernel-state-machine.js";
 import type { ProposedToolCall, ToolValidationResult } from "../tools/types.js";
@@ -153,7 +154,7 @@ describe("ToolExecutionPipeline", () => {
         requiresApproval: false,
       });
       const handler = createSuccessHandler();
-      const { pipeline } = createPipeline({ validator });
+      const { pipeline, eventStore } = createPipeline({ validator });
 
       const result = await pipeline.execute(makeCall(), handler);
 
@@ -162,6 +163,16 @@ describe("ToolExecutionPipeline", () => {
       expect(result.validation.valid).toBe(false);
       expect(result.validation.errors).toHaveLength(1);
       expect(handler).not.toHaveBeenCalled();
+      const events = await eventStore.getByRequestId("test-req-1");
+      const decision = events.find((event) => event.type === "tool:decision:logged");
+      expect(decision?.payload.validation).toEqual({
+        outcome: "failed",
+        errorCount: 1,
+      });
+      expect(decision?.payload.approval).toEqual({
+        outcome: "skipped",
+        required: false,
+      });
     });
   });
 
@@ -200,7 +211,7 @@ describe("ToolExecutionPipeline", () => {
         riskClass: "irreversible",
       });
       const handler = createSuccessHandler();
-      const { pipeline, approvalGate, stateMachine } = createPipeline({
+      const { pipeline, approvalGate, stateMachine, eventStore } = createPipeline({
         validator,
       });
 
@@ -220,6 +231,12 @@ describe("ToolExecutionPipeline", () => {
       expect(result.approval?.decision).toBe("denied");
       expect(handler).not.toHaveBeenCalled();
       expect(stateMachine.currentState).toBe("idle");
+      const events = await eventStore.getByRequestId("test-req-1");
+      const decision = events.find((event) => event.type === "tool:decision:logged");
+      expect(decision?.payload.approval).toEqual({
+        outcome: "denied",
+        required: true,
+      });
     });
   });
 
@@ -388,6 +405,7 @@ describe("ToolExecutionPipeline", () => {
         "tool:executing",
         "tool:executed",
         "tool:verified",
+        "tool:decision:logged",
       ]);
 
       // Verify sequence IDs are monotonic
@@ -419,6 +437,27 @@ describe("ToolExecutionPipeline", () => {
   });
 
   describe("invariant fail-closed behavior", () => {
+    it("records invariant check metrics", async () => {
+      const invariantChecker: InvariantCheckerInterface = {
+        register: vi.fn(),
+        registerMany: vi.fn(),
+        check: vi.fn().mockResolvedValue({
+          status: "passed",
+          checks: [],
+          hasCriticalViolation: false,
+        }),
+      };
+      const handler = createSuccessHandler({ ok: true });
+      const { pipeline } = createPipeline({ invariantChecker });
+      const before = metrics.getSnapshot();
+
+      await pipeline.execute(makeCall({ requestId: "inv-metric-1" }), handler);
+
+      const after = metrics.getSnapshot();
+      const key = 'autonomy_invariant_checks_total:{"result":"pass"}';
+      expect((after.counters[key] ?? 0) - (before.counters[key] ?? 0)).toBe(1);
+    });
+
     it("fails pipeline when a critical invariant is violated", async () => {
       const invariantChecker: InvariantCheckerInterface = {
         register: vi.fn(),
@@ -510,6 +549,19 @@ describe("ToolExecutionPipeline", () => {
         durationMs: expect.any(Number),
         correlationId: expect.any(String),
       });
+      expect(mockEmit).toHaveBeenCalledWith(
+        "autonomy:decision:logged",
+        expect.objectContaining({
+          requestId: "evt-1",
+          toolName: "PLAY_EMOTE",
+          success: true,
+          validation: { outcome: "passed", errorCount: 0 },
+          approval: { outcome: "not_required", required: false },
+          verification: expect.objectContaining({ outcome: "passed" }),
+          invariants: expect.objectContaining({ outcome: "skipped" }),
+          correlationId: expect.any(String),
+        }),
+      );
     });
 
     it("emits compensation:attempted event on critical failure", async () => {
