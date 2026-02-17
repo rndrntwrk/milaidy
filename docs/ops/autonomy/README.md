@@ -58,6 +58,7 @@ Contents:
 - `phase3-acceptance-report-2026-02-17.md`: `P3-042` Phase 3 gate report and sign-off decision.
 - `phase4-dataset-schema-extraction-2026-02-17.md`: `P4-001/P4-002` learning dataset schema and event-log extraction implementation/validation evidence.
 - `phase4-prompt-templates-ab-testing-2026-02-17.md`: `P4-008/P4-009/P4-010/P4-011` role-specific prompt template design, anti-sycophancy/tool-guardrail constraints, and held-out variant A/B scoring evidence.
+- `phase4-training-env-orchestration-2026-02-17.md`: `P4-012/P4-013` reproducible training-environment configuration and end-to-end training-job orchestration evidence.
 - `phase4-deidentification-pipeline-2026-02-17.md`: `P4-003` deterministic de-identification/anonymization pipeline for learning dataset export paths.
 - `phase4-quality-filters-2026-02-17.md`: `P4-004` deterministic quality filters for training examples/episodes before dataset export.
 - `phase4-labeling-guidelines-2026-02-17.md`: `P4-005` labeling rubric and QA sampling policy for training trace annotation.
@@ -72,6 +73,7 @@ Primary scripts:
 - `npm run autonomy:retrieval:quality`
 - `npm run autonomy:learning:extract -- --events-file <path-to-events-json-or-jsonl>`
 - `npm run autonomy:prompt:ab-test -- --holdout-ratio 0.35 --seed p4-011`
+- `npm run autonomy:training:run -- --dataset-file <path-to-learning-dataset-json>`
 - `npm run autonomy:metrics:cardinality`
 - `npm run autonomy:metrics:retention-cost`
 - `npm run autonomy:contracts:inventory`

@@ -4,7 +4,7 @@
  * @module autonomy/learning/training/rlvr-loop
  */
 
-import type { TrainingDataset, RewardSignal } from "../types.js";
+import type { RLVRTrainingDataset } from "./dataset.js";
 
 /** RLVR training configuration. */
 export interface RLVRConfig {
@@ -44,9 +44,9 @@ export interface TrainingResult {
 /** RLVR training loop interface. */
 export interface RLVRLoop {
   /** Run a training loop on the given dataset. */
-  train(dataset: TrainingDataset, config?: RLVRConfig): Promise<TrainingResult>;
+  train(dataset: RLVRTrainingDataset, config?: RLVRConfig): Promise<TrainingResult>;
   /** Evaluate current model on a dataset without training. */
-  evaluate(dataset: TrainingDataset): Promise<{ averageReward: number; scores: number[] }>;
+  evaluate(dataset: RLVRTrainingDataset): Promise<{ averageReward: number; scores: number[] }>;
 }
 
 // ---------- Stub Implementation ----------
@@ -56,7 +56,7 @@ export interface RLVRLoop {
  * Used for testing the training pipeline without an actual ML backend.
  */
 export class StubRLVRLoop implements RLVRLoop {
-  async train(dataset: TrainingDataset, config?: RLVRConfig): Promise<TrainingResult> {
+  async train(dataset: RLVRTrainingDataset, config?: RLVRConfig): Promise<TrainingResult> {
     const start = Date.now();
     const maxEpochs = config?.maxEpochs ?? 3;
     const examples = dataset.examples.filter(
@@ -97,7 +97,7 @@ export class StubRLVRLoop implements RLVRLoop {
     };
   }
 
-  async evaluate(dataset: TrainingDataset): Promise<{ averageReward: number; scores: number[] }> {
+  async evaluate(dataset: RLVRTrainingDataset): Promise<{ averageReward: number; scores: number[] }> {
     const scores = dataset.examples.map((ex) => ex.reward ?? 0);
     const averageReward = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
     return { averageReward, scores };
@@ -110,13 +110,13 @@ export class StubRLVRLoop implements RLVRLoop {
 export class ExternalRLVRLoop implements RLVRLoop {
   constructor(private readonly endpoint: string) {}
 
-  async train(_dataset: TrainingDataset, _config?: RLVRConfig): Promise<TrainingResult> {
+  async train(_dataset: RLVRTrainingDataset, _config?: RLVRConfig): Promise<TrainingResult> {
     throw new Error(
       `ExternalRLVRLoop is a stub. Configure a training server at ${this.endpoint}.`,
     );
   }
 
-  async evaluate(_dataset: TrainingDataset): Promise<{ averageReward: number; scores: number[] }> {
+  async evaluate(_dataset: RLVRTrainingDataset): Promise<{ averageReward: number; scores: number[] }> {
     throw new Error(
       `ExternalRLVRLoop.evaluate() is a stub. Configure a training server at ${this.endpoint}.`,
     );

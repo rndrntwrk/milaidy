@@ -36,6 +36,44 @@ export {
   type PromptVariantScore,
   type HeldOutScenarioOptions,
 } from "./prompt-variant-evaluator.js";
+// RLVR training dataset helpers
+export {
+  parseRLVRTrainingDataset,
+  fromLearningTraceDataset,
+  RLVRTrainingDatasetSchema,
+  RLVRTrainingExampleSchema,
+  type RLVRTrainingDataset,
+  type RLVRTrainingExample,
+} from "./training/dataset.js";
+// RLVR loop + hyperparameter tuning
+export {
+  StubRLVRLoop,
+  ExternalRLVRLoop,
+  type RLVRConfig,
+  type TrainingResult,
+  type RLVRLoop,
+} from "./training/rlvr-loop.js";
+export {
+  GridSearchTuner,
+  type HyperparamSpace,
+  type TrialResult,
+  type TuningResult,
+  type ObjectiveFunction,
+} from "./training/hyperparam-tuner.js";
+// Training environment + orchestration
+export {
+  createTrainingEnvironmentConfig,
+  computeTrainingEnvironmentFingerprint,
+  buildTrainingEnvironmentManifest,
+  DEFAULT_HYPERPARAM_SPACE,
+  DEFAULT_RLVR_CONFIG,
+  type BuildTrainingEnvironmentInput,
+  type TrainingEnvironmentConfig,
+} from "./training/environment.js";
+export {
+  TrainingJobOrchestrator,
+  type TrainingJobResult,
+} from "./training/job-orchestrator.js";
 // Reward
 export {
   CheckpointReward,
