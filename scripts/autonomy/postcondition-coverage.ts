@@ -2,19 +2,37 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { BUILTIN_CONTRACTS } from "../../src/autonomy/tools/schemas/index.js";
-import { registerBuiltinPostConditions } from "../../src/autonomy/verification/postconditions/index.js";
+import { emoteAction } from "../../src/actions/emote.js";
+import { installPluginAction } from "../../src/actions/install-plugin.js";
+import { mediaActions } from "../../src/actions/media.js";
+import { restartAction } from "../../src/actions/restart.js";
+import { terminalAction } from "../../src/actions/terminal.js";
+import { createCodingDomainPack } from "../../src/autonomy/domains/coding/pack.js";
+import { ToolRegistry } from "../../src/autonomy/tools/registry.js";
+import {
+  BUILTIN_CONTRACTS,
+  registerBuiltinToolContracts,
+} from "../../src/autonomy/tools/schemas/index.js";
+import { registerRuntimeContracts } from "../../src/autonomy/tools/runtime-contracts.js";
+import {
+  customActionPostConditions,
+  registerBuiltinPostConditions,
+} from "../../src/autonomy/verification/postconditions/index.js";
 import type {
   PostCondition,
   PostConditionVerifierInterface,
   VerificationResult,
   VerifierContext,
 } from "../../src/autonomy/verification/types.js";
+import { loadMilaidyConfig } from "../../src/config/config.js";
+import { loadCustomActions } from "../../src/runtime/custom-actions.js";
+import { createTriggerTaskAction } from "../../src/triggers/action.js";
 
 interface CliArgs {
   outDir: string;
   label: string;
   failOnMissing: boolean;
+  includeRuntime: boolean;
 }
 
 interface CoverageEntry {
@@ -53,6 +71,7 @@ function parseArgs(argv: string[]): CliArgs {
     outDir: resolve(args.get("out-dir") ?? "docs/ops/autonomy/reports"),
     label: args.get("label") ?? `postconditions-${now}`,
     failOnMissing: parseBoolean(args.get("fail-on-missing"), true),
+    includeRuntime: parseBoolean(args.get("include-runtime"), false),
   };
 }
 
@@ -81,8 +100,13 @@ class CoverageCollector implements PostConditionVerifierInterface {
 
 function buildCoverageEntries(
   collector: CoverageCollector,
+  contracts: Array<{
+    name: string;
+    version: string;
+    riskClass: string;
+  }>,
 ): CoverageEntry[] {
-  return BUILTIN_CONTRACTS.map((contract) => {
+  return contracts.map((contract) => {
     const conditions = collector.conditions.get(contract.name) ?? [];
     const criticalCount = conditions.filter(
       (condition) => condition.severity === "critical",
@@ -110,8 +134,9 @@ function buildCoverageEntries(
 function renderMarkdown(input: {
   label: string;
   createdAt: string;
+  scope: "built-in" | "runtime";
   coveragePercent: number;
-  builtInToolCount: number;
+  contractCount: number;
   toolsWithConditions: number;
   missingTools: string[];
   extraRegisteredTools: string[];
@@ -122,7 +147,8 @@ function renderMarkdown(input: {
   lines.push("");
   lines.push(`- Label: \`${input.label}\``);
   lines.push(`- Created at: \`${input.createdAt}\``);
-  lines.push(`- Built-in tools: \`${input.builtInToolCount}\``);
+  lines.push(`- Scope: \`${input.scope}\``);
+  lines.push(`- Contracts in scope: \`${input.contractCount}\``);
   lines.push(`- Tools with post-conditions: \`${input.toolsWithConditions}\``);
   lines.push(`- Coverage: \`${input.coveragePercent.toFixed(2)}%\``);
   lines.push("");
@@ -156,10 +182,28 @@ function renderMarkdown(input: {
   lines.push("");
   lines.push("## Coverage Notes");
   lines.push("");
-  lines.push("- Scope currently covers autonomy built-in tool contracts.");
+  if (input.scope === "built-in") {
+    lines.push("- Scope covers autonomy built-in tool contracts only.");
+    lines.push("- Use --include-runtime=true to include runtime/custom-action contracts.");
+  } else {
+    lines.push("- Scope includes built-in and discovered runtime/custom-action contracts.");
+    lines.push("- Runtime-generated contracts without explicit post-conditions appear under Missing Coverage.");
+  }
   lines.push("- Use this report with tool inventory output for phase gate evidence.");
   lines.push("");
   return lines.join("\n");
+}
+
+function runtimeActionsForCoverage() {
+  return [
+    restartAction,
+    createTriggerTaskAction,
+    emoteAction,
+    terminalAction,
+    installPluginAction,
+    ...mediaActions,
+    ...loadCustomActions(),
+  ];
 }
 
 async function main() {
@@ -167,11 +211,56 @@ async function main() {
   const collector = new CoverageCollector();
   registerBuiltinPostConditions(collector);
 
-  const entries = buildCoverageEntries(collector);
-  const builtInToolCount = entries.length;
-  const toolsWithConditions = entries.filter((entry) => entry.conditionCount > 0).length;
+  let contracts = BUILTIN_CONTRACTS.map((contract) => ({
+    name: contract.name,
+    version: contract.version,
+    riskClass: contract.riskClass,
+  }));
+
+  if (cli.includeRuntime) {
+    const registry = new ToolRegistry();
+    registerBuiltinToolContracts(registry);
+    const config = loadMilaidyConfig();
+    const runtimeRegistration = registerRuntimeContracts(registry, {
+      runtime: { actions: runtimeActionsForCoverage() },
+      customActions: config.customActions ?? [],
+    });
+
+    // Mirror autonomy-service behavior for explicit custom actions.
+    for (const actionName of runtimeRegistration.explicit) {
+      collector.registerConditions(actionName, customActionPostConditions);
+    }
+
+    const autonomyDomains = config.autonomy?.domains;
+    if (autonomyDomains?.enabled) {
+      for (const domainId of autonomyDomains.autoLoadDomains ?? []) {
+        if (domainId !== "coding") continue;
+        const pack = createCodingDomainPack(autonomyDomains.coding);
+        for (const contract of pack.toolContracts) {
+          if (!registry.has(contract.name)) {
+            registry.register(contract);
+          }
+        }
+      }
+    }
+
+    contracts = registry
+      .getAll()
+      .map((contract) => ({
+        name: contract.name,
+        version: contract.version,
+        riskClass: contract.riskClass,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  const entries = buildCoverageEntries(collector, contracts);
+  const contractCount = entries.length;
+  const toolsWithConditions = entries.filter(
+    (entry) => entry.conditionCount > 0,
+  ).length;
   const coveragePercent =
-    builtInToolCount === 0 ? 100 : (toolsWithConditions / builtInToolCount) * 100;
+    contractCount === 0 ? 100 : (toolsWithConditions / contractCount) * 100;
   const missingTools = entries
     .filter((entry) => entry.conditionCount === 0)
     .map((entry) => entry.toolName);
@@ -183,7 +272,8 @@ async function main() {
   const payload = {
     label: cli.label,
     createdAt: new Date().toISOString(),
-    builtInToolCount,
+    scope: cli.includeRuntime ? "runtime" : "built-in",
+    contractCount,
     toolsWithConditions,
     coveragePercent: Number(coveragePercent.toFixed(2)),
     missingTools,
@@ -201,8 +291,9 @@ async function main() {
     renderMarkdown({
       label: payload.label,
       createdAt: payload.createdAt,
+      scope: payload.scope,
       coveragePercent: payload.coveragePercent,
-      builtInToolCount: payload.builtInToolCount,
+      contractCount: payload.contractCount,
       toolsWithConditions: payload.toolsWithConditions,
       missingTools: payload.missingTools,
       extraRegisteredTools: payload.extraRegisteredTools,
@@ -216,7 +307,7 @@ async function main() {
 
   if (cli.failOnMissing && missingTools.length > 0) {
     console.error(
-      `[postconditions] missing coverage for ${missingTools.length} built-in tool(s): ${missingTools.join(", ")}`,
+      `[postconditions] missing coverage for ${missingTools.length} contract(s): ${missingTools.join(", ")}`,
     );
     process.exitCode = 1;
   }
