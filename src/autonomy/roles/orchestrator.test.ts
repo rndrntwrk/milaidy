@@ -6,7 +6,10 @@ import type {
 } from "../workflow/types.js";
 import { LocalWorkflowEngine } from "../adapters/workflow/local-engine.js";
 import type { WorkflowEngine } from "../adapters/workflow/types.js";
-import { KernelOrchestrator } from "./orchestrator.js";
+import {
+  KernelOrchestrator,
+  type RoleCallPolicy,
+} from "./orchestrator.js";
 import { SafeModeControllerImpl } from "./safe-mode.js";
 import type {
   AuditorRole,
@@ -185,6 +188,7 @@ describe("KernelOrchestrator", () => {
     auditor?: AuditorRole;
     safeMode?: SafeModeController;
     workflowEngine?: WorkflowEngine;
+    roleCallPolicy?: Partial<RoleCallPolicy>;
   }) {
     const sm = new KernelStateMachine();
     return {
@@ -197,6 +201,7 @@ describe("KernelOrchestrator", () => {
         sm,
         overrides?.safeMode ?? new SafeModeControllerImpl(),
         overrides?.workflowEngine,
+        overrides?.roleCallPolicy,
       ),
       sm,
     };
@@ -435,6 +440,102 @@ describe("KernelOrchestrator", () => {
       );
       expect(workflowEngine.register).toHaveBeenCalledTimes(1);
       expect(workflowEngine.execute).toHaveBeenCalledTimes(1);
+    });
+
+    it("retries transient role failures and succeeds", async () => {
+      const planner = createMockPlanner(createMockPlan([{ toolName: "TOOL_A" }]));
+      let attempts = 0;
+      const pipeline: ExecutorRole = {
+        execute: vi.fn(async (call) => {
+          attempts += 1;
+          if (attempts === 1) {
+            throw new Error("transient executor failure");
+          }
+          return {
+            requestId: call.requestId,
+            toolName: call.tool,
+            success: true,
+            result: "ok",
+            validation: { valid: true, errors: [] },
+            durationMs: 10,
+          };
+        }),
+      };
+
+      const { orchestrator } = createOrchestrator({
+        planner,
+        pipeline,
+        roleCallPolicy: {
+          timeoutMs: 500,
+          maxRetries: 1,
+          backoffMs: 0,
+          circuitBreakerThreshold: 5,
+          circuitBreakerResetMs: 5_000,
+        },
+      });
+
+      const result = await orchestrator.execute(createRequest());
+
+      expect(result.success).toBe(true);
+      expect(pipeline.execute).toHaveBeenCalledTimes(2);
+    });
+
+    it("fails fast when role call times out", async () => {
+      const planner: PlannerRole = {
+        createPlan: vi.fn(() => new Promise<ExecutionPlan>(() => {})),
+        validatePlan: vi.fn(async () => ({ valid: true, issues: [] })),
+        getActivePlan: vi.fn(() => null),
+        cancelPlan: vi.fn(async () => {}),
+      };
+      const { orchestrator } = createOrchestrator({
+        planner,
+        roleCallPolicy: {
+          timeoutMs: 25,
+          maxRetries: 0,
+          backoffMs: 0,
+          circuitBreakerThreshold: 5,
+          circuitBreakerResetMs: 5_000,
+        },
+      });
+
+      const result = await orchestrator.execute(createRequest());
+
+      expect(result.success).toBe(false);
+      expect(result.auditReport.anomalies[0]).toContain(
+        "Role call timeout: planner.createPlan exceeded 25ms",
+      );
+      expect(planner.createPlan).toHaveBeenCalledTimes(1);
+    });
+
+    it("opens circuit breaker after threshold and blocks subsequent role calls", async () => {
+      const planner: PlannerRole = {
+        createPlan: vi.fn(async () => {
+          throw new Error("planner unavailable");
+        }),
+        validatePlan: vi.fn(async () => ({ valid: true, issues: [] })),
+        getActivePlan: vi.fn(() => null),
+        cancelPlan: vi.fn(async () => {}),
+      };
+      const { orchestrator } = createOrchestrator({
+        planner,
+        roleCallPolicy: {
+          timeoutMs: 100,
+          maxRetries: 0,
+          backoffMs: 0,
+          circuitBreakerThreshold: 1,
+          circuitBreakerResetMs: 60_000,
+        },
+      });
+
+      const first = await orchestrator.execute(createRequest());
+      const second = await orchestrator.execute(createRequest());
+
+      expect(first.success).toBe(false);
+      expect(second.success).toBe(false);
+      expect(planner.createPlan).toHaveBeenCalledTimes(1);
+      expect(second.auditReport.anomalies[0]).toContain(
+        "Role call blocked: planner.createPlan circuit breaker open until",
+      );
     });
   });
 

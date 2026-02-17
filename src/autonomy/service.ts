@@ -583,6 +583,7 @@ export class MilaidyAutonomyService extends Service {
       this.stateMachine,
       this.safeModeController,
       this.workflowEngine ?? undefined,
+      config.roles?.orchestrator,
     );
 
     // Initialize learning infrastructure (Phase 4)

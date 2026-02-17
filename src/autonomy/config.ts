@@ -254,6 +254,19 @@ export interface AutonomyRolesConfig {
     /** Minimum trust to exit safe mode (default: 0.8). */
     exitTrustFloor?: number;
   };
+  /** Orchestrator role-call resilience settings. */
+  orchestrator?: {
+    /** Timeout per role call in ms (default: 5000). */
+    timeoutMs?: number;
+    /** Max retries after the initial attempt (default: 1). */
+    maxRetries?: number;
+    /** Linear backoff base in ms between retries (default: 50). */
+    backoffMs?: number;
+    /** Failures required to open a role circuit breaker (default: 3). */
+    circuitBreakerThreshold?: number;
+    /** Circuit-open cooldown in ms before retrying calls (default: 30000). */
+    circuitBreakerResetMs?: number;
+  };
 }
 
 /**
@@ -407,6 +420,15 @@ export function resolveAutonomyConfig(
       safeMode: {
         errorThreshold: cfg.roles?.safeMode?.errorThreshold ?? 3,
         exitTrustFloor: cfg.roles?.safeMode?.exitTrustFloor ?? 0.8,
+      },
+      orchestrator: {
+        timeoutMs: cfg.roles?.orchestrator?.timeoutMs ?? 5_000,
+        maxRetries: cfg.roles?.orchestrator?.maxRetries ?? 1,
+        backoffMs: cfg.roles?.orchestrator?.backoffMs ?? 50,
+        circuitBreakerThreshold:
+          cfg.roles?.orchestrator?.circuitBreakerThreshold ?? 3,
+        circuitBreakerResetMs:
+          cfg.roles?.orchestrator?.circuitBreakerResetMs ?? 30_000,
       },
     },
     learning: {
@@ -607,6 +629,33 @@ export function validateAutonomyConfig(
     if (config.roles.safeMode.exitTrustFloor < 0 || config.roles.safeMode.exitTrustFloor > 1) {
       issues.push({ path: "autonomy.roles.safeMode.exitTrustFloor", message: "Must be between 0 and 1" });
     }
+  }
+  if (config.roles?.orchestrator?.timeoutMs !== undefined && config.roles.orchestrator.timeoutMs < 1) {
+    issues.push({ path: "autonomy.roles.orchestrator.timeoutMs", message: "Must be at least 1" });
+  }
+  if (config.roles?.orchestrator?.maxRetries !== undefined && config.roles.orchestrator.maxRetries < 0) {
+    issues.push({ path: "autonomy.roles.orchestrator.maxRetries", message: "Must be at least 0" });
+  }
+  if (config.roles?.orchestrator?.backoffMs !== undefined && config.roles.orchestrator.backoffMs < 0) {
+    issues.push({ path: "autonomy.roles.orchestrator.backoffMs", message: "Must be at least 0" });
+  }
+  if (
+    config.roles?.orchestrator?.circuitBreakerThreshold !== undefined &&
+    config.roles.orchestrator.circuitBreakerThreshold < 1
+  ) {
+    issues.push({
+      path: "autonomy.roles.orchestrator.circuitBreakerThreshold",
+      message: "Must be at least 1",
+    });
+  }
+  if (
+    config.roles?.orchestrator?.circuitBreakerResetMs !== undefined &&
+    config.roles.orchestrator.circuitBreakerResetMs < 1
+  ) {
+    issues.push({
+      path: "autonomy.roles.orchestrator.circuitBreakerResetMs",
+      message: "Must be at least 1",
+    });
   }
 
   // Validate learning config

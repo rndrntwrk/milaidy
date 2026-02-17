@@ -49,8 +49,38 @@ import {
   parseVerifierVerifyResponse,
 } from "./schemas.js";
 
+type RoleCallName =
+  | "planner"
+  | "executor"
+  | "verifier"
+  | "memory_writer"
+  | "auditor";
+
+export interface RoleCallPolicy {
+  timeoutMs: number;
+  maxRetries: number;
+  backoffMs: number;
+  circuitBreakerThreshold: number;
+  circuitBreakerResetMs: number;
+}
+
+const DEFAULT_ROLE_CALL_POLICY: RoleCallPolicy = {
+  timeoutMs: 5_000,
+  maxRetries: 1,
+  backoffMs: 50,
+  circuitBreakerThreshold: 3,
+  circuitBreakerResetMs: 30_000,
+};
+
+interface RoleCircuitState {
+  failures: number;
+  openUntil: number;
+}
+
 export class KernelOrchestrator implements RoleOrchestrator {
   private executionQueue: Promise<void> = Promise.resolve();
+  private readonly roleCallPolicy: RoleCallPolicy;
+  private readonly roleCircuitState = new Map<RoleCallName, RoleCircuitState>();
 
   constructor(
     private readonly planner: PlannerRole,
@@ -61,7 +91,20 @@ export class KernelOrchestrator implements RoleOrchestrator {
     private readonly stateMachine: KernelStateMachineInterface,
     private readonly safeModeController: SafeModeController,
     private readonly workflowEngine?: WorkflowEngine,
-  ) {}
+    roleCallPolicy?: Partial<RoleCallPolicy>,
+  ) {
+    const mergedPolicy = {
+      ...DEFAULT_ROLE_CALL_POLICY,
+      ...(roleCallPolicy ?? {}),
+    };
+    this.roleCallPolicy = {
+      timeoutMs: Math.max(1, mergedPolicy.timeoutMs),
+      maxRetries: Math.max(0, mergedPolicy.maxRetries),
+      backoffMs: Math.max(0, mergedPolicy.backoffMs),
+      circuitBreakerThreshold: Math.max(1, mergedPolicy.circuitBreakerThreshold),
+      circuitBreakerResetMs: Math.max(1, mergedPolicy.circuitBreakerResetMs),
+    };
+  }
 
   async execute(request: OrchestratedRequest): Promise<OrchestratedResult> {
     const startedAt = Date.now();
@@ -114,11 +157,15 @@ export class KernelOrchestrator implements RoleOrchestrator {
         sourceTrust: orchestratedRequest.sourceTrust,
       });
       plan = parsePlannerCreatePlanResponse(
-        await this.planner.createPlan(planRequest),
+        await this.callRoleWithResilience("planner", "createPlan", () =>
+          this.planner.createPlan(planRequest),
+        ),
       );
 
       const validation = parsePlannerValidatePlanResponse(
-        await this.planner.validatePlan(plan),
+        await this.callRoleWithResilience("planner", "validatePlan", () =>
+          this.planner.validatePlan(plan),
+        ),
       );
       if (!validation.valid) {
         plan.status = "rejected";
@@ -171,9 +218,11 @@ export class KernelOrchestrator implements RoleOrchestrator {
             requestId: `${plan.id}-${step.id}`,
           });
           const pipelineResult = parseExecutorExecuteResponse(
-            await this.executor.execute(
-              proposedCall,
-              orchestratedRequest.actionHandler,
+            await this.callRoleWithResilience("executor", "execute", () =>
+              this.executor.execute(
+                proposedCall,
+                orchestratedRequest.actionHandler,
+              ),
             ),
           );
           executions.push(pipelineResult);
@@ -226,8 +275,10 @@ export class KernelOrchestrator implements RoleOrchestrator {
             }));
 
           memoryReport = parseMemoryWriteBatchResponse(
-            await this.memoryWriter.writeBatch(
-              parseMemoryWriteBatchRequest(memoryRequests),
+            await this.callRoleWithResilience("memory_writer", "writeBatch", () =>
+              this.memoryWriter.writeBatch(
+                parseMemoryWriteBatchRequest(memoryRequests),
+              ),
             ),
           );
           this.stateMachine.transition("memory_written");
@@ -251,7 +302,9 @@ export class KernelOrchestrator implements RoleOrchestrator {
             recentOutputs: orchestratedRequest.recentOutputs ?? [],
           });
           auditReport = parseAuditorAuditResponse(
-            await this.auditor.audit(auditRequest),
+            await this.callRoleWithResilience("auditor", "audit", () =>
+              this.auditor.audit(auditRequest),
+            ),
           );
           this.stateMachine.transition("audit_complete");
         } catch (auditError) {
@@ -408,9 +461,11 @@ export class KernelOrchestrator implements RoleOrchestrator {
                 requestId: `${plan.id}-${step.id}`,
               });
               const pipelineResult = parseExecutorExecuteResponse(
-                await this.executor.execute(
-                  proposedCall,
-                  request.actionHandler,
+                await this.callRoleWithResilience("executor", "execute", () =>
+                  this.executor.execute(
+                    proposedCall,
+                    request.actionHandler,
+                  ),
                 ),
               );
               results.push(pipelineResult);
@@ -470,10 +525,130 @@ export class KernelOrchestrator implements RoleOrchestrator {
         agentId: request.agentId,
       });
       const report = parseVerifierVerifyResponse(
-        await this.verifier.verify(verifyRequest),
+        await this.callRoleWithResilience("verifier", "verify", () =>
+          this.verifier.verify(verifyRequest),
+        ),
       );
       reports.push(report);
     }
     return reports;
+  }
+
+  private async callRoleWithResilience<T>(
+    role: RoleCallName,
+    operation: string,
+    roleCall: () => Promise<T>,
+  ): Promise<T> {
+    const now = Date.now();
+    const circuitState = this.roleCircuitState.get(role);
+    if (circuitState && circuitState.openUntil > now) {
+      throw new Error(
+        `Role call blocked: ${role}.${operation} circuit breaker open until ${new Date(circuitState.openUntil).toISOString()}`,
+      );
+    }
+    if (circuitState && circuitState.openUntil > 0 && circuitState.openUntil <= now) {
+      this.resetRoleCircuit(role);
+    }
+
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= this.roleCallPolicy.maxRetries; attempt++) {
+      try {
+        const result = await this.callRoleWithTimeout(role, operation, roleCall);
+        this.resetRoleCircuit(role);
+        return result;
+      } catch (error) {
+        lastError = error;
+        const openedUntil = this.recordRoleFailure(role);
+        if (openedUntil > Date.now()) {
+          throw new Error(
+            `Role call failed: ${role}.${operation} circuit breaker open until ${new Date(openedUntil).toISOString()} (last error: ${this.describeError(error)})`,
+          );
+        }
+
+        const retriesRemaining = attempt < this.roleCallPolicy.maxRetries;
+        if (!retriesRemaining) {
+          throw new Error(
+            `Role call failed: ${role}.${operation} after ${attempt + 1} attempt(s): ${this.describeError(error)}`,
+          );
+        }
+
+        const backoffMs = this.roleCallPolicy.backoffMs * (attempt + 1);
+        if (backoffMs > 0) {
+          await this.sleep(backoffMs);
+        }
+      }
+    }
+
+    throw new Error(
+      `Role call failed: ${role}.${operation}: ${this.describeError(lastError)}`,
+    );
+  }
+
+  private async callRoleWithTimeout<T>(
+    role: RoleCallName,
+    operation: string,
+    roleCall: () => Promise<T>,
+  ): Promise<T> {
+    const timeoutMs = this.roleCallPolicy.timeoutMs;
+    if (timeoutMs <= 0) {
+      return roleCall();
+    }
+
+    return await new Promise<T>((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        reject(
+          new Error(
+            `Role call timeout: ${role}.${operation} exceeded ${timeoutMs}ms`,
+          ),
+        );
+      }, timeoutMs);
+
+      roleCall().then(
+        (value) => {
+          clearTimeout(timeoutId);
+          resolve(value);
+        },
+        (error) => {
+          clearTimeout(timeoutId);
+          reject(error);
+        },
+      );
+    });
+  }
+
+  private recordRoleFailure(role: RoleCallName): number {
+    const current = this.roleCircuitState.get(role) ?? {
+      failures: 0,
+      openUntil: 0,
+    };
+    const failures = current.failures + 1;
+    const openUntil =
+      failures >= this.roleCallPolicy.circuitBreakerThreshold
+        ? Date.now() + this.roleCallPolicy.circuitBreakerResetMs
+        : 0;
+
+    this.roleCircuitState.set(role, { failures, openUntil });
+    return openUntil;
+  }
+
+  private resetRoleCircuit(role: RoleCallName): void {
+    if (!this.roleCircuitState.has(role)) {
+      return;
+    }
+
+    this.roleCircuitState.set(role, { failures: 0, openUntil: 0 });
+  }
+
+  private describeError(error: unknown): string {
+    if (error instanceof Error) {
+      return error.message;
+    }
+    return String(error);
+  }
+
+  private async sleep(ms: number): Promise<void> {
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, ms);
+    });
   }
 }
