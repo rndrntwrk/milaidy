@@ -13,8 +13,8 @@ Current status pre-check snapshot:
 - Evidence basis: static repo review of autonomy kernel, API, persistence, and app UI code paths.
 - Summary counts:
 - `307` total checklist items.
-- `139` items tagged `STATUS: CODED`.
-- `61` items tagged `STATUS: PARTIAL`.
+- `140` items tagged `STATUS: CODED`.
+- `60` items tagged `STATUS: PARTIAL`.
 - `107` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
@@ -156,7 +156,7 @@ Sprint chunks:
 
 ### 0.C Instrumentation and Metrics Baseline
 
-- [ ] P0-013 Define canonical metric list (tool success, VC, PSD, ICS, Recall@N, CFR, MPS, reward hacking). [STATUS: PARTIAL]
+- [ ] P0-013 Define canonical metric list (tool success, VC, PSD, ICS, Recall@N, CFR, MPS, reward hacking). [STATUS: CODED]
 - [ ] P0-014 Wire telemetry counters/histograms/gauges to runtime. [STATUS: CODED]
 - [ ] P0-015 Expose metrics endpoint and verify scrape pipeline. [STATUS: CODED]
 - [ ] P0-016 Build initial dashboards (operations + autonomy quality). [STATUS: PARTIAL]

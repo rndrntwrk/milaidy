@@ -24,6 +24,16 @@ export {
 } from "./scenarios.js";
 
 export type {
+  CanonicalMetricCode,
+  CanonicalMetricDefinition,
+} from "./canonical-metrics.js";
+export {
+  CANONICAL_AUTONOMY_METRICS,
+  CANONICAL_METRIC_CODES,
+  getCanonicalMetricDefinition,
+} from "./canonical-metrics.js";
+
+export type {
   BaselineMetrics,
   EvaluationScenario,
   MetricsDelta,
