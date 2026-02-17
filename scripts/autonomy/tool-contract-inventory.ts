@@ -21,6 +21,7 @@ import { createTriggerTaskAction } from "../../src/triggers/action.js";
 interface CliArgs {
   outDir: string;
   label: string;
+  failOnMissing: boolean;
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -47,7 +48,16 @@ function parseArgs(argv: string[]): CliArgs {
   return {
     outDir: resolve(args.get("out-dir") ?? "docs/ops/autonomy/reports"),
     label: args.get("label") ?? `contracts-${now}`,
+    failOnMissing: parseBoolean(args.get("fail-on-missing"), true),
   };
+}
+
+function parseBoolean(value: string | undefined, fallback: boolean): boolean {
+  if (value === undefined) return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  return fallback;
 }
 
 function renderMarkdown(input: {
@@ -243,6 +253,13 @@ async function main() {
 
   console.log(`[contracts] wrote ${jsonPath}`);
   console.log(`[contracts] wrote ${mdPath}`);
+
+  if (cli.failOnMissing && runtimeActionUncovered.length > 0) {
+    console.error(
+      `[contracts] missing coverage for ${runtimeActionUncovered.length} runtime action(s): ${runtimeActionUncovered.join(", ")}`,
+    );
+    process.exitCode = 1;
+  }
 }
 
 void main();
