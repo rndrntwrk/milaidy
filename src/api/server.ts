@@ -139,6 +139,7 @@ interface AutonomyServiceLike {
   getStateMachine?(): import("../autonomy/state-machine/types.js").KernelStateMachineInterface | null;
   getExecutionPipeline?(): import("../autonomy/workflow/types.js").ToolExecutionPipelineInterface | null;
   getWorkflowEngine?(): import("../autonomy/adapters/workflow/types.js").WorkflowEngine | null;
+  getAuditRetentionManager?(): import("../autonomy/domains/governance/retention-manager.js").AuditRetentionManagerInterface | null;
 }
 
 /** Helper to retrieve the AutonomyService from a runtime (may be null). */
@@ -6078,6 +6079,106 @@ async function handleRequest(
     return;
   }
 
+  // ── GET /api/agent/autonomy/audit/summary ──────────────────────────────
+  if (method === "GET" && pathname === "/api/agent/autonomy/audit/summary") {
+    const runtime = state.runtime;
+    if (!runtime) {
+      error(res, "Agent runtime not available", 503);
+      return;
+    }
+
+    const autonomySvc = getAutonomySvc(runtime);
+    const retention = autonomySvc?.getAuditRetentionManager?.();
+    if (!retention) {
+      error(res, "Audit retention manager not available", 503);
+      return;
+    }
+
+    const summary = await retention.getComplianceSummary();
+    json(res, { ok: true, summary });
+    return;
+  }
+
+  // ── GET /api/agent/autonomy/audit/export ───────────────────────────────
+  if (method === "GET" && pathname === "/api/agent/autonomy/audit/export") {
+    const runtime = state.runtime;
+    if (!runtime) {
+      error(res, "Agent runtime not available", 503);
+      return;
+    }
+
+    const autonomySvc = getAutonomySvc(runtime);
+    const retention = autonomySvc?.getAuditRetentionManager?.();
+    if (!retention) {
+      error(res, "Audit retention manager not available", 503);
+      return;
+    }
+
+    const jsonl = await retention.toJsonl();
+    const recordCount = jsonl.length === 0 ? 0 : jsonl.split("\n").length;
+    json(res, {
+      ok: true,
+      format: "jsonl",
+      recordCount,
+      jsonl,
+    });
+    return;
+  }
+
+  // ── POST /api/agent/autonomy/audit/export-expired ──────────────────────
+  if (method === "POST" && pathname === "/api/agent/autonomy/audit/export-expired") {
+    const runtime = state.runtime;
+    if (!runtime) {
+      error(res, "Agent runtime not available", 503);
+      return;
+    }
+
+    const autonomySvc = getAutonomySvc(runtime);
+    const retention = autonomySvc?.getAuditRetentionManager?.();
+    if (!retention) {
+      error(res, "Audit retention manager not available", 503);
+      return;
+    }
+
+    let doEvict = false;
+    try {
+      const raw = await readBody(req);
+      if (raw.trim().length > 0) {
+        const parsed: unknown = JSON.parse(raw);
+        if (
+          parsed == null ||
+          typeof parsed !== "object" ||
+          Array.isArray(parsed)
+        ) {
+          error(res, "Request body must be a JSON object", 400);
+          return;
+        }
+        doEvict = (parsed as { evict?: boolean }).evict === true;
+      }
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "Invalid JSON in request body";
+      error(res, msg, 400);
+      return;
+    }
+
+    const exported = await retention.exportExpired();
+    let evicted = 0;
+    if (doEvict) {
+      evicted = await retention.evictExpired();
+    }
+
+    json(res, {
+      ok: true,
+      format: exported.format,
+      exportedAt: exported.exportedAt,
+      exportedCount: exported.records.length,
+      evicted,
+      records: exported.records,
+    });
+    return;
+  }
+
   // ── GET /api/agent/safe-mode ──────────────────────────────────────────
   if (method === "GET" && pathname === "/api/agent/safe-mode") {
     try {
@@ -10626,7 +10727,6 @@ async function handleRequest(
     };
     let tasksAvailable = false;
     let triggersAvailable = false;
-    let goalsAvailable = false;
     let todosAvailable = false;
     let runtimeTasks: Task[] = [];
     let todoData: TodoDataServiceLike | null = null;
@@ -10651,19 +10751,6 @@ async function handleRequest(
       } catch {
         tasksAvailable = false;
         todosAvailable = false;
-      }
-
-      // Autonomy Kernel goals (from our GoalManager)
-      const gm = autonomySvc?.getGoalManager?.();
-      if (gm) {
-        try {
-          const kernelGoals = await gm.getActiveGoals();
-          goals.push(...kernelGoals);
-          summary.totalGoals += kernelGoals.length;
-          goalsAvailable = true;
-        } catch {
-          // GoalManager errored — non-fatal
-        }
       }
 
       try {

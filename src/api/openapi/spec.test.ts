@@ -24,6 +24,9 @@ describe("buildOpenApiSpec", () => {
     expect(paths["/api/agent/autonomy/workflows/dead-letters/clear"]).toBeDefined();
     expect(paths["/api/agent/autonomy/workflows/{executionId}"]).toBeDefined();
     expect(paths["/api/agent/autonomy/workflows/{executionId}/cancel"]).toBeDefined();
+    expect(paths["/api/agent/autonomy/audit/summary"]).toBeDefined();
+    expect(paths["/api/agent/autonomy/audit/export"]).toBeDefined();
+    expect(paths["/api/agent/autonomy/audit/export-expired"]).toBeDefined();
     expect(paths["/api/agent/identity"]).toBeDefined();
     expect(paths["/api/agent/identity/history"]).toBeDefined();
     expect(paths["/api/agent/approvals"]).toBeDefined();
