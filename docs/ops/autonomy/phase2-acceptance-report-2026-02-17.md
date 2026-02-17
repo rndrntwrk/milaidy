@@ -14,6 +14,7 @@ Key quantitative gates at current HEAD:
 - Contract versioning is semver-gated in tests for built-in, runtime-synthesized, and custom-action contracts.
 - Post-condition coverage: `100%` (`11/11` built-in tools).
 - Runtime-scope post-condition coverage: supported via report flag (`--include-runtime=true`).
+- Independent verification query paths are wired into verification for install/trigger checks.
 - Reversible compensation coverage: `100%` (`6/6` reversible tools).
 - Reversible success gate (`P2-063`): `>=99.5%` threshold test passed.
 - Unauthorized irreversible execution gate (`P2-064`): `0` unauthorized executions in denial-path suite.
@@ -32,6 +33,7 @@ Notable metrics:
 - explicit vs synthesized runtime contracts are emitted: `runtimeExplicitContractCount`, `runtimeGeneratedContractCount`
 - risk breakdown: `read-only=2`, `reversible=6`, `irreversible=3`
 - postcondition coverage: `100%`
+- independent verification query keys: `plugins:installed`, `triggers:exists`, `events:has-type`
 - compensation coverage for reversible tools: `100%`
 
 ### Phase 2 Gate Tests
@@ -41,6 +43,8 @@ Notable metrics:
 - `src/autonomy/service.test.ts` (runtime-only action contract regression)
 - `src/autonomy/tools/schemas/custom-action.schema.test.ts`
 - `src/autonomy/tools/schemas/fixtures.test.ts`
+- `src/autonomy/verification/postconditions/independent-query.test.ts`
+- `src/autonomy/workflow/execution-pipeline.test.ts` (verification query propagation)
 - `docs/ops/autonomy/phase2-acceptance-gate-2026-02-17.md`
 
 Validation command:
