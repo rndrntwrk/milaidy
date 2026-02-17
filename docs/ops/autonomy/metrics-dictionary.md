@@ -19,22 +19,22 @@ These are emitted from `src/autonomy/metrics/prometheus-metrics.ts`.
 
 | Metric Name | Type | Labels | Meaning |
 |---|---|---|---|
-| `autonomy_trust_score` | histogram | `source` | Trust score distribution by source. |
-| `autonomy_memory_gate_decisions_total` | counter | `decision` | Allow/quarantine/reject count. |
-| `autonomy_quarantine_size` | gauge | none | Current quarantined memory count. |
-| `autonomy_drift_score` | histogram | none | Drift score distribution. |
-| `autonomy_drift_alerts_total` | counter | `severity` | Drift alert frequency. |
-| `autonomy_goal_transitions_total` | counter | `status` | Goal state transition count. |
-| `autonomy_approval_requests_total` | counter | `risk_class` | Approval request volume. |
-| `autonomy_approval_decisions_total` | counter | `decision` | Approval outcomes. |
-| `autonomy_event_store_size` | gauge | none | Stored execution event count. |
-| `autonomy_pipeline_executions_total` | counter | `outcome` | Pipeline outcome distribution. |
-| `autonomy_pipeline_latency_ms` | histogram | `outcome` | Pipeline latency by outcome. |
-| `autonomy_invariant_checks_total` | counter | `result` | Invariant pass/fail/error volume. |
-| `autonomy_safe_mode_events_total` | counter | `action` | Safe-mode enter/exit frequency. |
-| `autonomy_current_state` | gauge | `state` | Current state machine state marker. |
-| `autonomy_consecutive_errors` | gauge | none | Consecutive error count. |
-| `autonomy_kernel_up` | gauge | none | Liveness indicator for autonomy kernel. |
+| `milaidy_autonomy_trust_score` | histogram | `source` | Trust score distribution by source. |
+| `milaidy_autonomy_memory_gate_decisions_total` | counter | `decision` | Allow/quarantine/reject count. |
+| `milaidy_autonomy_quarantine_size` | gauge | none | Current quarantined memory count. |
+| `milaidy_autonomy_drift_score` | histogram | none | Drift score distribution. |
+| `milaidy_autonomy_drift_alerts_total` | counter | `severity` | Drift alert frequency. |
+| `milaidy_autonomy_goal_transitions_total` | counter | `status` | Goal state transition count. |
+| `milaidy_autonomy_approval_requests_total` | counter | `risk_class` | Approval request volume. |
+| `milaidy_autonomy_approval_decisions_total` | counter | `decision` | Approval outcomes. |
+| `milaidy_autonomy_event_store_size` | gauge | none | Stored execution event count. |
+| `milaidy_autonomy_pipeline_executions_total` | counter | `outcome` | Pipeline outcome distribution. |
+| `milaidy_autonomy_pipeline_latency_ms` | histogram | `outcome` | Pipeline latency by outcome. |
+| `milaidy_autonomy_invariant_checks_total` | counter | `result` | Invariant pass/fail/error volume. |
+| `milaidy_autonomy_safe_mode_events_total` | counter | `action` | Safe-mode enter/exit frequency. |
+| `milaidy_autonomy_current_state` | gauge | `state` | Current state machine state marker. |
+| `milaidy_autonomy_consecutive_errors` | gauge | none | Consecutive error count. |
+| `milaidy_autonomy_kernel_up` | gauge | none | Liveness indicator for autonomy kernel. |
 
 ## Report Artifacts
 

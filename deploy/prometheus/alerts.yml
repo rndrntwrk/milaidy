@@ -3,21 +3,21 @@ groups:
     rules:
       - alert: AutonomyKernelDown
         expr: milaidy_autonomy_kernel_up == 0
-        for: 1m
+        for: 2m
         labels:
           severity: critical
         annotations:
           summary: "Autonomy kernel is down"
-          description: "The autonomy kernel has been down for more than 1 minute."
+          description: "The autonomy kernel has been down for more than 2 minutes."
 
       - alert: HighDriftScore
-        expr: milaidy_autonomy_drift_score{quantile="0.95"} > 0.25
-        for: 5m
+        expr: milaidy_autonomy_drift_score{quantile="0.95"} > 0.15
+        for: 15m
         labels:
           severity: warning
         annotations:
           summary: "High persona drift detected"
-          description: "95th percentile drift score has exceeded 0.25 for 5 minutes."
+          description: "95th percentile drift score has exceeded 0.15 for 15 minutes."
 
       - alert: SafeModeActive
         expr: increase(milaidy_autonomy_safe_mode_events_total{action="enter"}[5m]) > 0
@@ -29,7 +29,7 @@ groups:
 
       - alert: HighConsecutiveErrors
         expr: milaidy_autonomy_consecutive_errors > 2
-        for: 2m
+        for: 5m
         labels:
           severity: warning
         annotations:
@@ -46,10 +46,55 @@ groups:
           description: "More than 10 approval requests are pending resolution."
 
       - alert: HighPipelineLatency
-        expr: milaidy_autonomy_pipeline_latency_ms{quantile="0.95"} > 10000
-        for: 5m
+        expr: milaidy_autonomy_pipeline_latency_ms{quantile="0.95"} > 1500
+        for: 10m
         labels:
           severity: warning
         annotations:
           summary: "High pipeline latency"
-          description: "95th percentile pipeline latency exceeds 10 seconds."
+          description: "95th percentile pipeline latency exceeds 1.5 seconds."
+
+      - alert: PipelineFailureRateHigh
+        expr: sum(increase(milaidy_autonomy_pipeline_executions_total{outcome="failure"}[10m])) / clamp_min(sum(increase(milaidy_autonomy_pipeline_executions_total[10m])), 1) > 0.01
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Pipeline failure rate is high"
+          description: "Pipeline failure rate has exceeded 1 percent over a 10 minute window."
+
+      - alert: InvariantFailuresPresent
+        expr: increase(milaidy_autonomy_invariant_checks_total{result="fail"}[10m]) > 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Invariant failures detected"
+          description: "Critical invariant checks are failing."
+
+      - alert: QuarantineBacklog
+        expr: milaidy_autonomy_quarantine_size > 100
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Memory quarantine backlog growing"
+          description: "Quarantine size has remained above 100 entries for 30 minutes."
+
+      - alert: ApprovalDenialSpike
+        expr: sum(increase(milaidy_autonomy_approval_decisions_total{decision="denied"}[30m])) / clamp_min(sum(increase(milaidy_autonomy_approval_decisions_total[30m])), 1) > 0.20
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Approval denial spike"
+          description: "Approval denial rate has exceeded 20 percent over 30 minutes."
+
+      - alert: EventStoreGrowthUnbounded
+        expr: milaidy_autonomy_event_store_size > 50000
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Event store growth is unbounded"
+          description: "Event store size has exceeded 50,000 for more than one hour."
