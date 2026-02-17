@@ -26,6 +26,17 @@ export {
   registerRuntimeContracts,
   registerRuntimeActionContracts,
 } from "./runtime-contracts.js";
+export {
+  loadPluginActionCatalog,
+  pluginIdFromPackageName,
+  resolvePluginImportSpecifier,
+} from "./plugin-action-catalog.js";
+export type {
+  PluginActionCatalog,
+  PluginActionCatalogEntry,
+  PluginActionCatalogFailure,
+  PluginModuleImporter,
+} from "./plugin-action-catalog.js";
 export type {
   ProposedToolCall,
   RiskClass,

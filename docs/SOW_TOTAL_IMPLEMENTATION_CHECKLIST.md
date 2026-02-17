@@ -256,7 +256,7 @@ Sprint chunks:
 
 ### 2.A Tool Inventory and Contract Coverage
 
-- [ ] P2-001 Build canonical inventory of all tools in runtime and plugins. [STATUS: PARTIAL]
+- [ ] P2-001 Build canonical inventory of all tools in runtime and plugins. [STATUS: CODED]
 - [ ] P2-002 Classify each tool risk class (read-only, reversible, irreversible). [STATUS: CODED]
 - [ ] P2-003 Define required permissions per tool. [STATUS: CODED]
 - [ ] P2-004 Define schema contract for every tool parameter. [STATUS: CODED]

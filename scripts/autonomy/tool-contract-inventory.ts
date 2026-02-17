@@ -8,6 +8,7 @@ import { mediaActions } from "../../src/actions/media.js";
 import { restartAction } from "../../src/actions/restart.js";
 import { terminalAction } from "../../src/actions/terminal.js";
 import { createCodingDomainPack } from "../../src/autonomy/domains/coding/pack.js";
+import { loadPluginActionCatalog } from "../../src/autonomy/tools/plugin-action-catalog.js";
 import { ToolRegistry } from "../../src/autonomy/tools/registry.js";
 import {
   BUILTIN_CONTRACTS,
@@ -16,6 +17,7 @@ import {
 import { registerRuntimeContracts } from "../../src/autonomy/tools/runtime-contracts.js";
 import { loadMilaidyConfig } from "../../src/config/config.js";
 import { loadCustomActions } from "../../src/runtime/custom-actions.js";
+import { collectPluginNames } from "../../src/runtime/eliza.js";
 import { createTriggerTaskAction } from "../../src/triggers/action.js";
 
 interface CliArgs {
@@ -65,11 +67,24 @@ function renderMarkdown(input: {
   createdAt: string;
   runtimeActionCount: number;
   runtimeActionCoverageCount: number;
+  canonicalActionCount: number;
+  pluginConfiguredCount: number;
+  pluginResolvedCount: number;
+  pluginActionCount: number;
+  pluginLoadFailureCount: number;
   runtimeExplicitContractCount: number;
   runtimeGeneratedContractCount: number;
   domainRegisteredContractCount: number;
   autoLoadedDomains: string[];
   runtimeActionUncovered: string[];
+  pluginLoadFailures: Array<{ pluginName: string; reason: string }>;
+  pluginActionCatalog: Array<{
+    pluginName: string;
+    pluginId: string;
+    runtimePluginName: string;
+    actionCount: number;
+    actionNames: string[];
+  }>;
   contracts: Array<{
     name: string;
     source: string;
@@ -87,7 +102,16 @@ function renderMarkdown(input: {
   lines.push(`- Created at: \`${input.createdAt}\``);
   lines.push(`- Contract count: \`${input.contracts.length}\``);
   lines.push(
-    `- Runtime action coverage: \`${input.runtimeActionCoverageCount}/${input.runtimeActionCount}\``,
+    `- Autonomy runtime action coverage: \`${input.runtimeActionCoverageCount}/${input.runtimeActionCount}\``,
+  );
+  lines.push(
+    `- Canonical runtime+plugin action count: \`${input.canonicalActionCount}\``,
+  );
+  lines.push(`- Configured plugins: \`${input.pluginConfiguredCount}\``);
+  lines.push(`- Resolved plugins: \`${input.pluginResolvedCount}\``);
+  lines.push(`- Plugin action count: \`${input.pluginActionCount}\``);
+  lines.push(
+    `- Plugin load failures: \`${input.pluginLoadFailureCount}\``,
   );
   lines.push(
     `- Explicit custom-action contracts: \`${input.runtimeExplicitContractCount}\``,
@@ -122,6 +146,31 @@ function renderMarkdown(input: {
   lines.push(
     "- Runtime-generated contracts are synthesized from action parameter metadata.",
   );
+  if (input.pluginLoadFailureCount > 0) {
+    lines.push(
+      "- Plugin load failures indicate unresolved plugin modules during catalog generation.",
+    );
+  }
+  lines.push("");
+  lines.push("## Plugin Action Catalog");
+  lines.push("");
+  lines.push("| Plugin | Runtime Name | Actions |");
+  lines.push("|---|---|---:|");
+  for (const entry of input.pluginActionCatalog) {
+    lines.push(
+      `| ${entry.pluginName} | ${entry.runtimePluginName} | ${entry.actionCount} |`,
+    );
+  }
+  lines.push("");
+  lines.push("## Plugin Load Failures");
+  lines.push("");
+  if (input.pluginLoadFailures.length === 0) {
+    lines.push("- none");
+  } else {
+    for (const failure of input.pluginLoadFailures) {
+      lines.push(`- ${failure.pluginName}: ${failure.reason}`);
+    }
+  }
   lines.push("");
   return lines.join("\n");
 }
@@ -146,7 +195,7 @@ async function main() {
   const builtInNames = new Set(BUILTIN_CONTRACTS.map((contract) => contract.name));
 
   const runtimeActions = runtimeActionsForInventory();
-  const runtimeActionNames = [
+  const autonomyRuntimeActionNames = [
     ...new Set(
       runtimeActions
         .map((action) =>
@@ -157,6 +206,19 @@ async function main() {
   ].sort((a, b) => a.localeCompare(b));
 
   const config = loadMilaidyConfig();
+  const pluginNames = [...collectPluginNames(config)].sort((a, b) =>
+    a.localeCompare(b),
+  );
+  const pluginActionCatalog = await loadPluginActionCatalog({
+    pluginNames,
+  });
+  const canonicalActionNames = [
+    ...new Set([
+      ...autonomyRuntimeActionNames,
+      ...pluginActionCatalog.actionNames,
+    ]),
+  ].sort((a, b) => a.localeCompare(b));
+
   const runtimeRegistration = registerRuntimeContracts(registry, {
     runtime: { actions: runtimeActions },
     customActions: config.customActions ?? [],
@@ -208,21 +270,28 @@ async function main() {
     return acc;
   }, {});
 
-  const runtimeActionUncovered = runtimeActionNames.filter(
+  const runtimeActionUncovered = autonomyRuntimeActionNames.filter(
     (name) => !registry.has(name),
   );
   const runtimeActionCoverageCount =
-    runtimeActionNames.length - runtimeActionUncovered.length;
+    autonomyRuntimeActionNames.length - runtimeActionUncovered.length;
 
   const payload = {
     label: cli.label,
     createdAt: new Date().toISOString(),
     builtInContractCount: BUILTIN_CONTRACTS.length,
-    runtimeActionCount: runtimeActionNames.length,
+    runtimeActionCount: autonomyRuntimeActionNames.length,
     runtimeActionCoverageCount,
+    canonicalActionCount: canonicalActionNames.length,
+    pluginConfiguredCount: pluginNames.length,
+    pluginResolvedCount: pluginActionCatalog.entries.length,
+    pluginActionCount: pluginActionCatalog.actionNames.length,
+    pluginLoadFailureCount: pluginActionCatalog.failures.length,
     runtimeExplicitContractCount: runtimeExplicitNames.size,
     runtimeGeneratedContractCount: runtimeGeneratedNames.size,
     runtimeActionUncovered,
+    pluginActionCatalog: pluginActionCatalog.entries,
+    pluginLoadFailures: pluginActionCatalog.failures,
     autoLoadedDomains,
     domainRegisteredContractCount: domainRegisteredNames.size,
     inventoryCount: contracts.length,
@@ -241,11 +310,18 @@ async function main() {
       createdAt: payload.createdAt,
       runtimeActionCount: payload.runtimeActionCount,
       runtimeActionCoverageCount: payload.runtimeActionCoverageCount,
+      canonicalActionCount: payload.canonicalActionCount,
+      pluginConfiguredCount: payload.pluginConfiguredCount,
+      pluginResolvedCount: payload.pluginResolvedCount,
+      pluginActionCount: payload.pluginActionCount,
+      pluginLoadFailureCount: payload.pluginLoadFailureCount,
       runtimeExplicitContractCount: payload.runtimeExplicitContractCount,
       runtimeGeneratedContractCount: payload.runtimeGeneratedContractCount,
       domainRegisteredContractCount: payload.domainRegisteredContractCount,
       autoLoadedDomains: payload.autoLoadedDomains,
       runtimeActionUncovered: payload.runtimeActionUncovered,
+      pluginActionCatalog: payload.pluginActionCatalog,
+      pluginLoadFailures: payload.pluginLoadFailures,
       contracts,
     }),
     "utf8",

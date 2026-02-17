@@ -17,6 +17,11 @@ Output:
 - `docs/ops/autonomy/reports/*.tool-contracts.json`
 - `docs/ops/autonomy/reports/*.tool-contracts.md`
 
+Report includes:
+- autonomy-routed runtime action contract coverage
+- canonical action counts (autonomy + resolved plugin actions)
+- per-plugin action catalog and plugin load-failure list
+
 Non-zero exit means uncovered runtime actions were detected.
 Use `--fail-on-missing=false` if you need report-only mode.
 
