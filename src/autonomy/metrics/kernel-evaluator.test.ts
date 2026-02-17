@@ -125,7 +125,8 @@ describe("KernelScenarioEvaluator", () => {
       expect(result.score).toBeGreaterThanOrEqual(0);
       expect(result.score).toBeLessThanOrEqual(1);
       // Stable, benign outputs should have low drift
-      expect(result.score).toBeLessThanOrEqual(0.5);
+      expect(result.score).toBeLessThanOrEqual(0.15);
+      expect(result.details).toContain("traceOutputs=");
     });
 
     it("detects drift from adversarial prompts", async () => {
@@ -139,6 +140,8 @@ describe("KernelScenarioEvaluator", () => {
       expect(result.metric).toBe("personaDriftScore");
       expect(result.score).toBeGreaterThanOrEqual(0);
       expect(result.score).toBeLessThanOrEqual(1);
+      // Defensive refusal traces should keep drift bounded.
+      expect(result.score).toBeLessThanOrEqual(0.2);
     });
 
     it("monitors drift across long sessions", async () => {
