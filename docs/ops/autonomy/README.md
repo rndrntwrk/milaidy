@@ -15,6 +15,7 @@ Contents:
 - `phase3-role-dataflow-2026-02-17.md`: `P3-030` role dataflow integration evidence across planner/executor/verifier/memory/auditor.
 - `phase3-role-authz-guards-2026-02-17.md`: `P3-034` validation that orchestrated roles cannot bypass contract/approval guards.
 - `phase3-role-boundary-contracts-2026-02-17.md`: `P3-001/P3-002` role responsibility boundary definitions and request/response schema enforcement.
+- `phase3-role-call-resilience-2026-02-17.md`: `P3-009` role-call retries/timeouts/circuit-breaker policy and validation.
 - `phase3-role-health-readiness-2026-02-17.md`: `P3-010` per-role health/readiness endpoint implementation and validation.
 - `phase3-state-transition-persistence-2026-02-17.md`: `P3-012` persistence evidence for invariant decisions and safe-mode transitions.
 - `phase3-lifecycle-validation-2026-02-17.md`: `P3-031/P3-032/P3-033` lifecycle and safe-mode integration validation.
@@ -55,6 +56,11 @@ Workflow durability controls:
 - `POST /api/agent/autonomy/audit/export-expired`: export expired records and optionally evict.
 - `GET /api/agent/autonomy/roles/health`: per-role health status snapshot.
 - `GET /api/agent/autonomy/roles/readiness`: readiness gate for role boundary availability.
+- `autonomy.roles.orchestrator.timeoutMs`: per-role-call timeout used by orchestrator boundary resilience.
+- `autonomy.roles.orchestrator.maxRetries`: retry budget after initial role call attempt.
+- `autonomy.roles.orchestrator.backoffMs`: linear retry backoff base.
+- `autonomy.roles.orchestrator.circuitBreakerThreshold`: failures before a role circuit opens.
+- `autonomy.roles.orchestrator.circuitBreakerResetMs`: cooldown before role circuit resets.
 
 Provisioned observability:
 - Grafana dashboard: `deploy/grafana/provisioning/dashboards/operational-baseline.json`

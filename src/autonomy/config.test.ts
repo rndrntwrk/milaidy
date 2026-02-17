@@ -30,6 +30,11 @@ describe("resolveAutonomyConfig", () => {
     expect(config.workflowEngine?.temporal?.taskQueue).toBe("autonomy-tasks");
     expect(config.workflowEngine?.temporal?.defaultTimeoutMs).toBe(30_000);
     expect(config.workflowEngine?.temporal?.deadLetterMax).toBe(1_000);
+    expect(config.roles?.orchestrator?.timeoutMs).toBe(5_000);
+    expect(config.roles?.orchestrator?.maxRetries).toBe(1);
+    expect(config.roles?.orchestrator?.backoffMs).toBe(50);
+    expect(config.roles?.orchestrator?.circuitBreakerThreshold).toBe(3);
+    expect(config.roles?.orchestrator?.circuitBreakerResetMs).toBe(30_000);
   });
 
   it("merges user values over defaults", () => {
@@ -240,6 +245,46 @@ describe("validateAutonomyConfig", () => {
     expect(
       issues.some((i) =>
         i.path.includes("autonomy.workflowEngine.temporal.deadLetterMax"),
+      ),
+    ).toBe(true);
+  });
+
+  it("catches invalid orchestrator role-call resilience settings", () => {
+    const issues = validateAutonomyConfig({
+      roles: {
+        orchestrator: {
+          timeoutMs: 0,
+          maxRetries: -1,
+          backoffMs: -1,
+          circuitBreakerThreshold: 0,
+          circuitBreakerResetMs: 0,
+        },
+      },
+    });
+
+    expect(
+      issues.some((i) =>
+        i.path.includes("autonomy.roles.orchestrator.timeoutMs"),
+      ),
+    ).toBe(true);
+    expect(
+      issues.some((i) =>
+        i.path.includes("autonomy.roles.orchestrator.maxRetries"),
+      ),
+    ).toBe(true);
+    expect(
+      issues.some((i) =>
+        i.path.includes("autonomy.roles.orchestrator.backoffMs"),
+      ),
+    ).toBe(true);
+    expect(
+      issues.some((i) =>
+        i.path.includes("autonomy.roles.orchestrator.circuitBreakerThreshold"),
+      ),
+    ).toBe(true);
+    expect(
+      issues.some((i) =>
+        i.path.includes("autonomy.roles.orchestrator.circuitBreakerResetMs"),
       ),
     ).toBe(true);
   });
