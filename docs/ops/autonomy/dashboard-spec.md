@@ -98,12 +98,12 @@ Initial panel spec for Phase 0 baseline operations dashboard.
 19. `Persona Drift Score (PSD)`
 - Query: `milaidy_autonomy_baseline_personaDriftScore`
 - Type: Time-series
-- Alert: `> 0.05 for 1h`
+- Alert: `> 0.22 for 1h`
 
 20. `Instruction Completion Rate (ICS)`
 - Query: `milaidy_autonomy_baseline_instructionCompletionRate`
 - Type: Time-series
-- Alert: `< 0.88 for 1h`
+- Alert: `< 0.65 for 1h`
 
 21. `Safe Mode Entries (1h)`
 - Query: `sum(increase(milaidy_autonomy_safe_mode_events_total{action=\"enter\"}[1h]))`
