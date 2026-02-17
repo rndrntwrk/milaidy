@@ -50,6 +50,7 @@ vi.mock("../di/container.js", () => ({
     SchemaValidator: Symbol.for("SchemaValidator"),
     PostConditionVerifier: Symbol.for("PostConditionVerifier"),
     StateMachine: Symbol.for("StateMachine"),
+    WorkflowEngine: Symbol.for("WorkflowEngine"),
     ApprovalGate: Symbol.for("ApprovalGate"),
     EventStore: Symbol.for("EventStore"),
     CompensationRegistry: Symbol.for("CompensationRegistry"),
@@ -247,8 +248,8 @@ describe("MilaidyAutonomyService", () => {
       const runtime = createMockRuntime();
       const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
 
-      // 4 core + 3 tool contracts + 5 workflow + InvariantChecker + BaselineHarness + TrustAwareRetriever + 6 roles + PromptBuilder = 22
-      expect(mockRegisterValue).toHaveBeenCalledTimes(22);
+      // 4 core + 3 tool contracts + 6 workflow + InvariantChecker + BaselineHarness + TrustAwareRetriever + 6 roles + PromptBuilder = 23
+      expect(mockRegisterValue).toHaveBeenCalledTimes(23);
 
       // Verify the registered values are the same instances as the service's
       const registeredTokens = mockRegisterValue.mock.calls.map((c: unknown[]) => c[0]);
@@ -260,6 +261,7 @@ describe("MilaidyAutonomyService", () => {
       expect(registeredTokens).toContain(Symbol.for("SchemaValidator"));
       expect(registeredTokens).toContain(Symbol.for("PostConditionVerifier"));
       expect(registeredTokens).toContain(Symbol.for("StateMachine"));
+      expect(registeredTokens).toContain(Symbol.for("WorkflowEngine"));
       expect(registeredTokens).toContain(Symbol.for("ApprovalGate"));
       expect(registeredTokens).toContain(Symbol.for("EventStore"));
       expect(registeredTokens).toContain(Symbol.for("CompensationRegistry"));
@@ -288,8 +290,8 @@ describe("MilaidyAutonomyService", () => {
       const runtime = createMockRuntime();
       await MilaidyAutonomyService.start(runtime);
 
-      // 22 (base) + 6 (learning: TraceCollector, HackDetector, RolloutCollector, ModelProvider, CheckpointManager, AdversarialGenerator) = 28
-      expect(mockRegisterValue).toHaveBeenCalledTimes(28);
+      // 23 (base) + 6 (learning: TraceCollector, HackDetector, RolloutCollector, ModelProvider, CheckpointManager, AdversarialGenerator) = 29
+      expect(mockRegisterValue).toHaveBeenCalledTimes(29);
       const registeredTokens = mockRegisterValue.mock.calls.map((c: unknown[]) => c[0]);
       expect(registeredTokens).toContain(Symbol.for("TraceCollector"));
       expect(registeredTokens).toContain(Symbol.for("HackDetector"));

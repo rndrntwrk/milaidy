@@ -13,6 +13,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  real,
   serial,
   text,
   timestamp,
@@ -179,6 +180,68 @@ export const autonomyApprovalsTable = pgTable(
   ],
 );
 
+// ---------- autonomy_memory ----------
+
+/**
+ * Typed memory entries with provenance and trust metadata.
+ */
+export const autonomyMemoryTable = pgTable(
+  "autonomy_memory",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentId: text("agent_id").notNull(),
+    memoryType: text("memory_type").notNull(),
+    content: jsonb("content").$type<Record<string, unknown>>().notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    provenance: jsonb("provenance").$type<Record<string, unknown>>().notNull(),
+    trustScore: real("trust_score").notNull(),
+    verified: boolean("verified").notNull().default(false),
+    verifiabilityClass: text("verifiability_class").notNull().default("unverified"),
+    source: text("source"),
+    sourceType: text("source_type"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_autonomy_memory_agent").on(table.agentId),
+    index("idx_autonomy_memory_type").on(table.memoryType),
+    index("idx_autonomy_memory_created_at").on(table.createdAt),
+  ],
+);
+
+// ---------- autonomy_memory_quarantine ----------
+
+/**
+ * Quarantined memory entries pending review.
+ */
+export const autonomyMemoryQuarantineTable = pgTable(
+  "autonomy_memory_quarantine",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agentId: text("agent_id").notNull(),
+    memoryType: text("memory_type").notNull(),
+    content: jsonb("content").$type<Record<string, unknown>>().notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    provenance: jsonb("provenance").$type<Record<string, unknown>>().notNull(),
+    trustScore: real("trust_score").notNull(),
+    verified: boolean("verified").notNull().default(false),
+    verifiabilityClass: text("verifiability_class").notNull().default("unverified"),
+    source: text("source"),
+    sourceType: text("source_type"),
+    decision: text("decision"),
+    decisionReason: text("decision_reason"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_autonomy_memory_quarantine_agent").on(table.agentId),
+    index("idx_autonomy_memory_quarantine_decision").on(table.decision),
+    index("idx_autonomy_memory_quarantine_expires").on(table.expiresAt),
+  ],
+);
+
 // ---------- autonomy_identity ----------
 
 /**
@@ -217,6 +280,11 @@ export type AutonomyEventInsert = typeof autonomyEventsTable.$inferInsert;
 
 export type AutonomyGoalRow = typeof autonomyGoalsTable.$inferSelect;
 export type AutonomyGoalInsert = typeof autonomyGoalsTable.$inferInsert;
+
+export type AutonomyMemoryRow = typeof autonomyMemoryTable.$inferSelect;
+export type AutonomyMemoryInsert = typeof autonomyMemoryTable.$inferInsert;
+export type AutonomyMemoryQuarantineRow = typeof autonomyMemoryQuarantineTable.$inferSelect;
+export type AutonomyMemoryQuarantineInsert = typeof autonomyMemoryQuarantineTable.$inferInsert;
 
 export type AutonomyStateRow = typeof autonomyStateTable.$inferSelect;
 export type AutonomyStateInsert = typeof autonomyStateTable.$inferInsert;

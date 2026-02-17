@@ -4,6 +4,7 @@
  */
 
 export { ApprovalGate } from "./approval-gate.js";
+export { PersistentApprovalGate } from "./persistent-approval-gate.js";
 export type {
   ApprovalDecision,
   ApprovalGateInterface,

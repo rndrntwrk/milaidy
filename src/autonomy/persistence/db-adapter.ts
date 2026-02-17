@@ -16,6 +16,8 @@ import {
   autonomyEventsTable,
   autonomyGoalsTable,
   autonomyIdentityTable,
+  autonomyMemoryQuarantineTable,
+  autonomyMemoryTable,
   autonomyStateTable,
 } from "./schema.js";
 
@@ -128,6 +130,8 @@ export class AutonomyDbAdapter {
       state: autonomyStateTable,
       audit: autonomyAuditTable,
       approvals: autonomyApprovalsTable,
+      memory: autonomyMemoryTable,
+      memoryQuarantine: autonomyMemoryQuarantineTable,
       identity: autonomyIdentityTable,
     } as const;
   }

@@ -68,6 +68,7 @@ let _registerBuiltinToolContracts: typeof import("./tools/schemas/index.js").reg
 let _registerBuiltinPostConditions: typeof import("./verification/postconditions/index.js").registerBuiltinPostConditions;
 let _KernelStateMachine: typeof import("./state-machine/kernel-state-machine.js").KernelStateMachine;
 let _ApprovalGate: typeof import("./approval/approval-gate.js").ApprovalGate;
+let _PersistentApprovalGate: typeof import("./approval/persistent-approval-gate.js").PersistentApprovalGate;
 let _InMemoryEventStore: typeof import("./workflow/event-store.js").InMemoryEventStore;
 let _CompensationRegistry: typeof import("./workflow/compensation-registry.js").CompensationRegistry;
 let _ToolExecutionPipeline: typeof import("./workflow/execution-pipeline.js").ToolExecutionPipeline;
@@ -101,6 +102,7 @@ let _PgRetentionManager: typeof import("./persistence/pg-retention-manager.js").
 let _PersistentStateMachine: typeof import("./persistence/persistent-state-machine.js").PersistentStateMachine;
 let _PgApprovalLog: typeof import("./persistence/pg-approval-log.js").PgApprovalLog;
 let _PgIdentityStore: typeof import("./persistence/pg-identity-store.js").PgIdentityStore;
+let _PgMemoryStore: typeof import("./persistence/pg-memory-store.js").PgMemoryStore;
 
 // Phase 4 — Learning
 let _CheckpointReward: typeof import("./learning/reward.js").CheckpointReward;
@@ -116,7 +118,7 @@ let _SystemPromptBuilder: typeof import("./learning/prompt-builder.js").SystemPr
 let _AdversarialScenarioGenerator: typeof import("./learning/adversarial.js").AdversarialScenarioGenerator;
 
 async function loadImplementations() {
-  const [trustMod, memMod, driftMod, goalMod, toolRegMod, schemaValMod, pcvMod, toolSchemasMod, pcMod, smMod, approvalMod, esMod, compRegMod, pipelineMod, compsMod, localWorkflowMod, temporalWorkflowMod, invMod, invRegMod, harnMod, evalMod, plannerMod, verifierMod, memWriterMod, auditorMod, safeModeMod, orchestratorMod] = await Promise.all([
+  const [trustMod, memMod, driftMod, goalMod, toolRegMod, schemaValMod, pcvMod, toolSchemasMod, pcMod, smMod, approvalMod, approvalPersistentMod, esMod, compRegMod, pipelineMod, compsMod, localWorkflowMod, temporalWorkflowMod, invMod, invRegMod, harnMod, evalMod, plannerMod, verifierMod, memWriterMod, auditorMod, safeModeMod, orchestratorMod] = await Promise.all([
     import("./trust/scorer.js"),
     import("./memory/gate.js"),
     import("./identity/drift-monitor.js"),
@@ -128,6 +130,7 @@ async function loadImplementations() {
     import("./verification/postconditions/index.js"),
     import("./state-machine/kernel-state-machine.js"),
     import("./approval/approval-gate.js"),
+    import("./approval/persistent-approval-gate.js"),
     import("./workflow/event-store.js"),
     import("./workflow/compensation-registry.js"),
     import("./workflow/execution-pipeline.js"),
@@ -156,6 +159,7 @@ async function loadImplementations() {
   _registerBuiltinPostConditions = pcMod.registerBuiltinPostConditions;
   _KernelStateMachine = smMod.KernelStateMachine;
   _ApprovalGate = approvalMod.ApprovalGate;
+  _PersistentApprovalGate = approvalPersistentMod.PersistentApprovalGate;
   _InMemoryEventStore = esMod.InMemoryEventStore;
   _CompensationRegistry = compRegMod.CompensationRegistry;
   _ToolExecutionPipeline = pipelineMod.ToolExecutionPipeline;
@@ -212,7 +216,7 @@ async function loadImplementations() {
   _CODING_GOVERNANCE_POLICY = codingGovMod.CODING_GOVERNANCE_POLICY;
 
   // Persistence (lazy — only used when persistence.enabled)
-  const [dbAdapterMod, pgEventMod, pgGoalMod, pgRetentionMod, psmMod, pgApprovalMod, pgIdentityMod] = await Promise.all([
+  const [dbAdapterMod, pgEventMod, pgGoalMod, pgRetentionMod, psmMod, pgApprovalMod, pgIdentityMod, pgMemoryMod] = await Promise.all([
     import("./persistence/db-adapter.js"),
     import("./persistence/pg-event-store.js"),
     import("./persistence/pg-goal-manager.js"),
@@ -220,6 +224,7 @@ async function loadImplementations() {
     import("./persistence/persistent-state-machine.js"),
     import("./persistence/pg-approval-log.js"),
     import("./persistence/pg-identity-store.js"),
+    import("./persistence/pg-memory-store.js"),
   ]);
   _AutonomyDbAdapter = dbAdapterMod.AutonomyDbAdapter;
   _PgEventStore = pgEventMod.PgEventStore;
@@ -228,6 +233,7 @@ async function loadImplementations() {
   _PersistentStateMachine = psmMod.PersistentStateMachine;
   _PgApprovalLog = pgApprovalMod.PgApprovalLog;
   _PgIdentityStore = pgIdentityMod.PgIdentityStore;
+  _PgMemoryStore = pgMemoryMod.PgMemoryStore;
 }
 
 // ---------- Service ----------
@@ -239,6 +245,7 @@ export class MilaidyAutonomyService extends Service {
 
   private trustScorer: TrustScorer | null = null;
   private memoryGate: (MemoryGate & { dispose(): void }) | null = null;
+  private memoryStore: import("./memory/store.js").MemoryStore | null = null;
   private driftMonitor: PersonaDriftMonitor | null = null;
   private goalManager: GoalManager | null = null;
   private toolRegistry: import("./tools/types.js").ToolRegistryInterface | null = null;
@@ -347,11 +354,18 @@ export class MilaidyAutonomyService extends Service {
 
     // Instantiate components
     this.trustScorer = new _RuleBasedTrustScorer(config.trust);
+    if (this.dbAdapter) {
+      this.memoryStore = new _PgMemoryStore(this.dbAdapter);
+    }
     this.memoryGate = new _MemoryGateImpl(
       this.trustScorer,
       config.trust,
       config.memoryGate,
+      this.memoryStore ?? undefined,
     );
+    if (typeof (this.memoryGate as { hydrateQuarantine?: () => Promise<void> }).hydrateQuarantine === "function") {
+      await (this.memoryGate as { hydrateQuarantine: () => Promise<void> }).hydrateQuarantine();
+    }
     this.driftMonitor = new _RuleBasedDriftMonitor(config.driftMonitor);
 
     // Goal manager: Pg-backed or in-memory
@@ -399,10 +413,19 @@ export class MilaidyAutonomyService extends Service {
     } catch {
       // Event bus not available — non-fatal
     }
-    this.approvalGate = new _ApprovalGate({
-      timeoutMs: config.approval?.timeoutMs ?? 300_000,
-      eventBus: eventBusRef,
-    });
+    if (this.dbAdapter) {
+      const gate = new _PersistentApprovalGate(this.dbAdapter, {
+        timeoutMs: config.approval?.timeoutMs ?? 300_000,
+        eventBus: eventBusRef,
+      });
+      this.approvalGate = gate;
+      await gate.hydratePending();
+    } else {
+      this.approvalGate = new _ApprovalGate({
+        timeoutMs: config.approval?.timeoutMs ?? 300_000,
+        eventBus: eventBusRef,
+      });
+    }
 
     // Event store: Pg-backed or in-memory
     this.eventStore = this.dbAdapter
@@ -596,6 +619,7 @@ export class MilaidyAutonomyService extends Service {
       const container = getContainer();
       if (this.trustScorer) container.registerValue(TOKENS.TrustScorer, this.trustScorer);
       if (this.memoryGate) container.registerValue(TOKENS.MemoryGate, this.memoryGate);
+      if (this.memoryStore) container.registerValue(TOKENS.MemoryStore, this.memoryStore);
       if (this.driftMonitor) container.registerValue(TOKENS.DriftMonitor, this.driftMonitor);
       if (this.goalManager) container.registerValue(TOKENS.GoalManager, this.goalManager);
       if (this.toolRegistry) container.registerValue(TOKENS.ToolRegistry, this.toolRegistry);
@@ -736,6 +760,7 @@ export class MilaidyAutonomyService extends Service {
     await this.workflowEngine?.close();
     this.trustScorer = null;
     this.memoryGate = null;
+    this.memoryStore = null;
     this.driftMonitor = null;
     this.goalManager = null;
     this.toolRegistry = null;
@@ -978,6 +1003,7 @@ export class MilaidyAutonomyService extends Service {
     await this.workflowEngine?.close();
     this.trustScorer = null;
     this.memoryGate = null;
+    this.memoryStore = null;
     this.driftMonitor = null;
     this.goalManager = null;
     this.toolRegistry = null;

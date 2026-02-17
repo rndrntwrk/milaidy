@@ -11,6 +11,8 @@ export {
   autonomyStateTable,
   autonomyAuditTable,
   autonomyApprovalsTable,
+  autonomyMemoryTable,
+  autonomyMemoryQuarantineTable,
   autonomyIdentityTable,
   type AutonomyEventRow,
   type AutonomyEventInsert,
@@ -22,6 +24,10 @@ export {
   type AutonomyAuditInsert,
   type AutonomyApprovalRow,
   type AutonomyApprovalInsert,
+  type AutonomyMemoryRow,
+  type AutonomyMemoryInsert,
+  type AutonomyMemoryQuarantineRow,
+  type AutonomyMemoryQuarantineInsert,
   type AutonomyIdentityRow,
   type AutonomyIdentityInsert,
 } from "./schema.js";
@@ -40,6 +46,7 @@ export { PgRetentionManager } from "./pg-retention-manager.js";
 export { PersistentStateMachine } from "./persistent-state-machine.js";
 export { PgApprovalLog, type ApprovalLogEntry, type ApprovalLogInterface } from "./pg-approval-log.js";
 export { PgIdentityStore, type IdentityVersionEntry, type IdentityStoreInterface } from "./pg-identity-store.js";
+export { PgMemoryStore } from "./pg-memory-store.js";
 
 // Migrations
 export { createAutonomyTables } from "./migrations/001_autonomy_tables.js";

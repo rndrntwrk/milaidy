@@ -102,6 +102,58 @@ CREATE INDEX IF NOT EXISTS idx_autonomy_approvals_tool_name
 CREATE INDEX IF NOT EXISTS idx_autonomy_approvals_created_at
   ON autonomy_approvals (created_at);
 
+-- autonomy_memory: typed memory entries
+CREATE TABLE IF NOT EXISTS autonomy_memory (
+  id                   UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id             TEXT         NOT NULL,
+  memory_type          TEXT         NOT NULL,
+  content              JSONB        NOT NULL DEFAULT '{}'::jsonb,
+  metadata             JSONB,
+  provenance           JSONB        NOT NULL DEFAULT '{}'::jsonb,
+  trust_score          DOUBLE PRECISION NOT NULL,
+  verified             BOOLEAN      NOT NULL DEFAULT false,
+  verifiability_class  TEXT         NOT NULL DEFAULT 'unverified',
+  source               TEXT,
+  source_type          TEXT,
+  created_at           TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  updated_at           TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_autonomy_memory_agent
+  ON autonomy_memory (agent_id);
+CREATE INDEX IF NOT EXISTS idx_autonomy_memory_type
+  ON autonomy_memory (memory_type);
+CREATE INDEX IF NOT EXISTS idx_autonomy_memory_created_at
+  ON autonomy_memory (created_at);
+
+-- autonomy_memory_quarantine: pending memory review
+CREATE TABLE IF NOT EXISTS autonomy_memory_quarantine (
+  id                   UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id             TEXT         NOT NULL,
+  memory_type          TEXT         NOT NULL,
+  content              JSONB        NOT NULL DEFAULT '{}'::jsonb,
+  metadata             JSONB,
+  provenance           JSONB        NOT NULL DEFAULT '{}'::jsonb,
+  trust_score          DOUBLE PRECISION NOT NULL,
+  verified             BOOLEAN      NOT NULL DEFAULT false,
+  verifiability_class  TEXT         NOT NULL DEFAULT 'unverified',
+  source               TEXT,
+  source_type          TEXT,
+  decision             TEXT,
+  decision_reason      TEXT,
+  reviewed_at          TIMESTAMPTZ,
+  expires_at           TIMESTAMPTZ  NOT NULL,
+  created_at           TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  updated_at           TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_autonomy_memory_quarantine_agent
+  ON autonomy_memory_quarantine (agent_id);
+CREATE INDEX IF NOT EXISTS idx_autonomy_memory_quarantine_decision
+  ON autonomy_memory_quarantine (decision);
+CREATE INDEX IF NOT EXISTS idx_autonomy_memory_quarantine_expires
+  ON autonomy_memory_quarantine (expires_at);
+
 -- autonomy_identity: identity version history
 CREATE TABLE IF NOT EXISTS autonomy_identity (
   id         SERIAL       PRIMARY KEY,
