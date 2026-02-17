@@ -24,6 +24,7 @@ Contents:
 - `phase1-identity-memory-validation-2026-02-17.md`: `P1-043/P1-044/P1-045/P1-046` identity/memory API integration, fail-closed integrity, quarantine lifecycle, and drift-alert threshold validation evidence.
 - `phase1-trust-feature-weight-strategy-2026-02-17.md`: `P1-029` trust feature set and weighting strategy definition.
 - `phase1-trust-override-policy-2026-02-17.md`: `P1-035` trust override governance policy + audit event enforcement evidence.
+- `phase1-retrieval-rank-guardrails-2026-02-17.md`: `P1-034` retrieval rank tuning configuration guardrails + runtime sanitization evidence.
 - `phase1-drift-report-persistence-2026-02-17.md`: `P1-014` durable drift report persistence in execution event logs.
 - `drift-quarantine-troubleshooting-runbook.md`: `P1-041` troubleshooting runbook for drift spikes and quarantine backlog handling.
 - `phase3-executor-role-2026-02-17.md`: `P3-024` Executor role implementation and wiring evidence.
@@ -96,6 +97,7 @@ Provisioned observability:
 - Event bus: `autonomy:state:transition` emits every kernel FSM transition with trigger metadata.
 - Event bus: `autonomy:identity:updated` emits identity mutation audit records (version change + changed fields + hash + policy metadata).
 - Event bus: `autonomy:retrieval:trust-override` emits trust override decisions with actor/source attribution and rejection reasons.
+- Event bus: `autonomy:retrieval:rank-guardrail` emits retrieval tuning sanitization records when unsafe rank configs are corrected.
 - Event store: `kernel-state-transitions` and `kernel-safe-mode-transitions` persist kernel and safe-mode transition history.
 - Event store: auditor writes `identity:drift:report` events per audited request with drift score/severity and corrective context.
 - Metric: `autonomy_goal_transitions_total{status}` tracks goal lifecycle transitions (`active/paused/completed/failed`).

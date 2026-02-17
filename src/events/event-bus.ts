@@ -251,6 +251,18 @@ export interface MilaidyEvents {
     violations: string[];
     timestamp: number;
   };
+  "autonomy:retrieval:rank-guardrail": {
+    adjustments: string[];
+    weights: {
+      trustWeight: number;
+      recencyWeight: number;
+      relevanceWeight: number;
+      typeWeight: number;
+    };
+    maxResults: number;
+    minTrustThreshold: number;
+    timestamp: number;
+  };
   "autonomy:goal:created": {
     goalId: string;
     description: string;

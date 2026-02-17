@@ -13,8 +13,8 @@ Current status pre-check snapshot:
 - Evidence basis: static repo review of autonomy kernel, API, persistence, and app UI code paths.
 - Summary counts:
 - `307` total checklist items.
-- `160` items tagged `STATUS: CODED`.
-- `40` items tagged `STATUS: PARTIAL`.
+- `161` items tagged `STATUS: CODED`.
+- `39` items tagged `STATUS: PARTIAL`.
 - `107` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
@@ -229,7 +229,7 @@ Sprint chunks:
 - [ ] P1-031 Implement simple ML trust classifier baseline (logistic regression) and compare.
 - [ ] P1-032 Define trust source reputation update mechanics. [STATUS: CODED]
 - [ ] P1-033 Implement trust-aware retrieval rank formula. [STATUS: CODED]
-- [ ] P1-034 Implement rank tuning configuration and guardrails. [STATUS: PARTIAL]
+- [ ] P1-034 Implement rank tuning configuration and guardrails. [STATUS: CODED]
 - [ ] P1-035 Implement user trust-override policy with auditing. [STATUS: CODED]
 - [ ] P1-036 Validate retrieval quality against baseline tasks.
 

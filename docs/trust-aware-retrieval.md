@@ -78,6 +78,14 @@ recencyScore = 0.5 ^ (ageMs / 86400000)
 
 **Validation**: Weights must each be between 0 and 1, and should sum to approximately 1.0 (tolerance: 0.05).
 
+Runtime rank guardrails:
+
+- weights are normalized to sum to `1.0`
+- unsafe weight mixes (outside guardrail band `0.05..0.80`) fall back to defaults
+- `maxResults` is clamped to `1..200`
+- `typeBoosts` are clamped to `0..2`
+- when sanitization occurs, event `autonomy:retrieval:rank-guardrail` is emitted
+
 ## User Overrides
 
 ### Trust Override
