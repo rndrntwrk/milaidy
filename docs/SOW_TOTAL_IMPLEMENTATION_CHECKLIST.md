@@ -13,9 +13,9 @@ Current status pre-check snapshot:
 - Evidence basis: static repo review of autonomy kernel, API, persistence, and app UI code paths.
 - Summary counts:
 - `307` total checklist items.
-- `96` items tagged `STATUS: CODED`.
+- `97` items tagged `STATUS: CODED`.
 - `93` items tagged `STATUS: PARTIAL`.
-- `118` items currently untagged.
+- `117` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
 - `STATUS: PARTIAL` means implementation exists but is incomplete, scoped down, optional, or not yet acceptance-ready.
@@ -350,7 +350,7 @@ Sprint chunks:
 
 - [ ] P2-063 Demonstrate >=99.5 percent success on reversible actions in test suite. [STATUS: CODED]
 - [ ] P2-064 Demonstrate zero unauthorized irreversible actions. [STATUS: CODED]
-- [ ] P2-065 Publish Phase 2 acceptance report and sign-off.
+- [ ] P2-065 Publish Phase 2 acceptance report and sign-off. [STATUS: CODED]
 
 ---
 
