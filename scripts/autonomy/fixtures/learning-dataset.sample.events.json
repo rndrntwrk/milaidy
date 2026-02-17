@@ -1,0 +1,170 @@
+[
+  {
+    "requestId": "req-learning-1",
+    "type": "tool:proposed",
+    "payload": {
+      "toolName": "READ_FILE",
+      "source": "user",
+      "params": {
+        "path": "/tmp/a.txt"
+      }
+    },
+    "timestamp": "2026-02-17T16:00:00.000Z",
+    "correlationId": "corr-learning-1"
+  },
+  {
+    "requestId": "req-learning-1",
+    "type": "tool:executed",
+    "payload": {
+      "durationMs": 20,
+      "result": {
+        "ok": true
+      }
+    },
+    "timestamp": "2026-02-17T16:00:00.020Z",
+    "correlationId": "corr-learning-1"
+  },
+  {
+    "requestId": "req-learning-1",
+    "type": "tool:verified",
+    "payload": {
+      "status": "passed",
+      "hasCriticalFailure": false
+    },
+    "timestamp": "2026-02-17T16:00:00.025Z",
+    "correlationId": "corr-learning-1"
+  },
+  {
+    "requestId": "req-learning-1",
+    "type": "tool:decision:logged",
+    "payload": {
+      "toolName": "READ_FILE",
+      "success": true,
+      "validation": {
+        "outcome": "passed",
+        "errorCount": 0
+      },
+      "approval": {
+        "required": false,
+        "outcome": "skipped"
+      },
+      "verification": {
+        "outcome": "passed",
+        "status": "passed",
+        "hasCriticalFailure": false
+      },
+      "invariants": {
+        "outcome": "passed",
+        "status": "passed",
+        "hasCriticalViolation": false
+      }
+    },
+    "timestamp": "2026-02-17T16:00:00.030Z",
+    "correlationId": "corr-learning-1"
+  },
+  {
+    "request_id": "req-learning-2",
+    "type": "tool:proposed",
+    "payload": {
+      "toolName": "WRITE_FILE",
+      "source": "user",
+      "params": {
+        "path": "/tmp/b.txt"
+      }
+    },
+    "timestamp": "2026-02-17T16:01:00.000Z",
+    "correlation_id": "corr-learning-2"
+  },
+  {
+    "request_id": "req-learning-2",
+    "type": "tool:failed",
+    "payload": {
+      "reason": "validation_failed"
+    },
+    "timestamp": "2026-02-17T16:01:00.010Z",
+    "correlation_id": "corr-learning-2"
+  },
+  {
+    "request_id": "req-learning-2",
+    "type": "tool:decision:logged",
+    "payload": {
+      "toolName": "WRITE_FILE",
+      "success": false,
+      "validation": {
+        "outcome": "failed",
+        "errorCount": 1
+      },
+      "approval": {
+        "required": false,
+        "outcome": "skipped"
+      },
+      "verification": {
+        "outcome": "skipped",
+        "status": "skipped",
+        "hasCriticalFailure": false
+      },
+      "invariants": {
+        "outcome": "skipped",
+        "status": "skipped",
+        "hasCriticalViolation": false
+      },
+      "error": "Validation failed"
+    },
+    "timestamp": "2026-02-17T16:01:00.020Z",
+    "correlation_id": "corr-learning-2"
+  },
+  {
+    "requestId": "req-learning-3",
+    "type": "tool:proposed",
+    "payload": {
+      "toolName": "TRANSFER",
+      "source": "system",
+      "params": {
+        "amount": 50
+      }
+    },
+    "timestamp": "2026-02-17T16:02:00.000Z",
+    "correlationId": "corr-learning-3"
+  },
+  {
+    "requestId": "req-learning-3",
+    "type": "tool:executed",
+    "payload": {
+      "durationMs": 15,
+      "result": {
+        "ok": true
+      }
+    },
+    "timestamp": "2026-02-17T16:02:00.015Z",
+    "correlationId": "corr-learning-3"
+  },
+  {
+    "requestId": "req-learning-3",
+    "type": "tool:decision:logged",
+    "payload": {
+      "toolName": "TRANSFER",
+      "success": true,
+      "validation": {
+        "outcome": "passed",
+        "errorCount": 0
+      },
+      "approval": {
+        "required": true,
+        "outcome": "approved"
+      },
+      "verification": {
+        "outcome": "failed",
+        "status": "failed",
+        "hasCriticalFailure": true
+      },
+      "invariants": {
+        "outcome": "failed",
+        "status": "failed",
+        "hasCriticalViolation": true
+      },
+      "error": "Invariant violation detected"
+    },
+    "timestamp": "2026-02-17T16:02:00.030Z",
+    "correlationId": "corr-learning-3"
+  }
+]

@@ -14,8 +14,8 @@ Current status pre-check snapshot:
 - Summary counts:
 - `307` total checklist items.
 - `174` items tagged `STATUS: CODED`.
-- `38` items tagged `STATUS: PARTIAL`.
-- `95` items currently untagged.
+- `33` items tagged `STATUS: PARTIAL`.
+- `100` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
 - `STATUS: PARTIAL` means implementation exists but is incomplete, scoped down, optional, or not yet acceptance-ready.
@@ -428,8 +428,8 @@ Sprint chunks:
 
 ### 4.A Data and Labeling Pipeline
 
-- [ ] P4-001 Define dataset schema for tool traces and labels. [STATUS: PARTIAL]
-- [ ] P4-002 Implement data extraction from event logs. [STATUS: PARTIAL]
+- [ ] P4-001 Define dataset schema for tool traces and labels. [STATUS: CODED]
+- [ ] P4-002 Implement data extraction from event logs. [STATUS: CODED]
 - [ ] P4-003 Implement de-identification/anonymization pipeline. [STATUS: CODED]
 - [ ] P4-004 Implement quality filters for training examples. [STATUS: CODED]
 - [ ] P4-005 Implement labeling guidelines and QA sampling. [STATUS: CODED]
