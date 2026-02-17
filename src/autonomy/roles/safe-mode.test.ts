@@ -1,7 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { metrics } from "../../telemetry/setup.js";
 import { SafeModeControllerImpl } from "./safe-mode.js";
 
 describe("SafeModeControllerImpl", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
   describe("shouldTrigger()", () => {
     it("returns false when below threshold", () => {
       const ctrl = new SafeModeControllerImpl();
@@ -39,15 +44,50 @@ describe("SafeModeControllerImpl", () => {
       expect(status.enteredAt).toBeGreaterThanOrEqual(before);
       expect(status.enteredAt).toBeLessThanOrEqual(Date.now());
     });
+
+    it("emits safe-mode entry event and records metric", () => {
+      const mockEmit = vi.fn();
+      const ctrl = new SafeModeControllerImpl({
+        eventBus: { emit: mockEmit },
+      });
+      const before = metrics.getSnapshot();
+
+      ctrl.shouldTrigger(3);
+      ctrl.enter("Too many errors");
+
+      expect(mockEmit).toHaveBeenCalledWith("autonomy:safe-mode:entered", {
+        enteredAt: expect.any(Number),
+        reason: "Too many errors",
+        consecutiveErrors: 3,
+      });
+      const after = metrics.getSnapshot();
+      const key = 'autonomy_safe_mode_events_total:{"action":"enter"}';
+      expect((after.counters[key] ?? 0) - (before.counters[key] ?? 0)).toBe(1);
+    });
   });
 
   describe("requestExit()", () => {
     it("succeeds with high-trust user", () => {
-      const ctrl = new SafeModeControllerImpl();
+      const mockEmit = vi.fn();
+      const ctrl = new SafeModeControllerImpl({
+        eventBus: { emit: mockEmit },
+      });
+      const before = metrics.getSnapshot();
       ctrl.enter("test");
       const result = ctrl.requestExit("user", 0.9);
       expect(result.allowed).toBe(true);
       expect(ctrl.getStatus().active).toBe(false);
+      expect(mockEmit).toHaveBeenCalledWith("autonomy:safe-mode:exited", {
+        exitedAt: expect.any(Number),
+        enteredAt: expect.any(Number),
+        reason: "test",
+        consecutiveErrors: 0,
+        approverSource: "user",
+        approverTrust: 0.9,
+      });
+      const after = metrics.getSnapshot();
+      const key = 'autonomy_safe_mode_events_total:{"action":"exit"}';
+      expect((after.counters[key] ?? 0) - (before.counters[key] ?? 0)).toBe(1);
     });
 
     it("succeeds with high-trust system source", () => {
@@ -59,12 +99,24 @@ describe("SafeModeControllerImpl", () => {
     });
 
     it("rejects low-trust caller", () => {
-      const ctrl = new SafeModeControllerImpl();
+      const mockEmit = vi.fn();
+      const ctrl = new SafeModeControllerImpl({
+        eventBus: { emit: mockEmit },
+      });
       ctrl.enter("test");
       const result = ctrl.requestExit("user", 0.5);
       expect(result.allowed).toBe(false);
       expect(result.reason).toContain("below the required floor");
       expect(ctrl.getStatus().active).toBe(true);
+      expect(mockEmit).toHaveBeenCalledWith(
+        "autonomy:safe-mode:exit-denied",
+        expect.objectContaining({
+          reason: expect.stringContaining("below the required floor"),
+          approverSource: "user",
+          approverTrust: 0.5,
+          active: true,
+        }),
+      );
     });
 
     it("rejects agent source (only user/system)", () => {

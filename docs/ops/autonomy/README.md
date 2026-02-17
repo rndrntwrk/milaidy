@@ -57,6 +57,7 @@ Provisioned observability:
 - Prometheus rules: `deploy/prometheus/alerts.yml`
 - Event bus: `autonomy:decision:logged` emits normalized validation/approval/verification/invariant outcomes per pipeline execution.
 - Event bus: `autonomy:tool:postcondition:checked` includes `failureTaxonomy` (`check_failed`, `check_error`, `timeout`) for verification analytics.
+- Event bus: `autonomy:safe-mode:entered`, `autonomy:safe-mode:exited`, and `autonomy:safe-mode:exit-denied` emit safe-mode lifecycle notifications.
 - Metric: `autonomy_invariant_checks_total{result=pass|fail|error}` increments on every invariant check run.
 - Metric: `autonomy_role_executions_total{role,outcome}` tracks role-level success/failure outcomes.
 - Metric: `autonomy_role_latency_ms{role}` tracks planner/executor/verifier/memory_writer/auditor/orchestrator latencies.

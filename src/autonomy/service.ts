@@ -533,7 +533,10 @@ export class MilaidyAutonomyService extends Service {
     );
     this.memoryWriterRole = new _GatedMemoryWriter(this.memoryGate);
     this.auditorRole = new _DriftAwareAuditor(this.driftMonitor, this.eventStore);
-    this.safeModeController = new _SafeModeControllerImpl(config.roles?.safeMode);
+    this.safeModeController = new _SafeModeControllerImpl({
+      ...(config.roles?.safeMode ?? {}),
+      eventBus: eventBusRef,
+    });
     this.orchestrator = new _KernelOrchestrator(
       this.planner,
       this.executorRole,
@@ -829,6 +832,13 @@ export class MilaidyAutonomyService extends Service {
     if (this.enabled) return;
     // Re-initialize with enabled override
     await loadImplementations();
+    let eventBusRef: { emit: (event: string, payload: unknown) => void } | undefined;
+    try {
+      const { getEventBus } = await import("../events/event-bus.js");
+      eventBusRef = getEventBus() as unknown as { emit: (event: string, payload: unknown) => void };
+    } catch {
+      // Event bus not available — non-fatal
+    }
     this.trustScorer = new _RuleBasedTrustScorer();
     this.memoryGate = new _MemoryGateImpl(this.trustScorer);
     this.driftMonitor = new _RuleBasedDriftMonitor();
@@ -893,7 +903,9 @@ export class MilaidyAutonomyService extends Service {
     );
     this.memoryWriterRole = new _GatedMemoryWriter(this.memoryGate);
     this.auditorRole = new _DriftAwareAuditor(this.driftMonitor, this.eventStore);
-    this.safeModeController = new _SafeModeControllerImpl();
+    this.safeModeController = new _SafeModeControllerImpl({
+      eventBus: eventBusRef,
+    });
     this.orchestrator = new _KernelOrchestrator(
       this.planner,
       this.executorRole,

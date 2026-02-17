@@ -385,7 +385,7 @@ Sprint chunks:
 - [ ] P3-016 Define safe-mode triggers (error bursts, drift threshold, policy breach). [STATUS: CODED]
 - [ ] P3-017 Define safe-mode restrictions by tool class. [STATUS: PARTIAL]
 - [ ] P3-018 Implement safe-mode state transitions in state machine. [STATUS: CODED]
-- [ ] P3-019 Implement safe-mode entry events and notifications.
+- [ ] P3-019 Implement safe-mode entry events and notifications. [STATUS: CODED]
 - [ ] P3-020 Implement safe-mode exit rules with trust floors/approvals. [STATUS: CODED]
 - [ ] P3-021 Implement safe-mode API endpoints. [STATUS: CODED]
 - [ ] P3-022 Implement safe-mode UI controls and status panel. [STATUS: CODED]
