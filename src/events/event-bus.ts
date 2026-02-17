@@ -237,6 +237,20 @@ export interface MilaidyEvents {
     severity: string;
     corrections: string[];
   };
+  "autonomy:retrieval:trust-override": {
+    roomId: string;
+    requestId?: string;
+    source: "system" | "api" | "user" | "plugin";
+    actor: string;
+    requestedOverride: number;
+    appliedOverride: number | null;
+    decision: "applied" | "clamped" | "rejected";
+    highRisk: boolean;
+    approvedBy?: string;
+    reason?: string;
+    violations: string[];
+    timestamp: number;
+  };
   "autonomy:goal:created": {
     goalId: string;
     description: string;

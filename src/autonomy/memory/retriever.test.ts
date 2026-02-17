@@ -39,6 +39,12 @@ function createMockRuntime(
   } as unknown as IAgentRuntime;
 }
 
+function createMockEventBus() {
+  return {
+    emit: vi.fn(),
+  };
+}
+
 const defaultOptions: RetrievalOptions = {
   roomId: "room-1" as UUID,
 };
@@ -146,13 +152,56 @@ describe("TrustAwareRetrieverImpl", () => {
       expect(results[0].memory.id).toBe("m1");
     });
 
-    it("applies trust override to all memories", async () => {
+    it("applies trust override to all memories when policy context is valid", async () => {
       const mem = makeMemory({
         id: "m1",
         metadata: { type: "custom", trustScore: 0.2 } as Memory["metadata"],
       });
 
-      const retriever = new TrustAwareRetrieverImpl(DEFAULT_RETRIEVAL_CONFIG);
+      const eventBus = createMockEventBus();
+      const retriever = new TrustAwareRetrieverImpl(
+        DEFAULT_RETRIEVAL_CONFIG,
+        undefined,
+        eventBus,
+      );
+      const runtime = createMockRuntime([mem]);
+
+      const results = await retriever.retrieve(runtime, {
+        ...defaultOptions,
+        trustOverride: 0.95,
+        trustOverridePolicy: {
+          source: "user",
+          actor: "ops-user",
+          approvedBy: "security-reviewer",
+          reason: "incident response memory triage",
+        },
+      });
+
+      expect(results).toHaveLength(1);
+      expect(results[0].trustScore).toBe(0.95);
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        "autonomy:retrieval:trust-override",
+        expect.objectContaining({
+          decision: "applied",
+          actor: "ops-user",
+          requestedOverride: 0.95,
+          appliedOverride: 0.95,
+        }),
+      );
+    });
+
+    it("rejects trust override when actor attribution is missing", async () => {
+      const mem = makeMemory({
+        id: "m1",
+        metadata: { type: "custom", trustScore: 0.2 } as Memory["metadata"],
+      });
+
+      const eventBus = createMockEventBus();
+      const retriever = new TrustAwareRetrieverImpl(
+        DEFAULT_RETRIEVAL_CONFIG,
+        undefined,
+        eventBus,
+      );
       const runtime = createMockRuntime([mem]);
 
       const results = await retriever.retrieve(runtime, {
@@ -161,7 +210,51 @@ describe("TrustAwareRetrieverImpl", () => {
       });
 
       expect(results).toHaveLength(1);
-      expect(results[0].trustScore).toBe(0.95);
+      expect(results[0].trustScore).toBe(0.2);
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        "autonomy:retrieval:trust-override",
+        expect.objectContaining({
+          decision: "rejected",
+          actor: "unknown",
+          appliedOverride: null,
+        }),
+      );
+    });
+
+    it("rejects high-risk trust override without independent approval", async () => {
+      const mem = makeMemory({
+        id: "m1",
+        metadata: { type: "custom", trustScore: 0.2 } as Memory["metadata"],
+      });
+
+      const eventBus = createMockEventBus();
+      const retriever = new TrustAwareRetrieverImpl(
+        DEFAULT_RETRIEVAL_CONFIG,
+        undefined,
+        eventBus,
+      );
+      const runtime = createMockRuntime([mem]);
+
+      const results = await retriever.retrieve(runtime, {
+        ...defaultOptions,
+        trustOverride: 0.95,
+        trustOverridePolicy: {
+          source: "api",
+          actor: "ops-user",
+        },
+      });
+
+      expect(results).toHaveLength(1);
+      expect(results[0].trustScore).toBe(0.2);
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        "autonomy:retrieval:trust-override",
+        expect.objectContaining({
+          decision: "rejected",
+          source: "api",
+          actor: "ops-user",
+          highRisk: true,
+        }),
+      );
     });
 
     it("filters by memory type when specified", async () => {
