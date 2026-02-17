@@ -40,6 +40,14 @@ export {
   deidentifyExamples,
   type DeidentificationOptions,
 } from "./deidentification.js";
+// Quality filtering pipeline
+export {
+  applyQualityFilters,
+  DEFAULT_QUALITY_FILTER_CONFIG,
+  type QualityFilterConfig,
+  type QualityFilterDrop,
+  type QualityFilterResult,
+} from "./quality-filters.js";
 // Types
 export type {
   CollectedEpisode,

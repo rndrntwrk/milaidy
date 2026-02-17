@@ -21,6 +21,10 @@ import type {
   TrainingExample,
 } from "./types.js";
 import { Deidentifier, type DeidentificationOptions } from "./deidentification.js";
+import {
+  applyQualityFilters,
+  type QualityFilterConfig,
+} from "./quality-filters.js";
 
 // ---------- Trace Collector ----------
 
@@ -159,12 +163,18 @@ export class DatasetExporter {
     options: {
       deidentify?: boolean;
       deidentification?: DeidentificationOptions;
+      qualityFilter?: Partial<QualityFilterConfig>;
     } = {},
   ): void {
     mkdirSync(dirname(outputPath), { recursive: true });
-    const normalizedEpisodes = options.deidentify
-      ? new Deidentifier(options.deidentification).deidentifyEpisodes(episodes)
+    const qualityFilteredEpisodes = options.qualityFilter
+      ? applyQualityFilters(episodes, options.qualityFilter).accepted
       : episodes;
+    const normalizedEpisodes = options.deidentify
+      ? new Deidentifier(options.deidentification).deidentifyEpisodes(
+          qualityFilteredEpisodes,
+        )
+      : qualityFilteredEpisodes;
     const lines = normalizedEpisodes.map((ep) => this.toJSONL(ep)).join("\n");
     writeFileSync(outputPath, lines + "\n", "utf-8");
   }

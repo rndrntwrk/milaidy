@@ -244,6 +244,58 @@ describe("DatasetExporter", () => {
     expect(payload).not.toContain("10.0.0.5");
   });
 
+  it("exportJSONL applies quality filters before writing", () => {
+    const exporter = new DatasetExporter();
+    const qualityStep: import("./types.js").TrainingExample = {
+      id: "step-good",
+      toolName: "SAY",
+      input: { params: {}, source: "user" },
+      output: { result: { ok: true }, durationMs: 1000 },
+      verification: { passed: true, checks: [] },
+      reward: {
+        total: 0.8,
+        breakdown: {},
+        dimensions: [],
+        computedAt: Date.now(),
+      },
+      metadata: {
+        agentId: "agent-1",
+        requestId: "req-1",
+        timestamp: Date.now(),
+      },
+    };
+    const highQuality = makeEpisode({
+      id: "ep-good",
+      description: "High-quality export candidate episode",
+      steps: [qualityStep],
+    });
+    const lowQuality = makeEpisode({
+      id: "ep-bad",
+      description: "Low-quality export candidate episode",
+      steps: [qualityStep],
+      totalReward: {
+        total: 0.01,
+        breakdown: {},
+        dimensions: [],
+        computedAt: Date.now(),
+      },
+    });
+
+    exporter.exportJSONL([highQuality, lowQuality], "/tmp/episode.jsonl", {
+      qualityFilter: {
+        minEpisodeReward: 0.2,
+      },
+    });
+
+    const lastCall = vi
+      .mocked(writeFileSync)
+      .mock
+      .calls.at(-1);
+    const payload = String(lastCall?.[1] ?? "");
+    expect(payload).toContain("\"id\":\"ep-good\"");
+    expect(payload).not.toContain("\"id\":\"ep-bad\"");
+  });
+
   it("toJSONL produces valid JSON", () => {
     const exporter = new DatasetExporter();
     const line = exporter.toJSONL(makeEpisode());
