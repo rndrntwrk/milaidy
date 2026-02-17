@@ -259,14 +259,14 @@ Sprint chunks:
 - [ ] P2-001 Build canonical inventory of all tools in runtime and plugins. [STATUS: PARTIAL]
 - [ ] P2-002 Classify each tool risk class (read-only, reversible, irreversible). [STATUS: PARTIAL]
 - [ ] P2-003 Define required permissions per tool. [STATUS: PARTIAL]
-- [ ] P2-004 Define schema contract for every tool parameter. [STATUS: PARTIAL]
+- [ ] P2-004 Define schema contract for every tool parameter. [STATUS: CODED]
 - [ ] P2-005 Add versioning for all tool contracts. [STATUS: PARTIAL]
-- [ ] P2-006 Add examples and negative test fixtures per tool. [STATUS: PARTIAL]
-- [ ] P2-007 Produce contract coverage report showing 100 percent tool coverage. [STATUS: PARTIAL]
+- [ ] P2-006 Add examples and negative test fixtures per tool. [STATUS: CODED]
+- [ ] P2-007 Produce contract coverage report showing 100 percent tool coverage. [STATUS: CODED]
 
 ### 2.B Schema Validator Hard Enforcement
 
-- [ ] P2-008 Ensure every tool call path passes through validator. [STATUS: PARTIAL]
+- [ ] P2-008 Ensure every tool call path passes through validator. [STATUS: CODED]
 - [ ] P2-009 Reject unknown tools by default with explicit error code. [STATUS: CODED]
 - [ ] P2-010 Reject malformed params with typed field-level errors. [STATUS: CODED]
 - [ ] P2-011 Ensure validated/coerced params are what executor receives. [STATUS: CODED]
