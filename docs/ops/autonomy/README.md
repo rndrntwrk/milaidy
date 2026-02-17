@@ -15,3 +15,6 @@ Primary scripts:
 - `npm run autonomy:metrics:cardinality`
 - `npm run autonomy:contracts:inventory`
 
+Provisioned observability:
+- Grafana dashboard: `deploy/grafana/provisioning/dashboards/operational-baseline.json`
+- Prometheus rules: `deploy/prometheus/alerts.yml`
