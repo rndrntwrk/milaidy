@@ -55,11 +55,16 @@ function createState(overrides: {
   } as unknown as import("../server.js").ServerState;
 }
 
-function createMockReq(method: string, url: string, body?: unknown) {
+function createMockReq(
+  method: string,
+  url: string,
+  body?: unknown,
+  headers: Record<string, string> = {},
+) {
   const req = new EventEmitter() as IncomingMessage & EventEmitter;
   req.method = method;
   req.url = url;
-  req.headers = { "content-type": "application/json" };
+  req.headers = { "content-type": "application/json", ...headers };
   (req as unknown as { socket: { remoteAddress: string } }).socket = {
     remoteAddress: "127.0.0.1",
   };
@@ -121,9 +126,16 @@ describe("identity + memory API integration", () => {
     }
 
     {
-      const { req, emitBody } = createMockReq("PUT", "/api/agent/identity", {
-        communicationStyle: { tone: "formal" },
-      });
+      const { req, emitBody } = createMockReq(
+        "PUT",
+        "/api/agent/identity",
+        {
+          communicationStyle: { tone: "formal" },
+        },
+        {
+          "x-autonomy-actor": "ops-user",
+        },
+      );
       const res = createMockRes();
       const p = __testOnlyHandleRequest(req, res, state);
       emitBody();
@@ -132,6 +144,13 @@ describe("identity + memory API integration", () => {
       const payload = JSON.parse(res.body) as { identity: typeof identity };
       expect(payload.identity.identityVersion).toBe(2);
       expect(payload.identity.communicationStyle.tone).toBe("formal");
+      expect(autonomySvc.updateIdentityConfig).toHaveBeenCalledWith(
+        { communicationStyle: { tone: "formal" } },
+        expect.objectContaining({
+          source: "api",
+          actor: "ops-user",
+        }),
+      );
     }
 
     {

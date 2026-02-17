@@ -524,6 +524,32 @@ const paths: Record<string, PathItem> = {
       summary: "Update agent identity",
       operationId: "updateIdentity",
       tags: ["Identity"],
+      parameters: [
+        {
+          name: "x-autonomy-actor",
+          in: "header",
+          required: false,
+          schema: { type: "string" },
+          description:
+            "Identity of the actor performing the update (required for API-governed updates).",
+        },
+        {
+          name: "x-autonomy-approved-by",
+          in: "header",
+          required: false,
+          schema: { type: "string" },
+          description:
+            "Independent approver identity for high-risk updates (name/coreValues/hardBoundaries).",
+        },
+        {
+          name: "x-autonomy-change-reason",
+          in: "header",
+          required: false,
+          schema: { type: "string" },
+          description:
+            "Change-control reason required for high-risk identity updates.",
+        },
+      ],
       requestBody: {
         required: true,
         content: { "application/json": { schema: { $ref: "#/components/schemas/Identity" } } },

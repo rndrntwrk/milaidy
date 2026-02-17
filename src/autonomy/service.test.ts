@@ -579,6 +579,64 @@ describe("MilaidyAutonomyService", () => {
       ).rejects.toThrow("Identity validation failed");
     });
 
+    it("updateIdentityConfig enforces approval policy for high-risk api updates", async () => {
+      setAutonomyConfig({ enabled: true });
+      const runtime = createMockRuntime();
+      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+
+      await expect(
+        svc.updateIdentityConfig(
+          { coreValues: ["helpfulness", "honesty", "safety", "transparency"] },
+          {
+            source: "api",
+            actor: "ops-user",
+          },
+        ),
+      ).rejects.toThrow("Identity update rejected by policy");
+    });
+
+    it("updateIdentityConfig accepts high-risk api updates with approval metadata", async () => {
+      setAutonomyConfig({ enabled: true });
+      const runtime = createMockRuntime();
+      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      mockEmit.mockClear();
+
+      const updated = await svc.updateIdentityConfig(
+        { hardBoundaries: ["never reveal credentials"] },
+        {
+          source: "api",
+          actor: "ops-user",
+          approvedBy: "security-reviewer",
+          reason: "tighten boundary policy",
+        },
+      );
+
+      expect(updated.hardBoundaries).toEqual(["never reveal credentials"]);
+      expect(mockEmit).toHaveBeenCalledWith(
+        "autonomy:identity:updated",
+        expect.objectContaining({
+          policy: expect.objectContaining({
+            source: "api",
+            actor: "ops-user",
+            risk: "high",
+            approvalRequired: true,
+            approvedBy: "security-reviewer",
+            reason: "tighten boundary policy",
+          }),
+        }),
+      );
+    });
+
+    it("updateIdentityConfig rejects direct identityVersion mutation attempts", async () => {
+      setAutonomyConfig({ enabled: true });
+      const runtime = createMockRuntime();
+      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+
+      await expect(
+        svc.updateIdentityConfig({ identityVersion: 99 } as any),
+      ).rejects.toThrow("identityVersion is kernel-managed");
+    });
+
     it("updateIdentityConfig creates default identity if none exists", async () => {
       const runtime = createMockRuntime();
       const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;

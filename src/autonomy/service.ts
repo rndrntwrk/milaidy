@@ -1064,8 +1064,10 @@ export class MilaidyAutonomyService extends Service {
 
   async updateIdentityConfig(
     update: Partial<AutonomyIdentityConfig>,
+    context: import("./identity/update-policy.js").IdentityUpdateContext = {},
   ): Promise<AutonomyIdentityConfig> {
     const { computeIdentityHash, validateAutonomyIdentity } = await import("./identity/schema.js");
+    const { evaluateIdentityUpdatePolicy } = await import("./identity/update-policy.js");
 
     if (!this.identityConfig) {
       const { createDefaultAutonomyIdentity } = await import("./identity/schema.js");
@@ -1073,6 +1075,12 @@ export class MilaidyAutonomyService extends Service {
     }
 
     const previous = this.identityConfig;
+    const policyDecision = evaluateIdentityUpdatePolicy(previous, update, context);
+    if (!policyDecision.allowed) {
+      throw new Error(
+        `Identity update rejected by policy: ${policyDecision.violations.join("; ")}`,
+      );
+    }
 
     // Apply partial update
     const updated: AutonomyIdentityConfig = {
@@ -1126,38 +1134,25 @@ export class MilaidyAutonomyService extends Service {
     this.eventBus?.emit("autonomy:identity:updated", {
       fromVersion: previous?.identityVersion ?? Math.max(1, updated.identityVersion - 1),
       toVersion: updated.identityVersion,
-      changedFields: this.identityChangedFields(update),
+      changedFields: policyDecision.changedFields,
       persisted,
       identityHash: updated.identityHash,
+      policy: {
+        source: policyDecision.source,
+        actor: policyDecision.actor,
+        risk: policyDecision.risk,
+        approvalRequired: policyDecision.approvalRequired,
+        approvedBy: policyDecision.approvedBy ?? null,
+        reason: policyDecision.reason ?? null,
+      },
       updatedAt: Date.now(),
     });
 
     logger.info(
-      `[autonomy-service] Identity updated to v${updated.identityVersion}`,
+      `[autonomy-service] Identity updated to v${updated.identityVersion} by ${policyDecision.actor} (${policyDecision.source})`,
     );
 
     return { ...updated };
-  }
-
-  private identityChangedFields(update: Partial<AutonomyIdentityConfig>): string[] {
-    const changed = new Set<string>();
-    for (const key of Object.keys(update)) {
-      if (key === "communicationStyle" || key === "softPreferences") continue;
-      changed.add(key);
-    }
-
-    if (update.communicationStyle) {
-      for (const key of Object.keys(update.communicationStyle)) {
-        changed.add(`communicationStyle.${key}`);
-      }
-    }
-    if (update.softPreferences) {
-      for (const key of Object.keys(update.softPreferences)) {
-        changed.add(`softPreferences.${key}`);
-      }
-    }
-
-    return Array.from(changed).sort();
   }
 
   // ---------- Component Accessors ----------

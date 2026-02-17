@@ -13,8 +13,8 @@ Current status pre-check snapshot:
 - Evidence basis: static repo review of autonomy kernel, API, persistence, and app UI code paths.
 - Summary counts:
 - `307` total checklist items.
-- `158` items tagged `STATUS: CODED`.
-- `42` items tagged `STATUS: PARTIAL`.
+- `159` items tagged `STATUS: CODED`.
+- `41` items tagged `STATUS: PARTIAL`.
 - `107` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
@@ -190,7 +190,7 @@ Sprint chunks:
 - [ ] P1-001 Define IdentityConfig schema (name, values, boundaries, communication style, metadata). [STATUS: CODED]
 - [ ] P1-002 Define preference model (scope, source, explicit/implicit, timestamp). [STATUS: CODED]
 - [ ] P1-003 Define identity versioning and hash integrity strategy. [STATUS: CODED]
-- [ ] P1-004 Define sanctioned identity update policy and approval rules. [STATUS: PARTIAL]
+- [ ] P1-004 Define sanctioned identity update policy and approval rules. [STATUS: CODED]
 - [ ] P1-005 Implement identity schema validation with clear error messages. [STATUS: CODED]
 - [ ] P1-006 Implement identity integrity verification fail-closed behavior. [STATUS: CODED]
 - [ ] P1-007 Implement identity history persistence and retrieval. [STATUS: CODED]

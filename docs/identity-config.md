@@ -59,6 +59,23 @@ Updates the identity configuration. Accepts a partial update — unspecified fie
 }
 ```
 
+### Identity Update Governance
+
+Sanctioned update policy enforces actor attribution and approval rules:
+
+- Actor attribution:
+  - API updates must provide a named actor via `x-autonomy-actor` (or authenticated identity mapping).
+- High-risk fields requiring independent approval + reason:
+  - `name`
+  - `coreValues`
+  - `hardBoundaries`
+- High-risk approval headers:
+  - `x-autonomy-approved-by`: independent reviewer (must differ from actor)
+  - `x-autonomy-change-reason`: change-control justification
+- Kernel-managed fields rejected if supplied directly:
+  - `identityVersion`
+  - `identityHash`
+
 **Response:**
 ```json
 {
