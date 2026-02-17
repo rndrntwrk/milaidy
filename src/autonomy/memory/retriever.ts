@@ -8,7 +8,10 @@
  */
 
 import type { IAgentRuntime, Memory, UUID } from "@elizaos/core";
-import type { AutonomyRetrievalConfig } from "../config.js";
+import {
+  DEFAULT_RETRIEVAL_CONFIG,
+  type AutonomyRetrievalConfig,
+} from "../config.js";
 import type { MemoryType } from "../types.js";
 import type { TrustScorer } from "../trust/scorer.js";
 
@@ -63,6 +66,19 @@ export interface TrustOverrideAuditRecord {
   timestamp: number;
 }
 
+export interface RetrievalRankGuardrailRecord {
+  adjustments: string[];
+  weights: {
+    trustWeight: number;
+    recencyWeight: number;
+    relevanceWeight: number;
+    typeWeight: number;
+  };
+  maxResults: number;
+  minTrustThreshold: number;
+  timestamp: number;
+}
+
 // ---------- Constants ----------
 
 const DEFAULT_TYPE_BOOSTS: Record<MemoryType, number> = {
@@ -82,6 +98,11 @@ const DEFAULT_TYPE_BOOSTS: Record<MemoryType, number> = {
 /** Exponential decay half-life in milliseconds (24 hours). */
 const RECENCY_HALF_LIFE_MS = 24 * 60 * 60 * 1000;
 const TRUST_OVERRIDE_APPROVAL_THRESHOLD = 0.9;
+const RETRIEVAL_MAX_RESULTS_GUARDRAIL = 200;
+const RETRIEVAL_MIN_WEIGHT_GUARDRAIL = 0.05;
+const RETRIEVAL_MAX_WEIGHT_GUARDRAIL = 0.8;
+const TYPE_BOOST_MIN_GUARDRAIL = 0;
+const TYPE_BOOST_MAX_GUARDRAIL = 2;
 const NON_PERSON_ACTORS = new Set([
   "",
   "anonymous",
@@ -102,9 +123,11 @@ export class TrustAwareRetrieverImpl implements TrustAwareRetriever {
     scorer?: TrustScorer | null,
     eventBus?: { emit: (event: string, payload: unknown) => void } | null,
   ) {
-    this.config = config;
     this.scorer = scorer ?? null;
     this.eventBus = eventBus ?? null;
+    const guarded = this.applyRetrievalGuardrails(config);
+    this.config = guarded.config;
+    this.emitRankGuardrailAudit(guarded.adjustments);
   }
 
   async retrieve(
@@ -290,6 +313,142 @@ export class TrustAwareRetrieverImpl implements TrustAwareRetriever {
     return trimmed.length > 0 ? trimmed : undefined;
   }
 
+  private emitRankGuardrailAudit(adjustments: string[]): void {
+    if (!this.eventBus || adjustments.length === 0) return;
+    const record: RetrievalRankGuardrailRecord = {
+      adjustments,
+      weights: this.getRankingWeights(),
+      maxResults: this.config.maxResults,
+      minTrustThreshold: this.config.minTrustThreshold,
+      timestamp: Date.now(),
+    };
+    try {
+      this.eventBus.emit("autonomy:retrieval:rank-guardrail", record);
+    } catch {
+      // Non-fatal: retrieval guardrail auditing must not block startup.
+    }
+  }
+
+  private applyRetrievalGuardrails(
+    rawConfig: Required<AutonomyRetrievalConfig>,
+  ): {
+    config: Required<AutonomyRetrievalConfig>;
+    adjustments: string[];
+  } {
+    const adjustments: string[] = [];
+    const config: Required<AutonomyRetrievalConfig> = {
+      ...rawConfig,
+      typeBoosts: { ...(rawConfig.typeBoosts ?? {}) },
+    };
+
+    const rawMaxResults = Number.isFinite(config.maxResults)
+      ? Math.floor(config.maxResults)
+      : DEFAULT_RETRIEVAL_CONFIG.maxResults;
+    const guardedMaxResults = Math.max(
+      1,
+      Math.min(RETRIEVAL_MAX_RESULTS_GUARDRAIL, rawMaxResults),
+    );
+    if (guardedMaxResults !== config.maxResults) {
+      adjustments.push(
+        `maxResults clamped to ${guardedMaxResults} (requested ${config.maxResults})`,
+      );
+      config.maxResults = guardedMaxResults;
+    }
+
+    const guardedMinTrust = Math.max(
+      0,
+      Math.min(1, config.minTrustThreshold),
+    );
+    if (guardedMinTrust !== config.minTrustThreshold) {
+      adjustments.push(
+        `minTrustThreshold clamped to ${guardedMinTrust.toFixed(3)} (requested ${config.minTrustThreshold})`,
+      );
+      config.minTrustThreshold = guardedMinTrust;
+    }
+
+    const normalizedTypeBoosts: Record<string, number> = {};
+    for (const [key, value] of Object.entries(config.typeBoosts ?? {})) {
+      if (!Number.isFinite(value)) {
+        adjustments.push(`typeBoosts.${key} dropped due to non-finite value`);
+        continue;
+      }
+      const guarded = Math.max(
+        TYPE_BOOST_MIN_GUARDRAIL,
+        Math.min(TYPE_BOOST_MAX_GUARDRAIL, value),
+      );
+      if (guarded !== value) {
+        adjustments.push(
+          `typeBoosts.${key} clamped to ${guarded.toFixed(3)} (requested ${value})`,
+        );
+      }
+      normalizedTypeBoosts[key] = guarded;
+    }
+    config.typeBoosts = normalizedTypeBoosts;
+
+    const rawWeights = {
+      trustWeight: config.trustWeight,
+      recencyWeight: config.recencyWeight,
+      relevanceWeight: config.relevanceWeight,
+      typeWeight: config.typeWeight,
+    };
+    const invalidRawWeight = Object.values(rawWeights).some(
+      (value) => !Number.isFinite(value) || value < 0 || value > 1,
+    );
+    if (invalidRawWeight) {
+      adjustments.push("retrieval weights invalid; reverted to defaults");
+      config.trustWeight = DEFAULT_RETRIEVAL_CONFIG.trustWeight;
+      config.recencyWeight = DEFAULT_RETRIEVAL_CONFIG.recencyWeight;
+      config.relevanceWeight = DEFAULT_RETRIEVAL_CONFIG.relevanceWeight;
+      config.typeWeight = DEFAULT_RETRIEVAL_CONFIG.typeWeight;
+      return { config, adjustments };
+    }
+
+    const sum =
+      rawWeights.trustWeight +
+      rawWeights.recencyWeight +
+      rawWeights.relevanceWeight +
+      rawWeights.typeWeight;
+    if (sum <= 0) {
+      adjustments.push("retrieval weights sum to zero; reverted to defaults");
+      config.trustWeight = DEFAULT_RETRIEVAL_CONFIG.trustWeight;
+      config.recencyWeight = DEFAULT_RETRIEVAL_CONFIG.recencyWeight;
+      config.relevanceWeight = DEFAULT_RETRIEVAL_CONFIG.relevanceWeight;
+      config.typeWeight = DEFAULT_RETRIEVAL_CONFIG.typeWeight;
+      return { config, adjustments };
+    }
+
+    const normalized = {
+      trustWeight: rawWeights.trustWeight / sum,
+      recencyWeight: rawWeights.recencyWeight / sum,
+      relevanceWeight: rawWeights.relevanceWeight / sum,
+      typeWeight: rawWeights.typeWeight / sum,
+    };
+    const outOfGuardrailBand = Object.values(normalized).some(
+      (value) =>
+        value < RETRIEVAL_MIN_WEIGHT_GUARDRAIL ||
+        value > RETRIEVAL_MAX_WEIGHT_GUARDRAIL,
+    );
+    if (outOfGuardrailBand) {
+      adjustments.push(
+        `retrieval weights violate guardrail band [${RETRIEVAL_MIN_WEIGHT_GUARDRAIL.toFixed(2)}, ${RETRIEVAL_MAX_WEIGHT_GUARDRAIL.toFixed(2)}]; reverted to defaults`,
+      );
+      config.trustWeight = DEFAULT_RETRIEVAL_CONFIG.trustWeight;
+      config.recencyWeight = DEFAULT_RETRIEVAL_CONFIG.recencyWeight;
+      config.relevanceWeight = DEFAULT_RETRIEVAL_CONFIG.relevanceWeight;
+      config.typeWeight = DEFAULT_RETRIEVAL_CONFIG.typeWeight;
+      return { config, adjustments };
+    }
+
+    if (Math.abs(sum - 1) > 0.0001) {
+      adjustments.push("retrieval weights normalized to sum to 1.0");
+    }
+    config.trustWeight = normalized.trustWeight;
+    config.recencyWeight = normalized.recencyWeight;
+    config.relevanceWeight = normalized.relevanceWeight;
+    config.typeWeight = normalized.typeWeight;
+    return { config, adjustments };
+  }
+
   private normalizeActor(
     value: string | undefined,
     source: TrustOverrideAuditRecord["source"],
@@ -297,6 +456,20 @@ export class TrustAwareRetrieverImpl implements TrustAwareRetriever {
     const actor = this.normalizeOptionalText(value);
     if (actor) return actor;
     return source === "system" ? "system" : "unknown";
+  }
+
+  getRankingWeights(): {
+    trustWeight: number;
+    recencyWeight: number;
+    relevanceWeight: number;
+    typeWeight: number;
+  } {
+    return {
+      trustWeight: this.config.trustWeight,
+      recencyWeight: this.config.recencyWeight,
+      relevanceWeight: this.config.relevanceWeight,
+      typeWeight: this.config.typeWeight,
+    };
   }
 
   /** Compute trust score for a memory. */

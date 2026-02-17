@@ -157,6 +157,15 @@ describe("validateAutonomyConfig", () => {
     expect(issues.some((i) => i.path.includes("trustWeight"))).toBe(true);
   });
 
+  it("catches retrieval weight guardrail violations", () => {
+    const issues = validateAutonomyConfig({
+      retrieval: { trustWeight: 0.9 },
+    });
+    expect(
+      issues.some((i) => i.message.includes("Guardrail")),
+    ).toBe(true);
+  });
+
   it("catches retrieval weights that do not sum to ~1.0", () => {
     const issues = validateAutonomyConfig({
       retrieval: { trustWeight: 0.1, recencyWeight: 0.1, relevanceWeight: 0.1, typeWeight: 0.1 },
@@ -178,11 +187,29 @@ describe("validateAutonomyConfig", () => {
     expect(issues.some((i) => i.path.includes("maxResults"))).toBe(true);
   });
 
+  it("catches retrieval maxResults above guardrail ceiling", () => {
+    const issues = validateAutonomyConfig({
+      retrieval: { maxResults: 500 },
+    });
+    expect(
+      issues.some((i) => i.path.includes("maxResults") && i.message.includes("Guardrail")),
+    ).toBe(true);
+  });
+
   it("catches retrieval minTrustThreshold out of range", () => {
     const issues = validateAutonomyConfig({
       retrieval: { minTrustThreshold: -0.1 },
     });
     expect(issues.some((i) => i.path.includes("minTrustThreshold"))).toBe(true);
+  });
+
+  it("catches retrieval typeBoost guardrail violations", () => {
+    const issues = validateAutonomyConfig({
+      retrieval: { typeBoosts: { observation: 3 } },
+    });
+    expect(
+      issues.some((i) => i.path.includes("typeBoosts.observation")),
+    ).toBe(true);
   });
 
   it("catches negative eventStore retentionMs", () => {

@@ -450,5 +450,69 @@ describe("TrustAwareRetrieverImpl", () => {
       // Non-overridden types keep defaults
       expect(retriever.getTypeBoost("instruction")).toBe(1.0);
     });
+
+    it("clamps user-configured boosts to guardrail bounds", () => {
+      const config = {
+        ...DEFAULT_RETRIEVAL_CONFIG,
+        typeBoosts: { observation: 5 },
+      };
+      const retriever = new TrustAwareRetrieverImpl(config);
+
+      expect(retriever.getTypeBoost("observation")).toBe(2);
+    });
+  });
+
+  describe("rank tuning guardrails", () => {
+    it("reverts to default weights when configured weights violate guardrail band", () => {
+      const config = {
+        ...DEFAULT_RETRIEVAL_CONFIG,
+        trustWeight: 0.95,
+        recencyWeight: 0.03,
+        relevanceWeight: 0.01,
+        typeWeight: 0.01,
+      };
+      const retriever = new TrustAwareRetrieverImpl(config);
+
+      expect(retriever.getRankingWeights()).toEqual({
+        trustWeight: DEFAULT_RETRIEVAL_CONFIG.trustWeight,
+        recencyWeight: DEFAULT_RETRIEVAL_CONFIG.recencyWeight,
+        relevanceWeight: DEFAULT_RETRIEVAL_CONFIG.relevanceWeight,
+        typeWeight: DEFAULT_RETRIEVAL_CONFIG.typeWeight,
+      });
+    });
+
+    it("clamps maxResults to guardrail ceiling", async () => {
+      const memories = Array.from({ length: 300 }, (_, i) =>
+        makeMemory({ id: `m${i}` }),
+      );
+      const config = {
+        ...DEFAULT_RETRIEVAL_CONFIG,
+        maxResults: 500,
+      };
+      const retriever = new TrustAwareRetrieverImpl(config);
+      const runtime = createMockRuntime(memories);
+
+      const results = await retriever.retrieve(runtime, defaultOptions);
+      expect(results).toHaveLength(200);
+    });
+
+    it("emits rank guardrail audit event when constructor sanitizes config", () => {
+      const eventBus = createMockEventBus();
+      const config = {
+        ...DEFAULT_RETRIEVAL_CONFIG,
+        maxResults: 500,
+      };
+
+      new TrustAwareRetrieverImpl(config, undefined, eventBus);
+
+      expect(eventBus.emit).toHaveBeenCalledWith(
+        "autonomy:retrieval:rank-guardrail",
+        expect.objectContaining({
+          adjustments: expect.arrayContaining([
+            expect.stringContaining("maxResults clamped"),
+          ]),
+        }),
+      );
+    });
   });
 });

@@ -556,6 +556,14 @@ export function validateAutonomyConfig(
     for (const field of weightFields) {
       if (r[field] !== undefined && (r[field]! < 0 || r[field]! > 1)) {
         issues.push({ path: `autonomy.retrieval.${field}`, message: "Must be between 0 and 1" });
+      } else if (
+        r[field] !== undefined &&
+        (r[field]! < 0.05 || r[field]! > 0.8)
+      ) {
+        issues.push({
+          path: `autonomy.retrieval.${field}`,
+          message: "Guardrail: must be between 0.05 and 0.8",
+        });
       }
     }
 
@@ -573,10 +581,26 @@ export function validateAutonomyConfig(
 
     if (r.maxResults !== undefined && r.maxResults < 1) {
       issues.push({ path: "autonomy.retrieval.maxResults", message: "Must be at least 1" });
+    } else if (r.maxResults !== undefined && r.maxResults > 200) {
+      issues.push({
+        path: "autonomy.retrieval.maxResults",
+        message: "Guardrail: must be at most 200",
+      });
     }
 
     if (r.minTrustThreshold !== undefined && (r.minTrustThreshold < 0 || r.minTrustThreshold > 1)) {
       issues.push({ path: "autonomy.retrieval.minTrustThreshold", message: "Must be between 0 and 1" });
+    }
+
+    if (r.typeBoosts !== undefined) {
+      for (const [key, value] of Object.entries(r.typeBoosts)) {
+        if (!Number.isFinite(value) || value < 0 || value > 2) {
+          issues.push({
+            path: `autonomy.retrieval.typeBoosts.${key}`,
+            message: "Guardrail: must be between 0 and 2",
+          });
+        }
+      }
     }
   }
 
