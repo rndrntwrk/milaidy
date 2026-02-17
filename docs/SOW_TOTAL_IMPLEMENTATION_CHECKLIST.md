@@ -13,8 +13,8 @@ Current status pre-check snapshot:
 - Evidence basis: static repo review of autonomy kernel, API, persistence, and app UI code paths.
 - Summary counts:
 - `307` total checklist items.
-- `105` items tagged `STATUS: CODED`.
-- `85` items tagged `STATUS: PARTIAL`.
+- `106` items tagged `STATUS: CODED`.
+- `84` items tagged `STATUS: PARTIAL`.
 - `117` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
@@ -411,7 +411,7 @@ Sprint chunks:
 
 ### 3.G Observability and Drift Reduction
 
-- [ ] P3-036 Build dashboards for role throughput/errors/latency. [STATUS: PARTIAL]
+- [ ] P3-036 Build dashboards for role throughput/errors/latency. [STATUS: CODED]
 - [ ] P3-037 Build dashboards for PSD/ICS/safe-mode frequency. [STATUS: PARTIAL]
 - [ ] P3-038 Run long-horizon scenarios and compare against baseline. [STATUS: PARTIAL]
 - [ ] P3-039 Tune thresholds based on empirical data. [STATUS: PARTIAL]
