@@ -271,7 +271,7 @@ Sprint chunks:
 - [ ] P2-010 Reject malformed params with typed field-level errors. [STATUS: CODED]
 - [ ] P2-011 Ensure validated/coerced params are what executor receives. [STATUS: CODED]
 - [ ] P2-012 Add structured validation event logs. [STATUS: CODED]
-- [ ] P2-013 Add fuzz tests for validator edge cases. [STATUS: PARTIAL]
+- [ ] P2-013 Add fuzz tests for validator edge cases. [STATUS: CODED]
 
 ### 2.C Post-Conditions and Independent Verification
 
