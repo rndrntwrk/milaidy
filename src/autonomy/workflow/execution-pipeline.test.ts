@@ -8,6 +8,7 @@ import { registerBuiltinCompensations } from "./compensations/index.js";
 import { InMemoryEventStore } from "./event-store.js";
 import { ToolExecutionPipeline } from "./execution-pipeline.js";
 import type { ToolActionHandler } from "./types.js";
+import type { InvariantCheckerInterface } from "../verification/invariants/types.js";
 
 // ---------- Helpers ----------
 
@@ -57,6 +58,7 @@ function createPipeline(
     validator?: ReturnType<typeof createMockValidator>;
     verifier?: ReturnType<typeof createMockVerifier>;
     handler?: ToolActionHandler;
+    invariantChecker?: InvariantCheckerInterface;
     config?: Record<string, unknown>;
     eventBus?: { emit: ReturnType<typeof vi.fn> };
   } = {},
@@ -77,6 +79,7 @@ function createPipeline(
     compensationRegistry,
     stateMachine,
     eventStore,
+    invariantChecker: overrides.invariantChecker,
     config: overrides.config as Record<string, unknown> | undefined,
     eventBus: overrides.eventBus,
   });
@@ -388,6 +391,40 @@ describe("ToolExecutionPipeline", () => {
         ["verifying", "idle", "verification_passed"],
       ]);
       expect(stateMachine.currentState).toBe("idle");
+    });
+  });
+
+  describe("invariant fail-closed behavior", () => {
+    it("fails pipeline when a critical invariant is violated", async () => {
+      const invariantChecker: InvariantCheckerInterface = {
+        register: vi.fn(),
+        registerMany: vi.fn(),
+        check: vi.fn().mockResolvedValue({
+          status: "failed",
+          checks: [
+            {
+              invariantId: "inv-critical",
+              passed: false,
+              severity: "critical",
+            },
+          ],
+          hasCriticalViolation: true,
+        }),
+      };
+      const handler = createSuccessHandler({ ok: true });
+      const { pipeline, stateMachine, eventStore } = createPipeline({
+        invariantChecker,
+      });
+
+      const result = await pipeline.execute(makeCall(), handler);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Critical invariant violation");
+      expect(result.invariants?.hasCriticalViolation).toBe(true);
+      expect(stateMachine.currentState).toBe("idle");
+
+      const events = await eventStore.getByRequestId("test-req-1");
+      expect(events.some((event) => event.type === "tool:failed")).toBe(true);
     });
   });
 

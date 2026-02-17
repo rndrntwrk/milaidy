@@ -357,6 +357,39 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
       correlationId,
     );
 
+    if (invariantInfo?.hasCriticalViolation) {
+      await this.eventStore.append(requestId, "tool:failed", {
+        reason: "critical_invariant_violation",
+      }, correlationId);
+      this.stateMachine.transition("fatal_error");
+      this.stateMachine.transition("recover");
+
+      this.eventBus?.emit("autonomy:pipeline:completed", {
+        requestId,
+        toolName,
+        success: false,
+        durationMs: Date.now() - startTime,
+        correlationId,
+      });
+
+      return {
+        requestId,
+        toolName,
+        success: false,
+        result: execResult.result,
+        validation: { valid: true, errors: [] },
+        approval: approvalInfo,
+        verification: {
+          status: verification.status,
+          hasCriticalFailure: false,
+        },
+        invariants: invariantInfo,
+        correlationId,
+        durationMs: Date.now() - startTime,
+        error: "Critical invariant violation",
+      };
+    }
+
     this.eventBus?.emit("autonomy:pipeline:completed", {
       requestId,
       toolName,

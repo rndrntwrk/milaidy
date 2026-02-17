@@ -326,7 +326,7 @@ Sprint chunks:
 - [ ] P2-047 Define invariant catalog with severity and ownership. [STATUS: PARTIAL]
 - [ ] P2-048 Implement invariant checker with timeout protections. [STATUS: CODED]
 - [ ] P2-049 Run invariants after every pipeline completion. [STATUS: CODED]
-- [ ] P2-050 Fail closed on critical invariant violations. [STATUS: PARTIAL]
+- [ ] P2-050 Fail closed on critical invariant violations. [STATUS: CODED]
 - [ ] P2-051 Emit invariant metrics and events. [STATUS: PARTIAL]
 - [ ] P2-052 Add invariant regression tests. [STATUS: CODED]
 
