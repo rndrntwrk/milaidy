@@ -116,7 +116,11 @@ export interface PipelineResult {
   /** Approval details (if approval was required). */
   approval?: { required: boolean; decision?: string; decidedBy?: string };
   /** Verification result (if execution reached verification). */
-  verification?: { status: string; hasCriticalFailure: boolean };
+  verification?: {
+    status: string;
+    hasCriticalFailure: boolean;
+    failureTaxonomy?: import("../verification/types.js").VerificationFailureTaxonomy;
+  };
   /** Compensation details (if compensation was attempted). */
   compensation?: { attempted: boolean; success: boolean; detail?: string };
   /** Invariant check results (if invariant checker is configured). */

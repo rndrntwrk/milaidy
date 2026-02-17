@@ -280,7 +280,7 @@ Sprint chunks:
 - [ ] P2-016 Implement critical vs warning severity handling. [STATUS: CODED]
 - [ ] P2-017 Implement independent verification query paths. [STATUS: PARTIAL]
 - [ ] P2-018 Implement verification result normalization schema. [STATUS: CODED]
-- [ ] P2-019 Add failure taxonomy for verification outcomes. [STATUS: PARTIAL]
+- [ ] P2-019 Add failure taxonomy for verification outcomes. [STATUS: CODED]
 - [ ] P2-020 Add post-condition coverage report.
 
 ### 2.D Durable Workflow Engine Integration

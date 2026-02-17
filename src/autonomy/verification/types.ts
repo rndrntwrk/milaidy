@@ -57,6 +57,8 @@ export interface PostConditionCheckResult {
   passed: boolean;
   /** The severity of this condition. */
   severity: PostConditionSeverity;
+  /** Failure taxonomy code (set only when a check fails). */
+  failureCode?: VerificationFailureCode;
   /** Error message if the check threw. */
   error?: string;
 }
@@ -65,6 +67,24 @@ export interface PostConditionCheckResult {
  * Overall verification status.
  */
 export type VerificationStatus = "passed" | "failed" | "partial";
+
+/**
+ * Failure taxonomy for verification outcomes.
+ */
+export type VerificationFailureCode = "check_failed" | "check_error" | "timeout";
+
+/**
+ * Aggregate verification failure taxonomy counts.
+ */
+export interface VerificationFailureTaxonomy {
+  totalFailures: number;
+  criticalFailures: number;
+  warningFailures: number;
+  infoFailures: number;
+  checkFailures: number;
+  errorFailures: number;
+  timeoutFailures: number;
+}
 
 /**
  * Result of running all post-conditions for a tool execution.
@@ -76,6 +96,8 @@ export interface VerificationResult {
   checks: PostConditionCheckResult[];
   /** Whether any critical condition failed. */
   hasCriticalFailure: boolean;
+  /** Aggregated failure taxonomy counts for this verification run. */
+  failureTaxonomy: VerificationFailureTaxonomy;
 }
 
 // ---------- Verifier Interface ----------

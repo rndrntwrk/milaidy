@@ -47,6 +47,7 @@ describe("PostConditionVerifier", () => {
     expect(result.status).toBe("passed");
     expect(result.checks).toHaveLength(0);
     expect(result.hasCriticalFailure).toBe(false);
+    expect(result.failureTaxonomy.totalFailures).toBe(0);
   });
 
   it("passes when all conditions pass", async () => {
@@ -62,6 +63,7 @@ describe("PostConditionVerifier", () => {
     expect(result.checks).toHaveLength(2);
     expect(result.checks.every((c) => c.passed)).toBe(true);
     expect(result.hasCriticalFailure).toBe(false);
+    expect(result.failureTaxonomy.totalFailures).toBe(0);
   });
 
   it("fails when all conditions fail", async () => {
@@ -75,6 +77,8 @@ describe("PostConditionVerifier", () => {
 
     expect(result.status).toBe("failed");
     expect(result.hasCriticalFailure).toBe(true);
+    expect(result.failureTaxonomy.totalFailures).toBe(2);
+    expect(result.failureTaxonomy.checkFailures).toBe(2);
   });
 
   it("returns partial when some pass and some fail", async () => {
@@ -119,8 +123,10 @@ describe("PostConditionVerifier", () => {
 
     expect(result.status).toBe("failed");
     expect(result.checks[0].passed).toBe(false);
+    expect(result.checks[0].failureCode).toBe("check_error");
     expect(result.checks[0].error).toBe("boom");
     expect(result.hasCriticalFailure).toBe(true);
+    expect(result.failureTaxonomy.errorFailures).toBe(1);
   });
 
   it("times out slow checks", async () => {
@@ -139,7 +145,9 @@ describe("PostConditionVerifier", () => {
 
     expect(result.status).toBe("failed");
     expect(result.checks[0].passed).toBe(false);
+    expect(result.checks[0].failureCode).toBe("timeout");
     expect(result.checks[0].error).toContain("timed out");
+    expect(result.failureTaxonomy.timeoutFailures).toBe(1);
   });
 
   it("appends conditions for the same tool", async () => {

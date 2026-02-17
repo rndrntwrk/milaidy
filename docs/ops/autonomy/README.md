@@ -35,4 +35,5 @@ Provisioned observability:
 - Grafana dashboard: `deploy/grafana/provisioning/dashboards/operational-baseline.json`
 - Prometheus rules: `deploy/prometheus/alerts.yml`
 - Event bus: `autonomy:decision:logged` emits normalized validation/approval/verification/invariant outcomes per pipeline execution.
+- Event bus: `autonomy:tool:postcondition:checked` includes `failureTaxonomy` (`check_failed`, `check_error`, `timeout`) for verification analytics.
 - Metric: `autonomy_invariant_checks_total{result=pass|fail|error}` increments on every invariant check run.

@@ -13,6 +13,8 @@ import type {
   PostCondition,
   PostConditionCheckResult,
   PostConditionVerifierInterface,
+  VerificationFailureCode,
+  VerificationFailureTaxonomy,
   VerificationResult,
   VerificationStatus,
   VerifierContext,
@@ -56,6 +58,7 @@ export class PostConditionVerifier implements PostConditionVerifierInterface {
         status: "passed",
         checks: [],
         hasCriticalFailure: false,
+        failureTaxonomy: emptyFailureTaxonomy(),
       };
     }
 
@@ -65,6 +68,7 @@ export class PostConditionVerifier implements PostConditionVerifierInterface {
     for (const condition of conditions) {
       let passed = false;
       let error: string | undefined;
+      let failureCode: VerificationFailureCode | undefined;
 
       let timerId: ReturnType<typeof setTimeout> | undefined;
       try {
@@ -86,6 +90,16 @@ export class PostConditionVerifier implements PostConditionVerifierInterface {
         if (timerId !== undefined) clearTimeout(timerId);
       }
 
+      if (!passed) {
+        if (error) {
+          failureCode = error.toLowerCase().includes("timed out")
+            ? "timeout"
+            : "check_error";
+        } else {
+          failureCode = "check_failed";
+        }
+      }
+
       if (!passed && condition.severity === "critical") {
         hasCriticalFailure = true;
       }
@@ -94,6 +108,7 @@ export class PostConditionVerifier implements PostConditionVerifierInterface {
         conditionId: condition.id,
         passed,
         severity: condition.severity,
+        ...(failureCode ? { failureCode } : {}),
         ...(error ? { error } : {}),
       });
     }
@@ -109,6 +124,41 @@ export class PostConditionVerifier implements PostConditionVerifierInterface {
       status = "partial";
     }
 
-    return { status, checks, hasCriticalFailure };
+    return {
+      status,
+      checks,
+      hasCriticalFailure,
+      failureTaxonomy: summarizeFailureTaxonomy(checks),
+    };
   }
+}
+
+function emptyFailureTaxonomy(): VerificationFailureTaxonomy {
+  return {
+    totalFailures: 0,
+    criticalFailures: 0,
+    warningFailures: 0,
+    infoFailures: 0,
+    checkFailures: 0,
+    errorFailures: 0,
+    timeoutFailures: 0,
+  };
+}
+
+function summarizeFailureTaxonomy(
+  checks: PostConditionCheckResult[],
+): VerificationFailureTaxonomy {
+  const taxonomy = emptyFailureTaxonomy();
+  for (const check of checks) {
+    if (check.passed) continue;
+    taxonomy.totalFailures += 1;
+    if (check.severity === "critical") taxonomy.criticalFailures += 1;
+    else if (check.severity === "warning") taxonomy.warningFailures += 1;
+    else taxonomy.infoFailures += 1;
+
+    if (check.failureCode === "timeout") taxonomy.timeoutFailures += 1;
+    else if (check.failureCode === "check_error") taxonomy.errorFailures += 1;
+    else taxonomy.checkFailures += 1;
+  }
+  return taxonomy;
 }

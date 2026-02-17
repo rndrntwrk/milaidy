@@ -269,6 +269,15 @@ export interface MilaidyEvents {
     criticalFailure: boolean;
     checkCount: number;
     requestId: string;
+    failureTaxonomy?: {
+      totalFailures: number;
+      criticalFailures: number;
+      warningFailures: number;
+      infoFailures: number;
+      checkFailures: number;
+      errorFailures: number;
+      timeoutFailures: number;
+    };
   };
 
   // ── Autonomy Workflow Engine Events ─────────────────────────────────
