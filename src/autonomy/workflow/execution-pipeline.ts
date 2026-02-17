@@ -6,7 +6,10 @@
  */
 
 import type { ApprovalGateInterface } from "../approval/types.js";
-import type { KernelStateMachineInterface } from "../state-machine/types.js";
+import type {
+  KernelStateMachineInterface,
+  TransitionResult,
+} from "../state-machine/types.js";
 import type {
   ProposedToolCall,
   RiskClass,
@@ -23,6 +26,7 @@ import type {
   VerifierContext,
 } from "../verification/types.js";
 import { recordInvariantCheck } from "../metrics/prometheus-metrics.js";
+import { evaluateSafeModeToolRestriction } from "../roles/safe-mode-policy.js";
 import type {
   CompensationIncidentManagerInterface,
   CompensationIncidentReason,
@@ -186,6 +190,66 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
       };
     }
 
+    const safeModeDecision = evaluateSafeModeToolRestriction({
+      safeModeActive: this.stateMachine.currentState === "safe_mode",
+      toolName,
+      riskClass: validation.riskClass,
+      source: call.source,
+    });
+    if (!safeModeDecision.allowed) {
+      await appendEvent("tool:failed", {
+        reason: "safe_mode_restricted",
+        riskClass: safeModeDecision.riskClass,
+        source: safeModeDecision.source,
+        detail: safeModeDecision.reason,
+      });
+      this.eventBus?.emit("autonomy:safe-mode:tool-blocked", {
+        requestId,
+        toolName,
+        riskClass: safeModeDecision.riskClass,
+        source: safeModeDecision.source,
+        reason: safeModeDecision.reason,
+        correlationId,
+      });
+      await this.appendDecisionLog({
+        requestId,
+        toolName,
+        correlationId,
+        success: false,
+        validationOutcome: "passed",
+        validationErrorCount: 0,
+        approvalOutcome: "skipped",
+        approvalRequired: false,
+        verificationOutcome: "skipped",
+        invariantOutcome: "skipped",
+        error: safeModeDecision.reason,
+      });
+      return {
+        requestId,
+        toolName,
+        success: false,
+        validation: { valid: true, errors: [] },
+        correlationId,
+        durationMs: Date.now() - startTime,
+        error: safeModeDecision.reason,
+      };
+    }
+
+    const safeModeReadOnlyBypass =
+      safeModeDecision.inSafeMode && safeModeDecision.allowed;
+    const transition = (
+      trigger: Parameters<KernelStateMachineInterface["transition"]>[0],
+    ): TransitionResult => {
+      if (!safeModeReadOnlyBypass) return this.stateMachine.transition(trigger);
+      const currentState = this.stateMachine.currentState;
+      return {
+        accepted: true,
+        from: currentState,
+        to: currentState,
+        trigger,
+      };
+    };
+
     // 3. Approval check
     let approvalInfo: PipelineResult["approval"];
     const needsApproval = this.shouldRequireApproval(
@@ -198,7 +262,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
       : "not_required";
 
     if (needsApproval) {
-      const smResult = this.stateMachine.transition("approval_required");
+      const smResult = transition("approval_required");
       if (!smResult.accepted) {
         return this.failResult(
           requestId,
@@ -238,7 +302,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
       approvalOutcome = this.toApprovalOutcome(approvalResult.decision);
 
       if (approvalResult.decision === "denied") {
-        this.stateMachine.transition("approval_denied");
+        transition("approval_denied");
         const errorMsg = "Approval denied";
         await this.appendDecisionLog({
           requestId,
@@ -266,7 +330,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
       }
 
       if (approvalResult.decision === "expired") {
-        this.stateMachine.transition("approval_expired");
+        transition("approval_expired");
         const errorMsg = "Approval expired";
         await this.appendDecisionLog({
           requestId,
@@ -294,10 +358,10 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
       }
 
       // Approved
-      this.stateMachine.transition("approval_granted");
+      transition("approval_granted");
     } else {
       // No approval needed — transition directly to executing
-      const smResult = this.stateMachine.transition("tool_validated");
+      const smResult = transition("tool_validated");
       if (!smResult.accepted) {
         return this.failResult(
           requestId,
@@ -329,7 +393,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
         reason: "execution_error",
         error: err instanceof Error ? err.message : String(err),
       });
-      this.stateMachine.transition("fatal_error");
+      transition("fatal_error");
       const errorMsg = err instanceof Error ? err.message : String(err);
       await this.appendDecisionLog({
         requestId,
@@ -362,7 +426,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
     });
 
     // 5. Verification
-    this.stateMachine.transition("execution_complete");
+    transition("execution_complete");
 
     const verifierCtx: VerifierContext = {
       toolName,
@@ -403,7 +467,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
 
     // 6. Handle critical verification failure → compensation
     if (verification.hasCriticalFailure) {
-      this.stateMachine.transition("verification_failed");
+      transition("verification_failed");
 
       const compensationInfo = await this.attemptCompensation({
         requestId,
@@ -425,7 +489,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
       if (incidentOpened) requestEventCount += 1;
 
       // Attempt recovery
-      this.stateMachine.transition("recover");
+      transition("recover");
 
       // Run invariants on failure path
       const invariantInfo = await this.runInvariants(
@@ -484,7 +548,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
     }
 
     // 7. Success
-    this.stateMachine.transition("verification_passed");
+    transition("verification_passed");
 
     // Run invariants on success path
     const invariantInfo = await this.runInvariants(
@@ -517,8 +581,8 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
       await appendEvent("tool:failed", {
         reason: "critical_invariant_violation",
       });
-      this.stateMachine.transition("fatal_error");
-      this.stateMachine.transition("recover");
+      transition("fatal_error");
+      transition("recover");
 
       this.eventBus?.emit("autonomy:pipeline:completed", {
         requestId,

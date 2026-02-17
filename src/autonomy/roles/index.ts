@@ -10,6 +10,14 @@ export { KernelOrchestrator } from "./orchestrator.js";
 // Implementations
 export { GoalDrivenPlanner, type PlannerConfig } from "./planner.js";
 export { type SafeModeConfig, SafeModeControllerImpl } from "./safe-mode.js";
+export {
+  DEFAULT_SAFE_MODE_TOOL_CLASS_RESTRICTIONS,
+  evaluateSafeModeToolRestriction,
+  type SafeModeToolClassDecision,
+  type SafeModeToolClassRestriction,
+  type SafeModeToolRestrictionDecision,
+  type SafeModeToolRestrictionInput,
+} from "./safe-mode-policy.js";
 // Role interfaces and types
 export type {
   AuditContext,
