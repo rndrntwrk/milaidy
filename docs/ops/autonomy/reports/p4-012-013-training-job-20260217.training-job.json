@@ -1,6 +1,6 @@
 {
   "label": "p4-012-013-training-job-20260217",
-  "createdAt": "2026-02-17T23:26:48.463Z",
+  "createdAt": "2026-02-17T23:32:28.370Z",
   "datasetFile": "/Volumes/OWC Envoy Pro FX/milaidy/milaidy/docs/ops/autonomy/reports/p4-001-002-learning-dataset-20260217.learning-dataset.json",
   "dataset": {
     "id": "p4-learning-v1",
@@ -63,9 +63,9 @@
     "createdAt": 1771369833951
   },
   "result": {
-    "jobId": "train-a0f34a3238e3",
-    "startedAt": 1771370808456,
-    "completedAt": 1771370808463,
+    "jobId": "train-299ca557a555",
+    "startedAt": 1771371148363,
+    "completedAt": 1771371148370,
     "durationMs": 7,
     "environmentFingerprint": "9a147f89ec88a64ae4ba6ea213f249b9f9dbf698184d772a9db73ad9bd80938c",
     "bestParams": {
@@ -251,7 +251,7 @@
           "durationMs": 0
         }
       ],
-      "durationMs": 0
+      "durationMs": 1
     },
     "training": {
       "success": true,
@@ -289,7 +289,7 @@
     }
   },
   "manifest": {
-    "generatedAt": "2026-02-17T23:26:48.463Z",
+    "generatedAt": "2026-02-17T23:32:28.370Z",
     "environment": {
       "id": "p4-012-013-training-job-20260217-env",
       "datasetFile": "/Volumes/OWC Envoy Pro FX/milaidy/milaidy/docs/ops/autonomy/reports/p4-001-002-learning-dataset-20260217.learning-dataset.json",
@@ -323,14 +323,22 @@
           0.2
         ]
       },
-      "createdAt": 1771370808455
+      "createdAt": 1771371148363
     },
     "fingerprint": "9a147f89ec88a64ae4ba6ea213f249b9f9dbf698184d772a9db73ad9bd80938c",
     "job": {
-      "jobId": "train-a0f34a3238e3",
+      "jobId": "train-299ca557a555",
       "status": "success",
-      "startedAt": 1771370808456,
-      "completedAt": 1771370808463
+      "startedAt": 1771371148363,
+      "completedAt": 1771371148370
     }
+  },
+  "checkpoint": {
+    "id": "ckpt-train-299ca557a555",
+    "path": "/Volumes/OWC Envoy Pro FX/milaidy/milaidy/docs/ops/autonomy/reports/ckpt-train-299ca557a555.checkpoint.json"
+  },
+  "registry": {
+    "experimentFile": "/Volumes/OWC Envoy Pro FX/milaidy/milaidy/docs/ops/autonomy/reports/training-experiments.registry.json",
+    "checkpointFile": "/Volumes/OWC Envoy Pro FX/milaidy/milaidy/docs/ops/autonomy/reports/training-checkpoints.registry.json"
   }
 }

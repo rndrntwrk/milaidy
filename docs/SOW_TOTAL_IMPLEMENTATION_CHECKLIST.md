@@ -13,8 +13,8 @@ Current status pre-check snapshot:
 - Evidence basis: static repo review of autonomy kernel, API, persistence, and app UI code paths.
 - Summary counts:
 - `307` total checklist items.
-- `180` items tagged `STATUS: CODED`.
-- `27` items tagged `STATUS: PARTIAL`.
+- `182` items tagged `STATUS: CODED`.
+- `25` items tagged `STATUS: PARTIAL`.
 - `100` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
@@ -447,8 +447,8 @@ Sprint chunks:
 
 - [ ] P4-012 Stand up training environment and reproducible configs. [STATUS: CODED]
 - [ ] P4-013 Implement training job orchestration scripts. [STATUS: CODED]
-- [ ] P4-014 Implement experiment tracking and artifact registry. [STATUS: PARTIAL]
-- [ ] P4-015 Implement checkpoint management and rollback strategy. [STATUS: PARTIAL]
+- [ ] P4-014 Implement experiment tracking and artifact registry. [STATUS: CODED]
+- [ ] P4-015 Implement checkpoint management and rollback strategy. [STATUS: CODED]
 - [ ] P4-016 Implement cost/performance budget tracking.
 
 ### 4.D Verifiable Reward and RLVR

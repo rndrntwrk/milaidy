@@ -74,6 +74,26 @@ export {
   TrainingJobOrchestrator,
   type TrainingJobResult,
 } from "./training/job-orchestrator.js";
+// Experiment tracking + checkpoint registry
+export {
+  InMemoryExperimentRegistry,
+  FileExperimentRegistry,
+  ExperimentRunSchema,
+  ExperimentArtifactSchema,
+  ExperimentStatusSchema,
+  ArtifactKindSchema,
+  type ExperimentRun,
+  type ExperimentArtifact,
+  type ExperimentStatus,
+  type ArtifactKind,
+} from "./training/experiment-registry.js";
+export {
+  InMemoryCheckpointRegistry,
+  FileCheckpointRegistry,
+  ModelCheckpointSchema,
+  type ModelCheckpoint,
+  type RollbackPlan,
+} from "./training/checkpoint-registry.js";
 // Reward
 export {
   CheckpointReward,

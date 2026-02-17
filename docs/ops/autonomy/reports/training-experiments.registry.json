@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "runs": [
+    {
+      "id": "train-299ca557a555",
+      "label": "p4-012-013-training-job-20260217",
+      "startedAt": 1771371148363,
+      "completedAt": 1771371148370,
+      "status": "succeeded",
+      "configFingerprint": "9a147f89ec88a64ae4ba6ea213f249b9f9dbf698184d772a9db73ad9bd80938c",
+      "parameters": {
+        "learningRate": 0.000005,
+        "batchSize": 16,
+        "maxEpochs": 3,
+        "klPenalty": 0.05,
+        "minRewardThreshold": 0
+      },
+      "metrics": {
+        "finalAverageReward": 0.4266666666666667,
+        "evaluationAverageReward": 0.3666666666666667,
+        "tuningBestScore": 0.4166666666666667
+      },
+      "artifacts": [
+        {
+          "id": "train-299ca557a555-dataset",
+          "kind": "dataset",
+          "path": "/Volumes/OWC Envoy Pro FX/milaidy/milaidy/docs/ops/autonomy/reports/p4-001-002-learning-dataset-20260217.learning-dataset.json",
+          "createdAt": 1771371148371
+        },
+        {
+          "id": "train-299ca557a555-checkpoint",
+          "kind": "checkpoint",
+          "path": "/Volumes/OWC Envoy Pro FX/milaidy/milaidy/docs/ops/autonomy/reports/ckpt-train-299ca557a555.checkpoint.json",
+          "createdAt": 1771371148371
+        },
+        {
+          "id": "train-299ca557a555-manifest",
+          "kind": "manifest",
+          "path": "/Volumes/OWC Envoy Pro FX/milaidy/milaidy/docs/ops/autonomy/reports/p4-012-013-training-job-20260217.training-job.json",
+          "createdAt": 1771371148371
+        },
+        {
+          "id": "train-299ca557a555-report",
+          "kind": "report",
+          "path": "/Volumes/OWC Envoy Pro FX/milaidy/milaidy/docs/ops/autonomy/reports/p4-012-013-training-job-20260217.training-job.md",
+          "createdAt": 1771371148372
+        }
+      ]
+    }
+  ]
+}

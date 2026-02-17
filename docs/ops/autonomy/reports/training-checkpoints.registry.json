@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "checkpoints": [
+    {
+      "id": "ckpt-train-299ca557a555",
+      "label": "p4-012-013-training-job-20260217",
+      "artifactPath": "/Volumes/OWC Envoy Pro FX/milaidy/milaidy/docs/ops/autonomy/reports/ckpt-train-299ca557a555.checkpoint.json",
+      "createdAt": 1771371148370,
+      "metrics": {
+        "finalAverageReward": 0.4266666666666667,
+        "evaluationAverageReward": 0.3666666666666667
+      },
+      "experimentRunId": "train-299ca557a555"
+    }
+  ]
+}
