@@ -25,6 +25,7 @@ Contents:
 - `phase1-quarantine-review-ui-2026-02-17.md`: `P1-038` governance quarantine review UI wiring and validation evidence.
 - `phase1-preference-source-scope-ui-2026-02-17.md`: `P1-039` preference source/scope visibility UI implementation and validation evidence.
 - `phase1-trust-feature-weight-strategy-2026-02-17.md`: `P1-029` trust feature set and weighting strategy definition.
+- `phase1-trust-ml-baseline-2026-02-17.md`: `P1-031` logistic-regression trust classifier baseline implementation and comparison evidence.
 - `phase1-trust-override-policy-2026-02-17.md`: `P1-035` trust override governance policy + audit event enforcement evidence.
 - `phase1-retrieval-rank-guardrails-2026-02-17.md`: `P1-034` retrieval rank tuning configuration guardrails + runtime sanitization evidence.
 - `phase1-drift-report-persistence-2026-02-17.md`: `P1-014` durable drift report persistence in execution event logs.
