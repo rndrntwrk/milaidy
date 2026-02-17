@@ -165,6 +165,7 @@ interface AutonomyServiceLike {
   getExecutionPipeline?(): import("../autonomy/workflow/types.js").ToolExecutionPipelineInterface | null;
   getWorkflowEngine?(): import("../autonomy/adapters/workflow/types.js").WorkflowEngine | null;
   getAuditRetentionManager?(): import("../autonomy/domains/governance/retention-manager.js").AuditRetentionManagerInterface | null;
+  getRoleHealth?(): import("../autonomy/service.js").AutonomyRoleHealthSnapshot;
 }
 
 /** Helper to retrieve the AutonomyService from a runtime (may be null). */
@@ -5479,6 +5480,60 @@ async function handleRequest(
   // Autonomy is always enabled.
   if (method === "GET" && pathname === "/api/agent/autonomy") {
     json(res, { enabled: true });
+    return;
+  }
+
+  // ── GET /api/agent/autonomy/roles/health ─────────────────────────────
+  if (method === "GET" && pathname === "/api/agent/autonomy/roles/health") {
+    try {
+      const autonomySvc = getAutonomySvc(state.runtime);
+      const roleHealth = autonomySvc?.getRoleHealth?.();
+      if (!roleHealth) {
+        error(res, "Autonomy role health is unavailable", 503);
+        return;
+      }
+
+      json(res, {
+        ok: true,
+        checkedAt: roleHealth.checkedAt,
+        summary: roleHealth.summary,
+        roles: roleHealth.roles,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      error(res, msg, 500);
+    }
+    return;
+  }
+
+  // ── GET /api/agent/autonomy/roles/readiness ──────────────────────────
+  if (
+    method === "GET" &&
+    pathname === "/api/agent/autonomy/roles/readiness"
+  ) {
+    try {
+      const autonomySvc = getAutonomySvc(state.runtime);
+      const roleHealth = autonomySvc?.getRoleHealth?.();
+      if (!roleHealth) {
+        error(res, "Autonomy role readiness is unavailable", 503);
+        return;
+      }
+
+      const ready = roleHealth.summary.ready;
+      json(
+        res,
+        {
+          ok: ready,
+          ready,
+          checkedAt: roleHealth.checkedAt,
+          summary: roleHealth.summary,
+        },
+        ready ? 200 : 503,
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      error(res, msg, 500);
+    }
     return;
   }
 

@@ -370,7 +370,7 @@ Sprint chunks:
 - [ ] P3-007 Implement transport layer (REST/gRPC) or explicit in-process boundary adapters. [STATUS: PARTIAL]
 - [ ] P3-008 Enforce role auth and request validation on every call. [STATUS: PARTIAL]
 - [ ] P3-009 Implement retries/timeouts/circuit breakers for role calls. [STATUS: PARTIAL]
-- [ ] P3-010 Implement per-role health checks and readiness endpoints. [STATUS: PARTIAL]
+- [ ] P3-010 Implement per-role health checks and readiness endpoints. [STATUS: CODED]
 
 ### 3.C State Externalization and Event Log
 

@@ -166,6 +166,93 @@ const paths: Record<string, PathItem> = {
     },
   },
 
+  "/api/agent/autonomy/roles/health": {
+    get: {
+      summary: "Get per-role health status",
+      operationId: "getAutonomyRoleHealth",
+      tags: ["Autonomy"],
+      responses: {
+        "200": {
+          description: "Role health snapshot",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean" },
+                  checkedAt: { type: "number" },
+                  summary: {
+                    type: "object",
+                    properties: {
+                      ready: { type: "boolean" },
+                      healthy: { type: "boolean" },
+                      totalRoles: { type: "number" },
+                      readyRoles: { type: "number" },
+                      healthyRoles: { type: "number" },
+                      unavailableRoles: { type: "array", items: { type: "string" } },
+                    },
+                  },
+                  roles: {
+                    type: "object",
+                    additionalProperties: {
+                      type: "object",
+                      properties: {
+                        role: { type: "string" },
+                        available: { type: "boolean" },
+                        ready: { type: "boolean" },
+                        healthy: { type: "boolean" },
+                        requiredMethods: { type: "array", items: { type: "string" } },
+                        missingMethods: { type: "array", items: { type: "string" } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        "503": { description: "Service unavailable" },
+      },
+    },
+  },
+
+  "/api/agent/autonomy/roles/readiness": {
+    get: {
+      summary: "Get role readiness gate status",
+      operationId: "getAutonomyRoleReadiness",
+      tags: ["Autonomy"],
+      responses: {
+        "200": {
+          description: "Roles are ready",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean" },
+                  ready: { type: "boolean" },
+                  checkedAt: { type: "number" },
+                  summary: {
+                    type: "object",
+                    properties: {
+                      ready: { type: "boolean" },
+                      healthy: { type: "boolean" },
+                      totalRoles: { type: "number" },
+                      readyRoles: { type: "number" },
+                      healthyRoles: { type: "number" },
+                      unavailableRoles: { type: "array", items: { type: "string" } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        "503": { description: "Roles are not ready or service unavailable" },
+      },
+    },
+  },
+
   "/api/agent/autonomy/workflows/start": {
     post: {
       summary: "Start a workflow execution",
