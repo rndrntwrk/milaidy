@@ -17,6 +17,9 @@ Output:
 - `docs/ops/autonomy/reports/*.tool-contracts.json`
 - `docs/ops/autonomy/reports/*.tool-contracts.md`
 
+Non-zero exit means uncovered runtime actions were detected.
+Use `--fail-on-missing=false` if you need report-only mode.
+
 Runtime-inclusive inventory (includes discovered runtime/custom actions):
 
 ```bash
