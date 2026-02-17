@@ -21,7 +21,7 @@ Contents:
 - `phase3-role-call-resilience-2026-02-17.md`: `P3-009` role-call retries/timeouts/circuit-breaker policy and validation.
 - `phase3-role-health-readiness-2026-02-17.md`: `P3-010` per-role health/readiness endpoint implementation and validation.
 - `phase3-state-transition-persistence-2026-02-17.md`: `P3-012` persistence evidence for invariant decisions and safe-mode transitions.
-- `phase3-state-recovery-replay-2026-02-17.md`: `P3-011/P3-015` persistent state restoration and replay validation evidence.
+- `phase3-state-recovery-replay-2026-02-17.md`: `P3-011/P3-013/P3-015` persistent state restoration, strict snapshot ordering, and replay validation evidence.
 - `phase3-lifecycle-validation-2026-02-17.md`: `P3-031/P3-032/P3-033` lifecycle and safe-mode integration validation.
 - `phase3-concurrency-consistency-2026-02-17.md`: `P3-035` concurrency consistency validation for orchestrated lifecycle execution.
 - `phase3-role-telemetry-2026-02-17.md`: `P3-028` role-level telemetry implementation and validation.

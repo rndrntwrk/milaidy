@@ -52,6 +52,34 @@ describe("PersistentStateMachine", () => {
     expect(sql).toContain("executing");
   });
 
+  it("serializes snapshot writes in transition order", async () => {
+    const persistedStates: string[] = [];
+    const exec = vi.fn().mockImplementation(async (sql: string) => {
+      if (sql.includes("INSERT INTO autonomy_state")) {
+        const match = sql.match(/VALUES \('([^']+)'/);
+        const state = match?.[1] ?? "unknown";
+        // Simulate slower first write to expose ordering races.
+        if (state === "executing") {
+          await new Promise((resolve) => setTimeout(resolve, 40));
+        } else {
+          await new Promise((resolve) => setTimeout(resolve, 1));
+        }
+        persistedStates.push(state);
+      }
+      return { rows: [], columns: [] };
+    });
+    const inner = new KernelStateMachine();
+    const adapter = makeMockAdapter(exec);
+    const psm = new PersistentStateMachine(inner, adapter);
+
+    psm.transition("tool_validated"); // idle -> executing
+    psm.transition("execution_complete"); // executing -> verifying
+
+    await vi.waitFor(() => {
+      expect(persistedStates).toEqual(["executing", "verifying"]);
+    });
+  });
+
   it("does not snapshot on rejected transition", async () => {
     const exec = vi.fn().mockResolvedValue({ rows: [], columns: [] });
     const inner = new KernelStateMachine();
@@ -76,6 +104,9 @@ describe("PersistentStateMachine", () => {
 
     // Move to a non-idle state first
     psm.transition("tool_validated");
+    await vi.waitFor(() => {
+      expect(exec).toHaveBeenCalledTimes(1);
+    });
     exec.mockClear();
 
     psm.reset();
@@ -121,6 +152,8 @@ describe("PersistentStateMachine", () => {
       expect(result.consecutiveErrors).toBe(3);
       expect(psm.currentState).toBe("safe_mode");
       expect(psm.consecutiveErrors).toBe(3);
+      const sql = exec.mock.calls[0][0] as string;
+      expect(sql).toContain("ORDER BY snapshot_at DESC, id DESC");
     });
 
     it("replays state from idle when inner machine has no restoreSnapshot support", async () => {
@@ -182,7 +215,7 @@ describe("PersistentStateMachine", () => {
       const snapshots: Array<{ state: string; consecutiveErrors: number }> = [];
       const exec = vi.fn().mockImplementation(async (sql: string) => {
         if (sql.includes("INSERT INTO autonomy_state")) {
-          const match = sql.match(/VALUES \('([^']+)',\s*(\d+),\s*'([^']+)'\)/);
+          const match = sql.match(/VALUES \('([^']+)',\s*(\d+)/);
           snapshots.push({
             state: match?.[1] ?? "idle",
             consecutiveErrors: Number(match?.[2] ?? 0),

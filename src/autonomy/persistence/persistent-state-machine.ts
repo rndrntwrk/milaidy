@@ -27,6 +27,7 @@ import type { AutonomyDbAdapter } from "./db-adapter.js";
 export class PersistentStateMachine implements KernelStateMachineInterface {
   private inner: KernelStateMachineInterface;
   private adapter: AutonomyDbAdapter;
+  private snapshotQueue: Promise<void> = Promise.resolve();
 
   constructor(inner: KernelStateMachineInterface, adapter: AutonomyDbAdapter) {
     this.inner = inner;
@@ -45,12 +46,8 @@ export class PersistentStateMachine implements KernelStateMachineInterface {
     const result = this.inner.transition(trigger);
 
     if (result.accepted) {
-      // Fire-and-forget snapshot — don't block the transition
-      this.snapshot().catch((err) => {
-        logger.error(
-          `[autonomy:persistent-sm] Snapshot failed: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      });
+      // Serialize snapshots to preserve transition ordering across async DB writes.
+      this.enqueueSnapshot();
     }
 
     return result;
@@ -62,12 +59,7 @@ export class PersistentStateMachine implements KernelStateMachineInterface {
 
   reset(): void {
     this.inner.reset();
-    // Fire-and-forget snapshot after reset
-    this.snapshot().catch((err) => {
-      logger.error(
-        `[autonomy:persistent-sm] Snapshot after reset failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    });
+    this.enqueueSnapshot();
   }
 
   /**
@@ -83,7 +75,7 @@ export class PersistentStateMachine implements KernelStateMachineInterface {
         `SELECT state, consecutive_errors
          FROM autonomy_state
          WHERE agent_id = '${esc(this.adapter.agentId)}'
-         ORDER BY id DESC
+         ORDER BY snapshot_at DESC, id DESC
          LIMIT 1`,
       );
 
@@ -119,10 +111,30 @@ export class PersistentStateMachine implements KernelStateMachineInterface {
 
   // ---------- Private ----------
 
-  private async snapshot(): Promise<void> {
+  private enqueueSnapshot(): void {
+    const captured = {
+      state: this.inner.currentState,
+      consecutiveErrors: this.inner.consecutiveErrors,
+      snapshotAt: new Date().toISOString(),
+    };
+
+    this.snapshotQueue = this.snapshotQueue.then(async () => {
+      await this.snapshot(captured);
+    }).catch((err) => {
+      logger.error(
+        `[autonomy:persistent-sm] Snapshot failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    });
+  }
+
+  private async snapshot(input: {
+    state: KernelState;
+    consecutiveErrors: number;
+    snapshotAt: string;
+  }): Promise<void> {
     await this.adapter.executeRaw(
-      `INSERT INTO autonomy_state (state, consecutive_errors, agent_id)
-       VALUES ('${esc(this.inner.currentState)}', ${this.inner.consecutiveErrors}, '${esc(this.adapter.agentId)}')`,
+      `INSERT INTO autonomy_state (state, consecutive_errors, agent_id, snapshot_at)
+       VALUES ('${esc(input.state)}', ${input.consecutiveErrors}, '${esc(this.adapter.agentId)}', '${input.snapshotAt}'::timestamptz)`,
     );
   }
 }
