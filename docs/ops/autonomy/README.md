@@ -16,6 +16,7 @@ Contents:
 - `phase3-role-authz-guards-2026-02-17.md`: `P3-034` validation that orchestrated roles cannot bypass contract/approval guards.
 - `phase3-lifecycle-validation-2026-02-17.md`: `P3-031/P3-032/P3-033` lifecycle and safe-mode integration validation.
 - `phase3-concurrency-consistency-2026-02-17.md`: `P3-035` concurrency consistency validation for orchestrated lifecycle execution.
+- `phase3-role-telemetry-2026-02-17.md`: `P3-028` role-level telemetry implementation and validation.
 - `reports/`: generated run artifacts (`.json` and `.md` outputs).
 
 Primary scripts:
@@ -46,3 +47,5 @@ Provisioned observability:
 - Event bus: `autonomy:decision:logged` emits normalized validation/approval/verification/invariant outcomes per pipeline execution.
 - Event bus: `autonomy:tool:postcondition:checked` includes `failureTaxonomy` (`check_failed`, `check_error`, `timeout`) for verification analytics.
 - Metric: `autonomy_invariant_checks_total{result=pass|fail|error}` increments on every invariant check run.
+- Metric: `autonomy_role_executions_total{role,outcome}` tracks role-level success/failure outcomes.
+- Metric: `autonomy_role_latency_ms{role}` tracks planner/executor/verifier/memory_writer/auditor/orchestrator latencies.

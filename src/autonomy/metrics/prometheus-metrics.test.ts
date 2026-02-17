@@ -24,6 +24,8 @@ import {
   recordInvariantCheck,
   recordKernelUp,
   recordQuarantineSize,
+  recordRoleExecution,
+  recordRoleLatencyMs,
   recordDriftAlert,
   recordGoalCount,
   recordEventAppended,
@@ -184,5 +186,19 @@ describe("Autonomy Prometheus Metrics", () => {
     const snap = metrics.getSnapshot();
     const key = 'autonomy_trust_sources_total:{"source":"user"}';
     expect(snap.counters[key]).toBeGreaterThan(0);
+  });
+
+  it("recordRoleExecution increments role counter", () => {
+    recordRoleExecution("planner", "success");
+    const snap = metrics.getSnapshot();
+    const key = 'autonomy_role_executions_total:{"role":"planner","outcome":"success"}';
+    expect(snap.counters[key]).toBeGreaterThan(0);
+  });
+
+  it("recordRoleLatencyMs records role histogram", () => {
+    recordRoleLatencyMs("orchestrator", 42);
+    const snap = metrics.getSnapshot();
+    const key = 'autonomy_role_latency_ms:{"role":"orchestrator"}';
+    expect(snap.histograms[key]).toBeDefined();
   });
 });

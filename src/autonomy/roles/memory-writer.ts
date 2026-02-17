@@ -8,6 +8,10 @@
  */
 
 import type { Memory } from "@elizaos/core";
+import {
+  recordRoleExecution,
+  recordRoleLatencyMs,
+} from "../metrics/prometheus-metrics.js";
 import type {
   MemoryGate,
   MemoryGateDecision,
@@ -40,34 +44,59 @@ export class GatedMemoryWriter implements MemoryWriterRole {
   constructor(private readonly memoryGate: MemoryGate) {}
 
   async write(request: MemoryWriteRequest): Promise<MemoryGateDecision> {
-    const memory = toMemory(request);
-    return this.memoryGate.evaluate(memory, request.source);
+    const startedAt = Date.now();
+    try {
+      const memory = toMemory(request);
+      const decision = await this.memoryGate.evaluate(memory, request.source);
+      recordRoleLatencyMs("memory_writer", Date.now() - startedAt);
+      recordRoleExecution(
+        "memory_writer",
+        decision.action === "reject" ? "failure" : "success",
+      );
+      return decision;
+    } catch (error) {
+      recordRoleLatencyMs("memory_writer", Date.now() - startedAt);
+      recordRoleExecution("memory_writer", "failure");
+      throw error;
+    }
   }
 
   async writeBatch(requests: MemoryWriteRequest[]): Promise<MemoryWriteReport> {
-    const report: MemoryWriteReport = {
-      total: requests.length,
-      allowed: 0,
-      quarantined: 0,
-      rejected: 0,
-    };
+    const startedAt = Date.now();
+    try {
+      const report: MemoryWriteReport = {
+        total: requests.length,
+        allowed: 0,
+        quarantined: 0,
+        rejected: 0,
+      };
 
-    for (const request of requests) {
-      const decision = await this.write(request);
-      switch (decision.action) {
-        case "allow":
-          report.allowed++;
-          break;
-        case "quarantine":
-          report.quarantined++;
-          break;
-        case "reject":
-          report.rejected++;
-          break;
+      for (const request of requests) {
+        const decision = await this.write(request);
+        switch (decision.action) {
+          case "allow":
+            report.allowed++;
+            break;
+          case "quarantine":
+            report.quarantined++;
+            break;
+          case "reject":
+            report.rejected++;
+            break;
+        }
       }
-    }
 
-    return report;
+      recordRoleLatencyMs("memory_writer", Date.now() - startedAt);
+      recordRoleExecution(
+        "memory_writer",
+        report.rejected > 0 ? "failure" : "success",
+      );
+      return report;
+    } catch (error) {
+      recordRoleLatencyMs("memory_writer", Date.now() - startedAt);
+      recordRoleExecution("memory_writer", "failure");
+      throw error;
+    }
   }
 
   getStats(): MemoryGateStats {

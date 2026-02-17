@@ -44,6 +44,12 @@ Tune after first full baseline window.
 - Condition: `milaidy_autonomy_event_store_size > 50000` for `1h`.
 - Action: verify retention and archiving jobs.
 
+9. `role_failure_rate_high` (`P2`)
+- Condition: any role failure rate `> 2%` over `10m`.
+- Query:
+`sum by (role) (increase(milaidy_autonomy_role_executions_total{outcome="failure"}[10m])) / clamp_min(sum by (role) (increase(milaidy_autonomy_role_executions_total[10m])), 1) > 0.02`
+- Action: inspect failing role path and recent orchestration traces.
+
 ## Escalation Rules
 
 - Two `P1` events in `30m`: open incident and assign incident commander.
@@ -54,4 +60,3 @@ Tune after first full baseline window.
 
 - Weekly threshold review until baseline stabilizes.
 - Monthly review after stabilization.
-
