@@ -32,6 +32,8 @@ import type {
 } from "./types.js";
 
 export class KernelOrchestrator implements RoleOrchestrator {
+  private executionQueue: Promise<void> = Promise.resolve();
+
   constructor(
     private readonly planner: PlannerRole,
     private readonly executor: ExecutorRole,
@@ -44,6 +46,26 @@ export class KernelOrchestrator implements RoleOrchestrator {
   ) {}
 
   async execute(request: OrchestratedRequest): Promise<OrchestratedResult> {
+    // Serialize orchestration executions to keep FSM transitions and
+    // role outputs consistent under concurrent requests.
+    let releaseQueueSlot!: () => void;
+    const queueSlot = new Promise<void>((resolve) => {
+      releaseQueueSlot = resolve;
+    });
+    const previous = this.executionQueue;
+    this.executionQueue = previous.then(() => queueSlot);
+
+    await previous;
+    try {
+      return await this.executeInternal(request);
+    } finally {
+      releaseQueueSlot();
+    }
+  }
+
+  private async executeInternal(
+    request: OrchestratedRequest,
+  ): Promise<OrchestratedResult> {
     const startTime = Date.now();
     const executions: PipelineResult[] = [];
     const verificationReports: VerificationReport[] = [];

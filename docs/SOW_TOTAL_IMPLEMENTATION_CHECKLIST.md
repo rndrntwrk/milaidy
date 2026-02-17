@@ -13,8 +13,8 @@ Current status pre-check snapshot:
 - Evidence basis: static repo review of autonomy kernel, API, persistence, and app UI code paths.
 - Summary counts:
 - `307` total checklist items.
-- `103` items tagged `STATUS: CODED`.
-- `87` items tagged `STATUS: PARTIAL`.
+- `104` items tagged `STATUS: CODED`.
+- `86` items tagged `STATUS: PARTIAL`.
 - `117` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
@@ -407,7 +407,7 @@ Sprint chunks:
 - [ ] P3-032 Validate full lifecycle under partial failures. [STATUS: CODED]
 - [ ] P3-033 Validate safe-mode trigger and recovery behavior. [STATUS: CODED]
 - [ ] P3-034 Validate no role bypasses contract or auth. [STATUS: CODED]
-- [ ] P3-035 Validate state consistency under concurrency. [STATUS: PARTIAL]
+- [ ] P3-035 Validate state consistency under concurrency. [STATUS: CODED]
 
 ### 3.G Observability and Drift Reduction
 
