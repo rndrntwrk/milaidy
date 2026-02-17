@@ -304,11 +304,11 @@ Sprint chunks:
 
 ### 2.F Saga and Compensation
 
-- [ ] P2-034 Define compensation eligibility per tool. [STATUS: PARTIAL]
-- [ ] P2-035 Implement compensation registry entries for reversible tools. [STATUS: PARTIAL]
+- [ ] P2-034 Define compensation eligibility per tool. [STATUS: CODED]
+- [ ] P2-035 Implement compensation registry entries for reversible tools. [STATUS: CODED]
 - [ ] P2-036 Implement compensation execution policy on downstream failure. [STATUS: PARTIAL]
 - [ ] P2-037 Log compensation attempts/outcomes with reason. [STATUS: PARTIAL]
-- [ ] P2-038 Add compensation simulation tests. [STATUS: PARTIAL]
+- [ ] P2-038 Add compensation simulation tests. [STATUS: CODED]
 - [ ] P2-039 Define unresolved compensation incident workflow.
 
 ### 2.G Approval Gate and Risk Controls

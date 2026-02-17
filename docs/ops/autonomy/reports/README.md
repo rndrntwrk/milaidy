@@ -5,6 +5,7 @@ This directory stores generated Sprint 1 operational artifacts:
 - red-team baseline measurements
 - tool contract inventories
 - post-condition coverage inventories
+- compensation coverage inventories
 - event projection rebuild reports
 - metrics cardinality analysis
 

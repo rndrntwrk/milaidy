@@ -346,6 +346,30 @@ describe("ToolExecutionPipeline", () => {
       expect(result.success).toBe(false);
       expect(result.compensation?.attempted).toBe(false);
     });
+
+    it("records attempted compensation failure for manual fallback tools", async () => {
+      const validator = createMockValidator({ riskClass: "reversible" });
+      const verifier = createMockVerifier({
+        status: "failed",
+        hasCriticalFailure: true,
+      });
+      const handler = createSuccessHandler({ taskId: "task-123" });
+      const { pipeline } = createPipeline({ validator, verifier });
+
+      const result = await pipeline.execute(
+        makeCall({
+          tool: "CREATE_TASK",
+          params: { request: "create nightly task" },
+        }),
+        handler,
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.compensation?.attempted).toBe(true);
+      expect(result.compensation?.success).toBe(false);
+      expect(result.compensation?.detail).toContain("Manual compensation required");
+      expect(result.compensation?.detail).toContain("task-123");
+    });
   });
 
   describe("event store ordering", () => {

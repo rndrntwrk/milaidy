@@ -4,7 +4,12 @@
  */
 
 export { CompensationRegistry } from "./compensation-registry.js";
-export { registerBuiltinCompensations } from "./compensations/index.js";
+export {
+  BUILTIN_COMPENSATION_ELIGIBILITY,
+  listBuiltinCompensationEligibility,
+  listBuiltinCompensationTools,
+  registerBuiltinCompensations,
+} from "./compensations/index.js";
 export { InMemoryEventStore } from "./event-store.js";
 export { computeEventHash, verifyEventChain } from "./event-integrity.js";
 export {
@@ -28,6 +33,7 @@ export type {
   EventChainVerification,
   EventHashInput,
 } from "./event-integrity.js";
+export type { CompensationEligibility } from "./compensations/eligibility.js";
 export type {
   RequestProjection,
   RequestProjectionStatus,
