@@ -13,8 +13,8 @@ Current status pre-check snapshot:
 - Evidence basis: static repo review of autonomy kernel, API, persistence, and app UI code paths.
 - Summary counts:
 - `307` total checklist items.
-- `151` items tagged `STATUS: CODED`.
-- `49` items tagged `STATUS: PARTIAL`.
+- `155` items tagged `STATUS: CODED`.
+- `45` items tagged `STATUS: PARTIAL`.
 - `107` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
@@ -244,10 +244,10 @@ Sprint chunks:
 
 ### 1.F Phase Gate
 
-- [ ] P1-043 Validate all identity/memory APIs with integration tests. [STATUS: PARTIAL]
-- [ ] P1-044 Validate fail-closed identity integrity behavior. [STATUS: PARTIAL]
-- [ ] P1-045 Validate quarantine lifecycle end-to-end. [STATUS: PARTIAL]
-- [ ] P1-046 Validate drift alerts fire at configured thresholds. [STATUS: PARTIAL]
+- [ ] P1-043 Validate all identity/memory APIs with integration tests. [STATUS: CODED]
+- [ ] P1-044 Validate fail-closed identity integrity behavior. [STATUS: CODED]
+- [ ] P1-045 Validate quarantine lifecycle end-to-end. [STATUS: CODED]
+- [ ] P1-046 Validate drift alerts fire at configured thresholds. [STATUS: CODED]
 - [ ] P1-047 Publish Phase 1 acceptance report and sign-off.
 
 ---
