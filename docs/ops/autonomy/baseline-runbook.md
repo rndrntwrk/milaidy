@@ -60,6 +60,17 @@ npm run autonomy:metrics:cardinality -- --file /tmp/metrics.txt --out docs/ops/a
 
 Non-zero exit means cardinality threshold violations were detected.
 
+## 5) Long-Horizon Comparison Run (Phase 3)
+
+```bash
+npm run autonomy:long-horizon:run -- --cycles 12 --compare baseline-sprint1-smoke
+```
+
+Output:
+- `docs/ops/autonomy/reports/*.long-horizon.json`
+- `docs/ops/autonomy/reports/*.long-horizon.md`
+- `docs/ops/autonomy/reports/state/baseline-snapshots.json`
+
 ## Acceptance Attachments (Phase 0)
 
 Attach to checklist evidence:
