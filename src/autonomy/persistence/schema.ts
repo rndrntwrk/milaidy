@@ -17,6 +17,7 @@ import {
   serial,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -39,6 +40,10 @@ export const autonomyEventsTable = pgTable(
     payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
     /** Correlation ID linking related events across subsystems. */
     correlationId: text("correlation_id"),
+    /** Previous hash in the append-only event chain. */
+    prevHash: text("prev_hash"),
+    /** Event hash for tamper-evident chain validation. */
+    eventHash: text("event_hash").notNull(),
     /** Agent ID that produced this event. */
     agentId: text("agent_id"),
     /** Epoch-ms timestamp from the in-memory event. */
@@ -52,6 +57,7 @@ export const autonomyEventsTable = pgTable(
     index("idx_autonomy_events_type").on(table.type),
     index("idx_autonomy_events_agent_id").on(table.agentId),
     index("idx_autonomy_events_timestamp").on(table.timestamp),
+    uniqueIndex("idx_autonomy_events_event_hash").on(table.eventHash),
   ],
 );
 

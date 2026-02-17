@@ -43,6 +43,8 @@ describe("Autonomy persistence schema", () => {
       expect(cols).toContain("type");
       expect(cols).toContain("payload");
       expect(cols).toContain("correlation_id");
+      expect(cols).toContain("prev_hash");
+      expect(cols).toContain("event_hash");
       expect(cols).toContain("agent_id");
       expect(cols).toContain("timestamp");
       expect(cols).toContain("created_at");
@@ -53,7 +55,9 @@ describe("Autonomy persistence schema", () => {
       expect(idxs).toContain("idx_autonomy_events_request_id");
       expect(idxs).toContain("idx_autonomy_events_correlation_id");
       expect(idxs).toContain("idx_autonomy_events_type");
+      expect(idxs).toContain("idx_autonomy_events_agent_id");
       expect(idxs).toContain("idx_autonomy_events_timestamp");
+      expect(idxs).toContain("idx_autonomy_events_event_hash");
     });
   });
 

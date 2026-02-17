@@ -296,11 +296,11 @@ Sprint chunks:
 ### 2.E Event Sourcing and State Reconstruction
 
 - [ ] P2-028 Define execution event schema and versioning. [STATUS: CODED]
-- [ ] P2-029 Implement append-only durable event store. [STATUS: PARTIAL]
+- [ ] P2-029 Implement append-only durable event store. [STATUS: CODED]
 - [ ] P2-030 Implement correlation IDs across pipeline/workflows. [STATUS: CODED]
 - [ ] P2-031 Implement projection/rebuild utilities. [STATUS: CODED]
 - [ ] P2-032 Implement event retention and archival policy. [STATUS: PARTIAL]
-- [ ] P2-033 Implement event integrity checks and backfill tooling. [STATUS: PARTIAL]
+- [ ] P2-033 Implement event integrity checks and backfill tooling. [STATUS: CODED]
 
 ### 2.F Saga and Compensation
 
@@ -335,7 +335,7 @@ Sprint chunks:
 - [ ] P2-053 Ensure all pipeline events are logged with timestamp and correlation ID. [STATUS: CODED]
 - [ ] P2-054 Ensure decision logs include validation/approval/verification/invariant outcomes. [STATUS: PARTIAL]
 - [ ] P2-055 Ensure audit exports can be generated for compliance review. [STATUS: PARTIAL]
-- [ ] P2-056 Validate tamper-evident or append-only guarantees. [STATUS: PARTIAL]
+- [ ] P2-056 Validate tamper-evident or append-only guarantees. [STATUS: CODED]
 
 ### 2.J Test and Performance Gate
 

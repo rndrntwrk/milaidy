@@ -15,6 +15,7 @@ import type {
   ExecutionEvent,
   ExecutionEventType,
 } from "../workflow/types.js";
+import { computeEventHash } from "../workflow/event-integrity.js";
 import type { AutonomyDbAdapter } from "./db-adapter.js";
 import type { AutonomyEventRow } from "./schema.js";
 
@@ -42,9 +43,31 @@ export class PgEventStore implements EventStoreInterface {
     const agentId = this.adapter.agentId;
 
     try {
+      const { rows: hashRows } = await this.adapter.executeRaw(
+        `SELECT event_hash
+         FROM autonomy_events
+         WHERE agent_id = '${escapeSql(agentId)}'
+         ORDER BY id DESC
+         LIMIT 1`,
+      );
+      const prevHashValue = hashRows[0]?.event_hash ?? hashRows[0]?.EVENT_HASH;
+      const prevHash =
+        typeof prevHashValue === "string" && prevHashValue.length > 0
+          ? prevHashValue
+          : undefined;
+      const timestampMs = Date.parse(timestamp);
+      const eventHash = computeEventHash({
+        requestId,
+        type,
+        payload,
+        timestamp: Number.isNaN(timestampMs) ? Date.now() : timestampMs,
+        correlationId,
+        prevHash,
+      });
+
       const { rows } = await this.adapter.executeRaw(
-        `INSERT INTO autonomy_events (request_id, type, payload, correlation_id, agent_id, timestamp)
-         VALUES ('${escapeSql(requestId)}', '${escapeSql(type)}', '${escapeSql(JSON.stringify(payload))}'::jsonb, ${correlationId ? `'${escapeSql(correlationId)}'` : "NULL"}, '${escapeSql(agentId)}', '${timestamp}'::timestamptz)
+        `INSERT INTO autonomy_events (request_id, type, payload, correlation_id, agent_id, timestamp, prev_hash, event_hash)
+         VALUES ('${escapeSql(requestId)}', '${escapeSql(type)}', '${escapeSql(JSON.stringify(payload))}'::jsonb, ${correlationId ? `'${escapeSql(correlationId)}'` : "NULL"}, '${escapeSql(agentId)}', '${timestamp}'::timestamptz, ${prevHash ? `'${escapeSql(prevHash)}'` : "NULL"}, '${escapeSql(eventHash)}')
          RETURNING id`,
       );
 
@@ -62,7 +85,7 @@ export class PgEventStore implements EventStoreInterface {
   async getByRequestId(requestId: string): Promise<ExecutionEvent[]> {
     try {
       const { rows } = await this.adapter.executeRaw(
-        `SELECT id, request_id, type, payload, correlation_id, timestamp
+        `SELECT id, request_id, type, payload, correlation_id, timestamp, prev_hash, event_hash
          FROM autonomy_events
          WHERE request_id = '${escapeSql(requestId)}'
          ORDER BY id ASC`,
@@ -79,7 +102,7 @@ export class PgEventStore implements EventStoreInterface {
   async getByCorrelationId(correlationId: string): Promise<ExecutionEvent[]> {
     try {
       const { rows } = await this.adapter.executeRaw(
-        `SELECT id, request_id, type, payload, correlation_id, timestamp
+        `SELECT id, request_id, type, payload, correlation_id, timestamp, prev_hash, event_hash
          FROM autonomy_events
          WHERE correlation_id = '${escapeSql(correlationId)}'
          ORDER BY id ASC`,
@@ -97,7 +120,7 @@ export class PgEventStore implements EventStoreInterface {
     if (n <= 0) return [];
     try {
       const { rows } = await this.adapter.executeRaw(
-        `SELECT id, request_id, type, payload, correlation_id, timestamp
+        `SELECT id, request_id, type, payload, correlation_id, timestamp, prev_hash, event_hash
          FROM autonomy_events
          ORDER BY id DESC
          LIMIT ${Math.max(0, Math.floor(n))}`,
@@ -171,5 +194,7 @@ function rowToEvent(row: Record<string, unknown>): ExecutionEvent {
         ? new Date(r.timestamp).getTime()
         : Number(r.timestamp ?? 0),
     ...(r.correlation_id ? { correlationId: String(r.correlation_id) } : {}),
+    ...(r.prev_hash ? { prevHash: String(r.prev_hash) } : {}),
+    ...(r.event_hash ? { eventHash: String(r.event_hash) } : {}),
   };
 }

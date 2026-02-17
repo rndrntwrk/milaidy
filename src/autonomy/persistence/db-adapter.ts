@@ -103,10 +103,12 @@ export class AutonomyDbAdapter {
    * Run schema migration: create tables if they don't exist.
    */
   async migrate(): Promise<void> {
-    const { createAutonomyTables } = await import(
-      "./migrations/001_autonomy_tables.js"
+    const { createAutonomyTables } = await import("./migrations/001_autonomy_tables.js");
+    const { addAutonomyEventsHashChain } = await import(
+      "./migrations/002_autonomy_events_hash_chain.js"
     );
     await createAutonomyTables(this);
+    await addAutonomyEventsHashChain(this);
     logger.info("[autonomy:db] Migration complete");
   }
 

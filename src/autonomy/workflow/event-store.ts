@@ -13,6 +13,7 @@ import type {
   ExecutionEvent,
   ExecutionEventType,
 } from "./types.js";
+import { computeEventHash } from "./event-integrity.js";
 
 /** Default maximum number of events to retain. */
 const DEFAULT_MAX_EVENTS = 10_000;
@@ -39,13 +40,28 @@ export class InMemoryEventStore implements EventStoreInterface {
     correlationId?: string,
   ): Promise<number> {
     const sequenceId = this.nextSequenceId++;
+    const timestamp = Date.now();
+    const prevHash =
+      this.events.length > 0
+        ? this.events[this.events.length - 1].eventHash
+        : undefined;
+    const eventHash = computeEventHash({
+      requestId,
+      type,
+      payload,
+      timestamp,
+      correlationId,
+      prevHash,
+    });
     const event: ExecutionEvent = {
       sequenceId,
       requestId,
       type,
       payload,
-      timestamp: Date.now(),
+      timestamp,
       ...(correlationId !== undefined ? { correlationId } : {}),
+      ...(prevHash ? { prevHash } : {}),
+      eventHash,
     };
 
     this.events.push(event);

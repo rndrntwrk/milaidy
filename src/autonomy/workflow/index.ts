@@ -6,6 +6,7 @@
 export { CompensationRegistry } from "./compensation-registry.js";
 export { registerBuiltinCompensations } from "./compensations/index.js";
 export { InMemoryEventStore } from "./event-store.js";
+export { computeEventHash, verifyEventChain } from "./event-integrity.js";
 export {
   rebuildAllRequestProjections,
   rebuildRequestProjection,
@@ -23,6 +24,10 @@ export type {
   ToolActionHandler,
   ToolExecutionPipelineInterface,
 } from "./types.js";
+export type {
+  EventChainVerification,
+  EventHashInput,
+} from "./event-integrity.js";
 export type {
   RequestProjection,
   RequestProjectionStatus,

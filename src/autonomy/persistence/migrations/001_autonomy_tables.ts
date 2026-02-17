@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS autonomy_events (
   type          TEXT         NOT NULL,
   payload       JSONB        NOT NULL DEFAULT '{}'::jsonb,
   correlation_id TEXT,
+  prev_hash     TEXT,
+  event_hash    TEXT         NOT NULL,
   agent_id      TEXT,
   timestamp     TIMESTAMPTZ  NOT NULL,
   created_at    TIMESTAMPTZ  NOT NULL DEFAULT now()
@@ -32,6 +34,8 @@ CREATE INDEX IF NOT EXISTS idx_autonomy_events_agent_id
   ON autonomy_events (agent_id);
 CREATE INDEX IF NOT EXISTS idx_autonomy_events_timestamp
   ON autonomy_events (timestamp);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_autonomy_events_event_hash
+  ON autonomy_events (event_hash);
 
 -- autonomy_goals: goal lifecycle persistence
 CREATE TABLE IF NOT EXISTS autonomy_goals (

@@ -16,6 +16,7 @@ Primary scripts:
 - `npm run autonomy:contracts:inventory`
 - `npm run autonomy:postconditions:coverage`
 - `npm run autonomy:events:rebuild -- --events-file <path-to-events-json>`
+- `npm run autonomy:events:verify -- --events-file <path-to-events-json>`
 
 Provisioned observability:
 - Grafana dashboard: `deploy/grafana/provisioning/dashboards/operational-baseline.json`
