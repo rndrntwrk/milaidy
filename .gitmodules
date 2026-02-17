@@ -9,3 +9,7 @@
 	path = eliza
 	url = https://github.com/elizaos/eliza.git
 	branch = next
+[submodule "benchmarks"]
+	path = benchmarks
+	url = https://github.com/elizaOS/benchmarks.git
+	branch = main
