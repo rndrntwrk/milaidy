@@ -284,6 +284,10 @@ export interface AutonomyRoleHealthSnapshot {
   };
 }
 
+export const KERNEL_STATE_TRANSITION_REQUEST_ID = "kernel-state-transitions";
+export const KERNEL_SAFE_MODE_TRANSITION_REQUEST_ID =
+  "kernel-safe-mode-transitions";
+
 export class MilaidyAutonomyService extends Service {
   static override serviceType = "AUTONOMY" as const;
 
@@ -316,6 +320,7 @@ export class MilaidyAutonomyService extends Service {
   private identityConfig: AutonomyIdentityConfig | null = null;
   private resolvedRetrievalConfig: import("./config.js").AutonomyRetrievalConfig | null = null;
   private enabled = false;
+  private stateTransitionUnsubscribe: (() => void) | null = null;
 
   // Phase 5 — Domains & Governance components
   private domainPackRegistry: import("./domains/registry.js").DomainPackRegistry | null = null;
@@ -498,6 +503,7 @@ export class MilaidyAutonomyService extends Service {
           maxEvents: config.eventStore?.maxEvents ?? 10_000,
           retentionMs: config.eventStore?.retentionMs ?? 0,
         });
+    this.wireStateTransitionPersistence(eventBusRef);
 
     this.compensationRegistry = new _CompensationRegistry();
     _registerBuiltinCompensations(this.compensationRegistry);
@@ -894,6 +900,7 @@ export class MilaidyAutonomyService extends Service {
     this.workflowEngine = new _LocalWorkflowEngine();
     this.approvalGate = new _ApprovalGate();
     this.eventStore = new _InMemoryEventStore();
+    this.wireStateTransitionPersistence(eventBusRef);
     this.compensationRegistry = new _CompensationRegistry();
     _registerBuiltinCompensations(this.compensationRegistry);
     this.compensationIncidentManager = new _CompensationIncidentManager();
@@ -962,6 +969,8 @@ export class MilaidyAutonomyService extends Service {
 
   async disableAutonomy(): Promise<void> {
     if (!this.enabled) return;
+    this.stateTransitionUnsubscribe?.();
+    this.stateTransitionUnsubscribe = null;
     this.memoryGate?.dispose();
     this.approvalGate?.dispose();
     await this.workflowEngine?.close();
@@ -1278,6 +1287,76 @@ export class MilaidyAutonomyService extends Service {
     return this.pilotRunner;
   }
 
+  private wireStateTransitionPersistence(
+    eventBusRef?: { emit: (event: string, payload: unknown) => void },
+  ): void {
+    this.stateTransitionUnsubscribe?.();
+    this.stateTransitionUnsubscribe = null;
+
+    if (!this.stateMachine) return;
+
+    this.stateTransitionUnsubscribe = this.stateMachine.onStateChange(
+      (from, to, trigger) => {
+        const transitionedAt = Date.now();
+        eventBusRef?.emit("autonomy:state:transition", {
+          from,
+          to,
+          trigger,
+          requestId: KERNEL_STATE_TRANSITION_REQUEST_ID,
+        });
+
+        void this.appendKernelTransitionEvent({
+          requestId: KERNEL_STATE_TRANSITION_REQUEST_ID,
+          type: "kernel:state:transition",
+          payload: {
+            from,
+            to,
+            trigger,
+            transitionedAt,
+          },
+        });
+
+        const safeModeEntered = from !== "safe_mode" && to === "safe_mode";
+        const safeModeExited = from === "safe_mode" && to !== "safe_mode";
+        if (!safeModeEntered && !safeModeExited) return;
+
+        void this.appendKernelTransitionEvent({
+          requestId: KERNEL_SAFE_MODE_TRANSITION_REQUEST_ID,
+          type: "kernel:safe-mode:transition",
+          payload: {
+            from,
+            to,
+            trigger,
+            active: to === "safe_mode",
+            transitionedAt,
+          },
+        });
+      },
+    );
+  }
+
+  private async appendKernelTransitionEvent(input: {
+    requestId: string;
+    type: "kernel:state:transition" | "kernel:safe-mode:transition";
+    payload: Record<string, unknown>;
+  }): Promise<void> {
+    if (!this.eventStore) return;
+    try {
+      await this.eventStore.append(
+        input.requestId,
+        input.type,
+        input.payload,
+        `${input.requestId}-${Date.now()}`,
+      );
+    } catch (err) {
+      logger.warn(
+        `[autonomy-service] Failed to persist ${input.type}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+  }
+
   private describeRoleHealth(
     role: AutonomyRoleName,
     instance: unknown,
@@ -1313,6 +1392,8 @@ export class MilaidyAutonomyService extends Service {
   // ---------- Lifecycle ----------
 
   async stop(): Promise<void> {
+    this.stateTransitionUnsubscribe?.();
+    this.stateTransitionUnsubscribe = null;
     this.memoryGate?.dispose();
     this.approvalGate?.dispose();
     await this.workflowEngine?.close();

@@ -15,6 +15,7 @@ Contents:
 - `phase3-role-dataflow-2026-02-17.md`: `P3-030` role dataflow integration evidence across planner/executor/verifier/memory/auditor.
 - `phase3-role-authz-guards-2026-02-17.md`: `P3-034` validation that orchestrated roles cannot bypass contract/approval guards.
 - `phase3-role-health-readiness-2026-02-17.md`: `P3-010` per-role health/readiness endpoint implementation and validation.
+- `phase3-state-transition-persistence-2026-02-17.md`: `P3-012` persistence evidence for invariant decisions and safe-mode transitions.
 - `phase3-lifecycle-validation-2026-02-17.md`: `P3-031/P3-032/P3-033` lifecycle and safe-mode integration validation.
 - `phase3-concurrency-consistency-2026-02-17.md`: `P3-035` concurrency consistency validation for orchestrated lifecycle execution.
 - `phase3-role-telemetry-2026-02-17.md`: `P3-028` role-level telemetry implementation and validation.
@@ -63,6 +64,8 @@ Provisioned observability:
 - Event bus: `autonomy:tool:postcondition:checked` includes `failureTaxonomy` (`check_failed`, `check_error`, `timeout`) for verification analytics.
 - Event bus: `autonomy:safe-mode:entered`, `autonomy:safe-mode:exited`, and `autonomy:safe-mode:exit-denied` emit safe-mode lifecycle notifications.
 - Event bus: `autonomy:safe-mode:tool-blocked` emits denied execution attempts for blocked tool classes during safe mode.
+- Event bus: `autonomy:state:transition` emits every kernel FSM transition with trigger metadata.
+- Event store: `kernel-state-transitions` and `kernel-safe-mode-transitions` persist kernel and safe-mode transition history.
 - Metric: `autonomy_invariant_checks_total{result=pass|fail|error}` increments on every invariant check run.
 - Metric: `autonomy_role_executions_total{role,outcome}` tracks role-level success/failure outcomes.
 - Metric: `autonomy_role_latency_ms{role}` tracks planner/executor/verifier/memory_writer/auditor/orchestrator latencies.

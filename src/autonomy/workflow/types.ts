@@ -23,7 +23,9 @@ export type ExecutionEventType =
   | "tool:compensated"
   | "tool:compensation:incident:opened"
   | "tool:invariants:checked"
-  | "tool:decision:logged";
+  | "tool:decision:logged"
+  | "kernel:state:transition"
+  | "kernel:safe-mode:transition";
 
 /**
  * A single event in the execution log.

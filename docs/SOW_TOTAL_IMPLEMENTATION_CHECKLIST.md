@@ -375,7 +375,7 @@ Sprint chunks:
 ### 3.C State Externalization and Event Log
 
 - [ ] P3-011 Externalize task state to persistent store. [STATUS: PARTIAL]
-- [ ] P3-012 Persist invariant decisions and safe-mode transitions. [STATUS: PARTIAL]
+- [ ] P3-012 Persist invariant decisions and safe-mode transitions. [STATUS: CODED]
 - [ ] P3-013 Ensure strict ordering guarantees where required. [STATUS: PARTIAL]
 - [ ] P3-014 Implement conflict handling for concurrent updates. [STATUS: PARTIAL]
 - [ ] P3-015 Validate state reconstruction with replay tests. [STATUS: PARTIAL]
