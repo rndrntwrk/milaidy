@@ -16,6 +16,7 @@ Contents:
 - `phase0-alert-threshold-policy-2026-02-17.md`: `P0-017` alert thresholds + paging escalation policy evidence.
 - `phase0-cardinality-retention-cost-2026-02-17.md`: `P0-018` metric cardinality + retention-cost validation evidence.
 - `phase0-metrics-dictionary-2026-02-17.md`: `P0-019` metric definition/formula dictionary evidence.
+- `phase0-baseline-data-and-reporting-2026-02-17.md`: `P0-020/P0-021/P0-025/P0-027` baseline scenario definition, baseline-window run, red-team run, and charted report evidence.
 - `phase0-metrics-endpoint-verification-2026-02-17.md`: `P0-015` metrics endpoint scrape-path verification.
 - `phase3-executor-role-2026-02-17.md`: `P3-024` Executor role implementation and wiring evidence.
 - `phase3-role-dataflow-2026-02-17.md`: `P3-030` role dataflow integration evidence across planner/executor/verifier/memory/auditor.

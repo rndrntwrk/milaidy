@@ -13,8 +13,8 @@ Current status pre-check snapshot:
 - Evidence basis: static repo review of autonomy kernel, API, persistence, and app UI code paths.
 - Summary counts:
 - `307` total checklist items.
-- `144` items tagged `STATUS: CODED`.
-- `56` items tagged `STATUS: PARTIAL`.
+- `148` items tagged `STATUS: CODED`.
+- `52` items tagged `STATUS: PARTIAL`.
 - `107` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
@@ -166,14 +166,14 @@ Sprint chunks:
 
 ### 0.D Baseline Data Collection and Adversarial Baseline
 
-- [ ] P0-020 Define baseline scenarios representative of real usage. [STATUS: PARTIAL]
-- [ ] P0-021 Run baseline scenarios for at least one full measurement window. [STATUS: PARTIAL]
+- [ ] P0-020 Define baseline scenarios representative of real usage. [STATUS: CODED]
+- [ ] P0-021 Run baseline scenarios for at least one full measurement window. [STATUS: CODED]
 - [ ] P0-022 Capture tool success/failure with cause taxonomy.
 - [ ] P0-023 Capture preference-following baseline.
 - [ ] P0-024 Capture persona drift/sycophancy baseline.
-- [ ] P0-025 Execute memory poisoning red-team baseline runs. [STATUS: PARTIAL]
+- [ ] P0-025 Execute memory poisoning red-team baseline runs. [STATUS: CODED]
 - [ ] P0-026 Document injection success rates and behavior impact.
-- [ ] P0-027 Produce baseline metrics report with charts. [STATUS: PARTIAL]
+- [ ] P0-027 Produce baseline metrics report with charts. [STATUS: CODED]
 
 ### 0.E Phase Gate
 
