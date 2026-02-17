@@ -142,6 +142,54 @@ describe("PersistentStateMachine", () => {
 
       expect(result.recovered).toBe(false);
     });
+
+    it("recovers latest snapshot after simulated process restart", async () => {
+      const snapshots: Array<{ state: string; consecutiveErrors: number }> = [];
+      const exec = vi.fn().mockImplementation(async (sql: string) => {
+        if (sql.includes("INSERT INTO autonomy_state")) {
+          const match = sql.match(/VALUES \('([^']+)',\s*(\d+),\s*'([^']+)'\)/);
+          snapshots.push({
+            state: match?.[1] ?? "idle",
+            consecutiveErrors: Number(match?.[2] ?? 0),
+          });
+          return { rows: [], columns: [] };
+        }
+        if (sql.includes("SELECT state, consecutive_errors")) {
+          const last = snapshots[snapshots.length - 1];
+          if (!last) return { rows: [], columns: [] };
+          return {
+            rows: [
+              {
+                state: last.state,
+                consecutive_errors: last.consecutiveErrors,
+              },
+            ],
+            columns: [],
+          };
+        }
+        return { rows: [], columns: [] };
+      });
+
+      const adapter = makeMockAdapter(exec);
+
+      const firstInner = new KernelStateMachine();
+      const firstPsm = new PersistentStateMachine(firstInner, adapter);
+      firstPsm.transition("tool_validated"); // idle -> executing
+      firstPsm.transition("execution_complete"); // executing -> verifying
+
+      await vi.waitFor(() => {
+        expect(snapshots.length).toBeGreaterThanOrEqual(2);
+      });
+
+      // Simulate restart by creating a fresh wrapper and inner state machine.
+      const secondInner = new KernelStateMachine();
+      const secondPsm = new PersistentStateMachine(secondInner, adapter);
+      const recovered = await secondPsm.recover();
+
+      expect(recovered.recovered).toBe(true);
+      expect(recovered.state).toBe("verifying");
+      expect(recovered.consecutiveErrors).toBe(0);
+    });
   });
 
   it("handles snapshot failure gracefully", async () => {

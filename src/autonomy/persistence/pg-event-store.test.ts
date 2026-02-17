@@ -273,6 +273,112 @@ describe("PgEventStore", () => {
       await store.syncSize();
       expect(store.size).toBe(42);
     });
+
+    it("restores readable event history and size after adapter restart", async () => {
+      type StoredRow = {
+        id: number;
+        request_id: string;
+        type: string;
+        payload: Record<string, unknown>;
+        correlation_id: string | null;
+        timestamp: string;
+        prev_hash: string | null;
+        event_hash: string | null;
+      };
+
+      const rows: StoredRow[] = [];
+      let nextId = 1;
+      const plannedInserts: Array<{
+        requestId: string;
+        type: string;
+        payload: Record<string, unknown>;
+        correlationId?: string;
+      }> = [
+        {
+          requestId: "req-restart-1",
+          type: "tool:proposed",
+          payload: { toolName: "PLAY_EMOTE" },
+        },
+        {
+          requestId: "req-restart-1",
+          type: "tool:validated",
+          payload: { valid: true },
+          correlationId: "corr-r1",
+        },
+      ];
+
+      const exec = vi.fn().mockImplementation(async (sql: string) => {
+        if (sql.includes("SELECT event_hash")) {
+          const last = rows[rows.length - 1];
+          return {
+            rows: last?.event_hash ? [{ event_hash: last.event_hash }] : [],
+            columns: ["event_hash"],
+          };
+        }
+
+        if (sql.includes("INSERT INTO autonomy_events")) {
+          const planned = plannedInserts.shift();
+          const id = nextId++;
+          rows.push({
+            id,
+            request_id: planned?.requestId ?? `req-${id}`,
+            type: planned?.type ?? "tool:proposed",
+            payload: planned?.payload ?? {},
+            correlation_id: planned?.correlationId ?? null,
+            timestamp: `2025-01-01T00:00:0${id}Z`,
+            prev_hash: id > 1 ? `hash-${id - 1}` : null,
+            event_hash: `hash-${id}`,
+          });
+          return { rows: [{ id }], columns: ["id"] };
+        }
+
+        if (sql.includes("SELECT count(*)::int AS cnt")) {
+          return { rows: [{ cnt: rows.length }], columns: ["cnt"] };
+        }
+
+        if (sql.includes("FROM autonomy_events") && sql.includes("WHERE request_id =")) {
+          const match = sql.match(/WHERE request_id = '([^']+)'/);
+          const requestId = match?.[1] ?? "";
+          return {
+            rows: rows
+              .filter((row) => row.request_id === requestId)
+              .map((row) => ({
+                ...row,
+                payload: row.payload,
+              })),
+            columns: [],
+          };
+        }
+
+        return { rows: [], columns: [] };
+      });
+
+      const adapter = makeMockAdapter({ executeRaw: exec });
+
+      const firstStore = new PgEventStore(adapter);
+      await firstStore.append("req-restart-1", "tool:proposed", {
+        toolName: "PLAY_EMOTE",
+      });
+      await firstStore.append(
+        "req-restart-1",
+        "tool:validated",
+        { valid: true },
+        "corr-r1",
+      );
+      expect(firstStore.size).toBe(2);
+
+      // Simulate process restart with a fresh PgEventStore instance.
+      const restartedStore = new PgEventStore(adapter);
+      expect(restartedStore.size).toBe(0);
+
+      const historyBeforeSync = await restartedStore.getByRequestId("req-restart-1");
+      expect(historyBeforeSync).toHaveLength(2);
+      expect(historyBeforeSync[0].type).toBe("tool:proposed");
+      expect(historyBeforeSync[1].type).toBe("tool:validated");
+
+      await restartedStore.syncSize();
+      expect(restartedStore.size).toBe(2);
+    });
   });
 
   describe("rowToEvent conversion", () => {
