@@ -14,8 +14,8 @@ Current status pre-check snapshot:
 - Summary counts:
 - `307` total checklist items.
 - `166` items tagged `STATUS: CODED`.
-- `37` items tagged `STATUS: PARTIAL`.
-- `104` items currently untagged.
+- `38` items tagged `STATUS: PARTIAL`.
+- `103` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
 - `STATUS: PARTIAL` means implementation exists but is incomplete, scoped down, optional, or not yet acceptance-ready.
@@ -240,7 +240,7 @@ Sprint chunks:
 - [ ] P1-039 Implement preference UI with source/scope visibility. [STATUS: CODED]
 - [ ] P1-040 Add operator docs for identity, gate, trust, retrieval. [STATUS: CODED]
 - [ ] P1-041 Add troubleshooting runbook for drift and quarantine backlogs. [STATUS: CODED]
-- [ ] P1-042 Run internal enablement session and record attendance/materials.
+- [ ] P1-042 Run internal enablement session and record attendance/materials. [STATUS: PARTIAL]
 
 ### 1.F Phase Gate
 
