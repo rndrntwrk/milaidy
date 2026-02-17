@@ -13,7 +13,7 @@ import {
   BUILTIN_CONTRACTS,
   registerBuiltinToolContracts,
 } from "../../src/autonomy/tools/schemas/index.js";
-import { registerRuntimeActionContracts } from "../../src/autonomy/tools/runtime-contracts.js";
+import { registerRuntimeContracts } from "../../src/autonomy/tools/runtime-contracts.js";
 import { loadMilaidyConfig } from "../../src/config/config.js";
 import { loadCustomActions } from "../../src/runtime/custom-actions.js";
 import { createTriggerTaskAction } from "../../src/triggers/action.js";
@@ -55,6 +55,7 @@ function renderMarkdown(input: {
   createdAt: string;
   runtimeActionCount: number;
   runtimeActionCoverageCount: number;
+  runtimeExplicitContractCount: number;
   runtimeGeneratedContractCount: number;
   domainRegisteredContractCount: number;
   autoLoadedDomains: string[];
@@ -77,6 +78,9 @@ function renderMarkdown(input: {
   lines.push(`- Contract count: \`${input.contracts.length}\``);
   lines.push(
     `- Runtime action coverage: \`${input.runtimeActionCoverageCount}/${input.runtimeActionCount}\``,
+  );
+  lines.push(
+    `- Explicit custom-action contracts: \`${input.runtimeExplicitContractCount}\``,
   );
   lines.push(
     `- Runtime-generated contracts: \`${input.runtimeGeneratedContractCount}\``,
@@ -142,11 +146,14 @@ async function main() {
     ),
   ].sort((a, b) => a.localeCompare(b));
 
-  const runtimeGeneratedNames = new Set(
-    registerRuntimeActionContracts(registry, { actions: runtimeActions }),
-  );
-
   const config = loadMilaidyConfig();
+  const runtimeRegistration = registerRuntimeContracts(registry, {
+    runtime: { actions: runtimeActions },
+    customActions: config.customActions ?? [],
+  });
+  const runtimeExplicitNames = new Set(runtimeRegistration.explicit);
+  const runtimeGeneratedNames = new Set(runtimeRegistration.synthesized);
+
   const autonomyDomains = config.autonomy?.domains;
   const autoLoadedDomains: string[] = [];
   const domainRegisteredNames = new Set<string>();
@@ -169,7 +176,9 @@ async function main() {
     .getAll()
     .map((contract) => ({
       name: contract.name,
-      source: runtimeGeneratedNames.has(contract.name)
+      source: runtimeExplicitNames.has(contract.name)
+        ? "custom-action"
+        : runtimeGeneratedNames.has(contract.name)
         ? "runtime-generated"
         : domainRegisteredNames.has(contract.name)
           ? "domain"
@@ -201,6 +210,7 @@ async function main() {
     builtInContractCount: BUILTIN_CONTRACTS.length,
     runtimeActionCount: runtimeActionNames.length,
     runtimeActionCoverageCount,
+    runtimeExplicitContractCount: runtimeExplicitNames.size,
     runtimeGeneratedContractCount: runtimeGeneratedNames.size,
     runtimeActionUncovered,
     autoLoadedDomains,
@@ -221,6 +231,7 @@ async function main() {
       createdAt: payload.createdAt,
       runtimeActionCount: payload.runtimeActionCount,
       runtimeActionCoverageCount: payload.runtimeActionCoverageCount,
+      runtimeExplicitContractCount: payload.runtimeExplicitContractCount,
       runtimeGeneratedContractCount: payload.runtimeGeneratedContractCount,
       domainRegisteredContractCount: payload.domainRegisteredContractCount,
       autoLoadedDomains: payload.autoLoadedDomains,

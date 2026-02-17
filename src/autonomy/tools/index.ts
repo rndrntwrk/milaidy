@@ -22,6 +22,8 @@ export {
 } from "./schemas/index.js";
 export {
   createRuntimeActionContract,
+  registerConfiguredCustomActionContracts,
+  registerRuntimeContracts,
   registerRuntimeActionContracts,
 } from "./runtime-contracts.js";
 export type {

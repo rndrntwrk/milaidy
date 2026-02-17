@@ -3,6 +3,8 @@ import { SchemaValidator } from "../verification/schema-validator.js";
 import { ToolRegistry } from "./registry.js";
 import {
   createRuntimeActionContract,
+  registerConfiguredCustomActionContracts,
+  registerRuntimeContracts,
   registerRuntimeActionContracts,
 } from "./runtime-contracts.js";
 import { registerBuiltinToolContracts } from "./schemas/index.js";
@@ -115,5 +117,77 @@ describe("runtime action contracts", () => {
     expect(destructiveContract?.riskClass).toBe("irreversible");
     expect(destructiveContract?.requiresApproval).toBe(true);
   });
-});
 
+  it("registers explicit custom-action contracts from config metadata", () => {
+    const registry = new ToolRegistry();
+    const registered = registerConfiguredCustomActionContracts(registry, [
+      {
+        id: "ca-1",
+        name: "CUSTOM_SHELL",
+        description: "Execute shell action",
+        parameters: [{ name: "command", description: "cmd", required: true }],
+        handler: { type: "shell", command: "echo {{command}}" },
+        enabled: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
+
+    expect(registered).toEqual(["CUSTOM_SHELL"]);
+    const contract = registry.get("CUSTOM_SHELL");
+    expect(contract?.riskClass).toBe("irreversible");
+    expect(contract?.requiresApproval).toBe(true);
+    expect(contract?.requiredPermissions).toEqual(["process:shell"]);
+
+    const validator = new SchemaValidator(registry);
+    expect(
+      validator.validate({
+        tool: "CUSTOM_SHELL",
+        params: { command: "pwd" },
+        source: "system",
+        requestId: "req-shell-ok",
+      }).valid,
+    ).toBe(true);
+    expect(
+      validator.validate({
+        tool: "CUSTOM_SHELL",
+        params: {},
+        source: "system",
+        requestId: "req-shell-missing",
+      }).valid,
+    ).toBe(false);
+  });
+
+  it("prefers explicit custom contracts before synthesized runtime contracts", () => {
+    const registry = new ToolRegistry();
+    const registration = registerRuntimeContracts(registry, {
+      customActions: [
+        {
+          id: "ca-2",
+          name: "CUSTOM_HTTP",
+          description: "Configured custom HTTP action",
+          parameters: [{ name: "url", description: "endpoint", required: true }],
+          handler: { type: "http", method: "GET", url: "{{url}}" },
+          enabled: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ],
+      runtime: {
+        actions: [
+          {
+            name: "CUSTOM_HTTP",
+            description: "Runtime action copy",
+            parameters: [],
+          },
+        ],
+      },
+    });
+
+    expect(registration.explicit).toEqual(["CUSTOM_HTTP"]);
+    expect(registration.synthesized).toEqual([]);
+    const contract = registry.get("CUSTOM_HTTP");
+    expect(contract?.tags?.includes("custom")).toBe(true);
+    expect(contract?.tags?.includes("runtime-generated")).toBe(false);
+  });
+});
