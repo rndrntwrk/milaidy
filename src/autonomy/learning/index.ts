@@ -48,6 +48,15 @@ export {
   type QualityFilterDrop,
   type QualityFilterResult,
 } from "./quality-filters.js";
+// Dataset splitting pipeline
+export {
+  buildHeldOutValidationSplit,
+  buildAdversarialSplit,
+  type HeldOutSplitOptions,
+  type HeldOutSplitResult,
+  type AdversarialSplitOptions,
+  type AdversarialSplitResult,
+} from "./dataset-splits.js";
 // Types
 export type {
   CollectedEpisode,

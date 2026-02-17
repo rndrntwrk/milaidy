@@ -59,6 +59,7 @@ Contents:
 - `phase4-deidentification-pipeline-2026-02-17.md`: `P4-003` deterministic de-identification/anonymization pipeline for learning dataset export paths.
 - `phase4-quality-filters-2026-02-17.md`: `P4-004` deterministic quality filters for training examples/episodes before dataset export.
 - `phase4-labeling-guidelines-2026-02-17.md`: `P4-005` labeling rubric and QA sampling policy for training trace annotation.
+- `phase4-dataset-splits-2026-02-17.md`: `P4-006/P4-007` deterministic held-out validation split and adversarial split construction.
 - `reports/`: generated run artifacts (`.json` and `.md` outputs).
 
 Primary scripts:
