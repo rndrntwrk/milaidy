@@ -14,6 +14,8 @@ import {
   buildTrainingEnvironmentManifest,
   createTrainingEnvironmentConfig,
 } from "../../src/autonomy/learning/training/environment.js";
+import { FileCheckpointRegistry } from "../../src/autonomy/learning/training/checkpoint-registry.js";
+import { FileExperimentRegistry } from "../../src/autonomy/learning/training/experiment-registry.js";
 import { TrainingJobOrchestrator } from "../../src/autonomy/learning/training/job-orchestrator.js";
 
 interface CliArgs {
@@ -22,6 +24,8 @@ interface CliArgs {
   label: string;
   envId: string;
   seed: string;
+  experimentRegistryFile: string;
+  checkpointRegistryFile: string;
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -51,12 +55,21 @@ function parseArgs(argv: string[]): CliArgs {
 
   const now = new Date().toISOString().replace(/[:.]/g, "-");
   const label = args.get("label") ?? `training-job-${now}`;
+  const outDir = resolve(args.get("out-dir") ?? "docs/ops/autonomy/reports");
   return {
     datasetFile: resolve(datasetFile),
-    outDir: resolve(args.get("out-dir") ?? "docs/ops/autonomy/reports"),
+    outDir,
     label,
     envId: args.get("env-id") ?? `${label}-env`,
     seed: args.get("seed") ?? "training-job-seed",
+    experimentRegistryFile: resolve(
+      args.get("experiment-registry") ??
+        join(outDir, "training-experiments.registry.json"),
+    ),
+    checkpointRegistryFile: resolve(
+      args.get("checkpoint-registry") ??
+        join(outDir, "training-checkpoints.registry.json"),
+    ),
   };
 }
 
@@ -83,6 +96,10 @@ function renderMarkdown(input: {
   datasetFile: string;
   dataset: RLVRTrainingDataset;
   result: Awaited<ReturnType<TrainingJobOrchestrator["run"]>>;
+  checkpointId: string;
+  experimentRegistryFile: string;
+  checkpointRegistryFile: string;
+  rollbackCandidateId?: string;
 }): string {
   const lines: string[] = [];
   lines.push("# Training Job Report");
@@ -93,6 +110,7 @@ function renderMarkdown(input: {
   lines.push(`- Dataset id: \`${input.dataset.id}\``);
   lines.push(`- Dataset examples: \`${input.dataset.examples.length}\``);
   lines.push(`- Job id: \`${input.result.jobId}\``);
+  lines.push(`- Checkpoint id: \`${input.checkpointId}\``);
   lines.push(`- Environment fingerprint: \`${input.result.environmentFingerprint}\``);
   lines.push(`- Training success: \`${input.result.training.success}\``);
   lines.push(
@@ -101,6 +119,11 @@ function renderMarkdown(input: {
   lines.push(
     `- Evaluation average reward: \`${input.result.evaluation.averageReward.toFixed(4)}\``,
   );
+  lines.push(`- Experiment registry: \`${input.experimentRegistryFile}\``);
+  lines.push(`- Checkpoint registry: \`${input.checkpointRegistryFile}\``);
+  if (input.rollbackCandidateId) {
+    lines.push(`- Suggested rollback candidate: \`${input.rollbackCandidateId}\``);
+  }
   lines.push("");
   lines.push("## Best Params");
   lines.push("");
@@ -157,19 +180,126 @@ async function main() {
   };
 
   mkdirSync(cli.outDir, { recursive: true });
+  const checkpointId = `ckpt-${result.jobId}`;
+  const checkpointPath = join(cli.outDir, `${checkpointId}.checkpoint.json`);
+  writeFileSync(
+    checkpointPath,
+    `${JSON.stringify(
+      {
+        checkpointId,
+        label: cli.label,
+        createdAt: result.completedAt,
+        finalConfig: result.finalConfig,
+        metrics: {
+          finalAverageReward: result.training.finalAverageReward,
+          evaluationAverageReward: result.evaluation.averageReward,
+          tuningBestScore: result.tuning.bestScore,
+        },
+        sourceJobId: result.jobId,
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+
+  const experimentRegistry = new FileExperimentRegistry(
+    cli.experimentRegistryFile,
+  );
+  experimentRegistry.createRun({
+    id: result.jobId,
+    label: cli.label,
+    startedAt: result.startedAt,
+    configFingerprint: result.environmentFingerprint,
+    parameters: result.finalConfig,
+    metrics: {
+      finalAverageReward: result.training.finalAverageReward,
+      evaluationAverageReward: result.evaluation.averageReward,
+      tuningBestScore: result.tuning.bestScore,
+    },
+  });
+  experimentRegistry.addArtifact(result.jobId, {
+    id: `${result.jobId}-dataset`,
+    kind: "dataset",
+    path: cli.datasetFile,
+  });
+  experimentRegistry.addArtifact(result.jobId, {
+    id: `${result.jobId}-checkpoint`,
+    kind: "checkpoint",
+    path: checkpointPath,
+  });
+
   const jsonPath = join(cli.outDir, `${cli.label}.training-job.json`);
   const mdPath = join(cli.outDir, `${cli.label}.training-job.md`);
-  writeFileSync(jsonPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  experimentRegistry.addArtifact(result.jobId, {
+    id: `${result.jobId}-manifest`,
+    kind: "manifest",
+    path: jsonPath,
+  });
+
+  const checkpointRegistry = new FileCheckpointRegistry(
+    cli.checkpointRegistryFile,
+  );
+  checkpointRegistry.register({
+    id: checkpointId,
+    label: cli.label,
+    artifactPath: checkpointPath,
+    createdAt: result.completedAt,
+    experimentRunId: result.jobId,
+    metrics: {
+      finalAverageReward: result.training.finalAverageReward,
+      evaluationAverageReward: result.evaluation.averageReward,
+    },
+  });
+  const rollbackCandidate = checkpointRegistry.selectRollbackCandidate({
+    currentMetrics: {
+      finalAverageReward: result.training.finalAverageReward,
+      evaluationAverageReward: result.evaluation.averageReward,
+    },
+    excludeCheckpointIds: [checkpointId],
+  });
+
+  const markdown = renderMarkdown({
+    label: cli.label,
+    createdAt,
+    datasetFile: cli.datasetFile,
+    dataset,
+    result,
+    checkpointId,
+    experimentRegistryFile: cli.experimentRegistryFile,
+    checkpointRegistryFile: cli.checkpointRegistryFile,
+    rollbackCandidateId: rollbackCandidate?.id,
+  });
+  writeFileSync(mdPath, `${markdown}\n`, "utf8");
+  experimentRegistry.addArtifact(result.jobId, {
+    id: `${result.jobId}-report`,
+    kind: "report",
+    path: mdPath,
+  });
+
+  const trackedPayload = {
+    ...payload,
+    checkpoint: {
+      id: checkpointId,
+      path: checkpointPath,
+      rollbackCandidateId: rollbackCandidate?.id,
+    },
+    registry: {
+      experimentFile: cli.experimentRegistryFile,
+      checkpointFile: cli.checkpointRegistryFile,
+    },
+  };
   writeFileSync(
-    mdPath,
-    `${renderMarkdown({
-      label: cli.label,
-      createdAt,
-      datasetFile: cli.datasetFile,
-      dataset,
-      result,
-    })}\n`,
+    jsonPath,
+    `${JSON.stringify(trackedPayload, null, 2)}\n`,
     "utf8",
+  );
+  experimentRegistry.completeRun(
+    result.jobId,
+    result.training.success ? "succeeded" : "failed",
+    {
+      completedAt: result.completedAt,
+    },
   );
 
   console.log(
@@ -180,8 +310,11 @@ async function main() {
         datasetId: dataset.id,
         examples: dataset.examples.length,
         jobId: result.jobId,
+        checkpointId,
         success: result.training.success,
         finalAverageReward: result.training.finalAverageReward,
+        experimentRegistry: cli.experimentRegistryFile,
+        checkpointRegistry: cli.checkpointRegistryFile,
         report: mdPath,
         json: jsonPath,
       },
