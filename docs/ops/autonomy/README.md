@@ -12,6 +12,9 @@ Contents:
 - `phase2-acceptance-gate-2026-02-17.md`: `P2-063/P2-064` test evidence for reversible success and irreversible authorization controls.
 - `phase2-acceptance-report-2026-02-17.md`: `P2-065` Phase 2 acceptance publication and sign-off record.
 - `phase0-canonical-metric-list-2026-02-17.md`: `P0-013` canonical SOW metric list definition and validation.
+- `phase0-dashboard-foundation-2026-02-17.md`: `P0-016` initial operations + quality dashboard provisioning evidence.
+- `phase0-alert-threshold-policy-2026-02-17.md`: `P0-017` alert thresholds + paging escalation policy evidence.
+- `phase0-metrics-dictionary-2026-02-17.md`: `P0-019` metric definition/formula dictionary evidence.
 - `phase0-metrics-endpoint-verification-2026-02-17.md`: `P0-015` metrics endpoint scrape-path verification.
 - `phase3-executor-role-2026-02-17.md`: `P3-024` Executor role implementation and wiring evidence.
 - `phase3-role-dataflow-2026-02-17.md`: `P3-030` role dataflow integration evidence across planner/executor/verifier/memory/auditor.
