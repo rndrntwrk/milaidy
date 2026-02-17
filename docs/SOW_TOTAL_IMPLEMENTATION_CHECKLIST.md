@@ -13,8 +13,8 @@ Current status pre-check snapshot:
 - Evidence basis: static repo review of autonomy kernel, API, persistence, and app UI code paths.
 - Summary counts:
 - `307` total checklist items.
-- `107` items tagged `STATUS: CODED`.
-- `83` items tagged `STATUS: PARTIAL`.
+- `109` items tagged `STATUS: CODED`.
+- `81` items tagged `STATUS: PARTIAL`.
 - `117` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
@@ -413,8 +413,8 @@ Sprint chunks:
 
 - [ ] P3-036 Build dashboards for role throughput/errors/latency. [STATUS: CODED]
 - [ ] P3-037 Build dashboards for PSD/ICS/safe-mode frequency. [STATUS: CODED]
-- [ ] P3-038 Run long-horizon scenarios and compare against baseline. [STATUS: PARTIAL]
-- [ ] P3-039 Tune thresholds based on empirical data. [STATUS: PARTIAL]
+- [ ] P3-038 Run long-horizon scenarios and compare against baseline. [STATUS: CODED]
+- [ ] P3-039 Tune thresholds based on empirical data. [STATUS: CODED]
 
 ### 3.H Phase Gate
 

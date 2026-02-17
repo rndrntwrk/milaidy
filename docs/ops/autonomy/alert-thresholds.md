@@ -1,7 +1,7 @@
-# Autonomy Alert Thresholds (Initial)
+# Autonomy Alert Thresholds (Tuned)
 
-These thresholds are baseline defaults for Phase 0/Phase 1 operations.
-Tune after first full baseline window.
+These thresholds were tuned using the Phase 3 long-horizon run
+(`phase3-long-horizon-2026-02-17`, 480 turns).
 
 ## Severity Model
 
@@ -29,7 +29,7 @@ Tune after first full baseline window.
 - Action: stop risky workflows and inspect latest execution traces.
 
 5. `drift_score_high` (`P2`)
-- Condition: `milaidy_autonomy_drift_score{quantile="0.95"} > 0.15` for `15m`.
+- Condition: `milaidy_autonomy_drift_score{quantile="0.95"} > 0.22` for `15m`.
 - Action: inspect drift report and consider safe-mode.
 
 6. `quarantine_backlog` (`P2`)
@@ -49,6 +49,14 @@ Tune after first full baseline window.
 - Query:
 `sum by (role) (increase(milaidy_autonomy_role_executions_total{outcome="failure"}[10m])) / clamp_min(sum by (role) (increase(milaidy_autonomy_role_executions_total[10m])), 1) > 0.02`
 - Action: inspect failing role path and recent orchestration traces.
+
+10. `baseline_psd_high` (`P2`)
+- Condition: `avg(milaidy_autonomy_baseline_personaDriftScore) > 0.22` for `1h`.
+- Action: compare latest long-horizon reports and inspect drift-correction prompts.
+
+11. `baseline_ics_low` (`P2`)
+- Condition: `avg(milaidy_autonomy_baseline_instructionCompletionRate) < 0.65` for `1h`.
+- Action: inspect completion failures and planner/executor regression traces.
 
 ## Escalation Rules
 

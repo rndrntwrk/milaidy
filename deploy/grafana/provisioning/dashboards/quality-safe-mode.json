@@ -73,7 +73,7 @@
               },
               {
                 "color": "red",
-                "value": 0.15
+                "value": 0.22
               }
             ]
           }
@@ -130,7 +130,7 @@
               },
               {
                 "color": "yellow",
-                "value": 0.8
+                "value": 0.65
               },
               {
                 "color": "green",

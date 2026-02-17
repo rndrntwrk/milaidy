@@ -11,13 +11,13 @@ groups:
           description: "The autonomy kernel has been down for more than 2 minutes."
 
       - alert: HighDriftScore
-        expr: milaidy_autonomy_drift_score{quantile="0.95"} > 0.15
+        expr: milaidy_autonomy_drift_score{quantile="0.95"} > 0.22
         for: 15m
         labels:
           severity: warning
         annotations:
           summary: "High persona drift detected"
-          description: "95th percentile drift score has exceeded 0.15 for 15 minutes."
+          description: "95th percentile drift score has exceeded 0.22 for 15 minutes."
 
       - alert: SafeModeActive
         expr: increase(milaidy_autonomy_safe_mode_events_total{action="enter"}[5m]) > 0
@@ -98,3 +98,30 @@ groups:
         annotations:
           summary: "Event store growth is unbounded"
           description: "Event store size has exceeded 50,000 for more than one hour."
+
+      - alert: RoleFailureRateHigh
+        expr: sum by (role) (increase(milaidy_autonomy_role_executions_total{outcome="failure"}[10m])) / clamp_min(sum by (role) (increase(milaidy_autonomy_role_executions_total[10m])), 1) > 0.02
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Role failure rate is high"
+          description: "One or more role failure rates are above 2 percent over 10 minutes."
+
+      - alert: BaselinePersonaDriftHigh
+        expr: avg(milaidy_autonomy_baseline_personaDriftScore) > 0.22
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Baseline persona drift remains high"
+          description: "Long-horizon baseline PSD remains above tuned threshold (0.22)."
+
+      - alert: BaselineInstructionCompletionLow
+        expr: avg(milaidy_autonomy_baseline_instructionCompletionRate) < 0.65
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Baseline instruction completion is low"
+          description: "Long-horizon baseline ICS remains below tuned floor (0.65)."
