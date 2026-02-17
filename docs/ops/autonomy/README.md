@@ -8,6 +8,7 @@ Contents:
 - `alert-thresholds.md`: initial alert policy and thresholds.
 - `invariant-catalog.md`: invariant ownership and severity catalog.
 - `baseline-runbook.md`: commands to generate baseline and red-team reports.
+- `pipeline-latency-optimization-2026-02-17.md`: `P2-062` before/after bottleneck optimization report.
 - `reports/`: generated run artifacts (`.json` and `.md` outputs).
 
 Primary scripts:
