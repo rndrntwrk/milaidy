@@ -88,8 +88,21 @@ Force a specific trust score for all memories in a retrieval:
 const results = await retriever.retrieve(runtime, {
   roomId,
   trustOverride: 0.9,  // All memories treated as high-trust
+  trustOverridePolicy: {
+    source: "api",
+    actor: "ops-user",
+    approvedBy: "security-reviewer",
+    reason: "incident-response retrieval runbook",
+    requestId: "retrieval-override-001",
+  },
 });
 ```
+
+Trust override policy:
+
+- non-system overrides require a named actor
+- overrides `>= 0.90` require independent approval (`approvedBy`) and `reason`
+- missing policy requirements fail closed (override rejected; baseline trust scoring is used)
 
 ### Memory Type Filter
 
@@ -114,6 +127,17 @@ The `milaidyTrustRetrieval` provider (position: 15) automatically injects ranked
 ```
 
 The provider is registered in the Milaidy plugin and resolves the retriever from the DI container.
+
+## Override Auditing
+
+Every trust override attempt emits an audit event:
+
+- event: `autonomy:retrieval:trust-override`
+- payload includes:
+  - actor/source attribution
+  - requested vs applied override
+  - decision (`applied`, `clamped`, `rejected`)
+  - violation reasons when rejected
 
 ## Programmatic Usage
 

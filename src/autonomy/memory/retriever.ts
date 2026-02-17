@@ -21,6 +21,13 @@ export interface RetrievalOptions {
   embedding?: number[];
   maxResults?: number;
   trustOverride?: number;
+  trustOverridePolicy?: {
+    actor?: string;
+    source?: "system" | "api" | "user" | "plugin";
+    approvedBy?: string;
+    reason?: string;
+    requestId?: string;
+  };
   memoryTypes?: MemoryType[];
   tableName?: string;
 }
@@ -41,6 +48,21 @@ export interface TrustAwareRetriever {
   retrieve(runtime: IAgentRuntime, options: RetrievalOptions): Promise<RankedMemory[]>;
 }
 
+export interface TrustOverrideAuditRecord {
+  roomId: UUID;
+  requestId?: string;
+  source: "system" | "api" | "user" | "plugin";
+  actor: string;
+  requestedOverride: number;
+  appliedOverride: number | null;
+  decision: "applied" | "clamped" | "rejected";
+  highRisk: boolean;
+  approvedBy?: string;
+  reason?: string;
+  violations: string[];
+  timestamp: number;
+}
+
 // ---------- Constants ----------
 
 const DEFAULT_TYPE_BOOSTS: Record<MemoryType, number> = {
@@ -59,16 +81,30 @@ const DEFAULT_TYPE_BOOSTS: Record<MemoryType, number> = {
 
 /** Exponential decay half-life in milliseconds (24 hours). */
 const RECENCY_HALF_LIFE_MS = 24 * 60 * 60 * 1000;
+const TRUST_OVERRIDE_APPROVAL_THRESHOLD = 0.9;
+const NON_PERSON_ACTORS = new Set([
+  "",
+  "anonymous",
+  "unknown",
+  "bypass",
+  "non-autonomy",
+]);
 
 // ---------- Implementation ----------
 
 export class TrustAwareRetrieverImpl implements TrustAwareRetriever {
   private readonly config: Required<AutonomyRetrievalConfig>;
   private readonly scorer: TrustScorer | null;
+  private readonly eventBus: { emit: (event: string, payload: unknown) => void } | null;
 
-  constructor(config: Required<AutonomyRetrievalConfig>, scorer?: TrustScorer | null) {
+  constructor(
+    config: Required<AutonomyRetrievalConfig>,
+    scorer?: TrustScorer | null,
+    eventBus?: { emit: (event: string, payload: unknown) => void } | null,
+  ) {
     this.config = config;
     this.scorer = scorer ?? null;
+    this.eventBus = eventBus ?? null;
   }
 
   async retrieve(
@@ -80,6 +116,7 @@ export class TrustAwareRetrieverImpl implements TrustAwareRetriever {
 
     // 1. Fetch candidates (time-ordered + semantic)
     const candidates = await this.fetchCandidates(runtime, options, tableName);
+    const trustOverride = this.resolveTrustOverride(options);
 
     // 2. Score each candidate
     const now = Date.now();
@@ -93,7 +130,7 @@ export class TrustAwareRetrieverImpl implements TrustAwareRetriever {
         if (!options.memoryTypes.includes(memoryType)) continue;
       }
 
-      const trustScore = this.computeTrustScore(memory, options.trustOverride);
+      const trustScore = this.computeTrustScore(memory, trustOverride);
       const recencyScore = this.computeRecencyScore(memory, now);
       const relevanceScore = this.computeRelevanceScore(memory);
       const typeBoost = this.getTypeBoost(memoryType);
@@ -126,6 +163,66 @@ export class TrustAwareRetrieverImpl implements TrustAwareRetriever {
   }
 
   // ---------- Private Helpers ----------
+
+  private resolveTrustOverride(options: RetrievalOptions): number | undefined {
+    if (options.trustOverride === undefined) return undefined;
+
+    const requested = options.trustOverride;
+    const clamped = Math.max(0, Math.min(1, requested));
+    const policy = options.trustOverridePolicy;
+    const source = policy?.source ?? "user";
+    const actor = this.normalizeActor(policy?.actor, source);
+    const approvedBy = this.normalizeOptionalText(policy?.approvedBy);
+    const reason = this.normalizeOptionalText(policy?.reason);
+    const highRisk = clamped >= TRUST_OVERRIDE_APPROVAL_THRESHOLD;
+    const violations: string[] = [];
+
+    if (source !== "system" && NON_PERSON_ACTORS.has(actor)) {
+      violations.push(
+        "a named actor is required for non-system trust overrides",
+      );
+    }
+
+    if (source !== "system" && highRisk) {
+      if (!approvedBy || NON_PERSON_ACTORS.has(approvedBy)) {
+        violations.push(
+          `approvedBy is required for trust overrides >= ${TRUST_OVERRIDE_APPROVAL_THRESHOLD.toFixed(2)}`,
+        );
+      } else if (approvedBy === actor) {
+        violations.push("approvedBy must be different from actor");
+      }
+      if (!reason) {
+        violations.push(
+          `reason is required for trust overrides >= ${TRUST_OVERRIDE_APPROVAL_THRESHOLD.toFixed(2)}`,
+        );
+      }
+    }
+
+    const allowed = violations.length === 0;
+    const decision: TrustOverrideAuditRecord["decision"] = !allowed
+      ? "rejected"
+      : clamped !== requested
+        ? "clamped"
+        : "applied";
+
+    const appliedOverride = allowed ? clamped : null;
+    this.emitTrustOverrideAudit({
+      roomId: options.roomId,
+      ...(policy?.requestId ? { requestId: policy.requestId } : {}),
+      source,
+      actor,
+      requestedOverride: requested,
+      appliedOverride,
+      decision,
+      highRisk,
+      ...(approvedBy ? { approvedBy } : {}),
+      ...(reason ? { reason } : {}),
+      violations,
+      timestamp: Date.now(),
+    });
+
+    return appliedOverride ?? undefined;
+  }
 
   private async fetchCandidates(
     runtime: IAgentRuntime,
@@ -176,6 +273,30 @@ export class TrustAwareRetrieverImpl implements TrustAwareRetriever {
     }
 
     return results;
+  }
+
+  private emitTrustOverrideAudit(record: TrustOverrideAuditRecord): void {
+    if (!this.eventBus) return;
+    try {
+      this.eventBus.emit("autonomy:retrieval:trust-override", record);
+    } catch {
+      // Non-fatal: retrieval must still proceed even if audit emission fails.
+    }
+  }
+
+  private normalizeOptionalText(value: string | undefined): string | undefined {
+    if (typeof value !== "string") return undefined;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  private normalizeActor(
+    value: string | undefined,
+    source: TrustOverrideAuditRecord["source"],
+  ): string {
+    const actor = this.normalizeOptionalText(value);
+    if (actor) return actor;
+    return source === "system" ? "system" : "unknown";
   }
 
   /** Compute trust score for a memory. */

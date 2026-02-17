@@ -886,7 +886,11 @@ export class MilaidyAutonomyService extends Service {
         const { TrustAwareRetrieverImpl } = await import("./memory/retriever.js");
         const { DEFAULT_RETRIEVAL_CONFIG } = await import("./config.js");
         const retrievalConfig = this.resolvedRetrievalConfig ?? DEFAULT_RETRIEVAL_CONFIG;
-        const retriever = new TrustAwareRetrieverImpl(retrievalConfig as Required<import("./config.js").AutonomyRetrievalConfig>, this.trustScorer);
+        const retriever = new TrustAwareRetrieverImpl(
+          retrievalConfig as Required<import("./config.js").AutonomyRetrievalConfig>,
+          this.trustScorer,
+          this.eventBus,
+        );
         container.registerValue(TOKENS.TrustAwareRetriever, retriever);
       } catch (err) {
         logger.debug(`[autonomy-service] Retriever registration skipped: ${err instanceof Error ? err.message : err}`);
