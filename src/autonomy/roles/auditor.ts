@@ -7,6 +7,8 @@
  * @module autonomy/roles/auditor
  */
 
+import { logger } from "@elizaos/core";
+
 import type {
   DriftReport,
   PersonaDriftMonitor,
@@ -17,6 +19,8 @@ import {
 } from "../metrics/prometheus-metrics.js";
 import type { EventStoreInterface, ExecutionEvent } from "../workflow/types.js";
 import type { AuditContext, AuditorRole, AuditReport } from "./types.js";
+
+export const AUDITOR_DRIFT_REPORT_EVENT_TYPE = "identity:drift:report" as const;
 
 export class DriftAwareAuditor implements AuditorRole {
   constructor(
@@ -72,6 +76,9 @@ export class DriftAwareAuditor implements AuditorRole {
         recommendations,
         auditedAt: Date.now(),
       };
+
+      await this.persistDriftReport(context, report);
+
       recordRoleLatencyMs("auditor", Date.now() - startedAt);
       recordRoleExecution("auditor", anomalies.length > 0 ? "failure" : "success");
       return report;
@@ -88,5 +95,34 @@ export class DriftAwareAuditor implements AuditorRole {
 
   async queryEvents(requestId: string): Promise<ExecutionEvent[]> {
     return this.eventStore.getByRequestId(requestId);
+  }
+
+  private async persistDriftReport(
+    context: AuditContext,
+    report: AuditReport,
+  ): Promise<void> {
+    try {
+      await this.eventStore.append(
+        context.requestId,
+        AUDITOR_DRIFT_REPORT_EVENT_TYPE,
+        {
+          driftScore: report.driftReport.driftScore,
+          severity: report.driftReport.severity,
+          dimensions: report.driftReport.dimensions,
+          windowSize: report.driftReport.windowSize,
+          corrections: report.driftReport.corrections,
+          analyzedAt: report.driftReport.analyzedAt,
+          eventCount: report.eventCount,
+          anomalies: report.anomalies,
+          recommendations: report.recommendations,
+          auditedAt: report.auditedAt,
+        },
+        context.correlationId,
+      );
+    } catch (error) {
+      logger.warn(
+        `[autonomy:auditor] Failed to persist drift report for request ${context.requestId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 }

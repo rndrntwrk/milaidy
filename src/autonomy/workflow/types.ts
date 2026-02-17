@@ -24,6 +24,7 @@ export type ExecutionEventType =
   | "tool:compensation:incident:opened"
   | "tool:invariants:checked"
   | "tool:decision:logged"
+  | "identity:drift:report"
   | "kernel:state:transition"
   | "kernel:safe-mode:transition";
 

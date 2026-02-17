@@ -4,7 +4,10 @@ import type {
   PersonaDriftMonitor,
 } from "../identity/drift-monitor.js";
 import type { EventStoreInterface, ExecutionEvent } from "../workflow/types.js";
-import { DriftAwareAuditor } from "./auditor.js";
+import {
+  AUDITOR_DRIFT_REPORT_EVENT_TYPE,
+  DriftAwareAuditor,
+} from "./auditor.js";
 import type { AuditContext } from "./types.js";
 
 function makeDriftReport(driftScore = 0.05): DriftReport {
@@ -34,6 +37,9 @@ function createMockDriftMonitor(driftScore = 0.05): PersonaDriftMonitor {
 
 function createMockEventStore(
   events: Partial<ExecutionEvent>[] = [],
+  options?: {
+    appendImpl?: () => Promise<number>;
+  },
 ): EventStoreInterface {
   const fullEvents: ExecutionEvent[] = events.map((e, i) => ({
     sequenceId: i + 1,
@@ -45,7 +51,7 @@ function createMockEventStore(
   }));
 
   return {
-    append: vi.fn(async () => 0),
+    append: vi.fn(options?.appendImpl ?? (async () => 0)),
     getByRequestId: vi.fn(async () => fullEvents),
     getByCorrelationId: vi.fn(async () => []),
     getRecent: vi.fn(async () => fullEvents),
@@ -102,6 +108,25 @@ describe("DriftAwareAuditor", () => {
 
       expect(es.getByRequestId).toHaveBeenCalledWith("req-1");
       expect(report.eventCount).toBe(0);
+    });
+
+    it("persists drift report events to the event store", async () => {
+      const dm = createMockDriftMonitor(0.12);
+      const es = createMockEventStore();
+      const auditor = new DriftAwareAuditor(dm, es);
+
+      await auditor.audit(createAuditContext());
+
+      expect(es.append).toHaveBeenCalledWith(
+        "req-1",
+        AUDITOR_DRIFT_REPORT_EVENT_TYPE,
+        expect.objectContaining({
+          driftScore: expect.any(Number),
+          severity: expect.any(String),
+          auditedAt: expect.any(Number),
+        }),
+        "corr-1",
+      );
     });
 
     it("detects anomalies from high drift scores", async () => {
@@ -163,6 +188,21 @@ describe("DriftAwareAuditor", () => {
       const report = await auditor.audit(createAuditContext());
 
       expect(report.auditedAt).toBeGreaterThanOrEqual(before);
+    });
+
+    it("does not fail audit when drift report persistence throws", async () => {
+      const dm = createMockDriftMonitor(0.05);
+      const es = createMockEventStore([], {
+        appendImpl: async () => {
+          throw new Error("write failed");
+        },
+      });
+      const auditor = new DriftAwareAuditor(dm, es);
+
+      const report = await auditor.audit(createAuditContext());
+
+      expect(report.driftReport.driftScore).toBe(0.05);
+      expect(es.append).toHaveBeenCalledTimes(1);
     });
   });
 

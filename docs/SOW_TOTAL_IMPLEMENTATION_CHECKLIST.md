@@ -13,8 +13,8 @@ Current status pre-check snapshot:
 - Evidence basis: static repo review of autonomy kernel, API, persistence, and app UI code paths.
 - Summary counts:
 - `307` total checklist items.
-- `157` items tagged `STATUS: CODED`.
-- `43` items tagged `STATUS: PARTIAL`.
+- `158` items tagged `STATUS: CODED`.
+- `42` items tagged `STATUS: PARTIAL`.
 - `107` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
@@ -203,7 +203,7 @@ Sprint chunks:
 - [ ] P1-011 Define drift dimensions and scoring formula. [STATUS: CODED]
 - [ ] P1-012 Implement drift monitor analysis window and threshold config. [STATUS: CODED]
 - [ ] P1-013 Implement drift alerts and callbacks. [STATUS: CODED]
-- [ ] P1-014 Implement drift report persistence. [STATUS: PARTIAL]
+- [ ] P1-014 Implement drift report persistence. [STATUS: CODED]
 - [ ] P1-015 Implement goal stack data model and lifecycle states. [STATUS: CODED]
 - [ ] P1-016 Implement goal push/pop/suspend/resume operations. [STATUS: CODED]
 - [ ] P1-017 Add goal APIs for query/update. [STATUS: CODED]
