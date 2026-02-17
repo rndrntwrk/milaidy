@@ -98,3 +98,4 @@ Initial panel spec for Phase 0 baseline operations dashboard.
 - All panels assume Prometheus scrape from `GET /metrics`.
 - Configure dashboard variables for environment, agent ID, and instance.
 - Use this spec as the seed for Grafana dashboard JSON provisioning.
+- Provisioned dashboard for Dashboard E: `deploy/grafana/provisioning/dashboards/role-telemetry.json`.
