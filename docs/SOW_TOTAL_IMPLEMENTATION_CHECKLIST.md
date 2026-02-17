@@ -13,8 +13,8 @@ Current status pre-check snapshot:
 - Evidence basis: static repo review of autonomy kernel, API, persistence, and app UI code paths.
 - Summary counts:
 - `307` total checklist items.
-- `162` items tagged `STATUS: CODED`.
-- `38` items tagged `STATUS: PARTIAL`.
+- `163` items tagged `STATUS: CODED`.
+- `37` items tagged `STATUS: PARTIAL`.
 - `107` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
@@ -237,7 +237,7 @@ Sprint chunks:
 
 - [ ] P1-037 Implement identity UI (view/edit/history/integrity indicators). [STATUS: CODED]
 - [ ] P1-038 Implement quarantine review UI. [STATUS: CODED]
-- [ ] P1-039 Implement preference UI with source/scope visibility. [STATUS: PARTIAL]
+- [ ] P1-039 Implement preference UI with source/scope visibility. [STATUS: CODED]
 - [ ] P1-040 Add operator docs for identity, gate, trust, retrieval. [STATUS: CODED]
 - [ ] P1-041 Add troubleshooting runbook for drift and quarantine backlogs. [STATUS: CODED]
 - [ ] P1-042 Run internal enablement session and record attendance/materials.
