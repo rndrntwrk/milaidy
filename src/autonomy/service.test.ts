@@ -81,9 +81,13 @@ vi.mock("../di/container.js", () => ({
 import { MilaidyAutonomyService, setAutonomyConfig } from "./service.js";
 
 /** Minimal mock runtime for testing. */
-function createMockRuntime(settings: Record<string, string> = {}) {
+function createMockRuntime(
+  settings: Record<string, string> = {},
+  extras: Record<string, unknown> = {},
+) {
   return {
     getSetting: (key: string) => settings[key] ?? null,
+    ...extras,
   } as unknown as import("@elizaos/core").IAgentRuntime;
 }
 
@@ -238,6 +242,63 @@ describe("MilaidyAutonomyService", () => {
         (c: unknown[]) => c[0] === "autonomy:kernel:initialized",
       );
       expect(call![1].configIssues).toBeGreaterThan(0);
+    });
+
+    it("registers synthesized contracts for runtime-only actions", async () => {
+      setAutonomyConfig({ enabled: true });
+      const runtime = createMockRuntime({}, {
+        actions: [
+          {
+            name: "READ_RUNTIME_STATUS",
+            description: "Read runtime-only status",
+            parameters: [
+              {
+                name: "target",
+                required: true,
+                schema: { type: "string" },
+              },
+            ],
+          },
+        ],
+      });
+      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const pipeline = svc.getExecutionPipeline();
+      if (!pipeline) {
+        throw new Error("Expected execution pipeline");
+      }
+
+      const validHandler = vi.fn(async () => ({
+        result: { ok: true },
+        durationMs: 1,
+      }));
+      const validResult = await pipeline.execute(
+        {
+          tool: "READ_RUNTIME_STATUS",
+          params: { target: "agent" },
+          source: "system",
+          requestId: "runtime-action-valid",
+        },
+        validHandler,
+      );
+      expect(validResult.success).toBe(true);
+      expect(validHandler).toHaveBeenCalledTimes(1);
+
+      const invalidHandler = vi.fn(async () => ({
+        result: { shouldNotRun: true },
+        durationMs: 1,
+      }));
+      const invalidResult = await pipeline.execute(
+        {
+          tool: "READ_RUNTIME_STATUS",
+          params: {},
+          source: "system",
+          requestId: "runtime-action-invalid",
+        },
+        invalidHandler,
+      );
+      expect(invalidResult.success).toBe(false);
+      expect(invalidResult.error).toBe("Validation failed");
+      expect(invalidHandler).not.toHaveBeenCalled();
     });
   });
 
