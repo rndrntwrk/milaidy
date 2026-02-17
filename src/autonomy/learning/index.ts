@@ -33,6 +33,13 @@ export {
 export { CheckpointManager, RolloutCollector } from "./rollout.js";
 // Trace collector & exporter
 export { DatasetExporter, TraceCollector } from "./trace-collector.js";
+// De-identification pipeline
+export {
+  Deidentifier,
+  deidentifyEpisodes,
+  deidentifyExamples,
+  type DeidentificationOptions,
+} from "./deidentification.js";
 // Types
 export type {
   CollectedEpisode,

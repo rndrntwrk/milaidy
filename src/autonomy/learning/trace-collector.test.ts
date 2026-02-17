@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { writeFileSync } from "node:fs";
 import type {
   OrchestratedRequest,
   OrchestratedResult,
@@ -217,6 +218,31 @@ describe("DatasetExporter", () => {
       ...overrides,
     };
   }
+
+  it("exportJSONL deidentifies sensitive values when enabled", () => {
+    const exporter = new DatasetExporter();
+    const episode = makeEpisode({
+      description: "Reach me at alice@example.com with token sk-abc123456789",
+      auditAnomalies: ["ip=10.0.0.5"],
+    });
+
+    exporter.exportJSONL([episode], "/tmp/episode.jsonl", {
+      deidentify: true,
+      deidentification: { salt: "test-redaction" },
+    });
+
+    const lastCall = vi
+      .mocked(writeFileSync)
+      .mock
+      .calls.at(-1);
+    const payload = String(lastCall?.[1] ?? "");
+    expect(payload).toContain("<EMAIL_");
+    expect(payload).toContain("<SECRET_");
+    expect(payload).toContain("<IP_");
+    expect(payload).not.toContain("alice@example.com");
+    expect(payload).not.toContain("sk-abc123456789");
+    expect(payload).not.toContain("10.0.0.5");
+  });
 
   it("toJSONL produces valid JSON", () => {
     const exporter = new DatasetExporter();

@@ -18,9 +18,9 @@ import type { CheckpointReward, EpisodeReward } from "./reward.js";
 import type {
   DatasetStatistics,
   Episode,
-  RewardSignal,
   TrainingExample,
 } from "./types.js";
+import { Deidentifier, type DeidentificationOptions } from "./deidentification.js";
 
 // ---------- Trace Collector ----------
 
@@ -153,9 +153,19 @@ export class DatasetExporter {
   /**
    * Export episodes to a JSONL file.
    */
-  exportJSONL(episodes: Episode[], outputPath: string): void {
+  exportJSONL(
+    episodes: Episode[],
+    outputPath: string,
+    options: {
+      deidentify?: boolean;
+      deidentification?: DeidentificationOptions;
+    } = {},
+  ): void {
     mkdirSync(dirname(outputPath), { recursive: true });
-    const lines = episodes.map((ep) => this.toJSONL(ep)).join("\n");
+    const normalizedEpisodes = options.deidentify
+      ? new Deidentifier(options.deidentification).deidentifyEpisodes(episodes)
+      : episodes;
+    const lines = normalizedEpisodes.map((ep) => this.toJSONL(ep)).join("\n");
     writeFileSync(outputPath, lines + "\n", "utf-8");
   }
 
