@@ -84,6 +84,7 @@ import {
   MilaidyAutonomyService,
   setAutonomyConfig,
 } from "./service.js";
+import { metrics } from "../telemetry/setup.js";
 
 /** Minimal mock runtime for testing. */
 function createMockRuntime(
@@ -515,6 +516,39 @@ describe("MilaidyAutonomyService", () => {
       expect(updated.identityVersion).toBe(original.identityVersion + 1);
       expect(updated.identityHash).not.toBe(original.identityHash);
       expect(updated.coreValues).toContain("transparency");
+    });
+
+    it("updateIdentityConfig emits identity mutation audit event and telemetry", async () => {
+      setAutonomyConfig({ enabled: true });
+      const runtime = createMockRuntime();
+      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      mockEmit.mockClear();
+      const before = metrics.getSnapshot();
+
+      const updated = await svc.updateIdentityConfig({
+        communicationStyle: { tone: "formal" } as any,
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        "autonomy:identity:updated",
+        expect.objectContaining({
+          toVersion: updated.identityVersion,
+          identityHash: updated.identityHash,
+        }),
+      );
+
+      const after = metrics.getSnapshot();
+      const sumCounter = (snapshot: ReturnType<typeof metrics.getSnapshot>, name: string) =>
+        Object.entries(snapshot.counters)
+          .filter(([key]) => key === name || key.startsWith(`${name}:{`))
+          .reduce((acc, [, value]) => acc + (typeof value === "number" ? value : 0), 0);
+      expect(
+        sumCounter(after, "autonomy_identity_updates_total") -
+          sumCounter(before, "autonomy_identity_updates_total"),
+      ).toBe(1);
+      expect(after.counters["autonomy_identity_version"]).toBe(
+        updated.identityVersion,
+      );
     });
 
     it("updateIdentityConfig merges communicationStyle partially", async () => {
