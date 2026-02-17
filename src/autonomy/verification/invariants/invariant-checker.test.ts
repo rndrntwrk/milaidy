@@ -33,6 +33,7 @@ function passingInvariant(id = "pass"): Invariant {
     description: "Always passes",
     check: async () => true,
     severity: "critical",
+    owner: "test:invariants",
   };
 }
 
@@ -45,6 +46,7 @@ function failingInvariant(
     description: "Always fails",
     check: async () => false,
     severity,
+    owner: "test:invariants",
   };
 }
 
@@ -67,6 +69,7 @@ describe("InvariantChecker", () => {
     expect(result.status).toBe("passed");
     expect(result.checks).toHaveLength(2);
     expect(result.checks.every((c) => c.passed)).toBe(true);
+    expect(result.checks.every((c) => c.owner === "test:invariants")).toBe(true);
     expect(result.hasCriticalViolation).toBe(false);
   });
 
@@ -120,6 +123,7 @@ describe("InvariantChecker", () => {
         throw new Error("boom");
       },
       severity: "critical",
+      owner: "test:throws",
     });
 
     const result = await checker.check(makeCtx());
@@ -138,6 +142,7 @@ describe("InvariantChecker", () => {
       check: () =>
         new Promise((resolve) => setTimeout(() => resolve(true), 500)),
       severity: "warning",
+      owner: "test:slow",
     });
 
     const result = await checker.check(makeCtx());
@@ -171,6 +176,7 @@ describe("InvariantChecker", () => {
         return true;
       },
       severity: "info",
+      owner: "test:context",
     });
 
     const ctx = makeCtx({

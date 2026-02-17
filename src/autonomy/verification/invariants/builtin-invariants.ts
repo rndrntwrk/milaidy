@@ -20,6 +20,7 @@ export const stateMachineConsistencyInvariant: Invariant = {
     return ["idle", "error", "safe_mode"].includes(ctx.currentState);
   },
   severity: "critical",
+  owner: "autonomy:workflow",
 };
 
 /**
@@ -34,6 +35,7 @@ export const eventStoreIntegrityInvariant: Invariant = {
     return ctx.eventCount >= 2;
   },
   severity: "warning",
+  owner: "autonomy:event-store",
 };
 
 /**
@@ -47,6 +49,7 @@ export const noOrphanedApprovalsInvariant: Invariant = {
     return ctx.pendingApprovalCount === 0;
   },
   severity: "warning",
+  owner: "autonomy:approvals",
 };
 
 /**
@@ -57,3 +60,15 @@ export const builtinInvariants: Invariant[] = [
   eventStoreIntegrityInvariant,
   noOrphanedApprovalsInvariant,
 ];
+
+/**
+ * Built-in invariant catalog metadata used by docs/reporting.
+ */
+export const builtinInvariantCatalog: Array<
+  Pick<Invariant, "id" | "description" | "severity" | "owner">
+> = builtinInvariants.map(({ id, description, severity, owner }) => ({
+  id,
+  description,
+  severity,
+  owner,
+}));

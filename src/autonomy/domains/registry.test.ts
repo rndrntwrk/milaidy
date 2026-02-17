@@ -57,6 +57,7 @@ function makeDomainPack(overrides?: Partial<DomainPack>): DomainPack {
         id: "test:invariant",
         description: "Test invariant",
         severity: "warning",
+        owner: "test:domain",
         check: async () => true,
       },
     ],

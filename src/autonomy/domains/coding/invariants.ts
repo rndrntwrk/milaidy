@@ -42,6 +42,7 @@ export const noShellEscapeInvariant: Invariant = {
     return !ANSI_ESCAPE_RE.test(output);
   },
   severity: "warning",
+  owner: "domain:coding",
 };
 
 // ---------- Output size bound ----------
@@ -60,6 +61,7 @@ export const outputSizeBoundInvariant: Invariant = {
     return output.length <= MAX_OUTPUT_BYTES;
   },
   severity: "warning",
+  owner: "domain:coding",
 };
 
 // ---------- Path safety ----------
@@ -95,6 +97,7 @@ export const pathSafetyInvariant: Invariant = {
     return !FORBIDDEN_PATH_RE.test(output);
   },
   severity: "critical",
+  owner: "domain:coding",
 };
 
 // ---------- Test output validity ----------
@@ -115,6 +118,7 @@ export const testOutputValidInvariant: Invariant = {
     return output.length > 0;
   },
   severity: "warning",
+  owner: "domain:coding",
 };
 
 // ---------- Git safety ----------
@@ -136,6 +140,7 @@ export const gitSafetyInvariant: Invariant = {
     return !FORCE_PUSH_MAIN_RE.test(output);
   },
   severity: "critical",
+  owner: "domain:coding",
 };
 
 // ---------- No secrets in output ----------
@@ -160,6 +165,7 @@ export const noSecretsInOutputInvariant: Invariant = {
     return !SECRET_PATTERNS.some((re) => re.test(output));
   },
   severity: "warning",
+  owner: "domain:coding",
 };
 
 // ---------- Registration ----------

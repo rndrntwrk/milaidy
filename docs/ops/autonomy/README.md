@@ -6,6 +6,7 @@ Contents:
 - `metrics-dictionary.md`: metric definitions and intent.
 - `dashboard-spec.md`: dashboard panel and query definitions.
 - `alert-thresholds.md`: initial alert policy and thresholds.
+- `invariant-catalog.md`: invariant ownership and severity catalog.
 - `baseline-runbook.md`: commands to generate baseline and red-team reports.
 - `reports/`: generated run artifacts (`.json` and `.md` outputs).
 
