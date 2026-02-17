@@ -298,7 +298,7 @@ Sprint chunks:
 - [ ] P2-028 Define execution event schema and versioning. [STATUS: CODED]
 - [ ] P2-029 Implement append-only durable event store. [STATUS: PARTIAL]
 - [ ] P2-030 Implement correlation IDs across pipeline/workflows. [STATUS: CODED]
-- [ ] P2-031 Implement projection/rebuild utilities. [STATUS: PARTIAL]
+- [ ] P2-031 Implement projection/rebuild utilities. [STATUS: CODED]
 - [ ] P2-032 Implement event retention and archival policy. [STATUS: PARTIAL]
 - [ ] P2-033 Implement event integrity checks and backfill tooling. [STATUS: PARTIAL]
 
