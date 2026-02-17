@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CompensationRegistry } from "./compensation-registry.js";
-import { registerBuiltinCompensations } from "./compensations/index.js";
+import {
+  listBuiltinCompensationTools,
+  registerBuiltinCompensations,
+} from "./compensations/index.js";
 import type { CompensationContext } from "./types.js";
 
 function makeCtx(
@@ -84,13 +87,24 @@ describe("CompensationRegistry", () => {
   });
 
   describe("registerBuiltinCompensations()", () => {
-    it("registers compensations for all 3 media tools", () => {
+    it("registers compensations for all eligible reversible tools", () => {
       const registry = new CompensationRegistry();
       registerBuiltinCompensations(registry);
 
+      expect(listBuiltinCompensationTools()).toEqual([
+        "CREATE_TASK",
+        "GENERATE_AUDIO",
+        "GENERATE_IMAGE",
+        "GENERATE_VIDEO",
+        "PHETTA_NOTIFY",
+        "PHETTA_SEND_EVENT",
+      ]);
+      expect(registry.has("CREATE_TASK")).toBe(true);
       expect(registry.has("GENERATE_IMAGE")).toBe(true);
       expect(registry.has("GENERATE_VIDEO")).toBe(true);
       expect(registry.has("GENERATE_AUDIO")).toBe(true);
+      expect(registry.has("PHETTA_NOTIFY")).toBe(true);
+      expect(registry.has("PHETTA_SEND_EVENT")).toBe(true);
     });
 
     it("media compensations return success with detail", async () => {
@@ -122,6 +136,22 @@ describe("CompensationRegistry", () => {
 
       expect(result.success).toBe(true);
       expect(result.detail).toContain("video");
+    });
+
+    it("manual fallback compensations report unresolved rollback", async () => {
+      const registry = new CompensationRegistry();
+      registerBuiltinCompensations(registry);
+
+      const result = await registry.compensate(
+        makeCtx({
+          toolName: "CREATE_TASK",
+          result: { taskId: "task-123" },
+        }),
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.detail).toContain("Manual compensation required");
+      expect(result.detail).toContain("task-123");
     });
   });
 });

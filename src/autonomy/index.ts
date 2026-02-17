@@ -104,9 +104,13 @@ export {
 export {
   InMemoryEventStore,
   CompensationRegistry,
+  BUILTIN_COMPENSATION_ELIGIBILITY,
+  listBuiltinCompensationEligibility,
+  listBuiltinCompensationTools,
   ToolExecutionPipeline,
   registerBuiltinCompensations,
   type EventStoreInterface,
+  type CompensationEligibility,
   type ExecutionEvent,
   type ExecutionEventType,
   type PipelineConfig,

@@ -15,6 +15,7 @@ Primary scripts:
 - `npm run autonomy:metrics:cardinality`
 - `npm run autonomy:contracts:inventory`
 - `npm run autonomy:postconditions:coverage`
+- `npm run autonomy:compensation:coverage`
 - `npm run autonomy:events:rebuild -- --events-file <path-to-events-json>`
 - `npm run autonomy:events:verify -- --events-file <path-to-events-json>`
 
