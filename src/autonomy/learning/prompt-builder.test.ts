@@ -135,4 +135,41 @@ describe("SystemPromptBuilder", () => {
       expect(withContext).toBe(base);
     });
   });
+
+  describe("buildRoleTemplate()", () => {
+    it("builds planner template with role-specific context and variables", () => {
+      const template = builder.buildRoleTemplate("planner", makeIdentity());
+      expect(template.id).toBe("planner-baseline");
+      expect(template.systemPrompt).toContain("Planner Context");
+      expect(template.systemPrompt).toContain("ordered plan steps");
+      expect(template.userTemplate).toContain("{{objective}}");
+      expect(template.variables).toEqual(["objective", "constraints", "context"]);
+    });
+
+    it("builds executor and verifier templates with different user templates", () => {
+      const templates = builder.buildRoleTemplates(makeIdentity());
+      expect(templates.executor.systemPrompt).toContain("Executor Context");
+      expect(templates.verifier.systemPrompt).toContain("Verifier Context");
+      expect(templates.executor.userTemplate).toContain("{{tool_request}}");
+      expect(templates.verifier.userTemplate).toContain("{{execution_result}}");
+    });
+
+    it("adds stronger anti-sycophancy constraints in truth-first variant", () => {
+      const template = builder.buildRoleTemplate("planner", makeIdentity(), {
+        variant: "truth-first",
+      });
+      expect(template.id).toBe("planner-truth-first");
+      expect(template.systemPrompt).toContain("uncertainty bounds");
+      expect(template.systemPrompt).toContain("unsupported agreement");
+    });
+
+    it("adds stricter tool guardrails in tool-safety-first variant", () => {
+      const template = builder.buildRoleTemplate("executor", makeIdentity(), {
+        variant: "tool-safety-first",
+      });
+      expect(template.id).toBe("executor-tool-safety-first");
+      expect(template.systemPrompt).toContain("approval tokens");
+      expect(template.systemPrompt).toContain("ambiguous parameters");
+    });
+  });
 });

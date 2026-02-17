@@ -13,8 +13,8 @@ Current status pre-check snapshot:
 - Evidence basis: static repo review of autonomy kernel, API, persistence, and app UI code paths.
 - Summary counts:
 - `307` total checklist items.
-- `174` items tagged `STATUS: CODED`.
-- `33` items tagged `STATUS: PARTIAL`.
+- `178` items tagged `STATUS: CODED`.
+- `29` items tagged `STATUS: PARTIAL`.
 - `100` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
@@ -438,10 +438,10 @@ Sprint chunks:
 
 ### 4.B Prompt and Reasoning Controls
 
-- [ ] P4-008 Design prompt templates for planning/execution/verifier contexts. [STATUS: PARTIAL]
-- [ ] P4-009 Add explicit truthfulness/anti-sycophancy prompt constraints. [STATUS: PARTIAL]
-- [ ] P4-010 Add explicit tool-use reasoning guardrails. [STATUS: PARTIAL]
-- [ ] P4-011 A/B test prompt variants on held-out scenarios. [STATUS: PARTIAL]
+- [ ] P4-008 Design prompt templates for planning/execution/verifier contexts. [STATUS: CODED]
+- [ ] P4-009 Add explicit truthfulness/anti-sycophancy prompt constraints. [STATUS: CODED]
+- [ ] P4-010 Add explicit tool-use reasoning guardrails. [STATUS: CODED]
+- [ ] P4-011 A/B test prompt variants on held-out scenarios. [STATUS: CODED]
 
 ### 4.C Fine-Tuning Infrastructure
 
