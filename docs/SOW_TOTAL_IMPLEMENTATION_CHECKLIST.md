@@ -309,7 +309,7 @@ Sprint chunks:
 - [ ] P2-036 Implement compensation execution policy on downstream failure. [STATUS: CODED]
 - [ ] P2-037 Log compensation attempts/outcomes with reason. [STATUS: CODED]
 - [ ] P2-038 Add compensation simulation tests. [STATUS: CODED]
-- [ ] P2-039 Define unresolved compensation incident workflow.
+- [ ] P2-039 Define unresolved compensation incident workflow. [STATUS: CODED]
 
 ### 2.G Approval Gate and Risk Controls
 

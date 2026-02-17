@@ -74,6 +74,7 @@ let _ApprovalGate: typeof import("./approval/approval-gate.js").ApprovalGate;
 let _PersistentApprovalGate: typeof import("./approval/persistent-approval-gate.js").PersistentApprovalGate;
 let _InMemoryEventStore: typeof import("./workflow/event-store.js").InMemoryEventStore;
 let _CompensationRegistry: typeof import("./workflow/compensation-registry.js").CompensationRegistry;
+let _CompensationIncidentManager: typeof import("./workflow/compensation-incidents.js").CompensationIncidentManager;
 let _ToolExecutionPipeline: typeof import("./workflow/execution-pipeline.js").ToolExecutionPipeline;
 let _registerBuiltinCompensations: typeof import("./workflow/compensations/index.js").registerBuiltinCompensations;
 let _LocalWorkflowEngine: typeof import("./adapters/workflow/local-engine.js").LocalWorkflowEngine;
@@ -122,7 +123,7 @@ let _SystemPromptBuilder: typeof import("./learning/prompt-builder.js").SystemPr
 let _AdversarialScenarioGenerator: typeof import("./learning/adversarial.js").AdversarialScenarioGenerator;
 
 async function loadImplementations() {
-  const [trustMod, memMod, driftMod, goalMod, toolRegMod, schemaValMod, pcvMod, toolSchemasMod, runtimeContractsMod, pcMod, smMod, approvalMod, approvalPersistentMod, esMod, compRegMod, pipelineMod, compsMod, localWorkflowMod, temporalWorkflowMod, invMod, invRegMod, harnMod, evalMod, plannerMod, executorMod, verifierMod, memWriterMod, auditorMod, safeModeMod, orchestratorMod] = await Promise.all([
+  const [trustMod, memMod, driftMod, goalMod, toolRegMod, schemaValMod, pcvMod, toolSchemasMod, runtimeContractsMod, pcMod, smMod, approvalMod, approvalPersistentMod, esMod, compRegMod, compIncidentMod, pipelineMod, compsMod, localWorkflowMod, temporalWorkflowMod, invMod, invRegMod, harnMod, evalMod, plannerMod, executorMod, verifierMod, memWriterMod, auditorMod, safeModeMod, orchestratorMod] = await Promise.all([
     import("./trust/scorer.js"),
     import("./memory/gate.js"),
     import("./identity/drift-monitor.js"),
@@ -138,6 +139,7 @@ async function loadImplementations() {
     import("./approval/persistent-approval-gate.js"),
     import("./workflow/event-store.js"),
     import("./workflow/compensation-registry.js"),
+    import("./workflow/compensation-incidents.js"),
     import("./workflow/execution-pipeline.js"),
     import("./workflow/compensations/index.js"),
     import("./adapters/workflow/local-engine.js"),
@@ -173,6 +175,7 @@ async function loadImplementations() {
   _PersistentApprovalGate = approvalPersistentMod.PersistentApprovalGate;
   _InMemoryEventStore = esMod.InMemoryEventStore;
   _CompensationRegistry = compRegMod.CompensationRegistry;
+  _CompensationIncidentManager = compIncidentMod.CompensationIncidentManager;
   _ToolExecutionPipeline = pipelineMod.ToolExecutionPipeline;
   _registerBuiltinCompensations = compsMod.registerBuiltinCompensations;
   _LocalWorkflowEngine = localWorkflowMod.LocalWorkflowEngine;
@@ -267,6 +270,7 @@ export class MilaidyAutonomyService extends Service {
   private approvalGate: import("./approval/types.js").ApprovalGateInterface | null = null;
   private eventStore: import("./workflow/types.js").EventStoreInterface | null = null;
   private compensationRegistry: import("./workflow/types.js").CompensationRegistryInterface | null = null;
+  private compensationIncidentManager: import("./workflow/types.js").CompensationIncidentManagerInterface | null = null;
   private executionPipeline: import("./workflow/types.js").ToolExecutionPipelineInterface | null = null;
   private workflowEngine: import("./adapters/workflow/types.js").WorkflowEngine | null = null;
   private invariantChecker: import("./verification/invariants/invariant-checker.js").InvariantChecker | null = null;
@@ -466,6 +470,7 @@ export class MilaidyAutonomyService extends Service {
 
     this.compensationRegistry = new _CompensationRegistry();
     _registerBuiltinCompensations(this.compensationRegistry);
+    this.compensationIncidentManager = new _CompensationIncidentManager();
 
     // Approval log and identity store (Pg-only, null when in-memory)
     if (this.dbAdapter) {
@@ -490,6 +495,7 @@ export class MilaidyAutonomyService extends Service {
       stateMachine: this.stateMachine,
       eventStore: this.eventStore,
       invariantChecker: this.invariantChecker ?? undefined,
+      compensationIncidentManager: this.compensationIncidentManager,
       config: {
         enabled: config.workflow?.enabled ?? true,
         maxConcurrent: config.workflow?.maxConcurrent ?? 1,
@@ -849,6 +855,7 @@ export class MilaidyAutonomyService extends Service {
     this.eventStore = new _InMemoryEventStore();
     this.compensationRegistry = new _CompensationRegistry();
     _registerBuiltinCompensations(this.compensationRegistry);
+    this.compensationIncidentManager = new _CompensationIncidentManager();
     this.invariantChecker = new _InvariantChecker();
     _registerBuiltinInvariants(this.invariantChecker);
     this.executionPipeline = new _ToolExecutionPipeline({
@@ -859,6 +866,7 @@ export class MilaidyAutonomyService extends Service {
       stateMachine: this.stateMachine,
       eventStore: this.eventStore,
       invariantChecker: this.invariantChecker,
+      compensationIncidentManager: this.compensationIncidentManager,
       verificationQuery: (input) =>
         this.runVerificationQuery(
           this.runtime as import("@elizaos/core").IAgentRuntime,
@@ -926,6 +934,7 @@ export class MilaidyAutonomyService extends Service {
     this.approvalGate = null;
     this.eventStore = null;
     this.compensationRegistry = null;
+    this.compensationIncidentManager = null;
     this.executionPipeline = null;
     this.workflowEngine = null;
     this.invariantChecker = null;
@@ -1062,6 +1071,10 @@ export class MilaidyAutonomyService extends Service {
     return this.eventStore;
   }
 
+  getCompensationIncidentManager(): import("./workflow/types.js").CompensationIncidentManagerInterface | null {
+    return this.compensationIncidentManager;
+  }
+
   getExecutionPipeline(): import("./workflow/types.js").ToolExecutionPipelineInterface | null {
     return this.executionPipeline;
   }
@@ -1182,6 +1195,7 @@ export class MilaidyAutonomyService extends Service {
     this.approvalGate = null;
     this.eventStore = null;
     this.compensationRegistry = null;
+    this.compensationIncidentManager = null;
     this.executionPipeline = null;
     this.workflowEngine = null;
     this.invariantChecker = null;

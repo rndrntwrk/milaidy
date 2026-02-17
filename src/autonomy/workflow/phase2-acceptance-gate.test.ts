@@ -16,6 +16,7 @@ import { registerBuiltinInvariants } from "../verification/invariants/index.js";
 import { PostConditionVerifier } from "../verification/postcondition-verifier.js";
 import { registerBuiltinPostConditions } from "../verification/postconditions/index.js";
 import { SchemaValidator } from "../verification/schema-validator.js";
+import { CompensationIncidentManager } from "./compensation-incidents.js";
 import { CompensationRegistry } from "./compensation-registry.js";
 import { registerBuiltinCompensations } from "./compensations/index.js";
 import { InMemoryEventStore } from "./event-store.js";
@@ -69,6 +70,7 @@ function createPipeline(opts: { autoApproveSources?: ToolCallSource[] } = {}) {
   const approvalGate = new ApprovalGate({ timeoutMs: 10_000 });
   const eventStore = new InMemoryEventStore();
   const compensationRegistry = new CompensationRegistry();
+  const compensationIncidentManager = new CompensationIncidentManager();
   registerBuiltinCompensations(compensationRegistry);
 
   const invariantChecker = new InvariantChecker();
@@ -81,6 +83,7 @@ function createPipeline(opts: { autoApproveSources?: ToolCallSource[] } = {}) {
     compensationRegistry,
     stateMachine,
     eventStore,
+    compensationIncidentManager,
     invariantChecker,
     config: {
       autoApproveReadOnly: true,
@@ -88,7 +91,7 @@ function createPipeline(opts: { autoApproveSources?: ToolCallSource[] } = {}) {
     },
   });
 
-  return { pipeline, approvalGate, eventStore };
+  return { pipeline, approvalGate, eventStore, compensationIncidentManager };
 }
 
 describe("Phase 2 Acceptance Gates", () => {
@@ -182,5 +185,34 @@ describe("Phase 2 Acceptance Gates", () => {
     }
 
     expect(unauthorizedExecutionCount).toBe(0);
+  });
+
+  it("P2-039: opens unresolved compensation incidents for manual rollback tools", async () => {
+    const { pipeline, eventStore, compensationIncidentManager } = createPipeline({
+      autoApproveSources: ["system"],
+    });
+
+    const requestId = "p2-039-create-task";
+    const result = await pipeline.execute(
+      makeCall("CREATE_TASK", requestId, "system"),
+      vi.fn(async () => ({
+        result: { success: false, data: { taskId: "task-p2-039" } },
+        durationMs: 1,
+      })),
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.compensation?.attempted).toBe(true);
+    expect(result.compensation?.success).toBe(false);
+
+    const incidents = compensationIncidentManager.listOpenIncidents();
+    expect(incidents).toHaveLength(1);
+    expect(incidents[0].toolName).toBe("CREATE_TASK");
+    expect(incidents[0].status).toBe("open");
+
+    const events = await eventStore.getByRequestId(requestId);
+    expect(
+      events.some((event) => event.type === "tool:compensation:incident:opened"),
+    ).toBe(true);
   });
 });

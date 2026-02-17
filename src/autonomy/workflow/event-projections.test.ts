@@ -72,6 +72,27 @@ describe("event projections", () => {
     expect(projection.correlationIds).toEqual(["corr-1"]);
   });
 
+  it("marks projection when unresolved compensation incident is opened", () => {
+    const projection = rebuildRequestProjection([
+      makeEvent({ sequenceId: 1, type: "tool:proposed", correlationId: "corr-2" }),
+      makeEvent({
+        sequenceId: 2,
+        type: "tool:compensated",
+        payload: { success: false, reason: "critical_verification_failure" },
+        correlationId: "corr-2",
+      }),
+      makeEvent({
+        sequenceId: 3,
+        type: "tool:compensation:incident:opened",
+        payload: { incidentId: "comp-incident-1", status: "open" },
+        correlationId: "corr-2",
+      }),
+    ]);
+
+    expect(projection.hasCompensation).toBe(true);
+    expect(projection.hasUnresolvedCompensationIncident).toBe(true);
+  });
+
   it("rebuilds projections for multiple requests", () => {
     const projections = rebuildAllRequestProjections([
       makeEvent({ sequenceId: 1, requestId: "req-a", type: "tool:proposed" }),

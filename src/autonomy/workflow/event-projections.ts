@@ -21,6 +21,7 @@ export interface RequestProjection {
   eventCount: number;
   status: RequestProjectionStatus;
   hasCompensation: boolean;
+  hasUnresolvedCompensationIncident: boolean;
   hasVerificationFailure: boolean;
   hasCriticalInvariantViolation: boolean;
   correlationIds: string[];
@@ -41,6 +42,7 @@ export function rebuildRequestProjection(events: ExecutionEvent[]): RequestProje
       eventCount: 0,
       status: "unknown",
       hasCompensation: false,
+      hasUnresolvedCompensationIncident: false,
       hasVerificationFailure: false,
       hasCriticalInvariantViolation: false,
       correlationIds: [],
@@ -55,6 +57,9 @@ export function rebuildRequestProjection(events: ExecutionEvent[]): RequestProje
   const hasVerifiedEvent = ordered.some((event) => event.type === "tool:verified");
   const hasExecutingEvent = ordered.some((event) => event.type === "tool:executing");
   const hasCompensation = ordered.some((event) => event.type === "tool:compensated");
+  const hasUnresolvedCompensationIncident = ordered.some(
+    (event) => event.type === "tool:compensation:incident:opened",
+  );
   const hasVerificationFailure = ordered.some((event) => {
     if (event.type !== "tool:verified") return false;
     return event.payload.hasCriticalFailure === true;
@@ -104,6 +109,7 @@ export function rebuildRequestProjection(events: ExecutionEvent[]): RequestProje
     eventCount: ordered.length,
     status,
     hasCompensation,
+    hasUnresolvedCompensationIncident,
     hasVerificationFailure,
     hasCriticalInvariantViolation,
     correlationIds,

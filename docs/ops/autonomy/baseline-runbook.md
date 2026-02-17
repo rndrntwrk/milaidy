@@ -44,6 +44,18 @@ Output:
 - `docs/ops/autonomy/reports/*.postconditions.json`
 - `docs/ops/autonomy/reports/*.postconditions.md`
 
+## 1.2) Event Projection Rebuild (Compensation Incident Visibility)
+
+```bash
+npm run autonomy:events:rebuild -- --events-file /tmp/autonomy-events.json
+```
+
+Output:
+- `docs/ops/autonomy/reports/*.event-projections.json`
+- `docs/ops/autonomy/reports/*.event-projections.md`
+
+Projection reports include `Unresolved Compensation Incident` to highlight requests that opened manual follow-up incidents.
+
 ## 2) Baseline Suite Report
 
 ```bash

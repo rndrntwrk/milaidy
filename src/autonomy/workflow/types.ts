@@ -21,6 +21,7 @@ export type ExecutionEventType =
   | "tool:verified"
   | "tool:failed"
   | "tool:compensated"
+  | "tool:compensation:incident:opened"
   | "tool:invariants:checked"
   | "tool:decision:logged";
 
@@ -189,4 +190,58 @@ export interface CompensationRegistryInterface {
   compensate(
     ctx: CompensationContext,
   ): Promise<{ success: boolean; detail?: string }>;
+}
+
+// ---------- Compensation Incident Types ----------
+
+export type CompensationIncidentStatus =
+  | "open"
+  | "acknowledged"
+  | "resolved";
+
+export type CompensationIncidentReason =
+  | "critical_verification_failure"
+  | "critical_invariant_violation";
+
+export interface CompensationIncident {
+  id: string;
+  requestId: string;
+  toolName: string;
+  correlationId: string;
+  reason: CompensationIncidentReason;
+  compensationAttempted: boolean;
+  compensationSuccess: boolean;
+  compensationDetail?: string;
+  status: CompensationIncidentStatus;
+  createdAt: number;
+  updatedAt: number;
+  acknowledgedAt?: number;
+  acknowledgedBy?: string;
+  resolvedAt?: number;
+  resolvedBy?: string;
+  resolutionNote?: string;
+}
+
+export interface CompensationIncidentManagerInterface {
+  openIncident(input: {
+    requestId: string;
+    toolName: string;
+    correlationId: string;
+    reason: CompensationIncidentReason;
+    compensationAttempted: boolean;
+    compensationSuccess: boolean;
+    compensationDetail?: string;
+  }): CompensationIncident;
+  acknowledgeIncident(
+    incidentId: string,
+    actor: string,
+  ): CompensationIncident | undefined;
+  resolveIncident(
+    incidentId: string,
+    actor: string,
+    resolutionNote?: string,
+  ): CompensationIncident | undefined;
+  getIncidentById(incidentId: string): CompensationIncident | undefined;
+  listOpenIncidents(): CompensationIncident[];
+  listIncidents(): CompensationIncident[];
 }

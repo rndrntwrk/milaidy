@@ -9,6 +9,7 @@ import type { ApprovalGateInterface } from "../approval/types.js";
 import type { KernelStateMachineInterface } from "../state-machine/types.js";
 import type {
   ProposedToolCall,
+  RiskClass,
   SchemaValidatorInterface,
   ToolCallSource,
 } from "../tools/types.js";
@@ -23,6 +24,8 @@ import type {
 } from "../verification/types.js";
 import { recordInvariantCheck } from "../metrics/prometheus-metrics.js";
 import type {
+  CompensationIncidentManagerInterface,
+  CompensationIncidentReason,
   CompensationRegistryInterface,
   ExecutionEventType,
   EventStoreInterface,
@@ -77,6 +80,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
     emit: (event: string, payload: unknown) => void;
   };
   private verificationQuery?: PipelineVerificationQuery;
+  private compensationIncidentManager?: CompensationIncidentManagerInterface;
 
   constructor(deps: {
     schemaValidator: SchemaValidatorInterface;
@@ -89,6 +93,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
     config?: Partial<PipelineConfig>;
     eventBus?: { emit: (event: string, payload: unknown) => void };
     verificationQuery?: PipelineVerificationQuery;
+    compensationIncidentManager?: CompensationIncidentManagerInterface;
   }) {
     this.schemaValidator = deps.schemaValidator;
     this.approvalGate = deps.approvalGate;
@@ -100,6 +105,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
     this.config = { ...DEFAULT_CONFIG, ...deps.config };
     this.eventBus = deps.eventBus;
     this.verificationQuery = deps.verificationQuery;
+    this.compensationIncidentManager = deps.compensationIncidentManager;
   }
 
   async execute(
@@ -408,6 +414,15 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
         reason: "critical_verification_failure",
       });
       if (compensationInfo?.attempted) requestEventCount += 1;
+      const incidentOpened = await this.openUnresolvedCompensationIncident({
+        requestId,
+        toolName,
+        correlationId,
+        riskClass: validation.riskClass,
+        reason: "critical_verification_failure",
+        compensation: compensationInfo,
+      });
+      if (incidentOpened) requestEventCount += 1;
 
       // Attempt recovery
       this.stateMachine.transition("recover");
@@ -489,6 +504,14 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
         result: execResult.result,
         correlationId,
         reason: "critical_invariant_violation",
+      });
+      await this.openUnresolvedCompensationIncident({
+        requestId,
+        toolName,
+        correlationId,
+        riskClass: validation.riskClass,
+        reason: "critical_invariant_violation",
+        compensation: compensationInfo,
       });
 
       await appendEvent("tool:failed", {
@@ -859,5 +882,53 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
       success: compResult.success,
       detail: compResult.detail,
     };
+  }
+
+  private async openUnresolvedCompensationIncident(input: {
+    requestId: string;
+    toolName: string;
+    correlationId: string;
+    riskClass: RiskClass | undefined;
+    reason: CompensationIncidentReason;
+    compensation: PipelineResult["compensation"] | undefined;
+  }): Promise<boolean> {
+    if (!this.compensationIncidentManager) return false;
+    if (input.riskClass !== "reversible") return false;
+    if (input.compensation?.attempted && input.compensation.success) return false;
+
+    const incident = this.compensationIncidentManager.openIncident({
+      requestId: input.requestId,
+      toolName: input.toolName,
+      correlationId: input.correlationId,
+      reason: input.reason,
+      compensationAttempted: input.compensation?.attempted ?? false,
+      compensationSuccess: input.compensation?.success ?? false,
+      compensationDetail: input.compensation?.detail,
+    });
+
+    const payload = {
+      incidentId: incident.id,
+      status: incident.status,
+      reason: incident.reason,
+      compensationAttempted: incident.compensationAttempted,
+      compensationSuccess: incident.compensationSuccess,
+      compensationDetail: incident.compensationDetail,
+      createdAt: incident.createdAt,
+    } satisfies Record<string, unknown>;
+
+    await this.eventStore.append(
+      input.requestId,
+      "tool:compensation:incident:opened",
+      payload,
+      input.correlationId,
+    );
+    this.eventBus?.emit("autonomy:compensation:incident:opened", {
+      requestId: input.requestId,
+      toolName: input.toolName,
+      correlationId: input.correlationId,
+      ...payload,
+    });
+
+    return true;
   }
 }
