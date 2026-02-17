@@ -276,36 +276,14 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
     if (verification.hasCriticalFailure) {
       this.stateMachine.transition("verification_failed");
 
-      let compensationInfo: PipelineResult["compensation"];
-      if (this.compensationRegistry.has(toolName)) {
-        const compResult = await this.compensationRegistry.compensate({
-          toolName,
-          params: call.params,
-          result: execResult.result,
-          requestId,
-        });
-
-        await this.eventStore.append(requestId, "tool:compensated", {
-          success: compResult.success,
-          detail: compResult.detail,
-        }, correlationId);
-
-        this.eventBus?.emit("autonomy:compensation:attempted", {
-          requestId,
-          toolName,
-          success: compResult.success,
-          detail: compResult.detail,
-          correlationId,
-        });
-
-        compensationInfo = {
-          attempted: true,
-          success: compResult.success,
-          detail: compResult.detail,
-        };
-      } else {
-        compensationInfo = { attempted: false, success: false };
-      }
+      const compensationInfo = await this.attemptCompensation({
+        requestId,
+        toolName,
+        params: call.params,
+        result: execResult.result,
+        correlationId,
+        reason: "critical_verification_failure",
+      });
 
       // Attempt recovery
       this.stateMachine.transition("recover");
@@ -358,6 +336,15 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
     );
 
     if (invariantInfo?.hasCriticalViolation) {
+      const compensationInfo = await this.attemptCompensation({
+        requestId,
+        toolName,
+        params: call.params,
+        result: execResult.result,
+        correlationId,
+        reason: "critical_invariant_violation",
+      });
+
       await this.eventStore.append(requestId, "tool:failed", {
         reason: "critical_invariant_violation",
       }, correlationId);
@@ -383,6 +370,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
           status: verification.status,
           hasCriticalFailure: false,
         },
+        compensation: compensationInfo,
         invariants: invariantInfo,
         correlationId,
         durationMs: Date.now() - startTime,
@@ -514,6 +502,61 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
       correlationId,
       durationMs: Date.now() - startTime,
       error,
+    };
+  }
+
+  private async attemptCompensation(input: {
+    requestId: string;
+    toolName: string;
+    params: Record<string, unknown>;
+    result: unknown;
+    correlationId: string;
+    reason: "critical_verification_failure" | "critical_invariant_violation";
+  }): Promise<PipelineResult["compensation"]> {
+    const {
+      requestId,
+      toolName,
+      params,
+      result,
+      correlationId,
+      reason,
+    } = input;
+
+    if (!this.compensationRegistry.has(toolName)) {
+      return { attempted: false, success: false };
+    }
+
+    const compResult = await this.compensationRegistry.compensate({
+      toolName,
+      params,
+      result,
+      requestId,
+    });
+
+    await this.eventStore.append(
+      requestId,
+      "tool:compensated",
+      {
+        success: compResult.success,
+        detail: compResult.detail,
+        reason,
+      },
+      correlationId,
+    );
+
+    this.eventBus?.emit("autonomy:compensation:attempted", {
+      requestId,
+      toolName,
+      success: compResult.success,
+      detail: compResult.detail,
+      reason,
+      correlationId,
+    });
+
+    return {
+      attempted: true,
+      success: compResult.success,
+      detail: compResult.detail,
     };
   }
 }

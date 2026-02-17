@@ -450,6 +450,42 @@ describe("ToolExecutionPipeline", () => {
       const events = await eventStore.getByRequestId("test-req-1");
       expect(events.some((event) => event.type === "tool:failed")).toBe(true);
     });
+
+    it("attempts compensation on critical invariant violations for reversible tools", async () => {
+      const invariantChecker: InvariantCheckerInterface = {
+        register: vi.fn(),
+        registerMany: vi.fn(),
+        check: vi.fn().mockResolvedValue({
+          status: "failed",
+          checks: [
+            {
+              invariantId: "inv-critical",
+              passed: false,
+              severity: "critical",
+            },
+          ],
+          hasCriticalViolation: true,
+        }),
+      };
+      const handler = createSuccessHandler({ outputPath: "/tmp/out.png" });
+      const { pipeline, eventStore } = createPipeline({
+        invariantChecker,
+      });
+
+      const result = await pipeline.execute(
+        makeCall({ tool: "GENERATE_IMAGE", params: { prompt: "cat" } }),
+        handler,
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.compensation?.attempted).toBe(true);
+      expect(result.compensation?.success).toBe(true);
+
+      const events = await eventStore.getByRequestId("test-req-1");
+      const compensationEvent = events.find((event) => event.type === "tool:compensated");
+      expect(compensationEvent).toBeDefined();
+      expect(compensationEvent?.payload.reason).toBe("critical_invariant_violation");
+    });
   });
 
   describe("event bus emissions", () => {
@@ -497,6 +533,7 @@ describe("ToolExecutionPipeline", () => {
         toolName: "GENERATE_IMAGE",
         success: true,
         detail: expect.any(String),
+        reason: "critical_verification_failure",
         correlationId: expect.any(String),
       });
     });
