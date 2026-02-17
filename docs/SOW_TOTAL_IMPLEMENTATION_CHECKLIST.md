@@ -13,8 +13,8 @@ Current status pre-check snapshot:
 - Evidence basis: static repo review of autonomy kernel, API, persistence, and app UI code paths.
 - Summary counts:
 - `307` total checklist items.
-- `100` items tagged `STATUS: CODED`.
-- `90` items tagged `STATUS: PARTIAL`.
+- `103` items tagged `STATUS: CODED`.
+- `87` items tagged `STATUS: PARTIAL`.
 - `117` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
@@ -403,9 +403,9 @@ Sprint chunks:
 ### 3.F Integration and End-to-End Tests
 
 - [ ] P3-030 Integrate role dataflow across full lifecycle. [STATUS: CODED]
-- [ ] P3-031 Validate full lifecycle under nominal conditions. [STATUS: PARTIAL]
-- [ ] P3-032 Validate full lifecycle under partial failures. [STATUS: PARTIAL]
-- [ ] P3-033 Validate safe-mode trigger and recovery behavior. [STATUS: PARTIAL]
+- [ ] P3-031 Validate full lifecycle under nominal conditions. [STATUS: CODED]
+- [ ] P3-032 Validate full lifecycle under partial failures. [STATUS: CODED]
+- [ ] P3-033 Validate safe-mode trigger and recovery behavior. [STATUS: CODED]
 - [ ] P3-034 Validate no role bypasses contract or auth. [STATUS: CODED]
 - [ ] P3-035 Validate state consistency under concurrency. [STATUS: PARTIAL]
 
