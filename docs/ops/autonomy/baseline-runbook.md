@@ -17,6 +17,30 @@ Output:
 - `docs/ops/autonomy/reports/*.tool-contracts.json`
 - `docs/ops/autonomy/reports/*.tool-contracts.md`
 
+Runtime-inclusive inventory (includes discovered runtime/custom actions):
+
+```bash
+npm run autonomy:contracts:inventory -- --label contracts-runtime --out-dir docs/ops/autonomy/reports
+```
+
+## 1.1) Post-Condition Coverage
+
+Built-in scope (default):
+
+```bash
+npm run autonomy:postconditions:coverage
+```
+
+Runtime/custom-action scope:
+
+```bash
+npm run autonomy:postconditions:coverage -- --include-runtime=true
+```
+
+Output:
+- `docs/ops/autonomy/reports/*.postconditions.json`
+- `docs/ops/autonomy/reports/*.postconditions.md`
+
 ## 2) Baseline Suite Report
 
 ```bash

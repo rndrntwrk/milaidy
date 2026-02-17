@@ -10,7 +10,9 @@ Phase 2 implementation is published with code-level completion evidence across c
 Key quantitative gates at current HEAD:
 - Tool contract inventory coverage: `11/11` built-in tools.
 - Runtime action contract coverage: `100%` for discovered runtime actions in inventory runs.
+- Runtime explicit custom-action contracts: available and reported separately from synthesized runtime contracts.
 - Post-condition coverage: `100%` (`11/11` built-in tools).
+- Runtime-scope post-condition coverage: supported via report flag (`--include-runtime=true`).
 - Reversible compensation coverage: `100%` (`6/6` reversible tools).
 - Reversible success gate (`P2-063`): `>=99.5%` threshold test passed.
 - Unauthorized irreversible execution gate (`P2-064`): `0` unauthorized executions in denial-path suite.
@@ -26,6 +28,7 @@ Key quantitative gates at current HEAD:
 Notable metrics:
 - built-in contracts: `11`
 - runtime coverage fields are emitted: `runtimeActionCount`, `runtimeActionCoverageCount`, `runtimeActionUncovered`
+- explicit vs synthesized runtime contracts are emitted: `runtimeExplicitContractCount`, `runtimeGeneratedContractCount`
 - risk breakdown: `read-only=2`, `reversible=6`, `irreversible=3`
 - postcondition coverage: `100%`
 - compensation coverage for reversible tools: `100%`
@@ -46,6 +49,12 @@ Validation command:
   src/autonomy/workflow/execution-pipeline.test.ts \
   src/autonomy/workflow/integration-pipeline.test.ts \
   src/autonomy/workflow/phase2-acceptance-gate.test.ts
+```
+
+Runtime-scope post-condition coverage command:
+
+```bash
+node --import tsx scripts/autonomy/postcondition-coverage.ts --include-runtime=true
 ```
 
 ### Performance Optimization Evidence
