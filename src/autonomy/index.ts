@@ -60,6 +60,7 @@ export { DEFAULT_RETRIEVAL_CONFIG, type AutonomyRetrievalConfig } from "./config
 // Re-export workflow config types
 export type {
   AutonomyWorkflowConfig,
+  AutonomyWorkflowEngineConfig,
   AutonomyApprovalConfig,
   AutonomyEventStoreConfig,
   AutonomyInvariantsConfig,
@@ -114,6 +115,15 @@ export {
   type CompensationFn,
   type CompensationRegistryInterface,
 } from "./workflow/index.js";
+
+// Re-export workflow engine adapters
+export {
+  LocalWorkflowEngine,
+  TemporalWorkflowEngine,
+  type WorkflowDefinition,
+  type WorkflowEngine,
+  type WorkflowResult,
+} from "./adapters/workflow/index.js";
 
 // Re-export roles (Phase 3)
 export {

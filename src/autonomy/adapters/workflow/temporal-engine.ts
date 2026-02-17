@@ -7,7 +7,10 @@
  * @module autonomy/adapters/workflow/temporal-engine
  */
 
+import { createRequire } from "node:module";
 import type { WorkflowEngine, WorkflowDefinition, WorkflowResult } from "./types.js";
+
+const require = createRequire(import.meta.url);
 
 /** Configuration for Temporal workflow engine. */
 export interface TemporalEngineConfig {
@@ -17,6 +20,8 @@ export interface TemporalEngineConfig {
   namespace?: string;
   /** Task queue name. Default: "autonomy-tasks". */
   taskQueue?: string;
+  /** Prefix for generated workflow IDs. Default: "autonomy". */
+  workflowIdPrefix?: string;
 }
 
 /**
@@ -29,16 +34,41 @@ export interface TemporalEngineConfig {
 export class TemporalWorkflowEngine implements WorkflowEngine {
   private readonly workflows = new Map<string, WorkflowDefinition>();
   private readonly config: Required<TemporalEngineConfig>;
+  private readonly results = new Map<string, WorkflowResult>();
+  private readonly handles = new Map<string, { workflowId: string; handle: unknown }>();
+  private clientPromise?: Promise<{ client: unknown; connection: unknown }>;
+  private temporalModule!: {
+    Connection: { connect: (opts: { address?: string }) => Promise<unknown> };
+    WorkflowClient: new (opts: { connection: unknown; namespace: string }) => {
+      start: (
+        workflowType: string,
+        options: { taskQueue: string; args: unknown[]; workflowId?: string },
+      ) => Promise<unknown>;
+      getHandle: (workflowId: string, runId?: string) => unknown;
+    };
+  };
 
   constructor(config: TemporalEngineConfig = {}) {
     this.config = {
       address: config.address ?? "localhost:7233",
       namespace: config.namespace ?? "default",
       taskQueue: config.taskQueue ?? "autonomy-tasks",
+      workflowIdPrefix: config.workflowIdPrefix ?? "autonomy",
     };
     // Verify dependency is available
     try {
-      require.resolve("@temporalio/client");
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const temporal = require("@temporalio/client") as {
+        Connection: { connect: (opts: { address?: string }) => Promise<unknown> };
+        WorkflowClient: new (opts: { connection: unknown; namespace: string }) => {
+          start: (
+            workflowType: string,
+            options: { taskQueue: string; args: unknown[]; workflowId?: string },
+          ) => Promise<unknown>;
+          getHandle: (workflowId: string, runId?: string) => unknown;
+        };
+      };
+      this.temporalModule = temporal;
     } catch {
       throw new Error(
         "TemporalWorkflowEngine requires '@temporalio/client'. Install it with: npm install @temporalio/client",
@@ -60,26 +90,64 @@ export class TemporalWorkflowEngine implements WorkflowEngine {
         durationMs: 0,
       };
     }
+    const startTime = Date.now();
 
-    // Stub: In a real implementation, this would create a Temporal
-    // workflow execution using the client Connection and WorkflowClient.
-    //
-    // const connection = await Connection.connect({ address: this.config.address });
-    // const client = new WorkflowClient({ connection, namespace: this.config.namespace });
-    // const handle = await client.start(workflowId, {
-    //   taskQueue: this.config.taskQueue,
-    //   args: [input],
-    // });
-    // const result = await handle.result();
+    try {
+      const { client } = await this.getClient();
+      const workflowType = workflow.temporal?.workflowType ?? workflow.id;
+      const taskQueue = workflow.temporal?.taskQueue ?? this.config.taskQueue;
+      const temporalWorkflowId = workflow.temporal?.workflowId ?? this.buildWorkflowId(workflow.id);
 
-    throw new Error(
-      `TemporalWorkflowEngine.execute() is a stub. ` +
-      `Configure a running Temporal server at ${this.config.address} and implement the client calls.`,
-    );
+      const handle = await (client as {
+        start: (
+          workflowType: string,
+          options: { taskQueue: string; args: unknown[]; workflowId?: string },
+        ) => Promise<unknown>;
+      }).start(workflowType, {
+        taskQueue,
+        args: [input],
+        workflowId: temporalWorkflowId,
+      });
+
+      const executionId = this.extractExecutionId(handle, temporalWorkflowId);
+      this.handles.set(executionId, { workflowId: temporalWorkflowId, handle });
+
+      const result = await (handle as { result: () => Promise<unknown> }).result();
+      const workflowResult: WorkflowResult = {
+        executionId,
+        success: true,
+        output: result,
+        durationMs: Date.now() - startTime,
+      };
+      this.results.set(executionId, workflowResult);
+      return workflowResult;
+    } catch (err) {
+      const workflowResult: WorkflowResult = {
+        executionId: `temporal-${Date.now()}`,
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+        durationMs: Date.now() - startTime,
+      };
+      this.results.set(workflowResult.executionId, workflowResult);
+      return workflowResult;
+    }
   }
 
   async getStatus(_executionId: string): Promise<WorkflowResult | undefined> {
-    throw new Error("TemporalWorkflowEngine.getStatus() is a stub.");
+    return this.results.get(_executionId);
+  }
+
+  async cancel(executionId: string): Promise<boolean> {
+    const entry = this.handles.get(executionId);
+    if (!entry) return false;
+    const handle = entry.handle as { cancel?: () => Promise<void> };
+    if (typeof handle?.cancel !== "function") return false;
+    try {
+      await handle.cancel();
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   listWorkflows(): string[] {
@@ -88,5 +156,46 @@ export class TemporalWorkflowEngine implements WorkflowEngine {
 
   async close(): Promise<void> {
     this.workflows.clear();
+    this.results.clear();
+    this.handles.clear();
+    if (this.clientPromise) {
+      try {
+        const { connection } = await this.clientPromise;
+        if (connection && typeof (connection as { close?: () => Promise<void> }).close === "function") {
+          await (connection as { close: () => Promise<void> }).close();
+        }
+      } catch {
+        // Ignore close errors
+      }
+    }
+  }
+
+  private async getClient(): Promise<{ client: unknown; connection: unknown }> {
+    if (!this.clientPromise) {
+      this.clientPromise = (async () => {
+        const { Connection, WorkflowClient } = this.temporalModule;
+        const connection = await Connection.connect({ address: this.config.address });
+        const client = new WorkflowClient({ connection, namespace: this.config.namespace });
+        return { client, connection };
+      })();
+    }
+    return this.clientPromise;
+  }
+
+  private buildWorkflowId(workflowId: string): string {
+    return `${this.config.workflowIdPrefix}-${workflowId}-${Date.now()}`;
+  }
+
+  private extractExecutionId(handle: unknown, fallbackWorkflowId: string): string {
+    const h = handle as {
+      workflowId?: string;
+      runId?: string;
+      firstExecutionRunId?: string;
+      execution?: { runId?: string };
+    };
+    const workflowId = h.workflowId ?? fallbackWorkflowId;
+    const runId = h.runId ?? h.firstExecutionRunId ?? h.execution?.runId;
+    if (runId) return `${workflowId}:${runId}`;
+    return workflowId;
   }
 }

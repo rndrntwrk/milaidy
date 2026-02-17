@@ -26,6 +26,15 @@ export interface WorkflowDefinition {
   name: string;
   /** Steps to execute (opaque to the adapter). */
   steps: unknown[];
+  /** Optional backend-specific hints. */
+  temporal?: {
+    /** Override workflow type for Temporal (defaults to `id`). */
+    workflowType?: string;
+    /** Override task queue for Temporal (defaults to engine config). */
+    taskQueue?: string;
+    /** Override workflow ID for Temporal (defaults to generated ID). */
+    workflowId?: string;
+  };
 }
 
 /** Workflow engine adapter interface. */
@@ -36,6 +45,8 @@ export interface WorkflowEngine {
   register(definition: WorkflowDefinition): void;
   /** Get the status of a running or completed workflow. */
   getStatus(executionId: string): Promise<WorkflowResult | undefined>;
+  /** Cancel a running workflow (if supported by the backend). */
+  cancel?(executionId: string): Promise<boolean>;
   /** List registered workflow IDs. */
   listWorkflows(): string[];
   /** Shutdown the engine and release resources. */

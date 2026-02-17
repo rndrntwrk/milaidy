@@ -5,6 +5,8 @@ import type {
   ToolActionHandler,
   ToolExecutionPipelineInterface,
 } from "../workflow/types.js";
+import { LocalWorkflowEngine } from "../adapters/workflow/local-engine.js";
+import type { WorkflowEngine } from "../adapters/workflow/types.js";
 import { KernelOrchestrator } from "./orchestrator.js";
 import { SafeModeControllerImpl } from "./safe-mode.js";
 import type {
@@ -164,6 +166,7 @@ describe("KernelOrchestrator", () => {
     memoryWriter?: MemoryWriterRole;
     auditor?: AuditorRole;
     safeMode?: SafeModeController;
+    workflowEngine?: WorkflowEngine;
   }) {
     const sm = new KernelStateMachine();
     return {
@@ -174,6 +177,7 @@ describe("KernelOrchestrator", () => {
         overrides?.auditor ?? createMockAuditor(),
         sm,
         overrides?.safeMode ?? new SafeModeControllerImpl(),
+        overrides?.workflowEngine,
       ),
       sm,
     };
@@ -339,6 +343,51 @@ describe("KernelOrchestrator", () => {
       await orchestrator.execute(createRequest());
 
       expect(executedTools).toEqual(["TOOL_A", "TOOL_B", "TOOL_C"]);
+    });
+
+    it("executes via workflow engine when provided", async () => {
+      const planner = createMockPlanner(
+        createMockPlan([{ toolName: "TOOL_A" }, { toolName: "TOOL_B" }]),
+      );
+      const pipeline = createMockPipeline(true);
+      const workflowEngine = new LocalWorkflowEngine();
+
+      const { orchestrator } = createOrchestrator({
+        planner,
+        pipeline,
+        workflowEngine,
+      });
+      const result = await orchestrator.execute(createRequest());
+
+      expect(result.success).toBe(true);
+      expect(result.executions).toHaveLength(2);
+      expect(pipeline.execute).toHaveBeenCalledTimes(2);
+      expect(workflowEngine.listWorkflows()).toContain("plan-plan-test");
+    });
+
+    it("fails execution when workflow engine returns failure", async () => {
+      const workflowEngine: WorkflowEngine = {
+        register: vi.fn(),
+        execute: vi.fn(async () => ({
+          executionId: "wf-1",
+          success: false,
+          error: "workflow failed",
+          durationMs: 5,
+        })),
+        getStatus: vi.fn(async () => undefined),
+        listWorkflows: vi.fn(() => []),
+        close: vi.fn(async () => {}),
+      };
+
+      const { orchestrator } = createOrchestrator({ workflowEngine });
+      const result = await orchestrator.execute(createRequest());
+
+      expect(result.success).toBe(false);
+      expect(result.auditReport?.anomalies).toContain(
+        "Workflow execution failed: workflow failed",
+      );
+      expect(workflowEngine.register).toHaveBeenCalledTimes(1);
+      expect(workflowEngine.execute).toHaveBeenCalledTimes(1);
     });
   });
 

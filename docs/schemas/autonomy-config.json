@@ -61,6 +61,22 @@
         "autoApproveReadOnly": { "type": "boolean", "default": true }
       }
     },
+    "workflowEngine": {
+      "type": "object",
+      "description": "Workflow engine selection and configuration.",
+      "properties": {
+        "provider": { "type": "string", "enum": ["local", "temporal"], "default": "local" },
+        "temporal": {
+          "type": "object",
+          "properties": {
+            "address": { "type": "string", "default": "localhost:7233" },
+            "namespace": { "type": "string", "default": "default" },
+            "taskQueue": { "type": "string", "default": "autonomy-tasks" },
+            "workflowIdPrefix": { "type": "string", "default": "autonomy" }
+          }
+        }
+      }
+    },
     "safeMode": {
       "type": "object",
       "description": "Safe mode configuration.",
