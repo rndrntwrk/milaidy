@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AutonomyDbAdapter } from "../persistence/db-adapter.js";
+import { metrics } from "../../telemetry/setup.js";
 import { PersistentApprovalGate } from "./persistent-approval-gate.js";
 
 function makeCall(overrides?: Partial<Record<string, unknown>>) {
@@ -25,6 +26,7 @@ describe("PersistentApprovalGate", () => {
     const executeRaw = vi.fn(async (_sql: string) => ({ rows: [], rowCount: 0 }));
     const adapter = { executeRaw } as unknown as AutonomyDbAdapter;
     const gate = new PersistentApprovalGate(adapter, { timeoutMs: 10_000 });
+    const before = metrics.getSnapshot();
 
     const pendingPromise = gate.requestApproval(makeCall(), "irreversible");
     const [pending] = gate.getPending();
@@ -40,6 +42,14 @@ describe("PersistentApprovalGate", () => {
     const result = await pendingPromise;
     expect(result.decision).toBe("approved");
     expect(result.decidedBy).toBe("tester");
+
+    const after = metrics.getSnapshot();
+    const reqKey = 'autonomy_approval_requests_total:{"risk_class":"irreversible"}';
+    const decisionKey = 'autonomy_approval_decisions_total:{"decision":"approved"}';
+    expect((after.counters[reqKey] ?? 0) - (before.counters[reqKey] ?? 0)).toBe(1);
+    expect((after.counters[decisionKey] ?? 0) - (before.counters[decisionKey] ?? 0)).toBe(1);
+    expect(after.histograms["autonomy_approval_turnaround_ms:{}"]).toBeDefined();
+    expect(after.counters["autonomy_approval_queue_size"]).toBe(0);
 
     const sqlCalls = executeRaw.mock.calls.map((call) => String(call[0]));
     expect(sqlCalls.some((sql) => sql.includes("INSERT INTO autonomy_approvals"))).toBe(true);

@@ -16,6 +16,12 @@ import type {
   ApprovalRequest,
   ApprovalResult,
 } from "./types.js";
+import {
+  recordApprovalDecision,
+  recordApprovalQueueSize,
+  recordApprovalRequest,
+  recordApprovalTurnaroundMs,
+} from "../metrics/prometheus-metrics.js";
 
 interface PendingEntry {
   request: ApprovalRequest;
@@ -73,6 +79,7 @@ export class PersistentApprovalGate implements ApprovalGateInterface {
           this.addPending(request);
         }
       }
+      recordApprovalQueueSize(this.pending.size);
     } catch (err) {
       logger.warn(
         `[approval-gate] Failed to hydrate pending approvals: ${err instanceof Error ? err.message : String(err)}`,
@@ -104,6 +111,8 @@ export class PersistentApprovalGate implements ApprovalGateInterface {
         resolve: resolvePromise,
         timer,
       });
+      recordApprovalRequest(riskClass);
+      recordApprovalQueueSize(this.pending.size);
 
       void this.persistRequest(request);
 
@@ -121,6 +130,7 @@ export class PersistentApprovalGate implements ApprovalGateInterface {
     const resolved = this.resolveInternal(id, decision, decidedBy);
     if (!resolved) {
       void this.persistResolution(id, decision, decidedBy);
+      recordApprovalDecision(decision);
     }
     return true;
   }
@@ -164,15 +174,20 @@ export class PersistentApprovalGate implements ApprovalGateInterface {
     clearTimeout(entry.timer);
     this.pending.delete(id);
 
+    const decidedAt = Date.now();
+    const turnaroundMs = Math.max(0, decidedAt - entry.request.createdAt);
     const result: ApprovalResult = {
       id,
       decision,
       decidedBy,
-      decidedAt: Date.now(),
+      decidedAt,
     };
 
     entry.resolve(result);
     void this.persistResolution(id, decision, decidedBy);
+    recordApprovalDecision(decision);
+    recordApprovalTurnaroundMs(turnaroundMs);
+    recordApprovalQueueSize(this.pending.size);
 
     this.eventBus?.emit("autonomy:approval:resolved", {
       requestId: entry.request.call.requestId,

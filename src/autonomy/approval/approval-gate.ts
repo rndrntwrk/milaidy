@@ -15,6 +15,12 @@ import type {
   ApprovalRequest,
   ApprovalResult,
 } from "./types.js";
+import {
+  recordApprovalDecision,
+  recordApprovalQueueSize,
+  recordApprovalRequest,
+  recordApprovalTurnaroundMs,
+} from "../metrics/prometheus-metrics.js";
 
 /** Default approval timeout: 5 minutes. */
 const DEFAULT_TIMEOUT_MS = 300_000;
@@ -65,6 +71,8 @@ export class ApprovalGate implements ApprovalGateInterface {
         resolve: resolvePromise,
         timer,
       });
+      recordApprovalRequest(riskClass);
+      recordApprovalQueueSize(this.pending.size);
 
       // Emit approval requested event
       this.eventBus?.emit("autonomy:approval:requested", {
@@ -106,14 +114,19 @@ export class ApprovalGate implements ApprovalGateInterface {
     clearTimeout(entry.timer);
     this.pending.delete(id);
 
+    const decidedAt = Date.now();
+    const turnaroundMs = Math.max(0, decidedAt - entry.request.createdAt);
     const result: ApprovalResult = {
       id,
       decision,
       decidedBy,
-      decidedAt: Date.now(),
+      decidedAt,
     };
 
     entry.resolve(result);
+    recordApprovalDecision(decision);
+    recordApprovalTurnaroundMs(turnaroundMs);
+    recordApprovalQueueSize(this.pending.size);
 
     // Emit approval resolved event
     this.eventBus?.emit("autonomy:approval:resolved", {

@@ -8,6 +8,7 @@
  */
 
 import { logger } from "@elizaos/core";
+import { recordGoalStatusChange } from "../metrics/prometheus-metrics.js";
 import type { GoalPriority, GoalStatus } from "../types.js";
 
 /**
@@ -169,6 +170,7 @@ export class InMemoryGoalManager implements GoalManager {
     };
 
     this.goals.set(goal.id, goal);
+    recordGoalStatusChange(goal.status);
 
     logger.info(
       `[goal-manager] Created goal ${goal.id}: "${goal.description}" ` +
@@ -247,6 +249,9 @@ export class InMemoryGoalManager implements GoalManager {
     }
 
     this.goals.set(goalId, updated);
+    if (updated.status !== goal.status) {
+      recordGoalStatusChange(updated.status);
+    }
 
     logger.debug(
       `[goal-manager] Updated goal ${goalId}: status=${updated.status}`,
