@@ -297,6 +297,8 @@ export interface SafeModeController {
 export interface OrchestratedRequest {
   /** Description of what to accomplish. */
   description: string;
+  /** Optional planner constraints/tool hints. */
+  constraints?: string[];
   /** Source of the request. */
   source: ToolCallSource;
   /** Trust level of the source. */

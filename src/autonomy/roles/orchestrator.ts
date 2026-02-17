@@ -58,6 +58,7 @@ export class KernelOrchestrator implements RoleOrchestrator {
 
       plan = await this.planner.createPlan({
         description: request.description,
+        constraints: request.constraints,
         source: request.source,
         sourceTrust: request.sourceTrust,
       });
