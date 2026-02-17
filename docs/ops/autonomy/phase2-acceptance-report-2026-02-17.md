@@ -9,6 +9,7 @@ Phase 2 implementation is published with code-level completion evidence across c
 
 Key quantitative gates at current HEAD:
 - Tool contract inventory coverage: `11/11` built-in tools.
+- Runtime action contract coverage: `100%` for discovered runtime actions in inventory runs.
 - Post-condition coverage: `100%` (`11/11` built-in tools).
 - Reversible compensation coverage: `100%` (`6/6` reversible tools).
 - Reversible success gate (`P2-063`): `>=99.5%` threshold test passed.
@@ -24,6 +25,7 @@ Key quantitative gates at current HEAD:
 
 Notable metrics:
 - built-in contracts: `11`
+- runtime coverage fields are emitted: `runtimeActionCount`, `runtimeActionCoverageCount`, `runtimeActionUncovered`
 - risk breakdown: `read-only=2`, `reversible=6`, `irreversible=3`
 - postcondition coverage: `100%`
 - compensation coverage for reversible tools: `100%`
@@ -31,6 +33,10 @@ Notable metrics:
 ### Phase 2 Gate Tests
 
 - `src/autonomy/workflow/phase2-acceptance-gate.test.ts`
+- `src/autonomy/tools/runtime-contracts.test.ts`
+- `src/autonomy/service.test.ts` (runtime-only action contract regression)
+- `src/autonomy/tools/schemas/custom-action.schema.test.ts`
+- `src/autonomy/tools/schemas/fixtures.test.ts`
 - `docs/ops/autonomy/phase2-acceptance-gate-2026-02-17.md`
 
 Validation command:
