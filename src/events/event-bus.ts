@@ -326,6 +326,27 @@ export interface MilaidyEvents {
     reason?: string;
     correlationId?: string;
   };
+  "autonomy:safe-mode:entered": {
+    enteredAt: number;
+    reason?: string;
+    consecutiveErrors: number;
+  };
+  "autonomy:safe-mode:exited": {
+    exitedAt: number;
+    enteredAt?: number;
+    reason?: string;
+    consecutiveErrors: number;
+    approverSource: string;
+    approverTrust: number;
+  };
+  "autonomy:safe-mode:exit-denied": {
+    attemptedAt: number;
+    reason: string;
+    approverSource: string;
+    approverTrust: number;
+    enteredAt?: number;
+    active: boolean;
+  };
   "autonomy:invariants:checked": {
     requestId: string;
     status: string;
