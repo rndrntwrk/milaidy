@@ -13,8 +13,8 @@ Current status pre-check snapshot:
 - Evidence basis: static repo review of autonomy kernel, API, persistence, and app UI code paths.
 - Summary counts:
 - `307` total checklist items.
-- `114` items tagged `STATUS: CODED`.
-- `79` items tagged `STATUS: PARTIAL`.
+- `115` items tagged `STATUS: CODED`.
+- `78` items tagged `STATUS: PARTIAL`.
 - `114` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
@@ -366,7 +366,7 @@ Sprint chunks:
 
 ### 3.B Service Scaffolding and Runtime Isolation
 
-- [ ] P3-006 Implement role-specific service modules/processes. [STATUS: PARTIAL]
+- [ ] P3-006 Implement role-specific service modules/processes. [STATUS: CODED]
 - [ ] P3-007 Implement transport layer (REST/gRPC) or explicit in-process boundary adapters. [STATUS: CODED]
 - [ ] P3-008 Enforce role auth and request validation on every call. [STATUS: CODED]
 - [ ] P3-009 Implement retries/timeouts/circuit breakers for role calls. [STATUS: CODED]

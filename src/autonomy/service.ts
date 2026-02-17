@@ -90,6 +90,7 @@ let _GatedMemoryWriter: typeof import("./roles/memory-writer.js").GatedMemoryWri
 let _DriftAwareAuditor: typeof import("./roles/auditor.js").DriftAwareAuditor;
 let _SafeModeControllerImpl: typeof import("./roles/safe-mode.js").SafeModeControllerImpl;
 let _KernelOrchestrator: typeof import("./roles/orchestrator.js").KernelOrchestrator;
+let _createRoleModuleRegistry: typeof import("./roles/modules.js").createRoleModuleRegistry;
 let _createInProcessRoleAdapters: typeof import("./adapters/roles/in-process-role-adapter.js").createInProcessRoleAdapters;
 
 // Phase 5 — Domains & Governance
@@ -124,7 +125,7 @@ let _SystemPromptBuilder: typeof import("./learning/prompt-builder.js").SystemPr
 let _AdversarialScenarioGenerator: typeof import("./learning/adversarial.js").AdversarialScenarioGenerator;
 
 async function loadImplementations() {
-  const [trustMod, memMod, driftMod, goalMod, toolRegMod, schemaValMod, pcvMod, toolSchemasMod, runtimeContractsMod, pcMod, smMod, approvalMod, approvalPersistentMod, esMod, compRegMod, compIncidentMod, pipelineMod, compsMod, localWorkflowMod, temporalWorkflowMod, invMod, invRegMod, harnMod, evalMod, plannerMod, executorMod, verifierMod, memWriterMod, auditorMod, safeModeMod, orchestratorMod, roleAdaptersMod] = await Promise.all([
+  const [trustMod, memMod, driftMod, goalMod, toolRegMod, schemaValMod, pcvMod, toolSchemasMod, runtimeContractsMod, pcMod, smMod, approvalMod, approvalPersistentMod, esMod, compRegMod, compIncidentMod, pipelineMod, compsMod, localWorkflowMod, temporalWorkflowMod, invMod, invRegMod, harnMod, evalMod, plannerMod, executorMod, verifierMod, memWriterMod, auditorMod, safeModeMod, orchestratorMod, roleModulesMod, roleAdaptersMod] = await Promise.all([
     import("./trust/scorer.js"),
     import("./memory/gate.js"),
     import("./identity/drift-monitor.js"),
@@ -156,6 +157,7 @@ async function loadImplementations() {
     import("./roles/auditor.js"),
     import("./roles/safe-mode.js"),
     import("./roles/orchestrator.js"),
+    import("./roles/modules.js"),
     import("./adapters/roles/in-process-role-adapter.js"),
   ]);
   _RuleBasedTrustScorer = trustMod.RuleBasedTrustScorer;
@@ -193,6 +195,7 @@ async function loadImplementations() {
   _DriftAwareAuditor = auditorMod.DriftAwareAuditor;
   _SafeModeControllerImpl = safeModeMod.SafeModeControllerImpl;
   _KernelOrchestrator = orchestratorMod.KernelOrchestrator;
+  _createRoleModuleRegistry = roleModulesMod.createRoleModuleRegistry;
   _createInProcessRoleAdapters = roleAdaptersMod.createInProcessRoleAdapters;
 
   // Phase 4 — Learning (lazy, non-blocking)
@@ -320,6 +323,7 @@ export class MilaidyAutonomyService extends Service {
   private auditorRole: import("./roles/types.js").AuditorRole | null = null;
   private safeModeController: import("./roles/types.js").SafeModeController | null = null;
   private orchestrator: import("./roles/types.js").RoleOrchestrator | null = null;
+  private roleModuleRegistry: import("./roles/modules.js").RoleModuleRegistry | null = null;
   private identityConfig: AutonomyIdentityConfig | null = null;
   private resolvedRetrievalConfig: import("./config.js").AutonomyRetrievalConfig | null = null;
   private enabled = false;
@@ -601,6 +605,16 @@ export class MilaidyAutonomyService extends Service {
         allowedSources: config.roles?.orchestrator?.allowedSources,
       },
     );
+    this.roleModuleRegistry = _createRoleModuleRegistry({
+      planner: this.planner,
+      executor: this.executorRole,
+      verifier: this.verifier,
+      memory_writer: this.memoryWriterRole,
+      auditor: this.auditorRole,
+      safe_mode: this.safeModeController,
+      orchestrator: this.orchestrator,
+    });
+    this.roleModuleRegistry.startAll();
 
     // Initialize learning infrastructure (Phase 4)
     this.promptBuilder = new _SystemPromptBuilder();
@@ -1185,40 +1199,62 @@ export class MilaidyAutonomyService extends Service {
   }
 
   getRoleHealth(): AutonomyRoleHealthSnapshot {
+    const moduleSnapshot = this.roleModuleRegistry?.getHealthSnapshot();
     const roles: Record<AutonomyRoleName, AutonomyRoleHealthStatus> = {
-      planner: this.describeRoleHealth("planner", this.planner, [
-        "createPlan",
-        "validatePlan",
-        "getActivePlan",
-        "cancelPlan",
-      ]),
-      executor: this.describeRoleHealth("executor", this.executorRole, [
-        "execute",
-      ]),
-      verifier: this.describeRoleHealth("verifier", this.verifier, [
-        "verify",
-        "checkInvariants",
-      ]),
-      memory_writer: this.describeRoleHealth(
-        "memory_writer",
-        this.memoryWriterRole,
-        ["write", "writeBatch", "getStats"],
-      ),
-      auditor: this.describeRoleHealth("auditor", this.auditorRole, [
-        "audit",
-        "getDriftReport",
-        "queryEvents",
-      ]),
-      safe_mode: this.describeRoleHealth(
-        "safe_mode",
-        this.safeModeController,
-        ["shouldTrigger", "enter", "requestExit", "getStatus"],
-      ),
-      orchestrator: this.describeRoleHealth("orchestrator", this.orchestrator, [
-        "execute",
-        "getCurrentPhase",
-        "isInSafeMode",
-      ]),
+      planner: moduleSnapshot
+        ? this.describeModuleRoleHealth("planner", moduleSnapshot.planner)
+        : this.describeRoleHealth("planner", this.planner, [
+            "createPlan",
+            "validatePlan",
+            "getActivePlan",
+            "cancelPlan",
+          ]),
+      executor: moduleSnapshot
+        ? this.describeModuleRoleHealth("executor", moduleSnapshot.executor)
+        : this.describeRoleHealth("executor", this.executorRole, [
+            "execute",
+          ]),
+      verifier: moduleSnapshot
+        ? this.describeModuleRoleHealth("verifier", moduleSnapshot.verifier)
+        : this.describeRoleHealth("verifier", this.verifier, [
+            "verify",
+            "checkInvariants",
+          ]),
+      memory_writer: moduleSnapshot
+        ? this.describeModuleRoleHealth(
+            "memory_writer",
+            moduleSnapshot.memory_writer,
+          )
+        : this.describeRoleHealth("memory_writer", this.memoryWriterRole, [
+            "write",
+            "writeBatch",
+            "getStats",
+          ]),
+      auditor: moduleSnapshot
+        ? this.describeModuleRoleHealth("auditor", moduleSnapshot.auditor)
+        : this.describeRoleHealth("auditor", this.auditorRole, [
+            "audit",
+            "getDriftReport",
+            "queryEvents",
+          ]),
+      safe_mode: moduleSnapshot
+        ? this.describeModuleRoleHealth("safe_mode", moduleSnapshot.safe_mode)
+        : this.describeRoleHealth("safe_mode", this.safeModeController, [
+            "shouldTrigger",
+            "enter",
+            "requestExit",
+            "getStatus",
+          ]),
+      orchestrator: moduleSnapshot
+        ? this.describeModuleRoleHealth(
+            "orchestrator",
+            moduleSnapshot.orchestrator,
+          )
+        : this.describeRoleHealth("orchestrator", this.orchestrator, [
+            "execute",
+            "getCurrentPhase",
+            "isInSafeMode",
+          ]),
     };
 
     const statuses = Object.values(roles);
@@ -1374,6 +1410,20 @@ export class MilaidyAutonomyService extends Service {
     }
   }
 
+  private describeModuleRoleHealth(
+    role: AutonomyRoleName,
+    moduleHealth: import("./roles/modules.js").RoleModuleHealth,
+  ): AutonomyRoleHealthStatus {
+    return {
+      role,
+      available: moduleHealth.available,
+      ready: moduleHealth.ready,
+      healthy: moduleHealth.healthy,
+      requiredMethods: [...moduleHealth.requiredMethods],
+      missingMethods: [...moduleHealth.missingMethods],
+    };
+  }
+
   private describeRoleHealth(
     role: AutonomyRoleName,
     instance: unknown,
@@ -1411,6 +1461,8 @@ export class MilaidyAutonomyService extends Service {
   async stop(): Promise<void> {
     this.stateTransitionUnsubscribe?.();
     this.stateTransitionUnsubscribe = null;
+    this.roleModuleRegistry?.stopAll();
+    this.roleModuleRegistry = null;
     this.memoryGate?.dispose();
     this.approvalGate?.dispose();
     await this.workflowEngine?.close();
