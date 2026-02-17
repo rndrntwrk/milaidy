@@ -33,6 +33,7 @@
   "scripts": {
     "benchmark:server": "node --import tsx src/benchmark/server.ts",
     "autonomy:baseline:run": "node --import tsx scripts/autonomy/run-baseline-suite.ts",
+    "autonomy:long-horizon:run": "node --import tsx scripts/autonomy/run-long-horizon-suite.ts",
     "autonomy:redteam:run": "node --import tsx scripts/autonomy/run-redteam-baseline.ts",
     "autonomy:metrics:cardinality": "node --import tsx scripts/autonomy/check-metrics-cardinality.ts",
     "autonomy:contracts:inventory": "node --import tsx scripts/autonomy/tool-contract-inventory.ts",
