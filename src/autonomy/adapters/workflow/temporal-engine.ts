@@ -24,6 +24,30 @@ export interface TemporalEngineConfig {
   workflowIdPrefix?: string;
 }
 
+interface TemporalHandle {
+  result: () => Promise<unknown>;
+  cancel?: () => Promise<void>;
+  workflowId?: string;
+  runId?: string;
+  firstExecutionRunId?: string;
+  execution?: { runId?: string };
+}
+
+interface TemporalClient {
+  start: (
+    workflowType: string,
+    options: { taskQueue: string; args: unknown[]; workflowId?: string },
+  ) => Promise<TemporalHandle>;
+  getHandle: (workflowId: string, runId?: string) => TemporalHandle;
+}
+
+interface TemporalClientModule {
+  Connection: {
+    connect: (opts: { address?: string }) => Promise<unknown>;
+  };
+  WorkflowClient: new (opts: { connection: unknown; namespace: string }) => TemporalClient;
+}
+
 /**
  * Temporal-backed workflow engine stub.
  *
@@ -35,39 +59,30 @@ export class TemporalWorkflowEngine implements WorkflowEngine {
   private readonly workflows = new Map<string, WorkflowDefinition>();
   private readonly config: Required<TemporalEngineConfig>;
   private readonly results = new Map<string, WorkflowResult>();
-  private readonly handles = new Map<string, { workflowId: string; handle: unknown }>();
-  private clientPromise?: Promise<{ client: unknown; connection: unknown }>;
-  private temporalModule!: {
-    Connection: { connect: (opts: { address?: string }) => Promise<unknown> };
-    WorkflowClient: new (opts: { connection: unknown; namespace: string }) => {
-      start: (
-        workflowType: string,
-        options: { taskQueue: string; args: unknown[]; workflowId?: string },
-      ) => Promise<unknown>;
-      getHandle: (workflowId: string, runId?: string) => unknown;
-    };
-  };
+  private readonly handles = new Map<string, { workflowId: string; handle: TemporalHandle }>();
+  private clientPromise?: Promise<{ client: TemporalClient; connection: unknown }>;
+  private temporalModule!: TemporalClientModule;
 
-  constructor(config: TemporalEngineConfig = {}) {
+  constructor(
+    config: TemporalEngineConfig = {},
+    deps?: { temporalModule?: TemporalClientModule },
+  ) {
     this.config = {
       address: config.address ?? "localhost:7233",
       namespace: config.namespace ?? "default",
       taskQueue: config.taskQueue ?? "autonomy-tasks",
       workflowIdPrefix: config.workflowIdPrefix ?? "autonomy",
     };
+
+    if (deps?.temporalModule) {
+      this.temporalModule = deps.temporalModule;
+      return;
+    }
+
     // Verify dependency is available
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const temporal = require("@temporalio/client") as {
-        Connection: { connect: (opts: { address?: string }) => Promise<unknown> };
-        WorkflowClient: new (opts: { connection: unknown; namespace: string }) => {
-          start: (
-            workflowType: string,
-            options: { taskQueue: string; args: unknown[]; workflowId?: string },
-          ) => Promise<unknown>;
-          getHandle: (workflowId: string, runId?: string) => unknown;
-        };
-      };
+      const temporal = require("@temporalio/client") as TemporalClientModule;
       this.temporalModule = temporal;
     } catch {
       throw new Error(
@@ -98,21 +113,25 @@ export class TemporalWorkflowEngine implements WorkflowEngine {
       const taskQueue = workflow.temporal?.taskQueue ?? this.config.taskQueue;
       const temporalWorkflowId = workflow.temporal?.workflowId ?? this.buildWorkflowId(workflow.id);
 
-      const handle = await (client as {
-        start: (
-          workflowType: string,
-          options: { taskQueue: string; args: unknown[]; workflowId?: string },
-        ) => Promise<unknown>;
-      }).start(workflowType, {
-        taskQueue,
-        args: [input],
-        workflowId: temporalWorkflowId,
-      });
+      let handle: TemporalHandle;
+      try {
+        handle = await client.start(workflowType, {
+          taskQueue,
+          args: [input],
+          workflowId: temporalWorkflowId,
+        });
+      } catch (err) {
+        if (!isAlreadyStartedError(err)) {
+          throw err;
+        }
+        // Idempotency behavior: attach to existing workflow execution.
+        handle = client.getHandle(temporalWorkflowId);
+      }
 
       const executionId = this.extractExecutionId(handle, temporalWorkflowId);
       this.handles.set(executionId, { workflowId: temporalWorkflowId, handle });
 
-      const result = await (handle as { result: () => Promise<unknown> }).result();
+      const result = await handle.result();
       const workflowResult: WorkflowResult = {
         executionId,
         success: true,
@@ -140,7 +159,7 @@ export class TemporalWorkflowEngine implements WorkflowEngine {
   async cancel(executionId: string): Promise<boolean> {
     const entry = this.handles.get(executionId);
     if (!entry) return false;
-    const handle = entry.handle as { cancel?: () => Promise<void> };
+    const handle = entry.handle;
     if (typeof handle?.cancel !== "function") return false;
     try {
       await handle.cancel();
@@ -170,7 +189,7 @@ export class TemporalWorkflowEngine implements WorkflowEngine {
     }
   }
 
-  private async getClient(): Promise<{ client: unknown; connection: unknown }> {
+  private async getClient(): Promise<{ client: TemporalClient; connection: unknown }> {
     if (!this.clientPromise) {
       this.clientPromise = (async () => {
         const { Connection, WorkflowClient } = this.temporalModule;
@@ -186,16 +205,21 @@ export class TemporalWorkflowEngine implements WorkflowEngine {
     return `${this.config.workflowIdPrefix}-${workflowId}-${Date.now()}`;
   }
 
-  private extractExecutionId(handle: unknown, fallbackWorkflowId: string): string {
-    const h = handle as {
-      workflowId?: string;
-      runId?: string;
-      firstExecutionRunId?: string;
-      execution?: { runId?: string };
-    };
+  private extractExecutionId(handle: TemporalHandle, fallbackWorkflowId: string): string {
+    const h = handle;
     const workflowId = h.workflowId ?? fallbackWorkflowId;
     const runId = h.runId ?? h.firstExecutionRunId ?? h.execution?.runId;
     if (runId) return `${workflowId}:${runId}`;
     return workflowId;
   }
+}
+
+function isAlreadyStartedError(err: unknown): boolean {
+  const e = err as { name?: string; message?: string; code?: string };
+  const name = String(e?.name ?? "");
+  const code = String(e?.code ?? "");
+  const message = String(e?.message ?? "");
+  if (name === "WorkflowExecutionAlreadyStartedError") return true;
+  if (code.toUpperCase().includes("ALREADY_STARTED")) return true;
+  return /already started/i.test(message);
 }
