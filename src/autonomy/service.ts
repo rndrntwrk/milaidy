@@ -328,6 +328,7 @@ export class MilaidyAutonomyService extends Service {
   private resolvedRetrievalConfig: import("./config.js").AutonomyRetrievalConfig | null = null;
   private enabled = false;
   private stateTransitionUnsubscribe: (() => void) | null = null;
+  private eventBus: { emit: (event: string, payload: unknown) => void } | null = null;
 
   // Phase 5 — Domains & Governance components
   private domainPackRegistry: import("./domains/registry.js").DomainPackRegistry | null = null;
@@ -487,6 +488,7 @@ export class MilaidyAutonomyService extends Service {
     } catch {
       // Event bus not available — non-fatal
     }
+    this.eventBus = eventBusRef ?? null;
     if (this.dbAdapter) {
       const gate = new _PersistentApprovalGate(this.dbAdapter, {
         timeoutMs: config.approval?.timeoutMs ?? 300_000,
@@ -907,6 +909,7 @@ export class MilaidyAutonomyService extends Service {
     } catch {
       // Event bus not available — non-fatal
     }
+    this.eventBus = eventBusRef ?? null;
     this.trustScorer = new _RuleBasedTrustScorer();
     this.memoryGate = new _MemoryGateImpl(this.trustScorer);
     this.driftMonitor = new _RuleBasedDriftMonitor();
@@ -1043,6 +1046,7 @@ export class MilaidyAutonomyService extends Service {
     this.dbAdapter = null;
     this.approvalLog = null;
     this.identityStore = null;
+    this.eventBus = null;
     this.identityConfig = null;
     this.enabled = false;
     logger.info("[autonomy-service] Autonomy disabled");
@@ -1067,6 +1071,8 @@ export class MilaidyAutonomyService extends Service {
       const { createDefaultAutonomyIdentity } = await import("./identity/schema.js");
       this.identityConfig = createDefaultAutonomyIdentity();
     }
+
+    const previous = this.identityConfig;
 
     // Apply partial update
     const updated: AutonomyIdentityConfig = {
@@ -1097,19 +1103,61 @@ export class MilaidyAutonomyService extends Service {
     this.identityConfig = updated;
 
     // Persist to identity store if available
+    let persisted = false;
     if (this.identityStore) {
       try {
         await this.identityStore.saveVersion(updated);
+        persisted = true;
       } catch (err) {
         logger.warn(`[autonomy-service] Failed to persist identity version: ${err instanceof Error ? err.message : err}`);
       }
     }
+
+    // Emit identity mutation telemetry/audit markers.
+    try {
+      const { recordIdentityVersionUpdate } = await import(
+        "./metrics/prometheus-metrics.js"
+      );
+      recordIdentityVersionUpdate(updated.identityVersion);
+    } catch {
+      // Telemetry wiring unavailable — non-fatal.
+    }
+
+    this.eventBus?.emit("autonomy:identity:updated", {
+      fromVersion: previous?.identityVersion ?? Math.max(1, updated.identityVersion - 1),
+      toVersion: updated.identityVersion,
+      changedFields: this.identityChangedFields(update),
+      persisted,
+      identityHash: updated.identityHash,
+      updatedAt: Date.now(),
+    });
 
     logger.info(
       `[autonomy-service] Identity updated to v${updated.identityVersion}`,
     );
 
     return { ...updated };
+  }
+
+  private identityChangedFields(update: Partial<AutonomyIdentityConfig>): string[] {
+    const changed = new Set<string>();
+    for (const key of Object.keys(update)) {
+      if (key === "communicationStyle" || key === "softPreferences") continue;
+      changed.add(key);
+    }
+
+    if (update.communicationStyle) {
+      for (const key of Object.keys(update.communicationStyle)) {
+        changed.add(`communicationStyle.${key}`);
+      }
+    }
+    if (update.softPreferences) {
+      for (const key of Object.keys(update.softPreferences)) {
+        changed.add(`softPreferences.${key}`);
+      }
+    }
+
+    return Array.from(changed).sort();
   }
 
   // ---------- Component Accessors ----------

@@ -13,8 +13,8 @@ Current status pre-check snapshot:
 - Evidence basis: static repo review of autonomy kernel, API, persistence, and app UI code paths.
 - Summary counts:
 - `307` total checklist items.
-- `150` items tagged `STATUS: CODED`.
-- `50` items tagged `STATUS: PARTIAL`.
+- `151` items tagged `STATUS: CODED`.
+- `49` items tagged `STATUS: PARTIAL`.
 - `107` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
@@ -196,7 +196,7 @@ Sprint chunks:
 - [ ] P1-007 Implement identity history persistence and retrieval. [STATUS: CODED]
 - [ ] P1-008 Add identity CRUD API endpoints. [STATUS: CODED]
 - [ ] P1-009 Add CLI commands for identity read/update/version rollback.
-- [ ] P1-010 Add audit logging for identity mutations. [STATUS: PARTIAL]
+- [ ] P1-010 Add audit logging for identity mutations. [STATUS: CODED]
 
 ### 1.B Persona Drift Monitoring and Goal Stack
 
