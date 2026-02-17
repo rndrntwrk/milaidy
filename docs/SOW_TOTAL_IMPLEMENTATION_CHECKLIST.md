@@ -358,8 +358,8 @@ Sprint chunks:
 
 ### 3.A Role Architecture and Contracts
 
-- [ ] P3-001 Define Planner, Executor, Verifier, Memory Writer, Auditor responsibility boundaries. [STATUS: PARTIAL]
-- [ ] P3-002 Define request/response schemas for each role boundary. [STATUS: PARTIAL]
+- [ ] P3-001 Define Planner, Executor, Verifier, Memory Writer, Auditor responsibility boundaries. [STATUS: CODED]
+- [ ] P3-002 Define request/response schemas for each role boundary. [STATUS: CODED]
 - [ ] P3-003 Define role authn/authz model and trust boundaries.
 - [ ] P3-004 Define rate limiting and backpressure strategy between roles.
 - [ ] P3-005 Publish role interaction sequence diagrams.

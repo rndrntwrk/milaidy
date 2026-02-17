@@ -34,6 +34,20 @@ import type {
   VerificationReport,
   VerifierRole,
 } from "./types.js";
+import {
+  parseAuditorAuditRequest,
+  parseAuditorAuditResponse,
+  parseExecutorExecuteRequest,
+  parseExecutorExecuteResponse,
+  parseMemoryWriteBatchRequest,
+  parseMemoryWriteBatchResponse,
+  parseOrchestratedRequest,
+  parsePlannerCreatePlanRequest,
+  parsePlannerCreatePlanResponse,
+  parsePlannerValidatePlanResponse,
+  parseVerifierVerifyRequest,
+  parseVerifierVerifyResponse,
+} from "./schemas.js";
 
 export class KernelOrchestrator implements RoleOrchestrator {
   private executionQueue: Promise<void> = Promise.resolve();
@@ -82,22 +96,30 @@ export class KernelOrchestrator implements RoleOrchestrator {
     const executions: PipelineResult[] = [];
     const verificationReports: VerificationReport[] = [];
     let plan: ExecutionPlan | undefined;
+    let orchestratedRequest: OrchestratedRequest;
 
     try {
+      orchestratedRequest = parseOrchestratedRequest(request);
+
       // Phase 1: Planning (idle → planning → idle)
       const planResult = this.stateMachine.transition("plan_requested");
       if (!planResult.accepted) {
         throw new Error(`Cannot start planning: ${planResult.reason}`);
       }
 
-      plan = await this.planner.createPlan({
-        description: request.description,
-        constraints: request.constraints,
-        source: request.source,
-        sourceTrust: request.sourceTrust,
+      const planRequest = parsePlannerCreatePlanRequest({
+        description: orchestratedRequest.description,
+        constraints: orchestratedRequest.constraints,
+        source: orchestratedRequest.source,
+        sourceTrust: orchestratedRequest.sourceTrust,
       });
+      plan = parsePlannerCreatePlanResponse(
+        await this.planner.createPlan(planRequest),
+      );
 
-      const validation = await this.planner.validatePlan(plan);
+      const validation = parsePlannerValidatePlanResponse(
+        await this.planner.validatePlan(plan),
+      );
       if (!validation.valid) {
         plan.status = "rejected";
         this.stateMachine.transition("plan_rejected");
@@ -112,16 +134,19 @@ export class KernelOrchestrator implements RoleOrchestrator {
       // Phase 2: Execution (pipeline handles its own FSM transitions)
       plan.status = "executing";
       if (this.workflowEngine) {
-        const workflowDefinition = this.buildWorkflowDefinition(plan, request);
+        const workflowDefinition = this.buildWorkflowDefinition(
+          plan,
+          orchestratedRequest,
+        );
         this.workflowEngine.register(workflowDefinition);
         const workflowResult = await this.workflowEngine.execute(
           workflowDefinition.id,
           {
             plan,
             request: {
-              agentId: request.agentId,
-              source: request.source,
-              sourceTrust: request.sourceTrust,
+              agentId: orchestratedRequest.agentId,
+              source: orchestratedRequest.source,
+              sourceTrust: orchestratedRequest.sourceTrust,
             },
           },
         );
@@ -139,14 +164,17 @@ export class KernelOrchestrator implements RoleOrchestrator {
         }
       } else {
         for (const step of plan.steps) {
-          const pipelineResult = await this.executor.execute(
-            {
-              tool: step.toolName,
-              params: step.params,
-              source: request.source,
-              requestId: `${plan.id}-${step.id}`,
-            },
-            request.actionHandler,
+          const proposedCall = parseExecutorExecuteRequest({
+            tool: step.toolName,
+            params: step.params,
+            source: orchestratedRequest.source,
+            requestId: `${plan.id}-${step.id}`,
+          });
+          const pipelineResult = parseExecutorExecuteResponse(
+            await this.executor.execute(
+              proposedCall,
+              orchestratedRequest.actionHandler,
+            ),
           );
           executions.push(pipelineResult);
 
@@ -165,7 +193,11 @@ export class KernelOrchestrator implements RoleOrchestrator {
         }
       }
       verificationReports.push(
-        ...(await this.verifyExecutedSteps(plan, executions, request)),
+        ...(await this.verifyExecutedSteps(
+          plan,
+          executions,
+          orchestratedRequest,
+        )),
       );
       plan.status = "complete";
 
@@ -182,18 +214,22 @@ export class KernelOrchestrator implements RoleOrchestrator {
                   ? e.result
                   : JSON.stringify(e.result),
               source: {
-                id: request.agentId,
+                id: orchestratedRequest.agentId,
                 type: "agent" as const,
-                reliability: request.sourceTrust,
+                reliability: orchestratedRequest.sourceTrust,
               },
-              agentId: request.agentId,
+              agentId: orchestratedRequest.agentId,
               metadata: {
                 toolName: e.toolName,
                 requestId: e.requestId,
               },
             }));
 
-          memoryReport = await this.memoryWriter.writeBatch(memoryRequests);
+          memoryReport = parseMemoryWriteBatchResponse(
+            await this.memoryWriter.writeBatch(
+              parseMemoryWriteBatchRequest(memoryRequests),
+            ),
+          );
           this.stateMachine.transition("memory_written");
         } catch (memError) {
           this.stateMachine.transition("memory_write_failed");
@@ -207,13 +243,16 @@ export class KernelOrchestrator implements RoleOrchestrator {
       let auditReport;
       if (auditTransition.accepted) {
         try {
-          auditReport = await this.auditor.audit({
+          const auditRequest = parseAuditorAuditRequest({
             requestId: plan.id,
             correlationId: plan.id,
             plan,
-            identityConfig: request.identityConfig,
-            recentOutputs: request.recentOutputs ?? [],
+            identityConfig: orchestratedRequest.identityConfig,
+            recentOutputs: orchestratedRequest.recentOutputs ?? [],
           });
+          auditReport = parseAuditorAuditResponse(
+            await this.auditor.audit(auditRequest),
+          );
           this.stateMachine.transition("audit_complete");
         } catch (auditError) {
           this.stateMachine.transition("audit_failed");
@@ -362,14 +401,17 @@ export class KernelOrchestrator implements RoleOrchestrator {
           async () => {
             const results: PipelineResult[] = [];
             for (const step of plan.steps) {
-              const pipelineResult = await this.executor.execute(
-                {
-                  tool: step.toolName,
-                  params: step.params,
-                  source: request.source,
-                  requestId: `${plan.id}-${step.id}`,
-                },
-                request.actionHandler,
+              const proposedCall = parseExecutorExecuteRequest({
+                tool: step.toolName,
+                params: step.params,
+                source: request.source,
+                requestId: `${plan.id}-${step.id}`,
+              });
+              const pipelineResult = parseExecutorExecuteResponse(
+                await this.executor.execute(
+                  proposedCall,
+                  request.actionHandler,
+                ),
               );
               results.push(pipelineResult);
 
@@ -419,7 +461,7 @@ export class KernelOrchestrator implements RoleOrchestrator {
       const step = plan.steps.find(
         (candidate) => `${plan.id}-${candidate.id}` === execution.requestId,
       );
-      const report = await this.verifier.verify({
+      const verifyRequest = parseVerifierVerifyRequest({
         requestId: execution.requestId,
         toolName: execution.toolName,
         params: step?.params ?? {},
@@ -427,6 +469,9 @@ export class KernelOrchestrator implements RoleOrchestrator {
         durationMs: execution.durationMs,
         agentId: request.agentId,
       });
+      const report = parseVerifierVerifyResponse(
+        await this.verifier.verify(verifyRequest),
+      );
       reports.push(report);
     }
     return reports;
