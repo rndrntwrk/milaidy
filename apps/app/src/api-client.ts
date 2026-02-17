@@ -131,6 +131,23 @@ export interface AutonomyApprovalLogEntry {
   decidedAt?: number;
 }
 
+export interface AutonomyQuarantinedMemory {
+  id: string;
+  content?: Record<string, unknown>;
+  trustScore?: number;
+  memoryType?: string;
+  verifiabilityClass?: string;
+  provenance?: Record<string, unknown>;
+  createdAt?: number;
+}
+
+export interface AutonomyQuarantineStats {
+  allowed: number;
+  quarantined: number;
+  rejected: number;
+  pendingReview: number;
+}
+
 export type AgentState = "not_started" | "starting" | "running" | "paused" | "stopped" | "restarting" | "error";
 
 export interface AgentStatus {
@@ -3480,6 +3497,32 @@ export class MilaidyClient {
   }
   async getIdentityHistory(): Promise<{ version: number; hash: string | null; history: AutonomyIdentity[] }> {
     return this.fetch("/api/agent/identity/history");
+  }
+
+  // Workbench — quarantine review
+  async getWorkbenchQuarantine(): Promise<{
+    ok: boolean;
+    quarantined: AutonomyQuarantinedMemory[];
+    stats: AutonomyQuarantineStats | null;
+  }> {
+    return this.fetch("/api/workbench/quarantine");
+  }
+  async reviewWorkbenchQuarantined(
+    memoryId: string,
+    decision: "approve" | "reject",
+  ): Promise<{
+    ok: boolean;
+    memoryId: string;
+    decision: "approve" | "reject";
+    memory?: AutonomyQuarantinedMemory | null;
+  }> {
+    return this.fetch(
+      `/api/workbench/quarantine/${encodeURIComponent(memoryId)}/review`,
+      {
+        method: "POST",
+        body: JSON.stringify({ decision }),
+      },
+    );
   }
 
   // Autonomy — Approvals

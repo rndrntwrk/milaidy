@@ -22,6 +22,7 @@ Contents:
 - `phase1-identity-update-policy-2026-02-17.md`: `P1-004` sanctioned identity update policy and approval-rule enforcement evidence.
 - `phase1-goal-gate-observability-2026-02-17.md`: `P1-018/P1-028` goal transition logging and gate observability metrics wiring evidence.
 - `phase1-identity-memory-validation-2026-02-17.md`: `P1-043/P1-044/P1-045/P1-046` identity/memory API integration, fail-closed integrity, quarantine lifecycle, and drift-alert threshold validation evidence.
+- `phase1-quarantine-review-ui-2026-02-17.md`: `P1-038` governance quarantine review UI wiring and validation evidence.
 - `phase1-trust-feature-weight-strategy-2026-02-17.md`: `P1-029` trust feature set and weighting strategy definition.
 - `phase1-trust-override-policy-2026-02-17.md`: `P1-035` trust override governance policy + audit event enforcement evidence.
 - `phase1-retrieval-rank-guardrails-2026-02-17.md`: `P1-034` retrieval rank tuning configuration guardrails + runtime sanitization evidence.

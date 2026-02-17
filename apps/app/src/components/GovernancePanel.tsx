@@ -3,9 +3,13 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import type {
+  AutonomyQuarantinedMemory,
+  AutonomyQuarantineStats,
+} from "../api-client";
 import { client } from "../api-client";
 
-type SubTab = "overview" | "policies" | "retention";
+type SubTab = "overview" | "policies" | "retention" | "quarantine";
 
 function SubTabButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
   return (
@@ -35,10 +39,36 @@ function StatusDot({ ok }: { ok: boolean }) {
   return <span className={`inline-block w-2 h-2 rounded-full ${ok ? "bg-ok" : "bg-danger"}`} />;
 }
 
+function memoryPreview(memory: AutonomyQuarantinedMemory): string {
+  const content = memory.content;
+  const text = typeof content?.text === "string" ? content.text : "";
+  if (text.trim().length > 0) return text.trim();
+  if (content && Object.keys(content).length > 0) {
+    return JSON.stringify(content);
+  }
+  return "No content preview";
+}
+
+function memorySource(memory: AutonomyQuarantinedMemory): string {
+  const source = memory.provenance?.source as Record<string, unknown> | undefined;
+  if (!source) return "unknown";
+  const type = typeof source.type === "string" ? source.type : "source";
+  const id = typeof source.id === "string" ? source.id : "unknown";
+  return `${type}:${id}`;
+}
+
 export function GovernancePanel() {
   const [subTab, setSubTab] = useState<SubTab>("overview");
   const [config, setConfig] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [quarantined, setQuarantined] = useState<AutonomyQuarantinedMemory[]>(
+    [],
+  );
+  const [quarantineStats, setQuarantineStats] =
+    useState<AutonomyQuarantineStats | null>(null);
+  const [quarantineLoading, setQuarantineLoading] = useState(false);
+  const [quarantineError, setQuarantineError] = useState<string | null>(null);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -51,6 +81,42 @@ export function GovernancePanel() {
 
   useEffect(() => { void load(); }, [load]);
 
+  const loadQuarantine = useCallback(async () => {
+    setQuarantineLoading(true);
+    setQuarantineError(null);
+    try {
+      const response = await client.getWorkbenchQuarantine();
+      setQuarantined(response.quarantined ?? []);
+      setQuarantineStats(response.stats ?? null);
+    } catch (err) {
+      setQuarantineError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setQuarantineLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (subTab === "quarantine") {
+      void loadQuarantine();
+    }
+  }, [subTab, loadQuarantine]);
+
+  const handleQuarantineReview = useCallback(
+    async (memoryId: string, decision: "approve" | "reject") => {
+      setReviewingId(memoryId);
+      setQuarantineError(null);
+      try {
+        await client.reviewWorkbenchQuarantined(memoryId, decision);
+        await loadQuarantine();
+      } catch (err) {
+        setQuarantineError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setReviewingId(null);
+      }
+    },
+    [loadQuarantine],
+  );
+
   if (loading) return <div className="text-muted p-4">Loading governance...</div>;
 
   const governance = (config as Record<string, unknown>)?.domains as Record<string, unknown> | undefined;
@@ -62,6 +128,7 @@ export function GovernancePanel() {
         <div className="flex gap-1 border-b border-border">
           <SubTabButton active={subTab === "overview"} label="Overview" onClick={() => setSubTab("overview")} />
           <SubTabButton active={subTab === "policies"} label="Policies" onClick={() => setSubTab("policies")} />
+          <SubTabButton active={subTab === "quarantine"} label="Quarantine" onClick={() => setSubTab("quarantine")} />
           <SubTabButton active={subTab === "retention"} label="Retention" onClick={() => setSubTab("retention")} />
         </div>
       </div>
@@ -152,6 +219,106 @@ export function GovernancePanel() {
               </div>
             </div>
           </Section>
+        )}
+
+        {subTab === "quarantine" && (
+          <>
+            <Section title="Review Queue">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[12px] text-muted">
+                  Pending memories held by the trust gate for manual review.
+                </div>
+                <button
+                  className="text-[11px] border border-border bg-bg px-2 py-1 cursor-pointer hover:border-accent hover:text-accent transition-colors"
+                  onClick={() => void loadQuarantine()}
+                  disabled={quarantineLoading || reviewingId !== null}
+                >
+                  Refresh
+                </button>
+              </div>
+
+              {quarantineStats && (
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <div className="border border-border bg-bg px-2 py-1 text-[11px]">
+                    <div className="text-muted uppercase">Pending</div>
+                    <div className="tabular-nums text-txt">
+                      {quarantineStats.pendingReview}
+                    </div>
+                  </div>
+                  <div className="border border-border bg-bg px-2 py-1 text-[11px]">
+                    <div className="text-muted uppercase">Quarantined Total</div>
+                    <div className="tabular-nums text-txt">
+                      {quarantineStats.quarantined}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {quarantineError && (
+                <div className="text-[12px] text-danger mb-2">
+                  {quarantineError}
+                </div>
+              )}
+
+              {quarantineLoading ? (
+                <div className="text-[12px] text-muted py-3">
+                  Loading quarantine queue...
+                </div>
+              ) : quarantined.length === 0 ? (
+                <div className="text-[12px] text-muted py-3">
+                  No quarantined memories pending review.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {quarantined.map((memory) => (
+                    <div
+                      key={memory.id}
+                      className="border border-border bg-bg p-3 text-[12px]"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-mono text-[11px] text-muted">
+                          {memory.id}
+                        </div>
+                        <div className="text-[11px] text-muted">
+                          trust {typeof memory.trustScore === "number" ? memory.trustScore.toFixed(3) : "—"}
+                        </div>
+                      </div>
+                      <div className="mt-2 text-txt break-words">
+                        {memoryPreview(memory)}
+                      </div>
+                      <div className="mt-2 text-[11px] text-muted">
+                        type {memory.memoryType ?? "unknown"} · source {memorySource(memory)}
+                      </div>
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          className="text-[11px] border border-ok text-ok px-2 py-1 cursor-pointer hover:bg-ok hover:text-ok-fg transition-colors disabled:opacity-50"
+                          onClick={() =>
+                            void handleQuarantineReview(memory.id, "approve")
+                          }
+                          disabled={
+                            reviewingId !== null || quarantineLoading
+                          }
+                        >
+                          {reviewingId === memory.id ? "Applying..." : "Approve"}
+                        </button>
+                        <button
+                          className="text-[11px] border border-danger text-danger px-2 py-1 cursor-pointer hover:bg-danger hover:text-danger-fg transition-colors disabled:opacity-50"
+                          onClick={() =>
+                            void handleQuarantineReview(memory.id, "reject")
+                          }
+                          disabled={
+                            reviewingId !== null || quarantineLoading
+                          }
+                        >
+                          {reviewingId === memory.id ? "Applying..." : "Reject"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Section>
+          </>
         )}
       </div>
     </div>
