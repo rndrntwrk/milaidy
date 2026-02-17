@@ -334,7 +334,7 @@ Sprint chunks:
 
 - [ ] P2-053 Ensure all pipeline events are logged with timestamp and correlation ID. [STATUS: CODED]
 - [ ] P2-054 Ensure decision logs include validation/approval/verification/invariant outcomes. [STATUS: PARTIAL]
-- [ ] P2-055 Ensure audit exports can be generated for compliance review. [STATUS: PARTIAL]
+- [ ] P2-055 Ensure audit exports can be generated for compliance review. [STATUS: CODED]
 - [ ] P2-056 Validate tamper-evident or append-only guarantees. [STATUS: CODED]
 
 ### 2.J Test and Performance Gate

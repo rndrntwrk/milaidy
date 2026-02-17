@@ -328,6 +328,101 @@ const paths: Record<string, PathItem> = {
     },
   },
 
+  "/api/agent/autonomy/audit/summary": {
+    get: {
+      summary: "Get audit retention compliance summary",
+      operationId: "getAutonomyAuditSummary",
+      tags: ["Autonomy"],
+      responses: {
+        "200": {
+          description: "Audit summary",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean" },
+                  summary: { type: "object" },
+                },
+              },
+            },
+          },
+        },
+        "503": { description: "Service unavailable" },
+      },
+    },
+  },
+
+  "/api/agent/autonomy/audit/export": {
+    get: {
+      summary: "Export current audit records as JSONL",
+      operationId: "exportAutonomyAudit",
+      tags: ["Autonomy"],
+      responses: {
+        "200": {
+          description: "Audit export",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean" },
+                  format: { type: "string", enum: ["jsonl"] },
+                  recordCount: { type: "number" },
+                  jsonl: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+        "503": { description: "Service unavailable" },
+      },
+    },
+  },
+
+  "/api/agent/autonomy/audit/export-expired": {
+    post: {
+      summary: "Export expired audit records (and optionally evict)",
+      operationId: "exportExpiredAutonomyAudit",
+      tags: ["Autonomy"],
+      requestBody: {
+        required: false,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              properties: {
+                evict: { type: "boolean" },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        "200": {
+          description: "Expired export result",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean" },
+                  format: { type: "string", enum: ["jsonl"] },
+                  exportedAt: { type: "number" },
+                  exportedCount: { type: "number" },
+                  evicted: { type: "number" },
+                  records: { type: "array", items: { type: "object" } },
+                },
+              },
+            },
+          },
+        },
+        "400": { description: "Invalid request" },
+        "503": { description: "Service unavailable" },
+      },
+    },
+  },
+
   "/api/agent/identity": {
     get: {
       summary: "Get current agent identity",

@@ -26,6 +26,9 @@ Workflow durability controls:
 - `autonomy.eventStore.retentionMs`: event-log retention window (`0` disables time eviction).
 - `GET /api/agent/autonomy/workflows/dead-letters`: inspect dead-lettered workflow executions.
 - `POST /api/agent/autonomy/workflows/dead-letters/clear`: clear dead-letter records.
+- `GET /api/agent/autonomy/audit/summary`: compliance summary for retained audit records.
+- `GET /api/agent/autonomy/audit/export`: export retained audit records in JSONL.
+- `POST /api/agent/autonomy/audit/export-expired`: export expired records and optionally evict.
 
 Provisioned observability:
 - Grafana dashboard: `deploy/grafana/provisioning/dashboards/operational-baseline.json`
