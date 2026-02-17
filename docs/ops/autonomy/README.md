@@ -18,6 +18,7 @@ Contents:
 - `phase0-metrics-dictionary-2026-02-17.md`: `P0-019` metric definition/formula dictionary evidence.
 - `phase0-baseline-data-and-reporting-2026-02-17.md`: `P0-020/P0-021/P0-025/P0-027` baseline scenario definition, baseline-window run, red-team run, and charted report evidence.
 - `phase0-metrics-endpoint-verification-2026-02-17.md`: `P0-015` metrics endpoint scrape-path verification.
+- `phase1-goal-gate-observability-2026-02-17.md`: `P1-018/P1-028` goal transition logging and gate observability metrics wiring evidence.
 - `phase3-executor-role-2026-02-17.md`: `P3-024` Executor role implementation and wiring evidence.
 - `phase3-role-dataflow-2026-02-17.md`: `P3-030` role dataflow integration evidence across planner/executor/verifier/memory/auditor.
 - `phase3-role-service-modules-2026-02-17.md`: `P3-006` role-specific module lifecycle implementation and validation evidence.
@@ -87,6 +88,13 @@ Provisioned observability:
 - Event bus: `autonomy:safe-mode:tool-blocked` emits denied execution attempts for blocked tool classes during safe mode.
 - Event bus: `autonomy:state:transition` emits every kernel FSM transition with trigger metadata.
 - Event store: `kernel-state-transitions` and `kernel-safe-mode-transitions` persist kernel and safe-mode transition history.
+- Metric: `autonomy_goal_transitions_total{status}` tracks goal lifecycle transitions (`active/paused/completed/failed`).
+- Metric: `autonomy_approval_requests_total{risk_class}` tracks approval-gate request volume by risk class.
+- Metric: `autonomy_approval_queue_size` tracks current pending approval queue depth.
+- Metric: `autonomy_approval_decisions_total{decision}` tracks approval outcomes (`approved/denied/expired/auto_approved`).
+- Metric: `autonomy_approval_turnaround_ms` tracks request-to-decision latency for approval-gate requests.
+- Metric: `autonomy_memory_gate_decisions_total{decision}` tracks allow/quarantine/reject decisions.
+- Metric: `autonomy_quarantine_size` tracks pending quarantine review backlog.
 - Metric: `autonomy_invariant_checks_total{result=pass|fail|error}` increments on every invariant check run.
 - Metric: `autonomy_role_executions_total{role,outcome}` tracks role-level success/failure outcomes.
 - Metric: `autonomy_role_latency_ms{role}` tracks planner/executor/verifier/memory_writer/auditor/orchestrator latencies.

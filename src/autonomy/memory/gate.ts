@@ -12,6 +12,10 @@
 import { logger } from "@elizaos/core";
 import type { Memory } from "@elizaos/core";
 import type { AutonomyMemoryGateConfig, AutonomyTrustConfig } from "../config.js";
+import {
+  recordMemoryGateDecision,
+  recordQuarantineSize,
+} from "../metrics/prometheus-metrics.js";
 import type { TrustScore, TrustSource, MemoryType } from "../types.js";
 import type { TrustScorer } from "../trust/scorer.js";
 import type { MemoryStore } from "./store.js";
@@ -105,6 +109,7 @@ export class MemoryGateImpl implements MemoryGate {
       maxQuarantineSize: gateConfig?.maxQuarantineSize ?? 1000,
     };
     this.store = store;
+    recordQuarantineSize(0);
   }
 
   /**
@@ -149,6 +154,7 @@ export class MemoryGateImpl implements MemoryGate {
   async evaluate(memory: Memory, source: TrustSource): Promise<MemoryGateDecision> {
     // If gate is disabled, allow but mark as unscored (no fabricated trust)
     if (!this.gateConfig.enabled) {
+      recordMemoryGateDecision("accepted");
       return {
         action: "allow",
         trustScore: {
@@ -174,6 +180,7 @@ export class MemoryGateImpl implements MemoryGate {
     // Input size limit — reject oversized content to prevent OOM/ReDoS
     if (contentText.length > MAX_CONTENT_SIZE) {
       this.stats.rejected++;
+      recordMemoryGateDecision("rejected");
       logger.warn(
         `[memory-gate] REJECT oversized content from ${source.id} ` +
         `(${contentText.length} bytes > ${MAX_CONTENT_SIZE} limit)`,
@@ -202,6 +209,7 @@ export class MemoryGateImpl implements MemoryGate {
     // Route based on trust thresholds
     if (trustScore.score >= this.trustConfig.writeThreshold) {
       this.stats.allowed++;
+      recordMemoryGateDecision("accepted");
       logger.debug(
         `[memory-gate] ALLOW memory from ${source.id} (trust=${trustScore.score.toFixed(3)})`,
       );
@@ -224,6 +232,7 @@ export class MemoryGateImpl implements MemoryGate {
       this.addToQuarantine(memoryId, typed);
       await this.persistQuarantine(typed, Date.now() + this.gateConfig.quarantineReviewMs);
       this.stats.quarantined++;
+      recordMemoryGateDecision("quarantined");
 
       logger.info(
         `[memory-gate] QUARANTINE memory ${memoryId} from ${source.id} ` +
@@ -240,6 +249,7 @@ export class MemoryGateImpl implements MemoryGate {
 
     // Reject: trust too low
     this.stats.rejected++;
+    recordMemoryGateDecision("rejected");
     logger.warn(
       `[memory-gate] REJECT memory from ${source.id} ` +
       `(trust=${trustScore.score.toFixed(3)}): ${trustScore.reasoning.join("; ")}`,
@@ -274,6 +284,7 @@ export class MemoryGateImpl implements MemoryGate {
 
     this.quarantineBuffer.delete(memoryId);
     this.stats.pendingReview = this.quarantineBuffer.size;
+    recordQuarantineSize(this.quarantineBuffer.size);
 
     if (decision === "approve") {
       memory.verified = true;
@@ -373,6 +384,7 @@ export class MemoryGateImpl implements MemoryGate {
 
     this.quarantineBuffer.set(memoryId, memory);
     this.stats.pendingReview = this.quarantineBuffer.size;
+    recordQuarantineSize(this.quarantineBuffer.size);
 
     // Set auto-expiry timer
     const delayMs = expiresAt ? Math.max(0, expiresAt - Date.now()) : this.gateConfig.quarantineReviewMs;
@@ -395,6 +407,7 @@ export class MemoryGateImpl implements MemoryGate {
     this.expiryTimers.delete(memoryId);
     this.quarantineBuffer.delete(memoryId);
     this.stats.pendingReview = this.quarantineBuffer.size;
+    recordQuarantineSize(this.quarantineBuffer.size);
 
     if (this.onExpiry) {
       this.onExpiry(memory);
@@ -425,6 +438,7 @@ export class MemoryGateImpl implements MemoryGate {
       }
       this.quarantineBuffer.delete(oldestId);
       this.stats.rejected++;
+      recordQuarantineSize(this.quarantineBuffer.size);
       logger.debug(`[memory-gate] Evicted oldest quarantined memory ${oldestId}`);
       void this.resolveQuarantine(oldestId, "rejected", "evicted");
     }

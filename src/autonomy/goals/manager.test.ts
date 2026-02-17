@@ -11,6 +11,7 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
+import { metrics } from "../../telemetry/setup.js";
 import { InMemoryGoalManager } from "./manager.js";
 import type { Goal, MutationContext } from "./manager.js";
 
@@ -134,6 +135,20 @@ describe("InMemoryGoalManager", () => {
         manager.updateGoal("non-existent", { status: "paused" }),
       ).rejects.toThrow("not found");
     });
+
+    it("records goal transition metrics on create and status change", async () => {
+      const before = metrics.getSnapshot();
+      const goal = await manager.addGoal(makeGoalInput({ status: "active" }));
+      const afterCreate = metrics.getSnapshot();
+
+      const activeKey = 'autonomy_goal_transitions_total:{"status":"active"}';
+      expect((afterCreate.counters[activeKey] ?? 0) - (before.counters[activeKey] ?? 0)).toBe(1);
+
+      await manager.updateGoal(goal.id, { status: "paused" });
+      const afterPause = metrics.getSnapshot();
+      const pausedKey = 'autonomy_goal_transitions_total:{"status":"paused"}';
+      expect((afterPause.counters[pausedKey] ?? 0) - (afterCreate.counters[pausedKey] ?? 0)).toBe(1);
+    });
   });
 
   describe("getActiveGoals", () => {
@@ -238,6 +253,7 @@ describe("InMemoryGoalManager", () => {
     });
 
     it("auto-completes goal when all criteria met", async () => {
+      const before = metrics.getSnapshot();
       const goal = await manager.addGoal(makeGoalInput({
         successCriteria: ["Task is done", "Feature is complete"],
       }));
@@ -247,6 +263,9 @@ describe("InMemoryGoalManager", () => {
       const updated = await manager.getGoalById(goal.id);
       expect(updated!.status).toBe("completed");
       expect(updated!.completedAt).toBeDefined();
+      const after = metrics.getSnapshot();
+      const completedKey = 'autonomy_goal_transitions_total:{"status":"completed"}';
+      expect((after.counters[completedKey] ?? 0) - (before.counters[completedKey] ?? 0)).toBeGreaterThanOrEqual(1);
     });
 
     it("returns false for goals with no criteria", async () => {

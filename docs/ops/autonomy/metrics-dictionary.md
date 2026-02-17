@@ -44,6 +44,7 @@ These are emitted from `src/autonomy/metrics/prometheus-metrics.ts`.
 | `milaidy_autonomy_drift_alerts_total` | counter | `severity` | Drift alert frequency. |
 | `milaidy_autonomy_goal_transitions_total` | counter | `status` | Goal state transition count. |
 | `milaidy_autonomy_approval_requests_total` | counter | `risk_class` | Approval request volume. |
+| `milaidy_autonomy_approval_queue_size` | gauge | none | Current pending approval queue size. |
 | `milaidy_autonomy_approval_decisions_total` | counter | `decision` | Approval outcomes. |
 | `milaidy_autonomy_event_store_size` | gauge | none | Stored execution event count. |
 | `milaidy_autonomy_pipeline_executions_total` | counter | `outcome` | Pipeline outcome distribution. |

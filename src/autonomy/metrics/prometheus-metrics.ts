@@ -86,6 +86,13 @@ export function recordApprovalRequest(riskClass: string): void {
 }
 
 /**
+ * Record current approval queue size.
+ */
+export function recordApprovalQueueSize(size: number): void {
+  metrics.gauge("autonomy_approval_queue_size", size);
+}
+
+/**
  * Record an approval decision.
  */
 export function recordApprovalDecision(

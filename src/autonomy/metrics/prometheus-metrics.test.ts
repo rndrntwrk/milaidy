@@ -11,6 +11,7 @@ import {
   recordDriftScore,
   recordGoalStatusChange,
   recordApprovalRequest,
+  recordApprovalQueueSize,
   recordApprovalDecision,
   recordApprovalTurnaroundMs,
   recordEventStoreSize,
@@ -81,6 +82,12 @@ describe("Autonomy Prometheus Metrics", () => {
     const snap = metrics.getSnapshot();
     const key = 'autonomy_approval_decisions_total:{"decision":"approved"}';
     expect(snap.counters[key]).toBeGreaterThan(0);
+  });
+
+  it("recordApprovalQueueSize sets gauge", () => {
+    recordApprovalQueueSize(4);
+    const snap = metrics.getSnapshot();
+    expect(snap.counters["autonomy_approval_queue_size"]).toBe(4);
   });
 
   it("recordApprovalTurnaroundMs records histogram", () => {

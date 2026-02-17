@@ -13,8 +13,8 @@ Current status pre-check snapshot:
 - Evidence basis: static repo review of autonomy kernel, API, persistence, and app UI code paths.
 - Summary counts:
 - `307` total checklist items.
-- `148` items tagged `STATUS: CODED`.
-- `52` items tagged `STATUS: PARTIAL`.
+- `150` items tagged `STATUS: CODED`.
+- `50` items tagged `STATUS: PARTIAL`.
 - `107` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
@@ -207,7 +207,7 @@ Sprint chunks:
 - [ ] P1-015 Implement goal stack data model and lifecycle states. [STATUS: CODED]
 - [ ] P1-016 Implement goal push/pop/suspend/resume operations. [STATUS: CODED]
 - [ ] P1-017 Add goal APIs for query/update. [STATUS: CODED]
-- [ ] P1-018 Add goal transition event logging. [STATUS: PARTIAL]
+- [ ] P1-018 Add goal transition event logging. [STATUS: CODED]
 
 ### 1.C Typed Memory Schema and Gate
 
@@ -220,7 +220,7 @@ Sprint chunks:
 - [ ] P1-025 Implement gate size/capacity protections. [STATUS: CODED]
 - [ ] P1-026 Implement quarantine hydration on startup. [STATUS: CODED]
 - [ ] P1-027 Implement quarantine review APIs. [STATUS: CODED]
-- [ ] P1-028 Implement gate observability (decision counters, queue size, latency). [STATUS: PARTIAL]
+- [ ] P1-028 Implement gate observability (decision counters, queue size, latency). [STATUS: CODED]
 
 ### 1.D Trust Scoring and Retrieval Ranking
 
