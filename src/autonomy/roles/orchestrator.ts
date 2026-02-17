@@ -20,6 +20,7 @@ import type {
 } from "../workflow/types.js";
 import { LocalWorkflowEngine } from "../adapters/workflow/local-engine.js";
 import type { WorkflowDefinition, WorkflowEngine } from "../adapters/workflow/types.js";
+import type { ToolCallSource } from "../tools/types.js";
 import type {
   AuditorRole,
   ExecutorRole,
@@ -72,6 +73,23 @@ const DEFAULT_ROLE_CALL_POLICY: RoleCallPolicy = {
   circuitBreakerResetMs: 30_000,
 };
 
+export interface RoleCallAuthzPolicy {
+  minSourceTrust: number;
+  allowedSources: ToolCallSource[];
+}
+
+const ROLE_CALL_SOURCES: ToolCallSource[] = [
+  "llm",
+  "user",
+  "system",
+  "plugin",
+];
+
+const DEFAULT_ROLE_CALL_AUTHZ_POLICY: RoleCallAuthzPolicy = {
+  minSourceTrust: 0,
+  allowedSources: ROLE_CALL_SOURCES,
+};
+
 interface RoleCircuitState {
   failures: number;
   openUntil: number;
@@ -80,6 +98,7 @@ interface RoleCircuitState {
 export class KernelOrchestrator implements RoleOrchestrator {
   private executionQueue: Promise<void> = Promise.resolve();
   private readonly roleCallPolicy: RoleCallPolicy;
+  private readonly roleCallAuthzPolicy: RoleCallAuthzPolicy;
   private readonly roleCircuitState = new Map<RoleCallName, RoleCircuitState>();
 
   constructor(
@@ -92,6 +111,7 @@ export class KernelOrchestrator implements RoleOrchestrator {
     private readonly safeModeController: SafeModeController,
     private readonly workflowEngine?: WorkflowEngine,
     roleCallPolicy?: Partial<RoleCallPolicy>,
+    roleCallAuthzPolicy?: Partial<RoleCallAuthzPolicy>,
   ) {
     const mergedPolicy = {
       ...DEFAULT_ROLE_CALL_POLICY,
@@ -103,6 +123,24 @@ export class KernelOrchestrator implements RoleOrchestrator {
       backoffMs: Math.max(0, mergedPolicy.backoffMs),
       circuitBreakerThreshold: Math.max(1, mergedPolicy.circuitBreakerThreshold),
       circuitBreakerResetMs: Math.max(1, mergedPolicy.circuitBreakerResetMs),
+    };
+
+    const mergedAuthzPolicy = {
+      ...DEFAULT_ROLE_CALL_AUTHZ_POLICY,
+      ...(roleCallAuthzPolicy ?? {}),
+    };
+    const allowedSources = Array.from(
+      new Set(mergedAuthzPolicy.allowedSources ?? ROLE_CALL_SOURCES),
+    ).filter((source): source is ToolCallSource =>
+      ROLE_CALL_SOURCES.includes(source),
+    );
+    this.roleCallAuthzPolicy = {
+      minSourceTrust: Math.max(
+        0,
+        Math.min(1, mergedAuthzPolicy.minSourceTrust),
+      ),
+      allowedSources:
+        allowedSources.length > 0 ? allowedSources : ROLE_CALL_SOURCES,
     };
   }
 
@@ -157,14 +195,26 @@ export class KernelOrchestrator implements RoleOrchestrator {
         sourceTrust: orchestratedRequest.sourceTrust,
       });
       plan = parsePlannerCreatePlanResponse(
-        await this.callRoleWithResilience("planner", "createPlan", () =>
-          this.planner.createPlan(planRequest),
+        await this.callRoleWithResilience(
+          "planner",
+          "createPlan",
+          () => this.planner.createPlan(planRequest),
+          {
+            source: orchestratedRequest.source,
+            sourceTrust: orchestratedRequest.sourceTrust,
+          },
         ),
       );
 
       const validation = parsePlannerValidatePlanResponse(
-        await this.callRoleWithResilience("planner", "validatePlan", () =>
-          this.planner.validatePlan(plan),
+        await this.callRoleWithResilience(
+          "planner",
+          "validatePlan",
+          () => this.planner.validatePlan(plan),
+          {
+            source: orchestratedRequest.source,
+            sourceTrust: orchestratedRequest.sourceTrust,
+          },
         ),
       );
       if (!validation.valid) {
@@ -218,11 +268,18 @@ export class KernelOrchestrator implements RoleOrchestrator {
             requestId: `${plan.id}-${step.id}`,
           });
           const pipelineResult = parseExecutorExecuteResponse(
-            await this.callRoleWithResilience("executor", "execute", () =>
-              this.executor.execute(
-                proposedCall,
-                orchestratedRequest.actionHandler,
-              ),
+            await this.callRoleWithResilience(
+              "executor",
+              "execute",
+              () =>
+                this.executor.execute(
+                  proposedCall,
+                  orchestratedRequest.actionHandler,
+                ),
+              {
+                source: orchestratedRequest.source,
+                sourceTrust: orchestratedRequest.sourceTrust,
+              },
             ),
           );
           executions.push(pipelineResult);
@@ -275,10 +332,17 @@ export class KernelOrchestrator implements RoleOrchestrator {
             }));
 
           memoryReport = parseMemoryWriteBatchResponse(
-            await this.callRoleWithResilience("memory_writer", "writeBatch", () =>
-              this.memoryWriter.writeBatch(
-                parseMemoryWriteBatchRequest(memoryRequests),
-              ),
+            await this.callRoleWithResilience(
+              "memory_writer",
+              "writeBatch",
+              () =>
+                this.memoryWriter.writeBatch(
+                  parseMemoryWriteBatchRequest(memoryRequests),
+                ),
+              {
+                source: orchestratedRequest.source,
+                sourceTrust: orchestratedRequest.sourceTrust,
+              },
             ),
           );
           this.stateMachine.transition("memory_written");
@@ -302,8 +366,14 @@ export class KernelOrchestrator implements RoleOrchestrator {
             recentOutputs: orchestratedRequest.recentOutputs ?? [],
           });
           auditReport = parseAuditorAuditResponse(
-            await this.callRoleWithResilience("auditor", "audit", () =>
-              this.auditor.audit(auditRequest),
+            await this.callRoleWithResilience(
+              "auditor",
+              "audit",
+              () => this.auditor.audit(auditRequest),
+              {
+                source: orchestratedRequest.source,
+                sourceTrust: orchestratedRequest.sourceTrust,
+              },
             ),
           );
           this.stateMachine.transition("audit_complete");
@@ -461,11 +531,18 @@ export class KernelOrchestrator implements RoleOrchestrator {
                 requestId: `${plan.id}-${step.id}`,
               });
               const pipelineResult = parseExecutorExecuteResponse(
-                await this.callRoleWithResilience("executor", "execute", () =>
-                  this.executor.execute(
-                    proposedCall,
-                    request.actionHandler,
-                  ),
+                await this.callRoleWithResilience(
+                  "executor",
+                  "execute",
+                  () =>
+                    this.executor.execute(
+                      proposedCall,
+                      request.actionHandler,
+                    ),
+                  {
+                    source: request.source,
+                    sourceTrust: request.sourceTrust,
+                  },
                 ),
               );
               results.push(pipelineResult);
@@ -525,8 +602,14 @@ export class KernelOrchestrator implements RoleOrchestrator {
         agentId: request.agentId,
       });
       const report = parseVerifierVerifyResponse(
-        await this.callRoleWithResilience("verifier", "verify", () =>
-          this.verifier.verify(verifyRequest),
+        await this.callRoleWithResilience(
+          "verifier",
+          "verify",
+          () => this.verifier.verify(verifyRequest),
+          {
+            source: request.source,
+            sourceTrust: request.sourceTrust,
+          },
         ),
       );
       reports.push(report);
@@ -538,7 +621,10 @@ export class KernelOrchestrator implements RoleOrchestrator {
     role: RoleCallName,
     operation: string,
     roleCall: () => Promise<T>,
+    authContext: { source: ToolCallSource; sourceTrust: number },
   ): Promise<T> {
+    this.assertRoleCallAuthorized(role, operation, authContext);
+
     const now = Date.now();
     const circuitState = this.roleCircuitState.get(role);
     if (circuitState && circuitState.openUntil > now) {
@@ -650,5 +736,22 @@ export class KernelOrchestrator implements RoleOrchestrator {
     await new Promise<void>((resolve) => {
       setTimeout(resolve, ms);
     });
+  }
+
+  private assertRoleCallAuthorized(
+    role: RoleCallName,
+    operation: string,
+    authContext: { source: ToolCallSource; sourceTrust: number },
+  ): void {
+    if (!this.roleCallAuthzPolicy.allowedSources.includes(authContext.source)) {
+      throw new Error(
+        `Role call denied: ${role}.${operation} source "${authContext.source}" is not allowed`,
+      );
+    }
+    if (authContext.sourceTrust < this.roleCallAuthzPolicy.minSourceTrust) {
+      throw new Error(
+        `Role call denied: ${role}.${operation} source trust ${authContext.sourceTrust.toFixed(3)} below floor ${this.roleCallAuthzPolicy.minSourceTrust.toFixed(3)}`,
+      );
+    }
   }
 }
