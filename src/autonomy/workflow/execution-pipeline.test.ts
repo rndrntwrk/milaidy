@@ -5,6 +5,7 @@ import { KernelStateMachine } from "../state-machine/kernel-state-machine.js";
 import type { ProposedToolCall, ToolValidationResult } from "../tools/types.js";
 import type { VerificationResult, VerifierContext } from "../verification/types.js";
 import { CompensationRegistry } from "./compensation-registry.js";
+import { CompensationIncidentManager } from "./compensation-incidents.js";
 import { registerBuiltinCompensations } from "./compensations/index.js";
 import { InMemoryEventStore } from "./event-store.js";
 import { ToolExecutionPipeline } from "./execution-pipeline.js";
@@ -86,6 +87,7 @@ function createPipeline(
   const eventStore = new InMemoryEventStore();
   const approvalGate = new ApprovalGate({ timeoutMs: 10_000 });
   const compensationRegistry = new CompensationRegistry();
+  const compensationIncidentManager = new CompensationIncidentManager();
   registerBuiltinCompensations(compensationRegistry);
 
   const validator = overrides.validator ?? createMockValidator();
@@ -102,6 +104,7 @@ function createPipeline(
     config: overrides.config as Record<string, unknown> | undefined,
     eventBus: overrides.eventBus,
     verificationQuery: overrides.verificationQuery,
+    compensationIncidentManager,
   });
 
   return {
@@ -110,6 +113,7 @@ function createPipeline(
     eventStore,
     approvalGate,
     compensationRegistry,
+    compensationIncidentManager,
     validator,
     verifier,
   };
@@ -389,7 +393,7 @@ describe("ToolExecutionPipeline", () => {
         ],
       });
       const handler = createSuccessHandler({ outputPath: "/tmp/image.png" });
-      const { pipeline, stateMachine } = createPipeline({
+      const { pipeline, stateMachine, compensationIncidentManager } = createPipeline({
         validator,
         verifier,
       });
@@ -404,6 +408,7 @@ describe("ToolExecutionPipeline", () => {
       expect(result.verification?.hasCriticalFailure).toBe(true);
       expect(result.compensation?.attempted).toBe(true);
       expect(result.compensation?.success).toBe(true);
+      expect(compensationIncidentManager.listOpenIncidents()).toHaveLength(0);
       // State machine should have recovered back to idle
       expect(stateMachine.currentState).toBe("idle");
     });
@@ -415,7 +420,10 @@ describe("ToolExecutionPipeline", () => {
         hasCriticalFailure: true,
       });
       const handler = createSuccessHandler();
-      const { pipeline } = createPipeline({ validator, verifier });
+      const { pipeline, compensationIncidentManager } = createPipeline({
+        validator,
+        verifier,
+      });
 
       const result = await pipeline.execute(
         makeCall({ tool: "UNKNOWN_TOOL" }),
@@ -424,6 +432,10 @@ describe("ToolExecutionPipeline", () => {
 
       expect(result.success).toBe(false);
       expect(result.compensation?.attempted).toBe(false);
+      const incidents = compensationIncidentManager.listOpenIncidents();
+      expect(incidents).toHaveLength(1);
+      expect(incidents[0].toolName).toBe("UNKNOWN_TOOL");
+      expect(incidents[0].compensationAttempted).toBe(false);
     });
 
     it("records attempted compensation failure for manual fallback tools", async () => {
@@ -433,7 +445,10 @@ describe("ToolExecutionPipeline", () => {
         hasCriticalFailure: true,
       });
       const handler = createSuccessHandler({ taskId: "task-123" });
-      const { pipeline } = createPipeline({ validator, verifier });
+      const { pipeline, compensationIncidentManager, eventStore } = createPipeline({
+        validator,
+        verifier,
+      });
 
       const result = await pipeline.execute(
         makeCall({
@@ -448,6 +463,18 @@ describe("ToolExecutionPipeline", () => {
       expect(result.compensation?.success).toBe(false);
       expect(result.compensation?.detail).toContain("Manual compensation required");
       expect(result.compensation?.detail).toContain("task-123");
+      const incidents = compensationIncidentManager.listOpenIncidents();
+      expect(incidents).toHaveLength(1);
+      expect(incidents[0].toolName).toBe("CREATE_TASK");
+      expect(incidents[0].reason).toBe("critical_verification_failure");
+      expect(incidents[0].compensationSuccess).toBe(false);
+
+      const events = await eventStore.getByRequestId("test-req-1");
+      const incidentEvent = events.find(
+        (event) => event.type === "tool:compensation:incident:opened",
+      );
+      expect(incidentEvent).toBeDefined();
+      expect(incidentEvent?.payload.status).toBe("open");
     });
   });
 
@@ -650,6 +677,35 @@ describe("ToolExecutionPipeline", () => {
         reason: "critical_verification_failure",
         correlationId: expect.any(String),
       });
+    });
+
+    it("emits compensation incident opened event when compensation remains unresolved", async () => {
+      const mockEmit = vi.fn();
+      const validator = createMockValidator({ riskClass: "reversible" });
+      const verifier = createMockVerifier({
+        status: "failed",
+        hasCriticalFailure: true,
+      });
+      const handler = createSuccessHandler({ taskId: "task-incident-1" });
+      const { pipeline } = createPipeline({
+        validator,
+        verifier,
+        eventBus: { emit: mockEmit },
+      });
+
+      await pipeline.execute(makeCall({ tool: "CREATE_TASK" }), handler);
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        "autonomy:compensation:incident:opened",
+        expect.objectContaining({
+          requestId: "test-req-1",
+          toolName: "CREATE_TASK",
+          status: "open",
+          compensationAttempted: true,
+          compensationSuccess: false,
+          correlationId: expect.any(String),
+        }),
+      );
     });
 
     it("emits postcondition:checked event with failure taxonomy", async () => {

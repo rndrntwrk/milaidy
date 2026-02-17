@@ -79,11 +79,11 @@ function renderMarkdown(input: {
   lines.push(`- Event count: \`${input.eventCount}\``);
   lines.push(`- Request projections: \`${input.projections.length}\``);
   lines.push("");
-  lines.push("| Request ID | Status | Events | Seq Range | Critical Invariant | Compensation | Last Error |");
-  lines.push("|---|---|---:|---|---|---|---|");
+  lines.push("| Request ID | Status | Events | Seq Range | Critical Invariant | Compensation | Unresolved Compensation Incident | Last Error |");
+  lines.push("|---|---|---:|---|---|---|---|---|");
   for (const projection of input.projections) {
     lines.push(
-      `| ${projection.requestId} | ${projection.status} | ${projection.eventCount} | ${projection.firstSequenceId}-${projection.lastSequenceId} | ${projection.hasCriticalInvariantViolation ? "yes" : "no"} | ${projection.hasCompensation ? "yes" : "no"} | ${projection.lastError ?? ""} |`,
+      `| ${projection.requestId} | ${projection.status} | ${projection.eventCount} | ${projection.firstSequenceId}-${projection.lastSequenceId} | ${projection.hasCriticalInvariantViolation ? "yes" : "no"} | ${projection.hasCompensation ? "yes" : "no"} | ${projection.hasUnresolvedCompensationIncident ? "yes" : "no"} | ${projection.lastError ?? ""} |`,
     );
   }
   lines.push("");

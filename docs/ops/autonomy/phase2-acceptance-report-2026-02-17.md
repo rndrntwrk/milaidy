@@ -16,6 +16,7 @@ Key quantitative gates at current HEAD:
 - Runtime-scope post-condition coverage: supported via report flag (`--include-runtime=true`).
 - Independent verification query paths are wired into verification for install/trigger checks.
 - Reversible compensation coverage: `100%` (`6/6` reversible tools).
+- Unresolved compensation incident workflow is defined and emits incident-opened records for manual/operator follow-up.
 - Reversible success gate (`P2-063`): `>=99.5%` threshold test passed.
 - Unauthorized irreversible execution gate (`P2-064`): `0` unauthorized executions in denial-path suite.
 
@@ -35,16 +36,19 @@ Notable metrics:
 - postcondition coverage: `100%`
 - independent verification query keys: `plugins:installed`, `triggers:exists`, `events:has-type`
 - compensation coverage for reversible tools: `100%`
+- unresolved compensation incidents emit execution event type: `tool:compensation:incident:opened`
 
 ### Phase 2 Gate Tests
 
 - `src/autonomy/workflow/phase2-acceptance-gate.test.ts`
+- `src/autonomy/workflow/compensation-incidents.test.ts`
 - `src/autonomy/tools/runtime-contracts.test.ts`
 - `src/autonomy/service.test.ts` (runtime-only action contract regression)
 - `src/autonomy/tools/schemas/custom-action.schema.test.ts`
 - `src/autonomy/tools/schemas/fixtures.test.ts`
 - `src/autonomy/verification/postconditions/independent-query.test.ts`
 - `src/autonomy/workflow/execution-pipeline.test.ts` (verification query propagation)
+- `src/autonomy/workflow/execution-pipeline.test.ts` (compensation incident workflow coverage)
 - `docs/ops/autonomy/phase2-acceptance-gate-2026-02-17.md`
 
 Validation command:

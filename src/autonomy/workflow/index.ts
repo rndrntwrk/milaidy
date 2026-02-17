@@ -4,6 +4,7 @@
  */
 
 export { CompensationRegistry } from "./compensation-registry.js";
+export { CompensationIncidentManager } from "./compensation-incidents.js";
 export {
   BUILTIN_COMPENSATION_ELIGIBILITY,
   listBuiltinCompensationEligibility,
@@ -19,6 +20,10 @@ export {
 export { ToolExecutionPipeline } from "./execution-pipeline.js";
 export type {
   CompensationContext,
+  CompensationIncident,
+  CompensationIncidentManagerInterface,
+  CompensationIncidentReason,
+  CompensationIncidentStatus,
   CompensationFn,
   CompensationRegistryInterface,
   EventStoreInterface,

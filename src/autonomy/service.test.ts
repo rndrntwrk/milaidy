@@ -217,6 +217,7 @@ describe("MilaidyAutonomyService", () => {
       expect(svc.getMemoryGate()).not.toBeNull();
       expect(svc.getDriftMonitor()).not.toBeNull();
       expect(svc.getGoalManager()).not.toBeNull();
+      expect(svc.getCompensationIncidentManager()).not.toBeNull();
     });
 
     it("emits autonomy:kernel:initialized", async () => {
