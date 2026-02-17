@@ -65,6 +65,7 @@ let _ToolRegistry: typeof import("./tools/registry.js").ToolRegistry;
 let _SchemaValidator: typeof import("./verification/schema-validator.js").SchemaValidator;
 let _PostConditionVerifier: typeof import("./verification/postcondition-verifier.js").PostConditionVerifier;
 let _registerBuiltinToolContracts: typeof import("./tools/schemas/index.js").registerBuiltinToolContracts;
+let _registerRuntimeActionContracts: typeof import("./tools/runtime-contracts.js").registerRuntimeActionContracts;
 let _registerBuiltinPostConditions: typeof import("./verification/postconditions/index.js").registerBuiltinPostConditions;
 let _KernelStateMachine: typeof import("./state-machine/kernel-state-machine.js").KernelStateMachine;
 let _ApprovalGate: typeof import("./approval/approval-gate.js").ApprovalGate;
@@ -119,7 +120,7 @@ let _SystemPromptBuilder: typeof import("./learning/prompt-builder.js").SystemPr
 let _AdversarialScenarioGenerator: typeof import("./learning/adversarial.js").AdversarialScenarioGenerator;
 
 async function loadImplementations() {
-  const [trustMod, memMod, driftMod, goalMod, toolRegMod, schemaValMod, pcvMod, toolSchemasMod, pcMod, smMod, approvalMod, approvalPersistentMod, esMod, compRegMod, pipelineMod, compsMod, localWorkflowMod, temporalWorkflowMod, invMod, invRegMod, harnMod, evalMod, plannerMod, executorMod, verifierMod, memWriterMod, auditorMod, safeModeMod, orchestratorMod] = await Promise.all([
+  const [trustMod, memMod, driftMod, goalMod, toolRegMod, schemaValMod, pcvMod, toolSchemasMod, runtimeContractsMod, pcMod, smMod, approvalMod, approvalPersistentMod, esMod, compRegMod, pipelineMod, compsMod, localWorkflowMod, temporalWorkflowMod, invMod, invRegMod, harnMod, evalMod, plannerMod, executorMod, verifierMod, memWriterMod, auditorMod, safeModeMod, orchestratorMod] = await Promise.all([
     import("./trust/scorer.js"),
     import("./memory/gate.js"),
     import("./identity/drift-monitor.js"),
@@ -128,6 +129,7 @@ async function loadImplementations() {
     import("./verification/schema-validator.js"),
     import("./verification/postcondition-verifier.js"),
     import("./tools/schemas/index.js"),
+    import("./tools/runtime-contracts.js"),
     import("./verification/postconditions/index.js"),
     import("./state-machine/kernel-state-machine.js"),
     import("./approval/approval-gate.js"),
@@ -158,6 +160,8 @@ async function loadImplementations() {
   _SchemaValidator = schemaValMod.SchemaValidator;
   _PostConditionVerifier = pcvMod.PostConditionVerifier;
   _registerBuiltinToolContracts = toolSchemasMod.registerBuiltinToolContracts;
+  _registerRuntimeActionContracts =
+    runtimeContractsMod.registerRuntimeActionContracts;
   _registerBuiltinPostConditions = pcMod.registerBuiltinPostConditions;
   _KernelStateMachine = smMod.KernelStateMachine;
   _ApprovalGate = approvalMod.ApprovalGate;
@@ -380,6 +384,7 @@ export class MilaidyAutonomyService extends Service {
     // Instantiate tool contracts & verification components
     this.toolRegistry = new _ToolRegistry();
     _registerBuiltinToolContracts(this.toolRegistry);
+    _registerRuntimeActionContracts(this.toolRegistry, runtime);
     this.schemaValidator = new _SchemaValidator(this.toolRegistry);
     this.postConditionVerifier = new _PostConditionVerifier(
       config.tools?.checkTimeoutMs,
@@ -711,6 +716,10 @@ export class MilaidyAutonomyService extends Service {
     // Initialize tool contracts & verification
     this.toolRegistry = new _ToolRegistry();
     _registerBuiltinToolContracts(this.toolRegistry);
+    _registerRuntimeActionContracts(
+      this.toolRegistry,
+      this.runtime as import("@elizaos/core").IAgentRuntime,
+    );
     this.schemaValidator = new _SchemaValidator(this.toolRegistry);
     this.postConditionVerifier = new _PostConditionVerifier();
     _registerBuiltinPostConditions(this.postConditionVerifier);

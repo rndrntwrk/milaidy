@@ -20,6 +20,10 @@ export {
   RUN_IN_TERMINAL,
   registerBuiltinToolContracts,
 } from "./schemas/index.js";
+export {
+  createRuntimeActionContract,
+  registerRuntimeActionContracts,
+} from "./runtime-contracts.js";
 export type {
   ProposedToolCall,
   RiskClass,
