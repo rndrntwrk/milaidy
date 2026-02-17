@@ -21,11 +21,13 @@ Contents:
 - `phase3-quality-safe-mode-dashboard-2026-02-17.md`: `P3-037` PSD/ICS/safe-mode dashboard provisioning evidence.
 - `phase3-long-horizon-2026-02-17.md`: `P3-038` long-horizon scenario comparison run and baseline delta evidence.
 - `phase3-threshold-tuning-2026-02-17.md`: `P3-039` empirical threshold tuning and alert-rule updates.
+- `phase3-reduction-demonstration-2026-02-17.md`: `P3-040` PSD/identity-violation reduction demonstration artifact.
 - `reports/`: generated run artifacts (`.json` and `.md` outputs).
 
 Primary scripts:
 - `npm run autonomy:baseline:run`
 - `npm run autonomy:long-horizon:run`
+- `npm run autonomy:phase3:reductions`
 - `npm run autonomy:redteam:run`
 - `npm run autonomy:metrics:cardinality`
 - `npm run autonomy:contracts:inventory`

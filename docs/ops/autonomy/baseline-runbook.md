@@ -71,6 +71,16 @@ Output:
 - `docs/ops/autonomy/reports/*.long-horizon.md`
 - `docs/ops/autonomy/reports/state/baseline-snapshots.json`
 
+## 6) Phase 3 Reduction Demonstration
+
+```bash
+npm run autonomy:phase3:reductions -- --baseline baseline-sprint1-smoke --current phase3-long-horizon-2026-02-17
+```
+
+Output:
+- `docs/ops/autonomy/reports/*.phase3-reduction.json`
+- `docs/ops/autonomy/reports/*.phase3-reduction.md`
+
 ## Acceptance Attachments (Phase 0)
 
 Attach to checklist evidence:
