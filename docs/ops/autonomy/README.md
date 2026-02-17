@@ -26,6 +26,7 @@ Contents:
 - `phase1-preference-source-scope-ui-2026-02-17.md`: `P1-039` preference source/scope visibility UI implementation and validation evidence.
 - `phase1-trust-feature-weight-strategy-2026-02-17.md`: `P1-029` trust feature set and weighting strategy definition.
 - `phase1-trust-ml-baseline-2026-02-17.md`: `P1-031` logistic-regression trust classifier baseline implementation and comparison evidence.
+- `phase1-retrieval-quality-validation-2026-02-17.md`: `P1-036` retrieval quality validation against baseline tasks with Recall@N comparison evidence.
 - `phase1-trust-override-policy-2026-02-17.md`: `P1-035` trust override governance policy + audit event enforcement evidence.
 - `phase1-retrieval-rank-guardrails-2026-02-17.md`: `P1-034` retrieval rank tuning configuration guardrails + runtime sanitization evidence.
 - `phase1-drift-report-persistence-2026-02-17.md`: `P1-014` durable drift report persistence in execution event logs.
@@ -59,6 +60,7 @@ Primary scripts:
 - `npm run autonomy:long-horizon:run`
 - `npm run autonomy:phase3:reductions`
 - `npm run autonomy:redteam:run`
+- `npm run autonomy:retrieval:quality`
 - `npm run autonomy:metrics:cardinality`
 - `npm run autonomy:metrics:retention-cost`
 - `npm run autonomy:contracts:inventory`
