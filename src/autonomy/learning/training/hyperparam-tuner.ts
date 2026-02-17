@@ -4,7 +4,7 @@
  * @module autonomy/learning/training/hyperparam-tuner
  */
 
-import type { TrainingDataset } from "../types.js";
+import type { RLVRTrainingDataset } from "./dataset.js";
 
 /** A hyperparameter space definition. */
 export interface HyperparamSpace {
@@ -36,7 +36,7 @@ export interface TuningResult {
 /** Objective function type. */
 export type ObjectiveFunction = (
   params: Record<string, number>,
-  dataset: TrainingDataset,
+  dataset: RLVRTrainingDataset,
 ) => Promise<number>;
 
 /**
@@ -50,7 +50,7 @@ export class GridSearchTuner {
    */
   async tune(
     space: HyperparamSpace,
-    dataset: TrainingDataset,
+    dataset: RLVRTrainingDataset,
     objective: ObjectiveFunction,
   ): Promise<TuningResult> {
     const start = Date.now();

@@ -1,0 +1,336 @@
+{
+  "label": "p4-012-013-training-job-20260217",
+  "createdAt": "2026-02-17T23:26:48.463Z",
+  "datasetFile": "/Volumes/OWC Envoy Pro FX/milaidy/milaidy/docs/ops/autonomy/reports/p4-001-002-learning-dataset-20260217.learning-dataset.json",
+  "dataset": {
+    "id": "p4-learning-v1",
+    "label": "p4-001-002-learning-dataset-20260217",
+    "examples": [
+      {
+        "id": "trace-135358b11513",
+        "toolName": "READ_FILE",
+        "reward": 0.95,
+        "source": "user",
+        "scenarioId": "req-learning-1",
+        "metadata": {
+          "verificationPassed": true,
+          "labels": {
+            "taskOutcome": "success",
+            "verificationAlignment": "aligned",
+            "policyCompliance": "compliant",
+            "safetyRisk": "none",
+            "rewardHackingSignal": "none"
+          }
+        }
+      },
+      {
+        "id": "trace-a0765286b365",
+        "toolName": "WRITE_FILE",
+        "reward": 0,
+        "source": "user",
+        "scenarioId": "req-learning-2",
+        "metadata": {
+          "verificationPassed": true,
+          "labels": {
+            "taskOutcome": "fail",
+            "verificationAlignment": "unknown",
+            "policyCompliance": "non_compliant",
+            "safetyRisk": "medium",
+            "rewardHackingSignal": "suspected",
+            "notes": "Validation failed"
+          }
+        }
+      },
+      {
+        "id": "trace-eb1df0688ce6",
+        "toolName": "TRANSFER",
+        "reward": 0.15000000000000002,
+        "source": "system",
+        "scenarioId": "req-learning-3",
+        "metadata": {
+          "verificationPassed": false,
+          "labels": {
+            "taskOutcome": "partial",
+            "verificationAlignment": "conflict",
+            "policyCompliance": "compliant",
+            "safetyRisk": "high",
+            "rewardHackingSignal": "confirmed",
+            "notes": "Invariant violation detected"
+          }
+        }
+      }
+    ],
+    "createdAt": 1771369833951
+  },
+  "result": {
+    "jobId": "train-a0f34a3238e3",
+    "startedAt": 1771370808456,
+    "completedAt": 1771370808463,
+    "durationMs": 7,
+    "environmentFingerprint": "9a147f89ec88a64ae4ba6ea213f249b9f9dbf698184d772a9db73ad9bd80938c",
+    "bestParams": {
+      "learningRate": 0.000005,
+      "batchSize": 16,
+      "klPenalty": 0.05
+    },
+    "finalConfig": {
+      "learningRate": 0.000005,
+      "batchSize": 16,
+      "maxEpochs": 3,
+      "klPenalty": 0.05,
+      "minRewardThreshold": 0
+    },
+    "tuning": {
+      "bestParams": {
+        "learningRate": 0.000005,
+        "batchSize": 16,
+        "klPenalty": 0.05
+      },
+      "bestScore": 0.4166666666666667,
+      "trials": [
+        {
+          "params": {
+            "learningRate": 0.000005,
+            "batchSize": 16,
+            "klPenalty": 0.05
+          },
+          "score": 0.4166666666666667,
+          "durationMs": 0
+        },
+        {
+          "params": {
+            "learningRate": 0.000005,
+            "batchSize": 16,
+            "klPenalty": 0.1
+          },
+          "score": 0.4166666666666667,
+          "durationMs": 0
+        },
+        {
+          "params": {
+            "learningRate": 0.000005,
+            "batchSize": 16,
+            "klPenalty": 0.2
+          },
+          "score": 0.4166666666666667,
+          "durationMs": 0
+        },
+        {
+          "params": {
+            "learningRate": 0.000005,
+            "batchSize": 32,
+            "klPenalty": 0.05
+          },
+          "score": 0.4166666666666667,
+          "durationMs": 0
+        },
+        {
+          "params": {
+            "learningRate": 0.000005,
+            "batchSize": 32,
+            "klPenalty": 0.1
+          },
+          "score": 0.4166666666666667,
+          "durationMs": 0
+        },
+        {
+          "params": {
+            "learningRate": 0.000005,
+            "batchSize": 32,
+            "klPenalty": 0.2
+          },
+          "score": 0.4166666666666667,
+          "durationMs": 0
+        },
+        {
+          "params": {
+            "learningRate": 0.00001,
+            "batchSize": 16,
+            "klPenalty": 0.05
+          },
+          "score": 0.4166666666666667,
+          "durationMs": 0
+        },
+        {
+          "params": {
+            "learningRate": 0.00001,
+            "batchSize": 16,
+            "klPenalty": 0.1
+          },
+          "score": 0.4166666666666667,
+          "durationMs": 0
+        },
+        {
+          "params": {
+            "learningRate": 0.00001,
+            "batchSize": 16,
+            "klPenalty": 0.2
+          },
+          "score": 0.4166666666666667,
+          "durationMs": 0
+        },
+        {
+          "params": {
+            "learningRate": 0.00001,
+            "batchSize": 32,
+            "klPenalty": 0.05
+          },
+          "score": 0.4166666666666667,
+          "durationMs": 0
+        },
+        {
+          "params": {
+            "learningRate": 0.00001,
+            "batchSize": 32,
+            "klPenalty": 0.1
+          },
+          "score": 0.4166666666666667,
+          "durationMs": 0
+        },
+        {
+          "params": {
+            "learningRate": 0.00001,
+            "batchSize": 32,
+            "klPenalty": 0.2
+          },
+          "score": 0.4166666666666667,
+          "durationMs": 0
+        },
+        {
+          "params": {
+            "learningRate": 0.00002,
+            "batchSize": 16,
+            "klPenalty": 0.05
+          },
+          "score": 0.4166666666666667,
+          "durationMs": 0
+        },
+        {
+          "params": {
+            "learningRate": 0.00002,
+            "batchSize": 16,
+            "klPenalty": 0.1
+          },
+          "score": 0.4166666666666667,
+          "durationMs": 0
+        },
+        {
+          "params": {
+            "learningRate": 0.00002,
+            "batchSize": 16,
+            "klPenalty": 0.2
+          },
+          "score": 0.4166666666666667,
+          "durationMs": 0
+        },
+        {
+          "params": {
+            "learningRate": 0.00002,
+            "batchSize": 32,
+            "klPenalty": 0.05
+          },
+          "score": 0.4166666666666667,
+          "durationMs": 0
+        },
+        {
+          "params": {
+            "learningRate": 0.00002,
+            "batchSize": 32,
+            "klPenalty": 0.1
+          },
+          "score": 0.4166666666666667,
+          "durationMs": 0
+        },
+        {
+          "params": {
+            "learningRate": 0.00002,
+            "batchSize": 32,
+            "klPenalty": 0.2
+          },
+          "score": 0.4166666666666667,
+          "durationMs": 0
+        }
+      ],
+      "durationMs": 0
+    },
+    "training": {
+      "success": true,
+      "epochsCompleted": 3,
+      "finalAverageReward": 0.4266666666666667,
+      "epochMetrics": [
+        {
+          "epoch": 1,
+          "averageReward": 0.3866666666666667,
+          "loss": 0.6133333333333333,
+          "klDivergence": 0.05
+        },
+        {
+          "epoch": 2,
+          "averageReward": 0.4066666666666667,
+          "loss": 0.5933333333333333,
+          "klDivergence": 0.1
+        },
+        {
+          "epoch": 3,
+          "averageReward": 0.4266666666666667,
+          "loss": 0.5733333333333333,
+          "klDivergence": 0.15000000000000002
+        }
+      ],
+      "durationMs": 0
+    },
+    "evaluation": {
+      "averageReward": 0.3666666666666667,
+      "scores": [
+        0.95,
+        0,
+        0.15000000000000002
+      ]
+    }
+  },
+  "manifest": {
+    "generatedAt": "2026-02-17T23:26:48.463Z",
+    "environment": {
+      "id": "p4-012-013-training-job-20260217-env",
+      "datasetFile": "/Volumes/OWC Envoy Pro FX/milaidy/milaidy/docs/ops/autonomy/reports/p4-001-002-learning-dataset-20260217.learning-dataset.json",
+      "outputDir": "/Volumes/OWC Envoy Pro FX/milaidy/milaidy/docs/ops/autonomy/reports",
+      "seed": "p4-012",
+      "runtime": {
+        "node": "23.9.0",
+        "platform": "darwin",
+        "arch": "arm64"
+      },
+      "rlvr": {
+        "learningRate": 0.00001,
+        "batchSize": 32,
+        "maxEpochs": 3,
+        "klPenalty": 0.1,
+        "minRewardThreshold": 0
+      },
+      "hyperparameterSpace": {
+        "learningRate": [
+          0.000005,
+          0.00001,
+          0.00002
+        ],
+        "batchSize": [
+          16,
+          32
+        ],
+        "klPenalty": [
+          0.05,
+          0.1,
+          0.2
+        ]
+      },
+      "createdAt": 1771370808455
+    },
+    "fingerprint": "9a147f89ec88a64ae4ba6ea213f249b9f9dbf698184d772a9db73ad9bd80938c",
+    "job": {
+      "jobId": "train-a0f34a3238e3",
+      "status": "success",
+      "startedAt": 1771370808456,
+      "completedAt": 1771370808463
+    }
+  }
+}

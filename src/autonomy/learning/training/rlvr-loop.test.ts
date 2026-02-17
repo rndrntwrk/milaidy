@@ -4,9 +4,9 @@
 
 import { describe, expect, it } from "vitest";
 import { StubRLVRLoop, ExternalRLVRLoop } from "./rlvr-loop.js";
-import type { TrainingDataset } from "../types.js";
+import type { RLVRTrainingDataset } from "./dataset.js";
 
-const dataset: TrainingDataset = {
+const dataset: RLVRTrainingDataset = {
   id: "ds1",
   label: "test",
   examples: [
