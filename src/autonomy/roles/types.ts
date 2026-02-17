@@ -11,7 +11,11 @@ import type { Goal } from "../goals/manager.js";
 import type { DriftReport } from "../identity/drift-monitor.js";
 import type { AutonomyIdentityConfig } from "../identity/schema.js";
 import type { MemoryGateDecision, MemoryGateStats } from "../memory/gate.js";
-import type { ToolCallSource, ToolValidationError } from "../tools/types.js";
+import type {
+  ProposedToolCall,
+  ToolCallSource,
+  ToolValidationError,
+} from "../tools/types.js";
 import type { TrustSource } from "../types.js";
 import type {
   InvariantContext,
@@ -21,7 +25,6 @@ import type {
   ExecutionEvent,
   PipelineResult,
   ToolActionHandler,
-  ToolExecutionPipelineInterface,
 } from "../workflow/types.js";
 
 // ========== PlannerRole ==========
@@ -97,10 +100,17 @@ export interface PlannerRole {
 // ========== ExecutorRole ==========
 
 /**
- * Role responsible for executing tool calls.
- * Re-uses the existing ToolExecutionPipelineInterface.
+ * Role responsible for executing tool calls through the workflow pipeline.
  */
-export type ExecutorRole = ToolExecutionPipelineInterface;
+export interface ExecutorRole {
+  /**
+   * Execute one validated tool call via the pipeline boundary.
+   */
+  execute(
+    call: ProposedToolCall,
+    actionHandler: ToolActionHandler,
+  ): Promise<PipelineResult>;
+}
 
 // ========== VerifierRole ==========
 

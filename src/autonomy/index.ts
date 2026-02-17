@@ -135,6 +135,7 @@ export {
 // Re-export roles (Phase 3)
 export {
   GoalDrivenPlanner,
+  PipelineExecutor,
   UnifiedVerifier,
   GatedMemoryWriter,
   DriftAwareAuditor,

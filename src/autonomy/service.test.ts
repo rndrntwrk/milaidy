@@ -58,6 +58,7 @@ vi.mock("../di/container.js", () => ({
     InvariantChecker: Symbol.for("InvariantChecker"),
     BaselineHarness: Symbol.for("BaselineHarness"),
     Planner: Symbol.for("Planner"),
+    Executor: Symbol.for("Executor"),
     Verifier: Symbol.for("Verifier"),
     MemoryWriter: Symbol.for("MemoryWriter"),
     Auditor: Symbol.for("Auditor"),
@@ -248,8 +249,8 @@ describe("MilaidyAutonomyService", () => {
       const runtime = createMockRuntime();
       const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
 
-      // 4 core + 3 tool contracts + 6 workflow + InvariantChecker + BaselineHarness + TrustAwareRetriever + 6 roles + PromptBuilder = 23
-      expect(mockRegisterValue).toHaveBeenCalledTimes(23);
+      // 4 core + 3 tool contracts + 6 workflow + InvariantChecker + BaselineHarness + TrustAwareRetriever + 7 roles + PromptBuilder = 24
+      expect(mockRegisterValue).toHaveBeenCalledTimes(24);
 
       // Verify the registered values are the same instances as the service's
       const registeredTokens = mockRegisterValue.mock.calls.map((c: unknown[]) => c[0]);
@@ -270,6 +271,7 @@ describe("MilaidyAutonomyService", () => {
       expect(registeredTokens).toContain(Symbol.for("BaselineHarness"));
       expect(registeredTokens).toContain(Symbol.for("TrustAwareRetriever"));
       expect(registeredTokens).toContain(Symbol.for("Planner"));
+      expect(registeredTokens).toContain(Symbol.for("Executor"));
       expect(registeredTokens).toContain(Symbol.for("Verifier"));
       expect(registeredTokens).toContain(Symbol.for("MemoryWriter"));
       expect(registeredTokens).toContain(Symbol.for("Auditor"));
@@ -290,8 +292,8 @@ describe("MilaidyAutonomyService", () => {
       const runtime = createMockRuntime();
       await MilaidyAutonomyService.start(runtime);
 
-      // 23 (base) + 6 (learning: TraceCollector, HackDetector, RolloutCollector, ModelProvider, CheckpointManager, AdversarialGenerator) = 29
-      expect(mockRegisterValue).toHaveBeenCalledTimes(29);
+      // 24 (base) + 6 (learning: TraceCollector, HackDetector, RolloutCollector, ModelProvider, CheckpointManager, AdversarialGenerator) = 30
+      expect(mockRegisterValue).toHaveBeenCalledTimes(30);
       const registeredTokens = mockRegisterValue.mock.calls.map((c: unknown[]) => c[0]);
       expect(registeredTokens).toContain(Symbol.for("TraceCollector"));
       expect(registeredTokens).toContain(Symbol.for("HackDetector"));
@@ -539,6 +541,7 @@ describe("MilaidyAutonomyService", () => {
       const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
 
       expect(svc.getPlanner()).not.toBeNull();
+      expect(svc.getExecutor()).not.toBeNull();
       expect(svc.getVerifier()).not.toBeNull();
       expect(svc.getMemoryWriter()).not.toBeNull();
       expect(svc.getAuditor()).not.toBeNull();
@@ -551,6 +554,7 @@ describe("MilaidyAutonomyService", () => {
       const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
 
       expect(svc.getPlanner()).toBeNull();
+      expect(svc.getExecutor()).toBeNull();
       expect(svc.getVerifier()).toBeNull();
       expect(svc.getMemoryWriter()).toBeNull();
       expect(svc.getAuditor()).toBeNull();

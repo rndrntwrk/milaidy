@@ -13,8 +13,8 @@ Current status pre-check snapshot:
 - Evidence basis: static repo review of autonomy kernel, API, persistence, and app UI code paths.
 - Summary counts:
 - `307` total checklist items.
-- `97` items tagged `STATUS: CODED`.
-- `93` items tagged `STATUS: PARTIAL`.
+- `98` items tagged `STATUS: CODED`.
+- `92` items tagged `STATUS: PARTIAL`.
 - `117` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
@@ -393,7 +393,7 @@ Sprint chunks:
 ### 3.E Role Implementations
 
 - [ ] P3-023 Implement Planner service behavior. [STATUS: CODED]
-- [ ] P3-024 Implement Executor service behavior. [STATUS: PARTIAL]
+- [ ] P3-024 Implement Executor service behavior. [STATUS: CODED]
 - [ ] P3-025 Implement Verifier service behavior. [STATUS: CODED]
 - [ ] P3-026 Implement Memory Writer service behavior. [STATUS: CODED]
 - [ ] P3-027 Implement Auditor service behavior. [STATUS: CODED]

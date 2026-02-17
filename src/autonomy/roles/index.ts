@@ -4,6 +4,7 @@
  */
 
 export { DriftAwareAuditor } from "./auditor.js";
+export { PipelineExecutor } from "./executor.js";
 export { GatedMemoryWriter } from "./memory-writer.js";
 export { KernelOrchestrator } from "./orchestrator.js";
 // Implementations
