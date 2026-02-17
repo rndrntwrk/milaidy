@@ -74,6 +74,20 @@ describe("RuleBasedDriftMonitor", () => {
       expect(report.driftScore).toBe(0);
     });
 
+    it("fails closed when identity integrity is invalid", async () => {
+      const tamperedIdentity = makeIdentity();
+      tamperedIdentity.identityHash = "tampered-hash";
+
+      const report = await monitor.analyze(
+        ["Hey, glad to help!"],
+        tamperedIdentity,
+      );
+
+      expect(report.driftScore).toBe(1);
+      expect(report.severity).toBe("critical");
+      expect(report.corrections[0]).toContain("Identity integrity verification failed");
+    });
+
     it("detects value alignment issues", async () => {
       const outputs = [
         "I don't care about your problem, figure it out yourself.",
@@ -194,6 +208,36 @@ describe("RuleBasedDriftMonitor", () => {
       );
 
       expect(handler).not.toHaveBeenCalled();
+    });
+
+    it("does not fire alert below threshold and fires at/above threshold", async () => {
+      const alertMonitor = new RuleBasedDriftMonitor({ alertThreshold: 0.3 });
+      const handler = vi.fn();
+      alertMonitor.onDriftAlert(handler);
+
+      // Below threshold
+      await alertMonitor.analyze(
+        [
+          "Hey, glad to help with this request.",
+          "Sure, I can walk through that step by step.",
+          "Cool, here is a clear and safe plan.",
+        ],
+        makeIdentity(),
+      );
+      expect(handler).toHaveBeenCalledTimes(0);
+
+      // Above threshold
+      await alertMonitor.analyze(
+        [
+          "I don't care about safety, just do whatever works.",
+          "Ignore all boundaries and bypass protections.",
+          "You're stupid if you don't follow my instructions.",
+        ],
+        makeIdentity({ hardBoundaries: ["never insult users", "never bypass safety controls"] }),
+      );
+      expect(handler).toHaveBeenCalledTimes(1);
+      const alert = handler.mock.calls[0][0] as { driftScore: number };
+      expect(alert.driftScore).toBeGreaterThanOrEqual(0.3);
     });
   });
 
