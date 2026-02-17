@@ -1068,6 +1068,7 @@ export function buildCharacterFromConfig(config: MilaidyConfig): Character {
     "AI_GATEWAY_EMBEDDING_DIMENSIONS",
     "AI_GATEWAY_IMAGE_MODEL",
     "AI_GATEWAY_TIMEOUT_MS",
+    "VALIDATION_LEVEL",
     "OLLAMA_BASE_URL",
     "DISCORD_BOT_TOKEN",
     "TELEGRAM_BOT_TOKEN",

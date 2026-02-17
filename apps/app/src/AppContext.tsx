@@ -1001,6 +1001,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const chatAbortRef = useRef<AbortController | null>(null);
   /** Synchronous lock so same-tick chat submits cannot double-send. */
   const chatSendBusyRef = useRef(false);
+  /** Batches streaming tokens so we update state once per animation frame. */
+  const pendingTokensRef = useRef("");
+  const tokenRafIdRef = useRef(0);
   /** Synchronous lock for export action to prevent duplicate clicks in the same tick. */
   const exportBusyRef = useRef(false);
   /** Synchronous lock for import action to prevent duplicate clicks in the same tick. */
@@ -1746,6 +1749,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       const controller = new AbortController();
       chatAbortRef.current = controller;
+      const flushPendingTokens = () => {
+        if (tokenRafIdRef.current) {
+          cancelAnimationFrame(tokenRafIdRef.current);
+          tokenRafIdRef.current = 0;
+        }
+        const batch = pendingTokensRef.current;
+        pendingTokensRef.current = "";
+        if (!batch) return;
+        setConversationMessages((prev) =>
+          prev.map((message) =>
+            message.id === assistantMsgId
+              ? { ...message, text: `${message.text}${batch}` }
+              : message,
+          ),
+        );
+      };
 
       try {
         const data = await client.sendConversationMessageStream(
@@ -1753,13 +1772,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
           text,
           (token) => {
             setChatFirstTokenReceived(true);
-            setConversationMessages((prev) =>
-              prev.map((message) =>
-                message.id === assistantMsgId
-                  ? { ...message, text: `${message.text}${token}` }
-                  : message,
-              ),
-            );
+            pendingTokensRef.current += token;
+            if (!tokenRafIdRef.current) {
+              tokenRafIdRef.current = requestAnimationFrame(() => {
+                const batch = pendingTokensRef.current;
+                pendingTokensRef.current = "";
+                tokenRafIdRef.current = 0;
+                setConversationMessages((prev) =>
+                  prev.map((message) =>
+                    message.id === assistantMsgId
+                      ? { ...message, text: `${message.text}${batch}` }
+                      : message,
+                  ),
+                );
+              });
+            }
           },
           mode,
           controller.signal,
@@ -1776,6 +1803,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         const abortError = err as Error;
         if (abortError.name === "AbortError") {
+          // Flush any buffered tokens before pruning empty assistant placeholder.
+          flushPendingTokens();
           setConversationMessages((prev) =>
             prev.filter((message) => !(message.id === assistantMsgId && !message.text.trim())),
           );
@@ -1815,6 +1844,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           await loadConversationMessages(convId);
         }
       } finally {
+        // Cancel any pending token batch frame
+        if (tokenRafIdRef.current) {
+          cancelAnimationFrame(tokenRafIdRef.current);
+          tokenRafIdRef.current = 0;
+          pendingTokensRef.current = "";
+        }
         if (chatAbortRef.current === controller) {
           chatAbortRef.current = null;
         }
