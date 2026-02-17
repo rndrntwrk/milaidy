@@ -8,7 +8,9 @@
  */
 
 import { z } from "zod";
+import type { CustomActionDef } from "../../config/types.milaidy.js";
 import type { PluginPermission } from "../../plugins/permissions.js";
+import { createCustomActionContract } from "./schemas/custom-action.schema.js";
 import type {
   RiskClass,
   ToolContract,
@@ -35,6 +37,11 @@ export type RuntimeActionLike = {
 export type RuntimeActionSource = {
   actions?: RuntimeActionLike[];
   getAllActions?: () => RuntimeActionLike[] | undefined;
+};
+
+export type RuntimeContractRegistration = {
+  explicit: string[];
+  synthesized: string[];
 };
 
 function inferRiskClass(actionName: string): RiskClass {
@@ -198,3 +205,57 @@ export function registerRuntimeActionContracts(
   return registered;
 }
 
+/**
+ * Register explicit contracts for configured custom actions.
+ *
+ * These contracts use declared handler type and parameter metadata,
+ * so they are preferred over synthesized runtime inference.
+ */
+export function registerConfiguredCustomActionContracts(
+  registry: ToolRegistryInterface,
+  customActions: CustomActionDef[] | null | undefined,
+): string[] {
+  if (!Array.isArray(customActions) || customActions.length === 0) {
+    return [];
+  }
+
+  const registered: string[] = [];
+  for (const action of customActions) {
+    if (!action?.enabled) continue;
+    const name = typeof action.name === "string" ? action.name.trim() : "";
+    if (!name || registry.has(name)) continue;
+
+    const contract = createCustomActionContract({
+      name,
+      description: action.description,
+      handlerType: action.handler.type,
+      parameters: action.parameters?.map((parameter) => ({
+        name: parameter.name,
+        required: parameter.required,
+      })),
+    });
+    registry.register(contract);
+    registered.push(contract.name);
+  }
+
+  return registered;
+}
+
+/**
+ * Register both explicit (configured custom actions) and synthesized
+ * (remaining runtime actions) contracts.
+ */
+export function registerRuntimeContracts(
+  registry: ToolRegistryInterface,
+  input: {
+    runtime?: RuntimeActionSource | null;
+    customActions?: CustomActionDef[] | null;
+  },
+): RuntimeContractRegistration {
+  const explicit = registerConfiguredCustomActionContracts(
+    registry,
+    input.customActions,
+  );
+  const synthesized = registerRuntimeActionContracts(registry, input.runtime);
+  return { explicit, synthesized };
+}

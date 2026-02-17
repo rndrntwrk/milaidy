@@ -66,6 +66,7 @@ let _SchemaValidator: typeof import("./verification/schema-validator.js").Schema
 let _PostConditionVerifier: typeof import("./verification/postcondition-verifier.js").PostConditionVerifier;
 let _registerBuiltinToolContracts: typeof import("./tools/schemas/index.js").registerBuiltinToolContracts;
 let _registerRuntimeActionContracts: typeof import("./tools/runtime-contracts.js").registerRuntimeActionContracts;
+let _registerConfiguredCustomActionContracts: typeof import("./tools/runtime-contracts.js").registerConfiguredCustomActionContracts;
 let _registerBuiltinPostConditions: typeof import("./verification/postconditions/index.js").registerBuiltinPostConditions;
 let _KernelStateMachine: typeof import("./state-machine/kernel-state-machine.js").KernelStateMachine;
 let _ApprovalGate: typeof import("./approval/approval-gate.js").ApprovalGate;
@@ -162,6 +163,8 @@ async function loadImplementations() {
   _registerBuiltinToolContracts = toolSchemasMod.registerBuiltinToolContracts;
   _registerRuntimeActionContracts =
     runtimeContractsMod.registerRuntimeActionContracts;
+  _registerConfiguredCustomActionContracts =
+    runtimeContractsMod.registerConfiguredCustomActionContracts;
   _registerBuiltinPostConditions = pcMod.registerBuiltinPostConditions;
   _KernelStateMachine = smMod.KernelStateMachine;
   _ApprovalGate = approvalMod.ApprovalGate;
@@ -384,6 +387,7 @@ export class MilaidyAutonomyService extends Service {
     // Instantiate tool contracts & verification components
     this.toolRegistry = new _ToolRegistry();
     _registerBuiltinToolContracts(this.toolRegistry);
+    await this.registerConfiguredCustomActionContracts();
     _registerRuntimeActionContracts(this.toolRegistry, runtime);
     this.schemaValidator = new _SchemaValidator(this.toolRegistry);
     this.postConditionVerifier = new _PostConditionVerifier(
@@ -636,6 +640,31 @@ export class MilaidyAutonomyService extends Service {
   }
 
   /**
+   * Register explicit tool contracts for configured custom actions.
+   *
+   * Uses the main Milaidy config file as source of truth because custom
+   * action handler type and required params are defined there.
+   */
+  private async registerConfiguredCustomActionContracts(): Promise<void> {
+    if (!this.toolRegistry) return;
+
+    try {
+      const { loadMilaidyConfig } = await import("../config/config.js");
+      const config = loadMilaidyConfig();
+      _registerConfiguredCustomActionContracts(
+        this.toolRegistry,
+        config.customActions ?? [],
+      );
+    } catch (err) {
+      logger.debug(
+        `[autonomy-service] custom action contract registration skipped: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+  }
+
+  /**
    * Register component instances into the DI container so other parts
    * of the system (e.g. future pipeline hooks) resolve the same instances.
    */
@@ -716,6 +745,7 @@ export class MilaidyAutonomyService extends Service {
     // Initialize tool contracts & verification
     this.toolRegistry = new _ToolRegistry();
     _registerBuiltinToolContracts(this.toolRegistry);
+    await this.registerConfiguredCustomActionContracts();
     _registerRuntimeActionContracts(
       this.toolRegistry,
       this.runtime as import("@elizaos/core").IAgentRuntime,
