@@ -144,7 +144,12 @@ export const createTriggerTaskAction: Action = {
     _options?: HandlerOptions,
     callback?: HandlerCallback,
   ): Promise<ActionResult | undefined> => {
-    const text = normalizeText(message.content.text ?? "");
+    const params = (_options as HandlerOptions | undefined)?.parameters as
+      | Record<string, unknown>
+      | undefined;
+    const override =
+      typeof params?.request === "string" ? params.request.trim() : undefined;
+    const text = normalizeText(override ?? message.content.text ?? "");
     if (!text) {
       return {
         success: false,

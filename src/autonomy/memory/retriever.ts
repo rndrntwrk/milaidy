@@ -47,8 +47,13 @@ const DEFAULT_TYPE_BOOSTS: Record<MemoryType, number> = {
   instruction: 1.0,
   system: 1.0,
   fact: 0.9,
+  document: 0.85,
   goal: 0.85,
+  task: 0.85,
+  action: 0.8,
   preference: 0.8,
+  relationship: 0.75,
+  message: 0.6,
   observation: 0.6,
 };
 
@@ -216,7 +221,19 @@ export class TrustAwareRetrieverImpl implements TrustAwareRetriever {
 
     // Explicit type in metadata
     if (meta?.memoryType && typeof meta.memoryType === "string") {
-      const valid: MemoryType[] = ["fact", "instruction", "preference", "observation", "goal", "system"];
+      const valid: MemoryType[] = [
+        "message",
+        "fact",
+        "document",
+        "relationship",
+        "goal",
+        "task",
+        "action",
+        "instruction",
+        "preference",
+        "observation",
+        "system",
+      ];
       if (valid.includes(meta.memoryType as MemoryType)) {
         return meta.memoryType as MemoryType;
       }
@@ -224,6 +241,12 @@ export class TrustAwareRetrieverImpl implements TrustAwareRetriever {
 
     // Content-based heuristics
     const text = (memory.content as { text?: string })?.text?.toLowerCase() ?? "";
+    if (text.includes("task") || text.includes("todo") || text.includes("to-do")) {
+      return "task";
+    }
+    if (text.includes("action") || text.includes("executed") || text.includes("performed")) {
+      return "action";
+    }
     if (text.includes("always") || text.includes("never") || text.includes("must")) {
       return "instruction";
     }

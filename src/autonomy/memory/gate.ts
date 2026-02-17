@@ -12,22 +12,10 @@
 import { logger } from "@elizaos/core";
 import type { Memory } from "@elizaos/core";
 import type { AutonomyMemoryGateConfig, AutonomyTrustConfig } from "../config.js";
-import type { TrustScore, TrustSource, MemoryType, MemoryProvenance } from "../types.js";
+import type { TrustScore, TrustSource, MemoryType } from "../types.js";
 import type { TrustScorer } from "../trust/scorer.js";
-
-/**
- * A memory object enriched with trust and provenance metadata.
- */
-export interface TypedMemoryObject extends Memory {
-  /** Trust score at write time. */
-  trustScore: number;
-  /** Provenance chain. */
-  provenance: MemoryProvenance;
-  /** Memory classification. */
-  memoryType: MemoryType;
-  /** Whether this memory has been verified. */
-  verified: boolean;
-}
+import type { MemoryStore } from "./store.js";
+import type { TypedMemoryObject } from "./types.js";
 
 /**
  * Decision made by the memory gate.
@@ -80,6 +68,7 @@ export class MemoryGateImpl implements MemoryGate {
   private scorer: TrustScorer;
   private trustConfig: Required<AutonomyTrustConfig>;
   private gateConfig: Required<AutonomyMemoryGateConfig>;
+  private store?: MemoryStore;
 
   /** Quarantined memories awaiting review. */
   private quarantineBuffer = new Map<string, TypedMemoryObject>();
@@ -101,6 +90,7 @@ export class MemoryGateImpl implements MemoryGate {
     scorer: TrustScorer,
     trustConfig?: Partial<AutonomyTrustConfig>,
     gateConfig?: Partial<AutonomyMemoryGateConfig>,
+    store?: MemoryStore,
   ) {
     this.scorer = scorer;
     this.trustConfig = {
@@ -114,6 +104,7 @@ export class MemoryGateImpl implements MemoryGate {
       quarantineReviewMs: gateConfig?.quarantineReviewMs ?? 3_600_000,
       maxQuarantineSize: gateConfig?.maxQuarantineSize ?? 1000,
     };
+    this.store = store;
   }
 
   /**
@@ -123,6 +114,36 @@ export class MemoryGateImpl implements MemoryGate {
    */
   onQuarantineExpiry(handler: (memory: TypedMemoryObject) => void): void {
     this.onExpiry = handler;
+  }
+
+  /**
+   * Hydrate pending quarantined entries from the persistent store.
+   */
+  async hydrateQuarantine(): Promise<void> {
+    if (!this.store) return;
+    try {
+      const pending = await this.store.listPendingQuarantine();
+      for (const record of pending) {
+        const memoryId = record.id;
+        const typed: TypedMemoryObject = {
+          id: record.id as Memory["id"],
+          agentId: record.agentId,
+          content: record.content,
+          metadata: record.metadata,
+          createdAt: record.createdAt,
+          trustScore: record.trustScore,
+          provenance: record.provenance,
+          memoryType: record.memoryType,
+          verifiabilityClass: record.verifiabilityClass,
+          verified: record.verified,
+        } as TypedMemoryObject;
+        this.addToQuarantine(memoryId, typed, record.expiresAt);
+      }
+    } catch (err) {
+      logger.warn(
+        `[memory-gate] Failed to hydrate quarantine: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   async evaluate(memory: Memory, source: TrustSource): Promise<MemoryGateDecision> {
@@ -184,6 +205,9 @@ export class MemoryGateImpl implements MemoryGate {
       logger.debug(
         `[memory-gate] ALLOW memory from ${source.id} (trust=${trustScore.score.toFixed(3)})`,
       );
+      const memoryId = memory.id ? String(memory.id) : crypto.randomUUID();
+      const typed = this.createTypedMemory(memory, memoryId, trustScore, source, true);
+      await this.persistAllowed(typed);
       return {
         action: "allow",
         trustScore,
@@ -195,9 +219,10 @@ export class MemoryGateImpl implements MemoryGate {
       // Quarantine: hold for review
       // Always generate a new UUID for quarantine to prevent ID collision replacement attacks
       const memoryId = crypto.randomUUID();
-      const typed = this.createTypedMemory(memory, memoryId, trustScore, source);
+      const typed = this.createTypedMemory(memory, memoryId, trustScore, source, false);
 
       this.addToQuarantine(memoryId, typed);
+      await this.persistQuarantine(typed, Date.now() + this.gateConfig.quarantineReviewMs);
       this.stats.quarantined++;
 
       logger.info(
@@ -254,10 +279,13 @@ export class MemoryGateImpl implements MemoryGate {
       memory.verified = true;
       this.stats.allowed++;
       logger.info(`[memory-gate] Quarantined memory ${memoryId} APPROVED`);
+      await this.persistAllowed(memory);
+      await this.resolveQuarantine(memoryId, "approved");
       return memory; // Return approved memory so caller can persist it
     } else {
       this.stats.rejected++;
       logger.info(`[memory-gate] Quarantined memory ${memoryId} REJECTED`);
+      await this.resolveQuarantine(memoryId, "rejected");
       return null;
     }
   }
@@ -292,6 +320,7 @@ export class MemoryGateImpl implements MemoryGate {
     memoryId: string,
     trustScore: TrustScore,
     source: TrustSource,
+    verified: boolean,
   ): TypedMemoryObject {
     return {
       ...memory,
@@ -305,15 +334,21 @@ export class MemoryGateImpl implements MemoryGate {
         trustScoreAtWrite: trustScore.score,
       },
       memoryType: this.inferMemoryType(memory),
-      verified: false,
+      verifiabilityClass:
+        (memory.metadata?.verifiabilityClass as string | undefined) ??
+        "unverified",
+      verified,
     };
   }
 
   private inferMemoryType(memory: Memory): MemoryType {
     // Use metadata.type if available
     const metaType = memory.metadata?.type;
-    if (metaType === "document" || metaType === "fragment") return "fact";
-    if (metaType === "message") return "observation";
+    if (metaType === "document" || metaType === "fragment") return "document";
+    if (metaType === "message") return "message";
+    if (metaType === "relationship") return "relationship";
+    if (metaType === "task") return "task";
+    if (metaType === "action") return "action";
     if (metaType === "description") return "fact";
 
     // Default heuristic based on content
@@ -321,6 +356,8 @@ export class MemoryGateImpl implements MemoryGate {
       ? memory.content
       : memory.content?.text ?? "";
 
+    if (/\b(task|todo|to-do|follow up|follow-up)\b/i.test(text)) return "task";
+    if (/\b(action|execute|performed|ran)\b/i.test(text)) return "action";
     if (/\b(always|never|must|should|rule)\b/i.test(text)) return "instruction";
     if (/\b(prefer|like|dislike|favorite)\b/i.test(text)) return "preference";
     if (/\b(goal|objective|target|achieve)\b/i.test(text)) return "goal";
@@ -328,7 +365,7 @@ export class MemoryGateImpl implements MemoryGate {
     return "observation";
   }
 
-  private addToQuarantine(memoryId: string, memory: TypedMemoryObject): void {
+  private addToQuarantine(memoryId: string, memory: TypedMemoryObject, expiresAt?: number): void {
     // Evict oldest if at capacity
     if (this.quarantineBuffer.size >= this.gateConfig.maxQuarantineSize) {
       this.evictOldestQuarantined();
@@ -338,9 +375,10 @@ export class MemoryGateImpl implements MemoryGate {
     this.stats.pendingReview = this.quarantineBuffer.size;
 
     // Set auto-expiry timer
+    const delayMs = expiresAt ? Math.max(0, expiresAt - Date.now()) : this.gateConfig.quarantineReviewMs;
     const timer = setTimeout(() => {
       this.handleQuarantineExpiry(memoryId);
-    }, this.gateConfig.quarantineReviewMs);
+    }, delayMs);
 
     // Prevent timer from keeping the process alive
     if (timer.unref) {
@@ -365,6 +403,7 @@ export class MemoryGateImpl implements MemoryGate {
       this.stats.rejected++;
       logger.info(`[memory-gate] Quarantined memory ${memoryId} expired and rejected`);
     }
+    void this.resolveQuarantine(memoryId, "rejected", "expired");
   }
 
   private evictOldestQuarantined(): void {
@@ -387,6 +426,59 @@ export class MemoryGateImpl implements MemoryGate {
       this.quarantineBuffer.delete(oldestId);
       this.stats.rejected++;
       logger.debug(`[memory-gate] Evicted oldest quarantined memory ${oldestId}`);
+      void this.resolveQuarantine(oldestId, "rejected", "evicted");
     }
+  }
+
+  private async persistAllowed(memory: TypedMemoryObject): Promise<void> {
+    if (!this.store) return;
+    await this.store.saveMemory({
+      id: String(memory.id ?? crypto.randomUUID()),
+      agentId: memory.agentId ?? "unknown",
+      memoryType: memory.memoryType,
+      content: (typeof memory.content === "string"
+        ? { text: memory.content }
+        : (memory.content as Record<string, unknown>)) ?? {},
+      metadata: (memory.metadata as Record<string, unknown> | undefined),
+      provenance: memory.provenance,
+      trustScore: memory.trustScore,
+      verified: memory.verified,
+      verifiabilityClass: memory.verifiabilityClass,
+      source: memory.provenance.source,
+      sourceType: memory.provenance.sourceType,
+      createdAt: memory.createdAt ?? Date.now(),
+      updatedAt: Date.now(),
+    });
+  }
+
+  private async persistQuarantine(memory: TypedMemoryObject, expiresAt: number): Promise<void> {
+    if (!this.store) return;
+    await this.store.saveQuarantine({
+      id: String(memory.id ?? crypto.randomUUID()),
+      agentId: memory.agentId ?? "unknown",
+      memoryType: memory.memoryType,
+      content: (typeof memory.content === "string"
+        ? { text: memory.content }
+        : (memory.content as Record<string, unknown>)) ?? {},
+      metadata: (memory.metadata as Record<string, unknown> | undefined),
+      provenance: memory.provenance,
+      trustScore: memory.trustScore,
+      verified: memory.verified,
+      verifiabilityClass: memory.verifiabilityClass,
+      source: memory.provenance.source,
+      sourceType: memory.provenance.sourceType,
+      createdAt: memory.createdAt ?? Date.now(),
+      updatedAt: Date.now(),
+      expiresAt,
+    });
+  }
+
+  private async resolveQuarantine(
+    id: string,
+    decision: "approved" | "rejected",
+    reason?: string,
+  ): Promise<void> {
+    if (!this.store) return;
+    await this.store.resolveQuarantine(id, decision, reason);
   }
 }

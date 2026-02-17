@@ -79,6 +79,7 @@ export const TOKENS = {
   // Autonomy Kernel
   TrustScorer: createToken<import("../autonomy/trust/scorer.js").TrustScorer>("TrustScorer"),
   MemoryGate: createToken<import("../autonomy/memory/gate.js").MemoryGate>("MemoryGate"),
+  MemoryStore: createToken<import("../autonomy/memory/store.js").MemoryStore>("MemoryStore"),
   DriftMonitor: createToken<import("../autonomy/identity/drift-monitor.js").PersonaDriftMonitor>("DriftMonitor"),
   GoalManager: createToken<import("../autonomy/goals/manager.js").GoalManager>("GoalManager"),
   TrustAwareRetriever: createToken<import("../autonomy/memory/retriever.js").TrustAwareRetriever>("TrustAwareRetriever"),

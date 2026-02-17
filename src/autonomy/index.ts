@@ -33,6 +33,7 @@ export { createDriftWatchEvaluator } from "./evaluators/drift-watch.js";
 // Re-export component classes and interfaces
 export { RuleBasedTrustScorer, type TrustScorer } from "./trust/scorer.js";
 export { MemoryGateImpl, type MemoryGate, type MemoryGateDecision, type MemoryGateStats } from "./memory/gate.js";
+export type { MemoryStore } from "./memory/store.js";
 export { RuleBasedDriftMonitor, type PersonaDriftMonitor, type DriftReport } from "./identity/drift-monitor.js";
 export { InMemoryGoalManager, type GoalManager, type Goal, type GoalEvaluationResult, type MutationContext } from "./goals/manager.js";
 
@@ -79,6 +80,7 @@ export {
 // Re-export approval gate
 export {
   ApprovalGate,
+  PersistentApprovalGate,
   type ApprovalGateInterface,
   type ApprovalRequest,
   type ApprovalDecision,

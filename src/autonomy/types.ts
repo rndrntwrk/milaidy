@@ -63,12 +63,26 @@ export interface TrustScore {
  * Classification of memory objects.
  */
 export type MemoryType =
+  | "message"
   | "fact"
+  | "document"
+  | "relationship"
+  | "goal"
+  | "task"
+  | "action"
   | "instruction"
   | "preference"
   | "observation"
-  | "goal"
   | "system";
+
+/**
+ * Verifiability class for memory entries.
+ */
+export type VerifiabilityClass =
+  | "unverified"
+  | "self_reported"
+  | "system_verified"
+  | "external_verified";
 
 /**
  * Provenance chain — who wrote a memory and why.
