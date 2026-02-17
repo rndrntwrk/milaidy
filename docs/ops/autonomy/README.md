@@ -21,6 +21,8 @@ Contents:
 - `phase1-identity-mutation-audit-2026-02-17.md`: `P1-010` identity mutation audit event + telemetry + durable history evidence.
 - `phase1-goal-gate-observability-2026-02-17.md`: `P1-018/P1-028` goal transition logging and gate observability metrics wiring evidence.
 - `phase1-identity-memory-validation-2026-02-17.md`: `P1-043/P1-044/P1-045/P1-046` identity/memory API integration, fail-closed integrity, quarantine lifecycle, and drift-alert threshold validation evidence.
+- `phase1-trust-feature-weight-strategy-2026-02-17.md`: `P1-029` trust feature set and weighting strategy definition.
+- `drift-quarantine-troubleshooting-runbook.md`: `P1-041` troubleshooting runbook for drift spikes and quarantine backlog handling.
 - `phase3-executor-role-2026-02-17.md`: `P3-024` Executor role implementation and wiring evidence.
 - `phase3-role-dataflow-2026-02-17.md`: `P3-030` role dataflow integration evidence across planner/executor/verifier/memory/auditor.
 - `phase3-role-service-modules-2026-02-17.md`: `P3-006` role-specific module lifecycle implementation and validation evidence.
