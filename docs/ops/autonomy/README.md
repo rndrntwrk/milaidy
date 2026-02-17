@@ -9,6 +9,7 @@ Contents:
 - `invariant-catalog.md`: invariant ownership and severity catalog.
 - `baseline-runbook.md`: commands to generate baseline and red-team reports.
 - `pipeline-latency-optimization-2026-02-17.md`: `P2-062` before/after bottleneck optimization report.
+- `phase2-acceptance-gate-2026-02-17.md`: `P2-063/P2-064` test evidence for reversible success and irreversible authorization controls.
 - `reports/`: generated run artifacts (`.json` and `.md` outputs).
 
 Primary scripts:
