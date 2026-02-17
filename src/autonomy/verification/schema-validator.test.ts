@@ -19,6 +19,59 @@ function makeCall(overrides: Partial<ProposedToolCall> = {}): ProposedToolCall {
   };
 }
 
+function makeSeededRandom(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+}
+
+function randomInt(rand: () => number, min: number, max: number): number {
+  return Math.floor(rand() * (max - min + 1)) + min;
+}
+
+function randomString(rand: () => number, length = 8): string {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789_-";
+  let out = "";
+  for (let i = 0; i < length; i++) {
+    out += chars[Math.floor(rand() * chars.length)];
+  }
+  return out;
+}
+
+function randomPrimitive(rand: () => number): unknown {
+  const pick = randomInt(rand, 0, 5);
+  if (pick === 0) return null;
+  if (pick === 1) return rand() < 0.5;
+  if (pick === 2) return randomInt(rand, -1000, 1000);
+  if (pick === 3) return randomString(rand, randomInt(rand, 0, 20));
+  if (pick === 4) return [];
+  return {};
+}
+
+function randomValue(rand: () => number, depth: number): unknown {
+  if (depth <= 0 || rand() < 0.6) return randomPrimitive(rand);
+  if (rand() < 0.5) {
+    const arr: unknown[] = [];
+    const length = randomInt(rand, 0, 6);
+    for (let i = 0; i < length; i++) {
+      arr.push(randomValue(rand, depth - 1));
+    }
+    return arr;
+  }
+  return randomParams(rand, depth - 1);
+}
+
+function randomParams(rand: () => number, depth = 2): Record<string, unknown> {
+  const obj: Record<string, unknown> = {};
+  const count = randomInt(rand, 0, 6);
+  for (let i = 0; i < count; i++) {
+    obj[randomString(rand, randomInt(rand, 1, 12))] = randomValue(rand, depth);
+  }
+  return obj;
+}
+
 describe("SchemaValidator", () => {
   function setup() {
     const registry = new ToolRegistry();
@@ -171,5 +224,57 @@ describe("SchemaValidator", () => {
       makeCall({ tool: "CUSTOM_TOOL", params: { input: "test" } }),
     );
     expect(result.valid).toBe(true);
+  });
+
+  it("handles randomized malformed payloads without throwing", () => {
+    const { validator } = setup();
+    const rand = makeSeededRandom(0x5eed1234);
+    const knownTools = [
+      "RUN_IN_TERMINAL",
+      "GENERATE_IMAGE",
+      "PLAY_EMOTE",
+      "INSTALL_PLUGIN",
+      "ANALYZE_IMAGE",
+    ];
+    const allowedCodes = new Set([
+      "missing_field",
+      "type_mismatch",
+      "invalid_value",
+      "out_of_range",
+      "unknown_field",
+    ]);
+
+    for (let i = 0; i < 250; i++) {
+      const knownTool = rand() < 0.8;
+      const tool = knownTool
+        ? knownTools[randomInt(rand, 0, knownTools.length - 1)]
+        : `UNKNOWN_${randomString(rand, 6).toUpperCase()}`;
+      const params = randomParams(rand);
+
+      let result:
+        | ReturnType<SchemaValidator["validate"]>
+        | undefined;
+      expect(() => {
+        result = validator.validate(
+          makeCall({
+            requestId: `fuzz-${i}`,
+            tool,
+            params,
+          }),
+        );
+      }).not.toThrow();
+
+      expect(result).toBeDefined();
+      expect(typeof result!.valid).toBe("boolean");
+      expect(Array.isArray(result!.errors)).toBe(true);
+      if (!result!.valid) {
+        expect(result!.validatedParams).toBeUndefined();
+      }
+      for (const err of result!.errors) {
+        expect(allowedCodes.has(err.code)).toBe(true);
+        expect(typeof err.field).toBe("string");
+        expect(typeof err.message).toBe("string");
+      }
+    }
   });
 });
