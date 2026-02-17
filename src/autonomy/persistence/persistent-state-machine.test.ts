@@ -45,9 +45,16 @@ describe("PersistentStateMachine", () => {
 
     // Wait for the async snapshot to complete
     await vi.waitFor(() => {
-      expect(exec).toHaveBeenCalledOnce();
+      const hasInsert = exec.mock.calls.some((call) =>
+        String(call[0]).includes("INSERT INTO autonomy_state"),
+      );
+      expect(hasInsert).toBe(true);
     });
-    const sql = exec.mock.calls[0][0] as string;
+    const insertCall = exec.mock.calls.find((call) =>
+      String(call[0]).includes("INSERT INTO autonomy_state"),
+    );
+    expect(insertCall).toBeDefined();
+    const sql = String(insertCall?.[0] ?? "");
     expect(sql).toContain("INSERT INTO autonomy_state");
     expect(sql).toContain("executing");
   });
@@ -96,6 +103,36 @@ describe("PersistentStateMachine", () => {
     expect(exec).not.toHaveBeenCalled();
   });
 
+  it("skips stale snapshots when a newer DB snapshot already exists", async () => {
+    const newerSnapshotAt = new Date(Date.now() + 60_000).toISOString();
+    const exec = vi.fn().mockImplementation(async (sql: string) => {
+      if (sql.includes("SELECT snapshot_at")) {
+        return {
+          rows: [{ snapshot_at: newerSnapshotAt }],
+          columns: [],
+        };
+      }
+      return { rows: [], columns: [] };
+    });
+    const inner = new KernelStateMachine();
+    const adapter = makeMockAdapter(exec);
+    const psm = new PersistentStateMachine(inner, adapter);
+
+    psm.transition("tool_validated");
+
+    await vi.waitFor(() => {
+      const hasSelect = exec.mock.calls.some((call) =>
+        String(call[0]).includes("SELECT snapshot_at"),
+      );
+      expect(hasSelect).toBe(true);
+    });
+
+    const hasInsert = exec.mock.calls.some((call) =>
+      String(call[0]).includes("INSERT INTO autonomy_state"),
+    );
+    expect(hasInsert).toBe(false);
+  });
+
   it("reset delegates and snapshots", async () => {
     const exec = vi.fn().mockResolvedValue({ rows: [], columns: [] });
     const inner = new KernelStateMachine();
@@ -105,7 +142,10 @@ describe("PersistentStateMachine", () => {
     // Move to a non-idle state first
     psm.transition("tool_validated");
     await vi.waitFor(() => {
-      expect(exec).toHaveBeenCalledTimes(1);
+      const hasInsert = exec.mock.calls.some((call) =>
+        String(call[0]).includes("INSERT INTO autonomy_state"),
+      );
+      expect(hasInsert).toBe(true);
     });
     exec.mockClear();
 
@@ -113,9 +153,16 @@ describe("PersistentStateMachine", () => {
     expect(psm.currentState).toBe("idle");
 
     await vi.waitFor(() => {
-      expect(exec).toHaveBeenCalledOnce();
+      const hasInsert = exec.mock.calls.some((call) =>
+        String(call[0]).includes("INSERT INTO autonomy_state"),
+      );
+      expect(hasInsert).toBe(true);
     });
-    const sql = exec.mock.calls[0][0] as string;
+    const insertCall = exec.mock.calls.find((call) =>
+      String(call[0]).includes("INSERT INTO autonomy_state"),
+    );
+    expect(insertCall).toBeDefined();
+    const sql = String(insertCall?.[0] ?? "");
     expect(sql).toContain("idle");
   });
 
