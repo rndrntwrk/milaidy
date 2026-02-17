@@ -2,11 +2,21 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { emoteAction } from "../../src/actions/emote.js";
+import { installPluginAction } from "../../src/actions/install-plugin.js";
+import { mediaActions } from "../../src/actions/media.js";
+import { restartAction } from "../../src/actions/restart.js";
+import { terminalAction } from "../../src/actions/terminal.js";
+import { createCodingDomainPack } from "../../src/autonomy/domains/coding/pack.js";
 import { ToolRegistry } from "../../src/autonomy/tools/registry.js";
 import {
   BUILTIN_CONTRACTS,
   registerBuiltinToolContracts,
 } from "../../src/autonomy/tools/schemas/index.js";
+import { registerRuntimeActionContracts } from "../../src/autonomy/tools/runtime-contracts.js";
+import { loadMilaidyConfig } from "../../src/config/config.js";
+import { loadCustomActions } from "../../src/runtime/custom-actions.js";
+import { createTriggerTaskAction } from "../../src/triggers/action.js";
 
 interface CliArgs {
   outDir: string;
@@ -43,8 +53,15 @@ function parseArgs(argv: string[]): CliArgs {
 function renderMarkdown(input: {
   label: string;
   createdAt: string;
+  runtimeActionCount: number;
+  runtimeActionCoverageCount: number;
+  runtimeGeneratedContractCount: number;
+  domainRegisteredContractCount: number;
+  autoLoadedDomains: string[];
+  runtimeActionUncovered: string[];
   contracts: Array<{
     name: string;
+    source: string;
     version: string;
     riskClass: string;
     requiresApproval: boolean;
@@ -58,21 +75,53 @@ function renderMarkdown(input: {
   lines.push(`- Label: \`${input.label}\``);
   lines.push(`- Created at: \`${input.createdAt}\``);
   lines.push(`- Contract count: \`${input.contracts.length}\``);
+  lines.push(
+    `- Runtime action coverage: \`${input.runtimeActionCoverageCount}/${input.runtimeActionCount}\``,
+  );
+  lines.push(
+    `- Runtime-generated contracts: \`${input.runtimeGeneratedContractCount}\``,
+  );
+  lines.push(
+    `- Auto-loaded domain contracts: \`${input.domainRegisteredContractCount}\``,
+  );
+  lines.push(
+    `- Auto-loaded domains: \`${input.autoLoadedDomains.join(", ") || "none"}\``,
+  );
   lines.push("");
-  lines.push("| Tool | Version | Risk | Approval | Permissions | Tags |");
-  lines.push("|---|---|---|---|---|---:|");
+  lines.push("| Tool | Source | Version | Risk | Approval | Permissions | Tags |");
+  lines.push("|---|---|---|---|---|---|---:|");
   for (const contract of input.contracts) {
     lines.push(
-      `| ${contract.name} | ${contract.version} | ${contract.riskClass} | ${contract.requiresApproval ? "required" : "not-required"} | ${contract.requiredPermissions.join(", ")} | ${contract.tagCount} |`,
+      `| ${contract.name} | ${contract.source} | ${contract.version} | ${contract.riskClass} | ${contract.requiresApproval ? "required" : "not-required"} | ${contract.requiredPermissions.join(", ")} | ${contract.tagCount} |`,
     );
   }
   lines.push("");
   lines.push("## Coverage Notes");
   lines.push("");
-  lines.push("- This report inventories autonomy built-in contracts only.");
-  lines.push("- Use this as the seed set for full runtime/plugin contract coverage work.");
+  if (input.runtimeActionUncovered.length === 0) {
+    lines.push("- All discovered runtime actions have a contract.");
+  } else {
+    lines.push(
+      `- Missing runtime action contracts: ${input.runtimeActionUncovered.join(", ")}`,
+    );
+  }
+  lines.push(
+    "- Runtime-generated contracts are synthesized from action parameter metadata.",
+  );
   lines.push("");
   return lines.join("\n");
+}
+
+function runtimeActionsForInventory() {
+  return [
+    restartAction,
+    createTriggerTaskAction,
+    emoteAction,
+    terminalAction,
+    installPluginAction,
+    ...mediaActions,
+    ...loadCustomActions(),
+  ];
 }
 
 async function main() {
@@ -80,11 +129,53 @@ async function main() {
 
   const registry = new ToolRegistry();
   registerBuiltinToolContracts(registry);
+  const builtInNames = new Set(BUILTIN_CONTRACTS.map((contract) => contract.name));
+
+  const runtimeActions = runtimeActionsForInventory();
+  const runtimeActionNames = [
+    ...new Set(
+      runtimeActions
+        .map((action) =>
+          typeof action?.name === "string" ? action.name.trim() : "",
+        )
+        .filter((name) => name.length > 0),
+    ),
+  ].sort((a, b) => a.localeCompare(b));
+
+  const runtimeGeneratedNames = new Set(
+    registerRuntimeActionContracts(registry, { actions: runtimeActions }),
+  );
+
+  const config = loadMilaidyConfig();
+  const autonomyDomains = config.autonomy?.domains;
+  const autoLoadedDomains: string[] = [];
+  const domainRegisteredNames = new Set<string>();
+
+  if (autonomyDomains?.enabled) {
+    for (const domainId of autonomyDomains.autoLoadDomains ?? []) {
+      if (domainId !== "coding") continue;
+      autoLoadedDomains.push(domainId);
+      const pack = createCodingDomainPack(autonomyDomains.coding);
+      for (const contract of pack.toolContracts) {
+        if (!registry.has(contract.name)) {
+          registry.register(contract);
+        }
+        domainRegisteredNames.add(contract.name);
+      }
+    }
+  }
 
   const contracts = registry
     .getAll()
     .map((contract) => ({
       name: contract.name,
+      source: runtimeGeneratedNames.has(contract.name)
+        ? "runtime-generated"
+        : domainRegisteredNames.has(contract.name)
+          ? "domain"
+          : builtInNames.has(contract.name)
+            ? "built-in"
+            : "registered",
       version: contract.version,
       riskClass: contract.riskClass,
       requiresApproval: contract.requiresApproval,
@@ -98,10 +189,22 @@ async function main() {
     return acc;
   }, {});
 
+  const runtimeActionUncovered = runtimeActionNames.filter(
+    (name) => !registry.has(name),
+  );
+  const runtimeActionCoverageCount =
+    runtimeActionNames.length - runtimeActionUncovered.length;
+
   const payload = {
     label: cli.label,
     createdAt: new Date().toISOString(),
     builtInContractCount: BUILTIN_CONTRACTS.length,
+    runtimeActionCount: runtimeActionNames.length,
+    runtimeActionCoverageCount,
+    runtimeGeneratedContractCount: runtimeGeneratedNames.size,
+    runtimeActionUncovered,
+    autoLoadedDomains,
+    domainRegisteredContractCount: domainRegisteredNames.size,
     inventoryCount: contracts.length,
     riskBreakdown,
     contracts,
@@ -116,6 +219,12 @@ async function main() {
     renderMarkdown({
       label: cli.label,
       createdAt: payload.createdAt,
+      runtimeActionCount: payload.runtimeActionCount,
+      runtimeActionCoverageCount: payload.runtimeActionCoverageCount,
+      runtimeGeneratedContractCount: payload.runtimeGeneratedContractCount,
+      domainRegisteredContractCount: payload.domainRegisteredContractCount,
+      autoLoadedDomains: payload.autoLoadedDomains,
+      runtimeActionUncovered: payload.runtimeActionUncovered,
       contracts,
     }),
     "utf8",
@@ -126,4 +235,3 @@ async function main() {
 }
 
 void main();
-
