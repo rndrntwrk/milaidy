@@ -13,8 +13,8 @@ Current status pre-check snapshot:
 - Evidence basis: static repo review of autonomy kernel, API, persistence, and app UI code paths.
 - Summary counts:
 - `307` total checklist items.
-- `115` items tagged `STATUS: CODED`.
-- `78` items tagged `STATUS: PARTIAL`.
+- `117` items tagged `STATUS: CODED`.
+- `76` items tagged `STATUS: PARTIAL`.
 - `114` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
@@ -374,11 +374,11 @@ Sprint chunks:
 
 ### 3.C State Externalization and Event Log
 
-- [ ] P3-011 Externalize task state to persistent store. [STATUS: PARTIAL]
+- [ ] P3-011 Externalize task state to persistent store. [STATUS: CODED]
 - [ ] P3-012 Persist invariant decisions and safe-mode transitions. [STATUS: CODED]
 - [ ] P3-013 Ensure strict ordering guarantees where required. [STATUS: PARTIAL]
 - [ ] P3-014 Implement conflict handling for concurrent updates. [STATUS: PARTIAL]
-- [ ] P3-015 Validate state reconstruction with replay tests. [STATUS: PARTIAL]
+- [ ] P3-015 Validate state reconstruction with replay tests. [STATUS: CODED]
 
 ### 3.D Safe Mode Design and Enforcement
 

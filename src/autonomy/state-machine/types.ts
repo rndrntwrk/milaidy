@@ -92,4 +92,6 @@ export interface KernelStateMachineInterface {
   onStateChange(listener: StateChangeListener): () => void;
   /** Reset to idle state with zero error count. */
   reset(): void;
+  /** Restore a persisted state snapshot (optional capability). */
+  restoreSnapshot?(state: KernelState, consecutiveErrors: number): void;
 }

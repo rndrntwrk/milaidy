@@ -93,6 +93,7 @@ export class PersistentStateMachine implements KernelStateMachineInterface {
 
       const state = String(rows[0].state ?? "idle") as KernelState;
       const consecutiveErrors = Number(rows[0].consecutive_errors ?? 0);
+      this.restoreSnapshot(state, consecutiveErrors);
 
       logger.info(
         `[autonomy:persistent-sm] Recovered state="${state}" consecutiveErrors=${consecutiveErrors}`,
@@ -105,6 +106,15 @@ export class PersistentStateMachine implements KernelStateMachineInterface {
       );
       return { recovered: false };
     }
+  }
+
+  restoreSnapshot(state: KernelState, consecutiveErrors: number): void {
+    this.inner.reset();
+    if (hasRestoreSnapshot(this.inner)) {
+      this.inner.restoreSnapshot(state, consecutiveErrors);
+      return;
+    }
+    replayStateFromIdle(this.inner, state);
   }
 
   // ---------- Private ----------
@@ -121,4 +131,33 @@ export class PersistentStateMachine implements KernelStateMachineInterface {
 
 function esc(value: string): string {
   return value.replace(/'/g, "''");
+}
+
+function hasRestoreSnapshot(
+  machine: KernelStateMachineInterface,
+): machine is KernelStateMachineInterface & {
+  restoreSnapshot(state: KernelState, consecutiveErrors: number): void;
+} {
+  return typeof machine.restoreSnapshot === "function";
+}
+
+function replayStateFromIdle(
+  machine: KernelStateMachineInterface,
+  state: KernelState,
+): void {
+  const replayTriggers: Record<KernelState, StateTrigger[]> = {
+    idle: [],
+    planning: ["plan_requested"],
+    executing: ["tool_validated"],
+    verifying: ["tool_validated", "execution_complete"],
+    writing_memory: ["write_memory"],
+    auditing: ["audit_requested"],
+    awaiting_approval: ["approval_required"],
+    safe_mode: ["escalate_safe_mode"],
+    error: ["fatal_error"],
+  };
+
+  for (const trigger of replayTriggers[state]) {
+    machine.transition(trigger);
+  }
 }

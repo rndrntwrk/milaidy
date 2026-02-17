@@ -125,6 +125,11 @@ export class KernelStateMachine implements KernelStateMachineInterface {
     };
   }
 
+  restoreSnapshot(state: KernelState, consecutiveErrors: number): void {
+    this._currentState = state;
+    this._consecutiveErrors = Math.max(0, Math.floor(consecutiveErrors));
+  }
+
   reset(): void {
     this._currentState = "idle";
     this._consecutiveErrors = 0;

@@ -119,6 +119,41 @@ describe("PersistentStateMachine", () => {
       expect(result.recovered).toBe(true);
       expect(result.state).toBe("safe_mode");
       expect(result.consecutiveErrors).toBe(3);
+      expect(psm.currentState).toBe("safe_mode");
+      expect(psm.consecutiveErrors).toBe(3);
+    });
+
+    it("replays state from idle when inner machine has no restoreSnapshot support", async () => {
+      const exec = vi.fn().mockResolvedValue({
+        rows: [{ state: "auditing", consecutive_errors: 0 }],
+        columns: [],
+      });
+      const base = new KernelStateMachine();
+      const inner = {
+        get currentState() {
+          return base.currentState;
+        },
+        get consecutiveErrors() {
+          return base.consecutiveErrors;
+        },
+        transition(trigger: Parameters<KernelStateMachine["transition"]>[0]) {
+          return base.transition(trigger);
+        },
+        onStateChange(listener: Parameters<KernelStateMachine["onStateChange"]>[0]) {
+          return base.onStateChange(listener);
+        },
+        reset() {
+          base.reset();
+        },
+      };
+      const adapter = makeMockAdapter(exec);
+      const psm = new PersistentStateMachine(inner, adapter);
+
+      const recovered = await psm.recover();
+
+      expect(recovered.recovered).toBe(true);
+      expect(psm.currentState).toBe("auditing");
+      expect(psm.consecutiveErrors).toBe(0);
     });
 
     it("returns recovered=false when no snapshots exist", async () => {
@@ -189,6 +224,8 @@ describe("PersistentStateMachine", () => {
       expect(recovered.recovered).toBe(true);
       expect(recovered.state).toBe("verifying");
       expect(recovered.consecutiveErrors).toBe(0);
+      expect(secondPsm.currentState).toBe("verifying");
+      expect(secondPsm.consecutiveErrors).toBe(0);
     });
   });
 
