@@ -79,6 +79,14 @@
         }
       }
     },
+    "eventStore": {
+      "type": "object",
+      "description": "Execution event store configuration.",
+      "properties": {
+        "maxEvents": { "type": "integer", "minimum": 100, "default": 10000 },
+        "retentionMs": { "type": "integer", "minimum": 0, "default": 0 }
+      }
+    },
     "safeMode": {
       "type": "object",
       "description": "Safe mode configuration.",

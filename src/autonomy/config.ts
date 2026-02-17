@@ -587,6 +587,9 @@ export function validateAutonomyConfig(
   if (config.eventStore?.maxEvents !== undefined && config.eventStore.maxEvents < 100) {
     issues.push({ path: "autonomy.eventStore.maxEvents", message: "Must be at least 100" });
   }
+  if (config.eventStore?.retentionMs !== undefined && config.eventStore.retentionMs < 0) {
+    issues.push({ path: "autonomy.eventStore.retentionMs", message: "Must be at least 0" });
+  }
 
   // Validate invariants config
   if (config.invariants?.checkTimeoutMs !== undefined && config.invariants.checkTimeoutMs < 100) {

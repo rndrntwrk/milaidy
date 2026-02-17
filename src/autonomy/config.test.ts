@@ -173,6 +173,13 @@ describe("validateAutonomyConfig", () => {
     expect(issues.some((i) => i.path.includes("minTrustThreshold"))).toBe(true);
   });
 
+  it("catches negative eventStore retentionMs", () => {
+    const issues = validateAutonomyConfig({
+      eventStore: { retentionMs: -1 },
+    });
+    expect(issues.some((i) => i.path.includes("autonomy.eventStore.retentionMs"))).toBe(true);
+  });
+
   it("validates identity config when present", () => {
     const identity = createDefaultAutonomyIdentity();
     identity.coreValues = []; // invalid — requires at least one

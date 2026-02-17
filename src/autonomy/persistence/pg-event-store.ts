@@ -21,12 +21,25 @@ import type { AutonomyEventRow } from "./schema.js";
 
 // ---------- Implementation ----------
 
+const DEFAULT_RETENTION_SWEEP_INTERVAL_MS = 60_000;
+
 export class PgEventStore implements EventStoreInterface {
   private adapter: AutonomyDbAdapter;
   private _size = 0;
+  private retentionMs: number;
+  private cleanupIntervalMs: number;
+  private lastCleanupAt = 0;
 
-  constructor(adapter: AutonomyDbAdapter) {
+  constructor(
+    adapter: AutonomyDbAdapter,
+    options?: { retentionMs?: number; cleanupIntervalMs?: number },
+  ) {
     this.adapter = adapter;
+    this.retentionMs = Math.max(options?.retentionMs ?? 0, 0);
+    this.cleanupIntervalMs = Math.max(
+      options?.cleanupIntervalMs ?? DEFAULT_RETENTION_SWEEP_INTERVAL_MS,
+      1,
+    );
   }
 
   get size(): number {
@@ -43,6 +56,8 @@ export class PgEventStore implements EventStoreInterface {
     const agentId = this.adapter.agentId;
 
     try {
+      await this.evictExpiredIfDue(Date.now());
+
       const { rows: hashRows } = await this.adapter.executeRaw(
         `SELECT event_hash
          FROM autonomy_events
@@ -84,6 +99,7 @@ export class PgEventStore implements EventStoreInterface {
 
   async getByRequestId(requestId: string): Promise<ExecutionEvent[]> {
     try {
+      await this.evictExpiredIfDue(Date.now());
       const { rows } = await this.adapter.executeRaw(
         `SELECT id, request_id, type, payload, correlation_id, timestamp, prev_hash, event_hash
          FROM autonomy_events
@@ -101,6 +117,7 @@ export class PgEventStore implements EventStoreInterface {
 
   async getByCorrelationId(correlationId: string): Promise<ExecutionEvent[]> {
     try {
+      await this.evictExpiredIfDue(Date.now());
       const { rows } = await this.adapter.executeRaw(
         `SELECT id, request_id, type, payload, correlation_id, timestamp, prev_hash, event_hash
          FROM autonomy_events
@@ -119,6 +136,7 @@ export class PgEventStore implements EventStoreInterface {
   async getRecent(n: number): Promise<ExecutionEvent[]> {
     if (n <= 0) return [];
     try {
+      await this.evictExpiredIfDue(Date.now());
       const { rows } = await this.adapter.executeRaw(
         `SELECT id, request_id, type, payload, correlation_id, timestamp, prev_hash, event_hash
          FROM autonomy_events
@@ -161,6 +179,35 @@ export class PgEventStore implements EventStoreInterface {
       this._size = Number(rows[0]?.cnt ?? rows[0]?.CNT ?? 0);
     } catch {
       // Non-fatal — size will be inaccurate but append will still work
+    }
+  }
+
+  private async evictExpiredIfDue(nowMs: number): Promise<void> {
+    if (this.retentionMs <= 0) return;
+    if (nowMs - this.lastCleanupAt < this.cleanupIntervalMs) return;
+    this.lastCleanupAt = nowMs;
+    await this.evictExpired(nowMs);
+  }
+
+  private async evictExpired(nowMs: number): Promise<number> {
+    const cutoffIso = new Date(nowMs - this.retentionMs).toISOString();
+    try {
+      const { rows } = await this.adapter.executeRaw(
+        `DELETE FROM autonomy_events
+         WHERE agent_id = '${escapeSql(this.adapter.agentId)}'
+           AND timestamp < '${cutoffIso}'::timestamptz
+         RETURNING id`,
+      );
+      const evicted = rows.length;
+      if (evicted > 0) {
+        this._size = Math.max(0, this._size - evicted);
+      }
+      return evicted;
+    } catch (err) {
+      logger.error(
+        `[autonomy:pg-event-store] retention eviction failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return 0;
     }
   }
 }

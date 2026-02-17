@@ -225,4 +225,42 @@ describe("InMemoryEventStore", () => {
       expect(events[1].prevHash).toBe(events[0].eventHash);
     });
   });
+
+  describe("time-based retention", () => {
+    it("evicts events older than retentionMs", async () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date("2025-01-01T00:00:00.000Z"));
+        const store = new InMemoryEventStore({ maxEvents: 10, retentionMs: 1_000 });
+        await store.append("req-1", "tool:proposed", {});
+
+        vi.setSystemTime(new Date("2025-01-01T00:00:00.500Z"));
+        await store.append("req-1", "tool:validated", {});
+
+        vi.setSystemTime(new Date("2025-01-01T00:00:02.100Z"));
+        await store.append("req-2", "tool:proposed", {});
+
+        expect(await store.getByRequestId("req-1")).toHaveLength(0);
+        expect(await store.getByRequestId("req-2")).toHaveLength(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("does not evict by age when retentionMs is disabled", async () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date("2025-01-01T00:00:00.000Z"));
+        const store = new InMemoryEventStore({ maxEvents: 10, retentionMs: 0 });
+        await store.append("req-1", "tool:proposed", {});
+
+        vi.setSystemTime(new Date("2025-01-02T00:00:00.000Z"));
+        await store.append("req-1", "tool:validated", {});
+
+        expect(await store.getByRequestId("req-1")).toHaveLength(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
 });

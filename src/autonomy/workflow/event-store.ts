@@ -17,6 +17,15 @@ import { computeEventHash } from "./event-integrity.js";
 
 /** Default maximum number of events to retain. */
 const DEFAULT_MAX_EVENTS = 10_000;
+/** Default retention window (0 = disabled). */
+const DEFAULT_RETENTION_MS = 0;
+
+type InMemoryEventStoreOptions =
+  | number
+  | {
+      maxEvents?: number;
+      retentionMs?: number;
+    };
 
 export class InMemoryEventStore implements EventStoreInterface {
   private events: ExecutionEvent[] = [];
@@ -24,9 +33,16 @@ export class InMemoryEventStore implements EventStoreInterface {
   private correlationIndex = new Map<string, number[]>();
   private nextSequenceId = 1;
   private maxEvents: number;
+  private retentionMs: number;
 
-  constructor(maxEvents = DEFAULT_MAX_EVENTS) {
-    this.maxEvents = Math.max(maxEvents, 1);
+  constructor(options: InMemoryEventStoreOptions = DEFAULT_MAX_EVENTS) {
+    if (typeof options === "number") {
+      this.maxEvents = Math.max(options, 1);
+      this.retentionMs = DEFAULT_RETENTION_MS;
+      return;
+    }
+    this.maxEvents = Math.max(options.maxEvents ?? DEFAULT_MAX_EVENTS, 1);
+    this.retentionMs = Math.max(options.retentionMs ?? DEFAULT_RETENTION_MS, 0);
   }
 
   get size(): number {
@@ -85,13 +101,14 @@ export class InMemoryEventStore implements EventStoreInterface {
       }
     }
 
-    // FIFO eviction
-    this.evict();
+    // FIFO + time-window eviction
+    this.evict(timestamp);
 
     return sequenceId;
   }
 
   async getByRequestId(requestId: string): Promise<ExecutionEvent[]> {
+    this.evict(Date.now());
     const indices = this.requestIndex.get(requestId);
     if (!indices) return [];
     return indices
@@ -100,6 +117,7 @@ export class InMemoryEventStore implements EventStoreInterface {
   }
 
   async getByCorrelationId(correlationId: string): Promise<ExecutionEvent[]> {
+    this.evict(Date.now());
     const indices = this.correlationIndex.get(correlationId);
     if (!indices) return [];
     return indices
@@ -108,6 +126,7 @@ export class InMemoryEventStore implements EventStoreInterface {
   }
 
   async getRecent(n: number): Promise<ExecutionEvent[]> {
+    this.evict(Date.now());
     if (n <= 0) return [];
     const start = Math.max(0, this.events.length - n);
     return this.events.slice(start);
@@ -120,41 +139,55 @@ export class InMemoryEventStore implements EventStoreInterface {
     this.nextSequenceId = 1;
   }
 
-  private evict(): void {
+  private evict(now: number): void {
+    if (this.retentionMs > 0) {
+      const cutoff = now - this.retentionMs;
+      while (
+        this.events.length > 0 &&
+        this.events[0].timestamp < cutoff
+      ) {
+        this.removeOldest();
+      }
+    }
+
     while (this.events.length > this.maxEvents) {
-      const evicted = this.events.shift();
-      if (!evicted) break;
+      this.removeOldest();
+    }
+  }
 
-      // Remove evicted event's request index entry
-      const reqIndices = this.requestIndex.get(evicted.requestId);
-      if (reqIndices) {
-        reqIndices.shift();
-        if (reqIndices.length === 0) {
-          this.requestIndex.delete(evicted.requestId);
+  private removeOldest(): void {
+    const evicted = this.events.shift();
+    if (!evicted) return;
+
+    // Remove evicted event's request index entry
+    const reqIndices = this.requestIndex.get(evicted.requestId);
+    if (reqIndices) {
+      reqIndices.shift();
+      if (reqIndices.length === 0) {
+        this.requestIndex.delete(evicted.requestId);
+      }
+    }
+
+    // Remove evicted event's correlation index entry
+    if (evicted.correlationId) {
+      const corrIndices = this.correlationIndex.get(evicted.correlationId);
+      if (corrIndices) {
+        corrIndices.shift();
+        if (corrIndices.length === 0) {
+          this.correlationIndex.delete(evicted.correlationId);
         }
       }
+    }
 
-      // Remove evicted event's correlation index entry
-      if (evicted.correlationId) {
-        const corrIndices = this.correlationIndex.get(evicted.correlationId);
-        if (corrIndices) {
-          corrIndices.shift();
-          if (corrIndices.length === 0) {
-            this.correlationIndex.delete(evicted.correlationId);
-          }
-        }
+    // Adjust all indices down by 1 since we removed from the front
+    for (const [, arr] of this.requestIndex) {
+      for (let i = 0; i < arr.length; i++) {
+        arr[i]--;
       }
-
-      // Adjust all indices down by 1 since we removed from the front
-      for (const [, arr] of this.requestIndex) {
-        for (let i = 0; i < arr.length; i++) {
-          arr[i]--;
-        }
-      }
-      for (const [, arr] of this.correlationIndex) {
-        for (let i = 0; i < arr.length; i++) {
-          arr[i]--;
-        }
+    }
+    for (const [, arr] of this.correlationIndex) {
+      for (let i = 0; i < arr.length; i++) {
+        arr[i]--;
       }
     }
   }
