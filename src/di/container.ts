@@ -89,6 +89,7 @@ export const TOKENS = {
   PostConditionVerifier: createToken<import("../autonomy/verification/postcondition-verifier.js").PostConditionVerifier>("PostConditionVerifier"),
 
   // Autonomy Workflow Engine
+  WorkflowEngine: createToken<import("../autonomy/adapters/workflow/types.js").WorkflowEngine>("WorkflowEngine"),
   ExecutionPipeline: createToken<import("../autonomy/workflow/types.js").ToolExecutionPipelineInterface>("ExecutionPipeline"),
   ApprovalGate: createToken<import("../autonomy/approval/types.js").ApprovalGateInterface>("ApprovalGate"),
   StateMachine: createToken<import("../autonomy/state-machine/types.js").KernelStateMachineInterface>("StateMachine"),

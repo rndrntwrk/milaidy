@@ -286,8 +286,8 @@ Sprint chunks:
 ### 2.D Durable Workflow Engine Integration
 
 - [ ] P2-021 Produce workflow engine decision record (Temporal/Cadence/etc). [STATUS: CODED]
-- [ ] P2-022 Implement workflow definitions for multi-step plan execution. [STATUS: PARTIAL]
-- [ ] P2-023 Implement durable workflow workers and task queue configuration. [STATUS: PARTIAL]
+- [ ] P2-022 Implement workflow definitions for multi-step plan execution. [STATUS: CODED]
+- [ ] P2-023 Implement durable workflow workers and task queue configuration. [STATUS: CODED]
 - [ ] P2-024 Implement workflow start/status/cancel APIs. [STATUS: CODED]
 - [ ] P2-025 Implement deterministic retries/idempotency strategy. [STATUS: PARTIAL]
 - [ ] P2-026 Implement workflow timeout and dead-letter behavior. [STATUS: PARTIAL]

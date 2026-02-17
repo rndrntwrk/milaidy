@@ -72,6 +72,10 @@ export class LocalWorkflowEngine implements WorkflowEngine {
     return this.results.get(executionId);
   }
 
+  async cancel(_executionId: string): Promise<boolean> {
+    return false;
+  }
+
   listWorkflows(): string[] {
     return [...this.workflows.keys()];
   }

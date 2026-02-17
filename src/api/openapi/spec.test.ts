@@ -18,6 +18,10 @@ describe("buildOpenApiSpec", () => {
   it("includes paths for autonomy endpoints", () => {
     const paths = spec.paths as Record<string, unknown>;
     expect(paths["/api/agent/autonomy"]).toBeDefined();
+    expect(paths["/api/agent/autonomy/execute-plan"]).toBeDefined();
+    expect(paths["/api/agent/autonomy/workflows/start"]).toBeDefined();
+    expect(paths["/api/agent/autonomy/workflows/{executionId}"]).toBeDefined();
+    expect(paths["/api/agent/autonomy/workflows/{executionId}/cancel"]).toBeDefined();
     expect(paths["/api/agent/identity"]).toBeDefined();
     expect(paths["/api/agent/identity/history"]).toBeDefined();
     expect(paths["/api/agent/approvals"]).toBeDefined();
@@ -38,6 +42,7 @@ describe("buildOpenApiSpec", () => {
     expect(tagNames).toContain("Autonomy");
     expect(tagNames).toContain("Identity");
     expect(tagNames).toContain("Approvals");
+    expect(tagNames).toContain("Workflows");
     expect(tagNames).toContain("Safe Mode");
     expect(tagNames).toContain("Monitoring");
   });

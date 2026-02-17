@@ -104,6 +104,25 @@ export interface AutonomyWorkflowConfig {
 }
 
 /**
+ * Workflow engine selection and configuration.
+ */
+export interface AutonomyWorkflowEngineConfig {
+  /** Workflow engine provider (default: "local"). */
+  provider?: "local" | "temporal";
+  /** Temporal-specific configuration (only used when provider = "temporal"). */
+  temporal?: {
+    /** Temporal server address (default: localhost:7233). */
+    address?: string;
+    /** Temporal namespace (default: "default"). */
+    namespace?: string;
+    /** Task queue name (default: "autonomy-tasks"). */
+    taskQueue?: string;
+    /** Workflow ID prefix (default: "autonomy"). */
+    workflowIdPrefix?: string;
+  };
+}
+
+/**
  * Approval gate configuration.
  */
 export interface AutonomyApprovalConfig {
@@ -257,6 +276,8 @@ export interface AutonomyConfig {
   tools?: AutonomyToolsConfig;
   /** Workflow execution pipeline settings. */
   workflow?: AutonomyWorkflowConfig;
+  /** Workflow engine selection and settings. */
+  workflowEngine?: AutonomyWorkflowEngineConfig;
   /** Approval gate settings. */
   approval?: AutonomyApprovalConfig;
   /** Event store settings. */
@@ -328,85 +349,94 @@ export const DEFAULT_AUTONOMY_CONFIG: {
 export function resolveAutonomyConfig(
   userConfig?: AutonomyConfig,
 ) {
-  if (!userConfig) return { ...DEFAULT_AUTONOMY_CONFIG, retrieval: { ...DEFAULT_RETRIEVAL_CONFIG } };
+  const cfg = userConfig ?? {};
 
   return {
-    enabled: userConfig.enabled ?? DEFAULT_AUTONOMY_CONFIG.enabled,
-    trust: { ...DEFAULT_AUTONOMY_CONFIG.trust, ...userConfig.trust },
-    memoryGate: { ...DEFAULT_AUTONOMY_CONFIG.memoryGate, ...userConfig.memoryGate },
-    driftMonitor: { ...DEFAULT_AUTONOMY_CONFIG.driftMonitor, ...userConfig.driftMonitor },
-    metrics: { ...DEFAULT_AUTONOMY_CONFIG.metrics, ...userConfig.metrics },
-    identity: userConfig.identity ?? DEFAULT_AUTONOMY_CONFIG.identity,
-    retrieval: { ...DEFAULT_RETRIEVAL_CONFIG, ...userConfig.retrieval },
-    tools: userConfig.tools,
+    enabled: cfg.enabled ?? DEFAULT_AUTONOMY_CONFIG.enabled,
+    trust: { ...DEFAULT_AUTONOMY_CONFIG.trust, ...cfg.trust },
+    memoryGate: { ...DEFAULT_AUTONOMY_CONFIG.memoryGate, ...cfg.memoryGate },
+    driftMonitor: { ...DEFAULT_AUTONOMY_CONFIG.driftMonitor, ...cfg.driftMonitor },
+    metrics: { ...DEFAULT_AUTONOMY_CONFIG.metrics, ...cfg.metrics },
+    identity: cfg.identity ?? DEFAULT_AUTONOMY_CONFIG.identity,
+    retrieval: { ...DEFAULT_RETRIEVAL_CONFIG, ...cfg.retrieval },
+    tools: cfg.tools,
     workflow: {
-      enabled: userConfig.workflow?.enabled ?? true,
-      maxConcurrent: userConfig.workflow?.maxConcurrent ?? 1,
-      defaultTimeoutMs: userConfig.workflow?.defaultTimeoutMs ?? 30_000,
+      enabled: cfg.workflow?.enabled ?? true,
+      maxConcurrent: cfg.workflow?.maxConcurrent ?? 1,
+      defaultTimeoutMs: cfg.workflow?.defaultTimeoutMs ?? 30_000,
+    },
+    workflowEngine: {
+      provider: cfg.workflowEngine?.provider ?? "local",
+      temporal: {
+        address: cfg.workflowEngine?.temporal?.address ?? "localhost:7233",
+        namespace: cfg.workflowEngine?.temporal?.namespace ?? "default",
+        taskQueue: cfg.workflowEngine?.temporal?.taskQueue ?? "autonomy-tasks",
+        workflowIdPrefix: cfg.workflowEngine?.temporal?.workflowIdPrefix ?? "autonomy",
+      },
     },
     approval: {
-      enabled: userConfig.approval?.enabled ?? true,
-      timeoutMs: userConfig.approval?.timeoutMs ?? 300_000,
-      autoApproveReadOnly: userConfig.approval?.autoApproveReadOnly ?? true,
-      autoApproveSources: userConfig.approval?.autoApproveSources ?? [],
+      enabled: cfg.approval?.enabled ?? true,
+      timeoutMs: cfg.approval?.timeoutMs ?? 300_000,
+      autoApproveReadOnly: cfg.approval?.autoApproveReadOnly ?? true,
+      autoApproveSources: cfg.approval?.autoApproveSources ?? [],
     },
     eventStore: {
-      maxEvents: userConfig.eventStore?.maxEvents ?? 10_000,
-      retentionMs: userConfig.eventStore?.retentionMs ?? 0,
+      maxEvents: cfg.eventStore?.maxEvents ?? 10_000,
+      retentionMs: cfg.eventStore?.retentionMs ?? 0,
     },
     invariants: {
-      enabled: userConfig.invariants?.enabled ?? true,
-      checkTimeoutMs: userConfig.invariants?.checkTimeoutMs ?? 5_000,
-      failOnCritical: userConfig.invariants?.failOnCritical ?? false,
+      enabled: cfg.invariants?.enabled ?? true,
+      checkTimeoutMs: cfg.invariants?.checkTimeoutMs ?? 5_000,
+      failOnCritical: cfg.invariants?.failOnCritical ?? false,
     },
     roles: {
-      enabled: userConfig.roles?.enabled ?? true,
+      enabled: cfg.roles?.enabled ?? true,
       planner: {
-        maxPlanSteps: userConfig.roles?.planner?.maxPlanSteps ?? 20,
-        autoApproveSimplePlans: userConfig.roles?.planner?.autoApproveSimplePlans ?? false,
+        maxPlanSteps: cfg.roles?.planner?.maxPlanSteps ?? 20,
+        autoApproveSimplePlans: cfg.roles?.planner?.autoApproveSimplePlans ?? false,
       },
       safeMode: {
-        errorThreshold: userConfig.roles?.safeMode?.errorThreshold ?? 3,
-        exitTrustFloor: userConfig.roles?.safeMode?.exitTrustFloor ?? 0.8,
+        errorThreshold: cfg.roles?.safeMode?.errorThreshold ?? 3,
+        exitTrustFloor: cfg.roles?.safeMode?.exitTrustFloor ?? 0.8,
       },
     },
     learning: {
-      enabled: userConfig.learning?.enabled ?? false,
-      dataPath: userConfig.learning?.dataPath ?? "",
+      enabled: cfg.learning?.enabled ?? false,
+      dataPath: cfg.learning?.dataPath ?? "",
       reward: {
-        validationWeight: userConfig.learning?.reward?.validationWeight ?? 0.2,
-        verificationWeight: userConfig.learning?.reward?.verificationWeight ?? 0.3,
-        efficiencyWeight: userConfig.learning?.reward?.efficiencyWeight ?? 0.1,
-        driftPenalty: userConfig.learning?.reward?.driftPenalty ?? 0.2,
-        completionWeight: userConfig.learning?.reward?.completionWeight ?? 0.2,
+        validationWeight: cfg.learning?.reward?.validationWeight ?? 0.2,
+        verificationWeight: cfg.learning?.reward?.verificationWeight ?? 0.3,
+        efficiencyWeight: cfg.learning?.reward?.efficiencyWeight ?? 0.1,
+        driftPenalty: cfg.learning?.reward?.driftPenalty ?? 0.2,
+        completionWeight: cfg.learning?.reward?.completionWeight ?? 0.2,
       },
       adversarial: {
-        enabled: userConfig.learning?.adversarial?.enabled ?? false,
-        injectionRate: userConfig.learning?.adversarial?.injectionRate ?? 0.1,
+        enabled: cfg.learning?.adversarial?.enabled ?? false,
+        injectionRate: cfg.learning?.adversarial?.injectionRate ?? 0.1,
       },
       hackDetection: {
-        enabled: userConfig.learning?.hackDetection?.enabled ?? true,
-        threshold: userConfig.learning?.hackDetection?.threshold ?? 0.5,
+        enabled: cfg.learning?.hackDetection?.enabled ?? true,
+        threshold: cfg.learning?.hackDetection?.threshold ?? 0.5,
       },
-      modelProvider: userConfig.learning?.modelProvider,
+      modelProvider: cfg.learning?.modelProvider,
     },
     domains: {
-      enabled: userConfig.domains?.enabled ?? false,
-      autoLoadDomains: userConfig.domains?.autoLoadDomains ?? [],
-      coding: userConfig.domains?.coding,
+      enabled: cfg.domains?.enabled ?? false,
+      autoLoadDomains: cfg.domains?.autoLoadDomains ?? [],
+      coding: cfg.domains?.coding,
       governance: {
-        enabled: userConfig.domains?.governance?.enabled ?? true,
-        defaultEventRetentionMs: userConfig.domains?.governance?.defaultEventRetentionMs ?? 604_800_000,
-        defaultAuditRetentionMs: userConfig.domains?.governance?.defaultAuditRetentionMs ?? 2_592_000_000,
+        enabled: cfg.domains?.governance?.enabled ?? true,
+        defaultEventRetentionMs: cfg.domains?.governance?.defaultEventRetentionMs ?? 604_800_000,
+        defaultAuditRetentionMs: cfg.domains?.governance?.defaultAuditRetentionMs ?? 2_592_000_000,
       },
       pilot: {
-        scenarioTimeoutMs: userConfig.domains?.pilot?.scenarioTimeoutMs ?? 30_000,
-        maxScenarios: userConfig.domains?.pilot?.maxScenarios ?? 0,
+        scenarioTimeoutMs: cfg.domains?.pilot?.scenarioTimeoutMs ?? 30_000,
+        maxScenarios: cfg.domains?.pilot?.maxScenarios ?? 0,
       },
     },
     persistence: {
-      enabled: userConfig.persistence?.enabled ?? false,
-      autoMigrate: userConfig.persistence?.autoMigrate ?? true,
+      enabled: cfg.persistence?.enabled ?? false,
+      autoMigrate: cfg.persistence?.autoMigrate ?? true,
     },
   };
 }
@@ -514,6 +544,23 @@ export function validateAutonomyConfig(
   }
   if (config.workflow?.defaultTimeoutMs !== undefined && config.workflow.defaultTimeoutMs < 1000) {
     issues.push({ path: "autonomy.workflow.defaultTimeoutMs", message: "Must be at least 1000" });
+  }
+
+  // Validate workflow engine config
+  if (config.workflowEngine?.provider && !["local", "temporal"].includes(config.workflowEngine.provider)) {
+    issues.push({ path: "autonomy.workflowEngine.provider", message: "Must be 'local' or 'temporal'" });
+  }
+  if (config.workflowEngine?.provider === "temporal") {
+    const temporalCfg = config.workflowEngine.temporal;
+    if (temporalCfg?.address !== undefined && temporalCfg.address.trim().length === 0) {
+      issues.push({ path: "autonomy.workflowEngine.temporal.address", message: "Must be a non-empty string" });
+    }
+    if (temporalCfg?.namespace !== undefined && temporalCfg.namespace.trim().length === 0) {
+      issues.push({ path: "autonomy.workflowEngine.temporal.namespace", message: "Must be a non-empty string" });
+    }
+    if (temporalCfg?.taskQueue !== undefined && temporalCfg.taskQueue.trim().length === 0) {
+      issues.push({ path: "autonomy.workflowEngine.temporal.taskQueue", message: "Must be a non-empty string" });
+    }
   }
 
   // Validate approval config

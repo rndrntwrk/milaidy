@@ -26,6 +26,8 @@ describe("resolveAutonomyConfig", () => {
     expect(config.identity).toBeUndefined();
     expect(config.retrieval.trustWeight).toBe(0.3);
     expect(config.retrieval.maxResults).toBe(20);
+    expect(config.workflowEngine?.provider).toBe("local");
+    expect(config.workflowEngine?.temporal?.taskQueue).toBe("autonomy-tasks");
   });
 
   it("merges user values over defaults", () => {
@@ -172,6 +174,29 @@ describe("validateAutonomyConfig", () => {
     const identity = createDefaultAutonomyIdentity();
     const issues = validateAutonomyConfig({ identity });
     expect(issues.filter((i) => i.path.includes("identity"))).toHaveLength(0);
+  });
+
+  it("catches invalid workflow engine provider", () => {
+    const issues = validateAutonomyConfig({
+      workflowEngine: { provider: "invalid" as never },
+    });
+    expect(
+      issues.some((i) => i.path.includes("autonomy.workflowEngine.provider")),
+    ).toBe(true);
+  });
+
+  it("catches empty temporal taskQueue when temporal provider is selected", () => {
+    const issues = validateAutonomyConfig({
+      workflowEngine: {
+        provider: "temporal",
+        temporal: { taskQueue: " " },
+      },
+    });
+    expect(
+      issues.some((i) =>
+        i.path.includes("autonomy.workflowEngine.temporal.taskQueue"),
+      ),
+    ).toBe(true);
   });
 });
 

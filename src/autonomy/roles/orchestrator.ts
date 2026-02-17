@@ -16,6 +16,8 @@ import type {
   PipelineResult,
   ToolExecutionPipelineInterface,
 } from "../workflow/types.js";
+import { LocalWorkflowEngine } from "../adapters/workflow/local-engine.js";
+import type { WorkflowDefinition, WorkflowEngine } from "../adapters/workflow/types.js";
 import type {
   AuditorRole,
   ExecutionPlan,
@@ -36,6 +38,7 @@ export class KernelOrchestrator implements RoleOrchestrator {
     private readonly auditor: AuditorRole,
     private readonly stateMachine: KernelStateMachineInterface,
     private readonly safeModeController: SafeModeController,
+    private readonly workflowEngine?: WorkflowEngine,
   ) {}
 
   async execute(request: OrchestratedRequest): Promise<OrchestratedResult> {
@@ -70,28 +73,56 @@ export class KernelOrchestrator implements RoleOrchestrator {
 
       // Phase 2: Execution (pipeline handles its own FSM transitions)
       plan.status = "executing";
-      for (const step of plan.steps) {
-        const pipelineResult = await this.pipeline.execute(
+      if (this.workflowEngine) {
+        const workflowDefinition = this.buildWorkflowDefinition(plan, request);
+        this.workflowEngine.register(workflowDefinition);
+        const workflowResult = await this.workflowEngine.execute(
+          workflowDefinition.id,
           {
-            tool: step.toolName,
-            params: step.params,
-            source: request.source,
-            requestId: `${plan.id}-${step.id}`,
+            plan,
+            request: {
+              agentId: request.agentId,
+              source: request.source,
+              sourceTrust: request.sourceTrust,
+            },
           },
-          request.actionHandler,
         );
-        executions.push(pipelineResult);
+        if (!workflowResult.success) {
+          throw new Error(
+            `Workflow execution failed: ${workflowResult.error ?? "unknown error"}`,
+          );
+        }
+        if (Array.isArray(workflowResult.output)) {
+          executions.push(
+            ...(workflowResult.output as PipelineResult[]),
+          );
+        } else {
+          throw new Error("Workflow execution returned unexpected output");
+        }
+      } else {
+        for (const step of plan.steps) {
+          const pipelineResult = await this.pipeline.execute(
+            {
+              tool: step.toolName,
+              params: step.params,
+              source: request.source,
+              requestId: `${plan.id}-${step.id}`,
+            },
+            request.actionHandler,
+          );
+          executions.push(pipelineResult);
 
-        if (!pipelineResult.success) {
-          // Check if we should enter safe mode
-          if (
-            this.safeModeController.shouldTrigger(
-              this.stateMachine.consecutiveErrors,
-            )
-          ) {
-            this.safeModeController.enter(
-              `Consecutive errors during plan execution: ${pipelineResult.error}`,
-            );
+          if (!pipelineResult.success) {
+            // Check if we should enter safe mode
+            if (
+              this.safeModeController.shouldTrigger(
+                this.stateMachine.consecutiveErrors,
+              )
+            ) {
+              this.safeModeController.enter(
+                `Consecutive errors during plan execution: ${pipelineResult.error}`,
+              );
+            }
           }
         }
       }
@@ -275,5 +306,62 @@ export class KernelOrchestrator implements RoleOrchestrator {
 
   isInSafeMode(): boolean {
     return this.stateMachine.currentState === "safe_mode";
+  }
+
+  private buildWorkflowDefinition(
+    plan: ExecutionPlan,
+    request: OrchestratedRequest,
+  ): WorkflowDefinition {
+    const usesLocalSteps = this.workflowEngine instanceof LocalWorkflowEngine;
+    const steps: WorkflowDefinition["steps"] = usesLocalSteps
+      ? [
+          async () => {
+            const results: PipelineResult[] = [];
+            for (const step of plan.steps) {
+              const pipelineResult = await this.pipeline.execute(
+                {
+                  tool: step.toolName,
+                  params: step.params,
+                  source: request.source,
+                  requestId: `${plan.id}-${step.id}`,
+                },
+                request.actionHandler,
+              );
+              results.push(pipelineResult);
+
+              if (!pipelineResult.success) {
+                if (
+                  this.safeModeController.shouldTrigger(
+                    this.stateMachine.consecutiveErrors,
+                  )
+                ) {
+                  this.safeModeController.enter(
+                    `Consecutive errors during plan execution: ${pipelineResult.error}`,
+                  );
+                }
+              }
+            }
+            return results;
+          },
+        ]
+      : [];
+
+    if (usesLocalSteps) {
+      return {
+        id: `plan-${plan.id}`,
+        name: `Plan Execution ${plan.id}`,
+        steps,
+      };
+    }
+
+    return {
+      id: "plan-execution",
+      name: "Plan Execution (Temporal)",
+      steps,
+      temporal: {
+        workflowType: "plan-execution",
+        workflowId: plan.id,
+      },
+    };
   }
 }
