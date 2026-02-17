@@ -14,6 +14,13 @@ import type { PipelineResult } from "../../workflow/types.js";
  */
 export type InvariantSeverity = "critical" | "warning" | "info";
 
+/**
+ * Ownership tag for an invariant.
+ *
+ * Use a stable team/system identifier (e.g. "autonomy:workflow").
+ */
+export type InvariantOwner = string;
+
 // ---------- Context ----------
 
 /**
@@ -50,6 +57,8 @@ export interface Invariant {
   check: (ctx: InvariantContext) => Promise<boolean>;
   /** Severity if the invariant is violated. */
   severity: InvariantSeverity;
+  /** Owning subsystem/team responsible for this invariant. */
+  owner: InvariantOwner;
 }
 
 // ---------- Results ----------
@@ -60,6 +69,8 @@ export interface Invariant {
 export interface InvariantCheckResult {
   /** The invariant ID. */
   invariantId: string;
+  /** Owning subsystem/team responsible for this invariant. */
+  owner: InvariantOwner;
   /** Whether the invariant held. */
   passed: boolean;
   /** The severity of this invariant. */

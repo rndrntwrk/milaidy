@@ -90,6 +90,7 @@ export class InvariantChecker implements InvariantCheckerInterface {
 
       checks.push({
         invariantId: invariant.id,
+        owner: invariant.owner,
         passed,
         severity: invariant.severity,
         ...(error ? { error } : {}),

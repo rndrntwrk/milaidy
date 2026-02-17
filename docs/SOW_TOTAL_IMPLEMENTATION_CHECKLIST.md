@@ -323,7 +323,7 @@ Sprint chunks:
 
 ### 2.H Cross-System Invariants
 
-- [ ] P2-047 Define invariant catalog with severity and ownership. [STATUS: PARTIAL]
+- [ ] P2-047 Define invariant catalog with severity and ownership. [STATUS: CODED]
 - [ ] P2-048 Implement invariant checker with timeout protections. [STATUS: CODED]
 - [ ] P2-049 Run invariants after every pipeline completion. [STATUS: CODED]
 - [ ] P2-050 Fail closed on critical invariant violations. [STATUS: CODED]

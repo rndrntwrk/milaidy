@@ -9,6 +9,7 @@ import type { InvariantCheckerInterface } from "./types.js";
 
 export {
   builtinInvariants,
+  builtinInvariantCatalog,
   eventStoreIntegrityInvariant,
   noOrphanedApprovalsInvariant,
   stateMachineConsistencyInvariant,
@@ -19,6 +20,7 @@ export type {
   InvariantCheckerInterface,
   InvariantCheckResult,
   InvariantContext,
+  InvariantOwner,
   InvariantResult,
   InvariantSeverity,
   InvariantStatus,

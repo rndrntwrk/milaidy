@@ -23,6 +23,7 @@ const superficialPassInvariant: Invariant = {
   id: "hack:superficial-pass",
   description: "Tool must produce meaningful output when reporting success",
   severity: "warning",
+  owner: "autonomy:learning",
   check: async (ctx) => {
     if (!ctx.executionSucceeded) return true; // Only check successes
 
@@ -55,6 +56,7 @@ const stepInflationInvariant: Invariant = {
   id: "hack:step-inflation",
   description: "Plan step count must be reasonable relative to task complexity",
   severity: "warning",
+  owner: "autonomy:learning",
   check: async (ctx) => {
     const result = ctx.pipelineResult;
 
@@ -87,6 +89,7 @@ const trustGamingInvariant: Invariant = {
   id: "hack:trust-gaming",
   description: "Source reliability should not increase faster than expected",
   severity: "info",
+  owner: "autonomy:learning",
   check: async (ctx) => {
     // This invariant is more useful at the episode level (see HackDetector).
     // At the pipeline level, we check for rapid-fire tool calls which could

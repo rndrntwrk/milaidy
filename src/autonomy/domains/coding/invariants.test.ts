@@ -50,6 +50,11 @@ describe("Coding invariants", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
+  it("all invariants define severity and owner", () => {
+    expect(CODING_INVARIANTS.every((i) => i.severity.length > 0)).toBe(true);
+    expect(CODING_INVARIANTS.every((i) => i.owner.length > 0)).toBe(true);
+  });
+
   // noShellEscapeInvariant
   it("noShellEscape passes for clean output", async () => {
     const result = await noShellEscapeInvariant.check(
