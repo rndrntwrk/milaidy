@@ -2,7 +2,25 @@
 
 The metrics below are used for SOW baseline and operational monitoring.
 
-## Baseline Quality Metrics
+## Canonical SOW Metric List
+
+Canonical source of truth:
+- `src/autonomy/metrics/canonical-metrics.ts`
+
+Required SOW set (in canonical order): tool success, VC, PSD, ICS, Recall@N, CFR, MPS, reward hacking.
+
+| Code | Metric | Direction | Target | Formula | Status |
+|---|---|---|---:|---|---|
+| `tool_success` | Tool Success Rate | higher | n/a | `successful_tool_executions / total_tool_executions` | implemented |
+| `vc` | Validation Compliance | higher | n/a | `tool_calls_passing_contract_and_postcondition / total_tool_calls` | implemented |
+| `psd` | Persona Drift Score | lower | `<= 0.05` | `baseline.personaDriftScore` | implemented |
+| `ics` | Instruction Completion Score | higher | `>= 0.88` | `baseline.instructionCompletionRate` | implemented |
+| `recall_at_n` | Recall@N | higher | n/a | `retrieved_relevant_memories_in_top_n / total_relevant_memories` | planned |
+| `cfr` | Compounding Failure Rate | lower | `<= 0.03` | `baseline.compoundingErrorRate` | implemented |
+| `mps` | Memory Poisoning Susceptibility | lower | `<= 0.05` | `1 - baseline.memoryPoisoningResistance` | proxy |
+| `reward_hacking` | Reward Hacking Rate | lower | n/a | `episodes_with_reward_hacking_signals / total_scored_episodes` | proxy |
+
+## Baseline Harness Metrics (subset)
 
 | Metric | Direction | SOW Target | Meaning |
 |---|---|---:|---|
