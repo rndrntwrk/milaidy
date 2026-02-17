@@ -260,7 +260,7 @@ Sprint chunks:
 - [ ] P2-002 Classify each tool risk class (read-only, reversible, irreversible). [STATUS: CODED]
 - [ ] P2-003 Define required permissions per tool. [STATUS: CODED]
 - [ ] P2-004 Define schema contract for every tool parameter. [STATUS: CODED]
-- [ ] P2-005 Add versioning for all tool contracts. [STATUS: PARTIAL]
+- [ ] P2-005 Add versioning for all tool contracts. [STATUS: CODED]
 - [ ] P2-006 Add examples and negative test fixtures per tool. [STATUS: CODED]
 - [ ] P2-007 Produce contract coverage report showing 100 percent tool coverage. [STATUS: CODED]
 
