@@ -90,6 +90,7 @@ let _GatedMemoryWriter: typeof import("./roles/memory-writer.js").GatedMemoryWri
 let _DriftAwareAuditor: typeof import("./roles/auditor.js").DriftAwareAuditor;
 let _SafeModeControllerImpl: typeof import("./roles/safe-mode.js").SafeModeControllerImpl;
 let _KernelOrchestrator: typeof import("./roles/orchestrator.js").KernelOrchestrator;
+let _createInProcessRoleAdapters: typeof import("./adapters/roles/in-process-role-adapter.js").createInProcessRoleAdapters;
 
 // Phase 5 — Domains & Governance
 let _DomainPackRegistry: typeof import("./domains/registry.js").DomainPackRegistry;
@@ -123,7 +124,7 @@ let _SystemPromptBuilder: typeof import("./learning/prompt-builder.js").SystemPr
 let _AdversarialScenarioGenerator: typeof import("./learning/adversarial.js").AdversarialScenarioGenerator;
 
 async function loadImplementations() {
-  const [trustMod, memMod, driftMod, goalMod, toolRegMod, schemaValMod, pcvMod, toolSchemasMod, runtimeContractsMod, pcMod, smMod, approvalMod, approvalPersistentMod, esMod, compRegMod, compIncidentMod, pipelineMod, compsMod, localWorkflowMod, temporalWorkflowMod, invMod, invRegMod, harnMod, evalMod, plannerMod, executorMod, verifierMod, memWriterMod, auditorMod, safeModeMod, orchestratorMod] = await Promise.all([
+  const [trustMod, memMod, driftMod, goalMod, toolRegMod, schemaValMod, pcvMod, toolSchemasMod, runtimeContractsMod, pcMod, smMod, approvalMod, approvalPersistentMod, esMod, compRegMod, compIncidentMod, pipelineMod, compsMod, localWorkflowMod, temporalWorkflowMod, invMod, invRegMod, harnMod, evalMod, plannerMod, executorMod, verifierMod, memWriterMod, auditorMod, safeModeMod, orchestratorMod, roleAdaptersMod] = await Promise.all([
     import("./trust/scorer.js"),
     import("./memory/gate.js"),
     import("./identity/drift-monitor.js"),
@@ -155,6 +156,7 @@ async function loadImplementations() {
     import("./roles/auditor.js"),
     import("./roles/safe-mode.js"),
     import("./roles/orchestrator.js"),
+    import("./adapters/roles/in-process-role-adapter.js"),
   ]);
   _RuleBasedTrustScorer = trustMod.RuleBasedTrustScorer;
   _MemoryGateImpl = memMod.MemoryGateImpl;
@@ -191,6 +193,7 @@ async function loadImplementations() {
   _DriftAwareAuditor = auditorMod.DriftAwareAuditor;
   _SafeModeControllerImpl = safeModeMod.SafeModeControllerImpl;
   _KernelOrchestrator = orchestratorMod.KernelOrchestrator;
+  _createInProcessRoleAdapters = roleAdaptersMod.createInProcessRoleAdapters;
 
   // Phase 4 — Learning (lazy, non-blocking)
   const [rewardMod, traceMod, hackMod, rolloutMod, modelMod, promptMod, advMod] = await Promise.all([
@@ -557,19 +560,28 @@ export class MilaidyAutonomyService extends Service {
     });
 
     // Instantiate role implementations (Phase 3)
-    this.planner = new _GoalDrivenPlanner(
-      this.goalManager,
-      this.toolRegistry,
-      config.roles?.planner,
-    );
-    this.executorRole = new _PipelineExecutor(this.executionPipeline);
-    this.verifier = new _UnifiedVerifier(
-      this.schemaValidator,
-      this.postConditionVerifier,
-      this.invariantChecker ?? undefined,
-    );
-    this.memoryWriterRole = new _GatedMemoryWriter(this.memoryGate);
-    this.auditorRole = new _DriftAwareAuditor(this.driftMonitor, this.eventStore);
+    const roleImplementations = {
+      planner: new _GoalDrivenPlanner(
+        this.goalManager,
+        this.toolRegistry,
+        config.roles?.planner,
+      ),
+      executor: new _PipelineExecutor(this.executionPipeline),
+      verifier: new _UnifiedVerifier(
+        this.schemaValidator,
+        this.postConditionVerifier,
+        this.invariantChecker ?? undefined,
+      ),
+      memoryWriter: new _GatedMemoryWriter(this.memoryGate),
+      auditor: new _DriftAwareAuditor(this.driftMonitor, this.eventStore),
+    };
+    const roleAdapters = _createInProcessRoleAdapters(roleImplementations);
+    this.planner = roleAdapters.planner;
+    this.executorRole = roleAdapters.executor;
+    this.verifier = roleAdapters.verifier;
+    this.memoryWriterRole = roleAdapters.memoryWriter;
+    this.auditorRole = roleAdapters.auditor;
+
     this.safeModeController = new _SafeModeControllerImpl({
       ...(config.roles?.safeMode ?? {}),
       eventBus: eventBusRef,
