@@ -78,7 +78,12 @@ vi.mock("../di/container.js", () => ({
   },
 }));
 
-import { MilaidyAutonomyService, setAutonomyConfig } from "./service.js";
+import {
+  KERNEL_SAFE_MODE_TRANSITION_REQUEST_ID,
+  KERNEL_STATE_TRANSITION_REQUEST_ID,
+  MilaidyAutonomyService,
+  setAutonomyConfig,
+} from "./service.js";
 
 /** Minimal mock runtime for testing. */
 function createMockRuntime(
@@ -649,6 +654,59 @@ describe("MilaidyAutonomyService", () => {
       expect(snapshot.summary.readyRoles).toBe(0);
       expect(snapshot.summary.unavailableRoles).toContain("planner");
       expect(snapshot.summary.unavailableRoles).toContain("orchestrator");
+    });
+
+    it("persists kernel state and safe-mode transitions to the event store", async () => {
+      setAutonomyConfig({ enabled: true });
+      const runtime = createMockRuntime();
+      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const stateMachine = svc.getStateMachine();
+      const eventStore = svc.getEventStore();
+      if (!stateMachine || !eventStore) {
+        throw new Error("expected state machine and event store");
+      }
+
+      stateMachine.transition("escalate_safe_mode");
+      stateMachine.transition("safe_mode_exit");
+
+      await vi.waitFor(async () => {
+        const transitions = await eventStore.getByRequestId(
+          KERNEL_SAFE_MODE_TRANSITION_REQUEST_ID,
+        );
+        expect(transitions.length).toBeGreaterThanOrEqual(2);
+      });
+
+      const kernelTransitions = await eventStore.getByRequestId(
+        KERNEL_STATE_TRANSITION_REQUEST_ID,
+      );
+      const safeModeTransitions = await eventStore.getByRequestId(
+        KERNEL_SAFE_MODE_TRANSITION_REQUEST_ID,
+      );
+
+      expect(
+        kernelTransitions.some(
+          (event) => event.type === "kernel:state:transition",
+        ),
+      ).toBe(true);
+      expect(
+        safeModeTransitions.some(
+          (event) => event.type === "kernel:safe-mode:transition",
+        ),
+      ).toBe(true);
+      expect(
+        safeModeTransitions.some((event) => event.payload.active === true),
+      ).toBe(true);
+      expect(
+        safeModeTransitions.some((event) => event.payload.active === false),
+      ).toBe(true);
+      expect(mockEmit).toHaveBeenCalledWith(
+        "autonomy:state:transition",
+        expect.objectContaining({
+          from: "idle",
+          to: "safe_mode",
+          trigger: "escalate_safe_mode",
+        }),
+      );
     });
 
     it("returns learning accessors when learning enabled", async () => {
