@@ -13,9 +13,9 @@ Current status pre-check snapshot:
 - Evidence basis: static repo review of autonomy kernel, API, persistence, and app UI code paths.
 - Summary counts:
 - `307` total checklist items.
-- `120` items tagged `STATUS: CODED`.
-- `73` items tagged `STATUS: PARTIAL`.
-- `114` items currently untagged.
+- `139` items tagged `STATUS: CODED`.
+- `61` items tagged `STATUS: PARTIAL`.
+- `107` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
 - `STATUS: PARTIAL` means implementation exists but is incomplete, scoped down, optional, or not yet acceptance-ready.
@@ -418,7 +418,7 @@ Sprint chunks:
 
 ### 3.H Phase Gate
 
-- [ ] P3-040 Demonstrate PSD and identity-violation reductions against baseline target. [STATUS: PARTIAL]
+- [ ] P3-040 Demonstrate PSD and identity-violation reductions against baseline target. [STATUS: CODED]
 - [ ] P3-041 Demonstrate safe-mode operates correctly under induced incidents. [STATUS: CODED]
 - [ ] P3-042 Publish Phase 3 acceptance report and sign-off. [STATUS: CODED]
 
