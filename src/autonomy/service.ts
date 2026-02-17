@@ -439,8 +439,13 @@ export class MilaidyAutonomyService extends Service {
 
     // Event store: Pg-backed or in-memory
     this.eventStore = this.dbAdapter
-      ? new _PgEventStore(this.dbAdapter)
-      : new _InMemoryEventStore(config.eventStore?.maxEvents ?? 10_000);
+      ? new _PgEventStore(this.dbAdapter, {
+          retentionMs: config.eventStore?.retentionMs ?? 0,
+        })
+      : new _InMemoryEventStore({
+          maxEvents: config.eventStore?.maxEvents ?? 10_000,
+          retentionMs: config.eventStore?.retentionMs ?? 0,
+        });
 
     this.compensationRegistry = new _CompensationRegistry();
     _registerBuiltinCompensations(this.compensationRegistry);

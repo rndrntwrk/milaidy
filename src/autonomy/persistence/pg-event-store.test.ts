@@ -109,6 +109,64 @@ describe("PgEventStore", () => {
 
       expect(store.size).toBe(3);
     });
+
+    it("evicts expired rows before append when retention is enabled", async () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date("2025-01-01T00:00:10.000Z"));
+        const exec = vi.fn()
+          .mockResolvedValueOnce({ rows: [{ id: 9 }], columns: ["id"] }) // retention delete
+          .mockResolvedValueOnce({ rows: [], columns: ["event_hash"] }) // hash lookup
+          .mockResolvedValueOnce({ rows: [{ id: 10 }], columns: ["id"] }); // insert
+
+        const adapter = makeMockAdapter({ executeRaw: exec });
+        const store = new PgEventStore(adapter, {
+          retentionMs: 5_000,
+          cleanupIntervalMs: 1,
+        });
+
+        await store.append("req-1", "tool:proposed", {});
+
+        expect(exec.mock.calls[0][0]).toContain("DELETE FROM autonomy_events");
+        expect(exec.mock.calls[0][0]).toContain("timestamp < '2025-01-01T00:00:05.000Z'");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("throttles retention cleanup by cleanup interval", async () => {
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date("2025-01-01T00:00:10.000Z"));
+        const exec = vi.fn().mockImplementation(async (sql: string) => {
+          if (sql.includes("DELETE FROM autonomy_events")) {
+            return { rows: [], columns: ["id"] };
+          }
+          if (sql.includes("SELECT event_hash")) {
+            return { rows: [], columns: ["event_hash"] };
+          }
+          if (sql.includes("RETURNING id")) {
+            return { rows: [{ id: 1 }], columns: ["id"] };
+          }
+          return { rows: [], columns: [] };
+        });
+        const adapter = makeMockAdapter({ executeRaw: exec });
+        const store = new PgEventStore(adapter, {
+          retentionMs: 5_000,
+          cleanupIntervalMs: 60_000,
+        });
+
+        await store.append("req-1", "tool:proposed", {});
+        await store.append("req-2", "tool:proposed", {});
+
+        const retentionDeletes = exec.mock.calls.filter(
+          ([sql]) => (sql as string).includes("DELETE FROM autonomy_events"),
+        );
+        expect(retentionDeletes).toHaveLength(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe("getByRequestId()", () => {

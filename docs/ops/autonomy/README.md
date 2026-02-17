@@ -18,6 +18,14 @@ Primary scripts:
 - `npm run autonomy:events:rebuild -- --events-file <path-to-events-json>`
 - `npm run autonomy:events:verify -- --events-file <path-to-events-json>`
 
+Workflow durability controls:
+- `autonomy.workflow.defaultTimeoutMs`: default workflow execution timeout.
+- `autonomy.workflowEngine.temporal.defaultTimeoutMs`: Temporal-specific timeout override.
+- `autonomy.workflowEngine.temporal.deadLetterMax`: in-memory dead-letter retention limit.
+- `autonomy.eventStore.retentionMs`: event-log retention window (`0` disables time eviction).
+- `GET /api/agent/autonomy/workflows/dead-letters`: inspect dead-lettered workflow executions.
+- `POST /api/agent/autonomy/workflows/dead-letters/clear`: clear dead-letter records.
+
 Provisioned observability:
 - Grafana dashboard: `deploy/grafana/provisioning/dashboards/operational-baseline.json`
 - Prometheus rules: `deploy/prometheus/alerts.yml`
