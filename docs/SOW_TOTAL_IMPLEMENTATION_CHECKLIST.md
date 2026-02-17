@@ -13,9 +13,9 @@ Current status pre-check snapshot:
 - Evidence basis: static repo review of autonomy kernel, API, persistence, and app UI code paths.
 - Summary counts:
 - `307` total checklist items.
-- `172` items tagged `STATUS: CODED`.
+- `174` items tagged `STATUS: CODED`.
 - `38` items tagged `STATUS: PARTIAL`.
-- `97` items currently untagged.
+- `95` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
 - `STATUS: PARTIAL` means implementation exists but is incomplete, scoped down, optional, or not yet acceptance-ready.
@@ -433,8 +433,8 @@ Sprint chunks:
 - [ ] P4-003 Implement de-identification/anonymization pipeline. [STATUS: CODED]
 - [ ] P4-004 Implement quality filters for training examples. [STATUS: CODED]
 - [ ] P4-005 Implement labeling guidelines and QA sampling. [STATUS: CODED]
-- [ ] P4-006 Build held-out validation split.
-- [ ] P4-007 Build adversarial split for robustness.
+- [ ] P4-006 Build held-out validation split. [STATUS: CODED]
+- [ ] P4-007 Build adversarial split for robustness. [STATUS: CODED]
 
 ### 4.B Prompt and Reasoning Controls
 
