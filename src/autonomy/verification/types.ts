@@ -43,7 +43,25 @@ export interface VerifierContext {
   agentId: string;
   /** Unique request identifier for tracing. */
   requestId: string;
+  /**
+   * Optional independent verification query path.
+   *
+   * Post-conditions can call this to validate outcomes against an
+   * external or secondary data source rather than trusting tool output.
+   */
+  query?: VerificationQueryFn;
 }
+
+export interface VerificationQueryInput {
+  /** Query identifier (e.g., "plugins:installed"). */
+  query: string;
+  /** Optional query payload. */
+  payload?: Record<string, unknown>;
+}
+
+export type VerificationQueryFn = (
+  input: VerificationQueryInput,
+) => Promise<unknown>;
 
 // ---------- Verification Result ----------
 

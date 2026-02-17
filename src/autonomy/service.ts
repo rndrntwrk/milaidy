@@ -500,6 +500,8 @@ export class MilaidyAutonomyService extends Service {
         eventStoreMaxEvents: config.eventStore?.maxEvents ?? 10_000,
       },
       eventBus: eventBusRef,
+      verificationQuery: (input) =>
+        this.runVerificationQuery(runtime, input),
     });
 
     // Instantiate baseline harness with evaluator and components
@@ -680,6 +682,74 @@ export class MilaidyAutonomyService extends Service {
     }
   }
 
+  private async runVerificationQuery(
+    runtime: IAgentRuntime,
+    input: {
+      toolName: string;
+      requestId: string;
+      source: import("./tools/types.js").ToolCallSource;
+      params: Record<string, unknown>;
+      result: unknown;
+      query: string;
+      payload?: Record<string, unknown>;
+    },
+  ): Promise<unknown> {
+    switch (input.query) {
+      case "plugins:installed": {
+        const pluginRaw =
+          typeof input.payload?.pluginName === "string"
+            ? input.payload.pluginName.trim()
+            : "";
+        if (!pluginRaw) return false;
+        const { listInstalledPlugins } = await import(
+          "../services/plugin-installer.js"
+        );
+        const target = pluginRaw.startsWith("@")
+          ? pluginRaw
+          : `@elizaos/plugin-${pluginRaw}`;
+        const aliases = new Set([pluginRaw, target]);
+        return listInstalledPlugins().some((plugin) =>
+          aliases.has(plugin.name),
+        );
+      }
+
+      case "triggers:exists": {
+        const { listTriggerTasks, readTriggerConfig } = await import(
+          "../triggers/runtime.js"
+        );
+        const triggerId =
+          typeof input.payload?.triggerId === "string"
+            ? input.payload.triggerId
+            : undefined;
+        const taskId =
+          typeof input.payload?.taskId === "string"
+            ? input.payload.taskId
+            : undefined;
+        if (!triggerId && !taskId) return false;
+        const tasks = await listTriggerTasks(runtime);
+        return tasks.some((task) => {
+          if (taskId && String(task.id) === taskId) return true;
+          if (triggerId) {
+            const cfg = readTriggerConfig(task);
+            return cfg?.triggerId === triggerId;
+          }
+          return false;
+        });
+      }
+
+      case "events:has-type": {
+        const eventType =
+          typeof input.payload?.type === "string" ? input.payload.type : "";
+        if (!eventType || !this.eventStore) return false;
+        const events = await this.eventStore.getByRequestId(input.requestId);
+        return events.some((event) => event.type === eventType);
+      }
+
+      default:
+        return undefined;
+    }
+  }
+
   /**
    * Register component instances into the DI container so other parts
    * of the system (e.g. future pipeline hooks) resolve the same instances.
@@ -789,6 +859,11 @@ export class MilaidyAutonomyService extends Service {
       stateMachine: this.stateMachine,
       eventStore: this.eventStore,
       invariantChecker: this.invariantChecker,
+      verificationQuery: (input) =>
+        this.runVerificationQuery(
+          this.runtime as import("@elizaos/core").IAgentRuntime,
+          input,
+        ),
     });
 
     // Initialize baseline harness
