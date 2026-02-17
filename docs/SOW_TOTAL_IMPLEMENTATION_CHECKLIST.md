@@ -275,13 +275,13 @@ Sprint chunks:
 
 ### 2.C Post-Conditions and Independent Verification
 
-- [ ] P2-014 Define post-condition checks for each tool. [STATUS: PARTIAL]
+- [ ] P2-014 Define post-condition checks for each tool. [STATUS: CODED]
 - [ ] P2-015 Implement per-check timeout and error handling policy. [STATUS: CODED]
 - [ ] P2-016 Implement critical vs warning severity handling. [STATUS: CODED]
 - [ ] P2-017 Implement independent verification query paths. [STATUS: PARTIAL]
 - [ ] P2-018 Implement verification result normalization schema. [STATUS: CODED]
 - [ ] P2-019 Add failure taxonomy for verification outcomes. [STATUS: CODED]
-- [ ] P2-020 Add post-condition coverage report.
+- [ ] P2-020 Add post-condition coverage report. [STATUS: CODED]
 
 ### 2.D Durable Workflow Engine Integration
 
