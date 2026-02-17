@@ -20,6 +20,8 @@ describe("buildOpenApiSpec", () => {
     expect(paths["/api/agent/autonomy"]).toBeDefined();
     expect(paths["/api/agent/autonomy/execute-plan"]).toBeDefined();
     expect(paths["/api/agent/autonomy/workflows/start"]).toBeDefined();
+    expect(paths["/api/agent/autonomy/workflows/dead-letters"]).toBeDefined();
+    expect(paths["/api/agent/autonomy/workflows/dead-letters/clear"]).toBeDefined();
     expect(paths["/api/agent/autonomy/workflows/{executionId}"]).toBeDefined();
     expect(paths["/api/agent/autonomy/workflows/{executionId}/cancel"]).toBeDefined();
     expect(paths["/api/agent/identity"]).toBeDefined();

@@ -207,6 +207,58 @@ const paths: Record<string, PathItem> = {
     },
   },
 
+  "/api/agent/autonomy/workflows/dead-letters": {
+    get: {
+      summary: "List workflow dead-letter records",
+      operationId: "listWorkflowDeadLetters",
+      tags: ["Workflows"],
+      responses: {
+        "200": {
+          description: "Dead-letter records",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean" },
+                  deadLetters: { type: "array", items: { type: "object" } },
+                },
+              },
+            },
+          },
+        },
+        "501": { description: "Not supported" },
+        "503": { description: "Service unavailable" },
+      },
+    },
+  },
+
+  "/api/agent/autonomy/workflows/dead-letters/clear": {
+    post: {
+      summary: "Clear workflow dead-letter records",
+      operationId: "clearWorkflowDeadLetters",
+      tags: ["Workflows"],
+      responses: {
+        "200": {
+          description: "Dead-letter clear result",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean" },
+                  cleared: { type: "number" },
+                },
+              },
+            },
+          },
+        },
+        "501": { description: "Not supported" },
+        "503": { description: "Service unavailable" },
+      },
+    },
+  },
+
   "/api/agent/autonomy/workflows/{executionId}": {
     get: {
       summary: "Get workflow execution status",

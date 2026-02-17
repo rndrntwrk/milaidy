@@ -5967,6 +5967,56 @@ async function handleRequest(
     return;
   }
 
+  // ── GET /api/agent/autonomy/workflows/dead-letters ─────────────────────
+  if (method === "GET" && pathname === "/api/agent/autonomy/workflows/dead-letters") {
+    const runtime = state.runtime;
+    if (!runtime) {
+      error(res, "Agent runtime not available", 503);
+      return;
+    }
+
+    const autonomySvc = getAutonomySvc(runtime);
+    const engine = autonomySvc?.getWorkflowEngine?.();
+    if (!engine) {
+      error(res, "Workflow engine not available", 503);
+      return;
+    }
+
+    if (typeof engine.getDeadLetters !== "function") {
+      error(res, "Workflow dead-letter retrieval not supported", 501);
+      return;
+    }
+
+    const deadLetters = await engine.getDeadLetters();
+    json(res, { ok: true, deadLetters });
+    return;
+  }
+
+  // ── POST /api/agent/autonomy/workflows/dead-letters/clear ──────────────
+  if (method === "POST" && pathname === "/api/agent/autonomy/workflows/dead-letters/clear") {
+    const runtime = state.runtime;
+    if (!runtime) {
+      error(res, "Agent runtime not available", 503);
+      return;
+    }
+
+    const autonomySvc = getAutonomySvc(runtime);
+    const engine = autonomySvc?.getWorkflowEngine?.();
+    if (!engine) {
+      error(res, "Workflow engine not available", 503);
+      return;
+    }
+
+    if (typeof engine.clearDeadLetters !== "function") {
+      error(res, "Workflow dead-letter clear not supported", 501);
+      return;
+    }
+
+    const cleared = await engine.clearDeadLetters();
+    json(res, { ok: true, cleared });
+    return;
+  }
+
   // ── GET /api/agent/autonomy/workflows/:executionId ─────────────────────
   if (method === "GET" && pathname.startsWith("/api/agent/autonomy/workflows/")) {
     const parts = pathname.split("/");

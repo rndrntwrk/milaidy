@@ -72,7 +72,9 @@
             "address": { "type": "string", "default": "localhost:7233" },
             "namespace": { "type": "string", "default": "default" },
             "taskQueue": { "type": "string", "default": "autonomy-tasks" },
-            "workflowIdPrefix": { "type": "string", "default": "autonomy" }
+            "workflowIdPrefix": { "type": "string", "default": "autonomy" },
+            "defaultTimeoutMs": { "type": "integer", "minimum": 1000, "default": 30000 },
+            "deadLetterMax": { "type": "integer", "minimum": 1, "default": 1000 }
           }
         }
       }

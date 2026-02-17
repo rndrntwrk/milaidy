@@ -17,6 +17,7 @@ describe("LocalWorkflowEngine", () => {
     });
     const result = await engine.execute("double", { value: 5 });
     expect(result.success).toBe(true);
+    expect(result.status).toBe("completed");
     expect(result.output).toEqual({ value: 10 });
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
   });
@@ -55,6 +56,7 @@ describe("LocalWorkflowEngine", () => {
     const engine = new LocalWorkflowEngine();
     const result = await engine.execute("missing", {});
     expect(result.success).toBe(false);
+    expect(result.status).toBe("failed");
     expect(result.error).toContain("not registered");
   });
 
@@ -67,7 +69,34 @@ describe("LocalWorkflowEngine", () => {
     });
     const result = await engine.execute("fail", {});
     expect(result.success).toBe(false);
+    expect(result.status).toBe("failed");
+    expect(result.deadLettered).toBe(true);
     expect(result.error).toBe("step exploded");
+  });
+
+  it("times out long-running workflows and dead-letters them", async () => {
+    const engine = new LocalWorkflowEngine({ defaultTimeoutMs: 10 });
+    engine.register({
+      id: "slow",
+      name: "Slow",
+      steps: [
+        async () => {
+          await new Promise((resolve) => setTimeout(resolve, 40));
+          return { done: true };
+        },
+      ],
+    });
+
+    const result = await engine.execute("slow", {});
+    expect(result.success).toBe(false);
+    expect(result.status).toBe("timed_out");
+    expect(result.deadLettered).toBe(true);
+    expect(result.error).toContain("timed out");
+
+    const deadLetters = await engine.getDeadLetters();
+    expect(deadLetters).toHaveLength(1);
+    expect(deadLetters[0].workflowId).toBe("slow");
+    expect(deadLetters[0].reason).toBe("timeout");
   });
 
   it("tracks execution results for getStatus", async () => {
@@ -96,5 +125,22 @@ describe("LocalWorkflowEngine", () => {
     await engine.execute("w", {});
     await engine.close();
     expect(engine.listWorkflows()).toEqual([]);
+  });
+
+  it("clearDeadLetters empties dead-letter queue", async () => {
+    const engine = new LocalWorkflowEngine();
+    engine.register({
+      id: "explode",
+      name: "Explode",
+      steps: [() => { throw new Error("boom"); }],
+    });
+
+    await engine.execute("explode", {});
+    const before = await engine.getDeadLetters();
+    expect(before).toHaveLength(1);
+
+    const cleared = await engine.clearDeadLetters();
+    expect(cleared).toBe(1);
+    expect(await engine.getDeadLetters()).toEqual([]);
   });
 });
