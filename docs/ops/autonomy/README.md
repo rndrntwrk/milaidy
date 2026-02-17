@@ -15,6 +15,7 @@ Contents:
 - `phase3-role-dataflow-2026-02-17.md`: `P3-030` role dataflow integration evidence across planner/executor/verifier/memory/auditor.
 - `phase3-role-authz-guards-2026-02-17.md`: `P3-034` validation that orchestrated roles cannot bypass contract/approval guards.
 - `phase3-role-boundary-contracts-2026-02-17.md`: `P3-001/P3-002` role responsibility boundary definitions and request/response schema enforcement.
+- `phase3-role-transport-adapters-2026-02-17.md`: `P3-007` explicit in-process role transport adapter implementation and wiring evidence.
 - `phase3-role-call-authz-validation-2026-02-17.md`: `P3-008` role-call auth + boundary validation enforcement on every orchestrator role call.
 - `phase3-role-call-resilience-2026-02-17.md`: `P3-009` role-call retries/timeouts/circuit-breaker policy and validation.
 - `phase3-role-health-readiness-2026-02-17.md`: `P3-010` per-role health/readiness endpoint implementation and validation.
