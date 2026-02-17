@@ -92,17 +92,8 @@ type ProbeApi = {
   setChatInput: (text: string) => void;
   handleSelectConversation: (id: string) => Promise<void>;
   handleChatSend: () => Promise<void>;
-  snapshot: () => {
-    chatSending: boolean;
-    chatFirstTokenReceived: boolean;
-    conversationMessages: Array<{
-      id: string;
-      role: "user" | "assistant";
-      text: string;
-      timestamp: number;
-      source?: string;
-    }>;
-  };
+  handleChatStop: () => void;
+  getConversationMessages: () => Array<{ id: string; role: string; text: string }>;
 };
 
 function Probe(props: { onReady: (api: ProbeApi) => void }) {
@@ -114,17 +105,13 @@ function Probe(props: { onReady: (api: ProbeApi) => void }) {
       setChatInput: (text: string) => app.setState("chatInput", text),
       handleSelectConversation: app.handleSelectConversation,
       handleChatSend: () => app.handleChatSend("simple"),
-      snapshot: () => ({
-        chatSending: app.chatSending,
-        chatFirstTokenReceived: app.chatFirstTokenReceived,
-        conversationMessages: app.conversationMessages.map((message) => ({
-          id: message.id,
-          role: message.role,
-          text: message.text,
-          timestamp: message.timestamp,
-          source: message.source,
+      handleChatStop: app.handleChatStop,
+      getConversationMessages: () =>
+        app.conversationMessages.map((msg) => ({
+          id: msg.id,
+          role: msg.role,
+          text: msg.text,
         })),
-      }),
     });
   }, [app, onReady]);
 
@@ -441,6 +428,100 @@ describe("chat send locking", () => {
 
     await act(async () => {
       tree?.unmount();
+    });
+  });
+
+  it("preserves buffered streamed tokens when stop aborts before frame flush", async () => {
+    const previousRaf = globalThis.requestAnimationFrame;
+    const previousCancelRaf = globalThis.cancelAnimationFrame;
+    const rafSpy = vi.fn(() => 999);
+    const cancelSpy = vi.fn();
+    Object.assign(globalThis, {
+      requestAnimationFrame: rafSpy,
+      cancelAnimationFrame: cancelSpy,
+    });
+
+    mockClient.sendConversationMessageStream.mockImplementation(
+      async (
+        _conversationId,
+        _text,
+        onToken,
+        _mode,
+        signal,
+      ) => {
+        onToken("partial");
+        await new Promise<never>((_resolve, reject) => {
+          const abortError = new Error("aborted");
+          abortError.name = "AbortError";
+          if (signal?.aborted) {
+            reject(abortError);
+            return;
+          }
+          signal?.addEventListener(
+            "abort",
+            () => reject(abortError),
+            { once: true },
+          );
+        });
+        return { text: "", agentName: "Milaidy" };
+      },
+    );
+
+    let api: ProbeApi | null = null;
+    let tree: TestRenderer.ReactTestRenderer;
+
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(
+          AppProvider,
+          null,
+          React.createElement(Probe, {
+            onReady: (nextApi) => {
+              api = nextApi;
+            },
+          }),
+        ),
+      );
+    });
+
+    expect(api).not.toBeNull();
+
+    await act(async () => {
+      await api!.handleSelectConversation("conv-1");
+      api!.setChatInput("hello");
+    });
+
+    let sendPromise: Promise<void> | null = null;
+    await act(async () => {
+      sendPromise = api!.handleChatSend();
+    });
+
+    await act(async () => {
+      api!.handleChatStop();
+      await sendPromise;
+    });
+
+    const preservedPartial = api!
+      .getConversationMessages()
+      .some((message) => message.role === "assistant" && message.text.includes("partial"));
+    expect(preservedPartial).toBe(true);
+    expect(cancelSpy).toHaveBeenCalledWith(999);
+
+    if (previousRaf) {
+      globalThis.requestAnimationFrame = previousRaf;
+    } else {
+      delete (globalThis as { requestAnimationFrame?: typeof requestAnimationFrame })
+        .requestAnimationFrame;
+    }
+    if (previousCancelRaf) {
+      globalThis.cancelAnimationFrame = previousCancelRaf;
+    } else {
+      delete (globalThis as { cancelAnimationFrame?: typeof cancelAnimationFrame })
+        .cancelAnimationFrame;
+    }
+
+    await act(async () => {
+      tree!.unmount();
     });
   });
 });

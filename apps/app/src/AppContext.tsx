@@ -1257,6 +1257,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const chatAbortRef = useRef<AbortController | null>(null);
   /** Synchronous lock so same-tick chat submits cannot double-send. */
   const chatSendBusyRef = useRef(false);
+  /** Batches streaming tokens so we update state once per animation frame. */
+  const pendingTokensRef = useRef("");
+  const tokenRafIdRef = useRef(0);
   /** Synchronous lock for export action to prevent duplicate clicks in the same tick. */
   const exportBusyRef = useRef(false);
   /** Synchronous lock for import action to prevent duplicate clicks in the same tick. */
@@ -2040,16 +2043,109 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [fetchGreeting]);
 
-  const handleChatSend = useCallback(
-    async (channelType: ConversationChannelType = "DM") => {
-      const text = chatInput.trim();
-      if (!text) return;
-      if (chatSendBusyRef.current || chatSending) return;
-      chatSendBusyRef.current = true;
+  const handleChatSend = useCallback(async (mode: ConversationMode = "simple") => {
+    const text = chatInput.trim();
+    if (!text) return;
+    if (chatSendBusyRef.current || chatSending) return;
+    chatSendBusyRef.current = true;
+
+    try {
+      let convId: string = activeConversationId ?? "";
+      if (!convId) {
+        try {
+          const { conversation } = await client.createConversation();
+          setConversations((prev) => [conversation, ...prev]);
+          setActiveConversationId(conversation.id);
+          activeConversationIdRef.current = conversation.id;
+          convId = conversation.id;
+        } catch {
+          return;
+        }
+      }
+
+      // Keep server-side active conversation in sync for proactive routing.
+      client.sendWsMessage({ type: "active-conversation", conversationId: convId });
+
+      const now = Date.now();
+      const userMsgId = `temp-${now}`;
+      const assistantMsgId = `temp-resp-${now}`;
+
+      setConversationMessages((prev: ConversationMessage[]) => [
+        ...prev,
+        { id: userMsgId, role: "user", text, timestamp: now },
+        { id: assistantMsgId, role: "assistant", text: "", timestamp: now },
+      ]);
+      setChatInput("");
+      setChatSending(true);
+      setChatFirstTokenReceived(false);
+
+      const controller = new AbortController();
+      chatAbortRef.current = controller;
+      const flushPendingTokens = () => {
+        if (tokenRafIdRef.current) {
+          cancelAnimationFrame(tokenRafIdRef.current);
+          tokenRafIdRef.current = 0;
+        }
+        const batch = pendingTokensRef.current;
+        pendingTokensRef.current = "";
+        if (!batch) return;
+        setConversationMessages((prev) =>
+          prev.map((message) =>
+            message.id === assistantMsgId
+              ? { ...message, text: `${message.text}${batch}` }
+              : message,
+          ),
+        );
+      };
 
       try {
-        let convId: string = activeConversationId ?? "";
-        if (!convId) {
+        const data = await client.sendConversationMessageStream(
+          convId,
+          text,
+          (token) => {
+            setChatFirstTokenReceived(true);
+            pendingTokensRef.current += token;
+            if (!tokenRafIdRef.current) {
+              tokenRafIdRef.current = requestAnimationFrame(() => {
+                const batch = pendingTokensRef.current;
+                pendingTokensRef.current = "";
+                tokenRafIdRef.current = 0;
+                setConversationMessages((prev) =>
+                  prev.map((message) =>
+                    message.id === assistantMsgId
+                      ? { ...message, text: `${message.text}${batch}` }
+                      : message,
+                  ),
+                );
+              });
+            }
+          },
+          mode,
+          controller.signal,
+        );
+
+        setConversationMessages((prev) =>
+          prev.map((message) =>
+            message.id === assistantMsgId
+              ? { ...message, text: data.text }
+              : message,
+          ),
+        );
+        await loadConversations();
+      } catch (err) {
+        const abortError = err as Error;
+        if (abortError.name === "AbortError") {
+          // Flush any buffered tokens before pruning empty assistant placeholder.
+          flushPendingTokens();
+          setConversationMessages((prev) =>
+            prev.filter((message) => !(message.id === assistantMsgId && !message.text.trim())),
+          );
+          return;
+        }
+
+        // If the conversation was lost (server restart), create a fresh one and retry once.
+        const status = (err as { status?: number }).status;
+        if (status === 404) {
           try {
             const { conversation } = await client.createConversation();
             setConversations((prev) => [conversation, ...prev]);
@@ -2181,7 +2277,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setChatFirstTokenReceived(false);
         }
       } finally {
-        chatSendBusyRef.current = false;
+        // Cancel any pending token batch frame
+        if (tokenRafIdRef.current) {
+          cancelAnimationFrame(tokenRafIdRef.current);
+          tokenRafIdRef.current = 0;
+          pendingTokensRef.current = "";
+        }
+        if (chatAbortRef.current === controller) {
+          chatAbortRef.current = null;
+        }
+        setChatSending(false);
+        setChatFirstTokenReceived(false);
       }
     },
     [

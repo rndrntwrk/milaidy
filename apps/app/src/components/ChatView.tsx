@@ -7,6 +7,12 @@
  */
 
 import {
+  useRef,
+  useEffect,
+  useCallback,
+  useState,
+  useMemo,
+  memo,
   type KeyboardEvent,
   useCallback,
   useEffect,
@@ -29,10 +35,7 @@ function isMobileViewport(): boolean {
   return typeof window !== "undefined" && window.innerWidth < 768;
 }
 
-const CHAT_INPUT_MIN_HEIGHT_PX = 38;
-const CHAT_INPUT_MAX_HEIGHT_PX = 200;
-
-export function ChatView() {
+export const ChatView = memo(function ChatView() {
   const {
     agentStatus,
     chatInput,
@@ -157,14 +160,18 @@ export function ChatView() {
 
   const agentName = agentStatus?.agentName ?? "Agent";
   const msgs = conversationMessages;
-  const visibleMsgs = msgs.filter(
-    (msg) =>
-      !(
-        chatSending &&
-        !chatFirstTokenReceived &&
-        msg.role === "assistant" &&
-        !msg.text.trim()
+  const visibleMsgs = useMemo(
+    () =>
+      msgs.filter(
+        (msg) =>
+          !(
+            chatSending &&
+            !chatFirstTokenReceived &&
+            msg.role === "assistant" &&
+            !msg.text.trim()
+          ),
       ),
+    [msgs, chatSending, chatFirstTokenReceived],
   );
   const agentAvatarSrc =
     selectedVrmIndex > 0 ? getVrmPreviewUrl(selectedVrmIndex) : null;
@@ -495,4 +502,4 @@ export function ChatView() {
       </div>
     </div>
   );
-}
+});
