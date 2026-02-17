@@ -39,6 +39,10 @@ export interface ExecutionEvent {
   timestamp: number;
   /** Correlation ID linking related events across subsystems. */
   correlationId?: string;
+  /** Previous event hash in the request/event chain. */
+  prevHash?: string;
+  /** Hash of this event payload and chain context. */
+  eventHash?: string;
 }
 
 // ---------- Event Store Interface ----------

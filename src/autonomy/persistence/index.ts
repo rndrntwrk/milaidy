@@ -50,3 +50,4 @@ export { PgMemoryStore } from "./pg-memory-store.js";
 
 // Migrations
 export { createAutonomyTables } from "./migrations/001_autonomy_tables.js";
+export { addAutonomyEventsHashChain } from "./migrations/002_autonomy_events_hash_chain.js";

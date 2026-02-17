@@ -19,7 +19,7 @@ function makeMockAdapter(
   }>,
 ): AutonomyDbAdapter {
   return {
-    executeRaw: overrides?.executeRaw ?? vi.fn().mockResolvedValue({ rows: [{ id: 1 }], columns: ["id"] }),
+    executeRaw: overrides?.executeRaw ?? vi.fn().mockResolvedValue({ rows: [], columns: [] }),
     agentId: overrides?.agentId ?? "test-agent",
     tables: {} as any,
     raw: {} as any,
@@ -34,7 +34,9 @@ function makeMockAdapter(
 describe("PgEventStore", () => {
   describe("append()", () => {
     it("inserts a row and returns the ID", async () => {
-      const exec = vi.fn().mockResolvedValue({ rows: [{ id: 42 }], columns: ["id"] });
+      const exec = vi.fn()
+        .mockResolvedValueOnce({ rows: [], columns: ["event_hash"] })
+        .mockResolvedValueOnce({ rows: [{ id: 42 }], columns: ["id"] });
       const adapter = makeMockAdapter({ executeRaw: exec });
       const store = new PgEventStore(adapter);
 
@@ -42,40 +44,48 @@ describe("PgEventStore", () => {
 
       expect(id).toBe(42);
       expect(store.size).toBe(1);
-      expect(exec).toHaveBeenCalledOnce();
+      expect(exec).toHaveBeenCalledTimes(2);
       // Verify SQL contains key parts
-      const sql = exec.mock.calls[0][0] as string;
+      const sql = exec.mock.calls[1][0] as string;
       expect(sql).toContain("INSERT INTO autonomy_events");
       expect(sql).toContain("req-1");
       expect(sql).toContain("tool:proposed");
       expect(sql).toContain("corr-1");
+      expect(sql).toContain("prev_hash");
+      expect(sql).toContain("event_hash");
     });
 
     it("passes NULL for missing correlationId", async () => {
-      const exec = vi.fn().mockResolvedValue({ rows: [{ id: 1 }], columns: ["id"] });
+      const exec = vi.fn()
+        .mockResolvedValueOnce({ rows: [], columns: [] })
+        .mockResolvedValueOnce({ rows: [{ id: 1 }], columns: ["id"] });
       const adapter = makeMockAdapter({ executeRaw: exec });
       const store = new PgEventStore(adapter);
 
       await store.append("req-1", "tool:proposed", {});
 
-      const sql = exec.mock.calls[0][0] as string;
+      const sql = exec.mock.calls[1][0] as string;
       expect(sql).toContain("NULL");
     });
 
     it("escapes single quotes in values", async () => {
-      const exec = vi.fn().mockResolvedValue({ rows: [{ id: 1 }], columns: ["id"] });
+      const exec = vi.fn()
+        .mockResolvedValueOnce({ rows: [], columns: [] })
+        .mockResolvedValueOnce({ rows: [{ id: 1 }], columns: ["id"] });
       const adapter = makeMockAdapter({ executeRaw: exec });
       const store = new PgEventStore(adapter);
 
       await store.append("req-o'brian", "tool:proposed", { path: "it's" });
 
-      const sql = exec.mock.calls[0][0] as string;
+      const sql = exec.mock.calls[1][0] as string;
       expect(sql).toContain("req-o''brian");
       expect(sql).toContain("it''s");
     });
 
     it("throws on database error", async () => {
-      const exec = vi.fn().mockRejectedValue(new Error("db gone"));
+      const exec = vi.fn()
+        .mockResolvedValueOnce({ rows: [], columns: [] })
+        .mockRejectedValueOnce(new Error("db gone"));
       const adapter = makeMockAdapter({ executeRaw: exec });
       const store = new PgEventStore(adapter);
 
@@ -84,7 +94,12 @@ describe("PgEventStore", () => {
     });
 
     it("increments size on each successful append", async () => {
-      const exec = vi.fn().mockResolvedValue({ rows: [{ id: 1 }], columns: ["id"] });
+      const exec = vi.fn().mockImplementation(async (sql: string) => {
+        if (sql.includes("RETURNING id")) {
+          return { rows: [{ id: 1 }], columns: ["id"] };
+        }
+        return { rows: [], columns: [] };
+      });
       const adapter = makeMockAdapter({ executeRaw: exec });
       const store = new PgEventStore(adapter);
 
@@ -187,6 +202,7 @@ describe("PgEventStore", () => {
   describe("syncSize()", () => {
     it("updates internal size from database count", async () => {
       const exec = vi.fn()
+        .mockResolvedValueOnce({ rows: [], columns: ["event_hash"] }) // latest hash lookup
         .mockResolvedValueOnce({ rows: [{ id: 1 }], columns: ["id"] }) // append
         .mockResolvedValueOnce({ rows: [{ cnt: 42 }], columns: ["cnt"] }); // syncSize
 
@@ -229,6 +245,29 @@ describe("PgEventStore", () => {
 
       const events = await store.getByRequestId("r1");
       expect(events[0].timestamp).toBe(date.getTime());
+    });
+
+    it("maps hash-chain columns when present", async () => {
+      const exec = vi.fn().mockResolvedValue({
+        rows: [
+          {
+            id: 7,
+            request_id: "r7",
+            type: "tool:executed",
+            payload: {},
+            prev_hash: "prev",
+            event_hash: "hash",
+            timestamp: "2025-01-01T00:00:00Z",
+          },
+        ],
+        columns: [],
+      });
+      const adapter = makeMockAdapter({ executeRaw: exec });
+      const store = new PgEventStore(adapter);
+
+      const events = await store.getByRequestId("r7");
+      expect(events[0].prevHash).toBe("prev");
+      expect(events[0].eventHash).toBe("hash");
     });
   });
 });

@@ -211,4 +211,18 @@ describe("InMemoryEventStore", () => {
       expect(corr2).toHaveLength(1);
     });
   });
+
+  describe("hash chain", () => {
+    it("adds event hashes and links prevHash across events", async () => {
+      const store = new InMemoryEventStore();
+      await store.append("req-1", "tool:proposed", {});
+      await store.append("req-1", "tool:validated", {});
+
+      const events = await store.getByRequestId("req-1");
+      expect(events[0].eventHash).toMatch(/^[a-f0-9]{64}$/);
+      expect(events[0].prevHash).toBeUndefined();
+      expect(events[1].eventHash).toMatch(/^[a-f0-9]{64}$/);
+      expect(events[1].prevHash).toBe(events[0].eventHash);
+    });
+  });
 });
