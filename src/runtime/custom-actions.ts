@@ -8,6 +8,9 @@
  */
 
 import type { Action, HandlerOptions, IAgentRuntime } from "@elizaos/core";
+import { createCustomActionContract } from "../autonomy/tools/schemas/custom-action.schema.js";
+import type { ToolRegistryInterface } from "../autonomy/tools/types.js";
+import { customActionPostConditions } from "../autonomy/verification/postconditions/custom-action.postcondition.js";
 import { loadMilaidyConfig } from "../config/config.js";
 import type {
   CustomActionDef,
@@ -16,6 +19,52 @@ import type {
 
 /** Cached runtime reference for hot-registration of new actions. */
 let _runtime: IAgentRuntime | null = null;
+const _customPostConditionsRegistered = new Set<string>();
+
+type AutonomyServiceLike = {
+  getToolRegistry?: () => ToolRegistryInterface | null;
+  getPostConditionVerifier?: () => {
+    registerConditions: (toolName: string, conditions: typeof customActionPostConditions) => void;
+  } | null;
+};
+
+function syncCustomActionWithAutonomy(def: CustomActionDef): void {
+  if (!_runtime) return;
+
+  try {
+    const autonomySvc = _runtime.getService?.("AUTONOMY") as
+      | AutonomyServiceLike
+      | null;
+    if (!autonomySvc) return;
+
+    const name = def.name.trim();
+    if (!name) return;
+
+    const registry = autonomySvc.getToolRegistry?.();
+    if (registry && !registry.has(name)) {
+      registry.register(
+        createCustomActionContract({
+          name,
+          description: def.description,
+          handlerType: def.handler.type,
+          parameters: def.parameters.map((parameter) => ({
+            name: parameter.name,
+            required: parameter.required,
+          })),
+        }),
+      );
+    }
+
+    const verifier = autonomySvc.getPostConditionVerifier?.();
+    if (verifier && !_customPostConditionsRegistered.has(name)) {
+      verifier.registerConditions(name, customActionPostConditions);
+      _customPostConditionsRegistered.add(name);
+    }
+  } catch {
+    // Non-fatal: custom action remains available in runtime even if autonomy
+    // service sync is unavailable.
+  }
+}
 
 /**
  * Store the runtime reference so we can hot-register actions later.
@@ -33,6 +82,7 @@ export function registerCustomActionLive(def: CustomActionDef): Action | null {
   if (!_runtime) return null;
   const action = defToAction(def);
   _runtime.registerAction(action);
+  syncCustomActionWithAutonomy(def);
   return action;
 }
 
