@@ -28,6 +28,7 @@ Contents:
 - `phase1-trust-ml-baseline-2026-02-17.md`: `P1-031` logistic-regression trust classifier baseline implementation and comparison evidence.
 - `phase1-retrieval-quality-validation-2026-02-17.md`: `P1-036` retrieval quality validation against baseline tasks with Recall@N comparison evidence.
 - `phase1-acceptance-report-2026-02-17.md`: `P1-047` Phase 1 acceptance publication and sign-off record.
+- `phase1-enablement-session-2026-02-17.md`: `P1-042` internal enablement session packet (agenda/materials/attendance template; pending live execution).
 - `phase1-trust-override-policy-2026-02-17.md`: `P1-035` trust override governance policy + audit event enforcement evidence.
 - `phase1-retrieval-rank-guardrails-2026-02-17.md`: `P1-034` retrieval rank tuning configuration guardrails + runtime sanitization evidence.
 - `phase1-drift-report-persistence-2026-02-17.md`: `P1-014` durable drift report persistence in execution event logs.
