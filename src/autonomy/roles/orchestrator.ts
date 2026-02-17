@@ -5,8 +5,7 @@
  * plan → execute → verify → write memory → audit.
  *
  * Drives the FSM through planning, memory writing, and auditing
- * phases while the existing pipeline handles its own internal
- * FSM transitions during execution.
+ * phases while delegating execution to the Executor role boundary.
  *
  * @module autonomy/roles/orchestrator
  */
@@ -14,12 +13,12 @@
 import type { KernelStateMachineInterface } from "../state-machine/types.js";
 import type {
   PipelineResult,
-  ToolExecutionPipelineInterface,
 } from "../workflow/types.js";
 import { LocalWorkflowEngine } from "../adapters/workflow/local-engine.js";
 import type { WorkflowDefinition, WorkflowEngine } from "../adapters/workflow/types.js";
 import type {
   AuditorRole,
+  ExecutorRole,
   ExecutionPlan,
   MemoryWriteRequest,
   MemoryWriterRole,
@@ -33,7 +32,7 @@ import type {
 export class KernelOrchestrator implements RoleOrchestrator {
   constructor(
     private readonly planner: PlannerRole,
-    private readonly pipeline: ToolExecutionPipelineInterface,
+    private readonly executor: ExecutorRole,
     private readonly memoryWriter: MemoryWriterRole,
     private readonly auditor: AuditorRole,
     private readonly stateMachine: KernelStateMachineInterface,
@@ -101,7 +100,7 @@ export class KernelOrchestrator implements RoleOrchestrator {
         }
       } else {
         for (const step of plan.steps) {
-          const pipelineResult = await this.pipeline.execute(
+          const pipelineResult = await this.executor.execute(
             {
               tool: step.toolName,
               params: step.params,
@@ -318,7 +317,7 @@ export class KernelOrchestrator implements RoleOrchestrator {
           async () => {
             const results: PipelineResult[] = [];
             for (const step of plan.steps) {
-              const pipelineResult = await this.pipeline.execute(
+              const pipelineResult = await this.executor.execute(
                 {
                   tool: step.toolName,
                   params: step.params,

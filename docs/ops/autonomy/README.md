@@ -11,6 +11,7 @@ Contents:
 - `pipeline-latency-optimization-2026-02-17.md`: `P2-062` before/after bottleneck optimization report.
 - `phase2-acceptance-gate-2026-02-17.md`: `P2-063/P2-064` test evidence for reversible success and irreversible authorization controls.
 - `phase2-acceptance-report-2026-02-17.md`: `P2-065` Phase 2 acceptance publication and sign-off record.
+- `phase3-executor-role-2026-02-17.md`: `P3-024` Executor role implementation and wiring evidence.
 - `reports/`: generated run artifacts (`.json` and `.md` outputs).
 
 Primary scripts:

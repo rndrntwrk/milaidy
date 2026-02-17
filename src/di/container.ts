@@ -103,6 +103,7 @@ export const TOKENS = {
 
   // Autonomy Roles (Phase 3)
   Planner: createToken<import("../autonomy/roles/types.js").PlannerRole>("Planner"),
+  Executor: createToken<import("../autonomy/roles/types.js").ExecutorRole>("Executor"),
   Verifier: createToken<import("../autonomy/roles/types.js").VerifierRole>("Verifier"),
   MemoryWriter: createToken<import("../autonomy/roles/types.js").MemoryWriterRole>("MemoryWriter"),
   Auditor: createToken<import("../autonomy/roles/types.js").AuditorRole>("Auditor"),

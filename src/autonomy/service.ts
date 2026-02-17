@@ -80,6 +80,7 @@ let _registerBuiltinInvariants: typeof import("./verification/invariants/index.j
 let _InMemoryBaselineHarness: typeof import("./metrics/baseline-harness.js").InMemoryBaselineHarness;
 let _KernelScenarioEvaluator: typeof import("./metrics/kernel-evaluator.js").KernelScenarioEvaluator;
 let _GoalDrivenPlanner: typeof import("./roles/planner.js").GoalDrivenPlanner;
+let _PipelineExecutor: typeof import("./roles/executor.js").PipelineExecutor;
 let _UnifiedVerifier: typeof import("./roles/verifier.js").UnifiedVerifier;
 let _GatedMemoryWriter: typeof import("./roles/memory-writer.js").GatedMemoryWriter;
 let _DriftAwareAuditor: typeof import("./roles/auditor.js").DriftAwareAuditor;
@@ -118,7 +119,7 @@ let _SystemPromptBuilder: typeof import("./learning/prompt-builder.js").SystemPr
 let _AdversarialScenarioGenerator: typeof import("./learning/adversarial.js").AdversarialScenarioGenerator;
 
 async function loadImplementations() {
-  const [trustMod, memMod, driftMod, goalMod, toolRegMod, schemaValMod, pcvMod, toolSchemasMod, pcMod, smMod, approvalMod, approvalPersistentMod, esMod, compRegMod, pipelineMod, compsMod, localWorkflowMod, temporalWorkflowMod, invMod, invRegMod, harnMod, evalMod, plannerMod, verifierMod, memWriterMod, auditorMod, safeModeMod, orchestratorMod] = await Promise.all([
+  const [trustMod, memMod, driftMod, goalMod, toolRegMod, schemaValMod, pcvMod, toolSchemasMod, pcMod, smMod, approvalMod, approvalPersistentMod, esMod, compRegMod, pipelineMod, compsMod, localWorkflowMod, temporalWorkflowMod, invMod, invRegMod, harnMod, evalMod, plannerMod, executorMod, verifierMod, memWriterMod, auditorMod, safeModeMod, orchestratorMod] = await Promise.all([
     import("./trust/scorer.js"),
     import("./memory/gate.js"),
     import("./identity/drift-monitor.js"),
@@ -142,6 +143,7 @@ async function loadImplementations() {
     import("./metrics/baseline-harness.js"),
     import("./metrics/kernel-evaluator.js"),
     import("./roles/planner.js"),
+    import("./roles/executor.js"),
     import("./roles/verifier.js"),
     import("./roles/memory-writer.js"),
     import("./roles/auditor.js"),
@@ -171,6 +173,7 @@ async function loadImplementations() {
   _InMemoryBaselineHarness = harnMod.InMemoryBaselineHarness;
   _KernelScenarioEvaluator = evalMod.KernelScenarioEvaluator;
   _GoalDrivenPlanner = plannerMod.GoalDrivenPlanner;
+  _PipelineExecutor = executorMod.PipelineExecutor;
   _UnifiedVerifier = verifierMod.UnifiedVerifier;
   _GatedMemoryWriter = memWriterMod.GatedMemoryWriter;
   _DriftAwareAuditor = auditorMod.DriftAwareAuditor;
@@ -260,6 +263,7 @@ export class MilaidyAutonomyService extends Service {
   private invariantChecker: import("./verification/invariants/invariant-checker.js").InvariantChecker | null = null;
   private baselineHarness: import("./metrics/baseline-harness.js").BaselineHarness | null = null;
   private planner: import("./roles/types.js").PlannerRole | null = null;
+  private executorRole: import("./roles/types.js").ExecutorRole | null = null;
   private verifier: import("./roles/types.js").VerifierRole | null = null;
   private memoryWriterRole: import("./roles/types.js").MemoryWriterRole | null = null;
   private auditorRole: import("./roles/types.js").AuditorRole | null = null;
@@ -500,6 +504,7 @@ export class MilaidyAutonomyService extends Service {
       this.toolRegistry,
       config.roles?.planner,
     );
+    this.executorRole = new _PipelineExecutor(this.executionPipeline);
     this.verifier = new _UnifiedVerifier(
       this.schemaValidator,
       this.postConditionVerifier,
@@ -510,7 +515,7 @@ export class MilaidyAutonomyService extends Service {
     this.safeModeController = new _SafeModeControllerImpl(config.roles?.safeMode);
     this.orchestrator = new _KernelOrchestrator(
       this.planner,
-      this.executionPipeline,
+      this.executorRole,
       this.memoryWriterRole,
       this.auditorRole,
       this.stateMachine,
@@ -649,6 +654,7 @@ export class MilaidyAutonomyService extends Service {
       if (this.invariantChecker) container.registerValue(TOKENS.InvariantChecker, this.invariantChecker);
       if (this.baselineHarness) container.registerValue(TOKENS.BaselineHarness, this.baselineHarness);
       if (this.planner) container.registerValue(TOKENS.Planner, this.planner);
+      if (this.executorRole) container.registerValue(TOKENS.Executor, this.executorRole);
       if (this.verifier) container.registerValue(TOKENS.Verifier, this.verifier);
       if (this.memoryWriterRole) container.registerValue(TOKENS.MemoryWriter, this.memoryWriterRole);
       if (this.auditorRole) container.registerValue(TOKENS.Auditor, this.auditorRole);
@@ -738,6 +744,7 @@ export class MilaidyAutonomyService extends Service {
 
     // Initialize role implementations (Phase 3)
     this.planner = new _GoalDrivenPlanner(this.goalManager, this.toolRegistry);
+    this.executorRole = new _PipelineExecutor(this.executionPipeline);
     this.verifier = new _UnifiedVerifier(
       this.schemaValidator,
       this.postConditionVerifier,
@@ -748,7 +755,7 @@ export class MilaidyAutonomyService extends Service {
     this.safeModeController = new _SafeModeControllerImpl();
     this.orchestrator = new _KernelOrchestrator(
       this.planner,
-      this.executionPipeline,
+      this.executorRole,
       this.memoryWriterRole,
       this.auditorRole,
       this.stateMachine,
@@ -790,6 +797,7 @@ export class MilaidyAutonomyService extends Service {
     this.invariantChecker = null;
     this.baselineHarness = null;
     this.planner = null;
+    this.executorRole = null;
     this.verifier = null;
     this.memoryWriterRole = null;
     this.auditorRole = null;
@@ -928,6 +936,10 @@ export class MilaidyAutonomyService extends Service {
     return this.planner;
   }
 
+  getExecutor(): import("./roles/types.js").ExecutorRole | null {
+    return this.executorRole;
+  }
+
   getVerifier(): import("./roles/types.js").VerifierRole | null {
     return this.verifier;
   }
@@ -1033,6 +1045,7 @@ export class MilaidyAutonomyService extends Service {
     this.invariantChecker = null;
     this.baselineHarness = null;
     this.planner = null;
+    this.executorRole = null;
     this.verifier = null;
     this.memoryWriterRole = null;
     this.auditorRole = null;

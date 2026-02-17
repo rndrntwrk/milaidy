@@ -3,7 +3,6 @@ import { KernelStateMachine } from "../state-machine/kernel-state-machine.js";
 import type {
   PipelineResult,
   ToolActionHandler,
-  ToolExecutionPipelineInterface,
 } from "../workflow/types.js";
 import { LocalWorkflowEngine } from "../adapters/workflow/local-engine.js";
 import type { WorkflowEngine } from "../adapters/workflow/types.js";
@@ -12,6 +11,7 @@ import { SafeModeControllerImpl } from "./safe-mode.js";
 import type {
   AuditorRole,
   AuditReport,
+  ExecutorRole,
   ExecutionPlan,
   MemoryWriterRole,
   OrchestratedRequest,
@@ -53,7 +53,7 @@ function createMockPlanner(
   };
 }
 
-function createMockPipeline(success = true): ToolExecutionPipelineInterface {
+function createMockPipeline(success = true): ExecutorRole {
   return {
     execute: vi.fn(async (call) => ({
       requestId: call.requestId,
@@ -162,7 +162,7 @@ describe("KernelOrchestrator", () => {
 
   function createOrchestrator(overrides?: {
     planner?: PlannerRole;
-    pipeline?: ToolExecutionPipelineInterface;
+    pipeline?: ExecutorRole;
     memoryWriter?: MemoryWriterRole;
     auditor?: AuditorRole;
     safeMode?: SafeModeController;
@@ -325,7 +325,7 @@ describe("KernelOrchestrator", () => {
       ]);
       const planner = createMockPlanner(plan);
       const executedTools: string[] = [];
-      const pipeline: ToolExecutionPipelineInterface = {
+      const pipeline: ExecutorRole = {
         execute: vi.fn(async (call) => {
           executedTools.push(call.tool);
           return {
@@ -393,7 +393,7 @@ describe("KernelOrchestrator", () => {
 
   describe("safe mode", () => {
     it("triggers safe mode after consecutive errors", async () => {
-      const failPipeline: ToolExecutionPipelineInterface = {
+      const failPipeline: ExecutorRole = {
         execute: vi.fn(async (call) => ({
           requestId: call.requestId,
           toolName: call.tool,
