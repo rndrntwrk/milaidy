@@ -9,6 +9,7 @@ Phase 2 implementation is published with code-level completion evidence across c
 
 Key quantitative gates at current HEAD:
 - Tool contract inventory coverage: `11/11` built-in tools.
+- Canonical inventory now includes runtime + resolved plugin action catalog with plugin load-failure reporting.
 - Runtime action contract coverage: `100%` for discovered runtime actions in inventory runs.
 - Runtime explicit custom-action contracts: available and reported separately from synthesized runtime contracts.
 - Contract versioning is semver-gated in tests for built-in, runtime-synthesized, and custom-action contracts.
@@ -31,6 +32,7 @@ Key quantitative gates at current HEAD:
 Notable metrics:
 - built-in contracts: `11`
 - runtime coverage fields are emitted: `runtimeActionCount`, `runtimeActionCoverageCount`, `runtimeActionUncovered`
+- canonical/plugin inventory fields are emitted: `canonicalActionCount`, `pluginConfiguredCount`, `pluginResolvedCount`, `pluginActionCount`, `pluginLoadFailureCount`, `pluginActionCatalog`
 - explicit vs synthesized runtime contracts are emitted: `runtimeExplicitContractCount`, `runtimeGeneratedContractCount`
 - risk breakdown: `read-only=2`, `reversible=6`, `irreversible=3`
 - postcondition coverage: `100%`
