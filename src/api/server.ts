@@ -137,6 +137,8 @@ interface AutonomyServiceLike {
   getApprovalGate?(): import("../autonomy/approval/types.js").ApprovalGateInterface | null;
   getApprovalLog?(): import("../autonomy/persistence/pg-approval-log.js").ApprovalLogInterface | null;
   getStateMachine?(): import("../autonomy/state-machine/types.js").KernelStateMachineInterface | null;
+  getExecutionPipeline?(): import("../autonomy/workflow/types.js").ToolExecutionPipelineInterface | null;
+  getWorkflowEngine?(): import("../autonomy/adapters/workflow/types.js").WorkflowEngine | null;
 }
 
 /** Helper to retrieve the AutonomyService from a runtime (may be null). */
@@ -145,6 +147,72 @@ function getAutonomySvc(
 ): AutonomyServiceLike | null {
   if (!runtime) return null;
   return runtime.getService("AUTONOMY") as AutonomyServiceLike | null;
+}
+
+function findRuntimeAction(
+  runtime: AgentRuntime,
+  toolName: string,
+): { name: string; handler: (runtime: AgentRuntime, message: unknown, state: unknown, options?: Record<string, unknown>) => Promise<unknown>; validate: (runtime: AgentRuntime, message: unknown, state: unknown) => Promise<boolean> } | null {
+  const normalized = toolName.trim().toUpperCase();
+  const actions = runtime.getAllActions?.() ?? runtime.actions ?? [];
+  for (const action of actions) {
+    const name = action.name?.toUpperCase?.() ?? "";
+    if (name === normalized) return action as never;
+    const similes = Array.isArray(action.similes) ? action.similes : [];
+    if (similes.some((s) => String(s).toUpperCase() === normalized)) {
+      return action as never;
+    }
+  }
+  return null;
+}
+
+async function executeRuntimeAction(params: {
+  runtime: AgentRuntime;
+  toolName: string;
+  requestId: string;
+  parameters: Record<string, unknown>;
+}): Promise<{ result: unknown; durationMs: number }> {
+  const { runtime, toolName, requestId, parameters } = params;
+  if (typeof runtime.isActionAllowed === "function") {
+    const decision = runtime.isActionAllowed(toolName);
+    if (!decision.allowed) {
+      throw new Error(
+        `Action "${toolName}" not allowed: ${decision.reason ?? "unknown"}`,
+      );
+    }
+  }
+  const action = findRuntimeAction(runtime, toolName);
+  if (!action) {
+    throw new Error(`Action "${toolName}" not registered`);
+  }
+
+  const memory = createMessageMemory({
+    id: crypto.randomUUID(),
+    entityId: runtime.agentId,
+    agentId: runtime.agentId,
+    roomId: runtime.agentId,
+    content: {
+      text: `[autonomy] tool:${toolName} request:${requestId}`,
+      source: "autonomy",
+    },
+  });
+
+  let state: unknown = undefined;
+  try {
+    state = await runtime.composeState(memory);
+  } catch {
+    state = undefined;
+  }
+  const valid = await action.validate(runtime, memory, state);
+  if (!valid) {
+    throw new Error(`Action "${toolName}" failed validation`);
+  }
+
+  const start = Date.now();
+  const result = await action.handler(runtime, memory, state, {
+    parameters,
+  });
+  return { result, durationMs: Date.now() - start };
 }
 
 function getAgentEventSvc(
@@ -1997,7 +2065,10 @@ async function generateChatResponse(
   agentName: string,
   opts?: ChatGenerateOptions,
 ): Promise<ChatGenerationResult> {
+  const t0 = Date.now();
+  let firstTokenMs = 0;
   let responseText = "";
+  const streamingActive = !!opts?.onChunk;
 
   const result = await runtime.messageService?.handleMessage(
     runtime,
@@ -2006,16 +2077,29 @@ async function generateChatResponse(
       if (opts?.isAborted?.()) {
         throw new Error("client_disconnected");
       }
-
-      if (content?.text) {
+      // When streaming is active, text already accumulated via onStreamChunk.
+      // The callback fires once at end with full text — only use it as fallback.
+      if (!streamingActive && content?.text) {
+        if (!firstTokenMs) firstTokenMs = Date.now() - t0;
         responseText += content.text;
         opts?.onChunk?.(content.text);
       }
       return [];
     },
+    {
+      onStreamChunk: streamingActive
+        ? async (chunk: string) => {
+            if (opts!.isAborted?.()) return;
+            if (!firstTokenMs) firstTokenMs = Date.now() - t0;
+            responseText += chunk;
+            opts!.onChunk!(chunk);
+          }
+        : undefined,
+      timeoutDuration: 60_000, // 60s instead of 1-hour default
+    },
   );
 
-  // Fallback: if callback wasn't used for text, stream + return final text.
+  // Fallback: if streaming didn't produce text, use callback/result text
   if (!responseText && result?.responseContent?.text) {
     responseText = result.responseContent.text;
     opts?.onChunk?.(result.responseContent.text);
@@ -2025,6 +2109,11 @@ async function generateChatResponse(
   const finalText = isNoResponsePlaceholder(responseText)
     ? (noResponseFallback ?? (responseText || "(no response)"))
     : responseText;
+
+  const totalMs = Date.now() - t0;
+  logger.info(
+    `[perf] chat response: total=${totalMs}ms, first-token=${firstTokenMs || "n/a"}ms, length=${finalText.length}`,
+  );
 
   return {
     text: finalText,
@@ -5717,6 +5806,228 @@ async function handleRequest(
     return;
   }
 
+  // ── POST /api/agent/autonomy/execute-plan ──────────────────────────────
+  if (method === "POST" && pathname === "/api/agent/autonomy/execute-plan") {
+    const body = await readJsonBody<{
+      plan?: {
+        id?: string;
+        steps?: Array<{
+          id?: string | number;
+          toolName?: string;
+          params?: Record<string, unknown>;
+        }>;
+      };
+      request?: {
+        agentId?: string;
+        source?: string;
+        sourceTrust?: number;
+      };
+      options?: {
+        stopOnFailure?: boolean;
+      };
+    }>(req, res);
+    if (!body) return;
+
+    const plan = body.plan;
+    if (!plan || !Array.isArray(plan.steps)) {
+      error(res, "plan.steps must be an array", 400);
+      return;
+    }
+
+    const runtime = state.runtime;
+    if (!runtime) {
+      error(res, "Agent runtime not available", 503);
+      return;
+    }
+
+    const autonomySvc = getAutonomySvc(runtime);
+    const pipeline = autonomySvc?.getExecutionPipeline?.();
+    if (!pipeline) {
+      error(res, "Autonomy execution pipeline not available", 503);
+      return;
+    }
+
+    const allowedSources = new Set(["llm", "user", "system", "plugin"]);
+    const source =
+      typeof body.request?.source === "string" &&
+      allowedSources.has(body.request.source)
+        ? (body.request.source as "llm" | "user" | "system" | "plugin")
+        : "system";
+    const stopOnFailure = body.options?.stopOnFailure !== false;
+
+    const results: unknown[] = [];
+    let stoppedEarly = false;
+    let failedStepIndex: number | null = null;
+    for (const [index, step] of plan.steps.entries()) {
+      const toolName =
+        typeof step.toolName === "string" ? step.toolName.trim() : "";
+      if (!toolName) {
+        error(res, `plan.steps[${index}].toolName is required`, 400);
+        return;
+      }
+
+      const params =
+        step.params && typeof step.params === "object" ? step.params : {};
+      const stepId =
+        step.id !== undefined ? String(step.id) : String(index + 1);
+      const requestId = `${plan.id ?? "plan"}-${stepId}`;
+
+      const result = await pipeline.execute(
+        {
+          tool: toolName,
+          params,
+          source,
+          requestId,
+        },
+        async (tool, validatedParams, reqId) =>
+          executeRuntimeAction({
+            runtime,
+            toolName: tool,
+            requestId: reqId,
+            parameters: (validatedParams ?? {}) as Record<string, unknown>,
+          }),
+      );
+
+      results.push(result);
+
+      if (
+        stopOnFailure &&
+        result &&
+        typeof result === "object" &&
+        "success" in result &&
+        (result as { success?: boolean }).success === false
+      ) {
+        stoppedEarly = true;
+        failedStepIndex = index;
+        break;
+      }
+    }
+
+    const successCount = results.filter(
+      (r) =>
+        r &&
+        typeof r === "object" &&
+        "success" in r &&
+        (r as { success?: boolean }).success === true,
+    ).length;
+    const failedCount = results.filter(
+      (r) =>
+        r &&
+        typeof r === "object" &&
+        "success" in r &&
+        (r as { success?: boolean }).success === false,
+    ).length;
+    const allSucceeded = failedCount === 0;
+
+    json(res, {
+      ok: allSucceeded,
+      allSucceeded,
+      stoppedEarly,
+      failedStepIndex,
+      stopOnFailure,
+      successCount,
+      failedCount,
+      results,
+    });
+    return;
+  }
+
+  // ── POST /api/agent/autonomy/workflows/start ───────────────────────────
+  if (method === "POST" && pathname === "/api/agent/autonomy/workflows/start") {
+    const body = await readJsonBody<{
+      workflowId?: string;
+      input?: Record<string, unknown>;
+    }>(req, res);
+    if (!body) return;
+
+    const workflowId =
+      typeof body.workflowId === "string" ? body.workflowId.trim() : "";
+    if (!workflowId) {
+      error(res, "workflowId is required", 400);
+      return;
+    }
+
+    const runtime = state.runtime;
+    if (!runtime) {
+      error(res, "Agent runtime not available", 503);
+      return;
+    }
+
+    const autonomySvc = getAutonomySvc(runtime);
+    const engine = autonomySvc?.getWorkflowEngine?.();
+    if (!engine) {
+      error(res, "Workflow engine not available", 503);
+      return;
+    }
+
+    const input =
+      body.input && typeof body.input === "object" ? body.input : {};
+    const result = await engine.execute(workflowId, input);
+    json(res, { ok: true, result });
+    return;
+  }
+
+  // ── GET /api/agent/autonomy/workflows/:executionId ─────────────────────
+  if (method === "GET" && pathname.startsWith("/api/agent/autonomy/workflows/")) {
+    const parts = pathname.split("/");
+    const executionId = decodeURIComponent(parts[5] ?? "");
+    if (!executionId || executionId === "start") {
+      error(res, "executionId is required", 400);
+      return;
+    }
+
+    const runtime = state.runtime;
+    if (!runtime) {
+      error(res, "Agent runtime not available", 503);
+      return;
+    }
+
+    const autonomySvc = getAutonomySvc(runtime);
+    const engine = autonomySvc?.getWorkflowEngine?.();
+    if (!engine) {
+      error(res, "Workflow engine not available", 503);
+      return;
+    }
+
+    const status = await engine.getStatus(executionId);
+    json(res, { ok: true, status: status ?? null });
+    return;
+  }
+
+  // ── POST /api/agent/autonomy/workflows/:executionId/cancel ──────────────
+  if (method === "POST" &&
+      pathname.startsWith("/api/agent/autonomy/workflows/") &&
+      pathname.endsWith("/cancel")) {
+    const parts = pathname.split("/");
+    const executionId = decodeURIComponent(parts[5] ?? "");
+    if (!executionId) {
+      error(res, "executionId is required", 400);
+      return;
+    }
+
+    const runtime = state.runtime;
+    if (!runtime) {
+      error(res, "Agent runtime not available", 503);
+      return;
+    }
+
+    const autonomySvc = getAutonomySvc(runtime);
+    const engine = autonomySvc?.getWorkflowEngine?.();
+    if (!engine) {
+      error(res, "Workflow engine not available", 503);
+      return;
+    }
+
+    if (typeof engine.cancel !== "function") {
+      error(res, "Workflow cancellation not supported", 501);
+      return;
+    }
+
+    const cancelled = await engine.cancel(executionId);
+    json(res, { ok: true, cancelled });
+    return;
+  }
+
   // ── GET /api/agent/safe-mode ──────────────────────────────────────────
   if (method === "GET" && pathname === "/api/agent/safe-mode") {
     try {
@@ -9286,6 +9597,8 @@ async function handleRequest(
     }
 
     initSse(res);
+    const sseT0 = Date.now();
+    let sseFirstChunkMs = 0;
     let aborted = false;
     req.on("close", () => {
       aborted = true;
@@ -9316,6 +9629,7 @@ async function handleRequest(
         {
           isAborted: () => aborted,
           onChunk: (chunk) => {
+            if (!sseFirstChunkMs) sseFirstChunkMs = Date.now() - sseT0;
             writeSse(res, { type: "token", text: chunk });
           },
           resolveNoResponseText: () =>
@@ -9349,6 +9663,9 @@ async function handleRequest(
         }
       }
     } finally {
+      logger.info(
+        `[perf] SSE /conversations/stream: total=${Date.now() - sseT0}ms, first-chunk=${sseFirstChunkMs || "n/a"}ms`,
+      );
       res.end();
     }
     return;
@@ -9613,6 +9930,8 @@ async function handleRequest(
     }
 
     initSse(res);
+    const sseT0 = Date.now();
+    let sseFirstChunkMs = 0;
     let aborted = false;
     req.on("close", () => {
       aborted = true;
@@ -9648,6 +9967,7 @@ async function handleRequest(
         {
           isAborted: () => aborted,
           onChunk: (chunk) => {
+            if (!sseFirstChunkMs) sseFirstChunkMs = Date.now() - sseT0;
             writeSse(res, { type: "token", text: chunk });
           },
           resolveNoResponseText: () =>
@@ -9679,6 +9999,9 @@ async function handleRequest(
         }
       }
     } finally {
+      logger.info(
+        `[perf] SSE /chat/stream: total=${Date.now() - sseT0}ms, first-chunk=${sseFirstChunkMs || "n/a"}ms`,
+      );
       res.end();
     }
     return;
@@ -12400,3 +12723,6 @@ export async function startApiServer(opts?: {
     });
   });
 }
+
+// Test-only access for unit tests (avoid real network listeners).
+export const __testOnlyHandleRequest = handleRequest;
