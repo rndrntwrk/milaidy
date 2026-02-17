@@ -13,9 +13,9 @@ Current status pre-check snapshot:
 - Evidence basis: static repo review of autonomy kernel, API, persistence, and app UI code paths.
 - Summary counts:
 - `307` total checklist items.
-- `170` items tagged `STATUS: CODED`.
+- `171` items tagged `STATUS: CODED`.
 - `38` items tagged `STATUS: PARTIAL`.
-- `99` items currently untagged.
+- `98` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
 - `STATUS: PARTIAL` means implementation exists but is incomplete, scoped down, optional, or not yet acceptance-ready.
@@ -431,7 +431,7 @@ Sprint chunks:
 - [ ] P4-001 Define dataset schema for tool traces and labels. [STATUS: PARTIAL]
 - [ ] P4-002 Implement data extraction from event logs. [STATUS: PARTIAL]
 - [ ] P4-003 Implement de-identification/anonymization pipeline. [STATUS: CODED]
-- [ ] P4-004 Implement quality filters for training examples.
+- [ ] P4-004 Implement quality filters for training examples. [STATUS: CODED]
 - [ ] P4-005 Implement labeling guidelines and QA sampling.
 - [ ] P4-006 Build held-out validation split.
 - [ ] P4-007 Build adversarial split for robustness.

@@ -57,6 +57,7 @@ Contents:
 - `phase3-safe-mode-tool-restrictions-2026-02-17.md`: `P3-017` safe-mode tool-class restriction policy + enforcement evidence.
 - `phase3-acceptance-report-2026-02-17.md`: `P3-042` Phase 3 gate report and sign-off decision.
 - `phase4-deidentification-pipeline-2026-02-17.md`: `P4-003` deterministic de-identification/anonymization pipeline for learning dataset export paths.
+- `phase4-quality-filters-2026-02-17.md`: `P4-004` deterministic quality filters for training examples/episodes before dataset export.
 - `reports/`: generated run artifacts (`.json` and `.md` outputs).
 
 Primary scripts:
