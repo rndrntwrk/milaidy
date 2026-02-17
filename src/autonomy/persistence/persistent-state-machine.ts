@@ -132,6 +132,28 @@ export class PersistentStateMachine implements KernelStateMachineInterface {
     consecutiveErrors: number;
     snapshotAt: string;
   }): Promise<void> {
+    const { rows } = await this.adapter.executeRaw(
+      `SELECT snapshot_at
+       FROM autonomy_state
+       WHERE agent_id = '${esc(this.adapter.agentId)}'
+       ORDER BY snapshot_at DESC, id DESC
+       LIMIT 1`,
+    );
+    const latestSnapshotAtRaw =
+      rows[0]?.snapshot_at ?? rows[0]?.SNAPSHOT_AT ?? null;
+    const latestSnapshotAt = parseSnapshotAt(latestSnapshotAtRaw);
+    const incomingSnapshotAt = Date.parse(input.snapshotAt);
+    if (
+      latestSnapshotAt !== null &&
+      !Number.isNaN(incomingSnapshotAt) &&
+      latestSnapshotAt > incomingSnapshotAt
+    ) {
+      logger.warn(
+        `[autonomy:persistent-sm] Skipping stale snapshot state="${input.state}" at ${input.snapshotAt}; newer snapshot exists`,
+      );
+      return;
+    }
+
     await this.adapter.executeRaw(
       `INSERT INTO autonomy_state (state, consecutive_errors, agent_id, snapshot_at)
        VALUES ('${esc(input.state)}', ${input.consecutiveErrors}, '${esc(this.adapter.agentId)}', '${input.snapshotAt}'::timestamptz)`,
@@ -172,4 +194,15 @@ function replayStateFromIdle(
   for (const trigger of replayTriggers[state]) {
     machine.transition(trigger);
   }
+}
+
+function parseSnapshotAt(value: unknown): number | null {
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
 }
