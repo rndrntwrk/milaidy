@@ -21,7 +21,8 @@ export type ExecutionEventType =
   | "tool:verified"
   | "tool:failed"
   | "tool:compensated"
-  | "tool:invariants:checked";
+  | "tool:invariants:checked"
+  | "tool:decision:logged";
 
 /**
  * A single event in the execution log.
