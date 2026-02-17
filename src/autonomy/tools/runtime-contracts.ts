@@ -154,7 +154,7 @@ export function createRuntimeActionContract(
       typeof action.description === "string" && action.description.trim().length > 0
         ? action.description
         : `Runtime action contract for ${name}`,
-    version: "1.0.0-runtime",
+    version: "1.0.0",
     riskClass,
     paramsSchema: buildParamsSchema(action.parameters),
     requiredPermissions: inferPermissions(name),

@@ -11,6 +11,7 @@ Key quantitative gates at current HEAD:
 - Tool contract inventory coverage: `11/11` built-in tools.
 - Runtime action contract coverage: `100%` for discovered runtime actions in inventory runs.
 - Runtime explicit custom-action contracts: available and reported separately from synthesized runtime contracts.
+- Contract versioning is semver-gated in tests for built-in, runtime-synthesized, and custom-action contracts.
 - Post-condition coverage: `100%` (`11/11` built-in tools).
 - Runtime-scope post-condition coverage: supported via report flag (`--include-runtime=true`).
 - Reversible compensation coverage: `100%` (`6/6` reversible tools).
