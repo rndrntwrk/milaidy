@@ -6,6 +6,10 @@
 export { CompensationRegistry } from "./compensation-registry.js";
 export { registerBuiltinCompensations } from "./compensations/index.js";
 export { InMemoryEventStore } from "./event-store.js";
+export {
+  rebuildAllRequestProjections,
+  rebuildRequestProjection,
+} from "./event-projections.js";
 export { ToolExecutionPipeline } from "./execution-pipeline.js";
 export type {
   CompensationContext,
@@ -19,3 +23,7 @@ export type {
   ToolActionHandler,
   ToolExecutionPipelineInterface,
 } from "./types.js";
+export type {
+  RequestProjection,
+  RequestProjectionStatus,
+} from "./event-projections.js";
