@@ -319,6 +319,8 @@ export interface OrchestratedResult {
   plan: ExecutionPlan;
   /** Results of each pipeline execution. */
   executions: PipelineResult[];
+  /** Verification reports for executed steps. */
+  verificationReports?: VerificationReport[];
   /** Memory write report (if memory was written). */
   memoryReport?: MemoryWriteReport;
   /** Audit report. */

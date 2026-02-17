@@ -516,6 +516,7 @@ export class MilaidyAutonomyService extends Service {
     this.orchestrator = new _KernelOrchestrator(
       this.planner,
       this.executorRole,
+      this.verifier,
       this.memoryWriterRole,
       this.auditorRole,
       this.stateMachine,
@@ -756,6 +757,7 @@ export class MilaidyAutonomyService extends Service {
     this.orchestrator = new _KernelOrchestrator(
       this.planner,
       this.executorRole,
+      this.verifier,
       this.memoryWriterRole,
       this.auditorRole,
       this.stateMachine,
