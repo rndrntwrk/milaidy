@@ -21,7 +21,21 @@ export { LLMJudgeEvaluator } from "./llm-judge-evaluator.js";
 // Model providers
 export { HttpModelProvider, StubModelProvider } from "./model-provider.js";
 // Prompt builder
-export { SystemPromptBuilder } from "./prompt-builder.js";
+export {
+  SystemPromptBuilder,
+  type PromptRole,
+  type PromptVariant,
+} from "./prompt-builder.js";
+// Prompt variant evaluator
+export {
+  evaluatePromptVariantsOnHeldOutScenarios,
+  selectHeldOutScenarios,
+  type PromptVariantEvaluationOptions,
+  type PromptVariantEvaluationResult,
+  type PromptVariantScenarioScore,
+  type PromptVariantScore,
+  type HeldOutScenarioOptions,
+} from "./prompt-variant-evaluator.js";
 // Reward
 export {
   CheckpointReward,

@@ -169,6 +169,8 @@ export interface PromptOptions {
   includeToolInstructions?: boolean;
   /** Add truthfulness reminder to mitigate sycophancy (default: true). */
   truthfulnessReminder?: boolean;
+  /** Prompt-constraint variant used for A/B testing. */
+  variant?: "baseline" | "truth-first" | "tool-safety-first";
   /** Maximum prompt length in characters. */
   maxLength?: number;
 }
