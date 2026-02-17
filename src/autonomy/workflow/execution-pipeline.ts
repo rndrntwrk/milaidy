@@ -54,6 +54,16 @@ type ApprovalOutcome =
 type VerificationOutcome = "skipped" | "passed" | "failed";
 type InvariantOutcome = "skipped" | "passed" | "failed";
 
+type PipelineVerificationQuery = (input: {
+  toolName: string;
+  requestId: string;
+  source: ToolCallSource;
+  params: Record<string, unknown>;
+  result: unknown;
+  query: string;
+  payload?: Record<string, unknown>;
+}) => Promise<unknown>;
+
 export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
   private config: PipelineConfig;
   private schemaValidator: SchemaValidatorInterface;
@@ -66,6 +76,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
   private eventBus?: {
     emit: (event: string, payload: unknown) => void;
   };
+  private verificationQuery?: PipelineVerificationQuery;
 
   constructor(deps: {
     schemaValidator: SchemaValidatorInterface;
@@ -77,6 +88,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
     invariantChecker?: InvariantCheckerInterface;
     config?: Partial<PipelineConfig>;
     eventBus?: { emit: (event: string, payload: unknown) => void };
+    verificationQuery?: PipelineVerificationQuery;
   }) {
     this.schemaValidator = deps.schemaValidator;
     this.approvalGate = deps.approvalGate;
@@ -87,6 +99,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
     this.invariantChecker = deps.invariantChecker;
     this.config = { ...DEFAULT_CONFIG, ...deps.config };
     this.eventBus = deps.eventBus;
+    this.verificationQuery = deps.verificationQuery;
   }
 
   async execute(
@@ -352,6 +365,18 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
       durationMs: execResult.durationMs,
       agentId: call.source,
       requestId,
+      query: this.verificationQuery
+        ? async (input) =>
+            this.verificationQuery?.({
+              toolName,
+              requestId,
+              source: call.source,
+              params: call.params,
+              result: execResult.result,
+              query: input.query,
+              payload: input.payload,
+            })
+        : undefined,
     };
 
     const verification = await this.postConditionVerifier.verify(verifierCtx);

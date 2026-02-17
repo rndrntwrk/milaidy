@@ -3,7 +3,7 @@ import { metrics } from "../../telemetry/setup.js";
 import { ApprovalGate } from "../approval/approval-gate.js";
 import { KernelStateMachine } from "../state-machine/kernel-state-machine.js";
 import type { ProposedToolCall, ToolValidationResult } from "../tools/types.js";
-import type { VerificationResult } from "../verification/types.js";
+import type { VerificationResult, VerifierContext } from "../verification/types.js";
 import { CompensationRegistry } from "./compensation-registry.js";
 import { registerBuiltinCompensations } from "./compensations/index.js";
 import { InMemoryEventStore } from "./event-store.js";
@@ -71,6 +71,15 @@ function createPipeline(
     invariantChecker?: InvariantCheckerInterface;
     config?: Record<string, unknown>;
     eventBus?: { emit: ReturnType<typeof vi.fn> };
+    verificationQuery?: (input: {
+      toolName: string;
+      requestId: string;
+      source: import("../tools/types.js").ToolCallSource;
+      params: Record<string, unknown>;
+      result: unknown;
+      query: string;
+      payload?: Record<string, unknown>;
+    }) => Promise<unknown>;
   } = {},
 ) {
   const stateMachine = new KernelStateMachine();
@@ -92,6 +101,7 @@ function createPipeline(
     invariantChecker: overrides.invariantChecker,
     config: overrides.config as Record<string, unknown> | undefined,
     eventBus: overrides.eventBus,
+    verificationQuery: overrides.verificationQuery,
   });
 
   return {
@@ -143,6 +153,49 @@ describe("ToolExecutionPipeline", () => {
         { emote: "dance" },
         "test-req-1",
       );
+    });
+
+    it("passes independent verification query function to post-condition verifier", async () => {
+      const verificationQuery = vi.fn(async ({ query }: { query: string }) =>
+        query === "probe:ok",
+      );
+      const verifier = {
+        verify: vi.fn(async (ctx: VerifierContext) => {
+          const queryResult = await ctx.query?.({
+            query: "probe:ok",
+            payload: { source: "test" },
+          });
+          expect(queryResult).toBe(true);
+          return {
+            status: "passed" as const,
+            checks: [],
+            hasCriticalFailure: false,
+            failureTaxonomy: {
+              totalFailures: 0,
+              criticalFailures: 0,
+              warningFailures: 0,
+              infoFailures: 0,
+              checkFailures: 0,
+              errorFailures: 0,
+              timeoutFailures: 0,
+            },
+          };
+        }),
+        registerConditions: vi.fn(),
+      };
+
+      const { pipeline } = createPipeline({ verifier, verificationQuery });
+      await pipeline.execute(makeCall(), createSuccessHandler());
+
+      expect(verificationQuery).toHaveBeenCalledWith({
+        toolName: "PLAY_EMOTE",
+        requestId: "test-req-1",
+        source: "llm",
+        params: { emote: "wave" },
+        result: { ok: true },
+        query: "probe:ok",
+        payload: { source: "test" },
+      });
     });
   });
 
