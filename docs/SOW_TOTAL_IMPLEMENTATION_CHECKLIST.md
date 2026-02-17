@@ -13,8 +13,8 @@ Current status pre-check snapshot:
 - Evidence basis: static repo review of autonomy kernel, API, persistence, and app UI code paths.
 - Summary counts:
 - `307` total checklist items.
-- `104` items tagged `STATUS: CODED`.
-- `86` items tagged `STATUS: PARTIAL`.
+- `105` items tagged `STATUS: CODED`.
+- `85` items tagged `STATUS: PARTIAL`.
 - `117` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
@@ -397,7 +397,7 @@ Sprint chunks:
 - [ ] P3-025 Implement Verifier service behavior. [STATUS: CODED]
 - [ ] P3-026 Implement Memory Writer service behavior. [STATUS: CODED]
 - [ ] P3-027 Implement Auditor service behavior. [STATUS: CODED]
-- [ ] P3-028 Define and implement role-level telemetry. [STATUS: PARTIAL]
+- [ ] P3-028 Define and implement role-level telemetry. [STATUS: CODED]
 - [ ] P3-029 Add role-level unit tests for each service. [STATUS: CODED]
 
 ### 3.F Integration and End-to-End Tests

@@ -78,9 +78,23 @@ Initial panel spec for Phase 0 baseline operations dashboard.
 - Type: Time-series
 - Alert: `> 50000 for 1h`
 
+## Dashboard E: Role Telemetry
+
+16. `Role Throughput`
+- Query: `sum by (role) (increase(milaidy_autonomy_role_executions_total[5m]))`
+- Type: Time-series
+
+17. `Role Failure Rate`
+- Query: `sum by (role) (increase(milaidy_autonomy_role_executions_total{outcome=\"failure\"}[10m])) / clamp_min(sum by (role) (increase(milaidy_autonomy_role_executions_total[10m])), 1)`
+- Type: Time-series
+- Alert: `> 0.02 for 10m`
+
+18. `Role Latency P95`
+- Query: `milaidy_autonomy_role_latency_ms{quantile=\"0.95\"}`
+- Type: Time-series
+
 ## Notes
 
 - All panels assume Prometheus scrape from `GET /metrics`.
 - Configure dashboard variables for environment, agent ID, and instance.
 - Use this spec as the seed for Grafana dashboard JSON provisioning.
-

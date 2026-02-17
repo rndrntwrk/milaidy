@@ -133,6 +133,38 @@ export function recordPipelineOutcome(outcome: string): void {
   metrics.counter("autonomy_pipeline_executions_total", 1, { outcome });
 }
 
+// ---------- Role Telemetry ----------
+
+export type AutonomyRoleName =
+  | "planner"
+  | "executor"
+  | "verifier"
+  | "memory_writer"
+  | "auditor"
+  | "orchestrator";
+
+export type RoleExecutionOutcome = "success" | "failure";
+
+/**
+ * Record a role execution result.
+ */
+export function recordRoleExecution(
+  role: AutonomyRoleName,
+  outcome: RoleExecutionOutcome,
+): void {
+  metrics.counter("autonomy_role_executions_total", 1, { role, outcome });
+}
+
+/**
+ * Record role execution latency in milliseconds.
+ */
+export function recordRoleLatencyMs(
+  role: AutonomyRoleName,
+  ms: number,
+): void {
+  metrics.histogram("autonomy_role_latency_ms", ms, { role });
+}
+
 // ---------- State Machine ----------
 
 /**

@@ -11,6 +11,10 @@
  */
 
 import type { KernelStateMachineInterface } from "../state-machine/types.js";
+import {
+  recordRoleExecution,
+  recordRoleLatencyMs,
+} from "../metrics/prometheus-metrics.js";
 import type {
   PipelineResult,
 } from "../workflow/types.js";
@@ -46,6 +50,7 @@ export class KernelOrchestrator implements RoleOrchestrator {
   ) {}
 
   async execute(request: OrchestratedRequest): Promise<OrchestratedResult> {
+    const startedAt = Date.now();
     // Serialize orchestration executions to keep FSM transitions and
     // role outputs consistent under concurrent requests.
     let releaseQueueSlot!: () => void;
@@ -57,7 +62,14 @@ export class KernelOrchestrator implements RoleOrchestrator {
 
     await previous;
     try {
-      return await this.executeInternal(request);
+      const result = await this.executeInternal(request);
+      recordRoleLatencyMs("orchestrator", Date.now() - startedAt);
+      recordRoleExecution("orchestrator", result.success ? "success" : "failure");
+      return result;
+    } catch (error) {
+      recordRoleLatencyMs("orchestrator", Date.now() - startedAt);
+      recordRoleExecution("orchestrator", "failure");
+      throw error;
     } finally {
       releaseQueueSlot();
     }

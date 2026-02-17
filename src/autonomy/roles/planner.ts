@@ -9,6 +9,10 @@
  */
 
 import type { Goal, GoalManager } from "../goals/manager.js";
+import {
+  recordRoleExecution,
+  recordRoleLatencyMs,
+} from "../metrics/prometheus-metrics.js";
 import type { ToolRegistryInterface } from "../tools/types.js";
 import type {
   ExecutionPlan,
@@ -58,107 +62,126 @@ export class GoalDrivenPlanner implements PlannerRole {
   ) {}
 
   async createPlan(request: PlanRequest): Promise<ExecutionPlan> {
-    // Cancel any existing plan
-    if (this.activePlan) {
-      await this.cancelPlan("Replaced by new plan");
-    }
-
-    // Create a root goal through GoalManager (trust-gated)
-    const rootGoal = await this.goalManager.addGoal({
-      description: request.description,
-      priority: "medium",
-      status: "active",
-      successCriteria: [`Plan for: ${request.description}`],
-      source: mapSourceToGoalSource(request.source),
-      sourceTrust: request.sourceTrust,
-    });
-
-    // Build plan steps from constraints (one step per constraint/tool hint)
-    const steps: PlanStep[] = [];
-    const goals: Goal[] = [rootGoal];
-
-    if (request.constraints && request.constraints.length > 0) {
-      for (const constraint of request.constraints) {
-        const step: PlanStep = {
-          id: nextStepId(),
-          toolName: constraint,
-          params: {},
-          dependsOn:
-            steps.length > 0 ? [steps[steps.length - 1].id] : undefined,
-        };
-        steps.push(step);
+    const startedAt = Date.now();
+    try {
+      // Cancel any existing plan
+      if (this.activePlan) {
+        await this.cancelPlan("Replaced by new plan");
       }
+
+      // Create a root goal through GoalManager (trust-gated)
+      const rootGoal = await this.goalManager.addGoal({
+        description: request.description,
+        priority: "medium",
+        status: "active",
+        successCriteria: [`Plan for: ${request.description}`],
+        source: mapSourceToGoalSource(request.source),
+        sourceTrust: request.sourceTrust,
+      });
+
+      // Build plan steps from constraints (one step per constraint/tool hint)
+      const steps: PlanStep[] = [];
+      const goals: Goal[] = [rootGoal];
+
+      if (request.constraints && request.constraints.length > 0) {
+        for (const constraint of request.constraints) {
+          const step: PlanStep = {
+            id: nextStepId(),
+            toolName: constraint,
+            params: {},
+            dependsOn:
+              steps.length > 0 ? [steps[steps.length - 1].id] : undefined,
+          };
+          steps.push(step);
+        }
+      }
+
+      const plan: ExecutionPlan = {
+        id: nextPlanId(),
+        goals,
+        steps,
+        createdAt: Date.now(),
+        status: "pending",
+      };
+
+      this.activePlan = plan;
+      recordRoleLatencyMs("planner", Date.now() - startedAt);
+      recordRoleExecution("planner", "success");
+      return plan;
+    } catch (error) {
+      recordRoleLatencyMs("planner", Date.now() - startedAt);
+      recordRoleExecution("planner", "failure");
+      throw error;
     }
-
-    const plan: ExecutionPlan = {
-      id: nextPlanId(),
-      goals,
-      steps,
-      createdAt: Date.now(),
-      status: "pending",
-    };
-
-    this.activePlan = plan;
-    return plan;
   }
 
   async validatePlan(plan: ExecutionPlan): Promise<PlanValidation> {
-    const issues: string[] = [];
-    const maxSteps = this.config?.maxPlanSteps ?? 20;
+    const startedAt = Date.now();
+    try {
+      const issues: string[] = [];
+      const maxSteps = this.config?.maxPlanSteps ?? 20;
 
-    // Check step count
-    if (plan.steps.length > maxSteps) {
-      issues.push(
-        `Plan has ${plan.steps.length} steps, exceeding max of ${maxSteps}`,
-      );
-    }
-
-    // Check tool names against registry
-    for (const step of plan.steps) {
-      if (!this.toolRegistry.has(step.toolName)) {
+      // Check step count
+      if (plan.steps.length > maxSteps) {
         issues.push(
-          `Step "${step.id}" references unknown tool "${step.toolName}"`,
+          `Plan has ${plan.steps.length} steps, exceeding max of ${maxSteps}`,
         );
       }
-    }
 
-    // Check for circular dependencies
-    const visited = new Set<string>();
-    const visiting = new Set<string>();
-    const stepMap = new Map(plan.steps.map((s) => [s.id, s]));
-
-    const hasCycle = (stepId: string): boolean => {
-      if (visiting.has(stepId)) return true;
-      if (visited.has(stepId)) return false;
-      visiting.add(stepId);
-      const step = stepMap.get(stepId);
-      if (step?.dependsOn) {
-        for (const dep of step.dependsOn) {
-          if (hasCycle(dep)) return true;
+      // Check tool names against registry
+      for (const step of plan.steps) {
+        if (!this.toolRegistry.has(step.toolName)) {
+          issues.push(
+            `Step "${step.id}" references unknown tool "${step.toolName}"`,
+          );
         }
       }
-      visiting.delete(stepId);
-      visited.add(stepId);
-      return false;
-    };
 
-    for (const step of plan.steps) {
-      if (hasCycle(step.id)) {
-        issues.push("Plan contains circular dependencies");
-        break;
+      // Check for circular dependencies
+      const visited = new Set<string>();
+      const visiting = new Set<string>();
+      const stepMap = new Map(plan.steps.map((s) => [s.id, s]));
+
+      const hasCycle = (stepId: string): boolean => {
+        if (visiting.has(stepId)) return true;
+        if (visited.has(stepId)) return false;
+        visiting.add(stepId);
+        const step = stepMap.get(stepId);
+        if (step?.dependsOn) {
+          for (const dep of step.dependsOn) {
+            if (hasCycle(dep)) return true;
+          }
+        }
+        visiting.delete(stepId);
+        visited.add(stepId);
+        return false;
+      };
+
+      for (const step of plan.steps) {
+        if (hasCycle(step.id)) {
+          issues.push("Plan contains circular dependencies");
+          break;
+        }
       }
-    }
 
-    // Check that all params are serializable
-    for (const step of plan.steps) {
-      try {
-        JSON.stringify(step.params);
-      } catch {
-        issues.push(`Step "${step.id}" has non-serializable params`);
+      // Check that all params are serializable
+      for (const step of plan.steps) {
+        try {
+          JSON.stringify(step.params);
+        } catch {
+          issues.push(`Step "${step.id}" has non-serializable params`);
+        }
       }
-    }
 
-    return { valid: issues.length === 0, issues };
+      const validation = { valid: issues.length === 0, issues };
+      recordRoleLatencyMs("planner", Date.now() - startedAt);
+      recordRoleExecution("planner", validation.valid ? "success" : "failure");
+      return validation;
+    } catch (error) {
+      recordRoleLatencyMs("planner", Date.now() - startedAt);
+      recordRoleExecution("planner", "failure");
+      throw error;
+    }
   }
 
   getActivePlan(): ExecutionPlan | null {

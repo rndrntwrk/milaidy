@@ -11,6 +11,10 @@ import type {
   DriftReport,
   PersonaDriftMonitor,
 } from "../identity/drift-monitor.js";
+import {
+  recordRoleExecution,
+  recordRoleLatencyMs,
+} from "../metrics/prometheus-metrics.js";
 import type { EventStoreInterface, ExecutionEvent } from "../workflow/types.js";
 import type { AuditContext, AuditorRole, AuditReport } from "./types.js";
 
@@ -21,51 +25,61 @@ export class DriftAwareAuditor implements AuditorRole {
   ) {}
 
   async audit(context: AuditContext): Promise<AuditReport> {
-    // 1. Run drift analysis
-    const driftReport = await this.driftMonitor.analyze(
-      context.recentOutputs,
-      context.identityConfig,
-    );
+    const startedAt = Date.now();
+    try {
+      // 1. Run drift analysis
+      const driftReport = await this.driftMonitor.analyze(
+        context.recentOutputs,
+        context.identityConfig,
+      );
 
-    // 2. Query events for this request
-    const events = await this.eventStore.getByRequestId(context.requestId);
+      // 2. Query events for this request
+      const events = await this.eventStore.getByRequestId(context.requestId);
 
-    // 3. Detect anomalies
-    const anomalies: string[] = [];
-    const recommendations: string[] = [];
+      // 3. Detect anomalies
+      const anomalies: string[] = [];
+      const recommendations: string[] = [];
 
-    // Check drift score
-    if (driftReport.driftScore > 0.25) {
-      anomalies.push(`High drift score: ${driftReport.driftScore.toFixed(3)}`);
-    }
-    if (driftReport.driftScore > 0.15) {
-      recommendations.push("Review recent outputs for persona drift");
-    }
-
-    // Check for verification failures in event trail
-    for (const event of events) {
-      if (event.type === "tool:failed") {
-        anomalies.push(
-          `Tool failure detected in event trail: ${event.payload.error ?? "unknown"}`,
-        );
+      // Check drift score
+      if (driftReport.driftScore > 0.25) {
+        anomalies.push(`High drift score: ${driftReport.driftScore.toFixed(3)}`);
       }
-      if (event.type === "tool:verified" && event.payload.hasCriticalFailure) {
-        anomalies.push("Verification critical failure in event trail");
+      if (driftReport.driftScore > 0.15) {
+        recommendations.push("Review recent outputs for persona drift");
       }
-    }
 
-    // Add drift corrections as recommendations
-    for (const correction of driftReport.corrections) {
-      recommendations.push(correction);
-    }
+      // Check for verification failures in event trail
+      for (const event of events) {
+        if (event.type === "tool:failed") {
+          anomalies.push(
+            `Tool failure detected in event trail: ${event.payload.error ?? "unknown"}`,
+          );
+        }
+        if (event.type === "tool:verified" && event.payload.hasCriticalFailure) {
+          anomalies.push("Verification critical failure in event trail");
+        }
+      }
 
-    return {
-      driftReport,
-      eventCount: events.length,
-      anomalies,
-      recommendations,
-      auditedAt: Date.now(),
-    };
+      // Add drift corrections as recommendations
+      for (const correction of driftReport.corrections) {
+        recommendations.push(correction);
+      }
+
+      const report = {
+        driftReport,
+        eventCount: events.length,
+        anomalies,
+        recommendations,
+        auditedAt: Date.now(),
+      };
+      recordRoleLatencyMs("auditor", Date.now() - startedAt);
+      recordRoleExecution("auditor", anomalies.length > 0 ? "failure" : "success");
+      return report;
+    } catch (error) {
+      recordRoleLatencyMs("auditor", Date.now() - startedAt);
+      recordRoleExecution("auditor", "failure");
+      throw error;
+    }
   }
 
   getDriftReport(): DriftReport | null {
