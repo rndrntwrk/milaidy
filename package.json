@@ -32,6 +32,10 @@
   },
   "scripts": {
     "benchmark:server": "node --import tsx src/benchmark/server.ts",
+    "autonomy:baseline:run": "node --import tsx scripts/autonomy/run-baseline-suite.ts",
+    "autonomy:redteam:run": "node --import tsx scripts/autonomy/run-redteam-baseline.ts",
+    "autonomy:metrics:cardinality": "node --import tsx scripts/autonomy/check-metrics-cardinality.ts",
+    "autonomy:contracts:inventory": "node --import tsx scripts/autonomy/tool-contract-inventory.ts",
     "build": "tsdown && cp src/plugins/telegram-enhanced/package.json dist/plugins/telegram-enhanced/package.json && scripts/rt.sh scripts/write-build-info.ts && cd apps/app && ../../scripts/rt.sh run build",
     "build:node": "tsdown && node --import tsx scripts/write-build-info.ts && cd apps/app && npm run build",
     "build:android": "cd apps/app && ../../scripts/rt.sh run build:android",
@@ -58,6 +62,7 @@
     "learn:loop": "scripts/rt.sh scripts/knowledge-loop.mjs",
     "learn:snapshot": "scripts/rt.sh scripts/knowledge-loop.mjs --full",
     "milaidy": "scripts/rt.sh scripts/run-node.mjs",
+    "temporal:worker": "node --import tsx src/autonomy/workflow/temporal/worker.ts",
     "postinstall": "node scripts/link-browser-server.mjs || true",
     "prepack": "scripts/rt.sh run build",
     "prepare": "node -e \"try{require('child_process').execSync('git config core.hooksPath git-hooks',{stdio:'ignore'})}catch{}\"",
@@ -91,6 +96,9 @@
     "tui:dev": "MILAIDY_PROFILE=dev scripts/rt.sh scripts/run-node.mjs --dev tui"
   },
   "optionalDependencies": {
+    "@temporalio/client": "^1.13.0",
+    "@temporalio/worker": "^1.13.0",
+    "@temporalio/workflow": "^1.13.0",
     "keytar": "^7.9.0",
     "node-machine-id": "^1.1.12"
   },
