@@ -6,6 +6,14 @@
 export { DriftAwareAuditor } from "./auditor.js";
 export { PipelineExecutor } from "./executor.js";
 export { GatedMemoryWriter } from "./memory-writer.js";
+export {
+  createRoleModuleRegistry,
+  RoleModuleRegistry,
+  type RoleModuleHealth,
+  type RoleModuleInstances,
+  type RoleModuleName,
+  type RoleModuleRegistrySnapshot,
+} from "./modules.js";
 export { KernelOrchestrator } from "./orchestrator.js";
 // Implementations
 export { GoalDrivenPlanner, type PlannerConfig } from "./planner.js";

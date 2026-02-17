@@ -13,6 +13,7 @@ Contents:
 - `phase2-acceptance-report-2026-02-17.md`: `P2-065` Phase 2 acceptance publication and sign-off record.
 - `phase3-executor-role-2026-02-17.md`: `P3-024` Executor role implementation and wiring evidence.
 - `phase3-role-dataflow-2026-02-17.md`: `P3-030` role dataflow integration evidence across planner/executor/verifier/memory/auditor.
+- `phase3-role-service-modules-2026-02-17.md`: `P3-006` role-specific module lifecycle implementation and validation evidence.
 - `phase3-role-authz-guards-2026-02-17.md`: `P3-034` validation that orchestrated roles cannot bypass contract/approval guards.
 - `phase3-role-boundary-contracts-2026-02-17.md`: `P3-001/P3-002` role responsibility boundary definitions and request/response schema enforcement.
 - `phase3-role-transport-adapters-2026-02-17.md`: `P3-007` explicit in-process role transport adapter implementation and wiring evidence.
