@@ -85,6 +85,197 @@ const paths: Record<string, PathItem> = {
     },
   },
 
+  "/api/agent/autonomy/execute-plan": {
+    post: {
+      summary: "Execute a plan through the autonomy pipeline",
+      operationId: "executeAutonomyPlan",
+      tags: ["Autonomy"],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              properties: {
+                plan: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string" },
+                    steps: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          id: { type: ["string", "number"] },
+                          toolName: { type: "string" },
+                          params: { type: "object", additionalProperties: true },
+                        },
+                        required: ["toolName"],
+                      },
+                    },
+                  },
+                  required: ["steps"],
+                },
+                request: {
+                  type: "object",
+                  properties: {
+                    agentId: { type: "string" },
+                    source: {
+                      type: "string",
+                      enum: ["llm", "user", "system", "plugin"],
+                    },
+                    sourceTrust: { type: "number" },
+                  },
+                },
+                options: {
+                  type: "object",
+                  properties: {
+                    stopOnFailure: { type: "boolean", default: true },
+                  },
+                },
+              },
+              required: ["plan"],
+            },
+          },
+        },
+      },
+      responses: {
+        "200": {
+          description: "Plan execution results",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean" },
+                  allSucceeded: { type: "boolean" },
+                  stoppedEarly: { type: "boolean" },
+                  failedStepIndex: { type: ["number", "null"] },
+                  stopOnFailure: { type: "boolean" },
+                  successCount: { type: "number" },
+                  failedCount: { type: "number" },
+                  results: { type: "array", items: { type: "object" } },
+                },
+              },
+            },
+          },
+        },
+        "400": { description: "Invalid request" },
+        "503": { description: "Service unavailable" },
+      },
+    },
+  },
+
+  "/api/agent/autonomy/workflows/start": {
+    post: {
+      summary: "Start a workflow execution",
+      operationId: "startWorkflow",
+      tags: ["Workflows"],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              properties: {
+                workflowId: { type: "string" },
+                input: { type: "object", additionalProperties: true },
+              },
+              required: ["workflowId"],
+            },
+          },
+        },
+      },
+      responses: {
+        "200": {
+          description: "Workflow started",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean" },
+                  result: { type: "object" },
+                },
+              },
+            },
+          },
+        },
+        "400": { description: "Invalid request" },
+        "503": { description: "Service unavailable" },
+      },
+    },
+  },
+
+  "/api/agent/autonomy/workflows/{executionId}": {
+    get: {
+      summary: "Get workflow execution status",
+      operationId: "getWorkflowStatus",
+      tags: ["Workflows"],
+      parameters: [
+        {
+          name: "executionId",
+          in: "path",
+          required: true,
+          schema: { type: "string" },
+        },
+      ],
+      responses: {
+        "200": {
+          description: "Workflow status",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean" },
+                  status: { type: ["object", "null"] },
+                },
+              },
+            },
+          },
+        },
+        "400": { description: "Invalid request" },
+        "503": { description: "Service unavailable" },
+      },
+    },
+  },
+
+  "/api/agent/autonomy/workflows/{executionId}/cancel": {
+    post: {
+      summary: "Cancel a workflow execution",
+      operationId: "cancelWorkflow",
+      tags: ["Workflows"],
+      parameters: [
+        {
+          name: "executionId",
+          in: "path",
+          required: true,
+          schema: { type: "string" },
+        },
+      ],
+      responses: {
+        "200": {
+          description: "Cancellation result",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean" },
+                  cancelled: { type: "boolean" },
+                },
+              },
+            },
+          },
+        },
+        "400": { description: "Invalid request" },
+        "501": { description: "Not supported" },
+        "503": { description: "Service unavailable" },
+      },
+    },
+  },
+
   "/api/agent/identity": {
     get: {
       summary: "Get current agent identity",
@@ -264,6 +455,7 @@ export function buildOpenApiSpec(): Record<string, unknown> {
       { name: "Autonomy", description: "Kernel lifecycle management" },
       { name: "Identity", description: "Agent identity and preferences" },
       { name: "Approvals", description: "Tool execution approval workflows" },
+      { name: "Workflows", description: "Workflow execution and lifecycle" },
       { name: "Safe Mode", description: "Safe mode status and control" },
       { name: "Monitoring", description: "Metrics and observability" },
     ],
