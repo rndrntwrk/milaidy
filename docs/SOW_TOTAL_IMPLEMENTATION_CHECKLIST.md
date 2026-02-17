@@ -13,9 +13,9 @@ Current status pre-check snapshot:
 - Evidence basis: static repo review of autonomy kernel, API, persistence, and app UI code paths.
 - Summary counts:
 - `307` total checklist items.
-- `65` items tagged `STATUS: CODED`.
-- `121` items tagged `STATUS: PARTIAL`.
-- `121` items currently untagged.
+- `94` items tagged `STATUS: CODED`.
+- `93` items tagged `STATUS: PARTIAL`.
+- `120` items currently untagged.
 - Status legend:
 - `STATUS: CODED` means code-level implementation exists in repo, but full acceptance evidence may still be missing.
 - `STATUS: PARTIAL` means implementation exists but is incomplete, scoped down, optional, or not yet acceptance-ready.
@@ -344,7 +344,7 @@ Sprint chunks:
 - [ ] P2-059 Add durability tests across restarts. [STATUS: CODED]
 - [ ] P2-060 Add benchmark-driven tests where available. [STATUS: CODED]
 - [ ] P2-061 Measure latency impact of validation/workflow orchestration. [STATUS: CODED]
-- [ ] P2-062 Optimize bottlenecks and document before/after results. [STATUS: PARTIAL]
+- [ ] P2-062 Optimize bottlenecks and document before/after results. [STATUS: CODED]
 
 ### 2.K Phase Gate
 
