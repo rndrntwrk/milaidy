@@ -109,6 +109,53 @@ describe("TemporalWorkflowEngine", () => {
     expect(mocks.getHandleMock).toHaveBeenCalledWith("plan-fixed");
   });
 
+  it("survives adapter restart by reattaching to existing workflow", async () => {
+    const mocks = createTemporalMocks();
+    const sharedHandle = {
+      workflowId: "plan-restart",
+      runId: "run-9",
+      result: vi.fn(async () => ({ stable: true })),
+    };
+
+    mocks.startMock
+      .mockResolvedValueOnce(sharedHandle)
+      .mockRejectedValueOnce(
+        Object.assign(new Error("already started"), {
+          name: "WorkflowExecutionAlreadyStartedError",
+        }),
+      );
+    mocks.getHandleMock.mockReturnValue(sharedHandle);
+
+    const def = {
+      id: "plan-execution",
+      name: "Plan Execution",
+      steps: [],
+      temporal: { workflowId: "plan-restart" },
+    };
+
+    const engine1 = new TemporalWorkflowEngine(
+      {},
+      { temporalModule: mocks.temporalModule },
+    );
+    engine1.register(def);
+    const first = await engine1.execute("plan-execution", { attempt: 1 });
+    expect(first.success).toBe(true);
+    expect(first.executionId).toBe("plan-restart:run-9");
+    await engine1.close();
+
+    // Simulate process restart with a fresh adapter instance.
+    const engine2 = new TemporalWorkflowEngine(
+      {},
+      { temporalModule: mocks.temporalModule },
+    );
+    engine2.register(def);
+    const second = await engine2.execute("plan-execution", { attempt: 2 });
+    expect(second.success).toBe(true);
+    expect(second.executionId).toBe("plan-restart:run-9");
+    expect(second.output).toEqual({ stable: true });
+    expect(mocks.getHandleMock).toHaveBeenCalledWith("plan-restart");
+  });
+
   it("returns failure on non-idempotent start errors", async () => {
     const mocks = createTemporalMocks();
     mocks.startMock.mockRejectedValueOnce(new Error("temporal unavailable"));

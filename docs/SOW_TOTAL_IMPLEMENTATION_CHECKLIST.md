@@ -291,7 +291,7 @@ Sprint chunks:
 - [ ] P2-024 Implement workflow start/status/cancel APIs. [STATUS: CODED]
 - [ ] P2-025 Implement deterministic retries/idempotency strategy. [STATUS: CODED]
 - [ ] P2-026 Implement workflow timeout and dead-letter behavior. [STATUS: PARTIAL]
-- [ ] P2-027 Verify workflow survives process restart. [STATUS: PARTIAL]
+- [ ] P2-027 Verify workflow survives process restart. [STATUS: CODED]
 
 ### 2.E Event Sourcing and State Reconstruction
 
