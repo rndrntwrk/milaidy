@@ -218,6 +218,21 @@ describe("KernelOrchestrator", () => {
       expect(sm.currentState).toBe("idle");
     });
 
+    it("fails closed on malformed orchestrated requests", async () => {
+      const planner = createMockPlanner();
+      const { orchestrator } = createOrchestrator({ planner });
+
+      const result = await orchestrator.execute(
+        createRequest({ sourceTrust: 2 as unknown as number }),
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.auditReport.anomalies[0]).toContain(
+        "Role boundary validation failed for RoleOrchestrator.execute request",
+      );
+      expect(planner.createPlan).not.toHaveBeenCalled();
+    });
+
     it("plan rejection stops lifecycle early", async () => {
       const planner = createMockPlanner(undefined, false);
       const pipeline = createMockPipeline();

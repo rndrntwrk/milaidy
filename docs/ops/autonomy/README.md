@@ -14,6 +14,7 @@ Contents:
 - `phase3-executor-role-2026-02-17.md`: `P3-024` Executor role implementation and wiring evidence.
 - `phase3-role-dataflow-2026-02-17.md`: `P3-030` role dataflow integration evidence across planner/executor/verifier/memory/auditor.
 - `phase3-role-authz-guards-2026-02-17.md`: `P3-034` validation that orchestrated roles cannot bypass contract/approval guards.
+- `phase3-role-boundary-contracts-2026-02-17.md`: `P3-001/P3-002` role responsibility boundary definitions and request/response schema enforcement.
 - `phase3-role-health-readiness-2026-02-17.md`: `P3-010` per-role health/readiness endpoint implementation and validation.
 - `phase3-state-transition-persistence-2026-02-17.md`: `P3-012` persistence evidence for invariant decisions and safe-mode transitions.
 - `phase3-lifecycle-validation-2026-02-17.md`: `P3-031/P3-032/P3-033` lifecycle and safe-mode integration validation.
