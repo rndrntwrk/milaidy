@@ -350,7 +350,16 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
       status: verification.status,
       hasCriticalFailure: verification.hasCriticalFailure,
       checks: verification.checks,
+      failureTaxonomy: verification.failureTaxonomy,
     }, correlationId);
+    this.eventBus?.emit("autonomy:tool:postcondition:checked", {
+      toolName,
+      status: verification.status,
+      criticalFailure: verification.hasCriticalFailure,
+      checkCount: verification.checks.length,
+      requestId,
+      failureTaxonomy: verification.failureTaxonomy,
+    });
 
     // 6. Handle critical verification failure → compensation
     if (verification.hasCriticalFailure) {
@@ -412,6 +421,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
         verification: {
           status: verification.status,
           hasCriticalFailure: true,
+          failureTaxonomy: verification.failureTaxonomy,
         },
         compensation: compensationInfo,
         invariants: invariantInfo,
@@ -483,6 +493,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
         verification: {
           status: verification.status,
           hasCriticalFailure: false,
+          failureTaxonomy: verification.failureTaxonomy,
         },
         compensation: compensationInfo,
         invariants: invariantInfo,
@@ -526,6 +537,7 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
       verification: {
         status: verification.status,
         hasCriticalFailure: false,
+        failureTaxonomy: verification.failureTaxonomy,
       },
       invariants: invariantInfo,
       correlationId,

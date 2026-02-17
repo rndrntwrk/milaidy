@@ -40,6 +40,15 @@ function createMockVerifier(overrides: Partial<VerificationResult> = {}) {
     status: "passed",
     checks: [],
     hasCriticalFailure: false,
+    failureTaxonomy: {
+      totalFailures: 0,
+      criticalFailures: 0,
+      warningFailures: 0,
+      infoFailures: 0,
+      checkFailures: 0,
+      errorFailures: 0,
+      timeoutFailures: 0,
+    },
     ...overrides,
   };
   return {
@@ -587,6 +596,47 @@ describe("ToolExecutionPipeline", () => {
         detail: expect.any(String),
         reason: "critical_verification_failure",
         correlationId: expect.any(String),
+      });
+    });
+
+    it("emits postcondition:checked event with failure taxonomy", async () => {
+      const mockEmit = vi.fn();
+      const verifier = createMockVerifier({
+        status: "failed",
+        hasCriticalFailure: true,
+        checks: [{ conditionId: "pc-timeout", passed: false, severity: "critical", failureCode: "timeout" }],
+        failureTaxonomy: {
+          totalFailures: 1,
+          criticalFailures: 1,
+          warningFailures: 0,
+          infoFailures: 0,
+          checkFailures: 0,
+          errorFailures: 0,
+          timeoutFailures: 1,
+        },
+      });
+      const { pipeline } = createPipeline({
+        verifier,
+        eventBus: { emit: mockEmit },
+      });
+
+      await pipeline.execute(makeCall({ requestId: "evt-tax-1" }), createSuccessHandler());
+
+      expect(mockEmit).toHaveBeenCalledWith("autonomy:tool:postcondition:checked", {
+        toolName: "PLAY_EMOTE",
+        status: "failed",
+        criticalFailure: true,
+        checkCount: 1,
+        requestId: "evt-tax-1",
+        failureTaxonomy: {
+          totalFailures: 1,
+          criticalFailures: 1,
+          warningFailures: 0,
+          infoFailures: 0,
+          checkFailures: 0,
+          errorFailures: 0,
+          timeoutFailures: 1,
+        },
       });
     });
   });
