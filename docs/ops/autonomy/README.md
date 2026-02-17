@@ -19,6 +19,7 @@ Contents:
 - `phase0-baseline-data-and-reporting-2026-02-17.md`: `P0-020/P0-021/P0-025/P0-027` baseline scenario definition, baseline-window run, red-team run, and charted report evidence.
 - `phase0-metrics-endpoint-verification-2026-02-17.md`: `P0-015` metrics endpoint scrape-path verification.
 - `phase1-identity-mutation-audit-2026-02-17.md`: `P1-010` identity mutation audit event + telemetry + durable history evidence.
+- `phase1-identity-update-policy-2026-02-17.md`: `P1-004` sanctioned identity update policy and approval-rule enforcement evidence.
 - `phase1-goal-gate-observability-2026-02-17.md`: `P1-018/P1-028` goal transition logging and gate observability metrics wiring evidence.
 - `phase1-identity-memory-validation-2026-02-17.md`: `P1-043/P1-044/P1-045/P1-046` identity/memory API integration, fail-closed integrity, quarantine lifecycle, and drift-alert threshold validation evidence.
 - `phase1-trust-feature-weight-strategy-2026-02-17.md`: `P1-029` trust feature set and weighting strategy definition.
@@ -92,7 +93,7 @@ Provisioned observability:
 - Event bus: `autonomy:safe-mode:entered`, `autonomy:safe-mode:exited`, and `autonomy:safe-mode:exit-denied` emit safe-mode lifecycle notifications.
 - Event bus: `autonomy:safe-mode:tool-blocked` emits denied execution attempts for blocked tool classes during safe mode.
 - Event bus: `autonomy:state:transition` emits every kernel FSM transition with trigger metadata.
-- Event bus: `autonomy:identity:updated` emits identity mutation audit records (version change + changed fields + hash).
+- Event bus: `autonomy:identity:updated` emits identity mutation audit records (version change + changed fields + hash + policy metadata).
 - Event store: `kernel-state-transitions` and `kernel-safe-mode-transitions` persist kernel and safe-mode transition history.
 - Event store: auditor writes `identity:drift:report` events per audited request with drift score/severity and corrective context.
 - Metric: `autonomy_goal_transitions_total{status}` tracks goal lifecycle transitions (`active/paused/completed/failed`).

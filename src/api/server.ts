@@ -133,7 +133,10 @@ interface AutonomyServiceLike {
   getGoalManager?(): import("../autonomy/goals/manager.js").GoalManager | null;
   getMemoryGate?(): import("../autonomy/memory/gate.js").MemoryGate | null;
   getIdentityConfig?(): import("../autonomy/identity/schema.js").AutonomyIdentityConfig | null;
-  updateIdentityConfig?(update: Partial<import("../autonomy/identity/schema.js").AutonomyIdentityConfig>): Promise<import("../autonomy/identity/schema.js").AutonomyIdentityConfig>;
+  updateIdentityConfig?(
+    update: Partial<import("../autonomy/identity/schema.js").AutonomyIdentityConfig>,
+    context?: import("../autonomy/identity/update-policy.js").IdentityUpdateContext,
+  ): Promise<import("../autonomy/identity/schema.js").AutonomyIdentityConfig>;
   getApprovalGate?(): import("../autonomy/approval/types.js").ApprovalGateInterface | null;
   getApprovalLog?(): import("../autonomy/persistence/pg-approval-log.js").ApprovalLogInterface | null;
   getStateMachine?(): import("../autonomy/state-machine/types.js").KernelStateMachineInterface | null;
@@ -3234,6 +3237,21 @@ function extractAuthToken(req: http.IncomingMessage): string | null {
   return null;
 }
 
+function readSingleHeaderValue(
+  value: string | string[] | undefined,
+): string | undefined {
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const trimmed = entry.trim();
+      if (trimmed.length > 0) return trimmed;
+    }
+    return undefined;
+  }
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 function tokenMatches(expected: string, provided: string): boolean {
   const a = Buffer.from(expected, "utf8");
   const b = Buffer.from(provided, "utf8");
@@ -5638,6 +5656,7 @@ async function handleRequest(
 
   // ── Autonomy auth guard ──────────────────────────────────────────────
   // Apply auth guard to /api/agent/ autonomy endpoints.
+  let autonomyAuthIdentity: string | undefined;
   if (pathname.startsWith("/api/agent/autonomy") ||
       pathname.startsWith("/api/agent/identity") ||
       pathname.startsWith("/api/agent/approvals") ||
@@ -5648,6 +5667,7 @@ async function handleRequest(
     const guard = createAuthGuard({ apiKey: autonomyCfg?.apiKey });
     const authResult = guard(req, res);
     if (!authResult.authenticated) return;
+    autonomyAuthIdentity = authResult.identity;
   }
 
   // ── POST /api/agent/autonomy ────────────────────────────────────────────
@@ -5743,7 +5763,21 @@ async function handleRequest(
         return;
       }
 
-      const updated = await autonomySvc.updateIdentityConfig(body as Partial<import("../autonomy/identity/schema.js").AutonomyIdentityConfig>);
+      const updated = await autonomySvc.updateIdentityConfig(
+        body as Partial<import("../autonomy/identity/schema.js").AutonomyIdentityConfig>,
+        {
+          source: "api",
+          actor:
+            readSingleHeaderValue(req.headers["x-autonomy-actor"]) ??
+            autonomyAuthIdentity,
+          approvedBy: readSingleHeaderValue(
+            req.headers["x-autonomy-approved-by"],
+          ),
+          reason: readSingleHeaderValue(
+            req.headers["x-autonomy-change-reason"],
+          ),
+        },
+      );
 
       // Persist to config file
       try {
