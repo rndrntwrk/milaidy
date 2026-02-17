@@ -20,21 +20,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - uses: pnpm/action-setup@v4
         with:
-          bun-version: latest
+          version: 9
 
-      - run: bun install --frozen-lockfile
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Run repository postinstall patches
-        run: bun run postinstall
+        run: pnpm run postinstall
 
       - name: Biome lint
-        run: bun run lint
+        run: pnpm run lint
 
       - name: Biome format check
-        run: bun run format
+        run: pnpm run format
 
   typecheck:
     name: Type Check
@@ -42,18 +46,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - uses: pnpm/action-setup@v4
         with:
-          bun-version: latest
+          version: 9
 
-      - run: bun install --frozen-lockfile
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Run repository postinstall patches
-        run: bun run postinstall
+        run: pnpm run postinstall
 
       - name: Run type checker
-        run: bun run typecheck
+        run: pnpm run typecheck
 
   test:
     name: Unit Tests
@@ -61,18 +69,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - uses: pnpm/action-setup@v4
         with:
-          bun-version: latest
+          version: 9
 
-      - run: bun install --frozen-lockfile
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Run repository postinstall patches
-        run: bun run postinstall
+        run: pnpm run postinstall
 
       - name: Run unit tests
-        run: bunx vitest run --config vitest.unit.config.ts
+        run: pnpm exec vitest run --config vitest.unit.config.ts
 
   build:
     name: Build
@@ -80,15 +92,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - uses: pnpm/action-setup@v4
         with:
-          bun-version: latest
+          version: 9
 
-      - run: bun install --frozen-lockfile
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Run repository postinstall patches
-        run: bun run postinstall
+        run: pnpm run postinstall
 
       - name: Build project
-        run: bun run build
+        run: pnpm run build
