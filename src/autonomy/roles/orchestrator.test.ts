@@ -8,6 +8,7 @@ import { LocalWorkflowEngine } from "../adapters/workflow/local-engine.js";
 import type { WorkflowEngine } from "../adapters/workflow/types.js";
 import {
   KernelOrchestrator,
+  type RoleCallAuthzPolicy,
   type RoleCallPolicy,
 } from "./orchestrator.js";
 import { SafeModeControllerImpl } from "./safe-mode.js";
@@ -189,6 +190,7 @@ describe("KernelOrchestrator", () => {
     safeMode?: SafeModeController;
     workflowEngine?: WorkflowEngine;
     roleCallPolicy?: Partial<RoleCallPolicy>;
+    roleCallAuthzPolicy?: Partial<RoleCallAuthzPolicy>;
   }) {
     const sm = new KernelStateMachine();
     return {
@@ -202,6 +204,7 @@ describe("KernelOrchestrator", () => {
         overrides?.safeMode ?? new SafeModeControllerImpl(),
         overrides?.workflowEngine,
         overrides?.roleCallPolicy,
+        overrides?.roleCallAuthzPolicy,
       ),
       sm,
     };
@@ -234,6 +237,42 @@ describe("KernelOrchestrator", () => {
       expect(result.success).toBe(false);
       expect(result.auditReport.anomalies[0]).toContain(
         "Role boundary validation failed for RoleOrchestrator.execute request",
+      );
+      expect(planner.createPlan).not.toHaveBeenCalled();
+    });
+
+    it("fails closed when source trust is below role-call auth floor", async () => {
+      const planner = createMockPlanner();
+      const { orchestrator } = createOrchestrator({
+        planner,
+        roleCallAuthzPolicy: {
+          minSourceTrust: 0.95,
+        },
+      });
+
+      const result = await orchestrator.execute(createRequest({ sourceTrust: 0.9 }));
+
+      expect(result.success).toBe(false);
+      expect(result.auditReport.anomalies[0]).toContain(
+        "Role call denied: planner.createPlan source trust",
+      );
+      expect(planner.createPlan).not.toHaveBeenCalled();
+    });
+
+    it("fails closed when source is not in role-call allowlist", async () => {
+      const planner = createMockPlanner();
+      const { orchestrator } = createOrchestrator({
+        planner,
+        roleCallAuthzPolicy: {
+          allowedSources: ["system"],
+        },
+      });
+
+      const result = await orchestrator.execute(createRequest({ source: "user" }));
+
+      expect(result.success).toBe(false);
+      expect(result.auditReport.anomalies[0]).toContain(
+        'Role call denied: planner.createPlan source "user" is not allowed',
       );
       expect(planner.createPlan).not.toHaveBeenCalled();
     });

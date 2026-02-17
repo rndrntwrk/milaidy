@@ -584,6 +584,10 @@ export class MilaidyAutonomyService extends Service {
       this.safeModeController,
       this.workflowEngine ?? undefined,
       config.roles?.orchestrator,
+      {
+        minSourceTrust: config.roles?.orchestrator?.minSourceTrust,
+        allowedSources: config.roles?.orchestrator?.allowedSources,
+      },
     );
 
     // Initialize learning infrastructure (Phase 4)

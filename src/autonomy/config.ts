@@ -266,6 +266,10 @@ export interface AutonomyRolesConfig {
     circuitBreakerThreshold?: number;
     /** Circuit-open cooldown in ms before retrying calls (default: 30000). */
     circuitBreakerResetMs?: number;
+    /** Minimum trust required for orchestrator role calls (default: 0). */
+    minSourceTrust?: number;
+    /** Allowed request sources for orchestrator role calls. */
+    allowedSources?: Array<import("./tools/types.js").ToolCallSource>;
   };
 }
 
@@ -429,6 +433,13 @@ export function resolveAutonomyConfig(
           cfg.roles?.orchestrator?.circuitBreakerThreshold ?? 3,
         circuitBreakerResetMs:
           cfg.roles?.orchestrator?.circuitBreakerResetMs ?? 30_000,
+        minSourceTrust: cfg.roles?.orchestrator?.minSourceTrust ?? 0,
+        allowedSources: cfg.roles?.orchestrator?.allowedSources ?? [
+          "llm",
+          "user",
+          "system",
+          "plugin",
+        ],
       },
     },
     learning: {
@@ -656,6 +667,28 @@ export function validateAutonomyConfig(
       path: "autonomy.roles.orchestrator.circuitBreakerResetMs",
       message: "Must be at least 1",
     });
+  }
+  if (config.roles?.orchestrator?.minSourceTrust !== undefined) {
+    if (
+      config.roles.orchestrator.minSourceTrust < 0 ||
+      config.roles.orchestrator.minSourceTrust > 1
+    ) {
+      issues.push({
+        path: "autonomy.roles.orchestrator.minSourceTrust",
+        message: "Must be between 0 and 1",
+      });
+    }
+  }
+  if (config.roles?.orchestrator?.allowedSources !== undefined) {
+    const allowed = new Set(["llm", "user", "system", "plugin"]);
+    for (const source of config.roles.orchestrator.allowedSources) {
+      if (!allowed.has(source)) {
+        issues.push({
+          path: "autonomy.roles.orchestrator.allowedSources",
+          message: `Invalid source "${source}"`,
+        });
+      }
+    }
   }
 
   // Validate learning config

@@ -35,6 +35,13 @@ describe("resolveAutonomyConfig", () => {
     expect(config.roles?.orchestrator?.backoffMs).toBe(50);
     expect(config.roles?.orchestrator?.circuitBreakerThreshold).toBe(3);
     expect(config.roles?.orchestrator?.circuitBreakerResetMs).toBe(30_000);
+    expect(config.roles?.orchestrator?.minSourceTrust).toBe(0);
+    expect(config.roles?.orchestrator?.allowedSources).toEqual([
+      "llm",
+      "user",
+      "system",
+      "plugin",
+    ]);
   });
 
   it("merges user values over defaults", () => {
@@ -258,6 +265,8 @@ describe("validateAutonomyConfig", () => {
           backoffMs: -1,
           circuitBreakerThreshold: 0,
           circuitBreakerResetMs: 0,
+          minSourceTrust: -0.1,
+          allowedSources: ["unknown" as never],
         },
       },
     });
@@ -285,6 +294,16 @@ describe("validateAutonomyConfig", () => {
     expect(
       issues.some((i) =>
         i.path.includes("autonomy.roles.orchestrator.circuitBreakerResetMs"),
+      ),
+    ).toBe(true);
+    expect(
+      issues.some((i) =>
+        i.path.includes("autonomy.roles.orchestrator.minSourceTrust"),
+      ),
+    ).toBe(true);
+    expect(
+      issues.some((i) =>
+        i.path.includes("autonomy.roles.orchestrator.allowedSources"),
       ),
     ).toBe(true);
   });
