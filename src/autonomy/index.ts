@@ -122,6 +122,7 @@ export {
 export {
   LocalWorkflowEngine,
   TemporalWorkflowEngine,
+  type WorkflowDeadLetter,
   type WorkflowDefinition,
   type WorkflowEngine,
   type WorkflowResult,

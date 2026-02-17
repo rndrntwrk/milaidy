@@ -119,6 +119,10 @@ export interface AutonomyWorkflowEngineConfig {
     taskQueue?: string;
     /** Workflow ID prefix (default: "autonomy"). */
     workflowIdPrefix?: string;
+    /** Default Temporal workflow timeout in ms (inherits workflow.defaultTimeoutMs). */
+    defaultTimeoutMs?: number;
+    /** Maximum retained workflow dead-letter records (default: 1000). */
+    deadLetterMax?: number;
   };
 }
 
@@ -372,6 +376,11 @@ export function resolveAutonomyConfig(
         namespace: cfg.workflowEngine?.temporal?.namespace ?? "default",
         taskQueue: cfg.workflowEngine?.temporal?.taskQueue ?? "autonomy-tasks",
         workflowIdPrefix: cfg.workflowEngine?.temporal?.workflowIdPrefix ?? "autonomy",
+        defaultTimeoutMs:
+          cfg.workflowEngine?.temporal?.defaultTimeoutMs ??
+          cfg.workflow?.defaultTimeoutMs ??
+          30_000,
+        deadLetterMax: cfg.workflowEngine?.temporal?.deadLetterMax ?? 1_000,
       },
     },
     approval: {
@@ -560,6 +569,12 @@ export function validateAutonomyConfig(
     }
     if (temporalCfg?.taskQueue !== undefined && temporalCfg.taskQueue.trim().length === 0) {
       issues.push({ path: "autonomy.workflowEngine.temporal.taskQueue", message: "Must be a non-empty string" });
+    }
+    if (temporalCfg?.defaultTimeoutMs !== undefined && temporalCfg.defaultTimeoutMs < 1000) {
+      issues.push({ path: "autonomy.workflowEngine.temporal.defaultTimeoutMs", message: "Must be at least 1000" });
+    }
+    if (temporalCfg?.deadLetterMax !== undefined && temporalCfg.deadLetterMax < 1) {
+      issues.push({ path: "autonomy.workflowEngine.temporal.deadLetterMax", message: "Must be at least 1" });
     }
   }
 

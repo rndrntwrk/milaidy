@@ -38,6 +38,7 @@ describe("TemporalWorkflowEngine", () => {
     const result = await engine.execute("missing", {});
 
     expect(result.success).toBe(false);
+    expect(result.status).toBe("failed");
     expect(result.error).toContain("not registered");
     expect(mocks.startMock).not.toHaveBeenCalled();
   });
@@ -61,6 +62,7 @@ describe("TemporalWorkflowEngine", () => {
     const result = await engine.execute("wf", { input: 1 });
 
     expect(result.success).toBe(true);
+    expect(result.status).toBe("completed");
     expect(result.executionId).toBe("wf-1:run-1");
     expect(result.output).toEqual({ ok: true });
     expect(mocks.startMock).toHaveBeenCalledTimes(1);
@@ -169,6 +171,44 @@ describe("TemporalWorkflowEngine", () => {
     const result = await engine.execute("wf", {});
 
     expect(result.success).toBe(false);
+    expect(result.status).toBe("failed");
+    expect(result.deadLettered).toBe(true);
     expect(result.error).toContain("temporal unavailable");
+    const deadLetters = await engine.getDeadLetters();
+    expect(deadLetters).toHaveLength(1);
+    expect(deadLetters[0].reason).toBe("start_error");
+  });
+
+  it("times out workflow result and dead-letters execution", async () => {
+    const mocks = createTemporalMocks();
+    const handle = {
+      workflowId: "wf-timeout",
+      runId: "run-timeout",
+      result: vi.fn(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        return { ok: true };
+      }),
+      cancel: vi.fn(async () => {}),
+    };
+    mocks.startMock.mockResolvedValue(handle);
+
+    const engine = new TemporalWorkflowEngine(
+      { defaultTimeoutMs: 10 },
+      { temporalModule: mocks.temporalModule },
+    );
+    engine.register({ id: "wf", name: "Workflow", steps: [] });
+
+    const result = await engine.execute("wf", { input: 1 });
+
+    expect(result.success).toBe(false);
+    expect(result.status).toBe("timed_out");
+    expect(result.deadLettered).toBe(true);
+    expect(result.error).toContain("timed out");
+    expect(handle.cancel).toHaveBeenCalledTimes(1);
+
+    const deadLetters = await engine.getDeadLetters();
+    expect(deadLetters).toHaveLength(1);
+    expect(deadLetters[0].executionId).toBe("wf-timeout:run-timeout");
+    expect(deadLetters[0].reason).toBe("timeout");
   });
 });

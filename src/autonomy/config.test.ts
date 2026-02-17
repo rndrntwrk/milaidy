@@ -28,6 +28,8 @@ describe("resolveAutonomyConfig", () => {
     expect(config.retrieval.maxResults).toBe(20);
     expect(config.workflowEngine?.provider).toBe("local");
     expect(config.workflowEngine?.temporal?.taskQueue).toBe("autonomy-tasks");
+    expect(config.workflowEngine?.temporal?.defaultTimeoutMs).toBe(30_000);
+    expect(config.workflowEngine?.temporal?.deadLetterMax).toBe(1_000);
   });
 
   it("merges user values over defaults", () => {
@@ -70,6 +72,14 @@ describe("resolveAutonomyConfig", () => {
     expect(config.memoryGate.enabled).toBe(false);
     expect(config.memoryGate.maxQuarantineSize).toBe(500);
     expect(config.driftMonitor.analysisWindowSize).toBe(10);
+  });
+
+  it("inherits workflow timeout for temporal engine when not explicitly set", () => {
+    const config = resolveAutonomyConfig({
+      workflow: { defaultTimeoutMs: 45_000 },
+      workflowEngine: { provider: "temporal", temporal: {} },
+    });
+    expect(config.workflowEngine?.temporal?.defaultTimeoutMs).toBe(45_000);
   });
 });
 
@@ -195,6 +205,34 @@ describe("validateAutonomyConfig", () => {
     expect(
       issues.some((i) =>
         i.path.includes("autonomy.workflowEngine.temporal.taskQueue"),
+      ),
+    ).toBe(true);
+  });
+
+  it("catches temporal defaultTimeoutMs below minimum", () => {
+    const issues = validateAutonomyConfig({
+      workflowEngine: {
+        provider: "temporal",
+        temporal: { defaultTimeoutMs: 500 },
+      },
+    });
+    expect(
+      issues.some((i) =>
+        i.path.includes("autonomy.workflowEngine.temporal.defaultTimeoutMs"),
+      ),
+    ).toBe(true);
+  });
+
+  it("catches temporal deadLetterMax below minimum", () => {
+    const issues = validateAutonomyConfig({
+      workflowEngine: {
+        provider: "temporal",
+        temporal: { deadLetterMax: 0 },
+      },
+    });
+    expect(
+      issues.some((i) =>
+        i.path.includes("autonomy.workflowEngine.temporal.deadLetterMax"),
       ),
     ).toBe(true);
   });

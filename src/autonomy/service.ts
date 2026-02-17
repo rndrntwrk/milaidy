@@ -389,10 +389,16 @@ export class MilaidyAutonomyService extends Service {
       : innerStateMachine;
 
     const workflowEngineProvider = config.workflowEngine?.provider ?? "local";
+    const workflowTimeoutMs = config.workflow?.defaultTimeoutMs ?? 30_000;
     if (workflowEngineProvider === "temporal") {
       try {
         this.workflowEngine = new _TemporalWorkflowEngine(
-          config.workflowEngine?.temporal,
+          {
+            ...(config.workflowEngine?.temporal ?? {}),
+            defaultTimeoutMs:
+              config.workflowEngine?.temporal?.defaultTimeoutMs ??
+              workflowTimeoutMs,
+          },
         );
       } catch (err) {
         logger.warn(
@@ -400,10 +406,14 @@ export class MilaidyAutonomyService extends Service {
             err instanceof Error ? err.message : String(err)
           }`,
         );
-        this.workflowEngine = new _LocalWorkflowEngine();
+        this.workflowEngine = new _LocalWorkflowEngine({
+          defaultTimeoutMs: workflowTimeoutMs,
+        });
       }
     } else {
-      this.workflowEngine = new _LocalWorkflowEngine();
+      this.workflowEngine = new _LocalWorkflowEngine({
+        defaultTimeoutMs: workflowTimeoutMs,
+      });
     }
 
     let eventBusRef: { emit: (event: string, payload: unknown) => void } | undefined;
