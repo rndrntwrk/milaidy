@@ -56,6 +56,7 @@ Contents:
 - `phase3-safe-mode-incident-demo-2026-02-17.md`: `P3-041` induced-incident safe-mode demonstration evidence.
 - `phase3-safe-mode-tool-restrictions-2026-02-17.md`: `P3-017` safe-mode tool-class restriction policy + enforcement evidence.
 - `phase3-acceptance-report-2026-02-17.md`: `P3-042` Phase 3 gate report and sign-off decision.
+- `phase4-dataset-schema-extraction-2026-02-17.md`: `P4-001/P4-002` learning dataset schema and event-log extraction implementation/validation evidence.
 - `phase4-deidentification-pipeline-2026-02-17.md`: `P4-003` deterministic de-identification/anonymization pipeline for learning dataset export paths.
 - `phase4-quality-filters-2026-02-17.md`: `P4-004` deterministic quality filters for training examples/episodes before dataset export.
 - `phase4-labeling-guidelines-2026-02-17.md`: `P4-005` labeling rubric and QA sampling policy for training trace annotation.
@@ -68,6 +69,7 @@ Primary scripts:
 - `npm run autonomy:phase3:reductions`
 - `npm run autonomy:redteam:run`
 - `npm run autonomy:retrieval:quality`
+- `npm run autonomy:learning:extract -- --events-file <path-to-events-json-or-jsonl>`
 - `npm run autonomy:metrics:cardinality`
 - `npm run autonomy:metrics:retention-cost`
 - `npm run autonomy:contracts:inventory`

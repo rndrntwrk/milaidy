@@ -57,6 +57,22 @@ export {
   type AdversarialSplitOptions,
   type AdversarialSplitResult,
 } from "./dataset-splits.js";
+// Learning trace dataset schema
+export {
+  parseLearningTraceDataset,
+  LearningTraceDatasetSchema,
+  LearningTraceExampleSchema,
+  TraceLabelSchema,
+  type LearningTraceDataset,
+  type LearningTraceExample,
+  type TraceLabel,
+} from "./dataset-schema.js";
+// Learning trace dataset extraction from event logs
+export {
+  extractLearningTraceDatasetFromEvents,
+  type EventLogEntry,
+  type ExtractDatasetOptions,
+} from "./event-log-extractor.js";
 // Types
 export type {
   CollectedEpisode,

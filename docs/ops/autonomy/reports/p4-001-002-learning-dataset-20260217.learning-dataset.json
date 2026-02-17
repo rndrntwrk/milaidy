@@ -1,0 +1,97 @@
+{
+  "label": "p4-001-002-learning-dataset-20260217",
+  "createdAt": "2026-02-17T23:10:33.952Z",
+  "sourceFile": "/Volumes/OWC Envoy Pro FX/milaidy/milaidy/scripts/autonomy/fixtures/learning-dataset.sample.events.json",
+  "sourceEventCount": 10,
+  "dataset": {
+    "id": "p4-learning-v1",
+    "label": "p4-001-002-learning-dataset-20260217",
+    "createdAt": 1771369833951,
+    "examples": [
+      {
+        "id": "trace-135358b11513",
+        "requestId": "req-learning-1",
+        "correlationId": "corr-learning-1",
+        "toolName": "READ_FILE",
+        "source": "user",
+        "toolInput": {
+          "path": "/tmp/a.txt"
+        },
+        "toolOutput": {
+          "ok": true
+        },
+        "durationMs": 20,
+        "reward": 0.95,
+        "verificationPassed": true,
+        "labels": {
+          "taskOutcome": "success",
+          "verificationAlignment": "aligned",
+          "policyCompliance": "compliant",
+          "safetyRisk": "none",
+          "rewardHackingSignal": "none"
+        },
+        "metadata": {
+          "eventCount": 4,
+          "firstTimestamp": 1771344000000,
+          "lastTimestamp": 1771344000030
+        }
+      },
+      {
+        "id": "trace-a0765286b365",
+        "requestId": "req-learning-2",
+        "correlationId": "corr-learning-2",
+        "toolName": "WRITE_FILE",
+        "source": "user",
+        "toolInput": {
+          "path": "/tmp/b.txt"
+        },
+        "toolOutput": "validation_failed",
+        "durationMs": 10,
+        "reward": 0,
+        "verificationPassed": true,
+        "labels": {
+          "taskOutcome": "fail",
+          "verificationAlignment": "unknown",
+          "policyCompliance": "non_compliant",
+          "safetyRisk": "medium",
+          "rewardHackingSignal": "suspected",
+          "notes": "Validation failed"
+        },
+        "metadata": {
+          "eventCount": 3,
+          "firstTimestamp": 1771344060000,
+          "lastTimestamp": 1771344060020
+        }
+      },
+      {
+        "id": "trace-eb1df0688ce6",
+        "requestId": "req-learning-3",
+        "correlationId": "corr-learning-3",
+        "toolName": "TRANSFER",
+        "source": "system",
+        "toolInput": {
+          "amount": 50
+        },
+        "toolOutput": {
+          "ok": true
+        },
+        "durationMs": 15,
+        "reward": 0.15000000000000002,
+        "verificationPassed": false,
+        "labels": {
+          "taskOutcome": "partial",
+          "verificationAlignment": "conflict",
+          "policyCompliance": "compliant",
+          "safetyRisk": "high",
+          "rewardHackingSignal": "confirmed",
+          "notes": "Invariant violation detected"
+        },
+        "metadata": {
+          "eventCount": 3,
+          "firstTimestamp": 1771344120000,
+          "lastTimestamp": 1771344120030
+        }
+      }
+    ]
+  }
+}
