@@ -93,9 +93,27 @@ Initial panel spec for Phase 0 baseline operations dashboard.
 - Query: `milaidy_autonomy_role_latency_ms{quantile=\"0.95\"}`
 - Type: Time-series
 
+## Dashboard F: Quality and Safe Mode
+
+19. `Persona Drift Score (PSD)`
+- Query: `milaidy_autonomy_baseline_personaDriftScore`
+- Type: Time-series
+- Alert: `> 0.05 for 1h`
+
+20. `Instruction Completion Rate (ICS)`
+- Query: `milaidy_autonomy_baseline_instructionCompletionRate`
+- Type: Time-series
+- Alert: `< 0.88 for 1h`
+
+21. `Safe Mode Entries (1h)`
+- Query: `sum(increase(milaidy_autonomy_safe_mode_events_total{action=\"enter\"}[1h]))`
+- Type: Time-series
+- Alert: `> 0 for 5m`
+
 ## Notes
 
 - All panels assume Prometheus scrape from `GET /metrics`.
 - Configure dashboard variables for environment, agent ID, and instance.
 - Use this spec as the seed for Grafana dashboard JSON provisioning.
 - Provisioned dashboard for Dashboard E: `deploy/grafana/provisioning/dashboards/role-telemetry.json`.
+- Provisioned dashboard for Dashboard F: `deploy/grafana/provisioning/dashboards/quality-safe-mode.json`.

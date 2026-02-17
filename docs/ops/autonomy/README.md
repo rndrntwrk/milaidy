@@ -18,6 +18,7 @@ Contents:
 - `phase3-concurrency-consistency-2026-02-17.md`: `P3-035` concurrency consistency validation for orchestrated lifecycle execution.
 - `phase3-role-telemetry-2026-02-17.md`: `P3-028` role-level telemetry implementation and validation.
 - `phase3-role-dashboard-2026-02-17.md`: `P3-036` role throughput/error/latency dashboard provisioning evidence.
+- `phase3-quality-safe-mode-dashboard-2026-02-17.md`: `P3-037` PSD/ICS/safe-mode dashboard provisioning evidence.
 - `reports/`: generated run artifacts (`.json` and `.md` outputs).
 
 Primary scripts:
@@ -45,6 +46,7 @@ Workflow durability controls:
 Provisioned observability:
 - Grafana dashboard: `deploy/grafana/provisioning/dashboards/operational-baseline.json`
 - Grafana dashboard: `deploy/grafana/provisioning/dashboards/role-telemetry.json`
+- Grafana dashboard: `deploy/grafana/provisioning/dashboards/quality-safe-mode.json`
 - Prometheus rules: `deploy/prometheus/alerts.yml`
 - Event bus: `autonomy:decision:logged` emits normalized validation/approval/verification/invariant outcomes per pipeline execution.
 - Event bus: `autonomy:tool:postcondition:checked` includes `failureTaxonomy` (`check_failed`, `check_error`, `timeout`) for verification analytics.
