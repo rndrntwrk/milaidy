@@ -24,6 +24,7 @@ export function createCustomActionContract(opts: {
   name: string;
   description: string;
   handlerType: "http" | "shell" | "code";
+  parameters?: Array<{ name: string; required?: boolean }>;
 }): ToolContract {
   // Build permissions based on handler type
   const permissions: PluginPermission[] = [];
@@ -37,8 +38,20 @@ export function createCustomActionContract(opts: {
 
   const riskClass = classifyRisk(permissions);
 
-  // Custom actions use a record schema — params are user-defined strings
-  const paramsSchema = z.record(z.string(), z.unknown());
+  // Prefer strict declared params when available; preserve permissive
+  // fallback for legacy callers that do not provide parameter metadata.
+  let paramsSchema: z.ZodTypeAny = z.record(z.string(), z.unknown());
+  if (Array.isArray(opts.parameters) && opts.parameters.length > 0) {
+    const shape: Record<string, z.ZodTypeAny> = {};
+    for (const parameter of opts.parameters) {
+      const name =
+        typeof parameter.name === "string" ? parameter.name.trim() : "";
+      if (!name || shape[name]) continue;
+      const field = z.string();
+      shape[name] = parameter.required ? field : field.optional();
+    }
+    paramsSchema = z.object(shape).strict();
+  }
 
   return {
     name: opts.name,
