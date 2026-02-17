@@ -253,6 +253,37 @@ async function loadImplementations() {
 
 // ---------- Service ----------
 
+export type AutonomyRoleName =
+  | "planner"
+  | "executor"
+  | "verifier"
+  | "memory_writer"
+  | "auditor"
+  | "safe_mode"
+  | "orchestrator";
+
+export interface AutonomyRoleHealthStatus {
+  role: AutonomyRoleName;
+  available: boolean;
+  ready: boolean;
+  healthy: boolean;
+  requiredMethods: string[];
+  missingMethods: string[];
+}
+
+export interface AutonomyRoleHealthSnapshot {
+  checkedAt: number;
+  roles: Record<AutonomyRoleName, AutonomyRoleHealthStatus>;
+  summary: {
+    ready: boolean;
+    healthy: boolean;
+    totalRoles: number;
+    readyRoles: number;
+    healthyRoles: number;
+    unavailableRoles: AutonomyRoleName[];
+  };
+}
+
 export class MilaidyAutonomyService extends Service {
   static override serviceType = "AUTONOMY" as const;
 
@@ -1127,6 +1158,64 @@ export class MilaidyAutonomyService extends Service {
     return this.orchestrator;
   }
 
+  getRoleHealth(): AutonomyRoleHealthSnapshot {
+    const roles: Record<AutonomyRoleName, AutonomyRoleHealthStatus> = {
+      planner: this.describeRoleHealth("planner", this.planner, [
+        "createPlan",
+        "validatePlan",
+        "getActivePlan",
+        "cancelPlan",
+      ]),
+      executor: this.describeRoleHealth("executor", this.executorRole, [
+        "execute",
+      ]),
+      verifier: this.describeRoleHealth("verifier", this.verifier, [
+        "verify",
+        "checkInvariants",
+      ]),
+      memory_writer: this.describeRoleHealth(
+        "memory_writer",
+        this.memoryWriterRole,
+        ["write", "writeBatch", "getStats"],
+      ),
+      auditor: this.describeRoleHealth("auditor", this.auditorRole, [
+        "audit",
+        "getDriftReport",
+        "queryEvents",
+      ]),
+      safe_mode: this.describeRoleHealth(
+        "safe_mode",
+        this.safeModeController,
+        ["shouldTrigger", "enter", "requestExit", "getStatus"],
+      ),
+      orchestrator: this.describeRoleHealth("orchestrator", this.orchestrator, [
+        "execute",
+        "getCurrentPhase",
+        "isInSafeMode",
+      ]),
+    };
+
+    const statuses = Object.values(roles);
+    const readyRoles = statuses.filter((status) => status.ready).length;
+    const healthyRoles = statuses.filter((status) => status.healthy).length;
+    const unavailableRoles = statuses
+      .filter((status) => !status.available)
+      .map((status) => status.role);
+
+    return {
+      checkedAt: Date.now(),
+      roles,
+      summary: {
+        ready: this.enabled && readyRoles === statuses.length,
+        healthy: healthyRoles === statuses.length,
+        totalRoles: statuses.length,
+        readyRoles,
+        healthyRoles,
+        unavailableRoles,
+      },
+    };
+  }
+
   // ---------- Persistence Accessors ----------
 
   getDbAdapter(): import("./persistence/db-adapter.js").AutonomyDbAdapter | null {
@@ -1187,6 +1276,38 @@ export class MilaidyAutonomyService extends Service {
 
   getPilotRunner(): import("./domains/pilot/pilot-runner.js").PilotRunner | null {
     return this.pilotRunner;
+  }
+
+  private describeRoleHealth(
+    role: AutonomyRoleName,
+    instance: unknown,
+    requiredMethods: string[],
+  ): AutonomyRoleHealthStatus {
+    if (!instance) {
+      return {
+        role,
+        available: false,
+        ready: false,
+        healthy: false,
+        requiredMethods: [...requiredMethods],
+        missingMethods: [...requiredMethods],
+      };
+    }
+
+    const candidate = instance as Record<string, unknown>;
+    const missingMethods = requiredMethods.filter(
+      (methodName) => typeof candidate[methodName] !== "function",
+    );
+    const healthy = missingMethods.length === 0;
+
+    return {
+      role,
+      available: true,
+      ready: healthy,
+      healthy,
+      requiredMethods: [...requiredMethods],
+      missingMethods,
+    };
   }
 
   // ---------- Lifecycle ----------

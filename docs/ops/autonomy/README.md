@@ -14,6 +14,7 @@ Contents:
 - `phase3-executor-role-2026-02-17.md`: `P3-024` Executor role implementation and wiring evidence.
 - `phase3-role-dataflow-2026-02-17.md`: `P3-030` role dataflow integration evidence across planner/executor/verifier/memory/auditor.
 - `phase3-role-authz-guards-2026-02-17.md`: `P3-034` validation that orchestrated roles cannot bypass contract/approval guards.
+- `phase3-role-health-readiness-2026-02-17.md`: `P3-010` per-role health/readiness endpoint implementation and validation.
 - `phase3-lifecycle-validation-2026-02-17.md`: `P3-031/P3-032/P3-033` lifecycle and safe-mode integration validation.
 - `phase3-concurrency-consistency-2026-02-17.md`: `P3-035` concurrency consistency validation for orchestrated lifecycle execution.
 - `phase3-role-telemetry-2026-02-17.md`: `P3-028` role-level telemetry implementation and validation.
@@ -50,6 +51,8 @@ Workflow durability controls:
 - `GET /api/agent/autonomy/audit/summary`: compliance summary for retained audit records.
 - `GET /api/agent/autonomy/audit/export`: export retained audit records in JSONL.
 - `POST /api/agent/autonomy/audit/export-expired`: export expired records and optionally evict.
+- `GET /api/agent/autonomy/roles/health`: per-role health status snapshot.
+- `GET /api/agent/autonomy/roles/readiness`: readiness gate for role boundary availability.
 
 Provisioned observability:
 - Grafana dashboard: `deploy/grafana/provisioning/dashboards/operational-baseline.json`

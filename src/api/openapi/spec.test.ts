@@ -19,6 +19,8 @@ describe("buildOpenApiSpec", () => {
     const paths = spec.paths as Record<string, unknown>;
     expect(paths["/api/agent/autonomy"]).toBeDefined();
     expect(paths["/api/agent/autonomy/execute-plan"]).toBeDefined();
+    expect(paths["/api/agent/autonomy/roles/health"]).toBeDefined();
+    expect(paths["/api/agent/autonomy/roles/readiness"]).toBeDefined();
     expect(paths["/api/agent/autonomy/workflows/start"]).toBeDefined();
     expect(paths["/api/agent/autonomy/workflows/dead-letters"]).toBeDefined();
     expect(paths["/api/agent/autonomy/workflows/dead-letters/clear"]).toBeDefined();

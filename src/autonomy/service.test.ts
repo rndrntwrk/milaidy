@@ -624,6 +624,33 @@ describe("MilaidyAutonomyService", () => {
       expect(svc.getOrchestrator()).toBeNull();
     });
 
+    it("reports all role health checks as ready when enabled", async () => {
+      setAutonomyConfig({ enabled: true });
+      const runtime = createMockRuntime();
+      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+
+      const snapshot = svc.getRoleHealth();
+      expect(snapshot.summary.ready).toBe(true);
+      expect(snapshot.summary.healthy).toBe(true);
+      expect(snapshot.summary.totalRoles).toBe(7);
+      expect(snapshot.summary.readyRoles).toBe(7);
+      expect(snapshot.summary.unavailableRoles).toHaveLength(0);
+      expect(snapshot.roles.planner.ready).toBe(true);
+      expect(snapshot.roles.orchestrator.ready).toBe(true);
+    });
+
+    it("reports role readiness as false when autonomy is disabled", async () => {
+      const runtime = createMockRuntime();
+      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+
+      const snapshot = svc.getRoleHealth();
+      expect(snapshot.summary.ready).toBe(false);
+      expect(snapshot.summary.healthy).toBe(false);
+      expect(snapshot.summary.readyRoles).toBe(0);
+      expect(snapshot.summary.unavailableRoles).toContain("planner");
+      expect(snapshot.summary.unavailableRoles).toContain("orchestrator");
+    });
+
     it("returns learning accessors when learning enabled", async () => {
       setAutonomyConfig({ enabled: true, learning: { enabled: true } });
       const runtime = createMockRuntime();
