@@ -48,6 +48,11 @@ import {
   buildTestHandler,
   registerCustomActionLive,
 } from "../runtime/custom-actions.js";
+import {
+  assertFive55Capability,
+  createFive55CapabilityPolicy,
+} from "../runtime/five55-capability-policy.js";
+import { resolveFive55CapabilityForRequest } from "../runtime/five55-capability-routing.js";
 import { createPiCredentialProvider } from "../runtime/pi-credentials.js";
 import {
   AgentExportError,
@@ -328,6 +333,8 @@ interface ServerState {
   /** Whether shell access is enabled (can be toggled in UI). */
   shellEnabled?: boolean;
 }
+
+const FIVE55_HTTP_CAPABILITY_POLICY = createFive55CapabilityPolicy();
 
 interface ShareIngestItem {
   id: string;
@@ -1090,7 +1097,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
       // Keys that are auto-injected by infrastructure and should never be
       // exposed as user-facing "config keys" or parameter definitions.
       const HIDDEN_KEYS = new Set(["VERCEL_OIDC_TOKEN"]);
-      return index.plugins
+      const manifestEntries: PluginEntry[] = index.plugins
         .map((p) => {
           const category = categorizePlugin(p.id);
           const envKey = p.envKey;
@@ -1147,6 +1154,343 @@ function discoverPluginsFromManifest(): PluginEntry[] {
           };
         })
         .sort((a, b) => a.name.localeCompare(b.name));
+
+      const syntheticFive55Entries: PluginEntry[] = [
+        {
+          id: "stream",
+          name: "Stream",
+          description:
+            "Stream control and observability bridge for live operations.",
+          enabled: false,
+          configured: Boolean(process.env.STREAM_API_URL?.trim()),
+          envKey: "STREAM_API_URL",
+          category: "feature",
+          source: "bundled",
+          configKeys: ["STREAM_API_URL", "STREAM_PLUGIN_ENABLED"],
+          parameters: [
+            {
+              key: "STREAM_API_URL",
+              type: "string",
+              description: "Stream control API base URL",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM_API_URL ?? null,
+              isSet: Boolean(process.env.STREAM_API_URL?.trim()),
+            },
+            {
+              key: "STREAM_PLUGIN_ENABLED",
+              type: "string",
+              description: "Enable/disable stream plugin (1/0)",
+              required: false,
+              sensitive: false,
+              default: "1",
+              currentValue: process.env.STREAM_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(process.env.STREAM_PLUGIN_ENABLED?.trim()),
+            },
+          ],
+          validationErrors: [],
+          validationWarnings: [],
+        },
+        {
+          id: "swap",
+          name: "Swap",
+          description:
+            "Swap + wallet execution bridge for EVM/SVM strategy actions.",
+          enabled: false,
+          configured: Boolean(process.env.SWAP_API_URL?.trim()),
+          envKey: "SWAP_API_URL",
+          category: "feature",
+          source: "bundled",
+          configKeys: ["SWAP_API_URL", "SWAP_PLUGIN_ENABLED"],
+          parameters: [
+            {
+              key: "SWAP_API_URL",
+              type: "string",
+              description: "Swap API base URL",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.SWAP_API_URL ?? null,
+              isSet: Boolean(process.env.SWAP_API_URL?.trim()),
+            },
+            {
+              key: "SWAP_PLUGIN_ENABLED",
+              type: "string",
+              description: "Enable/disable swap plugin (1/0)",
+              required: false,
+              sensitive: false,
+              default: "1",
+              currentValue: process.env.SWAP_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(process.env.SWAP_PLUGIN_ENABLED?.trim()),
+            },
+          ],
+          validationErrors: [],
+          validationWarnings: [],
+        },
+        {
+          id: "five55-games",
+          name: "Five55 Games",
+          description: "Five55 game discovery and play orchestration plugin.",
+          enabled: false,
+          configured: Boolean(process.env.FIVE55_GAMES_API_URL?.trim()),
+          envKey: "FIVE55_GAMES_API_URL",
+          category: "feature",
+          source: "bundled",
+          configKeys: ["FIVE55_GAMES_API_URL", "FIVE55_GAMES_PLUGIN_ENABLED"],
+          parameters: [
+            {
+              key: "FIVE55_GAMES_API_URL",
+              type: "string",
+              description: "Five55 games API base URL",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.FIVE55_GAMES_API_URL ?? null,
+              isSet: Boolean(process.env.FIVE55_GAMES_API_URL?.trim()),
+            },
+            {
+              key: "FIVE55_GAMES_PLUGIN_ENABLED",
+              type: "string",
+              description: "Enable/disable Five55 games plugin (1/0)",
+              required: false,
+              sensitive: false,
+              default: "1",
+              currentValue: process.env.FIVE55_GAMES_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(process.env.FIVE55_GAMES_PLUGIN_ENABLED?.trim()),
+            },
+          ],
+          validationErrors: [],
+          validationWarnings: [],
+        },
+        {
+          id: "five55-score-capture",
+          name: "Five55 Score Capture",
+          description: "Five55 score capture normalization and submit plugin.",
+          enabled: false,
+          configured: Boolean(process.env.FIVE55_SCORE_CAPTURE_API_URL?.trim()),
+          envKey: "FIVE55_SCORE_CAPTURE_API_URL",
+          category: "feature",
+          source: "bundled",
+          configKeys: [
+            "FIVE55_SCORE_CAPTURE_API_URL",
+            "FIVE55_SCORE_CAPTURE_PLUGIN_ENABLED",
+          ],
+          parameters: [
+            {
+              key: "FIVE55_SCORE_CAPTURE_API_URL",
+              type: "string",
+              description: "Five55 score capture API base URL",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.FIVE55_SCORE_CAPTURE_API_URL ?? null,
+              isSet: Boolean(process.env.FIVE55_SCORE_CAPTURE_API_URL?.trim()),
+            },
+            {
+              key: "FIVE55_SCORE_CAPTURE_PLUGIN_ENABLED",
+              type: "string",
+              description: "Enable/disable Five55 score capture plugin (1/0)",
+              required: false,
+              sensitive: false,
+              default: "1",
+              currentValue:
+                process.env.FIVE55_SCORE_CAPTURE_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(
+                process.env.FIVE55_SCORE_CAPTURE_PLUGIN_ENABLED?.trim(),
+              ),
+            },
+          ],
+          validationErrors: [],
+          validationWarnings: [],
+        },
+        {
+          id: "five55-leaderboard",
+          name: "Five55 Leaderboard",
+          description: "Five55 leaderboard read/write synchronization plugin.",
+          enabled: false,
+          configured: Boolean(process.env.FIVE55_LEADERBOARD_API_URL?.trim()),
+          envKey: "FIVE55_LEADERBOARD_API_URL",
+          category: "feature",
+          source: "bundled",
+          configKeys: [
+            "FIVE55_LEADERBOARD_API_URL",
+            "FIVE55_LEADERBOARD_PLUGIN_ENABLED",
+          ],
+          parameters: [
+            {
+              key: "FIVE55_LEADERBOARD_API_URL",
+              type: "string",
+              description: "Five55 leaderboard API base URL",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.FIVE55_LEADERBOARD_API_URL ?? null,
+              isSet: Boolean(process.env.FIVE55_LEADERBOARD_API_URL?.trim()),
+            },
+            {
+              key: "FIVE55_LEADERBOARD_PLUGIN_ENABLED",
+              type: "string",
+              description: "Enable/disable Five55 leaderboard plugin (1/0)",
+              required: false,
+              sensitive: false,
+              default: "1",
+              currentValue: process.env.FIVE55_LEADERBOARD_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(
+                process.env.FIVE55_LEADERBOARD_PLUGIN_ENABLED?.trim(),
+              ),
+            },
+          ],
+          validationErrors: [],
+          validationWarnings: [],
+        },
+        {
+          id: "five55-quests",
+          name: "Five55 Quests",
+          description: "Five55 quest and challenge lifecycle plugin.",
+          enabled: false,
+          configured: Boolean(process.env.FIVE55_QUESTS_API_URL?.trim()),
+          envKey: "FIVE55_QUESTS_API_URL",
+          category: "feature",
+          source: "bundled",
+          configKeys: ["FIVE55_QUESTS_API_URL", "FIVE55_QUESTS_PLUGIN_ENABLED"],
+          parameters: [
+            {
+              key: "FIVE55_QUESTS_API_URL",
+              type: "string",
+              description: "Five55 quests API base URL",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.FIVE55_QUESTS_API_URL ?? null,
+              isSet: Boolean(process.env.FIVE55_QUESTS_API_URL?.trim()),
+            },
+            {
+              key: "FIVE55_QUESTS_PLUGIN_ENABLED",
+              type: "string",
+              description: "Enable/disable Five55 quests plugin (1/0)",
+              required: false,
+              sensitive: false,
+              default: "1",
+              currentValue: process.env.FIVE55_QUESTS_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(process.env.FIVE55_QUESTS_PLUGIN_ENABLED?.trim()),
+            },
+          ],
+          validationErrors: [],
+          validationWarnings: [],
+        },
+        {
+          id: "five55-battles",
+          name: "Five55 Battles",
+          description: "Five55 battles read/resolve plugin.",
+          enabled: false,
+          configured: Boolean(process.env.FIVE55_BATTLES_API_URL?.trim()),
+          envKey: "FIVE55_BATTLES_API_URL",
+          category: "feature",
+          source: "bundled",
+          configKeys: [
+            "FIVE55_BATTLES_API_URL",
+            "FIVE55_BATTLES_PLUGIN_ENABLED",
+          ],
+          parameters: [
+            {
+              key: "FIVE55_BATTLES_API_URL",
+              type: "string",
+              description: "Five55 battles API base URL",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.FIVE55_BATTLES_API_URL ?? null,
+              isSet: Boolean(process.env.FIVE55_BATTLES_API_URL?.trim()),
+            },
+            {
+              key: "FIVE55_BATTLES_PLUGIN_ENABLED",
+              type: "string",
+              description: "Enable/disable Five55 battles plugin (1/0)",
+              required: false,
+              sensitive: false,
+              default: "1",
+              currentValue: process.env.FIVE55_BATTLES_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(process.env.FIVE55_BATTLES_PLUGIN_ENABLED?.trim()),
+            },
+          ],
+          validationErrors: [],
+          validationWarnings: [],
+        },
+        {
+          id: "five55-social",
+          name: "Five55 Social",
+          description: "Five55 social monitoring and point-assignment plugin.",
+          enabled: false,
+          configured: Boolean(process.env.FIVE55_SOCIAL_API_URL?.trim()),
+          envKey: "FIVE55_SOCIAL_API_URL",
+          category: "feature",
+          source: "bundled",
+          configKeys: ["FIVE55_SOCIAL_API_URL", "FIVE55_SOCIAL_PLUGIN_ENABLED"],
+          parameters: [
+            {
+              key: "FIVE55_SOCIAL_API_URL",
+              type: "string",
+              description: "Five55 social API base URL",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.FIVE55_SOCIAL_API_URL ?? null,
+              isSet: Boolean(process.env.FIVE55_SOCIAL_API_URL?.trim()),
+            },
+            {
+              key: "FIVE55_SOCIAL_PLUGIN_ENABLED",
+              type: "string",
+              description: "Enable/disable Five55 social plugin (1/0)",
+              required: false,
+              sensitive: false,
+              default: "1",
+              currentValue: process.env.FIVE55_SOCIAL_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(process.env.FIVE55_SOCIAL_PLUGIN_ENABLED?.trim()),
+            },
+          ],
+          validationErrors: [],
+          validationWarnings: [],
+        },
+        {
+          id: "five55-rewards",
+          name: "Five55 Rewards",
+          description: "Five55 rewards projection and settlement plugin.",
+          enabled: false,
+          configured: Boolean(process.env.FIVE55_REWARDS_API_URL?.trim()),
+          envKey: "FIVE55_REWARDS_API_URL",
+          category: "feature",
+          source: "bundled",
+          configKeys: [
+            "FIVE55_REWARDS_API_URL",
+            "FIVE55_REWARDS_PLUGIN_ENABLED",
+          ],
+          parameters: [
+            {
+              key: "FIVE55_REWARDS_API_URL",
+              type: "string",
+              description: "Five55 rewards API base URL",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.FIVE55_REWARDS_API_URL ?? null,
+              isSet: Boolean(process.env.FIVE55_REWARDS_API_URL?.trim()),
+            },
+            {
+              key: "FIVE55_REWARDS_PLUGIN_ENABLED",
+              type: "string",
+              description: "Enable/disable Five55 rewards plugin (1/0)",
+              required: false,
+              sensitive: false,
+              default: "1",
+              currentValue: process.env.FIVE55_REWARDS_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(process.env.FIVE55_REWARDS_PLUGIN_ENABLED?.trim()),
+            },
+          ],
+          validationErrors: [],
+          validationWarnings: [],
+        },
+      ];
+
+      const presentIds = new Set(manifestEntries.map((entry) => entry.id));
+      for (const entry of syntheticFive55Entries) {
+        if (!presentIds.has(entry.id)) {
+          manifestEntries.push(entry);
+        }
+      }
+
+      return manifestEntries.sort((a, b) => a.name.localeCompare(b.name));
     } catch (err) {
       logger.debug(
         `[milaidy-api] Failed to read plugins.json: ${err instanceof Error ? err.message : err}`,
@@ -4232,6 +4576,21 @@ async function handleRequest(
     return;
   }
   const pathname = url.pathname;
+  const requiredCapability = resolveFive55CapabilityForRequest(method, pathname);
+  if (requiredCapability) {
+    try {
+      assertFive55Capability(FIVE55_HTTP_CAPABILITY_POLICY, requiredCapability);
+    } catch (err) {
+      error(
+        res,
+        err instanceof Error
+          ? err.message
+          : "five55 capability denied for this request",
+        403,
+      );
+      return;
+    }
+  }
   const isAuthEndpoint = pathname.startsWith("/api/auth/");
   const registryService = state.registryService;
   const dropService = state.dropService;

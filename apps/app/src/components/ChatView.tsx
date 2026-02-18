@@ -79,6 +79,9 @@ export const ChatView = memo(function ChatView() {
     handleChatSend,
     handleChatStop,
     setState,
+    setTab,
+    setActionNotice,
+    plugins,
     droppedFiles,
     shareIngestNotice,
     selectedVrmIndex,
@@ -184,6 +187,50 @@ export const ChatView = memo(function ChatView() {
   );
   const agentAvatarSrc = selectedVrmIndex > 0 ? getVrmPreviewUrl(selectedVrmIndex) : null;
   const agentInitial = agentName.trim().charAt(0).toUpperCase() || "A";
+  const resolvePluginStatus = (id: string): "active" | "disabled" | "available" => {
+    const plugin = plugins.find(
+      (p) =>
+        p.id === id ||
+        p.id === id.replace(/^alice-/, "") ||
+        p.name.toLowerCase().includes(id),
+    );
+    if (!plugin) return "available";
+    return plugin.enabled ? "active" : "disabled";
+  };
+
+  const quickLayers = [
+    {
+      id: "stream",
+      label: "Stream",
+      prompt:
+        "Use STREAM_STATUS and STREAM_CONTROL to report current stream state and execute the next stream action safely.",
+    },
+    {
+      id: "swap",
+      label: "Swap",
+      prompt:
+        "Use WALLET_POSITION and SWAP_QUOTE to evaluate wallet state and produce a safe swap recommendation.",
+    },
+  ] as const;
+
+  const triggerQuickLayer = useCallback(
+    (prompt: string, layerId: string) => {
+      if (chatSending) return;
+      const status = resolvePluginStatus(layerId);
+      if (status === "disabled") {
+        setActionNotice(
+          `${layerId} is disabled. Enable it in Plugins first.`,
+          "info",
+          2200,
+        );
+        setTab("plugins");
+        return;
+      }
+      setState("chatInput", prompt);
+      setTimeout(() => void handleChatSend("power"), 30);
+    },
+    [chatSending, setActionNotice, setState, handleChatSend, setTab, plugins],
+  );
 
   const lastSpokenIdRef = useRef<string | null>(null);
 
@@ -242,6 +289,38 @@ export const ChatView = memo(function ChatView() {
       )}
 
       {/* ── Messages ───────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-1.5 pb-2 relative" style={{ zIndex: 1 }}>
+        <span className="text-[10px] uppercase tracking-wide text-muted pr-1">
+          Action layers
+        </span>
+        {quickLayers.map((layer) => {
+          const status = resolvePluginStatus(layer.id);
+          const tone =
+            status === "active"
+              ? "border-accent text-accent bg-card"
+              : status === "disabled"
+                ? "border-danger/40 text-danger bg-card"
+                : "border-border text-muted bg-card";
+          return (
+            <button
+              key={layer.id}
+              className={`px-2 py-1 text-[11px] border rounded transition-all ${tone}`}
+              onClick={() => triggerQuickLayer(layer.prompt, layer.id)}
+              title={`${layer.label} (${status})`}
+            >
+              {layer.label}
+            </button>
+          );
+        })}
+        <button
+          className="px-2 py-1 text-[11px] border rounded border-border text-muted bg-card hover:border-accent hover:text-accent"
+          onClick={() => setTab("plugins")}
+          title="Open plugin settings"
+        >
+          Manage
+        </button>
+      </div>
+
       <div ref={messagesRef} className="flex-1 overflow-y-auto py-2 relative" style={{ zIndex: 1 }}>
         {visibleMsgs.length === 0 && !chatSending ? (
           <div className="text-center py-10 text-muted italic">
