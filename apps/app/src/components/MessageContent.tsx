@@ -29,6 +29,18 @@ export interface MessageContentProps {
   message: ConversationMessage;
 }
 
+interface Five55ActionEnvelope {
+  ok: boolean;
+  code: string;
+  module: string;
+  action: string;
+  message: string;
+  status: number;
+  retryable: boolean;
+  data?: unknown;
+  details?: unknown;
+}
+
 // ── Segment types ───────────────────────────────────────────────────
 
 type Segment =
@@ -43,6 +55,27 @@ const FENCED_JSON_RE = /```(?:json)?\s*\n([\s\S]*?)```/g;
 
 function tryParse(s: string): unknown {
   try { return JSON.parse(s); } catch { return null; }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseFive55Envelope(text: string): Five55ActionEnvelope | null {
+  const parsed = tryParse(text.trim());
+  if (!isRecord(parsed)) return null;
+  if (
+    typeof parsed.ok !== "boolean" ||
+    typeof parsed.code !== "string" ||
+    typeof parsed.module !== "string" ||
+    typeof parsed.action !== "string" ||
+    typeof parsed.message !== "string" ||
+    typeof parsed.status !== "number" ||
+    typeof parsed.retryable !== "boolean"
+  ) {
+    return null;
+  }
+  return parsed as Five55ActionEnvelope;
 }
 
 function isUiSpec(obj: unknown): obj is UiSpec {
@@ -407,6 +440,65 @@ function UiSpecBlock({ spec, raw }: { spec: UiSpec; raw: string }) {
   );
 }
 
+function renderJsonBlock(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+function ActionEnvelopeBlock({ envelope }: { envelope: Five55ActionEnvelope }) {
+  const tone = envelope.ok
+    ? "border-ok/30 bg-ok/5"
+    : "border-danger/35 bg-danger/5";
+
+  return (
+    <div className={`my-1 border rounded-sm overflow-hidden ${tone}`}>
+      <div className="px-3 py-1 border-b border-border bg-bg-hover text-[10px] uppercase tracking-wide text-muted font-semibold">
+        {envelope.module} · {envelope.action}
+      </div>
+      <div className="px-3 py-2">
+        <div className="text-[11px] font-mono text-muted">
+          {envelope.code} · status {envelope.status}
+          {envelope.retryable ? " · retryable" : ""}
+        </div>
+        <div className="text-[12px] text-txt whitespace-pre-wrap mt-1">
+          {envelope.message}
+        </div>
+        {envelope.data !== undefined && (
+          <details className="mt-2">
+            <summary className="text-[11px] text-muted cursor-pointer">
+              data
+            </summary>
+            <pre className="mt-1 text-[10px] font-mono whitespace-pre-wrap break-words m-0 p-2 bg-card border border-border rounded-sm">
+              {renderJsonBlock(envelope.data)}
+            </pre>
+          </details>
+        )}
+        {envelope.details !== undefined && (
+          <details className="mt-2">
+            <summary className="text-[11px] text-muted cursor-pointer">
+              details
+            </summary>
+            <pre className="mt-1 text-[10px] font-mono whitespace-pre-wrap break-words m-0 p-2 bg-card border border-border rounded-sm">
+              {renderJsonBlock(envelope.details)}
+            </pre>
+          </details>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function renderTextOrEnvelope(text: string) {
+  const envelope = parseFive55Envelope(text);
+  if (envelope) {
+    return <ActionEnvelopeBlock envelope={envelope} />;
+  }
+  return <div className="text-txt whitespace-pre-wrap">{text}</div>;
+}
+
 // ── Main component ──────────────────────────────────────────────────
 
 export function MessageContent({ message }: MessageContentProps) {
@@ -422,7 +514,7 @@ export function MessageContent({ message }: MessageContentProps) {
 
   // Fast path: single plain-text segment (most messages)
   if (segments.length === 1 && segments[0].kind === "text") {
-    return <div className="text-txt whitespace-pre-wrap">{message.text}</div>;
+    return renderTextOrEnvelope(message.text);
   }
 
   return (
@@ -430,11 +522,7 @@ export function MessageContent({ message }: MessageContentProps) {
       {segments.map((seg, i) => {
         switch (seg.kind) {
           case "text":
-            return (
-              <div key={i} className="text-txt whitespace-pre-wrap">
-                {seg.text}
-              </div>
-            );
+            return <div key={i}>{renderTextOrEnvelope(seg.text)}</div>;
           case "config":
             if (BLOCKED_IDS.has(seg.pluginId)) return null;
             return <InlinePluginConfig key={i} pluginId={seg.pluginId} />;

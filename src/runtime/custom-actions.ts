@@ -13,6 +13,11 @@ import type {
   CustomActionDef,
   CustomActionHandler,
 } from "../config/types.milaidy.js";
+import {
+  assertFive55Capability,
+  createFive55CapabilityPolicy,
+} from "./five55-capability-policy.js";
+import { resolveFive55CapabilityForAction } from "./five55-capability-routing.js";
 
 /** Cached runtime reference for hot-registration of new actions. */
 let _runtime: IAgentRuntime | null = null;
@@ -38,6 +43,7 @@ export function registerCustomActionLive(def: CustomActionDef): Action | null {
 
 /** API port for shell handler requests. */
 const API_PORT = process.env.API_PORT || process.env.SERVER_PORT || "2138";
+const FIVE55_CAPABILITY_POLICY = createFive55CapabilityPolicy();
 
 /** Valid handler types that we actually support. */
 const VALID_HANDLER_TYPES = new Set(["http", "shell", "code"]);
@@ -220,6 +226,14 @@ function defToAction(def: CustomActionDef): Action {
 
     handler: async (_runtime, _message, _state, options) => {
       try {
+        const requiredCapability = resolveFive55CapabilityForAction(
+          def.name,
+          def.description,
+        );
+        if (requiredCapability) {
+          assertFive55Capability(FIVE55_CAPABILITY_POLICY, requiredCapability);
+        }
+
         const opts = options as HandlerOptions | undefined;
         const params: Record<string, string> = {};
 

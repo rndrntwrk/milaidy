@@ -79,6 +79,15 @@ import {
   resolvePhettaCompanionOptionsFromEnv,
 } from "./phetta-companion-plugin.js";
 import { isPiAiEnabledFromEnv, registerPiAiRuntime } from "./pi-ai.js";
+import { createSwapPlugin } from "../plugins/swap/index.js";
+import { createStreamPlugin } from "../plugins/stream/index.js";
+import { createFive55GamesPlugin } from "../plugins/five55-games/index.js";
+import { createFive55ScoreCapturePlugin } from "../plugins/five55-score-capture/index.js";
+import { createFive55LeaderboardPlugin } from "../plugins/five55-leaderboard/index.js";
+import { createFive55QuestsPlugin } from "../plugins/five55-quests/index.js";
+import { createFive55BattlesPlugin } from "../plugins/five55-battles/index.js";
+import { createFive55SocialPlugin } from "../plugins/five55-social/index.js";
+import { createFive55RewardsPlugin } from "../plugins/five55-rewards/index.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1883,6 +1892,43 @@ export async function startEliza(
     ? createPhettaCompanionPlugin(phettaOpts)
     : null;
 
+  const isFive55PluginEnabled = (envKey: string): boolean => {
+    const raw = process.env[envKey];
+    if (!raw) return true;
+    const normalized = raw.trim().toLowerCase();
+    return !["0", "false", "off", "no"].includes(normalized);
+  };
+
+  const five55SurfacePlugins: Plugin[] = [
+    ...(isFive55PluginEnabled("SWAP_PLUGIN_ENABLED")
+      ? [createSwapPlugin()]
+      : []),
+    ...(isFive55PluginEnabled("STREAM_PLUGIN_ENABLED")
+      ? [createStreamPlugin()]
+      : []),
+    ...(isFive55PluginEnabled("FIVE55_GAMES_PLUGIN_ENABLED")
+      ? [createFive55GamesPlugin()]
+      : []),
+    ...(isFive55PluginEnabled("FIVE55_SCORE_CAPTURE_PLUGIN_ENABLED")
+      ? [createFive55ScoreCapturePlugin()]
+      : []),
+    ...(isFive55PluginEnabled("FIVE55_LEADERBOARD_PLUGIN_ENABLED")
+      ? [createFive55LeaderboardPlugin()]
+      : []),
+    ...(isFive55PluginEnabled("FIVE55_QUESTS_PLUGIN_ENABLED")
+      ? [createFive55QuestsPlugin()]
+      : []),
+    ...(isFive55PluginEnabled("FIVE55_BATTLES_PLUGIN_ENABLED")
+      ? [createFive55BattlesPlugin()]
+      : []),
+    ...(isFive55PluginEnabled("FIVE55_SOCIAL_PLUGIN_ENABLED")
+      ? [createFive55SocialPlugin()]
+      : []),
+    ...(isFive55PluginEnabled("FIVE55_REWARDS_PLUGIN_ENABLED")
+      ? [createFive55RewardsPlugin()]
+      : []),
+  ];
+
   // 6. Resolve and load plugins
   // In headless (GUI) mode before onboarding, the user hasn't configured a
   // provider yet.  Downgrade diagnostics so the expected "no AI provider"
@@ -2074,6 +2120,7 @@ export async function startEliza(
     plugins: [
       milaidyPlugin,
       ...(phettaPlugin ? [phettaPlugin] : []),
+      ...five55SurfacePlugins,
       ...otherPlugins.map((p) => p.plugin),
     ],
     ...(runtimeLogLevel ? { logLevel: runtimeLogLevel } : {}),
@@ -2082,13 +2129,17 @@ export async function startEliza(
       ? {
           sandboxMode: true,
           sandboxAuditHandler: sandboxAuditLog
-            ? (event: Record<string, unknown>) => {
+            ? (event: unknown) => {
+                const payload =
+                  typeof event === "object" && event !== null
+                    ? (event as Record<string, unknown>)
+                    : {};
                 sandboxAuditLog.recordTokenReplacement(
-                  (event.direction as string) === "outbound"
+                  (payload.direction as string) === "outbound"
                     ? "outbound"
                     : "inbound",
-                  (event.url as string) ?? "unknown",
-                  (event.tokenIds as string[]) ?? [],
+                  (payload.url as string) ?? "unknown",
+                  (payload.tokenIds as string[]) ?? [],
                 );
               }
             : undefined,
@@ -2481,10 +2532,40 @@ export async function startEliza(
           const freshOtherPlugins = resolvedPlugins.filter(
             (p) => !PREREGISTER_PLUGINS.has(p.name),
           );
+          const freshFive55SurfacePlugins: Plugin[] = [
+            ...(isFive55PluginEnabled("SWAP_PLUGIN_ENABLED")
+              ? [createSwapPlugin()]
+              : []),
+            ...(isFive55PluginEnabled("STREAM_PLUGIN_ENABLED")
+              ? [createStreamPlugin()]
+              : []),
+            ...(isFive55PluginEnabled("FIVE55_GAMES_PLUGIN_ENABLED")
+              ? [createFive55GamesPlugin()]
+              : []),
+            ...(isFive55PluginEnabled("FIVE55_SCORE_CAPTURE_PLUGIN_ENABLED")
+              ? [createFive55ScoreCapturePlugin()]
+              : []),
+            ...(isFive55PluginEnabled("FIVE55_LEADERBOARD_PLUGIN_ENABLED")
+              ? [createFive55LeaderboardPlugin()]
+              : []),
+            ...(isFive55PluginEnabled("FIVE55_QUESTS_PLUGIN_ENABLED")
+              ? [createFive55QuestsPlugin()]
+              : []),
+            ...(isFive55PluginEnabled("FIVE55_BATTLES_PLUGIN_ENABLED")
+              ? [createFive55BattlesPlugin()]
+              : []),
+            ...(isFive55PluginEnabled("FIVE55_SOCIAL_PLUGIN_ENABLED")
+              ? [createFive55SocialPlugin()]
+              : []),
+            ...(isFive55PluginEnabled("FIVE55_REWARDS_PLUGIN_ENABLED")
+              ? [createFive55RewardsPlugin()]
+              : []),
+          ];
           const newRuntime = new AgentRuntime({
             character: freshCharacter,
             plugins: [
               freshMilaidyPlugin,
+              ...freshFive55SurfacePlugins,
               ...freshOtherPlugins.map((p) => p.plugin),
             ],
             ...(runtimeLogLevel ? { logLevel: runtimeLogLevel } : {}),
