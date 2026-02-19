@@ -1124,6 +1124,86 @@ export interface AppStopResult {
   message: string;
 }
 
+export interface Five55GameCatalogItem {
+  id: string;
+  title: string;
+  description: string;
+  category: "arcade" | "rpg" | "puzzle" | "racing" | "casino";
+  difficulty: "easy" | "medium" | "hard" | "expert";
+  path: string;
+  isBeta?: boolean;
+  hasAudio?: boolean;
+  hasSave?: boolean;
+}
+
+export interface Five55GamesCatalogResponse {
+  games: Five55GameCatalogItem[];
+  total: number;
+  includeBeta: boolean;
+  category: string;
+}
+
+export interface Five55GamePlayResponse {
+  game: Five55GameCatalogItem;
+  mode: "standard" | "ranked" | "spectate";
+  viewer: AppViewerConfig;
+  launchUrl: string;
+  startedAt: string;
+}
+
+export type Five55AutonomyMode = "newscast" | "topic" | "games" | "free";
+
+export interface Five55AutonomyPreviewRequest {
+  mode: Five55AutonomyMode;
+  durationMin: number;
+  topic?: string;
+  avatarRuntime?: "auto" | "local" | "premium";
+  speechSeconds?: number;
+  avatarMinutes?: number;
+}
+
+export interface Five55AutonomyPreviewResponse {
+  mode: Five55AutonomyMode;
+  topic?: string;
+  durationMin: number;
+  profile: string;
+  outputCount: number;
+  addons: string[];
+  assumptions: {
+    speechRatio: number;
+    speechSeconds: number;
+    avatarMinutes: number;
+    avatarRuntime: "auto" | "local" | "premium";
+  };
+  estimate: {
+    creditsPerMin?: number;
+    totalCredits?: number;
+    runtimeCredits?: number;
+    grandTotalCredits?: number;
+    usdcEquivalent?: number;
+    runtimeUsdcEquivalent?: number;
+    grandUsdcEquivalent?: number;
+    canAfford?: boolean;
+    canAffordWithRuntime?: boolean;
+    currentBalance?: number;
+    remainingAfter?: number;
+    remainingAfterRuntime?: number;
+    breakdown?: unknown;
+    runtimeEstimate?: unknown;
+    [key: string]: unknown;
+  };
+  balance: {
+    creditBalance?: number;
+    totalCreditsEarned?: number;
+    tier?: string;
+    spendingPower?: unknown;
+    usdcValue?: number;
+    [key: string]: unknown;
+  } | null;
+  canStart: boolean;
+  requestId?: string;
+}
+
 export type HyperscapeScriptedRole =
   | "combat"
   | "woodcutting"
@@ -1526,6 +1606,47 @@ export interface PermissionDefinition {
   requiredForFeatures: string[];
 }
 
+export interface AutonomyPlanStep {
+  id?: string | number;
+  toolName: string;
+  params?: Record<string, unknown>;
+}
+
+export interface AutonomyExecutePlanRequest {
+  plan: {
+    id?: string;
+    steps: AutonomyPlanStep[];
+  };
+  request?: {
+    agentId?: string;
+    source?: "llm" | "user" | "system" | "plugin";
+    sourceTrust?: number;
+  };
+  options?: {
+    stopOnFailure?: boolean;
+  };
+}
+
+export interface AutonomyPipelineStepResult {
+  requestId?: string;
+  toolName?: string;
+  success?: boolean;
+  result?: unknown;
+  error?: string;
+  [key: string]: unknown;
+}
+
+export interface AutonomyExecutePlanResponse {
+  ok: boolean;
+  allSucceeded: boolean;
+  stoppedEarly: boolean;
+  failedStepIndex: number | null;
+  stopOnFailure: boolean;
+  successCount: number;
+  failedCount: number;
+  results: AutonomyPipelineStepResult[];
+}
+
 declare global {
   interface Window {
     __MILAIDY_API_BASE__?: string;
@@ -1691,6 +1812,15 @@ export class MilaidyClient {
     }
     const qs = params.toString();
     return this.fetch(`/api/runtime${qs ? `?${qs}` : ""}`);
+  }
+
+  async executeAutonomyPlan(
+    input: AutonomyExecutePlanRequest,
+  ): Promise<AutonomyExecutePlanResponse> {
+    return this.fetch("/api/agent/autonomy/execute-plan", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
   }
 
   async playEmote(emoteId: string): Promise<{ ok: boolean }> {
@@ -2372,6 +2502,38 @@ export class MilaidyClient {
   /** Launch an app: installs its plugin (if needed), returns viewer config for iframe. */
   async launchApp(name: string): Promise<AppLaunchResult> {
     return this.fetch("/api/apps/launch", { method: "POST", body: JSON.stringify({ name }) });
+  }
+  async getFive55GamesCatalog(input?: {
+    category?: string;
+    includeBeta?: boolean;
+  }): Promise<Five55GamesCatalogResponse> {
+    return this.fetch("/api/five55/games/catalog", {
+      method: "POST",
+      body: JSON.stringify({
+        category: input?.category,
+        includeBeta: input?.includeBeta ?? true,
+      }),
+    });
+  }
+  async playFive55Game(input: {
+    gameId?: string;
+    mode?: "standard" | "ranked" | "spectate";
+  }): Promise<Five55GamePlayResponse> {
+    return this.fetch("/api/five55/games/play", {
+      method: "POST",
+      body: JSON.stringify({
+        gameId: input.gameId,
+        mode: input.mode ?? "spectate",
+      }),
+    });
+  }
+  async getFive55AutonomyPreview(
+    input: Five55AutonomyPreviewRequest,
+  ): Promise<Five55AutonomyPreviewResponse> {
+    return this.fetch("/api/five55/stream/autonomy/preview", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
   }
   async listRegistryPlugins(): Promise<RegistryPluginItem[]> { return this.fetch("/api/apps/plugins"); }
   async searchRegistryPlugins(query: string): Promise<RegistryPluginItem[]> { return this.fetch(`/api/apps/plugins/search?q=${encodeURIComponent(query)}`); }

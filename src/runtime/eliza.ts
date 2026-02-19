@@ -86,6 +86,7 @@ import { createFive55ScoreCapturePlugin } from "../plugins/five55-score-capture/
 import { createFive55LeaderboardPlugin } from "../plugins/five55-leaderboard/index.js";
 import { createFive55QuestsPlugin } from "../plugins/five55-quests/index.js";
 import { createFive55BattlesPlugin } from "../plugins/five55-battles/index.js";
+import { createFive55AdminPlugin } from "../plugins/five55-admin/index.js";
 import { createFive55SocialPlugin } from "../plugins/five55-social/index.js";
 import { createFive55RewardsPlugin } from "../plugins/five55-rewards/index.js";
 
@@ -1053,6 +1054,21 @@ export function buildCharacterFromConfig(config: MilaidyConfig): Character {
   const systemPrompt =
     agentEntry?.system ??
     "You are {{name}}, an autonomous AI agent powered by ElizaOS.";
+  const five55SurfacePolicy = [
+    "555 Surface Operations Policy:",
+    "Use the same operation standards across all channels (web chat, Discord, Telegram, and direct text).",
+    "For theme/event controls, use FIVE55_THEME_SET and FIVE55_EVENT_TRIGGER with explicit operator intent.",
+    "For live-stream actions, call STREAM_STATUS before and after STREAM_CONTROL changes.",
+    "For game actions, call FIVE55_GAMES_CATALOG before FIVE55_GAMES_PLAY unless a valid gameId is already known.",
+    "For battle creation, use FIVE55_BATTLES_CREATE before resolution flows.",
+    "For wallet and swap actions, perform read checks before write operations and summarize risk before execution.",
+    "When a run requests autonomous operation, confirm duration and cost constraints before starting.",
+  ].join("\n");
+  const resolvedSystemPrompt = systemPrompt.includes(
+    "555 Surface Operations Policy:",
+  )
+    ? systemPrompt
+    : `${systemPrompt}\n\n${five55SurfacePolicy}`;
   const style = agentEntry?.style;
   const adjectives = agentEntry?.adjectives;
   const topics = agentEntry?.topics;
@@ -1129,7 +1145,7 @@ export function buildCharacterFromConfig(config: MilaidyConfig): Character {
   return mergeCharacterDefaults({
     name,
     bio,
-    system: systemPrompt,
+    system: resolvedSystemPrompt,
     ...(style ? { style } : {}),
     ...(adjectives ? { adjectives } : {}),
     ...(topics ? { topics } : {}),
@@ -1922,6 +1938,9 @@ export async function startEliza(
     ...(isFive55PluginEnabled("FIVE55_BATTLES_PLUGIN_ENABLED")
       ? [createFive55BattlesPlugin()]
       : []),
+    ...(isFive55PluginEnabled("FIVE55_ADMIN_PLUGIN_ENABLED")
+      ? [createFive55AdminPlugin()]
+      : []),
     ...(isFive55PluginEnabled("FIVE55_SOCIAL_PLUGIN_ENABLED")
       ? [createFive55SocialPlugin()]
       : []),
@@ -2554,6 +2573,9 @@ export async function startEliza(
               : []),
             ...(isFive55PluginEnabled("FIVE55_BATTLES_PLUGIN_ENABLED")
               ? [createFive55BattlesPlugin()]
+              : []),
+            ...(isFive55PluginEnabled("FIVE55_ADMIN_PLUGIN_ENABLED")
+              ? [createFive55AdminPlugin()]
               : []),
             ...(isFive55PluginEnabled("FIVE55_SOCIAL_PLUGIN_ENABLED")
               ? [createFive55SocialPlugin()]

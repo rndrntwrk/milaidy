@@ -19,7 +19,13 @@ import {
 import { getVrmPreviewUrl, useApp } from "../AppContext.js";
 import { ChatAvatar } from "./ChatAvatar.js";
 import { useVoiceChat } from "../hooks/useVoiceChat.js";
-import { client, type ConversationMode, type VoiceConfig } from "../api-client.js";
+import {
+  client,
+  type ConversationMode,
+  type Five55AutonomyMode,
+  type Five55AutonomyPreviewResponse,
+  type VoiceConfig,
+} from "../api-client.js";
 import { MessageContent } from "./MessageContent.js";
 
 function renderInlineMarkdown(line: string): ReactNode[] {
@@ -69,6 +75,133 @@ function renderMessageText(text: string): ReactNode {
   ));
 }
 
+type ParsedToolEnvelope = {
+  ok?: boolean;
+  action?: string;
+  message?: string;
+  status?: number;
+  data?: Record<string, unknown>;
+};
+
+function parseToolEnvelopeFromPipelineResult(
+  pipelineResult: unknown,
+): ParsedToolEnvelope | null {
+  if (!pipelineResult || typeof pipelineResult !== "object") return null;
+  const pipelineRecord = pipelineResult as Record<string, unknown>;
+  const toolResult = pipelineRecord.result;
+  if (!toolResult || typeof toolResult !== "object") return null;
+  const toolRecord = toolResult as Record<string, unknown>;
+  const text = toolRecord.text;
+  if (typeof text !== "string" || text.trim().length === 0) return null;
+
+  try {
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== "object") return null;
+    const data = parsed.data;
+    return {
+      ok: typeof parsed.ok === "boolean" ? parsed.ok : undefined,
+      action: typeof parsed.action === "string" ? parsed.action : undefined,
+      message: typeof parsed.message === "string" ? parsed.message : undefined,
+      status: typeof parsed.status === "number" ? parsed.status : undefined,
+      data:
+        data && typeof data === "object" && !Array.isArray(data)
+          ? (data as Record<string, unknown>)
+          : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function findLastToolEnvelope(
+  results: unknown[],
+  actionName: string,
+): ParsedToolEnvelope | null {
+  const normalizedAction = actionName.trim().toUpperCase();
+  for (let i = results.length - 1; i >= 0; i -= 1) {
+    const envelope = parseToolEnvelopeFromPipelineResult(results[i]);
+    if (!envelope?.action) continue;
+    if (envelope.action.trim().toUpperCase() === normalizedAction) {
+      return envelope;
+    }
+  }
+  return null;
+}
+
+function summarizeStreamState(
+  envelope: ParsedToolEnvelope | null,
+): { live: boolean; label: string } {
+  const data = envelope?.data;
+  if (!data) return { live: false, label: "unknown" };
+
+  const rawState =
+    typeof data.state === "string"
+      ? data.state
+      : typeof data.phase === "string"
+        ? data.phase
+        : typeof data.status === "string"
+          ? data.status
+          : undefined;
+  const normalizedState = rawState?.trim().toLowerCase() ?? "";
+  const live =
+    data.active === true ||
+    data.isLive === true ||
+    normalizedState === "live" ||
+    normalizedState === "playing" ||
+    normalizedState === "streaming" ||
+    normalizedState === "on_air";
+  return { live, label: rawState ?? (live ? "live" : "unknown") };
+}
+
+type ParsedGameLaunch = {
+  gameId: string;
+  gameTitle: string;
+  viewerUrl: string;
+  sandbox?: string;
+  postMessageAuth: boolean;
+};
+
+function parseGameLaunchFromEnvelope(
+  envelope: ParsedToolEnvelope | null,
+): ParsedGameLaunch | null {
+  const data = envelope?.data;
+  if (!data) return null;
+
+  const game =
+    data.game && typeof data.game === "object" && !Array.isArray(data.game)
+      ? (data.game as Record<string, unknown>)
+      : null;
+  const viewer =
+    data.viewer && typeof data.viewer === "object" && !Array.isArray(data.viewer)
+      ? (data.viewer as Record<string, unknown>)
+      : null;
+
+  const viewerUrl =
+    (viewer && typeof viewer.url === "string" ? viewer.url : undefined) ??
+    (typeof data.launchUrl === "string" ? data.launchUrl : undefined);
+  if (!viewerUrl) return null;
+
+  const gameId =
+    (game && typeof game.id === "string" ? game.id : undefined) ??
+    "unknown-game";
+  const gameTitle =
+    (game && typeof game.title === "string" ? game.title : undefined) ?? gameId;
+  const sandbox =
+    viewer && typeof viewer.sandbox === "string" ? viewer.sandbox : undefined;
+  const postMessageAuth =
+    viewer && typeof viewer.postMessageAuth === "boolean"
+      ? viewer.postMessageAuth
+      : false;
+
+  return {
+    gameId,
+    gameTitle,
+    viewerUrl,
+    sandbox,
+    postMessageAuth,
+  };
+}
+
 export const ChatView = memo(function ChatView() {
   const {
     agentStatus,
@@ -82,6 +215,7 @@ export const ChatView = memo(function ChatView() {
     setTab,
     setActionNotice,
     plugins,
+    activeGameViewerUrl,
     droppedFiles,
     shareIngestNotice,
     selectedVrmIndex,
@@ -141,6 +275,21 @@ export const ChatView = memo(function ChatView() {
 
   // ── Voice config (ElevenLabs / browser TTS) ────────────────────────
   const [voiceConfig, setVoiceConfig] = useState<VoiceConfig | null>(null);
+  const [autoRunOpen, setAutoRunOpen] = useState(false);
+  const [autoRunMode, setAutoRunMode] = useState<Five55AutonomyMode>("newscast");
+  const [autoRunTopic, setAutoRunTopic] = useState("");
+  const [autoRunDurationMin, setAutoRunDurationMin] = useState(30);
+  const [autoRunAvatarRuntime, setAutoRunAvatarRuntime] = useState<
+    "auto" | "local" | "premium"
+  >("local");
+  const [autoRunPreview, setAutoRunPreview] =
+    useState<Five55AutonomyPreviewResponse | null>(null);
+  const [autoRunPreviewBusy, setAutoRunPreviewBusy] = useState(false);
+  const [autoRunLaunching, setAutoRunLaunching] = useState(false);
+
+  useEffect(() => {
+    setAutoRunPreview(null);
+  }, [autoRunMode, autoRunTopic, autoRunDurationMin, autoRunAvatarRuntime]);
 
   // Load saved voice config on mount so the correct TTS provider is used
   useEffect(() => {
@@ -187,50 +336,668 @@ export const ChatView = memo(function ChatView() {
   );
   const agentAvatarSrc = selectedVrmIndex > 0 ? getVrmPreviewUrl(selectedVrmIndex) : null;
   const agentInitial = agentName.trim().charAt(0).toUpperCase() || "A";
-  const resolvePluginStatus = (id: string): "active" | "disabled" | "available" => {
-    const plugin = plugins.find(
-      (p) =>
-        p.id === id ||
-        p.id === id.replace(/^alice-/, "") ||
-        p.name.toLowerCase().includes(id),
-    );
-    if (!plugin) return "available";
-    return plugin.enabled ? "active" : "disabled";
+  const DEFAULT_GAME_SANDBOX =
+    "allow-scripts allow-same-origin allow-popups allow-forms";
+  type LayerStatus = "active" | "disabled" | "available";
+  type QuickLayer = {
+    id: string;
+    label: string;
+    prompt: string;
+    pluginIds: string[];
+    navigateToApps?: boolean;
   };
 
-  const quickLayers = [
+  const resolvePluginStatus = useCallback((id: string): LayerStatus => {
+    const needle = id.trim().toLowerCase();
+    const plugin = plugins.find((p) => {
+      const pluginId = p.id.trim().toLowerCase();
+      const pluginName = p.name.trim().toLowerCase();
+      return (
+        pluginId === needle ||
+        pluginId === needle.replace(/^alice-/, "") ||
+        pluginName === needle ||
+        pluginName.includes(needle)
+      );
+    });
+    if (!plugin) return "available";
+    if (plugin.isActive === true) return "active";
+    if (plugin.enabled === false) return "disabled";
+    if (plugin.enabled === true && plugin.isActive === false) return "disabled";
+    return "available";
+  }, [plugins]);
+
+  const hasPluginRegistration = useCallback(
+    (id: string): boolean => {
+      const needle = id.trim().toLowerCase();
+      return plugins.some((p) => {
+        const pluginId = p.id.trim().toLowerCase();
+        const pluginName = p.name.trim().toLowerCase();
+        return (
+          pluginId === needle ||
+          pluginId === needle.replace(/^alice-/, "") ||
+          pluginName === needle ||
+          pluginName.includes(needle)
+        );
+      });
+    },
+    [plugins],
+  );
+
+  const resolveLayerStatus = useCallback((pluginIds: string[]): LayerStatus => {
+    if (pluginIds.length === 0) return "available";
+    const statuses = pluginIds.map((id) => resolvePluginStatus(id));
+    if (statuses.every((status) => status === "active")) return "active";
+    if (statuses.some((status) => status === "disabled")) return "disabled";
+    return "available";
+  }, [resolvePluginStatus]);
+
+  const hasActiveGameViewer =
+    typeof activeGameViewerUrl === "string" && activeGameViewerUrl.trim().length > 0;
+
+  const selectPreferredGameId = useCallback(
+    (games: Array<{ id: string; category?: string }>): string | undefined => {
+      const preferredOrder = [
+        "ninja-evilcorp",
+        "drive",
+        "wolf-and-sheep",
+        "pixel-copter",
+      ];
+      for (const preferredId of preferredOrder) {
+        const hit = games.find((game) => game.id === preferredId);
+        if (hit) return hit.id;
+      }
+
+      const nonCasino = games.find((game) => game.category !== "casino");
+      return nonCasino?.id ?? games[0]?.id;
+    },
+    [],
+  );
+
+  const buildAutonomousPrompt = useCallback(
+    (params: {
+      mode: Five55AutonomyMode;
+      topic: string;
+      durationMin: number;
+      gameTitle?: string;
+    }): string => {
+      const { mode, topic, durationMin, gameTitle } = params;
+      const timingInstruction =
+        `Operate autonomously for ${durationMin} minutes, then wrap up naturally and stop the stream.`;
+
+      if (mode === "newscast") {
+        return [
+          "Run an autonomous live newscast.",
+          "Cover recent events with concise segments, clear transitions, and factual framing.",
+          timingInstruction,
+        ].join(" ");
+      }
+      if (mode === "topic") {
+        const focus = topic.trim() || "the selected topic";
+        return [
+          `Run an autonomous live topic deep dive on ${focus}.`,
+          "Structure it into intro, key points, examples, and closing recap.",
+          timingInstruction,
+        ].join(" ");
+      }
+      if (mode === "games") {
+        const target = gameTitle?.trim() || "the active game";
+        return [
+          `Run an autonomous live gameplay session for ${target}.`,
+          "Keep live commentary focused on tactics, score progression, and key turning points.",
+          timingInstruction,
+        ].join(" ");
+      }
+      return [
+        "Run an autonomous live free-form session.",
+        "Choose engaging segments dynamically while maintaining coherent pacing.",
+        timingInstruction,
+      ].join(" ");
+    },
+    [],
+  );
+
+  const runAutonomousEstimate = useCallback(async () => {
+    if (autoRunMode === "topic" && autoRunTopic.trim().length === 0) {
+      setActionNotice(
+        "Topic mode requires a topic before estimating.",
+        "info",
+        2600,
+      );
+      return null;
+    }
+
+    setAutoRunPreviewBusy(true);
+    try {
+      const preview = await client.getFive55AutonomyPreview({
+        mode: autoRunMode,
+        topic: autoRunTopic.trim() || undefined,
+        durationMin: autoRunDurationMin,
+        avatarRuntime: autoRunAvatarRuntime,
+      });
+      setAutoRunPreview(preview);
+      setActionNotice(
+        preview.canStart
+          ? "Autonomous run estimate ready."
+          : "Estimate ready. Credits are insufficient for this run.",
+        preview.canStart ? "success" : "info",
+        2600,
+      );
+      return preview;
+    } catch (err) {
+      setActionNotice(
+        `Failed to estimate autonomous run: ${err instanceof Error ? err.message : "unknown error"}`,
+        "error",
+        4200,
+      );
+      return null;
+    } finally {
+      setAutoRunPreviewBusy(false);
+    }
+  }, [
+    autoRunMode,
+    autoRunTopic,
+    autoRunDurationMin,
+    autoRunAvatarRuntime,
+    setActionNotice,
+  ]);
+
+  const quickLayers: QuickLayer[] = [
     {
       id: "stream",
       label: "Stream",
+      pluginIds: ["stream"],
       prompt:
         "Use STREAM_STATUS and STREAM_CONTROL to report current stream state and execute the next stream action safely.",
     },
     {
+      id: "go-live",
+      label: "Go Live",
+      pluginIds: ["stream"],
+      prompt:
+        "Run STREAM_STATUS first. If the stream is not live, run STREAM_CONTROL with operation=\"start\" and scene=\"default\", then run STREAM_STATUS again and confirm final state, phase, and session.",
+    },
+    {
+      id: "autonomous-run",
+      label: "Autonomous",
+      pluginIds: ["stream"],
+      prompt: "",
+    },
+    {
+      id: "play-games",
+      label: "Play Games",
+      pluginIds: ["five55-games"],
+      navigateToApps: true,
+      prompt:
+        "Use FIVE55_GAMES_CATALOG to choose a playable game and run FIVE55_GAMES_PLAY in autonomous spectate mode (bot=true). Continue live commentary with score/capture updates.",
+    },
+    {
       id: "swap",
       label: "Swap",
+      pluginIds: ["swap"],
       prompt:
         "Use WALLET_POSITION and SWAP_QUOTE to evaluate wallet state and produce a safe swap recommendation.",
     },
-  ] as const;
+  ];
 
   const triggerQuickLayer = useCallback(
-    (prompt: string, layerId: string) => {
+    async (layer: QuickLayer) => {
       if (chatSending) return;
-      const status = resolvePluginStatus(layerId);
+      const status = resolveLayerStatus(layer.pluginIds);
       if (status === "disabled") {
+        const pluginLabel = layer.pluginIds.join(", ");
         setActionNotice(
-          `${layerId} is disabled. Enable it in Plugins first.`,
+          `${pluginLabel} is disabled or not active. Enable it in Plugins first.`,
           "info",
           2200,
         );
         setTab("plugins");
         return;
       }
+
+      if (layer.id === "autonomous-run") {
+        setAutoRunOpen(true);
+        setActionNotice(
+          "Configure mode, duration, and credit estimate before starting autonomous live mode.",
+          "info",
+          2600,
+        );
+        return;
+      }
+
+      let prompt = layer.prompt;
+      let openedViewerThisRun = false;
+      let viewerUrlForStream: string | undefined = hasActiveGameViewer
+        ? activeGameViewerUrl
+        : undefined;
+
+      if (layer.id === "go-live") {
+        if (!hasPluginRegistration("stream")) {
+          setActionNotice(
+            "stream plugin is not registered. Enable it in Plugins first.",
+            "info",
+            2600,
+          );
+          setTab("plugins");
+          return;
+        }
+        try {
+          const plan = await client.executeAutonomyPlan({
+            plan: {
+              id: "quick-layer-go-live",
+              steps: [
+                {
+                  id: "status-before",
+                  toolName: "STREAM_STATUS",
+                  params: { scope: "current" },
+                },
+                {
+                  id: "start",
+                  toolName: "STREAM_CONTROL",
+                  params: { operation: "start", scene: "default" },
+                },
+                {
+                  id: "status-after",
+                  toolName: "STREAM_STATUS",
+                  params: { scope: "current" },
+                },
+              ],
+            },
+            request: { source: "user", sourceTrust: 1 },
+            options: { stopOnFailure: false },
+          });
+          const statusEnvelope = findLastToolEnvelope(
+            plan.results,
+            "STREAM_STATUS",
+          );
+          const streamState = summarizeStreamState(statusEnvelope);
+          if (plan.allSucceeded || streamState.live) {
+            setActionNotice(
+              `Go live executed. Stream state: ${streamState.label}.`,
+              "success",
+              2800,
+            );
+            prompt =
+              "You are now live. Give a concise on-air opener, current stream state, and the next production action.";
+          } else {
+            setActionNotice(
+              "Go live ran but one or more stream steps failed. Check stream status and retry with exact fixes.",
+              "error",
+              4200,
+            );
+          }
+        } catch (err) {
+          setActionNotice(
+            `Go live execution failed: ${err instanceof Error ? err.message : "unknown error"}`,
+            "error",
+            4200,
+          );
+        }
+      }
+
+      if (layer.id === "play-games") {
+        try {
+          const catalog = await client.getFive55GamesCatalog({
+            includeBeta: true,
+          });
+          const selectedGameId = selectPreferredGameId(catalog.games);
+          const selectedGame = selectedGameId
+            ? catalog.games.find((game) => game.id === selectedGameId)
+            : undefined;
+
+          const playPlan = await client.executeAutonomyPlan({
+            plan: {
+              id: "quick-layer-play-games-autonomous",
+              steps: [
+                {
+                  id: "play-autonomous",
+                  toolName: "FIVE55_GAMES_PLAY",
+                  params: {
+                    ...(selectedGameId ? { gameId: selectedGameId } : {}),
+                    mode: "spectate",
+                  },
+                },
+              ],
+            },
+            request: { source: "user", sourceTrust: 1 },
+            options: { stopOnFailure: true },
+          });
+
+          let launch = parseGameLaunchFromEnvelope(
+            findLastToolEnvelope(playPlan.results, "FIVE55_GAMES_PLAY"),
+          );
+          if (!launch) {
+            const playResult = await client.playFive55Game({
+              gameId: selectedGameId,
+              mode: "spectate",
+            });
+            launch = {
+              gameId: playResult.game.id,
+              gameTitle: playResult.game.title,
+              viewerUrl: playResult.viewer.url,
+              sandbox: playResult.viewer.sandbox,
+              postMessageAuth: Boolean(playResult.viewer.postMessageAuth),
+            };
+          }
+
+          if (launch?.viewerUrl) {
+            const resolvedGameId = launch.gameId || selectedGameId || "unknown-game";
+            const resolvedGameTitle =
+              launch.gameTitle || selectedGame?.title || resolvedGameId;
+
+            openedViewerThisRun = true;
+            setState("activeGameApp", `five55:${resolvedGameId}`);
+            setState("activeGameDisplayName", resolvedGameTitle);
+            setState("activeGameViewerUrl", launch.viewerUrl);
+            setState(
+              "activeGameSandbox",
+              launch.sandbox ?? DEFAULT_GAME_SANDBOX,
+            );
+            setState("activeGamePostMessageAuth", launch.postMessageAuth);
+            setState("activeGamePostMessagePayload", null);
+            viewerUrlForStream = launch.viewerUrl;
+            prompt =
+              `You are now spectating ${resolvedGameTitle} (${resolvedGameId}) in autonomous bot mode. ` +
+              "Provide live game commentary, key decisions, and score/capture updates while continuing in-play control.";
+            setActionNotice(
+              `Launched ${resolvedGameTitle} in autonomous mode.`,
+              "success",
+              2400,
+            );
+          } else {
+            setActionNotice(
+              "Autonomous game launch did not return a viewer URL.",
+              "error",
+              4200,
+            );
+          }
+        } catch (err) {
+          setActionNotice(
+            `Failed to launch five55 game: ${err instanceof Error ? err.message : "unknown error"}`,
+            "error",
+            4200,
+          );
+        }
+      }
+
+      if (
+        layer.id === "play-games" &&
+        viewerUrlForStream &&
+        hasPluginRegistration("stream") &&
+        resolveLayerStatus(["stream"]) !== "disabled"
+      ) {
+        try {
+          const attachPlan = await client.executeAutonomyPlan({
+            plan: {
+              id: "quick-layer-game-stream-attach",
+              steps: [
+                {
+                  id: "status-before",
+                  toolName: "STREAM_STATUS",
+                  params: { scope: "current" },
+                },
+                {
+                  id: "start-game-feed",
+                  toolName: "STREAM_CONTROL",
+                  params: {
+                    operation: "start",
+                    scene: "game",
+                    inputType: "website",
+                    url: viewerUrlForStream,
+                  },
+                },
+                {
+                  id: "status-after",
+                  toolName: "STREAM_STATUS",
+                  params: { scope: "current" },
+                },
+              ],
+            },
+            request: { source: "user", sourceTrust: 1 },
+            options: { stopOnFailure: false },
+          });
+          const finalStatus = summarizeStreamState(
+            findLastToolEnvelope(attachPlan.results, "STREAM_STATUS"),
+          );
+          if (attachPlan.allSucceeded || finalStatus.live) {
+            setActionNotice(
+              `Game feed routed to stream. Stream state: ${finalStatus.label}.`,
+              "success",
+              2600,
+            );
+          } else {
+            setActionNotice(
+              "Game launched, but stream feed attach needs follow-up in stream controls.",
+              "info",
+              3600,
+            );
+          }
+        } catch (err) {
+          setActionNotice(
+            `Game launched, but stream attach failed: ${err instanceof Error ? err.message : "unknown error"}`,
+            "info",
+            4200,
+          );
+        }
+      }
+
       setState("chatInput", prompt);
+
+      if (layer.navigateToApps) {
+        setTab("apps");
+        const hasViewer = hasActiveGameViewer || openedViewerThisRun;
+        setState("appsSubTab", hasViewer ? "games" : "browse");
+        if (!openedViewerThisRun) {
+          setActionNotice(
+            hasActiveGameViewer
+              ? "Opened active game viewer for spectating."
+              : "Opened Apps. Launch a game to begin spectating.",
+            "info",
+            2200,
+          );
+        }
+      }
+
       setTimeout(() => void handleChatSend("power"), 30);
     },
-    [chatSending, setActionNotice, setState, handleChatSend, setTab, plugins],
+    [
+      chatSending,
+      resolveLayerStatus,
+      setActionNotice,
+      setState,
+      setTab,
+      hasActiveGameViewer,
+      activeGameViewerUrl,
+      selectPreferredGameId,
+      handleChatSend,
+      hasPluginRegistration,
+    ],
   );
+
+  const runAutonomousLaunch = useCallback(async () => {
+    if (chatSending || autoRunLaunching) return;
+    if (autoRunMode === "topic" && autoRunTopic.trim().length === 0) {
+      setActionNotice(
+        "Topic mode requires a topic before launch.",
+        "info",
+        3000,
+      );
+      return;
+    }
+    if (!hasPluginRegistration("stream")) {
+      setActionNotice(
+        "stream plugin is not registered. Enable it in Plugins first.",
+        "info",
+        2600,
+      );
+      setTab("plugins");
+      return;
+    }
+    if (resolveLayerStatus(["stream"]) === "disabled") {
+      setActionNotice(
+        "stream plugin is disabled. Enable it in Plugins before autonomous runs.",
+        "info",
+        3000,
+      );
+      setTab("plugins");
+      return;
+    }
+
+    setAutoRunLaunching(true);
+    try {
+      const preview =
+        autoRunPreview ??
+        (await runAutonomousEstimate());
+      if (!preview) return;
+      if (!preview.canStart) {
+        setActionNotice(
+          "Insufficient credits for this autonomous run. Adjust duration/runtime or top up credits.",
+          "error",
+          4200,
+        );
+        return;
+      }
+
+      let gameTitle: string | undefined;
+      let streamStartParams: Record<string, unknown> = {
+        operation: "start",
+        scene: "default",
+        inputType: "avatar",
+      };
+
+      if (autoRunMode === "games") {
+        const catalog = await client.getFive55GamesCatalog({ includeBeta: true });
+        const selectedGameId = selectPreferredGameId(catalog.games);
+        const selectedGame = selectedGameId
+          ? catalog.games.find((game) => game.id === selectedGameId)
+          : undefined;
+
+        const playPlan = await client.executeAutonomyPlan({
+          plan: {
+            id: "autonomous-live-games-launch",
+            steps: [
+              {
+                id: "play",
+                toolName: "FIVE55_GAMES_PLAY",
+                params: {
+                  ...(selectedGameId ? { gameId: selectedGameId } : {}),
+                  mode: "spectate",
+                },
+              },
+            ],
+          },
+          request: { source: "user", sourceTrust: 1 },
+          options: { stopOnFailure: true },
+        });
+        const launch = parseGameLaunchFromEnvelope(
+          findLastToolEnvelope(playPlan.results, "FIVE55_GAMES_PLAY"),
+        );
+        if (!launch?.viewerUrl) {
+          setActionNotice(
+            "Could not launch a game viewer for autonomous gameplay.",
+            "error",
+            4200,
+          );
+          return;
+        }
+
+        gameTitle = launch.gameTitle;
+        setState("activeGameApp", `five55:${launch.gameId}`);
+        setState("activeGameDisplayName", launch.gameTitle);
+        setState("activeGameViewerUrl", launch.viewerUrl);
+        setState(
+          "activeGameSandbox",
+          launch.sandbox ?? DEFAULT_GAME_SANDBOX,
+        );
+        setState("activeGamePostMessageAuth", launch.postMessageAuth);
+        setState("activeGamePostMessagePayload", null);
+        setTab("apps");
+        setState("appsSubTab", "games");
+        streamStartParams = {
+          operation: "start",
+          scene: "game",
+          inputType: "website",
+          url: launch.viewerUrl,
+        };
+      }
+
+      const streamPlan = await client.executeAutonomyPlan({
+        plan: {
+          id: "autonomous-live-stream-start",
+          steps: [
+            {
+              id: "status-before",
+              toolName: "STREAM_STATUS",
+              params: { scope: "current" },
+            },
+            {
+              id: "start",
+              toolName: "STREAM_CONTROL",
+              params: streamStartParams,
+            },
+            {
+              id: "status-after",
+              toolName: "STREAM_STATUS",
+              params: { scope: "current" },
+            },
+          ],
+        },
+        request: { source: "user", sourceTrust: 1 },
+        options: { stopOnFailure: false },
+      });
+
+      const finalStatus = summarizeStreamState(
+        findLastToolEnvelope(streamPlan.results, "STREAM_STATUS"),
+      );
+      if (!(streamPlan.allSucceeded || finalStatus.live)) {
+        setActionNotice(
+          "Autonomous launch started, but stream status needs verification.",
+          "info",
+          3600,
+        );
+      } else {
+        setActionNotice(
+          `Autonomous stream started. State: ${finalStatus.label}.`,
+          "success",
+          3000,
+        );
+      }
+
+      const prompt = buildAutonomousPrompt({
+        mode: autoRunMode,
+        topic: autoRunTopic,
+        durationMin: autoRunDurationMin,
+        gameTitle,
+      });
+      setState("chatInput", prompt);
+      setTimeout(() => void handleChatSend("power"), 30);
+      setAutoRunOpen(false);
+    } catch (err) {
+      setActionNotice(
+        `Autonomous live launch failed: ${err instanceof Error ? err.message : "unknown error"}`,
+        "error",
+        4200,
+      );
+    } finally {
+      setAutoRunLaunching(false);
+    }
+  }, [
+    chatSending,
+    autoRunLaunching,
+    hasPluginRegistration,
+    setActionNotice,
+    setTab,
+    resolveLayerStatus,
+    autoRunPreview,
+    runAutonomousEstimate,
+    autoRunMode,
+    selectPreferredGameId,
+    setState,
+    DEFAULT_GAME_SANDBOX,
+    buildAutonomousPrompt,
+    autoRunTopic,
+    autoRunDurationMin,
+    handleChatSend,
+  ]);
 
   const lastSpokenIdRef = useRef<string | null>(null);
 
@@ -294,7 +1061,7 @@ export const ChatView = memo(function ChatView() {
           Action layers
         </span>
         {quickLayers.map((layer) => {
-          const status = resolvePluginStatus(layer.id);
+          const status = resolveLayerStatus(layer.pluginIds);
           const tone =
             status === "active"
               ? "border-accent text-accent bg-card"
@@ -305,7 +1072,7 @@ export const ChatView = memo(function ChatView() {
             <button
               key={layer.id}
               className={`px-2 py-1 text-[11px] border rounded transition-all ${tone}`}
-              onClick={() => triggerQuickLayer(layer.prompt, layer.id)}
+              onClick={() => void triggerQuickLayer(layer)}
               title={`${layer.label} (${status})`}
             >
               {layer.label}
@@ -320,6 +1087,170 @@ export const ChatView = memo(function ChatView() {
           Manage
         </button>
       </div>
+
+      {autoRunOpen && (
+        <div
+          className="mb-2 rounded border border-border bg-card/70 p-2 text-xs relative"
+          style={{ zIndex: 1 }}
+        >
+          <div className="flex items-center justify-between pb-2">
+            <span className="text-[10px] uppercase tracking-wide text-muted">
+              Autonomous Run Setup
+            </span>
+            <button
+              className="px-2 py-1 text-[11px] border rounded border-border text-muted bg-card hover:border-accent hover:text-accent"
+              onClick={() => setAutoRunOpen(false)}
+              disabled={autoRunPreviewBusy || autoRunLaunching}
+            >
+              Close
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] text-muted">Mode</span>
+              <select
+                className="px-2 py-1 border rounded border-border bg-card text-txt"
+                value={autoRunMode}
+                onChange={(e) => setAutoRunMode(e.target.value as Five55AutonomyMode)}
+                disabled={autoRunPreviewBusy || autoRunLaunching}
+              >
+                <option value="newscast">Newscast</option>
+                <option value="topic">Topic</option>
+                <option value="games">Play Games</option>
+                <option value="free">Free Will</option>
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] text-muted">Duration (minutes)</span>
+              <input
+                type="number"
+                min={5}
+                max={180}
+                step={5}
+                className="px-2 py-1 border rounded border-border bg-card text-txt"
+                value={autoRunDurationMin}
+                onChange={(e) => {
+                  const parsed = Number.parseInt(e.target.value, 10);
+                  const next = Number.isFinite(parsed)
+                    ? Math.max(5, Math.min(180, parsed))
+                    : 30;
+                  setAutoRunDurationMin(next);
+                }}
+                disabled={autoRunPreviewBusy || autoRunLaunching}
+              />
+            </label>
+
+            <label className="flex flex-col gap-1 md:col-span-2">
+              <span className="text-[11px] text-muted">
+                Topic {autoRunMode === "topic" ? "(required)" : "(optional)"}
+              </span>
+              <input
+                type="text"
+                className="px-2 py-1 border rounded border-border bg-card text-txt"
+                placeholder="e.g. Solana ecosystem recap, market structure, render infra updates"
+                value={autoRunTopic}
+                onChange={(e) => setAutoRunTopic(e.target.value)}
+                disabled={autoRunPreviewBusy || autoRunLaunching}
+              />
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] text-muted">Avatar Runtime</span>
+              <select
+                className="px-2 py-1 border rounded border-border bg-card text-txt"
+                value={autoRunAvatarRuntime}
+                onChange={(e) =>
+                  setAutoRunAvatarRuntime(
+                    e.target.value as "auto" | "local" | "premium",
+                  )
+                }
+                disabled={autoRunPreviewBusy || autoRunLaunching}
+              >
+                <option value="local">Local (lower cost)</option>
+                <option value="auto">Auto</option>
+                <option value="premium">Premium (higher quality/cost)</option>
+              </select>
+            </label>
+
+            <div className="flex flex-col gap-1 justify-end">
+              <span className="text-[11px] text-muted">Identity Projection</span>
+              <span className="text-[11px] text-muted">
+                Uses current Milaidy character voice/style defaults.
+              </span>
+            </div>
+          </div>
+
+          {autoRunPreview && (
+            <div className="mt-2 rounded border border-border/70 bg-bg-hover/40 px-2 py-2">
+              <div className="flex flex-wrap items-center gap-3 text-[11px]">
+                <span className="text-muted">
+                  Profile: <span className="text-txt">{autoRunPreview.profile}</span>
+                </span>
+                <span className="text-muted">
+                  Stream credits:{" "}
+                  <span className="text-txt">
+                    {typeof autoRunPreview.estimate.totalCredits === "number"
+                      ? autoRunPreview.estimate.totalCredits
+                      : "n/a"}
+                  </span>
+                </span>
+                <span className="text-muted">
+                  Runtime credits:{" "}
+                  <span className="text-txt">
+                    {typeof autoRunPreview.estimate.runtimeCredits === "number"
+                      ? autoRunPreview.estimate.runtimeCredits
+                      : "n/a"}
+                  </span>
+                </span>
+                <span className="text-muted">
+                  Total credits:{" "}
+                  <span className="text-txt">
+                    {typeof autoRunPreview.estimate.grandTotalCredits === "number"
+                      ? autoRunPreview.estimate.grandTotalCredits
+                      : "n/a"}
+                  </span>
+                </span>
+                <span className="text-muted">
+                  Balance:{" "}
+                  <span className="text-txt">
+                    {typeof autoRunPreview.balance?.creditBalance === "number"
+                      ? autoRunPreview.balance.creditBalance
+                      : "n/a"}
+                  </span>
+                </span>
+                <span
+                  className={`font-semibold ${
+                    autoRunPreview.canStart ? "text-ok" : "text-danger"
+                  }`}
+                >
+                  {autoRunPreview.canStart
+                    ? "Ready to launch"
+                    : "Insufficient credits"}
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              className="px-2 py-1 text-[11px] border rounded border-border text-muted bg-card hover:border-accent hover:text-accent disabled:opacity-50"
+              onClick={() => void runAutonomousEstimate()}
+              disabled={autoRunPreviewBusy || autoRunLaunching}
+            >
+              {autoRunPreviewBusy ? "Estimating..." : "Estimate Cost"}
+            </button>
+            <button
+              className="px-2 py-1 text-[11px] border rounded border-accent text-accent bg-card hover:bg-accent/10 disabled:opacity-50"
+              onClick={() => void runAutonomousLaunch()}
+              disabled={autoRunPreviewBusy || autoRunLaunching}
+            >
+              {autoRunLaunching ? "Launching..." : "Start Autonomous Run"}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div ref={messagesRef} className="flex-1 overflow-y-auto py-2 relative" style={{ zIndex: 1 }}>
         {visibleMsgs.length === 0 && !chatSending ? (

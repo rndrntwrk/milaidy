@@ -26,6 +26,7 @@ export type Five55Capability =
   | "quests.create"
   | "quests.complete"
   | "battles.read"
+  | "battles.create"
   | "battles.resolve"
   | "social.monitor"
   | "social.assign_points"
@@ -62,6 +63,7 @@ const DEFAULT_GRANTS: ReadonlyArray<Five55Capability> = [
   "quests.create",
   "quests.complete",
   "battles.read",
+  "battles.create",
   "battles.resolve",
   "social.monitor",
   "social.assign_points",

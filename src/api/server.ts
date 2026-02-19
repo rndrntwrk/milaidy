@@ -1162,20 +1162,84 @@ function discoverPluginsFromManifest(): PluginEntry[] {
           description:
             "Stream control and observability bridge for live operations.",
           enabled: false,
-          configured: Boolean(process.env.STREAM_API_URL?.trim()),
+          configured: Boolean(
+            process.env.STREAM_API_URL?.trim() ||
+              process.env.STREAM555_BASE_URL?.trim(),
+          ),
           envKey: "STREAM_API_URL",
           category: "feature",
           source: "bundled",
-          configKeys: ["STREAM_API_URL", "STREAM_PLUGIN_ENABLED"],
+          configKeys: [
+            "STREAM_API_URL",
+            "STREAM555_BASE_URL",
+            "STREAM555_AGENT_TOKEN",
+            "STREAM555_DEFAULT_SESSION_ID",
+            "STREAM_SESSION_ID",
+            "STREAM_API_DIALECT",
+            "STREAM_PLUGIN_ENABLED",
+          ],
           parameters: [
             {
               key: "STREAM_API_URL",
               type: "string",
-              description: "Stream control API base URL",
+              description:
+                "Legacy stream control API base URL (expects /v1/stream/* endpoints)",
               required: false,
               sensitive: false,
               currentValue: process.env.STREAM_API_URL ?? null,
               isSet: Boolean(process.env.STREAM_API_URL?.trim()),
+            },
+            {
+              key: "STREAM555_BASE_URL",
+              type: "string",
+              description:
+                "555stream control-plane base URL for agent-v1 routes",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM555_BASE_URL ?? null,
+              isSet: Boolean(process.env.STREAM555_BASE_URL?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN",
+              type: "string",
+              description:
+                "Bearer token for 555stream agent API (stream/session control)",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_AGENT_TOKEN
+                ? maskValue(process.env.STREAM555_AGENT_TOKEN)
+                : null,
+              isSet: Boolean(process.env.STREAM555_AGENT_TOKEN?.trim()),
+            },
+            {
+              key: "STREAM555_DEFAULT_SESSION_ID",
+              type: "string",
+              description:
+                "Preferred 555stream session ID; plugin auto-creates/resumes when unset",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM555_DEFAULT_SESSION_ID ?? null,
+              isSet: Boolean(process.env.STREAM555_DEFAULT_SESSION_ID?.trim()),
+            },
+            {
+              key: "STREAM_SESSION_ID",
+              type: "string",
+              description:
+                "Optional session override used by the stream plugin",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM_SESSION_ID ?? null,
+              isSet: Boolean(process.env.STREAM_SESSION_ID?.trim()),
+            },
+            {
+              key: "STREAM_API_DIALECT",
+              type: "string",
+              description:
+                "Optional override: 'five55-v1' or 'agent-v1' (auto-detected when unset)",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM_API_DIALECT ?? null,
+              isSet: Boolean(process.env.STREAM_API_DIALECT?.trim()),
             },
             {
               key: "STREAM_PLUGIN_ENABLED",
@@ -1235,16 +1299,44 @@ function discoverPluginsFromManifest(): PluginEntry[] {
           envKey: "FIVE55_GAMES_API_URL",
           category: "feature",
           source: "bundled",
-          configKeys: ["FIVE55_GAMES_API_URL", "FIVE55_GAMES_PLUGIN_ENABLED"],
+          configKeys: [
+            "FIVE55_GAMES_API_URL",
+            "FIVE55_GAMES_API_DIALECT",
+            "FIVE55_GAMES_API_BEARER_TOKEN",
+            "FIVE55_GAMES_PLUGIN_ENABLED",
+          ],
           parameters: [
             {
               key: "FIVE55_GAMES_API_URL",
               type: "string",
-              description: "Five55 games API base URL",
+              description:
+                "Five55 games API base URL (expects /api/games/catalog and /api/games/play)",
               required: false,
               sensitive: false,
               currentValue: process.env.FIVE55_GAMES_API_URL ?? null,
               isSet: Boolean(process.env.FIVE55_GAMES_API_URL?.trim()),
+            },
+            {
+              key: "FIVE55_GAMES_API_DIALECT",
+              type: "string",
+              description:
+                "Optional override: 'five55-web' (direct) or 'milaidy-proxy' (via /api/five55/games/*)",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.FIVE55_GAMES_API_DIALECT ?? null,
+              isSet: Boolean(process.env.FIVE55_GAMES_API_DIALECT?.trim()),
+            },
+            {
+              key: "FIVE55_GAMES_API_BEARER_TOKEN",
+              type: "string",
+              description:
+                "Optional bearer token for upstream games API calls (used by proxy)",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.FIVE55_GAMES_API_BEARER_TOKEN
+                ? maskValue(process.env.FIVE55_GAMES_API_BEARER_TOKEN)
+                : null,
+              isSet: Boolean(process.env.FIVE55_GAMES_API_BEARER_TOKEN?.trim()),
             },
             {
               key: "FIVE55_GAMES_PLUGIN_ENABLED",
@@ -1376,7 +1468,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
         {
           id: "five55-battles",
           name: "Five55 Battles",
-          description: "Five55 battles read/resolve plugin.",
+          description: "Five55 battles challenge + resolution plugin.",
           enabled: false,
           configured: Boolean(process.env.FIVE55_BATTLES_API_URL?.trim()),
           envKey: "FIVE55_BATTLES_API_URL",
@@ -1384,6 +1476,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
           source: "bundled",
           configKeys: [
             "FIVE55_BATTLES_API_URL",
+            "FIVE55_BATTLES_CREATE_ENDPOINT",
             "FIVE55_BATTLES_PLUGIN_ENABLED",
           ],
           parameters: [
@@ -1397,6 +1490,18 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               isSet: Boolean(process.env.FIVE55_BATTLES_API_URL?.trim()),
             },
             {
+              key: "FIVE55_BATTLES_CREATE_ENDPOINT",
+              type: "string",
+              description:
+                "Optional create endpoint override (default: /battle/create)",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.FIVE55_BATTLES_CREATE_ENDPOINT ?? null,
+              isSet: Boolean(
+                process.env.FIVE55_BATTLES_CREATE_ENDPOINT?.trim(),
+              ),
+            },
+            {
               key: "FIVE55_BATTLES_PLUGIN_ENABLED",
               type: "string",
               description: "Enable/disable Five55 battles plugin (1/0)",
@@ -1405,6 +1510,65 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               default: "1",
               currentValue: process.env.FIVE55_BATTLES_PLUGIN_ENABLED ?? null,
               isSet: Boolean(process.env.FIVE55_BATTLES_PLUGIN_ENABLED?.trim()),
+            },
+          ],
+          validationErrors: [],
+          validationWarnings: [],
+        },
+        {
+          id: "five55-admin",
+          name: "Five55 Admin",
+          description:
+            "Five55 admin theme/event/cabinet control plugin with legacy env fallback.",
+          enabled: false,
+          configured: Boolean(
+            process.env.FIVE55_ADMIN_API_URL?.trim() ||
+              process.env.TWITTER_AGENT_MAIN_API_BASE?.trim() ||
+              process.env.TWITTER_BOT_MAIN_API_BASE?.trim(),
+          ),
+          envKey: "FIVE55_ADMIN_API_URL",
+          category: "feature",
+          source: "bundled",
+          configKeys: [
+            "FIVE55_ADMIN_API_URL",
+            "FIVE55_ADMIN_BEARER_TOKEN",
+            "ADMIN_API_TOKEN",
+            "TWITTER_AGENT_KEY",
+            "TWITTER_BOT_KEY",
+            "FIVE55_ADMIN_PLUGIN_ENABLED",
+          ],
+          parameters: [
+            {
+              key: "FIVE55_ADMIN_API_URL",
+              type: "string",
+              description:
+                "Primary Five55 admin API base URL (falls back to legacy TWITTER_* base envs)",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.FIVE55_ADMIN_API_URL ?? null,
+              isSet: Boolean(process.env.FIVE55_ADMIN_API_URL?.trim()),
+            },
+            {
+              key: "FIVE55_ADMIN_BEARER_TOKEN",
+              type: "string",
+              description:
+                "Primary admin bearer token (falls back to ADMIN_API_TOKEN/TWITTER_* key envs)",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.FIVE55_ADMIN_BEARER_TOKEN
+                ? maskValue(process.env.FIVE55_ADMIN_BEARER_TOKEN)
+                : null,
+              isSet: Boolean(process.env.FIVE55_ADMIN_BEARER_TOKEN?.trim()),
+            },
+            {
+              key: "FIVE55_ADMIN_PLUGIN_ENABLED",
+              type: "string",
+              description: "Enable/disable Five55 admin plugin (1/0)",
+              required: false,
+              sensitive: false,
+              default: "1",
+              currentValue: process.env.FIVE55_ADMIN_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(process.env.FIVE55_ADMIN_PLUGIN_ENABLED?.trim()),
             },
           ],
           validationErrors: [],
@@ -10928,6 +11092,390 @@ async function handleRequest(
       low,
       critical,
       topUpUrl: "https://www.elizacloud.ai/dashboard/billing",
+    });
+    return;
+  }
+
+  // ── Five55 games bridge (/api/five55/games/*) ────────────────────────
+  if (
+    (method === "GET" || method === "POST") &&
+    pathname === "/api/five55/games/catalog"
+  ) {
+    const upstreamBase = process.env.FIVE55_GAMES_API_URL?.trim();
+    if (!upstreamBase) {
+      error(res, "FIVE55_GAMES_API_URL is not configured", 503);
+      return;
+    }
+
+    let upstreamUrl: URL;
+    try {
+      upstreamUrl = new URL("/api/games/catalog", upstreamBase);
+    } catch {
+      error(res, "Invalid FIVE55_GAMES_API_URL", 500);
+      return;
+    }
+
+    const outboundHeaders: Record<string, string> = { Accept: "application/json" };
+    const bearer = process.env.FIVE55_GAMES_API_BEARER_TOKEN?.trim();
+    if (bearer) outboundHeaders.Authorization = `Bearer ${bearer}`;
+
+    let body:
+      | {
+          category?: string;
+          includeBeta?: string | boolean;
+        }
+      | undefined;
+    if (method === "POST") {
+      const parsed = await readJsonBody<{
+        category?: string;
+        includeBeta?: string | boolean;
+      }>(req, res);
+      if (!parsed) return;
+      body = parsed;
+      outboundHeaders["Content-Type"] = "application/json";
+    } else {
+      body = {
+        category: url.searchParams.get("category") ?? undefined,
+        includeBeta: url.searchParams.get("includeBeta") ?? undefined,
+      };
+      outboundHeaders["Content-Type"] = "application/json";
+    }
+
+    try {
+      const upstreamRes = await fetch(upstreamUrl.toString(), {
+        method: "POST",
+        headers: outboundHeaders,
+        body: JSON.stringify(body),
+      });
+      const raw = await upstreamRes.text();
+      let parsed: unknown = null;
+      try {
+        parsed = raw ? (JSON.parse(raw) as unknown) : null;
+      } catch {
+        parsed = null;
+      }
+
+      if (!upstreamRes.ok) {
+        error(
+          res,
+          typeof parsed === "object" && parsed && "error" in parsed
+            ? String((parsed as { error?: unknown }).error ?? "upstream error")
+            : raw || "upstream error",
+          upstreamRes.status,
+        );
+        return;
+      }
+
+      if (parsed && typeof parsed === "object") {
+        json(res, parsed);
+        return;
+      }
+
+      error(res, "Invalid upstream games catalog payload", 502);
+    } catch (err) {
+      error(
+        res,
+        `Failed to fetch games catalog: ${err instanceof Error ? err.message : String(err)}`,
+        502,
+      );
+    }
+    return;
+  }
+
+  if (method === "POST" && pathname === "/api/five55/games/play") {
+    const upstreamBase = process.env.FIVE55_GAMES_API_URL?.trim();
+    if (!upstreamBase) {
+      error(res, "FIVE55_GAMES_API_URL is not configured", 503);
+      return;
+    }
+
+    const body = await readJsonBody<{ gameId?: string; mode?: string }>(req, res);
+    if (!body) return;
+
+    let upstreamUrl: URL;
+    try {
+      upstreamUrl = new URL("/api/games/play", upstreamBase);
+    } catch {
+      error(res, "Invalid FIVE55_GAMES_API_URL", 500);
+      return;
+    }
+
+    const outboundHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    };
+    const bearer = process.env.FIVE55_GAMES_API_BEARER_TOKEN?.trim();
+    if (bearer) outboundHeaders.Authorization = `Bearer ${bearer}`;
+
+    try {
+      const upstreamRes = await fetch(upstreamUrl.toString(), {
+        method: "POST",
+        headers: outboundHeaders,
+        body: JSON.stringify({
+          gameId: body.gameId ?? null,
+          mode: body.mode ?? "spectate",
+        }),
+      });
+      const raw = await upstreamRes.text();
+      let parsed: unknown = null;
+      try {
+        parsed = raw ? (JSON.parse(raw) as unknown) : null;
+      } catch {
+        parsed = null;
+      }
+
+      if (!upstreamRes.ok) {
+        error(
+          res,
+          typeof parsed === "object" && parsed && "error" in parsed
+            ? String((parsed as { error?: unknown }).error ?? "upstream error")
+            : raw || "upstream error",
+          upstreamRes.status,
+        );
+        return;
+      }
+
+      if (parsed && typeof parsed === "object") {
+        json(res, parsed);
+        return;
+      }
+
+      error(res, "Invalid upstream game play payload", 502);
+    } catch (err) {
+      error(
+        res,
+        `Failed to start game session: ${err instanceof Error ? err.message : String(err)}`,
+        502,
+      );
+    }
+    return;
+  }
+
+  if (method === "POST" && pathname === "/api/five55/stream/autonomy/preview") {
+    type AutonomyMode = "newscast" | "topic" | "games" | "free";
+
+    const body = await readJsonBody<{
+      mode?: string;
+      durationMin?: number | string;
+      topic?: string;
+      avatarRuntime?: "auto" | "local" | "premium";
+      speechSeconds?: number | string;
+      avatarMinutes?: number | string;
+    }>(req, res);
+    if (!body) return;
+
+    const modeRaw = typeof body.mode === "string" ? body.mode : "newscast";
+    const mode = modeRaw.trim() as AutonomyMode;
+    if (!["newscast", "topic", "games", "free"].includes(mode)) {
+      error(res, "mode must be one of: newscast, topic, games, free", 400);
+      return;
+    }
+
+    const parsedDuration =
+      typeof body.durationMin === "number" || typeof body.durationMin === "string"
+        ? Number(body.durationMin)
+        : Number.NaN;
+    const durationMin = Number.isFinite(parsedDuration)
+      ? Math.max(5, Math.min(180, Math.floor(parsedDuration)))
+      : 30;
+    const topic =
+      typeof body.topic === "string" && body.topic.trim().length > 0
+        ? body.topic.trim()
+        : undefined;
+    if (mode === "topic" && !topic) {
+      error(res, "topic is required when mode=topic", 400);
+      return;
+    }
+
+    const avatarRuntimeRaw =
+      typeof body.avatarRuntime === "string" ? body.avatarRuntime : undefined;
+    const avatarRuntime: "auto" | "local" | "premium" =
+      avatarRuntimeRaw === "auto" ||
+      avatarRuntimeRaw === "local" ||
+      avatarRuntimeRaw === "premium"
+        ? avatarRuntimeRaw
+        : "local";
+
+    const profileByMode: Record<AutonomyMode, string> = {
+      newscast: "1080p30_standard",
+      topic: "1080p30_standard",
+      games: "1080p60_high",
+      free: "720p30_low",
+    };
+    const speechRatioByMode: Record<AutonomyMode, number> = {
+      newscast: 0.8,
+      topic: 0.75,
+      games: 0.65,
+      free: 0.55,
+    };
+    const addonsByMode: Record<AutonomyMode, string[]> = {
+      newscast: ["tts", "avatar"],
+      topic: ["tts", "avatar"],
+      games: ["capture_browser", "tts", "avatar"],
+      free: ["tts", "avatar"],
+    };
+
+    const speechRatio = speechRatioByMode[mode];
+    const speechSecondsInput =
+      typeof body.speechSeconds === "number" || typeof body.speechSeconds === "string"
+        ? Number(body.speechSeconds)
+        : Number.NaN;
+    const speechSeconds = Number.isFinite(speechSecondsInput)
+      ? Math.max(0, Math.floor(speechSecondsInput))
+      : Math.floor(durationMin * 60 * speechRatio);
+    const avatarMinutesInput =
+      typeof body.avatarMinutes === "number" || typeof body.avatarMinutes === "string"
+        ? Number(body.avatarMinutes)
+        : Number.NaN;
+    const avatarMinutes = Number.isFinite(avatarMinutesInput)
+      ? Math.max(0, Math.floor(avatarMinutesInput))
+      : durationMin;
+
+    const upstreamBase =
+      process.env.STREAM555_BASE_URL?.trim() ||
+      process.env.STREAM_API_URL?.trim();
+    if (!upstreamBase) {
+      error(res, "STREAM555_BASE_URL (or STREAM_API_URL) is not configured", 503);
+      return;
+    }
+    const upstreamToken =
+      process.env.STREAM555_AGENT_TOKEN?.trim() ||
+      process.env.STREAM_API_BEARER_TOKEN?.trim();
+    if (!upstreamToken) {
+      error(
+        res,
+        "STREAM555_AGENT_TOKEN (or STREAM_API_BEARER_TOKEN) is required for autonomy preview",
+        503,
+      );
+      return;
+    }
+
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      Authorization: `Bearer ${upstreamToken}`,
+    };
+
+    const profile = profileByMode[mode];
+    const outputCount = 1;
+    const addons = addonsByMode[mode];
+    const estimateUrl = new URL("/api/agent/v1/credits/estimate", upstreamBase);
+    estimateUrl.searchParams.set("profile", profile);
+    estimateUrl.searchParams.set("durationMin", String(durationMin));
+    estimateUrl.searchParams.set("outputCount", String(outputCount));
+    if (addons.length > 0) {
+      estimateUrl.searchParams.set("addons", addons.join(","));
+    }
+    estimateUrl.searchParams.set("avatarRuntime", avatarRuntime);
+    estimateUrl.searchParams.set("speechSeconds", String(speechSeconds));
+    estimateUrl.searchParams.set("avatarMinutes", String(avatarMinutes));
+
+    const parseJsonText = (raw: string): unknown => {
+      try {
+        return raw ? (JSON.parse(raw) as unknown) : null;
+      } catch {
+        return null;
+      }
+    };
+    const getUpstreamErrorMessage = (parsed: unknown, fallback: string): string => {
+      if (parsed && typeof parsed === "object" && "error" in parsed) {
+        const parsedRecord = parsed as { error?: unknown };
+        if (typeof parsedRecord.error === "string" && parsedRecord.error.trim()) {
+          return parsedRecord.error;
+        }
+      }
+      return fallback;
+    };
+
+    let estimatePayload: Record<string, unknown>;
+    try {
+      const estimateRes = await fetch(estimateUrl.toString(), {
+        method: "GET",
+        headers,
+      });
+      const estimateRaw = await estimateRes.text();
+      const parsed = parseJsonText(estimateRaw);
+      if (!estimateRes.ok) {
+        error(
+          res,
+          `Credits estimate failed: ${getUpstreamErrorMessage(parsed, estimateRaw || "upstream error")}`,
+          estimateRes.status,
+        );
+        return;
+      }
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        error(res, "Invalid credits estimate payload", 502);
+        return;
+      }
+      estimatePayload = parsed as Record<string, unknown>;
+    } catch (err) {
+      error(
+        res,
+        `Failed to request credits estimate: ${err instanceof Error ? err.message : String(err)}`,
+        502,
+      );
+      return;
+    }
+
+    let balancePayload: Record<string, unknown> | null = null;
+    try {
+      const balanceUrl = new URL("/api/agent/v1/credits/balance", upstreamBase);
+      const balanceRes = await fetch(balanceUrl.toString(), {
+        method: "GET",
+        headers,
+      });
+      const balanceRaw = await balanceRes.text();
+      const parsed = parseJsonText(balanceRaw);
+      if (
+        balanceRes.ok &&
+        parsed &&
+        typeof parsed === "object" &&
+        !Array.isArray(parsed)
+      ) {
+        balancePayload = parsed as Record<string, unknown>;
+      }
+    } catch {
+      balancePayload = null;
+    }
+
+    const grandTotalCredits = estimatePayload.grandTotalCredits;
+    const estimateBalance = estimatePayload.currentBalance;
+    const explicitCanAffordRuntime = estimatePayload.canAffordWithRuntime;
+    const explicitCanAfford = estimatePayload.canAfford;
+    let canStart = false;
+    if (typeof explicitCanAffordRuntime === "boolean") {
+      canStart = explicitCanAffordRuntime;
+    } else if (typeof explicitCanAfford === "boolean") {
+      canStart = explicitCanAfford;
+    } else if (
+      typeof estimateBalance === "number" &&
+      typeof grandTotalCredits === "number"
+    ) {
+      canStart = estimateBalance >= grandTotalCredits;
+    }
+
+    json(res, {
+      mode,
+      topic,
+      durationMin,
+      profile,
+      outputCount,
+      addons,
+      assumptions: {
+        speechRatio,
+        speechSeconds,
+        avatarMinutes,
+        avatarRuntime,
+      },
+      estimate: estimatePayload,
+      balance: balancePayload,
+      canStart,
+      requestId:
+        (typeof estimatePayload.requestId === "string"
+          ? estimatePayload.requestId
+          : undefined) ??
+        (balancePayload && typeof balancePayload.requestId === "string"
+          ? balancePayload.requestId
+          : undefined),
     });
     return;
   }

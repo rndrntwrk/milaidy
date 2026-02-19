@@ -38,14 +38,19 @@ export function resolveFive55CapabilityForRequest(
     return isWriteMethod(normalizedMethod) ? "stream.control" : "stream.read";
   }
 
-  if (startsWithAny(pathname, ["/api/quest", "/api/quests", "/api/challenge"])) {
+  if (
+    startsWithAny(pathname, ["/api/quest", "/api/quests", "/api/challenge"])
+  ) {
     if (isReadMethod(normalizedMethod)) return "quests.read";
     if (/\/(complete|claim|finish)$/.test(pathname)) return "quests.complete";
     return "quests.create";
   }
 
   if (startsWithAny(pathname, ["/api/battle", "/api/battles"])) {
-    return isReadMethod(normalizedMethod) ? "battles.read" : "battles.resolve";
+    if (isReadMethod(normalizedMethod)) return "battles.read";
+    if (/\/(resolve|settle|judge|end)$/.test(pathname))
+      return "battles.resolve";
+    return "battles.create";
   }
 
   if (startsWithAny(pathname, ["/api/leaderboard", "/api/leaderboards"])) {
@@ -68,7 +73,9 @@ export function resolveFive55CapabilityForRequest(
       "/api/settlement",
     ])
   ) {
-    return isReadMethod(normalizedMethod) ? "rewards.project" : "rewards.allocate";
+    return isReadMethod(normalizedMethod)
+      ? "rewards.project"
+      : "rewards.allocate";
   }
 
   if (
@@ -98,16 +105,21 @@ export function resolveFive55CapabilityForAction(
   if (/(theme|skin|palette)/.test(text)) return "theme.write";
 
   if (/(leaderboard|ranking|rank)/.test(text)) {
-    if (/(update|write|submit|publish|set)/.test(text)) return "leaderboard.write";
+    if (/(update|write|submit|publish|set)/.test(text))
+      return "leaderboard.write";
     return "leaderboard.read";
   }
 
   if (/(score|scoring|points?)/.test(text)) {
-    if (/(submit|record|write|post|capture)/.test(text)) return "games.submit_score";
+    if (/(submit|record|write|post|capture)/.test(text))
+      return "games.submit_score";
     return "games.capture_score";
   }
 
-  if (/(quest|challenge)/.test(text)) {
+  if (
+    /(quest|challenge)/.test(text) &&
+    !/(battle|matchmaking|duel|arena)/.test(text)
+  ) {
     if (/(complete|finish|claim)/.test(text)) return "quests.complete";
     if (/(create|new|start|assign)/.test(text)) return "quests.create";
     return "quests.read";
@@ -115,6 +127,9 @@ export function resolveFive55CapabilityForAction(
 
   if (/(battle|matchmaking|duel|arena)/.test(text)) {
     if (/(resolve|end|judge|settle)/.test(text)) return "battles.resolve";
+    if (/(create|new|start|challenge|duel|issue)/.test(text)) {
+      return "battles.create";
+    }
     return "battles.read";
   }
 
