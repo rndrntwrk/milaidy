@@ -11,7 +11,6 @@ export const CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-local-embedding", // local embeddings — required for memory
   "@elizaos/plugin-secrets-manager", // secrets management — load early, other plugins depend on it
   "@elizaos/plugin-form", // packaging issue
-  "@elizaos/plugin-elizacloud", // elizacloud responses
   "@elizaos/plugin-knowledge", // RAG knowledge management — required for knowledge tab
   "@elizaos/plugin-rolodex", // contact graph and relationship/social memory
   "@elizaos/plugin-trajectory-logger", // trajectory logging for debugging and RL training

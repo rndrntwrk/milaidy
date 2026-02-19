@@ -16,8 +16,10 @@ import {
   type AgentRuntime,
   ChannelType,
   type Content,
+  ContentType,
   createMessageMemory,
   logger,
+  type Media,
   ModelType,
   stringToUuid,
   type Task,
@@ -1591,6 +1593,13 @@ function scanSkillsDir(
 const MAX_BODY_BYTES = 1_048_576;
 
 /**
+ * Raised body limit for chat endpoints that accept base64-encoded image
+ * attachments. A single smartphone JPEG is typically 2–5 MB binary
+ * (~3–7 MB base64); 20 MB accommodates up to 4 images with room to spare.
+ */
+const CHAT_MAX_BODY_BYTES = 20 * 1_048_576;
+
+/**
  * Read and parse a JSON request body with size limits and error handling.
  * Returns null (and sends a 4xx response) if reading or parsing fails.
  */
@@ -2228,6 +2237,157 @@ function parseRequestChannelType(
   return normalized as ChannelType;
 }
 
+interface ChatImageAttachment {
+  /** Base64-encoded image data (no data URL prefix). */
+  data: string;
+  mimeType: string;
+  name: string;
+}
+
+const MAX_CHAT_IMAGES = 4;
+
+/** Maximum base64 data length for a single image (~3.75 MB binary). */
+const MAX_IMAGE_DATA_BYTES = 5 * 1_048_576;
+
+/** Maximum length of an image filename. */
+const MAX_IMAGE_NAME_LENGTH = 255;
+
+/** Matches a valid standard-alphabet base64 string (RFC 4648 §4, `+/`, optional `=` padding). */
+const BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/;
+
+const ALLOWED_IMAGE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+]);
+
+/** Returns an error message string, or null if valid. Exported for unit tests. */
+export function validateChatImages(images: unknown): string | null {
+  if (!Array.isArray(images) || images.length === 0) return null;
+  if (images.length > MAX_CHAT_IMAGES)
+    return `Too many images (max ${MAX_CHAT_IMAGES})`;
+  for (const img of images) {
+    if (!img || typeof img !== "object") return "Each image must be an object";
+    const { data, mimeType, name } = img as Record<string, unknown>;
+    if (typeof data !== "string" || !data)
+      return "Each image must have a non-empty data string";
+    if (data.startsWith("data:"))
+      return "Image data must be raw base64, not a data URL";
+    if (data.length > MAX_IMAGE_DATA_BYTES)
+      return `Image too large (max ${MAX_IMAGE_DATA_BYTES / 1_048_576} MB per image)`;
+    if (!BASE64_RE.test(data))
+      return "Image data contains invalid base64 characters";
+    if (typeof mimeType !== "string" || !mimeType)
+      return "Each image must have a mimeType string";
+    if (!ALLOWED_IMAGE_MIME_TYPES.has(mimeType.toLowerCase()))
+      return `Unsupported image type: ${mimeType}`;
+    if (typeof name !== "string" || !name)
+      return "Each image must have a name string";
+    if (name.length > MAX_IMAGE_NAME_LENGTH)
+      return `Image name too long (max ${MAX_IMAGE_NAME_LENGTH} characters)`;
+  }
+  return null;
+}
+
+/**
+ * Extension of the core Media attachment shape that carries raw image bytes for
+ * action handlers (e.g. POST_TWEET) while the message is in-memory. The
+ * extra fields are intentionally stripped before the message is persisted.
+ *
+ * Note: `_data`/`_mimeType` survive only because ElizaOS passes the
+ * `userMessage` object reference directly to action handlers without
+ * deep-cloning or serializing it. If that ever changes, action handlers
+ * that read these fields will silently receive `undefined`.
+ */
+export interface ChatAttachmentWithData extends Media {
+  /** Raw base64 image data — never written to the database. */
+  _data: string;
+  /** MIME type corresponding to `_data`. */
+  _mimeType: string;
+}
+
+/**
+ * Builds in-memory and compact (DB-persisted) attachment arrays from
+ * validated images. Exported so it can be unit-tested independently.
+ */
+export function buildChatAttachments(
+  images: ChatImageAttachment[] | undefined,
+): {
+  /** In-memory attachments that include `_data`/`_mimeType` for action handlers. */
+  attachments: ChatAttachmentWithData[] | undefined;
+  /** Persistence-safe attachments with `_data`/`_mimeType` stripped. */
+  compactAttachments: Media[] | undefined;
+} {
+  if (!images?.length)
+    return { attachments: undefined, compactAttachments: undefined };
+  // Compact placeholder URL (no base64) keeps the LLM context lean. The raw
+  // image bytes are stashed in `_data`/`_mimeType` for action handlers (e.g.
+  // POST_TWEET) that need to upload them.
+  const attachments: ChatAttachmentWithData[] = images.map((img, i) => ({
+    id: `img-${i}`,
+    url: `attachment:img-${i}`,
+    title: img.name,
+    source: "client_chat",
+    description: "User-attached image",
+    text: "",
+    contentType: ContentType.IMAGE,
+    _data: img.data,
+    _mimeType: img.mimeType,
+  }));
+  // DB-persisted version omits _data/_mimeType so raw bytes aren't stored.
+  const compactAttachments: Media[] = attachments.map(
+    ({ _data: _d, _mimeType: _m, ...rest }) => rest,
+  );
+  return { attachments, compactAttachments };
+}
+
+type MessageMemory = ReturnType<typeof createMessageMemory>;
+
+/**
+ * Constructs the in-memory user message (with image data for action handlers)
+ * and the persistence-safe counterpart (image data stripped). Extracted to
+ * avoid duplicating this logic across the stream and non-stream chat endpoints.
+ */
+export function buildUserMessages(params: {
+  images: ChatImageAttachment[] | undefined;
+  prompt: string;
+  userId: UUID;
+  roomId: UUID;
+  channelType: ChannelType;
+}): { userMessage: MessageMemory; messageToStore: MessageMemory } {
+  const { images, prompt, userId, roomId, channelType } = params;
+  const { attachments, compactAttachments } = buildChatAttachments(images);
+  const id = crypto.randomUUID() as UUID;
+  // In-memory message carries _data/_mimeType so action handlers can upload.
+  const userMessage = createMessageMemory({
+    id,
+    entityId: userId,
+    roomId,
+    content: {
+      text: prompt,
+      source: "client_chat",
+      channelType,
+      ...(attachments?.length ? { attachments } : {}),
+    },
+  });
+  // Persisted message: compact placeholder URL, no raw bytes in DB.
+  const messageToStore = compactAttachments?.length
+    ? createMessageMemory({
+        id,
+        entityId: userId,
+        roomId,
+        content: {
+          text: prompt,
+          source: "client_chat",
+          channelType,
+          attachments: compactAttachments,
+        },
+      })
+    : userMessage;
+  return { userMessage, messageToStore };
+}
+
 async function readChatRequestPayload(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -2239,11 +2399,19 @@ async function readChatRequestPayload(
     ) => Promise<T | null>;
     error: (res: http.ServerResponse, message: string, status?: number) => void;
   },
-): Promise<{ prompt: string; channelType: ChannelType } | null> {
+  /** Body size limit. Image-capable endpoints pass CHAT_MAX_BODY_BYTES (20 MB);
+   *  legacy/cloud-proxy endpoints that don't process images pass MAX_BODY_BYTES (1 MB). */
+  maxBytes = CHAT_MAX_BODY_BYTES,
+): Promise<{
+  prompt: string;
+  channelType: ChannelType;
+  images?: ChatImageAttachment[];
+} | null> {
   const body = await helpers.readJsonBody<{
     text?: string;
     channelType?: string;
-  }>(req, res);
+    images?: ChatImageAttachment[];
+  }>(req, res, { maxBytes });
   if (!body) return null;
   if (!body.text?.trim()) {
     helpers.error(res, "text is required");
@@ -2254,9 +2422,24 @@ async function readChatRequestPayload(
     helpers.error(res, "channelType is invalid", 400);
     return null;
   }
+  const imageValidationError = validateChatImages(body.images);
+  if (imageValidationError) {
+    helpers.error(res, imageValidationError, 400);
+    return null;
+  }
+  // Normalize mimeType to lowercase so downstream consumers (Twitter
+  // uploadMedia, content-type headers) never encounter mixed-case variants
+  // that slipped past the allowlist check.
+  const images = Array.isArray(body.images)
+    ? (body.images as ChatImageAttachment[]).map((img) => ({
+        ...img,
+        mimeType: img.mimeType.toLowerCase(),
+      }))
+    : undefined;
   return {
     prompt: body.text.trim(),
     channelType,
+    images,
   };
 }
 
@@ -2410,6 +2593,248 @@ function validateSkillId(
     return null;
   }
   return skillId;
+}
+
+const ALLOWED_MCP_CONFIG_TYPES = new Set([
+  "stdio",
+  "http",
+  "streamable-http",
+  "sse",
+]);
+
+const ALLOWED_MCP_COMMANDS = new Set([
+  "npx",
+  "node",
+  "bun",
+  "bunx",
+  "deno",
+  "python",
+  "python3",
+  "uvx",
+  "uv",
+  "docker",
+  "podman",
+]);
+
+const BLOCKED_MCP_ENV_KEYS = new Set([
+  "LD_PRELOAD",
+  "LD_LIBRARY_PATH",
+  "DYLD_INSERT_LIBRARIES",
+  "DYLD_LIBRARY_PATH",
+  "NODE_OPTIONS",
+  "NODE_EXTRA_CA_CERTS",
+  "ELECTRON_RUN_AS_NODE",
+  "PATH",
+  "HOME",
+  "SHELL",
+]);
+
+const INTERPRETER_MCP_COMMANDS = new Set([
+  "node",
+  "bun",
+  "deno",
+  "python",
+  "python3",
+  "uv",
+]);
+
+const PACKAGE_RUNNER_MCP_COMMANDS = new Set(["npx", "bunx", "uvx"]);
+const CONTAINER_MCP_COMMANDS = new Set(["docker", "podman"]);
+
+const BLOCKED_INTERPRETER_FLAGS = new Set([
+  "-e",
+  "--eval",
+  "-p",
+  "--print",
+  "-c",
+  "-m",
+]);
+
+const BLOCKED_PACKAGE_RUNNER_FLAGS = new Set(["-c", "--call", "-e", "--eval"]);
+const BLOCKED_CONTAINER_FLAGS = new Set([
+  "--privileged",
+  "-v",
+  "--volume",
+  "--mount",
+  "--cap-add",
+  "--security-opt",
+  "--pid",
+  "--network",
+]);
+const BLOCKED_DENO_SUBCOMMANDS = new Set(["eval"]);
+
+function normalizeMcpCommand(command: string): string {
+  const baseName = command.replace(/\\/g, "/").split("/").pop() ?? "";
+  return baseName.replace(/\.(exe|cmd|bat)$/i, "").toLowerCase();
+}
+
+function hasBlockedFlag(
+  args: string[],
+  blockedFlags: ReadonlySet<string>,
+): string | null {
+  for (const arg of args) {
+    const trimmed = arg.trim();
+    for (const flag of blockedFlags) {
+      if (trimmed === flag || trimmed.startsWith(`${flag}=`)) {
+        return flag;
+      }
+      // Block attached short-option forms like -cpayload or -epayload.
+      if (
+        /^-[A-Za-z]$/.test(flag) &&
+        trimmed.startsWith(flag) &&
+        trimmed.length > flag.length
+      ) {
+        return flag;
+      }
+    }
+  }
+  return null;
+}
+
+function firstPositionalArg(args: string[]): string | null {
+  for (const arg of args) {
+    const trimmed = arg.trim();
+    if (!trimmed || trimmed === "--" || trimmed.startsWith("-")) continue;
+    return trimmed.toLowerCase();
+  }
+  return null;
+}
+
+export function validateMcpServerConfig(
+  config: Record<string, unknown>,
+): string | null {
+  const configType = config.type;
+  if (
+    typeof configType !== "string" ||
+    !ALLOWED_MCP_CONFIG_TYPES.has(configType)
+  ) {
+    return `Invalid config type. Must be one of: ${[...ALLOWED_MCP_CONFIG_TYPES].join(", ")}`;
+  }
+
+  if (configType === "stdio") {
+    const command =
+      typeof config.command === "string" ? config.command.trim() : "";
+    if (!command) {
+      return "Command is required for stdio servers";
+    }
+    if (!/^[A-Za-z0-9._-]+$/.test(command)) {
+      return "Command must be a bare executable name without path separators";
+    }
+
+    const normalizedCommand = normalizeMcpCommand(command);
+    if (!ALLOWED_MCP_COMMANDS.has(normalizedCommand)) {
+      return (
+        `Command "${command}" is not allowed. ` +
+        `Allowed commands: ${[...ALLOWED_MCP_COMMANDS].join(", ")}`
+      );
+    }
+
+    if (config.args !== undefined) {
+      if (!Array.isArray(config.args)) {
+        return "args must be an array of strings";
+      }
+      for (const arg of config.args) {
+        if (typeof arg !== "string") {
+          return "Each arg must be a string";
+        }
+      }
+      const args = config.args as string[];
+      if (INTERPRETER_MCP_COMMANDS.has(normalizedCommand)) {
+        const blocked = hasBlockedFlag(args, BLOCKED_INTERPRETER_FLAGS);
+        if (blocked) {
+          return `Flag "${blocked}" is not allowed for ${normalizedCommand} MCP servers`;
+        }
+      }
+      if (PACKAGE_RUNNER_MCP_COMMANDS.has(normalizedCommand)) {
+        const blocked = hasBlockedFlag(args, BLOCKED_PACKAGE_RUNNER_FLAGS);
+        if (blocked) {
+          return `Flag "${blocked}" is not allowed for ${normalizedCommand} MCP servers`;
+        }
+      }
+      if (CONTAINER_MCP_COMMANDS.has(normalizedCommand)) {
+        const blocked = hasBlockedFlag(args, BLOCKED_CONTAINER_FLAGS);
+        if (blocked) {
+          return `Flag "${blocked}" is not allowed for ${normalizedCommand} MCP servers`;
+        }
+      }
+      if (normalizedCommand === "deno") {
+        const subcommand = firstPositionalArg(args);
+        if (subcommand && BLOCKED_DENO_SUBCOMMANDS.has(subcommand)) {
+          return `Subcommand "${subcommand}" is not allowed for deno MCP servers`;
+        }
+      }
+    }
+  } else {
+    const url = typeof config.url === "string" ? config.url.trim() : "";
+    if (!url) {
+      return "URL is required for remote servers";
+    }
+  }
+
+  if (config.env !== undefined) {
+    if (
+      typeof config.env !== "object" ||
+      config.env === null ||
+      Array.isArray(config.env)
+    ) {
+      return "env must be a plain object of string key-value pairs";
+    }
+
+    for (const [key, value] of Object.entries(config.env)) {
+      if (isBlockedObjectKey(key)) {
+        return `env key "${key}" is blocked for security reasons`;
+      }
+      if (typeof value !== "string") {
+        return `env.${key} must be a string`;
+      }
+      if (BLOCKED_MCP_ENV_KEYS.has(key.toUpperCase())) {
+        return `env variable "${key}" is not allowed for security reasons`;
+      }
+    }
+  }
+
+  if (config.cwd !== undefined && typeof config.cwd !== "string") {
+    return "cwd must be a string";
+  }
+
+  if (config.timeoutInMillis !== undefined) {
+    if (
+      typeof config.timeoutInMillis !== "number" ||
+      !Number.isFinite(config.timeoutInMillis) ||
+      config.timeoutInMillis < 0
+    ) {
+      return "timeoutInMillis must be a non-negative number";
+    }
+  }
+
+  return null;
+}
+
+export function resolveMcpServersRejection(
+  servers: Record<string, unknown>,
+): string | null {
+  for (const [serverName, serverConfig] of Object.entries(servers)) {
+    if (isBlockedObjectKey(serverName)) {
+      return `Invalid server name: "${serverName}"`;
+    }
+    if (
+      !serverConfig ||
+      typeof serverConfig !== "object" ||
+      Array.isArray(serverConfig)
+    ) {
+      return `Server "${serverName}" config must be a JSON object`;
+    }
+    if (hasBlockedObjectKeyDeep(serverConfig)) {
+      return `Server "${serverName}" contains blocked object keys`;
+    }
+    const configError = validateMcpServerConfig(
+      serverConfig as Record<string, unknown>,
+    );
+    if (configError) {
+      return `Server "${serverName}": ${configError}`;
+    }
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -3344,6 +3769,8 @@ const PAIRING_MAX_ATTEMPTS = 5;
 const PAIRING_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 let pairingCode: string | null = null;
+/** Guard against concurrent provider switch requests (P0 §3). */
+let providerSwitchInProgress = false;
 let pairingExpiresAt = 0;
 const pairingAttempts = new Map<string, { count: number; resetAt: number }>();
 
@@ -4497,6 +4924,241 @@ async function handleRequest(
   if (method === "OPTIONS") {
     res.statusCode = 204;
     res.end();
+    return;
+  }
+
+  // ── POST /api/provider/switch ─────────────────────────────────────────
+  // Atomically switch the active AI provider.  Clears competing credentials
+  // and env vars so the runtime loads the correct plugin on restart.
+  if (method === "POST" && pathname === "/api/provider/switch") {
+    const body = await readJsonBody<{ provider: string; apiKey?: string }>(
+      req,
+      res,
+    );
+    if (!body) return;
+    const provider = body.provider;
+    if (!provider || typeof provider !== "string") {
+      error(res, "Missing provider", 400);
+      return;
+    }
+
+    // P1 §7 — explicit provider allowlist
+    const VALID_PROVIDERS = new Set([
+      "elizacloud",
+      "openai-codex",
+      "openai-subscription",
+      "anthropic-subscription",
+      "openai",
+      "anthropic",
+      "deepseek",
+      "google",
+      "groq",
+      "xai",
+      "openrouter",
+    ]);
+    if (!VALID_PROVIDERS.has(provider)) {
+      error(res, "Invalid provider", 400);
+      return;
+    }
+
+    // P0 §3 — race guard: reject concurrent provider switch requests
+    if (providerSwitchInProgress) {
+      error(res, "Provider switch already in progress", 409);
+      return;
+    }
+    providerSwitchInProgress = true;
+
+    const config = state.config;
+    if (!config.cloud) config.cloud = {} as NonNullable<typeof config.cloud>;
+    if (!config.env) config.env = {};
+    const envCfg = config.env as Record<string, string>;
+
+    // Helper: clear cloud config & env vars
+    const clearCloud = () => {
+      (config.cloud as Record<string, unknown>).enabled = false;
+      delete (config.cloud as Record<string, unknown>).apiKey;
+      delete process.env.ELIZAOS_CLOUD_API_KEY;
+      delete process.env.ELIZAOS_CLOUD_ENABLED;
+      delete envCfg.ELIZAOS_CLOUD_API_KEY;
+      delete envCfg.ELIZAOS_CLOUD_ENABLED;
+      // Also clear from runtime character secrets if available
+      if (state.runtime?.character?.secrets) {
+        const secrets = state.runtime.character.secrets as Record<
+          string,
+          unknown
+        >;
+        delete secrets.ELIZAOS_CLOUD_API_KEY;
+        delete secrets.ELIZAOS_CLOUD_ENABLED;
+      }
+    };
+
+    // Helper: clear subscription credentials
+    const clearSubscriptions = async () => {
+      try {
+        const { deleteCredentials } = await import("../auth/index");
+        deleteCredentials("anthropic-subscription");
+        deleteCredentials("openai-codex");
+      } catch (err) {
+        logger.warn(
+          `[api] Failed to clear subscriptions: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+      // Don't clear the env keys here — applySubscriptionCredentials on
+      // restart will simply not set them if creds are gone.
+    };
+
+    // Provider-specific env key map
+    const PROVIDER_ENV_KEYS: Record<string, string> = {
+      openai: "OPENAI_API_KEY",
+      anthropic: "ANTHROPIC_API_KEY",
+      deepseek: "DEEPSEEK_API_KEY",
+      google: "GOOGLE_API_KEY",
+      groq: "GROQ_API_KEY",
+      xai: "XAI_API_KEY",
+      openrouter: "OPENROUTER_API_KEY",
+    };
+
+    // Helper: clear all direct API keys from env (except the one we're switching to)
+    const clearOtherApiKeys = (keepKey?: string) => {
+      for (const [, envKey] of Object.entries(PROVIDER_ENV_KEYS)) {
+        if (envKey === keepKey) continue;
+        delete process.env[envKey];
+        delete envCfg[envKey];
+        // P1 §6 — also clear from runtime character secrets
+        if (state.runtime?.character?.secrets) {
+          const secrets = state.runtime.character.secrets as Record<
+            string,
+            unknown
+          >;
+          delete secrets[envKey];
+        }
+      }
+    };
+
+    try {
+      // P0 §4 — input validation for direct API key providers
+      if (PROVIDER_ENV_KEYS[provider]) {
+        const trimmedKey =
+          typeof body.apiKey === "string" ? body.apiKey.trim() : "";
+        if (!trimmedKey) {
+          providerSwitchInProgress = false;
+          error(res, "API key is required for this provider", 400);
+          return;
+        }
+        if (trimmedKey.length > 512) {
+          providerSwitchInProgress = false;
+          error(res, "API key is too long", 400);
+          return;
+        }
+        // Store trimmed key back for use below
+        body.apiKey = trimmedKey;
+      }
+
+      if (provider === "elizacloud") {
+        // Switching TO elizacloud
+        await clearSubscriptions();
+        clearOtherApiKeys();
+        // Restore cloud config — the actual API key should already be in
+        // config.cloud.apiKey from the original cloud login.  If it was
+        // wiped, the user will need to re-login via cloud.
+        (config.cloud as Record<string, unknown>).enabled = true;
+        if (config.cloud.apiKey) {
+          process.env.ELIZAOS_CLOUD_API_KEY = config.cloud.apiKey;
+          process.env.ELIZAOS_CLOUD_ENABLED = "true";
+        }
+      } else if (
+        provider === "openai-codex" ||
+        provider === "openai-subscription"
+      ) {
+        // Switching TO OpenAI subscription
+        clearCloud();
+        clearOtherApiKeys("OPENAI_API_KEY");
+        // Delete Anthropic subscription but keep OpenAI
+        try {
+          const { deleteCredentials } = await import("../auth/index");
+          deleteCredentials("anthropic-subscription");
+        } catch (err) {
+          logger.warn(
+            `[api] Failed to clear Anthropic subscription: ${err instanceof Error ? err.message : err}`,
+          );
+        }
+        // Apply the OpenAI subscription credentials to env
+        try {
+          const { applySubscriptionCredentials } = await import(
+            "../auth/index"
+          );
+          await applySubscriptionCredentials();
+        } catch (err) {
+          logger.warn(
+            `[api] Failed to apply OpenAI subscription creds: ${err instanceof Error ? err.message : err}`,
+          );
+        }
+      } else if (provider === "anthropic-subscription") {
+        // Switching TO Anthropic subscription
+        clearCloud();
+        clearOtherApiKeys("ANTHROPIC_API_KEY");
+        // Delete OpenAI subscription but keep Anthropic
+        try {
+          const { deleteCredentials } = await import("../auth/index");
+          deleteCredentials("openai-codex");
+        } catch (err) {
+          logger.warn(
+            `[api] Failed to clear OpenAI subscription: ${err instanceof Error ? err.message : err}`,
+          );
+        }
+        try {
+          const { applySubscriptionCredentials } = await import(
+            "../auth/index"
+          );
+          await applySubscriptionCredentials();
+        } catch (err) {
+          logger.warn(
+            `[api] Failed to apply Anthropic subscription creds: ${err instanceof Error ? err.message : err}`,
+          );
+        }
+      } else if (PROVIDER_ENV_KEYS[provider]) {
+        // Switching TO a direct API key provider
+        clearCloud();
+        await clearSubscriptions();
+        const envKey = PROVIDER_ENV_KEYS[provider];
+        clearOtherApiKeys(envKey);
+        const apiKey = body.apiKey;
+        if (!apiKey) {
+          providerSwitchInProgress = false;
+          error(res, "API key is required for this provider", 400);
+          return;
+        }
+        process.env[envKey] = apiKey;
+        envCfg[envKey] = apiKey;
+      }
+
+      saveMiladyConfig(config);
+
+      // Schedule runtime restart so the new provider takes effect.
+      scheduleRuntimeRestart(`provider switch to ${provider}`);
+      // Keep the lock briefly in restart-capable environments to prevent
+      // double-submits from racing with restart-required propagation.
+      if (ctx?.onRestart) {
+        setTimeout(() => {
+          providerSwitchInProgress = false;
+        }, 250);
+      } else {
+        providerSwitchInProgress = false;
+      }
+
+      json(res, {
+        success: true,
+        provider,
+        restarting: true,
+      });
+    } catch (err) {
+      providerSwitchInProgress = false;
+      // P1 §8 — don't leak internal error details to client
+      logger.error(
+        `[api] Provider switch failed: ${err instanceof Error ? err.stack : err}`,
+      );
+      error(res, "Provider switch failed", 500);
+    }
     return;
   }
 
@@ -7796,6 +8458,31 @@ async function handleRequest(
       }
     }
 
+    if (
+      filtered.mcp &&
+      typeof filtered.mcp === "object" &&
+      !Array.isArray(filtered.mcp)
+    ) {
+      const mcpPatch = filtered.mcp as Record<string, unknown>;
+      if (mcpPatch.servers !== undefined) {
+        if (
+          !mcpPatch.servers ||
+          typeof mcpPatch.servers !== "object" ||
+          Array.isArray(mcpPatch.servers)
+        ) {
+          error(res, "mcp.servers must be a JSON object", 400);
+          return;
+        }
+        const mcpRejection = resolveMcpServersRejection(
+          mcpPatch.servers as Record<string, unknown>,
+        );
+        if (mcpRejection) {
+          error(res, mcpRejection, 400);
+          return;
+        }
+      }
+    }
+
     safeMerge(state.config as Record<string, unknown>, filtered);
 
     // If the client updated env vars, synchronise them into process.env so
@@ -8727,7 +9414,7 @@ async function handleRequest(
       error,
     });
     if (!chatPayload) return;
-    const { prompt, channelType } = chatPayload;
+    const { prompt, channelType, images } = chatPayload;
 
     const runtime = state.runtime;
     if (!runtime) {
@@ -8749,19 +9436,16 @@ async function handleRequest(
       return;
     }
 
-    const userMessage = createMessageMemory({
-      id: crypto.randomUUID() as UUID,
-      entityId: userId,
+    const { userMessage, messageToStore } = buildUserMessages({
+      images,
+      prompt,
+      userId,
       roomId: conv.roomId,
-      content: {
-        text: prompt,
-        source: "client_chat",
-        channelType,
-      },
+      channelType,
     });
 
     try {
-      await persistConversationMemory(runtime, userMessage);
+      await persistConversationMemory(runtime, messageToStore);
     } catch (err) {
       error(res, `Failed to store user message: ${getErrorMessage(err)}`, 500);
       return;
@@ -8875,7 +9559,7 @@ async function handleRequest(
       error,
     });
     if (!chatPayload) return;
-    const { prompt, channelType } = chatPayload;
+    const { prompt, channelType, images } = chatPayload;
     const runtime = state.runtime;
     if (!runtime) {
       error(res, "Agent is not running", 503);
@@ -8895,19 +9579,16 @@ async function handleRequest(
       return;
     }
 
-    const userMessage = createMessageMemory({
-      id: crypto.randomUUID() as UUID,
-      entityId: userId,
+    const { userMessage, messageToStore } = buildUserMessages({
+      images,
+      prompt,
+      userId,
       roomId: conv.roomId,
-      content: {
-        text: prompt,
-        source: "client_chat",
-        channelType,
-      },
+      channelType,
     });
 
     try {
-      await persistConversationMemory(runtime, userMessage);
+      await persistConversationMemory(runtime, messageToStore);
     } catch (err) {
       error(res, `Failed to store user message: ${getErrorMessage(err)}`, 500);
       return;
@@ -9080,10 +9761,14 @@ async function handleRequest(
 
   // ── POST /api/chat/stream ────────────────────────────────────────────
   if (method === "POST" && pathname === "/api/chat/stream") {
-    const chatPayload = await readChatRequestPayload(req, res, {
-      readJsonBody,
-      error,
-    });
+    // Legacy cloud-proxy path — forwards messages to a remote sandbox and
+    // does not process image attachments. Retain the standard 1 MB body limit.
+    const chatPayload = await readChatRequestPayload(
+      req,
+      res,
+      { readJsonBody, error },
+      MAX_BODY_BYTES,
+    );
     if (!chatPayload) return;
     const { prompt, channelType } = chatPayload;
 
@@ -9173,10 +9858,14 @@ async function handleRequest(
   // remote sandbox instead of the local runtime.  Supports SSE streaming
   // when the client sends Accept: text/event-stream.
   if (method === "POST" && pathname === "/api/chat") {
-    const chatPayload = await readChatRequestPayload(req, res, {
-      readJsonBody,
-      error,
-    });
+    // Legacy cloud-proxy path — forwards messages to a remote sandbox and
+    // does not process image attachments. Retain the standard 1 MB body limit.
+    const chatPayload = await readChatRequestPayload(
+      req,
+      res,
+      { readJsonBody, error },
+      MAX_BODY_BYTES,
+    );
     if (!chatPayload) return;
     const { prompt, channelType } = chatPayload;
 
@@ -10067,42 +10756,14 @@ async function handleRequest(
     }
 
     const config = body.config as Record<string, unknown> | undefined;
-    if (!config || typeof config !== "object") {
+    if (!config || typeof config !== "object" || Array.isArray(config)) {
       error(res, "Server config object is required", 400);
       return;
     }
-    if (hasBlockedObjectKeyDeep(config)) {
-      error(
-        res,
-        'Invalid server config: "__proto__", "constructor", and "prototype" are not allowed',
-        400,
-      );
-      return;
-    }
 
-    const configType = config.type as string | undefined;
-    const validTypes = ["stdio", "http", "streamable-http", "sse"];
-    if (!configType || !validTypes.includes(configType)) {
-      error(
-        res,
-        `Invalid config type. Must be one of: ${validTypes.join(", ")}`,
-        400,
-      );
-      return;
-    }
-
-    if (configType === "stdio" && !config.command) {
-      error(res, "Command is required for stdio servers", 400);
-      return;
-    }
-
-    if (
-      (configType === "http" ||
-        configType === "streamable-http" ||
-        configType === "sse") &&
-      !config.url
-    ) {
-      error(res, "URL is required for remote servers", 400);
+    const mcpRejection = resolveMcpServersRejection({ [serverName]: config });
+    if (mcpRejection) {
+      error(res, mcpRejection, 400);
       return;
     }
 
@@ -10165,13 +10826,20 @@ async function handleRequest(
     if (!body) return;
 
     if (!state.config.mcp) state.config.mcp = {};
-    if (body.servers && typeof body.servers === "object") {
-      if (hasBlockedObjectKeyDeep(body.servers)) {
-        error(
-          res,
-          'Invalid servers config: "__proto__", "constructor", and "prototype" are not allowed',
-          400,
-        );
+    if (body.servers !== undefined) {
+      if (
+        !body.servers ||
+        typeof body.servers !== "object" ||
+        Array.isArray(body.servers)
+      ) {
+        error(res, "servers must be a JSON object", 400);
+        return;
+      }
+      const mcpRejection = resolveMcpServersRejection(
+        body.servers as Record<string, unknown>,
+      );
+      if (mcpRejection) {
+        error(res, mcpRejection, 400);
         return;
       }
       const sanitized = cloneWithoutBlockedObjectKeys(body.servers);
