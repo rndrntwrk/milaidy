@@ -1030,6 +1030,97 @@ export function applyDatabaseConfigToEnv(config: MilaidyConfig): void {
 }
 
 /**
+ * Recover a broken PGlite data directory by moving it to a timestamped backup
+ * and letting the adapter re-initialize against a fresh directory.
+ *
+ * This is intentionally narrow: only triggers for the schema bootstrap failure
+ * that blocks startup in production today. A timestamped backup is retained so
+ * data can be restored manually after the process successfully starts.
+ */
+async function recoverPgliteDataDirIfNeeded(
+  error: unknown,
+): Promise<void> {
+  const message = formatError(error);
+  const shouldTryRecovery =
+    process.env.MILAIDY_PGLITE_RECOVERY !== "false" &&
+    /Failed query:\s*CREATE SCHEMA IF NOT EXISTS migrations/i.test(message);
+
+  if (!shouldTryRecovery) {
+    return;
+  }
+
+  const configuredDataDir = process.env.PGLITE_DATA_DIR?.trim();
+  if (!configuredDataDir) {
+    return;
+  }
+
+  const dataDir = resolveUserPath(configuredDataDir);
+  const backupTimestamp = new Date().toISOString().replace(/[.:]/g, "_");
+  const backupDir = `${dataDir}.recovery.${backupTimestamp}`;
+
+  // Keep any historical failures recoverable and auditable without immediate data loss.
+  try {
+    const stat = await fs.stat(dataDir);
+    if (!stat.isDirectory()) {
+      return;
+    }
+  } catch {
+    return;
+  }
+
+  logger.error(
+    `[milaidy] Database migration failed with PGlite schema bootstrap error. ` +
+      `Attempting safe recovery. source=${dataDir}, backup=${backupDir}`,
+  );
+
+  try {
+    await fs.rename(dataDir, backupDir);
+  } catch {
+    await fs.cp(dataDir, backupDir, {
+      recursive: true,
+      force: false,
+      verbatimSymlinks: true,
+    });
+    await fs.rm(dataDir, { recursive: true, force: true });
+  }
+
+  logger.success(
+    `[milaidy] PGlite data directory preserved for recovery: ${backupDir}`,
+  );
+}
+
+/**
+ * Initialize adapter with explicit recovery path for known startup blocker.
+ * Keeps restart behavior deterministic and prevents indefinite startup stall.
+ */
+async function initializeDatabaseAdapter(runtime: IRuntimeAdapterOwner): Promise<void> {
+  if (!runtime.adapter) {
+    throw new Error("Database adapter is not ready to initialize");
+  }
+
+  if (await runtime.adapter.isReady()) {
+    return;
+  }
+
+  try {
+    await runtime.adapter.init();
+  } catch (err) {
+    await recoverPgliteDataDirIfNeeded(err);
+    await runtime.adapter.init();
+  }
+}
+
+/**
+ * Minimal subset of AgentRuntime required for adapter lifecycle operations.
+ */
+interface IRuntimeAdapterOwner {
+  adapter: {
+    isReady: () => Promise<boolean>;
+    init: () => Promise<void>;
+  };
+}
+
+/**
  * Build an ElizaOS Character from the Milaidy config.
  *
  * Resolves the agent name from `config.agents.list` (first entry) or
@@ -2238,12 +2329,8 @@ export async function startEliza(
     //     runtime.initialize() also calls adapter.init() but that happens AFTER
     //     all plugin inits — too late for plugins that need runtime.db during init.
     //     The call is idempotent (runtime.initialize checks adapter.isReady()).
-    if (runtime.adapter && !(await runtime.adapter.isReady())) {
-      await runtime.adapter.init();
-      logger.info(
-        "[milaidy] Database adapter initialized early (before plugin inits)",
-      );
-    }
+    await initializeDatabaseAdapter(runtime);
+    logger.info("[milaidy] Database adapter initialized early (before plugin inits)");
   } else {
     const loadedNames = resolvedPlugins.map((p) => p.name).join(", ");
     logger.error(
@@ -2648,9 +2735,7 @@ export async function startEliza(
           );
           if (freshSqlPlugin) {
             await newRuntime.registerPlugin(freshSqlPlugin.plugin);
-            if (newRuntime.adapter && !(await newRuntime.adapter.isReady())) {
-              await newRuntime.adapter.init();
-            }
+            await initializeDatabaseAdapter(newRuntime);
           }
           if (freshLocalEmbeddingPlugin) {
             await newRuntime.registerPlugin(freshLocalEmbeddingPlugin.plugin);
