@@ -1059,11 +1059,13 @@ async function recoverPgliteDataDirIfNeeded(
   const backupDir = `${dataDir}.recovery.${backupTimestamp}`;
 
   // Keep any historical failures recoverable and auditable without immediate data loss.
+  // PGlite uses a directory today, but we intentionally accept both file + dir
+  // so recovery remains robust to upstream changes.
+  let isDirectory = false;
   try {
     const stat = await fs.stat(dataDir);
-    if (!stat.isDirectory()) {
-      return;
-    }
+    if (!stat.isDirectory() && !stat.isFile()) return;
+    isDirectory = stat.isDirectory();
   } catch {
     return;
   }
@@ -1077,11 +1079,11 @@ async function recoverPgliteDataDirIfNeeded(
     await fs.rename(dataDir, backupDir);
   } catch {
     await fs.cp(dataDir, backupDir, {
-      recursive: true,
+      recursive: isDirectory,
       force: false,
       verbatimSymlinks: true,
     });
-    await fs.rm(dataDir, { recursive: true, force: true });
+    await fs.rm(dataDir, { recursive: isDirectory, force: true });
   }
 
   logger.success(
@@ -2404,7 +2406,31 @@ export async function startEliza(
   );
 
   // 8. Initialize the runtime (registers remaining plugins, starts services)
-  await runtime.initialize();
+  try {
+    await runtime.initialize();
+  } catch (err) {
+    // Drizzle throws a query wrapper error that often preserves the underlying
+    // database failure on `.cause` — surface it so we can reason about whether
+    // recovery is appropriate (permissions, corruption, locks, etc.).
+    const rootCause = (err as { cause?: unknown } | null | undefined)?.cause;
+    if (rootCause) {
+      logger.error(
+        `[milaidy] Database initialization root cause: ${formatError(rootCause)}`,
+      );
+    }
+
+    // Best-effort stop to release file handles before attempting recovery.
+    try {
+      await runtime.stop();
+    } catch (stopErr) {
+      logger.warn(
+        `[milaidy] Runtime stop failed after init error: ${formatError(stopErr)}`,
+      );
+    }
+
+    await recoverPgliteDataDirIfNeeded(err);
+    throw err;
+  }
 
   // 8b. Wait for AgentSkillsService to finish loading.
   //     runtime.initialize() resolves the internal initPromise which unblocks
