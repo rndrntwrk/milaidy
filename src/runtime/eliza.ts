@@ -10,7 +10,6 @@
 import crypto from "node:crypto";
 import type { Dirent } from "node:fs";
 import { existsSync, mkdirSync, symlinkSync } from "node:fs";
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import fs from "node:fs/promises";
 import { createRequire } from "node:module";
 import os from "node:os";

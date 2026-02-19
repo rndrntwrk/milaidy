@@ -11,7 +11,6 @@ import { CharacterView } from "./components/CharacterView";
 import { ChatView } from "./components/ChatView";
 import { CommandPalette } from "./components/CommandPalette";
 import { ConnectorsPageView } from "./components/ConnectorsPageView";
-import { RestartBanner } from "./components/RestartBanner";
 import { ConversationsSidebar } from "./components/ConversationsSidebar";
 import { CustomActionEditor } from "./components/CustomActionEditor";
 import { CustomActionsPanel } from "./components/CustomActionsPanel";
@@ -23,6 +22,7 @@ import { LoadingScreen } from "./components/LoadingScreen";
 import { Nav } from "./components/Nav";
 import { OnboardingWizard } from "./components/OnboardingWizard";
 import { PairingView } from "./components/PairingView";
+import { RestartBanner } from "./components/RestartBanner";
 import { SaveCommandModal } from "./components/SaveCommandModal";
 import { SettingsView } from "./components/SettingsView";
 import { TerminalPanel } from "./components/TerminalPanel";
@@ -294,7 +294,9 @@ export function App() {
         <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
           <Header />
           <Nav />
-          <main className={`flex-1 min-h-0 py-4 px-3 xl:py-6 xl:px-5 ${isAdvancedTab ? "overflow-hidden" : "overflow-y-auto"}`}>
+          <main
+            className={`flex-1 min-h-0 py-4 px-3 xl:py-6 xl:px-5 ${isAdvancedTab ? "overflow-hidden" : "overflow-y-auto"}`}
+          >
             <ViewRouter />
           </main>
           <TerminalPanel />

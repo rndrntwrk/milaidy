@@ -38,7 +38,8 @@ function findAllPluginSqlDists() {
   }
 
   // Also check global node_modules in home directory (bun may resolve from there)
-  const homeNodeModules = resolve(process.env.HOME || "", "node_modules");
+  const homeDir = process.env.HOME || process.env.USERPROFILE || "";
+  const homeNodeModules = resolve(homeDir, "node_modules");
   if (existsSync(homeNodeModules)) {
     searchRoots.push(resolve(homeNodeModules, ".."));
   }

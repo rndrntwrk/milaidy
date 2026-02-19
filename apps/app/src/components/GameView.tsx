@@ -71,7 +71,11 @@ export function GameView() {
       setChatInput("");
       // Show agent's response
       if (response.text) {
-        setActionNotice(`Agent: ${response.text.slice(0, 100)}${response.text.length > 100 ? "..." : ""}`, "success", 4000);
+        setActionNotice(
+          `Agent: ${response.text.slice(0, 100)}${response.text.length > 100 ? "..." : ""}`,
+          "success",
+          4000,
+        );
       } else {
         setActionNotice("Command sent to agent.", "success", 2000);
       }

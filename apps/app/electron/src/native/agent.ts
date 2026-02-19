@@ -196,7 +196,9 @@ export class AgentManager {
       this.sendToRenderer("agent:status", this.status);
 
       // 2. Resolve runtime bootstrap entry (may be slow on cold boot).
-      const elizaModule = await dynamicImport(path.join(miladyDist, "eliza.js"));
+      const elizaModule = await dynamicImport(
+        path.join(miladyDist, "eliza.js"),
+      );
       const resolvedStartEliza = (elizaModule.startEliza ??
         (elizaModule.default as Record<string, unknown>)?.startEliza) as
         | ((opts: {

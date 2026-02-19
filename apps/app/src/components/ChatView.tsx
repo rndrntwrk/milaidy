@@ -178,7 +178,11 @@ export function ChatView() {
       .find((message) => message.role === "assistant");
     if (!latestAssistant || !latestAssistant.text.trim()) return;
 
-    queueAssistantSpeech(latestAssistant.id, latestAssistant.text, !chatSending);
+    queueAssistantSpeech(
+      latestAssistant.id,
+      latestAssistant.text,
+      !chatSending,
+    );
   }, [msgs, chatSending, agentVoiceMuted, queueAssistantSpeech]);
 
   useEffect(() => {
@@ -272,15 +276,16 @@ export function ChatView() {
       {/* ── Messages ───────────────────────────────────────────────── */}
       <div
         ref={messagesRef}
-        className="flex-1 overflow-y-auto py-2 pr-2 sm:pr-3 relative"
-        style={{ zIndex: 1, scrollbarGutter: "stable" }}
+        data-testid="chat-messages-scroll"
+        className="flex-1 overflow-y-auto py-2 pr-3 sm:pr-4 relative"
+        style={{ zIndex: 1, scrollbarGutter: "stable both-edges" }}
       >
         {visibleMsgs.length === 0 && !chatSending ? (
           <div className="text-center py-10 text-muted italic">
             Send a message to start chatting.
           </div>
         ) : (
-          <div className="w-full pr-1">
+          <div className="w-full pr-2 sm:pr-3">
             {visibleMsgs.map((msg, i) => {
               const prev = i > 0 ? visibleMsgs[i - 1] : null;
               const grouped = prev?.role === msg.role;
@@ -311,7 +316,9 @@ export function ChatView() {
                         )}
                       </div>
                     ))}
-                  <div className="max-w-[92%] sm:max-w-[85%] min-w-0 px-0 py-1 text-sm leading-relaxed whitespace-pre-wrap break-words">
+                  <div
+                    className={`max-w-[92%] sm:max-w-[85%] min-w-0 px-0 py-1 text-sm leading-relaxed whitespace-pre-wrap break-words ${isUser ? "mr-1 sm:mr-2" : ""}`}
+                  >
                     {!grouped && (
                       <div className="font-bold text-[12px] mb-1 text-accent">
                         {isUser ? "You" : agentName}
@@ -348,7 +355,7 @@ export function ChatView() {
                     </div>
                   )}
                 </div>
-                <div className="max-w-[92%] sm:max-w-[85%] min-w-0 px-0 py-1 text-sm leading-relaxed">
+                <div className="max-w-[92%] sm:max-w-[85%] min-w-0 px-0 py-1 pr-1 sm:pr-2 text-sm leading-relaxed">
                   <div className="font-bold text-[12px] mb-1 text-accent">
                     {agentName}
                   </div>
@@ -408,10 +415,11 @@ export function ChatView() {
         {voice.supported && (
           <button
             type="button"
-            className={`h-[38px] w-[38px] flex-shrink-0 flex items-center justify-center border rounded cursor-pointer transition-all self-end ${voice.isListening
-              ? "bg-accent border-accent text-accent-fg shadow-[0_0_10px_rgba(124,58,237,0.4)] animate-pulse"
-              : "border-border bg-card text-muted hover:border-accent hover:text-accent"
-              }`}
+            className={`h-[38px] w-[38px] flex-shrink-0 flex items-center justify-center border rounded cursor-pointer transition-all self-end ${
+              voice.isListening
+                ? "bg-accent border-accent text-accent-fg shadow-[0_0_10px_rgba(124,58,237,0.4)] animate-pulse"
+                : "border-border bg-card text-muted hover:border-accent hover:text-accent"
+            }`}
             onClick={voice.toggleListening}
             title={voice.isListening ? "Stop listening" : "Voice input"}
           >

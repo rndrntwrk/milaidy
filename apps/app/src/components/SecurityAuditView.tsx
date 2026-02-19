@@ -23,7 +23,12 @@ const EVENT_TYPES: SecurityAuditEventType[] = [
   "fetch_proxy_error",
 ];
 
-const SEVERITIES: SecurityAuditSeverity[] = ["info", "warn", "error", "critical"];
+const SEVERITIES: SecurityAuditSeverity[] = [
+  "info",
+  "warn",
+  "error",
+  "critical",
+];
 
 const DEFAULT_LIMIT = 200;
 const MIN_LIMIT = 1;
@@ -45,7 +50,6 @@ function severityBadgeClass(severity: SecurityAuditSeverity): string {
       return "bg-danger/10 text-danger border border-danger/30";
     case "warn":
       return "bg-warn/10 text-warn border border-warn/30";
-    case "info":
     default:
       return "bg-accent-subtle text-accent border border-accent/30";
   }
@@ -236,9 +240,13 @@ export function SecurityAuditView() {
 
       <div className="font-mono text-xs flex-1 min-h-0 overflow-y-auto border border-border p-2 bg-card">
         {loading && !live ? (
-          <div className="text-center py-8 text-muted">Loading audit entries...</div>
+          <div className="text-center py-8 text-muted">
+            Loading audit entries...
+          </div>
         ) : entries.length === 0 ? (
-          <div className="text-center py-8 text-muted">No audit entries found.</div>
+          <div className="text-center py-8 text-muted">
+            No audit entries found.
+          </div>
         ) : (
           entries.map((entry, index) => (
             <article
@@ -246,7 +254,9 @@ export function SecurityAuditView() {
               className="border border-border bg-bg/40 p-3 mb-2"
             >
               <div className="flex flex-wrap items-center gap-2 mb-1">
-                <span className="text-muted">{formatDateTime(entry.timestamp)}</span>
+                <span className="text-muted">
+                  {formatDateTime(entry.timestamp)}
+                </span>
                 <span
                   className={`inline-flex px-2 py-[2px] text-[10px] uppercase tracking-wide ${severityBadgeClass(entry.severity)}`}
                 >
@@ -255,7 +265,9 @@ export function SecurityAuditView() {
                 <span className="text-muted">{entry.type}</span>
               </div>
 
-              <p className="text-[12px] text-txt break-words">{entry.summary}</p>
+              <p className="text-[12px] text-txt break-words">
+                {entry.summary}
+              </p>
 
               {entry.metadata && Object.keys(entry.metadata).length > 0 && (
                 <details className="mt-2">

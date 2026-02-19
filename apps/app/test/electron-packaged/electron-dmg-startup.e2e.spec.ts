@@ -320,7 +320,9 @@ test("packaged DMG app starts and reaches chat/agent-ready state", async () => {
       timeout: 120_000,
     });
     // Status pill verifies app reached ready state (status could be running, paused, etc.)
-    await expect(page.getByTestId("status-pill")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("status-pill")).toBeVisible({
+      timeout: 30_000,
+    });
     expect(
       api.requests.some((request) => request.includes("/api/status")),
     ).toBe(true);

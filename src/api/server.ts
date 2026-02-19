@@ -1926,12 +1926,17 @@ async function generateChatResponse(
     if (incoming === existing) return "";
     if (incoming.startsWith(existing)) return incoming.slice(existing.length);
     if (existing.startsWith(incoming)) return "";
-    if (existing.endsWith(incoming) || existing.includes(incoming)) return "";
+
+    // Small chunks are usually raw token deltas; keep them even if they
+    // repeat suffix characters (e.g., "l" + "l" in "Hello").
+    if (incoming.length <= 3) return incoming;
 
     const maxOverlap = Math.min(existing.length, incoming.length);
     for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
       if (existing.endsWith(incoming.slice(0, overlap))) {
-        return incoming.slice(overlap);
+        const delta = incoming.slice(overlap);
+        if (!delta && overlap === incoming.length) return "";
+        return delta;
       }
     }
     return incoming;
@@ -3324,6 +3329,12 @@ function applyCors(
     );
   }
 
+  // Security headers
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("X-XSS-Protection", "1; mode=block");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+
   return true;
 }
 
@@ -4305,14 +4316,16 @@ async function maybeRouteAutonomyEventToConversation(
   const text = typeof payload?.text === "string" ? payload.text.trim() : "";
   if (!text) return;
 
-  const source =
-    typeof payload?.source === "string" && payload.source.trim().length > 0
-      ? payload.source
-      : "autonomy";
+  const hasExplicitSource =
+    typeof payload?.source === "string" && payload.source.trim().length > 0;
+  const source = hasExplicitSource
+    ? (payload?.source as string).trim()
+    : "autonomy";
 
   // Regular user conversation turns should never be re-routed as proactive.
   // Some AGENT_EVENT payloads may omit roomId metadata, so rely on source too.
   if (source === "client_chat") return;
+  if (!hasExplicitSource && !event.roomId) return;
 
   // Keep regular conversation messages in their own room only.
   if (
@@ -7242,12 +7255,29 @@ async function handleRequest(
 
   if (method === "GET" && pathname === "/api/registry/config") {
     const registryConfig = state.config.registry;
+    let chainId = 1;
+    if (registryService) {
+      try {
+        chainId = await registryService.getChainId();
+      } catch {
+        // Keep default if chain RPC is unavailable.
+      }
+    }
+
+    const explorerByChainId: Record<number, string> = {
+      1: "https://etherscan.io",
+      10: "https://optimistic.etherscan.io",
+      137: "https://polygonscan.com",
+      8453: "https://basescan.org",
+      42161: "https://arbiscan.io",
+    };
+
     json(res, {
       configured: Boolean(registryService),
-      chainId: 1,
+      chainId,
       registryAddress: registryConfig?.registryAddress ?? null,
       collectionAddress: registryConfig?.collectionAddress ?? null,
-      explorerUrl: "https://etherscan.io",
+      explorerUrl: explorerByChainId[chainId] ?? "",
     });
     return;
   }

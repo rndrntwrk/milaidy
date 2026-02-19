@@ -382,10 +382,6 @@ export function registerPluginsCli(program: Command): void {
       );
       for (const p of plugins) {
         console.log(`  ${chalk.cyan(p.name)} ${chalk.dim(`v${p.version}`)}`);
-        // console.log(`    ${chalk.dim(`installed: ${p.installedAt}`)}`); // installedAt might be missing in EjectedPluginInfo, checking
-        console.log(`  ${chalk.cyan(p.name)} ${chalk.dim(`v${p.version}`)}`);
-        // console.log(`    ${chalk.dim(`installed: ${p.installedAt}`)}`);
-        // console.log(`    ${chalk.dim(`path: ${p.installPath}`)}`);
         console.log();
       }
     });

@@ -103,13 +103,13 @@ export const THEMES: ReadonlyArray<{
   label: string;
   hint: string;
 }> = [
-    { id: "milady", label: "milady", hint: "clean black & white" },
-    { id: "qt314", label: "qt3.14", hint: "soft pastels" },
-    { id: "web2000", label: "web2000", hint: "green hacker vibes" },
-    { id: "programmer", label: "programmer", hint: "vscode dark" },
-    { id: "haxor", label: "haxor", hint: "terminal green" },
-    { id: "psycho", label: "psycho", hint: "pure chaos" },
-  ];
+  { id: "milady", label: "milady", hint: "clean black & white" },
+  { id: "qt314", label: "qt3.14", hint: "soft pastels" },
+  { id: "web2000", label: "web2000", hint: "green hacker vibes" },
+  { id: "programmer", label: "programmer", hint: "vscode dark" },
+  { id: "haxor", label: "haxor", hint: "terminal green" },
+  { id: "psycho", label: "psycho", hint: "pure chaos" },
+];
 
 const VALID_THEMES = new Set<string>(THEMES.map((t) => t.id));
 const AGENT_TRANSFER_MIN_PASSWORD_LENGTH = 4;
@@ -404,12 +404,17 @@ function computeStreamingDelta(existing: string, incoming: string): string {
   if (incoming === existing) return "";
   if (incoming.startsWith(existing)) return incoming.slice(existing.length);
   if (existing.startsWith(incoming)) return "";
-  if (existing.endsWith(incoming) || existing.includes(incoming)) return "";
+
+  // Small chunks are usually raw token deltas; keep them even if they
+  // duplicate suffix characters (e.g., "l" + "l" in "Hello").
+  if (incoming.length <= 3) return incoming;
 
   const maxOverlap = Math.min(existing.length, incoming.length);
   for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
     if (existing.endsWith(incoming.slice(0, overlap))) {
-      return incoming.slice(overlap);
+      const delta = incoming.slice(overlap);
+      if (!delta && overlap === incoming.length) return "";
+      return delta;
     }
   }
   return incoming;
@@ -875,7 +880,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // --- Deferred restart ---
   const [pendingRestart, setPendingRestart] = useState(false);
-  const [pendingRestartReasons, setPendingRestartReasons] = useState<string[]>([]);
+  const [pendingRestartReasons, setPendingRestartReasons] = useState<string[]>(
+    [],
+  );
   const [restartBannerDismissed, setRestartBannerDismissed] = useState(false);
 
   // --- Pairing ---
@@ -1836,7 +1843,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActionNotice(LIFECYCLE_MESSAGES.start.success, "success", 2400);
     } catch (err) {
       setActionNotice(
-        `Failed to ${LIFECYCLE_MESSAGES.start.verb} agent: ${err instanceof Error ? err.message : "unknown error"
+        `Failed to ${LIFECYCLE_MESSAGES.start.verb} agent: ${
+          err instanceof Error ? err.message : "unknown error"
         }`,
         "error",
         4200,
@@ -1855,7 +1863,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActionNotice(LIFECYCLE_MESSAGES.stop.success, "success", 2400);
     } catch (err) {
       setActionNotice(
-        `Failed to ${LIFECYCLE_MESSAGES.stop.verb} agent: ${err instanceof Error ? err.message : "unknown error"
+        `Failed to ${LIFECYCLE_MESSAGES.stop.verb} agent: ${
+          err instanceof Error ? err.message : "unknown error"
         }`,
         "error",
         4200,
@@ -1885,7 +1894,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActionNotice(LIFECYCLE_MESSAGES[action].success, "success", 2400);
     } catch (err) {
       setActionNotice(
-        `Failed to ${LIFECYCLE_MESSAGES[action].verb} agent: ${err instanceof Error ? err.message : "unknown error"
+        `Failed to ${LIFECYCLE_MESSAGES[action].verb} agent: ${
+          err instanceof Error ? err.message : "unknown error"
         }`,
         "error",
         4200,
@@ -1924,7 +1934,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActionNotice(LIFECYCLE_MESSAGES.restart.success, "success", 2400);
     } catch (err) {
       setActionNotice(
-        `Failed to ${LIFECYCLE_MESSAGES.restart.verb} agent: ${err instanceof Error ? err.message : "unknown error"
+        `Failed to ${LIFECYCLE_MESSAGES.restart.verb} agent: ${
+          err instanceof Error ? err.message : "unknown error"
         }`,
         "error",
         4200,
@@ -1967,8 +1978,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     const confirmed = window.confirm(
       "This will completely reset the agent — wiping all config, memory, and data.\n\n" +
-      "You will be taken back to the onboarding wizard.\n\n" +
-      "Are you sure?",
+        "You will be taken back to the onboarding wizard.\n\n" +
+        "Are you sure?",
     );
     if (!confirmed) return;
     if (!beginLifecycleAction("reset")) return;
@@ -1994,7 +2005,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActionNotice(LIFECYCLE_MESSAGES.reset.success, "success", 3200);
     } catch (err) {
       setActionNotice(
-        `Failed to ${LIFECYCLE_MESSAGES.reset.verb} agent: ${err instanceof Error ? err.message : "unknown error"
+        `Failed to ${LIFECYCLE_MESSAGES.reset.verb} agent: ${
+          err instanceof Error ? err.message : "unknown error"
         }`,
         "error",
         4200,
@@ -2131,7 +2143,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               return changed ? next : prev;
             });
           }
-          await loadConversations();
+          void loadConversations();
         } catch (err) {
           const abortError = err as Error;
           if (abortError.name === "AbortError") {
@@ -2510,7 +2522,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           /* ignore */
         });
         setActionNotice(
-          `Failed to ${enabled ? "enable" : "disable"} ${pluginName}: ${err instanceof Error ? err.message : "unknown error"
+          `Failed to ${enabled ? "enable" : "disable"} ${pluginName}: ${
+            err instanceof Error ? err.message : "unknown error"
           }`,
           "error",
           4200,
@@ -3095,8 +3108,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ── Onboarding ─────────────────────────────────────────────────────
 
-
-
   const handleOnboardingFinish = useCallback(async () => {
     if (onboardingFinishBusyRef.current || onboardingRestarting) return;
     if (!onboardingOptions) return;
@@ -3327,6 +3338,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       cloudConnected,
       setActionNotice,
       handleOnboardingFinish,
+      dropStatus?.dropEnabled,
+      dropStatus?.userHasMinted,
+      dropStatus?.mintedOut,
     ],
   );
 
@@ -3399,7 +3413,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setOnboardingStep("connectors");
         break;
     }
-  }, [onboardingStep, onboardingRunMode]);
+  }, [
+    onboardingStep,
+    onboardingRunMode,
+    dropStatus?.dropEnabled,
+    dropStatus?.userHasMinted,
+    dropStatus?.mintedOut,
+  ]);
 
   // ── Cloud ──────────────────────────────────────────────────────────
 
@@ -3964,20 +3984,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
         },
       );
-      client.onWsEvent(
-        "restart-required",
-        (data: Record<string, unknown>) => {
-          if (Array.isArray(data.reasons)) {
-            setPendingRestartReasons(
-              data.reasons.filter(
-                (el): el is string => typeof el === "string",
-              ),
-            );
-            setPendingRestart(true);
-            setRestartBannerDismissed(false);
-          }
-        },
-      );
+      client.onWsEvent("restart-required", (data: Record<string, unknown>) => {
+        if (Array.isArray(data.reasons)) {
+          setPendingRestartReasons(
+            data.reasons.filter((el): el is string => typeof el === "string"),
+          );
+          setPendingRestart(true);
+          setRestartBannerDismissed(false);
+        }
+      });
       unbindAgentEvents = client.onWsEvent(
         "agent_event",
         (data: Record<string, unknown>) => {

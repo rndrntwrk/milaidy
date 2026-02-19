@@ -233,4 +233,26 @@ describe("ChatView", () => {
       true,
     );
   });
+
+  it("keeps message text inset from the scrollbar gutter", async () => {
+    mockUseApp.mockReturnValue(
+      createContext({
+        conversationMessages: [
+          { id: "u1", role: "user", text: "hello", timestamp: 1 },
+        ],
+      }),
+    );
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(ChatView));
+    });
+    await flush();
+
+    const scroller = tree.root.findByProps({
+      "data-testid": "chat-messages-scroll",
+    });
+    expect(String(scroller.props.className)).toContain("pr-3");
+    expect(scroller.props.style?.scrollbarGutter).toBe("stable both-edges");
+  });
 });

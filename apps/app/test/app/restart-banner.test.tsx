@@ -39,7 +39,10 @@ function makeContext(
 
 /** Extract visible text from HTML markup (strip tags). */
 function readAllText(markup: string): string {
-  return markup.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  return markup
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 describe("RestartBanner", () => {
