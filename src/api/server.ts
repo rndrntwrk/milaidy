@@ -2582,6 +2582,18 @@ async function generateChatResponse(
   let firstTokenMs = 0;
   let responseText = "";
   const streamingActive = !!opts?.onChunk;
+  const normalizeDelta = (incoming: string | null | undefined): string => {
+    if (!incoming) return "";
+    if (!responseText) return incoming;
+
+    // Some providers emit a final "full text so far" chunk at stream end.
+    // Convert cumulative replays into true deltas to avoid duplicated output.
+    if (incoming.startsWith(responseText)) {
+      return incoming.slice(responseText.length);
+    }
+
+    return incoming;
+  };
 
   const result = await runtime.messageService?.handleMessage(
     runtime,
@@ -2590,23 +2602,25 @@ async function generateChatResponse(
       if (opts?.isAborted?.()) {
         throw new Error("client_disconnected");
       }
-      // When streaming is active, text already accumulated via onStreamChunk.
-      // The callback fires once at end with full text — only use it as fallback.
-      if (!streamingActive && content?.text) {
+      if (content?.text) {
+        const delta = normalizeDelta(content.text);
+        if (!delta) return [];
         if (!firstTokenMs) firstTokenMs = Date.now() - t0;
-        responseText += content.text;
-        opts?.onChunk?.(content.text);
+        responseText += delta;
+        opts?.onChunk?.(delta);
       }
       return [];
     },
     {
       onStreamChunk: streamingActive
         ? async (chunk: string) => {
-            if (opts!.isAborted?.()) return;
-            if (!firstTokenMs) firstTokenMs = Date.now() - t0;
-            responseText += chunk;
-            opts!.onChunk!(chunk);
-          }
+          if (opts!.isAborted?.()) return;
+          const delta = normalizeDelta(chunk);
+          if (!delta) return;
+          if (!firstTokenMs) firstTokenMs = Date.now() - t0;
+          responseText += delta;
+          opts!.onChunk!(delta);
+        }
         : undefined,
       timeoutDuration: 60_000, // 60s instead of 1-hour default
     },
