@@ -196,7 +196,301 @@ function patchRuntimeMethodBindings(runtime: AgentRuntime): void {
 const ACTION_FILTER_ALWAYS_INCLUDE_NAMES = new Set<string>([
   "SEND_CROSS_PLATFORM_MESSAGE",
   "SEND_TO_DELIVERY_CONTEXT",
+  "SEND_MESSAGE",
+  "SEND_DM",
+  "SEND_TELEGRAM_MESSAGE",
 ]);
+
+const SUPPORTED_MESSAGING_CHANNELS = [
+  "discord",
+  "telegram",
+  "slack",
+  "whatsapp",
+  "twitch",
+] as const;
+
+const MESSAGING_CHANNEL_REGEX =
+  /\b(discord|telegram|slack|whatsapp|twitch)\b/i;
+const MESSAGING_TARGET_ID_REGEX =
+  /(?:user(?:\s+id)?|chat(?:\s+id)?|target(?:\s+id)?|id)\s*[:#]?\s*(-?\d{6,})\b/i;
+const GENERIC_NUMERIC_ID_REGEX = /\b-?\d{6,}\b/;
+const TELEGRAM_HANDLE_REGEX = /@([a-zA-Z0-9_]{4,})/;
+
+type MutableRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): MutableRecord | null {
+  return value && typeof value === "object" ? (value as MutableRecord) : null;
+}
+
+function asString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function inferMessageBody(text: string): string | null {
+  const quoted = text.match(/["“]([^"”]+)["”]/);
+  if (quoted?.[1]?.trim()) return quoted[1].trim();
+
+  const byVerb = text.match(/\b(?:saying|say|message|text)\b[:\s-]+(.+)$/i);
+  if (byVerb?.[1]?.trim()) return byVerb[1].trim();
+
+  return null;
+}
+
+function inferMessagingParams(text: string): {
+  channel?: string;
+  to?: string;
+  messageText?: string;
+} {
+  const inferred: { channel?: string; to?: string; messageText?: string } = {};
+  if (!text.trim()) return inferred;
+
+  const channelMatch = text.match(MESSAGING_CHANNEL_REGEX);
+  const channel = channelMatch?.[1]?.toLowerCase();
+  if (channel && SUPPORTED_MESSAGING_CHANNELS.includes(channel as never)) {
+    inferred.channel = channel;
+  }
+
+  const explicitId = text.match(MESSAGING_TARGET_ID_REGEX)?.[1];
+  const fallbackId = text.match(GENERIC_NUMERIC_ID_REGEX)?.[0];
+  const telegramHandle = text.match(TELEGRAM_HANDLE_REGEX)?.[1];
+  if (explicitId) {
+    inferred.to = explicitId;
+  } else if (fallbackId) {
+    inferred.to = fallbackId;
+  } else if (inferred.channel === "telegram" && telegramHandle) {
+    inferred.to = `@${telegramHandle}`;
+  }
+
+  const messageText = inferMessageBody(text);
+  if (messageText) {
+    inferred.messageText = messageText;
+  }
+
+  return inferred;
+}
+
+function addMissingParameters(
+  action: { parameters?: unknown },
+  additions: Array<{
+    name: string;
+    description: string;
+    required: boolean;
+    schema: Record<string, unknown>;
+  }>,
+): {
+  parameters?: unknown;
+} {
+  const existing = Array.isArray(action.parameters) ? [...action.parameters] : [];
+  const existingNames = new Set<string>(
+    existing
+      .map((entry) => asRecord(entry)?.name)
+      .filter((name): name is string => typeof name === "string"),
+  );
+
+  let changed = false;
+  for (const addition of additions) {
+    if (existingNames.has(addition.name)) continue;
+    existing.push(addition);
+    changed = true;
+  }
+
+  if (!changed) return {};
+  return { parameters: existing };
+}
+
+function buildMessagingCallbackText(
+  result: unknown,
+  fallbackChannel?: string | null,
+  fallbackTo?: string | null,
+): string {
+  const resultRecord = asRecord(result);
+  const success = resultRecord?.success === true;
+  const errorText = asString(resultRecord?.error);
+  const data = asRecord(resultRecord?.data);
+  const channel = asString(data?.channel) ?? fallbackChannel ?? "messaging";
+  const recipient = asString(data?.to) ?? fallbackTo ?? "recipient";
+
+  if (success) {
+    return `Delivery confirmed via ${channel} to ${recipient}.`;
+  }
+
+  return `Delivery failed via ${channel}: ${errorText ?? "missing required messaging parameters."}`;
+}
+
+function patchMessagingAction(action: unknown): unknown {
+  const actionRecord = asRecord(action);
+  if (!actionRecord) return action;
+  const actionName = asString(actionRecord.name);
+  if (
+    actionName !== "SEND_CROSS_PLATFORM_MESSAGE" &&
+    actionName !== "SEND_TO_DELIVERY_CONTEXT"
+  ) {
+    return action;
+  }
+
+  const handler = actionRecord.handler;
+  if (typeof handler !== "function") return action;
+
+  const parameterHints = addMissingParameters(
+    actionRecord,
+    actionName === "SEND_CROSS_PLATFORM_MESSAGE"
+      ? [
+          {
+            name: "channel",
+            description:
+              "Target platform/channel (discord, telegram, slack, whatsapp, twitch).",
+            required: true,
+            schema: { type: "string" },
+          },
+          {
+            name: "to",
+            description: "Recipient identifier (user ID, chat ID, or room ID).",
+            required: true,
+            schema: { type: "string" },
+          },
+          {
+            name: "text",
+            description: "Message body to deliver.",
+            required: true,
+            schema: { type: "string" },
+          },
+        ]
+      : [
+          {
+            name: "deliveryContext",
+            description:
+              "Delivery context object containing channel and recipient fields.",
+            required: true,
+            schema: { type: "object" },
+          },
+          {
+            name: "text",
+            description: "Message body to deliver.",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+  );
+
+  const wrappedHandler = async (
+    runtime: unknown,
+    message: unknown,
+    state: unknown,
+    options: unknown,
+    callback?: (payload: { text?: string; data?: Record<string, unknown> }) => unknown,
+  ) => {
+    const messageRecord = asRecord(message) ?? {};
+    const content = asRecord(messageRecord.content) ?? {};
+    const params = asRecord(content.params) ?? {};
+    const target = asRecord(params.target) ?? {};
+    const nestedContent = asRecord(params.content) ?? {};
+    const deliveryContext = asRecord(params.deliveryContext) ?? {};
+
+    const sourceText = asString(params.text) ?? asString(content.text) ?? "";
+    const inferred = inferMessagingParams(sourceText);
+
+    const channel =
+      asString(deliveryContext.channel) ??
+      asString(target.channel) ??
+      asString(params.channel) ??
+      inferred.channel ??
+      null;
+    const to =
+      asString(deliveryContext.to) ??
+      asString(target.to) ??
+      asString(params.to) ??
+      inferred.to ??
+      null;
+    const text =
+      asString(nestedContent.text) ??
+      asString(params.text) ??
+      inferred.messageText ??
+      null;
+
+    let patchedParams: MutableRecord = { ...params };
+    let patched = false;
+
+    if (actionName === "SEND_CROSS_PLATFORM_MESSAGE") {
+      if ((!asRecord(params.target) || !asString(target.channel)) && channel) {
+        patchedParams = {
+          ...patchedParams,
+          target: { ...(asRecord(params.target) ?? {}), channel, ...(to ? { to } : {}) },
+        };
+        patched = true;
+      }
+      if (!asString(params.channel) && channel) {
+        patchedParams.channel = channel;
+        patched = true;
+      }
+      if (!asString(params.to) && to) {
+        patchedParams.to = to;
+        patched = true;
+      }
+      if (!asString(params.text) && text) {
+        patchedParams.text = text;
+        patched = true;
+      }
+      if ((!asRecord(params.content) || !asString(nestedContent.text)) && text) {
+        patchedParams.content = { ...(asRecord(params.content) ?? {}), text };
+        patched = true;
+      }
+    } else {
+      if (!asRecord(params.deliveryContext) && channel && to) {
+        patchedParams.deliveryContext = { channel, to };
+        patched = true;
+      } else if (asRecord(params.deliveryContext)) {
+        const nextDelivery = { ...deliveryContext };
+        let deliveryPatched = false;
+        if (!asString(deliveryContext.channel) && channel) {
+          nextDelivery.channel = channel;
+          deliveryPatched = true;
+        }
+        if (!asString(deliveryContext.to) && to) {
+          nextDelivery.to = to;
+          deliveryPatched = true;
+        }
+        if (deliveryPatched) {
+          patchedParams.deliveryContext = nextDelivery;
+          patched = true;
+        }
+      }
+      if (!asString(params.text) && text) {
+        patchedParams.text = text;
+        patched = true;
+      }
+    }
+
+    const normalizedMessage =
+      patched
+        ? { ...messageRecord, content: { ...content, params: patchedParams } }
+        : message;
+
+    const result = await (
+      handler as (
+        runtimeArg: unknown,
+        messageArg: unknown,
+        stateArg: unknown,
+        optionsArg: unknown,
+        callbackArg?: unknown,
+      ) => Promise<unknown>
+    )(runtime, normalizedMessage, state, options, undefined);
+
+    if (typeof callback === "function") {
+      await callback({
+        text: buildMessagingCallbackText(result, channel, to),
+      });
+    }
+    return result;
+  };
+
+  return {
+    ...actionRecord,
+    ...parameterHints,
+    handler: wrappedHandler,
+  };
+}
 
 function applyActionFilterHints(plugin: Plugin): Plugin {
   if (!Array.isArray(plugin.actions) || plugin.actions.length === 0) {
@@ -205,18 +499,23 @@ function applyActionFilterHints(plugin: Plugin): Plugin {
 
   let changed = false;
   const actions = plugin.actions.map((action) => {
-    if (!ACTION_FILTER_ALWAYS_INCLUDE_NAMES.has(action.name)) {
-      return action;
+    let nextAction = patchMessagingAction(action);
+    if (nextAction !== action) changed = true;
+    const nextActionRecord = asRecord(nextAction);
+    const actionName = asString(nextActionRecord?.name);
+    if (!actionName || !ACTION_FILTER_ALWAYS_INCLUDE_NAMES.has(actionName)) {
+      return nextAction as typeof action;
     }
 
-    if (Array.isArray(action.tags) && action.tags.includes("always-include")) {
-      return action;
+    const existingTags = asRecord(nextActionRecord)?.tags;
+    if (Array.isArray(existingTags) && existingTags.includes("always-include")) {
+      return nextAction as typeof action;
     }
 
-    const tags = Array.isArray(action.tags) ? [...action.tags] : [];
+    const tags = Array.isArray(existingTags) ? [...existingTags] : [];
     tags.push("always-include");
     changed = true;
-    return { ...action, tags };
+    return { ...(nextActionRecord ?? {}), tags } as typeof action;
   });
 
   return changed ? { ...plugin, actions } : plugin;
