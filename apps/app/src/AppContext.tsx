@@ -3372,9 +3372,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const { conversationId: convId, message: msg } = parsed;
 
         if (convId === activeConversationIdRef.current) {
-          // Active conversation — append in real-time (deduplicate by id)
+          // Active conversation — append in real-time.
+          // If this is an echo of the streamed temporary assistant message,
+          // reconcile IDs instead of rendering duplicate content.
           setConversationMessages((prev) => {
             if (prev.some((m) => m.id === msg.id)) return prev;
+
+            if (msg.role === "assistant" && msg.text.trim().length > 0) {
+              const tempIndex = prev.findIndex(
+                (m) =>
+                  m.role === "assistant" &&
+                  m.id.startsWith("temp-resp-") &&
+                  m.text.trim().length > 0 &&
+                  m.text.trim() === msg.text.trim(),
+              );
+              if (tempIndex !== -1) {
+                const next = [...prev];
+                next[tempIndex] = {
+                  ...next[tempIndex],
+                  id: msg.id,
+                  timestamp: msg.timestamp,
+                  source: msg.source ?? next[tempIndex].source,
+                };
+                return next;
+              }
+            }
+
             return [...prev, msg];
           });
         } else {

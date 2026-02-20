@@ -123,6 +123,39 @@ function formatError(err: unknown): string {
 }
 
 /**
+ * Actions that must survive ActionFilterService pruning because they back
+ * explicit cross-channel delivery intents from users/operators.
+ */
+const ACTION_FILTER_ALWAYS_INCLUDE_NAMES = new Set<string>([
+  "SEND_CROSS_PLATFORM_MESSAGE",
+  "SEND_TO_DELIVERY_CONTEXT",
+]);
+
+function applyActionFilterHints(plugin: Plugin): Plugin {
+  if (!Array.isArray(plugin.actions) || plugin.actions.length === 0) {
+    return plugin;
+  }
+
+  let changed = false;
+  const actions = plugin.actions.map((action) => {
+    if (!ACTION_FILTER_ALWAYS_INCLUDE_NAMES.has(action.name)) {
+      return action;
+    }
+
+    if (Array.isArray(action.tags) && action.tags.includes("always-include")) {
+      return action;
+    }
+
+    const tags = Array.isArray(action.tags) ? [...action.tags] : [];
+    tags.push("always-include");
+    changed = true;
+    return { ...action, tags };
+  });
+
+  return changed ? { ...plugin, actions } : plugin;
+}
+
+/**
  * Cancel the onboarding flow and exit cleanly.
  * Extracted to avoid duplicating the cancel+exit pattern 7 times.
  */
@@ -725,11 +758,12 @@ async function resolvePlugins(
       const pluginInstance = extractPlugin(mod);
 
       if (pluginInstance) {
+        const hintedPlugin = applyActionFilterHints(pluginInstance);
         // Wrap the plugin's init function with an error boundary so a
         // crashing plugin.init() does not take down the entire agent.
         const wrappedPlugin = wrapPluginWithErrorBoundary(
           pluginName,
-          pluginInstance,
+          hintedPlugin,
         );
         plugins.push({ name: pluginName, plugin: wrappedPlugin });
         logger.debug(`[milaidy] ✓ Loaded plugin: ${pluginName}`);
