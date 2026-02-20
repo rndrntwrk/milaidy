@@ -122,6 +122,56 @@ function formatError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+const RECOVERABLE_RUNTIME_ERROR_PATTERNS = [
+  "AI_NoOutputGeneratedError",
+  "No output generated. Check the stream for errors",
+  "Missing scopes: model.request",
+  "invalid api key",
+  "insufficient permissions for this operation",
+  "www-authenticate",
+] as const;
+
+/** @internal Exported for tests. */
+export function isRecoverableRuntimeError(err: unknown): boolean {
+  const message = formatError(err);
+  if (!message) return false;
+  const lower = message.toLowerCase();
+  return RECOVERABLE_RUNTIME_ERROR_PATTERNS.some((pattern) =>
+    lower.includes(pattern.toLowerCase()),
+  );
+}
+
+let runtimeErrorGuardsInstalled = false;
+
+function installRuntimeErrorGuards(): void {
+  if (runtimeErrorGuardsInstalled) return;
+  runtimeErrorGuardsInstalled = true;
+
+  process.on("unhandledRejection", (reason) => {
+    if (isRecoverableRuntimeError(reason)) {
+      logger.warn(
+        `[milaidy] Recovered from unhandled rejection: ${formatError(reason)}`,
+      );
+      return;
+    }
+
+    logger.error(`[milaidy] Unhandled rejection: ${formatError(reason)}`);
+    process.exit(1);
+  });
+
+  process.on("uncaughtException", (error) => {
+    if (isRecoverableRuntimeError(error)) {
+      logger.warn(
+        `[milaidy] Recovered from uncaught exception: ${formatError(error)}`,
+      );
+      return;
+    }
+
+    logger.error(`[milaidy] Uncaught exception: ${formatError(error)}`);
+    process.exit(1);
+  });
+}
+
 /**
  * Actions that must survive ActionFilterService pruning because they back
  * explicit cross-channel delivery intents from users/operators.
@@ -2173,6 +2223,8 @@ export async function bootElizaRuntime(
 export async function startEliza(
   opts?: StartElizaOptions,
 ): Promise<AgentRuntime | undefined> {
+  installRuntimeErrorGuards();
+
   // Start buffering logs early so startup messages appear in the UI log viewer
   const { captureEarlyLogs } = await import("../api/early-logs");
   captureEarlyLogs();

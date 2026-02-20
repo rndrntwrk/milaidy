@@ -8,6 +8,7 @@
  */
 
 import { logger } from "@elizaos/core";
+import crypto from "node:crypto";
 import { refreshAnthropicToken } from "./anthropic.js";
 import { migrateCredentials, needsMigration } from "./migration.js";
 import { refreshCodexToken } from "./openai-codex.js";
@@ -22,11 +23,15 @@ import type {
 const REFRESH_BUFFER_MS = 5 * 60 * 1000;
 const MIN_REFRESH_LOOP_MS = 30_000;
 const DEFAULT_REFRESH_LOOP_MS = 2 * 60 * 1000;
+const OPENAI_SCOPE_PROBE_TTL_MS = 15 * 60 * 1000;
 
 /** Whether migration has been attempted this session. */
 let _migrationAttempted = false;
 let _refreshInterval: ReturnType<typeof setInterval> | null = null;
 let _refreshInFlight: Promise<void> | null = null;
+let _openAiScopeProbeCache:
+  | { tokenHash: string; checkedAt: number; valid: boolean; reason?: string }
+  | null = null;
 
 function clearSubscriptionEnv(provider: SubscriptionProvider): void {
   if (provider === "anthropic-subscription") {
@@ -36,6 +41,93 @@ function clearSubscriptionEnv(provider: SubscriptionProvider): void {
   if (provider === "openai-codex") {
     delete process.env.OPENAI_API_KEY;
   }
+}
+
+function toOpenAiProbeReason(
+  status: number,
+  payload: Record<string, unknown> | null,
+): string {
+  const message =
+    typeof payload?.error === "string"
+      ? payload.error
+      : typeof (payload?.error as { message?: unknown } | undefined)?.message ===
+          "string"
+        ? ((payload?.error as { message?: string }).message ?? "")
+        : "";
+  return message || `HTTP ${status}`;
+}
+
+function isFatalOpenAiTokenScopeFailure(status: number, reason: string): boolean {
+  const lower = reason.toLowerCase();
+  if (status === 401) return true;
+  return (
+    lower.includes("missing scopes: model.request") ||
+    lower.includes("insufficient permissions for this operation") ||
+    lower.includes("invalid api key")
+  );
+}
+
+async function probeOpenAiTokenForModelRequest(
+  token: string,
+): Promise<{ valid: boolean; reason?: string }> {
+  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+  const now = Date.now();
+  if (
+    _openAiScopeProbeCache &&
+    _openAiScopeProbeCache.tokenHash === tokenHash &&
+    now - _openAiScopeProbeCache.checkedAt < OPENAI_SCOPE_PROBE_TTL_MS
+  ) {
+    return {
+      valid: _openAiScopeProbeCache.valid,
+      reason: _openAiScopeProbeCache.reason,
+    };
+  }
+
+  const model = process.env.MILAIDY_OPENAI_SCOPE_CHECK_MODEL?.trim() || "gpt-5";
+  let result: { valid: boolean; reason?: string } = { valid: true };
+
+  try {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: "healthcheck" }],
+        max_completion_tokens: 1,
+      }),
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as
+        | Record<string, unknown>
+        | null;
+      const reason = toOpenAiProbeReason(response.status, payload);
+      if (isFatalOpenAiTokenScopeFailure(response.status, reason)) {
+        result = { valid: false, reason };
+      } else {
+        logger.warn(
+          `[auth] OpenAI Codex scope probe returned non-fatal status ${response.status}; treating token as usable (${reason})`,
+        );
+      }
+    }
+  } catch (err) {
+    logger.warn(
+      `[auth] OpenAI Codex scope probe request failed; treating token as usable: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  _openAiScopeProbeCache = {
+    tokenHash,
+    checkedAt: now,
+    valid: result.valid,
+    reason: result.reason,
+  };
+
+  return result;
 }
 
 /**
@@ -217,6 +309,17 @@ export async function getSubscriptionStatus(): Promise<
   return results;
 }
 
+export async function validateOpenAiCodexAccess(): Promise<{
+  valid: boolean;
+  reason?: string;
+}> {
+  const token = await getAccessToken("openai-codex");
+  if (!token) {
+    return { valid: false, reason: "No OpenAI Codex token available" };
+  }
+  return probeOpenAiTokenForModelRequest(token);
+}
+
 /**
  * Apply subscription credentials to the environment.
  * Called at startup to make credentials available to ElizaOS plugins.
@@ -239,10 +342,18 @@ export async function applySubscriptionCredentials(): Promise<void> {
   // OpenAI Codex subscription → set OPENAI_API_KEY
   const codexToken = await getAccessToken("openai-codex");
   if (codexToken) {
-    process.env.OPENAI_API_KEY = codexToken;
-    logger.info(
-      "[auth] Applied OpenAI Codex subscription credentials to environment",
-    );
+    const validation = await probeOpenAiTokenForModelRequest(codexToken);
+    if (validation.valid) {
+      process.env.OPENAI_API_KEY = codexToken;
+      logger.info(
+        "[auth] Applied OpenAI Codex subscription credentials to environment",
+      );
+    } else {
+      clearSubscriptionEnv("openai-codex");
+      logger.warn(
+        `[auth] OpenAI Codex token lacks required API scope; not applying OPENAI_API_KEY (${validation.reason ?? "unknown reason"})`,
+      );
+    }
   } else {
     clearSubscriptionEnv("openai-codex");
   }

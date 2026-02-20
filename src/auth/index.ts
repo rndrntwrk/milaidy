@@ -23,6 +23,7 @@ export {
   saveCredentials,
   startSubscriptionCredentialRefreshLoop,
   stopSubscriptionCredentialRefreshLoop,
+  validateOpenAiCodexAccess,
 } from "./credentials.js";
 export type { CodexFlow } from "./openai-codex.js";
 // OpenAI Codex (ChatGPT Plus/Pro)

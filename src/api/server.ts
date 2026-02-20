@@ -5147,9 +5147,12 @@ async function handleRequest(
       return;
     }
     try {
-      const { saveCredentials, applySubscriptionCredentials } = await import(
-        "../auth/index.js"
-      );
+      const {
+        saveCredentials,
+        applySubscriptionCredentials,
+        deleteCredentials,
+        validateOpenAiCodexAccess,
+      } = await import("../auth/index.js");
       const flow = state._anthropicFlow;
       if (!flow) {
         error(res, "No active flow — call /start first", 400);
@@ -5251,9 +5254,12 @@ async function handleRequest(
     if (!body) return;
     let flow: import("../auth/index.js").CodexFlow | undefined;
     try {
-      const { saveCredentials, applySubscriptionCredentials } = await import(
-        "../auth/index.js"
-      );
+      const {
+        saveCredentials,
+        applySubscriptionCredentials,
+        validateOpenAiCodexAccess,
+        deleteCredentials,
+      } = await import("../auth/index.js");
       flow = state._codexFlow;
 
       if (!flow) {
@@ -5288,6 +5294,28 @@ async function handleRequest(
         return;
       }
       await saveCredentials("openai-codex", credentials);
+      const openAiAccess = await validateOpenAiCodexAccess();
+      if (!openAiAccess.valid) {
+        await deleteCredentials("openai-codex");
+        clearSubscriptionProviderState("openai-codex", state.config);
+        saveMilaidyConfig(state.config);
+        try {
+          flow.close();
+        } catch (closeErr) {
+          logger.debug(
+            `[api] OAuth flow cleanup failed: ${closeErr instanceof Error ? closeErr.message : closeErr}`,
+          );
+        }
+        delete state._codexFlow;
+        clearTimeout(state._codexFlowTimer);
+        delete state._codexFlowTimer;
+        error(
+          res,
+          `OpenAI OAuth token cannot access chat models: ${openAiAccess.reason ?? "missing required model.request scope"}`,
+          400,
+        );
+        return;
+      }
       await applySubscriptionCredentials();
       flow.close();
       delete state._codexFlow;

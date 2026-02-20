@@ -20,6 +20,7 @@ import {
   buildCharacterFromConfig,
   CUSTOM_PLUGINS_DIRNAME,
   collectPluginNames,
+  isRecoverableRuntimeError,
   mergeDropInPlugins,
   resolvePackageEntry,
   resolvePrimaryModel,
@@ -884,6 +885,30 @@ describe("resolvePackageEntry", () => {
 
     const entry = await resolvePackageEntry(pkgRoot);
     expect(entry).toBe(path.join(pkgRoot, "dist", "index.js"));
+  });
+});
+
+describe("isRecoverableRuntimeError", () => {
+  it("matches OpenAI missing-scope failures", () => {
+    expect(
+      isRecoverableRuntimeError(
+        new Error("Missing scopes: model.request on chat.completions"),
+      ),
+    ).toBe(true);
+  });
+
+  it("matches AI no-output stream failures", () => {
+    expect(
+      isRecoverableRuntimeError(
+        new Error("AI_NoOutputGeneratedError: No output generated"),
+      ),
+    ).toBe(true);
+  });
+
+  it("does not match generic coding errors", () => {
+    expect(
+      isRecoverableRuntimeError(new Error("Cannot read properties of undefined")),
+    ).toBe(false);
   });
 });
 
