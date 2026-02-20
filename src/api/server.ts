@@ -45,7 +45,7 @@ import {
   buildTestHandler,
   registerCustomActionLive,
 } from "../runtime/custom-actions";
-import { listPiAiModelOptions } from "../runtime/pi-credentials";
+import { listPiAiModelOptions } from "../../packages/plugin-pi-ai/src/pi-credentials.ts";
 import {
   isBlockedPrivateOrLinkLocalIp,
   normalizeHostLike,

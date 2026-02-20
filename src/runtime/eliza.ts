@@ -67,7 +67,7 @@ import { SandboxManager, type SandboxMode } from "../services/sandbox-manager";
 import { diagnoseNoAIProvider } from "../services/version-compat";
 import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins";
 import { createMiladyPlugin } from "./milady-plugin";
-import { isPiAiEnabledFromEnv } from "./pi-ai";
+import { isPiAiEnabledFromEnv } from "../../packages/plugin-pi-ai/src/runtime.ts";
 
 // ---------------------------------------------------------------------------
 // Types

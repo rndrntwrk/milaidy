@@ -15,14 +15,16 @@ import {
   type EmbeddingTier,
 } from "../runtime/embedding-presets.js";
 import { getEmbeddingState } from "../runtime/embedding-state.js";
-import { registerPiAiModelHandler } from "../runtime/pi-ai-model-handler.js";
-import { createPiCredentialProvider } from "../runtime/pi-credentials.js";
-import { getPiModel, parseModelSpec } from "../utils/pi-ai.js";
+import {
+  registerPiAiModelHandler,
+  createPiCredentialProvider,
+} from "../../packages/plugin-pi-ai/src/index.ts";
+import { getPiModel, parseModelSpec } from "../../packages/plugin-pi-ai/src/model-utils.ts";
 import { ElizaTUIBridge } from "./eliza-tui-bridge.js";
 import { resolveTuiModelSpec } from "./model-spec.js";
 import { MiladyTUI } from "./tui-app.js";
 
-export { registerPiAiModelHandler } from "../runtime/pi-ai-model-handler.js";
+export { registerPiAiModelHandler } from "../../packages/plugin-pi-ai/src/index.ts";
 export { ElizaTUIBridge } from "./eliza-tui-bridge.js";
 export { MiladyTUI } from "./tui-app.js";
 

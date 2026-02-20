@@ -16,7 +16,7 @@ import {
   Spacer,
   Text,
 } from "@mariozechner/pi-tui";
-import type { StreamEvent } from "../runtime/pi-ai-model-handler.js";
+import type { StreamEvent } from "../../packages/plugin-pi-ai/src/model-handler.ts";
 import {
   AssistantMessageComponent,
   ToolExecutionComponent,

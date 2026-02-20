@@ -1,4 +1,7 @@
-import { DEFAULT_PI_MODEL_SPEC, parseModelSpec } from "../utils/pi-ai.js";
+import {
+  DEFAULT_PI_MODEL_SPEC,
+  parseModelSpec,
+} from "../../packages/plugin-pi-ai/src/model-utils.ts";
 
 export interface ResolveTuiModelSpecParams {
   modelOverride?: string;
