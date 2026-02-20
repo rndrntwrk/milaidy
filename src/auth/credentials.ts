@@ -28,9 +28,54 @@ const DEFAULT_REFRESH_LOOP_MS = 2 * 60 * 1000;
 let _migrationAttempted = false;
 let _refreshInterval: ReturnType<typeof setInterval> | null = null;
 let _refreshInFlight: Promise<void> | null = null;
-let _openAiScopeProbeCache:
+let _openAiCodexProbeCache:
   | { tokenHash: string; checkedAt: number; valid: boolean; reason?: string }
   | null = null;
+
+const OPENAI_AUTH_JWT_CLAIM_PATH = "https://api.openai.com/auth";
+const OPENAI_CODEX_RESPONSES_URL = "https://chatgpt.com/backend-api/codex/responses";
+
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  const parts = token.split(".");
+  if (parts.length !== 3 || !parts[1]) return null;
+  const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base64.padEnd(
+    base64.length + ((4 - (base64.length % 4)) % 4),
+    "=",
+  );
+  try {
+    return JSON.parse(Buffer.from(padded, "base64").toString("utf8")) as Record<
+      string,
+      unknown
+    >;
+  } catch {
+    return null;
+  }
+}
+
+function extractOpenAiCodexAccountId(token: string): string | null {
+  const payload = decodeJwtPayload(token);
+  const authClaim = payload?.[OPENAI_AUTH_JWT_CLAIM_PATH] as
+    | { chatgpt_account_id?: unknown }
+    | undefined;
+  const accountId = authClaim?.chatgpt_account_id;
+  return typeof accountId === "string" && accountId.trim() ? accountId : null;
+}
+
+function looksLikeOpenAiSubscriptionToken(token: string | undefined): boolean {
+  if (!token) return false;
+  return Boolean(extractOpenAiCodexAccountId(token));
+}
+
+function clearInjectedOpenAiCodexToken(): void {
+  const current = process.env.OPENAI_API_KEY?.trim();
+  if (looksLikeOpenAiSubscriptionToken(current)) {
+    delete process.env.OPENAI_API_KEY;
+    logger.info(
+      "[auth] Cleared previously injected OpenAI subscription token from OPENAI_API_KEY",
+    );
+  }
+}
 
 function clearSubscriptionEnv(provider: SubscriptionProvider): void {
   if (provider === "anthropic-subscription") {
@@ -38,13 +83,16 @@ function clearSubscriptionEnv(provider: SubscriptionProvider): void {
     return;
   }
   if (provider === "openai-codex") {
-    delete process.env.OPENAI_API_KEY;
+    // OpenAI subscription now routes through pi-ai; never bridge OAuth tokens
+    // into OPENAI_API_KEY (reserved for real OpenAI API keys).
+    clearInjectedOpenAiCodexToken();
   }
 }
 
-function toOpenAiProbeReason(
+function toCodexProbeReason(
   status: number,
   payload: Record<string, unknown> | null,
+  fallbackText?: string,
 ): string {
   const message =
     typeof payload?.error === "string"
@@ -53,68 +101,99 @@ function toOpenAiProbeReason(
           "string"
         ? ((payload?.error as { message?: string }).message ?? "")
         : "";
-  return message || `HTTP ${status}`;
+  return message || fallbackText || `HTTP ${status}`;
 }
 
-function isFatalOpenAiTokenScopeFailure(status: number, reason: string): boolean {
+function isFatalCodexProbeFailure(status: number, reason: string): boolean {
   const lower = reason.toLowerCase();
-  if (status === 401) return true;
+  if (status === 401 || status === 403) return true;
   return (
-    lower.includes("missing scopes: model.request") ||
-    lower.includes("insufficient permissions for this operation") ||
-    lower.includes("invalid api key")
+    lower.includes("invalid token") ||
+    lower.includes("invalid api key") ||
+    lower.includes("unauthorized")
   );
 }
 
-async function probeOpenAiTokenForModelRequest(
+async function probeOpenAiCodexToken(
   token: string,
 ): Promise<{ valid: boolean; reason?: string }> {
   const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
-  if (_openAiScopeProbeCache && _openAiScopeProbeCache.tokenHash === tokenHash) {
+  if (
+    _openAiCodexProbeCache &&
+    _openAiCodexProbeCache.tokenHash === tokenHash
+  ) {
     return {
-      valid: _openAiScopeProbeCache.valid,
-      reason: _openAiScopeProbeCache.reason,
+      valid: _openAiCodexProbeCache.valid,
+      reason: _openAiCodexProbeCache.reason,
     };
   }
 
-  const model = process.env.MILAIDY_OPENAI_SCOPE_CHECK_MODEL?.trim() || "gpt-5";
+  const accountId = extractOpenAiCodexAccountId(token);
+  if (!accountId) {
+    return { valid: false, reason: "OAuth token missing chatgpt_account_id" };
+  }
+
+  const model = process.env.MILAIDY_OPENAI_CODEX_CHECK_MODEL?.trim() || "gpt-5.1";
   let result: { valid: boolean; reason?: string } = { valid: true };
 
   try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch(OPENAI_CODEX_RESPONSES_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
+        "chatgpt-account-id": accountId,
+        "OpenAI-Beta": "responses=experimental",
+        originator: "pi",
         "Content-Type": "application/json",
+        accept: "text/event-stream",
       },
       body: JSON.stringify({
+        store: false,
+        stream: true,
         model,
-        messages: [{ role: "user", content: "healthcheck" }],
-        max_completion_tokens: 1,
+        instructions: "healthcheck",
+        input: [
+          {
+            role: "user",
+            content: [{ type: "input_text", text: "healthcheck" }],
+          },
+        ],
+        text: { verbosity: "low" },
+        include: ["reasoning.encrypted_content"],
       }),
       signal: AbortSignal.timeout(10_000),
     });
 
     if (!response.ok) {
-      const payload = (await response.json().catch(() => null)) as
-        | Record<string, unknown>
-        | null;
-      const reason = toOpenAiProbeReason(response.status, payload);
-      if (isFatalOpenAiTokenScopeFailure(response.status, reason)) {
+      const responseText = await response.text().catch(() => "");
+      let payload: Record<string, unknown> | null = null;
+      if (responseText) {
+        try {
+          payload = JSON.parse(responseText) as Record<string, unknown>;
+        } catch {
+          payload = null;
+        }
+      }
+      const reason = toCodexProbeReason(
+        response.status,
+        payload,
+        responseText.slice(0, 200),
+      );
+      if (isFatalCodexProbeFailure(response.status, reason)) {
         result = { valid: false, reason };
       } else {
         logger.warn(
-          `[auth] OpenAI Codex scope probe returned non-fatal status ${response.status}; treating token as usable (${reason})`,
+          `[auth] OpenAI Codex probe returned non-fatal status ${response.status}; treating token as usable (${reason})`,
         );
       }
     }
   } catch (err) {
     logger.warn(
-      `[auth] OpenAI Codex scope probe request failed; treating token as usable: ${err instanceof Error ? err.message : String(err)}`,
+      `[auth] OpenAI Codex probe request failed; treating token as usable: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 
-  _openAiScopeProbeCache = {
+  _openAiCodexProbeCache = {
     tokenHash,
     checkedAt: Date.now(),
     valid: result.valid,
@@ -311,7 +390,7 @@ export async function validateOpenAiCodexAccess(): Promise<{
   if (!token) {
     return { valid: false, reason: "No OpenAI Codex token available" };
   }
-  return probeOpenAiTokenForModelRequest(token);
+  return probeOpenAiCodexToken(token);
 }
 
 /**
@@ -333,19 +412,20 @@ export async function applySubscriptionCredentials(): Promise<void> {
     clearSubscriptionEnv("anthropic-subscription");
   }
 
-  // OpenAI Codex subscription → set OPENAI_API_KEY
+  // OpenAI Codex subscription is consumed by pi-ai directly.
+  // Keep OPENAI_API_KEY strictly for real OpenAI API keys.
+  clearSubscriptionEnv("openai-codex");
   const codexToken = await getAccessToken("openai-codex");
   if (codexToken) {
-    const validation = await probeOpenAiTokenForModelRequest(codexToken);
+    const validation = await probeOpenAiCodexToken(codexToken);
     if (validation.valid) {
-      process.env.OPENAI_API_KEY = codexToken;
       logger.info(
-        "[auth] Applied OpenAI Codex subscription credentials to environment",
+        "[auth] OpenAI Codex subscription credentials are ready for pi-ai runtime",
       );
     } else {
       clearSubscriptionEnv("openai-codex");
       logger.warn(
-        `[auth] OpenAI Codex token lacks required API scope; not applying OPENAI_API_KEY (${validation.reason ?? "unknown reason"})`,
+        `[auth] OpenAI Codex token validation failed; subscription calls may fail (${validation.reason ?? "unknown reason"})`,
       );
     }
   } else {

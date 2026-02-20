@@ -2937,6 +2937,93 @@ function getProviderOptions(): Array<{
 }
 
 type CanonicalSubscriptionProvider = "anthropic-subscription" | "openai-codex";
+const OPENAI_SUBSCRIPTION_PI_SMALL_DEFAULT = "openai-codex/gpt-5.1-codex-mini";
+const OPENAI_SUBSCRIPTION_PI_LARGE_DEFAULT = "openai-codex/gpt-5.1";
+const OPENAI_AUTH_JWT_CLAIM_PATH = "https://api.openai.com/auth";
+
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  const parts = token.split(".");
+  if (parts.length !== 3 || !parts[1]) return null;
+  const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base64.padEnd(
+    base64.length + ((4 - (base64.length % 4)) % 4),
+    "=",
+  );
+  try {
+    return JSON.parse(Buffer.from(padded, "base64").toString("utf8")) as Record<
+      string,
+      unknown
+    >;
+  } catch {
+    return null;
+  }
+}
+
+function isOpenAiSubscriptionToken(value: string | undefined): boolean {
+  if (!value) return false;
+  const payload = decodeJwtPayload(value);
+  const authClaim = payload?.[OPENAI_AUTH_JWT_CLAIM_PATH] as
+    | { chatgpt_account_id?: unknown }
+    | undefined;
+  return typeof authClaim?.chatgpt_account_id === "string";
+}
+
+function clearInjectedOpenAiSubscriptionApiKey(config: MilaidyConfig): void {
+  const runtimeValue = process.env.OPENAI_API_KEY?.trim();
+  if (isOpenAiSubscriptionToken(runtimeValue)) {
+    delete process.env.OPENAI_API_KEY;
+  }
+
+  if (!config.env || typeof config.env !== "object") return;
+  const envCfg = config.env as Record<string, unknown>;
+  const storedValue =
+    typeof envCfg.OPENAI_API_KEY === "string"
+      ? envCfg.OPENAI_API_KEY.trim()
+      : undefined;
+  if (isOpenAiSubscriptionToken(storedValue)) {
+    delete envCfg.OPENAI_API_KEY;
+  }
+}
+
+function enableOpenAiSubscriptionPiAiMode(config: MilaidyConfig): void {
+  if (!config.env || typeof config.env !== "object") config.env = {};
+  const envCfg = config.env as Record<string, unknown>;
+  const vars = (envCfg.vars ?? {}) as Record<string, string>;
+  vars.MILAIDY_USE_PI_AI = "1";
+  envCfg.vars = vars;
+  process.env.MILAIDY_USE_PI_AI = "1";
+
+  if (!config.models || typeof config.models !== "object") config.models = {};
+  const modelsCfg = config.models as Record<string, unknown>;
+  if (
+    typeof modelsCfg.piAiSmall !== "string" ||
+    !modelsCfg.piAiSmall.trim()
+  ) {
+    modelsCfg.piAiSmall = OPENAI_SUBSCRIPTION_PI_SMALL_DEFAULT;
+  }
+  if (
+    typeof modelsCfg.piAiLarge !== "string" ||
+    !modelsCfg.piAiLarge.trim()
+  ) {
+    modelsCfg.piAiLarge = OPENAI_SUBSCRIPTION_PI_LARGE_DEFAULT;
+  }
+
+  if (!config.agents) config.agents = {};
+  if (!config.agents.defaults) config.agents.defaults = {};
+  const defaults = config.agents.defaults as Record<string, unknown>;
+  defaults.subscriptionProvider = "openai-subscription";
+
+  const modelCfg =
+    defaults.model && typeof defaults.model === "object"
+      ? (defaults.model as Record<string, unknown>)
+      : {};
+  const selectedLarge =
+    typeof modelsCfg.piAiLarge === "string" && modelsCfg.piAiLarge.trim()
+      ? modelsCfg.piAiLarge
+      : OPENAI_SUBSCRIPTION_PI_LARGE_DEFAULT;
+  modelCfg.primary = selectedLarge;
+  defaults.model = modelCfg;
+}
 
 function toCanonicalSubscriptionProvider(
   provider: string | null | undefined,
@@ -2959,14 +3046,13 @@ function clearSubscriptionProviderState(
   provider: CanonicalSubscriptionProvider,
   config: MilaidyConfig,
 ): void {
-  const envKey =
-    provider === "anthropic-subscription"
-      ? "ANTHROPIC_API_KEY"
-      : "OPENAI_API_KEY";
-  delete process.env[envKey];
-
-  if (config.env && typeof config.env === "object") {
-    delete (config.env as Record<string, unknown>)[envKey];
+  if (provider === "anthropic-subscription") {
+    delete process.env.ANTHROPIC_API_KEY;
+    if (config.env && typeof config.env === "object") {
+      delete (config.env as Record<string, unknown>).ANTHROPIC_API_KEY;
+    }
+  } else {
+    clearInjectedOpenAiSubscriptionApiKey(config);
   }
 
   const defaults = config.agents?.defaults as Record<string, unknown> | undefined;
@@ -5311,20 +5397,27 @@ async function handleRequest(
         delete state._codexFlowTimer;
         error(
           res,
-          `OpenAI OAuth token cannot access chat models: ${openAiAccess.reason ?? "missing required model.request scope"}`,
+          `OpenAI subscription token cannot access Codex responses: ${openAiAccess.reason ?? "token validation failed"}`,
           400,
         );
         return;
       }
+      enableOpenAiSubscriptionPiAiMode(state.config);
+      clearInjectedOpenAiSubscriptionApiKey(state.config);
+      saveMilaidyConfig(state.config);
       await applySubscriptionCredentials();
       flow.close();
       delete state._codexFlow;
       clearTimeout(state._codexFlowTimer);
       delete state._codexFlowTimer;
+      scheduleRuntimeRestart("openai-subscription-oauth", 450);
       json(res, {
         success: true,
         expiresAt: credentials.expires,
         accountId: credentials.accountId,
+        provider: "openai-subscription",
+        inferenceMode: "pi-ai-codex",
+        restarting: true,
       });
     } catch (err) {
       error(res, `OpenAI exchange failed: ${err}`, 500);
@@ -5666,7 +5759,8 @@ async function handleRequest(
     }
 
     // ── Local LLM provider ────────────────────────────────────────────────
-    // Also supports pi-ai (reads credentials from ~/.pi/agent/auth.json).
+    // Also supports pi-ai (reads credentials from ~/.pi/agent/auth.json and
+    // subscription OAuth credentials from Milaidy secure storage).
     {
       // Ensure we don't keep stale pi-ai mode when the user switches providers.
       if (!config.env) config.env = {};
@@ -5674,7 +5768,9 @@ async function handleRequest(
       const vars = (envCfg.vars ?? {}) as Record<string, string>;
 
       const providerId = typeof body.provider === "string" ? body.provider : "";
-      const wantsPiAi = runMode === "local" && providerId === "pi-ai";
+      const wantsPiAi =
+        runMode === "local" &&
+        (providerId === "pi-ai" || providerId === "openai-subscription");
 
       if (wantsPiAi) {
         vars.MILAIDY_USE_PI_AI = "1";
@@ -5690,6 +5786,8 @@ async function handleRequest(
           typeof body.primaryModel === "string" ? body.primaryModel.trim() : "";
         if (primaryModel) {
           config.agents.defaults.model.primary = primaryModel;
+        } else if (providerId === "openai-subscription") {
+          config.agents.defaults.model.primary = OPENAI_SUBSCRIPTION_PI_LARGE_DEFAULT;
         } else {
           delete config.agents.defaults.model.primary;
           if (
@@ -5698,6 +5796,21 @@ async function handleRequest(
           ) {
             delete config.agents.defaults.model;
           }
+        }
+
+        if (!config.models || typeof config.models !== "object") config.models = {};
+        const modelCfg = config.models as Record<string, unknown>;
+        if (
+          providerId === "openai-subscription" &&
+          (typeof modelCfg.piAiLarge !== "string" || !modelCfg.piAiLarge.trim())
+        ) {
+          modelCfg.piAiLarge = OPENAI_SUBSCRIPTION_PI_LARGE_DEFAULT;
+        }
+        if (
+          providerId === "openai-subscription" &&
+          (typeof modelCfg.piAiSmall !== "string" || !modelCfg.piAiSmall.trim())
+        ) {
+          modelCfg.piAiSmall = OPENAI_SUBSCRIPTION_PI_SMALL_DEFAULT;
         }
       } else {
         delete vars.MILAIDY_USE_PI_AI;
