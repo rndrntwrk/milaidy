@@ -23,7 +23,6 @@ import type {
 const REFRESH_BUFFER_MS = 5 * 60 * 1000;
 const MIN_REFRESH_LOOP_MS = 30_000;
 const DEFAULT_REFRESH_LOOP_MS = 2 * 60 * 1000;
-const OPENAI_SCOPE_PROBE_TTL_MS = 15 * 60 * 1000;
 
 /** Whether migration has been attempted this session. */
 let _migrationAttempted = false;
@@ -71,12 +70,7 @@ async function probeOpenAiTokenForModelRequest(
   token: string,
 ): Promise<{ valid: boolean; reason?: string }> {
   const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
-  const now = Date.now();
-  if (
-    _openAiScopeProbeCache &&
-    _openAiScopeProbeCache.tokenHash === tokenHash &&
-    now - _openAiScopeProbeCache.checkedAt < OPENAI_SCOPE_PROBE_TTL_MS
-  ) {
+  if (_openAiScopeProbeCache && _openAiScopeProbeCache.tokenHash === tokenHash) {
     return {
       valid: _openAiScopeProbeCache.valid,
       reason: _openAiScopeProbeCache.reason,
@@ -122,7 +116,7 @@ async function probeOpenAiTokenForModelRequest(
 
   _openAiScopeProbeCache = {
     tokenHash,
-    checkedAt: now,
+    checkedAt: Date.now(),
     valid: result.valid,
     reason: result.reason,
   };
