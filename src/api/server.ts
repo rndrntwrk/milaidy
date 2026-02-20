@@ -11,6 +11,7 @@ import fs from "node:fs";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { fileURLToPath } from "node:url";
 import {
   type AgentRuntime,
@@ -2435,6 +2436,8 @@ interface ChatGenerateOptions {
   onChunk?: (chunk: string) => void;
   isAborted?: () => boolean;
   resolveNoResponseText?: () => string;
+  mode?: ChatMode;
+  modelHint?: string;
 }
 
 const INSUFFICIENT_CREDITS_RE =
@@ -2452,11 +2455,97 @@ const GENERIC_NO_RESPONSE_CHAT_REPLY =
   "Sorry, I couldn't generate a response right now. Please try again.";
 
 const DEFAULT_CLOUD_API_BASE_URL = "https://www.elizacloud.ai/api/v1";
+const DEFAULT_CHAT_TIMEOUT_MS = 120_000;
+const DEFAULT_SSE_HEARTBEAT_MS = 15_000;
+
+type ChatModelSize = "small" | "large";
+type DynamicPromptExecArgs = Parameters<
+  AgentRuntime["dynamicPromptExecFromState"]
+>[0];
+type DynamicPromptExecResult = Awaited<
+  ReturnType<AgentRuntime["dynamicPromptExecFromState"]>
+>;
+
+const chatModelRoutingContext = new AsyncLocalStorage<{
+  modelSize: ChatModelSize;
+}>();
 
 function getErrorMessage(err: unknown, fallback = "generation failed"): string {
   if (err instanceof Error) return err.message;
   if (typeof err === "string") return err;
   return fallback;
+}
+
+function isChatTimeoutError(err: unknown): boolean {
+  const message = getErrorMessage(err, "");
+  return /\btimeout\b|timed out/i.test(message);
+}
+
+function getConfiguredChatTimeoutMs(): number {
+  const raw = process.env.MILAIDY_CHAT_TIMEOUT_MS;
+  if (!raw) return DEFAULT_CHAT_TIMEOUT_MS;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed)) return DEFAULT_CHAT_TIMEOUT_MS;
+  return Math.min(Math.max(parsed, 30_000), 300_000);
+}
+
+function resolveChatModelHint(config: MilaidyConfig, mode: ChatMode): string {
+  const modelsCfg = (config.models ?? {}) as Record<string, unknown>;
+  const piAiSmall =
+    typeof modelsCfg.piAiSmall === "string" ? modelsCfg.piAiSmall.trim() : "";
+  const piAiLarge =
+    typeof modelsCfg.piAiLarge === "string" ? modelsCfg.piAiLarge.trim() : "";
+
+  const defaults = config.agents?.defaults as Record<string, unknown> | undefined;
+  const modelCfg =
+    defaults?.model && typeof defaults.model === "object"
+      ? (defaults.model as Record<string, unknown>)
+      : undefined;
+  const primary =
+    typeof modelCfg?.primary === "string" ? modelCfg.primary.trim() : "";
+
+  if (mode === "simple") return piAiSmall || primary || "TEXT_SMALL(default)";
+  return piAiLarge || primary || "TEXT_LARGE(default)";
+}
+
+function resolveChatModelSize(mode: ChatMode): ChatModelSize {
+  return mode === "simple" ? "small" : "large";
+}
+
+function withChatModelRouting<T>(
+  mode: ChatMode,
+  task: () => Promise<T>,
+): Promise<T> {
+  return chatModelRoutingContext.run(
+    { modelSize: resolveChatModelSize(mode) },
+    task,
+  );
+}
+
+function patchRuntimeDynamicPromptModelRouting(runtime: AgentRuntime): void {
+  const rt = runtime as AgentRuntime & {
+    __milaidyChatModelRoutingPatched?: boolean;
+    dynamicPromptExecFromState: (
+      args: DynamicPromptExecArgs,
+    ) => Promise<DynamicPromptExecResult>;
+  };
+  if (rt.__milaidyChatModelRoutingPatched) return;
+
+  const original = rt.dynamicPromptExecFromState.bind(runtime);
+  rt.dynamicPromptExecFromState = async (
+    args: DynamicPromptExecArgs,
+  ): Promise<DynamicPromptExecResult> => {
+    const override = chatModelRoutingContext.getStore();
+    if (!override) return original(args);
+    return original({
+      ...args,
+      options: {
+        ...(args.options ?? {}),
+        modelSize: override.modelSize,
+      },
+    });
+  };
+  rt.__milaidyChatModelRoutingPatched = true;
 }
 
 function isInsufficientCreditsMessage(message: string): boolean {
@@ -2572,16 +2661,32 @@ function writeSse(
   res.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
+function startSseHeartbeat(
+  res: http.ServerResponse,
+  intervalMs = DEFAULT_SSE_HEARTBEAT_MS,
+): () => void {
+  const timer = setInterval(() => {
+    writeSse(res, { type: "heartbeat", ts: Date.now() });
+  }, intervalMs);
+  if (typeof timer.unref === "function") timer.unref();
+  return () => clearInterval(timer);
+}
+
 async function generateChatResponse(
   runtime: AgentRuntime,
   message: ReturnType<typeof createMessageMemory>,
   agentName: string,
   opts?: ChatGenerateOptions,
 ): Promise<ChatGenerationResult> {
+  patchRuntimeDynamicPromptModelRouting(runtime);
+
   const t0 = Date.now();
+  const chatMode = opts?.mode ?? "power";
+  const modelHint = opts?.modelHint ?? "unknown";
   let firstTokenMs = 0;
   let responseText = "";
   const streamingActive = !!opts?.onChunk;
+  const timeoutDuration = getConfiguredChatTimeoutMs();
   const normalizeDelta = (incoming: string | null | undefined): string => {
     if (!incoming) return "";
     if (!responseText) return incoming;
@@ -2595,36 +2700,54 @@ async function generateChatResponse(
     return incoming;
   };
 
-  const result = await runtime.messageService?.handleMessage(
-    runtime,
-    message,
-    async (content: Content) => {
-      if (opts?.isAborted?.()) {
-        throw new Error("client_disconnected");
+  let result:
+    | {
+        responseContent?: {
+          text?: string;
+        } | null;
       }
-      if (content?.text) {
-        const delta = normalizeDelta(content.text);
-        if (!delta) return [];
-        if (!firstTokenMs) firstTokenMs = Date.now() - t0;
-        responseText += delta;
-        opts?.onChunk?.(delta);
-      }
-      return [];
-    },
-    {
-      onStreamChunk: streamingActive
-        ? async (chunk: string) => {
-          if (opts!.isAborted?.()) return;
-          const delta = normalizeDelta(chunk);
-          if (!delta) return;
-          if (!firstTokenMs) firstTokenMs = Date.now() - t0;
-          responseText += delta;
-          opts!.onChunk!(delta);
-        }
-        : undefined,
-      timeoutDuration: 60_000, // 60s instead of 1-hour default
-    },
-  );
+    | undefined;
+  try {
+    result = await withChatModelRouting(chatMode, async () =>
+      runtime.messageService?.handleMessage(
+        runtime,
+        message,
+        async (content: Content) => {
+          if (opts?.isAborted?.()) {
+            throw new Error("client_disconnected");
+          }
+          if (content?.text) {
+            const delta = normalizeDelta(content.text);
+            if (!delta) return [];
+            if (!firstTokenMs) firstTokenMs = Date.now() - t0;
+            responseText += delta;
+            opts?.onChunk?.(delta);
+          }
+          return [];
+        },
+        {
+          onStreamChunk: streamingActive
+            ? async (chunk: string) => {
+              if (opts?.isAborted?.()) return;
+              const delta = normalizeDelta(chunk);
+              if (!delta) return;
+              if (!firstTokenMs) firstTokenMs = Date.now() - t0;
+              responseText += delta;
+              opts?.onChunk?.(delta);
+            }
+            : undefined,
+          timeoutDuration,
+          shouldRespondModel: chatMode === "simple" ? "small" : "large",
+        },
+      ),
+    );
+  } catch (err) {
+    const totalMs = Date.now() - t0;
+    logger.warn(
+      `[perf] chat response failed: mode=${chatMode}, model=${modelHint}, total=${totalMs}ms, first-token=${firstTokenMs || "n/a"}ms, timeout=${isChatTimeoutError(err)}, error=${getErrorMessage(err)}`,
+    );
+    throw err;
+  }
 
   // Fallback: if streaming didn't produce text, use callback/result text
   if (!responseText && result?.responseContent?.text) {
@@ -2639,7 +2762,7 @@ async function generateChatResponse(
 
   const totalMs = Date.now() - t0;
   logger.info(
-    `[perf] chat response: total=${totalMs}ms, first-token=${firstTokenMs || "n/a"}ms, length=${finalText.length}`,
+    `[perf] chat response: mode=${chatMode}, model=${modelHint}, timeout=false, total=${totalMs}ms, first-token=${firstTokenMs || "n/a"}ms, length=${finalText.length}`,
   );
 
   return {
@@ -2938,7 +3061,7 @@ function getProviderOptions(): Array<{
 
 type CanonicalSubscriptionProvider = "anthropic-subscription" | "openai-codex";
 const OPENAI_SUBSCRIPTION_PI_SMALL_DEFAULT = "openai-codex/gpt-5.1-codex-mini";
-const OPENAI_SUBSCRIPTION_PI_LARGE_DEFAULT = "openai-codex/gpt-5.1";
+const OPENAI_SUBSCRIPTION_PI_LARGE_DEFAULT = "openai-codex/gpt-5.3-codex";
 const OPENAI_AUTH_JWT_CLAIM_PATH = "https://api.openai.com/auth";
 
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
@@ -10548,6 +10671,8 @@ async function handleRequest(
     const proxy = state.cloudManager?.getProxy();
     if (proxy) {
       initSse(res);
+      writeSse(res, { type: "ready", mode, ts: Date.now() });
+      const stopSseHeartbeat = startSseHeartbeat(res);
       let fullText = "";
       try {
         for await (const chunk of proxy.handleChatMessageStream(
@@ -10585,6 +10710,7 @@ async function handleRequest(
           });
         }
       } finally {
+        stopSseHeartbeat();
         res.end();
       }
       return;
@@ -10596,6 +10722,8 @@ async function handleRequest(
     }
 
     initSse(res);
+    writeSse(res, { type: "ready", mode, ts: Date.now() });
+    const stopSseHeartbeat = startSseHeartbeat(res);
     const sseT0 = Date.now();
     let sseFirstChunkMs = 0;
     let aborted = false;
@@ -10626,6 +10754,8 @@ async function handleRequest(
         message,
         state.agentName,
         {
+          mode,
+          modelHint: resolveChatModelHint(state.config, mode),
           isAborted: () => aborted,
           onChunk: (chunk) => {
             if (!sseFirstChunkMs) sseFirstChunkMs = Date.now() - sseT0;
@@ -10662,6 +10792,7 @@ async function handleRequest(
         }
       }
     } finally {
+      stopSseHeartbeat();
       logger.info(
         `[perf] SSE /conversations/stream: total=${Date.now() - sseT0}ms, first-chunk=${sseFirstChunkMs || "n/a"}ms`,
       );
@@ -10747,6 +10878,8 @@ async function handleRequest(
         message,
         state.agentName,
         {
+          mode,
+          modelHint: resolveChatModelHint(state.config, mode),
           resolveNoResponseText: () =>
             resolveNoResponseFallback(state.logBuffer),
         },
@@ -10929,6 +11062,8 @@ async function handleRequest(
     }
 
     initSse(res);
+    writeSse(res, { type: "ready", mode, ts: Date.now() });
+    const stopSseHeartbeat = startSseHeartbeat(res);
     const sseT0 = Date.now();
     let sseFirstChunkMs = 0;
     let aborted = false;
@@ -10964,6 +11099,8 @@ async function handleRequest(
         message,
         state.agentName,
         {
+          mode,
+          modelHint: resolveChatModelHint(state.config, mode),
           isAborted: () => aborted,
           onChunk: (chunk) => {
             if (!sseFirstChunkMs) sseFirstChunkMs = Date.now() - sseT0;
@@ -10998,6 +11135,7 @@ async function handleRequest(
         }
       }
     } finally {
+      stopSseHeartbeat();
       logger.info(
         `[perf] SSE /chat/stream: total=${Date.now() - sseT0}ms, first-chunk=${sseFirstChunkMs || "n/a"}ms`,
       );
@@ -11039,6 +11177,8 @@ async function handleRequest(
 
       if (wantsStream) {
         initSse(res);
+        writeSse(res, { type: "ready", mode, ts: Date.now() });
+        const stopSseHeartbeat = startSseHeartbeat(res);
         let fullText = "";
 
         try {
@@ -11073,6 +11213,8 @@ async function handleRequest(
               message: getErrorMessage(err),
             });
           }
+        } finally {
+          stopSseHeartbeat();
         }
         res.end();
       } else {
@@ -11145,6 +11287,8 @@ async function handleRequest(
         message,
         state.agentName,
         {
+          mode,
+          modelHint: resolveChatModelHint(state.config, mode),
           resolveNoResponseText: () =>
             resolveNoResponseFallback(state.logBuffer),
         },
