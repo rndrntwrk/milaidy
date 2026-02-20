@@ -39,8 +39,16 @@ export const piAiPlugin: Plugin = {
     try {
       const normalized = loadPiAiPluginConfig(config);
 
-      for (const [key, value] of Object.entries(config)) {
-        if (value) {
+      const allowedEnvKeys = [
+        "PI_CODING_AGENT_DIR",
+        "PI_AI_MODEL_SPEC",
+        "PI_AI_SMALL_MODEL_SPEC",
+        "PI_AI_LARGE_MODEL_SPEC",
+        "PI_AI_PRIORITY",
+      ] as const;
+      for (const key of allowedEnvKeys) {
+        const value = config[key];
+        if (typeof value === "string" && value.trim()) {
           process.env[key] = value;
         }
       }

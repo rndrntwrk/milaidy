@@ -34,11 +34,11 @@ import {
   type TargetInfo,
   type UUID,
 } from "@elizaos/core";
+import { isPiAiEnabledFromEnv } from "../../packages/plugin-pi-ai/src/runtime.ts";
 import {
   debugLogResolvedContext,
   validateRuntimeContext,
 } from "../api/plugin-validation";
-
 import {
   configFileExists,
   loadMiladyConfig,
@@ -67,7 +67,6 @@ import { SandboxManager, type SandboxMode } from "../services/sandbox-manager";
 import { diagnoseNoAIProvider } from "../services/version-compat";
 import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins";
 import { createMiladyPlugin } from "./milady-plugin";
-import { isPiAiEnabledFromEnv } from "../../packages/plugin-pi-ai/src/runtime.ts";
 
 // ---------------------------------------------------------------------------
 // Types

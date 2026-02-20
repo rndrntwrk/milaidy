@@ -7,13 +7,19 @@
  * @module services/registry-client
  */
 
+import { lookup as dnsLookup } from "node:dns/promises";
 import fs from "node:fs/promises";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { logger } from "@elizaos/core";
 import { loadMiladyConfig, saveMiladyConfig } from "../config/config.js";
 import type { RegistryEndpoint } from "../config/types.milady.js";
+import {
+  isBlockedPrivateOrLinkLocalIp,
+  normalizeHostLike,
+} from "../security/network-policy.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -27,6 +33,14 @@ const CACHE_TTL_MS = 3_600_000; // 1 hour
 
 const LOCAL_APP_DEFAULT_SANDBOX =
   "allow-scripts allow-same-origin allow-popups";
+
+const BLOCKED_REGISTRY_HOST_LITERALS = new Set([
+  "localhost",
+  "127.0.0.1",
+  "::1",
+  "0.0.0.0",
+  "169.254.169.254",
+]);
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -909,6 +923,72 @@ export function isDefaultEndpoint(url: string): boolean {
   );
 }
 
+function parseRegistryEndpointUrl(rawUrl: string): URL {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new Error("Endpoint URL must be a valid absolute URL");
+  }
+
+  if (parsed.protocol !== "https:") {
+    throw new Error("Endpoint URL must use https://");
+  }
+
+  const hostname = normalizeHostLike(parsed.hostname);
+  if (!hostname) throw new Error("Endpoint URL hostname is required");
+
+  if (
+    BLOCKED_REGISTRY_HOST_LITERALS.has(hostname) ||
+    hostname.endsWith(".localhost") ||
+    hostname.endsWith(".local")
+  ) {
+    throw new Error(`Endpoint host "${hostname}" is blocked`);
+  }
+
+  if (net.isIP(hostname) && isBlockedPrivateOrLinkLocalIp(hostname)) {
+    throw new Error(`Endpoint host "${hostname}" is blocked`);
+  }
+
+  return parsed;
+}
+
+async function resolveRegistryEndpointUrlRejection(
+  rawUrl: string,
+): Promise<string | null> {
+  let parsed: URL;
+  try {
+    parsed = parseRegistryEndpointUrl(rawUrl);
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+
+  const hostname = normalizeHostLike(parsed.hostname);
+  if (!hostname || net.isIP(hostname)) {
+    return null;
+  }
+
+  let addresses: Array<{ address: string }>;
+  try {
+    const resolved = await dnsLookup(hostname, { all: true });
+    addresses = Array.isArray(resolved) ? resolved : [resolved];
+  } catch {
+    return `Could not resolve endpoint host "${hostname}"`;
+  }
+
+  if (addresses.length === 0) {
+    return `Could not resolve endpoint host "${hostname}"`;
+  }
+
+  for (const entry of addresses) {
+    if (isBlockedPrivateOrLinkLocalIp(entry.address)) {
+      return `Endpoint host "${hostname}" resolves to blocked address ${entry.address}`;
+    }
+  }
+
+  return null;
+}
+
 /** Return the list of custom registry endpoints from config. */
 export function getConfiguredEndpoints(): RegistryEndpoint[] {
   try {
@@ -921,7 +1001,8 @@ export function getConfiguredEndpoints(): RegistryEndpoint[] {
 
 /** Add a custom registry endpoint. Blocks duplicate URLs. */
 export function addRegistryEndpoint(label: string, url: string): void {
-  const normalised = normaliseEndpointUrl(url);
+  const parsed = parseRegistryEndpointUrl(url);
+  const normalised = normaliseEndpointUrl(parsed.toString());
   if (isDefaultEndpoint(normalised)) {
     throw new Error("Cannot add the default registry as a custom endpoint.");
   }
@@ -981,6 +1062,14 @@ async function fetchSingleEndpoint(
   url: string,
   label: string,
 ): Promise<Map<string, RegistryPluginInfo> | null> {
+  const rejection = await resolveRegistryEndpointUrlRejection(url);
+  if (rejection) {
+    logger.warn(
+      `[registry-client] Endpoint "${label}" (${url}) blocked: ${rejection}`,
+    );
+    return null;
+  }
+
   try {
     const resp = await fetch(url);
     if (!resp.ok) {
@@ -1062,6 +1151,12 @@ async function mergeCustomEndpoints(
   for (const result of results) {
     if (result.status === "fulfilled" && result.value) {
       for (const [name, info] of result.value) {
+        if (plugins.has(name)) {
+          logger.warn(
+            `[registry-client] Ignoring custom endpoint override for ${name}`,
+          );
+          continue;
+        }
         plugins.set(name, info);
       }
     }

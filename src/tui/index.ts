@@ -4,6 +4,12 @@ import process from "node:process";
 import { type AgentRuntime, stringToUuid, type UUID } from "@elizaos/core";
 import type { Api, Model } from "@mariozechner/pi-ai";
 import { Text } from "@mariozechner/pi-tui";
+import {
+  createPiCredentialProvider,
+  getPiModel,
+  parseModelSpec,
+  registerPiAiModelHandler,
+} from "../../packages/plugin-pi-ai/src/index.ts";
 import { loadMiladyConfig, saveMiladyConfig } from "../config/config.js";
 import {
   DEFAULT_MODELS_DIR,
@@ -15,11 +21,6 @@ import {
   type EmbeddingTier,
 } from "../runtime/embedding-presets.js";
 import { getEmbeddingState } from "../runtime/embedding-state.js";
-import {
-  registerPiAiModelHandler,
-  createPiCredentialProvider,
-} from "../../packages/plugin-pi-ai/src/index.ts";
-import { getPiModel, parseModelSpec } from "../../packages/plugin-pi-ai/src/model-utils.ts";
 import { ElizaTUIBridge } from "./eliza-tui-bridge.js";
 import { resolveTuiModelSpec } from "./model-spec.js";
 import { MiladyTUI } from "./tui-app.js";

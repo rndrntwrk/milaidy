@@ -67,6 +67,7 @@ process.env.MILAIDY_EMBEDDING_META_PATH = path.join(
 import {
   EMBEDDING_META_PATH,
   type EmbeddingManagerConfig,
+  ensureModel,
   MiladyEmbeddingManager,
   readEmbeddingMeta,
 } from "./embedding-manager.js";
@@ -131,6 +132,20 @@ describe("MiladyEmbeddingManager", () => {
     } catch {
       // best-effort cleanup
     }
+  });
+
+  it("rejects path traversal and invalid model identifiers in ensureModel", async () => {
+    const modelsDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "milaidy-emb-sec-"),
+    );
+
+    await expect(
+      ensureModel(modelsDir, "alice/models", "../escape.gguf"),
+    ).rejects.toThrow(/invalid embedding model filename/i);
+
+    await expect(
+      ensureModel(modelsDir, "../../evil", "model.gguf"),
+    ).rejects.toThrow(/invalid embedding model repo/i);
   });
 
   // 1. Config defaults

@@ -27,6 +27,7 @@ import {
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 
 const DEFAULT_PORT = 3939;
+const DEFAULT_HOST = "127.0.0.1";
 const BENCHMARK_WORLD_ID = stringToUuid("milady-benchmark-world");
 const BENCHMARK_MESSAGE_SERVER_ID = stringToUuid(
   "milady-benchmark-message-server",
@@ -209,6 +210,20 @@ function resolvePort(): number {
     return DEFAULT_PORT;
   }
   return Math.floor(parsed);
+}
+
+function resolveHost(): string {
+  const raw = process.env.MILADY_BENCH_HOST?.trim();
+  if (!raw) return DEFAULT_HOST;
+
+  if (raw !== "127.0.0.1" && raw !== "::1" && raw !== "localhost") {
+    elizaLogger.warn(
+      `[bench] Ignoring non-loopback MILADY_BENCH_HOST="${raw}"; using ${DEFAULT_HOST}`,
+    );
+    return DEFAULT_HOST;
+  }
+
+  return raw;
 }
 
 function extractRecord(value: unknown): Record<string, unknown> | undefined {
@@ -449,8 +464,9 @@ function createSession(taskId: string, benchmark: string): BenchmarkSession {
 // Proper robust server implementation
 export async function startBenchmarkServer() {
   const port = resolvePort();
+  const host = resolveHost();
   elizaLogger.info(
-    `[bench] Initializing milady benchmark runtime on port ${port}...`,
+    `[bench] Initializing milady benchmark runtime on ${host}:${port}...`,
   );
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1421,11 +1437,11 @@ export async function startBenchmarkServer() {
     res.end("Not Found");
   });
 
-  server.listen(port, () => {
+  server.listen(port, host, () => {
     elizaLogger.info(
-      `[bench] Milady benchmark server listening on port ${port}`,
+      `[bench] Milady benchmark server listening on ${host}:${port}`,
     );
-    console.log(`MILADY_BENCH_READY port=${port}`);
+    console.log(`MILADY_BENCH_READY host=${host} port=${port}`);
   });
 }
 

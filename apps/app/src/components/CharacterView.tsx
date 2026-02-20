@@ -631,7 +631,7 @@ export function CharacterView() {
       }
       setVoiceLoading(false);
     })();
-  }, [VOICE_PRESETS.find]);
+  }, []);
 
   const handleVoiceFieldChange = useCallback(
     (key: string, value: string | number) => {

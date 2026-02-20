@@ -190,6 +190,59 @@ function parseContentLength(
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
+function isAllowedDownloadHost(hostname: string): boolean {
+  return hostname === "huggingface.co" || hostname.endsWith(".huggingface.co");
+}
+
+function validateDownloadUrl(rawUrl: string): URL {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new Error(`Download failed: invalid URL "${rawUrl}"`);
+  }
+
+  if (parsed.protocol !== "https:") {
+    throw new Error("Download failed: only https:// URLs are allowed");
+  }
+
+  if (!isAllowedDownloadHost(parsed.hostname.toLowerCase())) {
+    throw new Error(
+      `Download failed: host "${parsed.hostname}" is not allowed`,
+    );
+  }
+
+  return parsed;
+}
+
+function sanitizeModelRepo(repo: string): string {
+  const trimmed = repo.trim();
+  if (!/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(trimmed)) {
+    throw new Error(`Invalid embedding model repo: ${repo}`);
+  }
+  return trimmed;
+}
+
+function sanitizeModelFilename(filename: string): string {
+  const trimmed = filename.trim();
+  if (!/^[A-Za-z0-9._-]+\.gguf$/i.test(trimmed)) {
+    throw new Error(`Invalid embedding model filename: ${filename}`);
+  }
+  return trimmed;
+}
+
+function resolveModelPath(modelsDir: string, filename: string): string {
+  const resolvedDir = path.resolve(modelsDir);
+  const resolvedPath = path.resolve(resolvedDir, filename);
+  if (
+    resolvedPath !== resolvedDir &&
+    !resolvedPath.startsWith(`${resolvedDir}${path.sep}`)
+  ) {
+    throw new Error("Invalid embedding model path");
+  }
+  return resolvedPath;
+}
+
 function downloadFile(
   url: string,
   dest: string,
@@ -200,6 +253,16 @@ function downloadFile(
     let redirectCount = 0;
 
     const request = (reqUrl: string) => {
+      let validatedUrl: URL;
+      try {
+        validatedUrl = validateDownloadUrl(reqUrl);
+      } catch (error) {
+        reject(
+          error instanceof Error ? error : new Error("Invalid download URL"),
+        );
+        return;
+      }
+
       // Open a fresh write stream for each attempt
       const file = fs.createWriteStream(dest);
       let bytesReceived = 0;
@@ -230,57 +293,64 @@ function downloadFile(
       };
 
       https
-        .get(reqUrl, { headers: { "User-Agent": "milaidy" } }, (res) => {
-          expectedBytes = parseContentLength(res.headers["content-length"]);
-          // Follow redirects (open new stream each time)
-          if (
-            res.statusCode &&
-            res.statusCode >= 300 &&
-            res.statusCode < 400 &&
-            res.headers.location
-          ) {
-            res.resume(); // drain the response
-            file.close();
-            safeUnlink(dest);
-            redirectCount += 1;
-            if (redirectCount > maxRedirects) {
+        .get(
+          validatedUrl.toString(),
+          { headers: { "User-Agent": "milaidy" } },
+          (res) => {
+            expectedBytes = parseContentLength(res.headers["content-length"]);
+            // Follow redirects (open new stream each time)
+            if (
+              res.statusCode &&
+              res.statusCode >= 300 &&
+              res.statusCode < 400 &&
+              res.headers.location
+            ) {
+              res.resume(); // drain the response
+              file.close();
+              safeUnlink(dest);
+              redirectCount += 1;
+              if (redirectCount > maxRedirects) {
+                settleError(
+                  new Error(
+                    `Download failed: too many redirects (>${maxRedirects})`,
+                  ),
+                );
+                return;
+              }
+              // Resolve relative redirect URLs (guard against malformed headers)
+              let next: string;
+              try {
+                next = new URL(
+                  res.headers.location,
+                  validatedUrl.toString(),
+                ).toString();
+              } catch {
+                settleError(
+                  new Error(
+                    `Download failed: malformed redirect URL "${res.headers.location}"`,
+                  ),
+                );
+                return;
+              }
+              request(next);
+              return;
+            }
+            if (res.statusCode !== 200) {
               settleError(
                 new Error(
-                  `Download failed: too many redirects (>${maxRedirects})`,
+                  `Download failed: HTTP ${res.statusCode} for ${validatedUrl.toString()}`,
                 ),
               );
               return;
             }
-            // Resolve relative redirect URLs (guard against malformed headers)
-            let next: string;
-            try {
-              next = new URL(res.headers.location, reqUrl).toString();
-            } catch {
-              settleError(
-                new Error(
-                  `Download failed: malformed redirect URL "${res.headers.location}"`,
-                ),
-              );
-              return;
-            }
-            request(next);
-            return;
-          }
-          if (res.statusCode !== 200) {
-            settleError(
-              new Error(
-                `Download failed: HTTP ${res.statusCode} for ${reqUrl}`,
-              ),
-            );
-            return;
-          }
-          res.on("data", (chunk: Buffer) => {
-            bytesReceived += chunk.length;
-          });
-          res.pipe(file);
-          file.on("finish", settleSuccess);
-          file.on("error", settleError);
-        })
+            res.on("data", (chunk: Buffer) => {
+              bytesReceived += chunk.length;
+            });
+            res.pipe(file);
+            file.on("finish", settleSuccess);
+            file.on("error", settleError);
+          },
+        )
         .on("error", settleError);
     };
     request(url);
@@ -293,16 +363,18 @@ async function ensureModel(
   filename: string,
   force = false,
 ): Promise<string> {
-  const modelPath = path.join(modelsDir, filename);
+  const safeRepo = sanitizeModelRepo(repo);
+  const safeFilename = sanitizeModelFilename(filename);
+  const modelPath = resolveModelPath(modelsDir, safeFilename);
   if (force) safeUnlink(modelPath);
   if (fs.existsSync(modelPath)) return modelPath;
 
   const log = getLogger();
-  fs.mkdirSync(modelsDir, { recursive: true });
+  fs.mkdirSync(path.resolve(modelsDir), { recursive: true });
 
-  const url = `https://huggingface.co/${repo}/resolve/main/${filename}`;
+  const url = `https://huggingface.co/${safeRepo}/resolve/main/${safeFilename}`;
   log.info(
-    `[milaidy] Downloading embedding model: ${filename} from ${repo}...`,
+    `[milaidy] Downloading embedding model: ${safeFilename} from ${safeRepo}...`,
   );
 
   await downloadFile(url, modelPath);

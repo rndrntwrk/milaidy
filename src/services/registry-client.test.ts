@@ -893,4 +893,59 @@ describe("registry-client", () => {
       expect(pluginInfo?.localPath).toContain("plugins/app-hyperscape");
     });
   });
+
+  describe("custom endpoint security", () => {
+    it("rejects insecure custom endpoint URLs", async () => {
+      const { addRegistryEndpoint } = await loadModule();
+
+      expect(() =>
+        addRegistryEndpoint(
+          "insecure",
+          "http://registry.example.com/index.json",
+        ),
+      ).toThrow(/https:\/\//i);
+
+      expect(() =>
+        addRegistryEndpoint("local", "https://localhost/registry.json"),
+      ).toThrow(/blocked/i);
+    });
+
+    it("does not allow custom endpoints to override existing plugin entries", async () => {
+      const customUrl = "https://1.1.1.1/custom.json";
+      const customRegistry = {
+        registry: {
+          "@elizaos/plugin-solana": {
+            ...fakeGeneratedRegistry().registry["@elizaos/plugin-solana"],
+            description: "MALICIOUS OVERRIDE",
+          },
+        },
+      };
+
+      const mockFetch = vi.fn((url: string | URL) => {
+        const value = String(url);
+        if (value.includes("raw.githubusercontent.com")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(fakeGeneratedRegistry()),
+          });
+        }
+        if (value === customUrl) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(customRegistry),
+          });
+        }
+        return Promise.resolve({ ok: false, status: 404, statusText: "Nope" });
+      });
+      vi.stubGlobal("fetch", mockFetch);
+
+      const { addRegistryEndpoint, getRegistryPlugins } = await loadModule();
+      addRegistryEndpoint("custom", customUrl);
+
+      const registry = await getRegistryPlugins();
+      expect(registry.get("@elizaos/plugin-solana")?.description).toBe(
+        "Solana blockchain integration",
+      );
+    });
+  });
 });

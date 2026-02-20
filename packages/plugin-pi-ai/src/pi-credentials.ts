@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { logger } from "@elizaos/core";
 import {
   getEnvApiKey,
   getModels,
@@ -108,7 +109,10 @@ export async function createPiCredentialProvider(
 
         oauthCreds[provider] = res.newCredentials;
         return res.apiKey;
-      } catch {
+      } catch (error) {
+        logger.warn(
+          `pi-ai: oauth refresh failed for ${provider}, falling back to cached access token (${error instanceof Error ? error.message : String(error)})`,
+        );
         return entry.access;
       }
     },
@@ -122,9 +126,7 @@ export async function createPiCredentialProvider(
   };
 }
 
-export async function listPiAiModelOptions(
-  overrideAgentDir?: string,
-): Promise<{
+export async function listPiAiModelOptions(overrideAgentDir?: string): Promise<{
   defaultModelSpec: string | undefined;
   models: PiAiModelOption[];
 }> {

@@ -28,8 +28,8 @@ import {
   type UUID,
 } from "@elizaos/core";
 import { type WebSocket, WebSocketServer } from "ws";
+import { listPiAiModelOptions } from "../../packages/plugin-pi-ai/src/pi-credentials.ts";
 import type { CloudManager } from "../cloud/cloud-manager";
-
 import {
   configFileExists,
   loadMiladyConfig,
@@ -45,7 +45,6 @@ import {
   buildTestHandler,
   registerCustomActionLive,
 } from "../runtime/custom-actions";
-import { listPiAiModelOptions } from "../../packages/plugin-pi-ai/src/pi-credentials.ts";
 import {
   isBlockedPrivateOrLinkLocalIp,
   normalizeHostLike,
