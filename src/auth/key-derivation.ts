@@ -20,6 +20,16 @@ import { logger } from "@elizaos/core";
 const MILAIDY_HOME =
   process.env.MILAIDY_HOME ?? path.join(os.homedir(), ".milaidy");
 const FALLBACK_ID_FILE = path.join(MILAIDY_HOME, ".machine-id");
+const DEFAULT_SECRET_SALT_VALUES = new Set([
+  "",
+  "default",
+  "changeme",
+  "change-me",
+  "development",
+  "development-only",
+  "dev-only",
+  "secret",
+]);
 
 /** Cached machine ID. */
 let _cachedMachineId: string | null = null;
@@ -58,6 +68,63 @@ export function getMachineId(): string {
   _cachedMachineId = getOrCreateFallbackId();
   logger.debug("[key-derivation] Using fallback machine ID");
   return _cachedMachineId;
+}
+
+function normalizedSecret(
+  value: string | undefined,
+  allowDefaults: boolean,
+): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  if (!allowDefaults) {
+    const normalized = trimmed.toLowerCase();
+    if (DEFAULT_SECRET_SALT_VALUES.has(normalized)) {
+      return null;
+    }
+  }
+  return trimmed;
+}
+
+/**
+ * Build passphrase candidates for credential encryption/decryption.
+ *
+ * Order matters:
+ * 1. Dedicated credentials master key (`MILAIDY_CREDENTIALS_MASTER_KEY`)
+ * 2. Application secret salt (`SECRET_SALT`) when non-default
+ * 3. API auth token (`MILAIDY_API_TOKEN`) as stable fallback
+ * 4. Machine-bound legacy key (for backwards compatibility only)
+ */
+export function getCredentialPassphraseCandidates(
+  env: NodeJS.ProcessEnv = process.env,
+): string[] {
+  const candidates: string[] = [];
+  const seen = new Set<string>();
+
+  const pushCandidate = (label: string, secret: string | null): void => {
+    if (!secret) return;
+    const passphrase = `milaidy:${label}:v1:${secret}`;
+    if (seen.has(passphrase)) return;
+    seen.add(passphrase);
+    candidates.push(passphrase);
+  };
+
+  pushCandidate(
+    "credentials-master",
+    normalizedSecret(env.MILAIDY_CREDENTIALS_MASTER_KEY, true),
+  );
+  pushCandidate(
+    "secret-salt",
+    normalizedSecret(env.SECRET_SALT, false),
+  );
+  pushCandidate(
+    "api-token",
+    normalizedSecret(env.MILAIDY_API_TOKEN, true),
+  );
+
+  const user = env.USER ?? env.USERNAME ?? "default";
+  pushCandidate("machine-legacy", `${getMachineId()}:${user}`);
+
+  return candidates;
 }
 
 /**

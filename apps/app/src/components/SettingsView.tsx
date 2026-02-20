@@ -13,7 +13,12 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useApp, THEMES } from "../AppContext";
-import { client, type PluginParamDef, type OnboardingOptions } from "../api-client";
+import {
+  client,
+  type PluginParamDef,
+  type OnboardingOptions,
+  type SubscriptionStatusProvider,
+} from "../api-client";
 import { ConfigPageView } from "./ConfigPageView";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer";
 import { MediaSettingsSection } from "./MediaSettingsSection";
@@ -87,6 +92,20 @@ function formatByteSize(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
   if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${bytes} B`;
+}
+
+type SubscriptionProviderId = "anthropic-subscription" | "openai-subscription";
+
+const SUBSCRIPTION_PROVIDER_BY_PLUGIN: Record<string, SubscriptionProviderId> = {
+  anthropic: "anthropic-subscription",
+  openai: "openai-subscription",
+};
+
+function formatSubscriptionExpiry(expiresAt: number | null): string {
+  if (!expiresAt) return "Not connected";
+  const date = new Date(expiresAt);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  return date.toLocaleString();
 }
 
 /* ── SettingsView ─────────────────────────────────────────────────────── */
@@ -166,6 +185,21 @@ export function SettingsView() {
   const [piAiSaving, setPiAiSaving] = useState(false);
   const [piAiSaveSuccess, setPiAiSaveSuccess] = useState(false);
 
+  /* ── Subscription OAuth state ───────────────────────────────────── */
+  const [subscriptionStatusByProvider, setSubscriptionStatusByProvider] = useState<
+    Partial<Record<SubscriptionProviderId, SubscriptionStatusProvider>>
+  >({});
+  const [subscriptionStatusLoading, setSubscriptionStatusLoading] = useState(false);
+  const [subscriptionError, setSubscriptionError] = useState<string | null>(null);
+  const [subscriptionSuccess, setSubscriptionSuccess] = useState<string | null>(null);
+  const [subscriptionBusyByProvider, setSubscriptionBusyByProvider] = useState<
+    Partial<Record<SubscriptionProviderId, boolean>>
+  >({});
+  const [openaiOAuthStarted, setOpenaiOAuthStarted] = useState(false);
+  const [openaiCallbackUrl, setOpenaiCallbackUrl] = useState("");
+  const [anthropicOAuthStarted, setAnthropicOAuthStarted] = useState(false);
+  const [anthropicCode, setAnthropicCode] = useState("");
+
   useEffect(() => {
     void loadPlugins();
     void loadUpdateStatus();
@@ -209,6 +243,36 @@ export function SettingsView() {
       } catch { /* ignore */ }
     })();
   }, [loadPlugins, loadUpdateStatus, checkExtensionStatus]);
+
+  const loadSubscriptionStatus = useCallback(async () => {
+    setSubscriptionStatusLoading(true);
+    try {
+      const response = await client.getSubscriptionStatus();
+      const mapped: Partial<Record<SubscriptionProviderId, SubscriptionStatusProvider>> = {};
+      for (const provider of response.providers) {
+        const id =
+          provider.provider === "openai-codex"
+            ? "openai-subscription"
+            : provider.provider;
+        if (id === "openai-subscription" || id === "anthropic-subscription") {
+          mapped[id] = provider;
+        }
+      }
+      setSubscriptionStatusByProvider(mapped);
+    } catch (err) {
+      setSubscriptionError(
+        err instanceof Error
+          ? `Failed to load OAuth status: ${err.message}`
+          : "Failed to load OAuth status",
+      );
+    } finally {
+      setSubscriptionStatusLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadSubscriptionStatus();
+  }, [loadSubscriptionStatus]);
 
   /* ── Derived ──────────────────────────────────────────────────────── */
 
@@ -460,6 +524,138 @@ export function SettingsView() {
       void handlePluginConfigSave(pluginId, values);
     },
     [pluginFieldValues, handlePluginConfigSave],
+  );
+
+  const setSubscriptionBusy = useCallback(
+    (provider: SubscriptionProviderId, busy: boolean) => {
+      setSubscriptionBusyByProvider((prev) => ({ ...prev, [provider]: busy }));
+    },
+    [],
+  );
+
+  const notifySubscriptionSuccess = useCallback((message: string) => {
+    setSubscriptionSuccess(message);
+    setTimeout(() => setSubscriptionSuccess(null), 2500);
+  }, []);
+
+  const handleStartSubscriptionOAuth = useCallback(
+    async (provider: SubscriptionProviderId) => {
+      setSubscriptionError(null);
+      setSubscriptionSuccess(null);
+      setSubscriptionBusy(provider, true);
+      try {
+        if (provider === "openai-subscription") {
+          const res = await client.startOpenAILogin();
+          if (!res.authUrl) throw new Error("OpenAI OAuth URL missing");
+          window.open(res.authUrl, "openai-oauth", "width=500,height=700,top=50,left=200");
+          setOpenaiOAuthStarted(true);
+          setOpenaiCallbackUrl("");
+        } else {
+          const res = await client.startAnthropicLogin();
+          if (!res.authUrl) throw new Error("Anthropic OAuth URL missing");
+          window.open(res.authUrl, "anthropic-oauth", "width=600,height=700,top=50,left=200");
+          setAnthropicOAuthStarted(true);
+          setAnthropicCode("");
+        }
+      } catch (err) {
+        setSubscriptionError(
+          err instanceof Error ? err.message : "Failed to start OAuth flow",
+        );
+      } finally {
+        setSubscriptionBusy(provider, false);
+      }
+    },
+    [setSubscriptionBusy],
+  );
+
+  const handleCompleteOpenAIOAuth = useCallback(async () => {
+    const callback = openaiCallbackUrl.trim();
+    if (!callback) return;
+    setSubscriptionError(null);
+    setSubscriptionSuccess(null);
+    setSubscriptionBusy("openai-subscription", true);
+    try {
+      const result = await client.exchangeOpenAICode(callback);
+      if (!result.success) {
+        throw new Error("OpenAI OAuth exchange failed");
+      }
+      setOpenaiOAuthStarted(false);
+      setOpenaiCallbackUrl("");
+      await loadSubscriptionStatus();
+      await loadPlugins();
+      notifySubscriptionSuccess("OpenAI subscription connected");
+    } catch (err) {
+      setSubscriptionError(
+        err instanceof Error ? err.message : "Failed to complete OpenAI OAuth",
+      );
+    } finally {
+      setSubscriptionBusy("openai-subscription", false);
+    }
+  }, [
+    loadPlugins,
+    loadSubscriptionStatus,
+    notifySubscriptionSuccess,
+    openaiCallbackUrl,
+    setSubscriptionBusy,
+  ]);
+
+  const handleCompleteAnthropicOAuth = useCallback(async () => {
+    const code = anthropicCode.trim();
+    if (!code) return;
+    setSubscriptionError(null);
+    setSubscriptionSuccess(null);
+    setSubscriptionBusy("anthropic-subscription", true);
+    try {
+      const result = await client.exchangeAnthropicCode(code);
+      if (!result.success) {
+        throw new Error("Anthropic OAuth exchange failed");
+      }
+      setAnthropicOAuthStarted(false);
+      setAnthropicCode("");
+      await loadSubscriptionStatus();
+      await loadPlugins();
+      notifySubscriptionSuccess("Anthropic subscription connected");
+    } catch (err) {
+      setSubscriptionError(
+        err instanceof Error ? err.message : "Failed to complete Anthropic OAuth",
+      );
+    } finally {
+      setSubscriptionBusy("anthropic-subscription", false);
+    }
+  }, [
+    anthropicCode,
+    loadPlugins,
+    loadSubscriptionStatus,
+    notifySubscriptionSuccess,
+    setSubscriptionBusy,
+  ]);
+
+  const handleSubscriptionDisconnect = useCallback(
+    async (provider: SubscriptionProviderId) => {
+      setSubscriptionError(null);
+      setSubscriptionSuccess(null);
+      setSubscriptionBusy(provider, true);
+      try {
+        await client.disconnectSubscription(provider);
+        if (provider === "openai-subscription") {
+          setOpenaiOAuthStarted(false);
+          setOpenaiCallbackUrl("");
+        } else {
+          setAnthropicOAuthStarted(false);
+          setAnthropicCode("");
+        }
+        await loadSubscriptionStatus();
+        await loadPlugins();
+        notifySubscriptionSuccess("Subscription disconnected");
+      } catch (err) {
+        setSubscriptionError(
+          err instanceof Error ? err.message : "Failed to disconnect subscription",
+        );
+      } finally {
+        setSubscriptionBusy(provider, false);
+      }
+    },
+    [loadPlugins, loadSubscriptionStatus, notifySubscriptionSuccess, setSubscriptionBusy],
   );
 
 
@@ -801,11 +997,24 @@ export function SettingsView() {
               )}
 
               {/* ── Local provider settings ──────────────────────────── */}
-              {!isCloudSelected && selectedProvider && selectedProvider.parameters.length > 0 && (() => {
+              {!isCloudSelected && selectedProvider && (() => {
                 const isSaving = pluginSaving.has(selectedProvider.id);
                 const saveSuccess = pluginSaveSuccess.has(selectedProvider.id);
                 const params = selectedProvider.parameters;
                 const setCount = params.filter((p: PluginParamDef) => p.isSet).length;
+                const hasPluginParams = params.length > 0;
+                const subscriptionProviderId =
+                  SUBSCRIPTION_PROVIDER_BY_PLUGIN[selectedProvider.id] ?? null;
+                const supportsSubscriptionOAuth = subscriptionProviderId !== null;
+                const providerStatus = subscriptionProviderId
+                  ? (subscriptionStatusByProvider[subscriptionProviderId] ?? null)
+                  : null;
+                const providerBusy = subscriptionProviderId
+                  ? subscriptionBusyByProvider[subscriptionProviderId] === true
+                  : false;
+                const isConfigured = selectedProvider.configured || Boolean(providerStatus?.configured);
+
+                if (!hasPluginParams && !supportsSubscriptionOAuth) return null;
 
                 return (
                   <div className="mt-4 pt-4 border-t border-[var(--border)]">
@@ -815,21 +1024,152 @@ export function SettingsView() {
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-[11px] text-[var(--muted)]">
-                          {setCount}/{params.length} configured
+                          {hasPluginParams ? `${setCount}/${params.length} configured` : "OAuth authorization"}
                         </span>
                         <span
                           className="text-[11px] px-2 py-[3px] border"
                           style={{
-                            borderColor: selectedProvider.configured ? "#2d8a4e" : "var(--warning,#f39c12)",
-                            color: selectedProvider.configured ? "#2d8a4e" : "var(--warning,#f39c12)",
+                            borderColor: isConfigured ? "#2d8a4e" : "var(--warning,#f39c12)",
+                            color: isConfigured ? "#2d8a4e" : "var(--warning,#f39c12)",
                           }}
                         >
-                          {selectedProvider.configured ? "Configured" : "Needs Setup"}
+                          {isConfigured ? "Configured" : "Needs Setup"}
                         </span>
                       </div>
                     </div>
 
-                    {(() => {
+                    {supportsSubscriptionOAuth && subscriptionProviderId && (
+                      <div className="mb-4 p-3 border border-[var(--border)] bg-[var(--card)]">
+                        <div className="flex justify-between items-center mb-2">
+                          <div className="text-xs font-semibold">Subscription OAuth</div>
+                          <span
+                            className={`text-[10px] px-2 py-[2px] border ${
+                              providerStatus?.configured && providerStatus?.valid
+                                ? "text-[var(--ok,#16a34a)] border-[var(--ok,#16a34a)]"
+                                : "text-[var(--warning,#f39c12)] border-[var(--warning,#f39c12)]"
+                            }`}
+                          >
+                            {providerStatus?.configured && providerStatus?.valid
+                              ? "Connected"
+                              : providerStatus?.configured
+                                ? "Expired"
+                                : "Not connected"}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-[var(--muted)] mb-3">
+                          <div>
+                            Expires: {formatSubscriptionExpiry(providerStatus?.expiresAt ?? null)}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <button
+                            className="btn text-xs py-[5px] px-3 !mt-0 !bg-transparent !border-[var(--border)] !text-[var(--muted)] hover:!text-[var(--text)] hover:!border-[var(--accent)]"
+                            onClick={() => void loadSubscriptionStatus()}
+                            disabled={subscriptionStatusLoading || providerBusy}
+                          >
+                            {subscriptionStatusLoading ? "Refreshing..." : "Refresh Status"}
+                          </button>
+                          {providerStatus?.configured ? (
+                            <button
+                              className="btn text-xs py-[5px] px-3 !mt-0 !bg-transparent !border-[var(--danger,#e74c3c)] !text-[var(--danger,#e74c3c)]"
+                              onClick={() => void handleSubscriptionDisconnect(subscriptionProviderId)}
+                              disabled={providerBusy}
+                            >
+                              {providerBusy ? "Disconnecting..." : "Disconnect"}
+                            </button>
+                          ) : (
+                            <button
+                              className="btn text-xs py-[5px] px-3 !mt-0"
+                              onClick={() => void handleStartSubscriptionOAuth(subscriptionProviderId)}
+                              disabled={providerBusy}
+                            >
+                              {providerBusy ? "Starting..." : "Connect OAuth"}
+                            </button>
+                          )}
+                        </div>
+
+                        {subscriptionProviderId === "openai-subscription" && openaiOAuthStarted && (
+                          <div className="space-y-2">
+                            <div className="text-[11px] text-[var(--muted)]">
+                              Paste the full callback URL from the OpenAI login redirect.
+                            </div>
+                            <input
+                              type="text"
+                              className="w-full px-2.5 py-[7px] border border-[var(--border)] bg-[var(--card)] text-[13px] font-[var(--mono)] transition-colors focus:border-[var(--accent)] focus:outline-none"
+                              placeholder="http://localhost:1455/auth/callback?code=..."
+                              value={openaiCallbackUrl}
+                              onChange={(e) => setOpenaiCallbackUrl(e.target.value)}
+                            />
+                            <div className="flex items-center gap-2">
+                              <button
+                                className="btn text-xs py-[5px] px-3 !mt-0"
+                                onClick={() => void handleCompleteOpenAIOAuth()}
+                                disabled={providerBusy || !openaiCallbackUrl.trim()}
+                              >
+                                {providerBusy ? "Completing..." : "Complete OpenAI Login"}
+                              </button>
+                              <button
+                                className="btn text-xs py-[5px] px-3 !mt-0 !bg-transparent !border-[var(--border)] !text-[var(--muted)] hover:!text-[var(--text)]"
+                                onClick={() => {
+                                  setOpenaiOAuthStarted(false);
+                                  setOpenaiCallbackUrl("");
+                                }}
+                                disabled={providerBusy}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {subscriptionProviderId === "anthropic-subscription" && anthropicOAuthStarted && (
+                          <div className="space-y-2">
+                            <div className="text-[11px] text-[var(--muted)]">
+                              Paste the authorization code returned by Anthropic.
+                            </div>
+                            <input
+                              type="text"
+                              className="w-full px-2.5 py-[7px] border border-[var(--border)] bg-[var(--card)] text-[13px] font-[var(--mono)] transition-colors focus:border-[var(--accent)] focus:outline-none"
+                              placeholder="Authorization code..."
+                              value={anthropicCode}
+                              onChange={(e) => setAnthropicCode(e.target.value)}
+                            />
+                            <div className="flex items-center gap-2">
+                              <button
+                                className="btn text-xs py-[5px] px-3 !mt-0"
+                                onClick={() => void handleCompleteAnthropicOAuth()}
+                                disabled={providerBusy || !anthropicCode.trim()}
+                              >
+                                {providerBusy ? "Completing..." : "Complete Anthropic Login"}
+                              </button>
+                              <button
+                                className="btn text-xs py-[5px] px-3 !mt-0 !bg-transparent !border-[var(--border)] !text-[var(--muted)] hover:!text-[var(--text)]"
+                                onClick={() => {
+                                  setAnthropicOAuthStarted(false);
+                                  setAnthropicCode("");
+                                }}
+                                disabled={providerBusy}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {subscriptionError && (
+                          <div className="text-[11px] text-[var(--danger,#e74c3c)] mt-2">
+                            {subscriptionError}
+                          </div>
+                        )}
+                        {subscriptionSuccess && (
+                          <div className="text-[11px] text-[var(--ok,#16a34a)] mt-2">
+                            {subscriptionSuccess}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {hasPluginParams && (() => {
                       const properties: Record<string, Record<string, unknown>> = {};
                       const required: string[] = [];
                       const hints: Record<string, ConfigUiHint> = {};
@@ -875,29 +1215,31 @@ export function SettingsView() {
                       );
                     })()}
 
-                    <div className="flex justify-between items-center mt-3">
-                      <div className="flex items-center gap-2">
+                    {hasPluginParams && (
+                      <div className="flex justify-between items-center mt-3">
+                        <div className="flex items-center gap-2">
+                          <button
+                            className="btn text-xs py-[5px] px-3.5 !mt-0 !bg-transparent !border-[var(--border)] !text-[var(--muted)] hover:!text-[var(--text)] hover:!border-[var(--accent)]"
+                            onClick={() => void handleFetchModels(selectedProvider.id)}
+                            disabled={modelsFetching}
+                          >
+                            {modelsFetching ? "Fetching..." : "Fetch Models"}
+                          </button>
+                          {modelsFetchResult && (
+                            <span className={`text-[11px] ${modelsFetchResult.startsWith("Error") ? "text-[var(--danger,#e74c3c)]" : "text-[var(--ok,#16a34a)]"}`}>
+                              {modelsFetchResult}
+                            </span>
+                          )}
+                        </div>
                         <button
-                          className="btn text-xs py-[5px] px-3.5 !mt-0 !bg-transparent !border-[var(--border)] !text-[var(--muted)] hover:!text-[var(--text)] hover:!border-[var(--accent)]"
-                          onClick={() => void handleFetchModels(selectedProvider.id)}
-                          disabled={modelsFetching}
+                          className={`btn text-xs py-[5px] px-4 !mt-0 ${saveSuccess ? "!bg-[var(--ok,#16a34a)] !border-[var(--ok,#16a34a)]" : ""}`}
+                          onClick={() => handlePluginSave(selectedProvider.id)}
+                          disabled={isSaving}
                         >
-                          {modelsFetching ? "Fetching..." : "Fetch Models"}
+                          {isSaving ? "Saving..." : saveSuccess ? "Saved" : "Save"}
                         </button>
-                        {modelsFetchResult && (
-                          <span className={`text-[11px] ${modelsFetchResult.startsWith("Error") ? "text-[var(--danger,#e74c3c)]" : "text-[var(--ok,#16a34a)]"}`}>
-                            {modelsFetchResult}
-                          </span>
-                        )}
                       </div>
-                      <button
-                        className={`btn text-xs py-[5px] px-4 !mt-0 ${saveSuccess ? "!bg-[var(--ok,#16a34a)] !border-[var(--ok,#16a34a)]" : ""}`}
-                        onClick={() => handlePluginSave(selectedProvider.id)}
-                        disabled={isSaving}
-                      >
-                        {isSaving ? "Saving..." : saveSuccess ? "Saved" : "Save"}
-                      </button>
-                    </div>
+                    )}
                   </div>
                 );
               })()}

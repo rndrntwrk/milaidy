@@ -24,6 +24,7 @@ import type { StoredCredentials } from "./types.js";
 // Mock machine ID
 vi.mock("./key-derivation.js", () => ({
   getMachineId: () => "test-machine-id-12345",
+  getCredentialPassphraseCandidates: () => ["test-passphrase-legacy"],
 }));
 
 // Test directory

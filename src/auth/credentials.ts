@@ -20,9 +20,23 @@ import type {
 
 /** Buffer before expiry to trigger refresh (5 minutes). */
 const REFRESH_BUFFER_MS = 5 * 60 * 1000;
+const MIN_REFRESH_LOOP_MS = 30_000;
+const DEFAULT_REFRESH_LOOP_MS = 2 * 60 * 1000;
 
 /** Whether migration has been attempted this session. */
 let _migrationAttempted = false;
+let _refreshInterval: ReturnType<typeof setInterval> | null = null;
+let _refreshInFlight: Promise<void> | null = null;
+
+function clearSubscriptionEnv(provider: SubscriptionProvider): void {
+  if (provider === "anthropic-subscription") {
+    delete process.env.ANTHROPIC_API_KEY;
+    return;
+  }
+  if (provider === "openai-codex") {
+    delete process.env.OPENAI_API_KEY;
+  }
+}
 
 /**
  * Ensure migration has been attempted.
@@ -179,11 +193,23 @@ export async function getSubscriptionStatus(): Promise<
   const results = await Promise.all(
     providers.map(async (provider) => {
       const stored = await loadCredentials(provider);
+      if (!stored) {
+        return {
+          provider,
+          configured: false,
+          valid: false,
+          expiresAt: null,
+        };
+      }
+
+      const token = await getAccessToken(provider);
+      const latest = await loadCredentials(provider);
+      const expiresAt = latest?.credentials.expires ?? stored.credentials.expires;
       return {
         provider,
-        configured: stored !== null,
-        valid: stored ? stored.credentials.expires > Date.now() : false,
-        expiresAt: stored?.credentials.expires ?? null,
+        configured: true,
+        valid: Boolean(token) && expiresAt > Date.now(),
+        expiresAt,
       };
     }),
   );
@@ -206,6 +232,8 @@ export async function applySubscriptionCredentials(): Promise<void> {
     logger.info(
       "[auth] Applied Anthropic subscription credentials to environment",
     );
+  } else {
+    clearSubscriptionEnv("anthropic-subscription");
   }
 
   // OpenAI Codex subscription → set OPENAI_API_KEY
@@ -215,6 +243,60 @@ export async function applySubscriptionCredentials(): Promise<void> {
     logger.info(
       "[auth] Applied OpenAI Codex subscription credentials to environment",
     );
+  } else {
+    clearSubscriptionEnv("openai-codex");
+  }
+}
+
+async function runRefreshPass(reason: string): Promise<void> {
+  if (_refreshInFlight) {
+    return _refreshInFlight;
+  }
+
+  _refreshInFlight = (async () => {
+    try {
+      await applySubscriptionCredentials();
+      logger.debug(`[auth] Subscription refresh pass complete (${reason})`);
+    } catch (err) {
+      logger.warn(
+        `[auth] Subscription refresh pass failed (${reason}): ${err instanceof Error ? err.message : String(err)}`,
+      );
+    } finally {
+      _refreshInFlight = null;
+    }
+  })();
+
+  return _refreshInFlight;
+}
+
+export async function startSubscriptionCredentialRefreshLoop(
+  intervalMs = DEFAULT_REFRESH_LOOP_MS,
+): Promise<void> {
+  const normalizedInterval = Number.isFinite(intervalMs)
+    ? Math.max(intervalMs, MIN_REFRESH_LOOP_MS)
+    : DEFAULT_REFRESH_LOOP_MS;
+
+  stopSubscriptionCredentialRefreshLoop();
+  await runRefreshPass("start");
+
+  _refreshInterval = setInterval(() => {
+    void runRefreshPass("interval");
+  }, normalizedInterval);
+
+  if (typeof _refreshInterval.unref === "function") {
+    _refreshInterval.unref();
+  }
+
+  logger.info(
+    `[auth] Subscription refresh loop active (${Math.round(normalizedInterval / 1000)}s interval)`,
+  );
+}
+
+export function stopSubscriptionCredentialRefreshLoop(): void {
+  if (_refreshInterval) {
+    clearInterval(_refreshInterval);
+    _refreshInterval = null;
+    logger.info("[auth] Subscription refresh loop stopped");
   }
 }
 

@@ -17,7 +17,7 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { logger } from "@elizaos/core";
-import { getMachineId } from "./key-derivation.js";
+import { getCredentialPassphraseCandidates } from "./key-derivation.js";
 
 // ---------- Types ----------
 
@@ -73,14 +73,9 @@ const SCRYPT_PARAMS = {
 } as const;
 
 /**
- * Derive an encryption key from machine-specific entropy.
- * Uses machine ID + username as passphrase material.
+ * Derive an encryption key from the selected credential passphrase material.
  */
-function deriveKey(salt: Buffer): Buffer {
-  const machineId = getMachineId();
-  const user = process.env.USER ?? process.env.USERNAME ?? "default";
-  const passphrase = `milaidy:${machineId}:${user}`;
-
+function deriveKey(salt: Buffer, passphrase: string): Buffer {
   return scryptSync(passphrase, salt, 32, {
     N: SCRYPT_PARAMS.N,
     r: SCRYPT_PARAMS.r,
@@ -96,7 +91,11 @@ function deriveKey(salt: Buffer): Buffer {
  */
 export function encrypt(plaintext: string): EncryptedPayload {
   const salt = randomBytes(32);
-  const key = deriveKey(salt);
+  const passphrases = getCredentialPassphraseCandidates();
+  if (passphrases.length === 0) {
+    throw new Error("No credential passphrase candidates available");
+  }
+  const key = deriveKey(salt, passphrases[0]);
   const iv = randomBytes(12); // 96-bit IV for GCM mode
 
   const cipher = createCipheriv("aes-256-gcm", key, iv);
@@ -135,24 +134,37 @@ export function decrypt(payload: EncryptedPayload): string {
   }
 
   const salt = Buffer.from(payload.keyDerivation.salt, "base64");
-  const key = deriveKey(salt);
   const iv = Buffer.from(payload.iv, "base64");
   const authTag = Buffer.from(payload.authTag, "base64");
   const ciphertext = Buffer.from(payload.ciphertext, "base64");
 
-  const decipher = createDecipheriv("aes-256-gcm", key, iv);
-  decipher.setAuthTag(authTag);
-
-  try {
-    return Buffer.concat([
-      decipher.update(ciphertext),
-      decipher.final(),
-    ]).toString("utf8");
-  } catch (err) {
-    throw new Error(
-      `Decryption failed: ${err instanceof Error ? err.message : "authentication failed"}`,
-    );
+  const passphrases = getCredentialPassphraseCandidates();
+  if (passphrases.length === 0) {
+    throw new Error("Decryption failed: no key candidates available");
   }
+
+  for (let i = 0; i < passphrases.length; i += 1) {
+    const key = deriveKey(salt, passphrases[i]);
+    const decipher = createDecipheriv("aes-256-gcm", key, iv);
+    decipher.setAuthTag(authTag);
+
+    try {
+      const plaintext = Buffer.concat([
+        decipher.update(ciphertext),
+        decipher.final(),
+      ]).toString("utf8");
+      if (i > 0) {
+        logger.debug(
+          `[secure-storage] Decrypted payload with fallback key candidate #${i + 1}`,
+        );
+      }
+      return plaintext;
+    } catch {
+      // Try next passphrase candidate.
+    }
+  }
+
+  throw new Error("Decryption failed: authentication failed");
 }
 
 /**

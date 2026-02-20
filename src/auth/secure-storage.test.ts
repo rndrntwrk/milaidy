@@ -19,12 +19,21 @@ import {
 } from "./secure-storage.js";
 import { MemoryBackend } from "./backends/memory.js";
 
+const mockPassphraseState = vi.hoisted(() => ({
+  candidates: ["test-passphrase-legacy"],
+}));
+
 // Mock machine ID for consistent testing
 vi.mock("./key-derivation.js", () => ({
   getMachineId: () => "test-machine-id-12345",
+  getCredentialPassphraseCandidates: () => mockPassphraseState.candidates,
 }));
 
 describe("encrypt/decrypt", () => {
+  beforeEach(() => {
+    mockPassphraseState.candidates = ["test-passphrase-legacy"];
+  });
+
   it("encrypts and decrypts a simple string", () => {
     const plaintext = "hello world";
     const encrypted = encrypt(plaintext);
@@ -119,6 +128,14 @@ describe("encrypt/decrypt", () => {
     expect(() => decrypt(encrypted as EncryptedPayload)).toThrow(
       "Unsupported algorithm",
     );
+  });
+
+  it("decrypts legacy payload after passphrase rotation", () => {
+    mockPassphraseState.candidates = ["legacy-passphrase"];
+    const encrypted = encrypt("persistent-secret");
+
+    mockPassphraseState.candidates = ["new-passphrase", "legacy-passphrase"];
+    expect(decrypt(encrypted)).toBe("persistent-secret");
   });
 });
 

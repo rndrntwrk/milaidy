@@ -474,6 +474,14 @@ export interface PluginInfo {
   icon?: string | null;
 }
 
+export interface SubscriptionStatusProvider {
+  provider: "anthropic-subscription" | "openai-subscription" | string;
+  canonicalProvider?: "anthropic-subscription" | "openai-codex" | string;
+  configured: boolean;
+  valid: boolean;
+  expiresAt: number | null;
+}
+
 export interface CorePluginEntry {
   npmName: string;
   id: string;
@@ -1882,6 +1890,12 @@ export class MilaidyClient {
     return this.fetch("/api/subscription/anthropic/start", { method: "POST" });
   }
 
+  async getSubscriptionStatus(): Promise<{
+    providers: SubscriptionStatusProvider[];
+  }> {
+    return this.fetch("/api/subscription/status");
+  }
+
   async exchangeAnthropicCode(code: string): Promise<{ success: boolean; expiresAt?: string }> {
     return this.fetch("/api/subscription/anthropic/exchange", {
       method: "POST",
@@ -1907,6 +1921,14 @@ export class MilaidyClient {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ code }),
+    });
+  }
+
+  async disconnectSubscription(
+    provider: "anthropic-subscription" | "openai-subscription" | "openai-codex",
+  ): Promise<{ success: boolean }> {
+    return this.fetch(`/api/subscription/${encodeURIComponent(provider)}`, {
+      method: "DELETE",
     });
   }
 

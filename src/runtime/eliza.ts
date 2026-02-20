@@ -2253,8 +2253,12 @@ export async function startEliza(
 
   // 2f. Apply subscription-based credentials (Claude Max, Codex Max)
   try {
-    const { applySubscriptionCredentials } = await import("../auth/index");
+    const {
+      applySubscriptionCredentials,
+      startSubscriptionCredentialRefreshLoop,
+    } = await import("../auth/index");
     await applySubscriptionCredentials();
+    await startSubscriptionCredentialRefreshLoop();
   } catch (err) {
     logger.warn(`[milaidy] Failed to apply subscription credentials: ${err}`);
   }
@@ -2842,6 +2846,17 @@ export async function startEliza(
         logger.warn(`[milaidy] Sandbox shutdown error: ${formatError(err)}`);
       }
       try {
+        try {
+          const { stopSubscriptionCredentialRefreshLoop } = await import(
+            "../auth/index"
+          );
+          stopSubscriptionCredentialRefreshLoop();
+        } catch (authErr) {
+          logger.warn(
+            `[milaidy] Failed to stop subscription refresh loop: ${formatError(authErr)}`,
+          );
+        }
+
         await embeddingManager.dispose();
       } catch (err) {
         logger.warn(
@@ -2946,10 +2961,14 @@ export async function startEliza(
           // Apply subscription-based credentials (Claude Max, Codex Max)
           // that may have been set up during onboarding.
           try {
-            const { applySubscriptionCredentials } = await import(
+            const {
+              applySubscriptionCredentials,
+              startSubscriptionCredentialRefreshLoop,
+            } = await import(
               "../auth/index"
             );
             await applySubscriptionCredentials();
+            await startSubscriptionCredentialRefreshLoop();
           } catch (subErr) {
             logger.warn(
               `[milaidy] Hot-reload: subscription credentials: ${formatError(subErr)}`,

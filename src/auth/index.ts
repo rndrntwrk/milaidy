@@ -21,6 +21,8 @@ export {
   hasValidCredentials,
   loadCredentials,
   saveCredentials,
+  startSubscriptionCredentialRefreshLoop,
+  stopSubscriptionCredentialRefreshLoop,
 } from "./credentials.js";
 export type { CodexFlow } from "./openai-codex.js";
 // OpenAI Codex (ChatGPT Plus/Pro)
@@ -47,7 +49,11 @@ export {
 } from "./migration.js";
 
 // Key derivation
-export { getMachineId, resetMachineId } from "./key-derivation.js";
+export {
+  getCredentialPassphraseCandidates,
+  getMachineId,
+  resetMachineId,
+} from "./key-derivation.js";
 
 // Types
 export type {

@@ -2922,6 +2922,50 @@ function getProviderOptions(): Array<{
   ];
 }
 
+type CanonicalSubscriptionProvider = "anthropic-subscription" | "openai-codex";
+
+function toCanonicalSubscriptionProvider(
+  provider: string | null | undefined,
+): CanonicalSubscriptionProvider | null {
+  if (!provider) return null;
+  if (provider === "anthropic-subscription") return "anthropic-subscription";
+  if (provider === "openai-subscription" || provider === "openai-codex") {
+    return "openai-codex";
+  }
+  return null;
+}
+
+function toUiSubscriptionProvider(
+  provider: CanonicalSubscriptionProvider,
+): "anthropic-subscription" | "openai-subscription" {
+  return provider === "openai-codex" ? "openai-subscription" : provider;
+}
+
+function clearSubscriptionProviderState(
+  provider: CanonicalSubscriptionProvider,
+  config: MilaidyConfig,
+): void {
+  const envKey =
+    provider === "anthropic-subscription"
+      ? "ANTHROPIC_API_KEY"
+      : "OPENAI_API_KEY";
+  delete process.env[envKey];
+
+  if (config.env && typeof config.env === "object") {
+    delete (config.env as Record<string, unknown>)[envKey];
+  }
+
+  const defaults = config.agents?.defaults as Record<string, unknown> | undefined;
+  if (!defaults) return;
+  const selected = defaults.subscriptionProvider;
+  if (
+    selected === provider ||
+    (provider === "openai-codex" && selected === "openai-subscription")
+  ) {
+    delete defaults.subscriptionProvider;
+  }
+}
+
 function getCloudProviderOptions(): Array<{
   id: string;
   name: string;
@@ -5046,7 +5090,12 @@ async function handleRequest(
   if (method === "GET" && pathname === "/api/subscription/status") {
     try {
       const { getSubscriptionStatus } = await import("../auth/index.js");
-      json(res, { providers: await getSubscriptionStatus() });
+      const providers = (await getSubscriptionStatus()).map((entry) => ({
+        ...entry,
+        provider: toUiSubscriptionProvider(entry.provider),
+        canonicalProvider: entry.provider,
+      }));
+      json(res, { providers });
     } catch (err) {
       error(res, `Failed to get subscription status: ${err}`, 500);
     }
@@ -5241,17 +5290,28 @@ async function handleRequest(
   // ── DELETE /api/subscription/:provider ───────────────────────────────────
   // Remove subscription credentials
   if (method === "DELETE" && pathname.startsWith("/api/subscription/")) {
-    const provider = pathname.split("/").pop();
-    if (provider === "anthropic-subscription" || provider === "openai-codex") {
-      try {
-        const { deleteCredentials } = await import("../auth/index.js");
-        await deleteCredentials(provider);
-        json(res, { success: true });
-      } catch (err) {
-        error(res, `Failed to delete credentials: ${err}`, 500);
-      }
-    } else {
-      error(res, `Unknown provider: ${provider}`, 400);
+    const requestedProvider = pathname.split("/").pop();
+    const provider = toCanonicalSubscriptionProvider(requestedProvider);
+    if (!provider) {
+      error(
+        res,
+        `Unknown provider: ${requestedProvider} (supported: anthropic-subscription, openai-subscription)`,
+        400,
+      );
+      return;
+    }
+
+    try {
+      const { deleteCredentials } = await import("../auth/index.js");
+      await deleteCredentials(provider);
+      clearSubscriptionProviderState(provider, state.config);
+      saveMilaidyConfig(state.config);
+      json(res, {
+        success: true,
+        provider: toUiSubscriptionProvider(provider),
+      });
+    } catch (err) {
+      error(res, `Failed to delete credentials: ${err}`, 500);
     }
     return;
   }
