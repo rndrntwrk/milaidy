@@ -99,6 +99,19 @@ const pairingSessions = new Map<string, PairingSession>();
 const failureTracking = new Map<string, { count: number; lastFailure: number }>();
 
 /**
+ * Test-only reset for module-level state.
+ *
+ * Pairing maintains in-memory maps for sessions and per-IP backoff tracking.
+ * Unit tests expect isolation across cases; exporting an explicit reset keeps
+ * production behavior unchanged while making test setup deterministic.
+ */
+export function __resetPairingStateForTests(): void {
+  pairingSessions.clear();
+  failureTracking.clear();
+  _authorizedDevices = null;
+}
+
+/**
  * Generate a cryptographically secure pairing code.
  */
 function generateCode(): string {

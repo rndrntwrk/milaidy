@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AgentRuntime } from "@elizaos/core";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { EventEmitter } from "node:events";
+import { Readable } from "node:stream";
 
 import { __testOnlyHandleRequest } from "../server.js";
 
@@ -93,7 +94,10 @@ describe("/api/agent/autonomy/execute-plan", () => {
   }
 
   function createMockReq(method: string, url: string, body?: unknown) {
-    const req = new EventEmitter() as IncomingMessage & EventEmitter;
+    const payload = body ? JSON.stringify(body) : "";
+    const req = new Readable({
+      read() {},
+    }) as unknown as IncomingMessage & EventEmitter;
     req.method = method;
     req.url = url;
     req.headers = { "content-type": "application/json" };
@@ -101,10 +105,9 @@ describe("/api/agent/autonomy/execute-plan", () => {
       remoteAddress: "127.0.0.1",
     };
 
-    const payload = body ? JSON.stringify(body) : "";
     const emitBody = () => {
-      if (payload) req.emit("data", Buffer.from(payload));
-      req.emit("end");
+      if (payload) req.push(Buffer.from(payload));
+      req.push(null);
     };
 
     return { req, emitBody };

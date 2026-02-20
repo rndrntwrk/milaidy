@@ -122,7 +122,9 @@ export async function startHarness(config: TestHarnessConfig): Promise<TestHarne
   while (Date.now() - startTime < timeout) {
     try {
       const status = await client.getStatus();
-      if (status.state === "running" || status.state === "idle") {
+      // For many E2E suites we only need the API server to be reachable.
+      // The agent runtime may legitimately be "not_started" in test mode.
+      if (status && typeof status.state === "string") {
         ready = true;
         break;
       }

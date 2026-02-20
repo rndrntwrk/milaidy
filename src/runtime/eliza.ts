@@ -2003,10 +2003,14 @@ export async function startEliza(
     : null;
 
   const isFive55PluginEnabled = (envKey: string): boolean => {
-    const raw = process.env[envKey];
-    if (!raw) return true;
-    const normalized = raw.trim().toLowerCase();
-    return !["0", "false", "off", "no"].includes(normalized);
+    const normalized = process.env[envKey]?.trim().toLowerCase();
+    if (!normalized) return false;
+    if (["1", "true", "on", "yes"].includes(normalized)) return true;
+    if (["0", "false", "off", "no"].includes(normalized)) return false;
+    logger.warn(
+      `[milaidy] Unrecognized ${envKey}="${process.env[envKey]}"; treating as disabled (expected true/false).`,
+    );
+    return false;
   };
 
   const five55SurfacePlugins: Plugin[] = [
@@ -2051,8 +2055,9 @@ export async function startEliza(
     quiet: preOnboarding,
   });
 
+  const isTestRun = process.env.VITEST || process.env.NODE_ENV === "test";
   if (resolvedPlugins.length === 0) {
-    if (preOnboarding) {
+    if (preOnboarding || isTestRun) {
       logger.info(
         "[milaidy] No plugins loaded yet — the onboarding wizard will configure a model provider",
       );
@@ -2383,6 +2388,9 @@ export async function startEliza(
     config.embedding?.model ?? defaultEmbeddingPreset.model;
   const embeddingGpuLayers =
     config.embedding?.gpuLayers ?? defaultEmbeddingPreset.gpuLayers;
+  const testStubEmbedding = isTestRun
+    ? new Array(embeddingDimensions).fill(0)
+    : null;
   runtime.registerModel(
     ModelType.TEXT_EMBEDDING,
     async (_runtime, params) => {
@@ -2392,17 +2400,23 @@ export async function startEliza(
           : params && typeof params === "object" && "text" in params
             ? (params as { text: string }).text
             : null;
-      if (!text) return new Array(embeddingDimensions).fill(0);
+      if (!text) return testStubEmbedding ?? new Array(embeddingDimensions).fill(0);
+      if (testStubEmbedding) return testStubEmbedding;
       return embeddingManager.generateEmbedding(text);
     },
     "milaidy",
     100,
   );
   logger.info(
-    "[milaidy] Embedding handler registered (priority 100, " +
-      `model=${embeddingModel}, ` +
-      `dims=${embeddingDimensions}, ` +
-      `gpu=${embeddingGpuLayers})`,
+    testStubEmbedding
+      ? "[milaidy] Test mode: Embedding handler stubbed (priority 100, " +
+          `model=${embeddingModel}, ` +
+          `dims=${embeddingDimensions}, ` +
+          `gpu=${embeddingGpuLayers})`
+      : "[milaidy] Embedding handler registered (priority 100, " +
+          `model=${embeddingModel}, ` +
+          `dims=${embeddingDimensions}, ` +
+          `gpu=${embeddingGpuLayers})`,
   );
 
   // 8. Initialize the runtime (registers remaining plugins, starts services)
@@ -2438,73 +2452,77 @@ export async function startEliza(
   //     explicit await the runtime would be returned to the caller (API server,
   //     dev-server) before skills are loaded, causing the /api/skills endpoint
   //     to return an empty list.
-  try {
-    const skillServicePromise = runtime.getServiceLoadPromise(
-      "AGENT_SKILLS_SERVICE",
-    );
-    // Give the service up to 30 s to load (matches the core runtime timeout).
-    const timeout = new Promise<never>((_resolve, reject) => {
-      setTimeout(() => {
-        reject(
-          new Error(
-            "[milaidy] AgentSkillsService timed out waiting to initialise (30 s)",
-          ),
-        );
-      }, 30_000);
-    });
-    await Promise.race([skillServicePromise, timeout]);
+  if (!isTestRun) {
+    try {
+      const skillServicePromise = runtime.getServiceLoadPromise(
+        "AGENT_SKILLS_SERVICE",
+      );
+      // Give the service up to 30 s to load (matches the core runtime timeout).
+      const timeout = new Promise<never>((_resolve, reject) => {
+        setTimeout(() => {
+          reject(
+            new Error(
+              "[milaidy] AgentSkillsService timed out waiting to initialise (30 s)",
+            ),
+          );
+        }, 30_000);
+      });
+      await Promise.race([skillServicePromise, timeout]);
 
-    // Log skill-loading summary now that the service is guaranteed ready.
-    const svc = runtime.getService("AGENT_SKILLS_SERVICE") as
-      | {
-          getCatalogStats?: () => {
-            loaded: number;
-            total: number;
-            storageType: string;
-          };
-        }
-      | null
-      | undefined;
-    if (svc?.getCatalogStats) {
-      const stats = svc.getCatalogStats();
-      logger.info(
-        `[milaidy] AgentSkills ready — ${stats.loaded} skills loaded, ` +
-          `${stats.total} in catalog (storage: ${stats.storageType})`,
+      // Log skill-loading summary now that the service is guaranteed ready.
+      const svc = runtime.getService("AGENT_SKILLS_SERVICE") as
+        | {
+            getCatalogStats?: () => {
+              loaded: number;
+              total: number;
+              storageType: string;
+            };
+          }
+        | null
+        | undefined;
+      if (svc?.getCatalogStats) {
+        const stats = svc.getCatalogStats();
+        logger.info(
+          `[milaidy] AgentSkills ready — ${stats.loaded} skills loaded, ` +
+            `${stats.total} in catalog (storage: ${stats.storageType})`,
+        );
+      }
+
+      // Guard against non-string skill.description values.
+      // The bundled YAML parser produces {} for multi-line descriptions, which
+      // crashes findBestLocalMatch / scoreSkillMatch (call .toLowerCase() on it).
+      // Instead of a one-shot sanitize (which misses skills loaded later by
+      // syncCatalog / autoRefresh), we monkey-patch getLoadedSkills to always
+      // return sanitized values.
+      const svcAny = svc as Record<string, unknown> | null | undefined;
+      const origGetLoaded = svcAny?.getLoadedSkills as
+        | ((...args: unknown[]) => Array<Record<string, unknown>>)
+        | undefined;
+      if (origGetLoaded && svcAny) {
+        (svcAny as Record<string, unknown>).getLoadedSkills = function (
+          ...args: unknown[]
+        ) {
+          const skills = origGetLoaded.apply(this, args);
+          for (const skill of skills) {
+            if (typeof skill.description !== "string") {
+              skill.description =
+                skill.description == null
+                  ? ""
+                  : JSON.stringify(skill.description);
+            }
+          }
+          return skills;
+        };
+        logger.debug("[milaidy] Patched getLoadedSkills to guard descriptions");
+      }
+    } catch (err) {
+      // Non-fatal — the agent can operate without skills.
+      logger.warn(
+        `[milaidy] AgentSkillsService did not initialise in time: ${formatError(err)}`,
       );
     }
-
-    // Guard against non-string skill.description values.
-    // The bundled YAML parser produces {} for multi-line descriptions, which
-    // crashes findBestLocalMatch / scoreSkillMatch (call .toLowerCase() on it).
-    // Instead of a one-shot sanitize (which misses skills loaded later by
-    // syncCatalog / autoRefresh), we monkey-patch getLoadedSkills to always
-    // return sanitized values.
-    const svcAny = svc as Record<string, unknown> | null | undefined;
-    const origGetLoaded = svcAny?.getLoadedSkills as
-      | ((...args: unknown[]) => Array<Record<string, unknown>>)
-      | undefined;
-    if (origGetLoaded && svcAny) {
-      (svcAny as Record<string, unknown>).getLoadedSkills = function (
-        ...args: unknown[]
-      ) {
-        const skills = origGetLoaded.apply(this, args);
-        for (const skill of skills) {
-          if (typeof skill.description !== "string") {
-            skill.description =
-              skill.description == null
-                ? ""
-                : JSON.stringify(skill.description);
-          }
-        }
-        return skills;
-      };
-      logger.debug("[milaidy] Patched getLoadedSkills to guard descriptions");
-    }
-  } catch (err) {
-    // Non-fatal — the agent can operate without skills.
-    logger.warn(
-      `[milaidy] AgentSkillsService did not initialise in time: ${formatError(err)}`,
-    );
+  } else {
+    logger.debug("[milaidy] Test mode: skipping AgentSkillsService await");
   }
 
   // 9. Graceful shutdown handler

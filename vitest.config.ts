@@ -26,6 +26,15 @@ export default defineConfig({
         "stubs",
         "empty-module.mjs",
       ),
+      // @elizaos/plugin-telegram is currently published without its dist/ output.
+      // We only need a tiny surface for unit tests of our telegram-enhanced wrapper,
+      // so point Vitest at a local stub.
+      "@elizaos/plugin-telegram": path.join(
+        repoRoot,
+        "test",
+        "stubs",
+        "plugin-telegram.mjs",
+      ),
     },
   },
   test: {

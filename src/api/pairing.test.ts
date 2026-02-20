@@ -12,6 +12,7 @@
 import crypto from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  __resetPairingStateForTests,
   cleanupExpiredSessions,
   createPairingSession,
   deleteDevice,
@@ -32,6 +33,10 @@ vi.mock("node:fs", async () => {
     writeFileSync: vi.fn(),
     mkdirSync: vi.fn(),
   };
+});
+
+beforeEach(() => {
+  __resetPairingStateForTests();
 });
 
 describe("createPairingSession", () => {
@@ -140,13 +145,14 @@ describe("verifyPairingSimple", () => {
   it("fails after maximum attempts", () => {
     const session = createPairingSession();
 
-    // Use up all attempts
+    // Use up all attempts. Backoff is per-IP, but attempt limits are per-session;
+    // vary the IP so we can deterministically hit maxAttempts without waiting.
     for (let i = 0; i < 5; i++) {
-      verifyPairingSimple(session.id, "WRONG-CODE", "10.0.0.1");
+      verifyPairingSimple(session.id, "WRONG-CODE", `10.0.0.${i + 1}`);
     }
 
     // Next attempt should fail with max attempts error
-    const result = verifyPairingSimple(session.id, session.code, "10.0.0.1");
+    const result = verifyPairingSimple(session.id, session.code, "10.0.0.99");
     expect(result.success).toBe(false);
     expect(result.error).toBe("Maximum attempts exceeded");
   });

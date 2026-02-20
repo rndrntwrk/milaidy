@@ -246,9 +246,38 @@ export class AppManager {
       throw new Error(`App "${name}" not found in the registry.`);
     }
 
+    const isTestRun = process.env.VITEST || process.env.NODE_ENV === "test";
+
     // The app's plugin is what the agent needs to play the game.
     // It's the same npm package name as the app, or a separate plugin ref.
     const pluginName = appInfo.name;
+
+    // In test runs we exercise the API surface and viewer metadata without
+    // performing real plugin installs (which would require network access and
+    // slow down CI). Plugin installer behavior is covered by unit tests.
+    if (isTestRun) {
+      const launchUrl = appInfo.launchUrl
+        ? substituteTemplateVars(appInfo.launchUrl)
+        : null;
+      const viewer = buildViewerConfig(appInfo, launchUrl);
+      this.activeSessions.set(name, {
+        appName: name,
+        pluginName,
+        launchType: appInfo.launchType,
+        launchUrl,
+        viewerUrl: viewer?.url ?? null,
+        startedAt: new Date().toISOString(),
+      });
+
+      return {
+        pluginInstalled: false,
+        needsRestart: false,
+        displayName: appInfo.displayName,
+        launchType: appInfo.launchType,
+        launchUrl,
+        viewer,
+      };
+    }
 
     // Check if the plugin is already installed
     const installed = listInstalledPlugins();

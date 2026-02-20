@@ -232,6 +232,68 @@ const LOCAL_APP_OVERRIDES: Readonly<Record<string, LocalAppOverride>> = {
   },
 };
 
+function fallbackAppDisplayName(packageName: string): string {
+  const bare = packageName.replace(/^@[^/]+\//, "");
+  return bare
+    .replace(/^app-/, "")
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function ensureFallbackApps(plugins: Map<string, RegistryPluginInfo>): void {
+  // Ensure a baseline set of local apps is available even when the registry
+  // cannot be fetched (offline / restricted networks). These are "wrappers"
+  // that provide viewer + launch metadata; install behavior is handled by the
+  // AppManager (and is skipped in test mode).
+  for (const [packageName, override] of Object.entries(LOCAL_APP_OVERRIDES)) {
+    const repoName = packageName.replace(/^@[^/]+\//, "");
+    const gitRepo = `elizaos/${repoName}`;
+
+    const existing = plugins.get(packageName);
+
+    const fallbackMeta: RegistryAppMeta = {
+      displayName:
+        override.displayName ??
+        existing?.appMeta?.displayName ??
+        fallbackAppDisplayName(packageName),
+      category: override.category ?? existing?.appMeta?.category ?? "game",
+      launchType:
+        override.launchType ??
+        existing?.appMeta?.launchType ??
+        (override.viewer ? "connect" : "url"),
+      launchUrl: override.launchUrl ?? existing?.appMeta?.launchUrl ?? null,
+      capabilities:
+        override.capabilities ?? existing?.appMeta?.capabilities ?? [],
+      viewer: existing?.appMeta?.viewer ?? override.viewer,
+    };
+
+    plugins.set(packageName, {
+      ...(existing ?? {}),
+      name: packageName,
+      gitRepo: existing?.gitRepo ?? gitRepo,
+      gitUrl: existing?.gitUrl ?? `https://github.com/${gitRepo}.git`,
+      description: existing?.description ?? "",
+      homepage: existing?.homepage ?? override.launchUrl ?? null,
+      topics: existing?.topics ?? [],
+      stars: existing?.stars ?? 0,
+      language: existing?.language ?? "TypeScript",
+      npm: existing?.npm ?? {
+        package: packageName,
+        v0Version: null,
+        v1Version: null,
+        v2Version: null,
+      },
+      git: existing?.git ?? { v0Branch: null, v1Branch: null, v2Branch: "main" },
+      supports: existing?.supports ?? { v0: false, v1: false, v2: true },
+      kind: "app",
+      appMeta: {
+        ...(existing?.appMeta ?? {}),
+        ...fallbackMeta,
+      },
+    });
+  }
+}
+
 function uniquePaths(paths: string[]): string[] {
   const seen = new Set<string>();
   const ordered: string[] = [];
@@ -783,12 +845,14 @@ export async function getRegistryPlugins(): Promise<
   Map<string, RegistryPluginInfo>
 > {
   if (memoryCache && Date.now() - memoryCache.fetchedAt < CACHE_TTL_MS) {
+    ensureFallbackApps(memoryCache.plugins);
     return memoryCache.plugins;
   }
 
   const fromFile = await readFileCache();
   if (fromFile) {
     await applyLocalWorkspaceApps(fromFile);
+    ensureFallbackApps(fromFile);
     memoryCache = { plugins: fromFile, fetchedAt: Date.now() };
     return fromFile;
   }
@@ -799,6 +863,7 @@ export async function getRegistryPlugins(): Promise<
   const plugins = await fetchFromNetwork();
   logger.info(`[registry-client] Loaded ${plugins.size} plugins`);
 
+  ensureFallbackApps(plugins);
   memoryCache = { plugins, fetchedAt: Date.now() };
   writeFileCache(plugins).catch((err) =>
     logger.warn(
