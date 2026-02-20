@@ -282,6 +282,30 @@ describe("createRateLimitMiddleware", () => {
     expect(res._headers["X-RateLimit-Reset"]).toBeDefined();
   });
 
+  it("does not share default limiter counters across different paths", () => {
+    const middleware = createRateLimitMiddleware({
+      endpointLimits: {
+        default: { windowMs: 60_000, maxRequests: 2 },
+      },
+    });
+
+    // Exhaust limit on one unlisted path.
+    const resA1 = mockResponse();
+    const resA2 = mockResponse();
+    const resA3 = mockResponse();
+    middleware(mockRequest("/api/path-a"), resA1);
+    middleware(mockRequest("/api/path-a"), resA2);
+    const blockedA = middleware(mockRequest("/api/path-a"), resA3);
+
+    expect(blockedA).toBe(false);
+    expect(resA3._statusCode).toBe(429);
+
+    // Different unlisted path should still be allowed.
+    const resB = mockResponse();
+    const allowedB = middleware(mockRequest("/api/path-b"), resB);
+    expect(allowedB).toBe(true);
+  });
+
   it("returns 503 when global bucket exhausted", () => {
     const middleware = createRateLimitMiddleware({
       globalBucket: { capacity: 1, refillRate: 0 },

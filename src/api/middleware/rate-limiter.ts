@@ -317,6 +317,7 @@ export function createRateLimitMiddleware(options: RateLimiterOptions = {}) {
   for (const [endpoint, config] of Object.entries(endpointLimits)) {
     limiters.set(endpoint, new SlidingWindowRateLimiter(config));
   }
+  const defaultLimiter = limiters.get("default");
 
   const skipPaths = new Set(options.skipPaths ?? []);
 
@@ -352,8 +353,16 @@ export function createRateLimitMiddleware(options: RateLimiterOptions = {}) {
     }
 
     // 2. Per-endpoint sliding window check
-    const limiter = limiters.get(pathname) ?? limiters.get("default")!;
-    const key = extractIP(req);
+    const endpointLimiter = limiters.get(pathname);
+    const limiter = endpointLimiter ?? defaultLimiter;
+    if (!limiter) {
+      logger.warn("[rate-limit] No default limiter configured; allowing request");
+      return true;
+    }
+    const clientIp = extractIP(req);
+    // For unlisted endpoints using the default limiter, scope counters by
+    // path so unrelated routes (and dynamic endpoints) don't starve each other.
+    const key = endpointLimiter ? clientIp : `${clientIp}:${pathname}`;
     const result = limiter.isAllowed(key);
 
     // Get config for headers

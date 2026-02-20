@@ -5023,10 +5023,13 @@ async function handleRequest(
     return;
   }
 
-  // Apply rate limiting (before auth to prevent brute force)
-  const rateLimiter = getRateLimiter();
-  if (!rateLimiter(req, res)) {
-    return; // Rate limited - response already sent
+  // Apply rate limiting only to API routes.
+  // Static UI assets (JS/CSS/VRM) should not consume API quotas.
+  if (pathname === "/api" || pathname.startsWith("/api/")) {
+    const rateLimiter = getRateLimiter();
+    if (!rateLimiter(req, res)) {
+      return; // Rate limited - response already sent
+    }
   }
 
   if (method !== "OPTIONS" && !isAuthEndpoint && !isAuthorized(req)) {
