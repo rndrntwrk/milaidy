@@ -233,6 +233,12 @@ describe("collectPluginNames", () => {
     expect(names.has("@elizaos/plugin-elizacloud")).toBe(true);
   });
 
+  it("does not add ElizaCloud plugin when cloud is disabled in config", () => {
+    const config = { cloud: { enabled: false, apiKey: "ck-test" } } as MilaidyConfig;
+    const names = collectPluginNames(config);
+    expect(names.has("@elizaos/plugin-elizacloud")).toBe(false);
+  });
+
   it("adds ElizaCloud plugin when env key is present", () => {
     process.env.ELIZAOS_CLOUD_API_KEY = "ck-test";
     const names = collectPluginNames({} as MilaidyConfig);
@@ -530,11 +536,15 @@ describe("applyCloudConfigToEnv", () => {
     expect(process.env.ELIZAOS_CLOUD_BASE_URL).toBe("https://cloud.test");
   });
 
-  it("overwrites stale env values with fresh config (hot-reload safety)", () => {
+  it("clears stale cloud env values when cloud mode is disabled", () => {
+    process.env.ELIZAOS_CLOUD_ENABLED = "true";
     process.env.ELIZAOS_CLOUD_API_KEY = "old-key";
-    const config = { cloud: { apiKey: "new-key" } } as MilaidyConfig;
+    process.env.ELIZAOS_CLOUD_BASE_URL = "https://old-cloud.test";
+    const config = { cloud: { enabled: false, apiKey: "new-key" } } as MilaidyConfig;
     applyCloudConfigToEnv(config);
-    expect(process.env.ELIZAOS_CLOUD_API_KEY).toBe("new-key");
+    expect(process.env.ELIZAOS_CLOUD_ENABLED).toBeUndefined();
+    expect(process.env.ELIZAOS_CLOUD_API_KEY).toBeUndefined();
+    expect(process.env.ELIZAOS_CLOUD_BASE_URL).toBeUndefined();
   });
 
   it("handles missing cloud config gracefully", () => {

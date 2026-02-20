@@ -5590,6 +5590,15 @@ async function handleRequest(
     const runMode = (body.runMode as string) || "local";
     if (!config.cloud) config.cloud = {};
     config.cloud.enabled = runMode === "cloud";
+    if (runMode !== "cloud") {
+      // Keep local/OAuth sessions deterministic by clearing process-level
+      // cloud flags during mode switches.
+      delete process.env.ELIZAOS_CLOUD_ENABLED;
+      delete process.env.ELIZAOS_CLOUD_API_KEY;
+      delete process.env.ELIZAOS_CLOUD_BASE_URL;
+      delete process.env.ELIZAOS_CLOUD_SMALL_MODEL;
+      delete process.env.ELIZAOS_CLOUD_LARGE_MODEL;
+    }
 
     // ── Sandbox mode (from 3-mode onboarding: off / light / standard / max)
     const sandboxMode = (body.sandboxMode as string) || "off";

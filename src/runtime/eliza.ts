@@ -348,7 +348,7 @@ export function collectPluginNames(config: MilaidyConfig): Set<string> {
       names.delete("@elizaos/plugin-shell");
     }
 
-    const cloudActive = config.cloud?.enabled || Boolean(config.cloud?.apiKey);
+    const cloudActive = config.cloud?.enabled === true;
     if (cloudActive) {
       // Always include cloud plugin when the user has logged in.
       names.add("@elizaos/plugin-elizacloud");
@@ -406,9 +406,8 @@ export function collectPluginNames(config: MilaidyConfig): Set<string> {
     }
   }
 
-  // ElizaCloud plugin — load when explicitly enabled OR when an API key
-  // exists in config (persisted login). This matches allow-list behavior.
-  if (config.cloud?.enabled === true || Boolean(config.cloud?.apiKey)) {
+  // ElizaCloud plugin — load only when explicitly enabled.
+  if (config.cloud?.enabled === true) {
     pluginsToLoad.add("@elizaos/plugin-elizacloud");
 
     // When cloud is active, remove direct AI provider plugins — the cloud
@@ -1184,21 +1183,31 @@ export function applyCloudConfigToEnv(config: MilaidyConfig): void {
   const cloud = config.cloud;
   if (!cloud) return;
 
-  // Having an API key means the user logged in — treat as enabled even if
-  // the flag was accidentally reset (e.g. by a provider switch or merge).
-  const effectivelyEnabled = cloud.enabled || Boolean(cloud.apiKey);
+  const explicitlyEnabled = cloud.enabled === true;
 
-  if (effectivelyEnabled) {
-    process.env.ELIZAOS_CLOUD_ENABLED = "true";
-    logger.info(
-      `[milaidy] Cloud config: enabled=${cloud.enabled}, hasApiKey=${Boolean(cloud.apiKey)}, baseUrl=${cloud.baseUrl ?? "(default)"}`,
-    );
+  if (!explicitlyEnabled) {
+    // Ensure stale cloud env vars do not leak into local runs.
+    delete process.env.ELIZAOS_CLOUD_ENABLED;
+    delete process.env.ELIZAOS_CLOUD_API_KEY;
+    delete process.env.ELIZAOS_CLOUD_BASE_URL;
+    delete process.env.ELIZAOS_CLOUD_SMALL_MODEL;
+    delete process.env.ELIZAOS_CLOUD_LARGE_MODEL;
+    return;
   }
+
+  process.env.ELIZAOS_CLOUD_ENABLED = "true";
+  logger.info(
+    `[milaidy] Cloud config: enabled=${cloud.enabled}, hasApiKey=${Boolean(cloud.apiKey)}, baseUrl=${cloud.baseUrl ?? "(default)"}`,
+  );
   if (cloud.apiKey) {
     process.env.ELIZAOS_CLOUD_API_KEY = cloud.apiKey;
+  } else {
+    delete process.env.ELIZAOS_CLOUD_API_KEY;
   }
   if (cloud.baseUrl) {
     process.env.ELIZAOS_CLOUD_BASE_URL = cloud.baseUrl;
+  } else {
+    delete process.env.ELIZAOS_CLOUD_BASE_URL;
   }
 
   // Propagate model names so the cloud plugin picks them up.  Falls back to
@@ -1206,17 +1215,15 @@ export function applyCloudConfigToEnv(config: MilaidyConfig): void {
   const models = (config as Record<string, unknown>).models as
     | { small?: string; large?: string }
     | undefined;
-  if (effectivelyEnabled) {
-    const small = models?.small || "openai/gpt-5-mini";
-    const large = models?.large || "anthropic/claude-sonnet-4.5";
-    process.env.SMALL_MODEL = small;
-    process.env.LARGE_MODEL = large;
-    if (!process.env.ELIZAOS_CLOUD_SMALL_MODEL) {
-      process.env.ELIZAOS_CLOUD_SMALL_MODEL = small;
-    }
-    if (!process.env.ELIZAOS_CLOUD_LARGE_MODEL) {
-      process.env.ELIZAOS_CLOUD_LARGE_MODEL = large;
-    }
+  const small = models?.small || "openai/gpt-5-mini";
+  const large = models?.large || "anthropic/claude-sonnet-4.5";
+  process.env.SMALL_MODEL = small;
+  process.env.LARGE_MODEL = large;
+  if (!process.env.ELIZAOS_CLOUD_SMALL_MODEL) {
+    process.env.ELIZAOS_CLOUD_SMALL_MODEL = small;
+  }
+  if (!process.env.ELIZAOS_CLOUD_LARGE_MODEL) {
+    process.env.ELIZAOS_CLOUD_LARGE_MODEL = large;
   }
 }
 

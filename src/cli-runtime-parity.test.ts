@@ -286,19 +286,25 @@ describe("config env propagation parity", () => {
     expect(process.env.ELIZAOS_CLOUD_BASE_URL).toBe("https://cloud.example");
   });
 
-  it("connector env values are never overwritten but cloud config always wins", () => {
+  it("connector env values are never overwritten and cloud env clears when disabled", () => {
     process.env.TELEGRAM_BOT_TOKEN = "already-set";
+    process.env.ELIZAOS_CLOUD_ENABLED = "true";
     process.env.ELIZAOS_CLOUD_API_KEY = "old-key";
+    process.env.ELIZAOS_CLOUD_BASE_URL = "https://old-cloud.example";
 
     applyConnectorSecretsToEnv({
       connectors: { telegram: { botToken: "new" } },
     } as MilaidyConfig);
-    applyCloudConfigToEnv({ cloud: { apiKey: "new-key" } } as MilaidyConfig);
+    applyCloudConfigToEnv({
+      cloud: { enabled: false, apiKey: "new-key" },
+    } as MilaidyConfig);
 
     // Connectors respect existing env (set via .env files)
     expect(process.env.TELEGRAM_BOT_TOKEN).toBe("already-set");
-    // Cloud config always overwrites (config file is source of truth for cloud keys)
-    expect(process.env.ELIZAOS_CLOUD_API_KEY).toBe("new-key");
+    // Disabled cloud mode clears stale cloud routing state.
+    expect(process.env.ELIZAOS_CLOUD_ENABLED).toBeUndefined();
+    expect(process.env.ELIZAOS_CLOUD_API_KEY).toBeUndefined();
+    expect(process.env.ELIZAOS_CLOUD_BASE_URL).toBeUndefined();
   });
 });
 
