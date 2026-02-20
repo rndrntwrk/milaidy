@@ -55,7 +55,25 @@ IMPROVEMENT_PLAN.md
 *_PLAN.md
 
 # Agent learning docs & knowledge base
-knowledge/
+# Keep knowledge local by default, but track canonical docs used by runtime seeding.
+knowledge/*
+!knowledge/00_ecosystem/
+knowledge/00_ecosystem/*
+!knowledge/00_ecosystem/ECOSYSTEM_CANONICAL.md
+!knowledge/10_555/
+knowledge/10_555/*
+!knowledge/10_555/ARCHITECTURE.md
+!knowledge/20_stream/
+knowledge/20_stream/*
+!knowledge/20_stream/ARCHITECTURE.md
+!knowledge/30_sw4p/
+knowledge/30_sw4p/*
+!knowledge/30_sw4p/ARCHITECTURE.md
+!knowledge/40_product_publication/
+knowledge/40_product_publication/*
+!knowledge/40_product_publication/CEO_BRIEFING_PACK.md
+!knowledge/40_product_publication/KNOWLEDGE_COLLECTION_PLAN.md
+!knowledge/README.md
 scripts/knowledge-loop.mjs
 test/contracts/
 apps/app/test-results/
