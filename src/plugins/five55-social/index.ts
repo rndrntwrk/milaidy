@@ -12,6 +12,7 @@ import {
   assertFive55Capability,
   createFive55CapabilityPolicy,
 } from "../../runtime/five55-capability-policy.js";
+import { assertTrustedAdminForAction } from "../../runtime/trusted-admin.js";
 import {
   exceptionAction,
   executeApiAction,
@@ -45,7 +46,8 @@ const socialProvider: Provider = {
 const monitorAction: Action = {
   name: "FIVE55_SOCIAL_MONITOR",
   similes: ["SOCIAL_MONITOR", "READ_SOCIAL_FEED"],
-  description: "Reads social interaction signal stream for contribution scoring.",
+  description:
+    "Reads social interaction signal stream for contribution scoring.",
   validate: async () => true,
   handler: async (_runtime, _message, _state, options) => {
     try {
@@ -102,8 +104,14 @@ const assignPointsAction: Action = {
   similes: ["ASSIGN_SOCIAL_POINTS", "SOCIAL_POINTS_UPDATE"],
   description: "Assigns points based on validated social interactions.",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, message, state, options) => {
     try {
+      assertTrustedAdminForAction(
+        runtime,
+        message,
+        state,
+        "FIVE55_SOCIAL_ASSIGN_POINTS",
+      );
       assertFive55Capability(CAPABILITY_POLICY, "social.assign_points");
       const userId = readParam(options as HandlerOptions | undefined, "userId");
       const points = readParam(options as HandlerOptions | undefined, "points");

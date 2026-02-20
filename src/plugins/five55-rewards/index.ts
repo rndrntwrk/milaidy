@@ -12,6 +12,7 @@ import {
   assertFive55Capability,
   createFive55CapabilityPolicy,
 } from "../../runtime/five55-capability-policy.js";
+import { assertTrustedAdminForAction } from "../../runtime/trusted-admin.js";
 import {
   exceptionAction,
   executeApiAction,
@@ -105,8 +106,14 @@ const allocateAction: Action = {
   description:
     "Allocates rewards and prepares settlement transfer instructions.",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, message, state, options) => {
     try {
+      assertTrustedAdminForAction(
+        runtime,
+        message,
+        state,
+        "FIVE55_REWARDS_ALLOCATE",
+      );
       assertFive55Capability(CAPABILITY_POLICY, "rewards.allocate");
       const userId = readParam(options as HandlerOptions | undefined, "userId");
       const amount = readParam(options as HandlerOptions | undefined, "amount");
@@ -145,11 +152,7 @@ const allocateAction: Action = {
         },
       });
     } catch (err) {
-      return exceptionAction(
-        "five55.rewards",
-        "FIVE55_REWARDS_ALLOCATE",
-        err,
-      );
+      return exceptionAction("five55.rewards", "FIVE55_REWARDS_ALLOCATE", err);
     }
   },
   parameters: [

@@ -12,6 +12,7 @@ import {
   assertFive55Capability,
   createFive55CapabilityPolicy,
 } from "../../runtime/five55-capability-policy.js";
+import { assertTrustedAdminForAction } from "../../runtime/trusted-admin.js";
 import {
   exceptionAction,
   executeApiAction,
@@ -92,8 +93,9 @@ const themeSetAction: Action = {
   description:
     "Updates the active 555 site theme (for operators and live events).",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, message, state, options) => {
     try {
+      assertTrustedAdminForAction(runtime, message, state, "FIVE55_THEME_SET");
       assertFive55Capability(CAPABILITY_POLICY, "theme.write");
       const theme =
         readParam(options as HandlerOptions | undefined, "theme") ?? "default";
@@ -142,8 +144,14 @@ const eventTriggerAction: Action = {
   description:
     "Triggers a temporary platform event (double_xp, free_play, burn_boost).",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, message, state, options) => {
     try {
+      assertTrustedAdminForAction(
+        runtime,
+        message,
+        state,
+        "FIVE55_EVENT_TRIGGER",
+      );
       assertFive55Capability(CAPABILITY_POLICY, "theme.write");
       const eventType =
         readParam(options as HandlerOptions | undefined, "type") ?? "double_xp";
@@ -211,6 +219,12 @@ const possessCabinetAction: Action = {
   validate: async () => true,
   handler: async (runtime, _message, _state, options) => {
     try {
+      assertTrustedAdminForAction(
+        runtime,
+        _message,
+        _state,
+        "FIVE55_CABINET_POSSESS",
+      );
       assertFive55Capability(CAPABILITY_POLICY, "games.play");
       const gameId =
         readParam(options as HandlerOptions | undefined, "gameId") ??
@@ -302,8 +316,14 @@ const releaseCabinetAction: Action = {
   similes: ["RELEASE_CABINET", "UNPOSSESS_CABINET", "RELEASE_MACHINE"],
   description: "Releases a previously possessed cabinet.",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, message, state, options) => {
     try {
+      assertTrustedAdminForAction(
+        runtime,
+        message,
+        state,
+        "FIVE55_CABINET_RELEASE",
+      );
       assertFive55Capability(CAPABILITY_POLICY, "games.play");
       const cabinetId =
         readParam(options as HandlerOptions | undefined, "cabinetId") ??

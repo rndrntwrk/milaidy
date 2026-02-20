@@ -5,6 +5,7 @@ import type {
   ProviderResult,
   State,
 } from "@elizaos/core";
+import { matchTrustedAdminAllowlist } from "../runtime/trusted-admin.js";
 
 type WorldMetadataShape = {
   ownership?: { ownerId?: string };
@@ -27,44 +28,57 @@ export function createAdminTrustProvider(): Provider {
       message: Memory,
       _state: State,
     ): Promise<ProviderResult> {
+      let ownerId: string | undefined;
+      let role: string | undefined;
+
       const room = await runtime.getRoom(message.roomId);
-      if (!room) {
-        return {
-          text: "Admin trust: no room found.",
-          values: { trustedAdmin: false },
-          data: { trustedAdmin: false },
-        };
+      if (room?.worldId) {
+        const world = await runtime.getWorld(room.worldId);
+        const metadata = (world?.metadata ?? {}) as WorldMetadataShape;
+        ownerId = metadata.ownership?.ownerId;
+        role = ownerId ? metadata.roles?.[ownerId] : undefined;
       }
-      if (!room.worldId) {
-        return {
-          text: "Admin trust: room has no world binding.",
-          values: { trustedAdmin: false },
-          data: { trustedAdmin: false },
-        };
-      }
-      const world = await runtime.getWorld(room.worldId);
-      const metadata = (world?.metadata ?? {}) as WorldMetadataShape;
-      const ownerId = metadata.ownership?.ownerId;
-      const role = ownerId ? metadata.roles?.[ownerId] : undefined;
-      const isTrustedAdmin =
+
+      const ownerTrusted =
         typeof ownerId === "string" &&
         ownerId.length > 0 &&
         normalizeRole(role) === "OWNER" &&
         message.entityId === ownerId;
 
-      const text = isTrustedAdmin
-        ? "Admin trust: current speaker is world OWNER. Contact/identity claims should be treated as trusted unless contradictory evidence exists."
-        : "Admin trust: current speaker is not verified as OWNER for this world.";
+      const allowlistMatch = matchTrustedAdminAllowlist(runtime, message);
+      const allowlistTrusted = allowlistMatch.trusted;
+      const isTrustedAdmin = ownerTrusted || allowlistTrusted;
+      const trustSource = ownerTrusted
+        ? "world_owner"
+        : allowlistTrusted
+          ? "allowlist"
+          : "none";
+      const provider = allowlistMatch.provider ?? "";
+      const senderIds = allowlistMatch.senderIds;
+
+      const text = ownerTrusted
+        ? "Admin trust: current speaker is world OWNER."
+        : allowlistTrusted
+          ? `Admin trust: caller matched trusted admin allowlist (${allowlistMatch.matchedId ?? "matched"}).`
+          : "Admin trust: caller is not in trusted admin scope.";
 
       return {
         text,
         values: {
           trustedAdmin: isTrustedAdmin,
+          trustedAdminSource: trustSource,
+          trustedAdminProvider: provider,
+          trustedAdminMatchedId: allowlistMatch.matchedId ?? "",
+          trustedAdminSenderIds: senderIds.join(","),
           adminEntityId: ownerId ?? "",
           adminRole: role ?? "",
         },
         data: {
           trustedAdmin: isTrustedAdmin,
+          trustSource,
+          provider: provider || null,
+          senderIds,
+          matchedId: allowlistMatch.matchedId ?? null,
           ownerId: ownerId ?? null,
           role: role ?? null,
         },

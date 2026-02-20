@@ -12,6 +12,7 @@ import {
   assertFive55Capability,
   createFive55CapabilityPolicy,
 } from "../../runtime/five55-capability-policy.js";
+import { assertTrustedAdminForAction } from "../../runtime/trusted-admin.js";
 import {
   exceptionAction,
   executeApiAction,
@@ -102,8 +103,14 @@ const createAction: Action = {
   similes: ["CREATE_QUEST", "NEW_QUEST"],
   description: "Creates a new quest/challenge.",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, message, state, options) => {
     try {
+      assertTrustedAdminForAction(
+        runtime,
+        message,
+        state,
+        "FIVE55_QUESTS_CREATE",
+      );
       assertFive55Capability(CAPABILITY_POLICY, "quests.create");
       const title = readParam(options as HandlerOptions | undefined, "title");
       const objective = readParam(
@@ -151,12 +158,22 @@ const createAction: Action = {
 const completeAction: Action = {
   name: "FIVE55_QUESTS_COMPLETE",
   similes: ["COMPLETE_QUEST", "FINISH_QUEST"],
-  description: "Marks quest completion for a user and triggers points pipeline.",
+  description:
+    "Marks quest completion for a user and triggers points pipeline.",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, message, state, options) => {
     try {
+      assertTrustedAdminForAction(
+        runtime,
+        message,
+        state,
+        "FIVE55_QUESTS_COMPLETE",
+      );
       assertFive55Capability(CAPABILITY_POLICY, "quests.complete");
-      const questId = readParam(options as HandlerOptions | undefined, "questId");
+      const questId = readParam(
+        options as HandlerOptions | undefined,
+        "questId",
+      );
       const userId = readParam(options as HandlerOptions | undefined, "userId");
       return executeApiAction({
         module: "five55.quests",

@@ -12,8 +12,12 @@ type FakeWorld = {
 function createRuntime(
   room: { worldId?: string } | null,
   world: FakeWorld | null,
+  settings: Record<string, string> = {},
 ): IAgentRuntime {
-  const runtimeSubset: Pick<IAgentRuntime, "getRoom" | "getWorld"> = {
+  const runtimeSubset: Pick<
+    IAgentRuntime,
+    "getRoom" | "getWorld" | "getSetting"
+  > = {
     getRoom: async () => {
       if (!room) return null;
       return {
@@ -27,6 +31,7 @@ function createRuntime(
         metadata: world.metadata ?? {},
       } as never;
     },
+    getSetting: (key: string) => settings[key] ?? null,
   };
   return runtimeSubset as IAgentRuntime;
 }
@@ -86,5 +91,43 @@ describe("admin-trust provider", () => {
     const result = await provider.get(runtime, message, state);
     const values = result.values as Record<string, string | boolean>;
     expect(values.trustedAdmin).toBe(false);
+  });
+
+  it("trusts allowlisted telegram sender id", async () => {
+    const runtime = createRuntime(null, null, {
+      MILAIDY_TRUSTED_ADMIN_TELEGRAM_IDS: "6689469214",
+    });
+    const message = {
+      roomId: "room-1",
+      entityId: "user-3",
+      metadata: {
+        provider: "telegram",
+        sender: { id: "6689469214" },
+      },
+    } as Memory;
+
+    const result = await provider.get(runtime, message, state);
+    const values = result.values as Record<string, string | boolean>;
+    expect(values.trustedAdmin).toBe(true);
+    expect(values.trustedAdminSource).toBe("allowlist");
+  });
+
+  it("supports provider-qualified entries in MILAIDY_TRUSTED_ADMIN_IDS", async () => {
+    const runtime = createRuntime(null, null, {
+      MILAIDY_TRUSTED_ADMIN_IDS: "telegram:777,discord:abc",
+    });
+    const message = {
+      roomId: "room-1",
+      entityId: "user-3",
+      metadata: {
+        provider: "discord",
+        sender: { id: "abc" },
+      },
+    } as Memory;
+
+    const result = await provider.get(runtime, message, state);
+    const values = result.values as Record<string, string | boolean>;
+    expect(values.trustedAdmin).toBe(true);
+    expect(values.trustedAdminSource).toBe("allowlist");
   });
 });

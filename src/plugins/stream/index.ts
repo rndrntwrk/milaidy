@@ -12,6 +12,7 @@ import {
   assertFive55Capability,
   createFive55CapabilityPolicy,
 } from "../../runtime/five55-capability-policy.js";
+import { assertTrustedAdminForAction } from "../../runtime/trusted-admin.js";
 import {
   exceptionAction,
   executeApiAction,
@@ -327,7 +328,11 @@ async function executeAgentStreamStatus(
   }
 
   try {
-    const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+    const sessionId = await ensureAgentSessionId(
+      base,
+      token,
+      requestedSessionId,
+    );
     const status = await fetchJson(
       "GET",
       base,
@@ -347,12 +352,17 @@ async function executeAgentStreamStatus(
       );
     }
 
-    return actionSuccess("STREAM_STATUS", "stream status fetched", status.status, {
-      dialect: "agent-v1",
-      scope,
-      sessionId,
-      ...(status.data ?? {}),
-    });
+    return actionSuccess(
+      "STREAM_STATUS",
+      "stream status fetched",
+      status.status,
+      {
+        dialect: "agent-v1",
+        scope,
+        sessionId,
+        ...(status.data ?? {}),
+      },
+    );
   } catch (err) {
     return actionFailure(
       "STREAM_STATUS",
@@ -382,7 +392,11 @@ async function executeAgentStreamControl(
   }
 
   try {
-    const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+    const sessionId = await ensureAgentSessionId(
+      base,
+      token,
+      requestedSessionId,
+    );
 
     if (operation === "pause" || operation === "resume") {
       return actionFailure(
@@ -432,7 +446,8 @@ async function executeAgentStreamControl(
         ? `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/stream/start`
         : `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/stream/stop`;
 
-    const defaultInputType = trimEnv(STREAM_DEFAULT_INPUT_TYPE_ENV) ?? "website";
+    const defaultInputType =
+      trimEnv(STREAM_DEFAULT_INPUT_TYPE_ENV) ?? "website";
     const defaultInputUrl = trimEnv(STREAM_DEFAULT_INPUT_URL_ENV);
     const resolvedInputType = inputType?.trim() || defaultInputType;
     const resolvedInputUrl = inputUrl?.trim() || defaultInputUrl;
@@ -512,7 +527,11 @@ async function executeAgentStreamSchedule(
   }
 
   try {
-    const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+    const sessionId = await ensureAgentSessionId(
+      base,
+      token,
+      requestedSessionId,
+    );
     const scheduleResponse = await fetchJson(
       "POST",
       base,
@@ -565,7 +584,9 @@ const streamProvider: Provider = {
     _message: Memory,
     _state: State,
   ): Promise<ProviderResult> {
-    const configured = Boolean(trimEnv(STREAM_API_ENV) ?? trimEnv(STREAM555_BASE_ENV));
+    const configured = Boolean(
+      trimEnv(STREAM_API_ENV) ?? trimEnv(STREAM555_BASE_ENV),
+    );
     const configuredBase = resolveConfiguredBaseKey();
     const dialect = resolveStreamDialect();
     return {
@@ -591,8 +612,12 @@ const streamStatusAction: Action = {
   handler: async (_runtime, _message, _state, options) => {
     try {
       assertFive55Capability(CAPABILITY_POLICY, "stream.read");
-      const scope = readParam(options as HandlerOptions | undefined, "scope") ?? "current";
-      const sessionId = readParam(options as HandlerOptions | undefined, "sessionId");
+      const scope =
+        readParam(options as HandlerOptions | undefined, "scope") ?? "current";
+      const sessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
 
       if (resolveStreamDialect() === "agent-v1") {
         const agentResult = await executeAgentStreamStatus(scope, sessionId);
@@ -635,22 +660,32 @@ const streamControlAction: Action = {
     "END_STREAM",
     "STREAM_START",
   ],
-  description:
-    "Controls stream lifecycle and active scene/action overlays.",
+  description: "Controls stream lifecycle and active scene/action overlays.",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, message, state, options) => {
     try {
+      assertTrustedAdminForAction(runtime, message, state, "STREAM_CONTROL");
       assertFive55Capability(CAPABILITY_POLICY, "stream.control");
       const operation = readParam(
         options as HandlerOptions | undefined,
         "operation",
       );
-      const scene = readParam(options as HandlerOptions | undefined, "scene") ?? "default";
-      const sessionId = readParam(options as HandlerOptions | undefined, "sessionId");
-      const inputType = readParam(options as HandlerOptions | undefined, "inputType");
+      const scene =
+        readParam(options as HandlerOptions | undefined, "scene") ?? "default";
+      const sessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+      const inputType = readParam(
+        options as HandlerOptions | undefined,
+        "inputType",
+      );
       const url = readParam(options as HandlerOptions | undefined, "url");
 
-      if (!operation || !["start", "stop", "pause", "resume", "scene"].includes(operation)) {
+      if (
+        !operation ||
+        !["start", "stop", "pause", "resume", "scene"].includes(operation)
+      ) {
         return actionFailure(
           "STREAM_CONTROL",
           "E_PARAM_MISSING",
@@ -716,18 +751,22 @@ const streamControlAction: Action = {
 const streamScheduleAction: Action = {
   name: "STREAM_SCHEDULE",
   similes: ["SCHEDULE_STREAM", "PLAN_STREAM", "STREAM_TIMELINE"],
-  description:
-    "Schedules stream windows plus projected economic impact.",
+  description: "Schedules stream windows plus projected economic impact.",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, message, state, options) => {
     try {
+      assertTrustedAdminForAction(runtime, message, state, "STREAM_SCHEDULE");
       assertFive55Capability(CAPABILITY_POLICY, "stream.control");
-      const startsAt = readParam(options as HandlerOptions | undefined, "startsAt");
-      const durationMin = readParam(
+      const startsAt = readParam(
         options as HandlerOptions | undefined,
-        "durationMin",
-      ) ?? "60";
-      const sessionId = readParam(options as HandlerOptions | undefined, "sessionId");
+        "startsAt",
+      );
+      const durationMin =
+        readParam(options as HandlerOptions | undefined, "durationMin") ?? "60";
+      const sessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
       const title = readParam(options as HandlerOptions | undefined, "title");
 
       if (!startsAt) {
@@ -757,7 +796,10 @@ const streamScheduleAction: Action = {
         );
         if (agentResult.success) return agentResult;
 
-        const legacyResult = await executeLegacyStreamSchedule(startsAt, durationMin);
+        const legacyResult = await executeLegacyStreamSchedule(
+          startsAt,
+          durationMin,
+        );
         if (legacyResult.success) return legacyResult;
         return agentResult;
       }

@@ -12,6 +12,7 @@ import {
   assertFive55Capability,
   createFive55CapabilityPolicy,
 } from "../../runtime/five55-capability-policy.js";
+import { assertTrustedAdminForAction } from "../../runtime/trusted-admin.js";
 import {
   exceptionAction,
   executeApiAction,
@@ -78,7 +79,11 @@ const readAction: Action = {
         },
       });
     } catch (err) {
-      return exceptionAction("five55.leaderboard", "FIVE55_LEADERBOARD_READ", err);
+      return exceptionAction(
+        "five55.leaderboard",
+        "FIVE55_LEADERBOARD_READ",
+        err,
+      );
     }
   },
   parameters: [
@@ -102,8 +107,14 @@ const writeAction: Action = {
   similes: ["WRITE_LEADERBOARD", "UPDATE_LEADERBOARD"],
   description: "Writes or upserts leaderboard score entries.",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, message, state, options) => {
     try {
+      assertTrustedAdminForAction(
+        runtime,
+        message,
+        state,
+        "FIVE55_LEADERBOARD_WRITE",
+      );
       assertFive55Capability(CAPABILITY_POLICY, "leaderboard.write");
       const userId = readParam(options as HandlerOptions | undefined, "userId");
       const gameId = readParam(options as HandlerOptions | undefined, "gameId");
