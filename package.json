@@ -73,6 +73,7 @@
     "generate:plugins": "node scripts/generate-plugin-index.js",
     "learn:loop": "scripts/rt.sh scripts/knowledge-loop.mjs",
     "learn:snapshot": "scripts/rt.sh scripts/knowledge-loop.mjs --full",
+    "knowledge:seed": "node --import tsx scripts/seed-knowledge.ts",
     "milaidy": "scripts/rt.sh scripts/run-node.mjs",
     "temporal:worker": "node --import tsx src/autonomy/workflow/temporal/worker.ts",
     "postinstall": "node scripts/link-browser-server.mjs || true",

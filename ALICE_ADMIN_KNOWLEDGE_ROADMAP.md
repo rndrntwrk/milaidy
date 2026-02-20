@@ -113,6 +113,10 @@ Use both layers:
 
 1. Curate source folders and documents.
 2. Ingest via knowledge API.
+   - Command:
+     - `npm run knowledge:seed -- <path1> <path2>`
+   - Example:
+     - `MILAIDY_API_BASE=http://127.0.0.1:3000 MILAIDY_API_TOKEN=<token> npm run knowledge:seed -- docs README.md`
 3. Validate retrieval quality on:
    - Product architecture questions
    - Operational procedures
