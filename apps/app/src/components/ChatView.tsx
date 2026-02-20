@@ -1043,7 +1043,7 @@ export const ChatView = memo(function ChatView() {
   };
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 px-3 relative">
+    <div className="flex flex-col flex-1 min-h-0 px-1 sm:px-3 relative">
       {/* 3D Avatar — behind chat on the right side */}
       {/* When using ElevenLabs audio analysis, mouthOpen carries real volume
           data — don't pass isSpeaking so the engine uses the external values
@@ -1448,7 +1448,10 @@ export const ChatView = memo(function ChatView() {
       </div>
 
       {/* ── Input row: mic + textarea + send ───────────────────────── */}
-      <div className="flex gap-2 items-end border-t border-border pt-3 pb-4 relative" style={{ zIndex: 1 }}>
+      <div
+        className="flex gap-2 items-end border-t border-border pt-3 pb-4 relative"
+        style={{ zIndex: 1, paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+      >
         {/* Mic button — user voice input */}
         {voice.supported && (
           <button
@@ -1499,7 +1502,7 @@ export const ChatView = memo(function ChatView() {
         {/* Send / Stop */}
         {chatSending ? (
           <button
-            className="h-[38px] px-4 py-2 border border-danger bg-danger/10 text-danger text-sm cursor-pointer hover:bg-danger/20 self-end"
+            className="h-[38px] px-3 sm:px-4 py-2 border border-danger bg-danger/10 text-danger text-sm cursor-pointer hover:bg-danger/20 self-end"
             onClick={handleChatStop}
             title="Stop generation"
           >
@@ -1507,7 +1510,7 @@ export const ChatView = memo(function ChatView() {
           </button>
         ) : voice.isSpeaking ? (
           <button
-            className="h-[38px] px-4 py-2 border border-danger bg-danger/10 text-danger text-sm cursor-pointer hover:bg-danger/20 self-end"
+            className="h-[38px] px-3 sm:px-4 py-2 border border-danger bg-danger/10 text-danger text-sm cursor-pointer hover:bg-danger/20 self-end"
             onClick={voice.stopSpeaking}
             title="Stop speaking"
           >
@@ -1515,7 +1518,7 @@ export const ChatView = memo(function ChatView() {
           </button>
         ) : (
           <button
-            className="h-[38px] px-6 py-2 border border-accent bg-accent text-accent-fg text-sm cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed self-end"
+            className="h-[38px] px-3 sm:px-6 py-2 border border-accent bg-accent text-accent-fg text-sm cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed self-end"
             onClick={() => void handleChatSend(chatMode)}
             disabled={chatSending}
           >

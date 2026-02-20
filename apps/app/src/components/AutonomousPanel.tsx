@@ -81,7 +81,7 @@ export function AutonomousPanel() {
 
   return (
     <aside
-      className="w-[420px] min-w-[420px] border-l border-border flex flex-col h-full font-body text-[13px]"
+      className="hidden lg:flex lg:w-[320px] lg:min-w-[320px] xl:w-[420px] xl:min-w-[420px] border-l border-border flex-col h-full font-body text-[13px]"
       data-testid="autonomous-panel"
     >
       <div className="px-3 py-2 border-b border-border">

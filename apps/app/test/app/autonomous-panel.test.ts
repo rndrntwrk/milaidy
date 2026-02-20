@@ -93,9 +93,9 @@ describe("AutonomousPanel", () => {
       tree = TestRenderer.create(React.createElement(AutonomousPanel));
     });
 
-    expect(
-      tree!.root.findByProps({ "data-testid": "autonomous-panel" }),
-    ).toBeDefined();
+    const panel = tree!.root.findByProps({ "data-testid": "autonomous-panel" });
+    expect(panel).toBeDefined();
+    expect(String(panel.props.className)).toContain("hidden lg:flex");
     expect(readAllText(tree!)).toContain("Agent not running");
   });
 

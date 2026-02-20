@@ -110,7 +110,7 @@ export function App() {
           <Nav />
           <div className="flex flex-1 min-h-0 relative">
             <ConversationsSidebar />
-            <main id="main-content" className="flex flex-col flex-1 min-w-0 overflow-visible pt-3 px-5">
+            <main id="main-content" className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden pt-2 px-3 sm:pt-3 sm:px-5">
               <ErrorBoundary><ChatView /></ErrorBoundary>
             </main>
             <AutonomousPanel />
@@ -129,7 +129,7 @@ export function App() {
         <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
           <Header />
           <Nav />
-          <main id="main-content" className={`flex-1 min-h-0 py-6 px-5 ${isAdvancedTab ? "overflow-hidden" : "overflow-y-auto"}`}>
+          <main id="main-content" className={`flex-1 min-h-0 py-4 px-3 sm:py-6 sm:px-5 ${isAdvancedTab ? "overflow-hidden" : "overflow-y-auto"}`}>
             <ErrorBoundary><ViewRouter /></ErrorBoundary>
           </main>
           <TerminalPanel />

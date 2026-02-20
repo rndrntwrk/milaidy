@@ -33,11 +33,11 @@ export function Header() {
   const iconBtn = "inline-flex items-center justify-center w-7 h-7 border border-border bg-bg cursor-pointer text-sm leading-none hover:border-accent hover:text-accent transition-colors";
 
   return (<>
-    <header className="flex items-center justify-between border-b border-border py-4 px-5">
+    <header className="flex flex-wrap items-start sm:items-center justify-between gap-2 border-b border-border py-2 px-3 sm:py-4 sm:px-5">
       <div className="flex items-center gap-3">
         <span className="text-lg font-bold text-txt-strong" data-testid="agent-name">{name}</span>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end max-w-full">
         {dropStatus?.dropEnabled && dropStatus?.publicMintOpen && !dropStatus?.mintedOut && !dropStatus?.userHasMinted && !registryStatus?.registered && (
           <button
             onClick={() => setTab("character")}
@@ -60,7 +60,7 @@ export function Header() {
             </span>
           )
         )}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <span className={`inline-flex items-center h-7 px-2.5 border font-mono text-xs leading-none ${stateColor}`} data-testid="status-pill">{state}</span>
           {state === "restarting" || state === "starting" || state === "not_started" || state === "stopped" ? (
             <span className="inline-flex items-center justify-center w-7 h-7 text-sm leading-none opacity-60">⏳</span>
@@ -110,7 +110,7 @@ export function Header() {
         )}
       </div>
     </header>
-    <button onClick={openCommandPalette} aria-label="Open command palette (Cmd+K)" className="fixed bottom-5 right-5 z-50 inline-flex items-center h-7 px-3 border border-border bg-bg text-xs font-mono cursor-pointer hover:border-accent hover:text-accent transition-colors shadow-lg">Cmd+K</button>
+    <button onClick={openCommandPalette} aria-label="Open command palette (Cmd+K)" className="hidden sm:inline-flex fixed bottom-5 right-5 z-50 items-center h-7 px-3 border border-border bg-bg text-xs font-mono cursor-pointer hover:border-accent hover:text-accent transition-colors shadow-lg">Cmd+K</button>
   </>
   );
 }
