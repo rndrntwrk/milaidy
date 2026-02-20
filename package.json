@@ -232,6 +232,7 @@
     "sharp"
   ],
   "patchedDependencies": {
+    "@elizaos/plugin-discord@2.0.0-alpha.10": "patches/@elizaos%2Fplugin-discord@2.0.0-alpha.10.patch",
     "@elizaos/plugin-pdf@2.0.0-alpha.4": "patches/@elizaos%2Fplugin-pdf@2.0.0-alpha.4.patch"
   }
 }

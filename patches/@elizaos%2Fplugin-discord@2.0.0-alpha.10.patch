@@ -1,0 +1,22 @@
+diff --git a/dist/index.js b/dist/index.js
+index 577f4e9ec5bead145b67e20755d861013c8c8d2f..6f132d344e390becc89facb58301285ddf478d32 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -7590,7 +7590,7 @@ function addServerId(obj) {
+ }
+ function createCompatRuntime(runtime) {
+   return new Proxy(runtime, {
+-    get(target, prop, receiver) {
++    get(target, prop) {
+      const value = Reflect.get(target, prop, target);
+       if (typeof value !== "function") {
+         return value;
+@@ -7607,7 +7607,7 @@ function createCompatRuntime(runtime) {
+       if (prop === "ensureConnections") {
+         return (entities, rooms, source, world) => value.call(target, entities, rooms.map((r) => addServerId(r)), source, addServerId(world));
+       }
+-      return value;
++      return value.bind(target);
+     }
+   });
+ }

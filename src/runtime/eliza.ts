@@ -172,6 +172,23 @@ function installRuntimeErrorGuards(): void {
   });
 }
 
+const RUNTIME_METHODS_REQUIRING_BOUND_THIS = [
+  "getConversationLength",
+] as const;
+
+function patchRuntimeMethodBindings(runtime: AgentRuntime): void {
+  const runtimeObj = runtime as unknown as Record<string, unknown>;
+  for (const methodName of RUNTIME_METHODS_REQUIRING_BOUND_THIS) {
+    const method = runtimeObj[methodName];
+    if (typeof method !== "function") continue;
+    Object.defineProperty(runtimeObj, methodName, {
+      value: method.bind(runtime),
+      writable: true,
+      configurable: true,
+    });
+  }
+}
+
 /**
  * Actions that must survive ActionFilterService pruning because they back
  * explicit cross-channel delivery intents from users/operators.
@@ -2643,6 +2660,10 @@ export async function startEliza(
         : {}),
     },
   });
+  // Some connector plugins wrap runtime with Proxy layers that can invoke
+  // class methods with a non-runtime `this`, breaking private fields.
+  // Bind these methods once on the instance so proxy calls stay safe.
+  patchRuntimeMethodBindings(runtime);
 
   // Optional: route all model calls through pi-ai using pi credentials
   // (~/.pi/agent/auth.json). This is useful for OAuth-backed providers
@@ -3113,6 +3134,7 @@ export async function startEliza(
                 : {}),
             },
           });
+          patchRuntimeMethodBindings(newRuntime);
 
           // Re-register pi-ai model handler on hot reload if enabled.
           if (isPiAiEnabledFromEnv()) {
