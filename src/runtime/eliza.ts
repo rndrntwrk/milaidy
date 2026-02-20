@@ -63,6 +63,10 @@ import {
   SandboxManager,
   type SandboxMode,
 } from "../services/sandbox-manager.js";
+import {
+  installPlugin,
+  resolvePackageRuntimeEntry,
+} from "../services/plugin-installer.js";
 import { diagnoseNoAIProvider } from "../services/version-compat.js";
 import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins.js";
 import { MilaidyEmbeddingManager } from "./embedding-manager.js";
@@ -142,7 +146,8 @@ const CHANNEL_ENV_MAP: Readonly<
   Record<string, Readonly<Record<string, string>>>
 > = {
   discord: {
-    token: "DISCORD_BOT_TOKEN",
+    token: "DISCORD_API_TOKEN",
+    botToken: "DISCORD_API_TOKEN",
   },
   telegram: {
     botToken: "TELEGRAM_BOT_TOKEN",
@@ -189,7 +194,7 @@ const _OPTIONAL_NATIVE_PLUGINS: readonly string[] = [
 /** Maps Milaidy channel names to ElizaOS plugin package names. */
 const CHANNEL_PLUGIN_MAP: Readonly<Record<string, string>> = {
   discord: "@elizaos/plugin-discord",
-  telegram: "@milaidy/plugin-telegram-enhanced",
+  telegram: "@elizaos/plugin-telegram",
   slack: "@elizaos/plugin-slack",
   twitter: "@elizaos/plugin-twitter",
   whatsapp: "@elizaos/plugin-whatsapp",
@@ -219,6 +224,23 @@ const PROVIDER_PLUGIN_MAP: Readonly<Record<string, string>> = {
   ELIZAOS_CLOUD_ENABLED: "@elizaos/plugin-elizacloud",
 };
 
+/** Maps integration/config env vars to non-provider plugins. */
+const INTEGRATION_PLUGIN_MAP: Readonly<Record<string, string>> = {
+  DISCORD_API_TOKEN: "@elizaos/plugin-discord",
+  TELEGRAM_BOT_TOKEN: "@elizaos/plugin-telegram",
+  GITHUB_API_TOKEN: "@elizaos/plugin-github",
+  ALICE_GH_TOKEN: "@elizaos/plugin-github",
+};
+
+/**
+ * Alias old or custom package names to canonical runtime plugin packages.
+ * This keeps persisted configs compatible when package naming evolves.
+ */
+const PLUGIN_NAME_ALIASES: Readonly<Record<string, string>> = {
+  "@milaidy/plugin-telegram-enhanced": "@elizaos/plugin-telegram",
+  "telegram-enhanced": "@elizaos/plugin-telegram",
+};
+
 /**
  * Optional feature plugins keyed by feature name.
  *
@@ -233,6 +255,10 @@ const OPTIONAL_PLUGIN_MAP: Readonly<Record<string, string>> = {
   computeruse: "@elizaos/plugin-computeruse",
   x402: "@elizaos/plugin-x402",
 };
+
+function normalizePluginPackageName(name: string): string {
+  return PLUGIN_NAME_ALIASES[name] ?? name;
+}
 
 function looksLikePlugin(value: unknown): value is Plugin {
   if (!value || typeof value !== "object") return false;
@@ -276,8 +302,9 @@ export function collectPluginNames(config: MilaidyConfig): Set<string> {
     const names = new Set<string>();
     // Convert short names to full package names using plugin maps
     for (const item of allowList) {
-      const pluginName =
-        CHANNEL_PLUGIN_MAP[item] ?? OPTIONAL_PLUGIN_MAP[item] ?? item;
+      const pluginName = normalizePluginPackageName(
+        CHANNEL_PLUGIN_MAP[item] ?? OPTIONAL_PLUGIN_MAP[item] ?? item,
+      );
       names.add(pluginName);
     }
     // Core plugins are always loaded regardless of allow list.
@@ -316,7 +343,7 @@ export function collectPluginNames(config: MilaidyConfig): Set<string> {
   // not an exclusive whitelist that blocks everything else.
   if (allowList && allowList.length > 0) {
     for (const name of allowList) {
-      pluginsToLoad.add(name);
+      pluginsToLoad.add(normalizePluginPackageName(name));
     }
   }
 
@@ -327,7 +354,7 @@ export function collectPluginNames(config: MilaidyConfig): Set<string> {
     if (channelConfig && typeof channelConfig === "object") {
       const pluginName = CHANNEL_PLUGIN_MAP[channelName];
       if (pluginName) {
-        pluginsToLoad.add(pluginName);
+        pluginsToLoad.add(normalizePluginPackageName(pluginName));
       }
     }
   }
@@ -335,7 +362,14 @@ export function collectPluginNames(config: MilaidyConfig): Set<string> {
   // Model-provider plugins — load when env key is present
   for (const [envKey, pluginName] of Object.entries(PROVIDER_PLUGIN_MAP)) {
     if (process.env[envKey]) {
-      pluginsToLoad.add(pluginName);
+      pluginsToLoad.add(normalizePluginPackageName(pluginName));
+    }
+  }
+
+  // Integration plugins — load when connector/integration env keys are present.
+  for (const [envKey, pluginName] of Object.entries(INTEGRATION_PLUGIN_MAP)) {
+    if (process.env[envKey]) {
+      pluginsToLoad.add(normalizePluginPackageName(pluginName));
     }
   }
 
@@ -370,7 +404,7 @@ export function collectPluginNames(config: MilaidyConfig): Set<string> {
           CHANNEL_PLUGIN_MAP[key] ??
           OPTIONAL_PLUGIN_MAP[key] ??
           `@elizaos/plugin-${key}`;
-        pluginsToLoad.add(pluginName);
+        pluginsToLoad.add(normalizePluginPackageName(pluginName));
       }
     }
   }
@@ -387,7 +421,7 @@ export function collectPluginNames(config: MilaidyConfig): Set<string> {
       if (isEnabled) {
         const pluginName = OPTIONAL_PLUGIN_MAP[featureName];
         if (pluginName) {
-          pluginsToLoad.add(pluginName);
+          pluginsToLoad.add(normalizePluginPackageName(pluginName));
         }
       }
     }
@@ -395,7 +429,7 @@ export function collectPluginNames(config: MilaidyConfig): Set<string> {
 
   // x402 plugin — auto-load when config section enabled
   if (config.x402?.enabled) {
-    pluginsToLoad.add("@elizaos/plugin-x402");
+    pluginsToLoad.add(normalizePluginPackageName("@elizaos/plugin-x402"));
   }
 
   // User-installed plugins from config.plugins.installs
@@ -405,7 +439,7 @@ export function collectPluginNames(config: MilaidyConfig): Set<string> {
   if (installs && typeof installs === "object") {
     for (const [packageName, record] of Object.entries(installs)) {
       if (record && typeof record === "object") {
-        pluginsToLoad.add(packageName);
+        pluginsToLoad.add(normalizePluginPackageName(packageName));
       }
     }
   }
@@ -916,6 +950,198 @@ export function applyConnectorSecretsToEnv(config: MilaidyConfig): void {
 }
 
 /**
+ * Normalize equivalent runtime secret names so plugin settings are consistent.
+ *
+ * - ALICE_GH_TOKEN ↔ GITHUB_API_TOKEN
+ * - DISCORD_BOT_TOKEN ↔ DISCORD_API_TOKEN
+ */
+/** @internal Exported for testing. */
+export function applyRuntimeSecretAliases(): void {
+  const aliceGhToken = process.env.ALICE_GH_TOKEN?.trim();
+  const githubApiToken = process.env.GITHUB_API_TOKEN?.trim();
+  if (!githubApiToken && aliceGhToken) {
+    process.env.GITHUB_API_TOKEN = aliceGhToken;
+  } else if (!aliceGhToken && githubApiToken) {
+    process.env.ALICE_GH_TOKEN = githubApiToken;
+  }
+
+  const discordApiToken = process.env.DISCORD_API_TOKEN?.trim();
+  const discordBotToken = process.env.DISCORD_BOT_TOKEN?.trim();
+  if (!discordApiToken && discordBotToken) {
+    process.env.DISCORD_API_TOKEN = discordBotToken;
+  } else if (!discordBotToken && discordApiToken) {
+    process.env.DISCORD_BOT_TOKEN = discordApiToken;
+  }
+}
+
+interface StartupPluginRequirement {
+  packageName: string;
+  reason: string;
+}
+
+function hasConnectorToken(
+  config: MilaidyConfig,
+  connectorName: string,
+): boolean {
+  const connectors = config.connectors ?? config.channels ?? {};
+  const connector = connectors[connectorName];
+  if (!connector || typeof connector !== "object") return false;
+  const connectorConfig = connector as Record<string, unknown>;
+  for (const key of ["token", "botToken", "apiKey"]) {
+    const value = connectorConfig[key];
+    if (typeof value === "string" && value.trim()) return true;
+  }
+  return false;
+}
+
+function collectStartupPluginRequirements(
+  config: MilaidyConfig,
+): StartupPluginRequirement[] {
+  const requirements: StartupPluginRequirement[] = [];
+  const seen = new Set<string>();
+
+  const add = (packageName: string, reason: string) => {
+    const normalized = normalizePluginPackageName(packageName);
+    if (seen.has(normalized)) return;
+    seen.add(normalized);
+    requirements.push({ packageName: normalized, reason });
+  };
+
+  if (
+    hasConnectorToken(config, "discord") ||
+    process.env.DISCORD_API_TOKEN?.trim() ||
+    process.env.DISCORD_BOT_TOKEN?.trim()
+  ) {
+    add("@elizaos/plugin-discord", "discord connector configured");
+  }
+
+  if (hasConnectorToken(config, "telegram") || process.env.TELEGRAM_BOT_TOKEN) {
+    add("@elizaos/plugin-telegram", "telegram connector configured");
+  }
+
+  if (process.env.GITHUB_API_TOKEN?.trim() || process.env.ALICE_GH_TOKEN?.trim()) {
+    add("@elizaos/plugin-github", "github token configured");
+  }
+
+  return requirements;
+}
+
+async function resolveInstallRecordPackageRoot(
+  installPath: string,
+  packageName: string,
+): Promise<string | null> {
+  const absInstallPath = path.resolve(installPath);
+  const npmLayoutPath = path.join(
+    absInstallPath,
+    "node_modules",
+    ...packageName.split("/"),
+  );
+  try {
+    const stat = await fs.stat(npmLayoutPath);
+    if (stat.isDirectory()) return npmLayoutPath;
+  } catch {
+    // Fall through to direct package layout checks.
+  }
+
+  try {
+    const pkgStat = await fs.stat(path.join(absInstallPath, "package.json"));
+    if (pkgStat.isFile()) return absInstallPath;
+  } catch {
+    // No usable package root in this install path.
+  }
+
+  return null;
+}
+
+async function hasUsablePluginPackage(
+  config: MilaidyConfig,
+  packageName: string,
+): Promise<boolean> {
+  const req = createRequire(import.meta.url);
+  try {
+    const pkgJsonPath = req.resolve(`${packageName}/package.json`);
+    const pkgRoot = path.dirname(pkgJsonPath);
+    const entry = await resolvePackageRuntimeEntry(pkgRoot);
+    if (entry) return true;
+  } catch {
+    // Not available from bundled node_modules; continue with install records.
+  }
+
+  const installs = config.plugins?.installs;
+  if (!installs || typeof installs !== "object") return false;
+
+  for (const [installedName, record] of Object.entries(installs)) {
+    if (normalizePluginPackageName(installedName) !== packageName) continue;
+    if (!record || typeof record !== "object") continue;
+
+    const installRecord = record as PluginInstallRecord;
+    if (!installRecord.installPath) continue;
+    const packageRoot = await resolveInstallRecordPackageRoot(
+      installRecord.installPath,
+      packageName,
+    );
+    if (!packageRoot) continue;
+
+    const entry = await resolvePackageRuntimeEntry(packageRoot);
+    if (entry) return true;
+  }
+
+  return false;
+}
+
+function isStartupPluginBootstrapEnabled(): boolean {
+  const raw = process.env.MILAIDY_STARTUP_PLUGIN_BOOTSTRAP?.trim().toLowerCase();
+  if (!raw) return true;
+  if (["1", "true", "yes", "on"].includes(raw)) return true;
+  if (["0", "false", "no", "off"].includes(raw)) return false;
+  return true;
+}
+
+async function ensureStartupPluginsInstalled(
+  config: MilaidyConfig,
+): Promise<boolean> {
+  if (!isStartupPluginBootstrapEnabled()) return false;
+
+  const requirements = collectStartupPluginRequirements(config);
+  if (requirements.length === 0) return false;
+
+  let changed = false;
+  for (const { packageName, reason } of requirements) {
+    if (await hasUsablePluginPackage(config, packageName)) {
+      continue;
+    }
+
+    logger.info(
+      `[milaidy] Startup plugin bootstrap: ${packageName} unavailable (${reason}); attempting install`,
+    );
+    try {
+      const result = await installPlugin(packageName, (progress) => {
+        logger.info(
+          `[milaidy][startup-plugin] ${progress.pluginName} ${progress.phase}: ${progress.message}`,
+        );
+      });
+
+      if (result.success) {
+        changed = true;
+        logger.info(
+          `[milaidy] Startup plugin bootstrap installed ${result.pluginName}@${result.version}`,
+        );
+      } else {
+        logger.warn(
+          `[milaidy] Startup plugin bootstrap failed for ${packageName}: ${result.error ?? "unknown error"}`,
+        );
+      }
+    } catch (err) {
+      logger.warn(
+        `[milaidy] Startup plugin bootstrap crashed for ${packageName}: ${formatError(err)}`,
+      );
+    }
+  }
+
+  return changed;
+}
+
+/**
  * Propagate cloud config from Milaidy config into process.env so the
  * ElizaCloud plugin can discover settings at startup.
  */
@@ -1188,7 +1414,13 @@ export function buildCharacterFromConfig(config: MilaidyConfig): Character {
     "AI_GATEWAY_TIMEOUT_MS",
     "VALIDATION_LEVEL",
     "OLLAMA_BASE_URL",
+    "DISCORD_API_TOKEN",
     "DISCORD_BOT_TOKEN",
+    "DISCORD_APPLICATION_ID",
+    "DISCORD_SHOULD_IGNORE_BOT_MESSAGES",
+    "DISCORD_SHOULD_IGNORE_DIRECT_MESSAGES",
+    "DISCORD_SHOULD_RESPOND_ONLY_TO_MENTIONS",
+    "DISCORD_LISTEN_CHANNEL_IDS",
     "TELEGRAM_BOT_TOKEN",
     "SLACK_BOT_TOKEN",
     "SLACK_APP_TOKEN",
@@ -1198,6 +1430,15 @@ export function buildCharacterFromConfig(config: MilaidyConfig): Character {
     "MSTEAMS_APP_PASSWORD",
     "MATTERMOST_BOT_TOKEN",
     "MATTERMOST_BASE_URL",
+    "GITHUB_API_TOKEN",
+    "GITHUB_OWNER",
+    "GITHUB_REPO",
+    "GITHUB_BRANCH",
+    "GITHUB_WEBHOOK_SECRET",
+    "GITHUB_APP_ID",
+    "GITHUB_APP_PRIVATE_KEY",
+    "GITHUB_INSTALLATION_ID",
+    "ALICE_GH_TOKEN",
     // ElizaCloud secrets
     "ELIZAOS_CLOUD_API_KEY",
     "ELIZAOS_CLOUD_BASE_URL",
@@ -1929,6 +2170,7 @@ export async function startEliza(
 
   // 2. Push channel secrets into process.env for plugin discovery
   applyConnectorSecretsToEnv(config);
+  applyRuntimeSecretAliases();
 
   // 2b. Propagate cloud config into process.env for ElizaCloud plugin
   applyCloudConfigToEnv(config);
@@ -1938,6 +2180,18 @@ export async function startEliza(
 
   // 2d. Propagate database config into process.env for plugin-sql
   applyDatabaseConfigToEnv(config);
+
+  // 2e. Ensure connector/integration plugins are physically installable
+  // before plugin resolution (handles broken/missing npm publishes).
+  const startupPluginsChanged = await ensureStartupPluginsInstalled(config);
+  if (startupPluginsChanged) {
+    config = loadMilaidyConfig();
+    applyConnectorSecretsToEnv(config);
+    applyRuntimeSecretAliases();
+    applyCloudConfigToEnv(config);
+    applyX402ConfigToEnv(config);
+    applyDatabaseConfigToEnv(config);
+  }
 
   // 2d-iii. OG tracking code initialization
   try {
@@ -2631,7 +2885,7 @@ export async function startEliza(
           }
 
           // Reload config from disk (updated by API)
-          const freshConfig = loadMilaidyConfig();
+          let freshConfig = loadMilaidyConfig();
 
           // Propagate secrets & cloud config into process.env so plugins
           // (especially plugin-elizacloud) can discover them.  The initial
@@ -2639,9 +2893,21 @@ export async function startEliza(
           // because the config may have changed (e.g. cloud enabled during
           // onboarding).
           applyConnectorSecretsToEnv(freshConfig);
+          applyRuntimeSecretAliases();
           applyCloudConfigToEnv(freshConfig);
           applyX402ConfigToEnv(freshConfig);
           applyDatabaseConfigToEnv(freshConfig);
+
+          const hotReloadPluginsChanged =
+            await ensureStartupPluginsInstalled(freshConfig);
+          if (hotReloadPluginsChanged) {
+            freshConfig = loadMilaidyConfig();
+            applyConnectorSecretsToEnv(freshConfig);
+            applyRuntimeSecretAliases();
+            applyCloudConfigToEnv(freshConfig);
+            applyX402ConfigToEnv(freshConfig);
+            applyDatabaseConfigToEnv(freshConfig);
+          }
 
           // Apply subscription-based credentials (Claude Max, Codex Max)
           // that may have been set up during onboarding.

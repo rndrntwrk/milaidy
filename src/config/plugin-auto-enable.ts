@@ -73,6 +73,13 @@ export const AUTH_PROVIDER_PLUGINS: Record<string, string> = {
   ELIZAOS_CLOUD_ENABLED: "@elizaos/plugin-elizacloud",
 };
 
+export const INTEGRATION_ENV_PLUGINS: Record<string, string> = {
+  DISCORD_API_TOKEN: "@elizaos/plugin-discord",
+  TELEGRAM_BOT_TOKEN: "@elizaos/plugin-telegram",
+  GITHUB_API_TOKEN: "@elizaos/plugin-github",
+  ALICE_GH_TOKEN: "@elizaos/plugin-github",
+};
+
 const FEATURE_PLUGINS: Record<string, string> = {
   browser: "@elizaos/plugin-browser",
   cron: "@elizaos/plugin-cron",
@@ -189,7 +196,11 @@ export function applyPluginAutoEnable(
   }
 
   // Env var API keys
-  for (const [envKey, pluginName] of Object.entries(AUTH_PROVIDER_PLUGINS)) {
+  const envPluginMap = {
+    ...AUTH_PROVIDER_PLUGINS,
+    ...INTEGRATION_ENV_PLUGINS,
+  };
+  for (const [envKey, pluginName] of Object.entries(envPluginMap)) {
     const envValue = env[envKey];
     if (!envValue || typeof envValue !== "string" || envValue.trim() === "")
       continue;

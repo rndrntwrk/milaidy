@@ -15,6 +15,7 @@ import type { MilaidyConfig } from "../config/config.js";
 import {
   applyCloudConfigToEnv,
   applyConnectorSecretsToEnv,
+  applyRuntimeSecretAliases,
   applyDatabaseConfigToEnv,
   buildCharacterFromConfig,
   CUSTOM_PLUGINS_DIRNAME,
@@ -63,6 +64,10 @@ describe("collectPluginNames", () => {
     "AI_GATEWAY_API_KEY",
     "AIGATEWAY_API_KEY",
     "OLLAMA_BASE_URL",
+    "DISCORD_API_TOKEN",
+    "TELEGRAM_BOT_TOKEN",
+    "GITHUB_API_TOKEN",
+    "ALICE_GH_TOKEN",
     "ELIZAOS_CLOUD_API_KEY",
     "ELIZAOS_CLOUD_ENABLED",
   ];
@@ -152,27 +157,25 @@ describe("collectPluginNames", () => {
       connectors: { telegram: { botToken: "tok" }, discord: { token: "tok" } },
     } as MilaidyConfig;
     const names = collectPluginNames(config);
-    // Telegram maps to the local enhanced plugin, not the upstream one
-    expect(names.has("@milaidy/plugin-telegram-enhanced")).toBe(true);
+    // Telegram maps to the upstream plugin to avoid broken wrapper packaging.
+    expect(names.has("@elizaos/plugin-telegram")).toBe(true);
     expect(names.has("@elizaos/plugin-discord")).toBe(true);
     expect(names.has("@elizaos/plugin-slack")).toBe(false);
   });
 
-  it("uses enhanced Telegram plugin when telegram is enabled via plugins.entries", () => {
+  it("uses upstream Telegram plugin when telegram is enabled via plugins.entries", () => {
     const config = {
       plugins: {
         entries: { telegram: { enabled: true } },
       },
     } as unknown as MilaidyConfig;
     const names = collectPluginNames(config);
-    // Should load the enhanced telegram plugin, NOT the base @elizaos/plugin-telegram
-    expect(names.has("@milaidy/plugin-telegram-enhanced")).toBe(true);
-    expect(names.has("@elizaos/plugin-telegram")).toBe(false);
+    expect(names.has("@elizaos/plugin-telegram")).toBe(true);
   });
 
-  it("uses enhanced Telegram plugin from CHANNEL_PLUGIN_MAP for connectors with plugins.entries", () => {
-    // When both connectors AND plugins.entries set telegram, the enhanced
-    // plugin should load (not both enhanced + base).
+  it("uses upstream Telegram plugin from CHANNEL_PLUGIN_MAP for connectors with plugins.entries", () => {
+    // When both connectors AND plugins.entries set telegram, the runtime
+    // should keep a single canonical plugin package.
     const config = {
       connectors: { telegram: { botToken: "tok" } },
       plugins: {
@@ -180,8 +183,7 @@ describe("collectPluginNames", () => {
       },
     } as unknown as MilaidyConfig;
     const names = collectPluginNames(config);
-    expect(names.has("@milaidy/plugin-telegram-enhanced")).toBe(true);
-    expect(names.has("@elizaos/plugin-telegram")).toBe(false);
+    expect(names.has("@elizaos/plugin-telegram")).toBe(true);
   });
 
   it("does not load telegram plugin when plugins.entries.telegram.enabled is false", () => {
@@ -191,8 +193,30 @@ describe("collectPluginNames", () => {
       },
     } as unknown as MilaidyConfig;
     const names = collectPluginNames(config);
-    expect(names.has("@milaidy/plugin-telegram-enhanced")).toBe(false);
     expect(names.has("@elizaos/plugin-telegram")).toBe(false);
+  });
+
+  it("normalizes legacy @milaidy/plugin-telegram-enhanced allowlist entry", () => {
+    const config = {
+      plugins: {
+        allow: ["@milaidy/plugin-telegram-enhanced"],
+      },
+    } as unknown as MilaidyConfig;
+    const names = collectPluginNames(config);
+    expect(names.has("@elizaos/plugin-telegram")).toBe(true);
+    expect(names.has("@milaidy/plugin-telegram-enhanced")).toBe(false);
+  });
+
+  it("loads github plugin when GITHUB_API_TOKEN is present", () => {
+    process.env.GITHUB_API_TOKEN = "ghp_test";
+    const names = collectPluginNames({} as MilaidyConfig);
+    expect(names.has("@elizaos/plugin-github")).toBe(true);
+  });
+
+  it("loads github plugin when only ALICE_GH_TOKEN is present", () => {
+    process.env.ALICE_GH_TOKEN = "ghp_alice";
+    const names = collectPluginNames({} as MilaidyConfig);
+    expect(names.has("@elizaos/plugin-github")).toBe(true);
   });
 
   it("does not add connector plugins for empty connector configs", () => {
@@ -349,6 +373,7 @@ describe("collectPluginNames", () => {
 
 describe("applyConnectorSecretsToEnv", () => {
   const envKeys = [
+    "DISCORD_API_TOKEN",
     "DISCORD_BOT_TOKEN",
     "TELEGRAM_BOT_TOKEN",
     "SLACK_BOT_TOKEN",
@@ -373,7 +398,15 @@ describe("applyConnectorSecretsToEnv", () => {
       connectors: { discord: { token: "discord-tok-123" } },
     } as MilaidyConfig;
     applyConnectorSecretsToEnv(config);
-    expect(process.env.DISCORD_BOT_TOKEN).toBe("discord-tok-123");
+    expect(process.env.DISCORD_API_TOKEN).toBe("discord-tok-123");
+  });
+
+  it("copies Discord botToken from config to env", () => {
+    const config = {
+      connectors: { discord: { botToken: "discord-bot-tok-123" } },
+    } as MilaidyConfig;
+    applyConnectorSecretsToEnv(config);
+    expect(process.env.DISCORD_API_TOKEN).toBe("discord-bot-tok-123");
   });
 
   it("copies Telegram botToken from config to env", () => {
@@ -410,7 +443,7 @@ describe("applyConnectorSecretsToEnv", () => {
       connectors: { discord: { token: "  " } },
     } as MilaidyConfig;
     applyConnectorSecretsToEnv(config);
-    expect(process.env.DISCORD_BOT_TOKEN).toBeUndefined();
+    expect(process.env.DISCORD_API_TOKEN).toBeUndefined();
   });
 
   it("handles missing connectors gracefully", () => {
@@ -430,6 +463,43 @@ describe("applyConnectorSecretsToEnv", () => {
     } as MilaidyConfig;
     applyConnectorSecretsToEnv(config);
     expect(process.env.TELEGRAM_BOT_TOKEN).toBe("legacy-tg-tok");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applyRuntimeSecretAliases
+// ---------------------------------------------------------------------------
+
+describe("applyRuntimeSecretAliases", () => {
+  const envKeys = [
+    "ALICE_GH_TOKEN",
+    "GITHUB_API_TOKEN",
+    "DISCORD_API_TOKEN",
+    "DISCORD_BOT_TOKEN",
+  ];
+  const snap = envSnapshot(envKeys);
+  beforeEach(() => {
+    snap.save();
+    for (const key of envKeys) delete process.env[key];
+  });
+  afterEach(() => snap.restore());
+
+  it("maps ALICE_GH_TOKEN to GITHUB_API_TOKEN", () => {
+    process.env.ALICE_GH_TOKEN = "ghp_alice";
+    applyRuntimeSecretAliases();
+    expect(process.env.GITHUB_API_TOKEN).toBe("ghp_alice");
+  });
+
+  it("maps GITHUB_API_TOKEN to ALICE_GH_TOKEN when fallback is missing", () => {
+    process.env.GITHUB_API_TOKEN = "ghp_github";
+    applyRuntimeSecretAliases();
+    expect(process.env.ALICE_GH_TOKEN).toBe("ghp_github");
+  });
+
+  it("maps DISCORD_BOT_TOKEN to DISCORD_API_TOKEN", () => {
+    process.env.DISCORD_BOT_TOKEN = "discord_bot";
+    applyRuntimeSecretAliases();
+    expect(process.env.DISCORD_API_TOKEN).toBe("discord_bot");
   });
 });
 
@@ -561,7 +631,12 @@ describe("applyDatabaseConfigToEnv", () => {
 // ---------------------------------------------------------------------------
 
 describe("buildCharacterFromConfig", () => {
-  const envKeys = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY"];
+  const envKeys = [
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "DISCORD_API_TOKEN",
+    "GITHUB_API_TOKEN",
+  ];
   const snap = envSnapshot(envKeys);
   beforeEach(() => {
     snap.save();
@@ -593,9 +668,13 @@ describe("buildCharacterFromConfig", () => {
   it("collects API keys from process.env as secrets", () => {
     process.env.ANTHROPIC_API_KEY = "sk-ant-test";
     process.env.OPENAI_API_KEY = "sk-oai-test";
+    process.env.DISCORD_API_TOKEN = "discord-test";
+    process.env.GITHUB_API_TOKEN = "ghp-test";
     const char = buildCharacterFromConfig({} as MilaidyConfig);
     expect(char.secrets?.ANTHROPIC_API_KEY).toBe("sk-ant-test");
     expect(char.secrets?.OPENAI_API_KEY).toBe("sk-oai-test");
+    expect(char.secrets?.DISCORD_API_TOKEN).toBe("discord-test");
+    expect(char.secrets?.GITHUB_API_TOKEN).toBe("ghp-test");
   });
 
   it("excludes empty or whitespace-only env values from secrets", () => {

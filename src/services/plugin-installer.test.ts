@@ -100,6 +100,29 @@ async function writeLocalPluginSource(
   return packageDir;
 }
 
+async function writeBrokenLocalPluginSource(
+  rootDir: string,
+  packageName: string,
+  version: string,
+): Promise<string> {
+  const packageDir = path.join(rootDir, "local-plugin-broken-src");
+  await fs.mkdir(packageDir, { recursive: true });
+  await fs.writeFile(
+    path.join(packageDir, "package.json"),
+    JSON.stringify(
+      {
+        name: packageName,
+        version,
+        type: "module",
+        main: "dist/index.js",
+      },
+      null,
+      2,
+    ),
+  );
+  return packageDir;
+}
+
 // ---------------------------------------------------------------------------
 // Setup / Teardown
 // ---------------------------------------------------------------------------
@@ -204,6 +227,55 @@ describe("plugin-installer", () => {
       expect(localPlugin).toBeDefined();
       expect(localPlugin?.version).toBe("1.2.3");
     }, 180_000);
+
+    it("fails local workspace install when runtime entry files are missing", async () => {
+      const brokenSourcePath = await writeBrokenLocalPluginSource(
+        tmpDir,
+        "@elizaos/plugin-broken-local",
+        "0.1.0",
+      );
+      const { getPluginInfo } = await import("./registry-client.js");
+      vi.mocked(getPluginInfo).mockResolvedValue(
+        testPluginInfo({
+          name: "@elizaos/plugin-broken-local",
+          npm: {
+            package: "@elizaos/plugin-broken-local",
+            v0Version: null,
+            v1Version: null,
+            v2Version: "0.1.0",
+          },
+          localPath: brokenSourcePath,
+        }),
+      );
+
+      const { installPlugin } = await loadInstaller();
+      const result = await installPlugin("@elizaos/plugin-broken-local");
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("no runtime entry file was found");
+    }, 180_000);
+
+    it("resolvePackageRuntimeEntry returns null when declared main is missing", async () => {
+      const pkgRoot = path.join(tmpDir, "runtime-entry-missing");
+      await fs.mkdir(pkgRoot, { recursive: true });
+      await fs.writeFile(
+        path.join(pkgRoot, "package.json"),
+        JSON.stringify(
+          {
+            name: "@elizaos/plugin-runtime-missing",
+            version: "1.0.0",
+            main: "dist/index.js",
+          },
+          null,
+          2,
+        ),
+      );
+
+      const { resolvePackageRuntimeEntry } = await loadInstaller();
+      const entry = await resolvePackageRuntimeEntry(pkgRoot);
+
+      expect(entry).toBeNull();
+    });
   });
 
   describe("uninstallPlugin", () => {

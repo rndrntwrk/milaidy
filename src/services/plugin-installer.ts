@@ -234,6 +234,21 @@ async function _installPlugin(
     emit("downloading", `Installing ${canonicalName} from local workspace...`);
     try {
       await runLocalPathInstall(pm, canonicalName, localPath, targetDir);
+      const validation = await validateInstalledPlugin(
+        targetDir,
+        canonicalName,
+      );
+      if (!validation.ok) {
+        emit("error", validation.error);
+        return {
+          success: false,
+          pluginName: canonicalName,
+          version: "",
+          installPath: targetDir,
+          requiresRestart: false,
+          error: validation.error,
+        };
+      }
       installedVersion = await readInstalledVersion(
         targetDir,
         canonicalName,
@@ -252,6 +267,13 @@ async function _installPlugin(
     emit("downloading", `Installing ${canonicalName}@${npmVersion}...`);
     try {
       await runPackageInstall(pm, canonicalName, npmVersion, targetDir);
+      const validation = await validateInstalledPlugin(
+        targetDir,
+        canonicalName,
+      );
+      if (!validation.ok) {
+        throw new Error(validation.error);
+      }
       installedVersion = await readInstalledVersion(
         targetDir,
         canonicalName,
@@ -267,6 +289,13 @@ async function _installPlugin(
 
       try {
         await gitCloneInstall(info, targetDir, onProgress);
+        const validation = await validateInstalledPlugin(
+          targetDir,
+          canonicalName,
+        );
+        if (!validation.ok) {
+          throw new Error(validation.error);
+        }
         installedVersion = info.npm.v2Version || info.npm.v1Version || "git";
         installSource = "path"; // git-cloned plugins are local path installs
         installed = true;
@@ -299,17 +328,19 @@ async function _installPlugin(
 
   emit("validating", "Verifying plugin can be loaded...");
 
-  // Validate the plugin is importable
-  const entryPoint = await resolveEntryPoint(targetDir, canonicalName);
-  if (!entryPoint) {
-    emit("error", "Plugin installed but entry point not found");
+  const finalValidation = await validateInstalledPlugin(
+    targetDir,
+    canonicalName,
+  );
+  if (!finalValidation.ok) {
+    emit("error", finalValidation.error);
     return {
       success: false,
       pluginName: canonicalName,
       version: installedVersion,
       installPath: targetDir,
       requiresRestart: false,
-      error: "Plugin installed on disk but entry point could not be resolved",
+      error: finalValidation.error,
     };
   }
 
@@ -701,6 +732,141 @@ async function resolveEntryPoint(
     return targetDir;
   } catch {
     // no package.json
+  }
+
+  return null;
+}
+
+interface InstallValidationResult {
+  ok: boolean;
+  error: string;
+}
+
+async function validateInstalledPlugin(
+  targetDir: string,
+  packageName: string,
+): Promise<InstallValidationResult> {
+  const packageRoot = await resolveEntryPoint(targetDir, packageName);
+  if (!packageRoot) {
+    return {
+      ok: false,
+      error: `Plugin "${packageName}" installed on disk but package root could not be resolved`,
+    };
+  }
+
+  const runtimeEntry = await resolvePackageRuntimeEntry(packageRoot);
+  if (!runtimeEntry) {
+    return {
+      ok: false,
+      error: `Plugin "${packageName}" installed but no runtime entry file was found (main/exports/dist/index.js)`,
+    };
+  }
+
+  return { ok: true, error: "" };
+}
+
+function collectRuntimeExportCandidates(
+  value: unknown,
+  candidates: string[],
+): void {
+  if (typeof value === "string") {
+    candidates.push(value);
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectRuntimeExportCandidates(item, candidates);
+    }
+    return;
+  }
+
+  if (!value || typeof value !== "object") {
+    return;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  if ("." in record) {
+    collectRuntimeExportCandidates(record["."], candidates);
+    return;
+  }
+
+  for (const field of ["import", "default", "require", "node"] as const) {
+    if (field in record) {
+      collectRuntimeExportCandidates(record[field], candidates);
+    }
+  }
+}
+
+function normaliseRuntimeEntryCandidate(candidate: string): string | null {
+  const trimmed = candidate.trim();
+  if (!trimmed) return null;
+
+  const normalised = trimmed.replace(/^[.][/\\]/, "");
+  if (!normalised) return null;
+
+  if (
+    path.isAbsolute(normalised) ||
+    normalised.includes("..") ||
+    normalised.startsWith("node:")
+  ) {
+    return null;
+  }
+
+  if (normalised.toLowerCase().endsWith(".d.ts")) {
+    return null;
+  }
+
+  return normalised;
+}
+
+/** @internal Exported for testing. */
+export async function resolvePackageRuntimeEntry(
+  packageRoot: string,
+): Promise<string | null> {
+  const pkgJsonPath = path.join(packageRoot, "package.json");
+
+  const runtimeCandidates: string[] = [];
+  try {
+    const pkgRaw = await fs.readFile(pkgJsonPath, "utf-8");
+    const pkg = JSON.parse(pkgRaw) as Record<string, unknown>;
+
+    collectRuntimeExportCandidates(pkg.exports, runtimeCandidates);
+
+    if (typeof pkg.module === "string") {
+      runtimeCandidates.push(pkg.module);
+    }
+
+    if (typeof pkg.main === "string") {
+      runtimeCandidates.push(pkg.main);
+    }
+  } catch {
+    // package.json may be absent or malformed; fall back to common entry paths.
+  }
+
+  runtimeCandidates.push(
+    "dist/index.js",
+    "dist/src/index.js",
+    "index.js",
+    "lib/index.js",
+  );
+
+  const seen = new Set<string>();
+  for (const rawCandidate of runtimeCandidates) {
+    const candidate = normaliseRuntimeEntryCandidate(rawCandidate);
+    if (!candidate || seen.has(candidate)) continue;
+    seen.add(candidate);
+
+    const candidatePath = path.resolve(packageRoot, candidate);
+    try {
+      const stat = await fs.stat(candidatePath);
+      if (stat.isFile()) {
+        return candidatePath;
+      }
+    } catch {
+      // Continue trying fallback candidates.
+    }
   }
 
   return null;
