@@ -348,6 +348,18 @@ export async function handleKnowledgeRoutes(
         fragmentCount: 0, // Will be populated below if needed
         source: metadata?.source || "upload",
         url: metadata?.url,
+        sourcePath:
+          typeof metadata?.sourcePath === "string" ? metadata.sourcePath : null,
+        sourceHash:
+          typeof metadata?.sourceHash === "string" ? metadata.sourceHash : null,
+        ingestLabel:
+          typeof metadata?.ingestLabel === "string"
+            ? metadata.ingestLabel
+            : null,
+        metadataVersion:
+          typeof metadata?.metadataVersion === "number"
+            ? metadata.metadataVersion
+            : null,
       };
     });
 
@@ -401,6 +413,18 @@ export async function handleKnowledgeRoutes(
         fragmentCount,
         source: metadata?.source || "upload",
         url: metadata?.url,
+        sourcePath:
+          typeof metadata?.sourcePath === "string" ? metadata.sourcePath : null,
+        sourceHash:
+          typeof metadata?.sourceHash === "string" ? metadata.sourceHash : null,
+        ingestLabel:
+          typeof metadata?.ingestLabel === "string"
+            ? metadata.ingestLabel
+            : null,
+        metadataVersion:
+          typeof metadata?.metadataVersion === "number"
+            ? metadata.metadataVersion
+            : null,
         content: document.content,
       },
     });
