@@ -21,12 +21,24 @@ import { ChatAvatar } from "./ChatAvatar.js";
 import { useVoiceChat } from "../hooks/useVoiceChat.js";
 import {
   client,
+  type AutonomyExecutePlanRequest,
   type ConversationMode,
   type Five55AutonomyMode,
   type Five55AutonomyPreviewResponse,
   type VoiceConfig,
 } from "../api-client.js";
 import { MessageContent } from "./MessageContent.js";
+import {
+  didToolActionSucceed,
+  findLastToolEnvelope,
+  getToolActionFailureMessage,
+  type ParsedToolEnvelope,
+} from "./quickLayerPlan.js";
+import {
+  computeQuickLayerRetryDelayMs,
+  getHttpStatusFromError,
+  shouldRetryQuickLayerError,
+} from "./quickLayerRetry.js";
 
 function renderInlineMarkdown(line: string): ReactNode[] {
   const nodes: ReactNode[] = [];
@@ -73,59 +85,6 @@ function renderMessageText(text: string): ReactNode {
       {i < lines.length - 1 ? <br /> : null}
     </span>
   ));
-}
-
-type ParsedToolEnvelope = {
-  ok?: boolean;
-  action?: string;
-  message?: string;
-  status?: number;
-  data?: Record<string, unknown>;
-};
-
-function parseToolEnvelopeFromPipelineResult(
-  pipelineResult: unknown,
-): ParsedToolEnvelope | null {
-  if (!pipelineResult || typeof pipelineResult !== "object") return null;
-  const pipelineRecord = pipelineResult as Record<string, unknown>;
-  const toolResult = pipelineRecord.result;
-  if (!toolResult || typeof toolResult !== "object") return null;
-  const toolRecord = toolResult as Record<string, unknown>;
-  const text = toolRecord.text;
-  if (typeof text !== "string" || text.trim().length === 0) return null;
-
-  try {
-    const parsed = JSON.parse(text) as Record<string, unknown>;
-    if (!parsed || typeof parsed !== "object") return null;
-    const data = parsed.data;
-    return {
-      ok: typeof parsed.ok === "boolean" ? parsed.ok : undefined,
-      action: typeof parsed.action === "string" ? parsed.action : undefined,
-      message: typeof parsed.message === "string" ? parsed.message : undefined,
-      status: typeof parsed.status === "number" ? parsed.status : undefined,
-      data:
-        data && typeof data === "object" && !Array.isArray(data)
-          ? (data as Record<string, unknown>)
-          : undefined,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function findLastToolEnvelope(
-  results: unknown[],
-  actionName: string,
-): ParsedToolEnvelope | null {
-  const normalizedAction = actionName.trim().toUpperCase();
-  for (let i = results.length - 1; i >= 0; i -= 1) {
-    const envelope = parseToolEnvelopeFromPipelineResult(results[i]);
-    if (!envelope?.action) continue;
-    if (envelope.action.trim().toUpperCase() === normalizedAction) {
-      return envelope;
-    }
-  }
-  return null;
 }
 
 function summarizeStreamState(
@@ -487,6 +446,39 @@ export const ChatView = memo(function ChatView() {
     [],
   );
 
+  const executePlanWithRetry = useCallback(
+    async (
+      input: AutonomyExecutePlanRequest,
+      opts?: { label?: string; maxAttempts?: number },
+    ) => {
+      const label = opts?.label ?? "Action";
+      const maxAttempts = Math.max(1, opts?.maxAttempts ?? 3);
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+          return await client.executeAutonomyPlan(input);
+        } catch (err) {
+          const status = getHttpStatusFromError(err);
+          const shouldRetry = shouldRetryQuickLayerError(
+            err,
+            attempt,
+            maxAttempts,
+          );
+          if (!shouldRetry) throw err;
+
+          const retryDelayMs = computeQuickLayerRetryDelayMs(attempt);
+          setActionNotice(
+            `${label} transient failure (HTTP ${status}). Retrying ${attempt + 1}/${maxAttempts}...`,
+            "info",
+            1800,
+          );
+          await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+        }
+      }
+      throw new Error(`${label} failed`);
+    },
+    [setActionNotice],
+  );
+
   const runAutonomousEstimate = useCallback(async () => {
     if (autoRunMode === "topic" && autoRunTopic.trim().length === 0) {
       setActionNotice(
@@ -543,9 +535,9 @@ export const ChatView = memo(function ChatView() {
     {
       id: "go-live",
       label: "Go Live",
-      pluginIds: ["stream"],
+      pluginIds: ["stream555-control"],
       prompt:
-        "Run STREAM_STATUS first. If the stream is not live, run STREAM_CONTROL with operation=\"start\" and scene=\"default\", then run STREAM_STATUS again and confirm final state, phase, and session.",
+        "Use STREAM555_GO_LIVE to start the active session, then summarize final live state and next production move.",
     },
     {
       id: "autonomous-run",
@@ -634,7 +626,7 @@ export const ChatView = memo(function ChatView() {
     async (layer: QuickLayer) => {
       if (chatSending) return;
       const status = resolveLayerStatus(layer.pluginIds);
-      if (status === "disabled") {
+      if (status === "disabled" && layer.id !== "go-live") {
         const pluginLabel = layer.pluginIds.join(", ");
         setActionNotice(
           `${pluginLabel} is disabled or not active. Enable it in Plugins first.`,
@@ -662,66 +654,147 @@ export const ChatView = memo(function ChatView() {
         : undefined;
 
       if (layer.id === "go-live") {
-        if (!hasPluginRegistration("stream")) {
+        const stream555ControlAvailable =
+          hasPluginRegistration("stream555-control") &&
+          resolveLayerStatus(["stream555-control"]) !== "disabled";
+        const legacyStreamAvailable =
+          hasPluginRegistration("stream") &&
+          resolveLayerStatus(["stream"]) !== "disabled";
+        let stream555FailureReason: string | null = null;
+
+        if (!stream555ControlAvailable && !legacyStreamAvailable) {
           setActionNotice(
-            "stream plugin is not registered. Enable it in Plugins first.",
+            "Neither stream555-control nor stream is available. Enable one in Plugins first.",
             "info",
             2600,
           );
           setTab("plugins");
           return;
         }
-        try {
-          const plan = await client.executeAutonomyPlan({
-            plan: {
-              id: "quick-layer-go-live",
-              steps: [
-                {
-                  id: "status-before",
-                  toolName: "STREAM_STATUS",
-                  params: { scope: "current" },
-                },
-                {
-                  id: "start",
-                  toolName: "STREAM_CONTROL",
-                  params: { operation: "start", scene: "default" },
-                },
-                {
-                  id: "status-after",
-                  toolName: "STREAM_STATUS",
-                  params: { scope: "current" },
-                },
-              ],
-            },
-            request: { source: "user", sourceTrust: 1 },
-            options: { stopOnFailure: false },
-          });
-          const statusEnvelope = findLastToolEnvelope(
-            plan.results,
-            "STREAM_STATUS",
-          );
-          const streamState = summarizeStreamState(statusEnvelope);
-          if (plan.allSucceeded || streamState.live) {
-            setActionNotice(
-              `Go live executed. Stream state: ${streamState.label}.`,
-              "success",
-              2800,
+        let goLiveCompleted = false;
+
+        if (stream555ControlAvailable) {
+          try {
+            const goLivePlan = await executePlanWithRetry({
+              plan: {
+                id: "quick-layer-go-live-stream555",
+                steps: [
+                  {
+                    id: "go-live",
+                    toolName: "STREAM555_GO_LIVE",
+                    params: { scene: "default" },
+                  },
+                ],
+              },
+              request: { source: "user", sourceTrust: 1 },
+              options: { stopOnFailure: false },
+            }, { label: "Go live" });
+
+            if (didToolActionSucceed(goLivePlan, "STREAM555_GO_LIVE")) {
+              setActionNotice(
+                "Go live executed via stream555-control.",
+                "success",
+                2800,
+              );
+              prompt =
+                "You are now live. Give a concise on-air opener, current stream state, and the next production action.";
+              goLiveCompleted = true;
+            } else if (!legacyStreamAvailable) {
+              stream555FailureReason = getToolActionFailureMessage(
+                goLivePlan,
+                "STREAM555_GO_LIVE",
+                "stream555 go-live action did not succeed",
+              );
+              setActionNotice(
+                `Go live failed: ${stream555FailureReason}`,
+                "error",
+                4200,
+              );
+              goLiveCompleted = true;
+            } else {
+              stream555FailureReason = getToolActionFailureMessage(
+                goLivePlan,
+                "STREAM555_GO_LIVE",
+                "stream555 go-live action did not succeed",
+              );
+              setActionNotice(
+                `stream555 go-live failed (${stream555FailureReason}); attempting legacy stream fallback.`,
+                "info",
+                3200,
+              );
+            }
+          } catch (err) {
+            if (!legacyStreamAvailable) {
+              setActionNotice(
+                `Go live execution failed: ${err instanceof Error ? err.message : "unknown error"}`,
+                "error",
+                4200,
+              );
+              goLiveCompleted = true;
+            } else {
+              stream555FailureReason =
+                err instanceof Error ? err.message : "unknown error";
+              setActionNotice(
+                `stream555 go-live request errored (${stream555FailureReason}); attempting legacy stream fallback.`,
+                "info",
+                3200,
+              );
+            }
+          }
+        }
+
+        if (!goLiveCompleted && legacyStreamAvailable) {
+          try {
+            const plan = await executePlanWithRetry({
+              plan: {
+                id: "quick-layer-go-live-legacy",
+                steps: [
+                  {
+                    id: "status-before",
+                    toolName: "STREAM_STATUS",
+                    params: { scope: "current" },
+                  },
+                  {
+                    id: "start",
+                    toolName: "STREAM_CONTROL",
+                    params: { operation: "start", scene: "default" },
+                  },
+                  {
+                    id: "status-after",
+                    toolName: "STREAM_STATUS",
+                    params: { scope: "current" },
+                  },
+                ],
+              },
+              request: { source: "user", sourceTrust: 1 },
+              options: { stopOnFailure: false },
+            }, { label: "Go live fallback" });
+            const statusEnvelope = findLastToolEnvelope(
+              plan.results,
+              "STREAM_STATUS",
             );
-            prompt =
-              "You are now live. Give a concise on-air opener, current stream state, and the next production action.";
-          } else {
+            const streamState = summarizeStreamState(statusEnvelope);
+            if (plan.allSucceeded || streamState.live) {
+              const fallbackMessage = stream555FailureReason
+                ? `Go live executed via legacy fallback (stream555 primary failed: ${stream555FailureReason}). Stream state: ${streamState.label}.`
+                : `Go live executed (legacy fallback). Stream state: ${streamState.label}.`;
+              setActionNotice(fallbackMessage, "info", 3600);
+              prompt =
+                "You are now live. Give a concise on-air opener, current stream state, and the next production action.";
+            } else {
+              setActionNotice(
+                "Go live fallback ran but one or more stream steps failed. Check stream status and retry with exact fixes.",
+                "error",
+                4200,
+              );
+            }
+          } catch (err) {
             setActionNotice(
-              "Go live ran but one or more stream steps failed. Check stream status and retry with exact fixes.",
+              `Go live fallback failed: ${err instanceof Error ? err.message : "unknown error"}`,
               "error",
               4200,
             );
           }
-        } catch (err) {
-          setActionNotice(
-            `Go live execution failed: ${err instanceof Error ? err.message : "unknown error"}`,
-            "error",
-            4200,
-          );
         }
       }
 
@@ -751,7 +824,7 @@ export const ChatView = memo(function ChatView() {
 
       if (layer.id === "screen-share") {
         try {
-          await client.executeAutonomyPlan({
+          const plan = await executePlanWithRetry({
             plan: {
               id: "quick-layer-screen-share",
               steps: [
@@ -764,10 +837,19 @@ export const ChatView = memo(function ChatView() {
             },
             request: { source: "user", sourceTrust: 1 },
             options: { stopOnFailure: false },
-          });
-          setActionNotice("Screen-share request dispatched.", "success", 2600);
-          prompt =
-            "Confirm screen-share is active and narrate what viewers should focus on next.";
+          }, { label: "Screen share" });
+          if (didToolActionSucceed(plan, "STREAM555_SCREEN_SHARE")) {
+            setActionNotice("Screen-share request dispatched.", "success", 2600);
+            prompt =
+              "Confirm screen-share is active and narrate what viewers should focus on next.";
+          } else {
+            const reason = getToolActionFailureMessage(
+              plan,
+              "STREAM555_SCREEN_SHARE",
+              "screen-share action did not succeed",
+            );
+            setActionNotice(`Screen-share request failed: ${reason}`, "error", 4200);
+          }
         } catch (err) {
           setActionNotice(
             `Screen-share request failed: ${err instanceof Error ? err.message : "unknown error"}`,
@@ -779,7 +861,7 @@ export const ChatView = memo(function ChatView() {
 
       if (layer.id === "ads") {
         try {
-          const createPlan = await client.executeAutonomyPlan({
+          const createPlan = await executePlanWithRetry({
             plan: {
               id: "quick-layer-ad-create",
               steps: [
@@ -796,13 +878,23 @@ export const ChatView = memo(function ChatView() {
             },
             request: { source: "user", sourceTrust: 1 },
             options: { stopOnFailure: false },
-          });
+          }, { label: "Ad create" });
+          if (!didToolActionSucceed(createPlan, "STREAM555_AD_CREATE")) {
+            const reason = getToolActionFailureMessage(
+              createPlan,
+              "STREAM555_AD_CREATE",
+              "ad create action did not succeed",
+            );
+            setActionNotice(`Ad create failed: ${reason}`, "error", 4200);
+            return;
+          }
+
           const createdAdId = parseAdIdFromEnvelope(
             findLastToolEnvelope(createPlan.results, "STREAM555_AD_CREATE"),
           );
 
           if (createdAdId) {
-            await client.executeAutonomyPlan({
+            const triggerPlan = await executePlanWithRetry({
               plan: {
                 id: "quick-layer-ad-trigger",
                 steps: [
@@ -818,7 +910,16 @@ export const ChatView = memo(function ChatView() {
               },
               request: { source: "user", sourceTrust: 1 },
               options: { stopOnFailure: false },
-            });
+            }, { label: "Ad trigger" });
+            if (!didToolActionSucceed(triggerPlan, "STREAM555_AD_TRIGGER")) {
+              const reason = getToolActionFailureMessage(
+                triggerPlan,
+                "STREAM555_AD_TRIGGER",
+                "ad trigger action did not succeed",
+              );
+              setActionNotice(`Ad trigger failed: ${reason}`, "error", 4200);
+              return;
+            }
             setActionNotice(
               `Ad created and triggered (${createdAdId}).`,
               "success",
@@ -844,7 +945,7 @@ export const ChatView = memo(function ChatView() {
 
       if (layer.id === "invite-guest") {
         try {
-          await client.executeAutonomyPlan({
+          const plan = await executePlanWithRetry({
             plan: {
               id: "quick-layer-guest-invite",
               steps: [
@@ -857,10 +958,19 @@ export const ChatView = memo(function ChatView() {
             },
             request: { source: "user", sourceTrust: 1 },
             options: { stopOnFailure: false },
-          });
-          setActionNotice("Guest invite generated.", "success", 2600);
-          prompt =
-            "Announce guest invite status and provide concise host handoff guidance.";
+          }, { label: "Guest invite" });
+          if (didToolActionSucceed(plan, "STREAM555_GUEST_INVITE")) {
+            setActionNotice("Guest invite generated.", "success", 2600);
+            prompt =
+              "Announce guest invite status and provide concise host handoff guidance.";
+          } else {
+            const reason = getToolActionFailureMessage(
+              plan,
+              "STREAM555_GUEST_INVITE",
+              "guest invite action did not succeed",
+            );
+            setActionNotice(`Guest invite failed: ${reason}`, "error", 4200);
+          }
         } catch (err) {
           setActionNotice(
             `Guest invite failed: ${err instanceof Error ? err.message : "unknown error"}`,
@@ -872,7 +982,7 @@ export const ChatView = memo(function ChatView() {
 
       if (layer.id === "radio") {
         try {
-          await client.executeAutonomyPlan({
+          const plan = await executePlanWithRetry({
             plan: {
               id: "quick-layer-radio-control",
               steps: [
@@ -885,9 +995,18 @@ export const ChatView = memo(function ChatView() {
             },
             request: { source: "user", sourceTrust: 1 },
             options: { stopOnFailure: false },
-          });
-          setActionNotice("Radio mode updated.", "success", 2600);
-          prompt = "Summarize current radio/audio mode and how it supports this segment.";
+          }, { label: "Radio control" });
+          if (didToolActionSucceed(plan, "STREAM555_RADIO_CONTROL")) {
+            setActionNotice("Radio mode updated.", "success", 2600);
+            prompt = "Summarize current radio/audio mode and how it supports this segment.";
+          } else {
+            const reason = getToolActionFailureMessage(
+              plan,
+              "STREAM555_RADIO_CONTROL",
+              "radio control action did not succeed",
+            );
+            setActionNotice(`Radio control failed: ${reason}`, "error", 4200);
+          }
         } catch (err) {
           setActionNotice(
             `Radio control failed: ${err instanceof Error ? err.message : "unknown error"}`,
@@ -899,7 +1018,7 @@ export const ChatView = memo(function ChatView() {
 
       if (layer.id === "pip") {
         try {
-          await client.executeAutonomyPlan({
+          const plan = await executePlanWithRetry({
             plan: {
               id: "quick-layer-pip-enable",
               steps: [
@@ -912,10 +1031,19 @@ export const ChatView = memo(function ChatView() {
             },
             request: { source: "user", sourceTrust: 1 },
             options: { stopOnFailure: false },
-          });
-          setActionNotice("PiP scene activated.", "success", 2600);
-          prompt =
-            "Confirm PiP composition is active and describe what each frame currently shows.";
+          }, { label: "PiP enable" });
+          if (didToolActionSucceed(plan, "STREAM555_PIP_ENABLE")) {
+            setActionNotice("PiP scene activated.", "success", 2600);
+            prompt =
+              "Confirm PiP composition is active and describe what each frame currently shows.";
+          } else {
+            const reason = getToolActionFailureMessage(
+              plan,
+              "STREAM555_PIP_ENABLE",
+              "PiP action did not succeed",
+            );
+            setActionNotice(`PiP activation failed: ${reason}`, "error", 4200);
+          }
         } catch (err) {
           setActionNotice(
             `PiP activation failed: ${err instanceof Error ? err.message : "unknown error"}`,
@@ -927,7 +1055,7 @@ export const ChatView = memo(function ChatView() {
 
       if (layer.id === "reaction-segment") {
         try {
-          await client.executeAutonomyPlan({
+          const plan = await executePlanWithRetry({
             plan: {
               id: "quick-layer-reaction-segment",
               steps: [
@@ -943,10 +1071,19 @@ export const ChatView = memo(function ChatView() {
             },
             request: { source: "user", sourceTrust: 1 },
             options: { stopOnFailure: false },
-          });
-          setActionNotice("Reaction segment override queued.", "success", 2600);
-          prompt =
-            "Start the next reaction segment now and keep your commentary focused on viewer engagement.";
+          }, { label: "Reaction segment override" });
+          if (didToolActionSucceed(plan, "STREAM555_SEGMENT_OVERRIDE")) {
+            setActionNotice("Reaction segment override queued.", "success", 2600);
+            prompt =
+              "Start the next reaction segment now and keep your commentary focused on viewer engagement.";
+          } else {
+            const reason = getToolActionFailureMessage(
+              plan,
+              "STREAM555_SEGMENT_OVERRIDE",
+              "segment override action did not succeed",
+            );
+            setActionNotice(`Reaction segment override failed: ${reason}`, "error", 4200);
+          }
         } catch (err) {
           setActionNotice(
             `Reaction segment override failed: ${err instanceof Error ? err.message : "unknown error"}`,
@@ -958,7 +1095,7 @@ export const ChatView = memo(function ChatView() {
 
       if (layer.id === "earnings") {
         try {
-          const earningsPlan = await client.executeAutonomyPlan({
+          const earningsPlan = await executePlanWithRetry({
             plan: {
               id: "quick-layer-earnings-estimate",
               steps: [
@@ -975,7 +1112,16 @@ export const ChatView = memo(function ChatView() {
             },
             request: { source: "user", sourceTrust: 1 },
             options: { stopOnFailure: false },
-          });
+          }, { label: "Earnings estimate" });
+          if (!didToolActionSucceed(earningsPlan, "STREAM555_EARNINGS_ESTIMATE")) {
+            const reason = getToolActionFailureMessage(
+              earningsPlan,
+              "STREAM555_EARNINGS_ESTIMATE",
+              "earnings estimate action did not succeed",
+            );
+            setActionNotice(`Earnings estimate failed: ${reason}`, "error", 4200);
+            return;
+          }
           const envelope = findLastToolEnvelope(
             earningsPlan.results,
             "STREAM555_EARNINGS_ESTIMATE",
@@ -1001,7 +1147,7 @@ export const ChatView = memo(function ChatView() {
 
       if (layer.id === "end-live") {
         try {
-          await client.executeAutonomyPlan({
+          const plan = await executePlanWithRetry({
             plan: {
               id: "quick-layer-end-live",
               steps: [
@@ -1014,10 +1160,19 @@ export const ChatView = memo(function ChatView() {
             },
             request: { source: "user", sourceTrust: 1 },
             options: { stopOnFailure: false },
-          });
-          setActionNotice("End-live request dispatched.", "success", 2600);
-          prompt =
-            "Provide a concise stream wrap-up, final outcomes, and next scheduled action.";
+          }, { label: "End live" });
+          if (didToolActionSucceed(plan, "STREAM555_END_LIVE")) {
+            setActionNotice("End-live request dispatched.", "success", 2600);
+            prompt =
+              "Provide a concise stream wrap-up, final outcomes, and next scheduled action.";
+          } else {
+            const reason = getToolActionFailureMessage(
+              plan,
+              "STREAM555_END_LIVE",
+              "end-live action did not succeed",
+            );
+            setActionNotice(`End-live failed: ${reason}`, "error", 4200);
+          }
         } catch (err) {
           setActionNotice(
             `End-live failed: ${err instanceof Error ? err.message : "unknown error"}`,
@@ -1037,7 +1192,7 @@ export const ChatView = memo(function ChatView() {
             ? catalog.games.find((game) => game.id === selectedGameId)
             : undefined;
 
-          const playPlan = await client.executeAutonomyPlan({
+          const playPlan = await executePlanWithRetry({
             plan: {
               id: "quick-layer-play-games-autonomous",
               steps: [
@@ -1053,7 +1208,7 @@ export const ChatView = memo(function ChatView() {
             },
             request: { source: "user", sourceTrust: 1 },
             options: { stopOnFailure: true },
-          });
+          }, { label: "Play games" });
 
           let launch = parseGameLaunchFromEnvelope(
             findLastToolEnvelope(playPlan.results, "FIVE55_GAMES_PLAY"),
@@ -1119,7 +1274,7 @@ export const ChatView = memo(function ChatView() {
         resolveLayerStatus(["stream"]) !== "disabled"
       ) {
         try {
-          const attachPlan = await client.executeAutonomyPlan({
+          const attachPlan = await executePlanWithRetry({
             plan: {
               id: "quick-layer-game-stream-attach",
               steps: [
@@ -1147,7 +1302,7 @@ export const ChatView = memo(function ChatView() {
             },
             request: { source: "user", sourceTrust: 1 },
             options: { stopOnFailure: false },
-          });
+          }, { label: "Game stream attach" });
           const finalStatus = summarizeStreamState(
             findLastToolEnvelope(attachPlan.results, "STREAM_STATUS"),
           );
@@ -1203,6 +1358,7 @@ export const ChatView = memo(function ChatView() {
       selectPreferredGameId,
       handleChatSend,
       hasPluginRegistration,
+      executePlanWithRetry,
     ],
   );
 
@@ -1264,7 +1420,7 @@ export const ChatView = memo(function ChatView() {
           ? catalog.games.find((game) => game.id === selectedGameId)
           : undefined;
 
-        const playPlan = await client.executeAutonomyPlan({
+        const playPlan = await executePlanWithRetry({
           plan: {
             id: "autonomous-live-games-launch",
             steps: [
@@ -1280,7 +1436,7 @@ export const ChatView = memo(function ChatView() {
           },
           request: { source: "user", sourceTrust: 1 },
           options: { stopOnFailure: true },
-        });
+        }, { label: "Autonomous game launch" });
         const launch = parseGameLaunchFromEnvelope(
           findLastToolEnvelope(playPlan.results, "FIVE55_GAMES_PLAY"),
         );
@@ -1313,7 +1469,7 @@ export const ChatView = memo(function ChatView() {
         };
       }
 
-      const streamPlan = await client.executeAutonomyPlan({
+      const streamPlan = await executePlanWithRetry({
         plan: {
           id: "autonomous-live-stream-start",
           steps: [
@@ -1336,7 +1492,7 @@ export const ChatView = memo(function ChatView() {
         },
         request: { source: "user", sourceTrust: 1 },
         options: { stopOnFailure: false },
-      });
+      }, { label: "Autonomous stream start" });
 
       const finalStatus = summarizeStreamState(
         findLastToolEnvelope(streamPlan.results, "STREAM_STATUS"),
@@ -1390,6 +1546,7 @@ export const ChatView = memo(function ChatView() {
     autoRunTopic,
     autoRunDurationMin,
     handleChatSend,
+    executePlanWithRetry,
   ]);
 
   useEffect(() => {

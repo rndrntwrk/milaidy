@@ -125,7 +125,7 @@ import {
   createHealthHandler,
   type HealthCheck,
 } from "./health.js";
-import { initTelemetry } from "../telemetry/setup.js";
+import { initTelemetry, metrics } from "../telemetry/setup.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1178,6 +1178,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             "STREAM_SESSION_ID",
             "STREAM_API_DIALECT",
             "STREAM_PLUGIN_ENABLED",
+            "STREAM555_CONTROL_PLUGIN_ENABLED",
           ],
           parameters: [
             {
@@ -1242,16 +1243,30 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               currentValue: process.env.STREAM_API_DIALECT ?? null,
               isSet: Boolean(process.env.STREAM_API_DIALECT?.trim()),
             },
-	            {
-	              key: "STREAM_PLUGIN_ENABLED",
-	              type: "string",
-	              description: "Enable/disable stream plugin (1/0)",
-	              required: false,
-	              sensitive: false,
-	              default: "0",
-	              currentValue: process.env.STREAM_PLUGIN_ENABLED ?? null,
-	              isSet: Boolean(process.env.STREAM_PLUGIN_ENABLED?.trim()),
-	            },
+            {
+              key: "STREAM_PLUGIN_ENABLED",
+              type: "string",
+              description: "Enable/disable legacy stream plugin (1/0)",
+              required: false,
+              sensitive: false,
+              default: "0",
+              currentValue: process.env.STREAM_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(process.env.STREAM_PLUGIN_ENABLED?.trim()),
+            },
+            {
+              key: "STREAM555_CONTROL_PLUGIN_ENABLED",
+              type: "string",
+              description:
+                "Enable/disable stream555-control plugin (1/0) for agent-v1 stream actions",
+              required: false,
+              sensitive: false,
+              default: "0",
+              currentValue:
+                process.env.STREAM555_CONTROL_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_CONTROL_PLUGIN_ENABLED?.trim(),
+              ),
+            },
           ],
           validationErrors: [],
           validationWarnings: [],
@@ -6947,6 +6962,13 @@ async function handleRequest(
         ? (body.request.source as "llm" | "user" | "system" | "plugin")
         : "system";
     const stopOnFailure = body.options?.stopOnFailure !== false;
+    const planId = typeof plan.id === "string" ? plan.id.trim() : "";
+    const isQuickLayerPlan = planId.startsWith("quick-layer-");
+    if (isQuickLayerPlan) {
+      metrics.counter("milaidy.quick_layer.plan_total", 1, {
+        plan: planId || "quick-layer-unknown",
+      });
+    }
 
     const results: unknown[] = [];
     let stoppedEarly = false;
@@ -6964,6 +6986,11 @@ async function handleRequest(
       const stepId =
         step.id !== undefined ? String(step.id) : String(index + 1);
       const requestId = `${plan.id ?? "plan"}-${stepId}`;
+      if (isQuickLayerPlan) {
+        metrics.counter("milaidy.quick_layer.dispatch_total", 1, {
+          action: toolName,
+        });
+      }
 
       const result = await pipeline.execute(
         {
@@ -6982,6 +7009,23 @@ async function handleRequest(
       );
 
       results.push(result);
+      if (
+        isQuickLayerPlan &&
+        result &&
+        typeof result === "object" &&
+        "success" in result
+      ) {
+        const succeeded = (result as { success?: boolean }).success;
+        if (succeeded === true) {
+          metrics.counter("milaidy.quick_layer.success_total", 1, {
+            action: toolName,
+          });
+        } else if (succeeded === false) {
+          metrics.counter("milaidy.quick_layer.failure_total", 1, {
+            action: toolName,
+          });
+        }
+      }
 
       if (
         stopOnFailure &&

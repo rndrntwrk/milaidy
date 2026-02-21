@@ -6,6 +6,7 @@ import { EventEmitter } from "node:events";
 import { Readable } from "node:stream";
 
 import { __testOnlyHandleRequest } from "../server.js";
+import { metrics } from "../../telemetry/setup.js";
 
 describe("/api/agent/autonomy/execute-plan", () => {
   const action = {
@@ -128,6 +129,18 @@ describe("/api/agent/autonomy/execute-plan", () => {
     return res as unknown as ServerResponse & typeof res;
   }
 
+  function readCounter(
+    name: string,
+    tags?: Record<string, string>,
+  ): number {
+    const snapshot = metrics.getSnapshot() as {
+      counters?: Record<string, number>;
+    };
+    const counters = snapshot.counters ?? {};
+    const key = tags ? `${name}:${JSON.stringify(tags)}` : name;
+    return Number(counters[key] ?? 0);
+  }
+
   it("executes plan steps through the pipeline", async () => {
     const state = createState();
     const { req, emitBody } = createMockReq(
@@ -240,5 +253,89 @@ describe("/api/agent/autonomy/execute-plan", () => {
     expect(payload.results).toHaveLength(1);
     expect(payload.results[0].success).toBe(false);
     expect(failingPipeline.execute).toHaveBeenCalledTimes(1);
+  });
+
+  it("records quick-layer dispatch and success counters by action", async () => {
+    const state = createState();
+    const tags = { action: "TEST_ACTION" };
+    const dispatchBefore = readCounter("milaidy.quick_layer.dispatch_total", tags);
+    const successBefore = readCounter("milaidy.quick_layer.success_total", tags);
+    const failureBefore = readCounter("milaidy.quick_layer.failure_total", tags);
+
+    const { req, emitBody } = createMockReq(
+      "POST",
+      "/api/agent/autonomy/execute-plan",
+      {
+        plan: {
+          id: "quick-layer-metrics-success",
+          steps: [{ id: "1", toolName: "TEST_ACTION", params: { probe: true } }],
+        },
+        request: { source: "user" },
+      },
+    );
+    const res = createMockRes();
+    const handlePromise = __testOnlyHandleRequest(req, res, state);
+    emitBody();
+    await handlePromise;
+
+    expect(res.statusCode).toBe(200);
+    expect(readCounter("milaidy.quick_layer.dispatch_total", tags)).toBe(
+      dispatchBefore + 1,
+    );
+    expect(readCounter("milaidy.quick_layer.success_total", tags)).toBe(
+      successBefore + 1,
+    );
+    expect(readCounter("milaidy.quick_layer.failure_total", tags)).toBe(
+      failureBefore,
+    );
+  });
+
+  it("records quick-layer failure counters by action", async () => {
+    const failingPipeline = {
+      execute: vi.fn().mockResolvedValue({
+        requestId: "quick-layer-metrics-failure-1",
+        toolName: "TEST_ACTION",
+        success: false,
+        validation: { valid: true, errors: [] },
+        durationMs: 1,
+        error: "simulated failure",
+      }),
+    };
+    const state = createState(
+      failingPipeline as unknown as {
+        execute: typeof pipeline.execute;
+      },
+    );
+    const tags = { action: "TEST_ACTION" };
+    const dispatchBefore = readCounter("milaidy.quick_layer.dispatch_total", tags);
+    const successBefore = readCounter("milaidy.quick_layer.success_total", tags);
+    const failureBefore = readCounter("milaidy.quick_layer.failure_total", tags);
+
+    const { req, emitBody } = createMockReq(
+      "POST",
+      "/api/agent/autonomy/execute-plan",
+      {
+        plan: {
+          id: "quick-layer-metrics-failure",
+          steps: [{ id: "1", toolName: "TEST_ACTION", params: { probe: true } }],
+        },
+        request: { source: "user" },
+      },
+    );
+    const res = createMockRes();
+    const handlePromise = __testOnlyHandleRequest(req, res, state);
+    emitBody();
+    await handlePromise;
+
+    expect(res.statusCode).toBe(200);
+    expect(readCounter("milaidy.quick_layer.dispatch_total", tags)).toBe(
+      dispatchBefore + 1,
+    );
+    expect(readCounter("milaidy.quick_layer.success_total", tags)).toBe(
+      successBefore,
+    );
+    expect(readCounter("milaidy.quick_layer.failure_total", tags)).toBe(
+      failureBefore + 1,
+    );
   });
 });
