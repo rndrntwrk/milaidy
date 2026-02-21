@@ -53,11 +53,14 @@ This checklist tracks production-readiness work for the stream/action expansion 
 - [x] Captured prior live smoke failure mode (`503 {"error":"Autonomy execution pipeline not available"}`) and reproduced baseline before fallback patch.
 - [x] Added server-side direct-runtime fallback for `/api/agent/autonomy/execute-plan` when autonomy pipeline is unavailable, with test coverage.
 - [x] Added regression coverage so direct-runtime steps now return `success=false` when action handlers return `{ success: false }`, including propagated error text.
-- [ ] Post-deploy live smoke against canonical `STREAM555_*` actions still fails at envelope layer with upstream `401 Invalid agent token` (`STREAM555_AGENT_TOKEN` path), despite runtime step execution succeeding.
+- [x] Deploy `22255650648` rolled out image `ghcr.io/render-network-os/555-bot:sha-8216512` with execute-plan failure surfacing fix.
+- [x] Runtime auth remediation executed: agent tier promoted (`curious -> owner`), explicit-scope token minted via `/api/agent/v1/auth/token`, Kubernetes `alice-secrets` patched, and GitHub secrets (`STREAM555_AGENT_TOKEN`, `STREAM_API_BEARER_TOKEN`) synchronized.
+- [ ] Post-remediation live smoke: partial pass only. `STREAM555_AD_CREATE`, `STREAM555_AD_TRIGGER`, `STREAM555_EARNINGS_ESTIMATE`, `STREAM555_END_LIVE` pass; `STREAM555_GO_LIVE` and `STREAM555_SCREEN_SHARE` fail with upstream `409 Request is still processing`; `STREAM555_SEGMENT_OVERRIDE` fails with `404 Segment state not found` (requires `/api/agent/v1/go-live/segments` bootstrap).
 - [ ] Verified live environment smoke pass.
 - [ ] Verified rollback path documented and tested end-to-end in runbook.
 
 ## Immediate Next Actions
 - [-] Execute live smoke path for `P0.6` in staging/prod-like env and capture envelope evidence.
-- [ ] Rotate/fix `STREAM555_AGENT_TOKEN` (secret `production/alice-secrets`) and re-run canonical sequence: `STREAM555_GO_LIVE -> STREAM555_SCREEN_SHARE -> STREAM555_AD_CREATE/TRIGGER -> STREAM555_SEGMENT_OVERRIDE -> STREAM555_EARNINGS_ESTIMATE -> STREAM555_END_LIVE`.
+- [ ] Implement `STREAM555_GO_LIVE`/`STREAM555_SCREEN_SHARE` conflict handling for `409 Request is still processing` (treat as in-flight and poll status or retry with non-colliding idempotency strategy).
+- [ ] Implement segment bootstrap path before `STREAM555_SEGMENT_OVERRIDE` (`/api/agent/v1/go-live/segments` fallback/init) to remove current 404 precondition failure.
 - [ ] Add deploy-time rollback toggle procedure for `STREAM555_CONTROL_PLUGIN_ENABLED` (`P1.4`) and capture proof run.
