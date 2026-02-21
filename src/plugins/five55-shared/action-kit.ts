@@ -49,6 +49,13 @@ export type Five55ActionCode =
   | "E_CAPABILITY_DENIED"
   | "E_RUNTIME_EXCEPTION";
 
+export type ActionLifecycleStage =
+  | "planned"
+  | "validated"
+  | "dispatched"
+  | "succeeded"
+  | "failed";
+
 export type ContractFieldType =
   | "string"
   | "number"
@@ -76,6 +83,34 @@ export interface Five55ActionEnvelope {
   retryable: boolean;
   data?: unknown;
   details?: unknown;
+  trace?: ActionTrace;
+}
+
+export interface ActionTrace {
+  actionId: string;
+  startedAt: string;
+  endedAt: string;
+  sessionId?: string;
+  segmentId?: string;
+  idempotencyKey?: string;
+}
+
+export interface ActionLifecycleEvent {
+  actionId: string;
+  module: string;
+  action: string;
+  stage: ActionLifecycleStage;
+  occurredAt: string;
+  startedAt: string;
+  endedAt?: string;
+  status?: number;
+  code?: Five55ActionCode;
+  message?: string;
+  endpoint?: string;
+  sessionId?: string;
+  segmentId?: string;
+  idempotencyKey?: string;
+  details?: unknown;
 }
 
 export interface ExecuteApiActionOptions {
@@ -88,12 +123,23 @@ export interface ExecuteApiActionOptions {
   requestContract?: ContractSchema;
   responseContract?: ContractSchema;
   transport?: PostJsonOptions;
+  context?: {
+    sessionId?: string;
+    segmentId?: string;
+    actionId?: string;
+  };
 }
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(value ?? "", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
+
+const ACTION_LIFECYCLE_BUFFER_LIMIT = parsePositiveInt(
+  process.env.FIVE55_ACTION_LIFECYCLE_BUFFER_LIMIT,
+  500,
+);
+const actionLifecycleBuffer: ActionLifecycleEvent[] = [];
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -105,12 +151,128 @@ function trimEnv(key: string | undefined): string | undefined {
   return value ? value : undefined;
 }
 
+function asNonEmptyString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 function pickFirstEnv(keys: Array<string | undefined>): string | undefined {
   for (const key of keys) {
     const value = trimEnv(key);
     if (value) return value;
   }
   return undefined;
+}
+
+function tryDecodeComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function inferSessionIdFromEndpoint(endpoint: string): string | undefined {
+  const match = endpoint.match(/\/sessions\/([^/]+)/i);
+  if (!match?.[1]) return undefined;
+  const candidate = tryDecodeComponent(match[1]).trim();
+  return candidate.length > 0 ? candidate : undefined;
+}
+
+function inferSessionIdFromPayload(
+  payload: Record<string, unknown>,
+): string | undefined {
+  const direct =
+    asNonEmptyString(payload.sessionId) ??
+    asNonEmptyString(payload.session_id) ??
+    asNonEmptyString(payload.streamSessionId) ??
+    asNonEmptyString(payload.stream_session_id);
+  if (direct) return direct;
+
+  const session = payload.session;
+  if (isPlainObject(session)) {
+    const nestedSession =
+      asNonEmptyString(session.sessionId) ??
+      asNonEmptyString(session.session_id);
+    if (nestedSession) return nestedSession;
+  }
+
+  return undefined;
+}
+
+function inferSegmentIdFromPayload(
+  payload: Record<string, unknown>,
+): string | undefined {
+  const direct =
+    asNonEmptyString(payload.segmentId) ??
+    asNonEmptyString(payload.segment_id) ??
+    asNonEmptyString(payload.segmentKey) ??
+    asNonEmptyString(payload.segment_key);
+  if (direct) return direct;
+
+  const segment = payload.segment;
+  if (isPlainObject(segment)) {
+    const nestedSegment =
+      asNonEmptyString(segment.id) ??
+      asNonEmptyString(segment.segmentId) ??
+      asNonEmptyString(segment.segment_id);
+    if (nestedSegment) return nestedSegment;
+  }
+
+  return undefined;
+}
+
+function trimLifecycleBuffer(): void {
+  if (actionLifecycleBuffer.length <= ACTION_LIFECYCLE_BUFFER_LIMIT) return;
+  const overflow = actionLifecycleBuffer.length - ACTION_LIFECYCLE_BUFFER_LIMIT;
+  actionLifecycleBuffer.splice(0, overflow);
+}
+
+export function recordActionLifecycleEvent(event: ActionLifecycleEvent): void {
+  actionLifecycleBuffer.push(event);
+  trimLifecycleBuffer();
+
+  const summary = `${event.module}.${event.action} stage=${event.stage} actionId=${event.actionId}`;
+  if (event.stage === "failed") {
+    console.warn(`[five55-action] ${summary}`, {
+      status: event.status,
+      code: event.code,
+      sessionId: event.sessionId,
+      segmentId: event.segmentId,
+      message: event.message,
+    });
+    return;
+  }
+
+  console.info(`[five55-action] ${summary}`, {
+    status: event.status,
+    sessionId: event.sessionId,
+    segmentId: event.segmentId,
+  });
+}
+
+export function getRecentActionLifecycleEvents(
+  limit = 200,
+  filter?: {
+    sessionId?: string;
+    segmentId?: string;
+    action?: string;
+  },
+): ActionLifecycleEvent[] {
+  const safeLimit = Math.max(1, Math.floor(limit));
+  const normalizedSession = filter?.sessionId?.trim();
+  const normalizedSegment = filter?.segmentId?.trim();
+  const normalizedAction = filter?.action?.trim().toUpperCase();
+  const filtered = actionLifecycleBuffer.filter((event) => {
+    if (normalizedSession && event.sessionId !== normalizedSession) return false;
+    if (normalizedSegment && event.segmentId !== normalizedSegment) return false;
+    if (normalizedAction && event.action.toUpperCase() !== normalizedAction) {
+      return false;
+    }
+    return true;
+  });
+  return filtered.slice(-safeLimit);
 }
 
 function inferService(endpoint: string): string | undefined {
@@ -218,12 +380,98 @@ function buildEnvelopeText(envelope: Five55ActionEnvelope): string {
   return JSON.stringify(envelope);
 }
 
+function buildActionTrace(
+  context: {
+    actionId: string;
+    startedAt: string;
+    sessionId?: string;
+    segmentId?: string;
+    idempotencyKey?: string;
+  },
+  endedAt: string,
+): ActionTrace {
+  return {
+    actionId: context.actionId,
+    startedAt: context.startedAt,
+    endedAt,
+    ...(context.sessionId ? { sessionId: context.sessionId } : {}),
+    ...(context.segmentId ? { segmentId: context.segmentId } : {}),
+    ...(context.idempotencyKey ? { idempotencyKey: context.idempotencyKey } : {}),
+  };
+}
+
+function createLifecycleContext(
+  options: ExecuteApiActionOptions,
+  idempotencyKey: string | undefined,
+): {
+  actionId: string;
+  startedAt: string;
+  sessionId?: string;
+  segmentId?: string;
+  idempotencyKey?: string;
+} {
+  const inferredSessionId =
+    options.context?.sessionId ??
+    inferSessionIdFromPayload(options.payload) ??
+    inferSessionIdFromEndpoint(options.endpoint) ??
+    trimEnv("STREAM555_DEFAULT_SESSION_ID") ??
+    trimEnv("STREAM_SESSION_ID");
+  const inferredSegmentId =
+    options.context?.segmentId ?? inferSegmentIdFromPayload(options.payload);
+
+  return {
+    actionId: options.context?.actionId?.trim() || crypto.randomUUID(),
+    startedAt: new Date().toISOString(),
+    ...(inferredSessionId ? { sessionId: inferredSessionId } : {}),
+    ...(inferredSegmentId ? { segmentId: inferredSegmentId } : {}),
+    ...(idempotencyKey ? { idempotencyKey } : {}),
+  };
+}
+
+function emitActionLifecycle(
+  options: ExecuteApiActionOptions,
+  context: {
+    actionId: string;
+    startedAt: string;
+    sessionId?: string;
+    segmentId?: string;
+    idempotencyKey?: string;
+  },
+  stage: ActionLifecycleStage,
+  payload: {
+    status?: number;
+    code?: Five55ActionCode;
+    message?: string;
+    details?: unknown;
+    endedAt?: string;
+  } = {},
+): void {
+  recordActionLifecycleEvent({
+    actionId: context.actionId,
+    module: options.module,
+    action: options.action,
+    stage,
+    occurredAt: payload.endedAt ?? new Date().toISOString(),
+    startedAt: context.startedAt,
+    ...(payload.endedAt ? { endedAt: payload.endedAt } : {}),
+    ...(payload.status !== undefined ? { status: payload.status } : {}),
+    ...(payload.code ? { code: payload.code } : {}),
+    ...(payload.message ? { message: payload.message } : {}),
+    ...(options.endpoint ? { endpoint: options.endpoint } : {}),
+    ...(context.sessionId ? { sessionId: context.sessionId } : {}),
+    ...(context.segmentId ? { segmentId: context.segmentId } : {}),
+    ...(context.idempotencyKey ? { idempotencyKey: context.idempotencyKey } : {}),
+    ...(payload.details !== undefined ? { details: payload.details } : {}),
+  });
+}
+
 function actionSuccess(
   module: string,
   action: string,
   status: number,
   message: string,
   data?: unknown,
+  trace?: ActionTrace,
 ): { success: true; text: string } {
   return {
     success: true,
@@ -236,6 +484,7 @@ function actionSuccess(
       status,
       retryable: false,
       data,
+      ...(trace ? { trace } : {}),
     }),
   };
 }
@@ -247,6 +496,7 @@ function actionFailure(
   status: number,
   message: string,
   details?: unknown,
+  trace?: ActionTrace,
 ): { success: false; text: string } {
   return {
     success: false,
@@ -259,6 +509,7 @@ function actionFailure(
       status,
       retryable: status === 0 || status === 429 || status >= 500,
       details,
+      ...(trace ? { trace } : {}),
     }),
   };
 }
@@ -356,12 +607,31 @@ export function exceptionAction(
 export async function executeApiAction(
   options: ExecuteApiActionOptions,
 ): Promise<{ success: boolean; text: string }> {
+  const payloadText = JSON.stringify(options.payload);
+  const idempotencyKey = buildIdempotencyKey(
+    options.endpoint,
+    payloadText,
+    options.transport,
+  );
+  const context = createLifecycleContext(options, idempotencyKey);
+  emitActionLifecycle(options, context, "planned", {
+    message: "action planned",
+  });
+
   const requestErrors = validateContract(
     options.payload,
     options.requestContract,
   );
   if (requestErrors.length > 0) {
     const hasMissing = requestErrors.some((entry) => entry.startsWith("missing "));
+    const endedAt = new Date().toISOString();
+    emitActionLifecycle(options, context, "failed", {
+      status: 400,
+      code: hasMissing ? "E_PARAM_MISSING" : "E_REQUEST_CONTRACT",
+      message: "request contract validation failed",
+      details: requestErrors,
+      endedAt,
+    });
     return actionFailure(
       options.module,
       options.action,
@@ -369,28 +639,57 @@ export async function executeApiAction(
       400,
       "request contract validation failed",
       requestErrors,
+      buildActionTrace(context, endedAt),
     );
   }
 
+  emitActionLifecycle(options, context, "validated", {
+    message: "request contract validated",
+  });
+
+  const transport = idempotencyKey
+    ? { ...(options.transport ?? {}), idempotencyKey }
+    : options.transport;
+  emitActionLifecycle(options, context, "dispatched", {
+    message: "upstream request dispatched",
+  });
   const upstream = await postJson(
     options.base,
     options.endpoint,
     options.payload,
-    options.transport,
+    transport,
   );
   if (!upstream.ok) {
+    const code = mapUpstreamCode(upstream.status);
+    const endedAt = new Date().toISOString();
+    emitActionLifecycle(options, context, "failed", {
+      status: upstream.status,
+      code,
+      message: "upstream request failed",
+      details: { body: upstream.body },
+      endedAt,
+    });
     return actionFailure(
       options.module,
       options.action,
-      mapUpstreamCode(upstream.status),
+      code,
       upstream.status,
       "upstream request failed",
       { body: upstream.body },
+      buildActionTrace(context, endedAt),
     );
   }
 
   const parsed = parseJsonObject(upstream.body);
   if (!parsed.ok) {
+    const endedAt = new Date().toISOString();
+    emitActionLifecycle(options, context, "failed", {
+      status: upstream.status || 502,
+      code: "E_RESPONSE_PARSE",
+      message: "response parse failed",
+      details: parsed.reason,
+      endedAt,
+    });
     return actionFailure(
       options.module,
       options.action,
@@ -398,6 +697,7 @@ export async function executeApiAction(
       upstream.status || 502,
       "response parse failed",
       parsed.reason,
+      buildActionTrace(context, endedAt),
     );
   }
 
@@ -406,6 +706,14 @@ export async function executeApiAction(
     options.responseContract,
   );
   if (responseErrors.length > 0) {
+    const endedAt = new Date().toISOString();
+    emitActionLifecycle(options, context, "failed", {
+      status: upstream.status || 502,
+      code: "E_RESPONSE_CONTRACT",
+      message: "response contract validation failed",
+      details: responseErrors,
+      endedAt,
+    });
     return actionFailure(
       options.module,
       options.action,
@@ -413,15 +721,25 @@ export async function executeApiAction(
       upstream.status || 502,
       "response contract validation failed",
       responseErrors,
+      buildActionTrace(context, endedAt),
     );
   }
 
+  const endedAt = new Date().toISOString();
+  emitActionLifecycle(options, context, "succeeded", {
+    status: upstream.status,
+    code: "OK",
+    message: options.successMessage,
+    details: parsed.value,
+    endedAt,
+  });
   return actionSuccess(
     options.module,
     options.action,
     upstream.status,
     options.successMessage,
     parsed.value,
+    buildActionTrace(context, endedAt),
   );
 }
 

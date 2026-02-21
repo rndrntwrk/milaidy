@@ -1,13 +1,100 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { client, type CustomActionDef } from "../api-client";
+import { useApp } from "../AppContext";
 import { CustomActionEditor } from "./CustomActionEditor";
+import { collectFive55ActionTimeline } from "./five55ActionEnvelope";
 
 export function CustomActionsView() {
+  const { setTab, setActionNotice, plugins, conversationMessages } = useApp();
   const [actions, setActions] = useState<CustomActionDef[]>([]);
   const [search, setSearch] = useState("");
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingAction, setEditingAction] = useState<CustomActionDef | null>(null);
   const [loading, setLoading] = useState(true);
+
+  type LayerStatus = "active" | "disabled" | "available";
+  type QuickLayerDock = {
+    id: string;
+    label: string;
+    pluginIds: string[];
+  };
+
+  const quickLayers = useMemo<QuickLayerDock[]>(
+    () => [
+      { id: "stream", label: "Stream", pluginIds: ["stream"] },
+      { id: "go-live", label: "Go Live", pluginIds: ["stream"] },
+      { id: "autonomous-run", label: "Autonomous", pluginIds: ["stream"] },
+      { id: "screen-share", label: "Screen Share", pluginIds: ["stream555-control"] },
+      { id: "ads", label: "Ads", pluginIds: ["stream555-control"] },
+      { id: "invite-guest", label: "Invite Guest", pluginIds: ["stream555-control"] },
+      { id: "radio", label: "Radio", pluginIds: ["stream555-control"] },
+      { id: "pip", label: "PiP", pluginIds: ["stream555-control"] },
+      { id: "reaction-segment", label: "Reaction", pluginIds: ["stream555-control"] },
+      { id: "earnings", label: "Earnings", pluginIds: ["stream555-control"] },
+      { id: "play-games", label: "Play Games", pluginIds: ["five55-games"] },
+      { id: "end-live", label: "End Live", pluginIds: ["stream555-control"] },
+      { id: "swap", label: "Swap", pluginIds: ["swap"] },
+    ],
+    [],
+  );
+
+  const resolvePluginStatus = useCallback(
+    (id: string): LayerStatus => {
+      const needle = id.trim().toLowerCase();
+      const plugin = plugins.find((p) => {
+        const pluginId = p.id.trim().toLowerCase();
+        const pluginName = p.name.trim().toLowerCase();
+        return (
+          pluginId === needle ||
+          pluginId === needle.replace(/^alice-/, "") ||
+          pluginName === needle ||
+          pluginName.includes(needle)
+        );
+      });
+
+      if (!plugin) return "available";
+      if (plugin.isActive === true) return "active";
+      if (plugin.enabled === false) return "disabled";
+      if (plugin.enabled === true && plugin.isActive === false) return "disabled";
+      return "available";
+    },
+    [plugins],
+  );
+
+  const resolveLayerStatus = useCallback(
+    (pluginIds: string[]): LayerStatus => {
+      if (pluginIds.length === 0) return "available";
+      const statuses = pluginIds.map((id) => resolvePluginStatus(id));
+      if (statuses.every((status) => status === "active")) return "active";
+      if (statuses.some((status) => status === "disabled")) return "disabled";
+      return "available";
+    },
+    [resolvePluginStatus],
+  );
+
+  const triggerDockedLayer = useCallback(
+    (layerId: string, layerLabel: string) => {
+      setTab("chat");
+      setActionNotice(`Running ${layerLabel} from Actions tab...`, "info", 2200);
+      window.setTimeout(() => {
+        window.dispatchEvent(
+          new CustomEvent("milaidy:quick-layer:run", {
+            detail: { layerId },
+          }),
+        );
+      }, 120);
+    },
+    [setActionNotice, setTab],
+  );
+
+  const actionTimeline = useMemo(
+    () => collectFive55ActionTimeline(conversationMessages),
+    [conversationMessages],
+  );
+  const recentActionTimeline = useMemo(
+    () => [...actionTimeline].reverse().slice(0, 80),
+    [actionTimeline],
+  );
 
   const loadActions = useCallback(async () => {
     try {
@@ -137,6 +224,146 @@ export function CustomActionsView() {
 
   return (
     <div className="flex flex-col h-full p-4 space-y-4">
+      {/* Docked studio quick actions (moved from Chat view) */}
+      <div className="border border-border bg-card rounded p-3 space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-txt">Studio Action Layers</h2>
+            <p className="text-xs text-muted">
+              Moved from Chat. Runs through the same quick-layer execution engine.
+            </p>
+          </div>
+          <button
+            onClick={() => setTab("plugins")}
+            className="px-3 py-1.5 text-xs border border-border bg-surface text-muted rounded hover:bg-card transition-colors"
+            title="Open plugin settings"
+          >
+            Manage Plugins
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {quickLayers.map((layer) => {
+            const status = resolveLayerStatus(layer.pluginIds);
+            const tone =
+              status === "active"
+                ? "border-accent text-accent bg-card"
+                : status === "disabled"
+                  ? "border-danger/40 text-danger bg-card"
+                  : "border-border text-muted bg-card";
+            return (
+              <button
+                key={layer.id}
+                className={`px-2 py-1 text-xs border rounded transition-all ${tone}`}
+                onClick={() => triggerDockedLayer(layer.id, layer.label)}
+                title={`${layer.label} (${status})`}
+              >
+                {layer.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="border border-border bg-card rounded p-3 space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-txt">Recent Action Timeline</h2>
+            <p className="text-xs text-muted">
+              Live execution envelopes captured from chat.
+            </p>
+          </div>
+          <span className="text-xs text-muted">{actionTimeline.length} total</span>
+        </div>
+        {recentActionTimeline.length === 0 ? (
+          <div className="text-xs text-muted">
+            No action envelopes detected yet. Run a tool action in chat to populate this timeline.
+          </div>
+        ) : (
+          <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+            {recentActionTimeline.map((entry) => {
+              const { envelope } = entry;
+              const stage =
+                envelope.trace?.stage ?? (envelope.ok ? "succeeded" : "failed");
+              const stageTone = envelope.ok ? "text-ok" : "text-danger";
+              const timestamp = new Date(entry.timestamp).toLocaleTimeString([], {
+                hour12: false,
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              });
+              return (
+                <div
+                  key={`${entry.messageId}-${envelope.action}-${envelope.trace?.actionId ?? entry.timestamp}`}
+                  className="border border-border rounded p-2 bg-bg-hover/30"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="text-xs font-semibold text-txt">
+                        {envelope.module} · {envelope.action}
+                      </div>
+                      <div className="text-[11px] text-muted mt-0.5">
+                        {envelope.code} · status {envelope.status}
+                        {envelope.retryable ? " · retryable" : ""}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className={`text-[11px] font-semibold ${stageTone}`}>
+                        {stage}
+                      </div>
+                      <div className="text-[10px] text-muted">{timestamp}</div>
+                    </div>
+                  </div>
+                  <div className="mt-1 text-xs text-txt whitespace-pre-wrap break-words">
+                    {envelope.message}
+                  </div>
+                  {(envelope.trace?.sessionId ||
+                    envelope.trace?.segmentId ||
+                    envelope.trace?.actionId ||
+                    envelope.trace?.idempotencyKey) && (
+                    <div className="mt-1.5 flex flex-wrap gap-1.5 text-[10px] text-muted">
+                      {envelope.trace?.sessionId && (
+                        <span className="px-1.5 py-0.5 border border-border rounded">
+                          session {envelope.trace.sessionId}
+                        </span>
+                      )}
+                      {envelope.trace?.segmentId && (
+                        <span className="px-1.5 py-0.5 border border-border rounded">
+                          segment {envelope.trace.segmentId}
+                        </span>
+                      )}
+                      {envelope.trace?.actionId && (
+                        <span className="px-1.5 py-0.5 border border-border rounded">
+                          action {envelope.trace.actionId}
+                        </span>
+                      )}
+                      {envelope.trace?.idempotencyKey && (
+                        <span className="px-1.5 py-0.5 border border-border rounded">
+                          idem {envelope.trace.idempotencyKey}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {(envelope.data !== undefined || envelope.details !== undefined) && (
+                    <details className="mt-1.5">
+                      <summary className="text-[11px] text-muted cursor-pointer">
+                        payload
+                      </summary>
+                      <pre className="mt-1 text-[10px] text-muted bg-card border border-border rounded p-2 whitespace-pre-wrap break-words m-0">
+                        {JSON.stringify(
+                          envelope.data !== undefined ? envelope.data : envelope.details,
+                          null,
+                          2,
+                        )}
+                      </pre>
+                    </details>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold text-txt">Custom Actions</h1>

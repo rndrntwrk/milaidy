@@ -21,24 +21,16 @@ import type { JsonSchemaObject } from "./config-catalog";
 import { useApp } from "../AppContext";
 import { UiRenderer } from "./ui-renderer";
 import type { UiSpec } from "./ui-spec";
+import {
+  parseFive55ActionEnvelope,
+  type Five55ActionEnvelope,
+} from "./five55ActionEnvelope";
 
 /** Reject prototype-pollution plugin IDs that could slip through the regex. */
 const BLOCKED_IDS = new Set(["__proto__", "constructor", "prototype"]);
 
 export interface MessageContentProps {
   message: ConversationMessage;
-}
-
-interface Five55ActionEnvelope {
-  ok: boolean;
-  code: string;
-  module: string;
-  action: string;
-  message: string;
-  status: number;
-  retryable: boolean;
-  data?: unknown;
-  details?: unknown;
 }
 
 // ── Segment types ───────────────────────────────────────────────────
@@ -59,23 +51,6 @@ function tryParse(s: string): unknown {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function parseFive55Envelope(text: string): Five55ActionEnvelope | null {
-  const parsed = tryParse(text.trim());
-  if (!isRecord(parsed)) return null;
-  if (
-    typeof parsed.ok !== "boolean" ||
-    typeof parsed.code !== "string" ||
-    typeof parsed.module !== "string" ||
-    typeof parsed.action !== "string" ||
-    typeof parsed.message !== "string" ||
-    typeof parsed.status !== "number" ||
-    typeof parsed.retryable !== "boolean"
-  ) {
-    return null;
-  }
-  return parsed as Five55ActionEnvelope;
 }
 
 function isUiSpec(obj: unknown): obj is UiSpec {
@@ -440,59 +415,46 @@ function UiSpecBlock({ spec, raw }: { spec: UiSpec; raw: string }) {
   );
 }
 
-function renderJsonBlock(value: unknown): string {
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
 function ActionEnvelopeBlock({ envelope }: { envelope: Five55ActionEnvelope }) {
+  const { setTab } = useApp();
   const tone = envelope.ok
     ? "border-ok/30 bg-ok/5"
     : "border-danger/35 bg-danger/5";
+  const stage = envelope.trace?.stage ?? (envelope.ok ? "succeeded" : "failed");
 
   return (
     <div className={`my-1 border rounded-sm overflow-hidden ${tone}`}>
       <div className="px-3 py-1 border-b border-border bg-bg-hover text-[10px] uppercase tracking-wide text-muted font-semibold">
         {envelope.module} · {envelope.action}
       </div>
-      <div className="px-3 py-2">
+      <div className="px-3 py-2 flex items-start justify-between gap-3">
         <div className="text-[11px] font-mono text-muted">
-          {envelope.code} · status {envelope.status}
+          {envelope.code} · {stage} · status {envelope.status}
           {envelope.retryable ? " · retryable" : ""}
+          <div className="text-[12px] text-txt whitespace-pre-wrap mt-1">
+            {envelope.message}
+          </div>
+          {envelope.trace?.actionId && (
+            <div className="mt-1 text-[10px] text-muted">
+              actionId: {envelope.trace.actionId}
+            </div>
+          )}
         </div>
-        <div className="text-[12px] text-txt whitespace-pre-wrap mt-1">
-          {envelope.message}
-        </div>
-        {envelope.data !== undefined && (
-          <details className="mt-2">
-            <summary className="text-[11px] text-muted cursor-pointer">
-              data
-            </summary>
-            <pre className="mt-1 text-[10px] font-mono whitespace-pre-wrap break-words m-0 p-2 bg-card border border-border rounded-sm">
-              {renderJsonBlock(envelope.data)}
-            </pre>
-          </details>
-        )}
-        {envelope.details !== undefined && (
-          <details className="mt-2">
-            <summary className="text-[11px] text-muted cursor-pointer">
-              details
-            </summary>
-            <pre className="mt-1 text-[10px] font-mono whitespace-pre-wrap break-words m-0 p-2 bg-card border border-border rounded-sm">
-              {renderJsonBlock(envelope.details)}
-            </pre>
-          </details>
-        )}
+        <button
+          type="button"
+          className="px-2 py-1 text-[10px] border border-border rounded bg-card text-muted hover:border-accent hover:text-accent shrink-0"
+          onClick={() => setTab("actions")}
+          title="Open Actions tab"
+        >
+          Open Actions
+        </button>
       </div>
     </div>
   );
 }
 
 function renderTextOrEnvelope(text: string) {
-  const envelope = parseFive55Envelope(text);
+  const envelope = parseFive55ActionEnvelope(text);
   if (envelope) {
     return <ActionEnvelopeBlock envelope={envelope} />;
   }

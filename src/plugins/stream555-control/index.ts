@@ -45,8 +45,17 @@ function resolveAgentToken(): string {
   return token;
 }
 
+function parseCsvList(value: string | undefined): string[] | undefined {
+  if (!value) return undefined;
+  const list = value
+    .split(",")
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+  return list.length > 0 ? list : undefined;
+}
+
 async function fetchJson(
-  method: "POST" | "PUT",
+  method: "GET" | "POST" | "PUT",
   base: string,
   endpoint: string,
   token: string,
@@ -59,7 +68,7 @@ async function fetchJson(
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify(payload),
+    body: method === "GET" ? undefined : JSON.stringify(payload),
   });
 
   const rawBody = await response.text();
@@ -153,7 +162,7 @@ const stream555ControlProvider: Provider = {
       text: [
         "## 555stream Control Surface",
         "",
-        "Actions: STREAM555_GO_LIVE, STREAM555_END_LIVE, STREAM555_AD_TRIGGER, STREAM555_AD_DISMISS, STREAM555_RADIO_CONTROL, STREAM555_GUEST_INVITE, STREAM555_SCENE_SET, STREAM555_PIP_ENABLE",
+        "Actions: STREAM555_GO_LIVE, STREAM555_SCREEN_SHARE, STREAM555_END_LIVE, STREAM555_AD_CREATE, STREAM555_AD_TRIGGER, STREAM555_AD_DISMISS, STREAM555_RADIO_CONTROL, STREAM555_GUEST_INVITE, STREAM555_SCENE_SET, STREAM555_PIP_ENABLE, STREAM555_SEGMENT_OVERRIDE, STREAM555_EARNINGS_ESTIMATE",
         `Base URL configured: ${configured ? "yes" : "no"} (${STREAM555_BASE_ENV})`,
         `Agent token configured: ${hasToken ? "yes" : "no"} (${STREAM555_TOKEN_ENV}|STREAM_API_BEARER_TOKEN)`,
       ].join("\n"),
@@ -215,6 +224,58 @@ const goLiveAction: Action = {
   ],
 };
 
+const screenShareAction: Action = {
+  name: "STREAM555_SCREEN_SHARE",
+  similes: ["STREAM555_START_SCREEN_SHARE", "START_SCREEN_SHARE_STREAM555"],
+  description:
+    "Switches the current stream input to screen share for the resolved session.",
+  validate: async () => true,
+  handler: async (_runtime, _message, _state, options) => {
+    try {
+      const requestedSessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+      const inputUrl = readParam(options as HandlerOptions | undefined, "inputUrl");
+      const sceneId =
+        readParam(options as HandlerOptions | undefined, "sceneId") || "active-pip";
+
+      const base = resolveBaseUrl();
+      const token = resolveAgentToken();
+      const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+
+      return executeApiAction({
+        module: "stream555.control",
+        action: "STREAM555_SCREEN_SHARE",
+        base,
+        endpoint: `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/stream/start`,
+        payload: {
+          input: {
+            type: "screen",
+            ...(inputUrl ? { url: inputUrl } : {}),
+          },
+          options: { scene: sceneId },
+        },
+        requestContract: {
+          input: { required: true, type: "object" },
+          options: { required: false, type: "object" },
+        },
+        responseContract: {},
+        successMessage: "screen-share requested",
+        transport: commandTransport(token),
+        context: { sessionId },
+      });
+    } catch (err) {
+      return exceptionAction("stream555.control", "STREAM555_SCREEN_SHARE", err);
+    }
+  },
+  parameters: [
+    { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
+    { name: "inputUrl", description: "Optional URL for browser-based screen source", required: false, schema: { type: "string" as const } },
+    { name: "sceneId", description: "Scene to activate (default active-pip)", required: false, schema: { type: "string" as const } },
+  ],
+};
+
 const endLiveAction: Action = {
   name: "STREAM555_END_LIVE",
   similes: ["STOP_LIVE_STREAM555", "STREAM555_STOP_LIVE"],
@@ -248,6 +309,65 @@ const endLiveAction: Action = {
   },
   parameters: [
     { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
+  ],
+};
+
+const adsCreateAction: Action = {
+  name: "STREAM555_AD_CREATE",
+  similes: ["STREAM555_CREATE_AD", "CREATE_AD_STREAM555"],
+  description: "Creates an ad in the resolved session for immediate or scheduled playback.",
+  validate: async () => true,
+  handler: async (_runtime, _message, _state, options) => {
+    try {
+      const requestedSessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+      const type = readParam(options as HandlerOptions | undefined, "type") || "l-bar";
+      const imageUrl = readParam(
+        options as HandlerOptions | undefined,
+        "imageUrl",
+      );
+      const text = readParam(options as HandlerOptions | undefined, "text");
+      const durationMsRaw = readParam(
+        options as HandlerOptions | undefined,
+        "durationMs",
+      );
+      const durationMs = durationMsRaw ? Number.parseInt(durationMsRaw, 10) : undefined;
+
+      const base = resolveBaseUrl();
+      const token = resolveAgentToken();
+      const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+
+      return executeApiAction({
+        module: "stream555.control",
+        action: "STREAM555_AD_CREATE",
+        base,
+        endpoint: `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/ads`,
+        payload: {
+          type,
+          ...(imageUrl ? { imageUrl } : {}),
+          ...(text ? { text } : {}),
+          ...(Number.isFinite(durationMs) ? { durationMs } : {}),
+        },
+        requestContract: {
+          type: { required: true, type: "string", nonEmpty: true },
+        },
+        responseContract: {},
+        successMessage: "ad created",
+        transport: commandTransport(token),
+        context: { sessionId },
+      });
+    } catch (err) {
+      return exceptionAction("stream555.control", "STREAM555_AD_CREATE", err);
+    }
+  },
+  parameters: [
+    { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
+    { name: "type", description: "Ad type (default l-bar)", required: false, schema: { type: "string" as const } },
+    { name: "imageUrl", description: "Creative image URL", required: false, schema: { type: "string" as const } },
+    { name: "text", description: "Creative text/caption", required: false, schema: { type: "string" as const } },
+    { name: "durationMs", description: "Playback duration in milliseconds", required: false, schema: { type: "string" as const } },
   ],
 };
 
@@ -359,6 +479,13 @@ const radioControlAction: Action = {
         options as HandlerOptions | undefined,
         "background",
       );
+      const radioPayload: JsonObject = {};
+      if (trackId) radioPayload.trackId = trackId;
+      if (effectId) radioPayload.effectId = effectId;
+      if (mode) radioPayload.mode = mode;
+      if (target) radioPayload.target = target;
+      if (Number.isFinite(level)) radioPayload.level = level;
+      if (background) radioPayload.backgroundId = background;
 
       const base = resolveBaseUrl();
       const token = resolveAgentToken();
@@ -371,15 +498,11 @@ const radioControlAction: Action = {
         endpoint: `/api/agent/v1/radio/${encodeURIComponent(sessionId)}/control`,
         payload: {
           action,
-          ...(trackId ? { trackId } : {}),
-          ...(effectId ? { effectId } : {}),
-          ...(mode ? { mode } : {}),
-          ...(target ? { target } : {}),
-          ...(Number.isFinite(level) ? { level } : {}),
-          ...(background ? { background } : {}),
+          payload: radioPayload,
         },
         requestContract: {
           action: { required: true, type: "string", nonEmpty: true },
+          payload: { required: true, type: "object" },
         },
         responseContract: {},
         successMessage: "radio control requested",
@@ -539,6 +662,109 @@ const pipEnableAction: Action = {
   ],
 };
 
+const segmentOverrideAction: Action = {
+  name: "STREAM555_SEGMENT_OVERRIDE",
+  similes: ["STREAM555_OVERRIDE_SEGMENT", "SEGMENT_OVERRIDE_STREAM555"],
+  description:
+    "Queues a segment override for the active live session (e.g. reaction/news/gaming/qa/storytime).",
+  validate: async () => true,
+  handler: async (_runtime, _message, _state, options) => {
+    try {
+      const requestedSessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+      const segmentType =
+        readParam(options as HandlerOptions | undefined, "segmentType") || "reaction";
+      const reason = readParam(options as HandlerOptions | undefined, "reason");
+      const requestedBy = readParam(
+        options as HandlerOptions | undefined,
+        "requestedBy",
+      );
+
+      const base = resolveBaseUrl();
+      const token = resolveAgentToken();
+      const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+
+      return executeApiAction({
+        module: "stream555.control",
+        action: "STREAM555_SEGMENT_OVERRIDE",
+        base,
+        endpoint: `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/segments/override`,
+        payload: {
+          segmentType,
+          ...(reason ? { reason } : {}),
+          ...(requestedBy ? { requestedBy } : {}),
+        },
+        requestContract: {
+          segmentType: { required: true, type: "string", nonEmpty: true },
+        },
+        responseContract: {},
+        successMessage: "segment override requested",
+        transport: commandTransport(token),
+        context: { sessionId },
+      });
+    } catch (err) {
+      return exceptionAction("stream555.control", "STREAM555_SEGMENT_OVERRIDE", err);
+    }
+  },
+  parameters: [
+    { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
+    { name: "segmentType", description: "reaction|news|gaming|storytime|qa", required: true, schema: { type: "string" as const } },
+    { name: "reason", description: "Operator reason for override", required: false, schema: { type: "string" as const } },
+    { name: "requestedBy", description: "Requester identifier", required: false, schema: { type: "string" as const } },
+  ],
+};
+
+const earningsEstimateAction: Action = {
+  name: "STREAM555_EARNINGS_ESTIMATE",
+  similes: ["STREAM555_PROJECTED_EARNINGS", "PROJECTED_EARNINGS_STREAM555"],
+  description:
+    "Evaluates marketplace inventory and returns projected payout-per-impression opportunities.",
+  validate: async () => true,
+  handler: async (_runtime, _message, _state, options) => {
+    try {
+      const categoriesRaw = readParam(
+        options as HandlerOptions | undefined,
+        "categories",
+      );
+      const categories = parseCsvList(categoriesRaw);
+      const limitRaw = readParam(options as HandlerOptions | undefined, "limit");
+      const poolSizeRaw = readParam(
+        options as HandlerOptions | undefined,
+        "poolSize",
+      );
+      const limit = limitRaw ? Number.parseInt(limitRaw, 10) : 5;
+      const poolSize = poolSizeRaw ? Number.parseInt(poolSizeRaw, 10) : 30;
+      const base = resolveBaseUrl();
+      const token = resolveAgentToken();
+
+      return executeApiAction({
+        module: "stream555.control",
+        action: "STREAM555_EARNINGS_ESTIMATE",
+        base,
+        endpoint: "/api/agent/v1/marketplace/evaluate",
+        payload: {
+          ...(categories ? { categories } : {}),
+          ...(Number.isFinite(limit) ? { limit } : {}),
+          ...(Number.isFinite(poolSize) ? { poolSize } : {}),
+        },
+        requestContract: {},
+        responseContract: {},
+        successMessage: "projected earnings evaluated",
+        transport: commandTransport(token),
+      });
+    } catch (err) {
+      return exceptionAction("stream555.control", "STREAM555_EARNINGS_ESTIMATE", err);
+    }
+  },
+  parameters: [
+    { name: "categories", description: "Comma-separated categories", required: false, schema: { type: "string" as const } },
+    { name: "limit", description: "Top campaign count", required: false, schema: { type: "string" as const } },
+    { name: "poolSize", description: "Evaluation candidate pool size", required: false, schema: { type: "string" as const } },
+  ],
+};
+
 export function createStream555ControlPlugin(): Plugin {
   return {
     name: "stream555-control",
@@ -547,16 +773,19 @@ export function createStream555ControlPlugin(): Plugin {
     providers: [stream555ControlProvider],
     actions: [
       goLiveAction,
+      screenShareAction,
       endLiveAction,
+      adsCreateAction,
       adsTriggerAction,
       adsDismissAction,
       radioControlAction,
       guestInviteAction,
       sceneSetAction,
       pipEnableAction,
+      segmentOverrideAction,
+      earningsEstimateAction,
     ],
   };
 }
 
 export default createStream555ControlPlugin;
-

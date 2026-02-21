@@ -161,6 +161,37 @@ type ParsedGameLaunch = {
   postMessageAuth: boolean;
 };
 
+function parseAdIdFromEnvelope(
+  envelope: ParsedToolEnvelope | null,
+): string | undefined {
+  const data = envelope?.data;
+  if (!data || typeof data !== "object") return undefined;
+  const ad =
+    data.ad && typeof data.ad === "object" && !Array.isArray(data.ad)
+      ? (data.ad as Record<string, unknown>)
+      : null;
+  return ad && typeof ad.id === "string" && ad.id.trim().length > 0
+    ? ad.id.trim()
+    : undefined;
+}
+
+function parseProjectedEarningsFromEnvelope(
+  envelope: ParsedToolEnvelope | null,
+): number | null {
+  const data = envelope?.data;
+  if (!data || typeof data !== "object") return null;
+  const evaluated = Array.isArray(data.evaluated) ? data.evaluated : [];
+  let maxPayout = 0;
+  for (const entry of evaluated) {
+    if (!entry || typeof entry !== "object") continue;
+    const payout = Number((entry as Record<string, unknown>).payoutPerImpression ?? 0);
+    if (Number.isFinite(payout) && payout > maxPayout) {
+      maxPayout = payout;
+    }
+  }
+  return Number.isFinite(maxPayout) ? maxPayout : null;
+}
+
 function parseGameLaunchFromEnvelope(
   envelope: ParsedToolEnvelope | null,
 ): ParsedGameLaunch | null {
@@ -523,6 +554,55 @@ export const ChatView = memo(function ChatView() {
       prompt: "",
     },
     {
+      id: "screen-share",
+      label: "Screen Share",
+      pluginIds: ["stream555-control"],
+      prompt:
+        "Use STREAM555_SCREEN_SHARE to switch the current live feed to screen-sharing and confirm the stream remains live.",
+    },
+    {
+      id: "ads",
+      label: "Ads",
+      pluginIds: ["stream555-control"],
+      prompt:
+        "Create and trigger an ad break, then summarize ad playback state and expected payout impact.",
+    },
+    {
+      id: "invite-guest",
+      label: "Invite Guest",
+      pluginIds: ["stream555-control"],
+      prompt:
+        "Create a guest invite and report the invite link with host-side instructions.",
+    },
+    {
+      id: "radio",
+      label: "Radio",
+      pluginIds: ["stream555-control"],
+      prompt:
+        "Configure radio mode and summarize current live audio blend decisions.",
+    },
+    {
+      id: "pip",
+      label: "PiP",
+      pluginIds: ["stream555-control"],
+      prompt:
+        "Enable PiP composition and confirm the active scene is updated.",
+    },
+    {
+      id: "reaction-segment",
+      label: "Reaction",
+      pluginIds: ["stream555-control"],
+      prompt:
+        "Queue a reaction segment override and announce the next reaction topic.",
+    },
+    {
+      id: "earnings",
+      label: "Earnings",
+      pluginIds: ["stream555-control"],
+      prompt:
+        "Evaluate marketplace payouts and report projected earnings opportunities for the next segment.",
+    },
+    {
       id: "play-games",
       label: "Play Games",
       pluginIds: ["five55-games"],
@@ -537,7 +617,18 @@ export const ChatView = memo(function ChatView() {
       prompt:
         "Use WALLET_POSITION and SWAP_QUOTE to evaluate wallet state and produce a safe swap recommendation.",
     },
+    {
+      id: "end-live",
+      label: "End Live",
+      pluginIds: ["stream555-control"],
+      prompt:
+        "Stop the stream and provide a concise post-live summary with next recommended action.",
+    },
   ];
+  const quickLayerById = useMemo(
+    () => new Map(quickLayers.map((layer) => [layer.id, layer])),
+    [quickLayers],
+  );
 
   const triggerQuickLayer = useCallback(
     async (layer: QuickLayer) => {
@@ -628,6 +719,308 @@ export const ChatView = memo(function ChatView() {
         } catch (err) {
           setActionNotice(
             `Go live execution failed: ${err instanceof Error ? err.message : "unknown error"}`,
+            "error",
+            4200,
+          );
+        }
+      }
+
+      const stream555ControlLayerIds = new Set([
+        "screen-share",
+        "ads",
+        "invite-guest",
+        "radio",
+        "pip",
+        "reaction-segment",
+        "earnings",
+        "end-live",
+      ]);
+
+      if (
+        stream555ControlLayerIds.has(layer.id) &&
+        !hasPluginRegistration("stream555-control")
+      ) {
+        setActionNotice(
+          "stream555-control plugin is not registered. Enable it in Plugins first.",
+          "info",
+          2600,
+        );
+        setTab("plugins");
+        return;
+      }
+
+      if (layer.id === "screen-share") {
+        try {
+          await client.executeAutonomyPlan({
+            plan: {
+              id: "quick-layer-screen-share",
+              steps: [
+                {
+                  id: "screen-share",
+                  toolName: "STREAM555_SCREEN_SHARE",
+                  params: { sceneId: "active-pip" },
+                },
+              ],
+            },
+            request: { source: "user", sourceTrust: 1 },
+            options: { stopOnFailure: false },
+          });
+          setActionNotice("Screen-share request dispatched.", "success", 2600);
+          prompt =
+            "Confirm screen-share is active and narrate what viewers should focus on next.";
+        } catch (err) {
+          setActionNotice(
+            `Screen-share request failed: ${err instanceof Error ? err.message : "unknown error"}`,
+            "error",
+            4200,
+          );
+        }
+      }
+
+      if (layer.id === "ads") {
+        try {
+          const createPlan = await client.executeAutonomyPlan({
+            plan: {
+              id: "quick-layer-ad-create",
+              steps: [
+                {
+                  id: "ad-create",
+                  toolName: "STREAM555_AD_CREATE",
+                  params: {
+                    type: "l-bar",
+                    imageUrl: "https://picsum.photos/seed/alice-ad/1280/720",
+                    durationMs: "15000",
+                  },
+                },
+              ],
+            },
+            request: { source: "user", sourceTrust: 1 },
+            options: { stopOnFailure: false },
+          });
+          const createdAdId = parseAdIdFromEnvelope(
+            findLastToolEnvelope(createPlan.results, "STREAM555_AD_CREATE"),
+          );
+
+          if (createdAdId) {
+            await client.executeAutonomyPlan({
+              plan: {
+                id: "quick-layer-ad-trigger",
+                steps: [
+                  {
+                    id: "ad-trigger",
+                    toolName: "STREAM555_AD_TRIGGER",
+                    params: {
+                      adId: createdAdId,
+                      durationMs: "15000",
+                    },
+                  },
+                ],
+              },
+              request: { source: "user", sourceTrust: 1 },
+              options: { stopOnFailure: false },
+            });
+            setActionNotice(
+              `Ad created and triggered (${createdAdId}).`,
+              "success",
+              2800,
+            );
+            prompt =
+              `Ad ${createdAdId} was triggered. Briefly summarize monetization impact and what comes next on stream.`;
+          } else {
+            setActionNotice(
+              "Ad create request completed, but no adId was returned for trigger.",
+              "info",
+              4200,
+            );
+          }
+        } catch (err) {
+          setActionNotice(
+            `Ad action failed: ${err instanceof Error ? err.message : "unknown error"}`,
+            "error",
+            4200,
+          );
+        }
+      }
+
+      if (layer.id === "invite-guest") {
+        try {
+          await client.executeAutonomyPlan({
+            plan: {
+              id: "quick-layer-guest-invite",
+              steps: [
+                {
+                  id: "guest-invite",
+                  toolName: "STREAM555_GUEST_INVITE",
+                  params: { name: "Guest" },
+                },
+              ],
+            },
+            request: { source: "user", sourceTrust: 1 },
+            options: { stopOnFailure: false },
+          });
+          setActionNotice("Guest invite generated.", "success", 2600);
+          prompt =
+            "Announce guest invite status and provide concise host handoff guidance.";
+        } catch (err) {
+          setActionNotice(
+            `Guest invite failed: ${err instanceof Error ? err.message : "unknown error"}`,
+            "error",
+            4200,
+          );
+        }
+      }
+
+      if (layer.id === "radio") {
+        try {
+          await client.executeAutonomyPlan({
+            plan: {
+              id: "quick-layer-radio-control",
+              steps: [
+                {
+                  id: "radio-mode",
+                  toolName: "STREAM555_RADIO_CONTROL",
+                  params: { action: "setAutoDJMode", mode: "MUSIC" },
+                },
+              ],
+            },
+            request: { source: "user", sourceTrust: 1 },
+            options: { stopOnFailure: false },
+          });
+          setActionNotice("Radio mode updated.", "success", 2600);
+          prompt = "Summarize current radio/audio mode and how it supports this segment.";
+        } catch (err) {
+          setActionNotice(
+            `Radio control failed: ${err instanceof Error ? err.message : "unknown error"}`,
+            "error",
+            4200,
+          );
+        }
+      }
+
+      if (layer.id === "pip") {
+        try {
+          await client.executeAutonomyPlan({
+            plan: {
+              id: "quick-layer-pip-enable",
+              steps: [
+                {
+                  id: "pip-enable",
+                  toolName: "STREAM555_PIP_ENABLE",
+                  params: { sceneId: "active-pip" },
+                },
+              ],
+            },
+            request: { source: "user", sourceTrust: 1 },
+            options: { stopOnFailure: false },
+          });
+          setActionNotice("PiP scene activated.", "success", 2600);
+          prompt =
+            "Confirm PiP composition is active and describe what each frame currently shows.";
+        } catch (err) {
+          setActionNotice(
+            `PiP activation failed: ${err instanceof Error ? err.message : "unknown error"}`,
+            "error",
+            4200,
+          );
+        }
+      }
+
+      if (layer.id === "reaction-segment") {
+        try {
+          await client.executeAutonomyPlan({
+            plan: {
+              id: "quick-layer-reaction-segment",
+              steps: [
+                {
+                  id: "segment-override-reaction",
+                  toolName: "STREAM555_SEGMENT_OVERRIDE",
+                  params: {
+                    segmentType: "reaction",
+                    reason: "actions-tab reaction segment",
+                  },
+                },
+              ],
+            },
+            request: { source: "user", sourceTrust: 1 },
+            options: { stopOnFailure: false },
+          });
+          setActionNotice("Reaction segment override queued.", "success", 2600);
+          prompt =
+            "Start the next reaction segment now and keep your commentary focused on viewer engagement.";
+        } catch (err) {
+          setActionNotice(
+            `Reaction segment override failed: ${err instanceof Error ? err.message : "unknown error"}`,
+            "error",
+            4200,
+          );
+        }
+      }
+
+      if (layer.id === "earnings") {
+        try {
+          const earningsPlan = await client.executeAutonomyPlan({
+            plan: {
+              id: "quick-layer-earnings-estimate",
+              steps: [
+                {
+                  id: "earnings-estimate",
+                  toolName: "STREAM555_EARNINGS_ESTIMATE",
+                  params: {
+                    categories: "gaming,reaction,news",
+                    limit: "5",
+                    poolSize: "30",
+                  },
+                },
+              ],
+            },
+            request: { source: "user", sourceTrust: 1 },
+            options: { stopOnFailure: false },
+          });
+          const envelope = findLastToolEnvelope(
+            earningsPlan.results,
+            "STREAM555_EARNINGS_ESTIMATE",
+          );
+          const maxPayout = parseProjectedEarningsFromEnvelope(envelope);
+          setActionNotice(
+            maxPayout && maxPayout > 0
+              ? `Projected top payout per impression: ${maxPayout.toFixed(4)} credits.`
+              : "Earnings estimate computed.",
+            "success",
+            3200,
+          );
+          prompt =
+            "Summarize projected earnings opportunities and recommend the next monetization move.";
+        } catch (err) {
+          setActionNotice(
+            `Earnings estimate failed: ${err instanceof Error ? err.message : "unknown error"}`,
+            "error",
+            4200,
+          );
+        }
+      }
+
+      if (layer.id === "end-live") {
+        try {
+          await client.executeAutonomyPlan({
+            plan: {
+              id: "quick-layer-end-live",
+              steps: [
+                {
+                  id: "end-live",
+                  toolName: "STREAM555_END_LIVE",
+                  params: {},
+                },
+              ],
+            },
+            request: { source: "user", sourceTrust: 1 },
+            options: { stopOnFailure: false },
+          });
+          setActionNotice("End-live request dispatched.", "success", 2600);
+          prompt =
+            "Provide a concise stream wrap-up, final outcomes, and next scheduled action.";
+        } catch (err) {
+          setActionNotice(
+            `End-live failed: ${err instanceof Error ? err.message : "unknown error"}`,
             "error",
             4200,
           );
@@ -999,6 +1392,22 @@ export const ChatView = memo(function ChatView() {
     handleChatSend,
   ]);
 
+  useEffect(() => {
+    const onQuickLayerRun = (rawEvent: Event) => {
+      const event = rawEvent as CustomEvent<{ layerId?: string }>;
+      const layerId = event.detail?.layerId;
+      if (typeof layerId !== "string" || layerId.trim().length === 0) return;
+      const layer = quickLayerById.get(layerId);
+      if (!layer) return;
+      void triggerQuickLayer(layer);
+    };
+
+    window.addEventListener("milaidy:quick-layer:run", onQuickLayerRun as EventListener);
+    return () => {
+      window.removeEventListener("milaidy:quick-layer:run", onQuickLayerRun as EventListener);
+    };
+  }, [quickLayerById, triggerQuickLayer]);
+
   const lastSpokenIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -1041,6 +1450,7 @@ export const ChatView = memo(function ChatView() {
       void handleChatSend(chatMode);
     }
   };
+  const showQuickLayersInChat = false;
 
   return (
     <div className="flex flex-col flex-1 min-h-0 px-1 sm:px-3 relative">
@@ -1056,200 +1466,206 @@ export const ChatView = memo(function ChatView() {
       )}
 
       {/* ── Messages ───────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-1.5 pb-2 relative" style={{ zIndex: 1 }}>
-        <span className="text-[10px] uppercase tracking-wide text-muted pr-1">
-          Action layers
-        </span>
-        {quickLayers.map((layer) => {
-          const status = resolveLayerStatus(layer.pluginIds);
-          const tone =
-            status === "active"
-              ? "border-accent text-accent bg-card"
-              : status === "disabled"
-                ? "border-danger/40 text-danger bg-card"
-                : "border-border text-muted bg-card";
-          return (
-            <button
-              key={layer.id}
-              className={`px-2 py-1 text-[11px] border rounded transition-all ${tone}`}
-              onClick={() => void triggerQuickLayer(layer)}
-              title={`${layer.label} (${status})`}
-            >
-              {layer.label}
-            </button>
-          );
-        })}
-        <button
-          className="px-2 py-1 text-[11px] border rounded border-border text-muted bg-card hover:border-accent hover:text-accent"
-          onClick={() => setTab("plugins")}
-          title="Open plugin settings"
-        >
-          Manage
-        </button>
-      </div>
-
-      {autoRunOpen && (
-        <div
-          className="mb-2 rounded border border-border bg-card/70 p-2 text-xs relative"
-          style={{ zIndex: 1 }}
-        >
-          <div className="flex items-center justify-between pb-2">
-            <span className="text-[10px] uppercase tracking-wide text-muted">
-              Autonomous Run Setup
-            </span>
-            <button
-              className="px-2 py-1 text-[11px] border rounded border-border text-muted bg-card hover:border-accent hover:text-accent"
-              onClick={() => setAutoRunOpen(false)}
-              disabled={autoRunPreviewBusy || autoRunLaunching}
-            >
-              Close
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            <label className="flex flex-col gap-1">
-              <span className="text-[11px] text-muted">Mode</span>
-              <select
-                className="px-2 py-1 border rounded border-border bg-card text-txt"
-                value={autoRunMode}
-                onChange={(e) => setAutoRunMode(e.target.value as Five55AutonomyMode)}
-                disabled={autoRunPreviewBusy || autoRunLaunching}
-              >
-                <option value="newscast">Newscast</option>
-                <option value="topic">Topic</option>
-                <option value="games">Play Games</option>
-                <option value="free">Free Will</option>
-              </select>
-            </label>
-
-            <label className="flex flex-col gap-1">
-              <span className="text-[11px] text-muted">Duration (minutes)</span>
-              <input
-                type="number"
-                min={5}
-                max={180}
-                step={5}
-                className="px-2 py-1 border rounded border-border bg-card text-txt"
-                value={autoRunDurationMin}
-                onChange={(e) => {
-                  const parsed = Number.parseInt(e.target.value, 10);
-                  const next = Number.isFinite(parsed)
-                    ? Math.max(5, Math.min(180, parsed))
-                    : 30;
-                  setAutoRunDurationMin(next);
-                }}
-                disabled={autoRunPreviewBusy || autoRunLaunching}
-              />
-            </label>
-
-            <label className="flex flex-col gap-1 md:col-span-2">
-              <span className="text-[11px] text-muted">
-                Topic {autoRunMode === "topic" ? "(required)" : "(optional)"}
+      {(showQuickLayersInChat || autoRunOpen) && (
+        <>
+          {showQuickLayersInChat && (
+            <div className="flex flex-wrap items-center gap-1.5 pb-2 relative" style={{ zIndex: 1 }}>
+              <span className="text-[10px] uppercase tracking-wide text-muted pr-1">
+                Action layers
               </span>
-              <input
-                type="text"
-                className="px-2 py-1 border rounded border-border bg-card text-txt"
-                placeholder="e.g. Solana ecosystem recap, market structure, render infra updates"
-                value={autoRunTopic}
-                onChange={(e) => setAutoRunTopic(e.target.value)}
-                disabled={autoRunPreviewBusy || autoRunLaunching}
-              />
-            </label>
-
-            <label className="flex flex-col gap-1">
-              <span className="text-[11px] text-muted">Avatar Runtime</span>
-              <select
-                className="px-2 py-1 border rounded border-border bg-card text-txt"
-                value={autoRunAvatarRuntime}
-                onChange={(e) =>
-                  setAutoRunAvatarRuntime(
-                    e.target.value as "auto" | "local" | "premium",
-                  )
-                }
-                disabled={autoRunPreviewBusy || autoRunLaunching}
+              {quickLayers.map((layer) => {
+                const status = resolveLayerStatus(layer.pluginIds);
+                const tone =
+                  status === "active"
+                    ? "border-accent text-accent bg-card"
+                    : status === "disabled"
+                      ? "border-danger/40 text-danger bg-card"
+                      : "border-border text-muted bg-card";
+                return (
+                  <button
+                    key={layer.id}
+                    className={`px-2 py-1 text-[11px] border rounded transition-all ${tone}`}
+                    onClick={() => void triggerQuickLayer(layer)}
+                    title={`${layer.label} (${status})`}
+                  >
+                    {layer.label}
+                  </button>
+                );
+              })}
+              <button
+                className="px-2 py-1 text-[11px] border rounded border-border text-muted bg-card hover:border-accent hover:text-accent"
+                onClick={() => setTab("plugins")}
+                title="Open plugin settings"
               >
-                <option value="local">Local (lower cost)</option>
-                <option value="auto">Auto</option>
-                <option value="premium">Premium (higher quality/cost)</option>
-              </select>
-            </label>
-
-            <div className="flex flex-col gap-1 justify-end">
-              <span className="text-[11px] text-muted">Identity Projection</span>
-              <span className="text-[11px] text-muted">
-                Uses current Milaidy character voice/style defaults.
-              </span>
-            </div>
-          </div>
-
-          {autoRunPreview && (
-            <div className="mt-2 rounded border border-border/70 bg-bg-hover/40 px-2 py-2">
-              <div className="flex flex-wrap items-center gap-3 text-[11px]">
-                <span className="text-muted">
-                  Profile: <span className="text-txt">{autoRunPreview.profile}</span>
-                </span>
-                <span className="text-muted">
-                  Stream credits:{" "}
-                  <span className="text-txt">
-                    {typeof autoRunPreview.estimate.totalCredits === "number"
-                      ? autoRunPreview.estimate.totalCredits
-                      : "n/a"}
-                  </span>
-                </span>
-                <span className="text-muted">
-                  Runtime credits:{" "}
-                  <span className="text-txt">
-                    {typeof autoRunPreview.estimate.runtimeCredits === "number"
-                      ? autoRunPreview.estimate.runtimeCredits
-                      : "n/a"}
-                  </span>
-                </span>
-                <span className="text-muted">
-                  Total credits:{" "}
-                  <span className="text-txt">
-                    {typeof autoRunPreview.estimate.grandTotalCredits === "number"
-                      ? autoRunPreview.estimate.grandTotalCredits
-                      : "n/a"}
-                  </span>
-                </span>
-                <span className="text-muted">
-                  Balance:{" "}
-                  <span className="text-txt">
-                    {typeof autoRunPreview.balance?.creditBalance === "number"
-                      ? autoRunPreview.balance.creditBalance
-                      : "n/a"}
-                  </span>
-                </span>
-                <span
-                  className={`font-semibold ${
-                    autoRunPreview.canStart ? "text-ok" : "text-danger"
-                  }`}
-                >
-                  {autoRunPreview.canStart
-                    ? "Ready to launch"
-                    : "Insufficient credits"}
-                </span>
-              </div>
+                Manage
+              </button>
             </div>
           )}
 
-          <div className="mt-2 flex flex-wrap gap-2">
-            <button
-              className="px-2 py-1 text-[11px] border rounded border-border text-muted bg-card hover:border-accent hover:text-accent disabled:opacity-50"
-              onClick={() => void runAutonomousEstimate()}
-              disabled={autoRunPreviewBusy || autoRunLaunching}
+          {autoRunOpen && (
+            <div
+              className="mb-2 rounded border border-border bg-card/70 p-2 text-xs relative"
+              style={{ zIndex: 1 }}
             >
-              {autoRunPreviewBusy ? "Estimating..." : "Estimate Cost"}
-            </button>
-            <button
-              className="px-2 py-1 text-[11px] border rounded border-accent text-accent bg-card hover:bg-accent/10 disabled:opacity-50"
-              onClick={() => void runAutonomousLaunch()}
-              disabled={autoRunPreviewBusy || autoRunLaunching}
-            >
-              {autoRunLaunching ? "Launching..." : "Start Autonomous Run"}
-            </button>
-          </div>
-        </div>
+              <div className="flex items-center justify-between pb-2">
+                <span className="text-[10px] uppercase tracking-wide text-muted">
+                  Autonomous Run Setup
+                </span>
+                <button
+                  className="px-2 py-1 text-[11px] border rounded border-border text-muted bg-card hover:border-accent hover:text-accent"
+                  onClick={() => setAutoRunOpen(false)}
+                  disabled={autoRunPreviewBusy || autoRunLaunching}
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11px] text-muted">Mode</span>
+                  <select
+                    className="px-2 py-1 border rounded border-border bg-card text-txt"
+                    value={autoRunMode}
+                    onChange={(e) => setAutoRunMode(e.target.value as Five55AutonomyMode)}
+                    disabled={autoRunPreviewBusy || autoRunLaunching}
+                  >
+                    <option value="newscast">Newscast</option>
+                    <option value="topic">Topic</option>
+                    <option value="games">Play Games</option>
+                    <option value="free">Free Will</option>
+                  </select>
+                </label>
+
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11px] text-muted">Duration (minutes)</span>
+                  <input
+                    type="number"
+                    min={5}
+                    max={180}
+                    step={5}
+                    className="px-2 py-1 border rounded border-border bg-card text-txt"
+                    value={autoRunDurationMin}
+                    onChange={(e) => {
+                      const parsed = Number.parseInt(e.target.value, 10);
+                      const next = Number.isFinite(parsed)
+                        ? Math.max(5, Math.min(180, parsed))
+                        : 30;
+                      setAutoRunDurationMin(next);
+                    }}
+                    disabled={autoRunPreviewBusy || autoRunLaunching}
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1 md:col-span-2">
+                  <span className="text-[11px] text-muted">
+                    Topic {autoRunMode === "topic" ? "(required)" : "(optional)"}
+                  </span>
+                  <input
+                    type="text"
+                    className="px-2 py-1 border rounded border-border bg-card text-txt"
+                    placeholder="e.g. Solana ecosystem recap, market structure, render infra updates"
+                    value={autoRunTopic}
+                    onChange={(e) => setAutoRunTopic(e.target.value)}
+                    disabled={autoRunPreviewBusy || autoRunLaunching}
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11px] text-muted">Avatar Runtime</span>
+                  <select
+                    className="px-2 py-1 border rounded border-border bg-card text-txt"
+                    value={autoRunAvatarRuntime}
+                    onChange={(e) =>
+                      setAutoRunAvatarRuntime(
+                        e.target.value as "auto" | "local" | "premium",
+                      )
+                    }
+                    disabled={autoRunPreviewBusy || autoRunLaunching}
+                  >
+                    <option value="local">Local (lower cost)</option>
+                    <option value="auto">Auto</option>
+                    <option value="premium">Premium (higher quality/cost)</option>
+                  </select>
+                </label>
+
+                <div className="flex flex-col gap-1 justify-end">
+                  <span className="text-[11px] text-muted">Identity Projection</span>
+                  <span className="text-[11px] text-muted">
+                    Uses current Milaidy character voice/style defaults.
+                  </span>
+                </div>
+              </div>
+
+              {autoRunPreview && (
+                <div className="mt-2 rounded border border-border/70 bg-bg-hover/40 px-2 py-2">
+                  <div className="flex flex-wrap items-center gap-3 text-[11px]">
+                    <span className="text-muted">
+                      Profile: <span className="text-txt">{autoRunPreview.profile}</span>
+                    </span>
+                    <span className="text-muted">
+                      Stream credits:{" "}
+                      <span className="text-txt">
+                        {typeof autoRunPreview.estimate.totalCredits === "number"
+                          ? autoRunPreview.estimate.totalCredits
+                          : "n/a"}
+                      </span>
+                    </span>
+                    <span className="text-muted">
+                      Runtime credits:{" "}
+                      <span className="text-txt">
+                        {typeof autoRunPreview.estimate.runtimeCredits === "number"
+                          ? autoRunPreview.estimate.runtimeCredits
+                          : "n/a"}
+                      </span>
+                    </span>
+                    <span className="text-muted">
+                      Total credits:{" "}
+                      <span className="text-txt">
+                        {typeof autoRunPreview.estimate.grandTotalCredits === "number"
+                          ? autoRunPreview.estimate.grandTotalCredits
+                          : "n/a"}
+                      </span>
+                    </span>
+                    <span className="text-muted">
+                      Balance:{" "}
+                      <span className="text-txt">
+                        {typeof autoRunPreview.balance?.creditBalance === "number"
+                          ? autoRunPreview.balance.creditBalance
+                          : "n/a"}
+                      </span>
+                    </span>
+                    <span
+                      className={`font-semibold ${
+                        autoRunPreview.canStart ? "text-ok" : "text-danger"
+                      }`}
+                    >
+                      {autoRunPreview.canStart
+                        ? "Ready to launch"
+                        : "Insufficient credits"}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  className="px-2 py-1 text-[11px] border rounded border-border text-muted bg-card hover:border-accent hover:text-accent disabled:opacity-50"
+                  onClick={() => void runAutonomousEstimate()}
+                  disabled={autoRunPreviewBusy || autoRunLaunching}
+                >
+                  {autoRunPreviewBusy ? "Estimating..." : "Estimate Cost"}
+                </button>
+                <button
+                  className="px-2 py-1 text-[11px] border rounded border-accent text-accent bg-card hover:bg-accent/10 disabled:opacity-50"
+                  onClick={() => void runAutonomousLaunch()}
+                  disabled={autoRunPreviewBusy || autoRunLaunching}
+                >
+                  {autoRunLaunching ? "Launching..." : "Start Autonomous Run"}
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       <div ref={messagesRef} className="flex-1 overflow-y-auto py-2 relative" style={{ zIndex: 1 }}>
@@ -1389,11 +1805,11 @@ export const ChatView = memo(function ChatView() {
           </button>
         </div>
         <div className="flex gap-1.5">
-          {/* Custom Actions panel toggle */}
+          {/* Actions tab */}
           <button
             className="w-7 h-7 flex items-center justify-center border rounded cursor-pointer transition-all bg-card border-border text-muted hover:border-accent hover:text-accent"
-            onClick={() => window.dispatchEvent(new Event("toggle-custom-actions-panel"))}
-            title="Custom Actions"
+            onClick={() => setTab("actions")}
+            title="Open Actions tab"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />

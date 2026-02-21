@@ -8,6 +8,7 @@ import type {
   ProviderResult,
   State,
 } from "@elizaos/core";
+import crypto from "node:crypto";
 import {
   assertFive55Capability,
   createFive55CapabilityPolicy,
@@ -16,6 +17,9 @@ import { assertTrustedAdminForAction } from "../../runtime/trusted-admin.js";
 import {
   exceptionAction,
   executeApiAction,
+  type Five55ActionCode,
+  getRecentActionLifecycleEvents,
+  recordActionLifecycleEvent,
   readParam,
 } from "../five55-shared/action-kit.js";
 
@@ -41,9 +45,83 @@ interface StreamActionEnvelope {
   retryable: boolean;
   data?: unknown;
   details?: unknown;
+  trace?: StreamActionTrace;
 }
 
 let cachedAgentSessionId: string | null = null;
+
+interface StreamActionTrace {
+  actionId: string;
+  startedAt: string;
+  endedAt: string;
+  sessionId?: string;
+  segmentId?: string;
+}
+
+interface StreamLifecycleContext {
+  actionId: string;
+  action: "STREAM_STATUS" | "STREAM_CONTROL" | "STREAM_SCHEDULE";
+  startedAt: string;
+  sessionId?: string;
+  segmentId?: string;
+}
+
+function createStreamLifecycleContext(
+  action: StreamLifecycleContext["action"],
+  requestedSessionId?: string,
+  segmentId?: string,
+): StreamLifecycleContext {
+  return {
+    actionId: crypto.randomUUID(),
+    action,
+    startedAt: new Date().toISOString(),
+    ...(requestedSessionId?.trim() ? { sessionId: requestedSessionId.trim() } : {}),
+    ...(segmentId?.trim() ? { segmentId: segmentId.trim() } : {}),
+  };
+}
+
+function buildStreamTrace(
+  context: StreamLifecycleContext,
+  endedAt: string,
+): StreamActionTrace {
+  return {
+    actionId: context.actionId,
+    startedAt: context.startedAt,
+    endedAt,
+    ...(context.sessionId ? { sessionId: context.sessionId } : {}),
+    ...(context.segmentId ? { segmentId: context.segmentId } : {}),
+  };
+}
+
+function emitStreamLifecycle(
+  context: StreamLifecycleContext,
+  stage: "planned" | "validated" | "dispatched" | "succeeded" | "failed",
+  payload: {
+    status?: number;
+    code?: Five55ActionCode;
+    message?: string;
+    endpoint?: string;
+    details?: unknown;
+    endedAt?: string;
+  } = {},
+): void {
+  recordActionLifecycleEvent({
+    actionId: context.actionId,
+    module: "stream",
+    action: context.action,
+    stage,
+    occurredAt: payload.endedAt ?? new Date().toISOString(),
+    startedAt: context.startedAt,
+    ...(payload.endedAt ? { endedAt: payload.endedAt } : {}),
+    ...(payload.status !== undefined ? { status: payload.status } : {}),
+    ...(payload.code ? { code: payload.code } : {}),
+    ...(payload.message ? { message: payload.message } : {}),
+    ...(payload.endpoint ? { endpoint: payload.endpoint } : {}),
+    ...(context.sessionId ? { sessionId: context.sessionId } : {}),
+    ...(context.segmentId ? { segmentId: context.segmentId } : {}),
+    ...(payload.details !== undefined ? { details: payload.details } : {}),
+  });
+}
 
 function createActionResult(
   success: boolean,
@@ -57,6 +135,7 @@ function actionSuccess(
   message: string,
   status: number,
   data?: unknown,
+  trace?: StreamActionTrace,
 ): { success: true; text: string } {
   return createActionResult(true, {
     ok: true,
@@ -67,6 +146,7 @@ function actionSuccess(
     status,
     retryable: false,
     data,
+    ...(trace ? { trace } : {}),
   }) as { success: true; text: string };
 }
 
@@ -76,6 +156,7 @@ function actionFailure(
   status: number,
   message: string,
   details?: unknown,
+  trace?: StreamActionTrace,
 ): { success: false; text: string } {
   return createActionResult(false, {
     ok: false,
@@ -86,6 +167,7 @@ function actionFailure(
     status,
     retryable: status === 0 || status === 429 || status >= 500,
     details,
+    ...(trace ? { trace } : {}),
   }) as { success: false; text: string };
 }
 
@@ -315,15 +397,35 @@ async function executeLegacyStreamSchedule(
 async function executeAgentStreamStatus(
   scope: string,
   requestedSessionId?: string,
+  segmentId?: string,
 ): Promise<{ success: boolean; text: string }> {
+  const lifecycle = createStreamLifecycleContext(
+    "STREAM_STATUS",
+    requestedSessionId,
+    segmentId,
+  );
+  emitStreamLifecycle(lifecycle, "planned", {
+    message: "agent-v1 stream status planned",
+    details: { scope, dialect: "agent-v1" },
+  });
+
   const base = resolveStreamBase();
   const token = resolveAgentToken();
   if (!token) {
+    const endedAt = new Date().toISOString();
+    emitStreamLifecycle(lifecycle, "failed", {
+      status: 401,
+      code: "E_UPSTREAM_UNAUTHORIZED",
+      message: `${STREAM555_TOKEN_ENV} (or STREAM_API_BEARER_TOKEN) is required for agent-v1 stream control`,
+      endedAt,
+    });
     return actionFailure(
       "STREAM_STATUS",
       "E_UPSTREAM_UNAUTHORIZED",
       401,
       `${STREAM555_TOKEN_ENV} (or STREAM_API_BEARER_TOKEN) is required for agent-v1 stream control`,
+      undefined,
+      buildStreamTrace(lifecycle, endedAt),
     );
   }
 
@@ -333,13 +435,34 @@ async function executeAgentStreamStatus(
       token,
       requestedSessionId,
     );
+    lifecycle.sessionId = sessionId;
+    const endpoint = `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/stream/status`;
+    emitStreamLifecycle(lifecycle, "validated", {
+      message: "agent-v1 session resolved",
+      details: { sessionId },
+    });
+    emitStreamLifecycle(lifecycle, "dispatched", {
+      message: "agent-v1 stream status dispatched",
+      endpoint,
+    });
     const status = await fetchJson(
       "GET",
       base,
-      `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/stream/status`,
+      endpoint,
       token,
     );
     if (!status.ok) {
+      const endedAt = new Date().toISOString();
+      emitStreamLifecycle(lifecycle, "failed", {
+        status: status.status,
+        code: "E_UPSTREAM_FAILURE",
+        message: "agent-v1 stream status failed",
+        details: {
+          sessionId,
+          detail: getErrorDetail(status),
+        },
+        endedAt,
+      });
       return actionFailure(
         "STREAM_STATUS",
         "E_UPSTREAM_FAILURE",
@@ -349,9 +472,22 @@ async function executeAgentStreamStatus(
           sessionId,
           detail: getErrorDetail(status),
         },
+        buildStreamTrace(lifecycle, endedAt),
       );
     }
 
+    const endedAt = new Date().toISOString();
+    emitStreamLifecycle(lifecycle, "succeeded", {
+      status: status.status,
+      code: "OK",
+      message: "stream status fetched",
+      details: {
+        dialect: "agent-v1",
+        scope,
+        sessionId,
+      },
+      endedAt,
+    });
     return actionSuccess(
       "STREAM_STATUS",
       "stream status fetched",
@@ -362,13 +498,23 @@ async function executeAgentStreamStatus(
         sessionId,
         ...(status.data ?? {}),
       },
+      buildStreamTrace(lifecycle, endedAt),
     );
   } catch (err) {
+    const endedAt = new Date().toISOString();
+    emitStreamLifecycle(lifecycle, "failed", {
+      status: 500,
+      code: "E_RUNTIME_EXCEPTION",
+      message: err instanceof Error ? err.message : String(err),
+      endedAt,
+    });
     return actionFailure(
       "STREAM_STATUS",
       "E_RUNTIME_EXCEPTION",
       500,
       err instanceof Error ? err.message : String(err),
+      undefined,
+      buildStreamTrace(lifecycle, endedAt),
     );
   }
 }
@@ -379,15 +525,35 @@ async function executeAgentStreamControl(
   requestedSessionId?: string,
   inputType?: string,
   inputUrl?: string,
+  segmentId?: string,
 ): Promise<{ success: boolean; text: string }> {
+  const lifecycle = createStreamLifecycleContext(
+    "STREAM_CONTROL",
+    requestedSessionId,
+    segmentId,
+  );
+  emitStreamLifecycle(lifecycle, "planned", {
+    message: "agent-v1 stream control planned",
+    details: { operation, scene, dialect: "agent-v1" },
+  });
+
   const base = resolveStreamBase();
   const token = resolveAgentToken();
   if (!token) {
+    const endedAt = new Date().toISOString();
+    emitStreamLifecycle(lifecycle, "failed", {
+      status: 401,
+      code: "E_UPSTREAM_UNAUTHORIZED",
+      message: `${STREAM555_TOKEN_ENV} (or STREAM_API_BEARER_TOKEN) is required for agent-v1 stream control`,
+      endedAt,
+    });
     return actionFailure(
       "STREAM_CONTROL",
       "E_UPSTREAM_UNAUTHORIZED",
       401,
       `${STREAM555_TOKEN_ENV} (or STREAM_API_BEARER_TOKEN) is required for agent-v1 stream control`,
+      undefined,
+      buildStreamTrace(lifecycle, endedAt),
     );
   }
 
@@ -397,25 +563,55 @@ async function executeAgentStreamControl(
       token,
       requestedSessionId,
     );
+    lifecycle.sessionId = sessionId;
+    emitStreamLifecycle(lifecycle, "validated", {
+      message: "agent-v1 session resolved",
+      details: { sessionId, operation },
+    });
 
     if (operation === "pause" || operation === "resume") {
+      const endedAt = new Date().toISOString();
+      emitStreamLifecycle(lifecycle, "failed", {
+        status: 400,
+        code: "E_REQUEST_CONTRACT",
+        message: `operation '${operation}' is not supported by agent-v1 stream API`,
+        endedAt,
+      });
       return actionFailure(
         "STREAM_CONTROL",
         "E_REQUEST_CONTRACT",
         400,
         `operation '${operation}' is not supported by agent-v1 stream API`,
+        undefined,
+        buildStreamTrace(lifecycle, endedAt),
       );
     }
 
     if (operation === "scene") {
+      const endpoint = `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/studio/scene/active`;
+      emitStreamLifecycle(lifecycle, "dispatched", {
+        message: "agent-v1 scene switch dispatched",
+        endpoint,
+      });
       const sceneResponse = await fetchJson(
         "POST",
         base,
-        `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/studio/scene/active`,
+        endpoint,
         token,
         { sceneId: scene || "default" },
       );
       if (!sceneResponse.ok) {
+        const endedAt = new Date().toISOString();
+        emitStreamLifecycle(lifecycle, "failed", {
+          status: sceneResponse.status,
+          code: "E_UPSTREAM_FAILURE",
+          message: "agent-v1 scene switch failed",
+          details: {
+            sessionId,
+            detail: getErrorDetail(sceneResponse),
+          },
+          endedAt,
+        });
         return actionFailure(
           "STREAM_CONTROL",
           "E_UPSTREAM_FAILURE",
@@ -425,8 +621,17 @@ async function executeAgentStreamControl(
             sessionId,
             detail: getErrorDetail(sceneResponse),
           },
+          buildStreamTrace(lifecycle, endedAt),
         );
       }
+      const endedAt = new Date().toISOString();
+      emitStreamLifecycle(lifecycle, "succeeded", {
+        status: sceneResponse.status,
+        code: "OK",
+        message: "scene switched",
+        details: { sessionId, operation, scene },
+        endedAt,
+      });
       return actionSuccess(
         "STREAM_CONTROL",
         "scene switched",
@@ -438,6 +643,7 @@ async function executeAgentStreamControl(
           scene,
           ...(sceneResponse.data ?? {}),
         },
+        buildStreamTrace(lifecycle, endedAt),
       );
     }
 
@@ -465,6 +671,20 @@ async function executeAgentStreamControl(
           }
         : {};
 
+    emitStreamLifecycle(lifecycle, "dispatched", {
+      message: "agent-v1 stream control dispatched",
+      endpoint,
+      details: {
+        operation,
+        ...(operation === "start"
+          ? {
+              inputType: resolvedInputType,
+              hasInputUrl: Boolean(resolvedInputUrl),
+            }
+          : {}),
+      },
+    });
+
     const commandResponse = await fetchJson(
       "POST",
       base,
@@ -474,6 +694,18 @@ async function executeAgentStreamControl(
     );
 
     if (!commandResponse.ok) {
+      const endedAt = new Date().toISOString();
+      emitStreamLifecycle(lifecycle, "failed", {
+        status: commandResponse.status,
+        code: "E_UPSTREAM_FAILURE",
+        message: "agent-v1 stream control failed",
+        details: {
+          sessionId,
+          operation,
+          detail: getErrorDetail(commandResponse),
+        },
+        endedAt,
+      });
       return actionFailure(
         "STREAM_CONTROL",
         "E_UPSTREAM_FAILURE",
@@ -484,9 +716,18 @@ async function executeAgentStreamControl(
           operation,
           detail: getErrorDetail(commandResponse),
         },
+        buildStreamTrace(lifecycle, endedAt),
       );
     }
 
+    const endedAt = new Date().toISOString();
+    emitStreamLifecycle(lifecycle, "succeeded", {
+      status: commandResponse.status,
+      code: "OK",
+      message: "stream control submitted",
+      details: { sessionId, operation, scene },
+      endedAt,
+    });
     return actionSuccess(
       "STREAM_CONTROL",
       "stream control submitted",
@@ -498,13 +739,24 @@ async function executeAgentStreamControl(
         scene,
         ...(commandResponse.data ?? {}),
       },
+      buildStreamTrace(lifecycle, endedAt),
     );
   } catch (err) {
+    const endedAt = new Date().toISOString();
+    emitStreamLifecycle(lifecycle, "failed", {
+      status: 500,
+      code: "E_RUNTIME_EXCEPTION",
+      message: err instanceof Error ? err.message : String(err),
+      details: { operation, scene },
+      endedAt,
+    });
     return actionFailure(
       "STREAM_CONTROL",
       "E_RUNTIME_EXCEPTION",
       500,
       err instanceof Error ? err.message : String(err),
+      undefined,
+      buildStreamTrace(lifecycle, endedAt),
     );
   }
 }
@@ -514,15 +766,35 @@ async function executeAgentStreamSchedule(
   durationMin: string,
   requestedSessionId?: string,
   title?: string,
+  segmentId?: string,
 ): Promise<{ success: boolean; text: string }> {
+  const lifecycle = createStreamLifecycleContext(
+    "STREAM_SCHEDULE",
+    requestedSessionId,
+    segmentId,
+  );
+  emitStreamLifecycle(lifecycle, "planned", {
+    message: "agent-v1 stream schedule planned",
+    details: { startsAt, durationMin, title, dialect: "agent-v1" },
+  });
+
   const base = resolveStreamBase();
   const token = resolveAgentToken();
   if (!token) {
+    const endedAt = new Date().toISOString();
+    emitStreamLifecycle(lifecycle, "failed", {
+      status: 401,
+      code: "E_UPSTREAM_UNAUTHORIZED",
+      message: `${STREAM555_TOKEN_ENV} (or STREAM_API_BEARER_TOKEN) is required for agent-v1 stream scheduling`,
+      endedAt,
+    });
     return actionFailure(
       "STREAM_SCHEDULE",
       "E_UPSTREAM_UNAUTHORIZED",
       401,
       `${STREAM555_TOKEN_ENV} (or STREAM_API_BEARER_TOKEN) is required for agent-v1 stream scheduling`,
+      undefined,
+      buildStreamTrace(lifecycle, endedAt),
     );
   }
 
@@ -532,10 +804,21 @@ async function executeAgentStreamSchedule(
       token,
       requestedSessionId,
     );
+    lifecycle.sessionId = sessionId;
+    const endpoint = `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/schedule`;
+    emitStreamLifecycle(lifecycle, "validated", {
+      message: "agent-v1 session resolved",
+      details: { sessionId },
+    });
+    emitStreamLifecycle(lifecycle, "dispatched", {
+      message: "agent-v1 stream schedule dispatched",
+      endpoint,
+      details: { title: title?.trim() || "Scheduled stream" },
+    });
     const scheduleResponse = await fetchJson(
       "POST",
       base,
-      `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/schedule`,
+      endpoint,
       token,
       {
         title: title?.trim() || "Scheduled stream",
@@ -544,6 +827,17 @@ async function executeAgentStreamSchedule(
       },
     );
     if (!scheduleResponse.ok) {
+      const endedAt = new Date().toISOString();
+      emitStreamLifecycle(lifecycle, "failed", {
+        status: scheduleResponse.status,
+        code: "E_UPSTREAM_FAILURE",
+        message: "agent-v1 stream schedule failed",
+        details: {
+          sessionId,
+          detail: getErrorDetail(scheduleResponse),
+        },
+        endedAt,
+      });
       return actionFailure(
         "STREAM_SCHEDULE",
         "E_UPSTREAM_FAILURE",
@@ -553,9 +847,18 @@ async function executeAgentStreamSchedule(
           sessionId,
           detail: getErrorDetail(scheduleResponse),
         },
+        buildStreamTrace(lifecycle, endedAt),
       );
     }
 
+    const endedAt = new Date().toISOString();
+    emitStreamLifecycle(lifecycle, "succeeded", {
+      status: scheduleResponse.status,
+      code: "OK",
+      message: "stream schedule submitted",
+      details: { sessionId },
+      endedAt,
+    });
     return actionSuccess(
       "STREAM_SCHEDULE",
       "stream schedule submitted",
@@ -565,13 +868,23 @@ async function executeAgentStreamSchedule(
         sessionId,
         ...(scheduleResponse.data ?? {}),
       },
+      buildStreamTrace(lifecycle, endedAt),
     );
   } catch (err) {
+    const endedAt = new Date().toISOString();
+    emitStreamLifecycle(lifecycle, "failed", {
+      status: 500,
+      code: "E_RUNTIME_EXCEPTION",
+      message: err instanceof Error ? err.message : String(err),
+      endedAt,
+    });
     return actionFailure(
       "STREAM_SCHEDULE",
       "E_RUNTIME_EXCEPTION",
       500,
       err instanceof Error ? err.message : String(err),
+      undefined,
+      buildStreamTrace(lifecycle, endedAt),
     );
   }
 }
@@ -597,7 +910,7 @@ const streamProvider: Provider = {
         `API configured: ${configured ? "yes" : "no"} (${configuredBase})`,
         `Dialect: ${dialect}`,
         `Session env: ${trimEnv(STREAM_SESSION_ENV) ?? trimEnv(STREAM555_SESSION_ENV) ?? "auto-create"}`,
-        "Actions: STREAM_STATUS, STREAM_CONTROL, STREAM_SCHEDULE",
+        "Actions: STREAM_STATUS, STREAM_CONTROL, STREAM_SCHEDULE, STREAM_ACTION_TIMELINE",
       ].join("\n"),
     };
   },
@@ -618,9 +931,17 @@ const streamStatusAction: Action = {
         options as HandlerOptions | undefined,
         "sessionId",
       );
+      const segmentId = readParam(
+        options as HandlerOptions | undefined,
+        "segmentId",
+      );
 
       if (resolveStreamDialect() === "agent-v1") {
-        const agentResult = await executeAgentStreamStatus(scope, sessionId);
+        const agentResult = await executeAgentStreamStatus(
+          scope,
+          sessionId,
+          segmentId,
+        );
         if (agentResult.success) return agentResult;
 
         const legacyResult = await executeLegacyStreamStatus(scope);
@@ -643,6 +964,12 @@ const streamStatusAction: Action = {
     {
       name: "sessionId",
       description: "Optional stream session identifier (agent-v1 mode)",
+      required: false,
+      schema: { type: "string" as const },
+    },
+    {
+      name: "segmentId",
+      description: "Optional segment identifier for lifecycle visibility",
       required: false,
       schema: { type: "string" as const },
     },
@@ -681,6 +1008,10 @@ const streamControlAction: Action = {
         "inputType",
       );
       const url = readParam(options as HandlerOptions | undefined, "url");
+      const segmentId = readParam(
+        options as HandlerOptions | undefined,
+        "segmentId",
+      );
 
       if (
         !operation ||
@@ -701,6 +1032,7 @@ const streamControlAction: Action = {
           sessionId,
           inputType,
           url,
+          segmentId,
         );
         if (agentResult.success) return agentResult;
 
@@ -745,6 +1077,12 @@ const streamControlAction: Action = {
       required: false,
       schema: { type: "string" as const },
     },
+    {
+      name: "segmentId",
+      description: "Optional segment identifier for lifecycle visibility",
+      required: false,
+      schema: { type: "string" as const },
+    },
   ],
 };
 
@@ -768,6 +1106,10 @@ const streamScheduleAction: Action = {
         "sessionId",
       );
       const title = readParam(options as HandlerOptions | undefined, "title");
+      const segmentId = readParam(
+        options as HandlerOptions | undefined,
+        "segmentId",
+      );
 
       if (!startsAt) {
         return actionFailure(
@@ -793,6 +1135,7 @@ const streamScheduleAction: Action = {
           durationMin,
           sessionId,
           title,
+          segmentId,
         );
         if (agentResult.success) return agentResult;
 
@@ -834,6 +1177,90 @@ const streamScheduleAction: Action = {
       required: false,
       schema: { type: "string" as const },
     },
+    {
+      name: "segmentId",
+      description: "Optional segment identifier for lifecycle visibility",
+      required: false,
+      schema: { type: "string" as const },
+    },
+  ],
+};
+
+const streamActionTimelineAction: Action = {
+  name: "STREAM_ACTION_TIMELINE",
+  similes: ["STREAM_TIMELINE", "ACTION_TIMELINE", "STREAM_ACTIONS_LOG"],
+  description:
+    "Returns recent action lifecycle events for stream/five55/swap visibility.",
+  validate: async () => true,
+  handler: async (_runtime, _message, _state, options) => {
+    try {
+      assertFive55Capability(CAPABILITY_POLICY, "stream.read");
+      const limitRaw =
+        readParam(options as HandlerOptions | undefined, "limit") ?? "50";
+      const limit = Number.parseInt(limitRaw, 10);
+      if (!Number.isFinite(limit) || limit <= 0) {
+        return actionFailure(
+          "STREAM_ACTION_TIMELINE",
+          "E_REQUEST_CONTRACT",
+          400,
+          "limit must be a positive integer",
+        );
+      }
+
+      const sessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+      const segmentId = readParam(
+        options as HandlerOptions | undefined,
+        "segmentId",
+      );
+      const action = readParam(options as HandlerOptions | undefined, "action");
+
+      const events = getRecentActionLifecycleEvents(limit, {
+        sessionId,
+        segmentId,
+        action,
+      });
+      return actionSuccess(
+        "STREAM_ACTION_TIMELINE",
+        "action timeline fetched",
+        200,
+        {
+          count: events.length,
+          events,
+        },
+      );
+    } catch (err) {
+      return exceptionAction("stream", "STREAM_ACTION_TIMELINE", err);
+    }
+  },
+  parameters: [
+    {
+      name: "limit",
+      description: "Maximum number of events to return",
+      required: false,
+      schema: { type: "string" as const },
+    },
+    {
+      name: "sessionId",
+      description: "Optional session filter",
+      required: false,
+      schema: { type: "string" as const },
+    },
+    {
+      name: "segmentId",
+      description: "Optional segment filter",
+      required: false,
+      schema: { type: "string" as const },
+    },
+    {
+      name: "action",
+      description:
+        "Optional action filter (STREAM_STATUS, STREAM_CONTROL, SWAP_EXECUTE, etc.)",
+      required: false,
+      schema: { type: "string" as const },
+    },
   ],
 };
 
@@ -842,7 +1269,12 @@ export function createStreamPlugin(): Plugin {
     name: "stream",
     description: "Live-stream orchestration and observability surface",
     providers: [streamProvider],
-    actions: [streamStatusAction, streamControlAction, streamScheduleAction],
+    actions: [
+      streamStatusAction,
+      streamControlAction,
+      streamScheduleAction,
+      streamActionTimelineAction,
+    ],
   };
 }
 
