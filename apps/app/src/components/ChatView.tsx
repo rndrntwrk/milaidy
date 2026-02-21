@@ -629,11 +629,10 @@ export const ChatView = memo(function ChatView() {
       if (status === "disabled" && layer.id !== "go-live") {
         const pluginLabel = layer.pluginIds.join(", ");
         setActionNotice(
-          `${pluginLabel} is disabled or not active. Enable it in Plugins first.`,
+          `${pluginLabel} is disabled or not active. Action stays in chat; enable the plugin when ready.`,
           "info",
           2200,
         );
-        setTab("plugins");
         return;
       }
 
@@ -664,11 +663,10 @@ export const ChatView = memo(function ChatView() {
 
         if (!stream555ControlAvailable && !legacyStreamAvailable) {
           setActionNotice(
-            "Neither stream555-control nor stream is available. Enable one in Plugins first.",
+            "Neither stream555-control nor stream is available. Staying in chat until one is enabled.",
             "info",
             2600,
           );
-          setTab("plugins");
           return;
         }
         let goLiveCompleted = false;
@@ -841,11 +839,10 @@ export const ChatView = memo(function ChatView() {
         !hasPluginRegistration("stream555-control")
       ) {
         setActionNotice(
-          "stream555-control plugin is not registered. Enable it in Plugins first.",
+          "stream555-control plugin is not registered. Staying in chat until it is enabled.",
           "info",
           2600,
         );
-        setTab("plugins");
         return;
       }
 
@@ -1424,20 +1421,18 @@ export const ChatView = memo(function ChatView() {
     }
     if (!hasPluginRegistration("stream")) {
       setActionNotice(
-        "stream plugin is not registered. Enable it in Plugins first.",
+        "stream plugin is not registered. Staying in chat until it is enabled.",
         "info",
         2600,
       );
-      setTab("plugins");
       return;
     }
     if (resolveLayerStatus(["stream"]) === "disabled") {
       setActionNotice(
-        "stream plugin is disabled. Enable it in Plugins before autonomous runs.",
+        "stream plugin is disabled. Staying in chat until it is enabled for autonomous runs.",
         "info",
         3000,
       );
-      setTab("plugins");
       return;
     }
 
