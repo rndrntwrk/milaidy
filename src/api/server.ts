@@ -97,6 +97,10 @@ import { handleTrainingRoutes } from "./training-routes.js";
 import { handleTrajectoryRoute } from "./trajectory-routes.js";
 import { handleTriggerRoutes } from "./trigger-routes.js";
 import {
+  enforceSimpleModeReplyBoundaries,
+  resolveEffectiveChatMode,
+} from "./chat-mode-guard.js";
+import {
   generateVerificationMessage,
   isAddressWhitelisted,
   markAddressVerified,
@@ -2853,14 +2857,20 @@ async function generateChatResponse(
   const finalText = isNoResponsePlaceholder(responseText)
     ? (noResponseFallback ?? (responseText || "(no response)"))
     : responseText;
+  const promptText =
+    typeof message.content?.text === "string" ? message.content.text : "";
+  const boundedText =
+    chatMode === "simple"
+      ? enforceSimpleModeReplyBoundaries(promptText, finalText)
+      : finalText;
 
   const totalMs = Date.now() - t0;
   logger.info(
-    `[perf] chat response: mode=${chatMode}, model=${modelHint}, timeout=false, total=${totalMs}ms, first-token=${firstTokenMs || "n/a"}ms, length=${finalText.length}`,
+    `[perf] chat response: mode=${chatMode}, model=${modelHint}, timeout=false, total=${totalMs}ms, first-token=${firstTokenMs || "n/a"}ms, length=${boundedText.length}`,
   );
 
   return {
-    text: finalText,
+    text: boundedText,
     agentName,
   };
 }
@@ -10930,14 +10940,27 @@ async function handleRequest(
       error(res, "mode must be 'simple' or 'power'", 400);
       return;
     }
-    const mode: ChatMode = body.mode === "simple" ? "simple" : "power";
     const prompt = body.text.trim();
+    const requestedMode: ChatMode = body.mode === "simple" ? "simple" : "power";
+    const modeDecision = resolveEffectiveChatMode(requestedMode, prompt);
+    const mode = modeDecision.effectiveMode;
+    if (modeDecision.autoEscalated) {
+      logger.info(
+        `[chat] auto-escalated mode simple->power for action intent (endpoint=/api/conversations/:id/messages/stream)`,
+      );
+    }
 
     // Cloud proxy path
     const proxy = state.cloudManager?.getProxy();
     if (proxy) {
       initSse(res);
-      writeSse(res, { type: "ready", mode, ts: Date.now() });
+      writeSse(res, {
+        type: "ready",
+        mode,
+        requestedMode,
+        autoEscalated: modeDecision.autoEscalated,
+        ts: Date.now(),
+      });
       const stopSseHeartbeat = startSseHeartbeat(res);
       let fullText = "";
       try {
@@ -10950,15 +10973,19 @@ async function handleRequest(
           writeSse(res, { type: "token", text: chunk });
         }
 
-        const resolvedText = normalizeChatResponseText(
-          fullText,
-          state.logBuffer,
-        );
+        const normalized = normalizeChatResponseText(fullText, state.logBuffer);
+        const resolvedText =
+          mode === "simple"
+            ? enforceSimpleModeReplyBoundaries(prompt, normalized)
+            : normalized;
         conv.updatedAt = new Date().toISOString();
         writeSse(res, {
           type: "done",
           fullText: resolvedText,
           agentName: proxy.agentName,
+          mode,
+          requestedMode,
+          autoEscalated: modeDecision.autoEscalated,
         });
       } catch (err) {
         const creditReply = getInsufficientCreditsReplyFromError(err);
@@ -10988,7 +11015,13 @@ async function handleRequest(
     }
 
     initSse(res);
-    writeSse(res, { type: "ready", mode, ts: Date.now() });
+    writeSse(res, {
+      type: "ready",
+      mode,
+      requestedMode,
+      autoEscalated: modeDecision.autoEscalated,
+      ts: Date.now(),
+    });
     const stopSseHeartbeat = startSseHeartbeat(res);
     const sseT0 = Date.now();
     let sseFirstChunkMs = 0;
@@ -11038,6 +11071,9 @@ async function handleRequest(
           type: "done",
           fullText: result.text,
           agentName: result.agentName,
+          mode,
+          requestedMode,
+          autoEscalated: modeDecision.autoEscalated,
         });
       }
     } catch (err) {
@@ -11088,7 +11124,15 @@ async function handleRequest(
       error(res, "mode must be 'simple' or 'power'", 400);
       return;
     }
-    const mode: ChatMode = body.mode === "simple" ? "simple" : "power";
+    const requestedMode: ChatMode = body.mode === "simple" ? "simple" : "power";
+    const prompt = body.text.trim();
+    const modeDecision = resolveEffectiveChatMode(requestedMode, prompt);
+    const mode = modeDecision.effectiveMode;
+    if (modeDecision.autoEscalated) {
+      logger.info(
+        `[chat] auto-escalated mode simple->power for action intent (endpoint=/api/conversations/:id/messages)`,
+      );
+    }
     if (!state.runtime) {
       error(res, "Agent is not running", 503);
       return;
@@ -11099,16 +11143,23 @@ async function handleRequest(
     if (proxy) {
       try {
         const responseText = await proxy.handleChatMessage(
-          body.text.trim(),
+          prompt,
           conv.roomId,
           mode,
         );
-        const resolvedText = normalizeChatResponseText(
-          responseText,
-          state.logBuffer,
-        );
+        const normalized = normalizeChatResponseText(responseText, state.logBuffer);
+        const resolvedText =
+          mode === "simple"
+            ? enforceSimpleModeReplyBoundaries(prompt, normalized)
+            : normalized;
         conv.updatedAt = new Date().toISOString();
-        json(res, { text: resolvedText, agentName: proxy.agentName });
+        json(res, {
+          text: resolvedText,
+          agentName: proxy.agentName,
+          mode,
+          requestedMode,
+          autoEscalated: modeDecision.autoEscalated,
+        });
       } catch (err) {
         const creditReply = getInsufficientCreditsReplyFromError(err);
         if (creditReply) {
@@ -11131,7 +11182,7 @@ async function handleRequest(
         entityId: userId,
         roomId: conv.roomId,
         content: {
-          text: body.text.trim(),
+          text: prompt,
           mode,
           simple: mode === "simple",
           source: "client_chat",
@@ -11155,6 +11206,9 @@ async function handleRequest(
       json(res, {
         text: result.text,
         agentName: result.agentName,
+        mode,
+        requestedMode,
+        autoEscalated: modeDecision.autoEscalated,
       });
     } catch (err) {
       const creditReply = getInsufficientCreditsReplyFromError(err);
@@ -11275,8 +11329,15 @@ async function handleRequest(
       error(res, "mode must be 'simple' or 'power'", 400);
       return;
     }
-    const mode: ChatMode = body.mode === "simple" ? "simple" : "power";
     const prompt = body.text.trim();
+    const requestedMode: ChatMode = body.mode === "simple" ? "simple" : "power";
+    const modeDecision = resolveEffectiveChatMode(requestedMode, prompt);
+    const mode = modeDecision.effectiveMode;
+    if (modeDecision.autoEscalated) {
+      logger.info(
+        `[chat] auto-escalated mode simple->power for action intent (endpoint=/api/chat/stream)`,
+      );
+    }
 
     // Cloud proxy path
     const proxy = state.cloudManager?.getProxy();
@@ -11293,14 +11354,18 @@ async function handleRequest(
           writeSse(res, { type: "token", text: chunk });
         }
 
-        const resolvedText = normalizeChatResponseText(
-          fullText,
-          state.logBuffer,
-        );
+        const normalized = normalizeChatResponseText(fullText, state.logBuffer);
+        const resolvedText =
+          mode === "simple"
+            ? enforceSimpleModeReplyBoundaries(prompt, normalized)
+            : normalized;
         writeSse(res, {
           type: "done",
           fullText: resolvedText,
           agentName: proxy.agentName,
+          mode,
+          requestedMode,
+          autoEscalated: modeDecision.autoEscalated,
         });
       } catch (err) {
         const creditReply = getInsufficientCreditsReplyFromError(err);
@@ -11328,7 +11393,13 @@ async function handleRequest(
     }
 
     initSse(res);
-    writeSse(res, { type: "ready", mode, ts: Date.now() });
+    writeSse(res, {
+      type: "ready",
+      mode,
+      requestedMode,
+      autoEscalated: modeDecision.autoEscalated,
+      ts: Date.now(),
+    });
     const stopSseHeartbeat = startSseHeartbeat(res);
     const sseT0 = Date.now();
     let sseFirstChunkMs = 0;
@@ -11382,6 +11453,9 @@ async function handleRequest(
           type: "done",
           fullText: result.text,
           agentName: result.agentName,
+          mode,
+          requestedMode,
+          autoEscalated: modeDecision.autoEscalated,
         });
       }
     } catch (err) {
@@ -11435,7 +11509,16 @@ async function handleRequest(
         error(res, "mode must be 'simple' or 'power'", 400);
         return;
       }
-      const mode: ChatMode = body.mode === "simple" ? "simple" : "power";
+      const prompt = body.text.trim();
+      const requestedMode: ChatMode =
+        body.mode === "simple" ? "simple" : "power";
+      const modeDecision = resolveEffectiveChatMode(requestedMode, prompt);
+      const mode = modeDecision.effectiveMode;
+      if (modeDecision.autoEscalated) {
+        logger.info(
+          `[chat] auto-escalated mode simple->power for action intent (endpoint=/api/chat cloud proxy)`,
+        );
+      }
 
       const wantsStream = (req.headers.accept ?? "").includes(
         "text/event-stream",
@@ -11443,27 +11526,37 @@ async function handleRequest(
 
       if (wantsStream) {
         initSse(res);
-        writeSse(res, { type: "ready", mode, ts: Date.now() });
+        writeSse(res, {
+          type: "ready",
+          mode,
+          requestedMode,
+          autoEscalated: modeDecision.autoEscalated,
+          ts: Date.now(),
+        });
         const stopSseHeartbeat = startSseHeartbeat(res);
         let fullText = "";
 
         try {
           for await (const chunk of proxy.handleChatMessageStream(
-            body.text.trim(),
+            prompt,
             "web-chat",
             mode,
           )) {
             fullText += chunk;
             writeSse(res, { type: "token", text: chunk });
           }
-          const resolvedText = normalizeChatResponseText(
-            fullText,
-            state.logBuffer,
-          );
+          const normalized = normalizeChatResponseText(fullText, state.logBuffer);
+          const resolvedText =
+            mode === "simple"
+              ? enforceSimpleModeReplyBoundaries(prompt, normalized)
+              : normalized;
           writeSse(res, {
             type: "done",
             fullText: resolvedText,
             agentName: proxy.agentName,
+            mode,
+            requestedMode,
+            autoEscalated: modeDecision.autoEscalated,
           });
         } catch (err) {
           const creditReply = getInsufficientCreditsReplyFromError(err);
@@ -11486,15 +11579,22 @@ async function handleRequest(
       } else {
         try {
           const responseText = await proxy.handleChatMessage(
-            body.text.trim(),
+            prompt,
             "web-chat",
             mode,
           );
-          const resolvedText = normalizeChatResponseText(
-            responseText,
-            state.logBuffer,
-          );
-          json(res, { text: resolvedText, agentName: proxy.agentName });
+          const normalized = normalizeChatResponseText(responseText, state.logBuffer);
+          const resolvedText =
+            mode === "simple"
+              ? enforceSimpleModeReplyBoundaries(prompt, normalized)
+              : normalized;
+          json(res, {
+            text: resolvedText,
+            agentName: proxy.agentName,
+            mode,
+            requestedMode,
+            autoEscalated: modeDecision.autoEscalated,
+          });
         } catch (err) {
           const creditReply = getInsufficientCreditsReplyFromError(err);
           if (creditReply) {
@@ -11518,7 +11618,15 @@ async function handleRequest(
       error(res, "mode must be 'simple' or 'power'", 400);
       return;
     }
-    const mode: ChatMode = body.mode === "simple" ? "simple" : "power";
+    const prompt = body.text.trim();
+    const requestedMode: ChatMode = body.mode === "simple" ? "simple" : "power";
+    const modeDecision = resolveEffectiveChatMode(requestedMode, prompt);
+    const mode = modeDecision.effectiveMode;
+    if (modeDecision.autoEscalated) {
+      logger.info(
+        `[chat] auto-escalated mode simple->power for action intent (endpoint=/api/chat local runtime)`,
+      );
+    }
 
     if (!state.runtime) {
       error(res, "Agent is not running", 503);
@@ -11540,7 +11648,7 @@ async function handleRequest(
         entityId: chatUserId,
         roomId: chatRoomId,
         content: {
-          text: body.text.trim(),
+          text: prompt,
           mode,
           simple: mode === "simple",
           source: "client_chat",
@@ -11563,6 +11671,9 @@ async function handleRequest(
       json(res, {
         text: result.text,
         agentName: result.agentName,
+        mode,
+        requestedMode,
+        autoEscalated: modeDecision.autoEscalated,
       });
     } catch (err) {
       const creditReply = getInsufficientCreditsReplyFromError(err);
