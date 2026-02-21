@@ -2688,8 +2688,66 @@ export async function startEliza(
     const {
       applySubscriptionCredentials,
       startSubscriptionCredentialRefreshLoop,
+      getSubscriptionStatus,
     } = await import("../auth/index");
     await applySubscriptionCredentials();
+
+    const subscriptionStatus = await getSubscriptionStatus();
+    const openAiCodex = subscriptionStatus.find(
+      (entry) => entry.provider === "openai-codex",
+    );
+    const defaultsCfg = config.agents?.defaults as
+      | Record<string, unknown>
+      | undefined;
+    const selectedSubscriptionProvider =
+      typeof defaultsCfg?.subscriptionProvider === "string"
+        ? defaultsCfg.subscriptionProvider
+        : undefined;
+    if (
+      openAiCodex?.configured &&
+      openAiCodex.valid &&
+      selectedSubscriptionProvider !== "anthropic-subscription"
+    ) {
+      process.env.MILAIDY_USE_PI_AI = "1";
+      if (!config.env) config.env = {};
+      const envCfg = config.env as Record<string, unknown>;
+      const vars = (envCfg.vars ?? {}) as Record<string, string>;
+      vars.MILAIDY_USE_PI_AI = "1";
+      envCfg.vars = vars;
+
+      if (!config.models) config.models = {};
+      const modelCfg = config.models as Record<string, unknown>;
+      if (
+        typeof modelCfg.piAiLarge !== "string" ||
+        !modelCfg.piAiLarge.trim()
+      ) {
+        modelCfg.piAiLarge = "openai-codex/gpt-5.3-codex";
+      }
+      if (
+        typeof modelCfg.piAiSmall !== "string" ||
+        !modelCfg.piAiSmall.trim()
+      ) {
+        modelCfg.piAiSmall = "openai-codex/gpt-5.1-codex-mini";
+      }
+      if (!config.agents) config.agents = {};
+      if (!config.agents.defaults) config.agents.defaults = {};
+      if (!config.agents.defaults.model) config.agents.defaults.model = {};
+      const defaultsModel = config.agents.defaults.model as Record<
+        string,
+        unknown
+      >;
+      if (
+        typeof defaultsModel.primary !== "string" ||
+        !defaultsModel.primary.trim()
+      ) {
+        defaultsModel.primary = modelCfg.piAiLarge;
+      }
+
+      logger.info(
+        "[milaidy] OpenAI subscription detected; forcing pi-ai routing for text models",
+      );
+    }
+
     await startSubscriptionCredentialRefreshLoop();
   } catch (err) {
     logger.warn(`[milaidy] Failed to apply subscription credentials: ${err}`);
