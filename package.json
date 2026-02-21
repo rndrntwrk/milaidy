@@ -38,6 +38,8 @@
     "autonomy:redteam:run": "node --import tsx scripts/autonomy/run-redteam-baseline.ts",
     "autonomy:retrieval:quality": "node --import tsx scripts/autonomy/validate-retrieval-quality.ts",
     "autonomy:learning:extract": "node --import tsx scripts/autonomy/extract-learning-dataset.ts",
+    "autonomy:knowledge:sft:build": "node --import tsx scripts/autonomy/build-knowledge-sft-dataset.ts",
+    "autonomy:knowledge:sft:validate": "node --import tsx scripts/autonomy/validate-knowledge-sft-dataset.ts",
     "autonomy:prompt:ab-test": "node --import tsx scripts/autonomy/ab-test-prompt-variants.ts",
     "autonomy:training:run": "node --import tsx scripts/autonomy/run-training-job.ts",
     "autonomy:metrics:cardinality": "node --import tsx scripts/autonomy/check-metrics-cardinality.ts",

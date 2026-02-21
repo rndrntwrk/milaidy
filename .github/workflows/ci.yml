@@ -84,3 +84,38 @@ jobs:
 
       - name: Build project
         run: bun run build
+
+  knowledge-quality-gate:
+    name: Knowledge SFT Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - run: bun install --frozen-lockfile
+
+      - name: Build knowledge SFT dataset
+        run: >
+          bun run autonomy:knowledge:sft:build --
+          knowledge
+          --out-dir /tmp/milaidy-knowledge-sft
+          --label ci-knowledge-sft
+          --seed ci-gate
+
+      - name: Validate knowledge SFT gate
+        run: >
+          bun run autonomy:knowledge:sft:validate --
+          --manifest /tmp/milaidy-knowledge-sft/ci-knowledge-sft.manifest.json
+          --report-dir /tmp/milaidy-knowledge-sft
+
+      - name: Upload knowledge gate reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: knowledge-sft-gate
+          path: /tmp/milaidy-knowledge-sft
+          retention-days: 14
