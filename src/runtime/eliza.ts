@@ -1158,10 +1158,22 @@ async function resolvePlugins(
       let mod: PluginModuleShape;
 
       if (installRecord?.installPath) {
-        // User-installed plugin — load from its install directory on disk.
-        // This works cross-platform including .app bundles where we can't
-        // modify the app's node_modules.
-        mod = await importFromPath(installRecord.installPath, pluginName);
+        // For first-party Eliza plugins, prefer the bundled dependency tree
+        // to avoid version-skew against @elizaos/core (common when a stale
+        // plugin copy exists under ~/.milaidy/plugins/installed).
+        if (pluginName.startsWith("@elizaos/plugin-")) {
+          try {
+            mod = (await import(pluginName)) as PluginModuleShape;
+          } catch {
+            // Fallback to user-installed copy if the package is not bundled.
+            mod = await importFromPath(installRecord.installPath, pluginName);
+          }
+        } else {
+          // User-installed plugin — load from its install directory on disk.
+          // This works cross-platform including .app bundles where we can't
+          // modify the app's node_modules.
+          mod = await importFromPath(installRecord.installPath, pluginName);
+        }
       } else if (pluginName.startsWith("@milaidy/plugin-")) {
         // Local Milaidy plugin — resolve from the compiled dist directory.
         // These are built by tsdown into dist/plugins/<name>/ and are not

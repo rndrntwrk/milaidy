@@ -142,6 +142,7 @@
     "@elizaos/plugin-form": "next",
     "@elizaos/plugin-goals": "next",
     "@elizaos/plugin-google-genai": "next",
+    "@elizaos/plugin-github": "next",
     "@elizaos/plugin-groq": "next",
     "@elizaos/plugin-imessage": "next",
     "@elizaos/plugin-knowledge": "next",
