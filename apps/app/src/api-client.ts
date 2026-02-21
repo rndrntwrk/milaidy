@@ -353,6 +353,10 @@ export interface OpenRouterModelOption {
 export interface OnboardingOptions {
   names: string[];
   styles: StylePreset[];
+  /** Canonical default preset catchphrase for onboarding. */
+  defaultStyleCatchphrase?: string;
+  /** Alias map used to migrate legacy preset catchphrases. */
+  styleAliases?: Record<string, string>;
   providers: ProviderOption[];
   cloudProviders: CloudProviderOption[];
   models: {
@@ -381,6 +385,8 @@ export interface OnboardingData {
   name: string;
   theme: string;
   runMode: "local" | "cloud";
+  /** Selected preset catchphrase (canonicalized server-side for persistence). */
+  styleCatchphrase?: string;
   /** Sandbox execution mode: "off" (rawdog), "light" (cloud), "standard" (local sandbox), "max". */
   sandboxMode?: "off" | "light" | "standard" | "max";
   bio: string[];

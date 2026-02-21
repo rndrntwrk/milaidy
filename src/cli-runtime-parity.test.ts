@@ -12,7 +12,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { MilaidyConfig } from "./config/config.js";
 // Shared presets used by both CLI and API server
-import { SHARED_STYLE_RULES, STYLE_PRESETS } from "./onboarding-presets.js";
+import {
+  DEFAULT_STYLE_CATCHPHRASE,
+  getStylePresetByCatchphrase,
+  SHARED_STYLE_RULES,
+  STYLE_PRESETS,
+} from "./onboarding-presets.js";
 import {
   applyCloudConfigToEnv,
   applyConnectorSecretsToEnv,
@@ -104,6 +109,15 @@ describe("onboarding presets parity (CLI ↔ GUI)", () => {
       expect(preset.messageExamples.length).toBeGreaterThan(0);
       expect(preset.postExamples.length).toBeGreaterThan(0);
     }
+  });
+
+  it("legacy catchphrases resolve to the canonical CEO preset", () => {
+    expect(getStylePresetByCatchphrase("hehe~").catchphrase).toBe(
+      DEFAULT_STYLE_CATCHPHRASE,
+    );
+    expect(getStylePresetByCatchphrase("lol k").catchphrase).toBe(
+      DEFAULT_STYLE_CATCHPHRASE,
+    );
   });
 });
 

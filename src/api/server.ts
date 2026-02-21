@@ -2921,7 +2921,12 @@ function validateSkillId(
 // ---------------------------------------------------------------------------
 
 // Use shared presets for full parity between CLI and GUI onboarding.
-import { STYLE_PRESETS } from "../onboarding-presets.js";
+import {
+  DEFAULT_STYLE_CATCHPHRASE,
+  getStylePresetByCatchphrase,
+  STYLE_CATCHPHRASE_ALIASES,
+  STYLE_PRESETS,
+} from "../onboarding-presets.js";
 
 import { pickRandomNames } from "../runtime/onboarding-names.js";
 
@@ -5782,6 +5787,8 @@ async function handleRequest(
     json(res, {
       names: pickRandomNames(5),
       styles: STYLE_PRESETS,
+      defaultStyleCatchphrase: DEFAULT_STYLE_CATCHPHRASE,
+      styleAliases: STYLE_CATCHPHRASE_ALIASES,
       providers: getProviderOptions(),
       cloudProviders: getCloudProviderOptions(),
       models: getModelOptions(),
@@ -5827,24 +5834,45 @@ async function handleRequest(
     if (config.agents.list.length === 0) {
       config.agents.list.push({ id: "main", default: true });
     }
+    const onboardingName = (body.name as string).trim();
+    const styleCatchphrase =
+      typeof body.styleCatchphrase === "string"
+        ? body.styleCatchphrase
+        : undefined;
+    const canonicalStylePreset = styleCatchphrase
+      ? getStylePresetByCatchphrase(styleCatchphrase)
+      : null;
     const agent = config.agents.list[0];
-    agent.name = (body.name as string).trim();
+    agent.name = onboardingName;
     agent.workspace = resolveDefaultAgentWorkspaceDir();
-    if (body.bio) agent.bio = body.bio as string[];
-    if (body.systemPrompt) agent.system = body.systemPrompt as string;
-    if (body.style)
-      agent.style = body.style as {
-        all?: string[];
-        chat?: string[];
-        post?: string[];
-      };
-    if (body.adjectives) agent.adjectives = body.adjectives as string[];
-    if (body.topics) agent.topics = body.topics as string[];
-    if (body.postExamples) agent.postExamples = body.postExamples as string[];
-    if (body.messageExamples)
-      agent.messageExamples = body.messageExamples as Array<
-        Array<{ user: string; content: { text: string } }>
-      >;
+    if (canonicalStylePreset) {
+      agent.bio = canonicalStylePreset.bio;
+      agent.system = canonicalStylePreset.system.replace(
+        /\{\{name\}\}/g,
+        onboardingName,
+      );
+      agent.style = canonicalStylePreset.style;
+      agent.adjectives = canonicalStylePreset.adjectives;
+      agent.topics = canonicalStylePreset.topics;
+      agent.postExamples = canonicalStylePreset.postExamples;
+      agent.messageExamples = canonicalStylePreset.messageExamples;
+    } else {
+      if (body.bio) agent.bio = body.bio as string[];
+      if (body.systemPrompt) agent.system = body.systemPrompt as string;
+      if (body.style)
+        agent.style = body.style as {
+          all?: string[];
+          chat?: string[];
+          post?: string[];
+        };
+      if (body.adjectives) agent.adjectives = body.adjectives as string[];
+      if (body.topics) agent.topics = body.topics as string[];
+      if (body.postExamples) agent.postExamples = body.postExamples as string[];
+      if (body.messageExamples)
+        agent.messageExamples = body.messageExamples as Array<
+          Array<{ user: string; content: { text: string } }>
+        >;
+    }
 
     // ── Theme preference ──────────────────────────────────────────────────
     if (body.theme) {

@@ -1982,7 +1982,11 @@ import { pickRandomNames } from "./onboarding-names.js";
 // Style presets — shared between CLI and GUI onboarding
 // ---------------------------------------------------------------------------
 
-import { STYLE_PRESETS } from "../onboarding-presets.js";
+import {
+  getStylePresetByCatchphrase,
+  resolveStyleCatchphrase,
+  STYLE_PRESETS,
+} from "../onboarding-presets.js";
 
 const EMBEDDING_TIER_ORDER: readonly EmbeddingTier[] = [
   "fallback",
@@ -2152,10 +2156,8 @@ async function runFirstTimeSetup(
   });
 
   if (clack.isCancel(styleChoice)) cancelOnboarding();
-
-  const chosenTemplate = STYLE_PRESETS.find(
-    (p) => p.catchphrase === styleChoice,
-  );
+  const canonicalStyleChoice = resolveStyleCatchphrase(styleChoice);
+  const chosenTemplate = getStylePresetByCatchphrase(canonicalStyleChoice);
 
   let chosenEmbeddingPreset: EmbeddingPreset | undefined;
 

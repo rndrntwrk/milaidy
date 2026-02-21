@@ -157,6 +157,37 @@ export type OnboardingStep =
   | "connectors"
   | "permissions";
 
+const FALLBACK_ONBOARDING_STYLE_CATCHPHRASE = "lol k let me handle it";
+
+function resolveOnboardingStyleCatchphrase(
+  options: OnboardingOptions | null | undefined,
+  requested: string,
+): string {
+  if (!options || options.styles.length === 0) return "";
+  const trimmed = requested.trim();
+  const aliases = options.styleAliases ?? {};
+  const canonical = (aliases[trimmed] ?? trimmed).trim();
+  if (canonical && options.styles.some((preset) => preset.catchphrase === canonical)) {
+    return canonical;
+  }
+  const preferred = (
+    options.defaultStyleCatchphrase ?? FALLBACK_ONBOARDING_STYLE_CATCHPHRASE
+  ).trim();
+  if (preferred && options.styles.some((preset) => preset.catchphrase === preferred)) {
+    return preferred;
+  }
+  return options.styles[0]?.catchphrase ?? "";
+}
+
+function resolveOnboardingStylePreset(
+  options: OnboardingOptions | null | undefined,
+  requested: string,
+): StylePreset | undefined {
+  if (!options) return undefined;
+  const catchphrase = resolveOnboardingStyleCatchphrase(options, requested);
+  return options.styles.find((preset) => preset.catchphrase === catchphrase);
+}
+
 // ── Action notice ──────────────────────────────────────────────────────
 
 interface ActionNotice {
@@ -921,7 +952,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>("welcome");
   const [onboardingOptions, setOnboardingOptions] = useState<OnboardingOptions | null>(null);
   const [onboardingName, setOnboardingName] = useState("");
-  const [onboardingStyle, setOnboardingStyle] = useState("");
+  const [onboardingStyle, setOnboardingStyle] = useState(
+    FALLBACK_ONBOARDING_STYLE_CATCHPHRASE,
+  );
   const [onboardingTheme, setOnboardingTheme] = useState<ThemeName>(loadTheme);
   const [onboardingRunMode, setOnboardingRunMode] = useState<"local-rawdog" | "local-sandbox" | "cloud" | "">("");
   const [onboardingCloudProvider, setOnboardingCloudProvider] = useState("");
@@ -945,6 +978,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [onboardingRpcKeys, setOnboardingRpcKeys] = useState<Record<string, string>>({});
   const [onboardingAvatar, setOnboardingAvatar] = useState(1);
   const [onboardingRestarting, setOnboardingRestarting] = useState(false);
+
+  // Keep style selection canonicalized when options load or aliases change.
+  useEffect(() => {
+    if (!onboardingOptions) return;
+    setOnboardingStyle((current) => {
+      const resolved = resolveOnboardingStyleCatchphrase(onboardingOptions, current);
+      return current === resolved ? current : resolved;
+    });
+  }, [onboardingOptions]);
 
   // --- Command palette ---
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -2767,7 +2809,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const handleOnboardingFinish = useCallback(async () => {
     if (!onboardingOptions) return;
-    const style = onboardingOptions.styles.find((s: StylePreset) => s.catchphrase === onboardingStyle);
+    const style = resolveOnboardingStylePreset(onboardingOptions, onboardingStyle);
+    const styleCatchphrase = style?.catchphrase
+      ?? resolveOnboardingStyleCatchphrase(onboardingOptions, onboardingStyle);
     const systemPrompt = style?.system
       ? style.system.replace(/\{\{name\}\}/g, onboardingName)
       : `You are ${onboardingName}, an autonomous AI agent powered by ElizaOS. ${onboardingOptions.sharedStyleRules}`;
@@ -2796,6 +2840,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         sandboxMode: onboardingRunMode === "local-sandbox" ? "standard" : onboardingRunMode === "cloud" ? "light" : "off",
         bio: style?.bio ?? ["An autonomous AI agent."],
         systemPrompt,
+        styleCatchphrase,
         style: style?.style,
         adjectives: style?.adjectives,
         topics: style?.topics,
