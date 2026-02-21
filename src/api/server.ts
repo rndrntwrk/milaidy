@@ -27,9 +27,9 @@ import {
   type Task,
   type UUID,
 } from "@elizaos/core";
+import { listPiAiModelOptions } from "@elizaos/plugin-pi-ai";
 import { type WebSocket, WebSocketServer } from "ws";
 import type { CloudManager } from "../cloud/cloud-manager";
-
 import {
   configFileExists,
   loadMiladyConfig,
@@ -1172,6 +1172,7 @@ function categorizePlugin(
     "qwen",
     "minimax",
     "zai",
+    "pi-ai",
   ];
   const connectors = [
     "telegram",
@@ -2975,6 +2976,15 @@ function getProviderOptions(): Array<{
       pluginName: "@elizaos/plugin-openai",
       keyPrefix: null,
       description: "Use your $20-200/mo ChatGPT subscription via OAuth.",
+    },
+    {
+      id: "pi-ai",
+      name: "Pi Credentials (pi-ai)",
+      envKey: null,
+      pluginName: "@elizaos/plugin-pi-ai",
+      keyPrefix: null,
+      description:
+        "Use credentials from ~/.pi/agent/auth.json (API keys or OAuth).",
     },
     {
       id: "anthropic",
@@ -5088,6 +5098,7 @@ async function handleRequest(
     // P1 §7 — explicit provider allowlist
     const VALID_PROVIDERS = new Set([
       "elizacloud",
+      "pi-ai",
       "openai-codex",
       "openai-subscription",
       "anthropic-subscription",
@@ -5132,6 +5143,26 @@ async function handleRequest(
         >;
         delete secrets.ELIZAOS_CLOUD_API_KEY;
         delete secrets.ELIZAOS_CLOUD_ENABLED;
+      }
+    };
+
+    // Helper: clear pi-ai mode
+    const clearPiAi = () => {
+      delete process.env.MILAIDY_USE_PI_AI;
+      delete envCfg.MILAIDY_USE_PI_AI;
+
+      const envRoot = config.env as Record<string, unknown>;
+      const vars = envRoot.vars;
+      if (vars && typeof vars === "object" && !Array.isArray(vars)) {
+        delete (vars as Record<string, unknown>).MILAIDY_USE_PI_AI;
+      }
+
+      if (state.runtime?.character?.secrets) {
+        const secrets = state.runtime.character.secrets as Record<
+          string,
+          unknown
+        >;
+        delete secrets.MILAIDY_USE_PI_AI;
       }
     };
 
@@ -5199,6 +5230,7 @@ async function handleRequest(
 
       if (provider === "elizacloud") {
         // Switching TO elizacloud
+        clearPiAi();
         await clearSubscriptions();
         clearOtherApiKeys();
         clearSubscriptionProviderConfig(config);
@@ -5210,11 +5242,29 @@ async function handleRequest(
           process.env.ELIZAOS_CLOUD_API_KEY = config.cloud.apiKey;
           process.env.ELIZAOS_CLOUD_ENABLED = "true";
         }
+      } else if (provider === "pi-ai") {
+        // Switching TO pi-ai credentials mode
+        clearCloud();
+        await clearSubscriptions();
+        clearOtherApiKeys();
+        process.env.MILAIDY_USE_PI_AI = "1";
+        envCfg.MILAIDY_USE_PI_AI = "1";
+
+        const envRoot = config.env as Record<string, unknown>;
+        const vars =
+          envRoot.vars &&
+          typeof envRoot.vars === "object" &&
+          !Array.isArray(envRoot.vars)
+            ? (envRoot.vars as Record<string, unknown>)
+            : {};
+        vars.MILAIDY_USE_PI_AI = "1";
+        envRoot.vars = vars;
       } else if (
         provider === "openai-codex" ||
         provider === "openai-subscription"
       ) {
         // Switching TO OpenAI subscription
+        clearPiAi();
         clearCloud();
         clearOtherApiKeys("OPENAI_API_KEY");
         applySubscriptionProviderConfig(config, provider);
@@ -5240,6 +5290,7 @@ async function handleRequest(
         }
       } else if (provider === "anthropic-subscription") {
         // Switching TO Anthropic subscription
+        clearPiAi();
         clearCloud();
         clearOtherApiKeys("ANTHROPIC_API_KEY");
         applySubscriptionProviderConfig(config, provider);
@@ -5265,6 +5316,7 @@ async function handleRequest(
         }
       } else if (PROVIDER_ENV_KEYS[provider]) {
         // Switching TO a direct API key provider
+        clearPiAi();
         clearCloud();
         await clearSubscriptions();
         clearSubscriptionProviderConfig(config);
@@ -5517,12 +5569,32 @@ async function handleRequest(
 
   // ── GET /api/onboarding/options ─────────────────────────────────────────
   if (method === "GET" && pathname === "/api/onboarding/options") {
+    let piAiModels: Array<{
+      id: string;
+      name: string;
+      provider: string;
+      isDefault: boolean;
+    }> = [];
+    let piAiDefaultModel: string | null = null;
+
+    try {
+      const piAi = await listPiAiModelOptions();
+      piAiModels = piAi.models;
+      piAiDefaultModel = piAi.defaultModelSpec ?? null;
+    } catch (err) {
+      logger.warn(
+        `[api] Failed to load pi-ai model options: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
     json(res, {
       names: pickRandomNames(5),
       styles: STYLE_PRESETS,
       providers: getProviderOptions(),
       cloudProviders: getCloudProviderOptions(),
       models: getModelOptions(),
+      piAiModels,
+      piAiDefaultModel,
       inventoryProviders: getInventoryProviderOptions(),
       sharedStyleRules: "Keep responses brief. Be helpful and concise.",
     });
@@ -5638,11 +5710,39 @@ async function handleRequest(
       if (!config.env) config.env = {};
       const envCfg = config.env as Record<string, unknown>;
       const vars = (envCfg.vars ?? {}) as Record<string, string>;
-
       const providerId = typeof body.provider === "string" ? body.provider : "";
 
       // Persist vars back onto config.env
       (envCfg as Record<string, unknown>).vars = vars;
+
+      const clearPiAiFlag = () => {
+        delete vars.MILAIDY_USE_PI_AI;
+        delete (config.env as Record<string, string>).MILAIDY_USE_PI_AI;
+        delete process.env.MILAIDY_USE_PI_AI;
+      };
+
+      if (runMode === "local" && providerId === "pi-ai") {
+        vars.MILAIDY_USE_PI_AI = "1";
+        process.env.MILAIDY_USE_PI_AI = "1";
+
+        // Optional primary model override (provider/model).
+        if (!config.agents) config.agents = {};
+        if (!config.agents.defaults) config.agents.defaults = {};
+        const defaults = config.agents.defaults as Record<string, unknown>;
+        const modelConfig = (defaults.model ?? {}) as Record<string, unknown>;
+        const primaryModel =
+          typeof body.primaryModel === "string" ? body.primaryModel.trim() : "";
+
+        if (primaryModel) {
+          modelConfig.primary = primaryModel;
+        } else {
+          delete modelConfig.primary;
+        }
+
+        defaults.model = modelConfig;
+      } else {
+        clearPiAiFlag();
+      }
 
       // API-key providers (envKey backed)
       if (runMode === "local" && providerId && body.providerApiKey) {
