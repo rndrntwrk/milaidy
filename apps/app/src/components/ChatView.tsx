@@ -537,7 +537,7 @@ export const ChatView = memo(function ChatView() {
       label: "Go Live",
       pluginIds: ["stream555-control"],
       prompt:
-        "Use STREAM555_GO_LIVE to start the active session, then summarize final live state and next production move.",
+        "Use STREAM555_GO_LIVE then STREAM555_GO_LIVE_SEGMENTS so the stream starts with segment orchestration active, then summarize live state and next production move.",
     },
     {
       id: "autonomous-run",
@@ -585,7 +585,7 @@ export const ChatView = memo(function ChatView() {
       label: "Reaction",
       pluginIds: ["stream555-control"],
       prompt:
-        "Queue a reaction segment override and announce the next reaction topic.",
+        "Ensure segment orchestration is active, queue a reaction segment override, then announce the next reaction topic.",
     },
     {
       id: "earnings",
@@ -684,20 +684,47 @@ export const ChatView = memo(function ChatView() {
                     toolName: "STREAM555_GO_LIVE",
                     params: { scene: "default" },
                   },
+                  {
+                    id: "segment-bootstrap",
+                    toolName: "STREAM555_GO_LIVE_SEGMENTS",
+                    params: {
+                      segmentIntent: "balanced",
+                    },
+                  },
                 ],
               },
               request: { source: "user", sourceTrust: 1 },
               options: { stopOnFailure: false },
             }, { label: "Go live" });
 
-            if (didToolActionSucceed(goLivePlan, "STREAM555_GO_LIVE")) {
+            const didGoLiveSucceed = didToolActionSucceed(goLivePlan, "STREAM555_GO_LIVE");
+            const didSegmentBootstrapSucceed = didToolActionSucceed(
+              goLivePlan,
+              "STREAM555_GO_LIVE_SEGMENTS",
+            );
+
+            if (didGoLiveSucceed && didSegmentBootstrapSucceed) {
               setActionNotice(
-                "Go live executed via stream555-control.",
+                "Go live executed via stream555-control with segment orchestration.",
                 "success",
                 2800,
               );
               prompt =
                 "You are now live. Give a concise on-air opener, current stream state, and the next production action.";
+              goLiveCompleted = true;
+            } else if (didGoLiveSucceed && !didSegmentBootstrapSucceed) {
+              const bootstrapFailureReason = getToolActionFailureMessage(
+                goLivePlan,
+                "STREAM555_GO_LIVE_SEGMENTS",
+                "segment bootstrap did not succeed",
+              );
+              setActionNotice(
+                `Go live started, but segment bootstrap failed: ${bootstrapFailureReason}`,
+                "error",
+                4200,
+              );
+              prompt =
+                "You are live. Confirm stream health, explain why segment mode is not active, and provide the exact next remediation step.";
               goLiveCompleted = true;
             } else if (!legacyStreamAvailable) {
               stream555FailureReason = getToolActionFailureMessage(
@@ -1060,6 +1087,19 @@ export const ChatView = memo(function ChatView() {
               id: "quick-layer-reaction-segment",
               steps: [
                 {
+                  id: "segment-state-before",
+                  toolName: "STREAM555_SEGMENT_STATE",
+                  params: {},
+                },
+                {
+                  id: "segment-bootstrap",
+                  toolName: "STREAM555_GO_LIVE_SEGMENTS",
+                  params: {
+                    segmentIntent: "reaction",
+                    segmentTypes: "reaction,analysis",
+                  },
+                },
+                {
                   id: "segment-override-reaction",
                   toolName: "STREAM555_SEGMENT_OVERRIDE",
                   params: {
@@ -1073,7 +1113,17 @@ export const ChatView = memo(function ChatView() {
             options: { stopOnFailure: false },
           }, { label: "Reaction segment override" });
           if (didToolActionSucceed(plan, "STREAM555_SEGMENT_OVERRIDE")) {
-            setActionNotice("Reaction segment override queued.", "success", 2600);
+            const bootstrapOk = didToolActionSucceed(
+              plan,
+              "STREAM555_GO_LIVE_SEGMENTS",
+            );
+            setActionNotice(
+              bootstrapOk
+                ? "Reaction segment override queued with segment orchestration active."
+                : "Reaction segment override queued.",
+              "success",
+              2600,
+            );
             prompt =
               "Start the next reaction segment now and keep your commentary focused on viewer engagement.";
           } else {

@@ -96,6 +96,49 @@ function getErrorDetail(payload: { data?: JsonObject; rawBody: string }): string
   return payload.rawBody || "upstream request failed";
 }
 
+function mapFailureCode(status: number): string {
+  if (status === 400) return "E_UPSTREAM_BAD_REQUEST";
+  if (status === 401) return "E_UPSTREAM_UNAUTHORIZED";
+  if (status === 403) return "E_UPSTREAM_FORBIDDEN";
+  if (status === 404) return "E_UPSTREAM_NOT_FOUND";
+  if (status === 409) return "E_UPSTREAM_CONFLICT";
+  if (status === 429) return "E_UPSTREAM_RATE_LIMITED";
+  if (status >= 500) return "E_UPSTREAM_SERVER";
+  return "E_UPSTREAM_FAILURE";
+}
+
+function buildEnvelopeActionResult({
+  ok,
+  module,
+  action,
+  status,
+  message,
+  data,
+  details,
+}: {
+  ok: boolean;
+  module: string;
+  action: string;
+  status: number;
+  message: string;
+  data?: unknown;
+  details?: unknown;
+}): { success: boolean; text: string } {
+  return {
+    success: ok,
+    text: JSON.stringify({
+      ok,
+      code: ok ? "OK" : mapFailureCode(status),
+      module,
+      action,
+      message,
+      status,
+      retryable: status === 429 || status >= 500,
+      ...(ok ? { data } : { details }),
+    }),
+  };
+}
+
 async function ensureAgentSessionId(
   base: string,
   token: string,
@@ -162,7 +205,7 @@ const stream555ControlProvider: Provider = {
       text: [
         "## 555stream Control Surface",
         "",
-        "Actions: STREAM555_GO_LIVE, STREAM555_SCREEN_SHARE, STREAM555_END_LIVE, STREAM555_AD_CREATE, STREAM555_AD_TRIGGER, STREAM555_AD_DISMISS, STREAM555_RADIO_CONTROL, STREAM555_GUEST_INVITE, STREAM555_SCENE_SET, STREAM555_PIP_ENABLE, STREAM555_SEGMENT_OVERRIDE, STREAM555_EARNINGS_ESTIMATE",
+        "Actions: STREAM555_GO_LIVE, STREAM555_GO_LIVE_SEGMENTS, STREAM555_SEGMENT_STATE, STREAM555_SCREEN_SHARE, STREAM555_END_LIVE, STREAM555_AD_CREATE, STREAM555_AD_TRIGGER, STREAM555_AD_DISMISS, STREAM555_RADIO_CONTROL, STREAM555_GUEST_INVITE, STREAM555_SCENE_SET, STREAM555_PIP_ENABLE, STREAM555_SEGMENT_OVERRIDE, STREAM555_EARNINGS_ESTIMATE",
         `Base URL configured: ${configured ? "yes" : "no"} (${STREAM555_BASE_ENV})`,
         `Agent token configured: ${hasToken ? "yes" : "no"} (${STREAM555_TOKEN_ENV}|STREAM_API_BEARER_TOKEN)`,
       ].join("\n"),
@@ -221,6 +264,170 @@ const goLiveAction: Action = {
     { name: "inputType", description: "camera|screen|website|avatar|radio|...", required: false, schema: { type: "string" as const } },
     { name: "inputUrl", description: "Optional source url for website/rtmp/file", required: false, schema: { type: "string" as const } },
     { name: "scene", description: "Initial scene id", required: false, schema: { type: "string" as const } },
+  ],
+};
+
+const goLiveSegmentsAction: Action = {
+  name: "STREAM555_GO_LIVE_SEGMENTS",
+  similes: [
+    "GO_LIVE_SEGMENTS_STREAM555",
+    "STREAM555_SEGMENT_BOOTSTRAP",
+    "STREAM555_START_SEGMENT_MODE",
+  ],
+  description:
+    "Bootstraps or resumes segment orchestration for the resolved active stream session.",
+  validate: async () => true,
+  handler: async (_runtime, _message, _state, options) => {
+    try {
+      const requestedSessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+      const segmentIntent = readParam(
+        options as HandlerOptions | undefined,
+        "segmentIntent",
+      );
+      const segmentTypes = parseCsvList(
+        readParam(options as HandlerOptions | undefined, "segmentTypes"),
+      );
+      const topicHints = parseCsvList(
+        readParam(options as HandlerOptions | undefined, "topicHints"),
+      );
+      const theme = readParam(options as HandlerOptions | undefined, "theme");
+      const segmentCountRaw = readParam(
+        options as HandlerOptions | undefined,
+        "segmentCount",
+      );
+      const avgSegmentDurationMsRaw = readParam(
+        options as HandlerOptions | undefined,
+        "avgSegmentDurationMs",
+      );
+      const autoStopRaw = readParam(
+        options as HandlerOptions | undefined,
+        "autoStop",
+      );
+      const segmentCount = segmentCountRaw
+        ? Number.parseInt(segmentCountRaw, 10)
+        : undefined;
+      const avgSegmentDurationMs = avgSegmentDurationMsRaw
+        ? Number.parseInt(avgSegmentDurationMsRaw, 10)
+        : undefined;
+      const normalizedAutoStop = autoStopRaw
+        ? !["false", "0", "no"].includes(autoStopRaw.trim().toLowerCase())
+        : undefined;
+
+      const optionsPayload: JsonObject = {};
+      if (segmentIntent) optionsPayload.segmentIntent = segmentIntent;
+      if (segmentTypes) optionsPayload.segmentTypes = segmentTypes;
+      if (topicHints) optionsPayload.topicHints = topicHints;
+      if (theme) optionsPayload.theme = theme;
+      if (
+        typeof segmentCount === "number" &&
+        Number.isFinite(segmentCount) &&
+        segmentCount > 0
+      ) {
+        optionsPayload.segmentCount = segmentCount;
+      }
+      if (
+        typeof avgSegmentDurationMs === "number" &&
+        Number.isFinite(avgSegmentDurationMs) &&
+        avgSegmentDurationMs > 0
+      ) {
+        optionsPayload.avgSegmentDurationMs = avgSegmentDurationMs;
+      }
+      if (typeof normalizedAutoStop === "boolean") {
+        optionsPayload.autoStop = normalizedAutoStop;
+      }
+
+      const base = resolveBaseUrl();
+      const token = resolveAgentToken();
+      const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+
+      return executeApiAction({
+        module: "stream555.control",
+        action: "STREAM555_GO_LIVE_SEGMENTS",
+        base,
+        endpoint: "/api/agent/v1/go-live/segments",
+        payload: {
+          sessionId,
+          options: optionsPayload,
+        },
+        requestContract: {
+          sessionId: { required: true, type: "string", nonEmpty: true },
+          options: { required: false, type: "object" },
+        },
+        responseContract: {},
+        successMessage: "segment orchestration bootstrap requested",
+        transport: commandTransport(token),
+        context: { sessionId },
+      });
+    } catch (err) {
+      return exceptionAction("stream555.control", "STREAM555_GO_LIVE_SEGMENTS", err);
+    }
+  },
+  parameters: [
+    { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
+    { name: "segmentIntent", description: "balanced|news|reaction|gaming|qa|analysis", required: false, schema: { type: "string" as const } },
+    { name: "segmentTypes", description: "Comma-separated segment type list", required: false, schema: { type: "string" as const } },
+    { name: "topicHints", description: "Comma-separated topic hints", required: false, schema: { type: "string" as const } },
+    { name: "theme", description: "Optional segment theme override", required: false, schema: { type: "string" as const } },
+    { name: "segmentCount", description: "Optional segment count", required: false, schema: { type: "string" as const } },
+    { name: "avgSegmentDurationMs", description: "Optional segment duration per segment (ms)", required: false, schema: { type: "string" as const } },
+    { name: "autoStop", description: "true|false", required: false, schema: { type: "string" as const } },
+  ],
+};
+
+const segmentStateAction: Action = {
+  name: "STREAM555_SEGMENT_STATE",
+  similes: [
+    "STREAM555_GET_SEGMENT_STATE",
+    "STREAM555_SEGMENTS_STATUS",
+    "SEGMENT_STATE_STREAM555",
+  ],
+  description:
+    "Fetches segment runtime state for the resolved session (queue, active segment, overrides, metrics).",
+  validate: async () => true,
+  handler: async (_runtime, _message, _state, options) => {
+    try {
+      const requestedSessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+      const base = resolveBaseUrl();
+      const token = resolveAgentToken();
+      const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+      const response = await fetchJson(
+        "GET",
+        base,
+        `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/segments/state`,
+        token,
+        {},
+      );
+      if (!response.ok) {
+        return buildEnvelopeActionResult({
+          ok: false,
+          module: "stream555.control",
+          action: "STREAM555_SEGMENT_STATE",
+          status: response.status || 502,
+          message: `segment state query failed (${response.status}): ${getErrorDetail(response)}`,
+          details: response.data ?? response.rawBody,
+        });
+      }
+
+      return buildEnvelopeActionResult({
+        ok: true,
+        module: "stream555.control",
+        action: "STREAM555_SEGMENT_STATE",
+        status: response.status,
+        message: "segment state fetched",
+        data: response.data ?? {},
+      });
+    } catch (err) {
+      return exceptionAction("stream555.control", "STREAM555_SEGMENT_STATE", err);
+    }
+  },
+  parameters: [
+    { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
   ],
 };
 
@@ -773,6 +980,8 @@ export function createStream555ControlPlugin(): Plugin {
     providers: [stream555ControlProvider],
     actions: [
       goLiveAction,
+      goLiveSegmentsAction,
+      segmentStateAction,
       screenShareAction,
       endLiveAction,
       adsCreateAction,
