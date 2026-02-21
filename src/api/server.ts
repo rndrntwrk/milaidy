@@ -2930,6 +2930,39 @@ import {
 
 import { pickRandomNames } from "../runtime/onboarding-names.js";
 
+const LEGACY_ALICE_STYLE_MARKERS = [
+  "playful, clever, a little mischievous",
+  "you type like you're in a gc even when you're not",
+];
+
+function maybeMigrateAliceLegacyStyle(config: MilaidyConfig): boolean {
+  const agent = config.agents?.list?.[0];
+  const name = agent?.name?.trim().toLowerCase();
+  if (!agent || name !== "alice") return false;
+
+  const styleAll = Array.isArray(agent.style?.all)
+    ? agent.style.all.join("\n").toLowerCase()
+    : "";
+  const system = typeof agent.system === "string" ? agent.system.toLowerCase() : "";
+  const bio = Array.isArray(agent.bio) ? agent.bio.join("\n").toLowerCase() : "";
+  const source = `${styleAll}\n${system}\n${bio}`;
+
+  const isLegacyProfile = LEGACY_ALICE_STYLE_MARKERS.some((marker) =>
+    source.includes(marker),
+  );
+  if (!isLegacyProfile) return false;
+
+  const canonical = getStylePresetByCatchphrase(DEFAULT_STYLE_CATCHPHRASE);
+  agent.bio = canonical.bio;
+  agent.system = canonical.system.replace(/\{\{name\}\}/g, agent.name ?? "Alice");
+  agent.style = canonical.style;
+  agent.adjectives = canonical.adjectives;
+  agent.topics = canonical.topics;
+  agent.postExamples = canonical.postExamples;
+  agent.messageExamples = canonical.messageExamples;
+  return true;
+}
+
 function getProviderOptions(): Array<{
   id: string;
   name: string;
@@ -13595,6 +13628,15 @@ export async function startApiServer(opts?: {
       `[milaidy-api] Failed to load config, starting with defaults: ${err instanceof Error ? err.message : err}`,
     );
     config = {} as MilaidyConfig;
+  }
+
+  // One-time migration for Alice instances that still carry legacy "hehe~"/
+  // old "lol k" profile fields. Persist immediately so restarts stay canonical.
+  if (maybeMigrateAliceLegacyStyle(config)) {
+    saveMilaidyConfig(config);
+    logger.info(
+      "[milaidy-api] Migrated Alice legacy style profile to canonical CEO preset.",
+    );
   }
 
   // Wallet/inventory routes read from process.env at request-time.
