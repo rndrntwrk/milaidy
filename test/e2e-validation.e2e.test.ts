@@ -63,16 +63,27 @@ interface PluginModule {
 }
 
 function looksLikePlugin(v: unknown): v is Plugin {
-  return (
-    !!v &&
-    typeof v === "object" &&
-    typeof (v as Record<string, unknown>).name === "string"
-  );
+  if (!v || typeof v !== "object") return false;
+  const obj = v as Record<string, unknown>;
+  const hasCollections = [
+    "actions",
+    "providers",
+    "services",
+    "evaluators",
+    "routes",
+  ].some((key) => Array.isArray(obj[key]));
+  return typeof obj.name === "string" && hasCollections;
 }
 
 function extractPlugin(mod: PluginModule): Plugin | null {
   if (looksLikePlugin(mod.default)) return mod.default;
   if (looksLikePlugin(mod.plugin)) return mod.plugin;
+  for (const [key, value] of Object.entries(mod)) {
+    if (key === "default" || key === "plugin") continue;
+    if (key.toLowerCase().endsWith("plugin") && looksLikePlugin(value)) {
+      return value;
+    }
+  }
   if (looksLikePlugin(mod)) return mod as Plugin;
   for (const [key, value] of Object.entries(mod)) {
     if (key === "default" || key === "plugin") continue;

@@ -85,6 +85,7 @@ import {
 import { isPiAiEnabledFromEnv, registerPiAiRuntime } from "./pi-ai.js";
 import { createSwapPlugin } from "../plugins/swap/index.js";
 import { createStreamPlugin } from "../plugins/stream/index.js";
+import { createStream555ControlPlugin } from "../plugins/stream555-control/index.js";
 import { createFive55GamesPlugin } from "../plugins/five55-games/index.js";
 import { createFive55ScoreCapturePlugin } from "../plugins/five55-score-capture/index.js";
 import { createFive55LeaderboardPlugin } from "../plugins/five55-leaderboard/index.js";
@@ -659,10 +660,26 @@ function normalizePluginPackageName(name: string): string {
   return PLUGIN_NAME_ALIASES[name] ?? name;
 }
 
+const PLUGIN_COLLECTION_KEYS = [
+  "actions",
+  "providers",
+  "services",
+  "evaluators",
+  "routes",
+] as const;
+
+function hasPluginCollections(obj: Record<string, unknown>): boolean {
+  return PLUGIN_COLLECTION_KEYS.some((key) => Array.isArray(obj[key]));
+}
+
 function looksLikePlugin(value: unknown): value is Plugin {
   if (!value || typeof value !== "object") return false;
   const obj = value as Record<string, unknown>;
-  return typeof obj.name === "string" && typeof obj.description === "string";
+  return (
+    typeof obj.name === "string" &&
+    typeof obj.description === "string" &&
+    hasPluginCollections(obj)
+  );
 }
 
 function extractPlugin(mod: PluginModuleShape): Plugin | null {
@@ -670,9 +687,16 @@ function extractPlugin(mod: PluginModuleShape): Plugin | null {
   if (looksLikePlugin(mod.default)) return mod.default;
   // 2. Check for a named `plugin` export
   if (looksLikePlugin(mod.plugin)) return mod.plugin;
-  // 3. Check if the module itself looks like a Plugin (CJS default pattern)
+  // 3. Prefer named exports that are explicitly plugin-shaped.
+  for (const [key, value] of Object.entries(mod)) {
+    if (key === "default" || key === "plugin") continue;
+    if (key.toLowerCase().endsWith("plugin") && looksLikePlugin(value)) {
+      return value;
+    }
+  }
+  // 4. Check if the module itself looks like a Plugin (CJS default pattern)
   if (looksLikePlugin(mod)) return mod as unknown as Plugin;
-  // 4. Scan named exports for the first value that looks like a Plugin.
+  // 5. Scan named exports for the first value that looks like a Plugin.
   //    This handles packages whose build drops the default export but still
   //    have a named export (e.g. `knowledgePlugin` from plugin-knowledge).
   for (const key of Object.keys(mod)) {
@@ -2687,6 +2711,9 @@ export async function startEliza(
     ...(isFive55PluginEnabled("STREAM_PLUGIN_ENABLED")
       ? [createStreamPlugin()]
       : []),
+    ...(isFive55PluginEnabled("STREAM555_CONTROL_PLUGIN_ENABLED")
+      ? [createStream555ControlPlugin()]
+      : []),
     ...(isFive55PluginEnabled("FIVE55_GAMES_PLUGIN_ENABLED")
       ? [createFive55GamesPlugin()]
       : []),
@@ -3387,6 +3414,9 @@ export async function startEliza(
               : []),
             ...(isFive55PluginEnabled("STREAM_PLUGIN_ENABLED")
               ? [createStreamPlugin()]
+              : []),
+            ...(isFive55PluginEnabled("STREAM555_CONTROL_PLUGIN_ENABLED")
+              ? [createStream555ControlPlugin()]
               : []),
             ...(isFive55PluginEnabled("FIVE55_GAMES_PLUGIN_ENABLED")
               ? [createFive55GamesPlugin()]

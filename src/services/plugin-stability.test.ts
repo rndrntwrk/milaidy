@@ -730,7 +730,11 @@ describe("Plugin Error Boundaries", () => {
 
   it("extractTestPlugin handles module with valid default export", () => {
     const goodModule = {
-      default: { name: "test-plugin", description: "A test plugin" },
+      default: {
+        name: "test-plugin",
+        description: "A test plugin",
+        actions: [],
+      },
     };
     const plugin = extractTestPlugin(goodModule as Record<string, unknown>);
     expect(plugin).not.toBeNull();
@@ -739,7 +743,11 @@ describe("Plugin Error Boundaries", () => {
 
   it("extractTestPlugin handles module with named plugin export", () => {
     const namedModule = {
-      plugin: { name: "named-plugin", description: "A named export plugin" },
+      plugin: {
+        name: "named-plugin",
+        description: "A named export plugin",
+        providers: [],
+      },
     };
     const plugin = extractTestPlugin(namedModule as Record<string, unknown>);
     expect(plugin).not.toBeNull();
@@ -935,6 +943,13 @@ function extractTestPlugin(mod: Record<string, unknown>): Plugin | null {
   if (looksLikePlugin(mod.default)) return mod.default as Plugin;
   // Check named `plugin` export
   if (looksLikePlugin(mod.plugin)) return mod.plugin as Plugin;
+  // Prefer explicit `*Plugin` named exports when available
+  for (const [key, value] of Object.entries(mod)) {
+    if (key === "default" || key === "plugin") continue;
+    if (key.toLowerCase().endsWith("plugin") && looksLikePlugin(value)) {
+      return value as Plugin;
+    }
+  }
   // Check if the module itself looks like a Plugin (CJS default pattern)
   if (looksLikePlugin(mod)) return mod as Plugin;
   // Scan named exports
@@ -948,5 +963,16 @@ function extractTestPlugin(mod: Record<string, unknown>): Plugin | null {
 function looksLikePlugin(value: unknown): boolean {
   if (!value || typeof value !== "object") return false;
   const obj = value as Record<string, unknown>;
-  return typeof obj.name === "string" && typeof obj.description === "string";
+  const hasCollections = [
+    "actions",
+    "providers",
+    "services",
+    "evaluators",
+    "routes",
+  ].some((key) => Array.isArray(obj[key]));
+  return (
+    typeof obj.name === "string" &&
+    typeof obj.description === "string" &&
+    hasCollections
+  );
 }

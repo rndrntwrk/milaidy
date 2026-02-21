@@ -88,16 +88,41 @@ const PROVIDER_PLUGIN_MAP: Readonly<Record<string, string>> = {
   OLLAMA_BASE_URL: "@elizaos/plugin-ollama",
 };
 
+const PLUGIN_COLLECTION_KEYS = [
+  "actions",
+  "providers",
+  "services",
+  "evaluators",
+  "routes",
+] as const;
+
+function hasPluginCollections(obj: Record<string, unknown>): boolean {
+  return PLUGIN_COLLECTION_KEYS.some((key) => Array.isArray(obj[key]));
+}
+
 function looksLikePlugin(value: unknown): value is Plugin {
   if (!value || typeof value !== "object") return false;
   const obj = value as Record<string, unknown>;
-  return typeof obj.name === "string" && typeof obj.description === "string";
+  return (
+    typeof obj.name === "string" &&
+    typeof obj.description === "string" &&
+    hasPluginCollections(obj)
+  );
 }
 
 function extractPlugin(mod: PluginModuleShape): Plugin | null {
   if (looksLikePlugin(mod.default)) return mod.default;
   if (looksLikePlugin(mod.plugin)) return mod.plugin;
+  for (const [key, value] of Object.entries(mod)) {
+    if (key === "default" || key === "plugin") continue;
+    if (key.toLowerCase().endsWith("plugin") && looksLikePlugin(value)) {
+      return value;
+    }
+  }
   if (looksLikePlugin(mod)) return mod as unknown as Plugin;
+  for (const value of Object.values(mod)) {
+    if (looksLikePlugin(value)) return value;
+  }
   return null;
 }
 

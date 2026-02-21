@@ -8,6 +8,10 @@ type PluginLike = {
   name: string;
   description: string;
   actions?: unknown;
+  providers?: unknown;
+  services?: unknown;
+  evaluators?: unknown;
+  routes?: unknown;
 };
 
 export type PluginActionCatalogEntry = {
@@ -36,16 +40,26 @@ export type PluginModuleImporter = (
 function looksLikePlugin(value: unknown): value is PluginLike {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Record<string, unknown>;
+  const hasCollections = ["actions", "providers", "services", "evaluators", "routes"].some(
+    (key) => Array.isArray(candidate[key]),
+  );
   return (
     typeof candidate.name === "string" &&
     candidate.name.trim().length > 0 &&
-    typeof candidate.description === "string"
+    typeof candidate.description === "string" &&
+    hasCollections
   );
 }
 
 function extractPlugin(mod: Record<string, unknown>): PluginLike | null {
   if (looksLikePlugin(mod.default)) return mod.default;
   if (looksLikePlugin(mod.plugin)) return mod.plugin;
+  for (const [key, value] of Object.entries(mod)) {
+    if (key === "default" || key === "plugin") continue;
+    if (key.toLowerCase().endsWith("plugin") && looksLikePlugin(value)) {
+      return value;
+    }
+  }
   if (looksLikePlugin(mod)) return mod as unknown as PluginLike;
   for (const value of Object.values(mod)) {
     if (looksLikePlugin(value)) return value;
