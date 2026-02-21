@@ -175,6 +175,27 @@ const githubCompatRewrites = [
   ],
 ];
 
+const githubStaticServiceStartNeedle = `  getClient() {
+    if (!this.octokit) {
+      throw new Error("GitHub service not initialized");
+    }
+    return this.octokit;
+  }
+  async start(runtime) {`;
+
+const githubStaticServiceStartPatch = `  getClient() {
+    if (!this.octokit) {
+      throw new Error("GitHub service not initialized");
+    }
+    return this.octokit;
+  }
+  static async start(runtime) {
+    const service = new GitHubService(runtime);
+    await service.start(runtime);
+    return service;
+  }
+  async start(runtime) {`;
+
 if (!existsSync(githubPluginDist)) {
   console.log(
     "[link-browser-server] @elizaos/plugin-github dist not found — skipping compat patch",
@@ -190,6 +211,17 @@ try {
   for (const [from, to] of githubCompatRewrites) {
     if (!patched.includes(from)) continue;
     patched = patched.split(from).join(to);
+    appliedCount += 1;
+  }
+
+  if (
+    !patched.includes("static async start(runtime)") &&
+    patched.includes(githubStaticServiceStartNeedle)
+  ) {
+    patched = patched.replace(
+      githubStaticServiceStartNeedle,
+      githubStaticServiceStartPatch,
+    );
     appliedCount += 1;
   }
 
