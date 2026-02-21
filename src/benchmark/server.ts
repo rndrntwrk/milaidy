@@ -96,8 +96,18 @@ const PLUGIN_COLLECTION_KEYS = [
   "routes",
 ] as const;
 
-function hasPluginCollections(obj: Record<string, unknown>): boolean {
-  return PLUGIN_COLLECTION_KEYS.some((key) => Array.isArray(obj[key]));
+function hasPluginSurface(obj: Record<string, unknown>): boolean {
+  if (PLUGIN_COLLECTION_KEYS.some((key) => Array.isArray(obj[key]))) return true;
+  if (typeof obj.init === "function") return true;
+  if (Array.isArray(obj.tests)) return true;
+
+  const config = obj.config;
+  if (config && typeof config === "object" && !Array.isArray(config)) return true;
+
+  const models = obj.models;
+  if (models && typeof models === "object" && !Array.isArray(models)) return true;
+
+  return false;
 }
 
 function looksLikePlugin(value: unknown): value is Plugin {
@@ -106,7 +116,8 @@ function looksLikePlugin(value: unknown): value is Plugin {
   return (
     typeof obj.name === "string" &&
     typeof obj.description === "string" &&
-    hasPluginCollections(obj)
+    obj.name.trim().length > 0 &&
+    hasPluginSurface(obj)
   );
 }
 

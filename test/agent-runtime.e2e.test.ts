@@ -68,7 +68,17 @@ function looksLikePlugin(v: unknown): v is Plugin {
     "evaluators",
     "routes",
   ].some((key) => Array.isArray(obj[key]));
-  return typeof obj.name === "string" && hasCollections;
+  const hasInit = typeof obj.init === "function";
+  const hasTests = Array.isArray(obj.tests);
+  const hasConfig =
+    !!obj.config && typeof obj.config === "object" && !Array.isArray(obj.config);
+  const hasModels =
+    !!obj.models && typeof obj.models === "object" && !Array.isArray(obj.models);
+  return (
+    typeof obj.name === "string" &&
+    obj.name.trim().length > 0 &&
+    (hasCollections || hasInit || hasTests || hasConfig || hasModels)
+  );
 }
 function extractPlugin(mod: PluginModule): Plugin | null {
   if (looksLikePlugin(mod.default)) return mod.default;

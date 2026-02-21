@@ -754,6 +754,31 @@ describe("Plugin Error Boundaries", () => {
     expect(plugin?.name).toBe("named-plugin");
   });
 
+  it("extractTestPlugin handles init-only plugin exports (plugin-sql shape)", () => {
+    const sqlLikeModule = {
+      default: {
+        name: "@elizaos/plugin-sql",
+        description: "SQL adapter plugin",
+        init: async () => {},
+      },
+    };
+    const plugin = extractTestPlugin(sqlLikeModule as Record<string, unknown>);
+    expect(plugin).not.toBeNull();
+    expect(plugin?.name).toBe("@elizaos/plugin-sql");
+  });
+
+  it("extractTestPlugin rejects provider-like exports with no plugin surface", () => {
+    const providerLike = {
+      documentsProvider: {
+        name: "AVAILABLE_DOCUMENTS",
+        description: "provider export",
+        get: async () => ({ text: "ok" }),
+      },
+    };
+    const plugin = extractTestPlugin(providerLike as Record<string, unknown>);
+    expect(plugin).toBeNull();
+  });
+
   it("a throwing plugin init does not propagate beyond the boundary", async () => {
     const faultyPlugin: Plugin = {
       name: "faulty-plugin",
@@ -970,9 +995,18 @@ function looksLikePlugin(value: unknown): boolean {
     "evaluators",
     "routes",
   ].some((key) => Array.isArray(obj[key]));
+  const hasInit = typeof obj.init === "function";
+  const hasTests = Array.isArray(obj.tests);
+  const hasConfig =
+    !!obj.config && typeof obj.config === "object" && !Array.isArray(obj.config);
+  const hasModels =
+    !!obj.models && typeof obj.models === "object" && !Array.isArray(obj.models);
+  const hasPluginSurface =
+    hasCollections || hasInit || hasTests || hasConfig || hasModels;
   return (
     typeof obj.name === "string" &&
     typeof obj.description === "string" &&
-    hasCollections
+    obj.name.trim().length > 0 &&
+    hasPluginSurface
   );
 }

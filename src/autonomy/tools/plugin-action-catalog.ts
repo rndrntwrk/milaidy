@@ -40,14 +40,26 @@ export type PluginModuleImporter = (
 function looksLikePlugin(value: unknown): value is PluginLike {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Record<string, unknown>;
-  const hasCollections = ["actions", "providers", "services", "evaluators", "routes"].some(
-    (key) => Array.isArray(candidate[key]),
+  const hasCollections = ["actions", "providers", "services", "evaluators", "routes"].some((key) =>
+    Array.isArray(candidate[key]),
   );
+  const hasInit = typeof candidate.init === "function";
+  const hasTests = Array.isArray(candidate.tests);
+  const hasConfig =
+    !!candidate.config &&
+    typeof candidate.config === "object" &&
+    !Array.isArray(candidate.config);
+  const hasModels =
+    !!candidate.models &&
+    typeof candidate.models === "object" &&
+    !Array.isArray(candidate.models);
+  const hasPluginSurface =
+    hasCollections || hasInit || hasTests || hasConfig || hasModels;
   return (
     typeof candidate.name === "string" &&
     candidate.name.trim().length > 0 &&
     typeof candidate.description === "string" &&
-    hasCollections
+    hasPluginSurface
   );
 }
 
