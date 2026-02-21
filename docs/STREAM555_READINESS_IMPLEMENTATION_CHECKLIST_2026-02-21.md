@@ -50,6 +50,8 @@ This checklist tracks production-readiness work for the stream/action expansion 
 - [x] Verified retry helper tests in `apps/app/test/components/quick-layer-retry.test.ts` pass.
 - [x] Verified `/api/agent/autonomy/execute-plan` test coverage for quick-layer metrics counters (dispatch/success/failure).
 - [x] Verified `ChatView` quick-layer paths route through retry wrapper for transient `429/5xx` errors.
+- [ ] Live smoke attempt against production pod failed with `503 {"error":"Autonomy execution pipeline not available"}` on all stream555 plan actions.
+- [x] Added server-side direct-runtime fallback for `/api/agent/autonomy/execute-plan` when autonomy pipeline is unavailable, with test coverage.
 - [ ] Verified live environment smoke pass.
 - [ ] Verified rollback path documented and tested.
 

@@ -53,7 +53,13 @@ describe("/api/agent/autonomy/execute-plan", () => {
     isActionAllowed: () => ({ allowed: true, reason: "allowed" }),
   } as unknown as AgentRuntime;
 
-  function createState(pipelineOverride = pipeline) {
+  function createState(
+    pipelineOverride:
+      | {
+          execute: typeof pipeline.execute;
+        }
+      | null = pipeline,
+  ) {
     const stateRuntime = {
       ...runtime,
       getService: (name: string) =>
@@ -171,6 +177,39 @@ describe("/api/agent/autonomy/execute-plan", () => {
     expect(payload.results).toHaveLength(1);
     expect(payload.results[0].success).toBe(true);
     expect(payload.results[0].result).toEqual({ success: true, data: { foo: "bar" } });
+  });
+
+  it("falls back to direct runtime execution when autonomy pipeline is unavailable", async () => {
+    const state = createState(null);
+    const { req, emitBody } = createMockReq(
+      "POST",
+      "/api/agent/autonomy/execute-plan",
+      {
+        plan: {
+          id: "quick-layer-direct-fallback",
+          steps: [{ id: "1", toolName: "TEST_ACTION", params: { fast: true } }],
+        },
+        request: { source: "system" },
+      },
+    );
+    const res = createMockRes();
+
+    const handlePromise = __testOnlyHandleRequest(req, res, state);
+    emitBody();
+    await handlePromise;
+
+    expect(res.statusCode).toBe(200);
+    const payload = JSON.parse(res.body) as {
+      ok: boolean;
+      executionMode?: string;
+      results: Array<{ success: boolean; executionMode?: string; result?: unknown }>;
+    };
+    expect(payload.ok).toBe(true);
+    expect(payload.executionMode).toBe("direct-runtime");
+    expect(payload.results).toHaveLength(1);
+    expect(payload.results[0].success).toBe(true);
+    expect(payload.results[0].executionMode).toBe("direct-runtime");
+    expect(payload.results[0].result).toEqual({ success: true, data: { fast: true } });
   });
 
   it("rejects missing toolName", async () => {

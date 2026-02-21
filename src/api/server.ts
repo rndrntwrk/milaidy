@@ -226,6 +226,46 @@ async function executeRuntimeAction(params: {
   return { result, durationMs: Date.now() - start };
 }
 
+async function executeRuntimeActionDirect(params: {
+  runtime: AgentRuntime;
+  toolName: string;
+  requestId: string;
+  parameters: Record<string, unknown>;
+}): Promise<{
+  requestId: string;
+  toolName: string;
+  success: boolean;
+  result?: unknown;
+  error?: string;
+  validation: { valid: boolean; errors: string[] };
+  durationMs: number;
+  executionMode: "direct-runtime";
+}> {
+  const startedAt = Date.now();
+  try {
+    const { result, durationMs } = await executeRuntimeAction(params);
+    return {
+      requestId: params.requestId,
+      toolName: params.toolName,
+      success: true,
+      result,
+      validation: { valid: true, errors: [] },
+      durationMs,
+      executionMode: "direct-runtime",
+    };
+  } catch (err) {
+    return {
+      requestId: params.requestId,
+      toolName: params.toolName,
+      success: false,
+      error: err instanceof Error ? err.message : String(err),
+      validation: { valid: false, errors: [] },
+      durationMs: Math.max(0, Date.now() - startedAt),
+      executionMode: "direct-runtime",
+    };
+  }
+}
+
 function getAgentEventSvc(
   runtime: AgentRuntime | null,
 ): AgentEventServiceLike | null {
@@ -6950,9 +6990,11 @@ async function handleRequest(
 
     const autonomySvc = getAutonomySvc(runtime);
     const pipeline = autonomySvc?.getExecutionPipeline?.();
+    const executionMode = pipeline ? "pipeline" : "direct-runtime";
     if (!pipeline) {
-      error(res, "Autonomy execution pipeline not available", 503);
-      return;
+      metrics.counter("milaidy.autonomy.execute_plan_fallback_total", 1, {
+        reason: "pipeline_unavailable",
+      });
     }
 
     const allowedSources = new Set(["llm", "user", "system", "plugin"]);
@@ -6992,21 +7034,28 @@ async function handleRequest(
         });
       }
 
-      const result = await pipeline.execute(
-        {
-          tool: toolName,
-          params,
-          source,
-          requestId,
-        },
-        async (tool, validatedParams, reqId) =>
-          executeRuntimeAction({
+      const result = pipeline
+        ? await pipeline.execute(
+            {
+              tool: toolName,
+              params,
+              source,
+              requestId,
+            },
+            async (tool, validatedParams, reqId) =>
+              executeRuntimeAction({
+                runtime,
+                toolName: tool,
+                requestId: reqId,
+                parameters: (validatedParams ?? {}) as Record<string, unknown>,
+              }),
+          )
+        : await executeRuntimeActionDirect({
             runtime,
-            toolName: tool,
-            requestId: reqId,
-            parameters: (validatedParams ?? {}) as Record<string, unknown>,
-          }),
-      );
+            toolName,
+            requestId,
+            parameters: params as Record<string, unknown>,
+          });
 
       results.push(result);
       if (
@@ -7059,6 +7108,7 @@ async function handleRequest(
     json(res, {
       ok: allSucceeded,
       allSucceeded,
+      executionMode,
       stoppedEarly,
       failedStepIndex,
       stopOnFailure,
