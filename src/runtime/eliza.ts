@@ -2079,7 +2079,11 @@ async function runFirstTimeSetup(config: MiladyConfig): Promise<MiladyConfig> {
       id: "gemini",
       label: "Google Gemini",
       envKey: "GOOGLE_GENERATIVE_AI_API_KEY",
-      detectKeys: ["GOOGLE_GENERATIVE_AI_API_KEY", "GOOGLE_API_KEY", "GEMINI_API_KEY"],
+      detectKeys: [
+        "GOOGLE_GENERATIVE_AI_API_KEY",
+        "GOOGLE_API_KEY",
+        "GEMINI_API_KEY",
+      ],
       hint: "AI...",
     },
     {
@@ -2284,14 +2288,23 @@ async function runFirstTimeSetup(config: MiladyConfig): Promise<MiladyConfig> {
   if (!hasGithubToken) {
     const options: Array<{ value: string; label: string; hint?: string }> = [
       { value: "skip", label: "Skip for now", hint: "you can add this later" },
-      { value: "pat", label: "Paste a Personal Access Token", hint: "github.com/settings/tokens" },
+      {
+        value: "pat",
+        label: "Paste a Personal Access Token",
+        hint: "github.com/settings/tokens",
+      },
     ];
     if (hasGithubOAuth) {
-      options.push({ value: "oauth", label: "Use OAuth (authorize in browser)", hint: "recommended" });
+      options.push({
+        value: "oauth",
+        label: "Use OAuth (authorize in browser)",
+        hint: "recommended",
+      });
     }
 
     const githubChoice = await clack.select({
-      message: "Configure GitHub access? (needed for coding agents, issue management, PRs)",
+      message:
+        "Configure GitHub access? (needed for coding agents, issue management, PRs)",
       options,
     });
 
@@ -2304,7 +2317,9 @@ async function runFirstTimeSetup(config: MiladyConfig): Promise<MiladyConfig> {
         clack.log.success("GitHub token configured.");
       }
     } else if (!clack.isCancel(githubChoice) && githubChoice === "oauth") {
-      clack.log.info("GitHub OAuth will activate when coding agents need access.");
+      clack.log.info(
+        "GitHub OAuth will activate when coding agents need access.",
+      );
     }
   }
 

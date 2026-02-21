@@ -63,14 +63,17 @@ const CODING_AGENT_EXAMPLES: ActionCallExample[] = [
     params: {
       FINALIZE_WORKSPACE: {
         prTitle: "Fix login bug in auth module",
-        prBody: "Resolved 401 errors after token refresh by fixing the token expiry check",
+        prBody:
+          "Resolved 401 errors after token refresh by fixing the token expiry check",
       },
     },
   },
 ];
 
 function formatExample(ex: ActionCallExample): string {
-  const actionTags = ex.actions.map((a) => `  <action>${a}</action>`).join("\n");
+  const actionTags = ex.actions
+    .map((a) => `  <action>${a}</action>`)
+    .join("\n");
   const paramBlocks = Object.entries(ex.params ?? {})
     .map(([actionName, params]) => {
       const inner = Object.entries(params)
@@ -103,14 +106,11 @@ Assistant:
 
 export const codingAgentExamplesProvider: Provider = {
   name: "CODING_AGENT_EXAMPLES",
-  description: "Structured examples showing how to use coding agent actions with parameters",
+  description:
+    "Structured examples showing how to use coding agent actions with parameters",
   position: -1, // Low priority — supplementary context
 
-  get: async (
-    _runtime: IAgentRuntime,
-    _message: Memory,
-    _state: State,
-  ) => {
+  get: async (_runtime: IAgentRuntime, _message: Memory, _state: State) => {
     const examples = CODING_AGENT_EXAMPLES.map(formatExample).join("\n\n");
     const text = [
       "# Coding Agent Action Call Examples",

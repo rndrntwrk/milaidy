@@ -27,9 +27,9 @@ import {
   type Task,
   type UUID,
 } from "@elizaos/core";
+import { createCodingAgentRouteHandler } from "@milaidy/plugin-coding-agent";
 import { type WebSocket, WebSocketServer } from "ws";
 import type { CloudManager } from "../cloud/cloud-manager";
-
 import {
   configFileExists,
   loadMiladyConfig,
@@ -49,7 +49,6 @@ import {
   isBlockedPrivateOrLinkLocalIp,
   normalizeHostLike,
 } from "../security/network-policy";
-
 import { AppManager } from "../services/app-manager";
 import { FallbackTrainingService } from "../services/fallback-training-service";
 import {
@@ -86,7 +85,6 @@ import { getAutonomyState, handleAutonomyRoutes } from "./autonomy-routes";
 import { handleCharacterRoutes } from "./character-routes";
 import { type CloudRouteState, handleCloudRoute } from "./cloud-routes";
 import { handleCloudStatusRoutes } from "./cloud-status-routes";
-
 import {
   extractAnthropicSystemAndLastUser,
   extractCompatTextContent,
@@ -130,7 +128,6 @@ import { handleTrainingRoutes } from "./training-routes";
 import type { TrainingServiceWithRuntime } from "./training-service-like";
 import { handleTrajectoryRoute } from "./trajectory-routes";
 import { handleTriggerRoutes } from "./trigger-routes";
-import { createCodingAgentRouteHandler } from "@milaidy/plugin-coding-agent";
 import {
   generateVerificationMessage,
   isAddressWhitelisted,
@@ -5696,9 +5693,14 @@ async function handleRequest(
     }
 
     // ── GitHub token ────────────────────────────────────────────────────
-    if (body.githubToken && typeof body.githubToken === "string" && body.githubToken.trim()) {
+    if (
+      body.githubToken &&
+      typeof body.githubToken === "string" &&
+      body.githubToken.trim()
+    ) {
       if (!config.env) config.env = {};
-      (config.env as Record<string, string>).GITHUB_TOKEN = body.githubToken.trim();
+      (config.env as Record<string, string>).GITHUB_TOKEN =
+        body.githubToken.trim();
       process.env.GITHUB_TOKEN = body.githubToken.trim();
     }
 
@@ -10111,7 +10113,12 @@ async function handleRequest(
   }
 
   // ── Coding Agent API (/api/coding-agents/*, /api/workspace/*, /api/issues/*) ──
-  if (state.runtime && (pathname.startsWith("/api/coding-agents") || pathname.startsWith("/api/workspace") || pathname.startsWith("/api/issues"))) {
+  if (
+    state.runtime &&
+    (pathname.startsWith("/api/coding-agents") ||
+      pathname.startsWith("/api/workspace") ||
+      pathname.startsWith("/api/issues"))
+  ) {
     const handler = createCodingAgentRouteHandler(state.runtime);
     const handled = await handler(req, res, pathname);
     if (handled) return;

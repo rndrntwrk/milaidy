@@ -7,8 +7,16 @@
  * @module actions/stop-agent
  */
 
-import type { Action, IAgentRuntime, Memory, State, HandlerCallback, ActionResult, HandlerOptions } from "@elizaos/core";
-import { PTYService } from "../services/pty-service.js";
+import type {
+  Action,
+  ActionResult,
+  HandlerCallback,
+  HandlerOptions,
+  IAgentRuntime,
+  Memory,
+  State,
+} from "@elizaos/core";
+import type { PTYService } from "../services/pty-service.js";
 
 export const stopAgentAction: Action = {
   name: "STOP_CODING_AGENT",
@@ -53,8 +61,13 @@ export const stopAgentAction: Action = {
     ],
   ],
 
-  validate: async (runtime: IAgentRuntime, _message: Memory): Promise<boolean> => {
-    const ptyService = runtime.getService("PTY_SERVICE") as unknown as PTYService | undefined;
+  validate: async (
+    runtime: IAgentRuntime,
+    _message: Memory,
+  ): Promise<boolean> => {
+    const ptyService = runtime.getService("PTY_SERVICE") as unknown as
+      | PTYService
+      | undefined;
     if (!ptyService) {
       return false;
     }
@@ -78,7 +91,9 @@ export const stopAgentAction: Action = {
     _options?: HandlerOptions,
     callback?: HandlerCallback,
   ): Promise<ActionResult | undefined> => {
-    const ptyService = runtime.getService("PTY_SERVICE") as unknown as PTYService | undefined;
+    const ptyService = runtime.getService("PTY_SERVICE") as unknown as
+      | PTYService
+      | undefined;
     if (!ptyService) {
       if (callback) {
         await callback({
@@ -123,7 +138,11 @@ export const stopAgentAction: Action = {
           text: `Stopped ${sessions.length} coding session(s).`,
         });
       }
-      return { success: true, text: `Stopped ${sessions.length} sessions`, data: { stoppedCount: sessions.length } };
+      return {
+        success: true,
+        text: `Stopped ${sessions.length} sessions`,
+        data: { stoppedCount: sessions.length },
+      };
     }
 
     // Stop specific session
@@ -159,7 +178,10 @@ export const stopAgentAction: Action = {
       await ptyService.stopSession(sessionId);
 
       // Clear state if this was the current session
-      if (state?.codingSession && (state.codingSession as { id: string }).id === sessionId) {
+      if (
+        state?.codingSession &&
+        (state.codingSession as { id: string }).id === sessionId
+      ) {
         delete state.codingSession;
       }
 
@@ -168,9 +190,14 @@ export const stopAgentAction: Action = {
           text: `Stopped coding agent session ${sessionId}.`,
         });
       }
-      return { success: true, text: `Stopped session ${sessionId}`, data: { sessionId, agentType: session.agentType } };
+      return {
+        success: true,
+        text: `Stopped session ${sessionId}`,
+        data: { sessionId, agentType: session.agentType },
+      };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       if (callback) {
         await callback({
           text: `Failed to stop agent: ${errorMessage}`,
@@ -183,7 +210,8 @@ export const stopAgentAction: Action = {
   parameters: [
     {
       name: "sessionId",
-      description: "ID of the session to stop. If not specified, stops the current session.",
+      description:
+        "ID of the session to stop. If not specified, stops the current session.",
       required: false,
       schema: { type: "string" as const },
     },

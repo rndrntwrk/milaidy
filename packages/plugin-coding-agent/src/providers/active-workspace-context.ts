@@ -10,16 +10,24 @@
  */
 
 import type { IAgentRuntime, Memory, Provider, State } from "@elizaos/core";
-import { PTYService, type SessionInfo } from "../services/pty-service.js";
-import { CodingWorkspaceService, type WorkspaceResult } from "../services/workspace-service.js";
+import type { PTYService, SessionInfo } from "../services/pty-service.js";
+import type {
+  CodingWorkspaceService,
+  WorkspaceResult,
+} from "../services/workspace-service.js";
 
 function formatStatus(status: string): string {
   switch (status) {
-    case "ready": return "idle";
-    case "busy": return "working";
-    case "starting": return "starting up";
-    case "authenticating": return "authenticating";
-    default: return status;
+    case "ready":
+      return "idle";
+    case "busy":
+      return "working";
+    case "starting":
+      return "starting up";
+    case "authenticating":
+      return "authenticating";
+    default:
+      return status;
   }
 }
 
@@ -29,12 +37,16 @@ function formatSessionLine(session: SessionInfo): string {
   return `  - "${label}" (${session.agentType}, ${status}) [session: ${session.id}]`;
 }
 
-function formatWorkspaceLine(ws: WorkspaceResult, sessions: SessionInfo[]): string {
+function formatWorkspaceLine(
+  ws: WorkspaceResult,
+  sessions: SessionInfo[],
+): string {
   const label = ws.label || ws.id.slice(0, 8);
   const agents = sessions.filter((s) => s.workdir === ws.path);
-  const agentSummary = agents.length > 0
-    ? agents.map((a) => `${a.agentType}:${formatStatus(a.status)}`).join(", ")
-    : "no agents";
+  const agentSummary =
+    agents.length > 0
+      ? agents.map((a) => `${a.agentType}:${formatStatus(a.status)}`).join(", ")
+      : "no agents";
   return `  - "${label}" → ${ws.repo} (branch: ${ws.branch}, ${agentSummary})`;
 }
 
@@ -43,13 +55,13 @@ export const activeWorkspaceContextProvider: Provider = {
   description: "Live status of active workspaces and coding agent sessions",
   position: 1, // Higher priority than action examples — this is live state
 
-  get: async (
-    runtime: IAgentRuntime,
-    _message: Memory,
-    _state: State,
-  ) => {
-    const ptyService = runtime.getService("PTY_SERVICE") as unknown as PTYService | undefined;
-    const wsService = runtime.getService("CODING_WORKSPACE_SERVICE") as unknown as CodingWorkspaceService | undefined;
+  get: async (runtime: IAgentRuntime, _message: Memory, _state: State) => {
+    const ptyService = runtime.getService("PTY_SERVICE") as unknown as
+      | PTYService
+      | undefined;
+    const wsService = runtime.getService(
+      "CODING_WORKSPACE_SERVICE",
+    ) as unknown as CodingWorkspaceService | undefined;
 
     // Gather data (with fast-fail timeouts)
     let sessions: SessionInfo[] = [];
@@ -59,7 +71,9 @@ export const activeWorkspaceContextProvider: Provider = {
       try {
         sessions = await Promise.race([
           ptyService.listSessions(),
-          new Promise<SessionInfo[]>((resolve) => setTimeout(() => resolve([]), 2000)),
+          new Promise<SessionInfo[]>((resolve) =>
+            setTimeout(() => resolve([]), 2000),
+          ),
         ]);
       } catch {
         sessions = [];
@@ -98,7 +112,9 @@ export const activeWorkspaceContextProvider: Provider = {
 
     // Sessions not tied to a tracked workspace (scratch dirs, orphans)
     const trackedPaths = new Set(workspaces.map((ws) => ws.path));
-    const untrackedSessions = sessions.filter((s) => !trackedPaths.has(s.workdir));
+    const untrackedSessions = sessions.filter(
+      (s) => !trackedPaths.has(s.workdir),
+    );
 
     if (untrackedSessions.length > 0) {
       lines.push("");
@@ -112,7 +128,7 @@ export const activeWorkspaceContextProvider: Provider = {
       lines.push("");
       lines.push(
         "You can interact with agents using SEND_TO_CODING_AGENT (pass sessionId), " +
-        "stop them with STOP_CODING_AGENT, or finalize their work with FINALIZE_WORKSPACE."
+          "stop them with STOP_CODING_AGENT, or finalize their work with FINALIZE_WORKSPACE.",
       );
     }
 

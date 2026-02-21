@@ -9,12 +9,18 @@
  * @module api/routes
  */
 
-import type { IncomingMessage, ServerResponse } from "http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import type { IAgentRuntime } from "@elizaos/core";
-import { PTYService } from "../services/pty-service.js";
-import { CodingWorkspaceService } from "../services/workspace-service.js";
+import type { PTYService } from "../services/pty-service.js";
+import type { CodingWorkspaceService } from "../services/workspace-service.js";
 
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
 
 interface RouteContext {
   runtime: IAgentRuntime;
@@ -23,7 +29,9 @@ interface RouteContext {
 }
 
 // Helper to parse JSON body
-async function parseBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+async function parseBody(
+  req: IncomingMessage,
+): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     let body = "";
     req.on("data", (chunk) => (body += chunk));
@@ -57,7 +65,7 @@ export async function handleCodingAgentRoutes(
   req: IncomingMessage,
   res: ServerResponse,
   pathname: string,
-  ctx: RouteContext
+  ctx: RouteContext,
 ): Promise<boolean> {
   const method = req.method?.toUpperCase();
 
@@ -73,7 +81,11 @@ export async function handleCodingAgentRoutes(
       const results = await ctx.ptyService.checkAvailableAgents();
       sendJson(res, results as unknown as JsonValue);
     } catch (error) {
-      sendError(res, error instanceof Error ? error.message : "Preflight check failed", 500);
+      sendError(
+        res,
+        error instanceof Error ? error.message : "Preflight check failed",
+        500,
+      );
     }
     return true;
   }
@@ -100,15 +112,33 @@ export async function handleCodingAgentRoutes(
       const url = new URL(req.url || "", `http://${req.headers.host}`);
       const agentType = url.searchParams.get("agentType");
       if (!agentType) {
-        sendError(res, "agentType query parameter required (claude, gemini, codex, aider)", 400);
+        sendError(
+          res,
+          "agentType query parameter required (claude, gemini, codex, aider)",
+          400,
+        );
         return true;
       }
 
-      const files = ctx.ptyService.getWorkspaceFiles(agentType as import("coding-agent-adapters").AdapterType);
-      const memoryFilePath = ctx.ptyService.getMemoryFilePath(agentType as import("coding-agent-adapters").AdapterType);
-      sendJson(res, { agentType, memoryFilePath, files } as unknown as JsonValue);
+      const files = ctx.ptyService.getWorkspaceFiles(
+        agentType as import("coding-agent-adapters").AdapterType,
+      );
+      const memoryFilePath = ctx.ptyService.getMemoryFilePath(
+        agentType as import("coding-agent-adapters").AdapterType,
+      );
+      sendJson(res, {
+        agentType,
+        memoryFilePath,
+        files,
+      } as unknown as JsonValue);
     } catch (error) {
-      sendError(res, error instanceof Error ? error.message : "Failed to get workspace files", 500);
+      sendError(
+        res,
+        error instanceof Error
+          ? error.message
+          : "Failed to get workspace files",
+        500,
+      );
     }
     return true;
   }
@@ -121,7 +151,11 @@ export async function handleCodingAgentRoutes(
       const presets = listPresets();
       sendJson(res, presets as unknown as JsonValue);
     } catch (error) {
-      sendError(res, error instanceof Error ? error.message : "Failed to list presets", 500);
+      sendError(
+        res,
+        error instanceof Error ? error.message : "Failed to list presets",
+        500,
+      );
     }
     return true;
   }
@@ -148,7 +182,11 @@ export async function handleCodingAgentRoutes(
       );
       sendJson(res, config as unknown as JsonValue);
     } catch (error) {
-      sendError(res, error instanceof Error ? error.message : "Failed to generate config", 500);
+      sendError(
+        res,
+        error instanceof Error ? error.message : "Failed to generate config",
+        500,
+      );
     }
     return true;
   }
@@ -165,7 +203,11 @@ export async function handleCodingAgentRoutes(
       const sessions = await ctx.ptyService.listSessions();
       sendJson(res, sessions as unknown as JsonValue);
     } catch (error) {
-      sendError(res, error instanceof Error ? error.message : "Failed to list agents", 500);
+      sendError(
+        res,
+        error instanceof Error ? error.message : "Failed to list agents",
+        500,
+      );
     }
     return true;
   }
@@ -180,14 +222,30 @@ export async function handleCodingAgentRoutes(
 
     try {
       const body = await parseBody(req);
-      const { agentType, workdir, task, memoryContent, approvalPreset, customCredentials, metadata } = body;
+      const {
+        agentType,
+        workdir,
+        task,
+        memoryContent,
+        approvalPreset,
+        customCredentials,
+        metadata,
+      } = body;
 
       // Build credentials from runtime
       const credentials = {
-        anthropicKey: ctx.runtime.getSetting("ANTHROPIC_API_KEY") as string | undefined,
-        openaiKey: ctx.runtime.getSetting("OPENAI_API_KEY") as string | undefined,
-        googleKey: ctx.runtime.getSetting("GOOGLE_GENERATIVE_AI_API_KEY") as string | undefined,
-        githubToken: ctx.runtime.getSetting("GITHUB_TOKEN") as string | undefined,
+        anthropicKey: ctx.runtime.getSetting("ANTHROPIC_API_KEY") as
+          | string
+          | undefined,
+        openaiKey: ctx.runtime.getSetting("OPENAI_API_KEY") as
+          | string
+          | undefined,
+        googleKey: ctx.runtime.getSetting("GOOGLE_GENERATIVE_AI_API_KEY") as
+          | string
+          | undefined,
+        githubToken: ctx.runtime.getSetting("GITHUB_TOKEN") as
+          | string
+          | undefined,
       };
 
       // Read model preferences from runtime settings
@@ -199,19 +257,31 @@ export async function handleCodingAgentRoutes(
         aider: "PARALLAX_AIDER",
       };
       const prefix = prefixMap[agentStr];
-      const modelPowerful = prefix ? (ctx.runtime.getSetting(`${prefix}_MODEL_POWERFUL`) as string | null) : null;
-      const modelFast = prefix ? (ctx.runtime.getSetting(`${prefix}_MODEL_FAST`) as string | null) : null;
-      const aiderProvider = agentStr === "aider" ? (ctx.runtime.getSetting("PARALLAX_AIDER_PROVIDER") as string | null) : null;
+      const modelPowerful = prefix
+        ? (ctx.runtime.getSetting(`${prefix}_MODEL_POWERFUL`) as string | null)
+        : null;
+      const modelFast = prefix
+        ? (ctx.runtime.getSetting(`${prefix}_MODEL_FAST`) as string | null)
+        : null;
+      const aiderProvider =
+        agentStr === "aider"
+          ? (ctx.runtime.getSetting("PARALLAX_AIDER_PROVIDER") as string | null)
+          : null;
 
       const session = await ctx.ptyService.spawnSession({
         name: `agent-${Date.now()}`,
-        agentType: agentStr as import("../services/pty-service.js").CodingAgentType,
+        agentType:
+          agentStr as import("../services/pty-service.js").CodingAgentType,
         workdir: workdir as string,
         initialTask: task as string,
         memoryContent: memoryContent as string | undefined,
         credentials,
-        approvalPreset: approvalPreset as import("coding-agent-adapters").ApprovalPreset | undefined,
-        customCredentials: customCredentials as Record<string, string> | undefined,
+        approvalPreset: approvalPreset as
+          | import("coding-agent-adapters").ApprovalPreset
+          | undefined,
+        customCredentials: customCredentials as
+          | Record<string, string>
+          | undefined,
         metadata: {
           ...(metadata as Record<string, unknown>),
           ...(aiderProvider ? { provider: aiderProvider } : {}),
@@ -222,14 +292,22 @@ export async function handleCodingAgentRoutes(
         },
       });
 
-      sendJson(res, {
-        sessionId: session.id,
-        agentType: session.agentType,
-        workdir: session.workdir,
-        status: session.status,
-      } as unknown as JsonValue, 201);
+      sendJson(
+        res,
+        {
+          sessionId: session.id,
+          agentType: session.agentType,
+          workdir: session.workdir,
+          status: session.status,
+        } as unknown as JsonValue,
+        201,
+      );
     } catch (error) {
-      sendError(res, error instanceof Error ? error.message : "Failed to spawn agent", 500);
+      sendError(
+        res,
+        error instanceof Error ? error.message : "Failed to spawn agent",
+        500,
+      );
     }
     return true;
   }
@@ -271,17 +349,28 @@ export async function handleCodingAgentRoutes(
 
       if (keys) {
         // Send special keys (e.g. "enter", ["down","enter"], "Ctrl-C")
-        await ctx.ptyService.sendKeysToSession(sessionId, keys as string | string[]);
+        await ctx.ptyService.sendKeysToSession(
+          sessionId,
+          keys as string | string[],
+        );
         sendJson(res, { success: true });
       } else if (input && typeof input === "string") {
         await ctx.ptyService.sendToSession(sessionId, input);
         sendJson(res, { success: true });
       } else {
-        sendError(res, "Either 'input' (string) or 'keys' (string|string[]) required", 400);
+        sendError(
+          res,
+          "Either 'input' (string) or 'keys' (string|string[]) required",
+          400,
+        );
         return true;
       }
     } catch (error) {
-      sendError(res, error instanceof Error ? error.message : "Failed to send input", 500);
+      sendError(
+        res,
+        error instanceof Error ? error.message : "Failed to send input",
+        500,
+      );
     }
     return true;
   }
@@ -300,7 +389,11 @@ export async function handleCodingAgentRoutes(
       await ctx.ptyService.stopSession(sessionId);
       sendJson(res, { success: true, sessionId });
     } catch (error) {
-      sendError(res, error instanceof Error ? error.message : "Failed to stop agent", 500);
+      sendError(
+        res,
+        error instanceof Error ? error.message : "Failed to stop agent",
+        500,
+      );
     }
     return true;
   }
@@ -317,12 +410,16 @@ export async function handleCodingAgentRoutes(
     try {
       const sessionId = outputMatch[1];
       const url = new URL(req.url || "", `http://${req.headers.host}`);
-      const lines = parseInt(url.searchParams.get("lines") || "100");
+      const lines = parseInt(url.searchParams.get("lines") || "100", 10);
 
       const output = await ctx.ptyService.getSessionOutput(sessionId, lines);
       sendJson(res, { sessionId, output });
     } catch (error) {
-      sendError(res, error instanceof Error ? error.message : "Failed to get output", 500);
+      sendError(
+        res,
+        error instanceof Error ? error.message : "Failed to get output",
+        500,
+      );
     }
     return true;
   }
@@ -338,7 +435,8 @@ export async function handleCodingAgentRoutes(
 
     try {
       const body = await parseBody(req);
-      const { repo, baseBranch, useWorktree, parentWorkspaceId, branchName } = body;
+      const { repo, baseBranch, useWorktree, parentWorkspaceId, branchName } =
+        body;
 
       const workspace = await ctx.workspaceService.provisionWorkspace({
         repo: repo as string,
@@ -348,14 +446,24 @@ export async function handleCodingAgentRoutes(
         parentWorkspaceId: parentWorkspaceId as string,
       });
 
-      sendJson(res, {
-        id: workspace.id,
-        path: workspace.path,
-        branch: workspace.branch,
-        isWorktree: workspace.isWorktree,
-      } as unknown as JsonValue, 201);
+      sendJson(
+        res,
+        {
+          id: workspace.id,
+          path: workspace.path,
+          branch: workspace.branch,
+          isWorktree: workspace.isWorktree,
+        } as unknown as JsonValue,
+        201,
+      );
     } catch (error) {
-      sendError(res, error instanceof Error ? error.message : "Failed to provision workspace", 500);
+      sendError(
+        res,
+        error instanceof Error
+          ? error.message
+          : "Failed to provision workspace",
+        500,
+      );
     }
     return true;
   }
@@ -373,7 +481,11 @@ export async function handleCodingAgentRoutes(
       const status = await ctx.workspaceService.getStatus(workspaceId);
       sendJson(res, status as unknown as JsonValue);
     } catch (error) {
-      sendError(res, error instanceof Error ? error.message : "Failed to get workspace", 500);
+      sendError(
+        res,
+        error instanceof Error ? error.message : "Failed to get workspace",
+        500,
+      );
     }
     return true;
   }
@@ -389,7 +501,7 @@ export async function handleCodingAgentRoutes(
     try {
       const workspaceId = commitMatch[1];
       const body = await parseBody(req);
-      const { message, files } = body;
+      const { message } = body;
 
       const result = await ctx.workspaceService.commit(workspaceId, {
         message: message as string,
@@ -398,7 +510,11 @@ export async function handleCodingAgentRoutes(
 
       sendJson(res, result as unknown as JsonValue);
     } catch (error) {
-      sendError(res, error instanceof Error ? error.message : "Failed to commit", 500);
+      sendError(
+        res,
+        error instanceof Error ? error.message : "Failed to commit",
+        500,
+      );
     }
     return true;
   }
@@ -422,7 +538,11 @@ export async function handleCodingAgentRoutes(
 
       sendJson(res, result as unknown as JsonValue);
     } catch (error) {
-      sendError(res, error instanceof Error ? error.message : "Failed to push", 500);
+      sendError(
+        res,
+        error instanceof Error ? error.message : "Failed to push",
+        500,
+      );
     }
     return true;
   }
@@ -448,7 +568,11 @@ export async function handleCodingAgentRoutes(
 
       sendJson(res, result as unknown as JsonValue, 201);
     } catch (error) {
-      sendError(res, error instanceof Error ? error.message : "Failed to create PR", 500);
+      sendError(
+        res,
+        error instanceof Error ? error.message : "Failed to create PR",
+        500,
+      );
     }
     return true;
   }
@@ -466,7 +590,11 @@ export async function handleCodingAgentRoutes(
       await ctx.workspaceService.removeWorkspace(workspaceId);
       sendJson(res, { success: true, workspaceId });
     } catch (error) {
-      sendError(res, error instanceof Error ? error.message : "Failed to remove workspace", 500);
+      sendError(
+        res,
+        error instanceof Error ? error.message : "Failed to remove workspace",
+        500,
+      );
     }
     return true;
   }
@@ -487,9 +615,15 @@ export async function handleCodingAgentRoutes(
         sendError(res, "repo query parameter required", 400);
         return true;
       }
-      const state = url.searchParams.get("state") as "open" | "closed" | "all" | null;
+      const state = url.searchParams.get("state") as
+        | "open"
+        | "closed"
+        | "all"
+        | null;
       const labelsParam = url.searchParams.get("labels");
-      const labels = labelsParam ? labelsParam.split(",").map((s) => s.trim()) : undefined;
+      const labels = labelsParam
+        ? labelsParam.split(",").map((s) => s.trim())
+        : undefined;
 
       const issues = await ctx.workspaceService.listIssues(repo, {
         state: state ?? "open",
@@ -497,7 +631,11 @@ export async function handleCodingAgentRoutes(
       });
       sendJson(res, issues as unknown as JsonValue);
     } catch (error) {
-      sendError(res, error instanceof Error ? error.message : "Failed to list issues", 500);
+      sendError(
+        res,
+        error instanceof Error ? error.message : "Failed to list issues",
+        500,
+      );
     }
     return true;
   }
@@ -524,13 +662,19 @@ export async function handleCodingAgentRoutes(
       });
       sendJson(res, issue as unknown as JsonValue, 201);
     } catch (error) {
-      sendError(res, error instanceof Error ? error.message : "Failed to create issue", 500);
+      sendError(
+        res,
+        error instanceof Error ? error.message : "Failed to create issue",
+        500,
+      );
     }
     return true;
   }
 
   // GET /api/issues/:repo/:number (e.g., /api/issues/owner/repo/42)
-  const issueGetMatch = pathname.match(/^\/api\/issues\/([^/]+)\/([^/]+)\/(\d+)$/);
+  const issueGetMatch = pathname.match(
+    /^\/api\/issues\/([^/]+)\/([^/]+)\/(\d+)$/,
+  );
   if (method === "GET" && issueGetMatch) {
     if (!ctx.workspaceService) {
       sendError(res, "Workspace Service not available", 503);
@@ -539,17 +683,23 @@ export async function handleCodingAgentRoutes(
 
     try {
       const repo = `${issueGetMatch[1]}/${issueGetMatch[2]}`;
-      const issueNumber = parseInt(issueGetMatch[3]);
+      const issueNumber = parseInt(issueGetMatch[3], 10);
       const issue = await ctx.workspaceService.getIssue(repo, issueNumber);
       sendJson(res, issue as unknown as JsonValue);
     } catch (error) {
-      sendError(res, error instanceof Error ? error.message : "Failed to get issue", 500);
+      sendError(
+        res,
+        error instanceof Error ? error.message : "Failed to get issue",
+        500,
+      );
     }
     return true;
   }
 
   // POST /api/issues/:repo/:number/comment
-  const commentMatch = pathname.match(/^\/api\/issues\/([^/]+)\/([^/]+)\/(\d+)\/comment$/);
+  const commentMatch = pathname.match(
+    /^\/api\/issues\/([^/]+)\/([^/]+)\/(\d+)\/comment$/,
+  );
   if (method === "POST" && commentMatch) {
     if (!ctx.workspaceService) {
       sendError(res, "Workspace Service not available", 503);
@@ -558,22 +708,32 @@ export async function handleCodingAgentRoutes(
 
     try {
       const repo = `${commentMatch[1]}/${commentMatch[2]}`;
-      const issueNumber = parseInt(commentMatch[3]);
+      const issueNumber = parseInt(commentMatch[3], 10);
       const body = await parseBody(req);
       if (!body.body) {
         sendError(res, "body is required", 400);
         return true;
       }
-      const comment = await ctx.workspaceService.addComment(repo, issueNumber, body.body as string);
+      const comment = await ctx.workspaceService.addComment(
+        repo,
+        issueNumber,
+        body.body as string,
+      );
       sendJson(res, comment as unknown as JsonValue, 201);
     } catch (error) {
-      sendError(res, error instanceof Error ? error.message : "Failed to add comment", 500);
+      sendError(
+        res,
+        error instanceof Error ? error.message : "Failed to add comment",
+        500,
+      );
     }
     return true;
   }
 
   // POST /api/issues/:repo/:number/close
-  const closeMatch = pathname.match(/^\/api\/issues\/([^/]+)\/([^/]+)\/(\d+)\/close$/);
+  const closeMatch = pathname.match(
+    /^\/api\/issues\/([^/]+)\/([^/]+)\/(\d+)\/close$/,
+  );
   if (method === "POST" && closeMatch) {
     if (!ctx.workspaceService) {
       sendError(res, "Workspace Service not available", 503);
@@ -582,11 +742,15 @@ export async function handleCodingAgentRoutes(
 
     try {
       const repo = `${closeMatch[1]}/${closeMatch[2]}`;
-      const issueNumber = parseInt(closeMatch[3]);
+      const issueNumber = parseInt(closeMatch[3], 10);
       const issue = await ctx.workspaceService.closeIssue(repo, issueNumber);
       sendJson(res, issue as unknown as JsonValue);
     } catch (error) {
-      sendError(res, error instanceof Error ? error.message : "Failed to close issue", 500);
+      sendError(
+        res,
+        error instanceof Error ? error.message : "Failed to close issue",
+        500,
+      );
     }
     return true;
   }
@@ -599,8 +763,12 @@ export async function handleCodingAgentRoutes(
  * Create route handler with services from runtime
  */
 export function createCodingAgentRouteHandler(runtime: IAgentRuntime) {
-  const ptyService = runtime.getService("PTY_SERVICE") as unknown as PTYService | null;
-  const workspaceService = runtime.getService("CODING_WORKSPACE_SERVICE") as unknown as CodingWorkspaceService | null;
+  const ptyService = runtime.getService(
+    "PTY_SERVICE",
+  ) as unknown as PTYService | null;
+  const workspaceService = runtime.getService(
+    "CODING_WORKSPACE_SERVICE",
+  ) as unknown as CodingWorkspaceService | null;
 
   const ctx: RouteContext = {
     runtime,

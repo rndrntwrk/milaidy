@@ -10,28 +10,26 @@
  * @module services/workspace-service
  */
 
-import {
-  WorkspaceService,
-  CredentialService,
-  MemoryTokenStore,
-  GitHubPatClient,
-  OAuthDeviceFlow,
-  type Workspace,
-  type WorkspaceConfig,
-  type WorkspaceFinalization,
-  type PullRequestInfo,
-  type WorkspaceEvent,
-  type WorkspaceStatus,
-  type IssueInfo,
-  type CreateIssueOptions,
-  type IssueComment,
-  type IssueCommentOptions,
-  type IssueState,
-} from "git-workspace-service";
-import type { IAgentRuntime } from "@elizaos/core";
-import * as path from "node:path";
-import * as os from "node:os";
 import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import type { IAgentRuntime } from "@elizaos/core";
+import {
+  type CreateIssueOptions,
+  CredentialService,
+  GitHubPatClient,
+  type IssueComment,
+  type IssueInfo,
+  type IssueState,
+  MemoryTokenStore,
+  OAuthDeviceFlow,
+  type PullRequestInfo,
+  type WorkspaceConfig,
+  type WorkspaceEvent,
+  type WorkspaceFinalization,
+  WorkspaceService,
+  type WorkspaceStatus,
+} from "git-workspace-service";
 
 /**
  * Callback for surfacing auth prompts to the user.
@@ -132,7 +130,8 @@ export class CodingWorkspaceService {
   constructor(runtime: IAgentRuntime, config: CodingWorkspaceConfig = {}) {
     this.runtime = runtime;
     this.serviceConfig = {
-      baseDir: config.baseDir ?? path.join(os.homedir(), ".milaidy", "workspaces"),
+      baseDir:
+        config.baseDir ?? path.join(os.homedir(), ".milaidy", "workspaces"),
       branchPrefix: config.branchPrefix ?? "milaidy",
       debug: config.debug ?? false,
       workspaceTtlMs: config.workspaceTtlMs ?? 24 * 60 * 60 * 1000, // 24 hours
@@ -140,14 +139,19 @@ export class CodingWorkspaceService {
   }
 
   static async start(runtime: IAgentRuntime): Promise<CodingWorkspaceService> {
-    const config = runtime.getSetting("CODING_WORKSPACE_CONFIG") as CodingWorkspaceConfig | null | undefined;
+    const config = runtime.getSetting("CODING_WORKSPACE_CONFIG") as
+      | CodingWorkspaceConfig
+      | null
+      | undefined;
     const service = new CodingWorkspaceService(runtime, config ?? {});
     await service.initialize();
     return service;
   }
 
   static async stopRuntime(runtime: IAgentRuntime): Promise<void> {
-    const service = runtime.getService("CODING_WORKSPACE_SERVICE") as unknown as CodingWorkspaceService | undefined;
+    const service = runtime.getService("CODING_WORKSPACE_SERVICE") as unknown as
+      | CodingWorkspaceService
+      | undefined;
     if (service) {
       await service.stop();
     }
@@ -162,27 +166,36 @@ export class CodingWorkspaceService {
     // Initialize workspace service
     this.workspaceService = new WorkspaceService({
       config: {
-        baseDir: this.serviceConfig.baseDir!,
+        baseDir: this.serviceConfig.baseDir as string,
         branchPrefix: this.serviceConfig.branchPrefix,
       },
       credentialService: this.credentialService,
-      logger: this.serviceConfig.debug ? {
-        info: (data: unknown, msg?: string) => console.log(`[WorkspaceService] ${msg ?? ""}`, data),
-        warn: (data: unknown, msg?: string) => console.warn(`[WorkspaceService] ${msg ?? ""}`, data),
-        error: (data: unknown, msg?: string) => console.error(`[WorkspaceService] ${msg ?? ""}`, data),
-        debug: (data: unknown, msg?: string) => this.log(`${msg ?? ""}`),
-      } : undefined,
+      logger: this.serviceConfig.debug
+        ? {
+            info: (data: unknown, msg?: string) =>
+              console.log(`[WorkspaceService] ${msg ?? ""}`, data),
+            warn: (data: unknown, msg?: string) =>
+              console.warn(`[WorkspaceService] ${msg ?? ""}`, data),
+            error: (data: unknown, msg?: string) =>
+              console.error(`[WorkspaceService] ${msg ?? ""}`, data),
+            debug: (_data: unknown, msg?: string) => this.log(`${msg ?? ""}`),
+          }
+        : undefined,
     });
 
     await this.workspaceService.initialize();
 
     // Initialize GitHub PAT client for issue management (if token available)
-    const githubToken = this.runtime.getSetting("GITHUB_TOKEN") as string | undefined;
+    const githubToken = this.runtime.getSetting("GITHUB_TOKEN") as
+      | string
+      | undefined;
     if (githubToken) {
       this.githubClient = new GitHubPatClient({ token: githubToken });
       this.log("GitHubPatClient initialized with PAT");
     } else {
-      this.log("GITHUB_TOKEN not set - will use OAuth device flow when GitHub access is needed");
+      this.log(
+        "GITHUB_TOKEN not set - will use OAuth device flow when GitHub access is needed",
+      );
     }
 
     // Set up event forwarding
@@ -217,7 +230,9 @@ export class CodingWorkspaceService {
   /**
    * Provision a new workspace
    */
-  async provisionWorkspace(options: ProvisionWorkspaceOptions): Promise<WorkspaceResult> {
+  async provisionWorkspace(
+    options: ProvisionWorkspaceOptions,
+  ): Promise<WorkspaceResult> {
     if (!this.workspaceService) {
       throw new Error("CodingWorkspaceService not initialized");
     }
@@ -245,11 +260,13 @@ export class CodingWorkspaceService {
         role: options.task?.role ?? "coding-agent",
         slug: options.task?.slug,
       },
-      userCredentials: options.userCredentials ? {
-        type: options.userCredentials.type,
-        token: options.userCredentials.token ?? "",
-        provider: "github",
-      } : undefined,
+      userCredentials: options.userCredentials
+        ? {
+            type: options.userCredentials.type,
+            token: options.userCredentials.token ?? "",
+            provider: "github",
+          }
+        : undefined,
     };
 
     const workspace = await this.workspaceService.provision(workspaceConfig);
@@ -319,7 +336,9 @@ export class CodingWorkspaceService {
    * Resolve a workspace by label or ID.
    */
   resolveWorkspace(labelOrId: string): WorkspaceResult | undefined {
-    return this.getWorkspaceByLabel(labelOrId) ?? this.workspaces.get(labelOrId);
+    return (
+      this.getWorkspaceByLabel(labelOrId) ?? this.workspaces.get(labelOrId)
+    );
   }
 
   /**
@@ -426,7 +445,10 @@ export class CodingWorkspaceService {
   /**
    * Create a pull request
    */
-  async createPR(workspaceId: string, options: PROptions): Promise<PullRequestInfo> {
+  async createPR(
+    workspaceId: string,
+    options: PROptions,
+  ): Promise<PullRequestInfo> {
     if (!this.workspaceService) {
       throw new Error("CodingWorkspaceService not initialized");
     }
@@ -450,7 +472,10 @@ export class CodingWorkspaceService {
       cleanup: false,
     };
 
-    const result = await this.workspaceService.finalize(workspaceId, finalization);
+    const result = await this.workspaceService.finalize(
+      workspaceId,
+      finalization,
+    );
     if (!result) {
       throw new Error("Failed to create PR");
     }
@@ -486,7 +511,9 @@ export class CodingWorkspaceService {
     if (this.githubAuthInProgress) return this.githubAuthInProgress;
 
     // Check for PAT (re-check in case it was set after init)
-    const githubToken = this.runtime.getSetting("GITHUB_TOKEN") as string | undefined;
+    const githubToken = this.runtime.getSetting("GITHUB_TOKEN") as
+      | string
+      | undefined;
     if (githubToken) {
       this.githubClient = new GitHubPatClient({ token: githubToken });
       this.log("GitHubPatClient initialized with PAT (late binding)");
@@ -494,11 +521,13 @@ export class CodingWorkspaceService {
     }
 
     // Try OAuth device flow (explicit user consent, scoped permissions)
-    const clientId = this.runtime.getSetting("GITHUB_OAUTH_CLIENT_ID") as string | undefined;
+    const clientId = this.runtime.getSetting("GITHUB_OAUTH_CLIENT_ID") as
+      | string
+      | undefined;
     if (!clientId) {
       throw new Error(
         "GitHub access required but no credentials available. " +
-        "Set GITHUB_TOKEN (PAT) or GITHUB_OAUTH_CLIENT_ID (for OAuth device flow)."
+          "Set GITHUB_TOKEN (PAT) or GITHUB_OAUTH_CLIENT_ID (for OAuth device flow).",
       );
     }
 
@@ -513,7 +542,9 @@ export class CodingWorkspaceService {
   }
 
   private async performOAuthFlow(clientId: string): Promise<GitHubPatClient> {
-    const clientSecret = this.runtime.getSetting("GITHUB_OAUTH_CLIENT_SECRET") as string | undefined;
+    const clientSecret = this.runtime.getSetting(
+      "GITHUB_OAUTH_CLIENT_SECRET",
+    ) as string | undefined;
 
     const oauth = new OAuthDeviceFlow({
       clientId,
@@ -541,7 +572,7 @@ export class CodingWorkspaceService {
     } else {
       // Fallback: log to console
       console.log(
-        `\n[GitHub Auth] Go to ${deviceCode.verificationUri} and enter code: ${deviceCode.userCode}\n`
+        `\n[GitHub Auth] Go to ${deviceCode.verificationUri} and enter code: ${deviceCode.userCode}\n`,
       );
     }
 
@@ -554,7 +585,10 @@ export class CodingWorkspaceService {
     return this.githubClient;
   }
 
-  async createIssue(repo: string, options: CreateIssueOptions): Promise<IssueInfo> {
+  async createIssue(
+    repo: string,
+    options: CreateIssueOptions,
+  ): Promise<IssueInfo> {
     const client = await this.ensureGitHubClient();
     const { owner, repo: repoName } = this.parseOwnerRepo(repo);
     const issue = await client.createIssue(owner, repoName, options);
@@ -568,25 +602,49 @@ export class CodingWorkspaceService {
     return client.getIssue(owner, repoName, issueNumber);
   }
 
-  async listIssues(repo: string, options?: { state?: IssueState | "all"; labels?: string[]; assignee?: string }): Promise<IssueInfo[]> {
+  async listIssues(
+    repo: string,
+    options?: {
+      state?: IssueState | "all";
+      labels?: string[];
+      assignee?: string;
+    },
+  ): Promise<IssueInfo[]> {
     const client = await this.ensureGitHubClient();
     const { owner, repo: repoName } = this.parseOwnerRepo(repo);
     return client.listIssues(owner, repoName, options);
   }
 
-  async updateIssue(repo: string, issueNumber: number, options: { title?: string; body?: string; state?: IssueState; labels?: string[]; assignees?: string[] }): Promise<IssueInfo> {
+  async updateIssue(
+    repo: string,
+    issueNumber: number,
+    options: {
+      title?: string;
+      body?: string;
+      state?: IssueState;
+      labels?: string[];
+      assignees?: string[];
+    },
+  ): Promise<IssueInfo> {
     const client = await this.ensureGitHubClient();
     const { owner, repo: repoName } = this.parseOwnerRepo(repo);
     return client.updateIssue(owner, repoName, issueNumber, options);
   }
 
-  async addComment(repo: string, issueNumber: number, body: string): Promise<IssueComment> {
+  async addComment(
+    repo: string,
+    issueNumber: number,
+    body: string,
+  ): Promise<IssueComment> {
     const client = await this.ensureGitHubClient();
     const { owner, repo: repoName } = this.parseOwnerRepo(repo);
     return client.addComment(owner, repoName, issueNumber, { body });
   }
 
-  async listComments(repo: string, issueNumber: number): Promise<IssueComment[]> {
+  async listComments(
+    repo: string,
+    issueNumber: number,
+  ): Promise<IssueComment[]> {
     const client = await this.ensureGitHubClient();
     const { owner, repo: repoName } = this.parseOwnerRepo(repo);
     return client.listComments(owner, repoName, issueNumber);
@@ -606,7 +664,11 @@ export class CodingWorkspaceService {
     return client.reopenIssue(owner, repoName, issueNumber);
   }
 
-  async addLabels(repo: string, issueNumber: number, labels: string[]): Promise<void> {
+  async addLabels(
+    repo: string,
+    issueNumber: number,
+    labels: string[],
+  ): Promise<void> {
     const client = await this.ensureGitHubClient();
     const { owner, repo: repoName } = this.parseOwnerRepo(repo);
     await client.addLabels(owner, repoName, issueNumber, labels);
@@ -658,18 +720,23 @@ export class CodingWorkspaceService {
    * Safe to call for any path under the workspaces base dir.
    */
   async removeScratchDir(dirPath: string): Promise<void> {
-    const baseDir = this.serviceConfig.baseDir!;
+    const baseDir = this.serviceConfig.baseDir as string;
     // Safety: only remove directories under our base dir
     const resolved = path.resolve(dirPath);
     if (!resolved.startsWith(path.resolve(baseDir))) {
-      console.warn(`[CodingWorkspaceService] Refusing to remove dir outside base: ${resolved}`);
+      console.warn(
+        `[CodingWorkspaceService] Refusing to remove dir outside base: ${resolved}`,
+      );
       return;
     }
     try {
       await fs.promises.rm(resolved, { recursive: true, force: true });
       this.log(`Removed scratch dir ${resolved}`);
     } catch (err) {
-      console.warn(`[CodingWorkspaceService] Failed to remove scratch dir ${resolved}:`, err);
+      console.warn(
+        `[CodingWorkspaceService] Failed to remove scratch dir ${resolved}:`,
+        err,
+      );
     }
   }
 
@@ -684,7 +751,7 @@ export class CodingWorkspaceService {
       return;
     }
 
-    const baseDir = this.serviceConfig.baseDir!;
+    const baseDir = this.serviceConfig.baseDir as string;
     let entries: fs.Dirent[];
     try {
       entries = await fs.promises.readdir(baseDir, { withFileTypes: true });
@@ -725,7 +792,9 @@ export class CodingWorkspaceService {
     }
 
     if (removed > 0 || skipped > 0) {
-      console.log(`[CodingWorkspaceService] Startup GC: removed ${removed} orphaned workspace(s), kept ${skipped}`);
+      console.log(
+        `[CodingWorkspaceService] Startup GC: removed ${removed} orphaned workspace(s), kept ${skipped}`,
+      );
     }
   }
 

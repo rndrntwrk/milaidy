@@ -13,30 +13,42 @@
  * @module actions/start-coding-task
  */
 
-import type { Action, IAgentRuntime, Memory, State, HandlerCallback, ActionResult, HandlerOptions } from "@elizaos/core";
-import { PTYService, type SessionInfo, type CodingAgentType } from "../services/pty-service.js";
-import { CodingWorkspaceService } from "../services/workspace-service.js";
-import type { AgentCredentials, ApprovalPreset } from "coding-agent-adapters";
-import * as path from "node:path";
-import * as os from "node:os";
-import * as fs from "node:fs";
 import { randomUUID } from "node:crypto";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import type {
+  Action,
+  ActionResult,
+  HandlerCallback,
+  HandlerOptions,
+  IAgentRuntime,
+  Memory,
+  State,
+} from "@elizaos/core";
+import type { AgentCredentials, ApprovalPreset } from "coding-agent-adapters";
+import type {
+  CodingAgentType,
+  PTYService,
+  SessionInfo,
+} from "../services/pty-service.js";
+import type { CodingWorkspaceService } from "../services/workspace-service.js";
 
 /** Normalize user-provided agent type to adapter type */
 const normalizeAgentType = (input: string): CodingAgentType => {
   const normalized = input.toLowerCase().trim();
   const mapping: Record<string, CodingAgentType> = {
-    "claude": "claude",
+    claude: "claude",
     "claude-code": "claude",
-    "claudecode": "claude",
-    "codex": "codex",
-    "openai": "codex",
+    claudecode: "claude",
+    codex: "codex",
+    openai: "codex",
     "openai-codex": "codex",
-    "gemini": "gemini",
-    "google": "gemini",
-    "aider": "aider",
-    "shell": "shell",
-    "bash": "shell",
+    gemini: "gemini",
+    google: "gemini",
+    aider: "aider",
+    shell: "shell",
+    bash: "shell",
   };
   return mapping[normalized] ?? "claude";
 };
@@ -54,7 +66,10 @@ function createScratchDir(): string {
  * Generate a short semantic label from repo URL and/or task description.
  * e.g. "git-workspace-service-testbed/hello-mima" or "scratch/react-research"
  */
-function generateLabel(repo: string | undefined, task: string | undefined): string {
+function generateLabel(
+  repo: string | undefined,
+  task: string | undefined,
+): string {
   const parts: string[] = [];
 
   if (repo) {
@@ -71,7 +86,11 @@ function generateLabel(repo: string | undefined, task: string | undefined): stri
       .toLowerCase()
       .replace(/[^a-z0-9\s-]/g, "")
       .split(/\s+/)
-      .filter((w) => w.length > 2 && !["the", "and", "for", "with", "that", "this", "from"].includes(w))
+      .filter(
+        (w) =>
+          w.length > 2 &&
+          !["the", "and", "for", "with", "that", "this", "from"].includes(w),
+      )
       .slice(0, 3)
       .join("-");
     if (slug) parts.push(slug);
@@ -107,11 +126,18 @@ function registerSessionEvents(
     }
 
     // Auto-cleanup scratch directories when the session exits
-    if ((event === "stopped" || event === "completed" || event === "error") && scratchDir) {
-      const wsService = runtime.getService("CODING_WORKSPACE_SERVICE") as unknown as CodingWorkspaceService | undefined;
+    if (
+      (event === "stopped" || event === "completed" || event === "error") &&
+      scratchDir
+    ) {
+      const wsService = runtime.getService(
+        "CODING_WORKSPACE_SERVICE",
+      ) as unknown as CodingWorkspaceService | undefined;
       if (wsService) {
         wsService.removeScratchDir(scratchDir).catch((err) => {
-          console.warn(`[START_CODING_TASK] Failed to cleanup scratch dir for "${label}": ${err}`);
+          console.warn(
+            `[START_CODING_TASK] Failed to cleanup scratch dir for "${label}": ${err}`,
+          );
         });
       }
     }
@@ -138,7 +164,9 @@ export const startCodingTaskAction: Action = {
     [
       {
         name: "{{user1}}",
-        content: { text: "Set up a workspace for https://github.com/acme/my-app and have Claude fix the auth bug" },
+        content: {
+          text: "Set up a workspace for https://github.com/acme/my-app and have Claude fix the auth bug",
+        },
       },
       {
         name: "{{agentName}}",
@@ -151,7 +179,9 @@ export const startCodingTaskAction: Action = {
     [
       {
         name: "{{user1}}",
-        content: { text: "Use a coding agent to research the latest React patterns" },
+        content: {
+          text: "Use a coding agent to research the latest React patterns",
+        },
       },
       {
         name: "{{agentName}}",
@@ -163,8 +193,13 @@ export const startCodingTaskAction: Action = {
     ],
   ],
 
-  validate: async (runtime: IAgentRuntime, _message: Memory): Promise<boolean> => {
-    const ptyService = runtime.getService("PTY_SERVICE") as unknown as PTYService | undefined;
+  validate: async (
+    runtime: IAgentRuntime,
+    _message: Memory,
+  ): Promise<boolean> => {
+    const ptyService = runtime.getService("PTY_SERVICE") as unknown as
+      | PTYService
+      | undefined;
     return ptyService != null;
   },
 
@@ -175,30 +210,41 @@ export const startCodingTaskAction: Action = {
     options?: HandlerOptions,
     callback?: HandlerCallback,
   ): Promise<ActionResult | undefined> => {
-    const ptyService = runtime.getService("PTY_SERVICE") as unknown as PTYService | undefined;
+    const ptyService = runtime.getService("PTY_SERVICE") as unknown as
+      | PTYService
+      | undefined;
     if (!ptyService) {
       if (callback) {
-        await callback({ text: "PTY Service is not available. Cannot start coding task." });
+        await callback({
+          text: "PTY Service is not available. Cannot start coding task.",
+        });
       }
       return { success: false, error: "SERVICE_UNAVAILABLE" };
     }
 
-    const wsService = runtime.getService("CODING_WORKSPACE_SERVICE") as unknown as CodingWorkspaceService | undefined;
+    const wsService = runtime.getService(
+      "CODING_WORKSPACE_SERVICE",
+    ) as unknown as CodingWorkspaceService | undefined;
 
     // Extract parameters
     const params = options?.parameters;
     const content = message.content as Record<string, unknown>;
 
-    const rawAgentType = (params?.agentType as string) ?? (content.agentType as string) ?? "claude";
+    const rawAgentType =
+      (params?.agentType as string) ??
+      (content.agentType as string) ??
+      "claude";
     const defaultAgentType = normalizeAgentType(rawAgentType);
-    const memoryContent = (params?.memoryContent as string) ?? (content.memoryContent as string);
-    const approvalPreset = (params?.approvalPreset as string) ?? (content.approvalPreset as string);
+    const memoryContent =
+      (params?.memoryContent as string) ?? (content.memoryContent as string);
+    const approvalPreset =
+      (params?.approvalPreset as string) ?? (content.approvalPreset as string);
 
     // Repo is optional — extract from params, content, or text
     let repo = (params?.repo as string) ?? (content.repo as string);
     if (!repo && content.text) {
       const urlMatch = (content.text as string).match(
-        /https?:\/\/(?:github\.com|gitlab\.com|bitbucket\.org)\/[\w.-]+\/[\w.-]+(?:\.git)?/i
+        /https?:\/\/(?:github\.com|gitlab\.com|bitbucket\.org)\/[\w.-]+\/[\w.-]+(?:\.git)?/i,
       );
       if (urlMatch) {
         repo = urlMatch[0];
@@ -206,47 +252,63 @@ export const startCodingTaskAction: Action = {
     }
 
     // Build credentials (shared across all agents)
-    const customCredentialKeys = runtime.getSetting("CUSTOM_CREDENTIAL_KEYS") as string | undefined;
+    const customCredentialKeys = runtime.getSetting("CUSTOM_CREDENTIAL_KEYS") as
+      | string
+      | undefined;
     let customCredentials: Record<string, string> | undefined;
     if (customCredentialKeys) {
       customCredentials = {};
-      for (const key of customCredentialKeys.split(",").map(k => k.trim())) {
+      for (const key of customCredentialKeys.split(",").map((k) => k.trim())) {
         const val = runtime.getSetting(key) as string | undefined;
         if (val) customCredentials[key] = val;
       }
     }
 
     const credentials: AgentCredentials = {
-      anthropicKey: runtime.getSetting("ANTHROPIC_API_KEY") as string | undefined,
+      anthropicKey: runtime.getSetting("ANTHROPIC_API_KEY") as
+        | string
+        | undefined,
       openaiKey: runtime.getSetting("OPENAI_API_KEY") as string | undefined,
-      googleKey: runtime.getSetting("GOOGLE_GENERATIVE_AI_API_KEY") as string | undefined,
+      googleKey: runtime.getSetting("GOOGLE_GENERATIVE_AI_API_KEY") as
+        | string
+        | undefined,
       githubToken: runtime.getSetting("GITHUB_TOKEN") as string | undefined,
     };
 
     // --- Check for multi-agent mode ---
-    const agentsParam = (params?.agents as string) ?? (content.agents as string);
+    const agentsParam =
+      (params?.agents as string) ?? (content.agents as string);
 
     if (agentsParam) {
       // ==================== MULTI-AGENT MODE ====================
       // Parse pipe-delimited agent specs: "task1 | task2 | agentType:task3"
-      const agentSpecs = agentsParam.split("|").map(s => s.trim()).filter(Boolean);
+      const agentSpecs = agentsParam
+        .split("|")
+        .map((s) => s.trim())
+        .filter(Boolean);
 
       if (agentSpecs.length === 0) {
         if (callback) {
-          await callback({ text: "No agent tasks provided in agents parameter." });
+          await callback({
+            text: "No agent tasks provided in agents parameter.",
+          });
         }
         return { success: false, error: "EMPTY_AGENTS_PARAM" };
       }
 
       if (repo && !wsService) {
         if (callback) {
-          await callback({ text: "Workspace Service is not available. Cannot clone repository." });
+          await callback({
+            text: "Workspace Service is not available. Cannot clone repository.",
+          });
         }
         return { success: false, error: "WORKSPACE_SERVICE_UNAVAILABLE" };
       }
 
       if (callback) {
-        await callback({ text: `Launching ${agentSpecs.length} agents${repo ? ` on ${repo}` : ""}...` });
+        await callback({
+          text: `Launching ${agentSpecs.length} agents${repo ? ` on ${repo}` : ""}...`,
+        });
       }
 
       const results: Array<{
@@ -267,7 +329,18 @@ export const startCodingTaskAction: Action = {
         const colonIdx = spec.indexOf(":");
         if (colonIdx > 0 && colonIdx < 20) {
           const prefix = spec.slice(0, colonIdx).trim().toLowerCase();
-          const knownTypes = ["claude", "claude-code", "claudecode", "codex", "openai", "gemini", "google", "aider", "shell", "bash"];
+          const knownTypes = [
+            "claude",
+            "claude-code",
+            "claudecode",
+            "codex",
+            "openai",
+            "gemini",
+            "google",
+            "aider",
+            "shell",
+            "bash",
+          ];
           if (knownTypes.includes(prefix)) {
             specAgentType = normalizeAgentType(prefix);
             specTask = spec.slice(colonIdx + 1).trim();
@@ -298,7 +371,9 @@ export const startCodingTaskAction: Action = {
 
           // Preflight check
           if (specAgentType !== "shell") {
-            const [preflight] = await ptyService.checkAvailableAgents([specAgentType as Exclude<CodingAgentType, "shell">]);
+            const [preflight] = await ptyService.checkAvailableAgents([
+              specAgentType as Exclude<CodingAgentType, "shell">,
+            ]);
             if (preflight && !preflight.installed) {
               results.push({
                 sessionId: "",
@@ -335,7 +410,14 @@ export const startCodingTaskAction: Action = {
           // Register event handler
           const isScratch = !repo;
           const scratchDir = isScratch ? workdir : null;
-          registerSessionEvents(ptyService, runtime, session.id, specLabel, scratchDir, callback);
+          registerSessionEvents(
+            ptyService,
+            runtime,
+            session.id,
+            specLabel,
+            scratchDir,
+            callback,
+          );
 
           results.push({
             sessionId: session.id,
@@ -353,8 +435,12 @@ export const startCodingTaskAction: Action = {
             });
           }
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          console.error(`[START_CODING_TASK] Failed to spawn agent ${i + 1}:`, errorMessage);
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          console.error(
+            `[START_CODING_TASK] Failed to spawn agent ${i + 1}:`,
+            errorMessage,
+          );
           results.push({
             sessionId: "",
             agentType: specAgentType,
@@ -368,15 +454,21 @@ export const startCodingTaskAction: Action = {
 
       // Store all sessions in state
       if (state) {
-        state.codingSessions = results.filter(r => r.sessionId);
+        state.codingSessions = results.filter((r) => r.sessionId);
       }
 
-      const succeeded = results.filter(r => r.sessionId);
-      const failed = results.filter(r => !r.sessionId);
+      const succeeded = results.filter((r) => r.sessionId);
+      const failed = results.filter((r) => !r.sessionId);
       const summary = [
         `Launched ${succeeded.length}/${agentSpecs.length} agents${repo ? ` on ${repo}` : ""}:`,
-        ...succeeded.map(r => `  - "${r.label}" (${r.agentType}) [session: ${r.sessionId}]`),
-        ...(failed.length > 0 ? [`Failed: ${failed.map(r => `"${r.label}": ${r.error}`).join(", ")}`] : []),
+        ...succeeded.map(
+          (r) => `  - "${r.label}" (${r.agentType}) [session: ${r.sessionId}]`,
+        ),
+        ...(failed.length > 0
+          ? [
+              `Failed: ${failed.map((r) => `"${r.label}": ${r.error}`).join(", ")}`,
+            ]
+          : []),
       ].join("\n");
 
       if (callback) {
@@ -395,7 +487,8 @@ export const startCodingTaskAction: Action = {
     const task = (params?.task as string) ?? (content.task as string);
 
     // Generate or use explicit label
-    const explicitLabel = (params?.label as string) ?? (content.label as string);
+    const explicitLabel =
+      (params?.label as string) ?? (content.label as string);
     const label = explicitLabel || generateLabel(repo, task);
 
     // --- Step 1: Resolve workspace directory ---
@@ -406,7 +499,9 @@ export const startCodingTaskAction: Action = {
     if (repo) {
       if (!wsService) {
         if (callback) {
-          await callback({ text: "Workspace Service is not available. Cannot clone repository." });
+          await callback({
+            text: "Workspace Service is not available. Cannot clone repository.",
+          });
         }
         return { success: false, error: "WORKSPACE_SERVICE_UNAVAILABLE" };
       }
@@ -433,9 +528,12 @@ export const startCodingTaskAction: Action = {
           };
         }
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
         if (callback) {
-          await callback({ text: `Failed to clone repository: ${errorMessage}` });
+          await callback({
+            text: `Failed to clone repository: ${errorMessage}`,
+          });
         }
         return { success: false, error: errorMessage };
       }
@@ -446,7 +544,9 @@ export const startCodingTaskAction: Action = {
     // --- Step 2: Spawn the agent ---
     try {
       if (agentType !== "shell") {
-        const [preflight] = await ptyService.checkAvailableAgents([agentType as Exclude<CodingAgentType, "shell">]);
+        const [preflight] = await ptyService.checkAvailableAgents([
+          agentType as Exclude<CodingAgentType, "shell">,
+        ]);
         if (preflight && !preflight.installed) {
           if (callback) {
             await callback({
@@ -478,7 +578,14 @@ export const startCodingTaskAction: Action = {
       // Register event handler
       const isScratchWorkspace = !repo;
       const scratchDir = isScratchWorkspace ? workdir : null;
-      registerSessionEvents(ptyService, runtime, session.id, label, scratchDir, callback);
+      registerSessionEvents(
+        ptyService,
+        runtime,
+        session.id,
+        label,
+        scratchDir,
+        callback,
+      );
 
       if (state) {
         state.codingSession = {
@@ -511,11 +618,14 @@ export const startCodingTaskAction: Action = {
         },
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       console.error("[START_CODING_TASK] Failed to spawn agent:", errorMessage);
 
       if (callback) {
-        await callback({ text: `Failed to start coding agent: ${errorMessage}` });
+        await callback({
+          text: `Failed to start coding agent: ${errorMessage}`,
+        });
       }
       return { success: false, error: errorMessage };
     }
@@ -539,7 +649,8 @@ export const startCodingTaskAction: Action = {
     },
     {
       name: "task",
-      description: "The task or prompt to send to the agent once it's ready. Used for single-agent mode.",
+      description:
+        "The task or prompt to send to the agent once it's ready. Used for single-agent mode.",
       required: false,
       schema: { type: "string" as const },
     },
@@ -554,7 +665,8 @@ export const startCodingTaskAction: Action = {
     },
     {
       name: "memoryContent",
-      description: "Instructions/context to write to each agent's memory file (e.g. CLAUDE.md) before spawning.",
+      description:
+        "Instructions/context to write to each agent's memory file (e.g. CLAUDE.md) before spawning.",
       required: false,
       schema: { type: "string" as const },
     },
@@ -568,9 +680,13 @@ export const startCodingTaskAction: Action = {
     },
     {
       name: "approvalPreset",
-      description: "Permission level for all agents: readonly, standard, permissive, autonomous.",
+      description:
+        "Permission level for all agents: readonly, standard, permissive, autonomous.",
       required: false,
-      schema: { type: "string" as const, enum: ["readonly", "standard", "permissive", "autonomous"] },
+      schema: {
+        type: "string" as const,
+        enum: ["readonly", "standard", "permissive", "autonomous"],
+      },
     },
   ],
 };

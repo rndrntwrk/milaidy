@@ -7,26 +7,38 @@
  * @module actions/spawn-agent
  */
 
-import type { Action, IAgentRuntime, Memory, State, HandlerCallback, ActionResult, HandlerOptions } from "@elizaos/core";
-import { PTYService, type SessionInfo, type CodingAgentType } from "../services/pty-service.js";
-import { CodingWorkspaceService } from "../services/workspace-service.js";
+import type {
+  Action,
+  ActionResult,
+  HandlerCallback,
+  HandlerOptions,
+  IAgentRuntime,
+  Memory,
+  State,
+} from "@elizaos/core";
 import type { AgentCredentials, ApprovalPreset } from "coding-agent-adapters";
+import type {
+  CodingAgentType,
+  PTYService,
+  SessionInfo,
+} from "../services/pty-service.js";
+import type { CodingWorkspaceService } from "../services/workspace-service.js";
 
 /** Normalize user-provided agent type to adapter type */
 const normalizeAgentType = (input: string): CodingAgentType => {
   const normalized = input.toLowerCase().trim();
   const mapping: Record<string, CodingAgentType> = {
-    "claude": "claude",
+    claude: "claude",
     "claude-code": "claude",
-    "claudecode": "claude",
-    "codex": "codex",
-    "openai": "codex",
+    claudecode: "claude",
+    codex: "codex",
+    openai: "codex",
     "openai-codex": "codex",
-    "gemini": "gemini",
-    "google": "gemini",
-    "aider": "aider",
-    "shell": "shell",
-    "bash": "shell",
+    gemini: "gemini",
+    google: "gemini",
+    aider: "aider",
+    shell: "shell",
+    bash: "shell",
   };
   return mapping[normalized] ?? "claude";
 };
@@ -76,9 +88,14 @@ export const spawnAgentAction: Action = {
     ],
   ],
 
-  validate: async (runtime: IAgentRuntime, _message: Memory): Promise<boolean> => {
+  validate: async (
+    runtime: IAgentRuntime,
+    _message: Memory,
+  ): Promise<boolean> => {
     // Check if PTYService is available
-    const ptyService = runtime.getService("PTY_SERVICE") as unknown as PTYService | undefined;
+    const ptyService = runtime.getService("PTY_SERVICE") as unknown as
+      | PTYService
+      | undefined;
     if (!ptyService) {
       console.warn("[SPAWN_CODING_AGENT] PTYService not available");
       return false;
@@ -93,7 +110,9 @@ export const spawnAgentAction: Action = {
     options?: HandlerOptions,
     callback?: HandlerCallback,
   ): Promise<ActionResult | undefined> => {
-    const ptyService = runtime.getService("PTY_SERVICE") as unknown as PTYService | undefined;
+    const ptyService = runtime.getService("PTY_SERVICE") as unknown as
+      | PTYService
+      | undefined;
     if (!ptyService) {
       if (callback) {
         await callback({
@@ -107,7 +126,10 @@ export const spawnAgentAction: Action = {
     const params = options?.parameters;
     const content = message.content as Record<string, unknown>;
 
-    const rawAgentType = (params?.agentType as string) ?? (content.agentType as string) ?? "claude";
+    const rawAgentType =
+      (params?.agentType as string) ??
+      (content.agentType as string) ??
+      "claude";
     const agentType = normalizeAgentType(rawAgentType);
     const task = (params?.task as string) ?? (content.task as string);
 
@@ -118,7 +140,9 @@ export const spawnAgentAction: Action = {
     }
     if (!workdir) {
       // Check workspace service for most recently provisioned workspace
-      const wsService = runtime.getService("CODING_WORKSPACE_SERVICE") as unknown as CodingWorkspaceService | undefined;
+      const wsService = runtime.getService(
+        "CODING_WORKSPACE_SERVICE",
+      ) as unknown as CodingWorkspaceService | undefined;
       if (wsService) {
         const workspaces = wsService.listWorkspaces();
         if (workspaces.length > 0) {
@@ -129,15 +153,19 @@ export const spawnAgentAction: Action = {
     if (!workdir) {
       workdir = process.cwd();
     }
-    const memoryContent = (params?.memoryContent as string) ?? (content.memoryContent as string);
-    const approvalPreset = (params?.approvalPreset as string) ?? (content.approvalPreset as string);
+    const memoryContent =
+      (params?.memoryContent as string) ?? (content.memoryContent as string);
+    const approvalPreset =
+      (params?.approvalPreset as string) ?? (content.approvalPreset as string);
 
     // Custom credentials for MCP servers and other integrations
-    const customCredentialKeys = runtime.getSetting("CUSTOM_CREDENTIAL_KEYS") as string | undefined;
+    const customCredentialKeys = runtime.getSetting("CUSTOM_CREDENTIAL_KEYS") as
+      | string
+      | undefined;
     let customCredentials: Record<string, string> | undefined;
     if (customCredentialKeys) {
       customCredentials = {};
-      for (const key of customCredentialKeys.split(",").map(k => k.trim())) {
+      for (const key of customCredentialKeys.split(",").map((k) => k.trim())) {
         const val = runtime.getSetting(key) as string | undefined;
         if (val) customCredentials[key] = val;
       }
@@ -145,20 +173,27 @@ export const spawnAgentAction: Action = {
 
     // Build credentials from runtime settings
     const credentials: AgentCredentials = {
-      anthropicKey: runtime.getSetting("ANTHROPIC_API_KEY") as string | undefined,
+      anthropicKey: runtime.getSetting("ANTHROPIC_API_KEY") as
+        | string
+        | undefined,
       openaiKey: runtime.getSetting("OPENAI_API_KEY") as string | undefined,
-      googleKey: runtime.getSetting("GOOGLE_GENERATIVE_AI_API_KEY") as string | undefined,
+      googleKey: runtime.getSetting("GOOGLE_GENERATIVE_AI_API_KEY") as
+        | string
+        | undefined,
       githubToken: runtime.getSetting("GITHUB_TOKEN") as string | undefined,
     };
 
     try {
       // Check if the agent CLI is installed (for non-shell agents)
       if (agentType !== "shell") {
-        const [preflight] = await ptyService.checkAvailableAgents([agentType as Exclude<CodingAgentType, "shell">]);
+        const [preflight] = await ptyService.checkAvailableAgents([
+          agentType as Exclude<CodingAgentType, "shell">,
+        ]);
         if (preflight && !preflight.installed) {
           if (callback) {
             await callback({
-              text: `${preflight.adapter} CLI is not installed.\n` +
+              text:
+                `${preflight.adapter} CLI is not installed.\n` +
                 `Install with: ${preflight.installCommand}\n` +
                 `Docs: ${preflight.docsUrl}`,
             });
@@ -240,8 +275,12 @@ export const spawnAgentAction: Action = {
         },
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error("[SPAWN_CODING_AGENT] Failed to spawn agent:", errorMessage);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      console.error(
+        "[SPAWN_CODING_AGENT] Failed to spawn agent:",
+        errorMessage,
+      );
 
       if (callback) {
         await callback({
@@ -263,7 +302,8 @@ export const spawnAgentAction: Action = {
     },
     {
       name: "workdir",
-      description: "Working directory for the agent. Defaults to current directory.",
+      description:
+        "Working directory for the agent. Defaults to current directory.",
       required: false,
       schema: { type: "string" as const },
     },
@@ -275,15 +315,20 @@ export const spawnAgentAction: Action = {
     },
     {
       name: "memoryContent",
-      description: "Instructions/context to write to the agent's memory file (e.g. CLAUDE.md) before spawning.",
+      description:
+        "Instructions/context to write to the agent's memory file (e.g. CLAUDE.md) before spawning.",
       required: false,
       schema: { type: "string" as const },
     },
     {
       name: "approvalPreset",
-      description: "Permission level: readonly (safe audit), standard (reads+web auto, writes prompt), permissive (file ops auto, shell prompts), autonomous (all auto, use with sandbox)",
+      description:
+        "Permission level: readonly (safe audit), standard (reads+web auto, writes prompt), permissive (file ops auto, shell prompts), autonomous (all auto, use with sandbox)",
       required: false,
-      schema: { type: "string" as const, enum: ["readonly", "standard", "permissive", "autonomous"] },
+      schema: {
+        type: "string" as const,
+        enum: ["readonly", "standard", "permissive", "autonomous"],
+      },
     },
   ],
 };

@@ -7,8 +7,16 @@
  * @module actions/send-to-agent
  */
 
-import type { Action, IAgentRuntime, Memory, State, HandlerCallback, ActionResult, HandlerOptions } from "@elizaos/core";
-import { PTYService } from "../services/pty-service.js";
+import type {
+  Action,
+  ActionResult,
+  HandlerCallback,
+  HandlerOptions,
+  IAgentRuntime,
+  Memory,
+  State,
+} from "@elizaos/core";
+import type { PTYService } from "../services/pty-service.js";
 
 export const sendToAgentAction: Action = {
   name: "SEND_TO_CODING_AGENT",
@@ -53,8 +61,13 @@ export const sendToAgentAction: Action = {
     ],
   ],
 
-  validate: async (runtime: IAgentRuntime, _message: Memory): Promise<boolean> => {
-    const ptyService = runtime.getService("PTY_SERVICE") as unknown as PTYService | undefined;
+  validate: async (
+    runtime: IAgentRuntime,
+    _message: Memory,
+  ): Promise<boolean> => {
+    const ptyService = runtime.getService("PTY_SERVICE") as unknown as
+      | PTYService
+      | undefined;
     if (!ptyService) {
       return false;
     }
@@ -81,7 +94,9 @@ export const sendToAgentAction: Action = {
     _options?: HandlerOptions,
     callback?: HandlerCallback,
   ): Promise<ActionResult | undefined> => {
-    const ptyService = runtime.getService("PTY_SERVICE") as unknown as PTYService | undefined;
+    const ptyService = runtime.getService("PTY_SERVICE") as unknown as
+      | PTYService
+      | undefined;
     if (!ptyService) {
       if (callback) {
         await callback({
@@ -136,7 +151,11 @@ export const sendToAgentAction: Action = {
             text: `Sent key sequence to coding agent.`,
           });
         }
-        return { success: true, text: "Sent key sequence", data: { sessionId, keys: content.keys } };
+        return {
+          success: true,
+          text: "Sent key sequence",
+          data: { sessionId, keys: content.keys },
+        };
       } else if (content.input) {
         // Send text input
         await ptyService.sendToSession(sessionId, content.input);
@@ -145,7 +164,11 @@ export const sendToAgentAction: Action = {
             text: `Sent to coding agent: "${content.input}"`,
           });
         }
-        return { success: true, text: "Sent input to agent", data: { sessionId, input: content.input } };
+        return {
+          success: true,
+          text: "Sent input to agent",
+          data: { sessionId, input: content.input },
+        };
       } else {
         if (callback) {
           await callback({
@@ -155,7 +178,8 @@ export const sendToAgentAction: Action = {
         return { success: false, error: "NO_INPUT" };
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       if (callback) {
         await callback({
           text: `Failed to send to agent: ${errorMessage}`,
@@ -168,7 +192,8 @@ export const sendToAgentAction: Action = {
   parameters: [
     {
       name: "sessionId",
-      description: "ID of the coding session to send to. If not specified, uses the current session.",
+      description:
+        "ID of the coding session to send to. If not specified, uses the current session.",
       required: false,
       schema: { type: "string" as const },
     },
@@ -180,7 +205,8 @@ export const sendToAgentAction: Action = {
     },
     {
       name: "keys",
-      description: "Special key sequence to send (e.g., 'Enter', 'Ctrl-C', 'y').",
+      description:
+        "Special key sequence to send (e.g., 'Enter', 'Ctrl-C', 'y').",
       required: false,
       schema: { type: "string" as const },
     },
