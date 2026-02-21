@@ -7769,7 +7769,7 @@ async function handleRequest(
           installs?.[packageName] || installs?.[plugin.id];
         if (hasInstallRecord) {
           plugin.loadError =
-            "Plugin installed but failed to load — the package may be missing compiled files.";
+            "Plugin installed but failed to load — check runtime logs for the exact error.";
         }
       }
     }

@@ -78,6 +78,10 @@ export const INTEGRATION_ENV_PLUGINS: Record<string, string> = {
   TELEGRAM_BOT_TOKEN: "@elizaos/plugin-telegram",
   GITHUB_API_TOKEN: "@elizaos/plugin-github",
   ALICE_GH_TOKEN: "@elizaos/plugin-github",
+  N8N_API_KEY: "@elizaos/plugin-n8n",
+  N8N_HOST: "@elizaos/plugin-n8n",
+  N8N_URL: "@elizaos/plugin-n8n",
+  MCP_CONFIG: "@elizaos/plugin-mcp",
 };
 
 const FEATURE_PLUGINS: Record<string, string> = {
@@ -214,6 +218,21 @@ export function applyPluginAutoEnable(
       pluginId,
       changes,
       `env: ${envKey}`,
+    );
+  }
+
+  const mcpServers = updatedConfig.mcp?.servers;
+  if (
+    mcpServers &&
+    Object.keys(mcpServers).length > 0 &&
+    pluginsConfig.entries?.mcp?.enabled !== false
+  ) {
+    addToAllowlist(
+      pluginsConfig.allow,
+      "@elizaos/plugin-mcp",
+      "mcp",
+      changes,
+      "config: mcp.servers",
     );
   }
 

@@ -630,6 +630,10 @@ const INTEGRATION_PLUGIN_MAP: Readonly<Record<string, string>> = {
   TELEGRAM_BOT_TOKEN: "@elizaos/plugin-telegram",
   GITHUB_API_TOKEN: "@elizaos/plugin-github",
   ALICE_GH_TOKEN: "@elizaos/plugin-github",
+  N8N_API_KEY: "@elizaos/plugin-n8n",
+  N8N_HOST: "@elizaos/plugin-n8n",
+  N8N_URL: "@elizaos/plugin-n8n",
+  MCP_CONFIG: "@elizaos/plugin-mcp",
 };
 
 /**
@@ -1477,6 +1481,29 @@ function collectStartupPluginRequirements(
 
   if (process.env.GITHUB_API_TOKEN?.trim() || process.env.ALICE_GH_TOKEN?.trim()) {
     add("@elizaos/plugin-github", "github token configured");
+  }
+
+  const mcpServers = config.mcp?.servers;
+  if (
+    (mcpServers && Object.keys(mcpServers).length > 0) ||
+    process.env.MCP_CONFIG?.trim()
+  ) {
+    add("@elizaos/plugin-mcp", "mcp configured");
+  }
+
+  const n8nEntry = config.plugins?.entries?.n8n;
+  const n8nEnabledInConfig =
+    n8nEntry !== undefined &&
+    (typeof n8nEntry !== "object" ||
+      n8nEntry === null ||
+      (n8nEntry as Record<string, unknown>).enabled !== false);
+  if (
+    n8nEnabledInConfig ||
+    process.env.N8N_API_KEY?.trim() ||
+    process.env.N8N_HOST?.trim() ||
+    process.env.N8N_URL?.trim()
+  ) {
+    add("@elizaos/plugin-n8n", "n8n configured");
   }
 
   return requirements;

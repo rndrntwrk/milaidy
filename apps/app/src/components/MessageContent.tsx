@@ -416,7 +416,6 @@ function UiSpecBlock({ spec, raw }: { spec: UiSpec; raw: string }) {
 }
 
 function ActionEnvelopeBlock({ envelope }: { envelope: Five55ActionEnvelope }) {
-  const { setTab } = useApp();
   const tone = envelope.ok
     ? "border-ok/30 bg-ok/5"
     : "border-danger/35 bg-danger/5";
@@ -443,8 +442,10 @@ function ActionEnvelopeBlock({ envelope }: { envelope: Five55ActionEnvelope }) {
         <button
           type="button"
           className="px-2 py-1 text-[10px] border border-border rounded bg-card text-muted hover:border-accent hover:text-accent shrink-0"
-          onClick={() => setTab("actions")}
-          title="Open Actions tab"
+          onClick={() => {
+            window.dispatchEvent(new Event("toggle-custom-actions-panel"));
+          }}
+          title="Open Actions drawer"
         >
           Open Actions
         </button>
