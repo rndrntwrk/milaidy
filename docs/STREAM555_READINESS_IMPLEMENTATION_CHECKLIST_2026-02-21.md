@@ -28,7 +28,7 @@ This checklist tracks production-readiness work for the stream/action expansion 
 - [x] P1.1 Add explicit fallback-state notices when stream555 path fails and legacy fallback is used.
 - [x] P1.2 Add metric counters for quick-layer dispatch/success/failure by action name.
 - [x] P1.3 Add bounded retries/backoff policy for transient `429/5xx` action failures in UI flow.
-- [ ] P1.4 Add deployment-level rollback switch for `STREAM555_CONTROL_PLUGIN_ENABLED` without manifest edits.
+- [-] P1.4 Add deployment-level rollback switch for `STREAM555_CONTROL_PLUGIN_ENABLED` without manifest edits.
 
 ### P2 - Operational excellence
 - [ ] P2.1 Publish runbook for incident triage with exact log queries and expected envelopes.
@@ -50,11 +50,14 @@ This checklist tracks production-readiness work for the stream/action expansion 
 - [x] Verified retry helper tests in `apps/app/test/components/quick-layer-retry.test.ts` pass.
 - [x] Verified `/api/agent/autonomy/execute-plan` test coverage for quick-layer metrics counters (dispatch/success/failure).
 - [x] Verified `ChatView` quick-layer paths route through retry wrapper for transient `429/5xx` errors.
-- [ ] Live smoke attempt against production pod failed with `503 {"error":"Autonomy execution pipeline not available"}` on all stream555 plan actions.
+- [x] Captured prior live smoke failure mode (`503 {"error":"Autonomy execution pipeline not available"}`) and reproduced baseline before fallback patch.
 - [x] Added server-side direct-runtime fallback for `/api/agent/autonomy/execute-plan` when autonomy pipeline is unavailable, with test coverage.
+- [x] Added regression coverage so direct-runtime steps now return `success=false` when action handlers return `{ success: false }`, including propagated error text.
+- [ ] Post-deploy live smoke against canonical `STREAM555_*` actions still fails at envelope layer with upstream `401 Invalid agent token` (`STREAM555_AGENT_TOKEN` path), despite runtime step execution succeeding.
 - [ ] Verified live environment smoke pass.
-- [ ] Verified rollback path documented and tested.
+- [ ] Verified rollback path documented and tested end-to-end in runbook.
 
 ## Immediate Next Actions
 - [-] Execute live smoke path for `P0.6` in staging/prod-like env and capture envelope evidence.
-- [ ] Add deploy-time rollback toggle procedure for `STREAM555_CONTROL_PLUGIN_ENABLED` (`P1.4`).
+- [ ] Rotate/fix `STREAM555_AGENT_TOKEN` (secret `production/alice-secrets`) and re-run canonical sequence: `STREAM555_GO_LIVE -> STREAM555_SCREEN_SHARE -> STREAM555_AD_CREATE/TRIGGER -> STREAM555_SEGMENT_OVERRIDE -> STREAM555_EARNINGS_ESTIMATE -> STREAM555_END_LIVE`.
+- [ ] Add deploy-time rollback toggle procedure for `STREAM555_CONTROL_PLUGIN_ENABLED` (`P1.4`) and capture proof run.

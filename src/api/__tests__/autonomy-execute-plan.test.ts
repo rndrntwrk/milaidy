@@ -212,6 +212,51 @@ describe("/api/agent/autonomy/execute-plan", () => {
     expect(payload.results[0].result).toEqual({ success: true, data: { fast: true } });
   });
 
+  it("marks direct runtime step as failed when action returns success=false", async () => {
+    action.handler.mockImplementationOnce(async () => ({
+      success: false,
+      text: JSON.stringify({ ok: false, message: "upstream request failed" }),
+    }));
+    const state = createState(null);
+    const { req, emitBody } = createMockReq(
+      "POST",
+      "/api/agent/autonomy/execute-plan",
+      {
+        plan: {
+          id: "quick-layer-direct-fallback-failure",
+          steps: [{ id: "1", toolName: "TEST_ACTION", params: {} }],
+        },
+        request: { source: "system" },
+      },
+    );
+    const res = createMockRes();
+
+    const handlePromise = __testOnlyHandleRequest(req, res, state);
+    emitBody();
+    await handlePromise;
+
+    expect(res.statusCode).toBe(200);
+    const payload = JSON.parse(res.body) as {
+      ok: boolean;
+      allSucceeded: boolean;
+      failedCount: number;
+      stoppedEarly: boolean;
+      failedStepIndex: number | null;
+      executionMode?: string;
+      results: Array<{ success: boolean; executionMode?: string; error?: string }>;
+    };
+    expect(payload.ok).toBe(false);
+    expect(payload.allSucceeded).toBe(false);
+    expect(payload.failedCount).toBe(1);
+    expect(payload.stoppedEarly).toBe(true);
+    expect(payload.failedStepIndex).toBe(0);
+    expect(payload.executionMode).toBe("direct-runtime");
+    expect(payload.results).toHaveLength(1);
+    expect(payload.results[0].success).toBe(false);
+    expect(payload.results[0].executionMode).toBe("direct-runtime");
+    expect(payload.results[0].error).toContain("upstream request failed");
+  });
+
   it("rejects missing toolName", async () => {
     const state = createState();
     const { req, emitBody } = createMockReq(

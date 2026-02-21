@@ -244,11 +244,50 @@ async function executeRuntimeActionDirect(params: {
   const startedAt = Date.now();
   try {
     const { result, durationMs } = await executeRuntimeAction(params);
+    let success = true;
+    let error: string | undefined;
+
+    // Some actions encode upstream/API failure as `{ success: false, ... }`
+    // without throwing. Surface this as step failure in direct-runtime mode.
+    if (result && typeof result === "object" && "success" in result) {
+      const actionSuccess = (result as { success?: unknown }).success;
+      if (actionSuccess === false) {
+        success = false;
+        const directError =
+          typeof (result as { error?: unknown }).error === "string"
+            ? (result as { error: string }).error
+            : undefined;
+        if (directError) {
+          error = directError;
+        } else {
+          const maybeText =
+            typeof (result as { text?: unknown }).text === "string"
+              ? (result as { text: string }).text
+              : undefined;
+          if (maybeText) {
+            try {
+              const parsed = JSON.parse(maybeText) as { message?: unknown };
+              if (typeof parsed.message === "string" && parsed.message.trim()) {
+                error = parsed.message.trim();
+              } else {
+                error = maybeText;
+              }
+            } catch {
+              error = maybeText;
+            }
+          } else {
+            error = `Action "${params.toolName}" returned success=false`;
+          }
+        }
+      }
+    }
+
     return {
       requestId: params.requestId,
       toolName: params.toolName,
-      success: true,
+      success,
       result,
+      ...(error ? { error } : {}),
       validation: { valid: true, errors: [] },
       durationMs,
       executionMode: "direct-runtime",
