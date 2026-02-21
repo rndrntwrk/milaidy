@@ -28,7 +28,6 @@ import { SaveCommandModal } from "./components/SaveCommandModal";
 import { SettingsView } from "./components/SettingsView";
 import { TerminalPanel } from "./components/TerminalPanel";
 import { useContextMenu } from "./hooks/useContextMenu";
-import { useWhipStream } from "./hooks/useWhipStream";
 
 const CHAT_MOBILE_BREAKPOINT_PX = 1024;
 
@@ -81,28 +80,15 @@ export function App() {
     gameOverlayEnabled,
   } = useApp();
   const contextMenu = useContextMenu();
-  const whipStream = useWhipStream();
-  const startWhipStream = whipStream.start;
 
-  // Auto-start retake.tv WHIP stream + LTCG autonomy when game is active.
-  // Uses LiveKit WHIP (WebRTC) — pure browser streaming, no FFmpeg needed.
-  const streamAutoStarted = useRef(false);
+  // Auto-start LTCG autonomy when game is active.
+  // (retake.tv stream is now auto-started server-side in deferred startup)
+  const autonomyAutoStarted = useRef(false);
   useEffect(() => {
-    if (activeGameViewerUrl && !streamAutoStarted.current) {
-      streamAutoStarted.current = true;
+    if (activeGameViewerUrl && !autonomyAutoStarted.current) {
+      autonomyAutoStarted.current = true;
       const timer = setTimeout(async () => {
         const apiBase = window.__MILADY_API_BASE__ || window.location.origin;
-        try {
-          // Get WHIP URL from backend (registers session + fetches RTMP creds + derives WHIP)
-          const whipRes = await fetch(`${apiBase}/api/retake/whip`);
-          if (whipRes.ok) {
-            const { whipUrl } = await whipRes.json();
-            await startWhipStream(whipUrl);
-            console.log("[App] WHIP stream started via LiveKit");
-          }
-        } catch (err) {
-          console.warn("[App] WHIP stream failed:", err);
-        }
         try {
           // Start LTCG PvP autonomy
           await fetch(`${apiBase}/api/ltcg/autonomy/start`, {
@@ -114,7 +100,7 @@ export function App() {
       }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [activeGameViewerUrl, startWhipStream]);
+  }, [activeGameViewerUrl]);
 
   const [customActionsPanelOpen, setCustomActionsPanelOpen] = useState(false);
   const [customActionsEditorOpen, setCustomActionsEditorOpen] = useState(false);
