@@ -725,6 +725,7 @@ function extractPlugin(mod: PluginModuleShape): Plugin | null {
 /** @internal Exported for testing. */
 export function collectPluginNames(config: MilaidyConfig): Set<string> {
   const shellPluginDisabled = config.features?.shellEnabled === false;
+  const piAiActive = isPiAiEnabledFromEnv();
 
   // Check for explicit allow list first
   const allowList = config.plugins?.allow;
@@ -761,6 +762,13 @@ export function collectPluginNames(config: MilaidyConfig): Set<string> {
       const directProviders = new Set(Object.values(PROVIDER_PLUGIN_MAP));
       directProviders.delete("@elizaos/plugin-elizacloud"); // keep cloud itself
       for (const p of directProviders) {
+        names.delete(p);
+      }
+    }
+    if (piAiActive) {
+      // In pi-ai mode we route text models through the pi handler and avoid
+      // direct provider plugins competing for model dispatch.
+      for (const p of Object.values(PROVIDER_PLUGIN_MAP)) {
         names.delete(p);
       }
     }
@@ -820,6 +828,13 @@ export function collectPluginNames(config: MilaidyConfig): Set<string> {
     }
   }
 
+  if (piAiActive) {
+    // Enforce deterministic routing through pi-ai for OAuth-backed model calls.
+    for (const p of Object.values(PROVIDER_PLUGIN_MAP)) {
+      pluginsToLoad.delete(p);
+    }
+  }
+
   // Optional feature plugins from config.plugins.entries
   const pluginsConfig = config.plugins as
     | Record<string, Record<string, unknown>>
@@ -874,6 +889,13 @@ export function collectPluginNames(config: MilaidyConfig): Set<string> {
       if (record && typeof record === "object") {
         pluginsToLoad.add(normalizePluginPackageName(packageName));
       }
+    }
+  }
+
+  if (piAiActive) {
+    // Final guard in case optional/user plugins re-added direct providers.
+    for (const p of Object.values(PROVIDER_PLUGIN_MAP)) {
+      pluginsToLoad.delete(p);
     }
   }
 

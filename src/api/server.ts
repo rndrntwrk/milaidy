@@ -3165,6 +3165,31 @@ function toUiSubscriptionProvider(
   return provider === "openai-codex" ? "openai-subscription" : provider;
 }
 
+function isTruthyConfigFlag(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes";
+}
+
+async function restoreOpenAiSubscriptionPiAiModeFromCredentials(
+  config: MilaidyConfig,
+): Promise<boolean> {
+  try {
+    const { getSubscriptionStatus } = await import("../auth/index.js");
+    const status = await getSubscriptionStatus();
+    const openAiCodex = status.find((entry) => entry.provider === "openai-codex");
+    if (!(openAiCodex?.configured && openAiCodex.valid)) return false;
+    enableOpenAiSubscriptionPiAiMode(config);
+    clearInjectedOpenAiSubscriptionApiKey(config);
+    return true;
+  } catch (err) {
+    logger.debug(
+      `[milaidy-api] Failed to reconcile OpenAI subscription mode: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return false;
+  }
+}
+
 function clearSubscriptionProviderState(
   provider: CanonicalSubscriptionProvider,
   config: MilaidyConfig,
@@ -5881,6 +5906,9 @@ async function handleRequest(
         "anthropic/claude-sonnet-4.5";
     }
 
+    const providerFieldProvided = typeof body.provider === "string";
+    const providerId = providerFieldProvided ? String(body.provider).trim() : "";
+
     // ── Local LLM provider ────────────────────────────────────────────────
     // Also supports pi-ai (reads credentials from ~/.pi/agent/auth.json and
     // subscription OAuth credentials from Milaidy secure storage).
@@ -5890,10 +5918,12 @@ async function handleRequest(
       const envCfg = config.env as Record<string, unknown>;
       const vars = (envCfg.vars ?? {}) as Record<string, string>;
 
-      const providerId = typeof body.provider === "string" ? body.provider : "";
       const wantsPiAi =
         runMode === "local" &&
         (providerId === "pi-ai" || providerId === "openai-subscription");
+      const piAiAlreadyEnabled =
+        isTruthyConfigFlag(vars.MILAIDY_USE_PI_AI) ||
+        isTruthyConfigFlag(process.env.MILAIDY_USE_PI_AI);
 
       if (wantsPiAi) {
         vars.MILAIDY_USE_PI_AI = "1";
@@ -5935,9 +5965,14 @@ async function handleRequest(
         ) {
           modelCfg.piAiSmall = OPENAI_SUBSCRIPTION_PI_SMALL_DEFAULT;
         }
-      } else {
+      } else if (runMode !== "local" || providerFieldProvided) {
         delete vars.MILAIDY_USE_PI_AI;
         delete process.env.MILAIDY_USE_PI_AI;
+      } else if (piAiAlreadyEnabled) {
+        // Preserve active pi-ai mode when settings are saved without an explicit
+        // provider selection (common in partial updates from the Settings UI).
+        vars.MILAIDY_USE_PI_AI = "1";
+        process.env.MILAIDY_USE_PI_AI = "1";
       }
 
       // Persist vars back onto config.env
@@ -5972,6 +6007,31 @@ async function handleRequest(
       logger.info(
         `[milaidy-api] Subscription provider selected: ${body.provider} — complete OAuth via /api/subscription/ endpoints`,
       );
+    }
+
+    const selectedSubscriptionProvider = toCanonicalSubscriptionProvider(
+      (
+        config.agents?.defaults as Record<string, unknown> | undefined
+      )?.subscriptionProvider as string | undefined,
+    );
+    const providerExplicitlyNonPiAi =
+      providerFieldProvided &&
+      providerId.length > 0 &&
+      providerId !== "pi-ai" &&
+      providerId !== "openai-subscription";
+    if (
+      runMode === "local" &&
+      !providerExplicitlyNonPiAi &&
+      selectedSubscriptionProvider !== "anthropic-subscription"
+    ) {
+      const restored = await restoreOpenAiSubscriptionPiAiModeFromCredentials(
+        config,
+      );
+      if (restored) {
+        logger.info(
+          "[milaidy-api] Restored OpenAI subscription pi-ai mode from stored credentials",
+        );
+      }
     }
 
     // ── Connectors (Telegram, Discord, WhatsApp, Twilio, Blooio) ────────
@@ -10157,6 +10217,18 @@ async function handleRequest(
     }
 
     safeMerge(state.config as Record<string, unknown>, filtered);
+
+    const selectedSubscriptionProvider = toCanonicalSubscriptionProvider(
+      (
+        state.config.agents?.defaults as Record<string, unknown> | undefined
+      )?.subscriptionProvider as string | undefined,
+    );
+    if (
+      state.config.cloud?.enabled !== true &&
+      selectedSubscriptionProvider !== "anthropic-subscription"
+    ) {
+      await restoreOpenAiSubscriptionPiAiModeFromCredentials(state.config);
+    }
 
     // If the client updated env vars, synchronise them into process.env so
     // subsequent hot-restarts see the latest values (loadMilaidyConfig()
