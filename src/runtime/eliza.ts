@@ -94,6 +94,7 @@ import { createFive55BattlesPlugin } from "../plugins/five55-battles/index.js";
 import { createFive55AdminPlugin } from "../plugins/five55-admin/index.js";
 import { createFive55SocialPlugin } from "../plugins/five55-social/index.js";
 import { createFive55RewardsPlugin } from "../plugins/five55-rewards/index.js";
+import { createFive55GithubPlugin } from "../plugins/five55-github/index.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -2836,6 +2837,21 @@ export async function startEliza(
     return false;
   };
 
+  const isFive55GithubPluginEnabled = (): boolean => {
+    const raw = process.env.FIVE55_GITHUB_PLUGIN_ENABLED?.trim().toLowerCase();
+    if (raw) {
+      if (["1", "true", "on", "yes"].includes(raw)) return true;
+      if (["0", "false", "off", "no"].includes(raw)) return false;
+      logger.warn(
+        `[milaidy] Unrecognized FIVE55_GITHUB_PLUGIN_ENABLED="${process.env.FIVE55_GITHUB_PLUGIN_ENABLED}"; expected true/false. Falling back to token-based enablement.`,
+      );
+    }
+    return Boolean(
+      process.env.GITHUB_API_TOKEN?.trim() ||
+        process.env.ALICE_GH_TOKEN?.trim(),
+    );
+  };
+
   const five55SurfacePlugins: Plugin[] = [
     ...(isFive55PluginEnabled("SWAP_PLUGIN_ENABLED")
       ? [createSwapPlugin()]
@@ -2870,6 +2886,7 @@ export async function startEliza(
     ...(isFive55PluginEnabled("FIVE55_REWARDS_PLUGIN_ENABLED")
       ? [createFive55RewardsPlugin()]
       : []),
+    ...(isFive55GithubPluginEnabled() ? [createFive55GithubPlugin()] : []),
   ];
 
   // 6. Resolve and load plugins
@@ -3573,6 +3590,9 @@ export async function startEliza(
               : []),
             ...(isFive55PluginEnabled("FIVE55_REWARDS_PLUGIN_ENABLED")
               ? [createFive55RewardsPlugin()]
+              : []),
+            ...(isFive55GithubPluginEnabled()
+              ? [createFive55GithubPlugin()]
               : []),
           ];
           const newRuntime = new AgentRuntime({
