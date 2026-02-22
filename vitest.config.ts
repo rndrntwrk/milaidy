@@ -32,6 +32,7 @@ export default defineConfig({
     include: [
       "src/**/*.test.ts",
       "scripts/**/*.test.ts",
+      "apps/**/*.test.ts",
       "apps/**/*.test.tsx",
       "apps/app/test/app/lifecycle-lock.test.ts",
       "apps/app/test/app/api-client-timeout.test.ts",
