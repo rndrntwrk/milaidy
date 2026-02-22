@@ -13,9 +13,13 @@ import {
   executeApiAction,
   readParam,
 } from "../five55-shared/action-kit.js";
+import {
+  describeAgentAuthSource,
+  isAgentAuthConfigured,
+  resolveAgentBearer,
+} from "../five55-shared/agent-auth.js";
 
 const STREAM555_BASE_ENV = "STREAM555_BASE_URL";
-const STREAM555_TOKEN_ENV = "STREAM555_AGENT_TOKEN";
 const STREAM_SESSION_ENV = "STREAM_SESSION_ID";
 const STREAM555_SESSION_ENV = "STREAM555_DEFAULT_SESSION_ID";
 
@@ -34,15 +38,8 @@ function resolveBaseUrl(): string {
   return base;
 }
 
-function resolveAgentToken(): string {
-  const token =
-    trimEnv(STREAM555_TOKEN_ENV) ?? trimEnv("STREAM_API_BEARER_TOKEN");
-  if (!token) {
-    throw new Error(
-      `${STREAM555_TOKEN_ENV} (or STREAM_API_BEARER_TOKEN) is required`,
-    );
-  }
-  return token;
+async function resolveAgentToken(baseUrl: string): Promise<string> {
+  return resolveAgentBearer(baseUrl);
 }
 
 function parseCsvList(value: string | undefined): string[] | undefined {
@@ -204,16 +201,14 @@ const stream555ControlProvider: Provider = {
     _state: State,
   ): Promise<ProviderResult> {
     const configured = Boolean(trimEnv(STREAM555_BASE_ENV));
-    const hasToken = Boolean(
-      trimEnv(STREAM555_TOKEN_ENV) ?? trimEnv("STREAM_API_BEARER_TOKEN"),
-    );
+    const hasToken = isAgentAuthConfigured();
     return {
       text: [
         "## 555stream Control Surface",
         "",
         "Actions: STREAM555_GO_LIVE, STREAM555_GO_LIVE_SEGMENTS, STREAM555_SEGMENT_STATE, STREAM555_SCREEN_SHARE, STREAM555_END_LIVE, STREAM555_AD_CREATE, STREAM555_AD_TRIGGER, STREAM555_AD_DISMISS, STREAM555_RADIO_CONTROL, STREAM555_GUEST_INVITE, STREAM555_SCENE_SET, STREAM555_PIP_ENABLE, STREAM555_SEGMENT_OVERRIDE, STREAM555_EARNINGS_ESTIMATE",
         `Base URL configured: ${configured ? "yes" : "no"} (${STREAM555_BASE_ENV})`,
-        `Agent token configured: ${hasToken ? "yes" : "no"} (${STREAM555_TOKEN_ENV}|STREAM_API_BEARER_TOKEN)`,
+        `Agent auth configured: ${hasToken ? "yes" : "no"} (${describeAgentAuthSource()})`,
       ].join("\n"),
     };
   },
@@ -237,7 +232,7 @@ const goLiveAction: Action = {
       const scene = readParam(options as HandlerOptions | undefined, "scene") || "default";
 
       const base = resolveBaseUrl();
-      const token = resolveAgentToken();
+      const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
 
       return executeApiAction({
@@ -346,7 +341,7 @@ const goLiveSegmentsAction: Action = {
       }
 
       const base = resolveBaseUrl();
-      const token = resolveAgentToken();
+      const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
 
       return executeApiAction({
@@ -400,7 +395,7 @@ const segmentStateAction: Action = {
         "sessionId",
       );
       const base = resolveBaseUrl();
-      const token = resolveAgentToken();
+      const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
       const response = await fetchJson(
         "GET",
@@ -454,7 +449,7 @@ const screenShareAction: Action = {
         readParam(options as HandlerOptions | undefined, "sceneId") || "active-pip";
 
       const base = resolveBaseUrl();
-      const token = resolveAgentToken();
+      const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
 
       return executeApiAction({
@@ -501,7 +496,7 @@ const endLiveAction: Action = {
         "sessionId",
       );
       const base = resolveBaseUrl();
-      const token = resolveAgentToken();
+      const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
 
       return executeApiAction({
@@ -552,7 +547,7 @@ const adsCreateAction: Action = {
       const durationMs = durationMsRaw ? Number.parseInt(durationMsRaw, 10) : undefined;
 
       const base = resolveBaseUrl();
-      const token = resolveAgentToken();
+      const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
 
       return executeApiAction({
@@ -607,7 +602,7 @@ const adsTriggerAction: Action = {
       );
       const durationMs = durationMsRaw ? Number.parseInt(durationMsRaw, 10) : undefined;
       const base = resolveBaseUrl();
-      const token = resolveAgentToken();
+      const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
 
       return executeApiAction({
@@ -647,7 +642,7 @@ const adsDismissAction: Action = {
         "sessionId",
       );
       const base = resolveBaseUrl();
-      const token = resolveAgentToken();
+      const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
 
       return executeApiAction({
@@ -704,7 +699,7 @@ const radioControlAction: Action = {
       if (background) radioPayload.backgroundId = background;
 
       const base = resolveBaseUrl();
-      const token = resolveAgentToken();
+      const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
 
       return executeApiAction({
@@ -763,7 +758,7 @@ const guestInviteAction: Action = {
         : undefined;
 
       const base = resolveBaseUrl();
-      const token = resolveAgentToken();
+      const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
 
       return executeApiAction({
@@ -809,7 +804,7 @@ const sceneSetAction: Action = {
       );
 
       const base = resolveBaseUrl();
-      const token = resolveAgentToken();
+      const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
 
       return executeApiAction({
@@ -851,7 +846,7 @@ const pipEnableAction: Action = {
       const pipScene =
         readParam(options as HandlerOptions | undefined, "sceneId") || "active-pip";
       const base = resolveBaseUrl();
-      const token = resolveAgentToken();
+      const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
 
       return executeApiAction({
@@ -899,7 +894,7 @@ const segmentOverrideAction: Action = {
       );
 
       const base = resolveBaseUrl();
-      const token = resolveAgentToken();
+      const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
 
       return executeApiAction({
@@ -953,7 +948,7 @@ const earningsEstimateAction: Action = {
       const limit = limitRaw ? Number.parseInt(limitRaw, 10) : 5;
       const poolSize = poolSizeRaw ? Number.parseInt(poolSizeRaw, 10) : 30;
       const base = resolveBaseUrl();
-      const token = resolveAgentToken();
+      const token = await resolveAgentToken(base);
 
       return executeApiAction({
         module: "stream555.control",

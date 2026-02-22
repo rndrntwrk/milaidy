@@ -22,11 +22,18 @@ import {
   recordActionLifecycleEvent,
   readParam,
 } from "../five55-shared/action-kit.js";
+import {
+  STREAM555_AGENT_API_KEY_ENV,
+  STREAM555_AGENT_TOKEN_ENV,
+  STREAM_API_BEARER_TOKEN_ENV,
+  describeAgentAuthSource,
+  isAgentAuthConfigured,
+  resolveAgentBearer,
+} from "../five55-shared/agent-auth.js";
 
 const CAPABILITY_POLICY = createFive55CapabilityPolicy();
 const STREAM_API_ENV = "STREAM_API_URL";
 const STREAM555_BASE_ENV = "STREAM555_BASE_URL";
-const STREAM555_TOKEN_ENV = "STREAM555_AGENT_TOKEN";
 const STREAM555_SESSION_ENV = "STREAM555_DEFAULT_SESSION_ID";
 const STREAM_SESSION_ENV = "STREAM_SESSION_ID";
 const STREAM_DIALECT_ENV = "STREAM_API_DIALECT";
@@ -204,14 +211,14 @@ function resolveStreamDialect(): StreamDialect {
   if (explicit === "five55-v1" || explicit === "v1") {
     return "five55-v1";
   }
-  if (trimEnv(STREAM555_BASE_ENV) && trimEnv(STREAM555_TOKEN_ENV)) {
+  if (trimEnv(STREAM555_BASE_ENV) && isAgentAuthConfigured()) {
     return "agent-v1";
   }
   return "five55-v1";
 }
 
-function resolveAgentToken(): string | undefined {
-  return trimEnv(STREAM555_TOKEN_ENV) ?? trimEnv("STREAM_API_BEARER_TOKEN");
+function getAgentAuthRequiredMessage(purpose: string): string {
+  return `${STREAM555_AGENT_API_KEY_ENV} or ${STREAM555_AGENT_TOKEN_ENV} (or ${STREAM_API_BEARER_TOKEN_ENV}) is required for ${purpose}`;
 }
 
 async function fetchJson(
@@ -410,20 +417,22 @@ async function executeAgentStreamStatus(
   });
 
   const base = resolveStreamBase();
-  const token = resolveAgentToken();
-  if (!token) {
+  let token: string;
+  try {
+    token = await resolveAgentBearer(base);
+  } catch (_err) {
     const endedAt = new Date().toISOString();
     emitStreamLifecycle(lifecycle, "failed", {
       status: 401,
       code: "E_UPSTREAM_UNAUTHORIZED",
-      message: `${STREAM555_TOKEN_ENV} (or STREAM_API_BEARER_TOKEN) is required for agent-v1 stream control`,
+      message: getAgentAuthRequiredMessage("agent-v1 stream control"),
       endedAt,
     });
     return actionFailure(
       "STREAM_STATUS",
       "E_UPSTREAM_UNAUTHORIZED",
       401,
-      `${STREAM555_TOKEN_ENV} (or STREAM_API_BEARER_TOKEN) is required for agent-v1 stream control`,
+      getAgentAuthRequiredMessage("agent-v1 stream control"),
       undefined,
       buildStreamTrace(lifecycle, endedAt),
     );
@@ -538,20 +547,22 @@ async function executeAgentStreamControl(
   });
 
   const base = resolveStreamBase();
-  const token = resolveAgentToken();
-  if (!token) {
+  let token: string;
+  try {
+    token = await resolveAgentBearer(base);
+  } catch (_err) {
     const endedAt = new Date().toISOString();
     emitStreamLifecycle(lifecycle, "failed", {
       status: 401,
       code: "E_UPSTREAM_UNAUTHORIZED",
-      message: `${STREAM555_TOKEN_ENV} (or STREAM_API_BEARER_TOKEN) is required for agent-v1 stream control`,
+      message: getAgentAuthRequiredMessage("agent-v1 stream control"),
       endedAt,
     });
     return actionFailure(
       "STREAM_CONTROL",
       "E_UPSTREAM_UNAUTHORIZED",
       401,
-      `${STREAM555_TOKEN_ENV} (or STREAM_API_BEARER_TOKEN) is required for agent-v1 stream control`,
+      getAgentAuthRequiredMessage("agent-v1 stream control"),
       undefined,
       buildStreamTrace(lifecycle, endedAt),
     );
@@ -779,20 +790,22 @@ async function executeAgentStreamSchedule(
   });
 
   const base = resolveStreamBase();
-  const token = resolveAgentToken();
-  if (!token) {
+  let token: string;
+  try {
+    token = await resolveAgentBearer(base);
+  } catch (_err) {
     const endedAt = new Date().toISOString();
     emitStreamLifecycle(lifecycle, "failed", {
       status: 401,
       code: "E_UPSTREAM_UNAUTHORIZED",
-      message: `${STREAM555_TOKEN_ENV} (or STREAM_API_BEARER_TOKEN) is required for agent-v1 stream scheduling`,
+      message: getAgentAuthRequiredMessage("agent-v1 stream scheduling"),
       endedAt,
     });
     return actionFailure(
       "STREAM_SCHEDULE",
       "E_UPSTREAM_UNAUTHORIZED",
       401,
-      `${STREAM555_TOKEN_ENV} (or STREAM_API_BEARER_TOKEN) is required for agent-v1 stream scheduling`,
+      getAgentAuthRequiredMessage("agent-v1 stream scheduling"),
       undefined,
       buildStreamTrace(lifecycle, endedAt),
     );
@@ -897,11 +910,12 @@ const streamProvider: Provider = {
     _message: Memory,
     _state: State,
   ): Promise<ProviderResult> {
-    const configured = Boolean(
-      trimEnv(STREAM_API_ENV) ?? trimEnv(STREAM555_BASE_ENV),
-    );
-    const configuredBase = resolveConfiguredBaseKey();
     const dialect = resolveStreamDialect();
+    const configuredBase = resolveConfiguredBaseKey();
+    const configured =
+      dialect === "agent-v1"
+        ? Boolean(trimEnv(STREAM555_BASE_ENV) && isAgentAuthConfigured())
+        : Boolean(trimEnv(STREAM_API_ENV) ?? trimEnv(STREAM555_BASE_ENV));
     return {
       text: [
         "## Stream Surface",
@@ -909,6 +923,7 @@ const streamProvider: Provider = {
         "Use stream actions to inspect and control live stream operations.",
         `API configured: ${configured ? "yes" : "no"} (${configuredBase})`,
         `Dialect: ${dialect}`,
+        `Agent auth: ${describeAgentAuthSource()}`,
         `Session env: ${trimEnv(STREAM_SESSION_ENV) ?? trimEnv(STREAM555_SESSION_ENV) ?? "auto-create"}`,
         "Actions: STREAM_STATUS, STREAM_CONTROL, STREAM_SCHEDULE, STREAM_ACTION_TIMELINE",
       ].join("\n"),

@@ -6,6 +6,9 @@ type EnvSnapshot = Record<string, string | undefined>;
 const ENV_KEYS = [
   "STREAM555_BASE_URL",
   "STREAM555_AGENT_TOKEN",
+  "STREAM555_AGENT_API_KEY",
+  "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
+  "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
   "STREAM_API_BEARER_TOKEN",
 ] as const;
 
@@ -62,6 +65,9 @@ describe("stream555-control plugin actions", () => {
     envBefore = snapshotEnv();
     process.env.STREAM555_BASE_URL = "http://control-plane:3000";
     process.env.STREAM555_AGENT_TOKEN = "test-token";
+    delete process.env.STREAM555_AGENT_API_KEY;
+    delete process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT;
+    delete process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS;
     delete process.env.STREAM_API_BEARER_TOKEN;
   });
 

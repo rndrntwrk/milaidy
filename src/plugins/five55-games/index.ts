@@ -17,6 +17,11 @@ import {
   executeApiAction,
   readParam,
 } from "../five55-shared/action-kit.js";
+import {
+  describeAgentAuthSource,
+  isAgentAuthConfigured,
+  resolveAgentBearer,
+} from "../five55-shared/agent-auth.js";
 
 const CAPABILITY_POLICY = createFive55CapabilityPolicy();
 const API_ENV = "FIVE55_GAMES_API_URL";
@@ -25,7 +30,6 @@ const LOCAL_API_URL_ENV = "MILAIDY_API_URL";
 const LOCAL_PORT_ENV = "MILAIDY_PORT";
 const LOCAL_TOKEN_ENV = "MILAIDY_API_TOKEN";
 const STREAM555_BASE_ENV = "STREAM555_BASE_URL";
-const STREAM555_TOKEN_ENV = "STREAM555_AGENT_TOKEN";
 const STREAM_SESSION_ENV = "STREAM_SESSION_ID";
 const STREAM555_SESSION_ENV = "STREAM555_DEFAULT_SESSION_ID";
 
@@ -45,7 +49,7 @@ function resolveGamesDialect(): GamesDialect {
   if (explicit === "milaidy-proxy" || explicit === "proxy") {
     return "milaidy-proxy";
   }
-  if (trimEnv(STREAM555_BASE_ENV) && trimEnv(STREAM555_TOKEN_ENV)) {
+  if (trimEnv(STREAM555_BASE_ENV) && isAgentAuthConfigured()) {
     return "agent-v1";
   }
   return trimEnv(API_ENV) ? "five55-web" : "milaidy-proxy";
@@ -92,10 +96,6 @@ function resolvePlayEndpoint(
     return `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/play`;
   }
   return dialect === "five55-web" ? "/api/games/play" : "/api/five55/games/play";
-}
-
-function resolveAgentToken(): string | undefined {
-  return trimEnv(STREAM555_TOKEN_ENV) ?? trimEnv("STREAM_API_BEARER_TOKEN");
 }
 
 async function fetchJson(
@@ -191,14 +191,14 @@ const gamesProvider: Provider = {
       dialect === "five55-web"
         ? Boolean(trimEnv(API_ENV))
         : dialect === "agent-v1"
-          ? Boolean(trimEnv(STREAM555_BASE_ENV) && resolveAgentToken())
-        : true;
+          ? Boolean(trimEnv(STREAM555_BASE_ENV) && isAgentAuthConfigured())
+          : true;
     return {
       text: [
         "## Five55 Games Surface",
         "",
         "Actions: FIVE55_GAMES_CATALOG, FIVE55_GAMES_PLAY",
-        `API configured: ${configured ? "yes" : "no"} (${dialect === "five55-web" ? API_ENV : dialect === "agent-v1" ? `${STREAM555_BASE_ENV}|${STREAM555_TOKEN_ENV}` : `${LOCAL_API_URL_ENV}|${LOCAL_PORT_ENV}`})`,
+        `API configured: ${configured ? "yes" : "no"} (${dialect === "five55-web" ? API_ENV : dialect === "agent-v1" ? `${STREAM555_BASE_ENV}|${describeAgentAuthSource()}` : `${LOCAL_API_URL_ENV}|${LOCAL_PORT_ENV}`})`,
         `Dialect: ${dialect}`,
         ...(dialect === "agent-v1"
           ? [`Session env: ${trimEnv(STREAM_SESSION_ENV) ?? trimEnv(STREAM555_SESSION_ENV) ?? "auto-create"}`]
@@ -227,13 +227,8 @@ const catalogAction: Action = {
       );
 
       if (dialect === "agent-v1") {
-        const token = resolveAgentToken();
-        if (!token) {
-          throw new Error(
-            `${STREAM555_TOKEN_ENV} (or STREAM_API_BEARER_TOKEN) is not configured`,
-          );
-        }
         const base = resolveGamesBase(dialect);
+        const token = await resolveAgentBearer(base);
         const sessionId = await ensureAgentSessionId(
           base,
           token,
@@ -357,13 +352,8 @@ const playAction: Action = {
       );
 
       if (dialect === "agent-v1") {
-        const token = resolveAgentToken();
-        if (!token) {
-          throw new Error(
-            `${STREAM555_TOKEN_ENV} (or STREAM_API_BEARER_TOKEN) is not configured`,
-          );
-        }
         const base = resolveGamesBase(dialect);
+        const token = await resolveAgentBearer(base);
         const sessionId = await ensureAgentSessionId(
           base,
           token,

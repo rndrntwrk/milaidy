@@ -1247,8 +1247,11 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             "Stream control and observability bridge for live operations.",
           enabled: false,
           configured: Boolean(
-            process.env.STREAM_API_URL?.trim() ||
-              process.env.STREAM555_BASE_URL?.trim(),
+            (process.env.STREAM_API_URL?.trim() ||
+              process.env.STREAM555_BASE_URL?.trim()) &&
+              (process.env.STREAM555_AGENT_API_KEY?.trim() ||
+                process.env.STREAM555_AGENT_TOKEN?.trim() ||
+                process.env.STREAM_API_BEARER_TOKEN?.trim()),
           ),
           envKey: "STREAM_API_URL",
           category: "feature",
@@ -1257,6 +1260,9 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             "STREAM_API_URL",
             "STREAM555_BASE_URL",
             "STREAM555_AGENT_TOKEN",
+            "STREAM555_AGENT_API_KEY",
+            "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
+            "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
             "STREAM555_DEFAULT_SESSION_ID",
             "STREAM_SESSION_ID",
             "STREAM_API_DIALECT",
@@ -1295,6 +1301,44 @@ function discoverPluginsFromManifest(): PluginEntry[] {
                 ? maskValue(process.env.STREAM555_AGENT_TOKEN)
                 : null,
               isSet: Boolean(process.env.STREAM555_AGENT_TOKEN?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_API_KEY",
+              type: "string",
+              description:
+                "Long-lived agent API key exchanged for short-lived JWTs at runtime",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_AGENT_API_KEY
+                ? maskValue(process.env.STREAM555_AGENT_API_KEY)
+                : null,
+              isSet: Boolean(process.env.STREAM555_AGENT_API_KEY?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
+              type: "string",
+              description:
+                "Optional token exchange endpoint path (default /api/agent/v1/auth/token/exchange)",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
+              type: "number",
+              description:
+                "Token refresh buffer for exchanged JWTs (seconds, default 300)",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS?.trim(),
+              ),
             },
             {
               key: "STREAM555_DEFAULT_SESSION_ID",
@@ -12356,13 +12400,87 @@ async function handleRequest(
       error(res, "STREAM555_BASE_URL (or STREAM_API_URL) is not configured", 503);
       return;
     }
-    const upstreamToken =
+
+    const parseJsonText = (raw: string): unknown => {
+      try {
+        return raw ? (JSON.parse(raw) as unknown) : null;
+      } catch {
+        return null;
+      }
+    };
+    const getUpstreamErrorMessage = (parsed: unknown, fallback: string): string => {
+      if (parsed && typeof parsed === "object" && "error" in parsed) {
+        const parsedRecord = parsed as { error?: unknown };
+        if (typeof parsedRecord.error === "string" && parsedRecord.error.trim()) {
+          return parsedRecord.error;
+        }
+      }
+      return fallback;
+    };
+
+    let upstreamToken =
       process.env.STREAM555_AGENT_TOKEN?.trim() ||
-      process.env.STREAM_API_BEARER_TOKEN?.trim();
+      process.env.STREAM_API_BEARER_TOKEN?.trim() ||
+      "";
+    const upstreamApiKey = process.env.STREAM555_AGENT_API_KEY?.trim();
+
+    if (!upstreamToken && upstreamApiKey) {
+      let exchangeUrl: URL;
+      try {
+        exchangeUrl = new URL(
+          process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT?.trim() ||
+            "/api/agent/v1/auth/token/exchange",
+          upstreamBase,
+        );
+      } catch {
+        error(res, "Invalid STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT", 500);
+        return;
+      }
+
+      try {
+        const exchangeRes = await fetch(exchangeUrl.toString(), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({ apiKey: upstreamApiKey }),
+        });
+        const exchangeRaw = await exchangeRes.text();
+        const exchangeParsed = parseJsonText(exchangeRaw);
+        if (!exchangeRes.ok) {
+          error(
+            res,
+            `Token exchange failed: ${getUpstreamErrorMessage(exchangeParsed, exchangeRaw || "upstream error")}`,
+            exchangeRes.status,
+          );
+          return;
+        }
+        if (
+          !exchangeParsed ||
+          typeof exchangeParsed !== "object" ||
+          Array.isArray(exchangeParsed) ||
+          typeof (exchangeParsed as { token?: unknown }).token !== "string" ||
+          !(exchangeParsed as { token: string }).token.trim()
+        ) {
+          error(res, "Invalid token exchange payload", 502);
+          return;
+        }
+        upstreamToken = (exchangeParsed as { token: string }).token;
+      } catch (err) {
+        error(
+          res,
+          `Failed to exchange agent token: ${err instanceof Error ? err.message : String(err)}`,
+          502,
+        );
+        return;
+      }
+    }
+
     if (!upstreamToken) {
       error(
         res,
-        "STREAM555_AGENT_TOKEN (or STREAM_API_BEARER_TOKEN) is required for autonomy preview",
+        "STREAM555_AGENT_API_KEY or STREAM555_AGENT_TOKEN (or STREAM_API_BEARER_TOKEN) is required for autonomy preview",
         503,
       );
       return;
@@ -12386,23 +12504,6 @@ async function handleRequest(
     estimateUrl.searchParams.set("avatarRuntime", avatarRuntime);
     estimateUrl.searchParams.set("speechSeconds", String(speechSeconds));
     estimateUrl.searchParams.set("avatarMinutes", String(avatarMinutes));
-
-    const parseJsonText = (raw: string): unknown => {
-      try {
-        return raw ? (JSON.parse(raw) as unknown) : null;
-      } catch {
-        return null;
-      }
-    };
-    const getUpstreamErrorMessage = (parsed: unknown, fallback: string): string => {
-      if (parsed && typeof parsed === "object" && "error" in parsed) {
-        const parsedRecord = parsed as { error?: unknown };
-        if (typeof parsedRecord.error === "string" && parsedRecord.error.trim()) {
-          return parsedRecord.error;
-        }
-      }
-      return fallback;
-    };
 
     let estimatePayload: Record<string, unknown>;
     try {
