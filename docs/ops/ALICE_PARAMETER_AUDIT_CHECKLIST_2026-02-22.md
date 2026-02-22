@@ -7,6 +7,8 @@ Do not mark a line complete without attaching objective evidence (command output
 
 1. `P0-1` code remediation implemented in `src/runtime/eliza.ts` with test coverage in `src/runtime/eliza.test.ts`.
 2. Deployment verification for `P0-1` still pending (must confirm plugin-failure count drops in live logs).
+3. Trusted-admin runtime verification runbook added:
+   - `docs/ops/ALICE_TRUSTED_ADMIN_RUNTIME_CHECKLIST_2026-02-22.md`
 
 ## P0 Blockers (Security + Runtime Integrity)
 
