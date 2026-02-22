@@ -2882,6 +2882,199 @@ function parseBoundedLimit(rawLimit: string | null, fallback = 15): number {
   return Math.min(Math.max(parsed, 1), 50);
 }
 
+interface GitHubRepoListIntent {
+  owner: string | null;
+  sinceDays: number | null;
+  limit: number | null;
+  includePrivate: boolean | null;
+}
+
+function parseBooleanFlag(raw: string | undefined): boolean | null {
+  if (!raw) return null;
+  const value = raw.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(value)) return true;
+  if (["0", "false", "no", "off"].includes(value)) return false;
+  return null;
+}
+
+function parseGitHubRepoListIntent(prompt: string): GitHubRepoListIntent | null {
+  const normalized = prompt.trim();
+  if (!normalized) return null;
+
+  const hasRepoTarget = /\b(repo|repos|repository|repositories)\b/i.test(
+    normalized,
+  );
+  const hasListVerb = /\b(list|show|get|fetch|pull)\b/i.test(normalized);
+  if (!hasRepoTarget || !hasListVerb) return null;
+
+  const owner =
+    normalized.match(
+      /\b(?:owner|org|organization|username|user)\s*[:=]?\s*([A-Za-z0-9_.-]+)\b/i,
+    )?.[1] ?? null;
+
+  const sinceDaysRaw =
+    normalized.match(/\bsinceDays\s*[:=]?\s*(\d{1,4})\b/i)?.[1] ??
+    normalized.match(/\bsince\s*[:=]?\s*(\d{1,4})\b/i)?.[1] ??
+    normalized.match(/\blast\s+(\d{1,4})\s+days?\b/i)?.[1] ??
+    null;
+  const sinceDays = sinceDaysRaw ? Number.parseInt(sinceDaysRaw, 10) : null;
+
+  const limitRaw =
+    normalized.match(/\blimit\s*[:=]?\s*(\d{1,3})\b/i)?.[1] ?? null;
+  const limit = limitRaw ? Number.parseInt(limitRaw, 10) : null;
+
+  const includePrivateRaw =
+    normalized.match(/\bincludePrivate\s*[:=]?\s*(true|false|1|0|yes|no)\b/i)
+      ?.[
+      1
+    ] ??
+    normalized.match(/\bprivate\s*[:=]?\s*(true|false|1|0|yes|no)\b/i)?.[1] ??
+    undefined;
+  const includePrivate = parseBooleanFlag(includePrivateRaw);
+
+  return {
+    owner,
+    sinceDays:
+      sinceDays && Number.isFinite(sinceDays) && sinceDays > 0
+        ? Math.min(sinceDays, 3650)
+        : null,
+    limit:
+      limit && Number.isFinite(limit) && limit > 0 ? Math.min(limit, 100) : null,
+    includePrivate,
+  };
+}
+
+function stringifyJson(value: unknown): string {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function formatGitHubRepoListReply(actionResult: {
+  success: boolean;
+  result?: unknown;
+  error?: string;
+}): string {
+  if (!actionResult.success) {
+    return `GitHub repo fetch failed: ${actionResult.error ?? "unknown error"}`;
+  }
+
+  const resultRecord =
+    actionResult.result && typeof actionResult.result === "object"
+      ? (actionResult.result as Record<string, unknown>)
+      : null;
+
+  const rawText =
+    resultRecord && typeof resultRecord.text === "string"
+      ? resultRecord.text
+      : null;
+
+  if (!rawText) {
+    return "GitHub repo fetch returned no response payload.";
+  }
+
+  let parsedEnvelope: Record<string, unknown> | null = null;
+  try {
+    const parsed: unknown = JSON.parse(rawText);
+    if (parsed && typeof parsed === "object") {
+      parsedEnvelope = parsed as Record<string, unknown>;
+    }
+  } catch {
+    parsedEnvelope = null;
+  }
+
+  if (!parsedEnvelope) return rawText;
+
+  const data =
+    parsedEnvelope.data && typeof parsedEnvelope.data === "object"
+      ? (parsedEnvelope.data as Record<string, unknown>)
+      : null;
+  if (!data) return rawText;
+
+  const repositories = Array.isArray(data.repositories)
+    ? data.repositories
+    : [];
+  const owner =
+    typeof data.owner === "string" && data.owner.trim().length > 0
+      ? data.owner.trim()
+      : "unknown";
+  const sinceDays =
+    typeof data.sinceDays === "number" && Number.isFinite(data.sinceDays)
+      ? data.sinceDays
+      : null;
+  const total =
+    typeof data.total === "number" && Number.isFinite(data.total)
+      ? data.total
+      : repositories.length;
+  const returned =
+    typeof data.returned === "number" && Number.isFinite(data.returned)
+      ? data.returned
+      : repositories.length;
+
+  if (repositories.length === 0) {
+    return sinceDays
+      ? `No repositories found for ${owner} updated in the last ${sinceDays} days.`
+      : `No repositories found for ${owner}.`;
+  }
+
+  const header = sinceDays
+    ? `Found ${returned}/${total} repositories for ${owner} updated in the last ${sinceDays} days:`
+    : `Found ${returned}/${total} repositories for ${owner}:`;
+
+  const lines = repositories.map((entry) => {
+    const repo =
+      entry && typeof entry === "object"
+        ? (entry as Record<string, unknown>)
+        : null;
+    if (!repo) return `- ${stringifyJson(entry)}`;
+    const fullName =
+      typeof repo.fullName === "string" && repo.fullName.trim().length > 0
+        ? repo.fullName.trim()
+        : typeof repo.name === "string" && repo.name.trim().length > 0
+          ? repo.name.trim()
+          : "unknown-repo";
+    const pushedAt =
+      typeof repo.pushedAt === "string" && repo.pushedAt.trim().length > 0
+        ? repo.pushedAt.trim()
+        : null;
+    const updatedAt =
+      typeof repo.updatedAt === "string" && repo.updatedAt.trim().length > 0
+        ? repo.updatedAt.trim()
+        : null;
+    const ts = pushedAt ?? updatedAt ?? "unknown";
+    const visibility = repo.private === true ? "private" : "public";
+    return `- ${fullName} (${visibility}) — ${ts}`;
+  });
+
+  return [header, ...lines].join("\n");
+}
+
+async function tryGitHubRepoListShortcut(params: {
+  runtime: AgentRuntime;
+  prompt: string;
+}): Promise<string | null> {
+  const intent = parseGitHubRepoListIntent(params.prompt);
+  if (!intent) return null;
+
+  const actionResponse = await executeRuntimeActionDirect({
+    runtime: params.runtime,
+    toolName: "FIVE55_GITHUB_LIST_REPOS",
+    requestId: crypto.randomUUID(),
+    parameters: {
+      ...(intent.owner ? { owner: intent.owner } : {}),
+      ...(intent.sinceDays !== null ? { sinceDays: String(intent.sinceDays) } : {}),
+      ...(intent.limit !== null ? { limit: String(intent.limit) } : {}),
+      ...(intent.includePrivate !== null
+        ? { includePrivate: String(intent.includePrivate) }
+        : {}),
+    },
+  });
+
+  return formatGitHubRepoListReply(actionResponse);
+}
+
 // ---------------------------------------------------------------------------
 // Config redaction
 // ---------------------------------------------------------------------------
@@ -11048,6 +11241,25 @@ async function handleRequest(
         },
       });
 
+      const githubShortcutReply = await tryGitHubRepoListShortcut({
+        runtime,
+        prompt,
+      });
+      if (githubShortcutReply) {
+        if (!aborted) {
+          conv.updatedAt = new Date().toISOString();
+          writeSse(res, {
+            type: "done",
+            fullText: githubShortcutReply,
+            agentName: state.agentName,
+            mode,
+            requestedMode,
+            autoEscalated: modeDecision.autoEscalated,
+          });
+        }
+        return;
+      }
+
       const result = await generateChatResponse(
         runtime,
         message,
@@ -11189,6 +11401,22 @@ async function handleRequest(
           channelType: ChannelType.DM,
         },
       });
+
+      const githubShortcutReply = await tryGitHubRepoListShortcut({
+        runtime,
+        prompt,
+      });
+      if (githubShortcutReply) {
+        conv.updatedAt = new Date().toISOString();
+        json(res, {
+          text: githubShortcutReply,
+          agentName: state.agentName,
+          mode,
+          requestedMode,
+          autoEscalated: modeDecision.autoEscalated,
+        });
+        return;
+      }
 
       const result = await generateChatResponse(
         runtime,
@@ -11431,6 +11659,24 @@ async function handleRequest(
         },
       });
 
+      const githubShortcutReply = await tryGitHubRepoListShortcut({
+        runtime,
+        prompt,
+      });
+      if (githubShortcutReply) {
+        if (!aborted) {
+          writeSse(res, {
+            type: "done",
+            fullText: githubShortcutReply,
+            agentName: state.agentName,
+            mode,
+            requestedMode,
+            autoEscalated: modeDecision.autoEscalated,
+          });
+        }
+        return;
+      }
+
       const result = await generateChatResponse(
         runtime,
         message,
@@ -11655,6 +11901,21 @@ async function handleRequest(
           channelType: ChannelType.DM,
         },
       });
+
+      const githubShortcutReply = await tryGitHubRepoListShortcut({
+        runtime,
+        prompt,
+      });
+      if (githubShortcutReply) {
+        json(res, {
+          text: githubShortcutReply,
+          agentName: state.agentName,
+          mode,
+          requestedMode,
+          autoEscalated: modeDecision.autoEscalated,
+        });
+        return;
+      }
 
       const result = await generateChatResponse(
         runtime,
