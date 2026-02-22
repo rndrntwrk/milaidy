@@ -189,6 +189,12 @@ function commandTransport(token: string) {
   };
 }
 
+function buildStopIdempotencyKey(sessionId: string): string {
+  const normalizedSessionId = sessionId.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const nonce = Math.random().toString(36).slice(2, 10);
+  return `stream-stop:${normalizedSessionId}:${Date.now().toString(36)}:${nonce}`;
+}
+
 const stream555ControlProvider: Provider = {
   name: "stream555Control",
   description: "555stream orchestration controls (go-live, ads, radio, guests, scenes)",
@@ -507,7 +513,10 @@ const endLiveAction: Action = {
         requestContract: {},
         responseContract: {},
         successMessage: "end-live requested",
-        transport: commandTransport(token),
+        transport: {
+          ...commandTransport(token),
+          idempotencyKey: buildStopIdempotencyKey(sessionId),
+        },
         context: { sessionId },
       });
     } catch (err) {
