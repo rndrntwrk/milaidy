@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { client, type CustomActionDef } from "../api-client";
+import { useApp } from "../AppContext";
 
 interface CustomActionsPanelProps {
   open: boolean;
@@ -7,21 +8,45 @@ interface CustomActionsPanelProps {
   onOpenEditor: (action?: CustomActionDef | null) => void;
 }
 
+type LayerStatus = "active" | "disabled" | "available";
+type QuickLayerDock = {
+  id: string;
+  label: string;
+  pluginIds: string[];
+};
+
 const HANDLER_TYPE_COLORS: Record<string, string> = {
   http: "bg-blue-500/20 text-blue-400",
   shell: "bg-green-500/20 text-green-400",
   code: "bg-purple-500/20 text-purple-400",
 };
 
+const QUICK_LAYER_DOCK: QuickLayerDock[] = [
+  { id: "stream", label: "Stream", pluginIds: ["stream"] },
+  { id: "go-live", label: "Go Live", pluginIds: ["stream555-control"] },
+  { id: "autonomous-run", label: "Autonomous", pluginIds: ["stream"] },
+  { id: "screen-share", label: "Screen Share", pluginIds: ["stream555-control"] },
+  { id: "ads", label: "Ads", pluginIds: ["stream555-control"] },
+  { id: "invite-guest", label: "Invite Guest", pluginIds: ["stream555-control"] },
+  { id: "radio", label: "Radio", pluginIds: ["stream555-control"] },
+  { id: "pip", label: "PiP", pluginIds: ["stream555-control"] },
+  { id: "reaction-segment", label: "Reaction", pluginIds: ["stream555-control"] },
+  { id: "earnings", label: "Earnings", pluginIds: ["stream555-control"] },
+  { id: "play-games", label: "Play Games", pluginIds: ["five55-games"] },
+  { id: "end-live", label: "End Live", pluginIds: ["stream555-control"] },
+  { id: "swap", label: "Swap", pluginIds: ["swap"] },
+];
+
 export function CustomActionsPanel({
   open,
   onClose,
   onOpenEditor,
 }: CustomActionsPanelProps) {
+  const { plugins, setActionNotice, setTab } = useApp();
   const [actions, setActions] = useState<CustomActionDef[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const loadActions = async () => {
+  const loadActions = useCallback(async () => {
     try {
       setLoading(true);
       const result = await client.listCustomActions();
@@ -31,13 +56,74 @@ export function CustomActionsPanel({
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  const resolvePluginStatus = useCallback(
+    (id: string): LayerStatus => {
+      const needle = id.trim().toLowerCase();
+      const plugin = plugins.find((p) => {
+        const pluginId = p.id.trim().toLowerCase();
+        const pluginName = p.name.trim().toLowerCase();
+        return (
+          pluginId === needle ||
+          pluginId === needle.replace(/^alice-/, "") ||
+          pluginName === needle ||
+          pluginName.includes(needle)
+        );
+      });
+
+      if (!plugin) return "available";
+      if (plugin.isActive === true) return "active";
+      if (plugin.enabled === false) return "disabled";
+      if (plugin.enabled === true && plugin.isActive === false) return "disabled";
+      return "available";
+    },
+    [plugins],
+  );
+
+  const resolveLayerStatus = useCallback(
+    (pluginIds: string[]): LayerStatus => {
+      if (pluginIds.length === 0) return "available";
+      const statuses = pluginIds.map((id) => resolvePluginStatus(id));
+      if (statuses.every((status) => status === "active")) return "active";
+      if (statuses.some((status) => status === "disabled")) return "disabled";
+      return "available";
+    },
+    [resolvePluginStatus],
+  );
+
+  const layerStatuses = useMemo(
+    () =>
+      new Map(
+        QUICK_LAYER_DOCK.map((layer) => [
+          layer.id,
+          resolveLayerStatus(layer.pluginIds),
+        ]),
+      ),
+    [resolveLayerStatus],
+  );
+
+  const triggerDockedLayer = useCallback(
+    (layerId: string, layerLabel: string) => {
+      setTab("chat");
+      setActionNotice(`Running ${layerLabel} from Actions drawer...`, "info", 2200);
+      onClose();
+      window.setTimeout(() => {
+        window.dispatchEvent(
+          new CustomEvent("milaidy:quick-layer:run", {
+            detail: { layerId },
+          }),
+        );
+      }, 120);
+    },
+    [onClose, setActionNotice, setTab],
+  );
 
   useEffect(() => {
     if (open) {
       loadActions();
     }
-  }, [open]);
+  }, [loadActions, open]);
 
   const handleToggleEnabled = async (action: CustomActionDef) => {
     try {
@@ -102,8 +188,40 @@ export function CustomActionsPanel({
             </button>
           </div>
 
+          {/* Default stream/runtime quick actions */}
+          <div className="px-3 pt-3 pb-2 border-b border-border">
+            <div className="text-xs font-semibold text-txt">Studio Quick Actions</div>
+            <div className="text-[11px] text-muted mt-1">
+              Default 555 stream/game controls in the dock.
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {QUICK_LAYER_DOCK.map((layer) => {
+                const status = layerStatuses.get(layer.id) ?? "available";
+                const tone =
+                  status === "active"
+                    ? "border-accent text-accent bg-card"
+                    : status === "disabled"
+                      ? "border-danger/40 text-danger bg-card"
+                      : "border-border text-muted bg-card";
+                return (
+                  <button
+                    key={layer.id}
+                    onClick={() => triggerDockedLayer(layer.id, layer.label)}
+                    className={`px-2 py-1 text-[11px] border rounded transition-all ${tone}`}
+                    title={`${layer.label} (${status})`}
+                  >
+                    {layer.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Action List */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            <div className="text-[11px] text-muted uppercase tracking-wide px-0.5">
+              Custom Actions
+            </div>
             {loading ? (
               <div className="text-center text-muted text-xs py-8">
                 Loading...
