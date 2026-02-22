@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { client, type CustomActionDef } from "../api-client";
 import { useApp } from "../AppContext";
+import { QUICK_LAYER_DOCK } from "./quickLayerCatalog";
 
 interface CustomActionsPanelProps {
   open: boolean;
@@ -9,33 +10,12 @@ interface CustomActionsPanelProps {
 }
 
 type LayerStatus = "active" | "disabled" | "available";
-type QuickLayerDock = {
-  id: string;
-  label: string;
-  pluginIds: string[];
-};
 
 const HANDLER_TYPE_COLORS: Record<string, string> = {
   http: "bg-blue-500/20 text-blue-400",
   shell: "bg-green-500/20 text-green-400",
   code: "bg-purple-500/20 text-purple-400",
 };
-
-const QUICK_LAYER_DOCK: QuickLayerDock[] = [
-  { id: "stream", label: "Stream", pluginIds: ["stream"] },
-  { id: "go-live", label: "Go Live", pluginIds: ["stream555-control"] },
-  { id: "autonomous-run", label: "Autonomous", pluginIds: ["stream"] },
-  { id: "screen-share", label: "Screen Share", pluginIds: ["stream555-control"] },
-  { id: "ads", label: "Ads", pluginIds: ["stream555-control"] },
-  { id: "invite-guest", label: "Invite Guest", pluginIds: ["stream555-control"] },
-  { id: "radio", label: "Radio", pluginIds: ["stream555-control"] },
-  { id: "pip", label: "PiP", pluginIds: ["stream555-control"] },
-  { id: "reaction-segment", label: "Reaction", pluginIds: ["stream555-control"] },
-  { id: "earnings", label: "Earnings", pluginIds: ["stream555-control"] },
-  { id: "play-games", label: "Play Games", pluginIds: ["five55-games"] },
-  { id: "end-live", label: "End Live", pluginIds: ["stream555-control"] },
-  { id: "swap", label: "Swap", pluginIds: ["swap"] },
-];
 
 export function CustomActionsPanel({
   open,

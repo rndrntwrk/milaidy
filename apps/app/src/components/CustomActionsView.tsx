@@ -3,6 +3,7 @@ import { client, type CustomActionDef } from "../api-client";
 import { useApp } from "../AppContext";
 import { CustomActionEditor } from "./CustomActionEditor";
 import { collectFive55ActionTimeline } from "./five55ActionEnvelope";
+import { QUICK_LAYER_DOCK } from "./quickLayerCatalog";
 
 export function CustomActionsView() {
   const { setTab, setActionNotice, plugins, conversationMessages } = useApp();
@@ -13,30 +14,7 @@ export function CustomActionsView() {
   const [loading, setLoading] = useState(true);
 
   type LayerStatus = "active" | "disabled" | "available";
-  type QuickLayerDock = {
-    id: string;
-    label: string;
-    pluginIds: string[];
-  };
-
-  const quickLayers = useMemo<QuickLayerDock[]>(
-    () => [
-      { id: "stream", label: "Stream", pluginIds: ["stream"] },
-      { id: "go-live", label: "Go Live", pluginIds: ["stream"] },
-      { id: "autonomous-run", label: "Autonomous", pluginIds: ["stream"] },
-      { id: "screen-share", label: "Screen Share", pluginIds: ["stream555-control"] },
-      { id: "ads", label: "Ads", pluginIds: ["stream555-control"] },
-      { id: "invite-guest", label: "Invite Guest", pluginIds: ["stream555-control"] },
-      { id: "radio", label: "Radio", pluginIds: ["stream555-control"] },
-      { id: "pip", label: "PiP", pluginIds: ["stream555-control"] },
-      { id: "reaction-segment", label: "Reaction", pluginIds: ["stream555-control"] },
-      { id: "earnings", label: "Earnings", pluginIds: ["stream555-control"] },
-      { id: "play-games", label: "Play Games", pluginIds: ["five55-games"] },
-      { id: "end-live", label: "End Live", pluginIds: ["stream555-control"] },
-      { id: "swap", label: "Swap", pluginIds: ["swap"] },
-    ],
-    [],
-  );
+  const quickLayers = QUICK_LAYER_DOCK;
 
   const resolvePluginStatus = useCallback(
     (id: string): LayerStatus => {
