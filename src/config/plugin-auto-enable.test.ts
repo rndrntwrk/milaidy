@@ -252,20 +252,20 @@ describe("applyPluginAutoEnable — env vars", () => {
     expect(anthropicEntries).toHaveLength(1);
   });
 
-  it("enables github plugin when GITHUB_API_TOKEN is set", () => {
+  it("does not auto-enable upstream github plugin when GITHUB_API_TOKEN is set", () => {
     const params = makeParams({
       env: { GITHUB_API_TOKEN: "ghp_test_123" },
     });
     const { config } = applyPluginAutoEnable(params);
-    expect(config.plugins?.allow).toContain("github");
+    expect(config.plugins?.allow ?? []).not.toContain("github");
   });
 
-  it("enables github plugin when ALICE_GH_TOKEN is set", () => {
+  it("does not auto-enable upstream github plugin when ALICE_GH_TOKEN is set", () => {
     const params = makeParams({
       env: { ALICE_GH_TOKEN: "ghp_test_alice" },
     });
     const { config } = applyPluginAutoEnable(params);
-    expect(config.plugins?.allow).toContain("github");
+    expect(config.plugins?.allow ?? []).not.toContain("github");
   });
 });
 
@@ -389,15 +389,11 @@ describe("AUTH_PROVIDER_PLUGINS", () => {
 });
 
 describe("INTEGRATION_ENV_PLUGINS", () => {
-  it("maps GITHUB_API_TOKEN to github plugin", () => {
-    expect(INTEGRATION_ENV_PLUGINS.GITHUB_API_TOKEN).toBe(
-      "@elizaos/plugin-github",
-    );
+  it("does not map GITHUB_API_TOKEN to upstream github plugin", () => {
+    expect(INTEGRATION_ENV_PLUGINS.GITHUB_API_TOKEN).toBeUndefined();
   });
 
-  it("maps ALICE_GH_TOKEN fallback to github plugin", () => {
-    expect(INTEGRATION_ENV_PLUGINS.ALICE_GH_TOKEN).toBe(
-      "@elizaos/plugin-github",
-    );
+  it("does not map ALICE_GH_TOKEN fallback to upstream github plugin", () => {
+    expect(INTEGRATION_ENV_PLUGINS.ALICE_GH_TOKEN).toBeUndefined();
   });
 });

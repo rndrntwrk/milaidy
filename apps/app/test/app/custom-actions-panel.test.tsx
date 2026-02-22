@@ -112,13 +112,7 @@ describe("CustomActionsPanel default dock actions", () => {
     const ctx = createContext();
     const onClose = vi.fn();
     mockUseApp.mockReturnValue(ctx);
-
-    let receivedLayerId: string | undefined;
-    const listener = (raw: Event) => {
-      const event = raw as CustomEvent<{ layerId?: string }>;
-      receivedLayerId = event.detail?.layerId;
-    };
-    window.addEventListener("milaidy:quick-layer:run", listener as EventListener);
+    const dispatchSpy = vi.spyOn(window, "dispatchEvent");
 
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
@@ -144,9 +138,13 @@ describe("CustomActionsPanel default dock actions", () => {
       2200,
     );
     expect(onClose).toHaveBeenCalled();
-    expect(receivedLayerId).toBe("go-live");
-
-    window.removeEventListener("milaidy:quick-layer:run", listener as EventListener);
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "milaidy:quick-layer:run" }),
+    );
+    const dispatchedEvent = dispatchSpy.mock.calls.at(-1)?.[0] as
+      | CustomEvent<{ layerId?: string }>
+      | undefined;
+    expect(dispatchedEvent?.detail?.layerId).toBe("go-live");
   });
 
   it("marks quick action as disabled when plugin is disabled", async () => {

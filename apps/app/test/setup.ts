@@ -164,15 +164,66 @@ if (typeof globalThis.sessionStorage === "undefined") {
 }
 
 if (typeof globalThis.window === "undefined") {
+  const windowListeners = new Map<string, Set<(event: Event) => void>>();
+  const toEventHandler = (
+    listener: EventListenerOrEventListenerObject | null | undefined,
+  ): ((event: Event) => void) | null => {
+    if (!listener) return null;
+    if (typeof listener === "function") return listener;
+    if (
+      typeof listener === "object" &&
+      typeof listener.handleEvent === "function"
+    ) {
+      return listener.handleEvent.bind(listener) as (event: Event) => void;
+    }
+    return null;
+  };
+  const addWindowEventListener = (
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+  ) => {
+    const handler = toEventHandler(listener);
+    if (!handler) return;
+    const handlers = windowListeners.get(type) ?? new Set<(event: Event) => void>();
+    handlers.add(handler);
+    windowListeners.set(type, handlers);
+  };
+  const removeWindowEventListener = (
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+  ) => {
+    const handler = toEventHandler(listener);
+    if (!handler) return;
+    const handlers = windowListeners.get(type);
+    if (!handlers) return;
+    handlers.delete(handler);
+    if (handlers.size === 0) {
+      windowListeners.delete(type);
+    }
+  };
+  const dispatchWindowEvent = (event: Event): boolean => {
+    const eventType = (event as { type?: string }).type;
+    if (!eventType) return false;
+    for (const handler of windowListeners.get(eventType) ?? []) {
+      handler(event);
+    }
+    return true;
+  };
+
   Object.defineProperty(globalThis, "window", {
     value: {
       close: vi.fn(),
       focus: vi.fn(),
       open: vi.fn(),
+      setTimeout: (...args: Parameters<typeof globalThis.setTimeout>) =>
+        globalThis.setTimeout(...args),
+      clearTimeout: (...args: Parameters<typeof globalThis.clearTimeout>) =>
+        globalThis.clearTimeout(...args),
       location: { reload: vi.fn() },
       screenX: 0, screenY: 0, outerWidth: 1920, outerHeight: 1080,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
+      addEventListener: vi.fn(addWindowEventListener),
+      removeEventListener: vi.fn(removeWindowEventListener),
+      dispatchEvent: vi.fn(dispatchWindowEvent),
       localStorage: globalThis.localStorage,
       sessionStorage: globalThis.sessionStorage,
       navigator: globalThis.navigator,
@@ -190,6 +241,62 @@ if (typeof globalThis.window === "undefined") {
   }
   if (!win.navigator) {
     Object.defineProperty(win, "navigator", { value: globalThis.navigator, writable: true, configurable: true });
+  }
+  if (typeof win.setTimeout !== "function") {
+    win.setTimeout = (...args: Parameters<typeof globalThis.setTimeout>) =>
+      globalThis.setTimeout(...args);
+  }
+  if (typeof win.clearTimeout !== "function") {
+    win.clearTimeout = (...args: Parameters<typeof globalThis.clearTimeout>) =>
+      globalThis.clearTimeout(...args);
+  }
+  if (
+    typeof win.addEventListener !== "function" ||
+    typeof win.removeEventListener !== "function" ||
+    typeof win.dispatchEvent !== "function"
+  ) {
+    const listeners = new Map<string, Set<(event: Event) => void>>();
+    const toEventHandler = (
+      listener: EventListenerOrEventListenerObject | null | undefined,
+    ): ((event: Event) => void) | null => {
+      if (!listener) return null;
+      if (typeof listener === "function") return listener;
+      if (
+        typeof listener === "object" &&
+        typeof listener.handleEvent === "function"
+      ) {
+        return listener.handleEvent.bind(listener) as (event: Event) => void;
+      }
+      return null;
+    };
+
+    win.addEventListener = vi.fn(
+      (type: string, listener: EventListenerOrEventListenerObject | null) => {
+        const handler = toEventHandler(listener);
+        if (!handler) return;
+        const handlers = listeners.get(type) ?? new Set<(event: Event) => void>();
+        handlers.add(handler);
+        listeners.set(type, handlers);
+      },
+    );
+    win.removeEventListener = vi.fn(
+      (type: string, listener: EventListenerOrEventListenerObject | null) => {
+        const handler = toEventHandler(listener);
+        if (!handler) return;
+        const handlers = listeners.get(type);
+        if (!handlers) return;
+        handlers.delete(handler);
+        if (handlers.size === 0) listeners.delete(type);
+      },
+    );
+    win.dispatchEvent = vi.fn((event: Event) => {
+      const eventType = (event as { type?: string }).type;
+      if (!eventType) return false;
+      for (const handler of listeners.get(eventType) ?? []) {
+        handler(event);
+      }
+      return true;
+    });
   }
 }
 

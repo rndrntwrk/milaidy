@@ -629,8 +629,9 @@ const PROVIDER_PLUGIN_MAP: Readonly<Record<string, string>> = {
 const INTEGRATION_PLUGIN_MAP: Readonly<Record<string, string>> = {
   DISCORD_API_TOKEN: "@elizaos/plugin-discord",
   TELEGRAM_BOT_TOKEN: "@elizaos/plugin-telegram",
-  GITHUB_API_TOKEN: "@elizaos/plugin-github",
-  ALICE_GH_TOKEN: "@elizaos/plugin-github",
+  // GitHub token wiring is handled by the internal five55-github plugin.
+  // We keep upstream plugin-github opt-in only (manual allowlist), because
+  // current published builds are not consistently runtime-safe with core.
   N8N_API_KEY: "@elizaos/plugin-n8n",
   N8N_HOST: "@elizaos/plugin-n8n",
   N8N_URL: "@elizaos/plugin-n8n",
@@ -1476,30 +1477,87 @@ async function importFromPath(
 /** @internal Exported for testing. */
 export async function resolvePackageEntry(pkgRoot: string): Promise<string> {
   const fallback = path.join(pkgRoot, "dist", "index.js");
+  const candidates: string[] = [];
+
+  const pushCandidate = (raw: unknown) => {
+    if (typeof raw !== "string") return;
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+    candidates.push(trimmed);
+  };
+
+  const pushConditionalExports = (raw: unknown) => {
+    if (typeof raw === "string") {
+      pushCandidate(raw);
+      return;
+    }
+    if (!raw || typeof raw !== "object") return;
+    const record = raw as Record<string, unknown>;
+    for (const key of ["import", "default", "require", "node"]) {
+      pushConditionalExports(record[key]);
+    }
+  };
+
   try {
     const raw = await fs.readFile(path.join(pkgRoot, "package.json"), "utf-8");
     const pkg = JSON.parse(raw) as {
       name?: string;
       main?: string;
-      exports?: Record<string, string | Record<string, string>> | string;
+      exports?: Record<string, unknown> | string;
     };
 
-    if (typeof pkg.exports === "object" && pkg.exports["."] !== undefined) {
-      const dot = pkg.exports["."];
-      const resolved =
-        typeof dot === "string" ? dot : dot.import || dot.default;
-      if (typeof resolved === "string") return path.resolve(pkgRoot, resolved);
+    if (typeof pkg.exports === "object" && pkg.exports !== null) {
+      if (pkg.exports["."] !== undefined) {
+        pushConditionalExports(pkg.exports["."]);
+      } else {
+        pushConditionalExports(pkg.exports);
+      }
     }
-    if (typeof pkg.exports === "string")
-      return path.resolve(pkgRoot, pkg.exports);
-    if (pkg.main) return path.resolve(pkgRoot, pkg.main);
-    return fallback;
+    if (typeof pkg.exports === "string") pushCandidate(pkg.exports);
+    pushCandidate(pkg.main);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      return fallback;
+      // Fall back to common runtime entry paths.
+    } else {
+      throw err;
     }
-    throw err;
   }
+
+  candidates.push(
+    "dist/index.js",
+    "dist/index.mjs",
+    "dist/index.cjs",
+    "dist/node/index.js",
+    "dist/node/index.mjs",
+    "dist/node/index.cjs",
+    "dist/src/index.js",
+    "dist/src/index.mjs",
+    "index.js",
+    "index.mjs",
+    "index.cjs",
+    "lib/index.js",
+    "src/index.js",
+    "src/index.ts",
+  );
+
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    const normalized = candidate.replace(/^[.][/\\]/, "");
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+
+    const absoluteCandidate = path.resolve(pkgRoot, normalized);
+    try {
+      const stat = await fs.stat(absoluteCandidate);
+      if (stat.isFile()) {
+        return absoluteCandidate;
+      }
+    } catch {
+      // Try next candidate.
+    }
+  }
+
+  return fallback;
 }
 
 // ---------------------------------------------------------------------------
@@ -1561,6 +1619,26 @@ interface StartupPluginRequirement {
   reason: string;
 }
 
+const STARTUP_PLUGIN_DEFAULT_VERSION_OVERRIDES: Readonly<Record<string, string>> =
+  {
+    "@elizaos/plugin-telegram": "2.0.0-alpha.7",
+    "@elizaos/plugin-n8n": "2.0.0-alpha.10",
+  };
+
+const STARTUP_PLUGIN_VERSION_ENV_KEYS: Readonly<Record<string, string>> = {
+  "@elizaos/plugin-telegram": "MILAIDY_STARTUP_PLUGIN_TELEGRAM_VERSION",
+  "@elizaos/plugin-n8n": "MILAIDY_STARTUP_PLUGIN_N8N_VERSION",
+};
+
+function resolveStartupPluginInstallSpec(packageName: string): string {
+  const envKey = STARTUP_PLUGIN_VERSION_ENV_KEYS[packageName];
+  const explicitVersion = envKey ? process.env[envKey]?.trim() : undefined;
+  const selectedVersion =
+    explicitVersion || STARTUP_PLUGIN_DEFAULT_VERSION_OVERRIDES[packageName];
+  if (!selectedVersion) return packageName;
+  return `${packageName}@${selectedVersion}`;
+}
+
 function hasConnectorToken(
   config: MilaidyConfig,
   connectorName: string,
@@ -1599,10 +1677,6 @@ function collectStartupPluginRequirements(
 
   if (hasConnectorToken(config, "telegram") || process.env.TELEGRAM_BOT_TOKEN) {
     add("@elizaos/plugin-telegram", "telegram connector configured");
-  }
-
-  if (process.env.GITHUB_API_TOKEN?.trim() || process.env.ALICE_GH_TOKEN?.trim()) {
-    add("@elizaos/plugin-github", "github token configured");
   }
 
   const mcpServers = config.mcp?.servers;
@@ -1716,20 +1790,35 @@ async function ensureStartupPluginsInstalled(
       continue;
     }
 
+    const installSpec = resolveStartupPluginInstallSpec(packageName);
+
     logger.info(
-      `[milaidy] Startup plugin bootstrap: ${packageName} unavailable (${reason}); attempting install`,
+      `[milaidy] Startup plugin bootstrap: ${packageName} unavailable (${reason}); attempting install (${installSpec})`,
     );
     try {
-      const result = await installPlugin(packageName, (progress) => {
+      const result = await installPlugin(installSpec, (progress) => {
         logger.info(
           `[milaidy][startup-plugin] ${progress.pluginName} ${progress.phase}: ${progress.message}`,
         );
       });
 
       if (result.success) {
+        const packageRoot = await resolveInstallRecordPackageRoot(
+          result.installPath,
+          packageName,
+        );
+        const runtimeEntry = packageRoot
+          ? await resolvePackageRuntimeEntry(packageRoot)
+          : null;
+        if (!runtimeEntry) {
+          logger.warn(
+            `[milaidy] Startup plugin bootstrap installed ${result.pluginName}@${result.version} but no runtime entry was detected. installPath=${result.installPath}`,
+          );
+          continue;
+        }
         changed = true;
         logger.info(
-          `[milaidy] Startup plugin bootstrap installed ${result.pluginName}@${result.version}`,
+          `[milaidy] Startup plugin bootstrap installed ${result.pluginName}@${result.version} (entry=${runtimeEntry})`,
         );
       } else {
         logger.warn(

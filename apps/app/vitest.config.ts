@@ -6,7 +6,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   test: {
-    include: [path.join(here, "test/**/*.test.ts")],
+    include: [path.join(here, "test/**/*.{test,spec}.{ts,tsx}")],
     setupFiles: [path.join(here, "test/setup.ts")],
     environment: "node",
     testTimeout: 30000,

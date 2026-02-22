@@ -76,8 +76,7 @@ export const AUTH_PROVIDER_PLUGINS: Record<string, string> = {
 export const INTEGRATION_ENV_PLUGINS: Record<string, string> = {
   DISCORD_API_TOKEN: "@elizaos/plugin-discord",
   TELEGRAM_BOT_TOKEN: "@elizaos/plugin-telegram",
-  GITHUB_API_TOKEN: "@elizaos/plugin-github",
-  ALICE_GH_TOKEN: "@elizaos/plugin-github",
+  // GitHub token auto-enable is intentionally handled by internal five55-github.
   N8N_API_KEY: "@elizaos/plugin-n8n",
   N8N_HOST: "@elizaos/plugin-n8n",
   N8N_URL: "@elizaos/plugin-n8n",

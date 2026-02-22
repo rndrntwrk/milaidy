@@ -235,16 +235,16 @@ describe("collectPluginNames", () => {
     expect(names.has("@milaidy/plugin-telegram-enhanced")).toBe(false);
   });
 
-  it("loads github plugin when GITHUB_API_TOKEN is present", () => {
+  it("does not auto-load upstream github plugin when GITHUB_API_TOKEN is present", () => {
     process.env.GITHUB_API_TOKEN = "ghp_test";
     const names = collectPluginNames({} as MilaidyConfig);
-    expect(names.has("@elizaos/plugin-github")).toBe(true);
+    expect(names.has("@elizaos/plugin-github")).toBe(false);
   });
 
-  it("loads github plugin when only ALICE_GH_TOKEN is present", () => {
+  it("does not auto-load upstream github plugin when only ALICE_GH_TOKEN is present", () => {
     process.env.ALICE_GH_TOKEN = "ghp_alice";
     const names = collectPluginNames({} as MilaidyConfig);
-    expect(names.has("@elizaos/plugin-github")).toBe(true);
+    expect(names.has("@elizaos/plugin-github")).toBe(false);
   });
 
   it("does not add connector plugins for empty connector configs", () => {

@@ -95,30 +95,21 @@ function createContext(
   };
 }
 
-function text(node: TestRenderer.ReactTestInstance): string {
-  return node.children
-    .map((child) => (typeof child === "string" ? child : ""))
-    .join("")
-    .trim();
-}
-
-function findButtonByText(
-  root: TestRenderer.ReactTestInstance,
-  label: string,
-): TestRenderer.ReactTestInstance {
-  const matches = root.findAll(
-    (node) => node.type === "button" && text(node) === label,
-  );
-  if (!matches[0]) {
-    throw new Error(`Button "${label}" not found`);
-  }
-  return matches[0];
-}
-
 async function flush(): Promise<void> {
   await act(async () => {
     await Promise.resolve();
   });
+}
+
+async function triggerQuickLayer(layerId: string): Promise<void> {
+  await act(async () => {
+    window.dispatchEvent(
+      new CustomEvent("milaidy:quick-layer:run", {
+        detail: { layerId },
+      }),
+    );
+  });
+  await flush();
 }
 
 describe("ChatView quick layers", () => {
@@ -172,9 +163,7 @@ describe("ChatView quick layers", () => {
     });
     await flush();
 
-    await act(async () => {
-      findButtonByText(tree!.root, "Go Live").props.onClick();
-    });
+    await triggerQuickLayer("go-live");
 
     expect(mockClient.executeAutonomyPlan).toHaveBeenCalled();
     expect(ctx.setState).toHaveBeenCalledWith(
@@ -254,9 +243,7 @@ describe("ChatView quick layers", () => {
     });
     await flush();
 
-    await act(async () => {
-      await findButtonByText(tree!.root, "Play Games").props.onClick();
-    });
+    await triggerQuickLayer("play-games");
 
     expect(mockClient.getFive55GamesCatalog).toHaveBeenCalledWith({
       includeBeta: true,

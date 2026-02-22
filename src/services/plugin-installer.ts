@@ -49,6 +49,38 @@ const VALID_BRANCH = /^[a-zA-Z0-9][\w./-]*$/;
 /** Git URLs: https:// only, no shell metacharacters. */
 const VALID_GIT_URL = /^https:\/\/[a-zA-Z0-9][\w./-]*\.git$/;
 
+interface ParsedPluginSpec {
+  packageName: string;
+  version?: string;
+}
+
+function parsePluginSpec(rawSpec: string): ParsedPluginSpec {
+  const spec = rawSpec.trim();
+  if (!spec) return { packageName: rawSpec };
+
+  if (spec.startsWith("@")) {
+    const slashIndex = spec.indexOf("/");
+    const atIndex = spec.lastIndexOf("@");
+    if (atIndex > slashIndex) {
+      return {
+        packageName: spec.slice(0, atIndex),
+        version: spec.slice(atIndex + 1),
+      };
+    }
+    return { packageName: spec };
+  }
+
+  const atIndex = spec.lastIndexOf("@");
+  if (atIndex > 0) {
+    return {
+      packageName: spec.slice(0, atIndex),
+      version: spec.slice(atIndex + 1),
+    };
+  }
+
+  return { packageName: spec };
+}
+
 function assertValidPackageName(name: string): void {
   if (!VALID_PACKAGE_NAME.test(name)) {
     throw new Error(`Invalid package name: "${name}"`);
@@ -183,29 +215,34 @@ export function installPlugin(
 }
 
 async function _installPlugin(
-  pluginName: string,
+  pluginSpec: string,
   onProgress?: ProgressCallback,
 ): Promise<InstallResult> {
+  const { packageName: requestedName, version: explicitVersion } =
+    parsePluginSpec(pluginSpec);
   const emit = (phase: InstallPhase, message: string) =>
-    onProgress?.({ phase, pluginName, message });
+    onProgress?.({ phase, pluginName: requestedName, message });
 
-  emit("resolving", `Looking up ${pluginName} in registry...`);
+  emit("resolving", `Looking up ${requestedName} in registry...`);
 
-  const info = await getPluginInfo(pluginName);
+  const info = await getPluginInfo(requestedName);
   if (!info) {
     return {
       success: false,
-      pluginName,
+      pluginName: requestedName,
       version: "",
       installPath: "",
       requiresRestart: false,
-      error: `Plugin "${pluginName}" not found in the registry`,
+      error: `Plugin "${requestedName}" not found in the registry`,
     };
   }
 
   // Determine the canonical package name and version to install
   const canonicalName = info.name;
-  const npmVersion = info.npm.v2Version || info.npm.v1Version || "next";
+  const npmVersion = explicitVersion || info.npm.v2Version || info.npm.v1Version || "next";
+  if (explicitVersion) {
+    assertValidVersion(explicitVersion);
+  }
   const localPath = info.localPath;
   const targetDir = pluginDir(canonicalName);
 
@@ -847,9 +884,19 @@ export async function resolvePackageRuntimeEntry(
 
   runtimeCandidates.push(
     "dist/index.js",
+    "dist/index.mjs",
+    "dist/index.cjs",
+    "dist/node/index.js",
+    "dist/node/index.mjs",
+    "dist/node/index.cjs",
     "dist/src/index.js",
+    "dist/src/index.mjs",
     "index.js",
+    "index.mjs",
+    "index.cjs",
     "lib/index.js",
+    "src/index.js",
+    "src/index.ts",
   );
 
   const seen = new Set<string>();
