@@ -9,6 +9,11 @@ import type {
   State,
 } from "@elizaos/core";
 import {
+  assertFive55Capability,
+  createFive55CapabilityPolicy,
+} from "../../runtime/five55-capability-policy.js";
+import { assertTrustedAdminForAction } from "../../runtime/trusted-admin.js";
+import {
   exceptionAction,
   executeApiAction,
   readParam,
@@ -22,6 +27,7 @@ import {
 const STREAM555_BASE_ENV = "STREAM555_BASE_URL";
 const STREAM_SESSION_ENV = "STREAM_SESSION_ID";
 const STREAM555_SESSION_ENV = "STREAM555_DEFAULT_SESSION_ID";
+const CAPABILITY_POLICY = createFive55CapabilityPolicy();
 
 let cachedAgentSessionId: string | undefined;
 
@@ -30,6 +36,20 @@ type JsonObject = Record<string, unknown>;
 function trimEnv(key: string): string | undefined {
   const value = process.env[key]?.trim();
   return value ? value : undefined;
+}
+
+function assertStreamReadAccess(): void {
+  assertFive55Capability(CAPABILITY_POLICY, "stream.read");
+}
+
+function assertStreamControlAccess(
+  runtime: IAgentRuntime,
+  message: Memory,
+  state: State | undefined,
+  actionName: string,
+): void {
+  assertTrustedAdminForAction(runtime, message, state, actionName);
+  assertFive55Capability(CAPABILITY_POLICY, "stream.control");
 }
 
 function resolveBaseUrl(): string {
@@ -220,8 +240,9 @@ const goLiveAction: Action = {
   description:
     "Starts Alice live stream via agent-v1 stream start for the resolved session.",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, message, state, options) => {
     try {
+      assertStreamControlAccess(runtime, message, state, "STREAM555_GO_LIVE");
       const requestedSessionId = readParam(
         options as HandlerOptions | undefined,
         "sessionId",
@@ -278,8 +299,14 @@ const goLiveSegmentsAction: Action = {
   description:
     "Bootstraps or resumes segment orchestration for the resolved active stream session.",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, message, state, options) => {
     try {
+      assertStreamControlAccess(
+        runtime,
+        message,
+        state,
+        "STREAM555_GO_LIVE_SEGMENTS",
+      );
       const requestedSessionId = readParam(
         options as HandlerOptions | undefined,
         "sessionId",
@@ -390,6 +417,7 @@ const segmentStateAction: Action = {
   validate: async () => true,
   handler: async (_runtime, _message, _state, options) => {
     try {
+      assertStreamReadAccess();
       const requestedSessionId = readParam(
         options as HandlerOptions | undefined,
         "sessionId",
@@ -438,8 +466,14 @@ const screenShareAction: Action = {
   description:
     "Switches the current stream input to screen share for the resolved session.",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, message, state, options) => {
     try {
+      assertStreamControlAccess(
+        runtime,
+        message,
+        state,
+        "STREAM555_SCREEN_SHARE",
+      );
       const requestedSessionId = readParam(
         options as HandlerOptions | undefined,
         "sessionId",
@@ -489,8 +523,9 @@ const endLiveAction: Action = {
   similes: ["STOP_LIVE_STREAM555", "STREAM555_STOP_LIVE"],
   description: "Stops Alice live stream for the resolved session.",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, message, state, options) => {
     try {
+      assertStreamControlAccess(runtime, message, state, "STREAM555_END_LIVE");
       const requestedSessionId = readParam(
         options as HandlerOptions | undefined,
         "sessionId",
@@ -528,8 +563,9 @@ const adsCreateAction: Action = {
   similes: ["STREAM555_CREATE_AD", "CREATE_AD_STREAM555"],
   description: "Creates an ad in the resolved session for immediate or scheduled playback.",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, message, state, options) => {
     try {
+      assertStreamControlAccess(runtime, message, state, "STREAM555_AD_CREATE");
       const requestedSessionId = readParam(
         options as HandlerOptions | undefined,
         "sessionId",
@@ -587,8 +623,9 @@ const adsTriggerAction: Action = {
   similes: ["STREAM555_TRIGGER_AD", "TRIGGER_AD_BREAK_STREAM555"],
   description: "Triggers an ad break for a specific ad id in the active session.",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, message, state, options) => {
     try {
+      assertStreamControlAccess(runtime, message, state, "STREAM555_AD_TRIGGER");
       const adId = readParam(options as HandlerOptions | undefined, "adId");
       if (!adId) throw new Error("adId is required");
 
@@ -635,8 +672,9 @@ const adsDismissAction: Action = {
   similes: ["STREAM555_DISMISS_AD", "DISMISS_AD_BREAK_STREAM555"],
   description: "Dismisses currently active ad break in the resolved session.",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, message, state, options) => {
     try {
+      assertStreamControlAccess(runtime, message, state, "STREAM555_AD_DISMISS");
       const requestedSessionId = readParam(
         options as HandlerOptions | undefined,
         "sessionId",
@@ -672,8 +710,14 @@ const radioControlAction: Action = {
   description:
     "Controls radio in-session (toggleTrack|toggleEffect|setAutoDJMode|setVolume|setBackground).",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, message, state, options) => {
     try {
+      assertStreamControlAccess(
+        runtime,
+        message,
+        state,
+        "STREAM555_RADIO_CONTROL",
+      );
       const requestedSessionId = readParam(
         options as HandlerOptions | undefined,
         "sessionId",
@@ -741,8 +785,14 @@ const guestInviteAction: Action = {
   similes: ["STREAM555_INVITE_GUEST", "GUEST_INVITE_STREAM555"],
   description: "Creates a guest invite link for the resolved session.",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, message, state, options) => {
     try {
+      assertStreamControlAccess(
+        runtime,
+        message,
+        state,
+        "STREAM555_GUEST_INVITE",
+      );
       const requestedSessionId = readParam(
         options as HandlerOptions | undefined,
         "sessionId",
@@ -794,8 +844,9 @@ const sceneSetAction: Action = {
   similes: ["STREAM555_SET_SCENE", "SET_SCENE_STREAM555"],
   description: "Sets active studio scene for resolved session.",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, message, state, options) => {
     try {
+      assertStreamControlAccess(runtime, message, state, "STREAM555_SCENE_SET");
       const sceneId =
         readParam(options as HandlerOptions | undefined, "sceneId") || "default";
       const requestedSessionId = readParam(
@@ -837,8 +888,9 @@ const pipEnableAction: Action = {
   description:
     "Enables PiP-like presentation by switching to a PiP scene (default: active-pip).",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, message, state, options) => {
     try {
+      assertStreamControlAccess(runtime, message, state, "STREAM555_PIP_ENABLE");
       const requestedSessionId = readParam(
         options as HandlerOptions | undefined,
         "sessionId",
@@ -879,8 +931,14 @@ const segmentOverrideAction: Action = {
   description:
     "Queues a segment override for the active live session (e.g. reaction/news/gaming/qa/storytime).",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, message, state, options) => {
     try {
+      assertStreamControlAccess(
+        runtime,
+        message,
+        state,
+        "STREAM555_SEGMENT_OVERRIDE",
+      );
       const requestedSessionId = readParam(
         options as HandlerOptions | undefined,
         "sessionId",
@@ -935,6 +993,7 @@ const earningsEstimateAction: Action = {
   validate: async () => true,
   handler: async (_runtime, _message, _state, options) => {
     try {
+      assertStreamReadAccess();
       const categoriesRaw = readParam(
         options as HandlerOptions | undefined,
         "categories",

@@ -58,6 +58,13 @@ function resolveAction(name: string) {
   return action;
 }
 
+const INTERNAL_RUNTIME = { agentId: "alice-internal" } as never;
+const INTERNAL_MESSAGE = {
+  entityId: "alice-internal",
+  content: { source: "system" },
+} as never;
+const INTERNAL_STATE = { values: {} } as never;
+
 describe("stream555-control plugin actions", () => {
   let envBefore: EnvSnapshot;
 
@@ -84,9 +91,9 @@ describe("stream555-control plugin actions", () => {
 
     const action = resolveAction("STREAM555_RADIO_CONTROL");
     const result = await action.handler?.(
-      {} as never,
-      {} as never,
-      {} as never,
+      INTERNAL_RUNTIME,
+      INTERNAL_MESSAGE,
+      INTERNAL_STATE,
       {
         parameters: {
           sessionId: "session-1",
@@ -123,9 +130,9 @@ describe("stream555-control plugin actions", () => {
 
     const action = resolveAction("STREAM555_SCREEN_SHARE");
     const result = await action.handler?.(
-      {} as never,
-      {} as never,
-      {} as never,
+      INTERNAL_RUNTIME,
+      INTERNAL_MESSAGE,
+      INTERNAL_STATE,
       { parameters: { sessionId: "session-2" } } as never,
     );
 
@@ -150,9 +157,9 @@ describe("stream555-control plugin actions", () => {
 
     const action = resolveAction("STREAM555_SEGMENT_OVERRIDE");
     const result = await action.handler?.(
-      {} as never,
-      {} as never,
-      {} as never,
+      INTERNAL_RUNTIME,
+      INTERNAL_MESSAGE,
+      INTERNAL_STATE,
       {
         parameters: {
           sessionId: "session-3",
@@ -189,9 +196,9 @@ describe("stream555-control plugin actions", () => {
 
     const action = resolveAction("STREAM555_EARNINGS_ESTIMATE");
     const result = await action.handler?.(
-      {} as never,
-      {} as never,
-      {} as never,
+      INTERNAL_RUNTIME,
+      INTERNAL_MESSAGE,
+      INTERNAL_STATE,
       {
         parameters: {
           categories: "gaming, News,  ",
@@ -221,9 +228,9 @@ describe("stream555-control plugin actions", () => {
     const action = resolveAction("STREAM555_SCREEN_SHARE");
 
     const result = await action.handler?.(
-      {} as never,
-      {} as never,
-      {} as never,
+      INTERNAL_RUNTIME,
+      INTERNAL_MESSAGE,
+      INTERNAL_STATE,
       { parameters: { sessionId: "session-fail" } } as never,
     );
 

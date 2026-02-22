@@ -86,6 +86,7 @@ import { isPiAiEnabledFromEnv, registerPiAiRuntime } from "./pi-ai.js";
 import { createSwapPlugin } from "../plugins/swap/index.js";
 import { createStreamPlugin } from "../plugins/stream/index.js";
 import { createStream555ControlPlugin } from "../plugins/stream555-control/index.js";
+import { createStream555AuthPlugin } from "../plugins/stream555-auth/index.js";
 import { createFive55GamesPlugin } from "../plugins/five55-games/index.js";
 import { createFive55ScoreCapturePlugin } from "../plugins/five55-score-capture/index.js";
 import { createFive55LeaderboardPlugin } from "../plugins/five55-leaderboard/index.js";
@@ -670,6 +671,7 @@ const INTERNAL_BUNDLED_PLUGIN_ENTRY_KEYS = new Set<string>([
   "swap",
   "stream",
   "stream555-control",
+  "stream555-auth",
   "five55-games",
   "five55-score-capture",
   "five55-leaderboard",
@@ -757,6 +759,29 @@ export function resolveFive55GithubPluginEnabled(
     Boolean(
       process.env.GITHUB_API_TOKEN?.trim() || process.env.ALICE_GH_TOKEN?.trim(),
     ) || isPluginEntryEnabled(config, "five55-github")
+  );
+}
+
+export function resolveStream555AuthPluginEnabled(
+  config: MilaidyConfig,
+): boolean {
+  const parsed = parseBooleanToggle(process.env.STREAM555_AUTH_PLUGIN_ENABLED);
+  if (parsed !== null) return parsed;
+
+  if (process.env.STREAM555_AUTH_PLUGIN_ENABLED?.trim()) {
+    logger.warn(
+      `[milaidy] Unrecognized STREAM555_AUTH_PLUGIN_ENABLED="${process.env.STREAM555_AUTH_PLUGIN_ENABLED}"; expected true/false. Falling back to config/control plugin defaults.`,
+    );
+  }
+
+  if (config.plugins?.entries?.["stream555-auth"] !== undefined) {
+    return isPluginEntryEnabled(config, "stream555-auth");
+  }
+
+  return resolveFive55PluginEnabled(
+    config,
+    "STREAM555_CONTROL_PLUGIN_ENABLED",
+    "stream555-control",
   );
 }
 
@@ -3038,6 +3063,9 @@ export async function startEliza(
     )
       ? [createStream555ControlPlugin()]
       : []),
+    ...(resolveStream555AuthPluginEnabled(config)
+      ? [createStream555AuthPlugin()]
+      : []),
     ...(resolveFive55PluginEnabled(
       config,
       "FIVE55_GAMES_PLUGIN_ENABLED",
@@ -3788,6 +3816,9 @@ export async function startEliza(
               "stream555-control",
             )
               ? [createStream555ControlPlugin()]
+              : []),
+            ...(resolveStream555AuthPluginEnabled(freshConfig)
+              ? [createStream555AuthPlugin()]
               : []),
             ...(resolveFive55PluginEnabled(
               freshConfig,
