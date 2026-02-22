@@ -20,7 +20,10 @@ import {
   buildCharacterFromConfig,
   CUSTOM_PLUGINS_DIRNAME,
   collectPluginNames,
+  resolveFive55GithubPluginEnabled,
+  resolveFive55PluginEnabled,
   isRecoverableRuntimeError,
+  isPluginEntryEnabled,
   mergeDropInPlugins,
   resolvePackageEntry,
   resolvePrimaryModel,
@@ -197,6 +200,30 @@ describe("collectPluginNames", () => {
     expect(names.has("@elizaos/plugin-telegram")).toBe(false);
   });
 
+  it("does not resolve internal five55 entries as external @elizaos packages", () => {
+    const config = {
+      plugins: {
+        entries: { "five55-admin": { enabled: true } },
+      },
+    } as unknown as MilaidyConfig;
+    const names = collectPluginNames(config);
+    expect(names.has("@elizaos/plugin-five55-admin")).toBe(false);
+  });
+
+  it("skips plugins.entries packages that are not installed", () => {
+    const config = {
+      plugins: {
+        entries: {
+          "definitely-missing-plugin-zzzzzz": { enabled: true },
+        },
+      },
+    } as unknown as MilaidyConfig;
+    const names = collectPluginNames(config);
+    expect(
+      names.has("@elizaos/plugin-definitely-missing-plugin-zzzzzz"),
+    ).toBe(false);
+  });
+
   it("normalizes legacy @milaidy/plugin-telegram-enhanced allowlist entry", () => {
     const config = {
       plugins: {
@@ -371,6 +398,64 @@ describe("collectPluginNames", () => {
     const names = collectPluginNames(config);
     expect(names.has("@elizaos/plugin-elizacloud")).toBe(true);
     expect(names.has("@elizaos/plugin-vision")).toBe(false);
+  });
+});
+
+describe("five55 plugin toggles", () => {
+  const envKeys = [
+    "FIVE55_ADMIN_PLUGIN_ENABLED",
+    "FIVE55_GITHUB_PLUGIN_ENABLED",
+    "GITHUB_API_TOKEN",
+    "ALICE_GH_TOKEN",
+  ];
+  const snap = envSnapshot(envKeys);
+
+  beforeEach(() => {
+    snap.save();
+    for (const k of envKeys) delete process.env[k];
+  });
+
+  afterEach(() => snap.restore());
+
+  it("enables from config entry when env toggle is unset", () => {
+    const config = {
+      plugins: { entries: { "five55-admin": { enabled: true } } },
+    } as unknown as MilaidyConfig;
+    expect(
+      resolveFive55PluginEnabled(
+        config,
+        "FIVE55_ADMIN_PLUGIN_ENABLED",
+        "five55-admin",
+      ),
+    ).toBe(true);
+  });
+
+  it("honors explicit env toggle over config entry", () => {
+    process.env.FIVE55_ADMIN_PLUGIN_ENABLED = "0";
+    const config = {
+      plugins: { entries: { "five55-admin": { enabled: true } } },
+    } as unknown as MilaidyConfig;
+    expect(
+      resolveFive55PluginEnabled(
+        config,
+        "FIVE55_ADMIN_PLUGIN_ENABLED",
+        "five55-admin",
+      ),
+    ).toBe(false);
+  });
+
+  it("github toggle enables from config when env and tokens are absent", () => {
+    const config = {
+      plugins: { entries: { "five55-github": { enabled: true } } },
+    } as unknown as MilaidyConfig;
+    expect(resolveFive55GithubPluginEnabled(config)).toBe(true);
+  });
+
+  it("plugin entry helper handles explicit disabled state", () => {
+    const config = {
+      plugins: { entries: { "five55-admin": { enabled: false } } },
+    } as unknown as MilaidyConfig;
+    expect(isPluginEntryEnabled(config, "five55-admin")).toBe(false);
   });
 });
 

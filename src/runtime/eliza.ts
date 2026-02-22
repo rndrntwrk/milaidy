@@ -661,6 +661,104 @@ const OPTIONAL_PLUGIN_MAP: Readonly<Record<string, string>> = {
   x402: "@elizaos/plugin-x402",
 };
 
+/**
+ * Plugin-entry IDs implemented as bundled Milaidy runtime plugins (not npm
+ * packages). They are instantiated explicitly in `startRuntime`.
+ */
+const INTERNAL_BUNDLED_PLUGIN_ENTRY_KEYS = new Set<string>([
+  "swap",
+  "stream",
+  "stream555-control",
+  "five55-games",
+  "five55-score-capture",
+  "five55-leaderboard",
+  "five55-quests",
+  "five55-battles",
+  "five55-admin",
+  "five55-social",
+  "five55-rewards",
+  "five55-github",
+]);
+
+function hasInstallRecordForPlugin(
+  config: MilaidyConfig,
+  pluginName: string,
+): boolean {
+  const installs = config.plugins?.installs;
+  if (!installs || typeof installs !== "object") return false;
+
+  return Object.keys(installs).some(
+    (name) => normalizePluginPackageName(name) === pluginName,
+  );
+}
+
+function canResolvePluginPackage(
+  config: MilaidyConfig,
+  pluginName: string,
+): boolean {
+  if (hasInstallRecordForPlugin(config, pluginName)) return true;
+  const req = createRequire(import.meta.url);
+  try {
+    req.resolve(`${pluginName}/package.json`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function isPluginEntryEnabled(
+  config: MilaidyConfig,
+  entryKey: string,
+): boolean {
+  const entry = config.plugins?.entries?.[entryKey];
+  if (entry === undefined) return false;
+  if (!entry || typeof entry !== "object") return true;
+  return (entry as Record<string, unknown>).enabled !== false;
+}
+
+function parseBooleanToggle(raw: string | undefined): boolean | null {
+  const normalized = raw?.trim().toLowerCase();
+  if (!normalized) return null;
+  if (["1", "true", "on", "yes"].includes(normalized)) return true;
+  if (["0", "false", "off", "no"].includes(normalized)) return false;
+  return null;
+}
+
+export function resolveFive55PluginEnabled(
+  config: MilaidyConfig,
+  envKey: string,
+  entryKey: string,
+): boolean {
+  const parsed = parseBooleanToggle(process.env[envKey]);
+  if (parsed !== null) return parsed;
+
+  if (process.env[envKey]?.trim()) {
+    logger.warn(
+      `[milaidy] Unrecognized ${envKey}="${process.env[envKey]}"; expected true/false. Falling back to config plugin entry "${entryKey}".`,
+    );
+  }
+  return isPluginEntryEnabled(config, entryKey);
+}
+
+export function resolveFive55GithubPluginEnabled(
+  config: MilaidyConfig,
+): boolean {
+  const parsed = parseBooleanToggle(process.env.FIVE55_GITHUB_PLUGIN_ENABLED);
+  if (parsed !== null) return parsed;
+
+  if (process.env.FIVE55_GITHUB_PLUGIN_ENABLED?.trim()) {
+    logger.warn(
+      `[milaidy] Unrecognized FIVE55_GITHUB_PLUGIN_ENABLED="${process.env.FIVE55_GITHUB_PLUGIN_ENABLED}"; expected true/false. Falling back to token/config-based enablement.`,
+    );
+  }
+
+  return (
+    Boolean(
+      process.env.GITHUB_API_TOKEN?.trim() || process.env.ALICE_GH_TOKEN?.trim(),
+    ) || isPluginEntryEnabled(config, "five55-github")
+  );
+}
+
 function normalizePluginPackageName(name: string): string {
   return PLUGIN_NAME_ALIASES[name] ?? name;
 }
@@ -851,13 +949,24 @@ export function collectPluginNames(config: MilaidyConfig): Set<string> {
         typeof entry === "object" &&
         (entry as Record<string, unknown>).enabled !== false
       ) {
+        if (INTERNAL_BUNDLED_PLUGIN_ENTRY_KEYS.has(key)) {
+          continue;
+        }
+
         // Connector keys (telegram, discord, etc.) must use CHANNEL_PLUGIN_MAP
         // so the correct variant loads (e.g. enhanced telegram, not base).
         const pluginName =
           CHANNEL_PLUGIN_MAP[key] ??
           OPTIONAL_PLUGIN_MAP[key] ??
           `@elizaos/plugin-${key}`;
-        pluginsToLoad.add(normalizePluginPackageName(pluginName));
+        const normalized = normalizePluginPackageName(pluginName);
+        if (!canResolvePluginPackage(config, normalized)) {
+          logger.warn(
+            `[milaidy] Skipping plugins.entries.${key}: package "${normalized}" is not installed`,
+          );
+          continue;
+        }
+        pluginsToLoad.add(normalized);
       }
     }
   }
@@ -2826,67 +2935,79 @@ export async function startEliza(
     ? createPhettaCompanionPlugin(phettaOpts)
     : null;
 
-  const isFive55PluginEnabled = (envKey: string): boolean => {
-    const normalized = process.env[envKey]?.trim().toLowerCase();
-    if (!normalized) return false;
-    if (["1", "true", "on", "yes"].includes(normalized)) return true;
-    if (["0", "false", "off", "no"].includes(normalized)) return false;
-    logger.warn(
-      `[milaidy] Unrecognized ${envKey}="${process.env[envKey]}"; treating as disabled (expected true/false).`,
-    );
-    return false;
-  };
-
-  const isFive55GithubPluginEnabled = (): boolean => {
-    const raw = process.env.FIVE55_GITHUB_PLUGIN_ENABLED?.trim().toLowerCase();
-    if (raw) {
-      if (["1", "true", "on", "yes"].includes(raw)) return true;
-      if (["0", "false", "off", "no"].includes(raw)) return false;
-      logger.warn(
-        `[milaidy] Unrecognized FIVE55_GITHUB_PLUGIN_ENABLED="${process.env.FIVE55_GITHUB_PLUGIN_ENABLED}"; expected true/false. Falling back to token-based enablement.`,
-      );
-    }
-    return Boolean(
-      process.env.GITHUB_API_TOKEN?.trim() ||
-        process.env.ALICE_GH_TOKEN?.trim(),
-    );
-  };
-
   const five55SurfacePlugins: Plugin[] = [
-    ...(isFive55PluginEnabled("SWAP_PLUGIN_ENABLED")
+    ...(resolveFive55PluginEnabled(config, "SWAP_PLUGIN_ENABLED", "swap")
       ? [createSwapPlugin()]
       : []),
-    ...(isFive55PluginEnabled("STREAM_PLUGIN_ENABLED")
+    ...(resolveFive55PluginEnabled(config, "STREAM_PLUGIN_ENABLED", "stream")
       ? [createStreamPlugin()]
       : []),
-    ...(isFive55PluginEnabled("STREAM555_CONTROL_PLUGIN_ENABLED")
+    ...(resolveFive55PluginEnabled(
+      config,
+      "STREAM555_CONTROL_PLUGIN_ENABLED",
+      "stream555-control",
+    )
       ? [createStream555ControlPlugin()]
       : []),
-    ...(isFive55PluginEnabled("FIVE55_GAMES_PLUGIN_ENABLED")
+    ...(resolveFive55PluginEnabled(
+      config,
+      "FIVE55_GAMES_PLUGIN_ENABLED",
+      "five55-games",
+    )
       ? [createFive55GamesPlugin()]
       : []),
-    ...(isFive55PluginEnabled("FIVE55_SCORE_CAPTURE_PLUGIN_ENABLED")
+    ...(resolveFive55PluginEnabled(
+      config,
+      "FIVE55_SCORE_CAPTURE_PLUGIN_ENABLED",
+      "five55-score-capture",
+    )
       ? [createFive55ScoreCapturePlugin()]
       : []),
-    ...(isFive55PluginEnabled("FIVE55_LEADERBOARD_PLUGIN_ENABLED")
+    ...(resolveFive55PluginEnabled(
+      config,
+      "FIVE55_LEADERBOARD_PLUGIN_ENABLED",
+      "five55-leaderboard",
+    )
       ? [createFive55LeaderboardPlugin()]
       : []),
-    ...(isFive55PluginEnabled("FIVE55_QUESTS_PLUGIN_ENABLED")
+    ...(resolveFive55PluginEnabled(
+      config,
+      "FIVE55_QUESTS_PLUGIN_ENABLED",
+      "five55-quests",
+    )
       ? [createFive55QuestsPlugin()]
       : []),
-    ...(isFive55PluginEnabled("FIVE55_BATTLES_PLUGIN_ENABLED")
+    ...(resolveFive55PluginEnabled(
+      config,
+      "FIVE55_BATTLES_PLUGIN_ENABLED",
+      "five55-battles",
+    )
       ? [createFive55BattlesPlugin()]
       : []),
-    ...(isFive55PluginEnabled("FIVE55_ADMIN_PLUGIN_ENABLED")
+    ...(resolveFive55PluginEnabled(
+      config,
+      "FIVE55_ADMIN_PLUGIN_ENABLED",
+      "five55-admin",
+    )
       ? [createFive55AdminPlugin()]
       : []),
-    ...(isFive55PluginEnabled("FIVE55_SOCIAL_PLUGIN_ENABLED")
+    ...(resolveFive55PluginEnabled(
+      config,
+      "FIVE55_SOCIAL_PLUGIN_ENABLED",
+      "five55-social",
+    )
       ? [createFive55SocialPlugin()]
       : []),
-    ...(isFive55PluginEnabled("FIVE55_REWARDS_PLUGIN_ENABLED")
+    ...(resolveFive55PluginEnabled(
+      config,
+      "FIVE55_REWARDS_PLUGIN_ENABLED",
+      "five55-rewards",
+    )
       ? [createFive55RewardsPlugin()]
       : []),
-    ...(isFive55GithubPluginEnabled() ? [createFive55GithubPlugin()] : []),
+    ...(resolveFive55GithubPluginEnabled(config)
+      ? [createFive55GithubPlugin()]
+      : []),
   ];
 
   // 6. Resolve and load plugins
@@ -3558,40 +3679,84 @@ export async function startEliza(
             (p) => !PREREGISTER_PLUGINS.has(p.name),
           );
           const freshFive55SurfacePlugins: Plugin[] = [
-            ...(isFive55PluginEnabled("SWAP_PLUGIN_ENABLED")
+            ...(resolveFive55PluginEnabled(
+              freshConfig,
+              "SWAP_PLUGIN_ENABLED",
+              "swap",
+            )
               ? [createSwapPlugin()]
               : []),
-            ...(isFive55PluginEnabled("STREAM_PLUGIN_ENABLED")
+            ...(resolveFive55PluginEnabled(
+              freshConfig,
+              "STREAM_PLUGIN_ENABLED",
+              "stream",
+            )
               ? [createStreamPlugin()]
               : []),
-            ...(isFive55PluginEnabled("STREAM555_CONTROL_PLUGIN_ENABLED")
+            ...(resolveFive55PluginEnabled(
+              freshConfig,
+              "STREAM555_CONTROL_PLUGIN_ENABLED",
+              "stream555-control",
+            )
               ? [createStream555ControlPlugin()]
               : []),
-            ...(isFive55PluginEnabled("FIVE55_GAMES_PLUGIN_ENABLED")
+            ...(resolveFive55PluginEnabled(
+              freshConfig,
+              "FIVE55_GAMES_PLUGIN_ENABLED",
+              "five55-games",
+            )
               ? [createFive55GamesPlugin()]
               : []),
-            ...(isFive55PluginEnabled("FIVE55_SCORE_CAPTURE_PLUGIN_ENABLED")
+            ...(resolveFive55PluginEnabled(
+              freshConfig,
+              "FIVE55_SCORE_CAPTURE_PLUGIN_ENABLED",
+              "five55-score-capture",
+            )
               ? [createFive55ScoreCapturePlugin()]
               : []),
-            ...(isFive55PluginEnabled("FIVE55_LEADERBOARD_PLUGIN_ENABLED")
+            ...(resolveFive55PluginEnabled(
+              freshConfig,
+              "FIVE55_LEADERBOARD_PLUGIN_ENABLED",
+              "five55-leaderboard",
+            )
               ? [createFive55LeaderboardPlugin()]
               : []),
-            ...(isFive55PluginEnabled("FIVE55_QUESTS_PLUGIN_ENABLED")
+            ...(resolveFive55PluginEnabled(
+              freshConfig,
+              "FIVE55_QUESTS_PLUGIN_ENABLED",
+              "five55-quests",
+            )
               ? [createFive55QuestsPlugin()]
               : []),
-            ...(isFive55PluginEnabled("FIVE55_BATTLES_PLUGIN_ENABLED")
+            ...(resolveFive55PluginEnabled(
+              freshConfig,
+              "FIVE55_BATTLES_PLUGIN_ENABLED",
+              "five55-battles",
+            )
               ? [createFive55BattlesPlugin()]
               : []),
-            ...(isFive55PluginEnabled("FIVE55_ADMIN_PLUGIN_ENABLED")
+            ...(resolveFive55PluginEnabled(
+              freshConfig,
+              "FIVE55_ADMIN_PLUGIN_ENABLED",
+              "five55-admin",
+            )
               ? [createFive55AdminPlugin()]
               : []),
-            ...(isFive55PluginEnabled("FIVE55_SOCIAL_PLUGIN_ENABLED")
+            ...(resolveFive55PluginEnabled(
+              freshConfig,
+              "FIVE55_SOCIAL_PLUGIN_ENABLED",
+              "five55-social",
+            )
               ? [createFive55SocialPlugin()]
               : []),
-            ...(isFive55PluginEnabled("FIVE55_REWARDS_PLUGIN_ENABLED")
+            ...(resolveFive55PluginEnabled(
+              freshConfig,
+              "FIVE55_REWARDS_PLUGIN_ENABLED",
+              "five55-rewards",
+            )
               ? [createFive55RewardsPlugin()]
               : []),
-            ...(isFive55GithubPluginEnabled()
+            ...(resolveFive55GithubPluginEnabled(freshConfig)
               ? [createFive55GithubPlugin()]
               : []),
           ];
