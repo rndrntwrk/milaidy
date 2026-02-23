@@ -47,15 +47,15 @@ describe("twitter-verify", () => {
       {
         agent: "",
         wallet: "0x1111111111111111111111111111111111111111",
-        expected:
-          'Verifying my Milady agent "" | 0x1111...1111 #MiladyAgent',
+        expected: 'Verifying my Milady agent "" | 0x1111...1111 #MiladyAgent',
       },
-    ])(
-      "formats message for agent=$agent wallet=$wallet",
-      ({ agent, wallet, expected }) => {
-        expect(generateVerificationMessage(agent, wallet)).toBe(expected);
-      },
-    );
+    ])("formats message for agent=$agent wallet=$wallet", ({
+      agent,
+      wallet,
+      expected,
+    }) => {
+      expect(generateVerificationMessage(agent, wallet)).toBe(expected);
+    });
   });
 
   // ── URL parsing (table-driven) ──────────────────────────────────────
@@ -95,7 +95,10 @@ describe("twitter-verify", () => {
         expectedApi: "https://api.fxtwitter.com/user_name/status/111",
         label: "underscore in screen name",
       },
-    ])("parses valid URL ($label) and calls correct API", async ({ url, expectedApi }) => {
+    ])("parses valid URL ($label) and calls correct API", async ({
+      url,
+      expectedApi,
+    }) => {
       const fetchMock = mockFetchResponse({
         ok: true,
         status: 200,
@@ -123,8 +126,14 @@ describe("twitter-verify", () => {
   describe("fetch failures", () => {
     it.each([
       { error: new Error("network timeout"), label: "network timeout" },
-      { error: new TypeError("Failed to fetch"), label: "TypeError fetch failure" },
-      { error: new DOMException("The operation was aborted", "AbortError"), label: "AbortError (timeout)" },
+      {
+        error: new TypeError("Failed to fetch"),
+        label: "TypeError fetch failure",
+      },
+      {
+        error: new DOMException("The operation was aborted", "AbortError"),
+        label: "AbortError (timeout)",
+      },
     ])("returns retry message on $label", async ({ error }) => {
       vi.stubGlobal("fetch", vi.fn().mockRejectedValue(error));
 
@@ -138,11 +147,23 @@ describe("twitter-verify", () => {
     });
 
     it.each([
-      { status: 404, expected: "Tweet not found. Make sure the URL is correct and the tweet is public.", label: "404" },
+      {
+        status: 404,
+        expected:
+          "Tweet not found. Make sure the URL is correct and the tweet is public.",
+        label: "404",
+      },
       { status: 500, expected: "Tweet fetch failed (HTTP 500)", label: "500" },
       { status: 503, expected: "Tweet fetch failed (HTTP 503)", label: "503" },
-      { status: 429, expected: "Tweet fetch failed (HTTP 429)", label: "429 rate-limit" },
-    ])("maps HTTP $label to appropriate error", async ({ status, expected }) => {
+      {
+        status: 429,
+        expected: "Tweet fetch failed (HTTP 429)",
+        label: "429 rate-limit",
+      },
+    ])("maps HTTP $label to appropriate error", async ({
+      status,
+      expected,
+    }) => {
       mockFetchResponse({ ok: false, status });
 
       const result = await verifyTweet(VALID_TWEET_URL, WALLET);
@@ -207,25 +228,22 @@ describe("twitter-verify", () => {
         text: "#MiladyAgent 0xFFFF567890abcdef",
         label: "wrong address prefix (no partial match)",
       },
-    ])(
-      "rejects tweet missing wallet evidence ($label)",
-      async ({ text }) => {
-        mockFetchResponse({
-          ok: true,
-          status: 200,
-          body: { tweet: { text, author: { screen_name: "user1" } } },
-        });
+    ])("rejects tweet missing wallet evidence ($label)", async ({ text }) => {
+      mockFetchResponse({
+        ok: true,
+        status: 200,
+        body: { tweet: { text, author: { screen_name: "user1" } } },
+      });
 
-        const result = await verifyTweet(VALID_TWEET_URL, WALLET);
+      const result = await verifyTweet(VALID_TWEET_URL, WALLET);
 
-        expect(result).toEqual({
-          verified: false,
-          error:
-            "Tweet does not contain your wallet address. Make sure you copied the full verification message.",
-          handle: "user1",
-        });
-      },
-    );
+      expect(result).toEqual({
+        verified: false,
+        error:
+          "Tweet does not contain your wallet address. Make sure you copied the full verification message.",
+        handle: "user1",
+      });
+    });
 
     it.each([
       {
@@ -236,24 +254,21 @@ describe("twitter-verify", () => {
         text: "0x1234567890 partial address present, no tag",
         label: "partial address present but no hashtag",
       },
-    ])(
-      "rejects tweet missing hashtag ($label)",
-      async ({ text }) => {
-        mockFetchResponse({
-          ok: true,
-          status: 200,
-          body: { tweet: { text, author: { screen_name: "user2" } } },
-        });
+    ])("rejects tweet missing hashtag ($label)", async ({ text }) => {
+      mockFetchResponse({
+        ok: true,
+        status: 200,
+        body: { tweet: { text, author: { screen_name: "user2" } } },
+      });
 
-        const result = await verifyTweet(VALID_TWEET_URL, WALLET);
+      const result = await verifyTweet(VALID_TWEET_URL, WALLET);
 
-        expect(result).toEqual({
-          verified: false,
-          error: "Tweet is missing #MiladyAgent hashtag.",
-          handle: "user2",
-        });
-      },
-    );
+      expect(result).toEqual({
+        verified: false,
+        error: "Tweet is missing #MiladyAgent hashtag.",
+        handle: "user2",
+      });
+    });
   });
 
   // ── Successful verification paths ──────────────────────────────────
@@ -314,7 +329,7 @@ describe("twitter-verify", () => {
         status: 200,
         body: {
           tweet: {
-            text: '0x1234...5678 #MiladyAgent',
+            text: "0x1234...5678 #MiladyAgent",
             author: {},
           },
         },

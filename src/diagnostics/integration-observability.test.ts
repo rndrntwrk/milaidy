@@ -126,21 +126,18 @@ describe("createIntegrationTelemetrySpan", () => {
       "mcp",
     ];
 
-    it.each(BOUNDARIES)(
-      "emits valid events for boundary=%s",
-      (boundary) => {
-        const span = createIntegrationTelemetrySpan(
-          { boundary, operation: `test_${boundary}` },
-          { now: fixedClock(100, 142) },
-        );
-        span.success({ statusCode: 200 });
+    it.each(BOUNDARIES)("emits valid events for boundary=%s", (boundary) => {
+      const span = createIntegrationTelemetrySpan(
+        { boundary, operation: `test_${boundary}` },
+        { now: fixedClock(100, 142) },
+      );
+      span.success({ statusCode: 200 });
 
-        const event = lastInfoEvent();
-        expect(event.boundary).toBe(boundary);
-        expect(event.operation).toBe(`test_${boundary}`);
-        expect(event.durationMs).toBe(42);
-      },
-    );
+      const event = lastInfoEvent();
+      expect(event.boundary).toBe(boundary);
+      expect(event.operation).toBe(`test_${boundary}`);
+      expect(event.durationMs).toBe(42);
+    });
 
     it("covers all declared boundary types", () => {
       // If IntegrationBoundary is extended, this test must be updated.
@@ -162,19 +159,21 @@ describe("createIntegrationTelemetrySpan", () => {
       { start: 100, end: 148, expected: 48, label: "normal elapsed" },
       { start: 0, end: 0, expected: 0, label: "zero duration" },
       { start: 500, end: 501, expected: 1, label: "1ms duration" },
-      { start: 1000, end: 999, expected: 0, label: "negative clock floors to 0" },
-    ])(
-      "computes durationMs correctly ($label)",
-      ({ start, end, expected }) => {
-        const span = createIntegrationTelemetrySpan(
-          { boundary: "cloud", operation: "op" },
-          { now: fixedClock(start, end) },
-        );
-        span.success();
-
-        expect(lastInfoEvent().durationMs).toBe(expected);
+      {
+        start: 1000,
+        end: 999,
+        expected: 0,
+        label: "negative clock floors to 0",
       },
-    );
+    ])("computes durationMs correctly ($label)", ({ start, end, expected }) => {
+      const span = createIntegrationTelemetrySpan(
+        { boundary: "cloud", operation: "op" },
+        { now: fixedClock(start, end) },
+      );
+      span.success();
+
+      expect(lastInfoEvent().durationMs).toBe(expected);
+    });
   });
 
   // ── Outcome routing ────────────────────────────────────────────────
@@ -259,18 +258,15 @@ describe("createIntegrationTelemetrySpan", () => {
         expected: "upper_case_error",
         label: "string error sanitized (special chars removed, lowered)",
       },
-    ])(
-      "infers errorKind from $label",
-      ({ error, expected }) => {
-        const span = createIntegrationTelemetrySpan(
-          { boundary: "wallet", operation: "op" },
-          { now: fixedClock(0, 1) },
-        );
-        span.failure({ error });
+    ])("infers errorKind from $label", ({ error, expected }) => {
+      const span = createIntegrationTelemetrySpan(
+        { boundary: "wallet", operation: "op" },
+        { now: fixedClock(0, 1) },
+      );
+      span.failure({ error });
 
-        expect(lastWarnEvent().errorKind).toBe(expected);
-      },
-    );
+      expect(lastWarnEvent().errorKind).toBe(expected);
+    });
 
     it("uses explicit errorKind over inferred value", () => {
       const span = createIntegrationTelemetrySpan(
@@ -310,24 +306,45 @@ describe("createIntegrationTelemetrySpan", () => {
 
   describe("token sanitization", () => {
     it.each([
-      { input: "http_error", expected: "http_error", label: "clean token unchanged" },
-      { input: "HTTP Error!", expected: "http_error", label: "special chars replaced" },
-      { input: "___leading___trailing___", expected: "leading_trailing", label: "leading/trailing underscores stripped, consecutive collapsed" },
-      { input: "a".repeat(100), expected: "a".repeat(64), label: "truncated to 64 chars" },
-      { input: "", expected: undefined, label: "empty string returns undefined" },
-      { input: "!!!@@@", expected: undefined, label: "all-special-char string returns undefined" },
-    ])(
-      "sanitizes errorKind token ($label)",
-      ({ input, expected }) => {
-        const span = createIntegrationTelemetrySpan(
-          { boundary: "marketplace", operation: "op" },
-          { now: fixedClock(0, 1) },
-        );
-        span.failure({ errorKind: input });
-
-        expect(lastWarnEvent().errorKind).toBe(expected);
+      {
+        input: "http_error",
+        expected: "http_error",
+        label: "clean token unchanged",
       },
-    );
+      {
+        input: "HTTP Error!",
+        expected: "http_error",
+        label: "special chars replaced",
+      },
+      {
+        input: "___leading___trailing___",
+        expected: "leading_trailing",
+        label: "leading/trailing underscores stripped, consecutive collapsed",
+      },
+      {
+        input: "a".repeat(100),
+        expected: "a".repeat(64),
+        label: "truncated to 64 chars",
+      },
+      {
+        input: "",
+        expected: undefined,
+        label: "empty string returns undefined",
+      },
+      {
+        input: "!!!@@@",
+        expected: undefined,
+        label: "all-special-char string returns undefined",
+      },
+    ])("sanitizes errorKind token ($label)", ({ input, expected }) => {
+      const span = createIntegrationTelemetrySpan(
+        { boundary: "marketplace", operation: "op" },
+        { now: fixedClock(0, 1) },
+      );
+      span.failure({ errorKind: input });
+
+      expect(lastWarnEvent().errorKind).toBe(expected);
+    });
   });
 
   // ── Idempotent recording ───────────────────────────────────────────
@@ -478,53 +495,47 @@ describe("observability boundary coverage", () => {
     expect(event).toHaveProperty("durationMs");
   });
 
-  it.each(EXPECTED_BOUNDARIES)(
-    "boundary=%s can create a span and emit a success event",
-    (boundary) => {
-      const sink = {
-        info: vi.fn<(message: string) => void>(),
-        warn: vi.fn<(message: string) => void>(),
-      };
-      const span = createIntegrationTelemetrySpan(
-        { boundary, operation: `contract_test_${boundary}` },
-        { now: fixedClock(0, 1), sink },
-      );
+  it.each(
+    EXPECTED_BOUNDARIES,
+  )("boundary=%s can create a span and emit a success event", (boundary) => {
+    const sink = {
+      info: vi.fn<(message: string) => void>(),
+      warn: vi.fn<(message: string) => void>(),
+    };
+    const span = createIntegrationTelemetrySpan(
+      { boundary, operation: `contract_test_${boundary}` },
+      { now: fixedClock(0, 1), sink },
+    );
 
-      span.success({ statusCode: 200 });
+    span.success({ statusCode: 200 });
 
-      expect(sink.info).toHaveBeenCalledOnce();
-      const event = parseEvent(
-        (sink.info.mock.calls[0] as [string])[0],
-      );
-      expect(event.boundary).toBe(boundary);
-      expect(event.outcome).toBe("success");
-      expect(event.durationMs).toBe(1);
-      expect(event.statusCode).toBe(200);
-    },
-  );
+    expect(sink.info).toHaveBeenCalledOnce();
+    const event = parseEvent((sink.info.mock.calls[0] as [string])[0]);
+    expect(event.boundary).toBe(boundary);
+    expect(event.outcome).toBe("success");
+    expect(event.durationMs).toBe(1);
+    expect(event.statusCode).toBe(200);
+  });
 
-  it.each(EXPECTED_BOUNDARIES)(
-    "boundary=%s can create a span and emit a failure event",
-    (boundary) => {
-      const sink = {
-        info: vi.fn<(message: string) => void>(),
-        warn: vi.fn<(message: string) => void>(),
-      };
-      const span = createIntegrationTelemetrySpan(
-        { boundary, operation: `contract_test_${boundary}` },
-        { now: fixedClock(0, 50), sink },
-      );
+  it.each(
+    EXPECTED_BOUNDARIES,
+  )("boundary=%s can create a span and emit a failure event", (boundary) => {
+    const sink = {
+      info: vi.fn<(message: string) => void>(),
+      warn: vi.fn<(message: string) => void>(),
+    };
+    const span = createIntegrationTelemetrySpan(
+      { boundary, operation: `contract_test_${boundary}` },
+      { now: fixedClock(0, 50), sink },
+    );
 
-      span.failure({ statusCode: 500, errorKind: "http_error" });
+    span.failure({ statusCode: 500, errorKind: "http_error" });
 
-      expect(sink.warn).toHaveBeenCalledOnce();
-      const event = parseEvent(
-        (sink.warn.mock.calls[0] as [string])[0],
-      );
-      expect(event.boundary).toBe(boundary);
-      expect(event.outcome).toBe("failure");
-      expect(event.durationMs).toBe(50);
-      expect(event.errorKind).toBe("http_error");
-    },
-  );
+    expect(sink.warn).toHaveBeenCalledOnce();
+    const event = parseEvent((sink.warn.mock.calls[0] as [string])[0]);
+    expect(event.boundary).toBe(boundary);
+    expect(event.outcome).toBe("failure");
+    expect(event.durationMs).toBe(50);
+    expect(event.errorKind).toBe("http_error");
+  });
 });

@@ -34,9 +34,10 @@ vi.mock("../src/diagnostics/integration-observability", () => ({
 }));
 
 vi.mock("node:child_process", async () => {
-  const actual = await vi.importActual<typeof import("node:child_process")>(
-    "node:child_process",
-  );
+  const actual =
+    await vi.importActual<typeof import("node:child_process")>(
+      "node:child_process",
+    );
   const nodeFs = await import("node:fs");
   const nodePath = await import("node:path");
 
@@ -61,10 +62,9 @@ vi.mock("node:child_process", async () => {
               gitFixtureRef.files,
             )) {
               const filePath = nodePath.default.join(cloneDir, relPath);
-              nodeFs.default.mkdirSync(
-                nodePath.default.dirname(filePath),
-                { recursive: true },
-              );
+              nodeFs.default.mkdirSync(nodePath.default.dirname(filePath), {
+                recursive: true,
+              });
               nodeFs.default.writeFileSync(filePath, content);
             }
             return process.nextTick(() => cbFn(null, "", ""));
@@ -75,9 +75,7 @@ vi.mock("node:child_process", async () => {
           }
         }
 
-        process.nextTick(() =>
-          cbFn(new Error("Mock command failed"), "", ""),
-        );
+        process.nextTick(() => cbFn(new Error("Mock command failed"), "", ""));
       },
     ),
   };
@@ -91,11 +89,7 @@ let tmpDir: string;
 let workspaceDir: string;
 let savedEnv: Record<string, string | undefined>;
 
-function stubFetch(response: {
-  ok: boolean;
-  status: number;
-  body: unknown;
-}) {
+function stubFetch(response: { ok: boolean; status: number; body: unknown }) {
   vi.stubGlobal(
     "fetch",
     vi.fn().mockResolvedValue({
