@@ -36,8 +36,8 @@
   },
   "scripts": {
     "benchmark:server": "node --import tsx src/benchmark/server.ts",
-    "build": "bun run build:local-plugins && tsdown && scripts/rt.sh scripts/write-build-info.ts && cd apps/app && ../../scripts/rt.sh run build",
-    "build:node": "bun run build:local-plugins && tsdown && node --import tsx scripts/write-build-info.ts && cd apps/app && npm run build",
+    "build": "bun run build:local-plugins && tsdown && echo '{\"type\":\"module\"}' > dist/package.json && scripts/rt.sh scripts/write-build-info.ts && cd apps/app && ../../scripts/rt.sh run build",
+    "build:node": "bun run build:local-plugins && tsdown && echo '{\"type\":\"module\"}' > dist/package.json && node --import tsx scripts/write-build-info.ts && cd apps/app && npm run build",
     "build:local-plugins": "node scripts/build-local-plugins.mjs",
     "build:android": "cd apps/app && ../../scripts/rt.sh run build:android",
     "build:desktop": "cd apps/app && ../../scripts/rt.sh run build:electron",
