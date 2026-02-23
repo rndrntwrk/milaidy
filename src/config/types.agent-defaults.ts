@@ -64,6 +64,10 @@ export type SandboxBrowserSettings = {
   headless?: boolean;
   enableNoVnc?: boolean;
   /**
+   * Host path for persistent browser state (mounted into the browser container).
+   */
+  profilePath?: string;
+  /**
    * Allow sandboxed sessions to target the host browser control server.
    * Default: false.
    */

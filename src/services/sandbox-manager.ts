@@ -64,6 +64,7 @@ export interface SandboxManagerConfig {
     headless?: boolean;
     autoStart?: boolean;
     autoStartTimeoutMs?: number;
+    profilePath?: string;
   };
 }
 
@@ -426,15 +427,29 @@ export class SandboxManager {
     const name = `${this.config.containerPrefix}-browser-${Date.now()}`;
     const cdpPort = this.config.browser?.cdpPort ?? 9222;
     const vncPort = this.config.browser?.vncPort ?? 5900;
+    const browserContainerHome = "/home/node/.milaidy-browser-home";
+    const browserProfilePath =
+      this.config.browser?.profilePath?.trim() ||
+      join(
+        this.config.workspaceRoot ??
+          join(process.env.HOME ?? "/tmp", ".milaidy", "browser-workspace"),
+        "browser",
+      );
     const image =
       this.config.browser?.image ?? "milaidy-sandbox-browser:bookworm-slim";
+    mkdirSync(browserProfilePath, { recursive: true });
 
     return this.engine.runContainer({
       image,
       name,
       detach: true,
-      mounts: [],
-      env: {},
+      mounts: [{ host: browserProfilePath, container: browserContainerHome }],
+      env: {
+        MILAIDY_BROWSER_HOME: browserContainerHome,
+        MILAIDY_BROWSER_STATE_PATH: browserProfilePath,
+        MILAIDY_BROWSER_CDP_PORT: String(cdpPort),
+        MILAIDY_BROWSER_VNC_PORT: String(vncPort),
+      },
       network: "bridge",
       user: "1000:1000",
       capDrop: [],
