@@ -24,12 +24,37 @@ import type { IpcValue } from "./ipc-types";
  * milady dist bundles are ESM.  This wrapper keeps a real `import()` call
  * at runtime.
  *
- * If the `new Function` trick fails (e.g. Electron CSP), we fall back to
- * require() with the filesystem path (file:// URLs don't work with require).
+ * For ASAR-packed files (Electron packaged app), ESM import() doesn't work
+ * because Node's ESM loader can't read from ASAR archives.  In that case
+ * we fall back to require() with the filesystem path.
  */
 const dynamicImport = async (
   specifier: string,
 ): Promise<Record<string, unknown>> => {
+  // Convert file:// URLs to filesystem paths for require() fallback
+  const fsPath = specifier.startsWith("file://")
+    ? fileURLToPath(specifier)
+    : specifier;
+
+  // If the path is inside an ASAR archive, require() is the only option.
+  // Electron patches require() to handle ASAR reads, but the ESM loader
+  // does NOT support ASAR.
+  const isAsar = fsPath.includes(".asar");
+
+  if (isAsar) {
+    console.log(`[Agent] Loading from ASAR via require(): ${fsPath}`);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      return require(fsPath) as Record<string, unknown>;
+    } catch (requireErr) {
+      console.error(
+        "[Agent] ASAR require() failed:",
+        requireErr instanceof Error ? requireErr.message : requireErr,
+      );
+      throw requireErr;
+    }
+  }
+
   // Primary path: use new Function to get a real async import() at runtime,
   // bypassing tsc's CJS downgrade.
   try {
@@ -43,9 +68,6 @@ const dynamicImport = async (
       "[Agent] ESM dynamic import failed, falling back to require():",
       primaryErr instanceof Error ? primaryErr.message : primaryErr,
     );
-    const fsPath = specifier.startsWith("file://")
-      ? fileURLToPath(specifier)
-      : specifier;
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require(fsPath) as Record<string, unknown>;
   }
@@ -127,9 +149,14 @@ export class AgentManager {
     try {
       // Resolve the milady dist.
       // In dev: __dirname = electron/build/src/native/ → 6 levels up to milady root/dist
-      // In packaged app: dist is bundled into app.asar at app.getAppPath()/milady-dist
+      // In packaged app: dist is unpacked to app.asar.unpacked/milady-dist
+      // (asarUnpack in electron-builder.config.json ensures milady-dist is
+      // extracted outside the ASAR so ESM import() works normally.)
       const miladyDist = app.isPackaged
-        ? path.join(app.getAppPath(), "milady-dist")
+        ? path.join(
+          app.getAppPath().replace("app.asar", "app.asar.unpacked"),
+          "milady-dist",
+        )
         : path.resolve(__dirname, "../../../../../../dist");
 
       console.log(
