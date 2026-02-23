@@ -222,4 +222,91 @@ describe("stream555-auth plugin actions", () => {
     expect(envelope.code).toBe("OK");
     expect(envelope.action).toBe("STREAM555_AUTH_WALLET_PROVISION_LINKED");
   });
+
+  it("requests wallet auth challenge via agent wallet route", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, {
+        challengeId: "challenge-1",
+        message: "sign this message",
+      }),
+    );
+
+    const action = resolveAction("STREAM555_AUTH_WALLET_CHALLENGE");
+    const result = await action.handler?.(
+      INTERNAL_RUNTIME,
+      INTERNAL_MESSAGE,
+      INTERNAL_STATE,
+      {
+        parameters: {
+          walletAddress: "0x1234567890abcdef1234567890abcdef12345678",
+          chainType: "evm",
+          agentId: "alice-wallet",
+        },
+      } as never,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("/api/agent/v1/auth/wallet/challenge");
+    expect(parseFetchBody(fetchMock.mock.calls[0])).toEqual({
+      walletAddress: "0x1234567890abcdef1234567890abcdef12345678",
+      chainType: "evm",
+      agentId: "alice-wallet",
+    });
+
+    expect(result?.success).toBe(true);
+    const envelope = parseEnvelope(result as { text: string });
+    expect(envelope.code).toBe("OK");
+    expect(envelope.action).toBe("STREAM555_AUTH_WALLET_CHALLENGE");
+  });
+
+  it("verifies wallet challenge and sets active bearer token", async () => {
+    process.env.STREAM555_AGENT_API_KEY =
+      "sk_ag_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    delete process.env.STREAM555_AGENT_TOKEN;
+
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(201, {
+        token: "wallet-auth-token",
+        agentId: "alice-wallet",
+        userId: "user-1",
+        actorId: "actor-1",
+        policyId: "policy-v1",
+        walletAddress: "0x1234567890abcdef1234567890abcdef12345678",
+        chainType: "evm",
+        scopes: ["stream:*"],
+      }),
+    );
+
+    const action = resolveAction("STREAM555_AUTH_WALLET_VERIFY");
+    const result = await action.handler?.(
+      INTERNAL_RUNTIME,
+      INTERNAL_MESSAGE,
+      INTERNAL_STATE,
+      {
+        parameters: {
+          challengeId: "challenge-1",
+          signature: "0xdeadbeef",
+        },
+      } as never,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("/api/agent/v1/auth/wallet/verify");
+    expect(parseFetchBody(fetchMock.mock.calls[0])).toEqual({
+      challengeId: "challenge-1",
+      signature: "0xdeadbeef",
+    });
+
+    expect(process.env.STREAM555_AGENT_TOKEN).toBe("wallet-auth-token");
+    expect(process.env.STREAM555_AGENT_API_KEY).toBeUndefined();
+
+    expect(result?.success).toBe(true);
+    const envelope = parseEnvelope(result as { text: string });
+    expect(envelope.code).toBe("OK");
+    expect(envelope.action).toBe("STREAM555_AUTH_WALLET_VERIFY");
+  });
 });

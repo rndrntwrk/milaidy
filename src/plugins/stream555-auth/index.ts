@@ -208,6 +208,13 @@ function setActiveApiKey(apiKey: string): void {
   invalidateExchangedAgentTokenCache();
 }
 
+function setActiveBearerToken(token: string): void {
+  process.env[STREAM555_AGENT_TOKEN_ENV] = token;
+  delete process.env[STREAM555_AGENT_API_KEY_ENV];
+  delete process.env[STREAM_API_BEARER_TOKEN_ENV];
+  invalidateExchangedAgentTokenCache();
+}
+
 const stream555AuthProvider: Provider = {
   name: "stream555Auth",
   description:
@@ -226,7 +233,7 @@ const stream555AuthProvider: Provider = {
       text: [
         "## 555stream Auth Surface",
         "",
-        "Actions: STREAM555_AUTH_APIKEY_CREATE, STREAM555_AUTH_APIKEY_LIST, STREAM555_AUTH_APIKEY_REVOKE, STREAM555_AUTH_APIKEY_SET_ACTIVE, STREAM555_AUTH_WALLET_PROVISION_LINKED",
+        "Actions: STREAM555_AUTH_APIKEY_CREATE, STREAM555_AUTH_APIKEY_LIST, STREAM555_AUTH_APIKEY_REVOKE, STREAM555_AUTH_APIKEY_SET_ACTIVE, STREAM555_AUTH_WALLET_CHALLENGE, STREAM555_AUTH_WALLET_VERIFY, STREAM555_AUTH_WALLET_PROVISION_LINKED",
         `Base configured: ${baseConfigured ? "yes" : "no"} (${resolveBaseEnvSource()})`,
         `Admin API key configured: ${adminConfigured ? "yes" : "no"} (${STREAM555_ADMIN_API_KEY_ENV})`,
         `Agent auth configured: ${authConfigured ? "yes" : "no"} (${describeAgentAuthSource()})`,
@@ -632,6 +639,199 @@ const provisionLinkedWalletAction: Action = {
   ],
 };
 
+const walletChallengeAction: Action = {
+  name: "STREAM555_AUTH_WALLET_CHALLENGE",
+  similes: [
+    "STREAM555_WALLET_CHALLENGE",
+    "STREAM555_AUTH_CHALLENGE_WALLET",
+  ],
+  description:
+    "Requests a wallet-sign challenge from the 555stream agent auth surface.",
+  validate: async () => true,
+  handler: async (runtime, message, state, options) => {
+    try {
+      assertStreamControlAccess(
+        runtime,
+        message,
+        state,
+        "STREAM555_AUTH_WALLET_CHALLENGE",
+      );
+      const walletAddress = readParam(
+        options as HandlerOptions | undefined,
+        "walletAddress",
+      );
+      if (!walletAddress) {
+        throw new Error("walletAddress is required");
+      }
+      const base = resolveBaseUrl();
+      const chainType =
+        readParam(options as HandlerOptions | undefined, "chainType") || "evm";
+      const agentId = readParam(
+        options as HandlerOptions | undefined,
+        "agentId",
+      );
+
+      const response = await requestJson(
+        "POST",
+        base,
+        "/api/agent/v1/auth/wallet/challenge",
+        {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        {
+          walletAddress,
+          chainType,
+          ...(agentId ? { agentId } : {}),
+        },
+      );
+      if (!response.ok) {
+        return buildEnvelope({
+          ok: false,
+          action: "STREAM555_AUTH_WALLET_CHALLENGE",
+          status: response.status || 502,
+          message: `wallet challenge failed (${response.status}): ${getErrorDetail(response)}`,
+          details: response.data ?? response.rawBody,
+        });
+      }
+
+      return buildEnvelope({
+        ok: true,
+        action: "STREAM555_AUTH_WALLET_CHALLENGE",
+        status: response.status,
+        message: "wallet challenge issued",
+        data: response.data ?? {},
+      });
+    } catch (err) {
+      return exceptionAction(MODULE, "STREAM555_AUTH_WALLET_CHALLENGE", err);
+    }
+  },
+  parameters: [
+    { name: "walletAddress", description: "Agent wallet address for sign-in", required: true, schema: { type: "string" as const } },
+    { name: "chainType", description: "evm|solana (default evm)", required: false, schema: { type: "string" as const } },
+    { name: "agentId", description: "Optional stable agent identifier", required: false, schema: { type: "string" as const } },
+  ],
+};
+
+const walletVerifyAction: Action = {
+  name: "STREAM555_AUTH_WALLET_VERIFY",
+  similes: [
+    "STREAM555_WALLET_VERIFY",
+    "STREAM555_AUTH_VERIFY_WALLET",
+  ],
+  description:
+    "Verifies a signed wallet challenge and can set the returned token as active runtime auth.",
+  validate: async () => true,
+  handler: async (runtime, message, state, options) => {
+    try {
+      assertStreamControlAccess(
+        runtime,
+        message,
+        state,
+        "STREAM555_AUTH_WALLET_VERIFY",
+      );
+      const challengeId = readParam(
+        options as HandlerOptions | undefined,
+        "challengeId",
+      );
+      const signature = readParam(
+        options as HandlerOptions | undefined,
+        "signature",
+      );
+      if (!challengeId) {
+        throw new Error("challengeId is required");
+      }
+      if (!signature) {
+        throw new Error("signature is required");
+      }
+
+      const setActive = parseBoolean(
+        readParam(options as HandlerOptions | undefined, "setActive"),
+        true,
+      );
+      const revealToken = parseBoolean(
+        readParam(options as HandlerOptions | undefined, "revealToken"),
+        false,
+      );
+
+      const base = resolveBaseUrl();
+      const response = await requestJson(
+        "POST",
+        base,
+        "/api/agent/v1/auth/wallet/verify",
+        {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        {
+          challengeId,
+          signature,
+        },
+      );
+      if (!response.ok) {
+        return buildEnvelope({
+          ok: false,
+          action: "STREAM555_AUTH_WALLET_VERIFY",
+          status: response.status || 502,
+          message: `wallet verify failed (${response.status}): ${getErrorDetail(response)}`,
+          details: response.data ?? response.rawBody,
+        });
+      }
+
+      const returnedToken =
+        typeof response.data?.token === "string" ? response.data.token : null;
+      if (setActive && returnedToken) {
+        setActiveBearerToken(returnedToken);
+      }
+
+      const data: JsonObject = {
+        agentId:
+          typeof response.data?.agentId === "string" ? response.data.agentId : null,
+        userId:
+          typeof response.data?.userId === "string" ? response.data.userId : null,
+        actorId:
+          typeof response.data?.actorId === "string" ? response.data.actorId : null,
+        policyId:
+          typeof response.data?.policyId === "string" ? response.data.policyId : null,
+        sessionKind:
+          typeof response.data?.sessionKind === "string"
+            ? response.data.sessionKind
+            : null,
+        walletAddress:
+          typeof response.data?.walletAddress === "string"
+            ? response.data.walletAddress
+            : null,
+        chainType:
+          typeof response.data?.chainType === "string" ? response.data.chainType : null,
+        expiresAt:
+          typeof response.data?.expiresAt === "string" ? response.data.expiresAt : null,
+        scopes: Array.isArray(response.data?.scopes) ? response.data.scopes : null,
+        activeTokenSet: Boolean(setActive && returnedToken),
+        authSource: describeAgentAuthSource(),
+      };
+      if (revealToken && returnedToken) {
+        data.token = returnedToken;
+      }
+
+      return buildEnvelope({
+        ok: true,
+        action: "STREAM555_AUTH_WALLET_VERIFY",
+        status: response.status,
+        message: "wallet challenge verified",
+        data,
+      });
+    } catch (err) {
+      return exceptionAction(MODULE, "STREAM555_AUTH_WALLET_VERIFY", err);
+    }
+  },
+  parameters: [
+    { name: "challengeId", description: "Challenge identifier returned by wallet challenge action", required: true, schema: { type: "string" as const } },
+    { name: "signature", description: "Wallet signature over challenge message", required: true, schema: { type: "string" as const } },
+    { name: "setActive", description: "Set returned token as active runtime auth (default true)", required: false, schema: { type: "string" as const } },
+    { name: "revealToken", description: "Include returned token in response envelope (default false)", required: false, schema: { type: "string" as const } },
+  ],
+};
+
 export function createStream555AuthPlugin(): Plugin {
   return {
     name: "stream555-auth",
@@ -643,6 +843,8 @@ export function createStream555AuthPlugin(): Plugin {
       listApiKeysAction,
       revokeApiKeyAction,
       setActiveApiKeyAction,
+      walletChallengeAction,
+      walletVerifyAction,
       provisionLinkedWalletAction,
     ],
   };
