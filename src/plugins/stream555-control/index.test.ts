@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createStream555ControlPlugin } from "./index.js";
+
+vi.mock("../../services/registry-client.js", () => ({
+  getPluginInfo: vi.fn(),
+}));
 
 type EnvSnapshot = Record<string, string | undefined>;
 
@@ -48,7 +51,8 @@ function parseEnvelope(result: { text: string }): Record<string, unknown> {
   return JSON.parse(result.text) as Record<string, unknown>;
 }
 
-function resolveAction(name: string) {
+async function resolveAction(name: string) {
+  const { createStream555ControlPlugin } = await import("./index.js");
   const plugin = createStream555ControlPlugin();
   const actions = plugin.actions ?? [];
   const action = actions.find((entry) => entry.name === name);
@@ -69,6 +73,7 @@ describe("stream555-control plugin actions", () => {
   let envBefore: EnvSnapshot;
 
   beforeEach(() => {
+    vi.resetModules();
     envBefore = snapshotEnv();
     process.env.STREAM555_BASE_URL = "http://control-plane:3000";
     process.env.STREAM555_AGENT_TOKEN = "test-token";
@@ -89,7 +94,7 @@ describe("stream555-control plugin actions", () => {
       .mockResolvedValueOnce(jsonResponse(200, { sessionId: "session-1" }))
       .mockResolvedValueOnce(jsonResponse(200, { ok: true }));
 
-    const action = resolveAction("STREAM555_RADIO_CONTROL");
+    const action = await resolveAction("STREAM555_RADIO_CONTROL");
     const result = await action.handler?.(
       INTERNAL_RUNTIME,
       INTERNAL_MESSAGE,
@@ -128,7 +133,7 @@ describe("stream555-control plugin actions", () => {
       .mockResolvedValueOnce(jsonResponse(200, { sessionId: "session-2" }))
       .mockResolvedValueOnce(jsonResponse(200, { accepted: true }));
 
-    const action = resolveAction("STREAM555_SCREEN_SHARE");
+    const action = await resolveAction("STREAM555_SCREEN_SHARE");
     const result = await action.handler?.(
       INTERNAL_RUNTIME,
       INTERNAL_MESSAGE,
@@ -155,7 +160,7 @@ describe("stream555-control plugin actions", () => {
       .mockResolvedValueOnce(jsonResponse(200, { sessionId: "session-3" }))
       .mockResolvedValueOnce(jsonResponse(200, { queued: true }));
 
-    const action = resolveAction("STREAM555_SEGMENT_OVERRIDE");
+    const action = await resolveAction("STREAM555_SEGMENT_OVERRIDE");
     const result = await action.handler?.(
       INTERNAL_RUNTIME,
       INTERNAL_MESSAGE,
@@ -194,7 +199,7 @@ describe("stream555-control plugin actions", () => {
       }),
     );
 
-    const action = resolveAction("STREAM555_EARNINGS_ESTIMATE");
+    const action = await resolveAction("STREAM555_EARNINGS_ESTIMATE");
     const result = await action.handler?.(
       INTERNAL_RUNTIME,
       INTERNAL_MESSAGE,
@@ -225,7 +230,7 @@ describe("stream555-control plugin actions", () => {
   it("returns a runtime exception envelope when base url is missing", async () => {
     delete process.env.STREAM555_BASE_URL;
     const fetchMock = vi.spyOn(globalThis, "fetch");
-    const action = resolveAction("STREAM555_SCREEN_SHARE");
+    const action = await resolveAction("STREAM555_SCREEN_SHARE");
 
     const result = await action.handler?.(
       INTERNAL_RUNTIME,
@@ -239,5 +244,80 @@ describe("stream555-control plugin actions", () => {
     const envelope = parseEnvelope(result as { text: string });
     expect(envelope.code).toBe("E_RUNTIME_EXCEPTION");
     expect(String(envelope.message)).toContain("STREAM555_BASE_URL");
+  });
+
+  it("resolves app viewer URL (prefers non-local) and starts website go-live", async () => {
+    const { getPluginInfo } = await import("../../services/registry-client.js");
+    vi.mocked(getPluginInfo).mockResolvedValue({
+      name: "@elizaos/app-babylon",
+      gitRepo: "elizaos/app-babylon",
+      gitUrl: "https://github.com/elizaos/app-babylon.git",
+      description: "Prediction market platform",
+      homepage: "https://babylon.social",
+      topics: ["defi"],
+      stars: 200,
+      language: "TypeScript",
+      npm: {
+        package: "@elizaos/app-babylon",
+        v0Version: null,
+        v1Version: null,
+        v2Version: "1.0.0",
+      },
+      git: { v0Branch: null, v1Branch: null, v2Branch: "main" },
+      supports: { v0: false, v1: false, v2: true },
+      kind: "app",
+      appMeta: {
+        displayName: "Babylon",
+        category: "platform",
+        launchType: "url",
+        launchUrl: "http://localhost:3000",
+        icon: null,
+        capabilities: [],
+        minPlayers: null,
+        maxPlayers: null,
+      },
+    });
+
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { sessionId: "session-4" }))
+      .mockResolvedValueOnce(jsonResponse(200, { accepted: true }));
+
+    const action = await resolveAction("STREAM555_GO_LIVE_APP");
+    const result = await action.handler?.(
+      INTERNAL_RUNTIME,
+      INTERNAL_MESSAGE,
+      INTERNAL_STATE,
+      { parameters: { appName: "babylon", sessionId: "session-4" } } as never,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, streamStartCall] = fetchMock.mock.calls;
+    expect(String(streamStartCall[0])).toContain(
+      "/api/agent/v1/sessions/session-4/stream/start",
+    );
+    expect(parseFetchBody(streamStartCall)).toEqual({
+      input: { type: "website", url: "https://babylon.social" },
+      options: {
+        scene: "default",
+        appName: "@elizaos/app-babylon",
+        resolvedFrom: "homepage",
+        app: {
+          name: "@elizaos/app-babylon",
+          displayName: "Babylon",
+          category: "platform",
+          launchType: "url",
+          viewer: null,
+          requirements: {
+            wrapperRequired: false,
+            wrapperProvided: false,
+            publicUrlRequired: true,
+            localhostAllowed: false,
+          },
+        },
+      },
+    });
+    expect(result?.success).toBe(true);
+    expect(parseEnvelope(result as { text: string }).code).toBe("OK");
   });
 });

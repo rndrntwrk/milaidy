@@ -23,6 +23,7 @@ import {
   isAgentAuthConfigured,
   resolveAgentBearer,
 } from "../five55-shared/agent-auth.js";
+import { getPluginInfo, type RegistryPluginInfo } from "../../services/registry-client.js";
 
 const STREAM555_BASE_ENV = "STREAM555_BASE_URL";
 const STREAM_SESSION_ENV = "STREAM_SESSION_ID";
@@ -69,6 +70,129 @@ function parseCsvList(value: string | undefined): string[] | undefined {
     .map((entry) => entry.trim().toLowerCase())
     .filter(Boolean);
   return list.length > 0 ? list : undefined;
+}
+
+function normalizeAppName(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) throw new Error("appName is required");
+  if (trimmed.startsWith("@")) return trimmed;
+
+  const normalized = trimmed
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  if (!normalized) throw new Error("appName is required");
+
+  if (
+    normalized === "eliza-town" ||
+    normalized === "elizatown" ||
+    normalized === "agent-town" ||
+    normalized === "agenttown" ||
+    normalized === "ai-town" ||
+    normalized === "aitown"
+  ) {
+    return "@elizaos/app-agent-town";
+  }
+
+  if (normalized.startsWith("app-") || normalized.startsWith("plugin-")) {
+    return `@elizaos/${normalized}`;
+  }
+
+  return `@elizaos/app-${normalized}`;
+}
+
+function getTemplateFallbackValue(key: string): string | undefined {
+  if (key === "RS_SDK_BOT_NAME") {
+    const runtimeBotName = process.env.BOT_NAME?.trim();
+    if (runtimeBotName && runtimeBotName.length > 0) {
+      return runtimeBotName;
+    }
+    return "testbot";
+  }
+  return undefined;
+}
+
+function substituteTemplateVars(raw: string): string {
+  return raw.replace(/\{([A-Z0-9_]+)\}/g, (_full, key: string) => {
+    const value = process.env[key];
+    if (value && value.trim().length > 0) {
+      return value.trim();
+    }
+    return getTemplateFallbackValue(key) ?? "";
+  });
+}
+
+function buildViewerUrl(
+  baseUrl: string,
+  embedParams?: Record<string, string>,
+): string {
+  if (!embedParams || Object.keys(embedParams).length === 0) {
+    return substituteTemplateVars(baseUrl);
+  }
+  const resolvedBaseUrl = substituteTemplateVars(baseUrl);
+  const [beforeHash, hashPartRaw] = resolvedBaseUrl.split("#", 2);
+  const [pathPart, queryPartRaw] = beforeHash.split("?", 2);
+  const queryParams = new URLSearchParams(queryPartRaw ?? "");
+  for (const [key, rawValue] of Object.entries(embedParams)) {
+    queryParams.set(key, substituteTemplateVars(rawValue));
+  }
+  const query = queryParams.toString();
+  const hash = hashPartRaw ? `#${hashPartRaw}` : "";
+  return `${pathPart}${query.length > 0 ? `?${query}` : ""}${hash}`;
+}
+
+function isLocalhostUrl(raw: string): boolean {
+  try {
+    const url = new URL(raw);
+    const hostname = url.hostname.toLowerCase();
+    return (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "0.0.0.0" ||
+      hostname === "::1"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function resolveAppUrlCandidates(
+  pluginInfo: RegistryPluginInfo,
+): Array<{ source: "viewer" | "launchUrl" | "homepage"; url: string }> {
+  const candidates: Array<{
+    source: "viewer" | "launchUrl" | "homepage";
+    url: string;
+  }> = [];
+
+  const viewer = pluginInfo.appMeta?.viewer;
+  if (viewer?.url) {
+    candidates.push({
+      source: "viewer",
+      url: buildViewerUrl(viewer.url, viewer.embedParams),
+    });
+  }
+  const launchUrl = pluginInfo.appMeta?.launchUrl;
+  if (launchUrl) {
+    candidates.push({ source: "launchUrl", url: buildViewerUrl(launchUrl) });
+  }
+  if (pluginInfo.homepage) {
+    candidates.push({
+      source: "homepage",
+      url: buildViewerUrl(pluginInfo.homepage),
+    });
+  }
+
+  return candidates
+    .map((entry) => ({ ...entry, url: entry.url.trim() }))
+    .filter((entry) => entry.url.length > 0);
+}
+
+function parseAllowLocalhost(raw: string | undefined): boolean {
+  if (!raw) return false;
+  const normalized = raw.trim().toLowerCase();
+  if (!normalized) return false;
+  return !["false", "0", "no", "off"].includes(normalized);
 }
 
 async function fetchJson(
@@ -226,7 +350,7 @@ const stream555ControlProvider: Provider = {
       text: [
         "## 555stream Control Surface",
         "",
-        "Actions: STREAM555_GO_LIVE, STREAM555_GO_LIVE_SEGMENTS, STREAM555_SEGMENT_STATE, STREAM555_SCREEN_SHARE, STREAM555_END_LIVE, STREAM555_AD_CREATE, STREAM555_AD_TRIGGER, STREAM555_AD_DISMISS, STREAM555_RADIO_CONTROL, STREAM555_GUEST_INVITE, STREAM555_SCENE_SET, STREAM555_PIP_ENABLE, STREAM555_SEGMENT_OVERRIDE, STREAM555_EARNINGS_ESTIMATE",
+        "Actions: STREAM555_GO_LIVE, STREAM555_GO_LIVE_APP, STREAM555_GO_LIVE_SEGMENTS, STREAM555_SEGMENT_STATE, STREAM555_SCREEN_SHARE, STREAM555_END_LIVE, STREAM555_AD_CREATE, STREAM555_AD_TRIGGER, STREAM555_AD_DISMISS, STREAM555_RADIO_CONTROL, STREAM555_GUEST_INVITE, STREAM555_SCENE_SET, STREAM555_PIP_ENABLE, STREAM555_SEGMENT_OVERRIDE, STREAM555_EARNINGS_ESTIMATE",
         `Base URL configured: ${configured ? "yes" : "no"} (${STREAM555_BASE_ENV})`,
         `Agent auth configured: ${hasToken ? "yes" : "no"} (${describeAgentAuthSource()})`,
       ].join("\n"),
@@ -285,6 +409,150 @@ const goLiveAction: Action = {
     { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
     { name: "inputType", description: "camera|screen|website|avatar|radio|...", required: false, schema: { type: "string" as const } },
     { name: "inputUrl", description: "Optional source url for website/rtmp/file", required: false, schema: { type: "string" as const } },
+    { name: "scene", description: "Initial scene id", required: false, schema: { type: "string" as const } },
+  ],
+};
+
+const goLiveAppAction: Action = {
+  name: "STREAM555_GO_LIVE_APP",
+  similes: ["STREAM555_APP_GO_LIVE", "STREAM555_STREAM_APP", "GO_LIVE_APP_STREAM555"],
+  description:
+    "Starts a 555stream website-capture stream using a Milaidy app viewer URL (Babylon, Agent Town, etc).",
+  validate: async () => true,
+  handler: async (runtime, message, state, options) => {
+    try {
+      assertStreamControlAccess(runtime, message, state, "STREAM555_GO_LIVE_APP");
+
+      const appNameRaw = readParam(options as HandlerOptions | undefined, "appName");
+      if (!appNameRaw) throw new Error("appName is required");
+      const viewerUrlOverride = readParam(
+        options as HandlerOptions | undefined,
+        "viewerUrl",
+      );
+      const allowLocalhost = parseAllowLocalhost(
+        readParam(options as HandlerOptions | undefined, "allowLocalhost"),
+      );
+      const scene = readParam(options as HandlerOptions | undefined, "scene") || "default";
+      const requestedSessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+
+      const appName = normalizeAppName(appNameRaw);
+
+      let resolvedUrl = viewerUrlOverride?.trim() ?? "";
+      let resolvedFrom: "viewerUrl" | "viewer" | "launchUrl" | "homepage" = "viewerUrl";
+      const pluginInfo = await getPluginInfo(appName);
+      if (pluginInfo && pluginInfo.kind !== "app") {
+        throw new Error(`"${pluginInfo.name}" is not an app.`);
+      }
+      const wrapperRequired = Boolean(pluginInfo?.appMeta?.viewer?.postMessageAuth);
+      const wrapperProvided = Boolean(viewerUrlOverride && viewerUrlOverride.trim().length > 0);
+      if (wrapperRequired && !wrapperProvided) {
+        throw new Error(
+          `App "${appName}" requires embed auth (postMessageAuth). Provide a wrapper viewerUrl that performs the auth handshake.`,
+        );
+      }
+
+      if (!resolvedUrl) {
+        if (!pluginInfo) {
+          throw new Error(`App "${appNameRaw}" not found in the registry.`);
+        }
+
+        const candidates = resolveAppUrlCandidates(pluginInfo);
+        if (candidates.length === 0) {
+          throw new Error(`"${pluginInfo.name}" has no streamable viewer URL.`);
+        }
+
+        const chosen = allowLocalhost
+          ? candidates[0]
+          : candidates.find((entry) => !isLocalhostUrl(entry.url)) ?? candidates[0];
+
+        resolvedUrl = chosen.url;
+        resolvedFrom = chosen.source;
+      }
+
+      if (!allowLocalhost && isLocalhostUrl(resolvedUrl)) {
+        throw new Error(
+          `resolved viewer URL is localhost (${resolvedUrl}). Provide a public viewerUrl override or set allowLocalhost=true for local testing.`,
+        );
+      }
+
+      const base = resolveBaseUrl();
+      const token = await resolveAgentToken(base);
+      const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+
+      const appOptions = {
+        name: appName,
+        displayName: pluginInfo?.appMeta?.displayName ?? null,
+        category: pluginInfo?.appMeta?.category ?? null,
+        launchType: pluginInfo?.appMeta?.launchType ?? null,
+        viewer: pluginInfo?.appMeta?.viewer
+          ? {
+              postMessageAuth: Boolean(pluginInfo.appMeta.viewer.postMessageAuth),
+              sandbox: pluginInfo.appMeta.viewer.sandbox ?? null,
+              embedParamKeys: Object.keys(pluginInfo.appMeta.viewer.embedParams ?? {}),
+            }
+          : null,
+        requirements: {
+          wrapperRequired,
+          wrapperProvided,
+          publicUrlRequired: !allowLocalhost,
+          localhostAllowed: allowLocalhost,
+        },
+      };
+
+      return executeApiAction({
+        module: "stream555.control",
+        action: "STREAM555_GO_LIVE_APP",
+        base,
+        endpoint: `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/stream/start`,
+        payload: {
+          input: {
+            type: "website",
+            url: resolvedUrl,
+          },
+          options: {
+            scene,
+            appName,
+            resolvedFrom,
+            app: appOptions,
+          },
+        },
+        requestContract: {
+          input: { required: true, type: "object" },
+          options: { required: false, type: "object" },
+        },
+        responseContract: {},
+        successMessage: "app go-live requested",
+        transport: commandTransport(token),
+        context: { sessionId },
+      });
+    } catch (err) {
+      return exceptionAction("stream555.control", "STREAM555_GO_LIVE_APP", err);
+    }
+  },
+  parameters: [
+    {
+      name: "appName",
+      description: "App package or alias (babylon, agent-town, eliza town, etc)",
+      required: true,
+      schema: { type: "string" as const },
+    },
+    {
+      name: "viewerUrl",
+      description:
+        "Optional explicit viewer URL override (must be reachable by capture-service)",
+      required: false,
+      schema: { type: "string" as const },
+    },
+    {
+      name: "allowLocalhost",
+      description: "Allow localhost URLs for local testing (default false)",
+      required: false,
+      schema: { type: "string" as const },
+    },
+    { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
     { name: "scene", description: "Initial scene id", required: false, schema: { type: "string" as const } },
   ],
 };
@@ -1043,6 +1311,7 @@ export function createStream555ControlPlugin(): Plugin {
     providers: [stream555ControlProvider],
     actions: [
       goLiveAction,
+      goLiveAppAction,
       goLiveSegmentsAction,
       segmentStateAction,
       screenShareAction,

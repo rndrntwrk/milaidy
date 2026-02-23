@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("./registry-client.js", () => ({
   listApps: vi.fn().mockResolvedValue([]),
   getAppInfo: vi.fn().mockResolvedValue(null),
+  getPluginInfo: vi.fn().mockResolvedValue(null),
   searchApps: vi.fn().mockResolvedValue([]),
 }));
 
@@ -197,8 +198,9 @@ describe("AppManager", () => {
       expect(mockInstall).not.toHaveBeenCalled();
     });
 
-    it("throws when plugin install fails", async () => {
+    it("throws when plugin installation fails", async () => {
       const { getAppInfo } = await import("./registry-client.js");
+      const { getPluginInfo } = await import("./registry-client.js");
       vi.mocked(getAppInfo).mockResolvedValue({
         name: "@elizaos/app-test",
         displayName: "Test",
@@ -219,6 +221,28 @@ describe("AppManager", () => {
           v2Version: null,
         },
       });
+      vi.mocked(getPluginInfo).mockResolvedValue({
+        name: "@elizaos/app-test",
+        gitRepo: "elizaos/app-test",
+        gitUrl: "https://github.com/elizaos/app-test.git",
+        description: "Test",
+        homepage: null,
+        topics: [],
+        stars: 0,
+        language: "TypeScript",
+        npm: {
+          package: "@elizaos/app-test",
+          v0Version: null,
+          v1Version: null,
+          v2Version: "1.0.0",
+        },
+        git: {
+          v0Branch: null,
+          v1Branch: null,
+          v2Branch: "main",
+        },
+        supports: { v0: false, v1: false, v2: true },
+      });
 
       const { installPlugin, listInstalledPlugins } = await import(
         "./plugin-installer.js"
@@ -238,6 +262,68 @@ describe("AppManager", () => {
       await expect(mgr.launch("@elizaos/app-test")).rejects.toThrow(
         "Package not found",
       );
+    });
+
+    it("skips plugin install when app metadata has no install source", async () => {
+      const { getAppInfo } = await import("./registry-client.js");
+      const { getPluginInfo } = await import("./registry-client.js");
+      vi.mocked(getAppInfo).mockResolvedValue({
+        name: "@elizaos/app-test",
+        displayName: "Test",
+        description: "",
+        category: "game",
+        launchType: "url",
+        launchUrl: null,
+        icon: null,
+        capabilities: [],
+        stars: 0,
+        repository: "",
+        latestVersion: null,
+        supports: { v0: false, v1: false, v2: false },
+        npm: {
+          package: "@elizaos/app-test",
+          v0Version: null,
+          v1Version: null,
+          v2Version: null,
+        },
+      });
+      vi.mocked(getPluginInfo).mockResolvedValue({
+        name: "@elizaos/app-test",
+        gitRepo: "elizaos/app-test",
+        gitUrl: "https://github.com/elizaos/app-test.git",
+        description: "Test",
+        homepage: null,
+        topics: [],
+        stars: 0,
+        language: "TypeScript",
+        npm: {
+          package: "@elizaos/app-test",
+          v0Version: null,
+          v1Version: null,
+          v2Version: null,
+        },
+        git: {
+          v0Branch: null,
+          v1Branch: null,
+          v2Branch: "main",
+        },
+        supports: { v0: false, v1: false, v2: false },
+      });
+
+      const { installPlugin, listInstalledPlugins } = await import(
+        "./plugin-installer.js"
+      );
+      vi.mocked(listInstalledPlugins).mockReturnValue([]);
+      vi.mocked(installPlugin).mockClear();
+
+      const { AppManager } = await import("./app-manager.js");
+      const mgr = new AppManager();
+      const result = await mgr.launch("@elizaos/app-test");
+
+      expect(result.pluginInstalled).toBe(false);
+      expect(result.needsRestart).toBe(false);
+      expect(result.launchType).toBe("url");
+      expect(installPlugin).not.toHaveBeenCalled();
     });
 
     it("returns null viewer when app has no viewer config", async () => {

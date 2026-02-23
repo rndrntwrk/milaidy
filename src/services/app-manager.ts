@@ -19,6 +19,7 @@ import {
 import {
   type RegistryAppInfo,
   getAppInfo as registryGetAppInfo,
+  getPluginInfo as registryGetPluginInfo,
   listApps as registryListApps,
   searchApps as registrySearchApps,
 } from "./registry-client.js";
@@ -28,6 +29,10 @@ const HYPERSCAPE_APP_NAME = "@elizaos/app-hyperscape";
 const HYPERSCAPE_AUTH_MESSAGE_TYPE = "HYPERSCAPE_AUTH";
 const RS_2004SCAPE_APP_NAME = "@elizaos/app-2004scape";
 const RS_2004SCAPE_AUTH_MESSAGE_TYPE = "RS_2004SCAPE_AUTH";
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 export interface AppViewerAuthMessage {
   type: string;
@@ -213,6 +218,75 @@ function buildViewerConfig(
   return null;
 }
 
+function getPluginPackageName(
+  appInfo: RegistryAppInfo,
+  pluginInfo?: {
+    npm: {
+      package: string;
+      v0Version: string | null;
+      v1Version: string | null;
+      v2Version: string | null;
+    };
+  },
+): string {
+  const pluginPackage = pluginInfo?.npm.package;
+  if (pluginPackage && pluginPackage.trim().length > 0) {
+    return pluginPackage;
+  }
+  if (appInfo.npm.package && appInfo.npm.package.trim().length > 0) {
+    return appInfo.npm.package;
+  }
+  return appInfo.name;
+}
+
+function isPluginInstallable(
+  appInfo: RegistryAppInfo,
+  pluginInfo?: {
+    localPath?: string;
+    npm: {
+      v0Version: string | null;
+      v1Version: string | null;
+      v2Version: string | null;
+    };
+  },
+): boolean {
+  if (pluginInfo?.localPath) {
+    return true;
+  }
+  return (
+    [appInfo.npm.v2Version, appInfo.npm.v1Version, appInfo.npm.v0Version].some(
+      (version) => typeof version === "string" && version.trim().length > 0,
+    ) ||
+    (typeof pluginInfo?.npm.v2Version === "string" &&
+      pluginInfo.npm.v2Version.trim().length > 0) ||
+    (typeof pluginInfo?.npm.v1Version === "string" &&
+      pluginInfo.npm.v1Version.trim().length > 0) ||
+    (typeof pluginInfo?.npm.v0Version === "string" &&
+      pluginInfo.npm.v0Version.trim().length > 0)
+  );
+}
+
+async function getPluginMetadata(
+  appName: string,
+): Promise<{
+  npm: {
+    package: string;
+    v0Version: string | null;
+    v1Version: string | null;
+    v2Version: string | null;
+  };
+  localPath?: string;
+} | null> {
+  try {
+    return await registryGetPluginInfo(appName);
+  } catch (error) {
+    logger.warn(
+      `[app-manager] Failed to load plugin metadata for "${appName}": ${describeError(error)}`,
+    );
+    return null;
+  }
+}
+
 export class AppManager {
   private readonly activeSessions = new Map<string, ActiveAppSession>();
 
@@ -245,21 +319,22 @@ export class AppManager {
     if (!appInfo) {
       throw new Error(`App "${name}" not found in the registry.`);
     }
+    const pluginMeta = await getPluginMetadata(name);
+    const launchUrl = appInfo.launchUrl
+      ? substituteTemplateVars(appInfo.launchUrl)
+      : null;
+    const viewer = buildViewerConfig(appInfo, launchUrl);
 
     const isTestRun = process.env.VITEST || process.env.NODE_ENV === "test";
 
     // The app's plugin is what the agent needs to play the game.
     // It's the same npm package name as the app, or a separate plugin ref.
-    const pluginName = appInfo.name;
+    const pluginName = getPluginPackageName(appInfo, pluginMeta ?? undefined);
 
     // In test runs we exercise the API surface and viewer metadata without
     // performing real plugin installs (which would require network access and
     // slow down CI). Plugin installer behavior is covered by unit tests.
     if (isTestRun) {
-      const launchUrl = appInfo.launchUrl
-        ? substituteTemplateVars(appInfo.launchUrl)
-        : null;
-      const viewer = buildViewerConfig(appInfo, launchUrl);
       this.activeSessions.set(name, {
         appName: name,
         pluginName,
@@ -269,6 +344,29 @@ export class AppManager {
         startedAt: new Date().toISOString(),
       });
 
+      return {
+        pluginInstalled: false,
+        needsRestart: false,
+        displayName: appInfo.displayName,
+        launchType: appInfo.launchType,
+        launchUrl,
+        viewer,
+      };
+    }
+
+    const installable = isPluginInstallable(appInfo, pluginMeta ?? undefined);
+    if (!installable) {
+      logger.info(
+        `[app-manager] Skipping plugin install for "${name}" because no install source is configured.`,
+      );
+      this.activeSessions.set(name, {
+        appName: name,
+        pluginName,
+        launchType: appInfo.launchType,
+        launchUrl,
+        viewerUrl: viewer?.url ?? null,
+        startedAt: new Date().toISOString(),
+      });
       return {
         pluginInstalled: false,
         needsRestart: false,
@@ -302,10 +400,6 @@ export class AppManager {
     }
 
     // Build viewer config from registry app metadata
-    const launchUrl = appInfo.launchUrl
-      ? substituteTemplateVars(appInfo.launchUrl)
-      : null;
-    const viewer = buildViewerConfig(appInfo, launchUrl);
     this.activeSessions.set(name, {
       appName: name,
       pluginName,
@@ -330,9 +424,10 @@ export class AppManager {
     if (!appInfo) {
       throw new Error(`App "${name}" not found in the registry.`);
     }
+    const pluginMeta = await getPluginMetadata(name);
 
     const hadSession = this.activeSessions.delete(name);
-    const pluginName = appInfo.name;
+    const pluginName = getPluginPackageName(appInfo, pluginMeta ?? undefined);
     const installed = listInstalledPlugins();
     const isPluginInstalled = installed.some(
       (plugin) => plugin.name === pluginName,
