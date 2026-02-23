@@ -13,6 +13,14 @@ import {
 import dotenv from "dotenv";
 import { CORE_PLUGINS } from "../runtime/core-plugins";
 import { createMiladyPlugin } from "../runtime/milady-plugin";
+import {
+  type BenchmarkContext,
+  type CapturedAction,
+  clearCapturedAction,
+  createBenchmarkPlugin,
+  getCapturedAction,
+  setBenchmarkContext,
+} from "./plugin";
 
 // Load environment variables BEFORE anything else
 // This ensures API keys are available when plugins initialize
@@ -58,6 +66,25 @@ function formatUnknownError(error: unknown): string {
     return `${error.name}: ${error.message}`;
   }
   return String(error);
+}
+
+function disableManualCompactionAction(runtime: AgentRuntime): void {
+  const runtimeWithActions = runtime as AgentRuntime & {
+    actions?: Array<{ name?: string }>;
+  };
+  if (!Array.isArray(runtimeWithActions.actions)) {
+    return;
+  }
+  const compactSessionIndex = runtimeWithActions.actions.findIndex(
+    (action) => action?.name?.toUpperCase() === "COMPACT_SESSION",
+  );
+  if (compactSessionIndex === -1) {
+    return;
+  }
+  runtimeWithActions.actions.splice(compactSessionIndex, 1);
+  elizaLogger.info(
+    "[bench] Disabled manual COMPACT_SESSION action; auto-compaction remains enabled",
+  );
 }
 
 function toPlugin(candidate: unknown, source: string): Plugin {
@@ -151,21 +178,191 @@ function coerceParams(value: unknown): Record<string, unknown> {
   }
 
   if (typeof value === "string") {
+    const trimmed = value.trim();
     try {
-      const parsed = JSON.parse(value);
+      const parsed = JSON.parse(trimmed);
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
         return parsed as Record<string, unknown>;
       }
     } catch {
-      // ignore malformed param strings
+      // fall through to XML parsing
+    }
+
+    if (trimmed.startsWith("<")) {
+      const paramsByAction: Record<string, unknown> = {};
+      const actionMatches = [
+        ...trimmed.matchAll(/<([A-Za-z0-9_-]+)>([\s\S]*?)<\/\1>/g),
+      ];
+      for (const [, actionName, actionBody] of actionMatches) {
+        const actionParams: Record<string, unknown> = {};
+        const fieldMatches = [
+          ...actionBody.matchAll(/<([A-Za-z0-9_-]+)>([\s\S]*?)<\/\1>/g),
+        ];
+        for (const [, fieldName, fieldValue] of fieldMatches) {
+          actionParams[fieldName] = fieldValue.trim();
+        }
+        paramsByAction[actionName] =
+          Object.keys(actionParams).length > 0
+            ? actionParams
+            : actionBody.trim();
+      }
+      if (Object.keys(paramsByAction).length > 0) {
+        return paramsByAction;
+      }
     }
   }
 
   return {};
 }
 
+function normalizeBenchmarkContext(
+  session: BenchmarkSession,
+  context: Record<string, unknown> | undefined,
+): BenchmarkContext {
+  const normalized: Record<string, unknown> = {
+    ...(context ?? {}),
+    benchmark: session.benchmark,
+    taskId: session.taskId,
+  };
+
+  if (
+    !Array.isArray(normalized.actionSpace) &&
+    Array.isArray(normalized.action_space)
+  ) {
+    normalized.actionSpace = normalized.action_space;
+  }
+
+  if (normalized.task_id === undefined) {
+    normalized.task_id = session.taskId;
+  }
+
+  return normalized as BenchmarkContext;
+}
+
+function capturedActionToParams(
+  capturedAction: CapturedAction | null,
+): Record<string, unknown> {
+  if (!capturedAction) return {};
+
+  const benchmarkParams: Record<string, unknown> = {};
+  if (capturedAction.command) benchmarkParams.command = capturedAction.command;
+  if (capturedAction.toolName)
+    benchmarkParams.tool_name = capturedAction.toolName;
+  if (capturedAction.arguments)
+    benchmarkParams.arguments = capturedAction.arguments;
+  if (capturedAction.operation)
+    benchmarkParams.operation = capturedAction.operation;
+  if (capturedAction.elementId)
+    benchmarkParams.element_id = capturedAction.elementId;
+  if (capturedAction.value) benchmarkParams.value = capturedAction.value;
+
+  if (Object.keys(benchmarkParams).length === 0) {
+    return {};
+  }
+
+  return { BENCHMARK_ACTION: benchmarkParams };
+}
+
 function sessionKey(session: BenchmarkSession): string {
   return `${session.benchmark}:${session.taskId}`;
+}
+
+async function collectSessionDiagnostics(
+  runtime: AgentRuntime,
+  session: BenchmarkSession,
+): Promise<Record<string, unknown>> {
+  const room = await runtime.getRoom(session.roomId);
+  const rawLastCompactionAt = room?.metadata?.lastCompactionAt;
+  const lastCompactionAt =
+    typeof rawLastCompactionAt === "number" ? rawLastCompactionAt : null;
+
+  const [allMessages, recentMessages, factsInRoom, factsForUser] =
+    await Promise.all([
+      runtime.getMemories({
+        tableName: "messages",
+        roomId: session.roomId,
+        count: 2000,
+        unique: false,
+      }),
+      runtime.getMemories({
+        tableName: "messages",
+        roomId: session.roomId,
+        count: 2000,
+        unique: false,
+        ...(lastCompactionAt !== null ? { start: lastCompactionAt } : {}),
+      }),
+      runtime.getMemories({
+        tableName: "facts",
+        roomId: session.roomId,
+        count: 2000,
+        unique: false,
+      }),
+      runtime.getMemories({
+        tableName: "facts",
+        roomId: session.roomId,
+        entityId: session.userEntityId,
+        count: 500,
+        unique: false,
+      }),
+    ]);
+
+  const compactionSummaries = allMessages
+    .filter((m) => m.content?.source === "compaction")
+    .sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+  const latestCompactionSummary = compactionSummaries.at(-1) ?? null;
+  const latestSummaryText =
+    typeof latestCompactionSummary?.content?.text === "string"
+      ? latestCompactionSummary.content.text
+      : "";
+  const summaryPreview = latestSummaryText.slice(0, 400);
+
+  const providerNames = runtime.providers.map((provider) => provider.name);
+  const evaluatorNames =
+    (runtime as unknown as { evaluators?: Array<{ name?: string }> }).evaluators
+      ?.map((evaluator) => evaluator?.name ?? "")
+      .filter((name) => name.length > 0) ?? [];
+  const actionNames =
+    (runtime as unknown as { actions?: Array<{ name?: string }> }).actions
+      ?.map((action) => action?.name?.toUpperCase() ?? "")
+      .filter((name) => name.length > 0) ?? [];
+
+  return {
+    benchmark: session.benchmark,
+    task_id: session.taskId,
+    room_id: session.roomId,
+    relay_room_id: session.relayRoomId,
+    room_metadata: {
+      last_compaction_at: lastCompactionAt,
+      compaction_history: Array.isArray(room?.metadata?.compactionHistory)
+        ? room.metadata.compactionHistory
+        : [],
+    },
+    memory_counts: {
+      messages_total: allMessages.length,
+      messages_since_last_compaction: recentMessages.length,
+      compaction_summaries: compactionSummaries.length,
+      facts_room_total: factsInRoom.length,
+      facts_for_user_total: factsForUser.length,
+    },
+    latest_compaction_summary: latestCompactionSummary
+      ? {
+          memory_id: latestCompactionSummary.id,
+          created_at: latestCompactionSummary.createdAt ?? null,
+          preview: summaryPreview,
+        }
+      : null,
+    capability_flags: {
+      has_recent_messages_provider: providerNames.includes("RECENT_MESSAGES"),
+      has_facts_provider: providerNames.includes("FACTS"),
+      has_reflection_evaluator: evaluatorNames.some((name) =>
+        name.toUpperCase().includes("REFLECTION"),
+      ),
+      has_relationship_evaluator: evaluatorNames.some((name) =>
+        name.toUpperCase().includes("RELATIONSHIP"),
+      ),
+      has_manual_compaction_action: actionNames.includes("COMPACT_SESSION"),
+    },
+  };
 }
 
 async function ensureBenchmarkSessionContext(
@@ -327,6 +524,17 @@ export async function startBenchmarkServer() {
     );
   }
 
+  // Load benchmark plugin — provides benchmark provider + BENCHMARK_ACTION
+  try {
+    const benchmarkPlugin = createBenchmarkPlugin();
+    plugins.push(toPlugin(benchmarkPlugin, "benchmark-plugin"));
+    elizaLogger.info("[bench] Loaded benchmark plugin");
+  } catch (error: unknown) {
+    elizaLogger.error(
+      `[bench] Failed to load benchmark plugin: ${formatUnknownError(error)}`,
+    );
+  }
+
   // Load trust plugin — provides trust engine, security module, and permission system
   // (may already be in CORE_PLUGINS but we want to ensure it's loaded)
   if (!loadedPlugins.includes("@elizaos/plugin-trust")) {
@@ -404,9 +612,9 @@ export async function startBenchmarkServer() {
     process.env.MILAIDY_BENCH_MOCK === "true"
   ) {
     try {
-      // @ts-expect-error - mock-plugin.ts is gitignored, only exists for local benchmarking
-      const { mockPlugin } = await import("./mock-plugin.ts");
-      plugins.push(toPlugin(mockPlugin, "./mock-plugin.ts"));
+      const mockLocation = "./mock-plugin.ts";
+      const { mockPlugin } = await import(mockLocation);
+      plugins.push(toPlugin(mockPlugin, mockLocation));
       elizaLogger.info("[bench] Loaded mock benchmark plugin");
     } catch (error: unknown) {
       elizaLogger.error(
@@ -436,6 +644,21 @@ export async function startBenchmarkServer() {
     }
   }
 
+  // Optional runtime setting passthrough for deterministic benchmark tuning.
+  // Useful for forcing compaction behavior in context-stress scenarios.
+  const runtimeSettingKeys = [
+    "MAX_CONVERSATION_TOKENS",
+    "AUTO_COMPACT",
+    "CONVERSATION_LENGTH",
+    "ADVANCED_CAPABILITIES",
+  ];
+  for (const key of runtimeSettingKeys) {
+    const value = process.env[key]?.trim();
+    if (value) {
+      settings[key] = value;
+    }
+  }
+
   const runtime = new AgentRuntime({
     character: {
       name: "Kira",
@@ -452,6 +675,7 @@ export async function startBenchmarkServer() {
   });
 
   await runtime.initialize();
+  disableManualCompactionAction(runtime);
   const modelHandlers = (
     runtime as unknown as { models?: Map<string, unknown[]> }
   ).models;
@@ -716,6 +940,42 @@ export async function startBenchmarkServer() {
       return;
     }
 
+    if (pathname === "/api/benchmark/diagnostics" && req.method === "GET") {
+      try {
+        const context = extractRecord({
+          benchmark: requestUrl.searchParams.get("benchmark") ?? undefined,
+          task_id:
+            requestUrl.searchParams.get("task_id") ??
+            requestUrl.searchParams.get("taskId") ??
+            undefined,
+        });
+        const taskId = extractTaskId(context);
+        const benchmark = extractBenchmarkName(context);
+        const session =
+          resolveSession(taskId, benchmark, false) ??
+          activeSession ??
+          resolveSession("default-task", "unknown", false);
+
+        if (!session) {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ status: "ok", diagnostics: null }));
+          return;
+        }
+
+        const diagnostics = await collectSessionDiagnostics(runtime, session);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ status: "ok", diagnostics }));
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        elizaLogger.error(
+          `[bench] Diagnostics error: ${formatUnknownError(err)}`,
+        );
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: errorMessage }));
+      }
+      return;
+    }
+
     if (pathname === "/api/benchmark/message" && req.method === "POST") {
       let body = "";
       req.on("data", (chunk) => (body += chunk));
@@ -751,9 +1011,10 @@ export async function startBenchmarkServer() {
 
           await ensureBenchmarkSessionContext(runtime, session);
 
+          const benchmarkContext = normalizeBenchmarkContext(session, context);
           const composedPrompt = composeBenchmarkPrompt({
             text,
-            context,
+            context: benchmarkContext,
             image: parsed.image,
           });
 
@@ -788,12 +1049,23 @@ export async function startBenchmarkServer() {
           if (!runtime.messageService) {
             throw new Error("Runtime message service is not available");
           }
+          const messageService = runtime.messageService;
 
-          const result = await runtime.messageService.handleMessage(
-            runtime,
-            incomingMessage,
-            callback,
-          );
+          clearCapturedAction();
+          setBenchmarkContext(benchmarkContext);
+          const result = await (async () => {
+            try {
+              return await messageService.handleMessage(
+                runtime,
+                incomingMessage,
+                callback,
+              );
+            } finally {
+              setBenchmarkContext(null);
+            }
+          })();
+
+          const capturedAction = getCapturedAction();
 
           const responseText =
             typeof result.responseContent?.text === "string"
@@ -803,8 +1075,18 @@ export async function startBenchmarkServer() {
             typeof result.responseContent?.thought === "string"
               ? result.responseContent.thought
               : null;
-          const actions = coerceActions(result.responseContent?.actions);
-          const params = coerceParams(result.responseContent?.params);
+          const actionList = coerceActions(result.responseContent?.actions);
+          const actions =
+            actionList.length > 0
+              ? actionList
+              : capturedAction
+                ? ["BENCHMARK_ACTION"]
+                : [];
+          const parsedParams = coerceParams(result.responseContent?.params);
+          const params =
+            Object.keys(parsedParams).length > 0
+              ? parsedParams
+              : capturedActionToParams(capturedAction);
           const finishedAt = Date.now();
 
           trajectory.push({

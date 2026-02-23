@@ -39,20 +39,19 @@ Windows (PowerShell):
 irm https://milady-ai.github.io/milady/install.ps1 | iex
 ```
 
-### npm / npx
+### npm global
 
 ```bash
-npm install -g milady
-# or run without installing
-npx milady
-# or with bun
-bunx milady
+npm install -g miladyai
+milady setup
 ```
 
-Then run setup:
+### no-install (optional)
 
 ```bash
-milady setup
+bunx miladyai setup
+# or
+npx miladyai setup
 ```
 
 ### Download the App

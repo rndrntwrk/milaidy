@@ -2,6 +2,9 @@
  * Navigation — tabs + onboarding.
  */
 
+/** Apps are only enabled in dev mode; production builds hide this feature. */
+export const APPS_ENABLED = import.meta.env.DEV;
+
 export type Tab =
   | "chat"
   | "apps"
@@ -20,9 +23,10 @@ export type Tab =
   | "runtime"
   | "database"
   | "settings"
-  | "logs";
+  | "logs"
+  | "security";
 
-export const TAB_GROUPS = [
+const ALL_TAB_GROUPS = [
   { label: "Chat", tabs: ["chat"] as Tab[] },
   { label: "Character", tabs: ["character"] as Tab[] },
   { label: "Wallets", tabs: ["wallets"] as Tab[] },
@@ -43,9 +47,14 @@ export const TAB_GROUPS = [
       "runtime",
       "database",
       "logs",
+      "security",
     ] as Tab[],
   },
 ] as const;
+
+export const TAB_GROUPS = APPS_ENABLED
+  ? ALL_TAB_GROUPS
+  : ALL_TAB_GROUPS.filter((g) => g.label !== "Apps");
 
 const TAB_PATHS: Record<Tab, string> = {
   chat: "/chat",
@@ -66,6 +75,7 @@ const TAB_PATHS: Record<Tab, string> = {
   database: "/database",
   settings: "/settings",
   logs: "/logs",
+  security: "/security",
 };
 
 /** Legacy path redirects — old paths that now map to new tabs. */
@@ -100,6 +110,10 @@ export function tabFromPath(pathname: string, basePath = ""): Tab | null {
   if (normalized.endsWith("/index.html")) normalized = "/";
   if (normalized === "/") return "chat";
   if (normalized === "/voice") return "settings";
+  // Apps disabled in production builds — redirect to chat
+  if (!APPS_ENABLED && (normalized === "/apps" || normalized === "/game")) {
+    return "chat";
+  }
   // Check current paths first, then legacy redirects
   return PATH_TO_TAB.get(normalized) ?? LEGACY_PATHS[normalized] ?? null;
 }
@@ -160,6 +174,8 @@ export function titleForTab(tab: Tab): string {
       return "Settings";
     case "logs":
       return "Logs";
+    case "security":
+      return "Security";
     default:
       return "Milady";
   }

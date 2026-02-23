@@ -12,6 +12,7 @@ import type { ConfigUiHint } from "../types";
 import type { JsonSchemaObject } from "./config-catalog";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer";
 import { autoLabel } from "./shared/labels";
+import { WhatsAppQrOverlay } from "./WhatsAppQrOverlay";
 
 /* ── UI Showcase Plugin ────────────────────────────────────────────── */
 
@@ -1509,11 +1510,11 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
     setInstallingPlugins((prev) => new Set(prev).add(pluginId));
     try {
       await client.installRegistryPlugin(npmName);
-      setActionNotice(`Installed ${npmName}. Restarting agent...`, "success");
-      // Wait for the restart to complete (handles 409 if already restarting)
-      await client.restartAndWait();
       await loadPlugins();
-      setActionNotice(`${npmName} installed and loaded.`, "success");
+      setActionNotice(
+        `${npmName} installed. Restart required to activate.`,
+        "success",
+      );
     } catch (err) {
       setActionNotice(
         `Failed to install ${npmName}: ${err instanceof Error ? err.message : "unknown error"}`,
@@ -2132,6 +2133,9 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                       pluginConfigs={pluginConfigs}
                       onParamChange={handleParamChange}
                     />
+                    {p.id === "whatsapp" && (
+                      <WhatsAppQrOverlay accountId="default" />
+                    )}
                   </div>
                 </div>
 

@@ -58,6 +58,36 @@ type VmRunner = {
 
 let vmRunner: VmRunner | null = null;
 
+function resolveFetchInputUrl(input: RequestInfo | URL): string | null {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.toString();
+  if (typeof Request !== "undefined" && input instanceof Request) {
+    return input.url;
+  }
+  return null;
+}
+
+async function safeCodeFetch(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  const url = resolveFetchInputUrl(input);
+  if (!url || (await isBlockedUrl(url))) {
+    throw new Error(
+      "Blocked: cannot make requests to internal network addresses",
+    );
+  }
+
+  const response = await fetch(input, { ...init, redirect: "manual" });
+  if (response.status >= 300 && response.status < 400) {
+    throw new Error(
+      "Blocked: redirects are not allowed for code custom actions",
+    );
+  }
+
+  return response;
+}
+
 async function runCodeHandler(
   code: string,
   params: Record<string, string>,
@@ -71,7 +101,7 @@ async function runCodeHandler(
   }
 
   const script = `(async () => { ${code} })();`;
-  const context: Record<string, unknown> = { params, fetch };
+  const context: Record<string, unknown> = { params, fetch: safeCodeFetch };
   return await vmRunner.runInNewContext(`"use strict"; ${script}`, context, {
     filename: "milady-custom-action",
     timeout: 30_000,
@@ -223,8 +253,19 @@ function buildHandler(
           `http://localhost:${API_PORT}/api/terminal/run`,
           {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ command }),
+            headers: (() => {
+              const headers: Record<string, string> = {
+                "Content-Type": "application/json",
+              };
+              const token = process.env.MILADY_API_TOKEN?.trim();
+              if (token) {
+                headers.Authorization = /^Bearer\s+/i.test(token)
+                  ? token
+                  : `Bearer ${token}`;
+              }
+              return headers;
+            })(),
+            body: JSON.stringify({ command, clientId: "runtime-shell-action" }),
           },
         );
 

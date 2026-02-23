@@ -55,7 +55,7 @@ const CONNECTOR_PLUGINS: Record<string, string> = {
   discord: "@elizaos/plugin-discord",
   telegram: "@elizaos/plugin-telegram",
   slack: "@elizaos/plugin-slack",
-  whatsapp: "@elizaos/plugin-whatsapp",
+  whatsapp: "@milady/plugin-whatsapp",
   signal: "@elizaos/plugin-signal",
   imessage: "@elizaos/plugin-imessage",
   bluebubbles: "@elizaos/plugin-bluebubbles",
@@ -120,6 +120,7 @@ const envKeysToClean = [
   "OLLAMA_BASE_URL",
   "ELIZAOS_CLOUD_API_KEY",
   "ELIZAOS_CLOUD_ENABLED",
+  "MILAIDY_USE_PI_AI",
   "DISCORD_BOT_TOKEN",
   "TELEGRAM_BOT_TOKEN",
   "SLACK_BOT_TOKEN",
@@ -145,7 +146,7 @@ describe("Plugin Enumeration", () => {
     expect(Object.keys(CONNECTOR_PLUGINS).length).toBe(10);
     for (const [connector, pluginName] of Object.entries(CONNECTOR_PLUGINS)) {
       expect(typeof connector).toBe("string");
-      expect(pluginName).toMatch(/^@elizaos\/plugin-/);
+      expect(pluginName).toMatch(/^@(elizaos|milady)\/plugin-/);
     }
   });
 
@@ -171,9 +172,12 @@ describe("Plugin Enumeration", () => {
       "@elizaos/skills",
       "@elizaos/tui",
     ]);
-    // All enumerated plugins should be valid package names
+    // All enumerated plugins should be valid scoped package names
     for (const name of ALL_KNOWN_PLUGINS) {
-      expect(name.startsWith("@elizaos/plugin-")).toBe(true);
+      expect(
+        name.startsWith("@elizaos/plugin-") ||
+          name.startsWith("@milady/plugin-"),
+      ).toBe(true);
     }
     expect(knownPackages.size).toBeGreaterThan(0);
   });
@@ -612,13 +616,13 @@ describe("Provider Validation", () => {
     expect(provider.name).toBe("workspaceContext");
   });
 
-  it.skip("createSessionKeyProvider returns a valid Provider shape", () => {
+  it("createSessionKeyProvider returns a valid Provider shape", () => {
     const provider = createSessionKeyProvider({ defaultAgentId: "test-agent" });
     expect(provider).toBeDefined();
     expect(typeof provider.name).toBe("string");
     expect(typeof provider.description).toBe("string");
     expect(typeof provider.get).toBe("function");
-    expect(provider.name).toBe("session-key");
+    expect(provider.name).toBe("miladySessionKey");
   });
 
   it("createMiladyPlugin returns a valid Plugin with providers", () => {
