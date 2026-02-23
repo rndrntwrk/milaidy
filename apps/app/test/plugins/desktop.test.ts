@@ -70,13 +70,9 @@ describe("@milady/capacitor-desktop", () => {
     };
 
     // jsdom location.reload is read-only; replace location entirely
-    // This must be done before DesktopWeb is instantiated, as it accesses location.
-    delete window.location;
-    vi.stubGlobal('location', {
-      reload: vi.fn(),
-      // Add other properties of location if they are accessed by DesktopWeb or tests
-      // For now, only reload is explicitly used in tests.
-    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (window as any).location = new URL("http://localhost/") as any;
+    (window as any).location.reload = vi.fn();
 
     d = new DesktopWeb();
   });

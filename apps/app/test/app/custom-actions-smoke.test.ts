@@ -57,6 +57,7 @@ interface ChatViewContextStub {
   droppedFiles: string[];
   shareIngestNotice: string;
   selectedVrmIndex: number;
+  chatPendingImages: string[];
 }
 
 function createContext(
@@ -68,19 +69,20 @@ function createContext(
     chatSending: false,
     chatFirstTokenReceived: false,
     conversationMessages: [],
-    handleChatSend: vi.fn(async () => {}),
+    handleChatSend: vi.fn(async () => { }),
     handleChatStop: vi.fn(),
     setState: vi.fn(),
     droppedFiles: [],
     shareIngestNotice: "",
     selectedVrmIndex: 0,
+    chatPendingImages: [],
     ...overrides,
   };
 }
 
 function text(node: TestRenderer.ReactTestInstance): string {
   return node.children
-    .map((child) =>
+    .map((child: TestRenderer.ReactTestInstance | string) =>
       typeof child === "string"
         ? child
         : text(child as TestRenderer.ReactTestInstance),
@@ -94,7 +96,7 @@ function findButtonByText(
   label: string,
 ): TestRenderer.ReactTestInstance {
   const found = root.root.findAll(
-    (n) => n.type === "button" && text(n) === label,
+    (n: TestRenderer.ReactTestInstance) => n.type === "button" && text(n) === label,
   );
   expect(found.length).toBeGreaterThan(0);
   return found[0];
@@ -105,7 +107,7 @@ function findInputByPlaceholder(
   placeholder: string,
 ): TestRenderer.ReactTestInstance {
   const found = root.root.findAll(
-    (n) => n.type === "input" && n.props.placeholder === placeholder,
+    (n: TestRenderer.ReactTestInstance) => n.type === "input" && n.props.placeholder === placeholder,
   );
   expect(found.length).toBeGreaterThan(0);
   return found[0];
@@ -147,8 +149,8 @@ function FlowHarness({
     React.createElement(CustomActionsPanel, {
       open: panelOpen,
       onClose: () => setPanelOpen(false),
-      onOpenEditor: (action: CustomActionDef | null) => {
-        setEditingAction(action);
+      onOpenEditor: (action?: CustomActionDef | null) => {
+        setEditingAction(action ?? null);
         setEditorOpen(true);
       },
     }),
@@ -260,16 +262,19 @@ describe("custom actions smoke flow", () => {
     });
     if (!tree) throw new Error("failed to render FlowHarness");
 
-    const actionsButton = findButtonByText(tree, "Actions");
+    // The ChatView no longer renders an "Actions" button — the panel is toggled
+    // via a custom event. Dispatch it directly to open the panel.
+
+
     await act(async () => {
-      actionsButton.props.onClick();
+      window.dispatchEvent(new Event("toggle-custom-actions-panel"));
     });
     await flush();
 
     expect(mockClient.listCustomActions).toHaveBeenCalledTimes(1);
 
     const title = tree?.root.findAll(
-      (node) => node.type === "h2" && text(node) === "Custom Actions",
+      (node: TestRenderer.ReactTestInstance) => node.type === "h2" && text(node) === "Custom Actions",
     );
     expect(title.length).toBe(1);
 
@@ -280,7 +285,7 @@ describe("custom actions smoke flow", () => {
     await flush();
 
     const editorHeader = tree?.root.findAll(
-      (node) => node.type === "h2" && text(node) === "New Custom Action",
+      (node: TestRenderer.ReactTestInstance) => node.type === "h2" && text(node) === "New Custom Action",
     );
     expect(editorHeader.length).toBe(1);
 
@@ -309,7 +314,7 @@ describe("custom actions smoke flow", () => {
     expect(nameInput.props.value).toBe("CHECK_SITE");
 
     const descriptionArea = tree?.root.findAll(
-      (node) =>
+      (node: TestRenderer.ReactTestInstance) =>
         node.type === "textarea" &&
         node.props.placeholder === "What does this action do?",
     )[0];

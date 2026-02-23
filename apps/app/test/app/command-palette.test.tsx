@@ -3,12 +3,18 @@ import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockUseApp } = vi.hoisted(() => ({
+const { mockUseApp, mockUseBugReport } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
+  mockUseBugReport: vi.fn(() => ({ open: vi.fn() })),
 }));
 
 vi.mock("../../src/AppContext", () => ({
   useApp: () => mockUseApp(),
+}));
+
+vi.mock("../../src/hooks/useBugReport", () => ({
+  useBugReport: () => mockUseBugReport(),
+  BugReportProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 import { CommandPalette } from "../../src/components/CommandPalette";
@@ -98,11 +104,11 @@ describe("CommandPalette keyboard behavior", () => {
       keydown({
         key: "ArrowUp",
         preventDefault: preventDefaultUp,
-      } as KeyboardEvent);
+      } as unknown as KeyboardEvent);
       keydown({
         key: "ArrowDown",
         preventDefault: preventDefaultDown,
-      } as KeyboardEvent);
+      } as unknown as KeyboardEvent);
     });
 
     expect(preventDefaultUp).not.toHaveBeenCalled();
@@ -122,7 +128,7 @@ describe("CommandPalette keyboard behavior", () => {
     });
 
     const commandButtons = tree.root.findAll(
-      (node) =>
+      (node: TestRenderer.ReactTestInstance) =>
         node.type === "button" &&
         typeof node.props.className === "string" &&
         node.props.className.includes("w-full px-4 py-2.5"),
@@ -153,7 +159,7 @@ describe("CommandPalette keyboard behavior", () => {
     const preventDefault = vi.fn();
 
     act(() => {
-      keydown({ key: "Enter", preventDefault } as KeyboardEvent);
+      keydown({ key: "Enter", preventDefault } as unknown as KeyboardEvent);
     });
 
     expect(preventDefault).not.toHaveBeenCalled();

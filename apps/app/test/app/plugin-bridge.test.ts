@@ -93,7 +93,7 @@ describe("plugin-bridge", () => {
     it.each([
       ["gatewayDiscovery", false],
       ["desktopTray", false],
-      ["elevenlabs", false],
+      ["elevenlabs", true],
       ["backgroundLocation", false],
     ] as const)("%s → %s on web", (feature, expected) => {
       expect(isFeatureAvailable(feature)).toBe(expected);
