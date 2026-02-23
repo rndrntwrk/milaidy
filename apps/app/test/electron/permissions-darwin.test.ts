@@ -2,7 +2,7 @@
  * Unit tests for macOS permission detection
  * (apps/app/electron/src/native/permissions-darwin.ts)
  */
-import { type Mock, beforeEach, describe, expect, it, vi } from "vitest";
+import { type Mock, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -41,7 +41,6 @@ vi.mock("electron", () => ({
   },
 }));
 
-import { exec } from "node:child_process";
 import { desktopCapturer, shell, systemPreferences } from "electron";
 import {
   checkAccessibility,
@@ -54,63 +53,7 @@ import {
   requestMicrophone,
   requestPermission,
 } from "../../electron/src/native/permissions-darwin";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-const execMock = exec as unknown as Mock;
-
-/**
- * Configure the callback-style exec mock to respond to commands matching a
- * pattern. promisify(exec) will call exec(cmd, opts, cb) under the hood.
- */
-function mockExecResult(
-  pattern: string | RegExp,
-  result: { stdout: string; stderr?: string } | Error,
-) {
-  execMock.mockImplementation(
-    (cmd: string, opts: unknown, cb?: Function) => {
-      const callback = typeof opts === "function" ? opts : cb;
-      const matches =
-        typeof pattern === "string" ? cmd.includes(pattern) : pattern.test(cmd);
-      if (matches) {
-        if (result instanceof Error) callback?.(result, "", result.message);
-        else callback?.(null, result.stdout, result.stderr || "");
-      } else {
-        callback?.(new Error(`unexpected command: ${cmd}`), "", "");
-      }
-    },
-  );
-}
-
-/**
- * Configure exec to respond to multiple patterns in order.
- */
-function mockExecSequence(
-  entries: Array<{
-    pattern: string | RegExp;
-    result: { stdout: string; stderr?: string } | Error;
-  }>,
-) {
-  execMock.mockImplementation(
-    (cmd: string, opts: unknown, cb?: Function) => {
-      const callback = typeof opts === "function" ? opts : cb;
-      for (const { pattern, result } of entries) {
-        const matches =
-          typeof pattern === "string"
-            ? cmd.includes(pattern)
-            : pattern.test(cmd);
-        if (matches) {
-          if (result instanceof Error) callback?.(result, "", result.message);
-          else callback?.(null, result.stdout, result.stderr || "");
-          return;
-        }
-      }
-      callback?.(new Error(`unexpected command: ${cmd}`), "", "");
-    },
-  );
-}
+import { execMock, mockExecResult, mockExecSequence } from "./helpers/exec-mock";
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -425,35 +368,40 @@ describe("requestPermission dispatcher", () => {
     expect(result.status).toBe("denied");
   });
 
-  it("opens settings for accessibility then re-checks", async () => {
-    vi.useFakeTimers();
-    const openMock = shell.openExternal as Mock;
-    openMock.mockResolvedValue(undefined);
-    // The re-check will call osascript
-    mockExecResult("osascript", { stdout: "true\n" });
+  describe("timer-based re-check tests", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
 
-    const promise = requestPermission("accessibility");
-    await vi.advanceTimersByTimeAsync(600);
-    const result = await promise;
+    afterEach(() => {
+      vi.useRealTimers();
+    });
 
-    expect(openMock).toHaveBeenCalled();
-    expect(result.status).toBe("granted");
-    vi.useRealTimers();
-  });
+    it("opens settings for accessibility then re-checks", async () => {
+      const openMock = shell.openExternal as Mock;
+      openMock.mockResolvedValue(undefined);
+      mockExecResult("osascript", { stdout: "true\n" });
 
-  it("opens settings for screen-recording then re-checks", async () => {
-    vi.useFakeTimers();
-    const openMock = shell.openExternal as Mock;
-    openMock.mockResolvedValue(undefined);
-    (desktopCapturer.getSources as Mock).mockResolvedValue([]);
+      const promise = requestPermission("accessibility");
+      await vi.advanceTimersByTimeAsync(600);
+      const result = await promise;
 
-    const promise = requestPermission("screen-recording");
-    await vi.advanceTimersByTimeAsync(600);
-    const result = await promise;
+      expect(openMock).toHaveBeenCalled();
+      expect(result.status).toBe("granted");
+    });
 
-    expect(openMock).toHaveBeenCalled();
-    expect(result.status).toBe("denied");
-    vi.useRealTimers();
+    it("opens settings for screen-recording then re-checks", async () => {
+      const openMock = shell.openExternal as Mock;
+      openMock.mockResolvedValue(undefined);
+      (desktopCapturer.getSources as Mock).mockResolvedValue([]);
+
+      const promise = requestPermission("screen-recording");
+      await vi.advanceTimersByTimeAsync(600);
+      const result = await promise;
+
+      expect(openMock).toHaveBeenCalled();
+      expect(result.status).toBe("denied");
+    });
   });
 
   it("returns granted for shell", async () => {
