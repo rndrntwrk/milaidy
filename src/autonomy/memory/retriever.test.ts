@@ -507,6 +507,14 @@ describe("TrustAwareRetrieverImpl", () => {
       });
       expect(retriever.contentHash(m1)).not.toBe(retriever.contentHash(m2));
     });
+
+    it("distinguishes long texts that differ only after 200 chars", () => {
+      const retriever = new TrustAwareRetrieverImpl(DEFAULT_RETRIEVAL_CONFIG);
+      const prefix = "a".repeat(250);
+      const m1 = makeMemory({ id: "m1", content: { text: prefix + " ending one" } });
+      const m2 = makeMemory({ id: "m2", content: { text: prefix + " ending two" } });
+      expect(retriever.contentHash(m1)).not.toBe(retriever.contentHash(m2));
+    });
   });
 
   describe("two-phase cross-room retrieval", () => {

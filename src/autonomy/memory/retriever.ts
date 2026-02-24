@@ -370,17 +370,26 @@ export class TrustAwareRetrieverImpl implements TrustAwareRetriever {
         options.embedding.length > 0 &&
         this.entityMemoryProvider.searchEntityMemories
       ) {
-        return await this.entityMemoryProvider.searchEntityMemories(
-          canonicalEntityId,
-          options.embedding,
-          {
-            limit: this.config.maxResults * 2,
-            matchThreshold: 0.3,
-          },
-        );
+        try {
+          return await this.entityMemoryProvider.searchEntityMemories(
+            canonicalEntityId,
+            options.embedding,
+            {
+              limit: this.config.maxResults * 2,
+              matchThreshold: 0.3,
+            },
+          );
+        } catch (semanticErr) {
+          // Semantic search failed — fall back to recency instead of returning empty
+          this.eventBus?.emit("autonomy:retrieval:entity-search-fallback", {
+            canonicalEntityId,
+            error: semanticErr instanceof Error ? semanticErr.message : String(semanticErr),
+            fallback: "recency",
+          });
+        }
       }
 
-      // Fall back to recency-based fetch
+      // Recency-based fetch (also serves as fallback from semantic search failure)
       return await this.entityMemoryProvider.getEntityMemories(
         canonicalEntityId,
         {
@@ -389,8 +398,12 @@ export class TrustAwareRetrieverImpl implements TrustAwareRetriever {
           limit: this.config.maxResults * 2,
         },
       );
-    } catch {
+    } catch (err) {
       // Entity memory fetch failure is non-fatal — fall back to room-only retrieval
+      this.eventBus?.emit("autonomy:retrieval:entity-fetch-error", {
+        canonicalEntityId,
+        error: err instanceof Error ? err.message : String(err),
+      });
       return [];
     }
   }
@@ -404,16 +417,22 @@ export class TrustAwareRetrieverImpl implements TrustAwareRetriever {
     const text = (memory.content as { text?: string })?.text;
     if (!text || text.length === 0) return null;
 
-    // Simple but effective: use first 200 chars of normalized text as hash key.
-    // This catches exact duplicates and near-duplicates where only whitespace differs.
+    // Hash the full normalized text using djb2 to avoid truncation-based collisions
+    // (two different memories sharing a 200-char prefix would have falsely deduped).
     const normalized = text.trim().toLowerCase().replace(/\s+/g, " ");
-    const truncated = normalized.slice(0, 200);
+
+    // djb2 hash — fast, good distribution for string dedup
+    let hash = 5381;
+    for (let i = 0; i < normalized.length; i++) {
+      hash = ((hash << 5) + hash + normalized.charCodeAt(i)) | 0;
+    }
+    const hashStr = (hash >>> 0).toString(36);
 
     // Include memory type in hash to avoid collisions between different types
     // with the same text (e.g., a "fact" vs an "observation" with identical content).
     const meta = memory.metadata as Record<string, unknown> | undefined;
     const memType = (meta?.memoryType as string) ?? "";
-    return `${memType}::${truncated}`;
+    return `${memType}::${hashStr}`;
   }
 
   private emitTrustOverrideAudit(record: TrustOverrideAuditRecord): void {

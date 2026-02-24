@@ -34,4 +34,29 @@ describe("evaluateRetrievalQuality", () => {
       expect(task.recallAtN).toBeGreaterThanOrEqual(task.baselineRecallAtN);
     }
   });
+
+  it("identity-specific probes individually achieve minimum recall", async () => {
+    const tasks = buildBaselineRetrievalQualityTasks(Date.now());
+    const summary = await evaluateRetrievalQuality(tasks, { topN: 2 });
+
+    // WP-1 identity grounding probes must each individually pass.
+    // These are the most critical probes — the core purpose of the SOW.
+    const identityProbeIds = [
+      "rq-003", // operator identity recognition
+      "rq-004", // operator preference recall
+      "rq-005", // cross-platform identity resolution
+      "rq-010", // operator trust level grounding
+      "rq-011", // identity confusion adversarial
+    ];
+
+    for (const probeId of identityProbeIds) {
+      const result = summary.taskResults.find((t) => t.taskId === probeId);
+      if (result) {
+        expect(
+          result.recallAtN,
+          `Identity probe ${probeId} failed: recall=${result.recallAtN}`,
+        ).toBeGreaterThanOrEqual(0.5);
+      }
+    }
+  });
 });

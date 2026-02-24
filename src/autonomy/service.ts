@@ -881,17 +881,62 @@ export class MilaidyAutonomyService extends Service {
       if (this.auditRetentionManager) container.registerValue(TOKENS.AuditRetentionManager, this.auditRetentionManager);
       if (this.pilotRunner) container.registerValue(TOKENS.PilotRunner, this.pilotRunner);
 
-      // Register trust-aware retriever
+      // Register entity memory provider + trust-aware retriever
       try {
         const { TrustAwareRetrieverImpl } = await import("./memory/retriever.js");
         const { DEFAULT_RETRIEVAL_CONFIG } = await import("./config.js");
+        const { InMemoryEntityMemoryStore } = await import("./memory/entity-memory-store.js");
+        const { InMemoryEntityLinkStore } = await import("./memory/entity-link-store.js");
+        const { EntityLinker } = await import("./memory/entity-linker.js");
+        const { TierPromoter } = await import("./memory/tier-promoter.js");
+        const { ActionIntentTracker } = await import("./memory/action-intent-tracker.js");
+
+        // Entity memory store (provides cross-platform entity-scoped memories)
+        const entityMemoryStore = new InMemoryEntityMemoryStore();
+
+        // Entity link store + linker (maps platform IDs to canonical entities)
+        const entityLinkStore = new InMemoryEntityLinkStore();
+        const entityLinker = new EntityLinker(entityLinkStore);
+
+        // Seed the operator entity so cross-platform resolution works immediately
+        await entityLinker.seedOperators([
+          {
+            displayName: "enoomian",
+            platformIds: {
+              discord: "enoomian",
+              web_chat: "admin-uuid",
+              telegram: "@enoomian",
+              github: "rndrntwrk",
+            },
+            preferences: { style: "direct" },
+          },
+        ]);
+
+        // Tier promoter (handles mid→long promotion at session end)
+        const tierPromoter = new TierPromoter(entityMemoryStore);
+
+        // Action intent tracker (detects commitments, verifies completion evidence)
+        const actionIntentTracker = new ActionIntentTracker();
+
+        // Wire retriever with entity memory provider for cross-room retrieval
         const retrievalConfig = this.resolvedRetrievalConfig ?? DEFAULT_RETRIEVAL_CONFIG;
         const retriever = new TrustAwareRetrieverImpl(
           retrievalConfig as Required<import("./config.js").AutonomyRetrievalConfig>,
           this.trustScorer,
           this.eventBus,
+          entityMemoryStore,
         );
+
         container.registerValue(TOKENS.TrustAwareRetriever, retriever);
+
+        // Store references for access by other components
+        (this as Record<string, unknown>)._entityMemoryStore = entityMemoryStore;
+        (this as Record<string, unknown>)._entityLinkStore = entityLinkStore;
+        (this as Record<string, unknown>)._entityLinker = entityLinker;
+        (this as Record<string, unknown>)._tierPromoter = tierPromoter;
+        (this as Record<string, unknown>)._actionIntentTracker = actionIntentTracker;
+
+        logger.info("[autonomy-service] Cross-platform memory components initialized (entity linker, tier promoter, action tracker)");
       } catch (err) {
         logger.debug(`[autonomy-service] Retriever registration skipped: ${err instanceof Error ? err.message : err}`);
       }
