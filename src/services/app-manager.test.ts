@@ -418,6 +418,127 @@ describe("AppManager", () => {
       delete process.env.TEST_VIEWER_BOT;
     });
 
+    it("rewrites localhost app URLs through local proxy when enabled", async () => {
+      process.env.MILAIDY_PROXY_LOCAL_APP_URLS = "1";
+
+      const { getAppInfo } = await import("./registry-client.js");
+      vi.mocked(getAppInfo).mockResolvedValue({
+        name: "@elizaos/app-agent-town",
+        displayName: "Agent Town",
+        description: "Agent Town",
+        category: "game",
+        launchType: "url",
+        launchUrl: "http://localhost:5173/",
+        icon: null,
+        capabilities: [],
+        stars: 0,
+        repository: "",
+        latestVersion: "1.0.0",
+        supports: { v0: false, v1: false, v2: true },
+        npm: {
+          package: "@elizaos/app-agent-town",
+          v0Version: null,
+          v1Version: null,
+          v2Version: "1.0.0",
+        },
+        viewer: {
+          url: "http://localhost:5173/ai-town/index.html",
+          embedParams: { embedded: "true" },
+        },
+      });
+
+      const { listInstalledPlugins } = await import("./plugin-installer.js");
+      vi.mocked(listInstalledPlugins).mockReturnValue([
+        {
+          name: "@elizaos/app-agent-town",
+          version: "1.0.0",
+          installPath: "/tmp/app-agent-town",
+          installedAt: "2026-01-01",
+        },
+      ]);
+
+      const { AppManager } = await import("./app-manager.js");
+      const mgr = new AppManager();
+      const result = await mgr.launch("@elizaos/app-agent-town");
+
+      expect(result.launchUrl).toBe(
+        "/api/apps/local/%40elizaos%2Fapp-agent-town/",
+      );
+      expect(result.viewer?.url).toBe(
+        "/api/apps/local/%40elizaos%2Fapp-agent-town/ai-town/index.html?embedded=true",
+      );
+
+      delete process.env.MILAIDY_PROXY_LOCAL_APP_URLS;
+    });
+
+    it("rewrites localhost app URLs by default outside test mode", async () => {
+      const savedNodeEnv = process.env.NODE_ENV;
+      const savedVitest = process.env.VITEST;
+      const savedProxyFlag = process.env.MILAIDY_PROXY_LOCAL_APP_URLS;
+
+      process.env.NODE_ENV = "production";
+      delete process.env.VITEST;
+      delete process.env.MILAIDY_PROXY_LOCAL_APP_URLS;
+
+      try {
+        const { getAppInfo } = await import("./registry-client.js");
+        vi.mocked(getAppInfo).mockResolvedValue({
+          name: "@elizaos/app-hyperfy",
+          displayName: "Hyperfy",
+          description: "Hyperfy",
+          category: "game",
+          launchType: "connect",
+          launchUrl: "http://localhost:3003/",
+          icon: null,
+          capabilities: [],
+          stars: 0,
+          repository: "",
+          latestVersion: "1.0.0",
+          supports: { v0: false, v1: false, v2: true },
+          npm: {
+            package: "@elizaos/app-hyperfy",
+            v0Version: null,
+            v1Version: null,
+            v2Version: "1.0.0",
+          },
+          viewer: {
+            url: "http://localhost:3003/",
+          },
+        });
+
+        const { listInstalledPlugins } = await import("./plugin-installer.js");
+        vi.mocked(listInstalledPlugins).mockReturnValue([
+          {
+            name: "@elizaos/app-hyperfy",
+            version: "1.0.0",
+            installPath: "/tmp/app-hyperfy",
+            installedAt: "2026-01-01",
+          },
+        ]);
+
+        const { AppManager } = await import("./app-manager.js");
+        const mgr = new AppManager();
+        const result = await mgr.launch("@elizaos/app-hyperfy");
+
+        expect(result.launchUrl).toBe("/api/apps/local/%40elizaos%2Fapp-hyperfy/");
+        expect(result.viewer?.url).toBe(
+          "/api/apps/local/%40elizaos%2Fapp-hyperfy/",
+        );
+      } finally {
+        process.env.NODE_ENV = savedNodeEnv;
+        if (savedVitest === undefined) {
+          delete process.env.VITEST;
+        } else {
+          process.env.VITEST = savedVitest;
+        }
+        if (savedProxyFlag === undefined) {
+          delete process.env.MILAIDY_PROXY_LOCAL_APP_URLS;
+        } else {
+          process.env.MILAIDY_PROXY_LOCAL_APP_URLS = savedProxyFlag;
+        }
+      }
+    });
+
     it("falls back to testbot for 2004scape bot placeholder", async () => {
       delete process.env.RS_SDK_BOT_NAME;
       delete process.env.BOT_NAME;

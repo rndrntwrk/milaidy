@@ -12159,81 +12159,425 @@ async function handleRequest(
   }
 
   // ── Five55 games bridge (/api/five55/games/*) ────────────────────────
+  const parseGamesJsonText = (raw: string): unknown => {
+    try {
+      return raw ? (JSON.parse(raw) as unknown) : null;
+    } catch {
+      return null;
+    }
+  };
+  const extractGamesError = (parsed: unknown, raw: string): string => {
+    if (parsed && typeof parsed === "object" && "error" in parsed) {
+      const parsedRecord = parsed as { error?: unknown };
+      if (typeof parsedRecord.error === "string" && parsedRecord.error.trim()) {
+        return parsedRecord.error;
+      }
+    }
+    return raw || "upstream error";
+  };
+  const toBoolean = (value: unknown, fallback: boolean): boolean => {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === "true" || normalized === "1") return true;
+      if (normalized === "false" || normalized === "0") return false;
+    }
+    return fallback;
+  };
+  const asRecord = (value: unknown): Record<string, unknown> | null =>
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
+  const normalizeCategory = (
+    value: unknown,
+  ): "arcade" | "rpg" | "puzzle" | "racing" | "casino" => {
+    if (typeof value !== "string") return "arcade";
+    const normalized = value.trim().toLowerCase();
+    if (
+      normalized === "arcade" ||
+      normalized === "rpg" ||
+      normalized === "puzzle" ||
+      normalized === "racing" ||
+      normalized === "casino"
+    ) {
+      return normalized;
+    }
+    return "arcade";
+  };
+  const normalizeDifficulty = (
+    value: unknown,
+  ): "easy" | "medium" | "hard" | "expert" => {
+    if (typeof value !== "string") return "medium";
+    const normalized = value.trim().toLowerCase();
+    if (
+      normalized === "easy" ||
+      normalized === "medium" ||
+      normalized === "hard" ||
+      normalized === "expert"
+    ) {
+      return normalized;
+    }
+    return "medium";
+  };
+  const resolveRelativeViewerPath = (gamePath: string): string => {
+    const trimmedPath = gamePath.trim().replace(/^\/+/, "");
+    if (!trimmedPath) return "games/unknown-game/index.html";
+    if (/\.html$/i.test(trimmedPath)) {
+      return trimmedPath.startsWith("games/") ? trimmedPath : `games/${trimmedPath}`;
+    }
+    return `games/${trimmedPath.replace(/\/+$/, "")}/index.html`;
+  };
+  const buildViewerUrl = (gamePath: string, mode: string): string => {
+    const viewerBase =
+      process.env.FIVE55_GAMES_VIEWER_BASE_URL?.trim() ||
+      process.env.GAMES_BASE_URL?.trim() ||
+      "https://555.rndrntwrk.com";
+    const relativePath = resolveRelativeViewerPath(gamePath);
+    const viewerUrl = new URL(relativePath, `${viewerBase.replace(/\/+$/, "")}/`);
+    if (mode === "spectate" || mode === "agent") {
+      viewerUrl.searchParams.set("bot", "true");
+    }
+    return viewerUrl.toString();
+  };
+  const normalizeCatalogGame = (
+    value: unknown,
+  ): {
+    id: string;
+    title: string;
+    description: string;
+    category: "arcade" | "rpg" | "puzzle" | "racing" | "casino";
+    difficulty: "easy" | "medium" | "hard" | "expert";
+    path: string;
+    isBeta?: boolean;
+    hasAudio?: boolean;
+    hasSave?: boolean;
+  } | null => {
+    const record = asRecord(value);
+    if (!record) return null;
+    const id =
+      typeof record.id === "string" && record.id.trim().length > 0
+        ? record.id.trim()
+        : null;
+    if (!id) return null;
+    const title =
+      typeof record.title === "string" && record.title.trim().length > 0
+        ? record.title.trim()
+        : typeof record.name === "string" && record.name.trim().length > 0
+          ? record.name.trim()
+          : id;
+    const description =
+      typeof record.description === "string" && record.description.trim().length > 0
+        ? record.description.trim()
+        : "Playable app surfaced in Alice.";
+    const rawPath =
+      typeof record.path === "string" && record.path.trim().length > 0
+        ? record.path.trim()
+        : id;
+    const normalized = {
+      id,
+      title,
+      description,
+      category: normalizeCategory(record.category),
+      difficulty: normalizeDifficulty(record.difficulty),
+      path: `/${resolveRelativeViewerPath(rawPath)}`,
+    };
+    const optionalFields: {
+      isBeta?: boolean;
+      hasAudio?: boolean;
+      hasSave?: boolean;
+    } = {};
+    if (typeof record.isBeta === "boolean") {
+      optionalFields.isBeta = record.isBeta;
+    }
+    if (typeof record.beta === "boolean") {
+      optionalFields.isBeta = record.beta;
+    }
+    if (typeof record.hasAudio === "boolean") {
+      optionalFields.hasAudio = record.hasAudio;
+    }
+    if (typeof record.hasSave === "boolean") {
+      optionalFields.hasSave = record.hasSave;
+    }
+    return {
+      ...normalized,
+      ...optionalFields,
+    };
+  };
+  const resolveCatalogPayload = (
+    parsed: unknown,
+    defaults: {
+      includeBeta: boolean;
+      category: string;
+      sessionId?: string;
+    },
+  ): Record<string, unknown> => {
+    const payload = asRecord(parsed) ?? {};
+    const games = (Array.isArray(payload.games) ? payload.games : [])
+      .map(normalizeCatalogGame)
+      .filter((game): game is NonNullable<ReturnType<typeof normalizeCatalogGame>> =>
+        Boolean(game),
+      );
+    const total =
+      typeof payload.total === "number" && Number.isFinite(payload.total)
+        ? payload.total
+        : typeof payload.count === "number" && Number.isFinite(payload.count)
+          ? payload.count
+          : games.length;
+    const includeBeta =
+      typeof payload.includeBeta === "boolean"
+        ? payload.includeBeta
+        : defaults.includeBeta;
+    const category =
+      typeof payload.category === "string" && payload.category.trim().length > 0
+        ? payload.category
+        : defaults.category;
+    const response: Record<string, unknown> = {
+      games,
+      total,
+      includeBeta,
+      category,
+    };
+    if (typeof defaults.sessionId === "string" && defaults.sessionId.trim().length > 0) {
+      response.sessionId = defaults.sessionId;
+    }
+    if (typeof payload.requestId === "string") {
+      response.requestId = payload.requestId;
+    }
+    return response;
+  };
+  const resolveGamesAgentBearer = async (upstreamBase: string): Promise<string> => {
+    const staticToken =
+      process.env.STREAM555_AGENT_TOKEN?.trim() ||
+      process.env.STREAM_API_BEARER_TOKEN?.trim();
+    if (staticToken) return staticToken;
+
+    const apiKey = process.env.STREAM555_AGENT_API_KEY?.trim();
+    if (!apiKey) {
+      throw new Error(
+        "STREAM555_AGENT_API_KEY or STREAM555_AGENT_TOKEN (or STREAM_API_BEARER_TOKEN) is required",
+      );
+    }
+
+    const exchangeEndpoint =
+      process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT?.trim() ||
+      "/api/agent/v1/auth/token/exchange";
+    const exchangeUrl = new URL(exchangeEndpoint, upstreamBase);
+    const exchangeRes = await fetch(exchangeUrl.toString(), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({ apiKey }),
+    });
+    const exchangeRaw = await exchangeRes.text();
+    const exchangeParsed = parseGamesJsonText(exchangeRaw);
+    if (!exchangeRes.ok) {
+      throw new Error(
+        `Token exchange failed (${exchangeRes.status}): ${extractGamesError(exchangeParsed, exchangeRaw)}`,
+      );
+    }
+    if (
+      !exchangeParsed ||
+      typeof exchangeParsed !== "object" ||
+      Array.isArray(exchangeParsed) ||
+      typeof (exchangeParsed as { token?: unknown }).token !== "string" ||
+      !(exchangeParsed as { token: string }).token.trim()
+    ) {
+      throw new Error("Token exchange succeeded but no token was returned");
+    }
+    return (exchangeParsed as { token: string }).token;
+  };
+  const ensureGamesAgentSessionId = async (
+    upstreamBase: string,
+    bearerToken: string,
+    preferredSessionId?: string,
+  ): Promise<string> => {
+    const sessionIdCandidate =
+      preferredSessionId?.trim() ||
+      process.env.STREAM_SESSION_ID?.trim() ||
+      process.env.STREAM555_DEFAULT_SESSION_ID?.trim();
+    const sessionUrl = new URL("/api/agent/v1/sessions", upstreamBase);
+    const sessionRes = await fetch(sessionUrl.toString(), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${bearerToken}`,
+      },
+      body: JSON.stringify(
+        sessionIdCandidate ? { sessionId: sessionIdCandidate } : {},
+      ),
+    });
+    const sessionRaw = await sessionRes.text();
+    const sessionParsed = parseGamesJsonText(sessionRaw);
+    if (!sessionRes.ok) {
+      throw new Error(
+        `Session bootstrap failed (${sessionRes.status}): ${extractGamesError(sessionParsed, sessionRaw)}`,
+      );
+    }
+    if (
+      !sessionParsed ||
+      typeof sessionParsed !== "object" ||
+      Array.isArray(sessionParsed) ||
+      typeof (sessionParsed as { sessionId?: unknown }).sessionId !== "string" ||
+      !(sessionParsed as { sessionId: string }).sessionId.trim()
+    ) {
+      throw new Error("Session bootstrap did not return sessionId");
+    }
+    return (sessionParsed as { sessionId: string }).sessionId;
+  };
+
   if (
     (method === "GET" || method === "POST") &&
     pathname === "/api/five55/games/catalog"
   ) {
-    const upstreamBase = process.env.FIVE55_GAMES_API_URL?.trim();
-    if (!upstreamBase) {
-      error(res, "FIVE55_GAMES_API_URL is not configured", 503);
-      return;
-    }
-
-    let upstreamUrl: URL;
-    try {
-      upstreamUrl = new URL("/api/games/catalog", upstreamBase);
-    } catch {
-      error(res, "Invalid FIVE55_GAMES_API_URL", 500);
-      return;
-    }
-
-    const outboundHeaders: Record<string, string> = { Accept: "application/json" };
-    const bearer = process.env.FIVE55_GAMES_API_BEARER_TOKEN?.trim();
-    if (bearer) outboundHeaders.Authorization = `Bearer ${bearer}`;
-
     let body:
       | {
           category?: string;
           includeBeta?: string | boolean;
+          sessionId?: string;
         }
       | undefined;
     if (method === "POST") {
       const parsed = await readJsonBody<{
         category?: string;
         includeBeta?: string | boolean;
+        sessionId?: string;
       }>(req, res);
       if (!parsed) return;
       body = parsed;
-      outboundHeaders["Content-Type"] = "application/json";
     } else {
       body = {
         category: url.searchParams.get("category") ?? undefined,
         includeBeta: url.searchParams.get("includeBeta") ?? undefined,
+        sessionId: url.searchParams.get("sessionId") ?? undefined,
       };
-      outboundHeaders["Content-Type"] = "application/json";
     }
 
+    const includeBeta = toBoolean(body?.includeBeta, true);
+    const requestedCategory =
+      typeof body?.category === "string" && body.category.trim().length > 0
+        ? body.category.trim().toLowerCase()
+        : "all";
+    const requestedSessionId =
+      typeof body?.sessionId === "string" && body.sessionId.trim().length > 0
+        ? body.sessionId.trim()
+        : undefined;
+    const requestBody = {
+      ...(requestedCategory === "all" ? {} : { category: requestedCategory }),
+      includeBeta,
+    };
+
+    const directBase = process.env.FIVE55_GAMES_API_URL?.trim();
+    if (directBase) {
+      let upstreamUrl: URL;
+      try {
+        upstreamUrl = new URL("/api/games/catalog", directBase);
+      } catch {
+        error(res, "Invalid FIVE55_GAMES_API_URL", 500);
+        return;
+      }
+      const outboundHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      };
+      const directBearer = process.env.FIVE55_GAMES_API_BEARER_TOKEN?.trim();
+      if (directBearer) outboundHeaders.Authorization = `Bearer ${directBearer}`;
+
+      try {
+        const upstreamRes = await fetch(upstreamUrl.toString(), {
+          method: "POST",
+          headers: outboundHeaders,
+          body: JSON.stringify(requestBody),
+        });
+        const raw = await upstreamRes.text();
+        const parsed = parseGamesJsonText(raw);
+        if (!upstreamRes.ok) {
+          error(res, extractGamesError(parsed, raw), upstreamRes.status);
+          return;
+        }
+        const payload = resolveCatalogPayload(parsed, {
+          includeBeta,
+          category: requestedCategory,
+        });
+        json(res, payload);
+      } catch (err) {
+        error(
+          res,
+          `Failed to fetch games catalog: ${err instanceof Error ? err.message : String(err)}`,
+          502,
+        );
+      }
+      return;
+    }
+
+    const upstreamBase =
+      process.env.STREAM555_BASE_URL?.trim() ||
+      process.env.STREAM_API_URL?.trim();
+    if (!upstreamBase) {
+      error(
+        res,
+        "FIVE55_GAMES_API_URL is not configured and STREAM555_BASE_URL (or STREAM_API_URL) is unavailable",
+        503,
+      );
+      return;
+    }
+
+    let upstreamToken = "";
+    try {
+      upstreamToken = await resolveGamesAgentBearer(upstreamBase);
+    } catch (err) {
+      error(
+        res,
+        err instanceof Error ? err.message : "Failed to resolve games agent bearer",
+        503,
+      );
+      return;
+    }
+
+    let sessionId = "";
+    try {
+      sessionId = await ensureGamesAgentSessionId(
+        upstreamBase,
+        upstreamToken,
+        requestedSessionId,
+      );
+    } catch (err) {
+      error(
+        res,
+        err instanceof Error ? err.message : "Failed to bootstrap stream session",
+        502,
+      );
+      return;
+    }
+
+    const upstreamUrl = new URL(
+      `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/catalog`,
+      upstreamBase,
+    );
     try {
       const upstreamRes = await fetch(upstreamUrl.toString(), {
         method: "POST",
-        headers: outboundHeaders,
-        body: JSON.stringify(body),
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${upstreamToken}`,
+        },
+        body: JSON.stringify(requestBody),
       });
       const raw = await upstreamRes.text();
-      let parsed: unknown = null;
-      try {
-        parsed = raw ? (JSON.parse(raw) as unknown) : null;
-      } catch {
-        parsed = null;
-      }
-
+      const parsed = parseGamesJsonText(raw);
       if (!upstreamRes.ok) {
-        error(
-          res,
-          typeof parsed === "object" && parsed && "error" in parsed
-            ? String((parsed as { error?: unknown }).error ?? "upstream error")
-            : raw || "upstream error",
-          upstreamRes.status,
-        );
+        error(res, extractGamesError(parsed, raw), upstreamRes.status);
         return;
       }
-
-      if (parsed && typeof parsed === "object") {
-        json(res, parsed);
-        return;
-      }
-
-      error(res, "Invalid upstream games catalog payload", 502);
+      const payload = resolveCatalogPayload(parsed, {
+        includeBeta,
+        category: requestedCategory,
+        sessionId,
+      });
+      json(res, payload);
     } catch (err) {
       error(
         res,
@@ -12245,64 +12589,250 @@ async function handleRequest(
   }
 
   if (method === "POST" && pathname === "/api/five55/games/play") {
-    const upstreamBase = process.env.FIVE55_GAMES_API_URL?.trim();
-    if (!upstreamBase) {
-      error(res, "FIVE55_GAMES_API_URL is not configured", 503);
-      return;
-    }
-
-    const body = await readJsonBody<{ gameId?: string; mode?: string }>(req, res);
+    const body = await readJsonBody<{
+      gameId?: string;
+      mode?: string;
+      sessionId?: string;
+    }>(req, res);
     if (!body) return;
 
-    let upstreamUrl: URL;
-    try {
-      upstreamUrl = new URL("/api/games/play", upstreamBase);
-    } catch {
-      error(res, "Invalid FIVE55_GAMES_API_URL", 500);
+    const modeCandidate =
+      typeof body.mode === "string" ? body.mode.trim().toLowerCase() : "";
+    const mode =
+      modeCandidate === "standard" ||
+      modeCandidate === "ranked" ||
+      modeCandidate === "spectate" ||
+      modeCandidate === "solo" ||
+      modeCandidate === "agent"
+        ? modeCandidate
+        : "spectate";
+    const requestedSessionId =
+      typeof body.sessionId === "string" && body.sessionId.trim().length > 0
+        ? body.sessionId.trim()
+        : undefined;
+    const directBase = process.env.FIVE55_GAMES_API_URL?.trim();
+    if (directBase) {
+      let upstreamUrl: URL;
+      try {
+        upstreamUrl = new URL("/api/games/play", directBase);
+      } catch {
+        error(res, "Invalid FIVE55_GAMES_API_URL", 500);
+        return;
+      }
+
+      const outboundHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      };
+      const directBearer = process.env.FIVE55_GAMES_API_BEARER_TOKEN?.trim();
+      if (directBearer) outboundHeaders.Authorization = `Bearer ${directBearer}`;
+
+      try {
+        const upstreamRes = await fetch(upstreamUrl.toString(), {
+          method: "POST",
+          headers: outboundHeaders,
+          body: JSON.stringify({
+            gameId: body.gameId ?? null,
+            mode,
+          }),
+        });
+        const raw = await upstreamRes.text();
+        const parsed = parseGamesJsonText(raw);
+        if (!upstreamRes.ok) {
+          error(res, extractGamesError(parsed, raw), upstreamRes.status);
+          return;
+        }
+        if (parsed && typeof parsed === "object") {
+          json(res, parsed);
+          return;
+        }
+        error(res, "Invalid upstream game play payload", 502);
+      } catch (err) {
+        error(
+          res,
+          `Failed to start game session: ${err instanceof Error ? err.message : String(err)}`,
+          502,
+        );
+      }
       return;
     }
 
-    const outboundHeaders: Record<string, string> = {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    };
-    const bearer = process.env.FIVE55_GAMES_API_BEARER_TOKEN?.trim();
-    if (bearer) outboundHeaders.Authorization = `Bearer ${bearer}`;
+    const upstreamBase =
+      process.env.STREAM555_BASE_URL?.trim() ||
+      process.env.STREAM_API_URL?.trim();
+    if (!upstreamBase) {
+      error(
+        res,
+        "FIVE55_GAMES_API_URL is not configured and STREAM555_BASE_URL (or STREAM_API_URL) is unavailable",
+        503,
+      );
+      return;
+    }
 
+    let upstreamToken = "";
     try {
-      const upstreamRes = await fetch(upstreamUrl.toString(), {
-        method: "POST",
-        headers: outboundHeaders,
-        body: JSON.stringify({
-          gameId: body.gameId ?? null,
-          mode: body.mode ?? "spectate",
-        }),
-      });
-      const raw = await upstreamRes.text();
-      let parsed: unknown = null;
-      try {
-        parsed = raw ? (JSON.parse(raw) as unknown) : null;
-      } catch {
-        parsed = null;
-      }
+      upstreamToken = await resolveGamesAgentBearer(upstreamBase);
+    } catch (err) {
+      error(
+        res,
+        err instanceof Error ? err.message : "Failed to resolve games agent bearer",
+        503,
+      );
+      return;
+    }
 
-      if (!upstreamRes.ok) {
+    let sessionId = "";
+    try {
+      sessionId = await ensureGamesAgentSessionId(
+        upstreamBase,
+        upstreamToken,
+        requestedSessionId,
+      );
+    } catch (err) {
+      error(
+        res,
+        err instanceof Error ? err.message : "Failed to bootstrap stream session",
+        502,
+      );
+      return;
+    }
+
+    let gameId =
+      typeof body.gameId === "string" && body.gameId.trim().length > 0
+        ? body.gameId.trim()
+        : "";
+
+    if (!gameId) {
+      const catalogUrl = new URL(
+        `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/catalog`,
+        upstreamBase,
+      );
+      try {
+        const catalogRes = await fetch(catalogUrl.toString(), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            Authorization: `Bearer ${upstreamToken}`,
+          },
+          body: JSON.stringify({ includeBeta: true }),
+        });
+        const catalogRaw = await catalogRes.text();
+        const catalogParsed = parseGamesJsonText(catalogRaw);
+        if (!catalogRes.ok) {
+          error(res, extractGamesError(catalogParsed, catalogRaw), catalogRes.status);
+          return;
+        }
+        const catalogPayload = asRecord(catalogParsed);
+        const catalogGames = Array.isArray(catalogPayload?.games)
+          ? catalogPayload.games
+          : [];
+        const firstGame = catalogGames
+          .map((entry) => asRecord(entry))
+          .find(
+            (entry) =>
+              typeof entry?.id === "string" && entry.id.trim().length > 0,
+          );
+        gameId =
+          typeof firstGame?.id === "string" && firstGame.id.trim().length > 0
+            ? firstGame.id.trim()
+            : "";
+      } catch (err) {
         error(
           res,
-          typeof parsed === "object" && parsed && "error" in parsed
-            ? String((parsed as { error?: unknown }).error ?? "upstream error")
-            : raw || "upstream error",
-          upstreamRes.status,
+          `Failed to resolve default game: ${err instanceof Error ? err.message : String(err)}`,
+          502,
         );
         return;
       }
+    }
 
-      if (parsed && typeof parsed === "object") {
-        json(res, parsed);
+    if (!gameId) {
+      error(res, "No playable games available for the current session", 404);
+      return;
+    }
+
+    const playUrl = new URL(
+      `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/play`,
+      upstreamBase,
+    );
+    try {
+      const upstreamRes = await fetch(playUrl.toString(), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${upstreamToken}`,
+        },
+        body: JSON.stringify({
+          gameId,
+          mode,
+        }),
+      });
+      const raw = await upstreamRes.text();
+      const parsed = parseGamesJsonText(raw);
+      if (!upstreamRes.ok) {
+        error(res, extractGamesError(parsed, raw), upstreamRes.status);
         return;
       }
 
-      error(res, "Invalid upstream game play payload", 502);
+      const parsedRecord = asRecord(parsed);
+      const upstreamGame = asRecord(parsedRecord?.game);
+      const upstreamGameId =
+        typeof parsedRecord?.gameId === "string" && parsedRecord.gameId.trim().length > 0
+          ? parsedRecord.gameId.trim()
+          : typeof upstreamGame?.id === "string" && upstreamGame.id.trim().length > 0
+            ? upstreamGame.id.trim()
+            : gameId;
+      const upstreamPath =
+        typeof upstreamGame?.path === "string" && upstreamGame.path.trim().length > 0
+          ? upstreamGame.path.trim()
+          : upstreamGameId;
+      const useNameAsTitle =
+        (typeof upstreamGame?.title !== "string" ||
+          upstreamGame.title.trim().length === 0) &&
+        typeof upstreamGame?.name === "string" &&
+        upstreamGame.name.trim().length > 0;
+      const normalizedGame =
+        normalizeCatalogGame({
+          ...upstreamGame,
+          id: upstreamGameId,
+          ...(useNameAsTitle ? { title: upstreamGame.name } : {}),
+          path: upstreamPath,
+        }) ??
+        normalizeCatalogGame({
+          id: upstreamGameId,
+          title: upstreamGameId,
+          description: "Playable app surfaced in Alice.",
+          category: "arcade",
+          difficulty: "medium",
+          path: upstreamPath,
+        });
+      if (!normalizedGame) {
+        error(res, "Invalid upstream game play payload", 502);
+        return;
+      }
+
+      const viewerUrl = buildViewerUrl(upstreamPath, mode);
+      const responsePayload: Record<string, unknown> = {
+        game: normalizedGame,
+        mode,
+        viewer: {
+          url: viewerUrl,
+          sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
+          postMessageAuth: false,
+        },
+        launchUrl: viewerUrl,
+        startedAt: new Date().toISOString(),
+        sessionId,
+      };
+      if (typeof parsedRecord?.requestId === "string") {
+        responsePayload.requestId = parsedRecord.requestId;
+      }
+      if (typeof parsedRecord?.sourceId === "string") {
+        responsePayload.sourceId = parsedRecord.sourceId;
+      }
+      json(res, responsePayload);
     } catch (err) {
       error(
         res,
@@ -12600,6 +13130,201 @@ async function handleRequest(
   }
 
   // ── App routes (/api/apps/*) ──────────────────────────────────────────
+  if (
+    (method === "GET" || method === "HEAD") &&
+    pathname.startsWith("/api/apps/local/")
+  ) {
+    const proxyPrefix = "/api/apps/local/";
+    const proxyPayload = pathname.slice(proxyPrefix.length);
+    const slashIndex = proxyPayload.indexOf("/");
+    const encodedAppName =
+      slashIndex >= 0 ? proxyPayload.slice(0, slashIndex) : proxyPayload;
+    if (!encodedAppName) {
+      error(res, "app name is required", 400);
+      return;
+    }
+
+    let appName: string;
+    try {
+      appName = decodeURIComponent(encodedAppName);
+    } catch {
+      error(res, "invalid app name encoding", 400);
+      return;
+    }
+
+    const appInfo = await state.appManager.getInfo(appName);
+    if (!appInfo) {
+      error(res, `App "${appName}" not found in registry`, 404);
+      return;
+    }
+
+    const templateSubstitutions = (
+      raw: string,
+    ): string =>
+      raw.replace(/\{([A-Z0-9_]+)\}/g, (_full, key: string) => {
+        const value = process.env[key];
+        if (value && value.trim().length > 0) return value.trim();
+        if (key === "RS_SDK_BOT_NAME") {
+          const runtimeBotName = process.env.BOT_NAME?.trim();
+          if (runtimeBotName && runtimeBotName.length > 0) return runtimeBotName;
+          return "testbot";
+        }
+        return "";
+      });
+    const upstreamSourceRaw =
+      appInfo.viewer?.url?.trim() || appInfo.launchUrl?.trim() || "";
+    if (!upstreamSourceRaw) {
+      error(res, `App "${appName}" has no upstream URL configured`, 404);
+      return;
+    }
+
+    let upstreamSource: URL;
+    try {
+      upstreamSource = new URL(templateSubstitutions(upstreamSourceRaw));
+    } catch {
+      error(res, `App "${appName}" has an invalid upstream URL`, 500);
+      return;
+    }
+
+    const normalizeHost = (value: string): string =>
+      value.trim().toLowerCase().replace(/^\[|\]$/g, "");
+    const host = normalizeHost(upstreamSource.hostname);
+    const isLoopbackHost =
+      host === "localhost" ||
+      host === "0.0.0.0" ||
+      host === "::1" ||
+      host === "::ffff:127.0.0.1" ||
+      host.startsWith("127.");
+    if (!isLoopbackHost) {
+      error(
+        res,
+        `App "${appName}" is not configured for local proxy access`,
+        400,
+      );
+      return;
+    }
+
+    const requestedPath =
+      slashIndex >= 0 ? proxyPayload.slice(slashIndex) : undefined;
+    const upstreamPath =
+      requestedPath && requestedPath.length > 0
+        ? requestedPath
+        : upstreamSource.pathname && upstreamSource.pathname.length > 0
+          ? upstreamSource.pathname
+          : "/";
+    const upstreamUrl = new URL(upstreamSource.origin);
+    upstreamUrl.pathname = upstreamPath.startsWith("/")
+      ? upstreamPath
+      : `/${upstreamPath}`;
+    upstreamUrl.search = url.search;
+
+    const forwardHeaders: Record<string, string> = {};
+    const acceptedHeaders = [
+      "accept",
+      "accept-language",
+      "if-none-match",
+      "if-modified-since",
+      "range",
+      "user-agent",
+    ] as const;
+    for (const headerName of acceptedHeaders) {
+      const value = req.headers[headerName];
+      if (typeof value === "string" && value.trim().length > 0) {
+        forwardHeaders[headerName] = value;
+      }
+    }
+
+    let upstreamResponse: Response;
+    try {
+      upstreamResponse = await fetch(upstreamUrl.toString(), {
+        method,
+        headers: forwardHeaders,
+        redirect: "manual",
+      });
+    } catch (err) {
+      error(
+        res,
+        `Failed to reach local app upstream: ${err instanceof Error ? err.message : String(err)}`,
+        502,
+      );
+      return;
+    }
+
+    const localProxyBase = `/api/apps/local/${encodeURIComponent(appName)}`;
+    const mapLocationHeader = (locationValue: string): string => {
+      const trimmed = locationValue.trim();
+      if (!trimmed) return trimmed;
+      if (trimmed.startsWith("/")) {
+        return `${localProxyBase}${trimmed}`;
+      }
+      try {
+        const parsed = new URL(trimmed);
+        const parsedHost = normalizeHost(parsed.hostname);
+        const parsedLoopback =
+          parsedHost === "localhost" ||
+          parsedHost === "0.0.0.0" ||
+          parsedHost === "::1" ||
+          parsedHost === "::ffff:127.0.0.1" ||
+          parsedHost.startsWith("127.");
+        if (!parsedLoopback) return trimmed;
+        return `${localProxyBase}${parsed.pathname}${parsed.search}${parsed.hash}`;
+      } catch {
+        return trimmed;
+      }
+    };
+
+    const passthroughHeaders = [
+      "cache-control",
+      "content-language",
+      "content-type",
+      "etag",
+      "expires",
+      "last-modified",
+      "vary",
+      "x-frame-options",
+      "content-security-policy",
+      "referrer-policy",
+      "x-content-type-options",
+    ] as const;
+    for (const headerName of passthroughHeaders) {
+      const value = upstreamResponse.headers.get(headerName);
+      if (value) {
+        res.setHeader(headerName, value);
+      }
+    }
+    const locationHeader = upstreamResponse.headers.get("location");
+    if (locationHeader) {
+      res.setHeader("Location", mapLocationHeader(locationHeader));
+    }
+
+    res.statusCode = upstreamResponse.status;
+    if (method === "HEAD" || upstreamResponse.status === 304) {
+      res.end();
+      return;
+    }
+
+    const contentType = upstreamResponse.headers.get("content-type") ?? "";
+    const rewriteHtmlForProxy = (html: string): string => {
+      const localProxyRoot = `${localProxyBase}/`;
+      return html
+        .replace(
+          /(\s(?:src|href|action|poster)=["'])\/(?!\/)/gi,
+          `$1${localProxyRoot}`,
+        )
+        .replace(/url\((['"]?)\/(?!\/)/gi, `url($1${localProxyRoot}`);
+    };
+
+    if (/text\/html/i.test(contentType)) {
+      const rawHtml = await upstreamResponse.text();
+      res.end(rewriteHtmlForProxy(rawHtml));
+      return;
+    }
+
+    const bodyBuffer = Buffer.from(await upstreamResponse.arrayBuffer());
+    res.end(bodyBuffer);
+    return;
+  }
+
   if (method === "GET" && pathname === "/api/apps") {
     const apps = await state.appManager.listAvailable();
     json(res, apps);

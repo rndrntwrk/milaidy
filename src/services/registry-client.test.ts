@@ -838,5 +838,60 @@ describe("registry-client", () => {
       const pluginInfo = await getPluginInfo("@elizaos/app-hyperscape");
       expect(pluginInfo?.localPath).toContain("plugins/app-hyperscape");
     });
+
+    it("applies local app viewer override over legacy registry viewer paths", async () => {
+      const generated = fakeGeneratedRegistry();
+      generated.registry["@elizaos/app-agent-town"] = {
+        git: {
+          repo: "elizaos/app-agent-town",
+          v0: { version: null, branch: null },
+          v1: { version: null, branch: null },
+          v2: { version: "1.0.0", branch: "main" },
+        },
+        npm: {
+          repo: "@elizaos/app-agent-town",
+          v0: null,
+          v1: null,
+          v2: "1.0.0",
+          v0CoreRange: null,
+          v1CoreRange: null,
+          v2CoreRange: ">=2.0.0",
+        },
+        supports: { v0: false, v1: false, v2: true },
+        description: "Legacy agent town metadata",
+        homepage: null,
+        topics: ["game"],
+        stargazers_count: 10,
+        language: "TypeScript",
+        kind: "app",
+        app: {
+          displayName: "Agent Town",
+          category: "game",
+          launchType: "url",
+          launchUrl: "http://localhost:5173/ai-town/index.html",
+          icon: null,
+          capabilities: ["social"],
+          minPlayers: 1,
+          maxPlayers: 1,
+          viewer: {
+            url: "http://localhost:5173/ai-town/index.html",
+            sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
+          },
+        },
+      };
+
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(generated),
+        }),
+      );
+
+      const { getAppInfo } = await loadModule();
+      const agentTown = await getAppInfo("@elizaos/app-agent-town");
+      expect(agentTown?.launchUrl).toBe("http://localhost:5173/");
+      expect(agentTown?.viewer?.url).toBe("http://localhost:5173/");
+    });
   });
 });

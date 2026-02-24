@@ -102,6 +102,40 @@ function getTemplateFallbackValue(key: string): string | undefined {
   return undefined;
 }
 
+function isLoopbackHostname(hostname: string): boolean {
+  const normalized = hostname.trim().toLowerCase().replace(/^\[|\]$/g, "");
+  if (!normalized) return false;
+  if (normalized === "localhost" || normalized === "::1") return true;
+  if (normalized === "0.0.0.0") return true;
+  if (normalized === "::ffff:127.0.0.1") return true;
+  return normalized.startsWith("127.");
+}
+
+function shouldProxyLocalAppUrls(): boolean {
+  const explicit = process.env.MILAIDY_PROXY_LOCAL_APP_URLS?.trim().toLowerCase();
+  if (explicit === "1" || explicit === "true") return true;
+  if (explicit === "0" || explicit === "false") return false;
+  if (process.env.VITEST || process.env.NODE_ENV === "test") return false;
+  return true;
+}
+
+function toProxyAppUrl(appName: string, candidate: string): string {
+  if (!shouldProxyLocalAppUrls()) return candidate;
+  let parsed: URL;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    return candidate;
+  }
+  if (!/^https?:$/i.test(parsed.protocol)) return candidate;
+  if (!isLoopbackHostname(parsed.hostname)) return candidate;
+  const appSegment = encodeURIComponent(appName);
+  const upstreamPath = parsed.pathname && parsed.pathname.length > 0
+    ? parsed.pathname
+    : "/";
+  return `/api/apps/local/${appSegment}${upstreamPath}${parsed.search}${parsed.hash}`;
+}
+
 function substituteTemplateVars(raw: string): string {
   return raw.replace(/\{([A-Z0-9_]+)\}/g, (_full, key: string) => {
     const value = process.env[key];
@@ -113,11 +147,12 @@ function substituteTemplateVars(raw: string): string {
 }
 
 function buildViewerUrl(
+  appName: string,
   baseUrl: string,
   embedParams?: Record<string, string>,
 ): string {
   if (!embedParams || Object.keys(embedParams).length === 0) {
-    return substituteTemplateVars(baseUrl);
+    return toProxyAppUrl(appName, substituteTemplateVars(baseUrl));
   }
   const resolvedBaseUrl = substituteTemplateVars(baseUrl);
   const [beforeHash, hashPartRaw] = resolvedBaseUrl.split("#", 2);
@@ -128,7 +163,8 @@ function buildViewerUrl(
   }
   const query = queryParams.toString();
   const hash = hashPartRaw ? `#${hashPartRaw}` : "";
-  return `${pathPart}${query.length > 0 ? `?${query}` : ""}${hash}`;
+  const urlWithParams = `${pathPart}${query.length > 0 ? `?${query}` : ""}${hash}`;
+  return toProxyAppUrl(appName, urlWithParams);
 }
 
 function buildViewerAuthMessage(
@@ -199,7 +235,11 @@ function buildViewerConfig(
       }
     }
     return {
-      url: buildViewerUrl(appInfo.viewer.url, appInfo.viewer.embedParams),
+      url: buildViewerUrl(
+        appInfo.name,
+        appInfo.viewer.url,
+        appInfo.viewer.embedParams,
+      ),
       embedParams: appInfo.viewer.embedParams,
       postMessageAuth,
       sandbox: appInfo.viewer.sandbox ?? DEFAULT_VIEWER_SANDBOX,
@@ -211,7 +251,7 @@ function buildViewerConfig(
     launchUrl
   ) {
     return {
-      url: launchUrl,
+      url: toProxyAppUrl(appInfo.name, launchUrl),
       sandbox: DEFAULT_VIEWER_SANDBOX,
     };
   }
@@ -320,8 +360,11 @@ export class AppManager {
       throw new Error(`App "${name}" not found in the registry.`);
     }
     const pluginMeta = await getPluginMetadata(name);
-    const launchUrl = appInfo.launchUrl
+    const launchUrlRaw = appInfo.launchUrl
       ? substituteTemplateVars(appInfo.launchUrl)
+      : null;
+    const launchUrl = launchUrlRaw
+      ? toProxyAppUrl(appInfo.name, launchUrlRaw)
       : null;
     const viewer = buildViewerConfig(appInfo, launchUrl);
 
