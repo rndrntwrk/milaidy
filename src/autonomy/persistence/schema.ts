@@ -278,6 +278,99 @@ export const autonomyIdentityTable = pgTable(
   ],
 );
 
+// ---------- canonical_entities ----------
+
+/**
+ * Cross-platform entity identity linking.
+ * Maps platform-specific user IDs to a canonical entity identity,
+ * enabling cross-room memory retrieval.
+ */
+export const canonicalEntitiesTable = pgTable(
+  "canonical_entities",
+  {
+    /** UUID primary key — the canonical entity ID used across all platform rooms. */
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Human-readable display name for the entity. */
+    displayName: text("display_name").notNull(),
+    /** Trust level: 0.0–1.0. Operators start at 1.0. */
+    trustLevel: real("trust_level").notNull().default(0.5),
+    /** Whether this entity is an operator (system administrator). */
+    isOperator: boolean("is_operator").notNull().default(false),
+    /**
+     * Platform identity map: { "discord": "enoomian#1234", "web_chat": "<uuid>", "telegram": "@enoomian" }
+     */
+    platformIds: jsonb("platform_ids").$type<Record<string, string>>().notNull().default({}),
+    /** User preferences extracted from interactions (e.g. communication style). */
+    preferences: jsonb("preferences").$type<Record<string, unknown>>().notNull().default({}),
+    /** Known facts about this entity, accumulated over sessions. */
+    knownFacts: jsonb("known_facts").$type<string[]>().notNull().default([]),
+    /** Per-platform last seen timestamps. */
+    lastSeen: jsonb("last_seen").$type<Record<string, number>>().notNull().default({}),
+    /** Arbitrary metadata. */
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    /** When this entity was first seen. */
+    firstSeen: timestamp("first_seen", { withTimezone: true }).defaultNow().notNull(),
+    /** DB insertion time. */
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    /** Last update time. */
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_canonical_entities_display_name").on(table.displayName),
+    index("idx_canonical_entities_is_operator").on(table.isOperator),
+  ],
+);
+
+// ---------- entity_memories ----------
+
+/**
+ * Entity-scoped memories (mid-term and long-term tiers).
+ * These memories follow the person across rooms/platforms,
+ * unlike room-scoped ElizaOS memories.
+ */
+export const entityMemoriesTable = pgTable(
+  "entity_memories",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** The canonical entity this memory belongs to. */
+    canonicalEntityId: uuid("canonical_entity_id").notNull(),
+    /** Memory tier: mid-term (session summaries, 30-day TTL) or long-term (permanent facts). */
+    memoryTier: text("memory_tier").notNull(), // 'mid-term' | 'long-term'
+    /** Memory type from the existing autonomy taxonomy. */
+    memoryType: text("memory_type").notNull(),
+    /** Memory content. */
+    content: jsonb("content").$type<Record<string, unknown>>().notNull(),
+    /** Optional metadata (source platform, room origin, related facts, etc.). */
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    /** Trust score at write time. */
+    trustScore: real("trust_score").notNull(),
+    /** Provenance chain. */
+    provenance: jsonb("provenance").$type<Record<string, unknown>>().notNull(),
+    /** Source platform (discord, web_chat, telegram). */
+    sourcePlatform: text("source_platform"),
+    /** Source room ID where this memory originated. */
+    sourceRoomId: text("source_room_id"),
+    /** Embedding vector stored as JSON array for semantic search. */
+    embedding: jsonb("embedding").$type<number[]>(),
+    /** Expiry timestamp for mid-term memories (null for long-term). */
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    /** Number of sessions this fact has appeared in (for promotion logic). */
+    sessionCount: integer("session_count").notNull().default(1),
+    /** Whether this memory has been superseded by a newer version. */
+    superseded: boolean("superseded").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_entity_memories_canonical_entity").on(table.canonicalEntityId),
+    index("idx_entity_memories_tier").on(table.memoryTier),
+    index("idx_entity_memories_type").on(table.memoryType),
+    index("idx_entity_memories_expires").on(table.expiresAt),
+    index("idx_entity_memories_superseded").on(table.superseded),
+    index("idx_entity_memories_entity_tier").on(table.canonicalEntityId, table.memoryTier),
+  ],
+);
+
 // ---------- Type Exports ----------
 
 /** Inferred row types for use in queries. */
@@ -303,3 +396,9 @@ export type AutonomyApprovalInsert = typeof autonomyApprovalsTable.$inferInsert;
 
 export type AutonomyIdentityRow = typeof autonomyIdentityTable.$inferSelect;
 export type AutonomyIdentityInsert = typeof autonomyIdentityTable.$inferInsert;
+
+export type CanonicalEntityRow = typeof canonicalEntitiesTable.$inferSelect;
+export type CanonicalEntityInsert = typeof canonicalEntitiesTable.$inferInsert;
+
+export type EntityMemoryRow = typeof entityMemoriesTable.$inferSelect;
+export type EntityMemoryInsert = typeof entityMemoriesTable.$inferInsert;

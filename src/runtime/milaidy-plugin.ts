@@ -46,6 +46,7 @@ import {
   resolveSessionKeyFromRoom,
 } from "../providers/session-bridge.js";
 import { createSimpleModeProvider } from "../providers/simple-mode.js";
+import { createPlatformContextProvider } from "../providers/platform-context.js";
 import { createTrustRetrievalProvider } from "../providers/trust-retrieval-provider.js";
 import { DEFAULT_AGENT_WORKSPACE_DIR } from "../providers/workspace.js";
 import { createWorkspaceProvider } from "../providers/workspace-provider.js";
@@ -186,6 +187,7 @@ export function createMilaidyPlugin(config?: MilaidyPluginConfig): Plugin {
     createSessionKeyProvider({ defaultAgentId: agentId }),
     ...getSessionProviders({ storePath: sessionStorePath }),
     createTrustRetrievalProvider(),
+    createPlatformContextProvider(),
   ];
 
   // Optionally add bootstrap providers (can be heavy for small context windows)

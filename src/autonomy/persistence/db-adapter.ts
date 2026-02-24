@@ -19,6 +19,8 @@ import {
   autonomyMemoryQuarantineTable,
   autonomyMemoryTable,
   autonomyStateTable,
+  canonicalEntitiesTable,
+  entityMemoriesTable,
 } from "./schema.js";
 
 // ---------- Types ----------
@@ -107,8 +109,12 @@ export class AutonomyDbAdapter {
     const { addAutonomyEventsHashChain } = await import(
       "./migrations/002_autonomy_events_hash_chain.js"
     );
+    const { createCanonicalEntitiesTables } = await import(
+      "./migrations/003_canonical_entities.js"
+    );
     await createAutonomyTables(this);
     await addAutonomyEventsHashChain(this);
+    await createCanonicalEntitiesTables(this);
     logger.info("[autonomy:db] Migration complete");
   }
 
@@ -135,6 +141,8 @@ export class AutonomyDbAdapter {
       memory: autonomyMemoryTable,
       memoryQuarantine: autonomyMemoryQuarantineTable,
       identity: autonomyIdentityTable,
+      canonicalEntities: canonicalEntitiesTable,
+      entityMemories: entityMemoriesTable,
     } as const;
   }
 

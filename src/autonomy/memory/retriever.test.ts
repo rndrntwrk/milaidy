@@ -14,7 +14,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type { IAgentRuntime, Memory, UUID } from "@elizaos/core";
 import { DEFAULT_RETRIEVAL_CONFIG } from "../config.js";
-import { TrustAwareRetrieverImpl, type RetrievalOptions } from "./retriever.js";
+import {
+  TrustAwareRetrieverImpl,
+  type RetrievalOptions,
+  type EntityMemoryProvider,
+} from "./retriever.js";
 
 // ---------- Helpers ----------
 
@@ -459,6 +463,269 @@ describe("TrustAwareRetrieverImpl", () => {
       const retriever = new TrustAwareRetrieverImpl(config);
 
       expect(retriever.getTypeBoost("observation")).toBe(2);
+    });
+  });
+
+  describe("contentHash()", () => {
+    it("returns null for empty text", () => {
+      const retriever = new TrustAwareRetrieverImpl(DEFAULT_RETRIEVAL_CONFIG);
+      const mem = makeMemory({ id: "m1", content: {} });
+      expect(retriever.contentHash(mem)).toBeNull();
+    });
+
+    it("returns null for missing text", () => {
+      const retriever = new TrustAwareRetrieverImpl(DEFAULT_RETRIEVAL_CONFIG);
+      const mem = makeMemory({ id: "m1", content: { text: "" } });
+      expect(retriever.contentHash(mem)).toBeNull();
+    });
+
+    it("produces consistent hashes for identical text", () => {
+      const retriever = new TrustAwareRetrieverImpl(DEFAULT_RETRIEVAL_CONFIG);
+      const m1 = makeMemory({ id: "m1", content: { text: "hello world" } });
+      const m2 = makeMemory({ id: "m2", content: { text: "hello world" } });
+      expect(retriever.contentHash(m1)).toBe(retriever.contentHash(m2));
+    });
+
+    it("normalizes whitespace for dedup", () => {
+      const retriever = new TrustAwareRetrieverImpl(DEFAULT_RETRIEVAL_CONFIG);
+      const m1 = makeMemory({ id: "m1", content: { text: "hello   world" } });
+      const m2 = makeMemory({ id: "m2", content: { text: "  hello world  " } });
+      expect(retriever.contentHash(m1)).toBe(retriever.contentHash(m2));
+    });
+
+    it("includes memory type in hash to avoid cross-type collisions", () => {
+      const retriever = new TrustAwareRetrieverImpl(DEFAULT_RETRIEVAL_CONFIG);
+      const m1 = makeMemory({
+        id: "m1",
+        content: { text: "hello" },
+        metadata: { type: "custom", memoryType: "fact" } as Memory["metadata"],
+      });
+      const m2 = makeMemory({
+        id: "m2",
+        content: { text: "hello" },
+        metadata: { type: "custom", memoryType: "observation" } as Memory["metadata"],
+      });
+      expect(retriever.contentHash(m1)).not.toBe(retriever.contentHash(m2));
+    });
+  });
+
+  describe("two-phase cross-room retrieval", () => {
+    function createMockEntityMemoryProvider(
+      memories: Memory[] = [],
+      searchMemories?: Memory[],
+    ): EntityMemoryProvider {
+      return {
+        getEntityMemories: vi.fn(async () => memories),
+        ...(searchMemories !== undefined
+          ? { searchEntityMemories: vi.fn(async () => searchMemories) }
+          : {}),
+      };
+    }
+
+    it("includes entity memories when canonicalEntityId is provided", async () => {
+      const roomMem = makeMemory({ id: "room-1", content: { text: "room scoped memory" } });
+      const entityMem = makeMemory({
+        id: "entity-1",
+        content: { text: "entity scoped memory from discord" },
+        metadata: { type: "custom", trustScore: 0.8 } as Memory["metadata"],
+      });
+
+      const entityProvider = createMockEntityMemoryProvider([entityMem]);
+      const retriever = new TrustAwareRetrieverImpl(
+        DEFAULT_RETRIEVAL_CONFIG,
+        null,
+        null,
+        entityProvider,
+      );
+      const runtime = createMockRuntime([roomMem]);
+
+      const results = await retriever.retrieve(runtime, {
+        ...defaultOptions,
+        canonicalEntityId: "canonical-user-123",
+      });
+
+      expect(results).toHaveLength(2);
+      const ids = results.map((r) => r.memory.id);
+      expect(ids).toContain("room-1");
+      expect(ids).toContain("entity-1");
+      expect(entityProvider.getEntityMemories).toHaveBeenCalledWith(
+        "canonical-user-123",
+        expect.objectContaining({ tiers: ["mid-term", "long-term"] }),
+      );
+    });
+
+    it("deduplicates identical content across room and entity memories", async () => {
+      const sharedText = "user prefers bullet point formatting";
+      const roomMem = makeMemory({
+        id: "room-1",
+        content: { text: sharedText },
+        metadata: { type: "custom", memoryType: "preference" } as Memory["metadata"],
+      });
+      const entityMem = makeMemory({
+        id: "entity-1",
+        content: { text: sharedText },
+        metadata: { type: "custom", memoryType: "preference" } as Memory["metadata"],
+      });
+
+      const entityProvider = createMockEntityMemoryProvider([entityMem]);
+      const retriever = new TrustAwareRetrieverImpl(
+        DEFAULT_RETRIEVAL_CONFIG,
+        null,
+        null,
+        entityProvider,
+      );
+      const runtime = createMockRuntime([roomMem]);
+
+      const results = await retriever.retrieve(runtime, {
+        ...defaultOptions,
+        canonicalEntityId: "canonical-user-123",
+      });
+
+      // Should only get 1 result since content hashes match
+      expect(results).toHaveLength(1);
+    });
+
+    it("uses semantic search on entity provider when embedding is available", async () => {
+      const entityMem = makeMemory({
+        id: "entity-1",
+        content: { text: "entity semantic match" },
+        metadata: { type: "custom", similarity: 0.85 } as Memory["metadata"],
+      });
+
+      const searchResults = [entityMem];
+      const entityProvider = createMockEntityMemoryProvider([], searchResults);
+      const retriever = new TrustAwareRetrieverImpl(
+        DEFAULT_RETRIEVAL_CONFIG,
+        null,
+        null,
+        entityProvider,
+      );
+      const runtime = createMockRuntime([]);
+
+      const results = await retriever.retrieve(runtime, {
+        ...defaultOptions,
+        canonicalEntityId: "canonical-user-123",
+        embedding: [0.1, 0.2, 0.3],
+      });
+
+      expect(results).toHaveLength(1);
+      expect(results[0].memory.id).toBe("entity-1");
+      expect(entityProvider.searchEntityMemories).toHaveBeenCalledWith(
+        "canonical-user-123",
+        [0.1, 0.2, 0.3],
+        expect.objectContaining({ matchThreshold: 0.3 }),
+      );
+    });
+
+    it("falls back to recency-based entity fetch when no embedding", async () => {
+      const entityMem = makeMemory({
+        id: "entity-1",
+        content: { text: "entity recency match" },
+      });
+
+      const entityProvider = createMockEntityMemoryProvider([entityMem]);
+      const retriever = new TrustAwareRetrieverImpl(
+        DEFAULT_RETRIEVAL_CONFIG,
+        null,
+        null,
+        entityProvider,
+      );
+      const runtime = createMockRuntime([]);
+
+      const results = await retriever.retrieve(runtime, {
+        ...defaultOptions,
+        canonicalEntityId: "canonical-user-123",
+      });
+
+      expect(results).toHaveLength(1);
+      expect(entityProvider.getEntityMemories).toHaveBeenCalled();
+    });
+
+    it("does not fetch entity memories when canonicalEntityId is absent", async () => {
+      const entityMem = makeMemory({ id: "entity-1", content: { text: "should not appear" } });
+      const entityProvider = createMockEntityMemoryProvider([entityMem]);
+      const retriever = new TrustAwareRetrieverImpl(
+        DEFAULT_RETRIEVAL_CONFIG,
+        null,
+        null,
+        entityProvider,
+      );
+      const runtime = createMockRuntime([]);
+
+      const results = await retriever.retrieve(runtime, defaultOptions);
+
+      expect(results).toHaveLength(0);
+      expect(entityProvider.getEntityMemories).not.toHaveBeenCalled();
+    });
+
+    it("does not fetch entity memories when provider is null", async () => {
+      const retriever = new TrustAwareRetrieverImpl(
+        DEFAULT_RETRIEVAL_CONFIG,
+        null,
+        null,
+        null,
+      );
+      const runtime = createMockRuntime([]);
+
+      const results = await retriever.retrieve(runtime, {
+        ...defaultOptions,
+        canonicalEntityId: "canonical-user-123",
+      });
+
+      // No crash, just empty
+      expect(results).toHaveLength(0);
+    });
+
+    it("gracefully handles entity provider errors", async () => {
+      const roomMem = makeMemory({ id: "room-1", content: { text: "room memory" } });
+      const entityProvider: EntityMemoryProvider = {
+        getEntityMemories: vi.fn(async () => {
+          throw new Error("database connection lost");
+        }),
+      };
+
+      const retriever = new TrustAwareRetrieverImpl(
+        DEFAULT_RETRIEVAL_CONFIG,
+        null,
+        null,
+        entityProvider,
+      );
+      const runtime = createMockRuntime([roomMem]);
+
+      // Should not throw — falls back to room-only results
+      const results = await retriever.retrieve(runtime, {
+        ...defaultOptions,
+        canonicalEntityId: "canonical-user-123",
+      });
+
+      expect(results).toHaveLength(1);
+      expect(results[0].memory.id).toBe("room-1");
+    });
+
+    it("allows entity memories with null content hash through dedup", async () => {
+      const roomMem = makeMemory({ id: "room-1", content: { text: "room text" } });
+      // Entity memory with no text content — hash will be null, should still pass through
+      const entityMem = makeMemory({
+        id: "entity-1",
+        content: { action: "some_action" },
+        metadata: { type: "custom", memoryType: "action" } as Memory["metadata"],
+      });
+
+      const entityProvider = createMockEntityMemoryProvider([entityMem]);
+      const retriever = new TrustAwareRetrieverImpl(
+        DEFAULT_RETRIEVAL_CONFIG,
+        null,
+        null,
+        entityProvider,
+      );
+      const runtime = createMockRuntime([roomMem]);
+
+      const results = await retriever.retrieve(runtime, {
+        ...defaultOptions,
+        canonicalEntityId: "canonical-user-123",
+      });
+
+      expect(results).toHaveLength(2);
     });
   });
 

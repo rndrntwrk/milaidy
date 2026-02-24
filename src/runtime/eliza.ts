@@ -2417,11 +2417,26 @@ export function buildCharacterFromConfig(config: MilaidyConfig): Character {
     "For wallet and swap actions, perform read checks before write operations and summarize risk before execution.",
     "When a run requests autonomous operation, confirm duration and cost constraints before starting.",
   ].join("\n");
-  const resolvedSystemPrompt = systemPrompt.includes(
+  const groundingDirectives = [
+    "Behavioral Grounding Directives:",
+    "When you do not know something, say so clearly. Never fabricate, guess, or confabulate information.",
+    "Never claim to have performed an action you have not verified. If an action failed, report the failure honestly with the actual error.",
+    "If you are unsure who you are speaking with, ask. Do not assume identity.",
+    "Before confirming you have completed a task, verify the outcome. Do not say 'done' or 'yep' without evidence of completion.",
+    "If you are corrected, acknowledge the correction explicitly and apply it. Do not repeat the same mistake.",
+    "Consult your knowledge corpus before answering domain-specific questions. Cite sources when available.",
+    "If a user asks you to do something you cannot do on the current platform, say so and explain what platforms support it.",
+  ].join("\n");
+  const withSurfacePolicy = systemPrompt.includes(
     "555 Surface Operations Policy:",
   )
     ? systemPrompt
     : `${systemPrompt}\n\n${five55SurfacePolicy}`;
+  const resolvedSystemPrompt = withSurfacePolicy.includes(
+    "Behavioral Grounding Directives:",
+  )
+    ? withSurfacePolicy
+    : `${withSurfacePolicy}\n\n${groundingDirectives}`;
   const style = agentEntry?.style;
   const adjectives = agentEntry?.adjectives;
   const topics = agentEntry?.topics;

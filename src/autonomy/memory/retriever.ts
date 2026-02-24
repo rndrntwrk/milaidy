@@ -33,6 +33,36 @@ export interface RetrievalOptions {
   };
   memoryTypes?: MemoryType[];
   tableName?: string;
+  /**
+   * Optional canonical entity ID for cross-platform retrieval.
+   * When provided, the retriever executes two-phase retrieval:
+   *   Phase 1: Room-scoped short-term memories (existing behavior)
+   *   Phase 2: Entity-scoped mid-term + long-term memories
+   * Results are merged, deduplicated, and ranked through the same scoring pipeline.
+   */
+  canonicalEntityId?: string;
+}
+
+/**
+ * Provider for entity-scoped memories (mid-term + long-term).
+ * Injected into the retriever to decouple from the specific store implementation.
+ */
+export interface EntityMemoryProvider {
+  /** Fetch entity-scoped memories for a canonical entity. */
+  getEntityMemories(
+    canonicalEntityId: string,
+    opts?: {
+      tiers?: Array<"mid-term" | "long-term">;
+      memoryTypes?: MemoryType[];
+      limit?: number;
+    },
+  ): Promise<Memory[]>;
+  /** Semantic search across entity memories. */
+  searchEntityMemories?(
+    canonicalEntityId: string,
+    embedding: number[],
+    opts?: { limit?: number; matchThreshold?: number },
+  ): Promise<Memory[]>;
 }
 
 /** A memory with computed ranking scores. */
@@ -117,14 +147,17 @@ export class TrustAwareRetrieverImpl implements TrustAwareRetriever {
   private readonly config: Required<AutonomyRetrievalConfig>;
   private readonly scorer: TrustScorer | null;
   private readonly eventBus: { emit: (event: string, payload: unknown) => void } | null;
+  private readonly entityMemoryProvider: EntityMemoryProvider | null;
 
   constructor(
     config: Required<AutonomyRetrievalConfig>,
     scorer?: TrustScorer | null,
     eventBus?: { emit: (event: string, payload: unknown) => void } | null,
+    entityMemoryProvider?: EntityMemoryProvider | null,
   ) {
     this.scorer = scorer ?? null;
     this.eventBus = eventBus ?? null;
+    this.entityMemoryProvider = entityMemoryProvider ?? null;
     const guarded = this.applyRetrievalGuardrails(config);
     this.config = guarded.config;
     this.emitRankGuardrailAudit(guarded.adjustments);
@@ -137,11 +170,33 @@ export class TrustAwareRetrieverImpl implements TrustAwareRetriever {
     const tableName = options.tableName ?? "memories";
     const maxResults = options.maxResults ?? this.config.maxResults;
 
-    // 1. Fetch candidates (time-ordered + semantic)
+    // Phase 1: Room-scoped short-term candidates (existing behavior)
     const candidates = await this.fetchCandidates(runtime, options, tableName);
+
+    // Phase 2: Entity-scoped mid-term + long-term candidates (cross-platform)
+    if (options.canonicalEntityId && this.entityMemoryProvider) {
+      const entityCandidates = await this.fetchEntityCandidates(
+        options.canonicalEntityId,
+        options,
+      );
+      // Merge entity candidates into the candidate pool, deduplicating by content hash
+      const seenContentHashes = new Set<string>();
+      for (const m of candidates) {
+        const hash = this.contentHash(m);
+        if (hash) seenContentHashes.add(hash);
+      }
+      for (const m of entityCandidates) {
+        const hash = this.contentHash(m);
+        if (!hash || !seenContentHashes.has(hash)) {
+          candidates.push(m);
+          if (hash) seenContentHashes.add(hash);
+        }
+      }
+    }
+
     const trustOverride = this.resolveTrustOverride(options);
 
-    // 2. Score each candidate
+    // Score each candidate through the same ranking pipeline
     const now = Date.now();
     const scored: RankedMemory[] = [];
 
@@ -178,10 +233,10 @@ export class TrustAwareRetrieverImpl implements TrustAwareRetriever {
       });
     }
 
-    // 3. Sort descending by rank score
+    // Sort descending by rank score
     scored.sort((a, b) => b.rankScore - a.rankScore);
 
-    // 4. Trim to maxResults
+    // Trim to maxResults
     return scored.slice(0, maxResults);
   }
 
@@ -296,6 +351,69 @@ export class TrustAwareRetrieverImpl implements TrustAwareRetriever {
     }
 
     return results;
+  }
+
+  /**
+   * Fetch entity-scoped memories (mid-term + long-term) for cross-platform retrieval.
+   * Uses semantic search when an embedding is available, otherwise fetches by recency.
+   */
+  private async fetchEntityCandidates(
+    canonicalEntityId: string,
+    options: RetrievalOptions,
+  ): Promise<Memory[]> {
+    if (!this.entityMemoryProvider) return [];
+
+    try {
+      // Prefer semantic search if embedding is available and provider supports it
+      if (
+        options.embedding &&
+        options.embedding.length > 0 &&
+        this.entityMemoryProvider.searchEntityMemories
+      ) {
+        return await this.entityMemoryProvider.searchEntityMemories(
+          canonicalEntityId,
+          options.embedding,
+          {
+            limit: this.config.maxResults * 2,
+            matchThreshold: 0.3,
+          },
+        );
+      }
+
+      // Fall back to recency-based fetch
+      return await this.entityMemoryProvider.getEntityMemories(
+        canonicalEntityId,
+        {
+          tiers: ["mid-term", "long-term"],
+          memoryTypes: options.memoryTypes,
+          limit: this.config.maxResults * 2,
+        },
+      );
+    } catch {
+      // Entity memory fetch failure is non-fatal — fall back to room-only retrieval
+      return [];
+    }
+  }
+
+  /**
+   * Compute a content-based deduplication hash for a memory.
+   * Uses the text content + optional metadata fingerprint to detect duplicates
+   * across room-scoped and entity-scoped pools.
+   */
+  contentHash(memory: Memory): string | null {
+    const text = (memory.content as { text?: string })?.text;
+    if (!text || text.length === 0) return null;
+
+    // Simple but effective: use first 200 chars of normalized text as hash key.
+    // This catches exact duplicates and near-duplicates where only whitespace differs.
+    const normalized = text.trim().toLowerCase().replace(/\s+/g, " ");
+    const truncated = normalized.slice(0, 200);
+
+    // Include memory type in hash to avoid collisions between different types
+    // with the same text (e.g., a "fact" vs an "observation" with identical content).
+    const meta = memory.metadata as Record<string, unknown> | undefined;
+    const memType = (meta?.memoryType as string) ?? "";
+    return `${memType}::${truncated}`;
   }
 
   private emitTrustOverrideAudit(record: TrustOverrideAuditRecord): void {
