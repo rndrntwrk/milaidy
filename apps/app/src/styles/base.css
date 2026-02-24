@@ -1,4 +1,4 @@
-/* Milaidy — Theme System */
+/* Milady — Theme System */
 
 /* ═══════════════════════════════════════════════════════════════════════
    milady — miladymaker.net inspired: sage greens, warm cream, Y2K web
@@ -66,8 +66,12 @@
   --link-hover-color: #c44536;
 
   --mono: "Courier New", Courier, monospace;
-  --font-body: "Hiragino Kaku Gothic Pro", Osaka, Meiryo, "MS PGothic", arial, helvetica, clean, sans-serif;
-  --font-display: "Hiragino Kaku Gothic Pro", Osaka, Meiryo, "MS PGothic", arial, helvetica, clean, sans-serif;
+  --font-body:
+    "Hiragino Kaku Gothic Pro", Osaka, Meiryo, "MS PGothic", arial, helvetica,
+    clean, sans-serif;
+  --font-display:
+    "Hiragino Kaku Gothic Pro", Osaka, Meiryo, "MS PGothic", arial, helvetica,
+    clean, sans-serif;
 
   /* No shadows — flat retro web aesthetic */
   --shadow-sm: none;
@@ -162,8 +166,12 @@
   --link-hover-color: #f43f5e;
 
   --mono: "Courier New", Courier, monospace;
-  --font-body: "Hiragino Kaku Gothic Pro", Osaka, Meiryo, "MS PGothic", arial, helvetica, clean, sans-serif;
-  --font-display: "Hiragino Kaku Gothic Pro", Osaka, Meiryo, "MS PGothic", arial, helvetica, clean, sans-serif;
+  --font-body:
+    "Hiragino Kaku Gothic Pro", Osaka, Meiryo, "MS PGothic", arial, helvetica,
+    clean, sans-serif;
+  --font-display:
+    "Hiragino Kaku Gothic Pro", Osaka, Meiryo, "MS PGothic", arial, helvetica,
+    clean, sans-serif;
 
   --shadow-sm: 0 1px 2px rgba(217, 70, 239, 0.06);
   --shadow-md: 0 2px 8px rgba(217, 70, 239, 0.08);
@@ -256,8 +264,12 @@
   --link-hover-color: #ef4444;
 
   --mono: "Courier New", Courier, monospace;
-  --font-body: "Hiragino Kaku Gothic Pro", Osaka, Meiryo, "MS PGothic", arial, helvetica, clean, sans-serif;
-  --font-display: "Hiragino Kaku Gothic Pro", Osaka, Meiryo, "MS PGothic", arial, helvetica, clean, sans-serif;
+  --font-body:
+    "Hiragino Kaku Gothic Pro", Osaka, Meiryo, "MS PGothic", arial, helvetica,
+    clean, sans-serif;
+  --font-display:
+    "Hiragino Kaku Gothic Pro", Osaka, Meiryo, "MS PGothic", arial, helvetica,
+    clean, sans-serif;
 
   --shadow-sm: none;
   --shadow-md: none;
@@ -350,8 +362,12 @@
   --link-hover-color: #f44747;
 
   --mono: "Cascadia Code", "Fira Code", Consolas, "Courier New", monospace;
-  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-display: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-body:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  --font-display:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
   --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.3);
@@ -538,7 +554,8 @@
   --link-hover-color: #ff073a;
 
   --mono: "Courier New", Courier, monospace;
-  --font-body: "Comic Sans MS", "Chalkboard SE", "Hiragino Kaku Gothic Pro", sans-serif;
+  --font-body:
+    "Comic Sans MS", "Chalkboard SE", "Hiragino Kaku Gothic Pro", sans-serif;
   --font-display: Impact, "Arial Black", "Hiragino Kaku Gothic Pro", sans-serif;
 
   --shadow-sm: 0 0 6px rgba(255, 0, 255, 0.3), 0 0 6px rgba(0, 255, 255, 0.2);
@@ -602,13 +619,13 @@ html:not([data-theme]) #root {
 
   body {
     margin: 0;
-    font: 400 14px/1.65 var(--font-body);
+    font: 400 14px / 1.65 var(--font-body);
     background: var(--bg);
     color: var(--text);
     -webkit-font-smoothing: antialiased;
   }
 
-  milaidy-app {
+  milady-app {
     display: flex;
     flex-direction: column;
     position: relative;
@@ -678,6 +695,10 @@ html:not([data-theme]) #root {
 
 /* Simple animations (outside layer — keyframes don't participate in cascade layers) */
 @keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }

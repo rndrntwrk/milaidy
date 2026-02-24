@@ -1,6 +1,6 @@
 import type { IAgentRuntime, Memory, State } from "@elizaos/core";
+import { adminTrustProvider } from "@elizaos/plugin-trust";
 import { describe, expect, it } from "vitest";
-import { createAdminTrustProvider } from "./admin-trust.js";
 
 type FakeWorld = {
   metadata?: {
@@ -37,8 +37,16 @@ function createRuntime(
 }
 
 describe("admin-trust provider", () => {
-  const provider = createAdminTrustProvider();
-  const state = {} as State;
+  const provider = adminTrustProvider;
+  const state = {
+    recentMessagesData: [
+      {
+        content: {
+          text: "admin trust provider status",
+        },
+      },
+    ],
+  } as State;
 
   it("marks OWNER speaker as trusted admin", async () => {
     const runtime = createRuntime(
@@ -53,6 +61,7 @@ describe("admin-trust provider", () => {
     const message = {
       roomId: "room-1",
       entityId: "admin-1",
+      content: { text: "admin trust" },
     } as Memory;
 
     const result = await provider.get(runtime, message, state);
@@ -74,6 +83,7 @@ describe("admin-trust provider", () => {
     const message = {
       roomId: "room-1",
       entityId: "user-2",
+      content: { text: "admin trust" },
     } as Memory;
 
     const result = await provider.get(runtime, message, state);
@@ -86,6 +96,7 @@ describe("admin-trust provider", () => {
     const message = {
       roomId: "room-1",
       entityId: "admin-1",
+      content: { text: "admin trust" },
     } as Memory;
 
     const result = await provider.get(runtime, message, state);

@@ -7,11 +7,10 @@
  * @module auth
  */
 
-export type { AnthropicFlow } from "./anthropic.js";
+export type { AnthropicFlow } from "./anthropic";
 // Anthropic (Claude Pro/Max)
-export { refreshAnthropicToken, startAnthropicLogin } from "./anthropic.js";
-// Claude Code setup token runtime support
-export { applyClaudeCodeStealth } from "./apply-stealth.js";
+export { refreshAnthropicToken, startAnthropicLogin } from "./anthropic";
+
 // Credential storage + management
 export {
   applySubscriptionCredentials,
@@ -27,7 +26,30 @@ export {
 } from "./credentials.js";
 export type { CodexFlow } from "./openai-codex.js";
 // OpenAI Codex (ChatGPT Plus/Pro)
-export { refreshCodexToken, startCodexLogin } from "./openai-codex.js";
+export { refreshCodexToken, startCodexLogin } from "./openai-codex";
+
+// Secure storage layer
+export {
+  type SecureStorageBackend,
+  type EncryptedPayload,
+  encrypt,
+  decrypt,
+  isEncryptedPayload,
+  getSecureStorage,
+  resetSecureStorage,
+  setSecureStorageBackend,
+} from "./secure-storage.js";
+
+// Migration utilities
+export {
+  migrateCredentials,
+  needsMigration,
+  getProvidersPendingMigration,
+  type MigrationResult,
+} from "./migration.js";
+
+// Key derivation
+export { getMachineId, resetMachineId } from "./key-derivation.js";
 
 // Secure storage layer
 export {

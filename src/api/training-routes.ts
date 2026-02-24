@@ -1,30 +1,36 @@
-import type http from "node:http";
 import type { AgentRuntime } from "@elizaos/core";
-import type { TrainingService } from "../services/training-service.js";
+import { isLoopbackHost } from "../security/network-policy";
+import { parsePositiveInteger } from "../utils/number-parsing";
+import type { RouteHelpers, RouteRequestContext } from "./route-helpers";
+import type { TrainingServiceLike } from "./training-service-like";
 
-export interface TrainingRouteHelpers {
-  json: (res: http.ServerResponse, data: object, status?: number) => void;
-  error: (res: http.ServerResponse, message: string, status?: number) => void;
-  readJsonBody: <T extends object>(
-    req: http.IncomingMessage,
-    res: http.ServerResponse,
-  ) => Promise<T | null>;
-}
+export type TrainingRouteHelpers = RouteHelpers;
 
-export interface TrainingRouteContext extends TrainingRouteHelpers {
-  req: http.IncomingMessage;
-  res: http.ServerResponse;
-  method: string;
-  pathname: string;
+export interface TrainingRouteContext extends RouteRequestContext {
   runtime: AgentRuntime | null;
-  trainingService: TrainingService;
+  trainingService: TrainingServiceLike;
 }
 
-function parsePositiveInt(value: string | null, fallback: number): number {
-  if (!value) return fallback;
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return fallback;
-  return Math.max(1, Math.floor(parsed));
+function resolveOllamaUrlRejection(rawUrl: string): string | null {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return null;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return "ollamaUrl must be a valid URL";
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return "ollamaUrl must use http:// or https://";
+  }
+
+  if (!isLoopbackHost(parsed.hostname)) {
+    return "ollamaUrl must target a loopback host (localhost, 127.0.0.1, or ::1)";
+  }
+
+  return null;
 }
 
 export async function handleTrainingRoutes(
@@ -60,7 +66,7 @@ export async function handleTrainingRoutes(
       req.url ?? "/",
       `http://${req.headers.host ?? "localhost"}`,
     );
-    const limit = parsePositiveInt(url.searchParams.get("limit"), 100);
+    const limit = parsePositiveInteger(url.searchParams.get("limit"), 100);
     const offset = Math.max(0, Number(url.searchParams.get("offset") ?? "0"));
     const result = await trainingService.listTrajectories({ limit, offset });
     json(res, result);
@@ -186,6 +192,19 @@ export async function handleTrainingRoutes(
       ollamaUrl?: string;
     }>(req, res);
     if (!body) return true;
+
+    if (body.ollamaUrl !== undefined && typeof body.ollamaUrl !== "string") {
+      error(res, "ollamaUrl must be a string", 400);
+      return true;
+    }
+    if (typeof body.ollamaUrl === "string") {
+      const ollamaUrlRejection = resolveOllamaUrlRejection(body.ollamaUrl);
+      if (ollamaUrlRejection) {
+        error(res, ollamaUrlRejection, 400);
+        return true;
+      }
+    }
+
     try {
       const model = await trainingService.importModelToOllama(modelId, body);
       json(res, { model });

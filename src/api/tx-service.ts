@@ -1,7 +1,7 @@
 /**
  * Ethereum transaction signing and contract interaction layer.
  *
- * Provides the missing transaction capability to Milaidy's wallet system,
+ * Provides the missing transaction capability to Milady's wallet system,
  * which currently only handles key generation and balance fetching.
  * Used by the registry and drop services for on-chain operations.
  */
@@ -57,12 +57,15 @@ export class TxService {
   async getFreshNonce(): Promise<number> {
     // Use a fresh provider for each nonce lookup to avoid ethers.js v6 caching
     const freshProvider = new ethers.JsonRpcProvider(this.rpcUrl);
-    const nonce = await freshProvider.getTransactionCount(
-      this.wallet.address,
-      "pending",
-    );
-    freshProvider.destroy();
-    return nonce;
+    try {
+      const nonce = await freshProvider.getTransactionCount(
+        this.wallet.address,
+        "pending",
+      );
+      return nonce;
+    } finally {
+      freshProvider.destroy();
+    }
   }
 
   get address(): string {

@@ -64,7 +64,7 @@ jobs:
       fail-fast: false
       matrix:
         platform:
-          # macos-14 (ARM64) cross-compiles x64 via Rosetta
+          # macos-14 (ARM64) cross-compiles x64 via Rosetta; E2E test runs on arm64 only
           - name: macOS (Intel)
             os: macos
             runner: macos-14
@@ -101,7 +101,12 @@ jobs:
           bun-version: latest
 
       - name: Install root dependencies
-        run: bun install --frozen-lockfile
+        run: |
+          for i in 1 2 3; do
+            bun install --frozen-lockfile && break
+            echo "Retry $i: bun install failed, retrying..."
+            sleep 5
+          done
 
       - name: Align package versions with release tag
         run: |
@@ -124,25 +129,38 @@ jobs:
           echo '{"type":"module"}' > dist/package.json
 
       - name: Install Capacitor app dependencies
-        run: bun install
+        run: |
+          for i in 1 2 3; do
+            bun install && break
+            echo "Retry $i: bun install failed, retrying..."
+            sleep 5
+          done
         working-directory: apps/app
 
       - name: Build Capacitor plugins
         run: |
           for d in gateway swabble camera screencapture canvas desktop location talkmode agent; do
             echo "[plugin:$d] building..."
-            (cd plugins/$d && npm run build)
+            (cd plugins/$d && bun run build)
           done
         working-directory: apps/app
         shell: bash
 
       - name: Refresh Capacitor app dependencies
-        run: bun install
+        run: |
+          for i in 1 2 3; do
+            bun install && break
+            echo "Retry $i: bun install failed, retrying..."
+            sleep 5
+          done
         working-directory: apps/app
 
       - name: Build Capacitor app
         if: matrix.platform.os != 'windows'
-        run: bun run build
+        run: |
+          # Run vite build directly instead of the build script
+          # (the build script's rt.sh install is handled by previous steps)
+          npx vite build
         working-directory: apps/app
 
       - name: Build Capacitor app (Windows)
@@ -155,12 +173,74 @@ jobs:
         working-directory: apps/app
 
       - name: Install Electron dependencies
-        run: npm install --no-audit --no-fund
+        run: |
+          for i in 1 2 3; do
+            bun install --no-save && break
+            echo "Retry $i: bun install failed, retrying..."
+            sleep 5
+          done
         working-directory: apps/app/electron
 
       - name: Build Electron app
         run: bun run build
         working-directory: apps/app/electron
+
+      # Build a custom dist specifically for the Electron app where all third-party
+      # npm dependencies are bundled inline (noExternal: true behavior via rolldown).
+      # This prevents the packaged app from failing to resolve external imports
+      # like "json5" from within the app.asar.unpacked directory.
+      - name: Bundle dist for Electron
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Building standalone Electron dist with all node_modules inlined..."
+
+          cat << 'EOF' > tsdown.electron.config.ts
+          import { defineConfig } from "tsdown";
+          export default defineConfig([{
+            entry: {
+              "index": "src/index.ts",
+              "entry": "src/entry.ts",
+              "eliza": "src/runtime/eliza.ts",
+              "server": "src/api/server.ts",
+              "plugins/whatsapp/index": "src/plugins/whatsapp/index.ts",
+              "plugins/retake/index": "src/plugins/retake/index.ts"
+            },
+            format: "esm",
+            platform: "node",
+            outDir: "dist-electron",
+            noExternal: [/.*/],
+            external: [
+              "node-llama-cpp",
+              "@reflink/reflink",
+              "@reflink/reflink-darwin-arm64",
+              "@reflink/reflink-darwin-x64",
+              "@reflink/reflink-linux-arm64-gnu",
+              "@reflink/reflink-linux-x64-gnu",
+              "fsevents",
+              "koffi",
+            ],
+            fixedExtension: false,
+            inlineOnly: false,
+            env: { NODE_ENV: "production" }
+          }]);
+          EOF
+
+          npx tsdown --config tsdown.electron.config.ts --no-clean
+
+          # Copy to milady-dist so electron-builder can pack it.
+          rm -rf apps/app/electron/milady-dist
+          mkdir -p apps/app/electron/milady-dist
+
+          find dist-electron -name '*.js' | while read f; do
+            rel="${f#dist-electron/}"
+            mkdir -p "apps/app/electron/milady-dist/$(dirname "$rel")"
+            cp "$f" "apps/app/electron/milady-dist/$rel"
+          done
+
+          echo '{"type":"module"}' > apps/app/electron/milady-dist/package.json
+          echo "Copied $(find apps/app/electron/milady-dist -name '*.js' | wc -l | tr -d ' ') JS files to milady-dist/"
+        working-directory: .
 
       - name: Prepare platform electron-builder config
         run: |
@@ -233,8 +313,8 @@ jobs:
 
       - name: Preflight Azure Trusted Signing access
         id: trusted_signing_preflight
-        continue-on-error: true
         if: matrix.platform.os == 'windows'
+        continue-on-error: true
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -296,21 +376,6 @@ jobs:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID || '' }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET || '' }}
 
-      - name: Fallback to unsigned Windows build when Trusted Signing preflight fails
-        if: matrix.platform.os == 'windows' && steps.trusted_signing_preflight.outcome != 'success'
-        run: |
-          node -e "
-            const fs = require('fs');
-            const file = './electron-builder.ci.json';
-            const cfg = JSON.parse(fs.readFileSync(file, 'utf8'));
-            if (cfg.win && cfg.win.azureSignOptions) {
-              delete cfg.win.azureSignOptions;
-              fs.writeFileSync(file, JSON.stringify(cfg, null, 2));
-            }
-          "
-          echo "::warning::Trusted Signing preflight failed; continuing with unsigned Windows artifact."
-        working-directory: apps/app/electron
-
       - name: Package desktop app
         run: |
           # Unset empty signing env vars — electron-builder treats "" as an invalid file path
@@ -320,6 +385,14 @@ jobs:
           if [ "${MATRIX_OS:-}" = "windows" ] && [ "${TRUSTED_SIGNING_PREFLIGHT:-success}" != "success" ]; then
             echo "Trusted Signing preflight failed; building Windows artifact without Azure signing."
             unset AZURE_TENANT_ID AZURE_CLIENT_ID AZURE_CLIENT_SECRET
+            # Remove azureSignOptions from config so electron-builder doesn't attempt signing
+            node -e "
+              const fs = require('fs');
+              const c = JSON.parse(fs.readFileSync('./electron-builder.ci.json', 'utf8'));
+              if (c.win) delete c.win.azureSignOptions;
+              fs.writeFileSync('./electron-builder.ci.json', JSON.stringify(c, null, 2));
+            "
+            echo "Removed azureSignOptions from config"
           fi
           npx electron-builder build ${{ matrix.platform.electron-args }} -c ./electron-builder.ci.json -p never
         working-directory: apps/app/electron
@@ -336,13 +409,34 @@ jobs:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID || '' }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET || '' }}
 
+      - name: Install Playwright browser runtime
+        if: matrix.platform.os == 'macos' && matrix.platform.artifact-name == 'macos-arm64'
+        run: bunx playwright install chromium
+        working-directory: apps/app
+
+      # E2E test only runs on arm64 (native) - x64 runs under Rosetta which has timing issues
+      - name: Verify packaged DMG boots to chat
+        if: matrix.platform.os == 'macos' && matrix.platform.artifact-name == 'macos-arm64'
+        run: |
+          set -euo pipefail
+
+          dmg_path=$(ls -t dist/*.dmg | head -n 1)
+          if [ -z "${dmg_path:-}" ]; then
+            echo "::error::No DMG artifact found under apps/app/electron/dist"
+            exit 1
+          fi
+
+          echo "Running packaged startup test against ${dmg_path}"
+          MILADY_TEST_DMG_PATH="${PWD}/${dmg_path}" bun run --cwd .. test:electron:packaged:e2e
+        working-directory: apps/app/electron
+
       - name: Verify macOS signature and notarization
         if: matrix.platform.os == 'macos'
         run: |
           set -euo pipefail
           shopt -s nullglob
 
-          apps=(dist/mac*/Milaidy.app)
+          apps=(dist/mac*/Milady.app)
           if [ "${#apps[@]}" -eq 0 ]; then
             echo "::error::No macOS .app bundles found under dist/mac*"
             exit 1
@@ -423,8 +517,8 @@ jobs:
       - name: Validate required macOS release artifacts
         run: |
           VERSION="${{ needs.prepare.outputs.version }}"
-          X64_DMG="release-files/Milaidy-${VERSION}.dmg"
-          ARM64_DMG="release-files/Milaidy-${VERSION}-arm64.dmg"
+          X64_DMG="release-files/Milady-${VERSION}.dmg"
+          ARM64_DMG="release-files/Milady-${VERSION}-arm64.dmg"
           if [ ! -f "${X64_DMG}" ]; then
             echo "::error::Missing required macOS x64 DMG: ${X64_DMG}"
             exit 1
@@ -459,7 +553,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
-          name: Milaidy ${{ needs.prepare.outputs.tag }}
+          name: Milady ${{ needs.prepare.outputs.tag }}
           draft: ${{ inputs.draft || false }}
           prerelease: ${{ contains(needs.prepare.outputs.version, 'alpha') || contains(needs.prepare.outputs.version, 'beta') || contains(needs.prepare.outputs.version, 'rc') || contains(needs.prepare.outputs.version, 'nightly') }}
           generate_release_notes: true

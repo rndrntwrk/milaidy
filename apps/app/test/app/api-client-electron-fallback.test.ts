@@ -1,12 +1,20 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MilaidyClient } from "../../src/api-client";
+import { MiladyClient } from "../../src/api-client";
 
-describe("MilaidyClient Electron API fallback", () => {
+describe("MiladyClient Electron API fallback", () => {
   const originalFetch = globalThis.fetch;
-  const originalBase = (window as { __MILAIDY_API_BASE__?: string })
-    .__MILAIDY_API_BASE__;
-  const originalProtocol = (window.location as { protocol?: string }).protocol;
+  const originalBase = (window as { __MILADY_API_BASE__?: string })
+    .__MILADY_API_BASE__;
+  const originalProtocol = window.location.protocol;
+
+  beforeEach(() => {
+    // Aggressively clear global state that might leak from other tests
+    delete (window as { __MILADY_API_BASE__?: string }).__MILADY_API_BASE__;
+    delete (window as { __MILADY_API_TOKEN__?: string }).__MILADY_API_TOKEN__;
+    window.sessionStorage.clear();
+  });
 
   afterEach(() => {
     Object.defineProperty(globalThis, "fetch", {
@@ -14,21 +22,35 @@ describe("MilaidyClient Electron API fallback", () => {
       writable: true,
       configurable: true,
     });
-    (window as { __MILAIDY_API_BASE__?: string }).__MILAIDY_API_BASE__ =
-      originalBase;
-    (window.location as { protocol?: string }).protocol = originalProtocol;
+    if (originalBase !== undefined) {
+      (window as { __MILADY_API_BASE__?: string }).__MILADY_API_BASE__ =
+        originalBase;
+    } else {
+      delete (window as { __MILADY_API_BASE__?: string }).__MILADY_API_BASE__;
+    }
+    Object.defineProperty(window, "location", {
+      value: { ...window.location, protocol: originalProtocol },
+      writable: true,
+    });
   });
 
+  function setProtocol(proto: string) {
+    Object.defineProperty(window, "location", {
+      value: { ...window.location, protocol: proto },
+      writable: true,
+    });
+  }
+
   it("does not probe localhost on capacitor-electron protocol before API base is injected", async () => {
-    (window as { __MILAIDY_API_BASE__?: string }).__MILAIDY_API_BASE__ =
+    (window as { __MILADY_API_BASE__?: string }).__MILADY_API_BASE__ =
       undefined;
-    (window.location as { protocol?: string }).protocol = "capacitor-electron:";
+    setProtocol("capacitor-electron:");
 
     const fetchMock = vi.fn(async () => ({
       ok: true,
       json: async () => ({
         state: "starting",
-        agentName: "Milaidy",
+        agentName: "Milady",
         model: undefined,
         uptime: undefined,
         startedAt: undefined,
@@ -40,7 +62,7 @@ describe("MilaidyClient Electron API fallback", () => {
       configurable: true,
     });
 
-    const client = new MilaidyClient();
+    const client = new MiladyClient();
     expect(client.apiAvailable).toBe(false);
     await expect(client.getStatus()).rejects.toThrow(
       "API not available (no HTTP origin)",
@@ -50,15 +72,15 @@ describe("MilaidyClient Electron API fallback", () => {
   });
 
   it("prefers injected API base over fallback", async () => {
-    (window as { __MILAIDY_API_BASE__?: string }).__MILAIDY_API_BASE__ =
+    (window as { __MILADY_API_BASE__?: string }).__MILADY_API_BASE__ =
       "http://localhost:9999";
-    (window.location as { protocol?: string }).protocol = "capacitor-electron:";
+    setProtocol("capacitor-electron:");
 
     const fetchMock = vi.fn(async () => ({
       ok: true,
       json: async () => ({
         state: "running",
-        agentName: "Milaidy",
+        agentName: "Milady",
         model: "test",
         uptime: 1,
         startedAt: Date.now(),
@@ -70,7 +92,7 @@ describe("MilaidyClient Electron API fallback", () => {
       configurable: true,
     });
 
-    const client = new MilaidyClient();
+    const client = new MiladyClient();
     await client.getStatus();
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -80,15 +102,15 @@ describe("MilaidyClient Electron API fallback", () => {
   });
 
   it("starts unavailable on capacitor-electron and switches to injected API base when injected later", async () => {
-    (window as { __MILAIDY_API_BASE__?: string }).__MILAIDY_API_BASE__ =
+    (window as { __MILADY_API_BASE__?: string }).__MILADY_API_BASE__ =
       undefined;
-    (window.location as { protocol?: string }).protocol = "capacitor-electron:";
+    setProtocol("capacitor-electron:");
 
     const fetchMock = vi.fn(async () => ({
       ok: true,
       json: async () => ({
         state: "running",
-        agentName: "Milaidy",
+        agentName: "Milady",
         model: "test",
         uptime: 1,
         startedAt: Date.now(),
@@ -100,13 +122,13 @@ describe("MilaidyClient Electron API fallback", () => {
       configurable: true,
     });
 
-    const client = new MilaidyClient();
+    const client = new MiladyClient();
     await expect(client.getStatus()).rejects.toThrow(
       "API not available (no HTTP origin)",
     );
     expect(fetchMock).not.toHaveBeenCalled();
 
-    (window as { __MILAIDY_API_BASE__?: string }).__MILAIDY_API_BASE__ =
+    (window as { __MILADY_API_BASE__?: string }).__MILADY_API_BASE__ =
       "http://127.0.0.1:4444";
     await client.getStatus();
     expect(fetchMock).toHaveBeenLastCalledWith(

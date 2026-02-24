@@ -42,14 +42,21 @@ export default defineConfig({
     hookTimeout: isWindows ? 180_000 : 120_000,
     pool: "forks",
     maxWorkers: isCI ? ciWorkers : localWorkers,
-    include: ["src/**/*.test.ts", "test/format-error.test.ts"],
-    setupFiles: ["test/setup.ts"],
-    exclude: [
-      "dist/**",
-      "**/node_modules/**",
-      "**/*.live.test.ts",
-      "**/*.e2e.test.ts",
+    include: [
+      "src/**/*.test.ts",
+      "scripts/**/*.test.ts",
+      "apps/**/*.test.ts",
+      "apps/**/*.test.tsx",
+      "apps/app/test/app/lifecycle-lock.test.ts",
+      "apps/app/test/app/api-client-timeout.test.ts",
+      "apps/app/test/app/startup-backend-missing.e2e.test.ts",
+      "apps/app/test/app/startup-token-401.e2e.test.ts",
+      "apps/app/test/electron-ui/electron-startup-failure.e2e.spec.ts",
+      "test/api-server.e2e.test.ts",
+      "test/format-error.test.ts",
     ],
+    setupFiles: ["test/setup.ts"],
+    exclude: ["dist/**", "**/node_modules/**", "**/*.live.test.ts"],
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
@@ -68,6 +75,11 @@ export default defineConfig({
         "src/cli/**",
         "src/hooks/**",
       ],
+    },
+    server: {
+      deps: {
+        inline: ["@elizaos/core"],
+      },
     },
   },
 });

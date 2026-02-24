@@ -1,5 +1,5 @@
 /**
- * Tests for the Milaidy registry client.
+ * Tests for the Milady registry client.
  *
  * Exercises the full cache hierarchy (memory → file → network), search
  * scoring, plugin lookup, and edge cases for malformed data.
@@ -17,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // ---------------------------------------------------------------------------
 
 async function loadModule() {
-  return await import("./registry-client.js");
+  return await import("./registry-client");
 }
 
 // ---------------------------------------------------------------------------
@@ -73,6 +73,29 @@ function fakeGeneratedRegistry() {
         homepage: null,
         topics: ["discord", "bot"],
         stargazers_count: 50,
+        language: "TypeScript",
+      },
+      "@elizaos/plugin-obsidian": {
+        git: {
+          repo: "elizaos-plugins/plugin-obsidian",
+          v0: { version: null, branch: null },
+          v1: { version: null, branch: null },
+          v2: { version: "2.0.0", branch: "next" },
+        },
+        npm: {
+          repo: "@elizaos/plugin-obsidian",
+          v0: null,
+          v1: null,
+          v2: "2.0.0-alpha.3",
+          v0CoreRange: null,
+          v1CoreRange: null,
+          v2CoreRange: ">=2.0.0",
+        },
+        supports: { v0: false, v1: false, v2: true },
+        description: "Obsidian notes integration",
+        homepage: null,
+        topics: ["obsidian", "notes"],
+        stargazers_count: 10,
         language: "TypeScript",
       },
       "@thirdparty/plugin-weather": {
@@ -221,20 +244,37 @@ async function writeLocalAppPackage(
 let tmpDir: string;
 let savedEnv: Record<string, string | undefined>;
 
+async function removeDirWithRetries(dir: string, attempts = 4): Promise<void> {
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      await fs.rm(dir, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      const shouldRetry =
+        error instanceof Error &&
+        "code" in error &&
+        (error as NodeJS.ErrnoException).code === "ENOTEMPTY" &&
+        i < attempts - 1;
+      if (!shouldRetry) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+  }
+}
+
 beforeEach(async () => {
   // Reset module cache to get fresh module-level state
   vi.resetModules();
 
-  tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "milaidy-reg-test-"));
+  tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "milady-reg-test-"));
   savedEnv = {
-    MILAIDY_STATE_DIR: process.env.MILAIDY_STATE_DIR,
-    MILAIDY_WORKSPACE_ROOT: process.env.MILAIDY_WORKSPACE_ROOT,
+    MILADY_STATE_DIR: process.env.MILADY_STATE_DIR,
+    MILADY_WORKSPACE_ROOT: process.env.MILADY_WORKSPACE_ROOT,
   };
   // Point the file cache at our temp dir
-  process.env.MILAIDY_STATE_DIR = tmpDir;
+  process.env.MILADY_STATE_DIR = tmpDir;
   const isolatedWorkspaceRoot = path.join(tmpDir, "workspace-empty");
   await fs.mkdir(isolatedWorkspaceRoot, { recursive: true });
-  process.env.MILAIDY_WORKSPACE_ROOT = isolatedWorkspaceRoot;
+  process.env.MILADY_WORKSPACE_ROOT = isolatedWorkspaceRoot;
 
   // Mock global fetch
   vi.stubGlobal("fetch", vi.fn());
@@ -242,9 +282,9 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.unstubAllGlobals();
-  process.env.MILAIDY_STATE_DIR = savedEnv.MILAIDY_STATE_DIR;
-  process.env.MILAIDY_WORKSPACE_ROOT = savedEnv.MILAIDY_WORKSPACE_ROOT;
-  await fs.rm(tmpDir, { recursive: true, force: true });
+  process.env.MILADY_STATE_DIR = savedEnv.MILADY_STATE_DIR;
+  process.env.MILADY_WORKSPACE_ROOT = savedEnv.MILADY_WORKSPACE_ROOT;
+  await removeDirWithRetries(tmpDir);
 });
 
 // ---------------------------------------------------------------------------
@@ -263,7 +303,7 @@ describe("registry-client", () => {
       const { getRegistryPlugins } = await loadModule();
       const registry = await getRegistryPlugins();
 
-      expect(registry.size).toBe(5);
+      expect(registry.size).toBe(6);
       const solana = registry.get("@elizaos/plugin-solana");
       expect(solana).toBeDefined();
       expect(solana?.description).toBe("Solana blockchain integration");
@@ -274,6 +314,10 @@ describe("registry-client", () => {
       );
       expect(solana?.stars).toBe(150);
       expect(solana?.topics).toContain("blockchain");
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ redirect: "error" }),
+      );
     });
 
     it("falls back to index.json when generated-registry.json fails", async () => {
@@ -365,7 +409,7 @@ describe("registry-client", () => {
       const mod2 = await loadModule();
       const registry = await mod2.getRegistryPlugins();
       expect(mockFetch2).not.toHaveBeenCalled();
-      expect(registry.size).toBe(5);
+      expect(registry.size).toBe(6);
     });
   });
 
@@ -414,6 +458,20 @@ describe("registry-client", () => {
       const info = await getPluginInfo("plugin-solana");
       expect(info).not.toBeNull();
       expect(info?.name).toBe("@elizaos/plugin-solana");
+    });
+
+    it("resolves obsidan typo alias to @elizaos/plugin-obsidian", async () => {
+      const { getPluginInfo } = await loadModule();
+      const info = await getPluginInfo("obsidan");
+      expect(info).not.toBeNull();
+      expect(info?.name).toBe("@elizaos/plugin-obsidian");
+    });
+
+    it("resolves scoped obsidan typo alias", async () => {
+      const { getPluginInfo } = await loadModule();
+      const info = await getPluginInfo("@elizaos/plugin-obsidan");
+      expect(info).not.toBeNull();
+      expect(info?.name).toBe("@elizaos/plugin-obsidian");
     });
 
     it("finds plugin by scope-stripped name", async () => {
@@ -593,6 +651,39 @@ describe("registry-client", () => {
       expect(dungeons.launchUrl).toBe("http://localhost:{port}");
       expect(dungeons.icon).toBeNull();
       expect(dungeons.capabilities).toContain("combat");
+    });
+
+    it("falls back to safe sandbox when registry sandbox tokens are untrusted", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              lastUpdatedAt: "2026-02-07T00:00:00Z",
+              registry: {
+                "@elizaos/app-dungeons": {
+                  ...fakeGeneratedRegistry().registry["@elizaos/app-dungeons"],
+                  app: {
+                    ...fakeGeneratedRegistry().registry["@elizaos/app-dungeons"]
+                      .app,
+                    viewer: {
+                      url: "https://example.org/embed",
+                      sandbox:
+                        "allow-scripts allow-same-origin allow-top-navigation",
+                    },
+                  },
+                },
+              },
+            }),
+        }),
+      );
+      vi.resetModules();
+      const { listApps } = await loadModule();
+      const apps = await listApps();
+      expect(apps[0]?.viewer?.sandbox).toBe(
+        "allow-scripts allow-same-origin allow-popups",
+      );
     });
 
     it("returns empty array when registry has no apps", async () => {
@@ -805,7 +896,7 @@ describe("registry-client", () => {
         launchType: "connect",
         launchUrl: "https://hyperscape.ai",
       });
-      process.env.MILAIDY_WORKSPACE_ROOT = workspaceRoot;
+      process.env.MILADY_WORKSPACE_ROOT = workspaceRoot;
 
       vi.stubGlobal(
         "fetch",
@@ -892,6 +983,61 @@ describe("registry-client", () => {
       const agentTown = await getAppInfo("@elizaos/app-agent-town");
       expect(agentTown?.launchUrl).toBe("http://localhost:5173/");
       expect(agentTown?.viewer?.url).toBe("http://localhost:5173/");
+    });
+  });
+
+  describe("custom endpoint security", () => {
+    it("rejects insecure custom endpoint URLs", async () => {
+      const { addRegistryEndpoint } = await loadModule();
+
+      expect(() =>
+        addRegistryEndpoint(
+          "insecure",
+          "http://registry.example.com/index.json",
+        ),
+      ).toThrow(/https:\/\//i);
+
+      expect(() =>
+        addRegistryEndpoint("local", "https://localhost/registry.json"),
+      ).toThrow(/blocked/i);
+    });
+
+    it("does not allow custom endpoints to override existing plugin entries", async () => {
+      const customUrl = "https://1.1.1.1/custom.json";
+      const customRegistry = {
+        registry: {
+          "@elizaos/plugin-solana": {
+            ...fakeGeneratedRegistry().registry["@elizaos/plugin-solana"],
+            description: "MALICIOUS OVERRIDE",
+          },
+        },
+      };
+
+      const mockFetch = vi.fn((url: string | URL) => {
+        const value = String(url);
+        if (value.includes("raw.githubusercontent.com")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(fakeGeneratedRegistry()),
+          });
+        }
+        if (value === customUrl) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(customRegistry),
+          });
+        }
+        return Promise.resolve({ ok: false, status: 404, statusText: "Nope" });
+      });
+      vi.stubGlobal("fetch", mockFetch);
+
+      const { addRegistryEndpoint, getRegistryPlugins } = await loadModule();
+      addRegistryEndpoint("custom", customUrl);
+
+      const registry = await getRegistryPlugins();
+      expect(registry.get("@elizaos/plugin-solana")?.description).toBe(
+        "Solana blockchain integration",
+      );
     });
   });
 });

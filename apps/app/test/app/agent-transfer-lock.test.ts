@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import React, { useEffect } from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -39,7 +40,7 @@ const { mockClient } = vi.hoisted(() => ({
     getAgentEvents: vi.fn(async () => ({ events: [], latestEventId: null })),
     getStatus: vi.fn(async () => ({
       state: "running",
-      agentName: "Milaidy",
+      agentName: "Milady",
       model: undefined,
       startedAt: undefined,
       uptime: undefined,
@@ -59,7 +60,7 @@ const { mockClient } = vi.hoisted(() => ({
       },
     })),
     importAgent: vi.fn(async () => ({
-      agentName: "Milaidy",
+      agentName: "Milady",
       counts: {
         memories: 1,
         entities: 0,
@@ -85,7 +86,10 @@ function createDeferred<T>() {
 }
 
 type ProbeApi = {
-  setState: (key: "exportPassword" | "importPassword" | "importFile", value: unknown) => void;
+  setState: (
+    key: "exportPassword" | "importPassword" | "importFile",
+    value: unknown,
+  ) => void;
   handleAgentExport: () => Promise<void>;
   handleAgentImport: () => Promise<void>;
 };
@@ -154,17 +158,23 @@ describe("agent transfer locking", () => {
     mockClient.connectWs.mockImplementation(() => {});
     mockClient.disconnectWs.mockImplementation(() => {});
     mockClient.onWsEvent.mockReturnValue(() => {});
-    mockClient.getAgentEvents.mockResolvedValue({ events: [], latestEventId: null });
+    mockClient.getAgentEvents.mockResolvedValue({
+      events: [],
+      latestEventId: null,
+    });
     mockClient.getStatus.mockResolvedValue({
       state: "running",
-      agentName: "Milaidy",
+      agentName: "Milady",
       model: undefined,
       startedAt: undefined,
       uptime: undefined,
     });
     mockClient.getWalletAddresses.mockResolvedValue(null);
     mockClient.getConfig.mockResolvedValue({});
-    mockClient.getCloudStatus.mockResolvedValue({ enabled: false, connected: false });
+    mockClient.getCloudStatus.mockResolvedValue({
+      enabled: false,
+      connected: false,
+    });
     mockClient.getWorkbenchOverview.mockResolvedValue({
       tasks: [],
       triggers: [],
@@ -198,18 +208,18 @@ describe("agent transfer locking", () => {
     expect(api).not.toBeNull();
 
     await act(async () => {
-      api!.setState("exportPassword", "abcd");
+      api?.setState("exportPassword", "abcd");
     });
 
     await act(async () => {
-      void api!.handleAgentExport();
-      void api!.handleAgentExport();
+      void api?.handleAgentExport();
+      void api?.handleAgentExport();
     });
 
     expect(mockClient.exportAgent).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      tree!.unmount();
+      tree?.unmount();
     });
   });
 
@@ -244,19 +254,19 @@ describe("agent transfer locking", () => {
     } as unknown as File;
 
     await act(async () => {
-      api!.setState("importPassword", "abcd");
-      api!.setState("importFile", fakeFile);
+      api?.setState("importPassword", "abcd");
+      api?.setState("importFile", fakeFile);
     });
 
     await act(async () => {
-      void api!.handleAgentImport();
-      void api!.handleAgentImport();
+      void api?.handleAgentImport();
+      void api?.handleAgentImport();
     });
 
     expect(mockClient.importAgent).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      tree!.unmount();
+      tree?.unmount();
     });
   });
 });

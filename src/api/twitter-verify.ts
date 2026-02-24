@@ -10,7 +10,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { logger } from "@elizaos/core";
-import { resolveStateDir } from "../config/paths.js";
+import { resolveStateDir } from "../config/paths";
+import type { VerificationResult } from "../contracts/verification";
+
+export type { VerificationResult } from "../contracts/verification";
 
 const WHITELIST_FILE = "whitelist.json";
 
@@ -26,12 +29,6 @@ interface WhitelistData {
   verified: Record<string, WhitelistEntry>;
 }
 
-export interface VerificationResult {
-  verified: boolean;
-  error: string | null;
-  handle: string | null;
-}
-
 // ── Verification Message ─────────────────────────────────────────────────
 
 export function generateVerificationMessage(
@@ -39,7 +36,7 @@ export function generateVerificationMessage(
   walletAddress: string,
 ): string {
   const shortAddr = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
-  return `Verifying my Milaidy agent "${agentName}" | ${shortAddr} #MilaidyAgent`;
+  return `Verifying my Milady agent "${agentName}" | ${shortAddr} #MiladyAgent`;
 }
 
 // ── Tweet Verification ───────────────────────────────────────────────────
@@ -70,7 +67,7 @@ export async function verifyTweet(
   let response: Response;
   try {
     response = await fetch(apiUrl, {
-      headers: { "User-Agent": "MilaidyVerifier/1.0" },
+      headers: { "User-Agent": "MiladyVerifier/1.0" },
       signal: AbortSignal.timeout(15_000),
     });
   } catch (err) {
@@ -131,7 +128,7 @@ export async function verifyTweet(
   const hasAddress =
     tweetText.includes(shortAddr) ||
     tweetText.toLowerCase().includes(walletAddress.toLowerCase().slice(0, 10));
-  const hasHashtag = tweetText.includes("#MilaidyAgent");
+  const hasHashtag = tweetText.includes("#MiladyAgent");
 
   if (!hasAddress) {
     return {
@@ -144,7 +141,7 @@ export async function verifyTweet(
   if (!hasHashtag) {
     return {
       verified: false,
-      error: "Tweet is missing #MilaidyAgent hashtag.",
+      error: "Tweet is missing #MiladyAgent hashtag.",
       handle,
     };
   }

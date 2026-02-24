@@ -14,15 +14,17 @@
 
 import { useState } from "react";
 import { useApp } from "../AppContext";
-import { PluginsPageView } from "./PluginsPageView";
-import { SkillsView } from "./SkillsView";
+import type { Tab } from "../navigation";
 import { CustomActionsView } from "./CustomActionsView";
+import { DatabasePageView } from "./DatabasePageView";
 import { FineTuningView } from "./FineTuningView";
+import { LogsPageView } from "./LogsPageView";
+import { PluginsPageView } from "./PluginsPageView";
+import { RuntimeView } from "./RuntimeView";
+import { SecurityAuditPageView } from "./SecurityAuditPageView";
+import { SkillsView } from "./SkillsView";
 import { TrajectoriesView } from "./TrajectoriesView";
 import { TrajectoryDetailView } from "./TrajectoryDetailView";
-import { RuntimeView } from "./RuntimeView";
-import { DatabasePageView } from "./DatabasePageView";
-import { LogsPageView } from "./LogsPageView";
 import { TriggersView } from "./TriggersView";
 import { IdentityPanel } from "./IdentityPanel";
 import { ApprovalPanel } from "./ApprovalPanel";
@@ -43,7 +45,8 @@ type SubTab =
   | "trajectories"
   | "runtime"
   | "database"
-  | "logs";
+  | "logs"
+  | "security";
 
 const SUB_TABS: Array<{ id: SubTab; label: string; description: string }> = [
   { id: "plugins", label: "Plugins", description: "Features and connectors" },
@@ -59,6 +62,11 @@ const SUB_TABS: Array<{ id: SubTab; label: string; description: string }> = [
   { id: "runtime", label: "Runtime", description: "Deep runtime object introspection and load order" },
   { id: "database", label: "Databases", description: "Tables, media, and vector browser" },
   { id: "logs", label: "Logs", description: "Runtime and service logs" },
+  {
+    id: "security",
+    label: "Security",
+    description: "Sandbox and policy audit feed",
+  },
 ];
 
 function mapTabToSubTab(tab: Tab): SubTab {
@@ -82,7 +90,9 @@ function mapTabToSubTab(tab: Tab): SubTab {
 
 export function AdvancedPageView() {
   const { tab, setTab } = useApp();
-  const [selectedTrajectoryId, setSelectedTrajectoryId] = useState<string | null>(null);
+  const [selectedTrajectoryId, setSelectedTrajectoryId] = useState<
+    string | null
+  >(null);
 
   const currentSubTab = mapTabToSubTab(tab);
 
@@ -128,6 +138,9 @@ export function AdvancedPageView() {
       case "logs":
         setTab("logs");
         break;
+      case "security":
+        setTab("security");
+        break;
       default:
         setTab("plugins");
     }
@@ -171,6 +184,8 @@ export function AdvancedPageView() {
         return <DatabasePageView />;
       case "logs":
         return <LogsPageView />;
+      case "security":
+        return <SecurityAuditPageView />;
       default:
         return <PluginsPageView />;
     }
@@ -185,6 +200,7 @@ export function AdvancedPageView() {
             const isActive = currentSubTab === subTab.id;
             return (
               <button
+                type="button"
                 key={subTab.id}
                 id={`adv-tab-${subTab.id}`}
                 role="tab"

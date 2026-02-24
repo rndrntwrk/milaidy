@@ -1,20 +1,20 @@
 import {
-  type Component,
-  type Focusable,
-  getEditorKeybindings,
-  Input,
-  type SelectItem,
-  SelectList,
-} from "@elizaos/tui";
-import {
   type Api,
   getEnvApiKey,
   getModels,
   getProviders,
   type Model,
 } from "@mariozechner/pi-ai";
-import chalk from "chalk";
+import {
+  type Component,
+  type Focusable,
+  getEditorKeybindings,
+  Input,
+  type SelectItem,
+  SelectList,
+} from "@mariozechner/pi-tui";
 import { tuiTheme } from "../theme.js";
+import { ModalFrame } from "./modal-frame.js";
 
 export interface ModelSelectorOptions {
   currentModel: Model<Api>;
@@ -32,6 +32,10 @@ export class ModelSelectorComponent implements Component, Focusable {
   private filterInput = new Input();
   private selectList: SelectList;
   private modelByKey = new Map<string, Model<Api>>();
+  private frame = new ModalFrame({
+    title: "Select model",
+    hint: "type to filter • ↑↓ navigate • Enter select • Esc cancel",
+  });
 
   constructor(options: ModelSelectorOptions) {
     const items: SelectItem[] = [];
@@ -105,15 +109,10 @@ export class ModelSelectorComponent implements Component, Focusable {
     // Propagate focus to the filter input so cursor marker is emitted.
     this.filterInput.focused = this.focused;
 
-    const header = [
-      chalk.bold(" Select model"),
-      chalk.dim(" type to filter • ↑↓ navigate • Enter select • Esc cancel"),
-      "",
-    ];
-
     const filterLine = this.filterInput.render(width).map((l) => `  ${l}`);
+    const body = [...filterLine, "", ...this.selectList.render(width)];
 
-    return [...header, ...filterLine, "", ...this.selectList.render(width)];
+    return this.frame.render(width, body);
   }
 
   invalidate(): void {

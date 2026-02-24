@@ -7,6 +7,8 @@
  * @module runtime/custom-actions
  */
 
+import { lookup as dnsLookup } from "node:dns/promises";
+import net from "node:net";
 import type { Action, HandlerOptions, IAgentRuntime } from "@elizaos/core";
 import { createCustomActionContract } from "../autonomy/tools/schemas/custom-action.schema.js";
 import type { ToolRegistryInterface } from "../autonomy/tools/types.js";
@@ -98,6 +100,66 @@ const FIVE55_CAPABILITY_POLICY = createFive55CapabilityPolicy();
 /** Valid handler types that we actually support. */
 const VALID_HANDLER_TYPES = new Set(["http", "shell", "code"]);
 
+type VmRunner = {
+  runInNewContext: (
+    code: string,
+    contextObject: Record<string, unknown>,
+    options?: { filename?: string; timeout?: number },
+  ) => unknown;
+};
+
+let vmRunner: VmRunner | null = null;
+
+function resolveFetchInputUrl(input: RequestInfo | URL): string | null {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.toString();
+  if (typeof Request !== "undefined" && input instanceof Request) {
+    return input.url;
+  }
+  return null;
+}
+
+async function safeCodeFetch(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  const url = resolveFetchInputUrl(input);
+  if (!url || (await isBlockedUrl(url))) {
+    throw new Error(
+      "Blocked: cannot make requests to internal network addresses",
+    );
+  }
+
+  const response = await fetch(input, { ...init, redirect: "manual" });
+  if (response.status >= 300 && response.status < 400) {
+    throw new Error(
+      "Blocked: redirects are not allowed for code custom actions",
+    );
+  }
+
+  return response;
+}
+
+async function runCodeHandler(
+  code: string,
+  params: Record<string, string>,
+): Promise<unknown> {
+  if (typeof process === "undefined" || !process.versions?.node) {
+    throw new Error("Code actions are only supported in Node runtimes.");
+  }
+
+  if (!vmRunner) {
+    vmRunner = (await import("node:vm")) as VmRunner;
+  }
+
+  const script = `(async () => { ${code} })();`;
+  const context: Record<string, unknown> = { params, fetch: safeCodeFetch };
+  return await vmRunner.runInNewContext(`"use strict"; ${script}`, context, {
+    filename: "milady-custom-action",
+    timeout: 30_000,
+  });
+}
+
 /**
  * Shell-escape a value so it can be safely interpolated into a shell command.
  * Wraps in single quotes and escapes any embedded single quotes.
@@ -106,14 +168,19 @@ function shellEscape(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
+function isBlockedIp(ip: string): boolean {
+  return isBlockedPrivateOrLinkLocalIp(ip);
+}
+
 /**
  * Check whether a URL targets a private/internal network (SSRF guard).
  * Blocks loopback, link-local, and RFC-1918 ranges except our own API.
+ * Resolves hostnames to concrete IPs to prevent DNS-alias bypasses.
  */
-function isBlockedUrl(url: string): boolean {
+async function isBlockedUrl(url: string): Promise<boolean> {
   try {
     const parsed = new URL(url);
-    const hostname = parsed.hostname.toLowerCase();
+    const hostname = normalizeHostLike(parsed.hostname);
 
     // Allow requests to our own API (terminal/run endpoint etc.)
     if (
@@ -139,19 +206,23 @@ function isBlockedUrl(url: string): boolean {
       return true;
     }
 
-    // Block RFC-1918 / link-local ranges
-    const parts = hostname.split(".");
-    if (parts.length === 4 && parts.every((p) => /^\d+$/.test(p))) {
-      const [a, b] = parts.map(Number);
-      if (a === 10) return true; // 10.0.0.0/8
-      if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12
-      if (a === 192 && b === 168) return true; // 192.168.0.0/16
-      if (a === 169 && b === 254) return true; // link-local
+    // Direct IP literals can be checked immediately.
+    if (net.isIP(hostname)) {
+      return isBlockedIp(hostname);
+    }
+
+    // Resolve hostnames to catch aliases (e.g. nip.io) pointing at blocked IPs.
+    const records = await dnsLookup(hostname, { all: true });
+    const addresses = Array.isArray(records) ? records : [records];
+    for (const entry of addresses) {
+      if (isBlockedIp(entry.address)) {
+        return true;
+      }
     }
 
     return false;
   } catch {
-    // Malformed URL — block it
+    // Malformed URL or failed resolution — block it
     return true;
   }
 }
@@ -188,7 +259,7 @@ function buildHandler(
         }
 
         // SSRF guard — block requests to internal/private networks
-        if (isBlockedUrl(url)) {
+        if (await isBlockedUrl(url)) {
           return {
             ok: false,
             output:
@@ -203,12 +274,20 @@ function buildHandler(
         const fetchOpts: RequestInit = {
           method: handler.method || "GET",
           headers,
+          redirect: "manual",
         };
         if (body && handler.method !== "GET" && handler.method !== "HEAD") {
           fetchOpts.body = body;
         }
 
         const response = await fetch(url, fetchOpts);
+        if (response.status >= 300 && response.status < 400) {
+          return {
+            ok: false,
+            output:
+              "Blocked: redirects are not allowed for HTTP custom actions",
+          };
+        }
         const text = await response.text();
         return { ok: response.ok, output: text.slice(0, 4000) };
       };
@@ -226,8 +305,19 @@ function buildHandler(
           `http://localhost:${API_PORT}/api/terminal/run`,
           {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ command }),
+            headers: (() => {
+              const headers: Record<string, string> = {
+                "Content-Type": "application/json",
+              };
+              const token = process.env.MILADY_API_TOKEN?.trim();
+              if (token) {
+                headers.Authorization = /^Bearer\s+/i.test(token)
+                  ? token
+                  : `Bearer ${token}`;
+              }
+              return headers;
+            })(),
+            body: JSON.stringify({ command, clientId: "runtime-shell-action" }),
           },
         );
 
@@ -247,12 +337,7 @@ function buildHandler(
       // desktop app — the owner wrote the code. We restrict the sandbox to
       // only expose `params` and `fetch`; no require/import/process/global.
       return async (params) => {
-        const fn = new Function(
-          "params",
-          "fetch",
-          `"use strict"; return (async () => { ${handler.code} })();`,
-        );
-        const result = await fn(params, fetch);
+        const result = await runCodeHandler(handler.code, params);
         const output = result !== undefined ? String(result) : "Done";
         return { ok: true, output: output.slice(0, 4000) };
       };
@@ -330,7 +415,7 @@ function defToAction(def: CustomActionDef): Action {
  */
 export function loadCustomActions(): Action[] {
   try {
-    const config = loadMilaidyConfig();
+    const config = loadMiladyConfig();
     const defs = config.customActions ?? [];
     return defs.filter((d) => d.enabled).map(defToAction);
   } catch {

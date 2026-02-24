@@ -396,6 +396,10 @@ export async function validateOpenAiCodexAccess(): Promise<{
 /**
  * Apply subscription credentials to the environment.
  * Called at startup to make credentials available to ElizaOS plugins.
+ *
+ * When a `config` is provided and the active subscription provider has
+ * credentials, `model.primary` is auto-set so the user doesn't need to
+ * configure it manually.
  */
 export async function applySubscriptionCredentials(): Promise<void> {
   // Ensure migration has happened

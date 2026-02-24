@@ -6,6 +6,36 @@
 import crypto from "node:crypto";
 import { logger } from "@elizaos/core";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
+import type {
+  EvmChainBalance,
+  EvmNft,
+  EvmTokenBalance,
+  KeyValidationResult,
+  SolanaNft,
+  SolanaTokenBalance,
+  WalletAddresses,
+  WalletChain,
+  WalletGenerateResult,
+  WalletImportResult,
+  WalletKeys,
+} from "../contracts/wallet";
+
+export type {
+  EvmChainBalance,
+  EvmNft,
+  EvmTokenBalance,
+  KeyValidationResult,
+  SolanaNft,
+  SolanaTokenBalance,
+  WalletAddresses,
+  WalletBalancesResponse,
+  WalletChain,
+  WalletConfigStatus,
+  WalletGenerateResult,
+  WalletImportResult,
+  WalletKeys,
+  WalletNftsResponse,
+} from "../contracts/wallet";
 
 const FETCH_TIMEOUT_MS = 15_000;
 

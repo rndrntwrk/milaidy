@@ -1,19 +1,33 @@
 import type http from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
-import { resolveWebSocketUpgradeRejection } from "./server.js";
+import { createMockHeadersRequest } from "./../test-support/test-helpers";
+import { resolveWebSocketUpgradeRejection } from "./server";
 
-type ReqLike = Pick<http.IncomingMessage, "headers">;
-
-function req(headers: http.IncomingHttpHeaders = {}): ReqLike {
-  return { headers };
+function req(
+  headers: http.IncomingHttpHeaders = {},
+): Pick<http.IncomingMessage, "headers"> {
+  return createMockHeadersRequest(headers) as Pick<
+    http.IncomingMessage,
+    "headers"
+  >;
 }
 
 describe("resolveWebSocketUpgradeRejection", () => {
-  const prevToken = process.env.MILAIDY_API_TOKEN;
+  const prevToken = process.env.MILADY_API_TOKEN;
+  const prevAllowQueryToken = process.env.MILADY_ALLOW_WS_QUERY_TOKEN;
+  const prevAllowedOrigins = process.env.MILADY_ALLOWED_ORIGINS;
 
   afterEach(() => {
-    if (prevToken === undefined) delete process.env.MILAIDY_API_TOKEN;
-    else process.env.MILAIDY_API_TOKEN = prevToken;
+    if (prevToken === undefined) delete process.env.MILADY_API_TOKEN;
+    else process.env.MILADY_API_TOKEN = prevToken;
+
+    if (prevAllowQueryToken === undefined)
+      delete process.env.MILADY_ALLOW_WS_QUERY_TOKEN;
+    else process.env.MILADY_ALLOW_WS_QUERY_TOKEN = prevAllowQueryToken;
+
+    if (prevAllowedOrigins === undefined)
+      delete process.env.MILADY_ALLOWED_ORIGINS;
+    else process.env.MILADY_ALLOWED_ORIGINS = prevAllowedOrigins;
   });
 
   it("rejects non-/ws paths", () => {
@@ -25,7 +39,7 @@ describe("resolveWebSocketUpgradeRejection", () => {
   });
 
   it("rejects disallowed origins", () => {
-    delete process.env.MILAIDY_API_TOKEN;
+    delete process.env.MILADY_API_TOKEN;
     const rejection = resolveWebSocketUpgradeRejection(
       req({ origin: "https://evil.example" }) as http.IncomingMessage,
       new URL("ws://localhost/ws"),
@@ -34,7 +48,7 @@ describe("resolveWebSocketUpgradeRejection", () => {
   });
 
   it("rejects unauthenticated upgrades when API token is enabled", () => {
-    process.env.MILAIDY_API_TOKEN = "test-token";
+    process.env.MILADY_API_TOKEN = "test-token";
     const rejection = resolveWebSocketUpgradeRejection(
       req() as http.IncomingMessage,
       new URL("ws://localhost/ws"),
@@ -43,7 +57,7 @@ describe("resolveWebSocketUpgradeRejection", () => {
   });
 
   it("accepts valid bearer token", () => {
-    process.env.MILAIDY_API_TOKEN = "test-token";
+    process.env.MILADY_API_TOKEN = "test-token";
     const rejection = resolveWebSocketUpgradeRejection(
       req({ authorization: "Bearer test-token" }) as http.IncomingMessage,
       new URL("ws://localhost/ws"),
@@ -51,8 +65,20 @@ describe("resolveWebSocketUpgradeRejection", () => {
     expect(rejection).toBeNull();
   });
 
-  it("accepts valid query token", () => {
-    process.env.MILAIDY_API_TOKEN = "test-token";
+  it("rejects query token auth by default", () => {
+    process.env.MILADY_API_TOKEN = "test-token";
+    delete process.env.MILADY_ALLOW_WS_QUERY_TOKEN;
+
+    const rejection = resolveWebSocketUpgradeRejection(
+      req() as http.IncomingMessage,
+      new URL("ws://localhost/ws?token=test-token"),
+    );
+    expect(rejection).toEqual({ status: 401, reason: "Unauthorized" });
+  });
+
+  it("accepts valid query token when explicitly enabled", () => {
+    process.env.MILADY_API_TOKEN = "test-token";
+    process.env.MILADY_ALLOW_WS_QUERY_TOKEN = "1";
     const rejection = resolveWebSocketUpgradeRejection(
       req() as http.IncomingMessage,
       new URL("ws://localhost/ws?token=test-token"),
@@ -61,9 +87,82 @@ describe("resolveWebSocketUpgradeRejection", () => {
   });
 
   it("accepts when token auth is disabled and origin is local", () => {
-    delete process.env.MILAIDY_API_TOKEN;
+    delete process.env.MILADY_API_TOKEN;
     const rejection = resolveWebSocketUpgradeRejection(
       req({ origin: "http://localhost:5173" }) as http.IncomingMessage,
+      new URL("ws://localhost/ws"),
+    );
+    expect(rejection).toBeNull();
+  });
+
+  it.each([
+    "http://[::1]:5173",
+    "http://[0:0:0:0:0:0:0:1]:5173",
+  ])("accepts IPv6 local origin when token auth is disabled (%s)", (origin) => {
+    delete process.env.MILADY_API_TOKEN;
+    const rejection = resolveWebSocketUpgradeRejection(
+      req({ origin }) as http.IncomingMessage,
+      new URL("ws://localhost/ws"),
+    );
+    expect(rejection).toBeNull();
+  });
+
+  it("rejects invalid bearer token", () => {
+    process.env.MILADY_API_TOKEN = "test-token";
+    const rejection = resolveWebSocketUpgradeRejection(
+      req({ authorization: "Bearer wrong-token" }) as http.IncomingMessage,
+      new URL("ws://localhost/ws"),
+    );
+    expect(rejection).toEqual({ status: 401, reason: "Unauthorized" });
+  });
+
+  it("accepts X-Milady-Token header auth", () => {
+    process.env.MILADY_API_TOKEN = "test-token";
+    const rejection = resolveWebSocketUpgradeRejection(
+      req({ "x-milady-token": "test-token" }) as http.IncomingMessage,
+      new URL("ws://localhost/ws"),
+    );
+    expect(rejection).toBeNull();
+  });
+
+  it("rejects wrong query token when query auth enabled", () => {
+    process.env.MILADY_API_TOKEN = "test-token";
+    process.env.MILADY_ALLOW_WS_QUERY_TOKEN = "1";
+    const rejection = resolveWebSocketUpgradeRejection(
+      req() as http.IncomingMessage,
+      new URL("ws://localhost/ws?token=wrong-token"),
+    );
+    expect(rejection).toEqual({ status: 401, reason: "Unauthorized" });
+  });
+
+  it.each([
+    "capacitor://localhost",
+    "app://localhost",
+    "capacitor-electron://localhost",
+    "app://-",
+  ])("accepts app-protocol origins (%s)", (origin) => {
+    delete process.env.MILADY_API_TOKEN;
+    const rejection = resolveWebSocketUpgradeRejection(
+      req({ origin }) as http.IncomingMessage,
+      new URL("ws://localhost/ws"),
+    );
+    expect(rejection).toBeNull();
+  });
+
+  it("accepts custom allowlisted origins via env", () => {
+    delete process.env.MILADY_API_TOKEN;
+    process.env.MILADY_ALLOWED_ORIGINS = "https://trusted.example.com";
+    const rejection = resolveWebSocketUpgradeRejection(
+      req({ origin: "https://trusted.example.com" }) as http.IncomingMessage,
+      new URL("ws://localhost/ws"),
+    );
+    expect(rejection).toBeNull();
+  });
+
+  it("accepts upgrade when no origin header is present", () => {
+    delete process.env.MILADY_API_TOKEN;
+    const rejection = resolveWebSocketUpgradeRejection(
+      req() as http.IncomingMessage,
       new URL("ws://localhost/ws"),
     );
     expect(rejection).toBeNull();

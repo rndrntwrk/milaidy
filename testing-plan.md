@@ -1,4 +1,4 @@
-# Milaidy Testing Plan - Bug Discovery
+# Milady Testing Plan - Bug Discovery
 
 **Goal**: Systematically test the project to find real bugs worth fixing
 
@@ -17,7 +17,7 @@
 **How to test**:
 ```bash
 # Terminal 1
-node milaidy.mjs start
+node milady.mjs start
 
 # Terminal 2
 cd apps/ui && bun run dev
@@ -77,11 +77,78 @@ cd apps/ui && bun run dev
 
 ---
 
+### 1.7 OpenAI + Anthropic Compatibility API
+- [ ] `GET /v1/models` returns a list of models
+- [ ] `POST /v1/chat/completions` returns an OpenAI-shaped response
+- [ ] `POST /v1/chat/completions` supports `stream: true` (SSE)
+- [ ] `POST /v1/messages` returns an Anthropic-shaped response
+- [ ] `POST /v1/messages` supports `stream: true` (SSE)
+
+**How to test**:
+```bash
+# Terminal 1
+bun run start
+
+# If you have MILADY_API_TOKEN set, add this to curl:
+#   -H "Authorization: Bearer $MILADY_API_TOKEN"
+
+curl -sS http://localhost:2138/v1/models | jq .
+
+curl -sS http://localhost:2138/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "milady",
+    "messages": [
+      { "role": "system", "content": "You are a helpful assistant." },
+      { "role": "user", "content": "Say hello in one sentence." }
+    ]
+  }' | jq .
+
+curl -N http://localhost:2138/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "milady",
+    "stream": true,
+    "messages": [
+      { "role": "user", "content": "Stream a short haiku." }
+    ]
+  }'
+
+curl -sS http://localhost:2138/v1/messages \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "milady",
+    "max_tokens": 256,
+    "system": "You are a helpful assistant.",
+    "messages": [
+      { "role": "user", "content": "What is 2+2?" }
+    ]
+  }' | jq .
+
+curl -N http://localhost:2138/v1/messages \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "milady",
+    "stream": true,
+    "max_tokens": 256,
+    "messages": [
+      { "role": "user", "content": "Stream the answer to 2+2." }
+    ]
+  }'
+```
+
+**Expected**:
+- OpenAI route returns `{ id, object, created, model, choices: [...] }`
+- Anthropic route returns `{ id, type: \"message\", role: \"assistant\", content: [{type:\"text\", text:\"...\"}] }`
+- Streaming routes produce `data:` SSE chunks and complete without hanging
+
+---
+
 ## Phase 2: Desktop App Testing (Windows)
 
 ### 2.1 Build Desktop App
 ```bash
-cd a:\programa\ai\milaidy
+cd a:\programa\ai\milady
 
 # Build everything
 bun run build
@@ -123,7 +190,7 @@ bun run electron:start-live
 - [ ] Check permissions issues
 
 ### 3.2 Installation & Setup
-- [ ] Test first-run experience (delete ~/.milaidy and restart)
+- [ ] Test first-run experience (delete ~/.milady and restart)
 - [ ] Verify onboarding wizard works
 - [ ] Test API key input
 - [ ] Test wallet generation
@@ -174,7 +241,7 @@ bun run electron:start-live
 
 ### 6.1 TypeScript Errors
 ```bash
-cd a:\programa\ai\milaidy
+cd a:\programa\ai\milady
 npx tsc --noEmit
 ```
 **Document**: Any type errors that should be fixed

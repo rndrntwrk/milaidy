@@ -3,8 +3,8 @@ import {
   normalizeTelegramCommandDescription,
   normalizeTelegramCommandName,
   resolveTelegramCustomCommands,
-} from "./telegram-custom-commands.js";
-import { ToolPolicySchema } from "./zod-schema.agent-runtime.js";
+} from "./telegram-custom-commands";
+import { ToolPolicySchema } from "./zod-schema.agent-runtime";
 import {
   BlockStreamingChunkSchema,
   BlockStreamingCoalesceSchema,
@@ -19,7 +19,7 @@ import {
   ReplyToModeSchema,
   RetryConfigSchema,
   requireOpenAllowFrom,
-} from "./zod-schema.core.js";
+} from "./zod-schema.core";
 
 const ToolPolicyBySenderSchema = z
   .record(z.string(), ToolPolicySchema)
@@ -801,6 +801,17 @@ export const BlueBubblesConfigSchema = BlueBubblesAccountSchemaBase.extend({
       'channels.bluebubbles.dmPolicy="open" requires channels.bluebubbles.allowFrom to include "*"',
   });
 });
+
+// ── Retake.tv streaming connector ──────────────────────────────────────────
+
+export const RetakeConfigSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    accessToken: z.string().optional(),
+    apiUrl: z.string().url().optional(),
+    captureUrl: z.string().optional(),
+  })
+  .strict();
 
 export const MSTeamsChannelSchema = z
   .object({

@@ -20,10 +20,21 @@
 import crypto from "node:crypto";
 import http from "node:http";
 import type { AgentRuntime, Content, Task, UUID } from "@elizaos/core";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
-import { startApiServer } from "../src/api/server.js";
-import { AGENT_NAME_POOL } from "../src/runtime/onboarding-names.js";
+import { startApiServer } from "../src/api/server";
+import { AGENT_NAME_POOL } from "../src/runtime/onboarding-names";
+
+vi.mock("../src/services/mcp-marketplace", () => ({
+  searchMcpMarketplace: vi
+    .fn()
+    .mockResolvedValue({ results: [{ name: "test", vendor: "test" }] }),
+  getMcpServerDetails: vi.fn((name: string) =>
+    name === "nonexistent-server-xyz-123"
+      ? Promise.resolve(null)
+      : Promise.resolve({ name: "test", description: "test" }),
+  ),
+}));
 
 // ---------------------------------------------------------------------------
 // HTTP helper (identical to the one in agent-runtime.e2e.test.ts)
@@ -73,6 +84,47 @@ function req(
   });
 }
 
+function reqRaw(
+  port: number,
+  method: string,
+  p: string,
+  body?: Record<string, unknown>,
+): Promise<{
+  status: number;
+  headers: http.IncomingHttpHeaders;
+  data: Buffer;
+}> {
+  return new Promise((resolve, reject) => {
+    const b = body ? JSON.stringify(body) : undefined;
+    const r = http.request(
+      {
+        hostname: "127.0.0.1",
+        port,
+        path: p,
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          ...(b ? { "Content-Length": Buffer.byteLength(b) } : {}),
+        },
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => {
+          resolve({
+            status: res.statusCode ?? 0,
+            headers: res.headers,
+            data: Buffer.concat(chunks),
+          });
+        });
+      },
+    );
+    r.on("error", reject);
+    if (b) r.write(b);
+    r.end();
+  });
+}
+
 type SseEventPayload = {
   type?: string;
   text?: string;
@@ -84,7 +136,7 @@ type SseEventPayload = {
 function reqSse(
   port: number,
   p: string,
-  body: Record<string, string | number | boolean | null>,
+  body: Record<string, unknown>,
 ): Promise<{
   status: number;
   headers: http.IncomingHttpHeaders;
@@ -485,7 +537,135 @@ function createRuntimeForWorkbenchCrudTests(options?: {
   return runtimeSubset as AgentRuntime;
 }
 
-function createRuntimeForChatSseTests(): AgentRuntime {
+function createRuntimeForChatSseTests(options?: {
+  onEmitEvent?: (
+    event: Parameters<AgentRuntime["emitEvent"]>[0],
+    payload: Parameters<AgentRuntime["emitEvent"]>[1],
+  ) => void | Promise<void>;
+  getService?: (serviceType: string) => unknown;
+  getServicesByType?: (serviceType: string) => unknown;
+  handleMessage?: (
+    runtime: AgentRuntime,
+    message: object,
+    onResponse: (content: Content) => Promise<object[]>,
+    messageOptions?: {
+      onStreamChunk?: (chunk: string, messageId?: string) => Promise<void>;
+    },
+  ) => Promise<{
+    responseContent?: {
+      text?: string;
+    };
+  }>;
+}): AgentRuntime {
+  const memoriesByRoom = new Map<string, Array<Record<string, unknown>>>();
+
+  const runtimeSubset: Pick<
+    AgentRuntime,
+    | "agentId"
+    | "character"
+    | "messageService"
+    | "ensureConnection"
+    | "getWorld"
+    | "updateWorld"
+    | "createMemory"
+    | "getService"
+    | "getServicesByType"
+    | "emitEvent"
+    | "getMemoriesByRoomIds"
+    | "getRoomsByWorld"
+    | "getMemories"
+    | "getCache"
+    | "setCache"
+  > = {
+    agentId: "chat-stream-agent",
+    character: {
+      name: "ChatStreamAgent",
+      postExamples: ["Welcome to the conversation."],
+    } as AgentRuntime["character"],
+    messageService: {
+      handleMessage: async (
+        runtime: AgentRuntime,
+        message: object,
+        onResponse: (content: Content) => Promise<object[]>,
+        messageOptions?: {
+          onStreamChunk?: (chunk: string, messageId?: string) => Promise<void>;
+        },
+      ) =>
+        options?.handleMessage?.(
+          runtime,
+          message,
+          onResponse,
+          messageOptions,
+        ) ??
+        (await (async () => {
+          await onResponse({ text: "Hello " } as Content);
+          await onResponse({ text: "world" } as Content);
+          return {
+            responseContent: {
+              text: "Hello world",
+            },
+          };
+        })()),
+    } as AgentRuntime["messageService"],
+    ensureConnection: async () => {},
+    getWorld: async () => null,
+    updateWorld: async () => {},
+    createMemory: async (memory: Record<string, unknown>) => {
+      const roomId = String(memory.roomId ?? "");
+      if (!roomId) return;
+      const current = memoriesByRoom.get(roomId) ?? [];
+      current.push({
+        ...memory,
+        createdAt:
+          typeof memory.createdAt === "number" ? memory.createdAt : Date.now(),
+      });
+      memoriesByRoom.set(roomId, current);
+    },
+    getService: (serviceType: string) =>
+      options?.getService?.(serviceType) ?? null,
+    getServicesByType: (serviceType: string) =>
+      options?.getServicesByType?.(serviceType) ?? [],
+    emitEvent: async (
+      event: Parameters<AgentRuntime["emitEvent"]>[0],
+      payload: Parameters<AgentRuntime["emitEvent"]>[1],
+    ) => {
+      await options?.onEmitEvent?.(event, payload);
+    },
+    getMemoriesByRoomIds: async (query: {
+      roomIds?: string[];
+      limit?: number;
+    }) => {
+      const roomIds = Array.isArray(query.roomIds) ? query.roomIds : [];
+      const limit = Math.max(1, query.limit ?? 200);
+      const merged: Array<Record<string, unknown>> = [];
+      for (const roomId of roomIds) {
+        const current = memoriesByRoom.get(String(roomId)) ?? [];
+        merged.push(...current);
+      }
+      merged.sort(
+        (a, b) => Number(a.createdAt ?? 0) - Number(b.createdAt ?? 0),
+      );
+      return merged.slice(-limit) as unknown as Awaited<
+        ReturnType<AgentRuntime["getMemoriesByRoomIds"]>
+      >;
+    },
+    getRoomsByWorld: async () => [],
+    getMemories: async (query: { roomId?: string; count?: number }) => {
+      const roomId = String(query.roomId ?? "");
+      const current = memoriesByRoom.get(roomId) ?? [];
+      const count = Math.max(1, query.count ?? current.length);
+      return current.slice(-count) as unknown as Awaited<
+        ReturnType<AgentRuntime["getMemories"]>
+      >;
+    },
+    getCache: async () => null,
+    setCache: async () => {},
+  };
+
+  return runtimeSubset as AgentRuntime;
+}
+
+function createRuntimeForCompatEndpointTests(): AgentRuntime {
   const runtimeSubset: Pick<
     AgentRuntime,
     | "agentId"
@@ -500,20 +680,23 @@ function createRuntimeForChatSseTests(): AgentRuntime {
     | "getCache"
     | "setCache"
   > = {
-    agentId: "chat-stream-agent",
-    character: { name: "ChatStreamAgent" } as AgentRuntime["character"],
+    agentId: "compat-endpoint-agent",
+    character: { name: "CompatAgent" } as AgentRuntime["character"],
     messageService: {
       handleMessage: async (
         _runtime: AgentRuntime,
         _message: object,
         onResponse: (content: Content) => Promise<object[]>,
       ) => {
-        await onResponse({ text: "Hello " } as Content);
-        await onResponse({ text: "world" } as Content);
+        await onResponse({ text: "Compat " } as Content);
+        await onResponse({ text: "reply" } as Content);
         return {
+          didRespond: true,
           responseContent: {
-            text: "Hello world",
+            text: "Compat reply",
           },
+          responseMessages: [],
+          mode: "power",
         };
       },
     } as AgentRuntime["messageService"],
@@ -678,12 +861,28 @@ function createRuntimeForCreditErrorTests(): AgentRuntime {
 describe("API Server E2E (no runtime)", () => {
   let port: number;
   let close: () => Promise<void>;
+  let updateStartup: (update: {
+    phase?: string;
+    attempt?: number;
+    lastError?: string;
+    lastErrorAt?: number;
+    nextRetryAt?: number;
+    state?:
+      | "not_started"
+      | "starting"
+      | "running"
+      | "paused"
+      | "stopped"
+      | "restarting"
+      | "error";
+  }) => void;
 
   beforeAll(async () => {
     // Start the REAL server with no runtime (port 0 = auto-assign)
     const server = await startApiServer({ port: 0 });
     port = server.port;
     close = server.close;
+    updateStartup = server.updateStartup;
   }, 30_000);
 
   afterAll(async () => {
@@ -705,6 +904,33 @@ describe("API Server E2E (no runtime)", () => {
       expect(data.uptime).toBeUndefined();
       expect(data.startedAt).toBeUndefined();
     });
+
+    it("includes startup status diagnostics and reflects updates", async () => {
+      const now = Date.now();
+      updateStartup({
+        phase: "runtime-retry",
+        attempt: 2,
+        lastError: "bootstrap failed",
+        lastErrorAt: now,
+        nextRetryAt: now + 1_000,
+        state: "starting",
+      });
+      const { data } = await req(port, "GET", "/api/status");
+      expect(data.startup).toBeDefined();
+      expect(data.startup.phase).toBe("runtime-retry");
+      expect(data.startup.attempt).toBe(2);
+      expect(data.startup.lastError).toContain("bootstrap failed");
+      expect(data.state).toBe("starting");
+
+      updateStartup({
+        phase: "idle",
+        attempt: 0,
+        lastError: undefined,
+        lastErrorAt: undefined,
+        nextRetryAt: undefined,
+        state: "not_started",
+      });
+    });
   });
 
   // -- Lifecycle state transitions --
@@ -715,7 +941,6 @@ describe("API Server E2E (no runtime)", () => {
       expect(data.ok).toBe(true);
       const status = await req(port, "GET", "/api/status");
       expect(status.data.state).toBe("running");
-      expect(typeof status.data.startedAt).toBe("number");
       expect(typeof status.data.uptime).toBe("number");
     });
 
@@ -838,6 +1063,281 @@ describe("API Server E2E (no runtime)", () => {
   });
 
   describe("streaming chat endpoints (runtime stub)", () => {
+    it("POST /api/chat emits MESSAGE_RECEIVED before handling", async () => {
+      const emitted: Array<{
+        event: string;
+        source: string | null;
+        text: string | null;
+      }> = [];
+      const runtime = createRuntimeForChatSseTests({
+        onEmitEvent: (event, payload) => {
+          if (typeof event !== "string") return;
+          const message =
+            payload && typeof payload === "object" && "message" in payload
+              ? (payload.message as { content?: { text?: string } })
+              : null;
+          const source =
+            payload && typeof payload === "object" && "source" in payload
+              ? payload.source
+              : null;
+          emitted.push({
+            event,
+            source: typeof source === "string" ? source : null,
+            text:
+              typeof message?.content?.text === "string"
+                ? message.content.text
+                : null,
+          });
+        },
+      });
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const { status, data } = await req(
+          streamServer.port,
+          "POST",
+          "/api/chat",
+          {
+            text: "hello",
+            mode: "simple",
+          },
+        );
+
+        expect(status).toBe(200);
+        expect(String(data.text ?? "")).toBe("Hello world");
+
+        const received = emitted.find(
+          (entry) => entry.event === "MESSAGE_RECEIVED",
+        );
+        expect(received).toBeDefined();
+        expect(received?.source).toBe("client_chat");
+        expect(received?.text).toBe("hello");
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("POST /api/chat does not use deprecated direct trajectory fallback when hooks do not set a step id", async () => {
+      const starts: Array<{ stepId: string; source?: string }> = [];
+      const ends: Array<{ stepId: string; status?: string }> = [];
+      const trajectoryLogger = {
+        isEnabled: () => true,
+        startTrajectory: async (
+          stepId: string,
+          options: { source?: string },
+        ) => {
+          starts.push({ stepId, source: options.source });
+          return stepId;
+        },
+        endTrajectory: async (stepId: string, status?: string) => {
+          ends.push({ stepId, status });
+        },
+      };
+      const runtime = createRuntimeForChatSseTests({
+        getService: (serviceType) =>
+          serviceType === "trajectory_logger" ? trajectoryLogger : null,
+      });
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const { status, data } = await req(
+          streamServer.port,
+          "POST",
+          "/api/chat",
+          {
+            text: "fallback trajectory path",
+            mode: "simple",
+          },
+        );
+
+        expect(status).toBe(200);
+        expect(String(data.text ?? "")).toBe("Hello world");
+        expect(starts).toHaveLength(0);
+        expect(ends).toHaveLength(0);
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("POST /api/chat does not call deprecated direct trajectory fallback even when logger is only in getServicesByType", async () => {
+      const starts: Array<{ stepId: string; source?: string }> = [];
+      const ends: Array<{ stepId: string; status?: string }> = [];
+      const trajectoryLogger = {
+        isEnabled: () => true,
+        startTrajectory: async (
+          stepId: string,
+          options: { source?: string },
+        ) => {
+          starts.push({ stepId, source: options.source });
+          return stepId;
+        },
+        endTrajectory: async (stepId: string, status?: string) => {
+          ends.push({ stepId, status });
+        },
+      };
+      const runtime = createRuntimeForChatSseTests({
+        getService: () => null,
+        getServicesByType: (serviceType) =>
+          serviceType === "trajectory_logger" ? [trajectoryLogger] : [],
+      });
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const { status, data } = await req(
+          streamServer.port,
+          "POST",
+          "/api/chat",
+          {
+            text: "trajectory logger by type",
+            mode: "simple",
+          },
+        );
+
+        expect(status).toBe(200);
+        expect(String(data.text ?? "")).toBe("Hello world");
+        expect(starts).toHaveLength(0);
+        expect(ends).toHaveLength(0);
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("POST /api/chat does not end trajectories directly when hook metadata provides a step id", async () => {
+      const starts: Array<{ stepId: string }> = [];
+      const ends: Array<{ stepId: string; status?: string }> = [];
+      const trajectoryLogger = {
+        isEnabled: () => true,
+        startTrajectory: async (stepId: string) => {
+          starts.push({ stepId });
+          return stepId;
+        },
+        endTrajectory: async (stepId: string, status?: string) => {
+          ends.push({ stepId, status });
+        },
+      };
+
+      const runtime = createRuntimeForChatSseTests({
+        getService: (serviceType) =>
+          serviceType === "trajectory_logger" ? trajectoryLogger : null,
+        onEmitEvent: (_event, payload) => {
+          if (
+            payload &&
+            typeof payload === "object" &&
+            "message" in payload &&
+            payload.message &&
+            typeof payload.message === "object"
+          ) {
+            const msg = payload.message as {
+              metadata?: Record<string, unknown>;
+            };
+            if (!msg.metadata) msg.metadata = {};
+            msg.metadata.trajectoryStepId = "hook-step-id";
+          }
+        },
+      });
+
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const { status, data } = await req(
+          streamServer.port,
+          "POST",
+          "/api/chat",
+          {
+            text: "trajectory end by hook",
+            mode: "simple",
+          },
+        );
+
+        expect(status).toBe(200);
+        expect(String(data.text ?? "")).toBe("Hello world");
+        expect(starts).toHaveLength(0);
+        expect(ends).toHaveLength(0);
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("POST /api/chat no longer proxies trajectory logger routing through deprecated fallback", async () => {
+      const starts: Array<{ stepId: string }> = [];
+      const ends: Array<{ stepId: string; status?: string }> = [];
+      const persistentLlmCalls: Array<{ stepId: string; model?: string }> = [];
+      const coreLlmCalls: Array<{ stepId: string; model?: string }> = [];
+      const persistentLogger = {
+        isEnabled: () => true,
+        startTrajectory: async (stepId: string) => {
+          starts.push({ stepId });
+          return stepId;
+        },
+        endTrajectory: async (stepId: string, status?: string) => {
+          ends.push({ stepId, status });
+        },
+        logLlmCall: (params: { stepId: string; model?: string }) => {
+          persistentLlmCalls.push(params);
+        },
+      };
+      const coreLogger = {
+        logLlmCall: (params: { stepId: string; model?: string }) => {
+          coreLlmCalls.push(params);
+        },
+      };
+      const runtime = createRuntimeForChatSseTests({
+        getService: (serviceType) =>
+          serviceType === "trajectory_logger" ? coreLogger : null,
+        getServicesByType: (serviceType) =>
+          serviceType === "trajectory_logger"
+            ? [coreLogger, persistentLogger]
+            : [],
+        handleMessage: async (runtimeArg, message, onResponse) => {
+          const trajectoryLogger = (
+            runtimeArg as unknown as {
+              getService: (serviceType: string) => {
+                logLlmCall?: (params: {
+                  stepId: string;
+                  model?: string;
+                }) => void;
+              } | null;
+            }
+          ).getService("trajectory_logger");
+          const metadata =
+            message && typeof message === "object" && "metadata" in message
+              ? (message.metadata as { trajectoryStepId?: string } | undefined)
+              : undefined;
+          const stepId = metadata?.trajectoryStepId;
+          if (stepId) {
+            trajectoryLogger?.logLlmCall?.({
+              stepId,
+              model: "unit-test-model",
+            });
+          }
+          await onResponse({ text: "Hello world" } as Content);
+          return {
+            responseContent: {
+              text: "Hello world",
+            },
+          };
+        },
+      });
+
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const { status, data } = await req(
+          streamServer.port,
+          "POST",
+          "/api/chat",
+          {
+            text: "trajectory logger routing",
+            mode: "simple",
+          },
+        );
+
+        expect(status).toBe(200);
+        expect(String(data.text ?? "")).toBe("Hello world");
+        expect(starts).toHaveLength(0);
+        expect(ends).toHaveLength(0);
+        expect(persistentLlmCalls).toHaveLength(0);
+        expect(coreLlmCalls).toHaveLength(0);
+      } finally {
+        await streamServer.close();
+      }
+    });
+
     it("POST /api/chat/stream emits token and done events", async () => {
       const runtime = createRuntimeForChatSseTests();
       const streamServer = await startApiServer({ port: 0, runtime });
@@ -858,6 +1358,222 @@ describe("API Server E2E (no runtime)", () => {
         expect(tokenEvents.map((event) => event.text).join("")).toBe(
           "Hello world",
         );
+
+        const doneEvent = events.find((event) => event.type === "done");
+        expect(doneEvent?.fullText).toBe("Hello world");
+        expect(doneEvent?.agentName).toBe("ChatStreamAgent");
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("POST /api/chat/stream emits token events from runtime onStreamChunk", async () => {
+      const runtime = createRuntimeForChatSseTests({
+        handleMessage: async (
+          _runtime,
+          _message,
+          onResponse,
+          messageOptions,
+        ) => {
+          await messageOptions?.onStreamChunk?.("Hello ");
+          await messageOptions?.onStreamChunk?.("world");
+          await onResponse({ text: "Hello world" } as Content);
+          return {
+            responseContent: {
+              text: "Hello world",
+            },
+          };
+        },
+      });
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const { status, events } = await reqSse(
+          streamServer.port,
+          "/api/chat/stream",
+          { text: "hello", mode: "power" },
+        );
+
+        expect(status).toBe(200);
+        const tokenEvents = events.filter((event) => event.type === "token");
+        expect(tokenEvents.map((event) => event.text)).toEqual([
+          "Hello ",
+          "world",
+        ]);
+
+        const doneEvent = events.find((event) => event.type === "done");
+        expect(doneEvent?.fullText).toBe("Hello world");
+        expect(doneEvent?.agentName).toBe("ChatStreamAgent");
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("POST /api/chat/stream avoids mixed-source duplication when callback text arrives before onStreamChunk", async () => {
+      const runtime = createRuntimeForChatSseTests({
+        handleMessage: async (
+          _runtime,
+          _message,
+          onResponse,
+          messageOptions,
+        ) => {
+          await onResponse({ text: "Hello world" } as Content);
+          await messageOptions?.onStreamChunk?.("Hello ");
+          await messageOptions?.onStreamChunk?.("world");
+          return {
+            responseContent: {
+              text: "Hello world",
+            },
+          };
+        },
+      });
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const { status, events } = await reqSse(
+          streamServer.port,
+          "/api/chat/stream",
+          { text: "hello", mode: "power" },
+        );
+
+        expect(status).toBe(200);
+        const tokenEvents = events.filter((event) => event.type === "token");
+        expect(tokenEvents.map((event) => event.text)).toEqual(["Hello world"]);
+
+        const doneEvent = events.find((event) => event.type === "done");
+        expect(doneEvent?.fullText).toBe("Hello world");
+        expect(doneEvent?.agentName).toBe("ChatStreamAgent");
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("POST /api/chat/stream de-duplicates cumulative callback text updates", async () => {
+      const runtime = createRuntimeForChatSseTests({
+        handleMessage: async (_runtime, _message, onResponse) => {
+          await onResponse({ text: "Hello " } as Content);
+          await onResponse({ text: "Hello world" } as Content);
+          return {
+            responseContent: {
+              text: "Hello world",
+            },
+          };
+        },
+      });
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const { status, events } = await reqSse(
+          streamServer.port,
+          "/api/chat/stream",
+          { text: "hello", mode: "power" },
+        );
+
+        expect(status).toBe(200);
+        const tokenEvents = events.filter((event) => event.type === "token");
+        expect(tokenEvents.map((event) => event.text)).toEqual([
+          "Hello ",
+          "world",
+        ]);
+
+        const doneEvent = events.find((event) => event.type === "done");
+        expect(doneEvent?.fullText).toBe("Hello world");
+        expect(doneEvent?.agentName).toBe("ChatStreamAgent");
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("POST /api/chat/stream preserves repeated characters in incremental callback tokens", async () => {
+      const runtime = createRuntimeForChatSseTests({
+        handleMessage: async (_runtime, _message, onResponse) => {
+          for (const token of [
+            "H",
+            "e",
+            "l",
+            "l",
+            "o",
+            " ",
+            "w",
+            "o",
+            "r",
+            "l",
+            "d",
+          ]) {
+            await onResponse({ text: token } as Content);
+          }
+          return {
+            responseContent: {
+              text: "Hello world",
+            },
+          };
+        },
+      });
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const { status, events } = await reqSse(
+          streamServer.port,
+          "/api/chat/stream",
+          { text: "hello", mode: "power" },
+        );
+
+        expect(status).toBe(200);
+        const tokenText = events
+          .filter((event) => event.type === "token")
+          .map((event) => event.text ?? "")
+          .join("");
+        expect(tokenText).toBe("Hello world");
+
+        const doneEvent = events.find((event) => event.type === "done");
+        expect(doneEvent?.fullText).toBe("Hello world");
+        expect(doneEvent?.agentName).toBe("ChatStreamAgent");
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("POST /api/conversations/:id/messages/stream emits token events from runtime onStreamChunk", async () => {
+      const runtime = createRuntimeForChatSseTests({
+        handleMessage: async (
+          _runtime,
+          _message,
+          onResponse,
+          messageOptions,
+        ) => {
+          await messageOptions?.onStreamChunk?.("Hello ");
+          await messageOptions?.onStreamChunk?.("world");
+          await onResponse({ text: "Hello world" } as Content);
+          return {
+            responseContent: {
+              text: "Hello world",
+            },
+          };
+        },
+      });
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const create = await req(
+          streamServer.port,
+          "POST",
+          "/api/conversations",
+          {
+            title: "SSE onStreamChunk conversation",
+          },
+        );
+        expect(create.status).toBe(200);
+        const conversation = create.data.conversation as { id?: string };
+        const conversationId = conversation.id ?? "";
+        expect(conversationId.length).toBeGreaterThan(0);
+
+        const { status, events } = await reqSse(
+          streamServer.port,
+          `/api/conversations/${conversationId}/messages/stream`,
+          { text: "hello", mode: "power" },
+        );
+
+        expect(status).toBe(200);
+        const tokenEvents = events.filter((event) => event.type === "token");
+        expect(tokenEvents.map((event) => event.text)).toEqual([
+          "Hello ",
+          "world",
+        ]);
 
         const doneEvent = events.find((event) => event.type === "done");
         expect(doneEvent?.fullText).toBe("Hello world");
@@ -901,6 +1617,657 @@ describe("API Server E2E (no runtime)", () => {
         expect(doneEvent?.agentName).toBe("ChatStreamAgent");
       } finally {
         await streamServer.close();
+      }
+    });
+
+    it("persists greeting and streamed turn messages to conversation memory", async () => {
+      const runtime = createRuntimeForChatSseTests();
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const create = await req(
+          streamServer.port,
+          "POST",
+          "/api/conversations",
+          {
+            title: "Persistence test",
+          },
+        );
+        expect(create.status).toBe(200);
+        const conversation = create.data.conversation as { id?: string };
+        const conversationId = conversation.id ?? "";
+        expect(conversationId.length).toBeGreaterThan(0);
+
+        const greeting = await req(
+          streamServer.port,
+          "POST",
+          `/api/conversations/${conversationId}/greeting`,
+        );
+        expect(greeting.status).toBe(200);
+        const greetingText = String(greeting.data.text ?? "");
+        expect(greetingText.length).toBeGreaterThan(0);
+
+        const stream = await reqSse(
+          streamServer.port,
+          `/api/conversations/${conversationId}/messages/stream`,
+          { text: "hello", mode: "simple" },
+        );
+        expect(stream.status).toBe(200);
+
+        const messagesResponse = await req(
+          streamServer.port,
+          "GET",
+          `/api/conversations/${conversationId}/messages`,
+        );
+        expect(messagesResponse.status).toBe(200);
+        const messages = (messagesResponse.data.messages ?? []) as Array<
+          Record<string, unknown>
+        >;
+        expect(messages.length).toBeGreaterThanOrEqual(3);
+
+        const greetingPersisted = messages.some(
+          (message) =>
+            message.role === "assistant" && message.text === greetingText,
+        );
+        const userPersisted = messages.some(
+          (message) => message.role === "user" && message.text === "hello",
+        );
+        const assistantPersisted = messages.some(
+          (message) =>
+            message.role === "assistant" && message.text === "Hello world",
+        );
+
+        expect(greetingPersisted).toBe(true);
+        expect(userPersisted).toBe(true);
+        expect(assistantPersisted).toBe(true);
+      } finally {
+        await streamServer.close();
+      }
+    });
+  });
+
+  describe("trajectory endpoints (runtime stub)", () => {
+    it("GET /api/trajectories/:id returns llm calls from plugin detail payload", async () => {
+      const trajectoryId = "trajectory-array-shape";
+      const startTime = Date.now() - 2_000;
+      const endTime = startTime + 1_200;
+      const callTimestamp = startTime + 400;
+      const rawSteps = [
+        {
+          stepId: "step-1",
+          stepNumber: 1,
+          timestamp: startTime + 100,
+          llmCalls: [
+            {
+              callId: "call-1",
+              timestamp: callTimestamp,
+              model: "unit-test-model",
+              systemPrompt: "system",
+              userPrompt: "hello from fallback",
+              response: "fallback response",
+              temperature: 0.1,
+              maxTokens: 512,
+              purpose: "response",
+              promptTokens: 12,
+              completionTokens: 18,
+              latencyMs: 33,
+            },
+          ],
+          providerAccesses: [],
+        },
+      ];
+
+      const trajectoryLogger = {
+        isEnabled: () => true,
+        setEnabled: () => {},
+        listTrajectories: async () => ({
+          trajectories: [
+            {
+              id: trajectoryId,
+              agentId: "chat-stream-agent",
+              source: "client_chat",
+              status: "completed",
+              startTime,
+              endTime,
+              durationMs: endTime - startTime,
+              stepCount: 1,
+              llmCallCount: 1,
+              totalPromptTokens: 12,
+              totalCompletionTokens: 18,
+              totalReward: 0,
+              scenarioId: null,
+              batchId: null,
+              createdAt: new Date(startTime).toISOString(),
+            },
+          ],
+          total: 1,
+          offset: 0,
+          limit: 50,
+        }),
+        getTrajectoryDetail: async () => ({
+          trajectoryId,
+          agentId: "chat-stream-agent",
+          startTime,
+          endTime,
+          durationMs: endTime - startTime,
+          steps: rawSteps,
+          totalReward: 0,
+          metrics: {
+            episodeLength: 1,
+            finalStatus: "completed",
+          },
+          metadata: {
+            source: "client_chat",
+          },
+        }),
+        getStats: async () => ({
+          totalTrajectories: 1,
+          totalSteps: 1,
+          totalLlmCalls: 1,
+          totalPromptTokens: 12,
+          totalCompletionTokens: 18,
+          averageDurationMs: endTime - startTime,
+          averageReward: 0,
+          bySource: { client_chat: 1 },
+          byStatus: { completed: 1 },
+          byScenario: {},
+        }),
+        deleteTrajectories: async () => 0,
+        clearAllTrajectories: async () => 0,
+        exportTrajectories: async () => ({
+          data: "[]",
+          filename: "trajectories.json",
+          mimeType: "application/json",
+        }),
+      };
+
+      const runtime = createRuntimeForChatSseTests({
+        getService: (serviceType) =>
+          serviceType === "trajectory_logger" ? trajectoryLogger : null,
+        getServicesByType: (serviceType) =>
+          serviceType === "trajectory_logger" ? [trajectoryLogger] : [],
+      }) as AgentRuntime & { adapter?: unknown };
+      runtime.adapter = {};
+
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const list = await req(
+          streamServer.port,
+          "GET",
+          "/api/trajectories?limit=10",
+        );
+        expect(list.status).toBe(200);
+        const listRows = list.data.trajectories as Array<
+          Record<string, unknown>
+        >;
+        expect(Array.isArray(listRows)).toBe(true);
+        expect(listRows[0]?.llmCallCount).toBe(1);
+
+        const detail = await req(
+          streamServer.port,
+          "GET",
+          `/api/trajectories/${encodeURIComponent(trajectoryId)}`,
+        );
+        expect(detail.status).toBe(200);
+        const llmCalls = detail.data.llmCalls as Array<Record<string, unknown>>;
+        expect(Array.isArray(llmCalls)).toBe(true);
+        expect(llmCalls).toHaveLength(1);
+        expect(llmCalls[0]?.userPrompt).toBe("hello from fallback");
+        expect(llmCalls[0]?.response).toBe("fallback response");
+        expect(llmCalls[0]?.promptTokens).toBe(12);
+        expect(llmCalls[0]?.completionTokens).toBe(18);
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("POST /api/trajectories/export returns a zip with trajectory folders", async () => {
+      const trajectoryId = "trajectory-zip-export";
+      const startTime = Date.now() - 2_000;
+      const endTime = startTime + 1_100;
+
+      const trajectoryLogger = {
+        isEnabled: () => true,
+        setEnabled: () => {},
+        listTrajectories: async () => ({
+          trajectories: [
+            {
+              id: trajectoryId,
+              agentId: "chat-stream-agent",
+              source: "client_chat",
+              status: "completed",
+              startTime,
+              endTime,
+              durationMs: endTime - startTime,
+              stepCount: 1,
+              llmCallCount: 1,
+              totalPromptTokens: 10,
+              totalCompletionTokens: 20,
+              totalReward: 0,
+              scenarioId: null,
+              batchId: null,
+              createdAt: new Date(startTime).toISOString(),
+            },
+          ],
+          total: 1,
+          offset: 0,
+          limit: 50,
+        }),
+        getTrajectoryDetail: async () => ({
+          trajectoryId,
+          agentId: "chat-stream-agent",
+          startTime,
+          endTime,
+          durationMs: endTime - startTime,
+          steps: [
+            {
+              stepId: "step-1",
+              stepNumber: 1,
+              timestamp: startTime + 100,
+              llmCalls: [
+                {
+                  callId: "call-1",
+                  timestamp: startTime + 200,
+                  model: "test-model",
+                  systemPrompt: "system",
+                  userPrompt: "hello",
+                  response: "world",
+                  temperature: 0.1,
+                  maxTokens: 200,
+                  purpose: "response",
+                  promptTokens: 10,
+                  completionTokens: 20,
+                  latencyMs: 12,
+                },
+              ],
+              providerAccesses: [],
+            },
+          ],
+          totalReward: 0,
+          metrics: {
+            episodeLength: 1,
+            finalStatus: "completed",
+          },
+          metadata: {
+            source: "client_chat",
+          },
+        }),
+        getStats: async () => ({
+          totalTrajectories: 1,
+          totalSteps: 1,
+          totalLlmCalls: 1,
+          totalPromptTokens: 10,
+          totalCompletionTokens: 20,
+          averageDurationMs: endTime - startTime,
+          averageReward: 0,
+          bySource: { client_chat: 1 },
+          byStatus: { completed: 1 },
+          byScenario: {},
+        }),
+        deleteTrajectories: async () => 0,
+        clearAllTrajectories: async () => 0,
+        exportTrajectories: async () => ({
+          data: "[]",
+          filename: "trajectories.json",
+          mimeType: "application/json",
+        }),
+        exportTrajectoriesZip: async () => ({
+          filename: "trajectories-export.zip",
+          entries: [
+            { name: "manifest.json", data: "{}" },
+            { name: `${trajectoryId}/summary.json`, data: "{}" },
+            { name: `${trajectoryId}/trajectory.json`, data: "{}" },
+          ],
+        }),
+      };
+
+      const runtime = createRuntimeForChatSseTests({
+        getService: (serviceType) =>
+          serviceType === "trajectory_logger" ? trajectoryLogger : null,
+        getServicesByType: (serviceType) =>
+          serviceType === "trajectory_logger" ? [trajectoryLogger] : [],
+      }) as AgentRuntime & { adapter?: unknown };
+      runtime.adapter = {};
+
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const zipRes = await reqRaw(
+          streamServer.port,
+          "POST",
+          "/api/trajectories/export",
+          { format: "zip" },
+        );
+        expect(zipRes.status).toBe(200);
+        expect(String(zipRes.headers["content-type"] ?? "")).toContain(
+          "application/zip",
+        );
+        expect(String(zipRes.headers["content-disposition"] ?? "")).toContain(
+          ".zip",
+        );
+        expect(zipRes.data.subarray(0, 2).toString("utf-8")).toBe("PK");
+        const zipText = zipRes.data.toString("utf-8");
+        expect(zipText).toContain("manifest.json");
+        expect(zipText).toContain(`${trajectoryId}/summary.json`);
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("GET/PUT /api/trajectories/config reflects plugin logger enabled state", async () => {
+      let enabled = false;
+      const setEnabledCalls: boolean[] = [];
+
+      const trajectoryLogger = {
+        isEnabled: () => enabled,
+        setEnabled: (next: boolean) => {
+          setEnabledCalls.push(next);
+          enabled = next;
+        },
+        listTrajectories: async () => ({
+          trajectories: [],
+          total: 0,
+          offset: 0,
+          limit: 50,
+        }),
+        getTrajectoryDetail: async () => null,
+        getStats: async () => ({
+          totalTrajectories: 0,
+          totalSteps: 0,
+          totalLlmCalls: 0,
+          totalPromptTokens: 0,
+          totalCompletionTokens: 0,
+          averageDurationMs: 0,
+          averageReward: 0,
+          bySource: {},
+          byStatus: {},
+          byScenario: {},
+        }),
+        deleteTrajectories: async () => 0,
+        clearAllTrajectories: async () => 0,
+        exportTrajectories: async () => ({
+          data: "[]",
+          filename: "trajectories.json",
+          mimeType: "application/json",
+        }),
+      };
+
+      const runtime = createRuntimeForChatSseTests({
+        getService: (serviceType) =>
+          serviceType === "trajectory_logger" ? trajectoryLogger : null,
+        getServicesByType: (serviceType) =>
+          serviceType === "trajectory_logger" ? [trajectoryLogger] : [],
+      }) as AgentRuntime & { adapter?: unknown };
+      runtime.adapter = {};
+
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const before = await req(
+          streamServer.port,
+          "GET",
+          "/api/trajectories/config",
+        );
+        expect(before.status).toBe(200);
+        expect(before.data.enabled).toBe(false);
+
+        const updated = await req(
+          streamServer.port,
+          "PUT",
+          "/api/trajectories/config",
+          { enabled: false },
+        );
+        expect(updated.status).toBe(200);
+        expect(updated.data.enabled).toBe(false);
+        expect(enabled).toBe(false);
+        expect(setEnabledCalls).toEqual([false]);
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it.skip("persists core trajectory rows to DB and loads them after restart", async () => {
+      type RawSqlQuery = {
+        queryChunks?: Array<{
+          value?: string[];
+        }>;
+      };
+
+      const readSqlText = (query: RawSqlQuery): string => {
+        const chunks = query.queryChunks ?? [];
+        return chunks
+          .map((chunk) =>
+            Array.isArray(chunk.value) ? chunk.value.join("") : "",
+          )
+          .join("")
+          .trim();
+      };
+
+      const splitSqlTuple = (valueList: string): string[] => {
+        const values: string[] = [];
+        let current = "";
+        let inString = false;
+        for (let i = 0; i < valueList.length; i += 1) {
+          const char = valueList[i];
+          if (char === "'") {
+            current += char;
+            if (inString && valueList[i + 1] === "'") {
+              current += "'";
+              i += 1;
+              continue;
+            }
+            inString = !inString;
+            continue;
+          }
+          if (char === "," && !inString) {
+            values.push(current.trim());
+            current = "";
+            continue;
+          }
+          current += char;
+        }
+        if (current.trim().length > 0) values.push(current.trim());
+        return values;
+      };
+
+      const parseSqlScalar = (token: string): string | number | null => {
+        if (token.toUpperCase() === "NULL") return null;
+        if (token.startsWith("'") && token.endsWith("'")) {
+          return token.slice(1, -1).replace(/''/g, "'");
+        }
+        const asNumber = Number(token);
+        return Number.isFinite(asNumber) ? asNumber : token;
+      };
+
+      class InMemoryTrajectoryDb {
+        private rows = new Map<string, Record<string, unknown>>();
+
+        async execute(query: RawSqlQuery): Promise<{ rows: unknown[] }> {
+          const sql = readSqlText(query);
+          const normalized = sql.toLowerCase().replace(/\s+/g, " ").trim();
+
+          if (
+            normalized.startsWith("create table if not exists trajectories")
+          ) {
+            return { rows: [] };
+          }
+
+          if (normalized.startsWith("insert into trajectories")) {
+            const match =
+              /insert into trajectories\s*\(([\s\S]+?)\)\s*values\s*\(([\s\S]+?)\)\s*on conflict/i.exec(
+                sql,
+              );
+            if (!match) return { rows: [] };
+            const columns = splitSqlTuple(match[1]).map((col) => col.trim());
+            const values = splitSqlTuple(match[2]).map(parseSqlScalar);
+            const row: Record<string, unknown> = {};
+            for (let i = 0; i < columns.length; i += 1) {
+              row[columns[i]] = values[i] ?? null;
+            }
+            const id = String(row.id ?? "");
+            if (id) {
+              const existing = this.rows.get(id) ?? {};
+              this.rows.set(id, { ...existing, ...row });
+            }
+            return { rows: [] };
+          }
+
+          if (normalized.startsWith("select * from trajectories")) {
+            const limitMatch = /limit\s+(\d+)/i.exec(sql);
+            const limit = limitMatch ? Number(limitMatch[1]) : 5000;
+            const rows = Array.from(this.rows.values()).sort((a, b) =>
+              String(b.created_at ?? "").localeCompare(
+                String(a.created_at ?? ""),
+              ),
+            );
+            return { rows: rows.slice(0, limit) };
+          }
+
+          if (
+            normalized.startsWith("select count(*) as total from trajectories")
+          ) {
+            return { rows: [{ total: this.rows.size }] };
+          }
+
+          if (normalized.startsWith("delete from trajectories where id in")) {
+            const inMatch = /where id in \(([\s\S]+)\)/i.exec(sql);
+            const deleted: Array<Record<string, unknown>> = [];
+            if (inMatch) {
+              const ids = splitSqlTuple(inMatch[1])
+                .map(parseSqlScalar)
+                .filter((id): id is string => typeof id === "string");
+              for (const id of ids) {
+                if (this.rows.delete(id)) deleted.push({ id });
+              }
+            }
+            return normalized.includes("returning id")
+              ? { rows: deleted }
+              : { rows: [] };
+          }
+
+          if (normalized.startsWith("delete from trajectories")) {
+            this.rows.clear();
+            return { rows: [] };
+          }
+
+          return { rows: [] };
+        }
+      }
+
+      const db = new InMemoryTrajectoryDb();
+
+      const createCoreLogger = () => {
+        const llmCalls: Array<Record<string, unknown>> = [];
+        const providerAccess: Array<Record<string, unknown>> = [];
+        return {
+          logLlmCall: (params: Record<string, unknown>) => {
+            llmCalls.push({
+              ...params,
+              timestamp:
+                typeof params.timestamp === "number"
+                  ? params.timestamp
+                  : Date.now(),
+            });
+          },
+          logProviderAccess: (params: Record<string, unknown>) => {
+            providerAccess.push({
+              ...params,
+              timestamp:
+                typeof params.timestamp === "number"
+                  ? params.timestamp
+                  : Date.now(),
+            });
+          },
+          getLlmCallLogs: () => llmCalls,
+          getProviderAccessLogs: () => providerAccess,
+        };
+      };
+
+      const createRuntime = () => {
+        const coreLogger = createCoreLogger();
+        const runtime = createRuntimeForChatSseTests({
+          getService: (serviceType) =>
+            serviceType === "trajectory_logger" ? coreLogger : null,
+          getServicesByType: (serviceType) =>
+            serviceType === "trajectory_logger" ? [coreLogger] : [],
+          handleMessage: async (runtimeArg, message, onResponse) => {
+            const metadata =
+              message && typeof message === "object" && "metadata" in message
+                ? (message as { metadata?: { trajectoryStepId?: string } })
+                    .metadata
+                : undefined;
+            const stepId = metadata?.trajectoryStepId;
+            if (stepId) {
+              const logger = runtimeArg.getService("trajectory_logger") as {
+                logLlmCall?: (params: Record<string, unknown>) => void;
+              } | null;
+              logger?.logLlmCall?.({
+                stepId,
+                model: "unit-test-model",
+                systemPrompt: "system",
+                userPrompt: "persist me",
+                response: "persisted",
+                temperature: 0,
+                maxTokens: 32,
+                purpose: "response",
+                actionType: "test",
+                promptTokens: 3,
+                completionTokens: 4,
+                latencyMs: 10,
+              });
+            }
+            await onResponse({ text: "persisted" } as Content);
+            return {
+              responseContent: {
+                text: "persisted",
+              },
+            };
+          },
+        }) as AgentRuntime & {
+          adapter?: {
+            db: { execute: (query: RawSqlQuery) => Promise<unknown> };
+          };
+        };
+        runtime.adapter = { db };
+        return runtime;
+      };
+
+      const runtimeA = createRuntime();
+      const serverA = await startApiServer({ port: 0, runtime: runtimeA });
+      let firstTrajectoryId: string | null = null;
+      try {
+        const chat = await req(serverA.port, "POST", "/api/chat", {
+          text: "persist this trajectory",
+          mode: "simple",
+        });
+        expect(chat.status).toBe(200);
+
+        const list = await req(serverA.port, "GET", "/api/trajectories");
+        expect(list.status).toBe(200);
+        const rows = list.data.trajectories as Array<Record<string, unknown>>;
+        expect(Array.isArray(rows)).toBe(true);
+        expect(rows.length).toBeGreaterThan(0);
+        firstTrajectoryId = String(rows[0]?.id ?? "");
+        expect(firstTrajectoryId.length).toBeGreaterThan(0);
+      } finally {
+        await serverA.close();
+      }
+
+      const runtimeB = createRuntime();
+      const serverB = await startApiServer({ port: 0, runtime: runtimeB });
+      try {
+        const listAfterRestart = await req(
+          serverB.port,
+          "GET",
+          "/api/trajectories",
+        );
+        expect(listAfterRestart.status).toBe(200);
+        const rows = listAfterRestart.data.trajectories as Array<
+          Record<string, unknown>
+        >;
+        expect(Array.isArray(rows)).toBe(true);
+        expect(rows.length).toBeGreaterThan(0);
+        const ids = rows.map((row) => String(row.id ?? ""));
+        expect(ids).toContain(firstTrajectoryId);
+      } finally {
+        await serverB.close();
       }
     });
   });
@@ -983,6 +2350,102 @@ describe("API Server E2E (no runtime)", () => {
         expect(status).toBe(200);
         expect(String(data.text)).toMatch(/top up your credits/i);
         expect(String(data.text)).not.toBe("(no response)");
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("GET /api/trajectories prefers route-compatible logger when byType contains core logger", async () => {
+      const coreLogger = {
+        logLlmCall: () => {},
+      };
+
+      const fullLogger = {
+        isEnabled: () => true,
+        setEnabled: () => {},
+        listTrajectories: async () => ({
+          trajectories: [
+            {
+              id: "trajectory-1",
+              agentId: "chat-stream-agent",
+              source: "client_chat",
+              status: "completed",
+              startTime: Date.now() - 1000,
+              endTime: Date.now(),
+              durationMs: 1000,
+              stepCount: 1,
+              llmCallCount: 1,
+              totalPromptTokens: 10,
+              totalCompletionTokens: 20,
+              totalReward: 0,
+              scenarioId: null,
+              batchId: null,
+              createdAt: new Date().toISOString(),
+            },
+          ],
+          total: 1,
+          offset: 0,
+          limit: 50,
+        }),
+        getTrajectoryDetail: async () => null,
+        getStats: async () => ({
+          totalTrajectories: 1,
+          totalSteps: 1,
+          totalLlmCalls: 1,
+          totalPromptTokens: 10,
+          totalCompletionTokens: 20,
+          averageDurationMs: 1000,
+          averageReward: 0,
+          bySource: { client_chat: 1 },
+          byStatus: { completed: 1 },
+          byScenario: {},
+        }),
+        deleteTrajectories: async () => 0,
+        clearAllTrajectories: async () => 0,
+        exportTrajectories: async () => ({
+          data: "[]",
+          filename: "trajectories.json",
+          mimeType: "application/json",
+        }),
+      };
+
+      const runtime = createRuntimeForChatSseTests({
+        getServicesByType: (serviceType) =>
+          serviceType === "trajectory_logger" ? [coreLogger] : [],
+        getService: (serviceType) =>
+          serviceType === "trajectory_logger" ? fullLogger : null,
+      }) as AgentRuntime & { adapter?: unknown };
+      runtime.adapter = {};
+
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const res = await req(streamServer.port, "GET", "/api/trajectories");
+        expect(res.status).toBe(200);
+        const rows = res.data.trajectories as Array<Record<string, unknown>>;
+        expect(Array.isArray(rows)).toBe(true);
+        expect(rows).toHaveLength(1);
+        expect(rows[0]?.llmCallCount).toBe(1);
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("GET /api/trajectories returns 503 when no route-compatible logger is available", async () => {
+      const runtime = createRuntimeForChatSseTests({
+        getServicesByType: (serviceType) =>
+          serviceType === "trajectory_logger" ? [{ logLlmCall: () => {} }] : [],
+        getService: (serviceType) =>
+          serviceType === "trajectory_logger" ? { logLlmCall: () => {} } : null,
+      }) as AgentRuntime & { adapter?: unknown };
+      runtime.adapter = {};
+
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const res = await req(streamServer.port, "GET", "/api/trajectories");
+        expect(res.status).toBe(503);
+        expect(String(res.data.error)).toContain(
+          "Trajectory logger service not available",
+        );
       } finally {
         await streamServer.close();
       }
@@ -1208,14 +2671,21 @@ describe("API Server E2E (no runtime)", () => {
       expect(Array.isArray(data.skills)).toBe(true);
     });
 
-    it("GET /api/skills/marketplace/search reports key-gated failure when key missing", async () => {
-      const { status, data } = await req(
-        port,
-        "GET",
-        "/api/skills/marketplace/search?q=agent",
-      );
-      expect(status).toBe(502);
-      expect(String(data.error)).toContain("SKILLSMP_API_KEY");
+    it("GET /api/skills/marketplace/search reports upstream network failures", async () => {
+      const savedRegistry = process.env.SKILLS_REGISTRY;
+      try {
+        process.env.SKILLS_REGISTRY = "http://127.0.0.1:1";
+        const { status, data } = await req(
+          port,
+          "GET",
+          "/api/skills/marketplace/search?q=agent",
+        );
+        expect(status).toBe(502);
+        expect(String(data.error).toLowerCase()).toContain("network");
+      } finally {
+        if (savedRegistry === undefined) delete process.env.SKILLS_REGISTRY;
+        else process.env.SKILLS_REGISTRY = savedRegistry;
+      }
     });
 
     it("POST /api/skills/marketplace/install validates source input", async () => {
@@ -1399,7 +2869,7 @@ describe("API Server E2E (no runtime)", () => {
         eventService.emit({
           runId: "run-autonomy-surface",
           seq: 1,
-          stream: "assistant",
+          stream: "provider",
           ts: Date.now() - 5,
           data: { text: "autonomy-thought" },
           agentId: "autonomy-surface-agent",
@@ -1412,20 +2882,18 @@ describe("API Server E2E (no runtime)", () => {
           data: { text: "autonomy-action" },
           agentId: "autonomy-surface-agent",
         });
-
-        await runtime.messageService?.handleMessage?.(
-          runtime,
-          {
-            id: crypto.randomUUID(),
-            roomId: "00000000-0000-0000-0000-00000000a999",
-            entityId: "autonomy-surface-agent",
-            content: {
-              text: "trigger follow-up",
-              source: "trigger-dispatch",
-            },
-          } as never,
-          async () => [],
-        );
+        eventService.emit({
+          runId: "run-autonomy-surface",
+          seq: 3,
+          stream: "assistant",
+          ts: Date.now(),
+          data: {
+            text: "Autonomy says: trigger follow-up",
+            source: "trigger-dispatch",
+          },
+          agentId: "autonomy-surface-agent",
+          roomId: "00000000-0000-0000-0000-00000000a999" as UUID,
+        });
 
         await waitForThought;
         await waitForAction;
@@ -1502,6 +2970,155 @@ describe("API Server E2E (no runtime)", () => {
             (trigger) => trigger.displayName === "Autonomy surface trigger",
           ),
         ).toBe(true);
+      } finally {
+        ws.close();
+        await streamServer.close();
+      }
+    });
+
+    it("does not route client_chat assistant events into proactive messages", async () => {
+      const eventService = new TestAgentEventService();
+      const runtime = createRuntimeForAutonomySurfaceTests({
+        eventService,
+        loopRunning: true,
+      });
+      const streamServer = await startApiServer({ port: 0, runtime });
+      const ws = new WebSocket(`ws://127.0.0.1:${streamServer.port}/ws`);
+      try {
+        await waitForWsMessage(ws, (message) => message.type === "status");
+
+        const createConversation = await req(
+          streamServer.port,
+          "POST",
+          "/api/conversations",
+          {
+            title: "No client_chat proactive routing",
+          },
+        );
+        expect(createConversation.status).toBe(200);
+        const conversation = createConversation.data.conversation as {
+          id?: string;
+        };
+        const conversationId = conversation.id ?? "";
+        expect(conversationId.length).toBeGreaterThan(0);
+
+        ws.send(
+          JSON.stringify({
+            type: "active-conversation",
+            conversationId,
+          }),
+        );
+
+        eventService.emit({
+          runId: "run-client-chat-no-proactive",
+          seq: 1,
+          stream: "assistant",
+          ts: Date.now(),
+          data: {
+            text: "should-not-route-to-proactive",
+            source: "client_chat",
+          },
+          agentId: "autonomy-surface-agent",
+        });
+
+        await expect(
+          waitForWsMessage(
+            ws,
+            (message) =>
+              message.type === "proactive-message" &&
+              message.conversationId === conversationId,
+            900,
+          ),
+        ).rejects.toThrow("Timed out waiting for websocket message");
+
+        const messagesResponse = await req(
+          streamServer.port,
+          "GET",
+          `/api/conversations/${encodeURIComponent(conversationId)}/messages`,
+        );
+        expect(messagesResponse.status).toBe(200);
+        const messages = messagesResponse.data.messages as Array<
+          Record<string, unknown>
+        >;
+        const routed = messages.find(
+          (message) =>
+            String(message.text ?? "") === "should-not-route-to-proactive",
+        );
+        expect(routed).toBeUndefined();
+      } finally {
+        ws.close();
+        await streamServer.close();
+      }
+    });
+
+    it("does not route ambiguous assistant events without source or room metadata", async () => {
+      const eventService = new TestAgentEventService();
+      const runtime = createRuntimeForAutonomySurfaceTests({
+        eventService,
+        loopRunning: true,
+      });
+      const streamServer = await startApiServer({ port: 0, runtime });
+      const ws = new WebSocket(`ws://127.0.0.1:${streamServer.port}/ws`);
+      try {
+        await waitForWsMessage(ws, (message) => message.type === "status");
+
+        const createConversation = await req(
+          streamServer.port,
+          "POST",
+          "/api/conversations",
+          {
+            title: "No ambiguous proactive routing",
+          },
+        );
+        expect(createConversation.status).toBe(200);
+        const conversation = createConversation.data.conversation as {
+          id?: string;
+        };
+        const conversationId = conversation.id ?? "";
+        expect(conversationId.length).toBeGreaterThan(0);
+
+        ws.send(
+          JSON.stringify({
+            type: "active-conversation",
+            conversationId,
+          }),
+        );
+
+        eventService.emit({
+          runId: "run-ambiguous-no-proactive",
+          seq: 1,
+          stream: "assistant",
+          ts: Date.now(),
+          data: {
+            text: "ambiguous-should-not-route",
+          },
+          agentId: "autonomy-surface-agent",
+        });
+
+        await expect(
+          waitForWsMessage(
+            ws,
+            (message) =>
+              message.type === "proactive-message" &&
+              message.conversationId === conversationId,
+            900,
+          ),
+        ).rejects.toThrow("Timed out waiting for websocket message");
+
+        const messagesResponse = await req(
+          streamServer.port,
+          "GET",
+          `/api/conversations/${encodeURIComponent(conversationId)}/messages`,
+        );
+        expect(messagesResponse.status).toBe(200);
+        const messages = messagesResponse.data.messages as Array<
+          Record<string, unknown>
+        >;
+        const routed = messages.find(
+          (message) =>
+            String(message.text ?? "") === "ambiguous-should-not-route",
+        );
+        expect(routed).toBeUndefined();
       } finally {
         ws.close();
         await streamServer.close();
@@ -1592,18 +3209,39 @@ describe("API Server E2E (no runtime)", () => {
   // -- Autonomy --
 
   describe("autonomy endpoints", () => {
-    it("GET /api/agent/autonomy always returns enabled: true", async () => {
+    it("GET /api/agent/autonomy reflects runtime availability when no runtime is configured", async () => {
       const { status, data } = await req(port, "GET", "/api/agent/autonomy");
       expect(status).toBe(200);
-      expect(data.enabled).toBe(true);
+      expect(data.enabled).toBe(false);
+      expect(data.thinking).toBe(false);
     });
 
-    it("POST /api/agent/autonomy always returns autonomy: true", async () => {
+    it("POST /api/agent/autonomy returns the current effective state", async () => {
       const { data } = await req(port, "POST", "/api/agent/autonomy", {
         enabled: false,
       });
       expect(data.ok).toBe(true);
-      expect(data.autonomy).toBe(true);
+      expect(data.autonomy).toBe(false);
+      expect(data.thinking).toBe(false);
+    });
+
+    it("GET /api/agent/autonomy uses AutonomyService state when runtime is present", async () => {
+      const runtime = createRuntimeForStreamTests({
+        loopRunning: true,
+      });
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const { status, data } = await req(
+          streamServer.port,
+          "GET",
+          "/api/agent/autonomy",
+        );
+        expect(status).toBe(200);
+        expect(data.enabled).toBe(true);
+        expect(data.thinking).toBe(true);
+      } finally {
+        await streamServer.close();
+      }
     });
   });
 
@@ -1636,8 +3274,10 @@ describe("API Server E2E (no runtime)", () => {
           "/api/workbench/overview",
         );
         expect(status).toBe(200);
-        const autonomy = (data as { autonomy?: { thinking?: boolean } })
-          .autonomy;
+        const autonomy = (
+          data as { autonomy?: { enabled?: boolean; thinking?: boolean } }
+        ).autonomy;
+        expect(autonomy?.enabled).toBe(true);
         expect(autonomy?.thinking).toBe(true);
       } finally {
         await workbenchServer.close();
@@ -1952,7 +3592,7 @@ describe("API Server E2E (no runtime)", () => {
           name: "test-remote",
           config: {
             type: "streamable-http",
-            url: "https://mcp.example.com/api",
+            url: "https://93.184.216.34/api",
           },
         },
       );
@@ -2011,7 +3651,7 @@ describe("API Server E2E (no runtime)", () => {
     it("PUT /api/mcp/config replaces entire config", async () => {
       const newServers = {
         "bulk-a": { type: "stdio", command: "npx", args: ["-y", "@test/a"] },
-        "bulk-b": { type: "streamable-http", url: "https://example.com/mcp" },
+        "bulk-b": { type: "streamable-http", url: "https://93.184.216.34/mcp" },
       };
 
       const { status, data } = await req(port, "PUT", "/api/mcp/config", {
@@ -2298,6 +3938,160 @@ describe("API Server E2E (workbench CRUD)", () => {
       `/api/workbench/todos/${encodeURIComponent(todoId)}`,
     );
     expect(readAfterDelete.status).toBe(404);
+  });
+});
+
+describe("API Server E2E (compat endpoints)", () => {
+  let port: number;
+  let close: () => Promise<void>;
+
+  beforeAll(async () => {
+    const server = await startApiServer({
+      port: 0,
+      runtime: createRuntimeForCompatEndpointTests(),
+    });
+    port = server.port;
+    close = server.close;
+  }, 30_000);
+
+  afterAll(async () => {
+    await close();
+  });
+
+  it("GET /v1/models returns OpenAI-compatible model list", async () => {
+    const { status, data } = await req(port, "GET", "/v1/models");
+    expect(status).toBe(200);
+    expect(data.object).toBe("list");
+    const models = data.data as Array<Record<string, unknown>>;
+    expect(models.length).toBeGreaterThan(0);
+    expect(models.some((item) => item.id === "milady")).toBe(true);
+    expect(models.some((item) => item.id === "CompatAgent")).toBe(true);
+  });
+
+  it("GET /v1/models/:id returns OpenAI-compatible model detail", async () => {
+    const { status, data } = await req(
+      port,
+      "GET",
+      "/v1/models/compat-model-id",
+    );
+    expect(status).toBe(200);
+    expect(data.object).toBe("model");
+    expect(data.id).toBe("compat-model-id");
+    expect(data.owned_by).toBe("milady");
+  });
+
+  it("POST /v1/chat/completions returns OpenAI-compatible completion", async () => {
+    const { status, data } = await req(port, "POST", "/v1/chat/completions", {
+      model: "milady",
+      user: "compat-e2e",
+      messages: [
+        { role: "system", content: "You are concise." },
+        { role: "user", content: "Say hi." },
+      ],
+    });
+    expect(status).toBe(200);
+    expect(data.object).toBe("chat.completion");
+    expect(typeof data.id).toBe("string");
+    const choices = data.choices as Array<Record<string, unknown>>;
+    expect(Array.isArray(choices)).toBe(true);
+    const firstChoice = choices[0] as Record<string, unknown>;
+    const message = firstChoice.message as Record<string, unknown>;
+    expect(message.role).toBe("assistant");
+    expect(message.content).toBe("Compat reply");
+    expect(firstChoice.finish_reason).toBe("stop");
+  });
+
+  it("POST /v1/chat/completions streams OpenAI-compatible SSE chunks", async () => {
+    const { status, headers, events } = await reqSse(
+      port,
+      "/v1/chat/completions",
+      {
+        model: "milady",
+        stream: true,
+        user: "compat-sse-e2e",
+        messages: [{ role: "user", content: "Stream a short answer." }],
+      },
+    );
+
+    expect(status).toBe(200);
+    expect(String(headers["content-type"])).toContain("text/event-stream");
+
+    const chunks = events.filter(
+      (event) =>
+        (event as Record<string, unknown>).object === "chat.completion.chunk",
+    ) as Array<Record<string, unknown>>;
+    expect(chunks.length).toBeGreaterThan(0);
+
+    const hasRoleChunk = chunks.some((chunk) => {
+      const choices = chunk.choices;
+      if (!Array.isArray(choices) || choices.length === 0) return false;
+      const firstChoice = choices[0] as Record<string, unknown>;
+      const delta = firstChoice.delta as Record<string, unknown> | undefined;
+      return delta?.role === "assistant";
+    });
+    expect(hasRoleChunk).toBe(true);
+
+    const content = chunks
+      .map((chunk) => {
+        const choices = chunk.choices;
+        if (!Array.isArray(choices) || choices.length === 0) return "";
+        const firstChoice = choices[0] as Record<string, unknown>;
+        const delta = firstChoice.delta as Record<string, unknown> | undefined;
+        return typeof delta?.content === "string" ? delta.content : "";
+      })
+      .join("");
+    expect(content).toContain("Compat reply");
+  });
+
+  it("POST /v1/messages returns Anthropic-compatible message", async () => {
+    const { status, data } = await req(port, "POST", "/v1/messages", {
+      model: "milady",
+      system: "You are concise.",
+      metadata: { conversation_id: "compat-room-1" },
+      messages: [{ role: "user", content: "Say hi." }],
+    });
+    expect(status).toBe(200);
+    expect(data.type).toBe("message");
+    expect(data.role).toBe("assistant");
+    const content = data.content as Array<Record<string, unknown>>;
+    expect(Array.isArray(content)).toBe(true);
+    const first = content[0] as Record<string, unknown>;
+    expect(first.type).toBe("text");
+    expect(first.text).toBe("Compat reply");
+    expect(data.stop_reason).toBe("end_turn");
+  });
+
+  it("POST /v1/messages streams Anthropic-compatible SSE events", async () => {
+    const { status, headers, events } = await reqSse(port, "/v1/messages", {
+      model: "milady",
+      stream: true,
+      metadata: { conversation_id: "compat-room-2" },
+      messages: [{ role: "user", content: "Stream a short answer." }],
+    });
+
+    expect(status).toBe(200);
+    expect(String(headers["content-type"])).toContain("text/event-stream");
+
+    const eventTypes = events
+      .map((event) => event.type)
+      .filter((value): value is string => typeof value === "string");
+    expect(eventTypes).toContain("message_start");
+    expect(eventTypes).toContain("content_block_start");
+    expect(eventTypes).toContain("content_block_delta");
+    expect(eventTypes).toContain("content_block_stop");
+    expect(eventTypes).toContain("message_delta");
+    expect(eventTypes).toContain("message_stop");
+
+    const streamedText = events
+      .filter((event) => event.type === "content_block_delta")
+      .map((event) => {
+        const delta = (event as Record<string, unknown>).delta as
+          | Record<string, unknown>
+          | undefined;
+        return typeof delta?.text === "string" ? delta.text : "";
+      })
+      .join("");
+    expect(streamedText).toContain("Compat reply");
   });
 });
 

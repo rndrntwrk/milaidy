@@ -67,7 +67,8 @@ process.env.MILAIDY_EMBEDDING_META_PATH = path.join(
 import {
   EMBEDDING_META_PATH,
   type EmbeddingManagerConfig,
-  MilaidyEmbeddingManager,
+  ensureModel,
+  MiladyEmbeddingManager,
   readEmbeddingMeta,
 } from "./embedding-manager.js";
 import { detectEmbeddingPreset } from "./embedding-presets.js";
@@ -111,7 +112,7 @@ function mockHardware(
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("MilaidyEmbeddingManager", () => {
+describe("MiladyEmbeddingManager", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers({ shouldAdvanceTime: false });
@@ -133,10 +134,24 @@ describe("MilaidyEmbeddingManager", () => {
     }
   });
 
+  it("rejects path traversal and invalid model identifiers in ensureModel", async () => {
+    const modelsDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "milaidy-emb-sec-"),
+    );
+
+    await expect(
+      ensureModel(modelsDir, "alice/models", "../escape.gguf"),
+    ).rejects.toThrow(/invalid embedding model filename/i);
+
+    await expect(
+      ensureModel(modelsDir, "../../evil", "model.gguf"),
+    ).rejects.toThrow(/invalid embedding model repo/i);
+  });
+
   // 1. Config defaults
   it("should use detected preset defaults when config is not provided", () => {
     const detected = detectEmbeddingPreset();
-    const mgr = new MilaidyEmbeddingManager(defaultConfig());
+    const mgr = new MiladyEmbeddingManager(defaultConfig());
     const stats = mgr.getStats();
 
     expect(stats.model).toBe(detected.model);
@@ -151,7 +166,7 @@ describe("MilaidyEmbeddingManager", () => {
     mockHardware("darwin", "arm64", 128);
 
     const detected = detectEmbeddingPreset();
-    const mgr = new MilaidyEmbeddingManager({
+    const mgr = new MiladyEmbeddingManager({
       modelsDir: makeTempModelsDir(detected.model),
     });
 
@@ -166,7 +181,7 @@ describe("MilaidyEmbeddingManager", () => {
   it("should default gpuLayers to 'auto' on Apple Silicon macOS", () => {
     mockHardware("darwin", "arm64", 16);
 
-    const mgr = new MilaidyEmbeddingManager({
+    const mgr = new MiladyEmbeddingManager({
       modelsDir: makeTempModelsDir(),
     });
 
@@ -177,7 +192,7 @@ describe("MilaidyEmbeddingManager", () => {
   it("should default gpuLayers to 0 on non-darwin platforms", () => {
     mockHardware("linux", "arm64", 128);
 
-    const mgr = new MilaidyEmbeddingManager({
+    const mgr = new MiladyEmbeddingManager({
       modelsDir: makeTempModelsDir(),
     });
 
@@ -186,7 +201,7 @@ describe("MilaidyEmbeddingManager", () => {
 
   // 4. Idle timeout fires dispose after inactivity
   it("should call dispose after idle timeout", async () => {
-    const mgr = new MilaidyEmbeddingManager(
+    const mgr = new MiladyEmbeddingManager(
       defaultConfig({ idleTimeoutMs: 5 * 60 * 1000 }), // 5 min
     );
 
@@ -205,7 +220,7 @@ describe("MilaidyEmbeddingManager", () => {
   });
 
   it("initializes node-llama-cpp with error-only logging", async () => {
-    const mgr = new MilaidyEmbeddingManager(defaultConfig());
+    const mgr = new MiladyEmbeddingManager(defaultConfig());
     await mgr.generateEmbedding("hello");
 
     expect(mockGetLlama).toHaveBeenCalledTimes(1);
@@ -218,7 +233,7 @@ describe("MilaidyEmbeddingManager", () => {
 
   // 5. lastUsedAt updates on generateEmbedding, preventing premature unload
   it("should update lastUsedAt on each generateEmbedding call", async () => {
-    const mgr = new MilaidyEmbeddingManager(
+    const mgr = new MiladyEmbeddingManager(
       defaultConfig({ idleTimeoutMs: 10 * 60 * 1000 }), // 10 min
     );
 
@@ -246,7 +261,7 @@ describe("MilaidyEmbeddingManager", () => {
 
   // 6. Re-initialization after idle unload
   it("should re-initialize transparently after idle unload", async () => {
-    const mgr = new MilaidyEmbeddingManager(
+    const mgr = new MiladyEmbeddingManager(
       defaultConfig({ idleTimeoutMs: 1 * 60 * 1000 }), // 1 min
     );
 
@@ -267,7 +282,7 @@ describe("MilaidyEmbeddingManager", () => {
 
   // 7. Explicit dispose clears timer and releases model
   it("should clean up on explicit dispose", async () => {
-    const mgr = new MilaidyEmbeddingManager(
+    const mgr = new MiladyEmbeddingManager(
       defaultConfig({ idleTimeoutMs: 30 * 60 * 1000 }),
     );
 
@@ -301,7 +316,7 @@ describe("MilaidyEmbeddingManager", () => {
       "fake-data",
     );
 
-    const mgr = new MilaidyEmbeddingManager(cfg);
+    const mgr = new MiladyEmbeddingManager(cfg);
     const before = mgr.getStats();
     expect(before).toEqual({
       lastUsedAt: null,
@@ -356,7 +371,7 @@ describe("MilaidyEmbeddingManager", () => {
       );
 
       // Create manager with new dimensions (768)
-      const mgr = new MilaidyEmbeddingManager(
+      const mgr = new MiladyEmbeddingManager(
         defaultConfig({ dimensions: 768 }),
       );
       await mgr.generateEmbedding("trigger init");
@@ -384,7 +399,7 @@ describe("MilaidyEmbeddingManager", () => {
         }),
       );
 
-      const mgr = new MilaidyEmbeddingManager(
+      const mgr = new MiladyEmbeddingManager(
         defaultConfig({ dimensions: 768 }),
       );
       await mgr.generateEmbedding("trigger init");

@@ -1,88 +1,47 @@
-import { EventEmitter } from "node:events";
-import type http from "node:http";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  createMockHttpResponse,
+  createMockJsonRequest,
+} from "../test-support/test-helpers";
 
-const loadMilaidyConfigMock = vi.fn();
-const saveMilaidyConfigMock = vi.fn();
+const loadMiladyConfigMock = vi.fn();
+const saveMiladyConfigMock = vi.fn();
 
-vi.mock("../config/config.js", () => ({
-  loadMilaidyConfig: () => loadMilaidyConfigMock(),
-  saveMilaidyConfig: (cfg: unknown) => saveMilaidyConfigMock(cfg),
+vi.mock("../config/config", () => ({
+  loadMiladyConfig: () => loadMiladyConfigMock(),
+  saveMiladyConfig: (cfg: unknown) => saveMiladyConfigMock(cfg),
 }));
 
-import { handleDatabaseRoute } from "./database.js";
-
-function createMockRequest(
-  method: string,
-  url: string,
-  body: unknown,
-): http.IncomingMessage & EventEmitter {
-  const req = new EventEmitter() as http.IncomingMessage &
-    EventEmitter & { destroy: () => void };
-  req.method = method;
-  req.url = url;
-  req.headers = { host: "localhost:2138" };
-  req.destroy = vi.fn();
-
-  const encoded = Buffer.from(JSON.stringify(body), "utf-8");
-  queueMicrotask(() => req.emit("data", encoded));
-  queueMicrotask(() => req.emit("end"));
-  return req;
-}
-
-function createMockResponse(): {
-  res: http.ServerResponse;
-  getStatus: () => number;
-  getJson: () => unknown;
-} {
-  let statusCode = 200;
-  let payload = "";
-
-  const res = {
-    set statusCode(value: number) {
-      statusCode = value;
-    },
-    get statusCode() {
-      return statusCode;
-    },
-    setHeader: () => undefined,
-    end: (chunk?: string | Buffer) => {
-      payload = chunk ? chunk.toString() : "";
-    },
-  } as unknown as http.ServerResponse;
-
-  return {
-    res,
-    getStatus: () => statusCode,
-    getJson: () => (payload ? JSON.parse(payload) : null),
-  };
-}
+import { handleDatabaseRoute } from "./database";
 
 describe("database API security hardening", () => {
-  const prevBind = process.env.MILAIDY_API_BIND;
+  const prevBind = process.env.MILADY_API_BIND;
 
   beforeEach(() => {
-    process.env.MILAIDY_API_BIND = "0.0.0.0";
-    loadMilaidyConfigMock.mockReturnValue({
+    process.env.MILADY_API_BIND = "0.0.0.0";
+    loadMiladyConfigMock.mockReturnValue({
       database: { provider: "postgres", postgres: { host: "8.8.8.8" } },
     });
-    saveMilaidyConfigMock.mockReset();
+    saveMiladyConfigMock.mockReset();
   });
 
   afterEach(() => {
     if (prevBind === undefined) {
-      delete process.env.MILAIDY_API_BIND;
+      delete process.env.MILADY_API_BIND;
     } else {
-      process.env.MILAIDY_API_BIND = prevBind;
+      process.env.MILADY_API_BIND = prevBind;
     }
     vi.clearAllMocks();
   });
 
   it("validates postgres host even when provider is omitted", async () => {
-    const req = createMockRequest("PUT", "/api/database/config", {
-      postgres: { host: "169.254.169.254" },
-    });
-    const { res, getStatus, getJson } = createMockResponse();
+    const req = createMockJsonRequest(
+      {
+        postgres: { host: "169.254.169.254" },
+      },
+      { method: "PUT", url: "/api/database/config" },
+    );
+    const { res, getStatus, getJson } = createMockHttpResponse();
 
     const handled = await handleDatabaseRoute(
       req,
@@ -97,18 +56,45 @@ describe("database API security hardening", () => {
       error:
         'Connection to "169.254.169.254" is blocked: link-local and metadata addresses are not allowed.',
     });
-    expect(saveMilaidyConfigMock).not.toHaveBeenCalled();
+    expect(saveMiladyConfigMock).not.toHaveBeenCalled();
+  });
+
+  it("blocks IPv6 link-local hosts across fe80::/10", async () => {
+    const req = createMockJsonRequest(
+      {
+        postgres: { host: "fea0::1" },
+      },
+      { method: "PUT", url: "/api/database/config" },
+    );
+    const { res, getStatus, getJson } = createMockHttpResponse();
+
+    const handled = await handleDatabaseRoute(
+      req,
+      res,
+      null,
+      "/api/database/config",
+    );
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(400);
+    expect(String((getJson() as { error?: string }).error ?? "")).toContain(
+      'Connection to "fea0::1" is blocked',
+    );
+    expect(saveMiladyConfigMock).not.toHaveBeenCalled();
   });
 
   it("allows unresolved hostnames when saving config for remote runtime networks", async () => {
-    const req = createMockRequest("PUT", "/api/database/config", {
-      provider: "postgres",
-      postgres: {
-        connectionString:
-          "postgresql://postgres:password@db.invalid:5432/postgres",
+    const req = createMockJsonRequest(
+      {
+        provider: "postgres",
+        postgres: {
+          connectionString:
+            "postgresql://postgres:password@db.invalid:5432/postgres",
+        },
       },
-    });
-    const { res, getStatus, getJson } = createMockResponse();
+      { method: "PUT", url: "/api/database/config" },
+    );
+    const { res, getStatus, getJson } = createMockHttpResponse();
 
     const handled = await handleDatabaseRoute(
       req,
@@ -119,15 +105,18 @@ describe("database API security hardening", () => {
 
     expect(handled).toBe(true);
     expect(getStatus()).toBe(200);
-    expect(saveMilaidyConfigMock).toHaveBeenCalledTimes(1);
+    expect(saveMiladyConfigMock).toHaveBeenCalledTimes(1);
     expect(getJson()).toMatchObject({ saved: true });
   });
 
   it("rejects unresolved hostnames during direct connection tests", async () => {
-    const req = createMockRequest("POST", "/api/database/test", {
-      host: "db.invalid",
-    });
-    const { res, getStatus, getJson } = createMockResponse();
+    const req = createMockJsonRequest(
+      {
+        host: "db.invalid",
+      },
+      { method: "POST", url: "/api/database/test" },
+    );
+    const { res, getStatus, getJson } = createMockHttpResponse();
 
     const handled = await handleDatabaseRoute(
       req,
@@ -141,18 +130,21 @@ describe("database API security hardening", () => {
     expect(String((getJson() as { error?: string })?.error ?? "")).toContain(
       "failed DNS resolution during validation",
     );
-    expect(saveMilaidyConfigMock).not.toHaveBeenCalled();
+    expect(saveMiladyConfigMock).not.toHaveBeenCalled();
   });
 
   it("pins connectionString host override params to the validated address", async () => {
-    const req = createMockRequest("PUT", "/api/database/config", {
-      provider: "postgres",
-      postgres: {
-        connectionString:
-          "postgresql://postgres:password@1.1.1.1:5432/postgres?host=8.8.8.8,8.8.4.4&hostaddr=8.8.4.4",
+    const req = createMockJsonRequest(
+      {
+        provider: "postgres",
+        postgres: {
+          connectionString:
+            "postgresql://postgres:password@1.1.1.1:5432/postgres?host=8.8.8.8,8.8.4.4&hostaddr=8.8.4.4",
+        },
       },
-    });
-    const { res, getStatus, getJson } = createMockResponse();
+      { method: "PUT", url: "/api/database/config" },
+    );
+    const { res, getStatus, getJson } = createMockHttpResponse();
 
     const handled = await handleDatabaseRoute(
       req,
@@ -164,9 +156,9 @@ describe("database API security hardening", () => {
     expect(handled).toBe(true);
     expect(getStatus()).toBe(200);
     expect(getJson()).toMatchObject({ saved: true });
-    expect(saveMilaidyConfigMock).toHaveBeenCalledTimes(1);
+    expect(saveMiladyConfigMock).toHaveBeenCalledTimes(1);
 
-    const savedConfig = saveMilaidyConfigMock.mock.calls[0]?.[0] as {
+    const savedConfig = saveMiladyConfigMock.mock.calls[0]?.[0] as {
       database?: {
         postgres?: {
           connectionString?: string;
@@ -180,5 +172,66 @@ describe("database API security hardening", () => {
     expect(parsed.hostname).toBe("8.8.8.8");
     expect(parsed.searchParams.get("host")).toBe("8.8.8.8");
     expect(parsed.searchParams.get("hostaddr")).toBe("8.8.8.8");
+  });
+
+  it.each([
+    "localhost:2138",
+    "[::1]:2138",
+    "http://localhost:2138",
+    "127.0.0.1:2138",
+  ])("allows private postgres hosts when MILADY_API_BIND is loopback with host+port (%s)", async (bindHost) => {
+    process.env.MILADY_API_BIND = bindHost;
+    const req = createMockJsonRequest(
+      {
+        provider: "postgres",
+        postgres: { host: "10.20.30.40" },
+      },
+      { method: "PUT", url: "/api/database/config" },
+    );
+    const { res, getStatus, getJson } = createMockHttpResponse();
+
+    const handled = await handleDatabaseRoute(
+      req,
+      res,
+      null,
+      "/api/database/config",
+    );
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(200);
+    expect(getJson()).toMatchObject({ saved: true });
+    expect(saveMiladyConfigMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    "127.evil.com",
+    "127.0.0.1.evil.com:2138",
+    "127.evil.com:2138",
+    "http://127.0.0.1.evil.com:2138",
+    "http://127.0.0.1@evil.com:2138",
+  ])("does not treat hostname spoof values as loopback binds (%s)", async (bindHost) => {
+    process.env.MILADY_API_BIND = bindHost;
+    const req = createMockJsonRequest(
+      {
+        provider: "postgres",
+        postgres: { host: "10.20.30.40" },
+      },
+      { method: "PUT", url: "/api/database/config" },
+    );
+    const { res, getStatus, getJson } = createMockHttpResponse();
+
+    const handled = await handleDatabaseRoute(
+      req,
+      res,
+      null,
+      "/api/database/config",
+    );
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(400);
+    expect(String((getJson() as { error?: string }).error ?? "")).toContain(
+      'Connection to "10.20.30.40" is blocked',
+    );
+    expect(saveMiladyConfigMock).not.toHaveBeenCalled();
   });
 });

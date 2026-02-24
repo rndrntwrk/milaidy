@@ -9,15 +9,24 @@
  * Works cross-platform with platform-specific permission requirements.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import {
+  type Dispatch,
+  type SetStateAction,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 import { useApp } from "../AppContext";
 import {
-  client,
   type AllPermissionsState,
-  type SystemPermissionId,
+  client,
   type PermissionStatus,
   type PluginInfo,
+  type SystemPermissionId,
 } from "../api-client";
+import { hasRequiredOnboardingPermissions } from "../onboarding-permissions";
+import { StatusBadge } from "./shared/ui-badges";
+import { Switch } from "./shared/ui-switch";
 
 /** Permission definition for UI rendering. */
 interface PermissionDef {
@@ -33,7 +42,8 @@ const SYSTEM_PERMISSIONS: PermissionDef[] = [
   {
     id: "accessibility",
     name: "Accessibility",
-    description: "Control mouse, keyboard, and interact with other applications",
+    description:
+      "Control mouse, keyboard, and interact with other applications",
     icon: "cursor",
     platforms: ["darwin"],
     requiredForFeatures: ["computeruse", "browser"],
@@ -99,15 +109,24 @@ const CAPABILITIES: CapabilityDef[] = [
     description: "Screen capture and visual analysis",
     requiredPermissions: ["screen-recording"],
   },
+  {
+    id: "coding-agent",
+    label: "Coding Agent Swarms",
+    description:
+      "Orchestrate CLI coding agents (Claude Code, Gemini, Codex, Aider)",
+    requiredPermissions: [],
+  },
 ];
 
-/** Status badge colors and labels. */
-const STATUS_CONFIG: Record<PermissionStatus, { color: string; label: string }> = {
-  granted: { color: "var(--ok, #16a34a)", label: "Granted" },
-  denied: { color: "var(--danger, #e74c3c)", label: "Denied" },
-  "not-determined": { color: "var(--warning, #f59e0b)", label: "Not Set" },
-  restricted: { color: "var(--muted)", label: "Restricted" },
-  "not-applicable": { color: "var(--muted)", label: "N/A" },
+const PERMISSION_BADGE_LABELS: Record<
+  PermissionStatus,
+  { tone: "success" | "danger" | "warning" | "muted"; label: string }
+> = {
+  granted: { tone: "success", label: "Granted" },
+  denied: { tone: "danger", label: "Denied" },
+  "not-determined": { tone: "warning", label: "Not Set" },
+  restricted: { tone: "muted", label: "Restricted" },
+  "not-applicable": { tone: "muted", label: "N/A" },
 };
 
 /** Icon mapping for permissions. */
@@ -120,23 +139,6 @@ function PermissionIcon({ icon }: { icon: string }) {
     terminal: "⌨️",
   };
   return <span className="text-base">{icons[icon] || "⚙️"}</span>;
-}
-
-/** Status badge component. */
-function StatusBadge({ status }: { status: PermissionStatus }) {
-  const config = STATUS_CONFIG[status];
-  return (
-    <span
-      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold"
-      style={{ background: `${config.color}20`, color: config.color }}
-    >
-      <span
-        className="w-1.5 h-1.5 rounded-full"
-        style={{ background: config.color }}
-      />
-      {config.label}
-    </span>
-  );
 }
 
 /** Individual permission row. */
@@ -167,7 +169,12 @@ function PermissionRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-semibold text-[13px]">{def.name}</span>
-          <StatusBadge status={status} />
+          <StatusBadge
+            label={PERMISSION_BADGE_LABELS[status].label}
+            tone={PERMISSION_BADGE_LABELS[status].tone}
+            withDot
+            className="rounded-full font-semibold"
+          />
         </div>
         <div className="text-[11px] text-[var(--muted)] mt-0.5 truncate">
           {def.description}
@@ -175,20 +182,15 @@ function PermissionRow({
       </div>
       <div className="flex items-center gap-2">
         {isShell && onToggleShell && status !== "not-applicable" && (
-          <button
-            type="button"
-            className={`relative w-10 h-5 rounded-full transition-colors ${
-              shellEnabled ? "bg-[var(--accent)]" : "bg-[var(--border)]"
-            }`}
-            onClick={() => onToggleShell(!shellEnabled)}
-            title={shellEnabled ? "Disable shell access" : "Enable shell access"}
-          >
-            <span
-              className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                shellEnabled ? "left-[22px]" : "left-0.5"
-              }`}
-            />
-          </button>
+          <Switch
+            checked={shellEnabled}
+            onChange={onToggleShell}
+            title={
+              shellEnabled ? "Disable shell access" : "Enable shell access"
+            }
+            trackOnClass="bg-[var(--accent)]"
+            trackOffClass="bg-[var(--border)]"
+          />
         )}
         {showAction && !isShell && (
           <>
@@ -250,13 +252,13 @@ function CapabilityToggle({
           {cap.description}
         </div>
       </div>
-      <button
-        type="button"
-        className={`relative w-10 h-5 rounded-full transition-colors ${
-          enabled ? "bg-[var(--accent)]" : "bg-[var(--border)]"
-        } ${!canEnable ? "opacity-50 cursor-not-allowed" : ""}`}
-        onClick={() => canEnable && onToggle(!enabled)}
+      <Switch
+        checked={enabled}
+        onChange={onToggle}
         disabled={!canEnable}
+        disabledClassName="opacity-50 cursor-not-allowed"
+        trackOnClass="bg-[var(--accent)]"
+        trackOffClass="bg-[var(--border)]"
         title={
           !available
             ? "Plugin not available"
@@ -266,24 +268,48 @@ function CapabilityToggle({
                 ? "Disable"
                 : "Enable"
         }
-      >
-        <span
-          className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-            enabled ? "left-[22px]" : "left-0.5"
-          }`}
-        />
-      </button>
+      />
     </div>
   );
 }
 
+function usePermissionActions(
+  setPermissions: Dispatch<SetStateAction<AllPermissionsState | null>>,
+) {
+  const handleRequest = useCallback(
+    async (id: SystemPermissionId) => {
+      try {
+        const state = await client.requestPermission(id);
+        setPermissions((prev) => (prev ? { ...prev, [id]: state } : prev));
+      } catch (err) {
+        console.error("Failed to request permission:", err);
+      }
+    },
+    [setPermissions],
+  );
+
+  const handleOpenSettings = useCallback(async (id: SystemPermissionId) => {
+    try {
+      await client.openPermissionSettings(id);
+    } catch (err) {
+      console.error("Failed to open settings:", err);
+    }
+  }, []);
+
+  return { handleRequest, handleOpenSettings };
+}
+
 export function PermissionsSection() {
   const { plugins, handlePluginToggle } = useApp();
-  const [permissions, setPermissions] = useState<AllPermissionsState | null>(null);
+  const [permissions, setPermissions] = useState<AllPermissionsState | null>(
+    null,
+  );
   const [platform, setPlatform] = useState<string>("unknown");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [shellEnabled, setShellEnabled] = useState(true);
+  const { handleRequest, handleOpenSettings } =
+    usePermissionActions(setPermissions);
 
   /** Load permissions on mount. */
   useEffect(() => {
@@ -323,25 +349,6 @@ export function PermissionsSection() {
     }
   }, []);
 
-  /** Request a permission. */
-  const handleRequest = useCallback(async (id: SystemPermissionId) => {
-    try {
-      const state = await client.requestPermission(id);
-      setPermissions((prev) => (prev ? { ...prev, [id]: state } : prev));
-    } catch (err) {
-      console.error("Failed to request permission:", err);
-    }
-  }, []);
-
-  /** Open system settings for a permission. */
-  const handleOpenSettings = useCallback(async (id: SystemPermissionId) => {
-    try {
-      await client.openPermissionSettings(id);
-    } catch (err) {
-      console.error("Failed to open settings:", err);
-    }
-  }, []);
-
   /** Toggle shell access. */
   const handleToggleShell = useCallback(async (enabled: boolean) => {
     try {
@@ -359,7 +366,9 @@ export function PermissionsSection() {
       if (!permissions) return false;
       return requiredPerms.every((id) => {
         const state = permissions[id];
-        return state?.status === "granted" || state?.status === "not-applicable";
+        return (
+          state?.status === "granted" || state?.status === "not-applicable"
+        );
       });
     },
     [permissions],
@@ -416,7 +425,9 @@ export function PermissionsSection() {
                 onOpenSettings={() => handleOpenSettings(def.id)}
                 isShell={def.id === "shell"}
                 shellEnabled={shellEnabled}
-                onToggleShell={def.id === "shell" ? handleToggleShell : undefined}
+                onToggleShell={
+                  def.id === "shell" ? handleToggleShell : undefined
+                }
               />
             );
           })}
@@ -424,12 +435,13 @@ export function PermissionsSection() {
         <div className="text-[11px] text-[var(--muted)] mt-2">
           {platform === "darwin" ? (
             <>
-              macOS requires Accessibility permission for computer control.
-              Open System Preferences → Security & Privacy → Privacy to grant access.
+              macOS requires Accessibility permission for computer control. Open
+              System Preferences → Security & Privacy → Privacy to grant access.
             </>
           ) : (
             <>
-              Grant permissions to enable features like voice input and computer control.
+              Grant permissions to enable features like voice input and computer
+              control.
             </>
           )}
         </div>
@@ -441,7 +453,9 @@ export function PermissionsSection() {
         <div className="space-y-2">
           {CAPABILITIES.map((cap) => {
             const plugin = plugins.find((p) => p.id === cap.id) ?? null;
-            const permissionsGranted = arePermissionsGranted(cap.requiredPermissions);
+            const permissionsGranted = arePermissionsGranted(
+              cap.requiredPermissions,
+            );
             return (
               <CapabilityToggle
                 key={cap.id}
@@ -456,8 +470,8 @@ export function PermissionsSection() {
           })}
         </div>
         <div className="text-[11px] text-[var(--muted)] mt-2">
-          Capabilities require their underlying system permissions to be granted.
-          Enable capabilities to unlock agent features.
+          Capabilities require their underlying system permissions to be
+          granted. Enable capabilities to unlock agent features.
         </div>
       </div>
     </div>
@@ -472,10 +486,14 @@ export function PermissionsSection() {
 export function PermissionsOnboardingSection({
   onContinue,
 }: {
-  onContinue: () => void;
+  onContinue: (options?: { allowPermissionBypass?: boolean }) => void;
 }) {
-  const [permissions, setPermissions] = useState<AllPermissionsState | null>(null);
+  const [permissions, setPermissions] = useState<AllPermissionsState | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
+  const { handleRequest, handleOpenSettings } =
+    usePermissionActions(setPermissions);
 
   useEffect(() => {
     void (async () => {
@@ -491,35 +509,15 @@ export function PermissionsOnboardingSection({
     })();
   }, []);
 
-  const handleRequest = useCallback(async (id: SystemPermissionId) => {
-    try {
-      const state = await client.requestPermission(id);
-      setPermissions((prev) => (prev ? { ...prev, [id]: state } : prev));
-    } catch (err) {
-      console.error("Failed to request permission:", err);
-    }
-  }, []);
-
-  const handleOpenSettings = useCallback(async (id: SystemPermissionId) => {
-    try {
-      await client.openPermissionSettings(id);
-    } catch (err) {
-      console.error("Failed to open settings:", err);
-    }
-  }, []);
-
   /** Check if all critical permissions are granted (or not applicable). */
-  const allGranted = permissions
-    ? ["accessibility", "screen-recording", "microphone"].every((id) => {
-        const state = permissions[id as SystemPermissionId];
-        return state?.status === "granted" || state?.status === "not-applicable";
-      })
-    : false;
+  const allGranted = hasRequiredOnboardingPermissions(permissions);
 
   if (loading) {
     return (
       <div className="text-center py-8">
-        <div className="text-[var(--muted)] text-sm">Checking permissions...</div>
+        <div className="text-[var(--muted)] text-sm">
+          Checking permissions...
+        </div>
       </div>
     );
   }
@@ -530,7 +528,11 @@ export function PermissionsOnboardingSection({
         <div className="text-[var(--muted)] text-sm mb-4">
           Unable to check permissions. You can configure them later in Settings.
         </div>
-        <button type="button" className="btn" onClick={onContinue}>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => onContinue({ allowPermissionBypass: true })}
+        >
           Continue
         </button>
       </div>
@@ -606,7 +608,7 @@ export function PermissionsOnboardingSection({
         <button
           type="button"
           className="btn text-xs py-2 px-6 opacity-70"
-          onClick={onContinue}
+          onClick={() => onContinue({ allowPermissionBypass: true })}
         >
           Skip for Now
         </button>
@@ -618,7 +620,7 @@ export function PermissionsOnboardingSection({
               background: "var(--accent)",
               borderColor: "var(--accent)",
             }}
-            onClick={onContinue}
+            onClick={() => onContinue()}
           >
             Continue
           </button>

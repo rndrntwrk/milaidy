@@ -4,7 +4,7 @@ import type {
   HumanDelayConfig,
   TypingMode,
 } from "@elizaos/core";
-import type { MemorySearchConfig } from "./types.tools.js";
+import type { MemorySearchConfig } from "./types.tools";
 
 // --- Sandbox types (merged from types.sandbox.ts) ---
 
@@ -168,6 +168,8 @@ export type CliBackendConfig = {
 };
 
 export type AgentDefaultsConfig = {
+  /** Active subscription provider, set automatically by provider switch. */
+  subscriptionProvider?: string;
   /** Primary model and fallbacks (provider/model). */
   model?: AgentModelListConfig;
   /** Optional image-capable model and fallbacks (provider/model). */

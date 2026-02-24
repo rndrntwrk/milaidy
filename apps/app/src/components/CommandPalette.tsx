@@ -28,6 +28,7 @@ export function CommandPalette() {
     setState,
     closeCommandPalette,
   } = useApp();
+  const { open: openBugReport } = useBugReport();
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -66,16 +67,57 @@ export function CommandPalette() {
     commands.push(
       { id: "nav-chat", label: "Open Chat", action: () => setTab("chat") },
       { id: "nav-apps", label: "Open Apps", action: () => setTab("apps") },
-      { id: "nav-character", label: "Open Character", action: () => setTab("character") },
-      { id: "nav-triggers", label: "Open Triggers", action: () => setTab("triggers") },
-      { id: "nav-wallets", label: "Open Wallets", action: () => setTab("wallets") },
-      { id: "nav-knowledge", label: "Open Knowledge", action: () => setTab("knowledge") },
-      { id: "nav-connectors", label: "Open Social", action: () => setTab("connectors") },
-      { id: "nav-plugins", label: "Open Plugins", action: () => setTab("plugins") },
-      { id: "nav-config", label: "Open Config", action: () => setTab("settings") },
-      { id: "nav-database", label: "Open Database", action: () => setTab("database") },
-      { id: "nav-settings", label: "Open Settings", action: () => setTab("settings") },
-      { id: "nav-logs", label: "Open Logs", action: () => setTab("logs") }
+      {
+        id: "nav-character",
+        label: "Open Character",
+        action: () => setTab("character"),
+      },
+      {
+        id: "nav-triggers",
+        label: "Open Triggers",
+        action: () => setTab("triggers"),
+      },
+      {
+        id: "nav-wallets",
+        label: "Open Wallets",
+        action: () => setTab("wallets"),
+      },
+      {
+        id: "nav-knowledge",
+        label: "Open Knowledge",
+        action: () => setTab("knowledge"),
+      },
+      {
+        id: "nav-connectors",
+        label: "Open Social",
+        action: () => setTab("connectors"),
+      },
+      {
+        id: "nav-plugins",
+        label: "Open Plugins",
+        action: () => setTab("plugins"),
+      },
+      {
+        id: "nav-config",
+        label: "Open Config",
+        action: () => setTab("settings"),
+      },
+      {
+        id: "nav-database",
+        label: "Open Database",
+        action: () => setTab("database"),
+      },
+      {
+        id: "nav-settings",
+        label: "Open Settings",
+        action: () => setTab("settings"),
+      },
+      { id: "nav-logs", label: "Open Logs", action: () => setTab("logs") },
+      {
+        id: "nav-security",
+        label: "Open Security",
+        action: () => setTab("security"),
+      },
     );
 
     if (currentGameViewerUrl.trim()) {
@@ -94,7 +136,11 @@ export function CommandPalette() {
       { id: "refresh-plugins", label: "Refresh Features", action: loadPlugins },
       { id: "refresh-skills", label: "Refresh Skills", action: loadSkills },
       { id: "refresh-logs", label: "Refresh Logs", action: loadLogs },
-      { id: "refresh-workbench", label: "Refresh Workbench", action: loadWorkbench }
+      {
+        id: "refresh-workbench",
+        label: "Refresh Workbench",
+        action: loadWorkbench,
+      },
     );
 
     // Chat commands
@@ -102,6 +148,13 @@ export function CommandPalette() {
       id: "chat-clear",
       label: "Clear Chat",
       action: handleChatClear,
+    });
+
+    // Bug report
+    commands.push({
+      id: "report-bug",
+      label: "Report Bug",
+      action: openBugReport,
     });
 
     return commands;
@@ -120,6 +173,7 @@ export function CommandPalette() {
     loadSkills,
     loadLogs,
     loadWorkbench,
+    openBugReport,
   ]);
 
   // Filter commands by query
@@ -142,24 +196,31 @@ export function CommandPalette() {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "ArrowDown") {
+        if (filteredCommands.length === 0) return;
         e.preventDefault();
         setState(
           "commandActiveIndex",
-          commandActiveIndex < filteredCommands.length - 1 ? commandActiveIndex + 1 : 0
+          commandActiveIndex < filteredCommands.length - 1
+            ? commandActiveIndex + 1
+            : 0,
         );
         return;
       }
 
       if (e.key === "ArrowUp") {
+        if (filteredCommands.length === 0) return;
         e.preventDefault();
         setState(
           "commandActiveIndex",
-          commandActiveIndex > 0 ? commandActiveIndex - 1 : filteredCommands.length - 1
+          commandActiveIndex > 0
+            ? commandActiveIndex - 1
+            : filteredCommands.length - 1,
         );
         return;
       }
 
       if (e.key === "Enter") {
+        if (filteredCommands.length === 0) return;
         e.preventDefault();
         const cmd = filteredCommands[commandActiveIndex];
         if (cmd) {
@@ -179,6 +240,23 @@ export function CommandPalette() {
     setState,
     closeCommandPalette,
   ]);
+
+  useEffect(() => {
+    if (filteredCommands.length === 0) {
+      if (commandActiveIndex !== 0) {
+        setState("commandActiveIndex", 0);
+      }
+      return;
+    }
+
+    const maxIndex = filteredCommands.length - 1;
+    if (commandActiveIndex < 0 || commandActiveIndex > maxIndex) {
+      setState(
+        "commandActiveIndex",
+        Math.min(Math.max(commandActiveIndex, 0), maxIndex),
+      );
+    }
+  }, [commandActiveIndex, filteredCommands.length, setState]);
 
   // Reset active index when query changes
   useEffect(() => {
@@ -212,11 +290,14 @@ export function CommandPalette() {
           ) : (
             filteredCommands.map((cmd, idx) => (
               <button
+                type="button"
                 key={cmd.id}
                 role="option"
                 aria-selected={idx === commandActiveIndex}
                 className={`w-full px-4 py-2.5 cursor-pointer flex justify-between items-center text-left text-sm font-body ${
-                  idx === commandActiveIndex ? "bg-bg-hover" : "hover:bg-bg-hover"
+                  idx === commandActiveIndex
+                    ? "bg-bg-hover"
+                    : "hover:bg-bg-hover"
                 }`}
                 onClick={() => {
                   cmd.action();
@@ -225,7 +306,9 @@ export function CommandPalette() {
                 onMouseEnter={() => setState("commandActiveIndex", idx)}
               >
                 <span>{cmd.label}</span>
-                {cmd.hint && <span className="text-xs text-muted">{cmd.hint}</span>}
+                {cmd.hint && (
+                  <span className="text-xs text-muted">{cmd.hint}</span>
+                )}
               </button>
             ))
           )}

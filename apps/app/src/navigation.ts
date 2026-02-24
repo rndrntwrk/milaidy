@@ -2,6 +2,9 @@
  * Navigation — tabs + onboarding.
  */
 
+/** Apps are only enabled in dev mode; production builds hide this feature. */
+export const APPS_ENABLED = import.meta.env.DEV;
+
 export type Tab =
   | "chat"
   | "apps"
@@ -25,7 +28,7 @@ export type Tab =
   | "safe-mode"
   | "governance";
 
-export const TAB_GROUPS = [
+const ALL_TAB_GROUPS = [
   { label: "Chat", tabs: ["chat"] as Tab[] },
   { label: "Character", tabs: ["character"] as Tab[] },
   { label: "Wallets", tabs: ["wallets"] as Tab[] },
@@ -50,9 +53,14 @@ export const TAB_GROUPS = [
       "runtime",
       "database",
       "logs",
+      "security",
     ] as Tab[],
   },
 ] as const;
+
+export const TAB_GROUPS = APPS_ENABLED
+  ? ALL_TAB_GROUPS
+  : ALL_TAB_GROUPS.filter((g) => g.label !== "Apps");
 
 const TAB_PATHS: Record<Tab, string> = {
   chat: "/chat",
@@ -127,7 +135,8 @@ function normalizePath(p: string): string {
   if (!p) return "/";
   let normalized = p.trim();
   if (!normalized.startsWith("/")) normalized = `/${normalized}`;
-  if (normalized.length > 1 && normalized.endsWith("/")) normalized = normalized.slice(0, -1);
+  if (normalized.length > 1 && normalized.endsWith("/"))
+    normalized = normalized.slice(0, -1);
   return normalized;
 }
 

@@ -1,15 +1,15 @@
 /**
- * ElizaOS runtime entry point for Milaidy.
+ * ElizaOS runtime entry point for Milady.
  *
- * Starts the ElizaOS agent runtime with Milaidy's plugin configuration.
+ * Starts the ElizaOS agent runtime with Milady's plugin configuration.
  * Can be run directly via: node --import tsx src/runtime/eliza.ts
- * Or via the CLI: milaidy start
+ * Or via the CLI: milady start
  *
  * @module eliza
  */
 import crypto from "node:crypto";
 import type { Dirent } from "node:fs";
-import { existsSync, symlinkSync } from "node:fs";
+import { existsSync, mkdirSync, symlinkSync } from "node:fs";
 import fs from "node:fs/promises";
 import { createRequire } from "node:module";
 import os from "node:os";
@@ -17,43 +17,58 @@ import path from "node:path";
 import process from "node:process";
 import * as readline from "node:readline";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import * as clack from "@clack/prompts";
+
+// @clack/prompts is loaded lazily inside runFirstTimeSetup() so the
+// packaged Electron app (which never runs interactive onboarding) does
+// not crash when the package is unavailable.
+type ClackModule = typeof import("@clack/prompts");
+let _clack: ClackModule | null = null;
+async function loadClack(): Promise<ClackModule> {
+  if (!_clack) _clack = await import("@clack/prompts");
+  return _clack;
+}
+
 import {
   AgentRuntime,
+  AutonomyService,
+  addLogListener,
   ChannelType,
   type Character,
   createMessageMemory,
+  type LogEntry,
   logger,
-  ModelType,
+  // loggerScope, // removed
   mergeCharacterDefaults,
   type Plugin,
+  type Provider,
   stringToUuid,
+  type TargetInfo,
   type UUID,
 } from "@elizaos/core";
 import {
   debugLogResolvedContext,
   validateRuntimeContext,
-} from "../api/plugin-validation.js";
-import { cloudLogin } from "../cloud/auth.js";
+} from "../api/plugin-validation";
 import {
   configFileExists,
-  loadMilaidyConfig,
-  type MilaidyConfig,
-  saveMilaidyConfig,
-} from "../config/config.js";
-import { resolveStateDir, resolveUserPath } from "../config/paths.js";
+  loadMiladyConfig,
+  type MiladyConfig,
+  saveMiladyConfig,
+} from "../config/config";
+import { collectConfigEnvVars } from "../config/env-vars";
+import { resolveStateDir, resolveUserPath } from "../config/paths";
 import {
   type ApplyPluginAutoEnableParams,
   applyPluginAutoEnable,
-} from "../config/plugin-auto-enable.js";
-import type { AgentConfig } from "../config/types.agents.js";
-import type { PluginInstallRecord } from "../config/types.milaidy.js";
+} from "../config/plugin-auto-enable";
+import type { AgentConfig } from "../config/types.agents";
+import type { PluginInstallRecord } from "../config/types.milady";
 import {
   createHookEvent,
   type LoadHooksOptions,
   loadHooks,
   triggerHook,
-} from "../hooks/index.js";
+} from "../hooks/index";
 import {
   ensureAgentWorkspace,
   resolveDefaultAgentWorkspaceDir,
@@ -108,6 +123,20 @@ interface ResolvedPlugin {
   /** The Plugin instance extracted from the module. */
   plugin: Plugin;
 }
+
+/**
+ * Temporary local compatibility shim for `@elizaos/core` not exporting
+ * `SandboxFetchAuditEvent` on the current dependency line in this repo.
+ * It preserves the runtime shape used by `sandboxAuditHandler`:
+ * - `direction` and `url` are required
+ * - `tokenIds` tracks tokens associated with the audit payload
+ * TODO(elizaos): replace/remove when upstream re-exports this type.
+ */
+type SandboxFetchAuditEvent = {
+  direction: "inbound" | "outbound";
+  url: string;
+  tokenIds: string[];
+};
 
 /** Shape we expect from a dynamically-imported plugin package. */
 interface PluginModuleShape {
@@ -535,11 +564,174 @@ function applyActionFilterHints(plugin: Plugin): Plugin {
 }
 
 /**
+ * Remove duplicate actions across an ordered list of plugins.
+ *
+ * When multiple plugins define an action with the same `name`, only the first
+ * occurrence is kept.  This prevents "Action already registered" warnings from
+ * ElizaOS core.  The function mutates each plugin's `actions` array in-place.
+ */
+export function deduplicatePluginActions(plugins: Plugin[]): void {
+  const seen = new Set<string>();
+  for (const plugin of plugins) {
+    if (plugin.actions) {
+      plugin.actions = plugin.actions.filter((action) => {
+        if (seen.has(action.name)) {
+          logger.debug(
+            `[milady] Skipping duplicate action "${action.name}" from plugin "${plugin.name}"`,
+          );
+          return false;
+        }
+        seen.add(action.name);
+        return true;
+      });
+    }
+  }
+}
+
+interface TrajectoryLoggerControl {
+  isEnabled?: () => boolean;
+  setEnabled?: (enabled: boolean) => void;
+}
+
+type TrajectoryLoggerRegistrationStatus =
+  | "pending"
+  | "registering"
+  | "registered"
+  | "failed"
+  | "unknown";
+
+type TrajectoryLoggerRuntimeLike = {
+  getServicesByType?: (serviceType: string) => unknown;
+  getService?: (serviceType: string) => unknown;
+  getServiceLoadPromise?: (serviceType: string) => Promise<unknown>;
+  getServiceRegistrationStatus?: (
+    serviceType: string,
+  ) => TrajectoryLoggerRegistrationStatus;
+};
+
+function collectTrajectoryLoggerCandidates(
+  runtimeLike: TrajectoryLoggerRuntimeLike,
+): TrajectoryLoggerControl[] {
+  const candidates: TrajectoryLoggerControl[] = [];
+  if (typeof runtimeLike.getServicesByType === "function") {
+    const byType = runtimeLike.getServicesByType("trajectory_logger");
+    if (Array.isArray(byType) && byType.length > 0) {
+      for (const service of byType) {
+        if (service) candidates.push(service as TrajectoryLoggerControl);
+      }
+    } else if (byType && !Array.isArray(byType)) {
+      candidates.push(byType as TrajectoryLoggerControl);
+    }
+  }
+  if (typeof runtimeLike.getService === "function") {
+    const single = runtimeLike.getService("trajectory_logger");
+    if (single) candidates.push(single as TrajectoryLoggerControl);
+  }
+  return candidates;
+}
+
+async function waitForTrajectoryLoggerService(
+  runtime: AgentRuntime,
+  context: string,
+  timeoutMs = 3000,
+): Promise<void> {
+  const runtimeLike = runtime as unknown as TrajectoryLoggerRuntimeLike;
+  if (collectTrajectoryLoggerCandidates(runtimeLike).length > 0) return;
+
+  const registrationStatus =
+    typeof runtimeLike.getServiceRegistrationStatus === "function"
+      ? runtimeLike.getServiceRegistrationStatus("trajectory_logger")
+      : "unknown";
+
+  if (
+    registrationStatus !== "pending" &&
+    registrationStatus !== "registering"
+  ) {
+    return;
+  }
+
+  if (typeof runtimeLike.getServiceLoadPromise !== "function") return;
+
+  let timedOut = false;
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<void>((resolve) => {
+    timeoutHandle = setTimeout(() => {
+      timedOut = true;
+      resolve();
+    }, timeoutMs);
+  });
+
+  try {
+    await Promise.race([
+      runtimeLike.getServiceLoadPromise("trajectory_logger").then(() => {}),
+      timeoutPromise,
+    ]);
+    if (timedOut) {
+      logger.debug(
+        `[milady] trajectory_logger still ${registrationStatus} after ${timeoutMs}ms (${context})`,
+      );
+    }
+  } catch (err) {
+    logger.debug(
+      `[milady] trajectory_logger registration failed while waiting (${context}): ${formatError(err)}`,
+    );
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+  }
+}
+
+function ensureTrajectoryLoggerEnabled(
+  runtime: AgentRuntime,
+  context: string,
+): void {
+  const runtimeLike = runtime as unknown as TrajectoryLoggerRuntimeLike;
+  const candidates = collectTrajectoryLoggerCandidates(runtimeLike);
+
+  let trajectoryLogger: TrajectoryLoggerControl | null = null;
+  let bestScore = -1;
+  for (const candidate of candidates) {
+    const candidateWithRuntime = candidate as TrajectoryLoggerControl & {
+      runtime?: { adapter?: unknown };
+      initialized?: boolean;
+      setEnabled?: unknown;
+    };
+    let score = 0;
+    if (typeof candidate.isEnabled === "function") score += 2;
+    if (typeof candidateWithRuntime.setEnabled === "function") score += 2;
+    if (candidateWithRuntime.initialized === true) score += 3;
+    if (candidateWithRuntime.runtime?.adapter) score += 3;
+    const enabled =
+      typeof candidate.isEnabled === "function" ? candidate.isEnabled() : true;
+    if (enabled) score += 1;
+    if (score > bestScore) {
+      trajectoryLogger = candidate;
+      bestScore = score;
+    }
+  }
+  if (!trajectoryLogger) {
+    logger.warn(
+      `[milady] trajectory_logger service unavailable (${context}); trajectory capture disabled`,
+    );
+    return;
+  }
+
+  const isEnabled =
+    typeof trajectoryLogger.isEnabled === "function"
+      ? trajectoryLogger.isEnabled()
+      : true;
+  if (!isEnabled && typeof trajectoryLogger.setEnabled === "function") {
+    trajectoryLogger.setEnabled(true);
+    logger.info("[milady] trajectory_logger enabled by default");
+  }
+}
+
+/**
  * Cancel the onboarding flow and exit cleanly.
  * Extracted to avoid duplicating the cancel+exit pattern 7 times.
  */
 function cancelOnboarding(): never {
-  clack.cancel("Maybe next time!");
+  // _clack is guaranteed to be loaded by the time onboarding calls this.
+  _clack?.cancel("Maybe next time!");
   process.exit(0);
 }
 
@@ -548,10 +740,10 @@ function cancelOnboarding(): never {
 // ---------------------------------------------------------------------------
 
 /**
- * Maps Milaidy channel config fields to the environment variable names
+ * Maps Milady channel config fields to the environment variable names
  * that ElizaOS plugins expect.
  *
- * Milaidy stores channel credentials under `config.channels.<name>.<field>`,
+ * Milady stores channel credentials under `config.channels.<name>.<field>`,
  * while ElizaOS plugins read them from process.env.
  */
 const CHANNEL_ENV_MAP: Readonly<
@@ -599,29 +791,45 @@ export { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS };
 const _OPTIONAL_NATIVE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-browser", // requires browser server binary
   "@elizaos/plugin-vision", // requires @tensorflow/tfjs-node native addon
-  "@elizaos/plugin-cron", // requires worldId at service init
   "@elizaos/plugin-computeruse", // requires platform-specific binaries
 ];
 
-/** Maps Milaidy channel names to ElizaOS plugin package names. */
-const CHANNEL_PLUGIN_MAP: Readonly<Record<string, string>> = {
+/** Maps Milady channel names to plugin package names. */
+export const CHANNEL_PLUGIN_MAP: Readonly<Record<string, string>> = {
   discord: "@elizaos/plugin-discord",
   telegram: "@elizaos/plugin-telegram",
   slack: "@elizaos/plugin-slack",
   twitter: "@elizaos/plugin-twitter",
-  whatsapp: "@elizaos/plugin-whatsapp",
+  // Internal connector built from src/plugins/whatsapp (not an npm package).
+  whatsapp: "@milady/plugin-whatsapp",
   signal: "@elizaos/plugin-signal",
   imessage: "@elizaos/plugin-imessage",
   bluebubbles: "@elizaos/plugin-bluebubbles",
+  farcaster: "@elizaos/plugin-farcaster",
+  lens: "@elizaos/plugin-lens",
   msteams: "@elizaos/plugin-msteams",
   mattermost: "@elizaos/plugin-mattermost",
   googlechat: "@elizaos/plugin-google-chat",
+  feishu: "@elizaos/plugin-feishu",
+  matrix: "@elizaos/plugin-matrix",
+  nostr: "@elizaos/plugin-nostr",
+  retake: "@milady/plugin-retake",
 };
+
+const PI_AI_PLUGIN_PACKAGE = "@elizaos/plugin-pi-ai";
+
+function isPiAiEnabledFromEnv(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = env.MILAIDY_USE_PI_AI;
+  if (!raw) return false;
+  const value = String(raw).trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
+}
 
 /** Maps environment variable names to model-provider plugin packages. */
 const PROVIDER_PLUGIN_MAP: Readonly<Record<string, string>> = {
   ANTHROPIC_API_KEY: "@elizaos/plugin-anthropic",
   OPENAI_API_KEY: "@elizaos/plugin-openai",
+  GEMINI_API_KEY: "@elizaos/plugin-google-genai",
   GOOGLE_API_KEY: "@elizaos/plugin-google-genai",
   GOOGLE_GENERATIVE_AI_API_KEY: "@elizaos/plugin-google-genai",
   GROQ_API_KEY: "@elizaos/plugin-groq",
@@ -631,6 +839,7 @@ const PROVIDER_PLUGIN_MAP: Readonly<Record<string, string>> = {
   AIGATEWAY_API_KEY: "@elizaos/plugin-vercel-ai-gateway",
   OLLAMA_BASE_URL: "@elizaos/plugin-ollama",
   ZAI_API_KEY: "@homunculuslabs/plugin-zai",
+  MILAIDY_USE_PI_AI: PI_AI_PLUGIN_PACKAGE,
   // ElizaCloud — loaded when API key is present OR cloud is explicitly enabled
   ELIZAOS_CLOUD_API_KEY: "@elizaos/plugin-elizacloud",
   ELIZAOS_CLOUD_ENABLED: "@elizaos/plugin-elizacloud",
@@ -672,16 +881,22 @@ const PLUGIN_NAME_ALIASES: Readonly<Record<string, string>> = {
 /**
  * Optional feature plugins keyed by feature name.
  *
- * Currently empty — reserved for future feature→plugin mappings.
- * The lookup code in {@link collectPluginNames} is intentionally kept
- * so new entries work without additional wiring.
+ * Mappings here support short IDs in allow-lists and feature toggles.
+ * Keep this map in sync with optional plugin registration and tests.
  */
 const OPTIONAL_PLUGIN_MAP: Readonly<Record<string, string>> = {
   browser: "@elizaos/plugin-browser",
   vision: "@elizaos/plugin-vision",
   cron: "@elizaos/plugin-cron",
+  cua: "@elizaos/plugin-cua",
   computeruse: "@elizaos/plugin-computeruse",
+  obsidian: "@elizaos/plugin-obsidian",
+  repoprompt: "@elizaos/plugin-repoprompt",
+  repoPrompt: "@elizaos/plugin-repoprompt",
+  "pi-ai": PI_AI_PLUGIN_PACKAGE,
+  piAi: PI_AI_PLUGIN_PACKAGE,
   x402: "@elizaos/plugin-x402",
+  "coding-agent": "@milaidy/plugin-coding-agent",
 };
 
 /**
@@ -944,7 +1159,7 @@ function looksLikePlugin(value: unknown): value is Plugin {
   );
 }
 
-function extractPlugin(mod: PluginModuleShape): Plugin | null {
+export function findRuntimePluginExport(mod: PluginModuleShape): Plugin | null {
   // 1. Prefer explicit default export
   if (looksLikePlugin(mod.default)) return mod.default;
   // 2. Check for a named `plugin` export
@@ -966,6 +1181,19 @@ function extractPlugin(mod: PluginModuleShape): Plugin | null {
     const value = mod[key];
     if (looksLikePlugin(value)) return value;
   }
+
+  // 5. Final compatibility fallback: accept minimal plugin-like exports only
+  // when the export name itself indicates it's a plugin.
+  for (const key of preferredKeys) {
+    const value = mod[key];
+    if (looksLikePluginBasic(value)) return value as Plugin;
+  }
+
+  // 6. Legacy CJS compatibility for modules that export only { name, description }.
+  if (looksLikePluginBasic(mod)) return mod as unknown as Plugin;
+  if (looksLikePluginBasic(mod.default)) return mod.default as Plugin;
+  if (looksLikePluginBasic(mod.plugin)) return mod.plugin as Plugin;
+
   return null;
 }
 
@@ -974,11 +1202,40 @@ function extractPlugin(mod: PluginModuleShape): Plugin | null {
  * based on config, environment variables, and feature flags.
  */
 /** @internal Exported for testing. */
-export function collectPluginNames(config: MilaidyConfig): Set<string> {
+export function collectPluginNames(config: MiladyConfig): Set<string> {
   const shellPluginDisabled = config.features?.shellEnabled === false;
   const piAiActive = isPiAiEnabledFromEnv();
 
-  // Check for explicit allow list first
+  const pluginEntries = (config.plugins as Record<string, unknown> | undefined)
+    ?.entries as Record<string, { enabled?: boolean }> | undefined;
+
+  const isPluginExplicitlyDisabled = (pluginPackageName: string): boolean => {
+    const marker = "/plugin-";
+    const markerIndex = pluginPackageName.lastIndexOf(marker);
+    const pluginId =
+      markerIndex >= 0
+        ? pluginPackageName.slice(markerIndex + marker.length)
+        : pluginPackageName;
+    return pluginEntries?.[pluginId]?.enabled === false;
+  };
+
+  const providerPluginIdSet = new Set(
+    Object.values(PROVIDER_PLUGIN_MAP).map((pluginPackageName) => {
+      const marker = "/plugin-";
+      const markerIndex = pluginPackageName.lastIndexOf(marker);
+      return markerIndex >= 0
+        ? pluginPackageName.slice(markerIndex + marker.length)
+        : pluginPackageName;
+    }),
+  );
+  const explicitProviderEntries = Object.entries(pluginEntries ?? {}).filter(
+    ([pluginId]) => providerPluginIdSet.has(pluginId),
+  );
+  const hasExplicitEnabledProvider = explicitProviderEntries.some(
+    ([, entry]) => entry?.enabled === true,
+  );
+
+  // Allow-list entries are additive (extra plugins), not exclusive.
   const allowList = config.plugins?.allow;
   const hasExplicitAllowList = allowList && allowList.length > 0;
 
@@ -1026,9 +1283,6 @@ export function collectPluginNames(config: MilaidyConfig): Set<string> {
 
   // Otherwise, proceed with auto-detection
   const pluginsToLoad = new Set<string>(CORE_PLUGINS);
-  if (shellPluginDisabled) {
-    pluginsToLoad.delete("@elizaos/plugin-shell");
-  }
 
   // Allow list is additive — extra plugins on top of auto-detection,
   // not an exclusive whitelist that blocks everything else.
@@ -1068,14 +1322,47 @@ export function collectPluginNames(config: MilaidyConfig): Set<string> {
   if (config.cloud?.enabled === true) {
     pluginsToLoad.add("@elizaos/plugin-elizacloud");
 
-    // When cloud is active, remove direct AI provider plugins — the cloud
-    // plugin handles ALL model calls via its own gateway.
-    const directProviders = new Set(Object.values(PROVIDER_PLUGIN_MAP));
-    directProviders.delete("@elizaos/plugin-elizacloud");
-    for (const p of directProviders) {
-      pluginsToLoad.delete(p);
+  const applyProviderPrecedence = (): void => {
+    // Provider precedence:
+    // 1) ElizaCloud (when enabled)
+    // 2) pi-ai (when enabled and cloud is not active)
+    // 3) direct provider plugins (api-key/env based)
+    if (cloudEffectivelyEnabled) {
+      pluginsToLoad.add("@elizaos/plugin-elizacloud");
+
+      // When cloud is active, remove direct AI provider plugins and pi-ai —
+      // the cloud plugin handles ALL model calls via its own gateway.
+      const directProviders = new Set(Object.values(PROVIDER_PLUGIN_MAP));
+      directProviders.delete("@elizaos/plugin-elizacloud");
+      for (const p of directProviders) {
+        pluginsToLoad.delete(p);
+      }
+      return;
     }
-  }
+
+    if (shouldEnablePiAi) {
+      pluginsToLoad.add(PI_AI_PLUGIN_PACKAGE);
+
+      // When pi-ai is active, remove direct provider plugins + cloud plugin.
+      // pi-ai performs the upstream provider selection itself.
+      const directProviders = new Set(Object.values(PROVIDER_PLUGIN_MAP));
+      directProviders.delete(PI_AI_PLUGIN_PACKAGE);
+      for (const p of directProviders) {
+        pluginsToLoad.delete(p);
+      }
+      pluginsToLoad.delete("@elizaos/plugin-elizacloud");
+      return;
+    }
+
+    if (cloudExplicitlyDisabled) {
+      // Cloud was explicitly disabled — remove elizacloud even though it's
+      // in CORE_PLUGINS, so it cannot intercept model calls.
+      pluginsToLoad.delete("@elizaos/plugin-elizacloud");
+    }
+  };
+
+  // Apply once before additive plugin-entry/feature paths.
+  applyProviderPrecedence();
 
   if (piAiActive) {
     // Enforce deterministic routing through pi-ai for OAuth-backed model calls.
@@ -1100,7 +1387,7 @@ export function collectPluginNames(config: MilaidyConfig): Set<string> {
         }
 
         // Connector keys (telegram, discord, etc.) must use CHANNEL_PLUGIN_MAP
-        // so the correct variant loads (e.g. enhanced telegram, not base).
+        // so the correct variant loads.
         const pluginName =
           CHANNEL_PLUGIN_MAP[key] ??
           OPTIONAL_PLUGIN_MAP[key] ??
@@ -1142,7 +1429,7 @@ export function collectPluginNames(config: MilaidyConfig): Set<string> {
 
   // User-installed plugins from config.plugins.installs
   // These are plugins that were installed via the plugin-manager at runtime
-  // and tracked in milaidy.json so they persist across restarts.
+  // and tracked in milady.json so they persist across restarts.
   const installs = config.plugins?.installs;
   if (installs && typeof installs === "object") {
     for (const [packageName, record] of Object.entries(installs)) {
@@ -1166,8 +1453,10 @@ export function collectPluginNames(config: MilaidyConfig): Set<string> {
 // Custom / drop-in plugin discovery
 // ---------------------------------------------------------------------------
 
-/** Subdirectory under the Milaidy state dir for drop-in custom plugins. */
+/** Subdirectory under the Milady state dir for drop-in custom plugins. */
 export const CUSTOM_PLUGINS_DIRNAME = "plugins/custom";
+/** Subdirectory under the Milady state dir for ejected plugins. */
+export const EJECTED_PLUGINS_DIRNAME = "plugins/ejected";
 
 /**
  * Scan a directory for drop-in plugin packages. Each immediate subdirectory
@@ -1245,7 +1534,7 @@ export function mergeDropInPlugins(params: {
     if (denyList.has(name) || installRecords[name]) continue;
     if (corePluginNames.has(name)) {
       skipped.push(
-        `[milaidy] Custom plugin "${name}" collides with core plugin — skipping`,
+        `[milady] Custom plugin "${name}" collides with core plugin — skipping`,
       );
       continue;
     }
@@ -1255,6 +1544,45 @@ export function mergeDropInPlugins(params: {
   }
 
   return { accepted, skipped };
+}
+
+const WORKSPACE_PLUGIN_OVERRIDES = new Set<string>([
+  // "@elizaos/plugin-trajectory-logger",
+  // "@elizaos/plugin-plugin-manager",
+  // "@elizaos/plugin-media-generation",
+]);
+
+function getWorkspacePluginOverridePath(pluginName: string): string | null {
+  if (process.env.MILADY_DISABLE_WORKSPACE_PLUGIN_OVERRIDES === "1") {
+    return null;
+  }
+  if (!WORKSPACE_PLUGIN_OVERRIDES.has(pluginName)) {
+    return null;
+  }
+
+  const pluginSegmentMatch = pluginName.match(/^@[^/]+\/(plugin-[^/]+)$/);
+  const pluginSegment = pluginSegmentMatch?.[1];
+  if (!pluginSegment) return null;
+
+  const thisDir = path.dirname(fileURLToPath(import.meta.url));
+  const miladyRoot = path.resolve(thisDir, "..", "..");
+  const workspaceRoot = path.resolve(miladyRoot, "..");
+  const candidates = [
+    path.join(miladyRoot, "plugins", pluginSegment, "typescript"),
+    path.join(workspaceRoot, "plugins", pluginSegment, "typescript"),
+    path.join(miladyRoot, "plugins", pluginSegment),
+    path.join(workspaceRoot, "plugins", pluginSegment),
+    path.join(miladyRoot, "packages", pluginSegment),
+    path.join(workspaceRoot, "packages", pluginSegment),
+  ];
+
+  for (const candidate of candidates) {
+    if (existsSync(path.join(candidate, "package.json"))) {
+      return candidate;
+    }
+  }
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -1276,6 +1604,24 @@ export function mergeDropInPlugins(params: {
  * find it.  Returns `true` when the server index.js is available (or was made
  * available via symlink), `false` otherwise.
  */
+/**
+ * Returns true if the given env var key is safe to forward to runtime.settings.
+ * Blocks blockchain private keys, secrets, passwords, tokens, credentials,
+ * mnemonics, and seed phrases while allowing API keys that plugins need.
+ */
+export function isEnvKeyAllowedForForwarding(key: string): boolean {
+  const upper = key.toUpperCase();
+  // Block blockchain private keys
+  if (upper.includes("PRIVATE_KEY")) return false;
+  if (upper.startsWith("EVM_") || upper.startsWith("SOLANA_")) return false;
+  // Block secrets, passwords, tokens, and seed phrases (but not API_KEY which plugins need)
+  if (/(SECRET|PASSWORD|CREDENTIAL|MNEMONIC|SEED_PHRASE)/i.test(key))
+    return false;
+  if (/(ACCESS_TOKEN|REFRESH_TOKEN|SESSION_TOKEN|AUTH_TOKEN)$/i.test(key))
+    return false;
+  return true;
+}
+
 export function ensureBrowserServerLink(): boolean {
   try {
     // Resolve the plugin-browser package root via its package.json.
@@ -1283,27 +1629,27 @@ export function ensureBrowserServerLink(): boolean {
     const pkgJsonPath = req.resolve("@elizaos/plugin-browser/package.json");
     const pluginRoot = path.dirname(pkgJsonPath);
     const serverDir = path.join(pluginRoot, "dist", "server");
-    const serverIndex = path.join(serverDir, "dist", "index.js");
+    const serverIndex = path.join(serverDir, "dist", "index");
 
     // Already linked / available — nothing to do.
     if (existsSync(serverIndex)) return true;
 
     // Walk upward from this file to find the eliza-workspace root.
-    // Layout: <workspace>/milaidy/src/runtime/eliza.ts
+    // Layout: <workspace>/milady/src/runtime/eliza.ts
     const thisDir = path.dirname(fileURLToPath(import.meta.url));
-    const milaidyRoot = path.resolve(thisDir, "..", "..");
-    const workspaceRoot = path.resolve(milaidyRoot, "..");
+    const miladyRoot = path.resolve(thisDir, "..", "..");
+    const workspaceRoot = path.resolve(miladyRoot, "..");
     const stagehandDir = path.join(
       workspaceRoot,
       "plugins",
       "plugin-browser",
       "stagehand-server",
     );
-    const stagehandIndex = path.join(stagehandDir, "dist", "index.js");
+    const stagehandIndex = path.join(stagehandDir, "dist", "index");
 
     if (!existsSync(stagehandIndex)) {
       logger.info(
-        `[milaidy] Browser server not found at ${stagehandDir} — ` +
+        `[milady] Browser server not found at ${stagehandDir} — ` +
           `@elizaos/plugin-browser will not be loaded`,
       );
       return false;
@@ -1312,13 +1658,11 @@ export function ensureBrowserServerLink(): boolean {
     // Create symlink: dist/server -> stagehand-server
     symlinkSync(stagehandDir, serverDir, "dir");
     logger.info(
-      `[milaidy] Linked browser server: ${serverDir} -> ${stagehandDir}`,
+      `[milady] Linked browser server: ${serverDir} -> ${stagehandDir}`,
     );
     return true;
   } catch (err) {
-    logger.debug(
-      `[milaidy] Could not link browser server: ${formatError(err)}`,
-    );
+    logger.debug(`[milady] Could not link browser server: ${formatError(err)}`);
     return false;
   }
 }
@@ -1328,19 +1672,19 @@ export function ensureBrowserServerLink(): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve Milaidy plugins from config and auto-enable logic.
+ * Resolve Milady plugins from config and auto-enable logic.
  * Returns an array of ElizaOS Plugin instances ready for AgentRuntime.
  *
  * Handles three categories of plugins:
  * 1. Built-in/npm plugins — imported by package name
- * 2. User-installed plugins — from ~/.milaidy/plugins/installed/
- * 3. Custom/drop-in plugins — from ~/.milaidy/plugins/custom/ and plugins.load.paths
+ * 2. User-installed plugins — from ~/.milady/plugins/installed/
+ * 3. Custom/drop-in plugins — from ~/.milady/plugins/custom/ and plugins.load.paths
  *
  * Each plugin is loaded inside an error boundary so a single failing plugin
  * cannot crash the entire agent startup.
  */
 async function resolvePlugins(
-  config: MilaidyConfig,
+  config: MiladyConfig,
   opts?: { quiet?: boolean },
 ): Promise<ResolvedPlugin[]> {
   const plugins: ResolvedPlugin[] = [];
@@ -1360,6 +1704,26 @@ async function resolvePlugins(
     ...(config.plugins?.installs ?? {}),
   };
 
+  const denyList = new Set(config.plugins?.deny ?? []);
+
+  // ── Auto-discover ejected plugins ───────────────────────────────────────
+  // Ejected plugins override npm/core versions, so they are tracked
+  // separately and consulted first at import time.
+  const ejectedRecords = await scanDropInPlugins(
+    path.join(resolveStateDir(), EJECTED_PLUGINS_DIRNAME),
+  );
+  const ejectedPluginNames: string[] = [];
+  for (const [name, _record] of Object.entries(ejectedRecords)) {
+    if (denyList.has(name)) continue;
+    pluginsToLoad.add(name);
+    ejectedPluginNames.push(name);
+  }
+  if (ejectedPluginNames.length > 0) {
+    logger.info(
+      `[milady] Discovered ${ejectedPluginNames.length} ejected plugin(s): ${ejectedPluginNames.join(", ")}`,
+    );
+  }
+
   // ── Auto-discover drop-in custom plugins ────────────────────────────────
   // Scan well-known dir + any extra dirs from plugins.load.paths (first wins).
   const scanDirs = [
@@ -1378,14 +1742,14 @@ async function resolvePlugins(
     dropInRecords,
     installRecords,
     corePluginNames: corePluginSet,
-    denyList: new Set(config.plugins?.deny ?? []),
+    denyList,
     pluginsToLoad,
   });
 
   for (const msg of skipped) logger.warn(msg);
   if (customPluginNames.length > 0) {
     logger.info(
-      `[milaidy] Discovered ${customPluginNames.length} custom plugin(s): ${customPluginNames.join(", ")}`,
+      `[milady] Discovered ${customPluginNames.length} custom plugin(s): ${customPluginNames.join(", ")}`,
     );
   }
 
@@ -1396,9 +1760,13 @@ async function resolvePlugins(
 
   logger.info(`[milaidy] Resolving ${pluginsToLoad.size} plugins...`);
 
-  // Dynamically import each plugin inside an error boundary
-  for (const pluginName of pluginsToLoad) {
+  // Load a single plugin - returns result or null on skip/failure
+  async function loadSinglePlugin(pluginName: string): Promise<{
+    name: string;
+    plugin: Plugin;
+  } | null> {
     const isCore = corePluginSet.has(pluginName);
+    const ejectedRecord = ejectedRecords[pluginName];
     const installRecord = installRecords[pluginName];
     const tier = resolveAlicePluginTier(pluginName);
     const source: "bundled" | "installed" | "internal" = installRecord?.installPath
@@ -1421,10 +1789,10 @@ async function resolvePlugins(
           reason,
         });
         logger.warn(
-          `[milaidy] Skipping ${pluginName}: browser server not available. ` +
+          `[milady] Skipping ${pluginName}: browser server not available. ` +
             `Build the stagehand-server or remove the plugin from plugins.allow.`,
         );
-        continue;
+        return null;
       }
     }
 
@@ -1480,18 +1848,24 @@ async function resolvePlugins(
         // the dist root via the parent of the current file's directory.
         const shortName = pluginName.replace("@milaidy/plugin-", "");
         const thisDir = path.dirname(fileURLToPath(import.meta.url));
-        // Walk up until we find the dist directory that contains plugins/
         const distRoot = thisDir.endsWith("runtime")
           ? path.resolve(thisDir, "..")
           : thisDir;
-        const distDir = path.resolve(distRoot, "plugins", shortName);
-        mod = await importFromPath(distDir, pluginName);
+        const indexPath = path.resolve(
+          distRoot,
+          "plugins",
+          shortName,
+          "index.js",
+        );
+        mod = (await import(
+          pathToFileURL(indexPath).href
+        )) as PluginModuleShape;
       } else {
         // Built-in/npm plugin — import by package name from node_modules.
         mod = (await import(pluginName)) as PluginModuleShape;
       }
 
-      const pluginInstance = extractPlugin(mod);
+      const pluginInstance = findRuntimePluginExport(mod);
 
       if (pluginInstance) {
         const hintedPlugin = applyActionFilterHints(pluginInstance);
@@ -1528,11 +1902,11 @@ async function resolvePlugins(
         } else {
           logger.warn(msg);
         }
+        return null;
       }
     } catch (err) {
-      // Core plugins log at error level (visible even with LOG_LEVEL=error).
-      // Optional/channel plugins log at warn level so they don't spam in dev.
       const msg = formatError(err);
+
       failedPlugins.push({ name: pluginName, error: msg });
       pluginLoadReport.push({
         name: pluginName,
@@ -1543,22 +1917,48 @@ async function resolvePlugins(
       });
       if (isCore) {
         logger.error(
-          `[milaidy] Failed to load core plugin ${pluginName}: ${msg}`,
+          `[milady] Failed to load core plugin ${pluginName}: ${msg}`,
         );
       } else {
-        logger.info(`[milaidy] Could not load plugin ${pluginName}: ${msg}`);
+        const optionalNames = new Set([
+          ...Object.values(OPTIONAL_PLUGIN_MAP),
+          ...Object.values(CHANNEL_PLUGIN_MAP),
+        ]);
+        if (optionalNames.has(pluginName)) {
+          logger.debug(
+            `[milady] Optional plugin ${pluginName} not available: ${msg}`,
+          );
+        } else {
+          logger.info(`[milady] Could not load plugin ${pluginName}: ${msg}`);
+        }
       }
+      return null;
     }
   }
 
+  // Load all plugins in parallel for faster startup
+  const pluginResults = await Promise.all(
+    Array.from(pluginsToLoad).map(loadSinglePlugin),
+  );
+
+  // Collect successful loads
+  for (const result of pluginResults) {
+    if (result) {
+      plugins.push(result);
+    }
+  }
+
+  const loadDuration = Date.now() - loadStartTime;
+  logger.info(`[milady] Plugin loading took ${loadDuration}ms`);
+
   // Summary logging
   logger.info(
-    `[milaidy] Plugin resolution complete: ${plugins.length}/${pluginsToLoad.size} loaded` +
+    `[milady] Plugin resolution complete: ${plugins.length}/${pluginsToLoad.size} loaded` +
       (failedPlugins.length > 0 ? `, ${failedPlugins.length} failed` : ""),
   );
   if (failedPlugins.length > 0) {
     logger.info(
-      `[milaidy] Failed plugins: ${failedPlugins.map((f) => `${f.name} (${f.error})`).join(", ")}`,
+      `[milady] Failed plugins: ${failedPlugins.map((f) => `${f.name} (${f.error})`).join(", ")}`,
     );
   }
   if (pluginLoadReport.length > 0) {
@@ -1583,20 +1983,48 @@ async function resolvePlugins(
 
   // Diagnose version-skew issues when AI providers failed to load (#10)
   const loadedNames = plugins.map((p) => p.name);
-  const diagnostic = isPiAiEnabledFromEnv()
-    ? null
-    : diagnoseNoAIProvider(loadedNames, failedPlugins);
+  const diagnostic = diagnoseNoAIProvider(loadedNames, failedPlugins);
   if (diagnostic) {
     if (opts?.quiet) {
       // In headless/GUI mode before onboarding, this is expected — the user
       // will configure a provider through the onboarding wizard and restart.
-      logger.info(`[milaidy] ${diagnostic}`);
+      logger.info(`[milady] ${diagnostic}`);
     } else {
-      logger.error(`[milaidy] ${diagnostic}`);
+      logger.error(`[milady] ${diagnostic}`);
+    }
+  }
+
+  // Persist repaired install records so future startups do not keep trying
+  // to import from stale install directories.
+  if (repairedInstallRecords.size > 0) {
+    try {
+      saveMiladyConfig(config);
+      logger.info(
+        `[milady] Repaired ${repairedInstallRecords.size} plugin install record(s): ${Array.from(repairedInstallRecords).join(", ")}`,
+      );
+    } catch (err) {
+      logger.warn(
+        `[milady] Failed to persist plugin install repairs: ${formatError(err)}`,
+      );
     }
   }
 
   return plugins;
+}
+
+/** @internal Exported for testing. */
+export function repairBrokenInstallRecord(
+  config: MiladyConfig,
+  pluginName: string,
+): boolean {
+  const record = config.plugins?.installs?.[pluginName];
+  if (!record || typeof record.installPath !== "string") return false;
+  if (!record.installPath.trim()) return false;
+
+  // Keep the plugin listed as installed but force node_modules resolution.
+  record.installPath = "";
+  record.source = "npm";
+  return true;
 }
 
 /**
@@ -1619,17 +2047,17 @@ function wrapPluginWithErrorBoundary(
   // Wrap init if present
   if (plugin.init) {
     const originalInit = plugin.init;
-    wrapped.init = async (...args: Parameters<NonNullable<Plugin["init"]>>) => {
+    wrapped.init = async (...args: Parameters<typeof originalInit>) => {
       try {
         return await originalInit(...args);
       } catch (err) {
         logger.error(
-          `[milaidy] Plugin "${pluginName}" crashed during init: ${formatError(err)}`,
+          `[milady] Plugin "${pluginName}" crashed during init: ${formatError(err)}`,
         );
         // Surface the error but don't rethrow — the agent continues
         // without this plugin's init having completed.
         logger.warn(
-          `[milaidy] Plugin "${pluginName}" will run in degraded mode (init failed)`,
+          `[milady] Plugin "${pluginName}" will run in degraded mode (init failed)`,
         );
       }
     };
@@ -1645,7 +2073,7 @@ function wrapPluginWithErrorBoundary(
         } catch (err) {
           const msg = formatError(err);
           logger.error(
-            `[milaidy] Provider "${provider.name}" (plugin: ${pluginName}) crashed: ${msg}`,
+            `[milady] Provider "${provider.name}" (plugin: ${pluginName}) crashed: ${msg}`,
           );
           // Return an error marker so downstream consumers can detect
           // the failure rather than silently using empty data.
@@ -1668,7 +2096,7 @@ function wrapPluginWithErrorBoundary(
  *   1. npm layout:  <installPath>/node_modules/@scope/package/  (from `bun add`)
  *   2. git layout:  <installPath>/ is the package root directly  (from `git clone`)
  *
- * @param installPath  Root directory of the installation (e.g. ~/.milaidy/plugins/installed/foo/).
+ * @param installPath  Root directory of the installation (e.g. ~/.milady/plugins/installed/foo/).
  * @param packageName  The npm package name (e.g. "@elizaos/plugin-discord") — used
  *                     to navigate directly into node_modules when present.
  */
@@ -1792,21 +2220,38 @@ export async function resolvePackageEntry(pkgRoot: string): Promise<string> {
 // ---------------------------------------------------------------------------
 
 /**
- * Propagate channel credentials from Milaidy config into process.env so
+ * Propagate channel credentials from Milady config into process.env so
  * that ElizaOS plugins can find them.
  */
 /** @internal Exported for testing. */
-export function applyConnectorSecretsToEnv(config: MilaidyConfig): void {
+export function applyConnectorSecretsToEnv(config: MiladyConfig): void {
   // Prefer config.connectors, fall back to config.channels for backward compatibility
   const connectors = config.connectors ?? config.channels ?? {};
 
   for (const [channelName, channelConfig] of Object.entries(connectors)) {
     if (!channelConfig || typeof channelConfig !== "object") continue;
+    const configObj = channelConfig as Record<string, unknown>;
+
+    // Discord plugins in the ecosystem use both DISCORD_API_TOKEN and
+    // DISCORD_BOT_TOKEN across versions. Mirror to both when available.
+    if (channelName === "discord") {
+      const tokenValue =
+        (typeof configObj.token === "string" && configObj.token.trim()) ||
+        (typeof configObj.botToken === "string" && configObj.botToken.trim()) ||
+        "";
+      if (tokenValue) {
+        if (!process.env.DISCORD_API_TOKEN) {
+          process.env.DISCORD_API_TOKEN = tokenValue;
+        }
+        if (!process.env.DISCORD_BOT_TOKEN) {
+          process.env.DISCORD_BOT_TOKEN = tokenValue;
+        }
+      }
+    }
 
     const envMap = CHANNEL_ENV_MAP[channelName];
     if (!envMap) continue;
 
-    const configObj = channelConfig as Record<string, unknown>;
     for (const [configField, envKey] of Object.entries(envMap)) {
       const value = configObj[configField];
       if (typeof value === "string" && value.trim() && !process.env[envKey]) {
@@ -2172,7 +2617,7 @@ async function ensureStartupPluginsInstalled(
  * ElizaCloud plugin can discover settings at startup.
  */
 /** @internal Exported for testing. */
-export function applyCloudConfigToEnv(config: MilaidyConfig): void {
+export function applyCloudConfigToEnv(config: MiladyConfig): void {
   const cloud = config.cloud;
   if (!cloud) return;
 
@@ -2228,11 +2673,11 @@ export function applyCloudConfigToEnv(config: MilaidyConfig): void {
  * credentials (or use the explicit `connectionString` field) and set
  * `POSTGRES_URL`. When the provider is "pglite" (the default), we set
  * `PGLITE_DATA_DIR` to either the configured value or a stable workspace
- * default (`~/.milaidy/workspace/.eliza/.elizadb`) and remove any stale
+ * default (`~/.milady/workspace/.eliza/.elizadb`) and remove any stale
  * `POSTGRES_URL`.
  */
 /** @internal Exported for testing. */
-export function applyX402ConfigToEnv(config: MilaidyConfig): void {
+export function applyX402ConfigToEnv(config: MiladyConfig): void {
   const x402 = (config as Record<string, unknown>).x402 as
     | { enabled?: boolean; apiKey?: string; baseUrl?: string }
     | undefined;
@@ -2244,14 +2689,14 @@ export function applyX402ConfigToEnv(config: MilaidyConfig): void {
     process.env.X402_BASE_URL = x402.baseUrl;
 }
 
-function resolveDefaultPgliteDataDir(config: MilaidyConfig): string {
+function resolveDefaultPgliteDataDir(config: MiladyConfig): string {
   const workspaceDir =
     config.agents?.defaults?.workspace ?? resolveDefaultAgentWorkspaceDir();
   return path.join(resolveUserPath(workspaceDir), ".eliza", ".elizadb");
 }
 
 /** @internal Exported for testing. */
-export function applyDatabaseConfigToEnv(config: MilaidyConfig): void {
+export function applyDatabaseConfigToEnv(config: MiladyConfig): void {
   const db = config.database;
   const provider = db?.provider ?? "pglite";
 
@@ -2279,14 +2724,165 @@ export function applyDatabaseConfigToEnv(config: MilaidyConfig): void {
     const configuredDataDir = db?.pglite?.dataDir?.trim();
     if (configuredDataDir) {
       process.env.PGLITE_DATA_DIR = resolveUserPath(configuredDataDir);
-      return;
+      // Fall through to directory creation below instead of returning early
     }
 
     const envDataDir = process.env.PGLITE_DATA_DIR?.trim();
     if (!envDataDir) {
       process.env.PGLITE_DATA_DIR = resolveDefaultPgliteDataDir(config);
     }
+
+    // Ensure the PGlite data directory exists before init so PGlite does
+    // not silently fall back to in-memory mode on first run.
+    const dataDir = process.env.PGLITE_DATA_DIR;
+    if (dataDir) {
+      const alreadyExisted = existsSync(dataDir);
+      mkdirSync(dataDir, { recursive: true });
+      logger.info(
+        `[milady] PGlite data dir: ${dataDir} (${alreadyExisted ? "existed" : "created"})`,
+      );
+    }
   }
+}
+
+function collectErrorMessages(err: unknown): string[] {
+  const messages: string[] = [];
+  const seen = new Set<unknown>();
+  let current: unknown = err;
+
+  while (current && !seen.has(current)) {
+    seen.add(current);
+
+    if (typeof current === "string") {
+      messages.push(current);
+      break;
+    }
+
+    if (current instanceof Error) {
+      if (current.message) messages.push(current.message);
+      if (current.stack) messages.push(current.stack);
+      current = (current as Error & { cause?: unknown }).cause;
+      continue;
+    }
+
+    if (typeof current === "object") {
+      const maybeErr = current as { message?: unknown; cause?: unknown };
+      if (typeof maybeErr.message === "string" && maybeErr.message) {
+        messages.push(maybeErr.message);
+      }
+      if (maybeErr.cause !== undefined) {
+        current = maybeErr.cause;
+        continue;
+      }
+    }
+
+    break;
+  }
+
+  return messages;
+}
+
+/** @internal Exported for testing. */
+export function isRecoverablePgliteInitError(err: unknown): boolean {
+  const haystack = collectErrorMessages(err).join("\n").toLowerCase();
+  if (!haystack) return false;
+
+  const hasAbort = haystack.includes("aborted(). build with -sassertions");
+  const hasPglite = haystack.includes("pglite");
+  const hasSqlite = haystack.includes("sqlite");
+  const hasMigrationsSchema =
+    haystack.includes("create schema if not exists migrations") ||
+    haystack.includes("failed query: create schema if not exists migrations");
+  const hasRecoverableStorageSignal = [
+    "database disk image is malformed",
+    "file is not a database",
+    "malformed database schema",
+    "database is locked",
+    "lock file already exists",
+    "wal file",
+    "checkpoint failed",
+    "checksum mismatch",
+    "corrupt",
+  ].some((needle) => haystack.includes(needle));
+
+  if (hasMigrationsSchema) return true;
+  if (hasAbort && hasPglite) return true;
+  if (hasRecoverableStorageSignal && (hasPglite || hasSqlite)) return true;
+  return false;
+}
+
+function resolveActivePgliteDataDir(config: MiladyConfig): string | null {
+  const provider = config.database?.provider ?? "pglite";
+  if (provider === "postgres") return null;
+
+  const configured = process.env.PGLITE_DATA_DIR?.trim();
+  const dataDir = configured || resolveDefaultPgliteDataDir(config);
+  return resolveUserPath(dataDir);
+}
+
+async function resetPgliteDataDir(dataDir: string): Promise<void> {
+  const normalized = path.resolve(dataDir);
+  const root = path.parse(normalized).root;
+  if (normalized === root) {
+    throw new Error(`Refusing to reset unsafe PGLite path: ${normalized}`);
+  }
+
+  const stamp = new Date()
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\..*$/, "")
+    .replace("T", "-");
+  const backupDir = `${normalized}.corrupt-${stamp}`;
+
+  if (existsSync(normalized)) {
+    try {
+      await fs.rename(normalized, backupDir);
+      logger.warn(
+        `[milady] Backed up existing PGLite data dir to ${backupDir}`,
+      );
+    } catch (err) {
+      logger.warn(
+        `[milady] Failed to back up PGLite data dir (${formatError(err)}); deleting ${normalized} instead`,
+      );
+      await fs.rm(normalized, { recursive: true, force: true });
+    }
+  }
+
+  await fs.mkdir(normalized, { recursive: true });
+}
+
+async function initializeDatabaseAdapter(
+  runtime: AgentRuntime,
+  config: MiladyConfig,
+): Promise<void> {
+  if (!runtime.adapter || (await runtime.adapter.isReady())) return;
+
+  try {
+    await runtime.adapter.init();
+    logger.info(
+      "[milady] Database adapter initialized early (before plugin inits)",
+    );
+  } catch (err) {
+    const pgliteDataDir = resolveActivePgliteDataDir(config);
+    if (!pgliteDataDir || !isRecoverablePgliteInitError(err)) {
+      throw err;
+    }
+
+    logger.warn(
+      `[milady] PGLite init failed (${formatError(err)}). Resetting local DB at ${pgliteDataDir} and retrying once.`,
+    );
+    await resetPgliteDataDir(pgliteDataDir);
+    process.env.PGLITE_DATA_DIR = pgliteDataDir;
+
+    await runtime.adapter.init();
+    logger.info(
+      "[milady] Database adapter recovered after resetting PGLite data",
+    );
+  }
+
+  // Health check: verify PGlite data directory has files after init.
+  // Runs on BOTH the happy path and the recovery path.
+  await verifyPgliteDataDir(config);
 }
 
 /**
@@ -2386,23 +2982,23 @@ interface IRuntimeAdapterOwner {
  * Build an ElizaOS Character from the Milaidy config.
  *
  * Resolves the agent name from `config.agents.list` (first entry) or
- * `config.ui.assistant.name`, falling back to "Milaidy".  Character
+ * `config.ui.assistant.name`, falling back to "Milady".  Character
  * personality data (bio, system prompt, style, etc.) is stored in the
  * database — not the config file — so we only provide sensible defaults
  * here for the initial bootstrap.
  */
 /** @internal Exported for testing. */
-export function buildCharacterFromConfig(config: MilaidyConfig): Character {
-  // Resolve name: agents list → ui assistant → "Milaidy"
+export function buildCharacterFromConfig(config: MiladyConfig): Character {
+  // Resolve name: agents list → ui assistant → "Milady"
   const agentEntry = config.agents?.list?.[0];
-  const name = agentEntry?.name ?? config.ui?.assistant?.name ?? "Milaidy";
+  const name = agentEntry?.name ?? config.ui?.assistant?.name ?? "Milady";
 
   // Read personality fields from the agent config entry (set during
   // onboarding from the chosen style preset).  Fall back to generic
   // defaults when the preset data is not present (e.g. pre-onboarding
   // bootstrap or configs created before this change).
   const bio = agentEntry?.bio ?? [
-    "{{name}} is an AI assistant powered by Milaidy and ElizaOS.",
+    "{{name}} is an AI assistant powered by Milady and ElizaOS.",
   ];
   const systemPrompt =
     agentEntry?.system ??
@@ -2447,6 +3043,7 @@ export function buildCharacterFromConfig(config: MilaidyConfig): Character {
   const secretKeys = [
     "ANTHROPIC_API_KEY",
     "OPENAI_API_KEY",
+    "GEMINI_API_KEY",
     "GOOGLE_API_KEY",
     "GOOGLE_GENERATIVE_AI_API_KEY",
     "GROQ_API_KEY",
@@ -2508,6 +3105,9 @@ export function buildCharacterFromConfig(config: MilaidyConfig): Character {
     "X402_MAX_TOTAL_USD",
     "X402_ENABLED",
     "X402_DB_PATH",
+    // GitHub access for coding agent plugin
+    "GITHUB_TOKEN",
+    "GITHUB_OAUTH_CLIENT_ID",
   ];
 
   const secrets: Record<string, string> = {};
@@ -2539,15 +3139,15 @@ export function buildCharacterFromConfig(config: MilaidyConfig): Character {
 }
 
 /**
- * Resolve the primary model identifier from Milaidy config.
+ * Resolve the primary model identifier from Milady config.
  *
- * Milaidy stores the model under `agents.defaults.model.primary` as an
+ * Milady stores the model under `agents.defaults.model.primary` as an
  * AgentModelListConfig object. Returns undefined when no model is
  * explicitly configured (ElizaOS falls back to whichever model
  * plugin is loaded).
  */
 /** @internal Exported for testing. */
-export function resolvePrimaryModel(config: MilaidyConfig): string | undefined {
+export function resolvePrimaryModel(config: MiladyConfig): string | undefined {
   const modelConfig = config.agents?.defaults?.model;
   if (!modelConfig) return undefined;
 
@@ -2561,7 +3161,7 @@ export function resolvePrimaryModel(config: MilaidyConfig): string | undefined {
 
 // Name pool + random picker shared with the web UI API server.
 // See src/runtime/onboarding-names.ts for the canonical list.
-import { pickRandomNames } from "./onboarding-names.js";
+import { pickRandomNames } from "./onboarding-names";
 
 // ---------------------------------------------------------------------------
 // Style presets — shared between CLI and GUI onboarding
@@ -2611,9 +3211,7 @@ function formatEmbeddingPresetSummary(preset: EmbeddingPreset): string {
  *
  * Subsequent runs skip this entirely.
  */
-async function runFirstTimeSetup(
-  config: MilaidyConfig,
-): Promise<MilaidyConfig> {
+async function runFirstTimeSetup(config: MiladyConfig): Promise<MiladyConfig> {
   const agentEntry = config.agents?.list?.[0];
   const hasName = Boolean(agentEntry?.name || config.ui?.assistant?.name);
   if (hasName) return config;
@@ -2621,90 +3219,17 @@ async function runFirstTimeSetup(
   // Only prompt when stdin is a TTY (interactive terminal)
   if (!process.stdin.isTTY) return config;
 
+  // Load @clack/prompts lazily — only needed for interactive CLI onboarding.
+  const clack = await loadClack();
+
   // ── Step 1: Welcome ────────────────────────────────────────────────────
-  clack.intro("WELCOME TO MILAIDY!");
-
-  // ── Step 1b: Where to run? ────────────────────────────────────────────
-  const runMode = await clack.select({
-    message: "Where do you want to run your agent?",
-    options: [
-      {
-        value: "local",
-        label: "On this machine (local)",
-        hint: "requires an AI provider API key",
-      },
-      {
-        value: "cloud",
-        label: "In the cloud (Eliza Cloud)",
-        hint: "free credits to start",
-      },
-    ],
-  });
-
-  if (clack.isCancel(runMode)) cancelOnboarding();
-
-  let _cloudApiKey: string | undefined;
-
-  if (runMode === "cloud") {
-    const cloudBaseUrl = config.cloud?.baseUrl ?? "https://www.elizacloud.ai";
-
-    clack.log.message("Opening your browser to log in to Eliza Cloud...");
-
-    const loginResult = await cloudLogin({
-      baseUrl: cloudBaseUrl,
-      onBrowserUrl: (url) => {
-        // Try to open the browser automatically; fall back to showing URL
-        import("node:child_process")
-          .then((cp) => {
-            // Validate URL protocol to prevent shell injection via crafted
-            // cloud.baseUrl values containing shell metacharacters.
-            let safeUrl: string;
-            try {
-              const parsed = new URL(url);
-              if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-                throw new Error("Invalid protocol");
-              }
-              safeUrl = parsed.href;
-            } catch {
-              clack.log.message(`Open this URL in your browser:\n  ${url}`);
-              return;
-            }
-
-            // Use execFile (not exec) to avoid shell interpretation.
-            // On Windows, "start" is a cmd built-in so we invoke via cmd.exe.
-            const child =
-              process.platform === "win32"
-                ? cp.execFile("cmd", ["/c", "start", "", safeUrl])
-                : cp.execFile(
-                    process.platform === "darwin" ? "open" : "xdg-open",
-                    [safeUrl],
-                  );
-            // Handle missing binary (e.g. xdg-open on minimal Linux) to
-            // avoid an unhandled error crash — fall back to printing the URL.
-            child.on("error", () => {
-              clack.log.message(`Open this URL in your browser:\n  ${safeUrl}`);
-            });
-          })
-          .catch(() => {
-            clack.log.message(`Open this URL in your browser:\n  ${url}`);
-          });
-      },
-      onPollStatus: (status) => {
-        if (status === "pending") {
-          // Spinner is handled by clack; nothing extra needed
-        }
-      },
-    });
-
-    _cloudApiKey = loginResult.apiKey;
-    clack.log.success("Logged in to Eliza Cloud!");
-  }
+  clack.intro("WELCOME TO MILADY!");
 
   // ── Step 2: Name ───────────────────────────────────────────────────────
   const randomNames = pickRandomNames(4);
 
   const nameChoice = await clack.select({
-    message: "♡♡milaidy♡♡: Hey there, I'm.... err, what was my name again?",
+    message: "♡♡milady♡♡: Hey there, I'm.... err, what was my name again?",
     options: [
       ...randomNames.map((n) => ({ value: n, label: n })),
       { value: "_custom_", label: "Custom...", hint: "type your own" },
@@ -2718,12 +3243,12 @@ async function runFirstTimeSetup(
   if (nameChoice === "_custom_") {
     const customName = await clack.text({
       message: "OK, what should I be called?",
-      placeholder: "Milaidy",
+      placeholder: "Milady",
     });
 
     if (clack.isCancel(customName)) cancelOnboarding();
 
-    name = customName.trim() || "Milaidy";
+    name = customName.trim() || "Milady";
   } else {
     name = nameChoice;
   }
@@ -2743,8 +3268,6 @@ async function runFirstTimeSetup(
   if (clack.isCancel(styleChoice)) cancelOnboarding();
   const canonicalStyleChoice = resolveStyleCatchphrase(styleChoice);
   const chosenTemplate = getStylePresetByCatchphrase(canonicalStyleChoice);
-
-  let chosenEmbeddingPreset: EmbeddingPreset | undefined;
 
   // ── Step 4: Model provider ───────────────────────────────────────────────
   // Skip provider selection in cloud mode — Eliza Cloud handles inference.
@@ -2782,8 +3305,12 @@ async function runFirstTimeSetup(
     {
       id: "gemini",
       label: "Google Gemini",
-      envKey: "GOOGLE_API_KEY",
-      detectKeys: ["GOOGLE_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY"],
+      envKey: "GOOGLE_GENERATIVE_AI_API_KEY",
+      detectKeys: [
+        "GOOGLE_GENERATIVE_AI_API_KEY",
+        "GOOGLE_API_KEY",
+        "GEMINI_API_KEY",
+      ],
       hint: "AI...",
     },
     {
@@ -2838,10 +3365,7 @@ async function runFirstTimeSetup(
   let providerEnvKey: string | undefined;
   let providerApiKey: string | undefined;
 
-  // In cloud mode, skip provider selection entirely.
-  if (runMode === "cloud") {
-    clack.log.message("AI inference will be handled by Eliza Cloud.");
-  } else if (detectedProvider) {
+  if (detectedProvider) {
     clack.log.success(
       `Found existing ${detectedProvider.label} key in environment (${detectedProvider.envKey})`,
     );
@@ -2894,53 +3418,13 @@ async function runFirstTimeSetup(
   }
 
   // ── Step 4b: Embedding model preset ────────────────────────────────────
-  if (runMode !== "cloud") {
-    const detectedTier = detectEmbeddingTier();
-    const detectedPreset = EMBEDDING_PRESETS[detectedTier];
-    const availableTiers = getAvailableEmbeddingTiers(detectedTier);
-    const availablePresets = availableTiers.map(
-      (tier) => EMBEDDING_PRESETS[tier],
-    );
-    const optionPresets = [
-      detectedPreset,
-      ...availablePresets.filter((preset) => preset.tier !== detectedTier),
-    ];
-
-    const cpuModel = os.cpus()[0]?.model ?? "Unknown CPU";
-    const ramGB = Math.round(os.totalmem() / 1024 ** 3);
-
-    clack.log.message(
-      `${name}: I detected your hardware — [${cpuModel}, ${ramGB}GB RAM]`,
-    );
-    clack.log.message(
-      `Recommended embedding model: ${detectedPreset.label}\n  → ${formatEmbeddingPresetSummary(detectedPreset)}`,
-    );
-
-    const embeddingTierChoice = await clack.select({
-      message: `${name}: Which embedding model should I use for local memory?`,
-      options: optionPresets.map((preset) => ({
-        value: preset.tier,
-        label:
-          preset.tier === detectedTier
-            ? `${preset.label} (recommended)`
-            : preset.label,
-        hint: preset.description,
-      })),
-    });
-
-    if (clack.isCancel(embeddingTierChoice)) cancelOnboarding();
-
-    chosenEmbeddingPreset = EMBEDDING_PRESETS[embeddingTierChoice];
-    clack.log.success(
-      `Embedding preset selected: ${chosenEmbeddingPreset.label}`,
-    );
-  }
+  // (Simplified: always use the standard/reliable model preset. No user choice.)
 
   // ── Step 5: Wallet setup ───────────────────────────────────────────────
   // Offer to generate or import wallets for EVM and Solana. Keys are
   // stored in config.env and process.env, making them available to
   // plugins at runtime.
-  const { generateWalletKeys, importWallet } = await import("../api/wallet.js");
+  const { generateWalletKeys, importWallet } = await import("../api/wallet");
 
   const hasEvmKey = Boolean(process.env.EVM_PRIVATE_KEY?.trim());
   const hasSolKey = Boolean(process.env.SOLANA_PRIVATE_KEY?.trim());
@@ -3016,41 +3500,57 @@ async function runFirstTimeSetup(
     // "skip" — do nothing
   }
 
-  // ── Step 6: Skills Marketplace API key ──────────────────────────────────
+  // ── Step 6: Skills Registry (ClawHub default) ──────────────────────────
+  const hasSkillsRegistry = Boolean(
+    process.env.SKILLS_REGISTRY?.trim() || process.env.CLAWHUB_REGISTRY?.trim(),
+  );
   const hasSkillsmpKey = Boolean(process.env.SKILLSMP_API_KEY?.trim());
+  if (!hasSkillsRegistry) {
+    process.env.SKILLS_REGISTRY = "https://clawhub.ai";
+  }
 
-  if (!hasSkillsmpKey) {
-    const skillsmpAction = await clack.select({
-      message: `${name}: Want to connect to the Skills Marketplace? (https://skillsmp.com)`,
-      options: [
-        {
-          value: "enter",
-          label: "Enter API key",
-          hint: "enables browsing & installing skills",
-        },
-        {
-          value: "skip",
-          label: "Skip for now",
-          hint: "you can add it later via env or config",
-        },
-      ],
+  // ── Step 7: GitHub access (for coding agents, issue management) ─────────
+  const hasGithubToken = Boolean(process.env.GITHUB_TOKEN?.trim());
+  const hasGithubOAuth = Boolean(process.env.GITHUB_OAUTH_CLIENT_ID?.trim());
+  if (!hasGithubToken) {
+    const options: Array<{ value: string; label: string; hint?: string }> = [
+      { value: "skip", label: "Skip for now", hint: "you can add this later" },
+      {
+        value: "pat",
+        label: "Paste a Personal Access Token",
+        hint: "github.com/settings/tokens",
+      },
+    ];
+    if (hasGithubOAuth) {
+      options.push({
+        value: "oauth",
+        label: "Use OAuth (authorize in browser)",
+        hint: "recommended",
+      });
+    }
+
+    const githubChoice = await clack.select({
+      message:
+        "Configure GitHub access? (needed for coding agents, issue management, PRs)",
+      options,
     });
 
-    if (clack.isCancel(skillsmpAction)) cancelOnboarding();
-
-    if (skillsmpAction === "enter") {
-      const skillsmpKeyInput = await clack.password({
-        message: "Paste your skillsmp.com API key:",
+    if (!clack.isCancel(githubChoice) && githubChoice === "pat") {
+      const tokenInput = await clack.password({
+        message: "Paste your GitHub token (or skip):",
       });
-
-      if (!clack.isCancel(skillsmpKeyInput) && skillsmpKeyInput.trim()) {
-        process.env.SKILLSMP_API_KEY = skillsmpKeyInput.trim();
-        clack.log.success("Skills Marketplace API key saved!");
+      if (!clack.isCancel(tokenInput) && tokenInput.trim()) {
+        process.env.GITHUB_TOKEN = tokenInput.trim();
+        clack.log.success("GitHub token configured.");
       }
+    } else if (!clack.isCancel(githubChoice) && githubChoice === "oauth") {
+      clack.log.info(
+        "GitHub OAuth will activate when coding agents need access.",
+      );
     }
   }
 
-  // ── Step 7: Persist agent + style + provider + embedding config ─────────
+  // ── Step 8: Persist agent + style + provider + embedding config ─────────
   // Save the agent name and chosen personality template into config so that
   // the same character data is used regardless of whether the user onboarded
   // via CLI or GUI.  This ensures full parity between onboarding surfaces.
@@ -3078,7 +3578,7 @@ async function runFirstTimeSetup(
     ...existingList.slice(1),
   ];
 
-  const updated: MilaidyConfig = {
+  const updated: MiladyConfig = {
     ...config,
     agents: {
       ...config.agents,
@@ -3103,22 +3603,21 @@ async function runFirstTimeSetup(
   if (process.env.SOLANA_PRIVATE_KEY && !hasSolKey) {
     envBucket.SOLANA_PRIVATE_KEY = process.env.SOLANA_PRIVATE_KEY;
   }
+  if (process.env.SKILLS_REGISTRY && !hasSkillsRegistry) {
+    envBucket.SKILLS_REGISTRY = process.env.SKILLS_REGISTRY;
+  }
   if (process.env.SKILLSMP_API_KEY && !hasSkillsmpKey) {
     envBucket.SKILLSMP_API_KEY = process.env.SKILLSMP_API_KEY;
   }
-
-  if (chosenEmbeddingPreset) {
-    updated.embedding = {
-      ...updated.embedding,
-      model: chosenEmbeddingPreset.model,
-      modelRepo: chosenEmbeddingPreset.modelRepo,
-      dimensions: chosenEmbeddingPreset.dimensions,
-      gpuLayers: chosenEmbeddingPreset.gpuLayers,
-    };
+  if (process.env.GITHUB_TOKEN && !hasGithubToken) {
+    envBucket.GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+  }
+  if (process.env.GITHUB_OAUTH_CLIENT_ID && !hasGithubOAuth) {
+    envBucket.GITHUB_OAUTH_CLIENT_ID = process.env.GITHUB_OAUTH_CLIENT_ID;
   }
 
   try {
-    saveMilaidyConfig(updated);
+    saveMiladyConfig(updated);
   } catch (err) {
     // Non-fatal: the agent can still start, but choices won't persist.
     clack.log.warn(`Could not save config: ${formatError(err)}`);
@@ -3141,11 +3640,22 @@ export interface StartElizaOptions {
    * server (used by `dev-server.ts`).
    */
   headless?: boolean;
+  /**
+   * When true, start the API server and keep running without entering
+   * the interactive chat loop. Used by `bun run start` for production
+   * server mode (like dev but without watch).
+   */
+  serverOnly?: boolean;
+  /**
+   * Internal guard to prevent infinite retry loops when recovering from
+   * corrupt PGLite state.
+   */
+  pgliteRecoveryAttempted?: boolean;
 }
 
 export interface BootElizaRuntimeOptions {
   /**
-   * When true, require an existing ~/.milaidy/milaidy.json config file.
+   * When true, require an existing ~/.milady/milady.json config file.
    * This is used by non-CLI UIs (like the @elizaos/tui interface) where interactive
    * onboarding prompts would break the alternate screen.
    */
@@ -3163,7 +3673,7 @@ export async function bootElizaRuntime(
 ): Promise<AgentRuntime> {
   if (opts.requireConfig && !configFileExists()) {
     throw new Error(
-      "No config found. Run `milaidy start` once to complete setup.",
+      "No config found. Run `milady start` once to complete setup.",
     );
   }
 
@@ -3174,8 +3684,54 @@ export async function bootElizaRuntime(
   return runtime;
 }
 
+const LEVEL_TO_NAME: Record<number, string> = {
+  10: "trace",
+  20: "debug",
+  27: "success",
+  28: "progress",
+  29: "log",
+  30: "info",
+  40: "warn",
+  50: "error",
+  60: "fatal",
+};
+
+export const logToChatListener = (entry: LogEntry) => {
+  if (entry.roomId && entry.runtime) {
+    const runtime = entry.runtime as unknown as AgentRuntime & {
+      logLevelOverrides?: Map<string, string>;
+    };
+    // access dynamic property
+    const overrides = runtime.logLevelOverrides;
+    const overrideLevel = overrides?.get(String(entry.roomId));
+
+    if (overrideLevel) {
+      const levelKey = entry.level as number;
+      const levelName = (
+        levelKey && LEVEL_TO_NAME[levelKey] ? LEVEL_TO_NAME[levelKey] : "log"
+      ).toUpperCase();
+
+      const prefix = `[${levelName}]`;
+      const content = `${prefix} ${entry.msg}`;
+
+      // Prevent infinite loops by suppressing logs from this action
+      runtime
+        .sendMessageToTarget(
+          { roomId: entry.roomId } as unknown as TargetInfo,
+          {
+            text: `\`\`\`\n${content}\n\`\`\``,
+            source: "system",
+
+            isLog: "true",
+          },
+        )
+        .catch(() => {});
+    }
+  }
+};
+
 /**
- * Start the ElizaOS runtime with Milaidy's configuration.
+ * Start the ElizaOS runtime with Milady's configuration.
  *
  * In headless mode the runtime is returned instead of entering the
  * interactive readline loop.
@@ -3189,16 +3745,19 @@ export async function startEliza(
   const { captureEarlyLogs } = await import("../api/early-logs");
   captureEarlyLogs();
 
-  // 1. Load Milaidy config from ~/.milaidy/milaidy.json
-  let config: MilaidyConfig;
+  // Register log listener for chat mirroring
+  addLogListener(logToChatListener);
+
+  // 1. Load Milady config from ~/.milady/milady.json
+  let config: MiladyConfig;
   try {
-    config = loadMilaidyConfig();
+    config = loadMiladyConfig();
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      logger.warn("[milaidy] No config found, using defaults");
-      // All MilaidyConfig fields are optional, so an empty object is
+      logger.warn("[milady] No config found, using defaults");
+      // All MiladyConfig fields are optional, so an empty object is
       // structurally valid. The `as` cast is safe here.
-      config = {} as MilaidyConfig;
+      config = {} as MiladyConfig;
     } else {
       throw err;
     }
@@ -3248,7 +3807,7 @@ export async function startEliza(
 
   // 2d-iii. OG tracking code initialization
   try {
-    const { initializeOGCode } = await import("../api/og-tracker.js");
+    const { initializeOGCode } = await import("../api/og-tracker");
     initializeOGCode();
   } catch {
     // Silent — OG tracking is non-critical
@@ -3263,11 +3822,38 @@ export async function startEliza(
   }
 
   // 2e. Prevent @elizaos/core from auto-loading @elizaos/plugin-bootstrap.
-  //     Milaidy uses @elizaos/plugin-trust which provides the settings/roles
+  //     Milady uses @elizaos/plugin-trust which provides the settings/roles
   //     providers and actions.  plugin-bootstrap (v1.x) is incompatible with
   //     the 2.0.0-alpha.x runtime used here.
   if (!process.env.IGNORE_BOOTSTRAP) {
     process.env.IGNORE_BOOTSTRAP = "true";
+  }
+
+  // 2e-ii. Ensure SECRET_SALT is set to suppress the @elizaos/core default
+  //        warning and avoid using a predictable value in production.
+  if (!process.env.SECRET_SALT) {
+    process.env.SECRET_SALT = crypto.randomBytes(32).toString("hex");
+    logger.info("[milady] Generated random SECRET_SALT for this session");
+  }
+
+  // 2e-iii. Pre-flight validation for Google AI API keys.  If the key looks
+  //         obviously invalid (too short, placeholder, wrong prefix), clear it
+  //         to prevent plugin-google-genai from making a failing API call.
+  for (const gkey of [
+    "GEMINI_API_KEY",
+    "GOOGLE_API_KEY",
+    "GOOGLE_GENERATIVE_AI_API_KEY",
+  ] as const) {
+    const val = process.env[gkey]?.trim();
+    if (
+      val &&
+      (val.length < 20 || val === "your-key-here" || val.startsWith("sk-"))
+    ) {
+      logger.warn(
+        `[milady] ${gkey} appears invalid (length/format), clearing to skip Google AI plugin`,
+      );
+      delete process.env[gkey];
+    }
   }
 
   // 2f. Apply subscription-based credentials (Claude Max, Codex Max)
@@ -3337,10 +3923,10 @@ export async function startEliza(
 
     await startSubscriptionCredentialRefreshLoop();
   } catch (err) {
-    logger.warn(`[milaidy] Failed to apply subscription credentials: ${err}`);
+    logger.warn(`[milady] Failed to apply subscription credentials: ${err}`);
   }
 
-  // 3. Build ElizaOS Character from Milaidy config
+  // 3. Build ElizaOS Character from Milady config
   const character = buildCharacterFromConfig(config);
 
   const primaryModel = resolvePrimaryModel(config);
@@ -3355,9 +3941,9 @@ export async function startEliza(
     recursive: true,
   });
 
-  // 5. Create the Milaidy bridge plugin (workspace context + session keys + compaction)
+  // 5. Create the Milady bridge plugin (workspace context + session keys + compaction)
   const agentId = character.name?.toLowerCase().replace(/\s+/g, "-") ?? "main";
-  const milaidyPlugin = createMilaidyPlugin({
+  const miladyPlugin = createMiladyPlugin({
     workspaceDir,
     bootstrapMaxChars: config.agents?.defaults?.bootstrapMaxChars,
     enableBootstrapProviders: config.agents?.defaults?.enableBootstrapProviders,
@@ -3365,11 +3951,9 @@ export async function startEliza(
     autonomyConfig: config.autonomy,
   });
 
-  // 5b. Optional: Phetta Companion bridge (VRM desktop pet)
-  const phettaOpts = resolvePhettaCompanionOptionsFromEnv(process.env);
-  const phettaPlugin = phettaOpts.enabled
-    ? createPhettaCompanionPlugin(phettaOpts)
-    : null;
+    agentId,
+    autonomyConfig: config.autonomy,
+  });
 
   const five55PluginFlags = {
     swap: resolveFive55PluginEnabled(config, "SWAP_PLUGIN_ENABLED", "swap"),
@@ -3470,14 +4054,14 @@ export async function startEliza(
   if (resolvedPlugins.length === 0) {
     if (preOnboarding || isTestRun) {
       logger.info(
-        "[milaidy] No plugins loaded yet — the onboarding wizard will configure a model provider",
+        "[milady] No plugins loaded yet — the onboarding wizard will configure a model provider",
       );
     } else {
       logger.error(
-        "[milaidy] No plugins loaded — at least one model provider plugin is required",
+        "[milady] No plugins loaded — at least one model provider plugin is required",
       );
       logger.error(
-        "[milaidy] Set an API key (e.g. ANTHROPIC_API_KEY, OPENAI_API_KEY) in your environment",
+        "[milady] Set an API key (e.g. ANTHROPIC_API_KEY, OPENAI_API_KEY) in your environment",
       );
       throw new Error("No plugins loaded");
     }
@@ -3488,7 +4072,7 @@ export async function startEliza(
     const pluginNames = resolvedPlugins.map((p) => p.name);
     const providerNames = resolvedPlugins
       .flatMap((p) => p.plugin.providers ?? [])
-      .map((prov) => prov.name);
+      .map((prov: Provider) => prov.name);
     // Build a context summary for validation
     const contextSummary: Record<string, unknown> = {
       agentName: character.name,
@@ -3517,12 +4101,12 @@ export async function startEliza(
         issues.push(`empty: ${contextValidation.emptyFields.join(", ")}`);
       }
       logger.warn(
-        `[milaidy] Context validation issues detected: ${issues.join("; ")}`,
+        `[milady] Context validation issues detected: ${issues.join("; ")}`,
       );
     }
   }
 
-  // 7. Create the AgentRuntime with Milaidy plugin + resolved plugins
+  // 7. Create the AgentRuntime with Milady plugin + resolved plugins
   //    plugin-sql must be registered first so its database adapter is available
   //    before other plugins (e.g. plugin-personality) run their init functions.
   //    runtime.initialize() registers all characterPlugins in parallel, so we
@@ -3568,10 +4152,10 @@ export async function startEliza(
       getSkillsDir: () => string;
     };
     bundledSkillsDir = getSkillsDir();
-    logger.info(`[milaidy] Bundled skills dir: ${bundledSkillsDir}`);
+    logger.info(`[milady] Bundled skills dir: ${bundledSkillsDir}`);
   } catch {
     logger.debug(
-      "[milaidy] @elizaos/skills not available — bundled skills will not be loaded",
+      "[milady] @elizaos/skills not available — bundled skills will not be loaded",
     );
   }
 
@@ -3594,7 +4178,7 @@ export async function startEliza(
   let sandboxAuditLog: SandboxAuditLog | null = null;
 
   if (isSandboxActive) {
-    logger.info(`[milaidy] Sandbox mode: ${sandboxMode}`);
+    logger.info(`[milady] Sandbox mode: ${sandboxMode}`);
     sandboxAuditLog = new SandboxAuditLog({ console: true });
 
     // Standard/max modes also start the container sandbox manager
@@ -3638,10 +4222,10 @@ export async function startEliza(
 
       try {
         await sandboxManager.start();
-        logger.info("[milaidy] Sandbox manager started");
+        logger.info("[milady] Sandbox manager started");
       } catch (err) {
         logger.error(
-          `[milaidy] Sandbox manager failed to start: ${err instanceof Error ? err.message : String(err)}`,
+          `[milady] Sandbox manager failed to start: ${err instanceof Error ? err.message : String(err)}`,
         );
         // Non-fatal: light mode fallback
       }
@@ -3654,6 +4238,30 @@ export async function startEliza(
     });
   }
   // ── End sandbox setup ───────────────────────────────────────────────────
+
+  // ── Boost preferred model plugin priority ─────────────────────────────
+  // ElizaOS selects the model handler with the highest `priority` for each
+  // ModelType.  All provider plugins default to priority 0, so whichever
+  // registers first wins — essentially random when using Promise.all.
+  // When the user has explicitly chosen a primary model provider (via
+  // `model.primary` in config), we bump that plugin's priority so its
+  // handlers are always selected over other providers.
+  const pluginsForRuntime = otherPlugins.map((p) => p.plugin);
+  if (primaryModel) {
+    for (const plugin of pluginsForRuntime) {
+      if (plugin.name === primaryModel) {
+        plugin.priority = (plugin.priority ?? 0) + 10;
+        logger.info(
+          `[milady] Boosted plugin "${plugin.name}" priority to ${plugin.priority} (model.primary)`,
+        );
+        break;
+      }
+    }
+  }
+
+  // Deduplicate actions across all plugins to avoid "Action already registered"
+  // warnings from ElizaOS core. First plugin wins (miladyPlugin is first).
+  deduplicatePluginActions([miladyPlugin, ...pluginsForRuntime]);
 
   let runtime = new AgentRuntime({
     character,
@@ -3688,7 +4296,22 @@ export async function startEliza(
     // Disabled: Milaidy manages autonomy via MilaidyAutonomyService in milaidy-plugin
     enableAutonomy: false,
     settings: {
-      // Forward Milaidy config env vars as runtime settings
+      VALIDATION_LEVEL: "fast",
+      // Forward non-sensitive Milady config.env vars as runtime settings so
+      // plugins can access them via runtime.getSetting(). This fixes a bug where
+      // plugins (e.g. @elizaos/plugin-google-genai) call runtime.getSetting()
+      // which returns null for keys not in settings, but the plugin checks
+      // !== undefined causing it to use "null" as the model name.
+      //
+      // Security: Filter out blockchain private keys and secrets. API keys are
+      // allowed since plugins need them via runtime.getSetting(). Private keys
+      // should only be accessed via process.env by signing services.
+      ...Object.fromEntries(
+        Object.entries(collectConfigEnvVars(config)).filter(([key]) =>
+          isEnvKeyAllowedForForwarding(key),
+        ),
+      ),
+      // Forward Milady config env vars as runtime settings
       ...(primaryModel ? { MODEL_PROVIDER: primaryModel } : {}),
       // Forward skills config so plugin-agent-skills can apply allow/deny filtering
       ...(config.skills?.allowBundled
@@ -3767,7 +4390,7 @@ export async function startEliza(
   } else {
     const loadedNames = resolvedPlugins.map((p) => p.name).join(", ");
     logger.error(
-      `[milaidy] @elizaos/plugin-sql was NOT found among resolved plugins. ` +
+      `[milady] @elizaos/plugin-sql was NOT found among resolved plugins. ` +
         `Loaded: [${loadedNames}]`,
     );
     throw new Error(
@@ -3783,13 +4406,14 @@ export async function startEliza(
   //     the cloud plugin's TEXT_EMBEDDING handler — which hits a paid API —
   //     because local-embedding's heavier init hasn't completed yet.
   if (localEmbeddingPlugin) {
+    configureLocalEmbeddingPlugin(localEmbeddingPlugin.plugin, config);
     await runtime.registerPlugin(localEmbeddingPlugin.plugin);
     logger.info(
-      "[milaidy] plugin-local-embedding pre-registered (TEXT_EMBEDDING ready)",
+      "[milady] plugin-local-embedding pre-registered (TEXT_EMBEDDING ready)",
     );
   } else {
     logger.warn(
-      "[milaidy] @elizaos/plugin-local-embedding not found — embeddings " +
+      "[milady] @elizaos/plugin-local-embedding not found — embeddings " +
         "will fall back to whatever TEXT_EMBEDDING handler is registered by " +
         "other plugins (may incur cloud API costs)",
     );
@@ -3946,10 +4570,93 @@ export async function startEliza(
       logger.warn(
         `[milaidy] AgentSkillsService did not initialise in time: ${formatError(err)}`,
       );
+      const timeout = new Promise<never>((_resolve, reject) => {
+        setTimeout(() => {
+          reject(
+            new Error(
+              "AgentSkillsService warm-up timed out (10s) — non-blocking, agent will function without skills",
+            ),
+          );
+        }, 10_000);
+      });
+      await Promise.race([skillServicePromise, timeout]);
+
+      const svc = runtime.getService("AGENT_SKILLS_SERVICE") as
+        | {
+            getCatalogStats?: () => {
+              loaded: number;
+              total: number;
+              storageType: string;
+            };
+          }
+        | null
+        | undefined;
+      if (svc?.getCatalogStats) {
+        const stats = svc.getCatalogStats();
+        logger.info(
+          `[milady] AgentSkills ready — ${stats.loaded} skills loaded, ` +
+            `${stats.total} in catalog (storage: ${stats.storageType})`,
+        );
+      }
+
+      // Guard against non-string skill.description values.
+      // The bundled YAML parser produces {} for multi-line descriptions, which
+      // crashes findBestLocalMatch / scoreSkillMatch (call .toLowerCase() on it).
+      // Instead of a one-shot sanitize (which misses skills loaded later by
+      // syncCatalog / autoRefresh), we monkey-patch getLoadedSkills to always
+      // return sanitized values.
+      const svcAny = svc as Record<string, unknown> | null | undefined;
+      const origGetLoaded = svcAny?.getLoadedSkills as
+        | ((...args: unknown[]) => Array<Record<string, unknown>>)
+        | undefined;
+      if (origGetLoaded && svcAny) {
+        (svcAny as Record<string, unknown>).getLoadedSkills = function (
+          ...args: unknown[]
+        ) {
+          const skills = origGetLoaded.apply(this, args);
+          for (const skill of skills) {
+            if (typeof skill.description !== "string") {
+              skill.description =
+                skill.description == null
+                  ? ""
+                  : JSON.stringify(skill.description);
+            }
+          }
+          return skills;
+        };
+        logger.debug("[milady] Patched getLoadedSkills to guard descriptions");
+      }
+    } catch (err) {
+      // Non-fatal — the agent can operate without skills. This warm-up runs
+      // async so it doesn't block startup.
+      logger.debug(`[milady] AgentSkillsService warm-up: ${formatError(err)}`);
+    }
+  };
+
+  const initializeRuntimeServices = async (): Promise<void> => {
+    // 8. Initialize the runtime (registers remaining plugins, starts services)
+    await runtime.initialize();
+    await waitForTrajectoryLoggerService(runtime, "runtime.initialize()");
+    ensureTrajectoryLoggerEnabled(runtime, "runtime.initialize()");
+
+    // 8b. Ensure AutonomyService is available for trigger dispatch.
+    // IGNORE_BOOTSTRAP=true prevents the bootstrap plugin (which normally
+    // registers this service) from loading, so we start it explicitly.
+    if (!runtime.getService("AUTONOMY")) {
+      try {
+        await AutonomyService.start(runtime);
+        logger.info("[milady] AutonomyService started for trigger dispatch");
+      } catch (err) {
+        logger.warn(
+          `[milady] AutonomyService failed to start: ${formatError(err)}`,
+        );
+      }
     }
   } else {
     logger.debug("[milaidy] Test mode: skipping AgentSkillsService await");
   }
+
+  installActionAliases(runtime);
 
   // 9. Graceful shutdown handler
   //
@@ -3969,10 +4676,10 @@ export async function startEliza(
         if (sandboxManager) {
           try {
             await sandboxManager.stop();
-            logger.info("[milaidy] Sandbox manager stopped");
+            logger.info("[milady] Sandbox manager stopped");
           } catch (err) {
             logger.warn(
-              `[milaidy] Sandbox stop error: ${err instanceof Error ? err.message : String(err)}`,
+              `[milady] Sandbox stop error: ${err instanceof Error ? err.message : String(err)}`,
             );
           }
         }
@@ -3997,10 +4704,11 @@ export async function startEliza(
           `[milaidy] Error disposing embedding manager: ${formatError(err)}`,
         );
       }
+
       try {
         await runtime.stop();
       } catch (err) {
-        logger.warn(`[milaidy] Error during shutdown: ${formatError(err)}`);
+        logger.warn(`[milady] Error during shutdown: ${formatError(err)}`);
       }
       process.exit(0);
     };
@@ -4009,61 +4717,60 @@ export async function startEliza(
     process.on("SIGTERM", () => void shutdown());
   }
 
-  // 10. Load hooks system
-  try {
-    const internalHooksConfig = config.hooks
-      ?.internal as LoadHooksOptions["internalConfig"];
+  const loadHooksSystem = async (): Promise<void> => {
+    try {
+      const internalHooksConfig = config.hooks
+        ?.internal as LoadHooksOptions["internalConfig"];
 
-    await loadHooks({
-      workspacePath: workspaceDir,
-      internalConfig: internalHooksConfig,
-      milaidyConfig: config as Record<string, unknown>,
-    });
+      await loadHooks({
+        workspacePath: workspaceDir,
+        internalConfig: internalHooksConfig,
+        miladyConfig: config as Record<string, unknown>,
+      });
 
-    const startupEvent = createHookEvent("gateway", "startup", "system", {
-      cfg: config,
-    });
-    await triggerHook(startupEvent);
-  } catch (err) {
-    logger.warn(`[milaidy] Hooks system could not load: ${formatError(err)}`);
-  }
+      const startupEvent = createHookEvent("gateway", "startup", "system", {
+        cfg: config,
+      });
+      await triggerHook(startupEvent);
+    } catch (err) {
+      logger.warn(`[milady] Hooks system could not load: ${formatError(err)}`);
+    }
+  };
 
   // ── Headless mode — return runtime for API server wiring ──────────────
   if (opts?.headless) {
+    void loadHooksSystem();
     logger.info(
-      "[milaidy] Runtime initialised in headless mode (autonomy enabled)",
+      "[milady] Runtime initialised in headless mode (autonomy enabled)",
     );
     return runtime;
   }
 
+  // 10. Load hooks system
+  await loadHooksSystem();
+
   // ── Start API server for GUI access ──────────────────────────────────────
   // In CLI mode (non-headless), start the API server in the background so
   // the GUI can connect to the running agent.  This ensures full feature
-  // parity: whether started via `npx milaidy`, `bun run dev`, or the
+  // parity: whether started via `npx miladyai`, `bun run dev`, or the
   // desktop app, the API server is always available for the GUI admin
   // surface.
   try {
-    const { startApiServer } = await import("../api/server.js");
-    const apiPort = Number(process.env.MILAIDY_PORT) || 2138;
+    const { startApiServer } = await import("../api/server");
+    const apiPort = Number(process.env.MILADY_PORT) || 2138;
     const { port: actualApiPort } = await startApiServer({
       port: apiPort,
       runtime,
       onRestart: async () => {
-        logger.info("[milaidy] Hot-reload: Restarting runtime...");
+        logger.info("[milady] Hot-reload: Restarting runtime...");
         try {
           // Stop the old runtime to release resources (DB connections, timers, etc.)
-          try {
-            await embeddingManager.dispose();
-          } catch (disposeErr) {
-            logger.warn(
-              `[milaidy] Hot-reload: embedding manager dispose failed: ${formatError(disposeErr)}`,
-            );
-          }
+
           try {
             await runtime.stop();
           } catch (stopErr) {
             logger.warn(
-              `[milaidy] Hot-reload: old runtime stop failed: ${formatError(stopErr)}`,
+              `[milady] Hot-reload: old runtime stop failed: ${formatError(stopErr)}`,
             );
           }
 
@@ -4105,7 +4812,7 @@ export async function startEliza(
             await startSubscriptionCredentialRefreshLoop();
           } catch (subErr) {
             logger.warn(
-              `[milaidy] Hot-reload: subscription credentials: ${formatError(subErr)}`,
+              `[milady] Hot-reload: subscription credentials: ${formatError(subErr)}`,
             );
           }
 
@@ -4116,13 +4823,12 @@ export async function startEliza(
           // (name, bio, style, etc.) are picked up on restart.
           const freshCharacter = buildCharacterFromConfig(freshConfig);
 
-          // Recreate Milaidy plugin with fresh workspace
-          const freshMilaidyPlugin = createMilaidyPlugin({
+          // Recreate Milady plugin with fresh workspace
+          const freshMiladyPlugin = createMiladyPlugin({
             workspaceDir:
               freshConfig.agents?.defaults?.workspace ?? workspaceDir,
             bootstrapMaxChars: freshConfig.agents?.defaults?.bootstrapMaxChars,
-            enableBootstrapProviders:
-              freshConfig.agents?.defaults?.enableBootstrapProviders,
+
             agentId:
               freshCharacter.name?.toLowerCase().replace(/\s+/g, "-") ?? "main",
             autonomyConfig: freshConfig.autonomy,
@@ -4311,62 +5017,79 @@ export async function startEliza(
             await initializeDatabaseAdapter(newRuntime);
           }
           if (freshLocalEmbeddingPlugin) {
+            configureLocalEmbeddingPlugin(
+              freshLocalEmbeddingPlugin.plugin,
+              freshConfig,
+            );
             await newRuntime.registerPlugin(freshLocalEmbeddingPlugin.plugin);
           }
 
-          // Re-create embedding manager with fresh config and register
-          // at priority 100 (same as initial startup).
-          const freshDefaultEmbeddingPreset = detectEmbeddingPreset();
-          const freshEmbeddingManager = new MilaidyEmbeddingManager({
-            model: freshConfig.embedding?.model,
-            modelRepo: freshConfig.embedding?.modelRepo,
-            dimensions: freshConfig.embedding?.dimensions,
-            gpuLayers: freshConfig.embedding?.gpuLayers,
-            idleTimeoutMs:
-              (freshConfig.embedding?.idleTimeoutMinutes ?? 30) * 60 * 1000,
-          });
-          const freshEmbeddingDims =
-            freshConfig.embedding?.dimensions ??
-            freshDefaultEmbeddingPreset.dimensions;
-          newRuntime.registerModel(
-            ModelType.TEXT_EMBEDDING,
-            async (_rt, params) => {
-              const text =
-                typeof params === "string"
-                  ? params
-                  : params && typeof params === "object" && "text" in params
-                    ? (params as { text: string }).text
-                    : null;
-              if (!text) return new Array(freshEmbeddingDims).fill(0);
-              return freshEmbeddingManager.generateEmbedding(text);
-            },
-            "milaidy",
-            100,
-          );
-          // Swap the outer reference so shutdown/next-reload disposes
-          // the correct instance.
-          embeddingManager = freshEmbeddingManager;
-
           await newRuntime.initialize();
+          await waitForTrajectoryLoggerService(
+            newRuntime,
+            "hot-reload runtime.initialize()",
+          );
+          ensureTrajectoryLoggerEnabled(
+            newRuntime,
+            "hot-reload runtime.initialize()",
+          );
+
+          // Ensure AutonomyService survives hot-reload
+          if (!newRuntime.getService("AUTONOMY")) {
+            try {
+              await AutonomyService.start(newRuntime);
+            } catch (err) {
+              logger.warn(
+                `[milady] AutonomyService failed to start after hot-reload: ${formatError(err)}`,
+              );
+            }
+          }
+
+          installActionAliases(newRuntime);
           runtime = newRuntime;
-          logger.info("[milaidy] Hot-reload: Runtime restarted successfully");
+          logger.info("[milady] Hot-reload: Runtime restarted successfully");
           return newRuntime;
         } catch (err) {
-          logger.error(`[milaidy] Hot-reload failed: ${formatError(err)}`);
+          logger.error(`[milady] Hot-reload failed: ${formatError(err)}`);
           return null;
         }
       },
     });
     const dashboardUrl = `http://localhost:${actualApiPort}`;
-    console.log(`[milaidy] Control UI: ${dashboardUrl}`);
-    logger.info(`[milaidy] API server listening on ${dashboardUrl}`);
+    console.log(`[milady] Control UI: ${dashboardUrl}`);
+    logger.info(`[milady] API server listening on ${dashboardUrl}`);
   } catch (apiErr) {
-    logger.warn(`[milaidy] Could not start API server: ${formatError(apiErr)}`);
+    logger.warn(`[milady] Could not start API server: ${formatError(apiErr)}`);
     // Non-fatal — CLI chat loop still works without the API server.
   }
 
+  // ── Server-only mode — keep running without chat loop ────────────────────
+  if (opts?.serverOnly) {
+    logger.info("[milady] Running in server-only mode (no interactive chat)");
+    console.log("[milady] Server running. Press Ctrl+C to stop.");
+
+    // Keep process alive — the API server handles all interaction
+    const keepAlive = setInterval(() => {}, 1 << 30); // ~12 days
+
+    // Cleanup on exit
+    const cleanup = async () => {
+      clearInterval(keepAlive);
+      try {
+        await runtime.stop();
+      } catch (err) {
+        logger.warn(`[milady] Error stopping runtime: ${formatError(err)}`);
+      }
+      process.exit(0);
+    };
+
+    process.on("SIGINT", () => void cleanup());
+    process.on("SIGTERM", () => void cleanup());
+
+    return runtime;
+  }
+
   // ── Interactive chat loop ────────────────────────────────────────────────
-  const agentName = character.name ?? "Milaidy";
+  const agentName = character.name ?? "Milady";
   const userId = crypto.randomUUID() as UUID;
   // Use `let` so the fallback path can reassign to fresh IDs.
   let roomId = stringToUuid(`${agentName}-chat-room`);
@@ -4412,7 +5135,7 @@ export async function startEliza(
     }
   } catch (err) {
     logger.warn(
-      `[milaidy] Could not establish chat room, retrying with fresh IDs: ${formatError(err)}`,
+      `[milady] Could not establish chat room, retrying with fresh IDs: ${formatError(err)}`,
     );
 
     // Fall back to unique IDs if deterministic ones conflict with stale data.
@@ -4455,7 +5178,7 @@ export async function startEliza(
       }
     } catch (retryErr) {
       logger.error(
-        `[milaidy] Chat room setup failed after retry: ${formatError(retryErr)}`,
+        `[milady] Chat room setup failed after retry: ${formatError(retryErr)}`,
       );
       throw retryErr;
     }
@@ -4478,7 +5201,7 @@ export async function startEliza(
         try {
           await runtime.stop();
         } catch (err) {
-          logger.warn(`[milaidy] Error stopping runtime: ${formatError(err)}`);
+          logger.warn(`[milady] Error stopping runtime: ${formatError(err)}`);
         }
         process.exit(0);
       }
@@ -4504,7 +5227,7 @@ export async function startEliza(
 
         if (!runtime.messageService) {
           logger.error(
-            "[milaidy] runtime.messageService is not available — cannot process messages",
+            "[milady] runtime.messageService is not available — cannot process messages",
           );
           console.log("[Error: message service unavailable]\n");
           prompt();
@@ -4528,7 +5251,7 @@ export async function startEliza(
         // failed message kill the interactive session.
         console.log(`\n[Error: ${formatError(err)}]\n`);
         logger.error(
-          `[milaidy] Chat message handling failed: ${formatError(err)}`,
+          `[milady] Chat message handling failed: ${formatError(err)}`,
         );
       }
       prompt();
@@ -4549,13 +5272,13 @@ const isDirectRun = (() => {
   if (import.meta.url === pathToFileURL(normalised).href) return true;
   // Fallback: match the specific filename (handles tsx rewriting)
   const base = path.basename(normalised);
-  return base === "eliza.ts" || base === "eliza.js";
+  return base === "eliza.ts" || base === "eliza";
 })();
 
 if (isDirectRun) {
   startEliza().catch((err) => {
     console.error(
-      "[milaidy] Fatal error:",
+      "[milady] Fatal error:",
       err instanceof Error ? (err.stack ?? err.message) : err,
     );
     process.exit(1);

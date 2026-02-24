@@ -17,6 +17,12 @@ const HANDLER_TYPE_COLORS: Record<string, string> = {
   code: "bg-purple-500/20 text-purple-400",
 };
 
+const HANDLER_TYPE_NAMES: Record<string, string> = {
+  http: "HTTP",
+  shell: "Shell",
+  code: "Code",
+};
+
 export function CustomActionsPanel({
   open,
   onClose,
@@ -25,14 +31,18 @@ export function CustomActionsPanel({
   const { plugins, setActionNotice, setTab } = useApp();
   const [actions, setActions] = useState<CustomActionDef[]>([]);
   const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [error, setError] = useState("");
 
   const loadActions = useCallback(async () => {
     try {
       setLoading(true);
+      setError("");
       const result = await client.listCustomActions();
       setActions(result || []);
-    } catch (error) {
-      console.error("Failed to load custom actions:", error);
+    } catch (err) {
+      console.error("Failed to load custom actions:", err);
+      setError("Failed to load custom actions. Please retry.");
     } finally {
       setLoading(false);
     }
@@ -101,32 +111,46 @@ export function CustomActionsPanel({
 
   useEffect(() => {
     if (open) {
-      loadActions();
+      void loadActions();
     }
   }, [loadActions, open]);
 
   const handleToggleEnabled = async (action: CustomActionDef) => {
     try {
+      const next = !action.enabled;
       await client.updateCustomAction(action.id, {
-        enabled: !action.enabled,
+        enabled: next,
       });
-      await loadActions();
-    } catch (error) {
-      console.error("Failed to toggle action:", error);
+      setActions((prev) =>
+        prev.map((item) =>
+          item.id === action.id
+            ? {
+                ...item,
+                enabled: next,
+              }
+            : item,
+        ),
+      );
+    } catch (err) {
+      console.error("Failed to toggle action:", err);
+      setError("Failed to update this action. Try again.");
     }
   };
 
   const handleDelete = async (action: CustomActionDef) => {
     const confirmed = window.confirm(
-      `Are you sure you want to delete "${action.name}"?`
+      `Are you sure you want to delete "${action.name}"?`,
     );
-    if (!confirmed) return;
+    if (!confirmed) {
+      return;
+    }
 
     try {
       await client.deleteCustomAction(action.id);
-      await loadActions();
-    } catch (error) {
-      console.error("Failed to delete action:", error);
+      setActions((prev) => prev.filter((item) => item.id !== action.id));
+    } catch (err) {
+      console.error("Failed to delete action:", err);
+      setError("Failed to delete action. Try again.");
     }
   };
 
@@ -141,15 +165,22 @@ export function CustomActionsPanel({
   return (
     <div
       className={`border-l border-border bg-card flex flex-col transition-all duration-200 ${
-        open ? "w-72" : "w-0 overflow-hidden"
+        open ? "w-80" : "w-0 overflow-hidden"
       }`}
     >
       {open && (
         <>
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-border">
-            <h2 className="text-sm font-semibold text-txt">Custom Actions</h2>
+          <div className="flex items-start justify-between p-4 border-b border-border">
+            <div>
+              <h2 className="text-sm font-semibold text-txt">Custom Actions</h2>
+              <p className="text-xs text-muted mt-0.5">
+                {actions.length} action{actions.length === 1 ? "" : "s"} ·{" "}
+                {enabledCount} enabled
+              </p>
+            </div>
             <button
+              type="button"
               onClick={onClose}
               className="text-muted hover:text-txt transition-colors"
               aria-label="Close panel"
@@ -163,6 +194,7 @@ export function CustomActionsPanel({
                 strokeWidth="2"
                 strokeLinecap="round"
               >
+                <title>Close panel</title>
                 <path d="M12 4L4 12M4 4l8 8" />
               </svg>
             </button>
@@ -204,108 +236,86 @@ export function CustomActionsPanel({
             </div>
             {loading ? (
               <div className="text-center text-muted text-xs py-8">
-                Loading...
+                Loading your actions...
               </div>
-            ) : actions.length === 0 ? (
+            ) : filteredActions.length === 0 ? (
               <div className="text-center text-muted text-xs py-8">
-                No custom actions yet
+                {search
+                  ? "No actions match this search."
+                  : "No custom actions yet. Create one to get started."}
               </div>
             ) : (
-              actions.map((action) => (
+              filteredActions.map((action) => (
                 <div
                   key={action.id}
                   className="border border-border bg-surface rounded p-2 space-y-2"
                 >
-                  {/* Action Name */}
-                  <div className="font-semibold text-xs text-txt truncate">
-                    {action.name}
-                  </div>
-
-                  {/* Description */}
-                  {action.description && (
-                    <div className="text-xs text-muted line-clamp-2">
-                      {action.description}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-xs text-txt truncate">
+                        {action.name}
+                      </div>
+                      <p className="text-[10px] text-muted mt-0.5">
+                        {action.parameters?.length || 0} parameter
+                        {(action.parameters?.length || 0) === 1 ? "" : "s"}
+                        {action.similes?.length
+                          ? ` • ${action.similes.length} alias`.concat(
+                              action.similes.length === 1 ? "" : "es",
+                            )
+                          : ""}
+                      </p>
                     </div>
-                  )}
 
-                  {/* Bottom Row: Badge, Toggle, Buttons */}
-                  <div className="flex items-center gap-2">
-                    {/* Handler Type Badge */}
                     <span
-                      className={`text-xs px-1.5 py-0.5 rounded ${
+                      className={`text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap ${
                         HANDLER_TYPE_COLORS[action.handler.type] ||
                         "bg-surface text-muted"
                       }`}
                     >
-                      {action.handler.type}
+                      {HANDLER_TYPE_NAMES[action.handler.type] ??
+                        action.handler.type}
                     </span>
+                  </div>
 
-                    <div className="flex-1" />
+                  {action.description && (
+                    <p className="text-xs text-muted line-clamp-2 break-words">
+                      {action.description}
+                    </p>
+                  )}
 
-                    {/* Enabled Toggle */}
-                    <label className="flex items-center gap-1 cursor-pointer">
+                  <div className="flex items-center gap-2 pt-1 border-t border-border">
+                    <label className="flex items-center gap-1 cursor-pointer text-xs text-muted">
                       <input
                         type="checkbox"
                         checked={action.enabled}
                         onChange={() => handleToggleEnabled(action)}
                         className="w-3 h-3 cursor-pointer accent-accent"
                       />
-                      <span className="text-xs text-muted">on</span>
+                      <span>Enabled</span>
                     </label>
 
-                    {/* Edit Button */}
-                    <button
-                      onClick={() => handleEdit(action)}
-                      className="text-xs text-accent hover:text-accent/80 transition-colors"
-                      title="Edit action"
-                    >
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
+                    <div className="ml-auto flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleEdit(action)}
+                        className="text-xs text-accent hover:text-accent/80 transition-colors"
+                        title="Edit action"
                       >
-                        <path d="M11.5 2.5l2 2L6 12H4v-2l7.5-7.5z" />
-                      </svg>
-                    </button>
-
-                    {/* Delete Button */}
-                    <button
-                      onClick={() => handleDelete(action)}
-                      className="text-xs text-danger hover:text-danger/80 transition-colors"
-                      title="Delete action"
-                    >
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(action)}
+                        className="text-xs text-danger hover:text-danger/80 transition-colors"
+                        title="Delete action"
                       >
-                        <path d="M3 4h10M5 4V3h6v1M6 7v5M10 7v5M4 4l1 9h6l1-9" />
-                      </svg>
-                    </button>
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))
             )}
-          </div>
-
-          {/* Footer */}
-          <div className="p-3 border-t border-border">
-            <button
-              onClick={handleCreate}
-              className="w-full bg-accent text-txt hover:bg-accent/90 transition-colors rounded px-3 py-2 text-sm font-medium"
-            >
-              Create Action
-            </button>
           </div>
         </>
       )}

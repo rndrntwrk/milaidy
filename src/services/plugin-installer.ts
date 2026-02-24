@@ -1,12 +1,12 @@
 /**
- * Plugin Installer for Milaidy.
+ * Plugin Installer for Milady.
  *
  * Cross-platform plugin installation and lifecycle management.
  *
  * Install targets:
- *   ~/.milaidy/plugins/installed/<sanitised-name>/
+ *   ~/.milady/plugins/installed/<sanitised-name>/
  *
- * Works identically whether milaidy is:
+ * Works identically whether milady is:
  *   - Running from source (dev)
  *   - Running as a CLI install (npm global)
  *   - Running inside an Electron .app bundle
@@ -15,7 +15,7 @@
  * Strategy:
  *   1. npm/bun install to an isolated prefix directory
  *   2. Fallback: git clone from the plugin's GitHub repo
- *   3. Track the installation in milaidy.json config
+ *   3. Track the installation in milady.json config
  *   4. Trigger agent restart to load the new plugin
  *
  * @module services/plugin-installer
@@ -27,9 +27,9 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { logger } from "@elizaos/core";
-import { loadMilaidyConfig, saveMilaidyConfig } from "../config/config.js";
-import { requestRestart } from "../runtime/restart.js";
-import { getPluginInfo, type RegistryPluginInfo } from "./registry-client.js";
+import { loadMiladyConfig, saveMiladyConfig } from "../config/config";
+import { requestRestart } from "../runtime/restart";
+import { getPluginInfo, type RegistryPluginInfo } from "./registry-client";
 
 const execFileAsync = promisify(execFile);
 
@@ -38,16 +38,17 @@ const execFileAsync = promisify(execFile);
 // ---------------------------------------------------------------------------
 
 /** npm package names: @scope/name or name. No shell metacharacters. */
-const VALID_PACKAGE_NAME = /^(@[a-zA-Z0-9][\w.-]*\/)?[a-zA-Z0-9][\w.-]*$/;
+export const VALID_PACKAGE_NAME =
+  /^(@[a-zA-Z0-9][\w.-]*\/)?[a-zA-Z0-9][\w.-]*$/;
 
 /** Version strings: semver, dist-tags, git refs. Conservative allowlist. */
 const VALID_VERSION = /^[a-zA-Z0-9][\w.+-]*$/;
 
 /** Git branch names: alphanumeric, hyphens, slashes, dots. No shell metacharacters. */
-const VALID_BRANCH = /^[a-zA-Z0-9][\w./-]*$/;
+export const VALID_BRANCH = /^[a-zA-Z0-9][\w./-]*$/;
 
 /** Git URLs: https:// only, no shell metacharacters. */
-const VALID_GIT_URL = /^https:\/\/[a-zA-Z0-9][\w./-]*\.git$/;
+export const VALID_GIT_URL = /^https:\/\/[a-zA-Z0-9][\w./-]*\.git$/;
 
 interface ParsedPluginSpec {
   packageName: string;
@@ -93,7 +94,7 @@ function assertValidVersion(version: string): void {
   }
 }
 
-function assertValidGitUrl(url: string): void {
+export function assertValidGitUrl(url: string): void {
   if (!VALID_GIT_URL.test(url)) {
     throw new Error(`Invalid git URL: "${url}"`);
   }
@@ -157,8 +158,8 @@ export interface UninstallResult {
 // ---------------------------------------------------------------------------
 
 function pluginsBaseDir(): string {
-  const stateDir = process.env.MILAIDY_STATE_DIR?.trim();
-  const base = stateDir || path.join(os.homedir(), ".milaidy");
+  const stateDir = process.env.MILADY_STATE_DIR?.trim();
+  const base = stateDir || path.join(os.homedir(), ".milady");
   return path.join(base, "plugins", "installed");
 }
 
@@ -169,7 +170,7 @@ function isWithinPluginsDir(targetPath: string): boolean {
   return resolved.startsWith(`${base}${path.sep}`);
 }
 
-function sanitisePackageName(name: string): string {
+export function sanitisePackageName(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
@@ -181,8 +182,8 @@ function pluginDir(pluginName: string): string {
 // Package manager detection
 // ---------------------------------------------------------------------------
 
-async function detectPackageManager(): Promise<"bun" | "pnpm" | "npm"> {
-  for (const cmd of ["bun", "pnpm", "npm"] as const) {
+export async function detectPackageManager(): Promise<"bun" | "npm"> {
+  for (const cmd of ["bun", "npm"] as const) {
     try {
       await execFileAsync(cmd, ["--version"]);
       return cmd;
@@ -201,22 +202,30 @@ async function detectPackageManager(): Promise<"bun" | "pnpm" | "npm"> {
  * Install a plugin from the registry.
  *
  * 1. Resolves the plugin name in the registry.
- * 2. Installs via npm/bun to ~/.milaidy/plugins/installed/<name>/.
+ * 2. Installs via npm/bun to ~/.milady/plugins/installed/<name>/.
  * 3. Falls back to git clone if npm is not available for this package.
- * 4. Writes an install record to milaidy.json.
+ * 4. Writes an install record to milady.json.
  * 5. Returns metadata about the installation for the caller to
  *    decide whether to trigger a restart.
+ *
+ * @param pluginName - The plugin name (e.g., "@elizaos/plugin-twitter")
+ * @param onProgress - Optional progress callback
+ * @param requestedVersion - Optional specific version to install (e.g., "1.2.23-alpha.0")
  */
 export function installPlugin(
   pluginName: string,
   onProgress?: ProgressCallback,
+  requestedVersion?: string,
 ): Promise<InstallResult> {
-  return serialise(() => _installPlugin(pluginName, onProgress));
+  return serialise(() =>
+    _installPlugin(pluginName, onProgress, requestedVersion),
+  );
 }
 
 async function _installPlugin(
   pluginSpec: string,
   onProgress?: ProgressCallback,
+  requestedVersion?: string,
 ): Promise<InstallResult> {
   const { packageName: requestedName, version: explicitVersion } =
     parsePluginSpec(pluginSpec);
@@ -383,7 +392,7 @@ async function _installPlugin(
 
   emit("configuring", "Recording installation in config...");
 
-  // Write install record to milaidy.json
+  // Write install record to milady.json
   recordInstallation(canonicalName, {
     source: installSource,
     spec: `${canonicalName}@${installedVersion}`,
@@ -412,8 +421,9 @@ async function _installPlugin(
 export async function installAndRestart(
   pluginName: string,
   onProgress?: ProgressCallback,
+  requestedVersion?: string,
 ): Promise<InstallResult> {
-  const result = await installPlugin(pluginName, onProgress);
+  const result = await installPlugin(pluginName, onProgress, requestedVersion);
 
   if (result.success && result.requiresRestart) {
     onProgress?.({
@@ -443,7 +453,7 @@ export function uninstallPlugin(pluginName: string): Promise<UninstallResult> {
 }
 
 async function _uninstallPlugin(pluginName: string): Promise<UninstallResult> {
-  const config = loadMilaidyConfig();
+  const config = loadMiladyConfig();
   const installs = config.plugins?.installs;
 
   if (!installs || !installs[pluginName]) {
@@ -492,7 +502,7 @@ async function _uninstallPlugin(pluginName: string): Promise<UninstallResult> {
 
   // Remove from config
   delete installs[pluginName];
-  saveMilaidyConfig(config);
+  saveMiladyConfig(config);
 
   return {
     success: true,
@@ -521,7 +531,7 @@ export async function uninstallAndRestart(
 // ---------------------------------------------------------------------------
 
 async function runPackageInstall(
-  pm: "bun" | "pnpm" | "npm",
+  pm: "bun" | "npm",
   packageName: string,
   version: string,
   targetDir: string,
@@ -533,7 +543,7 @@ async function runPackageInstall(
 }
 
 async function runLocalPathInstall(
-  pm: "bun" | "pnpm" | "npm",
+  pm: "bun" | "npm",
   packageName: string,
   sourcePath: string,
   targetDir: string,
@@ -547,7 +557,7 @@ async function runLocalPathInstall(
 }
 
 async function installSpecWithFallback(
-  pm: "bun" | "pnpm" | "npm",
+  pm: "bun" | "npm",
   spec: string,
   targetDir: string,
 ): Promise<void> {
@@ -563,16 +573,13 @@ async function installSpecWithFallback(
 }
 
 async function runInstallSpec(
-  pm: "bun" | "pnpm" | "npm",
+  pm: "bun" | "npm",
   spec: string,
   targetDir: string,
 ): Promise<void> {
   switch (pm) {
     case "bun":
       await execFileAsync("bun", ["add", spec], { cwd: targetDir });
-      break;
-    case "pnpm":
-      await execFileAsync("pnpm", ["add", spec, "--dir", targetDir]);
       break;
     default:
       await execFileAsync("npm", ["install", spec, "--prefix", targetDir]);
@@ -645,7 +652,9 @@ async function listRemoteBranches(gitUrl: string): Promise<string[]> {
   }
 }
 
-async function resolveGitBranch(info: RegistryPluginInfo): Promise<string> {
+export async function resolveGitBranch(
+  info: RegistryPluginInfo,
+): Promise<string> {
   assertValidGitUrl(info.gitUrl);
   const rawCandidates = [
     info.git.v2Branch,
@@ -929,7 +938,7 @@ function recordInstallation(
     installedAt: string;
   },
 ): void {
-  const config = loadMilaidyConfig();
+  const config = loadMiladyConfig();
 
   // Ensure the plugins.installs path exists in the config object
   if (!config.plugins) {
@@ -940,7 +949,7 @@ function recordInstallation(
   }
 
   config.plugins.installs[pluginName] = record;
-  saveMilaidyConfig(config);
+  saveMiladyConfig(config);
 }
 
 // ---------------------------------------------------------------------------
@@ -954,7 +963,7 @@ export function listInstalledPlugins(): Array<{
   installPath: string;
   installedAt: string;
 }> {
-  const config = loadMilaidyConfig();
+  const config = loadMiladyConfig();
   const installs = config.plugins?.installs ?? {};
 
   return Object.entries(installs).map(([name, record]) => ({

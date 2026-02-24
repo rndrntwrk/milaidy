@@ -5,39 +5,21 @@
  * in a split view layout (side-by-side on desktop, stacked on mobile).
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   client,
   type TrajectoryDetailResult,
   type TrajectoryLlmCall,
 } from "../api-client";
+import {
+  formatTrajectoryDuration,
+  formatTrajectoryTimestamp,
+  formatTrajectoryTokenCount,
+} from "./trajectory-format";
 
 interface TrajectoryDetailViewProps {
   trajectoryId: string;
   onBack?: () => void;
-}
-
-function formatDuration(ms: number | null): string {
-  if (ms === null) return "—";
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${(ms / 60000).toFixed(1)}m`;
-}
-
-function formatTimestamp(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
-function formatTokens(count: number | undefined): string {
-  if (count === undefined || count === 0) return "—";
-  if (count < 1000) return String(count);
-  return `${(count / 1000).toFixed(1)}k`;
 }
 
 function estimateCost(
@@ -83,7 +65,7 @@ function CodeBlock({ content, label }: { content: string; label: string }) {
   const lines = content.split("\n").length;
   const shouldTruncate = !expanded && lines > 20;
   const displayContent = shouldTruncate
-    ? content.split("\n").slice(0, 20).join("\n") + "\n..."
+    ? `${content.split("\n").slice(0, 20).join("\n")}\n...`
     : content;
 
   return (
@@ -96,6 +78,7 @@ function CodeBlock({ content, label }: { content: string; label: string }) {
           <span className="text-[10px] text-muted">{lines} lines</span>
           {lines > 20 && (
             <button
+              type="button"
               className="text-[10px] text-accent hover:underline"
               onClick={() => setExpanded(!expanded)}
             >
@@ -103,6 +86,7 @@ function CodeBlock({ content, label }: { content: string; label: string }) {
             </button>
           )}
           <button
+            type="button"
             className="text-[10px] text-muted hover:text-txt"
             onClick={() => navigator.clipboard.writeText(content)}
             title="Copy to clipboard"
@@ -138,22 +122,32 @@ function LlmCallCard({
         <span className="text-[10px] px-1.5 py-px bg-accent/10 text-accent rounded">
           {call.model}
         </span>
-        <span className="text-[10px] text-muted">{call.purpose || call.actionType || "response"}</span>
+        <span className="text-[10px] text-muted">
+          {call.purpose || call.actionType || "response"}
+        </span>
         <span className="text-[10px] text-muted ml-auto">
-          {formatDuration(call.latencyMs)}
+          {formatTrajectoryDuration(call.latencyMs)}
         </span>
       </div>
 
       {/* Metadata row */}
       <div className="flex flex-wrap gap-4 px-3 py-1.5 text-[10px] text-muted border-b border-border">
         <span>
-          Tokens: <span className="text-txt font-mono">{formatTokens(totalTokens)}</span>
+          Tokens:{" "}
+          <span className="text-txt font-mono">
+            {formatTrajectoryTokenCount(totalTokens, { emptyLabel: "—" })}
+          </span>
           <span className="ml-1">
-            ({formatTokens(promptTokens)}↑ {formatTokens(completionTokens)}↓)
+            ({formatTrajectoryTokenCount(promptTokens, { emptyLabel: "—" })}↑{" "}
+            {formatTrajectoryTokenCount(completionTokens, { emptyLabel: "—" })}
+            ↓)
           </span>
         </span>
         <span>
-          Est. cost: <span className="text-warn font-mono">{estimateCost(promptTokens, completionTokens, call.model)}</span>
+          Est. cost:{" "}
+          <span className="text-warn font-mono">
+            {estimateCost(promptTokens, completionTokens, call.model)}
+          </span>
         </span>
         <span>
           Temp: <span className="text-txt font-mono">{call.temperature}</span>
@@ -169,10 +163,12 @@ function LlmCallCard({
       {call.systemPrompt && (
         <div className="border-b border-border">
           <button
+            type="button"
             className="w-full text-left px-3 py-1.5 text-[10px] text-muted hover:bg-muted/5"
             onClick={() => setShowSystem(!showSystem)}
           >
-            {showSystem ? "▼" : "▶"} System prompt ({call.systemPrompt.length.toLocaleString()} chars)
+            {showSystem ? "▼" : "▶"} System prompt (
+            {call.systemPrompt.length.toLocaleString()} chars)
           </button>
           {showSystem && (
             <div className="p-2">
@@ -213,7 +209,9 @@ export function TrajectoryDetailView({
       const result = await client.getTrajectoryDetail(trajectoryId);
       setDetail(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load trajectory");
+      setError(
+        err instanceof Error ? err.message : "Failed to load trajectory",
+      );
     } finally {
       setLoading(false);
     }
@@ -237,6 +235,7 @@ export function TrajectoryDetailView({
         <div className="text-danger text-sm">{error}</div>
         {onBack && (
           <button
+            type="button"
             className="text-xs px-3 py-1.5 border border-border bg-card hover:border-accent"
             onClick={onBack}
           >
@@ -253,6 +252,7 @@ export function TrajectoryDetailView({
         <div className="text-muted text-sm">Trajectory not found</div>
         {onBack && (
           <button
+            type="button"
             className="text-xs px-3 py-1.5 border border-border bg-card hover:border-accent"
             onClick={onBack}
           >
@@ -264,8 +264,14 @@ export function TrajectoryDetailView({
   }
 
   const { trajectory, llmCalls } = detail;
-  const totalPromptTokens = llmCalls.reduce((sum, c) => sum + (c.promptTokens ?? 0), 0);
-  const totalCompletionTokens = llmCalls.reduce((sum, c) => sum + (c.completionTokens ?? 0), 0);
+  const totalPromptTokens = llmCalls.reduce(
+    (sum, c) => sum + (c.promptTokens ?? 0),
+    0,
+  );
+  const totalCompletionTokens = llmCalls.reduce(
+    (sum, c) => sum + (c.completionTokens ?? 0),
+    0,
+  );
 
   return (
     <div className="flex flex-col h-full">
@@ -273,6 +279,7 @@ export function TrajectoryDetailView({
       <div className="flex flex-wrap items-center gap-2 pb-3 border-b border-border mb-3">
         {onBack && (
           <button
+            type="button"
             className="text-xs px-2 py-1 border border-border bg-card hover:border-accent"
             onClick={onBack}
           >
@@ -280,14 +287,18 @@ export function TrajectoryDetailView({
           </button>
         )}
         <h2 className="text-sm font-semibold">Trajectory Detail</h2>
-        <span className="text-[10px] text-muted font-mono">{trajectory.id.slice(0, 8)}...</span>
+        <span className="text-[10px] text-muted font-mono">
+          {trajectory.id.slice(0, 8)}...
+        </span>
       </div>
 
       {/* Trajectory summary */}
       <div className="flex flex-wrap gap-4 text-xs mb-3 pb-3 border-b border-border">
         <div>
           <span className="text-muted">Time: </span>
-          <span>{formatTimestamp(trajectory.createdAt)}</span>
+          <span>
+            {formatTrajectoryTimestamp(trajectory.createdAt, "detailed")}
+          </span>
         </div>
         <div>
           <span className="text-muted">Source: </span>
@@ -309,7 +320,7 @@ export function TrajectoryDetailView({
         </div>
         <div>
           <span className="text-muted">Duration: </span>
-          <span>{formatDuration(trajectory.durationMs)}</span>
+          <span>{formatTrajectoryDuration(trajectory.durationMs)}</span>
         </div>
         <div>
           <span className="text-muted">LLM Calls: </span>
@@ -318,7 +329,10 @@ export function TrajectoryDetailView({
         <div>
           <span className="text-muted">Total Tokens: </span>
           <span className="text-accent font-mono">
-            {formatTokens(totalPromptTokens + totalCompletionTokens)}
+            {formatTrajectoryTokenCount(
+              totalPromptTokens + totalCompletionTokens,
+              { emptyLabel: "—" },
+            )}
           </span>
         </div>
       </div>

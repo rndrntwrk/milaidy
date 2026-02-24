@@ -14,22 +14,33 @@ interface SaveCommandModalProps {
 
 const NAME_PATTERN = /^[a-zA-Z][a-zA-Z0-9-]*$/;
 
-export function SaveCommandModal({ open, text, onSave, onClose }: SaveCommandModalProps) {
+export function SaveCommandModal({
+  open,
+  text,
+  onSave,
+  onClose,
+}: SaveCommandModalProps) {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogTitleId = useId();
+  const inputId = useId();
+  const inputLabelId = useId();
+  const inputErrorId = useId();
 
   useEffect(() => {
     if (open) {
       setName("");
       setError("");
-      setTimeout(() => inputRef.current?.focus(), 50);
+      const focusTimeout = setTimeout(() => inputRef.current?.focus(), 50);
+      return () => clearTimeout(focusTimeout);
     }
   }, [open]);
 
   const validate = useCallback((value: string) => {
     if (!value) return "Name is required";
-    if (!NAME_PATTERN.test(value)) return "Must start with a letter, no spaces (a-z, 0-9, -)";
+    if (!NAME_PATTERN.test(value))
+      return "Must start with a letter, no spaces (a-z, 0-9, -)";
     return "";
   }, []);
 
@@ -55,6 +66,7 @@ export function SaveCommandModal({ open, text, onSave, onClose }: SaveCommandMod
         <div className="flex items-center px-5 py-3 border-b border-border shrink-0">
           <span id="save-command-title" className="font-bold text-sm flex-1">Save as /Command</span>
           <button
+            type="button"
             className="text-muted hover:text-txt text-lg leading-none px-1 cursor-pointer"
             onClick={onClose}
             aria-label="Close"
@@ -73,7 +85,10 @@ export function SaveCommandModal({ open, text, onSave, onClose }: SaveCommandMod
               ref={inputRef}
               type="text"
               value={name}
-              onChange={(e) => { setName(e.target.value); setError(""); }}
+              onChange={(e) => {
+                setName(e.target.value);
+                setError("");
+              }}
               onKeyDown={handleKeyDown}
               placeholder="my-command"
               aria-required="true"
@@ -84,7 +99,7 @@ export function SaveCommandModal({ open, text, onSave, onClose }: SaveCommandMod
           </div>
           {error && <p id="save-cmd-error" className="text-xs text-danger" role="alert">{error}</p>}
 
-          <label className="text-xs text-muted mt-1">Preview</label>
+          <span className="text-xs text-muted mt-1">Preview</span>
           <pre className="text-xs text-muted bg-surface border border-border px-3 py-2 whitespace-pre-wrap break-words max-h-24 overflow-y-auto">
             {preview}
           </pre>
@@ -93,6 +108,7 @@ export function SaveCommandModal({ open, text, onSave, onClose }: SaveCommandMod
         {/* Footer */}
         <div className="flex justify-end gap-2 px-5 py-3 border-t border-border">
           <button
+            type="button"
             className="px-3 py-1.5 text-xs border border-border text-muted hover:text-txt cursor-pointer"
             onClick={onClose}
           >

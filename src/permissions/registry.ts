@@ -18,7 +18,7 @@ export const SYSTEM_PERMISSIONS: SystemPermissionDefinition[] = [
       "Control mouse, keyboard, and interact with other applications",
     icon: "cursor",
     platforms: ["darwin"],
-    requiredForFeatures: ["computeruse", "browser"],
+    requiredForFeatures: ["computeruse", "cua", "browser"],
   },
   {
     id: "screen-recording",
@@ -26,7 +26,7 @@ export const SYSTEM_PERMISSIONS: SystemPermissionDefinition[] = [
     description: "Capture screen content for screenshots and vision",
     icon: "monitor",
     platforms: ["darwin"],
-    requiredForFeatures: ["computeruse", "vision"],
+    requiredForFeatures: ["computeruse", "cua", "vision"],
   },
   {
     id: "microphone",

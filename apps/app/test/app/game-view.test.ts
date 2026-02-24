@@ -1,6 +1,7 @@
+// @vitest-environment jsdom
 import React from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TestRenderer, { act } from "react-test-renderer";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppViewerAuthMessage } from "../../src/api-client";
 
 interface GameContextStub {
@@ -10,6 +11,10 @@ interface GameContextStub {
   activeGameSandbox: string;
   activeGamePostMessageAuth: boolean;
   activeGamePostMessagePayload: AppViewerAuthMessage | null;
+  gameOverlayEnabled: boolean;
+  plugins: { id: string; enabled: boolean }[];
+  logs: unknown[];
+  loadLogs: () => Promise<void>;
   setState: (
     key: string,
     value: string | boolean | AppViewerAuthMessage | null,
@@ -37,9 +42,7 @@ vi.mock("../../src/AppContext", () => ({
 
 import { GameView } from "../../src/components/GameView";
 
-function createContext(
-  overrides?: Partial<GameContextStub>,
-): GameContextStub {
+function createContext(overrides?: Partial<GameContextStub>): GameContextStub {
   return {
     activeGameApp: "@elizaos/app-hyperscape",
     activeGameDisplayName: "Hyperscape",
@@ -47,6 +50,10 @@ function createContext(
     activeGameSandbox: "allow-scripts allow-same-origin",
     activeGamePostMessageAuth: false,
     activeGamePostMessagePayload: null,
+    gameOverlayEnabled: false,
+    plugins: [],
+    logs: [],
+    loadLogs: vi.fn(async () => {}),
     setState: vi.fn<GameContextStub["setState"]>(),
     setActionNotice: vi.fn<GameContextStub["setActionNotice"]>(),
     ...overrides,
@@ -104,7 +111,7 @@ describe("GameView", () => {
     await flush();
 
     await act(async () => {
-      findButtonByText(tree!.root, "Back to Apps").props.onClick();
+      findButtonByText(tree?.root, "Back to Apps").props.onClick();
     });
 
     expect(ctx.setState).toHaveBeenCalledWith("tab", "apps");
@@ -114,9 +121,7 @@ describe("GameView", () => {
     const ctx = createContext();
     mockUseApp.mockReturnValue(ctx);
 
-    const openSpy = vi
-      .spyOn(window, "open")
-      .mockReturnValue({} as Window);
+    const openSpy = vi.spyOn(window, "open").mockReturnValue({} as Window);
 
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
@@ -125,7 +130,7 @@ describe("GameView", () => {
     await flush();
 
     await act(async () => {
-      findButtonByText(tree!.root, "Open in New Tab").props.onClick();
+      findButtonByText(tree?.root, "Open in New Tab").props.onClick();
     });
 
     expect(openSpy).toHaveBeenCalledWith(
@@ -141,7 +146,7 @@ describe("GameView", () => {
 
     openSpy.mockReturnValueOnce(null);
     await act(async () => {
-      findButtonByText(tree!.root, "Open in New Tab").props.onClick();
+      findButtonByText(tree?.root, "Open in New Tab").props.onClick();
     });
     expect(ctx.setActionNotice).toHaveBeenCalledWith(
       "Popup blocked. Allow popups and try again.",
@@ -160,7 +165,8 @@ describe("GameView", () => {
       pluginUninstalled: true,
       needsRestart: true,
       stopScope: "plugin-uninstalled",
-      message: "App disconnected and plugin uninstalled. Agent restart required.",
+      message:
+        "App disconnected and plugin uninstalled. Agent restart required.",
     });
 
     let tree: TestRenderer.ReactTestRenderer;
@@ -170,15 +176,21 @@ describe("GameView", () => {
     await flush();
 
     await act(async () => {
-      await findButtonByText(tree!.root, "Stop").props.onClick();
+      await findButtonByText(tree?.root, "Stop").props.onClick();
     });
 
     expect(mockClientFns.stopApp).toHaveBeenCalledWith(ctx.activeGameApp);
     expect(ctx.setState).toHaveBeenCalledWith("activeGameApp", "");
     expect(ctx.setState).toHaveBeenCalledWith("activeGameDisplayName", "");
     expect(ctx.setState).toHaveBeenCalledWith("activeGameViewerUrl", "");
-    expect(ctx.setState).toHaveBeenCalledWith("activeGamePostMessageAuth", false);
-    expect(ctx.setState).toHaveBeenCalledWith("activeGamePostMessagePayload", null);
+    expect(ctx.setState).toHaveBeenCalledWith(
+      "activeGamePostMessageAuth",
+      false,
+    );
+    expect(ctx.setState).toHaveBeenCalledWith(
+      "activeGamePostMessagePayload",
+      null,
+    );
     expect(ctx.setState).toHaveBeenCalledWith("tab", "apps");
     expect(ctx.setActionNotice).toHaveBeenCalledWith(
       "App disconnected and plugin uninstalled. Agent restart required.",
@@ -199,7 +211,7 @@ describe("GameView", () => {
     await flush();
 
     await act(async () => {
-      await findButtonByText(tree!.root, "Stop").props.onClick();
+      await findButtonByText(tree?.root, "Stop").props.onClick();
     });
     expect(ctx.setActionNotice).toHaveBeenCalledWith(
       "Failed to stop: stop failed",
@@ -227,7 +239,7 @@ describe("GameView", () => {
     await flush();
 
     await act(async () => {
-      await findButtonByText(tree!.root, "Stop").props.onClick();
+      await findButtonByText(tree?.root, "Stop").props.onClick();
     });
     expect(ctx.setActionNotice).toHaveBeenCalledWith(
       "No active session or installed plugin found.",
@@ -250,28 +262,30 @@ describe("GameView", () => {
     let messageHandler:
       | ((event: MessageEvent<{ type?: string }>) => void)
       | null = null;
-    vi.spyOn(window, "addEventListener").mockImplementation(
-      ((type: string, listener: EventListenerOrEventListenerObject) => {
-        if (type === "message" && typeof listener === "function") {
-          messageHandler = listener as (event: MessageEvent<{ type?: string }>) => void;
-        }
-      }) as typeof window.addEventListener,
-    );
+    vi.spyOn(window, "addEventListener").mockImplementation(((
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+    ) => {
+      if (type === "message" && typeof listener === "function") {
+        messageHandler = listener as (
+          event: MessageEvent<{ type?: string }>,
+        ) => void;
+      }
+    }) as typeof window.addEventListener);
     vi.spyOn(window, "removeEventListener").mockImplementation(
       (() => {}) as typeof window.removeEventListener,
     );
 
-    const postMessage = vi.fn<
-      (message: AppViewerAuthMessage, targetOrigin: string) => void
-    >();
+    const postMessage =
+      vi.fn<(message: AppViewerAuthMessage, targetOrigin: string) => void>();
     Object.defineProperty(window, "postMessage", {
       value: postMessage,
       writable: true,
       configurable: true,
     });
-    let tree: TestRenderer.ReactTestRenderer;
+    let _tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
-      tree = TestRenderer.create(React.createElement(GameView), {
+      _tree = TestRenderer.create(React.createElement(GameView), {
         createNodeMock: (element) => {
           if (element.type === "iframe") {
             return { contentWindow: window };
@@ -291,7 +305,11 @@ describe("GameView", () => {
       } as MessageEvent<{ type?: string }>);
     });
     expect(postMessage).toHaveBeenCalledWith(payload, "http://localhost:5175");
-    expect(ctx.setActionNotice).toHaveBeenCalledWith("Viewer auth sent.", "info", 1800);
+    expect(ctx.setActionNotice).toHaveBeenCalledWith(
+      "Viewer auth sent.",
+      "info",
+      1800,
+    );
 
     await act(async () => {
       messageHandler?.({
@@ -317,28 +335,30 @@ describe("GameView", () => {
     let messageHandler:
       | ((event: MessageEvent<{ type?: string }>) => void)
       | null = null;
-    vi.spyOn(window, "addEventListener").mockImplementation(
-      ((type: string, listener: EventListenerOrEventListenerObject) => {
-        if (type === "message" && typeof listener === "function") {
-          messageHandler = listener as (event: MessageEvent<{ type?: string }>) => void;
-        }
-      }) as typeof window.addEventListener,
-    );
+    vi.spyOn(window, "addEventListener").mockImplementation(((
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+    ) => {
+      if (type === "message" && typeof listener === "function") {
+        messageHandler = listener as (
+          event: MessageEvent<{ type?: string }>,
+        ) => void;
+      }
+    }) as typeof window.addEventListener);
     vi.spyOn(window, "removeEventListener").mockImplementation(
       (() => {}) as typeof window.removeEventListener,
     );
 
-    const postMessage = vi.fn<
-      (message: AppViewerAuthMessage, targetOrigin: string) => void
-    >();
+    const postMessage =
+      vi.fn<(message: AppViewerAuthMessage, targetOrigin: string) => void>();
     Object.defineProperty(window, "postMessage", {
       value: postMessage,
       writable: true,
       configurable: true,
     });
-    let tree: TestRenderer.ReactTestRenderer;
+    let _tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
-      tree = TestRenderer.create(React.createElement(GameView), {
+      _tree = TestRenderer.create(React.createElement(GameView), {
         createNodeMock: (element) => {
           if (element.type === "iframe") {
             return { contentWindow: window };
@@ -370,7 +390,7 @@ describe("GameView", () => {
     await flush();
 
     await act(async () => {
-      findButtonByText(tree!.root, "Back to Apps").props.onClick();
+      findButtonByText(tree?.root, "Back to Apps").props.onClick();
     });
     expect(ctx.setState).toHaveBeenCalledWith("tab", "apps");
   });
