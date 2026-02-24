@@ -246,7 +246,6 @@
     "ai": "6.0.30",
     "tar": "^7.5.7",
     "@elizaos/core": "next",
-    "pdfjs-dist": "5.4.624",
     "@elizaos/plugin-sql": "$@elizaos/plugin-sql"
   },
   "pnpm": {

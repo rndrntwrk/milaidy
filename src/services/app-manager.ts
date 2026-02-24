@@ -12,6 +12,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { IAgentRuntime } from "@elizaos/core";
+import { createConnection } from "node:net";
 import { logger } from "@elizaos/core";
 import {
   installPlugin,
@@ -33,6 +34,11 @@ const HYPERSCAPE_AUTH_MESSAGE_TYPE = "HYPERSCAPE_AUTH";
 const RS_2004SCAPE_APP_NAME = "@elizaos/app-2004scape";
 const RS_2004SCAPE_AUTH_MESSAGE_TYPE = "RS_2004SCAPE_AUTH";
 const SAFE_APP_URL_PROTOCOLS = new Set(["http:", "https:"]);
+const LOCAL_APP_DEFAULT_FALLBACK_URLS: Readonly<Record<string, string>> = {
+  "@elizaos/app-hyperfy": "https://hyperfy.io/",
+  "@elizaos/app-hyperscape": "https://hyperscapeai.github.io/hyperscape/",
+  "@elizaos/app-2004scape": "https://rs-sdk-demo.fly.dev/",
+};
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -140,7 +146,10 @@ function getTemplateFallbackValue(key: string): string | undefined {
 }
 
 function isLoopbackHostname(hostname: string): boolean {
-  const normalized = hostname.trim().toLowerCase().replace(/^\[|\]$/g, "");
+  const normalized = hostname
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "");
   if (!normalized) return false;
   if (normalized === "localhost" || normalized === "::1") return true;
   if (normalized === "0.0.0.0") return true;
@@ -149,11 +158,118 @@ function isLoopbackHostname(hostname: string): boolean {
 }
 
 function shouldProxyLocalAppUrls(): boolean {
-  const explicit = process.env.MILAIDY_PROXY_LOCAL_APP_URLS?.trim().toLowerCase();
+  const explicit =
+    process.env.MILAIDY_PROXY_LOCAL_APP_URLS?.trim().toLowerCase();
   if (explicit === "1" || explicit === "true") return true;
   if (explicit === "0" || explicit === "false") return false;
-  if (process.env.VITEST || process.env.NODE_ENV === "test") return false;
+  if (isRuntimeTestEnvironment()) return false;
   return true;
+}
+
+function isRuntimeTestEnvironment(): boolean {
+  return (
+    process.env.NODE_ENV === "test" ||
+    Boolean(process.env.VITEST) ||
+    Boolean(process.env.VITEST_WORKER_ID) ||
+    Boolean(process.env.JEST_WORKER_ID)
+  );
+}
+
+function shouldValidateLocalAppUpstream(): boolean {
+  const explicit =
+    process.env.MILAIDY_VALIDATE_LOCAL_APP_UPSTREAM?.trim().toLowerCase();
+  if (explicit === "1" || explicit === "true") return true;
+  if (explicit === "0" || explicit === "false") return false;
+  if (isRuntimeTestEnvironment()) return false;
+  return true;
+}
+
+function resolveLocalUpstreamCandidate(
+  appInfo: RegistryAppInfo,
+): string | null {
+  const candidates = [appInfo.viewer?.url, appInfo.launchUrl]
+    .map((value) =>
+      typeof value === "string" && value.trim().length > 0
+        ? substituteTemplateVars(value)
+        : "",
+    )
+    .filter((value) => value.length > 0);
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = new URL(candidate);
+      if (!/^https?:$/i.test(parsed.protocol)) continue;
+      if (!isLoopbackHostname(parsed.hostname)) continue;
+      return parsed.toString();
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+async function isLoopbackUpstreamReachable(
+  candidateUrl: string,
+  timeoutMs = 1000,
+): Promise<boolean> {
+  let parsed: URL;
+  try {
+    parsed = new URL(candidateUrl);
+  } catch {
+    return false;
+  }
+  if (!/^https?:$/i.test(parsed.protocol)) return false;
+  if (!isLoopbackHostname(parsed.hostname)) return true;
+
+  const port = parsed.port
+    ? Number(parsed.port)
+    : parsed.protocol === "https:"
+      ? 443
+      : 80;
+  if (!Number.isFinite(port) || port <= 0) return false;
+
+  return await new Promise<boolean>((resolve) => {
+    const socket = createConnection({
+      host: parsed.hostname,
+      port,
+    });
+    let settled = false;
+    const settle = (reachable: boolean): void => {
+      if (settled) return;
+      settled = true;
+      socket.removeAllListeners();
+      socket.destroy();
+      resolve(reachable);
+    };
+    socket.setTimeout(timeoutMs);
+    socket.once("connect", () => settle(true));
+    socket.once("timeout", () => settle(false));
+    socket.once("error", () => settle(false));
+  });
+}
+
+function resolveAppLaunchFallbackUrl(appInfo: RegistryAppInfo): string | null {
+  const slug = appInfo.name
+    .replace(/^@[^/]+\//, "")
+    .replace(/^app-/, "")
+    .replace(/[^a-z0-9]+/gi, "_")
+    .replace(/^_+|_+$/g, "")
+    .toUpperCase();
+  const fallbackEnvKey = slug ? `MILAIDY_APP_FALLBACK_URL_${slug}` : undefined;
+  const fallbackFromEnv =
+    fallbackEnvKey &&
+    process.env[fallbackEnvKey] &&
+    process.env[fallbackEnvKey]?.trim().length
+      ? (process.env[fallbackEnvKey]?.trim() ?? null)
+      : null;
+  if (fallbackFromEnv) return fallbackFromEnv;
+
+  const defaultFallback = LOCAL_APP_DEFAULT_FALLBACK_URLS[appInfo.name];
+  if (defaultFallback) return defaultFallback;
+
+  const repository =
+    typeof appInfo.repository === "string" ? appInfo.repository.trim() : "";
+  return repository.length > 0 ? repository : null;
 }
 
 function toProxyAppUrl(appName: string, candidate: string): string {
@@ -167,9 +283,8 @@ function toProxyAppUrl(appName: string, candidate: string): string {
   if (!/^https?:$/i.test(parsed.protocol)) return candidate;
   if (!isLoopbackHostname(parsed.hostname)) return candidate;
   const appSegment = encodeURIComponent(appName);
-  const upstreamPath = parsed.pathname && parsed.pathname.length > 0
-    ? parsed.pathname
-    : "/";
+  const upstreamPath =
+    parsed.pathname && parsed.pathname.length > 0 ? parsed.pathname : "/";
   return `/api/apps/local/${appSegment}${upstreamPath}${parsed.search}${parsed.hash}`;
 }
 
@@ -383,9 +498,7 @@ function isPluginInstallable(
   );
 }
 
-async function getPluginMetadata(
-  appName: string,
-): Promise<{
+async function getPluginMetadata(appName: string): Promise<{
   npm: {
     package: string;
     v0Version: string | null;
@@ -512,12 +625,32 @@ export class AppManager {
     const launchUrlRaw = appInfo.launchUrl
       ? substituteTemplateVars(appInfo.launchUrl)
       : null;
-    const launchUrl = launchUrlRaw
+    let launchUrl = launchUrlRaw
       ? toProxyAppUrl(appInfo.name, launchUrlRaw)
       : null;
-    const viewer = buildViewerConfig(appInfo, launchUrl);
+    let viewer = buildViewerConfig(appInfo, launchUrl);
 
-    const isTestRun = process.env.VITEST || process.env.NODE_ENV === "test";
+    const isTestRun = isRuntimeTestEnvironment();
+    if (!isTestRun && shouldValidateLocalAppUpstream()) {
+      const localUpstream = resolveLocalUpstreamCandidate(appInfo);
+      if (localUpstream) {
+        const upstreamReachable =
+          await isLoopbackUpstreamReachable(localUpstream);
+        if (!upstreamReachable) {
+          const fallbackUrl = resolveAppLaunchFallbackUrl(appInfo);
+          if (!fallbackUrl) {
+            throw new Error(
+              `Local app upstream is unreachable (${localUpstream}) and no fallback URL is configured.`,
+            );
+          }
+          logger.warn(
+            `[app-manager] Local app upstream unreachable for "${name}" (${localUpstream}); falling back to ${fallbackUrl}.`,
+          );
+          launchUrl = fallbackUrl;
+          viewer = null;
+        }
+      }
+    }
 
     // The app's plugin is what the agent needs to play the game.
     // It's the same npm package name as the app, or a separate plugin ref.
