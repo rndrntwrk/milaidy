@@ -159,6 +159,13 @@ export type SkillsConfig = {
   entries?: Record<string, SkillConfig>;
 };
 
+export type KnowledgeConfig = {
+  /** Enable contextual knowledge enrichment for document ingestion. */
+  contextualEnrichment?: boolean;
+  /** Docs directory path used for enrichment context. */
+  docsPath?: string;
+};
+
 // --- Models types (merged from types.models.ts) ---
 
 export type ModelApi =
@@ -450,6 +457,15 @@ export type PluginInstallRecord = {
   installedAt?: string;
 };
 
+export type RegistryEndpoint = {
+  /** Human-friendly label shown in UI. */
+  label: string;
+  /** Endpoint URL returning registry JSON payload. */
+  url: string;
+  /** Whether this endpoint is enabled for fetch/merge. */
+  enabled?: boolean;
+};
+
 export type PluginsConfig = {
   /** Enable or disable plugin loading. */
   enabled?: boolean;
@@ -461,6 +477,8 @@ export type PluginsConfig = {
   slots?: PluginSlotsConfig;
   entries?: Record<string, PluginEntryConfig>;
   installs?: Record<string, PluginInstallRecord>;
+  /** Additional plugin registry endpoints. */
+  registryEndpoints?: RegistryEndpoint[];
 };
 
 // --- Cloud types (ElizaCloud integration) ---
@@ -515,6 +533,32 @@ export type CloudConfig = {
   backup?: CloudBackupConfig;
   /** Default container settings for new cloud deployments. */
   container?: CloudContainerDefaults;
+};
+
+/** CUA (Computer Use Agent) configuration. Supports local (Lume VM) and cloud modes. */
+export type CuaConfig = {
+  /** Enable the CUA plugin. Default: false. */
+  enabled?: boolean;
+  /** Local mode: host:port of the CUA computer server (e.g. "localhost:8002"). Skips cloud API. */
+  host?: string;
+  /** Cloud mode: CUA API key for cloud sandbox access. */
+  apiKey?: string;
+  /** Cloud mode: Name of the CUA cloud sandbox. */
+  sandboxName?: string;
+  /** OS type for the sandbox: linux, windows, macos, android. Default: linux. */
+  osType?: "linux" | "windows" | "macos" | "android";
+  /** Custom CUA API base URL. */
+  apiBase?: string;
+  /** OpenAI model for computer-use (default: computer-use-preview). */
+  computerUseModel?: string;
+  /** Maximum steps per run (default: 30). */
+  maxSteps?: number;
+  /** Auto-acknowledge safety checks (default: false). */
+  autoAckSafetyChecks?: boolean;
+  /** Connect to sandbox on plugin start (default: false). */
+  connectOnStart?: boolean;
+  /** Disconnect from sandbox after each run (default: true). */
+  disconnectAfterRun?: boolean;
 };
 
 /** x402 HTTP payment protocol configuration. */
@@ -633,6 +677,7 @@ export type MiladyConfig = {
       avatar?: string;
     };
   };
+  knowledge?: KnowledgeConfig;
   skills?: SkillsConfig;
   plugins?: PluginsConfig;
   models?: ModelsConfig;
@@ -661,6 +706,8 @@ export type MiladyConfig = {
   database?: DatabaseConfig;
   /** ElizaCloud integration for remote agent provisioning and inference. */
   cloud?: CloudConfig;
+  /** CUA (Computer Use Agent) cloud sandbox configuration. */
+  cua?: CuaConfig;
   x402?: X402Config;
   /** Media generation configuration (image, video, audio, vision providers). */
   media?: MediaConfig;

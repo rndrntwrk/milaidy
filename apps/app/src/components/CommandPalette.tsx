@@ -1,6 +1,6 @@
-import { useEffect, useRef, useMemo } from "react";
-import { useApp } from "../AppContext.js";
-import { Dialog } from "./ui/Dialog.js";
+import { useEffect, useMemo, useRef } from "react";
+import { useApp } from "../AppContext";
+import { useBugReport } from "../hooks/useBugReport";
 
 interface CommandItem {
   id: string;
@@ -28,6 +28,7 @@ export function CommandPalette() {
     setState,
     closeCommandPalette,
   } = useApp();
+  const { open: openBugReport } = useBugReport();
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -112,6 +113,11 @@ export function CommandPalette() {
         action: () => setTab("settings"),
       },
       { id: "nav-logs", label: "Open Logs", action: () => setTab("logs") },
+      {
+        id: "nav-security",
+        label: "Open Security",
+        action: () => setTab("security"),
+      },
     );
 
     if (currentGameViewerUrl.trim()) {
@@ -144,6 +150,13 @@ export function CommandPalette() {
       action: handleChatClear,
     });
 
+    // Bug report
+    commands.push({
+      id: "report-bug",
+      label: "Report Bug",
+      action: openBugReport,
+    });
+
     return commands;
   }, [
     agentState,
@@ -160,6 +173,7 @@ export function CommandPalette() {
     loadSkills,
     loadLogs,
     loadWorkbench,
+    openBugReport,
   ]);
 
   // Filter commands by query
@@ -182,6 +196,7 @@ export function CommandPalette() {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "ArrowDown") {
+        if (filteredCommands.length === 0) return;
         e.preventDefault();
         setState(
           "commandActiveIndex",
@@ -193,6 +208,7 @@ export function CommandPalette() {
       }
 
       if (e.key === "ArrowUp") {
+        if (filteredCommands.length === 0) return;
         e.preventDefault();
         setState(
           "commandActiveIndex",
@@ -204,6 +220,7 @@ export function CommandPalette() {
       }
 
       if (e.key === "Enter") {
+        if (filteredCommands.length === 0) return;
         e.preventDefault();
         const cmd = filteredCommands[commandActiveIndex];
         if (cmd) {
@@ -223,6 +240,23 @@ export function CommandPalette() {
     setState,
     closeCommandPalette,
   ]);
+
+  useEffect(() => {
+    if (filteredCommands.length === 0) {
+      if (commandActiveIndex !== 0) {
+        setState("commandActiveIndex", 0);
+      }
+      return;
+    }
+
+    const maxIndex = filteredCommands.length - 1;
+    if (commandActiveIndex < 0 || commandActiveIndex > maxIndex) {
+      setState(
+        "commandActiveIndex",
+        Math.min(Math.max(commandActiveIndex, 0), maxIndex),
+      );
+    }
+  }, [commandActiveIndex, filteredCommands.length, setState]);
 
   // Reset active index when query changes
   useEffect(() => {

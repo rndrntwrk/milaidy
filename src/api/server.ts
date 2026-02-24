@@ -7,8 +7,10 @@
  */
 
 import crypto from "node:crypto";
+import { lookup as dnsLookup } from "node:dns/promises";
 import fs from "node:fs";
 import http from "node:http";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,16 +18,19 @@ import {
   type AgentRuntime,
   ChannelType,
   type Content,
+  ContentType,
   createMessageMemory,
   logger,
+  type Media,
   ModelType,
   stringToUuid,
   type Task,
   type UUID,
 } from "@elizaos/core";
+import { listPiAiModelOptions } from "@elizaos/plugin-pi-ai";
+import { createCodingAgentRouteHandler } from "@milaidy/plugin-coding-agent";
 import { type WebSocket, WebSocketServer } from "ws";
 import type { CloudManager } from "../cloud/cloud-manager";
-
 import {
   configFileExists,
   loadMiladyConfig,
@@ -33,6 +38,7 @@ import {
   saveMiladyConfig,
 } from "../config/config";
 import { resolveModelsCacheDir, resolveStateDir } from "../config/paths";
+import { isConnectorConfigured } from "../config/plugin-auto-enable";
 import type { ConnectorConfig, CustomActionDef } from "../config/types.milady";
 import { EMOTE_BY_ID, EMOTE_CATALOG } from "../emotes/catalog";
 import { resolveDefaultAgentWorkspaceDir } from "../providers/workspace";
@@ -41,7 +47,10 @@ import {
   buildTestHandler,
   registerCustomActionLive,
 } from "../runtime/custom-actions";
-
+import {
+  isBlockedPrivateOrLinkLocalIp,
+  normalizeHostLike,
+} from "../security/network-policy";
 import { AppManager } from "../services/app-manager";
 import { FallbackTrainingService } from "../services/fallback-training-service";
 import {
@@ -62,6 +71,7 @@ import {
   searchSkillsMarketplace,
   uninstallMarketplaceSkill,
 } from "../services/skill-marketplace";
+import { streamManager } from "../services/stream-manager";
 import {
   listTriggerTasks,
   readTriggerConfig,
@@ -75,10 +85,10 @@ import { handleAppsHyperscapeRoutes } from "./apps-hyperscape-routes";
 import { handleAppsRoutes } from "./apps-routes";
 import { handleAuthRoutes } from "./auth-routes";
 import { getAutonomyState, handleAutonomyRoutes } from "./autonomy-routes";
+import { handleBugReportRoutes } from "./bug-report-routes";
 import { handleCharacterRoutes } from "./character-routes";
 import { type CloudRouteState, handleCloudRoute } from "./cloud-routes";
 import { handleCloudStatusRoutes } from "./cloud-status-routes";
-
 import {
   extractAnthropicSystemAndLastUser,
   extractCompatTextContent,
@@ -92,10 +102,17 @@ import {
   readJsonBody as parseJsonBody,
   type ReadJsonBodyOptions,
   readRequestBody,
+  readRequestBodyBuffer,
   sendJson,
   sendJsonError,
 } from "./http-helpers";
 import { handleKnowledgeRoutes } from "./knowledge-routes";
+import {
+  evictOldestConversation,
+  getOrReadCachedFile,
+  pushWithBatchEvict,
+  sweepExpiredEntries,
+} from "./memory-bounds";
 import { handleModelsRoutes } from "./models-routes";
 import { handlePermissionRoutes } from "./permissions-routes";
 import {
@@ -106,6 +123,10 @@ import {
   type PluginParamInfo,
   validatePluginConfig,
 } from "./plugin-validation";
+import {
+  applySubscriptionProviderConfig,
+  clearSubscriptionProviderConfig,
+} from "./provider-switch-config";
 import { handleRegistryRoutes } from "./registry-routes";
 import { RegistryService } from "./registry-service";
 import { handleSandboxRoute } from "./sandbox-routes";
@@ -120,130 +141,26 @@ import {
   isAddressWhitelisted,
   markAddressVerified,
   verifyTweet,
-} from "./twitter-verify.js";
-import { TxService } from "./tx-service.js";
+} from "./twitter-verify";
+import { TxService } from "./tx-service";
+import { generateWalletKeys, getWalletAddresses } from "./wallet";
+import { handleWalletRoutes } from "./wallet-routes";
 import {
-  fetchEvmBalances,
-  fetchEvmNfts,
-  fetchSolanaBalances,
-  fetchSolanaNfts,
-  generateWalletForChain,
-  generateWalletKeys,
-  getSolanaRpcConfig,
-  getWalletAddresses,
-  importWallet,
-  validatePrivateKey,
-  type SolanaRpcProvider,
-  type WalletBalancesResponse,
-  type WalletChain,
-  type WalletConfigStatus,
-  type WalletNftsResponse,
-} from "./wallet.js";
-import {
-  createHealthChecks,
-  createHealthHandler,
-  type HealthCheck,
-} from "./health.js";
-import { initTelemetry } from "../telemetry/setup.js";
+  applyWhatsAppQrOverride,
+  handleWhatsAppRoute,
+} from "./whatsapp-routes";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-/** Subset of the core AutonomyService interface we use for lifecycle control. */
-interface AutonomyServiceLike {
-  enableAutonomy(): Promise<void>;
-  disableAutonomy(): Promise<void>;
-  isLoopRunning(): boolean;
-  getGoalManager?(): import("../autonomy/goals/manager.js").GoalManager | null;
-  getMemoryGate?(): import("../autonomy/memory/gate.js").MemoryGate | null;
-  getIdentityConfig?(): import("../autonomy/identity/schema.js").AutonomyIdentityConfig | null;
-  updateIdentityConfig?(
-    update: Partial<import("../autonomy/identity/schema.js").AutonomyIdentityConfig>,
-    context?: import("../autonomy/identity/update-policy.js").IdentityUpdateContext,
-  ): Promise<import("../autonomy/identity/schema.js").AutonomyIdentityConfig>;
-  getApprovalGate?(): import("../autonomy/approval/types.js").ApprovalGateInterface | null;
-  getApprovalLog?(): import("../autonomy/persistence/pg-approval-log.js").ApprovalLogInterface | null;
-  getStateMachine?(): import("../autonomy/state-machine/types.js").KernelStateMachineInterface | null;
-  getExecutionPipeline?(): import("../autonomy/workflow/types.js").ToolExecutionPipelineInterface | null;
-  getWorkflowEngine?(): import("../autonomy/adapters/workflow/types.js").WorkflowEngine | null;
-  getAuditRetentionManager?(): import("../autonomy/domains/governance/retention-manager.js").AuditRetentionManagerInterface | null;
-  getRoleHealth?(): import("../autonomy/service.js").AutonomyRoleHealthSnapshot;
-}
-
-/** Helper to retrieve the AutonomyService from a runtime (may be null). */
-function getAutonomySvc(
-  runtime: AgentRuntime | null,
-): AutonomyServiceLike | null {
-  if (!runtime) return null;
-  return runtime.getService("AUTONOMY") as AutonomyServiceLike | null;
-}
-
-function findRuntimeAction(
-  runtime: AgentRuntime,
-  toolName: string,
-): { name: string; handler: (runtime: AgentRuntime, message: unknown, state: unknown, options?: Record<string, unknown>) => Promise<unknown>; validate: (runtime: AgentRuntime, message: unknown, state: unknown) => Promise<boolean> } | null {
-  const normalized = toolName.trim().toUpperCase();
-  const actions = runtime.getAllActions?.() ?? runtime.actions ?? [];
-  for (const action of actions) {
-    const name = action.name?.toUpperCase?.() ?? "";
-    if (name === normalized) return action as never;
-    const similes = Array.isArray(action.similes) ? action.similes : [];
-    if (similes.some((s) => String(s).toUpperCase() === normalized)) {
-      return action as never;
-    }
-  }
-  return null;
-}
-
-async function executeRuntimeAction(params: {
-  runtime: AgentRuntime;
-  toolName: string;
-  requestId: string;
-  parameters: Record<string, unknown>;
-}): Promise<{ result: unknown; durationMs: number }> {
-  const { runtime, toolName, requestId, parameters } = params;
-  if (typeof runtime.isActionAllowed === "function") {
-    const decision = runtime.isActionAllowed(toolName);
-    if (!decision.allowed) {
-      throw new Error(
-        `Action "${toolName}" not allowed: ${decision.reason ?? "unknown"}`,
-      );
-    }
-  }
-  const action = findRuntimeAction(runtime, toolName);
-  if (!action) {
-    throw new Error(`Action "${toolName}" not registered`);
-  }
-
-  const memory = createMessageMemory({
-    id: crypto.randomUUID(),
-    entityId: runtime.agentId,
-    agentId: runtime.agentId,
-    roomId: runtime.agentId,
-    content: {
-      text: `[autonomy] tool:${toolName} request:${requestId}`,
-      source: "autonomy",
-    },
-  });
-
-  let state: unknown = undefined;
-  try {
-    state = await runtime.composeState(memory);
-  } catch {
-    state = undefined;
-  }
-  const valid = await action.validate(runtime, memory, state);
-  if (!valid) {
-    throw new Error(`Action "${toolName}" failed validation`);
-  }
-
-  const start = Date.now();
-  const result = await action.handler(runtime, memory, state, {
-    parameters,
-  });
-  return { result, durationMs: Date.now() - start };
-}
+/** A connector-registered route handler. Returns `true` if the request was handled. */
+type ConnectorRouteHandler = (
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  pathname: string,
+  method: string,
+) => Promise<boolean>;
 
 function getAgentEventSvc(
   runtime: AgentRuntime | null,
@@ -305,6 +222,14 @@ interface ConversationMeta {
   updatedAt: string;
 }
 
+interface AgentStartupDiagnostics {
+  phase: string;
+  attempt: number;
+  lastError?: string;
+  lastErrorAt?: number;
+  nextRetryAt?: number;
+}
+
 interface ServerState {
   runtime: AgentRuntime | null;
   config: MiladyConfig;
@@ -319,6 +244,7 @@ interface ServerState {
   agentName: string;
   model: string | undefined;
   startedAt: number | undefined;
+  startup: AgentStartupDiagnostics;
   plugins: PluginEntry[];
   skills: SkillEntry[];
   logBuffer: LogEntry[];
@@ -348,6 +274,10 @@ interface ServerState {
   broadcastStatus: (() => void) | null;
   /** Broadcast an arbitrary JSON message to all WebSocket clients. Set by startApiServer. */
   broadcastWs: ((data: Record<string, unknown>) => void) | null;
+  /** Broadcast a JSON payload to WebSocket clients bound to a specific client id. */
+  broadcastWsToClientId:
+    | ((clientId: string, data: Record<string, unknown>) => number)
+    | null;
   /** Currently active conversation ID from the frontend (sent via WS). */
   activeConversationId: string | null;
   /** Transient OAuth flow state for subscription auth. */
@@ -366,6 +296,15 @@ interface ServerState {
   >;
   /** Whether shell access is enabled (can be toggled in UI). */
   shellEnabled?: boolean;
+  /** Reasons a restart is pending. Empty array = no restart needed. */
+  pendingRestartReasons: string[];
+  /** Route handlers registered by connector plugins (loaded dynamically). */
+  connectorRouteHandlers: ConnectorRouteHandler[];
+  /** Active WhatsApp pairing sessions (QR code flow). */
+  whatsappPairingSessions?: Map<
+    string,
+    import("../services/whatsapp-pairing").WhatsAppPairingSession
+  >;
 }
 
 interface ShareIngestItem {
@@ -636,6 +575,7 @@ function _extractResponseBlocks(
 // ---------------------------------------------------------------------------
 
 export function findOwnPackageRoot(startDir: string): string {
+  const KNOWN_NAMES = new Set(["milady", "milaidy", "miladyai"]);
   let dir = startDir;
   for (let i = 0; i < 10; i++) {
     const pkgPath = path.join(dir, "package.json");
@@ -647,7 +587,9 @@ export function findOwnPackageRoot(startDir: string): string {
         >;
         const pkgName =
           typeof pkg.name === "string" ? pkg.name.toLowerCase() : "";
-        if (pkgName === "milady") return dir;
+        if (KNOWN_NAMES.has(pkgName)) return dir;
+        // Also match if plugins.json exists at this level (resilient to renames)
+        if (fs.existsSync(path.join(dir, "plugins.json"))) return dir;
       } catch {
         /* keep searching */
       }
@@ -1157,6 +1099,8 @@ function discoverInstalledPlugins(
   return entries.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+// applyWhatsAppQrOverride is imported from ./whatsapp-routes
+
 /**
  * Discover available plugins from the bundled plugins.json manifest.
  * Falls back to filesystem scanning for monorepo development.
@@ -1175,7 +1119,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
       // Keys that are auto-injected by infrastructure and should never be
       // exposed as user-facing "config keys" or parameter definitions.
       const HIDDEN_KEYS = new Set(["VERCEL_OIDC_TOKEN"]);
-      return index.plugins
+      const entries = index.plugins
         .map((p) => {
           const category = categorizePlugin(p.id);
           const envKey = p.envKey;
@@ -1232,6 +1176,10 @@ function discoverPluginsFromManifest(): PluginEntry[] {
           };
         })
         .sort((a, b) => a.name.localeCompare(b.name));
+
+      applyWhatsAppQrOverride(entries, resolveDefaultAgentWorkspaceDir());
+
+      return entries;
     } catch (err) {
       logger.debug(
         `[milady-api] Failed to read plugins.json: ${err instanceof Error ? err.message : err}`,
@@ -1267,6 +1215,7 @@ function categorizePlugin(
     "qwen",
     "minimax",
     "zai",
+    "pi-ai",
   ];
   const connectors = [
     "telegram",
@@ -1292,6 +1241,7 @@ function categorizePlugin(
     "twitch",
     "nextcloud-talk",
     "instagram",
+    "retake",
   ];
   const databases = ["sql", "localdb", "inmemorydb"];
 
@@ -1580,7 +1530,7 @@ async function discoverSkills(
 
   // Bundled skills from the @elizaos/skills package
   try {
-    const skillsPkg = (await import("@elizaos/skills")) as {
+    const skillsPkg = (await import(/* @vite-ignore */ "@elizaos/skills")) as {
       getSkillsDir: () => string;
     };
     const bundledDir = skillsPkg.getSkillsDir();
@@ -1709,6 +1659,210 @@ function scanSkillsDir(
 const MAX_BODY_BYTES = 1_048_576;
 
 /**
+ * Raised body limit for chat endpoints that accept base64-encoded image
+ * attachments. A single smartphone JPEG is typically 2–5 MB binary
+ * (~3–7 MB base64); 20 MB accommodates up to 4 images with room to spare.
+ */
+const CHAT_MAX_BODY_BYTES = 20 * 1_048_576;
+const ELEVENLABS_FETCH_TIMEOUT_MS = 20_000;
+const ELEVENLABS_AUDIO_MAX_BYTES = 20 * 1_048_576;
+
+type StreamableServerResponse = Pick<
+  http.ServerResponse,
+  "write" | "once" | "off" | "removeListener"
+> & {
+  writableEnded?: boolean;
+  destroyed?: boolean;
+};
+
+function removeResponseListener(
+  res: StreamableServerResponse,
+  event: "drain" | "error",
+  handler: (...args: unknown[]) => void,
+): void {
+  if (typeof res.off === "function") {
+    res.off(event, handler);
+    return;
+  }
+  if (typeof res.removeListener === "function") {
+    res.removeListener(event, handler);
+  }
+}
+
+function responseContentLength(headers: Pick<Headers, "get">): number | null {
+  const raw = headers.get("content-length");
+  if (!raw) return null;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return parsed;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException
+    ? error.name === "AbortError" || error.name === "TimeoutError"
+    : error instanceof Error &&
+        (error.name === "AbortError" || error.name === "TimeoutError");
+}
+
+function createTimeoutError(message: string): Error {
+  const timeoutError = new Error(message);
+  timeoutError.name = "TimeoutError";
+  return timeoutError;
+}
+
+export async function fetchWithTimeoutGuard(
+  input: string | URL,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const upstreamSignal = init.signal;
+  let timedOut = false;
+
+  const onAbort = () => {
+    controller.abort();
+  };
+
+  if (upstreamSignal) {
+    if (upstreamSignal.aborted) {
+      controller.abort();
+    } else {
+      upstreamSignal.addEventListener("abort", onAbort, { once: true });
+    }
+  }
+
+  const timeoutHandle = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (timedOut && isAbortError(err)) {
+      throw createTimeoutError(
+        `Upstream request timed out after ${timeoutMs}ms`,
+      );
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutHandle);
+    if (upstreamSignal) {
+      upstreamSignal.removeEventListener("abort", onAbort);
+    }
+  }
+}
+
+async function waitForDrain(res: StreamableServerResponse): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const onDrain = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = (err: unknown) => {
+      cleanup();
+      reject(err instanceof Error ? err : new Error(String(err)));
+    };
+    const cleanup = () => {
+      removeResponseListener(
+        res,
+        "drain",
+        onDrain as (...args: unknown[]) => void,
+      );
+      removeResponseListener(
+        res,
+        "error",
+        onError as (...args: unknown[]) => void,
+      );
+    };
+
+    res.once("drain", onDrain);
+    res.once("error", onError);
+  });
+}
+
+/**
+ * Stream a web Response body to an HTTP response while enforcing a strict byte cap.
+ * Returns the number of bytes forwarded.
+ */
+export async function streamResponseBodyWithByteLimit(
+  upstream: Response,
+  res: StreamableServerResponse,
+  maxBytes: number,
+  timeoutMs?: number,
+): Promise<number> {
+  const declaredLength = responseContentLength(upstream.headers);
+  if (declaredLength !== null && declaredLength > maxBytes) {
+    throw new Error(
+      `Upstream response exceeds maximum size of ${maxBytes} bytes`,
+    );
+  }
+
+  if (!upstream.body) {
+    throw new Error("Upstream response did not include a body stream");
+  }
+
+  const reader = upstream.body.getReader();
+  let totalBytes = 0;
+  let streamTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
+  const streamTimeoutPromise =
+    typeof timeoutMs === "number" && timeoutMs > 0
+      ? new Promise<never>((_resolve, reject) => {
+          streamTimeoutHandle = setTimeout(() => {
+            reject(
+              createTimeoutError(
+                `Upstream response body timed out after ${timeoutMs}ms`,
+              ),
+            );
+          }, timeoutMs);
+        })
+      : null;
+
+  try {
+    while (true) {
+      const { done, value } = streamTimeoutPromise
+        ? await Promise.race([reader.read(), streamTimeoutPromise])
+        : await reader.read();
+      if (done) break;
+      if (!value || value.byteLength === 0) continue;
+
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        throw new Error(
+          `Upstream response exceeds maximum size of ${maxBytes} bytes`,
+        );
+      }
+
+      if (res.writableEnded || res.destroyed) {
+        throw new Error("Client connection closed while streaming response");
+      }
+
+      const canContinue = res.write(Buffer.from(value));
+      if (!canContinue) {
+        await waitForDrain(res);
+      }
+    }
+  } catch (err) {
+    try {
+      await reader.cancel(err);
+    } catch {
+      // Best effort cleanup; keep original error.
+    }
+    throw err;
+  } finally {
+    if (streamTimeoutHandle !== null) {
+      clearTimeout(streamTimeoutHandle);
+    }
+    reader.releaseLock();
+  }
+
+  return totalBytes;
+}
+
+/**
  * Read and parse a JSON request body with size limits and error handling.
  * Returns null (and sends a 4xx response) if reading or parsing fails.
  */
@@ -1751,7 +1905,7 @@ const STATIC_MIME: Record<string, string> = {
   ".ico": "image/x-icon",
   ".jpeg": "image/jpeg",
   ".jpg": "image/jpeg",
-  "": "application/javascript; charset=utf-8",
+  ".js": "application/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".map": "application/json",
   ".mjs": "application/javascript; charset=utf-8",
@@ -1816,6 +1970,22 @@ function sendStaticResponse(
   res.end(body);
 }
 
+// ── Static file cache ─────────────────────────────────────────────────
+const STATIC_CACHE_MAX = 50;
+const STATIC_CACHE_FILE_LIMIT = 512 * 1024; // 512 KB
+const staticFileCache = new Map<string, { body: Buffer; mtimeMs: number }>();
+
+function getCachedFile(filePath: string, mtimeMs: number): Buffer {
+  return getOrReadCachedFile(
+    staticFileCache,
+    filePath,
+    mtimeMs,
+    (p) => fs.readFileSync(p),
+    STATIC_CACHE_MAX,
+    STATIC_CACHE_FILE_LIMIT,
+  );
+}
+
 /**
  * Serve built dashboard assets from apps/app/dist with SPA fallback.
  * Returns true when the request is handled.
@@ -1855,7 +2025,7 @@ function serveStaticUi(
     const stat = fs.statSync(candidatePath);
     if (stat.isFile()) {
       const ext = path.extname(candidatePath).toLowerCase();
-      const body = fs.readFileSync(candidatePath);
+      const body = getCachedFile(candidatePath, stat.mtimeMs);
       const cacheControl = relativePath.startsWith("assets/")
         ? "public, max-age=31536000, immutable"
         : "public, max-age=0, must-revalidate";
@@ -2019,19 +2189,148 @@ async function generateChatResponse(
   const t0 = Date.now();
   let firstTokenMs = 0;
   let responseText = "";
-  const streamingActive = !!opts?.onChunk;
+  let activeStreamSource: StreamSource = "unset";
+  const messageSource =
+    typeof message.content.source === "string" &&
+    message.content.source.trim().length > 0
+      ? message.content.source
+      : "api";
+  const emitChunk = (chunk: string): void => {
+    if (!chunk) return;
+    responseText += chunk;
+    opts?.onChunk?.(chunk);
+  };
+  const claimStreamSource = (
+    source: Exclude<StreamSource, "unset">,
+  ): boolean => {
+    if (activeStreamSource === "unset") {
+      activeStreamSource = source;
+      return true;
+    }
+    return activeStreamSource === source;
+  };
+  const computeDelta = (existing: string, incoming: string): string => {
+    if (!incoming) return "";
+    if (!existing) return incoming;
+    if (incoming === existing) return "";
+    if (incoming.startsWith(existing)) return incoming.slice(existing.length);
+    if (existing.startsWith(incoming)) return "";
+
+    // Small chunks are usually raw token deltas; keep them even if they
+    // repeat suffix characters (e.g., "l" + "l" in "Hello").
+    if (incoming.length <= 3) return incoming;
 
     const maxOverlap = Math.min(existing.length, incoming.length);
     for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
       if (existing.endsWith(incoming.slice(0, overlap))) {
-        return incoming.slice(overlap);
+        const delta = incoming.slice(overlap);
+        if (!delta && overlap === incoming.length) return "";
+        return delta;
       }
-      // When streaming is active, text already accumulated via onStreamChunk.
-      // The callback fires once at end with full text — only use it as fallback.
-      if (!streamingActive && content?.text) {
-        if (!firstTokenMs) firstTokenMs = Date.now() - t0;
-        responseText += content.text;
-        opts?.onChunk?.(content.text);
+    }
+    return incoming;
+  };
+  const appendIncomingText = (incoming: string): void => {
+    const delta = computeDelta(responseText, incoming);
+    if (!delta) return;
+    emitChunk(delta);
+  };
+
+  // The core message service emits MESSAGE_SENT but not MESSAGE_RECEIVED.
+  // Emit inbound events here so trajectory/session hooks run for API chat.
+  try {
+    if (typeof runtime.emitEvent === "function") {
+      await runtime.emitEvent("MESSAGE_RECEIVED", {
+        message,
+        source: messageSource,
+      });
+    }
+  } catch (err) {
+    runtime.logger?.warn(
+      {
+        err,
+        src: "milady-api",
+        messageId: message.id,
+        roomId: message.roomId,
+      },
+      "Failed to emit MESSAGE_RECEIVED event",
+    );
+  }
+
+  // Fallback when MESSAGE_RECEIVED hooks are unavailable: start a trajectory
+  // directly so /api/chat still produces rows for the Trajectories view.
+
+  let result:
+    | Awaited<
+        ReturnType<NonNullable<AgentRuntime["messageService"]>["handleMessage"]>
+      >
+    | undefined;
+  let _handlerError: unknown = null;
+  try {
+    result = await runtime.messageService?.handleMessage(
+      runtime,
+      message,
+      async (content: Content) => {
+        if (opts?.isAborted?.()) {
+          throw new Error("client_disconnected");
+        }
+
+        // Trace action callback invocations so we can verify handlers execute.
+        const actionTag = (content as Record<string, unknown>)?.action;
+        if (actionTag) {
+          runtime.logger?.info(
+            {
+              src: "milady-api",
+              action: actionTag,
+              hasText: Boolean(extractCompatTextContent(content)),
+            },
+            `[milady-api] Action callback fired: ${actionTag}`,
+          );
+        }
+
+        const chunk = extractCompatTextContent(content);
+        if (!chunk) return [];
+        if (!claimStreamSource("callback")) return [];
+        appendIncomingText(chunk);
+        return [];
+      },
+      {
+        onStreamChunk: opts?.onChunk
+          ? async (chunk: string) => {
+              if (opts?.isAborted?.()) {
+                throw new Error("client_disconnected");
+              }
+              if (!chunk) return;
+              if (!claimStreamSource("onStreamChunk")) return;
+              appendIncomingText(chunk);
+            }
+          : undefined,
+      },
+    );
+
+    // Ensure MESSAGE_SENT hooks run for API chat flows. Some runtimes emit this
+    // internally, but API wrappers can bypass those hooks.
+    try {
+      const responseMessages = Array.isArray(result?.responseMessages)
+        ? (result.responseMessages as Array<{ id?: string; content?: Content }>)
+        : [];
+      if (
+        responseMessages.length > 0 &&
+        typeof runtime.emitEvent === "function"
+      ) {
+        for (const responseMessage of responseMessages) {
+          const memoryLike = {
+            id: responseMessage.id ?? crypto.randomUUID(),
+            roomId: message.roomId,
+            entityId: runtime.agentId,
+            content: responseMessage.content ?? { text: "" },
+            metadata: message.metadata,
+          } as unknown as ReturnType<typeof createMessageMemory>;
+          await runtime.emitEvent("MESSAGE_SENT", {
+            message: memoryLike,
+            source: messageSource,
+          });
+        }
       }
       return [];
     },
@@ -2048,10 +2347,37 @@ async function generateChatResponse(
     },
   );
 
-  // Fallback: if streaming didn't produce text, use callback/result text
-  if (!responseText && result?.responseContent?.text) {
-    responseText = result.responseContent.text;
-    opts?.onChunk?.(result.responseContent.text);
+  // Log the response mode and actions for debugging action execution
+  if (result) {
+    const rc = result.responseContent as Record<string, unknown> | null;
+    const resultRecord = result as unknown as Record<string, unknown>;
+    runtime.logger?.info(
+      {
+        src: "milady-api",
+        mode: resultRecord.mode,
+        actions: rc?.actions,
+        simple: rc?.simple,
+        hasText: Boolean(rc?.text),
+      },
+      "[milady-api] Chat response metadata",
+    );
+  }
+
+  const resultText = extractCompatTextContent(result?.responseContent);
+
+  // Fallback: if callbacks weren't used for text, stream + return final text.
+  if (!responseText && resultText) {
+    emitChunk(resultText);
+  } else if (
+    resultText &&
+    resultText !== responseText &&
+    resultText.startsWith(responseText)
+  ) {
+    // Keep streaming monotonic when final text extends emitted chunks.
+    emitChunk(resultText.slice(responseText.length));
+  } else if (resultText && resultText !== responseText) {
+    // Canonical final response may differ from streamed chunks (normalization).
+    responseText = resultText;
   }
 
   const noResponseFallback = opts?.resolveNoResponseText?.();
@@ -2224,6 +2550,157 @@ function parseRequestChannelType(
   return normalized as ChannelType;
 }
 
+interface ChatImageAttachment {
+  /** Base64-encoded image data (no data URL prefix). */
+  data: string;
+  mimeType: string;
+  name: string;
+}
+
+const MAX_CHAT_IMAGES = 4;
+
+/** Maximum base64 data length for a single image (~3.75 MB binary). */
+const MAX_IMAGE_DATA_BYTES = 5 * 1_048_576;
+
+/** Maximum length of an image filename. */
+const MAX_IMAGE_NAME_LENGTH = 255;
+
+/** Matches a valid standard-alphabet base64 string (RFC 4648 §4, `+/`, optional `=` padding). */
+const BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/;
+
+const ALLOWED_IMAGE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+]);
+
+/** Returns an error message string, or null if valid. Exported for unit tests. */
+export function validateChatImages(images: unknown): string | null {
+  if (!Array.isArray(images) || images.length === 0) return null;
+  if (images.length > MAX_CHAT_IMAGES)
+    return `Too many images (max ${MAX_CHAT_IMAGES})`;
+  for (const img of images) {
+    if (!img || typeof img !== "object") return "Each image must be an object";
+    const { data, mimeType, name } = img as Record<string, unknown>;
+    if (typeof data !== "string" || !data)
+      return "Each image must have a non-empty data string";
+    if (data.startsWith("data:"))
+      return "Image data must be raw base64, not a data URL";
+    if (data.length > MAX_IMAGE_DATA_BYTES)
+      return `Image too large (max ${MAX_IMAGE_DATA_BYTES / 1_048_576} MB per image)`;
+    if (!BASE64_RE.test(data))
+      return "Image data contains invalid base64 characters";
+    if (typeof mimeType !== "string" || !mimeType)
+      return "Each image must have a mimeType string";
+    if (!ALLOWED_IMAGE_MIME_TYPES.has(mimeType.toLowerCase()))
+      return `Unsupported image type: ${mimeType}`;
+    if (typeof name !== "string" || !name)
+      return "Each image must have a name string";
+    if (name.length > MAX_IMAGE_NAME_LENGTH)
+      return `Image name too long (max ${MAX_IMAGE_NAME_LENGTH} characters)`;
+  }
+  return null;
+}
+
+/**
+ * Extension of the core Media attachment shape that carries raw image bytes for
+ * action handlers (e.g. POST_TWEET) while the message is in-memory. The
+ * extra fields are intentionally stripped before the message is persisted.
+ *
+ * Note: `_data`/`_mimeType` survive only because ElizaOS passes the
+ * `userMessage` object reference directly to action handlers without
+ * deep-cloning or serializing it. If that ever changes, action handlers
+ * that read these fields will silently receive `undefined`.
+ */
+export interface ChatAttachmentWithData extends Media {
+  /** Raw base64 image data — never written to the database. */
+  _data: string;
+  /** MIME type corresponding to `_data`. */
+  _mimeType: string;
+}
+
+/**
+ * Builds in-memory and compact (DB-persisted) attachment arrays from
+ * validated images. Exported so it can be unit-tested independently.
+ */
+export function buildChatAttachments(
+  images: ChatImageAttachment[] | undefined,
+): {
+  /** In-memory attachments that include `_data`/`_mimeType` for action handlers. */
+  attachments: ChatAttachmentWithData[] | undefined;
+  /** Persistence-safe attachments with `_data`/`_mimeType` stripped. */
+  compactAttachments: Media[] | undefined;
+} {
+  if (!images?.length)
+    return { attachments: undefined, compactAttachments: undefined };
+  // Compact placeholder URL (no base64) keeps the LLM context lean. The raw
+  // image bytes are stashed in `_data`/`_mimeType` for action handlers (e.g.
+  // POST_TWEET) that need to upload them.
+  const attachments: ChatAttachmentWithData[] = images.map((img, i) => ({
+    id: `img-${i}`,
+    url: `attachment:img-${i}`,
+    title: img.name,
+    source: "client_chat",
+    description: "User-attached image",
+    text: "",
+    contentType: ContentType.IMAGE,
+    _data: img.data,
+    _mimeType: img.mimeType,
+  }));
+  // DB-persisted version omits _data/_mimeType so raw bytes aren't stored.
+  const compactAttachments: Media[] = attachments.map(
+    ({ _data: _d, _mimeType: _m, ...rest }) => rest,
+  );
+  return { attachments, compactAttachments };
+}
+
+type MessageMemory = ReturnType<typeof createMessageMemory>;
+
+/**
+ * Constructs the in-memory user message (with image data for action handlers)
+ * and the persistence-safe counterpart (image data stripped). Extracted to
+ * avoid duplicating this logic across the stream and non-stream chat endpoints.
+ */
+export function buildUserMessages(params: {
+  images: ChatImageAttachment[] | undefined;
+  prompt: string;
+  userId: UUID;
+  roomId: UUID;
+  channelType: ChannelType;
+}): { userMessage: MessageMemory; messageToStore: MessageMemory } {
+  const { images, prompt, userId, roomId, channelType } = params;
+  const { attachments, compactAttachments } = buildChatAttachments(images);
+  const id = crypto.randomUUID() as UUID;
+  // In-memory message carries _data/_mimeType so action handlers can upload.
+  const userMessage = createMessageMemory({
+    id,
+    entityId: userId,
+    roomId,
+    content: {
+      text: prompt,
+      source: "client_chat",
+      channelType,
+      ...(attachments?.length ? { attachments } : {}),
+    },
+  });
+  // Persisted message: compact placeholder URL, no raw bytes in DB.
+  const messageToStore = compactAttachments?.length
+    ? createMessageMemory({
+        id,
+        entityId: userId,
+        roomId,
+        content: {
+          text: prompt,
+          source: "client_chat",
+          channelType,
+          attachments: compactAttachments,
+        },
+      })
+    : userMessage;
+  return { userMessage, messageToStore };
+}
+
 async function readChatRequestPayload(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -2235,11 +2712,19 @@ async function readChatRequestPayload(
     ) => Promise<T | null>;
     error: (res: http.ServerResponse, message: string, status?: number) => void;
   },
-): Promise<{ prompt: string; channelType: ChannelType } | null> {
+  /** Body size limit. Image-capable endpoints pass CHAT_MAX_BODY_BYTES (20 MB);
+   *  legacy/cloud-proxy endpoints that don't process images pass MAX_BODY_BYTES (1 MB). */
+  maxBytes = CHAT_MAX_BODY_BYTES,
+): Promise<{
+  prompt: string;
+  channelType: ChannelType;
+  images?: ChatImageAttachment[];
+} | null> {
   const body = await helpers.readJsonBody<{
     text?: string;
     channelType?: string;
-  }>(req, res);
+    images?: ChatImageAttachment[];
+  }>(req, res, { maxBytes });
   if (!body) return null;
   if (!body.text?.trim()) {
     helpers.error(res, "text is required");
@@ -2250,9 +2735,24 @@ async function readChatRequestPayload(
     helpers.error(res, "channelType is invalid", 400);
     return null;
   }
+  const imageValidationError = validateChatImages(body.images);
+  if (imageValidationError) {
+    helpers.error(res, imageValidationError, 400);
+    return null;
+  }
+  // Normalize mimeType to lowercase so downstream consumers (Twitter
+  // uploadMedia, content-type headers) never encounter mixed-case variants
+  // that slipped past the allowlist check.
+  const images = Array.isArray(body.images)
+    ? (body.images as ChatImageAttachment[]).map((img) => ({
+        ...img,
+        mimeType: img.mimeType.toLowerCase(),
+      }))
+    : undefined;
   return {
     prompt: body.text.trim(),
     channelType,
+    images,
   };
 }
 
@@ -2408,6 +2908,313 @@ function validateSkillId(
   return skillId;
 }
 
+const ALLOWED_MCP_CONFIG_TYPES = new Set([
+  "stdio",
+  "http",
+  "streamable-http",
+  "sse",
+]);
+
+const ALLOWED_MCP_COMMANDS = new Set([
+  "npx",
+  "node",
+  "bun",
+  "bunx",
+  "deno",
+  "python",
+  "python3",
+  "uvx",
+  "uv",
+  "docker",
+  "podman",
+]);
+
+const BLOCKED_MCP_ENV_KEYS = new Set([
+  "LD_PRELOAD",
+  "LD_LIBRARY_PATH",
+  "DYLD_INSERT_LIBRARIES",
+  "DYLD_LIBRARY_PATH",
+  "NODE_OPTIONS",
+  "NODE_EXTRA_CA_CERTS",
+  "ELECTRON_RUN_AS_NODE",
+  "PATH",
+  "HOME",
+  "SHELL",
+]);
+
+const INTERPRETER_MCP_COMMANDS = new Set([
+  "node",
+  "bun",
+  "deno",
+  "python",
+  "python3",
+  "uv",
+]);
+
+const PACKAGE_RUNNER_MCP_COMMANDS = new Set(["npx", "bunx", "uvx"]);
+const CONTAINER_MCP_COMMANDS = new Set(["docker", "podman"]);
+
+const BLOCKED_INTERPRETER_FLAGS = new Set([
+  "-e",
+  "--eval",
+  "-p",
+  "--print",
+  "-r",
+  "--require",
+  "--import",
+  "--loader",
+  "--experimental-loader",
+  "--preload",
+  "-c",
+  "-m",
+]);
+
+const BLOCKED_PACKAGE_RUNNER_FLAGS = new Set(["-c", "--call", "-e", "--eval"]);
+const BLOCKED_CONTAINER_FLAGS = new Set([
+  "--privileged",
+  "-v",
+  "--volume",
+  "--mount",
+  "--cap-add",
+  "--security-opt",
+  "--pid",
+  "--network",
+]);
+const BLOCKED_DENO_SUBCOMMANDS = new Set(["eval"]);
+const BLOCKED_MCP_REMOTE_HOST_LITERALS = new Set([
+  "localhost",
+  "metadata.google.internal",
+]);
+
+function normalizeMcpCommand(command: string): string {
+  const baseName = command.replace(/\\/g, "/").split("/").pop() ?? "";
+  return baseName.replace(/\.(exe|cmd|bat)$/i, "").toLowerCase();
+}
+
+function hasBlockedFlag(
+  args: string[],
+  blockedFlags: ReadonlySet<string>,
+): string | null {
+  for (const arg of args) {
+    const trimmed = arg.trim();
+    for (const flag of blockedFlags) {
+      if (trimmed === flag || trimmed.startsWith(`${flag}=`)) {
+        return flag;
+      }
+      // Block attached short-option forms like -cpayload or -epayload.
+      if (
+        /^-[A-Za-z]$/.test(flag) &&
+        trimmed.startsWith(flag) &&
+        trimmed.length > flag.length
+      ) {
+        return flag;
+      }
+    }
+  }
+  return null;
+}
+
+function firstPositionalArg(args: string[]): string | null {
+  for (const arg of args) {
+    const trimmed = arg.trim();
+    if (!trimmed || trimmed === "--" || trimmed.startsWith("-")) continue;
+    return trimmed.toLowerCase();
+  }
+  return null;
+}
+
+async function resolveMcpRemoteUrlRejection(
+  rawUrl: string,
+): Promise<string | null> {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return "URL must be a valid absolute URL";
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return "URL must use http:// or https://";
+  }
+
+  const hostname = normalizeHostLike(parsed.hostname);
+  if (!hostname) return "URL hostname is required";
+
+  if (
+    BLOCKED_MCP_REMOTE_HOST_LITERALS.has(hostname) ||
+    hostname.endsWith(".localhost") ||
+    hostname.endsWith(".local")
+  ) {
+    return `URL host "${hostname}" is blocked for security reasons`;
+  }
+
+  if (net.isIP(hostname)) {
+    if (isBlockedPrivateOrLinkLocalIp(hostname)) {
+      return `URL host "${hostname}" is blocked for security reasons`;
+    }
+    return null;
+  }
+
+  let addresses: Array<{ address: string }>;
+  try {
+    const resolved = await dnsLookup(hostname, { all: true });
+    addresses = Array.isArray(resolved) ? resolved : [resolved];
+  } catch {
+    return `Could not resolve URL host "${hostname}"`;
+  }
+
+  if (addresses.length === 0) {
+    return `Could not resolve URL host "${hostname}"`;
+  }
+
+  for (const entry of addresses) {
+    if (isBlockedPrivateOrLinkLocalIp(entry.address)) {
+      return `URL host "${hostname}" resolves to blocked address ${entry.address}`;
+    }
+  }
+
+  return null;
+}
+
+export async function validateMcpServerConfig(
+  config: Record<string, unknown>,
+): Promise<string | null> {
+  const configType = config.type;
+  if (
+    typeof configType !== "string" ||
+    !ALLOWED_MCP_CONFIG_TYPES.has(configType)
+  ) {
+    return `Invalid config type. Must be one of: ${[...ALLOWED_MCP_CONFIG_TYPES].join(", ")}`;
+  }
+
+  if (configType === "stdio") {
+    const command =
+      typeof config.command === "string" ? config.command.trim() : "";
+    if (!command) {
+      return "Command is required for stdio servers";
+    }
+    if (!/^[A-Za-z0-9._-]+$/.test(command)) {
+      return "Command must be a bare executable name without path separators";
+    }
+
+    const normalizedCommand = normalizeMcpCommand(command);
+    if (!ALLOWED_MCP_COMMANDS.has(normalizedCommand)) {
+      return (
+        `Command "${command}" is not allowed. ` +
+        `Allowed commands: ${[...ALLOWED_MCP_COMMANDS].join(", ")}`
+      );
+    }
+
+    if (config.args !== undefined) {
+      if (!Array.isArray(config.args)) {
+        return "args must be an array of strings";
+      }
+      for (const arg of config.args) {
+        if (typeof arg !== "string") {
+          return "Each arg must be a string";
+        }
+      }
+      const args = config.args as string[];
+      if (INTERPRETER_MCP_COMMANDS.has(normalizedCommand)) {
+        const blocked = hasBlockedFlag(args, BLOCKED_INTERPRETER_FLAGS);
+        if (blocked) {
+          return `Flag "${blocked}" is not allowed for ${normalizedCommand} MCP servers`;
+        }
+      }
+      if (PACKAGE_RUNNER_MCP_COMMANDS.has(normalizedCommand)) {
+        const blocked = hasBlockedFlag(args, BLOCKED_PACKAGE_RUNNER_FLAGS);
+        if (blocked) {
+          return `Flag "${blocked}" is not allowed for ${normalizedCommand} MCP servers`;
+        }
+      }
+      if (CONTAINER_MCP_COMMANDS.has(normalizedCommand)) {
+        const blocked = hasBlockedFlag(args, BLOCKED_CONTAINER_FLAGS);
+        if (blocked) {
+          return `Flag "${blocked}" is not allowed for ${normalizedCommand} MCP servers`;
+        }
+      }
+      if (normalizedCommand === "deno") {
+        const subcommand = firstPositionalArg(args);
+        if (subcommand && BLOCKED_DENO_SUBCOMMANDS.has(subcommand)) {
+          return `Subcommand "${subcommand}" is not allowed for deno MCP servers`;
+        }
+      }
+    }
+  } else {
+    const url = typeof config.url === "string" ? config.url.trim() : "";
+    if (!url) {
+      return "URL is required for remote servers";
+    }
+    const urlRejection = await resolveMcpRemoteUrlRejection(url);
+    if (urlRejection) return urlRejection;
+  }
+
+  if (config.env !== undefined) {
+    if (
+      typeof config.env !== "object" ||
+      config.env === null ||
+      Array.isArray(config.env)
+    ) {
+      return "env must be a plain object of string key-value pairs";
+    }
+
+    for (const [key, value] of Object.entries(config.env)) {
+      if (isBlockedObjectKey(key)) {
+        return `env key "${key}" is blocked for security reasons`;
+      }
+      if (typeof value !== "string") {
+        return `env.${key} must be a string`;
+      }
+      if (BLOCKED_MCP_ENV_KEYS.has(key.toUpperCase())) {
+        return `env variable "${key}" is not allowed for security reasons`;
+      }
+    }
+  }
+
+  if (config.cwd !== undefined && typeof config.cwd !== "string") {
+    return "cwd must be a string";
+  }
+
+  if (config.timeoutInMillis !== undefined) {
+    if (
+      typeof config.timeoutInMillis !== "number" ||
+      !Number.isFinite(config.timeoutInMillis) ||
+      config.timeoutInMillis < 0
+    ) {
+      return "timeoutInMillis must be a non-negative number";
+    }
+  }
+
+  return null;
+}
+
+export async function resolveMcpServersRejection(
+  servers: Record<string, unknown>,
+): Promise<string | null> {
+  for (const [serverName, serverConfig] of Object.entries(servers)) {
+    if (isBlockedObjectKey(serverName)) {
+      return `Invalid server name: "${serverName}"`;
+    }
+    if (
+      !serverConfig ||
+      typeof serverConfig !== "object" ||
+      Array.isArray(serverConfig)
+    ) {
+      return `Server "${serverName}" config must be a JSON object`;
+    }
+    if (hasBlockedObjectKeyDeep(serverConfig)) {
+      return `Server "${serverName}" contains blocked object keys`;
+    }
+    const configError = await validateMcpServerConfig(
+      serverConfig as Record<string, unknown>,
+    );
+    if (configError) {
+      return `Server "${serverName}": ${configError}`;
+    }
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Onboarding helpers
 // ---------------------------------------------------------------------------
@@ -2452,6 +3259,15 @@ function getProviderOptions(): Array<{
       description: "Use your $20-200/mo ChatGPT subscription via OAuth.",
     },
     {
+      id: "pi-ai",
+      name: "Pi Credentials (pi-ai)",
+      envKey: null,
+      pluginName: "@elizaos/plugin-pi-ai",
+      keyPrefix: null,
+      description:
+        "Use credentials from ~/.pi/agent/auth.json (API keys or OAuth).",
+    },
+    {
       id: "anthropic",
       name: "Anthropic (API Key)",
       envKey: "ANTHROPIC_API_KEY",
@@ -2478,7 +3294,7 @@ function getProviderOptions(): Array<{
     {
       id: "gemini",
       name: "Gemini",
-      envKey: "GOOGLE_API_KEY",
+      envKey: "GOOGLE_GENERATIVE_AI_API_KEY",
       pluginName: "@elizaos/plugin-google-genai",
       keyPrefix: null,
       description: "Google's Gemini models.",
@@ -2773,7 +3589,7 @@ const PROVIDER_ENV_KEYS: Record<
   },
   "google-genai": {
     envKey: "GOOGLE_GENERATIVE_AI_API_KEY",
-    altEnvKeys: ["GOOGLE_API_KEY"],
+    altEnvKeys: ["GOOGLE_API_KEY", "GEMINI_API_KEY"],
   },
   ollama: { envKey: "OLLAMA_BASE_URL" },
   "vercel-ai-gateway": {
@@ -3282,7 +4098,8 @@ async function resolveTrainingServiceCtor(): Promise<TrainingServiceCtor | null>
   return null;
 }
 
-const LOCAL_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
+const LOCAL_ORIGIN_RE =
+  /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|\[0:0:0:0:0:0:0:1\])(:\d+)?$/i;
 const APP_ORIGIN_RE =
   /^(capacitor|capacitor-electron|app):\/\/(localhost|-)?$/i;
 
@@ -3327,9 +4144,15 @@ function applyCors(
     );
     res.setHeader(
       "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, X-Milady-Token, X-Api-Key, X-Milady-Export-Token",
+      "Content-Type, Authorization, X-Milady-Token, X-Api-Key, X-Milady-Export-Token, X-Milady-Client-Id, X-Milady-Terminal-Token",
     );
   }
+
+  // Security headers
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("X-XSS-Protection", "1; mode=block");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
 
   return true;
 }
@@ -3338,9 +4161,10 @@ const PAIRING_TTL_MS = 10 * 60 * 1000;
 const PAIRING_WINDOW_MS = 10 * 60 * 1000;
 const PAIRING_MAX_ATTEMPTS = 5;
 const PAIRING_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-const API_RESTART_EXIT_CODE = 75;
 
 let pairingCode: string | null = null;
+/** Guard against concurrent provider switch requests (P0 §3). */
+let providerSwitchInProgress = false;
 let pairingExpiresAt = 0;
 const pairingAttempts = new Map<string, { count: number; resetAt: number }>();
 
@@ -3380,6 +4204,10 @@ function ensurePairingCode(): string | null {
 function rateLimitPairing(ip: string | null): boolean {
   const key = ip ?? "unknown";
   const now = Date.now();
+
+  // Lazy sweep: evict expired entries when map grows beyond 100
+  sweepExpiredEntries(pairingAttempts, now, 100);
+
   const current = pairingAttempts.get(key);
   if (!current || now > current.resetAt) {
     pairingAttempts.set(key, { count: 1, resetAt: now + PAIRING_WINDOW_MS });
@@ -3409,19 +4237,56 @@ function extractAuthToken(req: http.IncomingMessage): string | null {
   return null;
 }
 
-function readSingleHeaderValue(
-  value: string | string[] | undefined,
-): string | undefined {
-  if (Array.isArray(value)) {
-    for (const entry of value) {
-      const trimmed = entry.trim();
-      if (trimmed.length > 0) return trimmed;
-    }
-    return undefined;
-  }
-  if (typeof value !== "string") return undefined;
+const SAFE_WS_CLIENT_ID_RE = /^[A-Za-z0-9._-]{1,128}$/;
+
+export function normalizeWsClientId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
   const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
+  if (!trimmed) return null;
+  if (!SAFE_WS_CLIENT_ID_RE.test(trimmed)) return null;
+  return trimmed;
+}
+
+function firstHeaderValue(value: string | string[] | undefined): string | null {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value) && typeof value[0] === "string") return value[0];
+  return null;
+}
+
+export function resolveTerminalRunClientId(
+  req: Pick<http.IncomingMessage, "headers">,
+  body: { clientId?: unknown } | null | undefined,
+): string | null {
+  const headerClientId = normalizeWsClientId(
+    firstHeaderValue(req.headers["x-milady-client-id"]),
+  );
+  if (headerClientId) return headerClientId;
+  return normalizeWsClientId(body?.clientId);
+}
+
+const SHARED_TERMINAL_CLIENT_IDS = new Set([
+  "runtime-terminal-action",
+  "runtime-shell-action",
+]);
+
+function isSharedTerminalClientId(clientId: string): boolean {
+  return SHARED_TERMINAL_CLIENT_IDS.has(clientId);
+}
+
+/**
+ * Resolve Authorization for Hyperscape API relays.
+ *
+ * Security: never forward the incoming request Authorization header
+ * (which typically carries MILADY_API_TOKEN for this API). Hyperscape relay
+ * auth must come from the dedicated HYPERSCAPE_AUTH_TOKEN secret instead.
+ */
+export function resolveHyperscapeAuthorizationHeader(
+  req: Pick<http.IncomingMessage, "headers">,
+): string | null {
+  void req;
+  const envToken = process.env.HYPERSCAPE_AUTH_TOKEN?.trim();
+  if (!envToken) return null;
+  return /^Bearer\s+/i.test(envToken) ? envToken : `Bearer ${envToken}`;
 }
 
 function tokenMatches(expected: string, provided: string): boolean {
@@ -3432,14 +4297,38 @@ function tokenMatches(expected: string, provided: string): boolean {
 }
 
 function isLoopbackBindHost(host: string): boolean {
-  const normalized = host
-    .trim()
-    .toLowerCase()
-    .replace(/^\[|\]$/g, "");
+  let normalized = host.trim().toLowerCase();
+
+  if (!normalized) return true;
+
+  // Allow users to provide full URLs by mistake (e.g. http://localhost:2138)
+  if (normalized.startsWith("http://") || normalized.startsWith("https://")) {
+    try {
+      const parsed = new URL(normalized);
+      normalized = parsed.hostname.toLowerCase();
+    } catch {
+      // Fall through and parse as raw host value.
+    }
+  }
+
+  // [::1]:2138 -> ::1
+  const bracketedIpv6 = /^\[([^\]]+)\](?::\d+)?$/.exec(normalized);
+  if (bracketedIpv6?.[1]) {
+    normalized = bracketedIpv6[1];
+  } else {
+    // localhost:2138 -> localhost, 127.0.0.1:2138 -> 127.0.0.1
+    const singleColonHostPort = /^([^:]+):(\d+)$/.exec(normalized);
+    if (singleColonHostPort?.[1]) {
+      normalized = singleColonHostPort[1];
+    }
+  }
+
+  normalized = normalized.replace(/^\[|\]$/g, "");
   if (!normalized) return true;
   if (
     normalized === "localhost" ||
     normalized === "::1" ||
+    normalized === "0:0:0:0:0:0:0:1" ||
     normalized === "::ffff:127.0.0.1"
   ) {
     return true;
@@ -3558,6 +4447,62 @@ export function resolveWalletExportRejection(
 
   if (!tokenMatches(expected, provided)) {
     return { status: 401, reason: "Invalid export token." };
+  }
+
+  return null;
+}
+
+interface TerminalRunRequestBody {
+  terminalToken?: string;
+}
+
+export interface TerminalRunRejection {
+  status: 401 | 403;
+  reason: string;
+}
+
+export function resolveTerminalRunRejection(
+  req: http.IncomingMessage,
+  body: TerminalRunRequestBody,
+): TerminalRunRejection | null {
+  const expected = process.env.MILADY_TERMINAL_RUN_TOKEN?.trim();
+  const apiTokenEnabled = Boolean(process.env.MILADY_API_TOKEN?.trim());
+
+  // Compatibility mode: local loopback sessions without API token keep
+  // existing behavior unless an explicit terminal token is configured.
+  if (!expected && !apiTokenEnabled) {
+    return null;
+  }
+
+  if (!expected) {
+    return {
+      status: 403,
+      reason:
+        "Terminal run is disabled for token-authenticated API sessions. Set MILADY_TERMINAL_RUN_TOKEN to enable command execution.",
+    };
+  }
+
+  const headerToken =
+    typeof req.headers["x-milady-terminal-token"] === "string"
+      ? req.headers["x-milady-terminal-token"].trim()
+      : "";
+  const bodyToken =
+    typeof body.terminalToken === "string" ? body.terminalToken.trim() : "";
+  const provided = headerToken || bodyToken;
+
+  if (!provided) {
+    return {
+      status: 401,
+      reason:
+        "Missing terminal token. Provide X-Milady-Terminal-Token header or terminalToken in request body.",
+    };
+  }
+
+  if (!tokenMatches(expected, provided)) {
+    return {
+      status: 401,
+      reason: "Invalid terminal token.",
+    };
   }
 
   return null;
@@ -4304,14 +5249,16 @@ async function maybeRouteAutonomyEventToConversation(
   const text = typeof payload?.text === "string" ? payload.text.trim() : "";
   if (!text) return;
 
-  const source =
-    typeof payload?.source === "string" && payload.source.trim().length > 0
-      ? payload.source
-      : "autonomy";
+  const hasExplicitSource =
+    typeof payload?.source === "string" && payload.source.trim().length > 0;
+  const source = hasExplicitSource
+    ? (payload?.source as string).trim()
+    : "autonomy";
 
   // Regular user conversation turns should never be re-routed as proactive.
   // Some AGENT_EVENT payloads may omit roomId metadata, so rely on source too.
   if (source === "client_chat") return;
+  if (!hasExplicitSource && !event.roomId) return;
 
   // Keep regular conversation messages in their own room only.
   if (
@@ -4388,55 +5335,24 @@ async function handleRequest(
   const registryService = state.registryService;
   const dropService = state.dropService;
 
-  const scheduleRuntimeRestart = (reason: string, delayMs = 300): void => {
-    const restart = () => {
-      if (ctx?.onRestart) {
-        logger.info(`[milady-api] Triggering runtime restart (${reason})...`);
-        Promise.resolve(ctx.onRestart())
-          .then((newRuntime) => {
-            if (!newRuntime) {
-              logger.warn("[milady-api] Runtime restart returned null");
-              return;
-            }
-            state.runtime = newRuntime;
-            state.chatConnectionReady = null;
-            state.chatConnectionPromise = null;
-            state.agentState = "running";
-            state.agentName = newRuntime.character.name ?? "Milady";
-            state.startedAt = Date.now();
-            logger.info("[milady-api] Runtime restarted successfully");
-            // Notify WebSocket clients so the UI can refresh
-            state.broadcastWs?.({
-              type: "status",
-              state: state.agentState,
-              agentName: state.agentName,
-              startedAt: state.startedAt,
-              restarted: true,
-            });
-          })
-          .catch((err) => {
-            logger.error(
-              `[milady-api] Runtime restart failed: ${err instanceof Error ? err.message : err}`,
-            );
-          });
-        return;
-      }
-
-      logger.info(
-        `[milady-api] No in-process restart handler; exiting for external restart (${reason})`,
+  const scheduleRuntimeRestart = (reason: string): void => {
+    if (state.pendingRestartReasons.length >= 50) {
+      // Prevent unbounded growth — keep only first entry + latest
+      state.pendingRestartReasons.splice(
+        1,
+        state.pendingRestartReasons.length - 1,
       );
-      if (process.env.VITEST || process.env.NODE_ENV === "test") {
-        logger.info("[milady-api] Skipping process.exit during test execution");
-        return;
-      }
-      process.exit(API_RESTART_EXIT_CODE);
-    };
-
-    if (delayMs <= 0) {
-      restart();
-      return;
     }
-    setTimeout(restart, delayMs);
+    if (!state.pendingRestartReasons.includes(reason)) {
+      state.pendingRestartReasons.push(reason);
+    }
+    logger.info(
+      `[milady-api] Restart required: ${reason} (${state.pendingRestartReasons.length} pending)`,
+    );
+    state.broadcastWs?.({
+      type: "restart-required",
+      reasons: [...state.pendingRestartReasons],
+    });
   };
 
   const resolveHyperscapeApiBaseUrl = async (): Promise<string> => {
@@ -4447,22 +5363,6 @@ async function handleRequest(
     // Default to the local Hyperscape API server. Viewer URLs can point at a
     // client dev server (for example :3333) which does not expose API routes.
     return "http://localhost:5555";
-  };
-
-  const resolveHyperscapeAuthorizationHeader = (): string | null => {
-    const requestAuth =
-      typeof req.headers.authorization === "string"
-        ? req.headers.authorization.trim()
-        : "";
-    if (requestAuth) {
-      return requestAuth;
-    }
-
-    const envToken = process.env.HYPERSCAPE_AUTH_TOKEN?.trim();
-    if (!envToken) {
-      return null;
-    }
-    return /^Bearer\s+/i.test(envToken) ? envToken : `Bearer ${envToken}`;
   };
 
   const relayHyperscapeApi = async (
@@ -4513,7 +5413,7 @@ async function handleRequest(
     if (contentType && rawBody !== undefined) {
       outboundHeaders["Content-Type"] = contentType;
     }
-    const authorization = resolveHyperscapeAuthorizationHeader();
+    const authorization = resolveHyperscapeAuthorizationHeader(req);
     if (authorization) {
       outboundHeaders.Authorization = authorization;
     }
@@ -4548,45 +5448,11 @@ async function handleRequest(
     return;
   }
 
-  // Health endpoints (before auth so Kubernetes probes work)
-  if (pathname.startsWith("/health")) {
-    const healthHandler = getHealthHandler(state);
-    if (await healthHandler(req, res)) {
-      return; // Health endpoint handled
-    }
-  }
-
-  // OpenAPI spec endpoint (before auth for documentation access)
-  if (method === "GET" && (pathname === "/api/docs/openapi.json" || pathname === "/api/docs")) {
-    try {
-      const { buildOpenApiSpec } = await import("./openapi/spec.js");
-      json(res, buildOpenApiSpec());
-    } catch {
-      error(res, "Failed to generate OpenAPI spec", 500);
-    }
-    return;
-  }
-
-  // Prometheus metrics endpoint (before auth so scrapers work)
-  if (method === "GET" && pathname === "/metrics") {
-    try {
-      const { metrics } = await import("../telemetry/setup.js");
-      const { exportPrometheusText } = await import("../telemetry/prometheus-exporter.js");
-      const text = exportPrometheusText(metrics.getSnapshot());
-      res.statusCode = 200;
-      res.setHeader("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
-      res.end(text);
-    } catch {
-      res.statusCode = 500;
-      res.end("# Error generating metrics\n");
-    }
-    return;
-  }
-
-  // Apply rate limiting (before auth to prevent brute force)
-  const rateLimiter = getRateLimiter();
-  if (!rateLimiter(req, res)) {
-    return; // Rate limited - response already sent
+  // Serve dashboard static assets before the auth gate.  serveStaticUi
+  // already refuses /api/, /v1/, and /ws paths, so API endpoints remain
+  // fully protected by the token check below.
+  if (method === "GET" || method === "HEAD") {
+    if (serveStaticUi(req, res, pathname)) return;
   }
 
   if (method !== "OPTIONS" && !isAuthEndpoint && !isAuthorized(req)) {
@@ -4601,93 +5467,288 @@ async function handleRequest(
     return;
   }
 
-  // ── GET /api/auth/status ───────────────────────────────────────────────
-  if (method === "GET" && pathname === "/api/auth/status") {
-    const required = Boolean(process.env.MILAIDY_API_TOKEN?.trim());
-    const enabled = pairingEnabled();
-    if (enabled) ensurePairingCode();
-    json(res, {
-      required,
-      pairingEnabled: enabled,
-      expiresAt: enabled ? pairingExpiresAt : null,
-    });
-    return;
-  }
-
-  // ── POST /api/auth/pair ────────────────────────────────────────────────
-  if (method === "POST" && pathname === "/api/auth/pair") {
-    const body = await readJsonBody<{ code?: string }>(req, res);
+  // ── POST /api/provider/switch ─────────────────────────────────────────
+  // Atomically switch the active AI provider.  Clears competing credentials
+  // and env vars so the runtime loads the correct plugin on restart.
+  if (method === "POST" && pathname === "/api/provider/switch") {
+    const body = await readJsonBody<{ provider: string; apiKey?: string }>(
+      req,
+      res,
+    );
     if (!body) return;
-
-    const token = process.env.MILAIDY_API_TOKEN?.trim();
-    if (!token) {
-      error(res, "Pairing not enabled", 400);
-      return;
-    }
-    if (!pairingEnabled()) {
-      error(res, "Pairing disabled", 403);
-      return;
-    }
-    if (!rateLimitPairing(req.socket.remoteAddress ?? null)) {
-      error(res, "Too many attempts. Try again later.", 429);
+    const provider = body.provider;
+    if (!provider || typeof provider !== "string") {
+      error(res, "Missing provider", 400);
       return;
     }
 
-    const provided = normalizePairingCode(body.code ?? "");
-    const current = ensurePairingCode();
-    if (!current || Date.now() > pairingExpiresAt) {
-      ensurePairingCode();
-      error(
-        res,
-        "Pairing code expired. Check server logs for a new code.",
-        410,
+    // P1 §7 — explicit provider allowlist
+    const VALID_PROVIDERS = new Set([
+      "elizacloud",
+      "pi-ai",
+      "openai-codex",
+      "openai-subscription",
+      "anthropic-subscription",
+      "openai",
+      "anthropic",
+      "deepseek",
+      "google",
+      "groq",
+      "xai",
+      "openrouter",
+    ]);
+    if (!VALID_PROVIDERS.has(provider)) {
+      error(res, "Invalid provider", 400);
+      return;
+    }
+
+    // P0 §3 — race guard: reject concurrent provider switch requests
+    if (providerSwitchInProgress) {
+      error(res, "Provider switch already in progress", 409);
+      return;
+    }
+    providerSwitchInProgress = true;
+
+    const config = state.config;
+    if (!config.cloud) config.cloud = {} as NonNullable<typeof config.cloud>;
+    if (!config.env) config.env = {};
+    const envCfg = config.env as Record<string, string>;
+
+    // Helper: clear cloud config & env vars
+    const clearCloud = () => {
+      (config.cloud as Record<string, unknown>).enabled = false;
+      delete (config.cloud as Record<string, unknown>).apiKey;
+      delete process.env.ELIZAOS_CLOUD_API_KEY;
+      delete process.env.ELIZAOS_CLOUD_ENABLED;
+      delete envCfg.ELIZAOS_CLOUD_API_KEY;
+      delete envCfg.ELIZAOS_CLOUD_ENABLED;
+      // Also clear from runtime character secrets if available
+      if (state.runtime?.character?.secrets) {
+        const secrets = state.runtime.character.secrets as Record<
+          string,
+          unknown
+        >;
+        delete secrets.ELIZAOS_CLOUD_API_KEY;
+        delete secrets.ELIZAOS_CLOUD_ENABLED;
+      }
+    };
+
+    // Helper: clear pi-ai mode
+    const clearPiAi = () => {
+      delete process.env.MILAIDY_USE_PI_AI;
+      delete envCfg.MILAIDY_USE_PI_AI;
+
+      const envRoot = config.env as Record<string, unknown>;
+      const vars = envRoot.vars;
+      if (vars && typeof vars === "object" && !Array.isArray(vars)) {
+        delete (vars as Record<string, unknown>).MILAIDY_USE_PI_AI;
+      }
+
+      if (state.runtime?.character?.secrets) {
+        const secrets = state.runtime.character.secrets as Record<
+          string,
+          unknown
+        >;
+        delete secrets.MILAIDY_USE_PI_AI;
+      }
+    };
+
+    // Helper: clear subscription credentials
+    const clearSubscriptions = async () => {
+      try {
+        const { deleteCredentials } = await import("../auth/index");
+        deleteCredentials("anthropic-subscription");
+        deleteCredentials("openai-codex");
+      } catch (err) {
+        logger.warn(
+          `[api] Failed to clear subscriptions: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+      // Don't clear the env keys here — applySubscriptionCredentials on
+      // restart will simply not set them if creds are gone.
+    };
+
+    // Provider-specific env key map
+    const PROVIDER_ENV_KEYS: Record<string, string> = {
+      openai: "OPENAI_API_KEY",
+      anthropic: "ANTHROPIC_API_KEY",
+      deepseek: "DEEPSEEK_API_KEY",
+      google: "GOOGLE_API_KEY",
+      groq: "GROQ_API_KEY",
+      xai: "XAI_API_KEY",
+      openrouter: "OPENROUTER_API_KEY",
+    };
+
+    // Helper: clear all direct API keys from env (except the one we're switching to)
+    const clearOtherApiKeys = (keepKey?: string) => {
+      for (const [, envKey] of Object.entries(PROVIDER_ENV_KEYS)) {
+        if (envKey === keepKey) continue;
+        delete process.env[envKey];
+        delete envCfg[envKey];
+        // P1 §6 — also clear from runtime character secrets
+        if (state.runtime?.character?.secrets) {
+          const secrets = state.runtime.character.secrets as Record<
+            string,
+            unknown
+          >;
+          delete secrets[envKey];
+        }
+      }
+    };
+
+    try {
+      // P0 §4 — input validation for direct API key providers
+      if (PROVIDER_ENV_KEYS[provider]) {
+        const trimmedKey =
+          typeof body.apiKey === "string" ? body.apiKey.trim() : "";
+        if (!trimmedKey) {
+          providerSwitchInProgress = false;
+          error(res, "API key is required for this provider", 400);
+          return;
+        }
+        if (trimmedKey.length > 512) {
+          providerSwitchInProgress = false;
+          error(res, "API key is too long", 400);
+          return;
+        }
+        // Store trimmed key back for use below
+        body.apiKey = trimmedKey;
+      }
+
+      if (provider === "elizacloud") {
+        // Switching TO elizacloud
+        clearPiAi();
+        await clearSubscriptions();
+        clearOtherApiKeys();
+        clearSubscriptionProviderConfig(config);
+        // Restore cloud config — the actual API key should already be in
+        // config.cloud.apiKey from the original cloud login.  If it was
+        // wiped, the user will need to re-login via cloud.
+        (config.cloud as Record<string, unknown>).enabled = true;
+        if (config.cloud.apiKey) {
+          process.env.ELIZAOS_CLOUD_API_KEY = config.cloud.apiKey;
+          process.env.ELIZAOS_CLOUD_ENABLED = "true";
+        }
+      } else if (provider === "pi-ai") {
+        // Switching TO pi-ai credentials mode
+        clearCloud();
+        await clearSubscriptions();
+        clearOtherApiKeys();
+        process.env.MILAIDY_USE_PI_AI = "1";
+        envCfg.MILAIDY_USE_PI_AI = "1";
+
+        const envRoot = config.env as Record<string, unknown>;
+        const vars =
+          envRoot.vars &&
+          typeof envRoot.vars === "object" &&
+          !Array.isArray(envRoot.vars)
+            ? (envRoot.vars as Record<string, unknown>)
+            : {};
+        vars.MILAIDY_USE_PI_AI = "1";
+        envRoot.vars = vars;
+      } else if (
+        provider === "openai-codex" ||
+        provider === "openai-subscription"
+      ) {
+        // Switching TO OpenAI subscription
+        clearPiAi();
+        clearCloud();
+        clearOtherApiKeys("OPENAI_API_KEY");
+        applySubscriptionProviderConfig(config, provider);
+        // Delete Anthropic subscription but keep OpenAI
+        try {
+          const { deleteCredentials } = await import("../auth/index");
+          deleteCredentials("anthropic-subscription");
+        } catch (err) {
+          logger.warn(
+            `[api] Failed to clear Anthropic subscription: ${err instanceof Error ? err.message : err}`,
+          );
+        }
+        // Apply the OpenAI subscription credentials to env + install stealth
+        try {
+          const { applySubscriptionCredentials } = await import(
+            "../auth/index"
+          );
+          await applySubscriptionCredentials(config);
+        } catch (err) {
+          logger.warn(
+            `[api] Failed to apply OpenAI subscription creds: ${err instanceof Error ? err.message : err}`,
+          );
+        }
+      } else if (provider === "anthropic-subscription") {
+        // Switching TO Anthropic subscription
+        clearPiAi();
+        clearCloud();
+        clearOtherApiKeys("ANTHROPIC_API_KEY");
+        applySubscriptionProviderConfig(config, provider);
+        // Delete OpenAI subscription but keep Anthropic
+        try {
+          const { deleteCredentials } = await import("../auth/index");
+          deleteCredentials("openai-codex");
+        } catch (err) {
+          logger.warn(
+            `[api] Failed to clear OpenAI subscription: ${err instanceof Error ? err.message : err}`,
+          );
+        }
+        // Apply the Anthropic subscription credentials to env + install stealth
+        try {
+          const { applySubscriptionCredentials } = await import(
+            "../auth/index"
+          );
+          await applySubscriptionCredentials(config);
+        } catch (err) {
+          logger.warn(
+            `[api] Failed to apply Anthropic subscription creds: ${err instanceof Error ? err.message : err}`,
+          );
+        }
+      } else if (PROVIDER_ENV_KEYS[provider]) {
+        // Switching TO a direct API key provider
+        clearPiAi();
+        clearCloud();
+        await clearSubscriptions();
+        clearSubscriptionProviderConfig(config);
+        const envKey = PROVIDER_ENV_KEYS[provider];
+        clearOtherApiKeys(envKey);
+        const apiKey = body.apiKey;
+        if (!apiKey) {
+          providerSwitchInProgress = false;
+          error(res, "API key is required for this provider", 400);
+          return;
+        }
+        process.env[envKey] = apiKey;
+        envCfg[envKey] = apiKey;
+      }
+
+      saveMiladyConfig(config);
+
+      // Schedule runtime restart so the new provider takes effect.
+      scheduleRuntimeRestart(`provider switch to ${provider}`);
+      // Keep the lock briefly in restart-capable environments to prevent
+      // double-submits from racing with restart-required propagation.
+      if (ctx?.onRestart) {
+        setTimeout(() => {
+          providerSwitchInProgress = false;
+        }, 250);
+      } else {
+        providerSwitchInProgress = false;
+      }
+
+      json(res, {
+        success: true,
+        provider,
+        restarting: true,
+      });
+    } catch (err) {
+      providerSwitchInProgress = false;
+      // P1 §8 — don't leak internal error details to client
+      logger.error(
+        `[api] Provider switch failed: ${err instanceof Error ? err.stack : err}`,
       );
-      return;
-    }
-
-    const expected = normalizePairingCode(current);
-    const a = Buffer.from(expected, "utf8");
-    const b = Buffer.from(provided, "utf8");
-    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
-      error(res, "Invalid pairing code", 403);
-      return;
-    }
-
-    pairingCode = null;
-    pairingExpiresAt = 0;
-    json(res, { token });
-    return;
-  }
-
-  // ── GET /api/subscription/status ──────────────────────────────────────
-  // Returns the status of subscription-based auth providers
-  if (method === "GET" && pathname === "/api/subscription/status") {
-    try {
-      const { getSubscriptionStatus } = await import("../auth/index.js");
-      json(res, { providers: await getSubscriptionStatus() });
-    } catch (err) {
-      error(res, `Failed to get subscription status: ${err}`, 500);
+      error(res, "Provider switch failed", 500);
     }
     return;
   }
 
-  // ── POST /api/subscription/anthropic/start ──────────────────────────────
-  // Start Anthropic OAuth flow — returns URL for user to visit
-  if (method === "POST" && pathname === "/api/subscription/anthropic/start") {
-    try {
-      const { startAnthropicLogin } = await import("../auth/index.js");
-      const flow = await startAnthropicLogin();
-      // Store flow in server state for the exchange step
-      state._anthropicFlow = flow;
-      json(res, { authUrl: flow.authUrl });
-    } catch (err) {
-      error(res, `Failed to start Anthropic login: ${err}`, 500);
-    }
-    return;
-  }
-
-  // ── POST /api/subscription/anthropic/exchange ───────────────────────────
-  // Exchange Anthropic auth code for tokens
   if (
     await handleAuthRoutes({
       req,
@@ -4910,7 +5971,10 @@ async function handleRequest(
       agentName: state.agentName,
       model: state.model,
       uptime,
+      startup: state.startup,
       cloud: cloudStatus,
+      pendingRestart: state.pendingRestartReasons.length > 0,
+      pendingRestartReasons: state.pendingRestartReasons,
     });
     return;
   }
@@ -5063,14 +6127,35 @@ async function handleRequest(
 
   // ── GET /api/onboarding/options ─────────────────────────────────────────
   if (method === "GET" && pathname === "/api/onboarding/options") {
+    let piAiModels: Array<{
+      id: string;
+      name: string;
+      provider: string;
+      isDefault: boolean;
+    }> = [];
+    let piAiDefaultModel: string | null = null;
+
+    try {
+      const piAi = await listPiAiModelOptions();
+      piAiModels = piAi.models;
+      piAiDefaultModel = piAi.defaultModelSpec ?? null;
+    } catch (err) {
+      logger.warn(
+        `[api] Failed to load pi-ai model options: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
     json(res, {
       names: pickRandomNames(5),
       styles: STYLE_PRESETS,
       providers: getProviderOptions(),
       cloudProviders: getCloudProviderOptions(),
       models: getModelOptions(),
+      piAiModels,
+      piAiDefaultModel,
       inventoryProviders: getInventoryProviderOptions(),
       sharedStyleRules: "Keep responses brief. Be helpful and concise.",
+      githubOAuthAvailable: Boolean(process.env.GITHUB_OAUTH_CLIENT_ID?.trim()),
     });
     return;
   }
@@ -5184,11 +6269,39 @@ async function handleRequest(
       if (!config.env) config.env = {};
       const envCfg = config.env as Record<string, unknown>;
       const vars = (envCfg.vars ?? {}) as Record<string, string>;
-
       const providerId = typeof body.provider === "string" ? body.provider : "";
 
       // Persist vars back onto config.env
       (envCfg as Record<string, unknown>).vars = vars;
+
+      const clearPiAiFlag = () => {
+        delete vars.MILAIDY_USE_PI_AI;
+        delete (config.env as Record<string, string>).MILAIDY_USE_PI_AI;
+        delete process.env.MILAIDY_USE_PI_AI;
+      };
+
+      if (runMode === "local" && providerId === "pi-ai") {
+        vars.MILAIDY_USE_PI_AI = "1";
+        process.env.MILAIDY_USE_PI_AI = "1";
+
+        // Optional primary model override (provider/model).
+        if (!config.agents) config.agents = {};
+        if (!config.agents.defaults) config.agents.defaults = {};
+        const defaults = config.agents.defaults as Record<string, unknown>;
+        const modelConfig = (defaults.model ?? {}) as Record<string, unknown>;
+        const primaryModel =
+          typeof body.primaryModel === "string" ? body.primaryModel.trim() : "";
+
+        if (primaryModel) {
+          modelConfig.primary = primaryModel;
+        } else {
+          delete modelConfig.primary;
+        }
+
+        defaults.model = modelConfig;
+      } else {
+        clearPiAiFlag();
+      }
 
       // API-key providers (envKey backed)
       if (runMode === "local" && providerId && body.providerApiKey) {
@@ -5219,6 +6332,36 @@ async function handleRequest(
       logger.info(
         `[milady-api] Subscription provider selected: ${body.provider} — complete OAuth via /api/subscription/ endpoints`,
       );
+
+      // Handle Anthropic setup token (sk-ant-oat01-...) provided during
+      // onboarding. The API-key gate above skips subscription providers
+      // because their envKey is null. Mirrors POST /api/subscription/
+      // anthropic/setup-token in subscription-routes.ts.
+      if (
+        body.provider === "anthropic-subscription" &&
+        typeof body.providerApiKey === "string" &&
+        body.providerApiKey.trim().startsWith("sk-ant-")
+      ) {
+        const token = body.providerApiKey.trim();
+        if (!config.env) config.env = {};
+        (config.env as Record<string, string>).ANTHROPIC_API_KEY = token;
+        process.env.ANTHROPIC_API_KEY = token;
+        logger.info(
+          "[milady-api] Anthropic setup token saved during onboarding",
+        );
+      }
+    }
+
+    // ── GitHub token ────────────────────────────────────────────────────
+    if (
+      body.githubToken &&
+      typeof body.githubToken === "string" &&
+      body.githubToken.trim()
+    ) {
+      if (!config.env) config.env = {};
+      (config.env as Record<string, string>).GITHUB_TOKEN =
+        body.githubToken.trim();
+      process.env.GITHUB_TOKEN = body.githubToken.trim();
     }
 
     // ── Connectors (Telegram, Discord, WhatsApp, Twilio, Blooio) ────────
@@ -6478,6 +7621,8 @@ async function handleRequest(
       plugin.validationWarnings = validation.warnings;
     }
 
+    applyWhatsAppQrOverride(allPlugins, resolveDefaultAgentWorkspaceDir());
+
     // Inject per-provider model options into configUiHints for MODEL fields.
     // Each provider's cache is independent — no cross-population.
     // Always set type: "select" on MODEL fields so they render as dropdowns,
@@ -6651,6 +7796,7 @@ async function handleRequest(
         "vision",
         "browser",
         "computeruse",
+        "coding-agent",
       ]);
       if (CAPABILITY_FEATURE_IDS.has(pluginId)) {
         if (!state.config.features) {
@@ -6668,7 +7814,7 @@ async function handleRequest(
         );
       }
 
-      scheduleRuntimeRestart(`Plugin toggle: ${pluginId}`, 300);
+      scheduleRuntimeRestart(`Plugin toggle: ${pluginId}`);
     }
 
     json(res, { ok: true, plugin });
@@ -6876,7 +8022,7 @@ async function handleRequest(
 
       // If autoRestart is not explicitly false, restart the agent
       if (body.autoRestart !== false && result.requiresRestart) {
-        scheduleRuntimeRestart(`Plugin ${result.pluginName} installed`, 500);
+        scheduleRuntimeRestart(`Plugin ${result.pluginName} installed`);
       }
 
       json(res, {
@@ -6925,7 +8071,7 @@ async function handleRequest(
       }
 
       if (body.autoRestart !== false && result.requiresRestart) {
-        scheduleRuntimeRestart(`Plugin ${pluginName} uninstalled`, 500);
+        scheduleRuntimeRestart(`Plugin ${pluginName} uninstalled`);
       }
 
       json(res, {
@@ -6963,7 +8109,7 @@ async function handleRequest(
         return;
       }
       if (result.requiresRestart) {
-        scheduleRuntimeRestart(`Plugin ${pluginName} ejected`, 500);
+        scheduleRuntimeRestart(`Plugin ${pluginName} ejected`);
       }
       json(res, {
         ok: true,
@@ -6997,7 +8143,7 @@ async function handleRequest(
         return;
       }
       if (result.requiresRestart) {
-        scheduleRuntimeRestart(`Plugin ${pluginName} synced`, 500);
+        scheduleRuntimeRestart(`Plugin ${pluginName} synced`);
       }
       json(res, {
         ok: true,
@@ -7037,7 +8183,7 @@ async function handleRequest(
         return;
       }
       if (result.requiresRestart) {
-        scheduleRuntimeRestart(`Plugin ${pluginName} reinjected`, 500);
+        scheduleRuntimeRestart(`Plugin ${pluginName} reinjected`);
       }
       json(res, {
         ok: true,
@@ -7216,7 +8362,6 @@ async function handleRequest(
     // Auto-restart so the change takes effect
     scheduleRuntimeRestart(
       `Plugin ${shortId} ${body.enabled ? "enabled" : "disabled"}`,
-      300,
     );
 
     json(res, {
@@ -8338,7 +9483,26 @@ async function handleRequest(
       url,
       logBuffer: state.logBuffer,
       eventBuffer: state.eventBuffer,
+      initSse,
+      writeSseJson,
       json,
+    })
+  ) {
+    return;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Bug report routes
+  // ═══════════════════════════════════════════════════════════════════════
+  if (
+    await handleBugReportRoutes({
+      req,
+      res,
+      method,
+      pathname,
+      readJsonBody,
+      json,
+      error,
     })
   ) {
     return;
@@ -8423,211 +9587,18 @@ async function handleRequest(
     const body = await readJsonBody<{ chain?: string; privateKey?: string }>(
       req,
       res,
-    );
-    if (!body) return;
-
-    if (!body.privateKey?.trim()) {
-      error(res, "privateKey is required");
-      return;
-    }
-
-    // Auto-detect chain if not specified
-    let chain: WalletChain;
-    if (body.chain === "evm" || body.chain === "solana") {
-      chain = body.chain;
-    } else if (body.chain) {
-      error(
-        res,
-        `Unsupported chain: ${body.chain}. Must be "evm" or "solana".`,
-      );
-      return;
-    } else {
-      // Auto-detect from key format
-      const detection = validatePrivateKey(body.privateKey.trim());
-      chain = detection.chain;
-    }
-
-    const result = importWallet(chain, body.privateKey.trim());
-
-    if (!result.success) {
-      error(res, result.error ?? "Import failed", 422);
-      return;
-    }
-
-    // Persist to config.env so it survives restarts
-    if (!state.config.env) state.config.env = {};
-    const envKey = chain === "evm" ? "EVM_PRIVATE_KEY" : "SOLANA_PRIVATE_KEY";
-    (state.config.env as Record<string, string>)[envKey] =
-      process.env[envKey] ?? "";
-
-    try {
-      saveMilaidyConfig(state.config);
-    } catch (err) {
-      logger.warn(
-        `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
-      );
-    }
-
-    json(res, {
-      ok: true,
-      chain,
-      address: result.address,
-    });
-    return;
-  }
-
-  // ── POST /api/wallet/generate ──────────────────────────────────────────
-  // Generate a new wallet for a specific chain (or both).
-  if (method === "POST" && pathname === "/api/wallet/generate") {
-    const body = await readJsonBody<{ chain?: string }>(req, res);
-    if (!body) return;
-
-    const chain = body.chain as string | undefined;
-    const validChains: Array<WalletChain | "both"> = ["evm", "solana", "both"];
-
-    if (chain && !validChains.includes(chain as WalletChain | "both")) {
-      error(
-        res,
-        `Unsupported chain: ${chain}. Must be "evm", "solana", or "both".`,
-      );
-      return;
-    }
-
-    const targetChain = (chain ?? "both") as WalletChain | "both";
-
-    if (!state.config.env) state.config.env = {};
-
-    const generated: Array<{ chain: WalletChain; address: string }> = [];
-
-    if (targetChain === "both" || targetChain === "evm") {
-      const result = generateWalletForChain("evm");
-      process.env.EVM_PRIVATE_KEY = result.privateKey;
-      (state.config.env as Record<string, string>).EVM_PRIVATE_KEY =
-        result.privateKey;
-      generated.push({ chain: "evm", address: result.address });
-      logger.info(`[milaidy-api] Generated EVM wallet: ${result.address}`);
-    }
-
-    if (targetChain === "both" || targetChain === "solana") {
-      const result = generateWalletForChain("solana");
-      process.env.SOLANA_PRIVATE_KEY = result.privateKey;
-      (state.config.env as Record<string, string>).SOLANA_PRIVATE_KEY =
-        result.privateKey;
-      generated.push({ chain: "solana", address: result.address });
-      logger.info(`[milaidy-api] Generated Solana wallet: ${result.address}`);
-    }
-
-    try {
-      saveMilaidyConfig(state.config);
-    } catch (err) {
-      logger.warn(
-        `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
-      );
-    }
-
-    json(res, { ok: true, wallets: generated });
-    return;
-  }
-
-  // ── GET /api/wallet/config ─────────────────────────────────────────────
-  if (method === "GET" && pathname === "/api/wallet/config") {
-    const addrs = getWalletAddresses();
-    const solanaRpcConfig = getSolanaRpcConfig();
-    const configStatus: WalletConfigStatus = {
-      alchemyKeySet: Boolean(process.env.ALCHEMY_API_KEY),
-      infuraKeySet: Boolean(process.env.INFURA_API_KEY),
-      ankrKeySet: Boolean(process.env.ANKR_API_KEY),
-      heliusKeySet: Boolean(process.env.HELIUS_API_KEY),
-      birdeyeKeySet: Boolean(process.env.BIRDEYE_API_KEY),
-      evmChains: ["Ethereum", "Base", "Arbitrum", "Optimism", "Polygon"],
-      evmAddress: addrs.evmAddress,
-      solanaAddress: addrs.solanaAddress,
-      solanaRpcProvider: solanaRpcConfig?.provider ?? null,
-    };
-    json(res, configStatus);
-    return;
-  }
-
-  // ── PUT /api/wallet/config ─────────────────────────────────────────────
-  if (method === "PUT" && pathname === "/api/wallet/config") {
-    const body = await readJsonBody<Record<string, string>>(req, res);
-    if (!body) return;
-    const allowedKeys = [
-      "ALCHEMY_API_KEY",
-      "INFURA_API_KEY",
-      "ANKR_API_KEY",
-      "HELIUS_API_KEY",
-      "BIRDEYE_API_KEY",
-      "SOLANA_RPC_PROVIDER",
-    ];
-
-    if (!state.config.env) state.config.env = {};
-
-    for (const key of allowedKeys) {
-      const value = body[key];
-      if (typeof value === "string" && value.trim()) {
-        process.env[key] = value.trim();
-        (state.config.env as Record<string, string>)[key] = value.trim();
-      }
-    }
-
-    // Generate SOLANA_RPC_URL based on the provider selection
-    const provider = (body.SOLANA_RPC_PROVIDER || process.env.SOLANA_RPC_PROVIDER || "helius") as SolanaRpcProvider;
-    let rpcUrl: string | null = null;
-
-    if (provider === "alchemy") {
-      const alchemyKey = body.ALCHEMY_API_KEY?.trim() || process.env.ALCHEMY_API_KEY;
-      if (alchemyKey) {
-        rpcUrl = `https://solana-mainnet.g.alchemy.com/v2/${alchemyKey}`;
-      }
-    } else if (provider === "helius") {
-      const heliusKey = body.HELIUS_API_KEY?.trim() || process.env.HELIUS_API_KEY;
-      if (heliusKey) {
-        rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${heliusKey}`;
-      }
-    }
-
-    if (rpcUrl) {
-      process.env.SOLANA_RPC_URL = rpcUrl;
-      (state.config.env as Record<string, string>).SOLANA_RPC_URL = rpcUrl;
-    }
-
-    try {
-      saveMilaidyConfig(state.config);
-    } catch (err) {
-      logger.warn(
-        `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
-      );
-    }
-
-    json(res, { ok: true });
-    return;
-  }
-
-  // ── POST /api/wallet/export ────────────────────────────────────────────
-  // SECURITY: Requires explicit confirmation + a dedicated export token.
-  if (method === "POST" && pathname === "/api/wallet/export") {
-    const body = await readJsonBody<WalletExportRequestBody>(req, res);
-    if (!body) return;
-
-    const rejection = resolveWalletExportRejection(req, body);
-    if (rejection) {
-      error(res, rejection.reason, rejection.status);
-      return;
-    }
-
-    const evmKey = process.env.EVM_PRIVATE_KEY ?? null;
-    const solKey = process.env.SOLANA_PRIVATE_KEY ?? null;
-    const addrs = getWalletAddresses();
-
-    logger.warn("[wallet] Private keys exported via API");
-
-    json(res, {
-      evm: evmKey ? { privateKey: evmKey, address: addrs.evmAddress } : null,
-      solana: solKey
-        ? { privateKey: solKey, address: addrs.solanaAddress }
-        : null,
-    });
+      method,
+      pathname,
+      config: state.config,
+      saveConfig: saveMiladyConfig,
+      ensureWalletKeysInEnvAndConfig,
+      resolveWalletExportRejection,
+      scheduleRuntimeRestart,
+      readJsonBody,
+      json,
+      error,
+    })
+  ) {
     return;
   }
 
@@ -8730,12 +9701,29 @@ async function handleRequest(
 
   if (method === "GET" && pathname === "/api/registry/config") {
     const registryConfig = state.config.registry;
+    let chainId = 1;
+    if (registryService) {
+      try {
+        chainId = await registryService.getChainId();
+      } catch {
+        // Keep default if chain RPC is unavailable.
+      }
+    }
+
+    const explorerByChainId: Record<number, string> = {
+      1: "https://etherscan.io",
+      10: "https://optimistic.etherscan.io",
+      137: "https://polygonscan.com",
+      8453: "https://basescan.org",
+      42161: "https://arbiscan.io",
+    };
+
     json(res, {
       configured: Boolean(registryService),
-      chainId: 1,
+      chainId,
       registryAddress: registryConfig?.registryAddress ?? null,
       collectionAddress: registryConfig?.collectionAddress ?? null,
-      explorerUrl: "https://etherscan.io",
+      explorerUrl: explorerByChainId[chainId] ?? "",
     });
     return;
   }
@@ -9000,6 +9988,23 @@ async function handleRequest(
     return;
   }
 
+  // ── WhatsApp routes (/api/whatsapp/*) ────────────────────────────────────
+  // Auth: these routes are protected by the isAuthorized(req) gate at L5331.
+  if (pathname.startsWith("/api/whatsapp")) {
+    if (!state.whatsappPairingSessions) {
+      state.whatsappPairingSessions = new Map();
+    }
+    const handled = await handleWhatsAppRoute(req, res, pathname, method, {
+      whatsappPairingSessions: state.whatsappPairingSessions,
+      broadcastWs: state.broadcastWs ?? undefined,
+      config: state.config,
+      runtime: state.runtime ?? undefined,
+      saveConfig: () => saveMiladyConfig(state.config),
+      workspaceDir: resolveDefaultAgentWorkspaceDir(),
+    });
+    if (handled) return;
+  }
+
   // ── POST /api/restart ───────────────────────────────────────────────────
   if (method === "POST" && pathname === "/api/restart") {
     json(res, { ok: true, message: "Restarting..." });
@@ -9128,15 +10133,19 @@ async function handleRequest(
       );
       upstreamUrl.searchParams.set("output_format", outputFormat);
 
-      const upstream = await fetch(upstreamUrl.toString(), {
-        method: "POST",
-        headers: {
-          "xi-api-key": resolvedApiKey,
-          "Content-Type": "application/json",
-          Accept: "audio/mpeg",
+      const upstream = await fetchWithTimeoutGuard(
+        upstreamUrl.toString(),
+        {
+          method: "POST",
+          headers: {
+            "xi-api-key": resolvedApiKey,
+            "Content-Type": "application/json",
+            Accept: "audio/mpeg",
+          },
+          body: JSON.stringify(payload),
         },
-        body: JSON.stringify(payload),
-      });
+        ELEVENLABS_FETCH_TIMEOUT_MS,
+      );
 
       if (!upstream.ok) {
         const upstreamBody = await upstream.text().catch(() => "");
@@ -9148,23 +10157,112 @@ async function handleRequest(
         return;
       }
 
-      const audio = Buffer.from(await upstream.arrayBuffer());
       const contentType = upstream.headers.get("content-type") || "audio/mpeg";
+      const contentLength = responseContentLength(upstream.headers);
+      if (
+        contentLength !== null &&
+        contentLength > ELEVENLABS_AUDIO_MAX_BYTES
+      ) {
+        error(
+          res,
+          `ElevenLabs response exceeds maximum size of ${ELEVENLABS_AUDIO_MAX_BYTES} bytes`,
+          502,
+        );
+        return;
+      }
+
       res.writeHead(200, {
         "Content-Type": contentType,
-        "Content-Length": String(audio.byteLength),
         "Cache-Control": "no-store",
+        ...(contentLength !== null
+          ? { "Content-Length": String(contentLength) }
+          : {}),
       });
-      res.end(audio);
+
+      await streamResponseBodyWithByteLimit(
+        upstream,
+        res,
+        ELEVENLABS_AUDIO_MAX_BYTES,
+        ELEVENLABS_FETCH_TIMEOUT_MS,
+      );
+      res.end();
       return;
     } catch (err) {
+      if (res.headersSent) {
+        res.destroy(
+          err instanceof Error
+            ? err
+            : new Error(
+                `ElevenLabs proxy error: ${typeof err === "string" ? err : String(err)}`,
+              ),
+        );
+        return;
+      }
       error(
         res,
         `ElevenLabs proxy error: ${err instanceof Error ? err.message : String(err)}`,
-        502,
+        isAbortError(err) ? 504 : 502,
       );
       return;
     }
+  }
+
+  // ── POST /api/avatar/vrm ─────────────────────────────────────────────────
+  // Upload a custom VRM avatar file. Saved to ~/.milady/avatars/custom.vrm.
+  if (method === "POST" && pathname === "/api/avatar/vrm") {
+    const MAX_VRM_BYTES = 50 * 1024 * 1024; // 50 MB
+    const rawBody = await readRequestBodyBuffer(req, {
+      maxBytes: MAX_VRM_BYTES,
+      returnNullOnTooLarge: true,
+    });
+    if (!rawBody || rawBody.length === 0) {
+      error(res, "Request body is empty or exceeds 50 MB", 400);
+      return;
+    }
+    // VRM files are GLB (binary glTF) — validate the 4-byte magic header
+    const GLB_MAGIC = Buffer.from([0x67, 0x6c, 0x54, 0x46]); // "glTF"
+    if (rawBody.length < 4 || !rawBody.subarray(0, 4).equals(GLB_MAGIC)) {
+      error(res, "Invalid VRM file: not a valid glTF/GLB file", 400);
+      return;
+    }
+    const avatarDir = path.join(resolveStateDir(), "avatars");
+    fs.mkdirSync(avatarDir, { recursive: true });
+    const vrmPath = path.join(avatarDir, "custom.vrm");
+    fs.writeFileSync(vrmPath, rawBody);
+    json(res, { ok: true, size: rawBody.length });
+    return;
+  }
+
+  // ── GET /api/avatar/vrm ──────────────────────────────────────────────────
+  // Serve the user's custom VRM avatar file if it exists.
+  if (
+    (method === "GET" || method === "HEAD") &&
+    pathname === "/api/avatar/vrm"
+  ) {
+    const vrmPath = path.join(resolveStateDir(), "avatars", "custom.vrm");
+    try {
+      const stat = fs.statSync(vrmPath);
+      if (!stat.isFile()) {
+        error(res, "No custom avatar found", 404);
+        return;
+      }
+      const headers: Record<string, string | number> = {
+        "Content-Type": "model/gltf-binary",
+        "Content-Length": stat.size,
+        "Cache-Control": "no-cache",
+      };
+      if (method === "HEAD") {
+        res.writeHead(200, headers);
+        res.end();
+        return;
+      }
+      const body = fs.readFileSync(vrmPath);
+      res.writeHead(200, headers);
+      res.end(body);
+    } catch {
+      error(res, "No custom avatar found", 404);
+    }
+    return;
   }
 
   // ── GET /api/config/schema ───────────────────────────────────────────────
@@ -9251,6 +10349,31 @@ async function handleRequest(
         delete (envPatch.vars as Record<string, unknown>).MILADY_API_TOKEN;
         delete (envPatch.vars as Record<string, unknown>)
           .MILADY_WALLET_EXPORT_TOKEN;
+      }
+    }
+
+    if (
+      filtered.mcp &&
+      typeof filtered.mcp === "object" &&
+      !Array.isArray(filtered.mcp)
+    ) {
+      const mcpPatch = filtered.mcp as Record<string, unknown>;
+      if (mcpPatch.servers !== undefined) {
+        if (
+          !mcpPatch.servers ||
+          typeof mcpPatch.servers !== "object" ||
+          Array.isArray(mcpPatch.servers)
+        ) {
+          error(res, "mcp.servers must be a JSON object", 400);
+          return;
+        }
+        const mcpRejection = await resolveMcpServersRejection(
+          mcpPatch.servers as Record<string, unknown>,
+        );
+        if (mcpRejection) {
+          error(res, mcpRejection, 400);
+          return;
+        }
       }
     }
 
@@ -9701,6 +10824,7 @@ async function handleRequest(
           const message = createMessageMemory({
             id: crypto.randomUUID() as UUID,
             entityId: userId,
+            agentId: runtime.agentId,
             roomId,
             content: {
               text: prompt,
@@ -10112,6 +11236,10 @@ async function handleRequest(
       updatedAt: now,
     };
     state.conversations.set(id, conv);
+
+    // Soft cap: evict the oldest conversation when the map exceeds 500
+    evictOldestConversation(state.conversations, 500);
+
     if (state.runtime) {
       await ensureConversationRoom(conv);
       await syncConversationRoomTitle(conv);
@@ -10185,7 +11313,7 @@ async function handleRequest(
       error,
     });
     if (!chatPayload) return;
-    const { prompt, channelType } = chatPayload;
+    const { prompt, channelType, images } = chatPayload;
 
     const runtime = state.runtime;
     if (!runtime) {
@@ -10207,19 +11335,16 @@ async function handleRequest(
       return;
     }
 
-    const userMessage = createMessageMemory({
-      id: crypto.randomUUID() as UUID,
-      entityId: userId,
+    const { userMessage, messageToStore } = buildUserMessages({
+      images,
+      prompt,
+      userId,
       roomId: conv.roomId,
-      content: {
-        text: prompt,
-        source: "client_chat",
-        channelType,
-      },
+      channelType,
     });
 
     try {
-      await persistConversationMemory(runtime, userMessage);
+      await persistConversationMemory(runtime, messageToStore);
     } catch (err) {
       error(res, `Failed to store user message: ${getErrorMessage(err)}`, 500);
       return;
@@ -10339,7 +11464,7 @@ async function handleRequest(
       error,
     });
     if (!chatPayload) return;
-    const { prompt, channelType } = chatPayload;
+    const { prompt, channelType, images } = chatPayload;
     const runtime = state.runtime;
     if (!runtime) {
       error(res, "Agent is not running", 503);
@@ -10359,19 +11484,16 @@ async function handleRequest(
       return;
     }
 
-    const userMessage = createMessageMemory({
-      id: crypto.randomUUID() as UUID,
-      entityId: userId,
+    const { userMessage, messageToStore } = buildUserMessages({
+      images,
+      prompt,
+      userId,
       roomId: conv.roomId,
-      content: {
-        text: prompt,
-        source: "client_chat",
-        channelType,
-      },
+      channelType,
     });
 
     try {
-      await persistConversationMemory(runtime, userMessage);
+      await persistConversationMemory(runtime, messageToStore);
     } catch (err) {
       error(res, `Failed to store user message: ${getErrorMessage(err)}`, 500);
       return;
@@ -10544,10 +11666,14 @@ async function handleRequest(
 
   // ── POST /api/chat/stream ────────────────────────────────────────────
   if (method === "POST" && pathname === "/api/chat/stream") {
-    const chatPayload = await readChatRequestPayload(req, res, {
-      readJsonBody,
-      error,
-    });
+    // Legacy cloud-proxy path — forwards messages to a remote sandbox and
+    // does not process image attachments. Retain the standard 1 MB body limit.
+    const chatPayload = await readChatRequestPayload(
+      req,
+      res,
+      { readJsonBody, error },
+      MAX_BODY_BYTES,
+    );
     if (!chatPayload) return;
     const { prompt, channelType } = chatPayload;
 
@@ -10579,6 +11705,7 @@ async function handleRequest(
       const message = createMessageMemory({
         id: crypto.randomUUID() as UUID,
         entityId: chatUserId,
+        agentId: runtime.agentId,
         roomId: chatRoomId,
         content: {
           text: prompt,
@@ -10643,10 +11770,14 @@ async function handleRequest(
   // remote sandbox instead of the local runtime.  Supports SSE streaming
   // when the client sends Accept: text/event-stream.
   if (method === "POST" && pathname === "/api/chat") {
-    const chatPayload = await readChatRequestPayload(req, res, {
-      readJsonBody,
-      error,
-    });
+    // Legacy cloud-proxy path — forwards messages to a remote sandbox and
+    // does not process image attachments. Retain the standard 1 MB body limit.
+    const chatPayload = await readChatRequestPayload(
+      req,
+      res,
+      { readJsonBody, error },
+      MAX_BODY_BYTES,
+    );
     if (!chatPayload) return;
     const { prompt, channelType } = chatPayload;
 
@@ -10668,6 +11799,7 @@ async function handleRequest(
       const message = createMessageMemory({
         id: crypto.randomUUID() as UUID,
         entityId: chatUserId,
+        agentId: runtime.agentId,
         roomId: chatRoomId,
         content: {
           text: prompt,
@@ -10727,6 +11859,18 @@ async function handleRequest(
       );
       if (handled) return;
     }
+  }
+
+  // ── Coding Agent API (/api/coding-agents/*, /api/workspace/*, /api/issues/*) ──
+  if (
+    state.runtime &&
+    (pathname.startsWith("/api/coding-agents") ||
+      pathname.startsWith("/api/workspace") ||
+      pathname.startsWith("/api/issues"))
+  ) {
+    const handler = createCodingAgentRouteHandler(state.runtime);
+    const handled = await handler(req, res, pathname);
+    if (handled) return;
   }
 
   if (
@@ -11607,42 +12751,16 @@ async function handleRequest(
     }
 
     const config = body.config as Record<string, unknown> | undefined;
-    if (!config || typeof config !== "object") {
+    if (!config || typeof config !== "object" || Array.isArray(config)) {
       error(res, "Server config object is required", 400);
       return;
     }
-    if (hasBlockedObjectKeyDeep(config)) {
-      error(
-        res,
-        'Invalid server config: "__proto__", "constructor", and "prototype" are not allowed',
-        400,
-      );
-      return;
-    }
 
-    const configType = config.type as string | undefined;
-    const validTypes = ["stdio", "http", "streamable-http", "sse"];
-    if (!configType || !validTypes.includes(configType)) {
-      error(
-        res,
-        `Invalid config type. Must be one of: ${validTypes.join(", ")}`,
-        400,
-      );
-      return;
-    }
-
-    if (configType === "stdio" && !config.command) {
-      error(res, "Command is required for stdio servers", 400);
-      return;
-    }
-
-    if (
-      (configType === "http" ||
-        configType === "streamable-http" ||
-        configType === "sse") &&
-      !config.url
-    ) {
-      error(res, "URL is required for remote servers", 400);
+    const mcpRejection = await resolveMcpServersRejection({
+      [serverName]: config,
+    });
+    if (mcpRejection) {
+      error(res, mcpRejection, 400);
       return;
     }
 
@@ -11705,13 +12823,20 @@ async function handleRequest(
     if (!body) return;
 
     if (!state.config.mcp) state.config.mcp = {};
-    if (body.servers && typeof body.servers === "object") {
-      if (hasBlockedObjectKeyDeep(body.servers)) {
-        error(
-          res,
-          'Invalid servers config: "__proto__", "constructor", and "prototype" are not allowed',
-          400,
-        );
+    if (body.servers !== undefined) {
+      if (
+        !body.servers ||
+        typeof body.servers !== "object" ||
+        Array.isArray(body.servers)
+      ) {
+        error(res, "servers must be a JSON object", 400);
+        return;
+      }
+      const mcpRejection = await resolveMcpServersRejection(
+        body.servers as Record<string, unknown>,
+      );
+      if (mcpRejection) {
+        error(res, mcpRejection, 400);
         return;
       }
       const sanitized = cloneWithoutBlockedObjectKeys(body.servers);
@@ -11813,8 +12938,19 @@ async function handleRequest(
       return;
     }
 
-    const body = await readJsonBody<{ command?: string }>(req, res);
+    const body = await readJsonBody<{
+      command?: string;
+      clientId?: unknown;
+      terminalToken?: string;
+    }>(req, res);
     if (!body) return;
+
+    const terminalRejection = resolveTerminalRunRejection(req, body);
+    if (terminalRejection) {
+      error(res, terminalRejection.reason, terminalRejection.status);
+      return;
+    }
+
     const command = typeof body.command === "string" ? body.command.trim() : "";
     if (!command) {
       error(res, "Missing or empty command");
@@ -11826,6 +12962,40 @@ async function handleRequest(
       error(res, "Command exceeds maximum length (4096 chars)", 400);
       return;
     }
+
+    // Prevent multiline/control-character payloads that can smuggle
+    // unintended command chains through a single request.
+    if (
+      command.includes("\n") ||
+      command.includes("\r") ||
+      command.includes("\0")
+    ) {
+      error(
+        res,
+        "Command must be a single line without control characters",
+        400,
+      );
+      return;
+    }
+
+    const targetClientId = resolveTerminalRunClientId(req, body);
+    if (!targetClientId) {
+      error(
+        res,
+        "Missing client id. Provide X-Milady-Client-Id header or clientId in the request body.",
+        400,
+      );
+      return;
+    }
+
+    const emitTerminalEvent = (payload: Record<string, unknown>) => {
+      if (isSharedTerminalClientId(targetClientId)) {
+        state.broadcastWs?.(payload);
+        return;
+      }
+      if (typeof state.broadcastWsToClientId !== "function") return;
+      state.broadcastWsToClientId(targetClientId, payload);
+    };
 
     const { maxConcurrent, maxDurationMs } = resolveTerminalRunLimits();
     if (activeTerminalRunCount >= maxConcurrent) {
@@ -11844,7 +13014,7 @@ async function handleRequest(
     const { spawn } = await import("node:child_process");
     const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-    state.broadcastWs?.({
+    emitTerminalEvent({
       type: "terminal-output",
       runId,
       event: "start",
@@ -11870,7 +13040,7 @@ async function handleRequest(
     const timeoutHandle = setTimeout(() => {
       if (proc.killed) return;
       proc.kill("SIGTERM");
-      state.broadcastWs?.({
+      emitTerminalEvent({
         type: "terminal-output",
         runId,
         event: "timeout",
@@ -11883,7 +13053,7 @@ async function handleRequest(
     }, maxDurationMs);
 
     proc.stdout?.on("data", (chunk: Buffer) => {
-      state.broadcastWs?.({
+      emitTerminalEvent({
         type: "terminal-output",
         runId,
         event: "stdout",
@@ -11892,7 +13062,7 @@ async function handleRequest(
     });
 
     proc.stderr?.on("data", (chunk: Buffer) => {
-      state.broadcastWs?.({
+      emitTerminalEvent({
         type: "terminal-output",
         runId,
         event: "stderr",
@@ -11902,7 +13072,7 @@ async function handleRequest(
 
     proc.on("close", (code: number | null) => {
       finalize();
-      state.broadcastWs?.({
+      emitTerminalEvent({
         type: "terminal-output",
         runId,
         event: "exit",
@@ -11912,7 +13082,7 @@ async function handleRequest(
 
     proc.on("error", (err: Error) => {
       finalize();
-      state.broadcastWs?.({
+      emitTerminalEvent({
         type: "terminal-output",
         runId,
         event: "error",
@@ -12193,9 +13363,89 @@ async function handleRequest(
     return;
   }
 
-  // ── Static UI serving (production) ──────────────────────────────────────
-  if (method === "GET" || method === "HEAD") {
-    if (serveStaticUi(req, res, pathname)) return;
+  // ── Stream Manager (macOS-compatible RTMP via FFmpeg) ────────────────────
+  if (method === "POST" && pathname === "/api/stream/start") {
+    try {
+      const body = await readJsonBody(req, res, { maxBytes: MAX_BODY_BYTES });
+      const rtmpUrl = body?.rtmpUrl as string | undefined;
+      const rtmpKey = body?.rtmpKey as string | undefined;
+
+      if (!rtmpUrl || !rtmpKey) {
+        error(res, "rtmpUrl and rtmpKey are required", 400);
+        return;
+      }
+
+      await streamManager.start({
+        rtmpUrl,
+        rtmpKey,
+        inputMode: (body?.inputMode as "testsrc" | "avfoundation") || "testsrc",
+        resolution: (body?.resolution as string) || "1280x720",
+        bitrate: (body?.bitrate as string) || "2500k",
+        framerate: (body?.framerate as number) || 30,
+      });
+
+      json(res, { ok: true, message: "Stream started" });
+    } catch (err) {
+      error(
+        res,
+        err instanceof Error ? err.message : "Stream start failed",
+        500,
+      );
+    }
+    return;
+  }
+
+  if (method === "POST" && pathname === "/api/stream/stop") {
+    try {
+      const result = await streamManager.stop();
+      json(res, { ok: true, ...result });
+    } catch (err) {
+      error(
+        res,
+        err instanceof Error ? err.message : "Stream stop failed",
+        500,
+      );
+    }
+    return;
+  }
+
+  if (method === "GET" && pathname === "/api/stream/status") {
+    json(res, streamManager.getHealth());
+    return;
+  }
+
+  // ── Stream frame push (pipe mode — Electron capturePage → FFmpeg stdin)
+  if (method === "POST" && pathname === "/api/stream/frame") {
+    if (!streamManager.isRunning()) {
+      error(res, "Stream not running", 400);
+      return;
+    }
+    try {
+      const buf = await readRequestBodyBuffer(req, {
+        maxBytes: 2 * 1024 * 1024,
+      });
+      if (!buf || buf.length === 0) {
+        error(res, "Empty frame", 400);
+        return;
+      }
+      const ok = streamManager.writeFrame(buf);
+      // Minimal response to reduce overhead at 15fps
+      res.writeHead(200);
+      res.end(ok ? "1" : "0");
+    } catch (err) {
+      error(
+        res,
+        err instanceof Error ? err.message : "Frame write failed",
+        500,
+      );
+    }
+    return;
+  }
+
+  // ── Connector plugin routes (dynamically registered) ────────────────────
+  for (const handler of state.connectorRouteHandlers) {
+    const handled = await handler(req, res, pathname, method);
+    if (handled) return;
   }
 
   // ── Fallback ────────────────────────────────────────────────────────────
@@ -12231,6 +13481,13 @@ export async function startApiServer(opts?: {
   port: number;
   close: () => Promise<void>;
   updateRuntime: (rt: AgentRuntime) => void;
+  updateStartup: (
+    update: Partial<AgentStartupDiagnostics> & {
+      phase?: string;
+      attempt?: number;
+      state?: ServerState["agentState"];
+    },
+  ) => void;
 }> {
   const apiStartTime = Date.now();
   console.log(`[milady-api] startApiServer called`);
@@ -12295,6 +13552,12 @@ export async function startApiServer(opts?: {
   const initialAgentState = hasRuntime
     ? "running"
     : (opts?.initialAgentState ?? "not_started");
+  const initialStartup: AgentStartupDiagnostics =
+    initialAgentState === "running"
+      ? { phase: "running", attempt: 0 }
+      : initialAgentState === "starting"
+        ? { phase: "starting", attempt: 0 }
+        : { phase: "idle", attempt: 0 };
   const agentName = hasRuntime
     ? (opts.runtime?.character.name ?? "Milady")
     : (config.agents?.list?.[0]?.name ??
@@ -12309,6 +13572,7 @@ export async function startApiServer(opts?: {
     model: hasRuntime ? "provided" : undefined,
     startedAt:
       hasRuntime || initialAgentState === "starting" ? Date.now() : undefined,
+    startup: initialStartup,
     plugins,
     // Filled asynchronously after server start to keep startup latency low.
     skills: [],
@@ -12330,9 +13594,12 @@ export async function startApiServer(opts?: {
     shareIngestQueue: [],
     broadcastStatus: null,
     broadcastWs: null,
+    broadcastWsToClientId: null,
     activeConversationId: null,
     permissionStates: {},
     shellEnabled: config.features?.shellEnabled !== false,
+    pendingRestartReasons: [],
+    connectorRouteHandlers: [],
   };
 
   const trainingServiceCtor = await resolveTrainingServiceCtor();
@@ -12390,14 +13657,18 @@ export async function startApiServer(opts?: {
             : resolvedSource === "cloud"
               ? ["server", "cloud"]
               : ["system"];
-    state.logBuffer.push({
-      timestamp: Date.now(),
-      level,
-      message,
-      source: resolvedSource,
-      tags: resolvedTags,
-    });
-    if (state.logBuffer.length > 1000) state.logBuffer.shift();
+    pushWithBatchEvict(
+      state.logBuffer,
+      {
+        timestamp: Date.now(),
+        level,
+        message,
+        source: resolvedSource,
+        tags: resolvedTags,
+      },
+      1200,
+      200,
+    );
   };
 
   // ── Flush early-captured logs into the main buffer ────────────────────
@@ -12722,11 +13993,45 @@ export async function startApiServer(opts?: {
         logger.warn({ err }, "Failed to initialize ERC-8004 registry service");
       }
     })();
+
+    // ── Dynamic connector route loading ──────────────────────────────────
+    // Connectors that need HTTP routes register them here, gated by config.
+    // Each loader dynamically imports its route module only when configured.
+    void (async () => {
+      const connectors = state.config.connectors ?? {};
+      if (isConnectorConfigured("retake", connectors.retake)) {
+        try {
+          const { handleRetakeRoute, initRetakeAutoStart } = await import(
+            "./retake-routes.js"
+          );
+          const retakeState = {
+            streamManager,
+            port,
+            config: connectors.retake as
+              | { accessToken?: string; apiUrl?: string; captureUrl?: string }
+              | undefined,
+          };
+          state.connectorRouteHandlers.push((req, res, pathname, method) =>
+            handleRetakeRoute(req, res, pathname, method, retakeState),
+          );
+          initRetakeAutoStart(retakeState);
+          addLog("info", "Retake connector routes registered", "system", [
+            "system",
+            "connectors",
+          ]);
+        } catch (err) {
+          logger.warn(
+            `[milady-api] Failed to load retake routes: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
+    })();
   };
 
   // ── WebSocket Server ─────────────────────────────────────────────────────
   const wss = new WebSocketServer({ noServer: true });
   const wsClients = new Set<WebSocket>();
+  const wsClientIds = new WeakMap<WebSocket, string>();
   bindRuntimeStreams(opts?.runtime ?? null);
   bindTrainingStream();
 
@@ -12754,7 +14059,18 @@ export async function startApiServer(opts?: {
   });
 
   // Handle WebSocket connections
-  wss.on("connection", (ws: WebSocket) => {
+  wss.on("connection", (ws: WebSocket, request: http.IncomingMessage) => {
+    try {
+      const wsUrl = new URL(
+        request.url ?? "/",
+        `http://${request.headers.host ?? "localhost"}`,
+      );
+      const clientId = normalizeWsClientId(wsUrl.searchParams.get("clientId"));
+      if (clientId) wsClientIds.set(ws, clientId);
+    } catch {
+      // Ignore malformed WS URL metadata; auth/path were already validated.
+    }
+
     wsClients.add(ws);
     addLog("info", "WebSocket client connected", "websocket", [
       "server",
@@ -12770,6 +14086,7 @@ export async function startApiServer(opts?: {
           agentName: state.agentName,
           model: state.model,
           startedAt: state.startedAt,
+          startup: state.startup,
         }),
       );
       const replay = state.eventBuffer.slice(-120);
@@ -12822,6 +14139,9 @@ export async function startApiServer(opts?: {
       agentName: state.agentName,
       model: state.model,
       startedAt: state.startedAt,
+      startup: state.startup,
+      pendingRestart: state.pendingRestartReasons.length > 0,
+      pendingRestartReasons: state.pendingRestartReasons,
     });
   };
 
@@ -12842,6 +14162,27 @@ export async function startApiServer(opts?: {
         }
       }
     }
+  };
+
+  state.broadcastWsToClientId = (
+    clientId: string,
+    data: Record<string, unknown>,
+  ) => {
+    const message = JSON.stringify(data);
+    let delivered = 0;
+    for (const client of wsClients) {
+      if (client.readyState !== 1) continue;
+      if (wsClientIds.get(client) !== clientId) continue;
+      try {
+        client.send(message);
+        delivered += 1;
+      } catch (err) {
+        logger.error(
+          `[milady-api] WebSocket targeted send error: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    }
+    return delivered;
   };
 
   // Broadcast status every 5 seconds
@@ -12926,6 +14267,10 @@ export async function startApiServer(opts?: {
     state.agentState = "running";
     state.agentName = rt.character.name ?? "Milady";
     state.startedAt = Date.now();
+    state.startup = {
+      phase: "running",
+      attempt: 0,
+    };
     addLog("info", `Runtime restarted — agent: ${state.agentName}`, "system", [
       "system",
       "agent",
@@ -12935,6 +14280,32 @@ export async function startApiServer(opts?: {
     void restoreConversationsFromDb(rt);
 
     // Broadcast status update immediately after restart
+    broadcastStatus();
+  };
+
+  const updateStartup = (
+    update: Partial<AgentStartupDiagnostics> & {
+      phase?: string;
+      attempt?: number;
+      state?: ServerState["agentState"];
+    },
+  ): void => {
+    const { state: nextState, ...startupUpdate } = update;
+    state.startup = {
+      ...state.startup,
+      ...startupUpdate,
+    };
+    if (nextState) {
+      state.agentState = nextState;
+      if (nextState === "error") {
+        state.startedAt = undefined;
+      } else if (
+        (nextState === "starting" || nextState === "running") &&
+        !state.startedAt
+      ) {
+        state.startedAt = Date.now();
+      }
+    }
     broadcastStatus();
   };
 
@@ -12974,20 +14345,69 @@ export async function startApiServer(opts?: {
       startDeferredStartupWork();
       resolve({
         port: actualPort,
-        close: async () => {
-          clearInterval(statusInterval);
-          if (detachRuntimeStreams) {
-            detachRuntimeStreams();
-            detachRuntimeStreams = null;
-          }
-          if (detachTrainingStream) {
-            detachTrainingStream();
-            detachTrainingStream = null;
-          }
-          wss.close();
-          await new Promise<void>((r) => server.close(() => r()));
-        },
+        close: () =>
+          new Promise<void>((r) => {
+            const closeAllConnections = (
+              server as { closeAllConnections?: () => void }
+            ).closeAllConnections;
+            const closeIdleConnections = (
+              server as { closeIdleConnections?: () => void }
+            ).closeIdleConnections;
+
+            clearInterval(statusInterval);
+            if (detachRuntimeStreams) {
+              detachRuntimeStreams();
+              detachRuntimeStreams = null;
+            }
+            if (detachTrainingStream) {
+              detachTrainingStream();
+              detachTrainingStream = null;
+            }
+            for (const ws of wsClients) {
+              if (ws.readyState === 1 || ws.readyState === 0) {
+                ws.terminate();
+              }
+            }
+            wsClients.clear();
+            // Clean up WhatsApp pairing sessions
+            if (state.whatsappPairingSessions) {
+              for (const s of state.whatsappPairingSessions.values()) {
+                try {
+                  s.stop();
+                } catch {
+                  /* non-fatal */
+                }
+              }
+              state.whatsappPairingSessions.clear();
+            }
+            wss.close();
+            const closeTimeout = setTimeout(() => r(), 5_000);
+            const resolved = { done: false };
+            const finalize = () => {
+              if (!resolved.done) {
+                resolved.done = true;
+                clearTimeout(closeTimeout);
+                r();
+              }
+            };
+            if (typeof closeAllConnections === "function") {
+              try {
+                closeAllConnections();
+              } catch {
+                // Bun/Node server internals vary by runtime; non-fatal on shutdown.
+              }
+            }
+            if (typeof closeIdleConnections === "function") {
+              try {
+                closeIdleConnections();
+              } catch {
+                // Bun/Node server internals vary by runtime; non-fatal on shutdown.
+              }
+            }
+            server.close(finalize);
+          }),
         updateRuntime,
+        updateStartup,
       });
     });
   });

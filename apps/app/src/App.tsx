@@ -2,44 +2,55 @@
  * Root App component — routing shell.
  */
 
-import { useState, useEffect, useCallback } from "react";
-import { useApp } from "./AppContext.js";
-import { TAB_GROUPS } from "./navigation.js";
-import { Header } from "./components/Header.js";
-import { Nav } from "./components/Nav.js";
-import { CommandPalette } from "./components/CommandPalette.js";
-import { EmotePicker } from "./components/EmotePicker.js";
-import { SaveCommandModal } from "./components/SaveCommandModal.js";
-import { PairingView } from "./components/PairingView.js";
-import { OnboardingWizard } from "./components/OnboardingWizard.js";
-import { ChatView } from "./components/ChatView.js";
-import { ConversationsSidebar } from "./components/ConversationsSidebar.js";
-import { AutonomousPanel } from "./components/AutonomousPanel.js";
-import { CustomActionsPanel } from "./components/CustomActionsPanel.js";
-import { CustomActionEditor } from "./components/CustomActionEditor.js";
-import { AppsPageView } from "./components/AppsPageView.js";
-import { AdvancedPageView } from "./components/AdvancedPageView.js";
-import { CharacterView } from "./components/CharacterView.js";
-import { ConnectorsPageView } from "./components/ConnectorsPageView.js";
-import { InventoryView } from "./components/InventoryView.js";
-import { KnowledgeView } from "./components/KnowledgeView.js";
-import { SettingsView } from "./components/SettingsView.js";
-import { LoadingScreen } from "./components/LoadingScreen.js";
-import { useContextMenu } from "./hooks/useContextMenu.js";
-import { TerminalPanel } from "./components/TerminalPanel.js";
-import { ToastContainer } from "./components/ui/Toast.js";
-import { ErrorBoundary } from "./components/ui/ErrorBoundary.js";
+import { useCallback, useEffect, useState } from "react";
+import { useApp } from "./AppContext";
+import { AdvancedPageView } from "./components/AdvancedPageView";
+import { AppsPageView } from "./components/AppsPageView";
+import { AutonomousPanel } from "./components/AutonomousPanel";
+import { BugReportModal } from "./components/BugReportModal";
+import { CharacterView } from "./components/CharacterView";
+import { ChatView } from "./components/ChatView";
+import { CommandPalette } from "./components/CommandPalette";
+import { ConnectorsPageView } from "./components/ConnectorsPageView";
+import { ConversationsSidebar } from "./components/ConversationsSidebar";
+import { CustomActionEditor } from "./components/CustomActionEditor";
+import { CustomActionsPanel } from "./components/CustomActionsPanel";
+import { EmotePicker } from "./components/EmotePicker";
+import { GameViewOverlay } from "./components/GameViewOverlay";
+import { Header } from "./components/Header";
+import { InventoryView } from "./components/InventoryView";
+import { KnowledgeView } from "./components/KnowledgeView";
+import { LoadingScreen } from "./components/LoadingScreen";
+import { Nav } from "./components/Nav";
+import { OnboardingWizard } from "./components/OnboardingWizard";
+import { PairingView } from "./components/PairingView";
+import { RestartBanner } from "./components/RestartBanner";
+import { SaveCommandModal } from "./components/SaveCommandModal";
+import { SettingsView } from "./components/SettingsView";
+import { StartupFailureView } from "./components/StartupFailureView";
+import { TerminalPanel } from "./components/TerminalPanel";
+import { BugReportProvider, useBugReportState } from "./hooks/useBugReport";
+import { useContextMenu } from "./hooks/useContextMenu";
+import { APPS_ENABLED } from "./navigation";
 
 const advancedTabs = new Set(TAB_GROUPS.find(g => g.label === "Advanced")?.tabs ?? []);
 
 function ViewRouter() {
   const { tab } = useApp();
   switch (tab) {
-    case "apps": return <AppsPageView />;
-    case "character": return <CharacterView />;
-    case "wallets": return <InventoryView />;
-    case "knowledge": return <KnowledgeView />;
-    case "connectors": return <ConnectorsPageView />;
+    case "chat":
+      return <ChatView />;
+    case "apps":
+      // Apps disabled in production builds; fall through to chat
+      return APPS_ENABLED ? <AppsPageView /> : <ChatView />;
+    case "character":
+      return <CharacterView />;
+    case "wallets":
+      return <InventoryView />;
+    case "knowledge":
+      return <KnowledgeView />;
+    case "connectors":
+      return <ConnectorsPageView />;
     case "advanced":
     case "plugins":
     case "skills":
@@ -54,6 +65,7 @@ function ViewRouter() {
     case "runtime":
     case "database":
     case "logs":
+    case "security":
       return <AdvancedPageView />;
     case "settings": return <SettingsView />;
     default: return <ChatView />;
@@ -64,17 +76,128 @@ export function App() {
   const {
     onboardingLoading,
     startupPhase,
+    startupError,
     authRequired,
     onboardingComplete,
+    retryStartup,
     tab,
-    toasts,
-    dismissToast,
+    actionNotice,
+    agentStatus,
+    unreadConversations,
+    activeGameViewerUrl,
+    gameOverlayEnabled,
   } = useApp();
   const contextMenu = useContextMenu();
 
   const [customActionsPanelOpen, setCustomActionsPanelOpen] = useState(false);
   const [customActionsEditorOpen, setCustomActionsEditorOpen] = useState(false);
-  const [editingAction, setEditingAction] = useState<import("./api-client").CustomActionDef | null>(null);
+  const [editingAction, setEditingAction] = useState<
+    import("./api-client").CustomActionDef | null
+  >(null);
+  const [isChatMobileLayout, setIsChatMobileLayout] = useState(() =>
+    typeof window !== "undefined"
+      ? window.innerWidth < CHAT_MOBILE_BREAKPOINT_PX
+      : false,
+  );
+  const [mobileConversationsOpen, setMobileConversationsOpen] = useState(false);
+  const [mobileAutonomousOpen, setMobileAutonomousOpen] = useState(false);
+
+  const isChat = tab === "chat";
+  const isAdvancedTab =
+    tab === "advanced" ||
+    tab === "plugins" ||
+    tab === "skills" ||
+    tab === "actions" ||
+    tab === "triggers" ||
+    tab === "fine-tuning" ||
+    tab === "trajectories" ||
+    tab === "runtime" ||
+    tab === "database" ||
+    tab === "logs" ||
+    tab === "security";
+  const unreadCount = unreadConversations?.size ?? 0;
+  const statusIndicatorClass =
+    agentStatus?.state === "running"
+      ? "bg-ok shadow-[0_0_8px_color-mix(in_srgb,var(--ok)_60%,transparent)]"
+      : agentStatus?.state === "paused" ||
+          agentStatus?.state === "starting" ||
+          agentStatus?.state === "restarting"
+        ? "bg-warn"
+        : agentStatus?.state === "error"
+          ? "bg-danger"
+          : "bg-muted";
+  const mobileChatControls = isChatMobileLayout ? (
+    <div className="flex items-center gap-2 w-max">
+      <button
+        type="button"
+        className={`inline-flex items-center gap-2 px-3 py-2 border rounded-md text-[12px] font-semibold transition-all cursor-pointer ${
+          mobileConversationsOpen
+            ? "border-accent bg-accent-subtle text-accent"
+            : "border-border bg-card text-txt hover:border-accent hover:text-accent"
+        }`}
+        onClick={() => {
+          setMobileAutonomousOpen(false);
+          setMobileConversationsOpen(true);
+        }}
+        aria-label="Open chats panel"
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          <title>Chats</title>
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>
+        Chats
+        {unreadCount > 0 && (
+          <span className="inline-flex min-w-[18px] h-[18px] items-center justify-center rounded-full bg-accent text-accent-fg text-[10px] font-bold px-1">
+            {unreadCount > 99 ? "99+" : unreadCount}
+          </span>
+        )}
+      </button>
+      <button
+        type="button"
+        className={`inline-flex items-center gap-2 px-3 py-2 border rounded-md text-[12px] font-semibold transition-all cursor-pointer ${
+          mobileAutonomousOpen
+            ? "border-accent bg-accent-subtle text-accent"
+            : "border-border bg-card text-txt hover:border-accent hover:text-accent"
+        }`}
+        onClick={() => {
+          setMobileConversationsOpen(false);
+          setMobileAutonomousOpen(true);
+        }}
+        aria-label="Open status panel"
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          <title>Status</title>
+          <path d="M3 3v18h18" />
+          <path d="m7 14 4-4 3 3 5-6" />
+        </svg>
+        Status
+        <span
+          className={`w-2 h-2 rounded-full ${statusIndicatorClass}`}
+          aria-hidden
+        />
+      </button>
+    </div>
+  ) : undefined;
 
   // Keep hook order stable across onboarding/auth state transitions.
   // Otherwise React can throw when onboarding completes and the main shell mounts.
@@ -89,8 +212,44 @@ export function App() {
     setEditingAction(null);
   }, []);
 
-  if (onboardingLoading) {
-    return <LoadingScreen phase={startupPhase} />;
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleResize = () => {
+      setIsChatMobileLayout(window.innerWidth < CHAT_MOBILE_BREAKPOINT_PX);
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (!isChatMobileLayout) {
+      setMobileConversationsOpen(false);
+      setMobileAutonomousOpen(false);
+    }
+  }, [isChatMobileLayout]);
+
+  useEffect(() => {
+    if (!isChat) {
+      setMobileConversationsOpen(false);
+      setMobileAutonomousOpen(false);
+    }
+  }, [isChat]);
+
+  const bugReport = useBugReportState();
+
+  const agentStarting = agentStatus?.state === "starting";
+
+  if (startupError) {
+    return <StartupFailureView error={startupError} onRetry={retryStartup} />;
+  }
+
+  if (onboardingLoading || agentStarting) {
+    return (
+      <LoadingScreen
+        phase={agentStarting ? "initializing-agent" : startupPhase}
+      />
+    );
   }
 
   if (authRequired) return <PairingView />;
@@ -100,10 +259,7 @@ export function App() {
   const isAdvancedTab = advancedTabs.has(tab);
 
   return (
-    <>
-      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[10001] focus:px-4 focus:py-2 focus:bg-accent focus:text-accent-fg focus:rounded">
-        Skip to content
-      </a>
+    <BugReportProvider value={bugReport}>
       {isChat ? (
         <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
           <Header />
@@ -129,11 +285,17 @@ export function App() {
         <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
           <Header />
           <Nav />
-          <main id="main-content" className={`flex-1 min-h-0 py-6 px-5 ${isAdvancedTab ? "overflow-hidden" : "overflow-y-auto"}`}>
-            <ErrorBoundary><ViewRouter /></ErrorBoundary>
+          <main
+            className={`flex-1 min-h-0 py-4 px-3 xl:py-6 xl:px-5 ${isAdvancedTab ? "overflow-hidden" : "overflow-y-auto"}`}
+          >
+            <ViewRouter />
           </main>
           <TerminalPanel />
         </div>
+      )}
+      {/* Persistent game overlay — stays visible across all tabs */}
+      {activeGameViewerUrl && gameOverlayEnabled && tab !== "apps" && (
+        <GameViewOverlay />
       )}
       <CommandPalette />
       <EmotePicker />
@@ -152,7 +314,21 @@ export function App() {
           setEditingAction(null);
         }}
       />
-      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
-    </>
+      <RestartBanner />
+      <BugReportModal />
+      {actionNotice && (
+        <div
+          className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-2 rounded-lg text-[13px] font-medium z-[10000] text-white ${
+            actionNotice.tone === "error"
+              ? "bg-danger"
+              : actionNotice.tone === "success"
+                ? "bg-ok"
+                : "bg-accent"
+          }`}
+        >
+          {actionNotice.text}
+        </div>
+      )}
+    </BugReportProvider>
   );
 }

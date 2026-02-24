@@ -2,6 +2,9 @@
  * Navigation — tabs + onboarding.
  */
 
+/** Apps are only enabled in dev mode; production builds hide this feature. */
+export const APPS_ENABLED = import.meta.env.DEV;
+
 export type Tab =
   | "chat"
   | "apps"
@@ -20,12 +23,9 @@ export type Tab =
   | "database"
   | "settings"
   | "logs"
-  | "identity"
-  | "approvals"
-  | "safe-mode"
-  | "governance";
+  | "security";
 
-export const TAB_GROUPS = [
+const ALL_TAB_GROUPS = [
   { label: "Chat", tabs: ["chat"] as Tab[] },
   { label: "Character", tabs: ["character"] as Tab[] },
   { label: "Wallets", tabs: ["wallets"] as Tab[] },
@@ -50,9 +50,14 @@ export const TAB_GROUPS = [
       "runtime",
       "database",
       "logs",
+      "security",
     ] as Tab[],
   },
 ] as const;
+
+export const TAB_GROUPS = APPS_ENABLED
+  ? ALL_TAB_GROUPS
+  : ALL_TAB_GROUPS.filter((g) => g.label !== "Apps");
 
 const TAB_PATHS: Record<Tab, string> = {
   chat: "/chat",
@@ -72,10 +77,7 @@ const TAB_PATHS: Record<Tab, string> = {
   database: "/database",
   settings: "/settings",
   logs: "/logs",
-  identity: "/identity",
-  approvals: "/approvals",
-  "safe-mode": "/safe-mode",
-  governance: "/governance",
+  security: "/security",
 };
 
 /** Legacy path redirects — old paths that now map to new tabs. */
@@ -110,6 +112,11 @@ export function tabFromPath(pathname: string, basePath = ""): Tab | null {
   let normalized = normalizePath(p).toLowerCase();
   if (normalized.endsWith("/index.html")) normalized = "/";
   if (normalized === "/") return "chat";
+  if (normalized === "/voice") return "settings";
+  // Apps disabled in production builds — redirect to chat
+  if (!APPS_ENABLED && (normalized === "/apps" || normalized === "/game")) {
+    return "chat";
+  }
   // Check current paths first, then legacy redirects
   return PATH_TO_TAB.get(normalized) ?? LEGACY_PATHS[normalized] ?? null;
 }
@@ -134,27 +141,45 @@ function normalizePath(p: string): string {
 
 export function titleForTab(tab: Tab): string {
   switch (tab) {
-    case "chat": return "Chat";
-    case "apps": return "Apps";
-    case "character": return "Character";
-    case "triggers": return "Triggers";
-    case "wallets": return "Wallets";
-    case "knowledge": return "Knowledge";
-    case "connectors": return "Social";
-    case "plugins": return "Plugins";
-    case "skills": return "Skills";
-    case "actions": return "Actions";
-    case "advanced": return "Advanced";
-    case "fine-tuning": return "Fine-Tuning";
-    case "trajectories": return "Trajectories";
-    case "runtime": return "Runtime";
-    case "database": return "Databases";
-    case "settings": return "Settings";
-    case "logs": return "Logs";
-    case "identity": return "Identity";
-    case "approvals": return "Approvals";
-    case "safe-mode": return "Safe Mode";
-    case "governance": return "Governance";
-    default: return "Milaidy";
+    case "chat":
+      return "Chat";
+    case "apps":
+      return "Apps";
+    case "character":
+      return "Character";
+    case "triggers":
+      return "Triggers";
+    case "wallets":
+      return "Wallets";
+    case "knowledge":
+      return "Knowledge";
+    case "connectors":
+      return "Social";
+    case "plugins":
+      return "Plugins";
+    case "skills":
+      return "Skills";
+    case "actions":
+      return "Actions";
+    case "advanced":
+      return "Advanced";
+    case "fine-tuning":
+      return "Fine-Tuning";
+    case "trajectories":
+      return "Trajectories";
+    case "voice":
+      return "Voice";
+    case "runtime":
+      return "Runtime";
+    case "database":
+      return "Databases";
+    case "settings":
+      return "Settings";
+    case "logs":
+      return "Logs";
+    case "security":
+      return "Security";
+    default:
+      return "Milady";
   }
 }

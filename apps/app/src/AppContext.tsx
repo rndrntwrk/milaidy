@@ -14,6 +14,7 @@ import {
   useState,
 } from "react";
 import {
+  type AgentStartupDiagnostics,
   type AgentStatus,
   type AppViewerAuthMessage,
   type CatalogSkill,
@@ -25,6 +26,7 @@ import {
   client,
   type DropStatus,
   type ExtensionStatus,
+  type ImageAttachment,
   type LogEntry,
   type McpMarketplaceResult,
   type McpRegistryServerDetail,
@@ -103,13 +105,13 @@ export const THEMES: ReadonlyArray<{
   label: string;
   hint: string;
 }> = [
-    { id: "milady", label: "milady", hint: "clean black & white" },
-    { id: "qt314", label: "qt3.14", hint: "soft pastels" },
-    { id: "web2000", label: "web2000", hint: "green hacker vibes" },
-    { id: "programmer", label: "programmer", hint: "vscode dark" },
-    { id: "haxor", label: "haxor", hint: "terminal green" },
-    { id: "psycho", label: "psycho", hint: "pure chaos" },
-  ];
+  { id: "milady", label: "milady", hint: "clean black & white" },
+  { id: "qt314", label: "qt3.14", hint: "soft pastels" },
+  { id: "web2000", label: "web2000", hint: "green hacker vibes" },
+  { id: "programmer", label: "programmer", hint: "vscode dark" },
+  { id: "haxor", label: "haxor", hint: "terminal green" },
+  { id: "psycho", label: "psycho", hint: "pure chaos" },
+];
 
 const VALID_THEMES = new Set<string>(THEMES.map((t) => t.id));
 const AGENT_TRANSFER_MIN_PASSWORD_LENGTH = 4;
@@ -320,13 +322,33 @@ function parseAgentStatusEvent(
   const startedAt =
     typeof data.startedAt === "number" ? data.startedAt : undefined;
   const uptime = typeof data.uptime === "number" ? data.uptime : undefined;
+  const startup = parseAgentStartupDiagnostics(data.startup);
   return {
     state: state as AgentStatus["state"],
     agentName,
     model,
     startedAt,
     uptime,
+    startup,
   };
+}
+
+function parseAgentStartupDiagnostics(
+  value: unknown,
+): AgentStartupDiagnostics | undefined {
+  if (!isRecord(value)) return undefined;
+  const phase = value.phase;
+  const attempt = value.attempt;
+  if (typeof phase !== "string" || typeof attempt !== "number") {
+    return undefined;
+  }
+  const startup: AgentStartupDiagnostics = { phase, attempt };
+  if (typeof value.lastError === "string") startup.lastError = value.lastError;
+  if (typeof value.lastErrorAt === "number")
+    startup.lastErrorAt = value.lastErrorAt;
+  if (typeof value.nextRetryAt === "number")
+    startup.nextRetryAt = value.nextRetryAt;
+  return startup;
 }
 
 function parseStreamEventEnvelopeEvent(
@@ -404,12 +426,17 @@ function computeStreamingDelta(existing: string, incoming: string): string {
   if (incoming === existing) return "";
   if (incoming.startsWith(existing)) return incoming.slice(existing.length);
   if (existing.startsWith(incoming)) return "";
-  if (existing.endsWith(incoming) || existing.includes(incoming)) return "";
+
+  // Small chunks are usually raw token deltas; keep them even if they
+  // duplicate suffix characters (e.g., "l" + "l" in "Hello").
+  if (incoming.length <= 3) return incoming;
 
   const maxOverlap = Math.min(existing.length, incoming.length);
   for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
     if (existing.endsWith(incoming.slice(0, overlap))) {
-      return incoming.slice(overlap);
+      const delta = incoming.slice(overlap);
+      if (!delta && overlap === incoming.length) return "";
+      return delta;
     }
   }
   return incoming;
@@ -438,6 +465,65 @@ type LoadConversationMessagesResult =
 
 export type StartupPhase = "starting-backend" | "initializing-agent";
 
+export type StartupErrorReason =
+  | "backend-timeout"
+  | "backend-unreachable"
+  | "agent-timeout"
+  | "agent-error";
+
+export interface StartupErrorState {
+  reason: StartupErrorReason;
+  phase: StartupPhase;
+  message: string;
+  detail?: string;
+  status?: number;
+  path?: string;
+}
+
+const BACKEND_STARTUP_TIMEOUT_MS = 30_000;
+const AGENT_READY_TIMEOUT_MS = 90_000;
+
+interface ApiLikeError {
+  kind?: string;
+  status?: number;
+  path?: string;
+  message?: string;
+}
+
+function asApiLikeError(err: unknown): ApiLikeError | null {
+  if (!isRecord(err)) return null;
+  const kind = err.kind;
+  const status = err.status;
+  const path = err.path;
+  const message = err.message;
+  const hasApiShape =
+    typeof kind === "string" ||
+    typeof status === "number" ||
+    typeof path === "string";
+  if (!hasApiShape) return null;
+  return {
+    kind: typeof kind === "string" ? kind : undefined,
+    status: typeof status === "number" ? status : undefined,
+    path: typeof path === "string" ? path : undefined,
+    message: typeof message === "string" ? message : undefined,
+  };
+}
+
+function formatStartupErrorDetail(err: unknown): string | undefined {
+  const apiErr = asApiLikeError(err);
+  if (apiErr) {
+    const parts: string[] = [];
+    if (apiErr.path) parts.push(apiErr.path);
+    if (typeof apiErr.status === "number") parts.push(`HTTP ${apiErr.status}`);
+    if (apiErr.message) parts.push(apiErr.message);
+    return parts.filter(Boolean).join(" - ");
+  }
+  if (err instanceof Error && err.message.trim()) {
+    return err.message.trim();
+  }
+  return undefined;
+}
+
 // ── Context value type ─────────────────────────────────────────────────
 
 export interface AppState {
@@ -449,11 +535,17 @@ export interface AppState {
   onboardingComplete: boolean;
   onboardingLoading: boolean;
   startupPhase: StartupPhase;
+  startupError: StartupErrorState | null;
   authRequired: boolean;
   actionNotice: ActionNotice | null;
   toasts: ToastItem[];
   lifecycleBusy: boolean;
   lifecycleAction: LifecycleAction | null;
+
+  // Deferred restart
+  pendingRestart: boolean;
+  pendingRestartReasons: string[];
+  restartBannerDismissed: boolean;
 
   // Pairing
   pairingEnabled: boolean;
@@ -652,6 +744,7 @@ export interface AppState {
   onboardingTwilioPhoneNumber: string;
   onboardingBlooioApiKey: string;
   onboardingBlooioPhoneNumber: string;
+  onboardingGithubToken: string;
   onboardingSubscriptionTab: "token" | "oauth";
   onboardingSelectedChains: Set<string>;
   onboardingRpcSelections: Record<string, string>;
@@ -683,6 +776,9 @@ export interface AppState {
   droppedFiles: string[];
   shareIngestNotice: string;
 
+  // Chat image attachments queued for the next message
+  chatPendingImages: ImageAttachment[];
+
   // Game
   activeGameApp: string;
   activeGameDisplayName: string;
@@ -690,6 +786,9 @@ export interface AppState {
   activeGameSandbox: string;
   activeGamePostMessageAuth: boolean;
   activeGamePostMessagePayload: GamePostMessageAuthPayload | null;
+
+  /** When true, the game iframe persists as a floating overlay across all tabs. */
+  gameOverlayEnabled: boolean;
 
   // Sub-tabs
   appsSubTab: "browse" | "games";
@@ -713,12 +812,16 @@ export interface AppActions {
   handlePauseResume: () => Promise<void>;
   handleRestart: () => Promise<void>;
   handleReset: () => Promise<void>;
+  retryStartup: () => void;
+  dismissRestartBanner: () => void;
+  triggerRestart: () => Promise<void>;
 
   // Chat
   handleChatSend: (channelType?: ConversationChannelType) => Promise<void>;
   handleChatStop: () => void;
   handleChatClear: () => Promise<void>;
   handleNewConversation: () => Promise<void>;
+  setChatPendingImages: (images: ImageAttachment[]) => void;
   handleSelectConversation: (id: string) => Promise<void>;
   handleDeleteConversation: (id: string) => Promise<void>;
   handleRenameConversation: (id: string, title: string) => Promise<void>;
@@ -856,12 +959,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [onboardingLoading, setOnboardingLoading] = useState(true);
   const [startupPhase, setStartupPhase] =
     useState<StartupPhase>("starting-backend");
+  const [startupError, setStartupError] = useState<StartupErrorState | null>(
+    null,
+  );
+  const [startupRetryNonce, setStartupRetryNonce] = useState(0);
   const [authRequired, setAuthRequired] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const actionNotice: ActionNotice | null = toasts.length > 0 ? { tone: toasts[0].tone, text: toasts[0].text } : null;
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [lifecycleAction, setLifecycleAction] =
     useState<LifecycleAction | null>(null);
+
+  // --- Deferred restart ---
+  const [pendingRestart, setPendingRestart] = useState(false);
+  const [pendingRestartReasons, setPendingRestartReasons] = useState<string[]>(
+    [],
+  );
+  const [restartBannerDismissed, setRestartBannerDismissed] = useState(false);
 
   // --- Pairing ---
   const [pairingEnabled, setPairingEnabled] = useState(false);
@@ -1165,6 +1279,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [onboardingBlooioApiKey, setOnboardingBlooioApiKey] = useState("");
   const [onboardingBlooioPhoneNumber, setOnboardingBlooioPhoneNumber] =
     useState("");
+  const [onboardingGithubToken, setOnboardingGithubToken] = useState("");
   const [onboardingSubscriptionTab, setOnboardingSubscriptionTab] = useState<
     "token" | "oauth"
   >("token");
@@ -1214,6 +1329,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [droppedFiles, setDroppedFiles] = useState<string[]>([]);
   const [shareIngestNotice, setShareIngestNotice] = useState("");
 
+  // --- Chat pending images ---
+  const [chatPendingImages, setChatPendingImages] = useState<ImageAttachment[]>(
+    [],
+  );
+
   // --- Game ---
   const [activeGameApp, setActiveGameApp] = useState("");
   const [activeGameDisplayName, setActiveGameDisplayName] = useState("");
@@ -1225,6 +1345,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     useState(false);
   const [activeGamePostMessagePayload, setActiveGamePostMessagePayload] =
     useState<GamePostMessageAuthPayload | null>(null);
+  const [gameOverlayEnabled, setGameOverlayEnabled] = useState(false);
 
   // --- Admin ---
   const [appsSubTab, setAppsSubTab] = useState<"browse" | "games">("browse");
@@ -1835,7 +1956,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActionNotice(LIFECYCLE_MESSAGES.start.success, "success", 2400);
     } catch (err) {
       setActionNotice(
-        `Failed to ${LIFECYCLE_MESSAGES.start.verb} agent: ${err instanceof Error ? err.message : "unknown error"
+        `Failed to ${LIFECYCLE_MESSAGES.start.verb} agent: ${
+          err instanceof Error ? err.message : "unknown error"
         }`,
         "error",
         4200,
@@ -1854,7 +1976,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActionNotice(LIFECYCLE_MESSAGES.stop.success, "success", 2400);
     } catch (err) {
       setActionNotice(
-        `Failed to ${LIFECYCLE_MESSAGES.stop.verb} agent: ${err instanceof Error ? err.message : "unknown error"
+        `Failed to ${LIFECYCLE_MESSAGES.stop.verb} agent: ${
+          err instanceof Error ? err.message : "unknown error"
         }`,
         "error",
         4200,
@@ -1884,7 +2007,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActionNotice(LIFECYCLE_MESSAGES[action].success, "success", 2400);
     } catch (err) {
       setActionNotice(
-        `Failed to ${LIFECYCLE_MESSAGES[action].verb} agent: ${err instanceof Error ? err.message : "unknown error"
+        `Failed to ${LIFECYCLE_MESSAGES[action].verb} agent: ${
+          err instanceof Error ? err.message : "unknown error"
         }`,
         "error",
         4200,
@@ -1918,10 +2042,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setConversations([]);
       const s = await client.restartAgent();
       setAgentStatus(s);
+      setPendingRestart(false);
+      setPendingRestartReasons([]);
       setActionNotice(LIFECYCLE_MESSAGES.restart.success, "success", 2400);
     } catch (err) {
       setActionNotice(
-        `Failed to ${LIFECYCLE_MESSAGES.restart.verb} agent: ${err instanceof Error ? err.message : "unknown error"
+        `Failed to ${LIFECYCLE_MESSAGES.restart.verb} agent: ${
+          err instanceof Error ? err.message : "unknown error"
         }`,
         "error",
         4200,
@@ -1943,6 +2070,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActionNotice,
   ]);
 
+  const dismissRestartBanner = useCallback(() => {
+    setRestartBannerDismissed(true);
+  }, []);
+
+  const triggerRestart = useCallback(async () => {
+    await handleRestart();
+  }, [handleRestart]);
+
+  const retryStartup = useCallback(() => {
+    setStartupError(null);
+    setAuthRequired(false);
+    setOnboardingLoading(true);
+    setStartupPhase("starting-backend");
+    setStartupRetryNonce((prev) => prev + 1);
+  }, []);
+
   const handleReset = useCallback(async () => {
     if (lifecycleBusyRef.current) {
       const activeAction =
@@ -1956,8 +2099,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     const confirmed = window.confirm(
       "This will completely reset the agent — wiping all config, memory, and data.\n\n" +
-      "You will be taken back to the onboarding wizard.\n\n" +
-      "Are you sure?",
+        "You will be taken back to the onboarding wizard.\n\n" +
+        "Are you sure?",
     );
     if (!confirmed) return;
     if (!beginLifecycleAction("reset")) return;
@@ -1983,7 +2126,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActionNotice(LIFECYCLE_MESSAGES.reset.success, "success", 3200);
     } catch (err) {
       setActionNotice(
-        `Failed to ${LIFECYCLE_MESSAGES.reset.verb} agent: ${err instanceof Error ? err.message : "unknown error"
+        `Failed to ${LIFECYCLE_MESSAGES.reset.verb} agent: ${
+          err instanceof Error ? err.message : "unknown error"
         }`,
         "error",
         4200,
@@ -2098,6 +2242,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         );
       };
 
+      // Capture and clear pending images before async work
+      const imagesToSend = chatPendingImages.length
+        ? chatPendingImages
+        : undefined;
+      setChatPendingImages([]);
+
       try {
         const data = await client.sendConversationMessageStream(
           convId,
@@ -2199,6 +2349,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             },
             channelType,
             controller.signal,
+            imagesToSend,
           );
 
           if (shouldApplyFinalStreamText(streamedAssistantText, data.text)) {
@@ -2213,7 +2364,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               return changed ? next : prev;
             });
           }
-          await loadConversations();
+          void loadConversations();
         } catch (err) {
           const abortError = err as Error;
           if (abortError.name === "AbortError") {
@@ -2243,6 +2394,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 conversation.id,
                 text,
                 channelType,
+                imagesToSend,
               );
               setConversationMessages([
                 {
@@ -2293,6 +2445,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [
       chatInput,
       chatSending,
+      chatPendingImages,
       activeConversationId,
       loadConversationMessages,
       loadConversations,
@@ -2586,16 +2739,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       try {
         setActionNotice(
-          `${enabled ? "Enabling" : "Disabling"} ${pluginName}. Restarting agent...`,
+          `${enabled ? "Enabling" : "Disabling"} ${pluginName}...`,
           "info",
           4200,
         );
         await client.updatePlugin(pluginId, { enabled });
-        // The server schedules a restart after toggle — wait for it then refresh
-        await client.restartAndWait();
         await loadPlugins();
         setActionNotice(
-          `${pluginName} ${enabled ? "enabled" : "disabled"}.`,
+          `${pluginName} ${enabled ? "enabled" : "disabled"}. Restart required to apply.`,
           "success",
           2800,
         );
@@ -2604,7 +2755,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           /* ignore */
         });
         setActionNotice(
-          `Failed to ${enabled ? "enable" : "disable"} ${pluginName}: ${err instanceof Error ? err.message : "unknown error"
+          `Failed to ${enabled ? "enable" : "disable"} ${pluginName}: ${
+            err instanceof Error ? err.message : "unknown error"
           }`,
           "error",
           4200,
@@ -2625,20 +2777,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const plugin = plugins.find((p) => p.id === pluginId);
         const isAiProvider = plugin?.category === "ai-provider";
 
-        // Restart agent if AI provider (API keys need restart to take effect)
-        if (isAiProvider) {
-          setActionNotice(
-            "Saving provider settings. Restarting agent to apply changes...",
-            "info",
-            4200,
-          );
-          await client.restartAndWait();
-        }
-
         await loadPlugins();
         setActionNotice(
           isAiProvider
-            ? "Provider settings saved and agent restarted."
+            ? "Provider settings saved. Restart required to apply."
             : "Plugin settings saved.",
           "success",
         );
@@ -2923,11 +3065,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setWalletError(null);
       try {
         await client.updateWalletConfig(config);
-        await client.restartAgent();
         await loadWalletConfig();
         await loadBalances();
         setActionNotice(
-          "Wallet API keys saved and agent restarted.",
+          "Wallet API keys saved. Restart required to apply.",
           "success",
         );
       } catch (err) {
@@ -3116,10 +3257,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!draft.username) delete draft.username;
       if (!draft.system) delete draft.system;
       const { agentName } = await client.updateCharacter(draft);
-      // Also persist avatar selection to config
+      // Also persist avatar selection to config (under "ui" which is allowlisted)
       try {
         await client.updateConfig({
-          settings: { avatarIndex: selectedVrmIndex },
+          ui: { avatarIndex: selectedVrmIndex },
         });
       } catch {
         /* non-fatal */
@@ -3200,8 +3341,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ── Onboarding ─────────────────────────────────────────────────────
 
-
-
   const handleOnboardingFinish = useCallback(async () => {
     if (onboardingFinishBusyRef.current || onboardingRestarting) return;
     if (!onboardingOptions) return;
@@ -3265,6 +3404,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           onboardingRunMode === "cloud" ? onboardingLargeModel : undefined,
         provider: isLocalMode ? onboardingProvider || undefined : undefined,
         providerApiKey: isLocalMode ? onboardingApiKey || undefined : undefined,
+        primaryModel: isLocalMode
+          ? onboardingPrimaryModel.trim() || undefined
+          : undefined,
         inventoryProviders:
           inventoryProviders.length > 0 ? inventoryProviders : undefined,
         // Connectors
@@ -3276,6 +3418,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         twilioPhoneNumber: onboardingTwilioPhoneNumber.trim() || undefined,
         blooioApiKey: onboardingBlooioApiKey.trim() || undefined,
         blooioPhoneNumber: onboardingBlooioPhoneNumber.trim() || undefined,
+        githubToken: onboardingGithubToken.trim() || undefined,
       });
       setOnboardingComplete(true);
       setTab("chat");
@@ -3305,6 +3448,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     onboardingLargeModel,
     onboardingProvider,
     onboardingApiKey,
+    onboardingPrimaryModel,
     onboardingSelectedChains,
     onboardingRpcSelections,
     onboardingRpcKeys,
@@ -3316,6 +3460,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     onboardingTwilioPhoneNumber,
     onboardingBlooioApiKey,
     onboardingBlooioPhoneNumber,
+    onboardingGithubToken,
     setTab,
   ]);
 
@@ -3432,6 +3577,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       cloudConnected,
       setActionNotice,
       handleOnboardingFinish,
+      dropStatus?.dropEnabled,
+      dropStatus?.userHasMinted,
+      dropStatus?.mintedOut,
     ],
   );
 
@@ -3504,7 +3652,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setOnboardingStep("connectors");
         break;
     }
-  }, [onboardingStep, onboardingRunMode]);
+  }, [
+    onboardingStep,
+    onboardingRunMode,
+    dropStatus?.dropEnabled,
+    dropStatus?.userHasMinted,
+    dropStatus?.mintedOut,
+  ]);
 
   // ── Cloud ──────────────────────────────────────────────────────────
 
@@ -3730,6 +3884,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         chatAvatarVisible: setChatAvatarVisible,
         chatAgentVoiceMuted: setChatAgentVoiceMuted,
         chatAvatarSpeaking: setChatAvatarSpeaking,
+        startupError: setStartupError,
         pairingCodeInput: setPairingCodeInput,
         pluginFilter: setPluginFilter,
         pluginStatusFilter: setPluginStatusFilter,
@@ -3776,6 +3931,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         onboardingTwilioPhoneNumber: setOnboardingTwilioPhoneNumber,
         onboardingBlooioApiKey: setOnboardingBlooioApiKey,
         onboardingBlooioPhoneNumber: setOnboardingBlooioPhoneNumber,
+        onboardingGithubToken: setOnboardingGithubToken,
         onboardingSubscriptionTab: setOnboardingSubscriptionTab,
         onboardingRpcKeys: setOnboardingRpcKeys,
         onboardingAvatar: setOnboardingAvatar,
@@ -3800,6 +3956,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         activeGameSandbox: setActiveGameSandbox,
         activeGamePostMessageAuth: setActiveGamePostMessageAuth,
         activeGamePostMessagePayload: setActiveGamePostMessagePayload,
+        gameOverlayEnabled: setGameOverlayEnabled,
         storePlugins: setStorePlugins,
         storeLoading: setStoreLoading,
         storeInstalling: setStoreInstalling,
@@ -3843,25 +4000,117 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     applyTheme(currentTheme);
+    const startupRunId = startupRetryNonce;
     let unbindStatus: (() => void) | null = null;
     let unbindAgentEvents: (() => void) | null = null;
     let unbindHeartbeatEvents: (() => void) | null = null;
     let unbindProactiveMessages: (() => void) | null = null;
     let cancelled = false;
+    const describeBackendFailure = (
+      err: unknown,
+      timedOut: boolean,
+    ): StartupErrorState => {
+      const apiErr = asApiLikeError(err);
+      if (apiErr?.kind === "http" && apiErr.status === 404) {
+        return {
+          reason: "backend-unreachable",
+          phase: "starting-backend",
+          message:
+            "Backend API routes are unavailable on this origin (received 404).",
+          detail: formatStartupErrorDetail(err),
+          status: apiErr.status,
+          path: apiErr.path,
+        };
+      }
+      if (timedOut || apiErr?.kind === "timeout") {
+        return {
+          reason: "backend-timeout",
+          phase: "starting-backend",
+          message: `Backend did not become reachable within ${Math.round(
+            BACKEND_STARTUP_TIMEOUT_MS / 1000,
+          )}s.`,
+          detail: formatStartupErrorDetail(err),
+          status: apiErr?.status,
+          path: apiErr?.path,
+        };
+      }
+      return {
+        reason: "backend-unreachable",
+        phase: "starting-backend",
+        message: "Failed to reach backend during startup.",
+        detail: formatStartupErrorDetail(err),
+        status: apiErr?.status,
+        path: apiErr?.path,
+      };
+    };
+    const describeAgentFailure = (
+      err: unknown,
+      timedOut: boolean,
+      diagnostics?: AgentStartupDiagnostics,
+    ): StartupErrorState => {
+      const detail =
+        diagnostics?.lastError ||
+        formatStartupErrorDetail(err) ||
+        "Agent runtime did not report a reason.";
+      if (timedOut) {
+        return {
+          reason: "agent-timeout",
+          phase: "initializing-agent",
+          message: `Agent did not reach running or paused within ${Math.round(
+            AGENT_READY_TIMEOUT_MS / 1000,
+          )}s.`,
+          detail,
+        };
+      }
+      return {
+        reason: "agent-error",
+        phase: "initializing-agent",
+        message: "Agent runtime reported a startup error.",
+        detail,
+      };
+    };
+    const STARTUP_WARN_PREFIX = "[milady][startup:init]";
+    const logStartupWarning = (scope: string, err: unknown) => {
+      console.warn(`${STARTUP_WARN_PREFIX} ${scope}`, err);
+    };
 
     const initApp = async () => {
+      if (import.meta.env.DEV && startupRunId > 0) {
+        console.debug(`[milady] Retrying startup run #${startupRunId}`);
+      }
       const BASE_DELAY_MS = 250;
       const MAX_DELAY_MS = 1000;
-      const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+      const sleep = (ms: number) =>
+        new Promise<void>((resolve) => setTimeout(resolve, ms));
       let onboardingNeedsOptions = false;
       let requiresAuth = false;
+      let latestAuth: {
+        required: boolean;
+        pairingEnabled: boolean;
+        expiresAt: number | null;
+      } = {
+        required: false,
+        pairingEnabled: false,
+        expiresAt: null,
+      };
+      setStartupError(null);
       setStartupPhase("starting-backend");
+      setAuthRequired(false);
+      setConnected(false);
+      const backendDeadlineAt = Date.now() + BACKEND_STARTUP_TIMEOUT_MS;
+      let lastBackendError: unknown = null;
 
       // Keep the splash screen up until the backend is reachable.
       let backendAttempts = 0;
       while (!cancelled) {
+        if (Date.now() >= backendDeadlineAt) {
+          setStartupError(describeBackendFailure(lastBackendError, true));
+          setOnboardingLoading(false);
+          return;
+        }
         try {
           const auth = await client.getAuthStatus();
+          latestAuth = auth;
           if (auth.required && !client.hasToken()) {
             setAuthRequired(true);
             setPairingEnabled(auth.pairingEnabled);
@@ -3873,7 +4122,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setOnboardingComplete(complete);
           onboardingNeedsOptions = !complete;
           break;
-        } catch {
+        } catch (err) {
+          const apiErr = asApiLikeError(err);
+          if (apiErr?.status === 401 && client.hasToken()) {
+            client.setToken(null);
+            setAuthRequired(true);
+            setPairingEnabled(latestAuth.pairingEnabled);
+            setPairingExpiresAt(latestAuth.expiresAt);
+            requiresAuth = true;
+            break;
+          }
+          if (apiErr?.status === 404) {
+            setStartupError(describeBackendFailure(err, false));
+            setOnboardingLoading(false);
+            return;
+          }
+          lastBackendError = err;
           backendAttempts += 1;
           const delay = Math.min(
             BASE_DELAY_MS * 2 ** Math.min(backendAttempts, 2),
@@ -3891,41 +4155,77 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      setStartupPhase("initializing-agent");
-
       // On fresh installs, unblock to onboarding as soon as options are available.
       if (onboardingNeedsOptions) {
-        let optionsLoaded = false;
-        while (!cancelled && !optionsLoaded) {
+        const optionsDeadlineAt = Date.now() + BACKEND_STARTUP_TIMEOUT_MS;
+        let optionsError: unknown = null;
+        while (!cancelled) {
+          if (Date.now() >= optionsDeadlineAt) {
+            setStartupError(describeBackendFailure(optionsError, true));
+            setOnboardingLoading(false);
+            return;
+          }
           try {
             const options = await client.getOnboardingOptions();
             setOnboardingOptions(options);
-            optionsLoaded = true;
-          } catch {
+            setOnboardingLoading(false);
+            return;
+          } catch (err) {
+            const apiErr = asApiLikeError(err);
+            if (apiErr?.status === 401 && client.hasToken()) {
+              client.setToken(null);
+              setAuthRequired(true);
+              setPairingEnabled(latestAuth.pairingEnabled);
+              setPairingExpiresAt(latestAuth.expiresAt);
+              setOnboardingLoading(false);
+              return;
+            }
+            if (apiErr?.status === 404) {
+              setStartupError(describeBackendFailure(err, false));
+              setOnboardingLoading(false);
+              return;
+            }
+            optionsError = err;
             await sleep(500);
           }
-        }
-        if (!cancelled) {
-          setOnboardingLoading(false);
         }
         return;
       }
 
+      setStartupPhase("initializing-agent");
+
       // Existing installs: keep loading until the runtime reports ready.
       let agentReady = false;
-      let _agentAttempts = 0;
+      const agentDeadlineAt = Date.now() + AGENT_READY_TIMEOUT_MS;
+      let lastAgentError: unknown = null;
+      let lastAgentDiagnostics: AgentStartupDiagnostics | undefined;
       while (!cancelled) {
+        if (Date.now() >= agentDeadlineAt) {
+          setStartupError(
+            describeAgentFailure(lastAgentError, true, lastAgentDiagnostics),
+          );
+          setOnboardingLoading(false);
+          return;
+        }
         try {
           let status = await client.getStatus();
           setAgentStatus(status);
           setConnected(true);
+          lastAgentDiagnostics = status.startup;
+
+          // Hydrate deferred restart state
+          if (status.pendingRestart) {
+            setPendingRestart(true);
+            setPendingRestartReasons(status.pendingRestartReasons ?? []);
+          }
 
           if (status.state === "not_started" || status.state === "stopped") {
             try {
               status = await client.startAgent();
               setAgentStatus(status);
-            } catch {
-              /* ignore */
+              lastAgentDiagnostics = status.startup;
+            } catch (err) {
+              lastAgentError = err;
             }
           }
 
@@ -3935,24 +4235,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
 
           if (status.state === "error") {
-            break;
+            setStartupError(
+              describeAgentFailure(lastAgentError, false, status.startup),
+            );
+            setOnboardingLoading(false);
+            return;
           }
-        } catch {
+        } catch (err) {
+          const apiErr = asApiLikeError(err);
+          if (apiErr?.status === 401 && client.hasToken()) {
+            client.setToken(null);
+            setAuthRequired(true);
+            setPairingEnabled(latestAuth.pairingEnabled);
+            setPairingExpiresAt(latestAuth.expiresAt);
+            setOnboardingLoading(false);
+            return;
+          }
+          lastAgentError = err;
           setConnected(false);
         }
-        _agentAttempts += 1;
         await sleep(500);
       }
       if (cancelled) return;
 
       if (!agentReady) {
-        if (import.meta.env.DEV) {
-          console.debug(
-            "[milady] Agent did not reach running/paused state during startup.",
-          );
-        }
+        setStartupError(
+          describeAgentFailure(lastAgentError, true, lastAgentDiagnostics),
+        );
+        setOnboardingLoading(false);
+        return;
       }
 
+      setStartupError(null);
       setOnboardingLoading(false);
 
       // Load conversations — if none exist, create one and request a greeting
@@ -3977,8 +4291,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
             if (messages.length === 0) {
               greetConvId = latest.id;
             }
-          } catch {
-            /* ignore */
+          } catch (err) {
+            logStartupWarning(
+              "failed to load latest conversation messages",
+              err,
+            );
           }
         } else {
           // First launch — create a conversation and greet
@@ -3993,12 +4310,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
             });
             setConversationMessages([]);
             greetConvId = conversation.id;
-          } catch {
-            /* ignore */
+          } catch (err) {
+            logStartupWarning("failed to create initial conversation", err);
           }
         }
-      } catch {
-        /* ignore */
+      } catch (err) {
+        logStartupWarning("failed to list conversations", err);
       }
 
       // If the agent is already running and we have a conversation needing a
@@ -4023,13 +4340,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
                   },
                 ]);
               }
-            } catch {
-              /* ignore */
+            } catch (err) {
+              logStartupWarning("failed to request greeting", err);
             }
             setChatSending(false);
           }
-        } catch {
-          /* ignore */
+        } catch (err) {
+          logStartupWarning(
+            "failed to confirm runtime state for greeting",
+            err,
+          );
         }
       }
 
@@ -4045,11 +4365,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setAgentStatus(nextStatus);
             // Auto-refresh plugins when agent reports a restart
             if (data.restarted) {
+              setPendingRestart(false);
+              setPendingRestartReasons([]);
               void loadPlugins();
             }
           }
+          // Sync pending restart state from periodic broadcasts
+          if (typeof data.pendingRestart === "boolean") {
+            setPendingRestart(data.pendingRestart);
+          }
+          if (Array.isArray(data.pendingRestartReasons)) {
+            setPendingRestartReasons(
+              data.pendingRestartReasons.filter(
+                (el): el is string => typeof el === "string",
+              ),
+            );
+          }
         },
       );
+      client.onWsEvent("restart-required", (data: Record<string, unknown>) => {
+        if (Array.isArray(data.reasons)) {
+          setPendingRestartReasons(
+            data.reasons.filter((el): el is string => typeof el === "string"),
+          );
+          setPendingRestart(true);
+          setRestartBannerDismissed(false);
+        }
+      });
       unbindAgentEvents = client.onWsEvent(
         "agent_event",
         (data: Record<string, unknown>) => {
@@ -4135,19 +4477,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Load wallet addresses for header
       try {
         setWalletAddresses(await client.getWalletAddresses());
-      } catch {
-        /* ignore */
+      } catch (err) {
+        logStartupWarning("failed to load wallet addresses", err);
       }
 
-      // Restore avatar selection from config (server-persisted)
+      // Restore avatar selection from config (server-persisted under "ui")
+      let resolvedIndex = loadAvatarIndex();
       try {
         const cfg = await client.getConfig();
-        const settings = cfg.settings as Record<string, unknown> | undefined;
-        if (settings?.avatarIndex != null) {
-          setSelectedVrmIndex(Number(settings.avatarIndex));
+        const ui = cfg.ui as Record<string, unknown> | undefined;
+        if (ui?.avatarIndex != null) {
+          resolvedIndex = normalizeAvatarIndex(Number(ui.avatarIndex));
+          setSelectedVrmIndex(resolvedIndex);
         }
-      } catch {
-        /* ignore — localStorage fallback already loaded */
+      } catch (err) {
+        logStartupWarning("failed to load config for avatar selection", err);
+      }
+      // If custom avatar selected, verify the file still exists on the server
+      if (resolvedIndex === 0) {
+        const hasVrm = await client.hasCustomVrm();
+        if (hasVrm) {
+          setCustomVrmUrl(`/api/avatar/vrm?t=${Date.now()}`);
+        } else {
+          setSelectedVrmIndex(1);
+        }
       }
 
       // Cloud polling
@@ -4227,6 +4580,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadWorkbench, // Cloud polling
     pollCloudCredits,
     setSelectedVrmIndex,
+    startupRetryNonce,
   ]);
 
   // When agent transitions to "running", send a greeting if conversation is empty
@@ -4264,54 +4618,210 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value: AppContextValue = {
     // State
-    tab, currentTheme, connected, agentStatus, onboardingComplete, onboardingLoading,
-    startupPhase, authRequired, actionNotice, toasts, lifecycleBusy, lifecycleAction,
-    pairingEnabled, pairingExpiresAt, pairingCodeInput, pairingError, pairingBusy,
-    chatInput, chatSending, chatFirstTokenReceived, conversations, activeConversationId, conversationMessages,
-    autonomousEvents, autonomousLatestEventId, unreadConversations,
-    triggers, triggersLoading, triggersSaving, triggerRunsById, triggerHealth, triggerError,
-    plugins, pluginFilter, pluginStatusFilter, pluginSearch, pluginSettingsOpen,
-    pluginAdvancedOpen, pluginSaving, pluginSaveSuccess,
-    skills, skillsSubTab, skillCreateFormOpen, skillCreateName, skillCreateDescription,
-    skillCreating, skillReviewReport, skillReviewId, skillReviewLoading, skillToggleAction,
-    skillsMarketplaceQuery, skillsMarketplaceResults, skillsMarketplaceError,
-    skillsMarketplaceLoading, skillsMarketplaceAction, skillsMarketplaceManualGithubUrl,
-    logs, logSources, logTags, logTagFilter, logLevelFilter, logSourceFilter,
-    walletAddresses, walletConfig, walletBalances, walletNfts, walletLoading,
-    walletNftsLoading, inventoryView, walletExportData, walletExportVisible,
-    walletApiKeySaving, inventorySort, walletError,
-    registryStatus, registryLoading, registryRegistering, registryError,
-    dropStatus, dropLoading, mintInProgress, mintResult, mintError, mintShiny,
-    whitelistStatus, whitelistLoading, twitterVerifyMessage, twitterVerifyUrl, twitterVerifying,
-    characterData, characterLoading, characterSaving, characterSaveSuccess,
-    characterSaveError, characterDraft, selectedVrmIndex, customVrmUrl,
-    cloudEnabled, cloudConnected, cloudCredits, cloudCreditsLow, cloudCreditsCritical,
-    cloudTopUpUrl, cloudUserId, cloudLoginBusy, cloudLoginError, cloudDisconnecting,
-    updateStatus, updateLoading, updateChannelSaving,
-    extensionStatus, extensionChecking,
-    storePlugins, storeSearch, storeFilter, storeLoading, storeInstalling,
-    storeUninstalling, storeError, storeDetailPlugin, storeSubTab,
-    catalogSkills, catalogTotal, catalogPage, catalogTotalPages, catalogSort,
-    catalogSearch, catalogLoading, catalogError, catalogDetailSkill,
-    catalogInstalling, catalogUninstalling,
-    workbenchLoading, workbench, workbenchTasksAvailable, workbenchTriggersAvailable, workbenchTodosAvailable,
-    exportBusy, exportPassword, exportIncludeLogs, exportError, exportSuccess,
-    importBusy, importPassword, importFile, importError, importSuccess,
-    onboardingStep, onboardingOptions, onboardingName, onboardingStyle, onboardingTheme,
-    onboardingRunMode, onboardingCloudProvider, onboardingSmallModel, onboardingLargeModel,
-    onboardingProvider, onboardingApiKey, onboardingOpenRouterModel, onboardingPrimaryModel,
-    onboardingTelegramToken, onboardingDiscordToken, onboardingWhatsAppSessionPath,
-    onboardingTwilioAccountSid, onboardingTwilioAuthToken, onboardingTwilioPhoneNumber,
-    onboardingBlooioApiKey, onboardingBlooioPhoneNumber, onboardingSubscriptionTab,
-    onboardingSelectedChains, onboardingRpcSelections, onboardingRpcKeys,
-    onboardingAvatar, onboardingRestarting,
-    commandPaletteOpen, commandQuery, commandActiveIndex, emotePickerOpen,
-    mcpConfiguredServers, mcpServerStatuses, mcpMarketplaceQuery, mcpMarketplaceResults,
-    mcpMarketplaceLoading, mcpAction, mcpAddingServer, mcpAddingResult,
-    mcpEnvInputs, mcpHeaderInputs,
-    droppedFiles, shareIngestNotice,
-    activeGameApp, activeGameDisplayName, activeGameViewerUrl, activeGameSandbox,
+    tab,
+    currentTheme,
+    connected,
+    agentStatus,
+    onboardingComplete,
+    onboardingLoading,
+    startupPhase,
+    startupError,
+    authRequired,
+    actionNotice,
+    lifecycleBusy,
+    lifecycleAction,
+    pendingRestart,
+    pendingRestartReasons,
+    restartBannerDismissed,
+    pairingEnabled,
+    pairingExpiresAt,
+    pairingCodeInput,
+    pairingError,
+    pairingBusy,
+    chatInput,
+    chatSending,
+    chatFirstTokenReceived,
+    chatAvatarVisible,
+    chatAgentVoiceMuted,
+    chatAvatarSpeaking,
+    conversations,
+    activeConversationId,
+    conversationMessages,
+    autonomousEvents,
+    autonomousLatestEventId,
+    unreadConversations,
+    triggers,
+    triggersLoading,
+    triggersSaving,
+    triggerRunsById,
+    triggerHealth,
+    triggerError,
+    plugins,
+    pluginFilter,
+    pluginStatusFilter,
+    pluginSearch,
+    pluginSettingsOpen,
+    pluginAdvancedOpen,
+    pluginSaving,
+    pluginSaveSuccess,
+    skills,
+    skillsSubTab,
+    skillCreateFormOpen,
+    skillCreateName,
+    skillCreateDescription,
+    skillCreating,
+    skillReviewReport,
+    skillReviewId,
+    skillReviewLoading,
+    skillToggleAction,
+    skillsMarketplaceQuery,
+    skillsMarketplaceResults,
+    skillsMarketplaceError,
+    skillsMarketplaceLoading,
+    skillsMarketplaceAction,
+    skillsMarketplaceManualGithubUrl,
+    logs,
+    logSources,
+    logTags,
+    logTagFilter,
+    logLevelFilter,
+    logSourceFilter,
+    walletAddresses,
+    walletConfig,
+    walletBalances,
+    walletNfts,
+    walletLoading,
+    walletNftsLoading,
+    inventoryView,
+    walletExportData,
+    walletExportVisible,
+    walletApiKeySaving,
+    inventorySort,
+    walletError,
+    registryStatus,
+    registryLoading,
+    registryRegistering,
+    registryError,
+    dropStatus,
+    dropLoading,
+    mintInProgress,
+    mintResult,
+    mintError,
+    mintShiny,
+    whitelistStatus,
+    whitelistLoading,
+    twitterVerifyMessage,
+    twitterVerifyUrl,
+    twitterVerifying,
+    characterData,
+    characterLoading,
+    characterSaving,
+    characterSaveSuccess,
+    characterSaveError,
+    characterDraft,
+    selectedVrmIndex,
+    customVrmUrl,
+    cloudEnabled,
+    cloudConnected,
+    cloudCredits,
+    cloudCreditsLow,
+    cloudCreditsCritical,
+    cloudTopUpUrl,
+    cloudUserId,
+    cloudLoginBusy,
+    cloudLoginError,
+    cloudDisconnecting,
+    updateStatus,
+    updateLoading,
+    updateChannelSaving,
+    extensionStatus,
+    extensionChecking,
+    storePlugins,
+    storeSearch,
+    storeFilter,
+    storeLoading,
+    storeInstalling,
+    storeUninstalling,
+    storeError,
+    storeDetailPlugin,
+    storeSubTab,
+    catalogSkills,
+    catalogTotal,
+    catalogPage,
+    catalogTotalPages,
+    catalogSort,
+    catalogSearch,
+    catalogLoading,
+    catalogError,
+    catalogDetailSkill,
+    catalogInstalling,
+    catalogUninstalling,
+    workbenchLoading,
+    workbench,
+    workbenchTasksAvailable,
+    workbenchTriggersAvailable,
+    workbenchTodosAvailable,
+    exportBusy,
+    exportPassword,
+    exportIncludeLogs,
+    exportError,
+    exportSuccess,
+    importBusy,
+    importPassword,
+    importFile,
+    importError,
+    importSuccess,
+    onboardingStep,
+    onboardingOptions,
+    onboardingName,
+    onboardingStyle,
+    onboardingTheme,
+    onboardingRunMode,
+    onboardingCloudProvider,
+    onboardingSmallModel,
+    onboardingLargeModel,
+    onboardingProvider,
+    onboardingApiKey,
+    onboardingOpenRouterModel,
+    onboardingPrimaryModel,
+    onboardingTelegramToken,
+    onboardingDiscordToken,
+    onboardingWhatsAppSessionPath,
+    onboardingTwilioAccountSid,
+    onboardingTwilioAuthToken,
+    onboardingTwilioPhoneNumber,
+    onboardingBlooioApiKey,
+    onboardingBlooioPhoneNumber,
+    onboardingGithubToken,
+    onboardingSubscriptionTab,
+    onboardingSelectedChains,
+    onboardingRpcSelections,
+    onboardingRpcKeys,
+    onboardingAvatar,
+    onboardingRestarting,
+    commandPaletteOpen,
+    commandQuery,
+    commandActiveIndex,
+    emotePickerOpen,
+    mcpConfiguredServers,
+    mcpServerStatuses,
+    mcpMarketplaceQuery,
+    mcpMarketplaceResults,
+    mcpMarketplaceLoading,
+    mcpAction,
+    mcpAddingServer,
+    mcpAddingResult,
+    mcpEnvInputs,
+    mcpHeaderInputs,
+    droppedFiles,
+    shareIngestNotice,
+    chatPendingImages,
+    activeGameApp,
+    activeGameDisplayName,
+    activeGameViewerUrl,
+    activeGameSandbox,
     activeGamePostMessageAuth,
+    gameOverlayEnabled,
     appsSubTab,
     agentSubTab,
     pluginsSubTab,
@@ -4328,10 +4838,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     handlePauseResume,
     handleRestart,
     handleReset,
+    retryStartup,
+    dismissRestartBanner,
+    triggerRestart,
     handleChatSend,
     handleChatStop,
     handleChatClear,
     handleNewConversation,
+    setChatPendingImages,
     handleSelectConversation,
     handleDeleteConversation,
     handleRenameConversation,
