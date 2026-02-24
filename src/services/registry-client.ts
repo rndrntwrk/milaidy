@@ -399,11 +399,14 @@ function mergeAppMeta(
   };
 }
 
-function cacheFilePath(): string {
-  const base =
+function resolveStateDir(): string {
+  const explicit =
     process.env.MILAIDY_STATE_DIR?.trim() ||
-    path.join(os.homedir(), ".milaidy");
-  return path.join(base, "cache", "registry.json");
+    process.env.MILADY_STATE_DIR?.trim();
+  if (explicit && explicit.length > 0) {
+    return explicit;
+  }
+  return path.join(os.homedir(), ".milady");
 }
 
 async function readJsonFile<T>(filePath: string): Promise<T | null> {
@@ -595,9 +598,7 @@ async function discoverLocalWorkspaceApps(): Promise<
   }
 
   // 2. Scan user-installed plugins (~/.milaidy/plugins/installed/) for kind: "app"
-  const stateDir =
-    process.env.MILAIDY_STATE_DIR?.trim() ||
-    path.join(os.homedir(), ".milaidy");
+  const stateDir = resolveStateDir();
   const installedBase = path.join(stateDir, "plugins", "installed");
   try {
     const installedEntries = await fs.readdir(installedBase, {
@@ -720,9 +721,7 @@ async function fetchFromNetwork(): Promise<Map<string, RegistryPluginInfo>> {
 // ---------------------------------------------------------------------------
 
 function cacheFilePath(): string {
-  const base =
-    process.env.MILADY_STATE_DIR?.trim() || path.join(os.homedir(), ".milady");
-  return path.join(base, "cache", "registry.json");
+  return path.join(resolveStateDir(), "cache", "registry.json");
 }
 
 async function readFileCache(): Promise<Map<

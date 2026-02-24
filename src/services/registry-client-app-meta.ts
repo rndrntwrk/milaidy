@@ -74,9 +74,9 @@ const LOCAL_APP_OVERRIDES: Readonly<Record<string, LocalAppOverride>> = {
   },
   "@elizaos/app-agent-town": {
     launchType: "url",
-    launchUrl: "http://localhost:5173/ai-town/index.html",
+    launchUrl: "http://localhost:5173/",
     viewer: {
-      url: "http://localhost:5173/ai-town/index.html",
+      url: "http://localhost:5173/",
       sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
     },
   },

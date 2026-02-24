@@ -412,7 +412,7 @@ function buildViewerConfig(
       }
     }
     const viewerUrl = normalizeSafeAppUrl(
-      buildViewerUrl(viewerInfo.url, viewerInfo.embedParams),
+      buildViewerUrl(appInfo.name, viewerInfo.url, viewerInfo.embedParams),
     );
     if (!viewerUrl) {
       throw new Error(
