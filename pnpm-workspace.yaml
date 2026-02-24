@@ -1,5 +1,6 @@
 packages:
   - 'apps/*'
   - 'apps/*/plugins/*'
+  - 'packages/*'
   - 'apps/*/electron'
   - 'deploy/cloud-agent-template'
