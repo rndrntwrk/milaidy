@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from "react";
+import { useCallback, useEffect, useRef, useMemo } from "react";
 import { useApp } from "../AppContext.js";
 import { useBugReport } from "../hooks/useBugReport.js";
 import { Dialog } from "./ui/Dialog.js";
@@ -27,9 +27,13 @@ export function CommandPalette() {
     handleChatClear,
     activeGameViewerUrl,
     setState,
-    closeCommandPalette,
   } = useApp();
   const { open: openBugReport } = useBugReport();
+  const closeCommandPalette = useCallback(() => {
+    setState("commandPaletteOpen", false);
+    setState("commandQuery", "");
+    setState("commandActiveIndex", 0);
+  }, [setState]);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
