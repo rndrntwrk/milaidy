@@ -16,33 +16,48 @@ export function Nav({ mobileLeft }: NavProps) {
 
   useEffect(() => {
     setMobileMenuOpen(false);
-  }, []);
+  }, [tab]);
 
   return (
-    <nav className="border-b border-border py-2 px-3 sm:px-5 flex gap-1 overflow-x-auto" aria-label="Main navigation">
-      {TAB_GROUPS.map((group: (typeof TAB_GROUPS)[number]) => {
-        const primaryTab = group.tabs[0];
-        const isActive = group.tabs.includes(tab);
-        return (
+    <>
+      <div className="lg:hidden border-b border-border px-3 py-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0 flex items-center gap-2 overflow-x-auto">
+            {mobileLeft}
+            <span className="inline-flex items-center h-8 px-3 border border-border bg-card text-[12px] font-medium text-txt whitespace-nowrap">
+              {activeGroup.label}
+            </span>
+          </div>
           <button
-            key={group.label}
-            className={`inline-block whitespace-nowrap px-3 py-1.5 text-[13px] bg-transparent border-0 border-b-2 cursor-pointer transition-colors ${
-              isActive
-                ? "text-accent font-medium border-b-accent"
-                : "text-muted border-b-transparent hover:text-txt"
-            }`}
-            onClick={() => setTab(primaryTab)}
-            aria-current={isActive ? "page" : undefined}
+            type="button"
+            className="inline-flex shrink-0 items-center justify-center w-9 h-9 border border-border bg-card text-txt cursor-pointer hover:border-accent hover:text-accent transition-colors"
+            onClick={() => setMobileMenuOpen(true)}
+            aria-label="Open navigation menu"
           >
-            <title>Menu</title>
-            <line x1="3" y1="6" x2="21" y2="6" />
-            <line x1="3" y1="12" x2="21" y2="12" />
-            <line x1="3" y1="18" x2="21" y2="18" />
-          </svg>
-        </button>
-      </nav>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <title>Menu</title>
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+        </div>
+      </div>
 
-      <nav className="hidden lg:flex border-b border-border py-1.5 px-3 xl:px-5 gap-0.5 overflow-x-auto whitespace-nowrap">
+      <nav
+        className="hidden lg:flex border-b border-border py-1.5 px-3 xl:px-5 gap-0.5 overflow-x-auto whitespace-nowrap"
+        aria-label="Main navigation"
+      >
         {TAB_GROUPS.map((group: (typeof TAB_GROUPS)[number]) => {
           const primaryTab = group.tabs[0];
           const isActive = group.tabs.includes(tab);
@@ -92,7 +107,10 @@ export function Nav({ mobileLeft }: NavProps) {
                         ? "border-accent bg-accent-subtle text-accent"
                         : "border-border bg-card text-txt hover:border-accent hover:text-accent"
                     }`}
-                    onClick={() => setTab(primaryTab)}
+                    onClick={() => {
+                      setTab(primaryTab);
+                      setMobileMenuOpen(false);
+                    }}
                   >
                     {group.label}
                   </button>

@@ -166,11 +166,54 @@ async function resolveInstalledCoreVersion(): Promise<string> {
 
   try {
     const require = createRequire(import.meta.url);
-    const pkgPath = require.resolve(`${CORE_PACKAGE_NAME}/package.json`);
-    const raw = await fs.readFile(pkgPath, "utf-8");
-    const pkg = JSON.parse(raw) as { version?: string };
-    if (typeof pkg.version === "string" && pkg.version.trim()) {
-      return pkg.version.trim();
+    const candidates = [
+      CORE_PACKAGE_NAME,
+      `${CORE_PACKAGE_NAME}/dist/index.js`,
+      `${CORE_PACKAGE_NAME}/dist/index.mjs`,
+      `${CORE_PACKAGE_NAME}/index.js`,
+      `${CORE_PACKAGE_NAME}/index.mjs`,
+    ];
+
+    let resolvedEntry: string | null = null;
+    for (const specifier of candidates) {
+      try {
+        resolvedEntry = require.resolve(specifier);
+        break;
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code;
+        if (
+          code === "MODULE_NOT_FOUND" ||
+          code === "ERR_MODULE_NOT_FOUND" ||
+          code === "ERR_PACKAGE_PATH_NOT_EXPORTED"
+        ) {
+          continue;
+        }
+      }
+    }
+
+    if (resolvedEntry) {
+      let dir = path.dirname(resolvedEntry);
+      const fsRoot = path.parse(dir).root;
+      while (true) {
+        try {
+          const raw = await fs.readFile(path.join(dir, "package.json"), "utf-8");
+          const pkg = JSON.parse(raw) as { name?: string; version?: string };
+          if (
+            pkg.name === CORE_PACKAGE_NAME &&
+            typeof pkg.version === "string" &&
+            pkg.version.trim()
+          ) {
+            return pkg.version.trim();
+          }
+        } catch {
+          // Keep walking upward.
+        }
+
+        if (dir === fsRoot) break;
+        const parent = path.dirname(dir);
+        if (parent === dir) break;
+        dir = parent;
+      }
     }
   } catch {
     // Keep unknown fallback.

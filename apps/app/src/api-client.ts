@@ -2165,17 +2165,6 @@ export class MiladyClient {
     });
   }
 
-  async getSubscriptionStatus(): Promise<{
-    providers: Array<{
-      provider: string;
-      configured: boolean;
-      valid: boolean;
-      expiresAt: number | null;
-    }>;
-  }> {
-    return this.fetch("/api/subscription/status");
-  }
-
   async deleteSubscription(provider: string): Promise<{ success: boolean }> {
     return this.fetch(`/api/subscription/${encodeURIComponent(provider)}`, {
       method: "DELETE",
@@ -3112,8 +3101,6 @@ export class MiladyClient {
       body: JSON.stringify(input),
     });
   }
-  async listRegistryPlugins(): Promise<RegistryPluginItem[]> { return this.fetch("/api/apps/plugins"); }
-  async searchRegistryPlugins(query: string): Promise<RegistryPluginItem[]> { return this.fetch(`/api/apps/plugins/search?q=${encodeURIComponent(query)}`); }
   async listHyperscapeEmbeddedAgents(): Promise<HyperscapeEmbeddedAgentsResponse> {
     return this.fetch("/api/apps/hyperscape/embedded-agents");
   }

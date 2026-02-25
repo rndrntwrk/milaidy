@@ -14,11 +14,7 @@ import {
   useMemo,
   memo,
   type KeyboardEvent,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
+  type ReactNode,
 } from "react";
 import { getVrmPreviewUrl, useApp } from "../AppContext.js";
 import { ChatAvatar } from "./ChatAvatar.js";
@@ -44,12 +40,51 @@ import {
   shouldRetryQuickLayerError,
 } from "./quickLayerRetry.js";
 
-function nowMs(): number {
-  return typeof performance !== "undefined" ? performance.now() : Date.now();
+function renderInlineMarkdown(line: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const tokenRe = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = tokenRe.exec(line)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(line.slice(lastIndex, match.index));
+    }
+
+    const token = match[0];
+    const key = `${match.index}-${token}`;
+    if (token.startsWith("**") && token.endsWith("**")) {
+      nodes.push(<strong key={key}>{token.slice(2, -2)}</strong>);
+    } else if (token.startsWith("*") && token.endsWith("*")) {
+      nodes.push(<em key={key}>{token.slice(1, -1)}</em>);
+    } else if (token.startsWith("`") && token.endsWith("`")) {
+      nodes.push(
+        <code key={key} className="px-1 py-0.5 rounded bg-bg text-[0.95em] font-mono">
+          {token.slice(1, -1)}
+        </code>,
+      );
+    } else {
+      nodes.push(token);
+    }
+
+    lastIndex = tokenRe.lastIndex;
+  }
+
+  if (lastIndex < line.length) {
+    nodes.push(line.slice(lastIndex));
+  }
+
+  return nodes;
 }
 
-function isMobileViewport(): boolean {
-  return typeof window !== "undefined" && window.innerWidth < 768;
+function renderMessageText(text: string): ReactNode {
+  const lines = text.split(/\r?\n/);
+  return lines.map((line, i) => (
+    <span key={i}>
+      {renderInlineMarkdown(line)}
+      {i < lines.length - 1 ? <br /> : null}
+    </span>
+  ));
 }
 
 function summarizeStreamState(
@@ -173,16 +208,60 @@ export const ChatView = memo(function ChatView() {
     activeGameViewerUrl,
     droppedFiles,
     shareIngestNotice,
-    chatAgentVoiceMuted: agentVoiceMuted,
     selectedVrmIndex,
-    chatPendingImages,
-    setChatPendingImages,
   } = useApp();
 
   const messagesRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [imageDragOver, setImageDragOver] = useState(false);
+
+  // ── Toggles (persisted in localStorage) ──────────────────────────
+  const [avatarVisible, setAvatarVisible] = useState(() => {
+    try {
+      const v = localStorage.getItem("milaidy:chat:avatarVisible");
+      return v === null ? true : v === "true";
+    } catch {
+      return true;
+    }
+  });
+  const [agentVoiceMuted, setAgentVoiceMuted] = useState(() => {
+    try {
+      const v = localStorage.getItem("milaidy:chat:voiceMuted");
+      return v === null ? true : v === "true"; // muted by default
+    } catch {
+      return true;
+    }
+  });
+  const [chatMode, setChatMode] = useState<ConversationMode>(() => {
+    try {
+      const v = localStorage.getItem("milaidy:chat:mode");
+      return v === "power" ? "power" : "simple";
+    } catch {
+      return "simple";
+    }
+  });
+
+  // Persist toggle changes
+  useEffect(() => {
+    try {
+      localStorage.setItem("milaidy:chat:avatarVisible", String(avatarVisible));
+    } catch {
+      /* ignore */
+    }
+  }, [avatarVisible]);
+  useEffect(() => {
+    try {
+      localStorage.setItem("milaidy:chat:voiceMuted", String(agentVoiceMuted));
+    } catch {
+      /* ignore */
+    }
+  }, [agentVoiceMuted]);
+  useEffect(() => {
+    try {
+      localStorage.setItem("milaidy:chat:mode", chatMode);
+    } catch {
+      /* ignore */
+    }
+  }, [chatMode]);
 
   // ── Voice config (ElevenLabs / browser TTS) ────────────────────────
   const [voiceConfig, setVoiceConfig] = useState<VoiceConfig | null>(null);
@@ -202,106 +281,33 @@ export const ChatView = memo(function ChatView() {
     setAutoRunPreview(null);
   }, [autoRunMode, autoRunTopic, autoRunDurationMin, autoRunAvatarRuntime]);
 
-  const loadVoiceConfig = useCallback(async () => {
-    try {
-      const cfg = await client.getConfig();
-      const messages = cfg.messages as
-        | Record<string, Record<string, string>>
-        | undefined;
-      const tts = messages?.tts as VoiceConfig | undefined;
-      setVoiceConfig(tts ?? null);
-    } catch {
-      /* ignore — will use browser TTS fallback */
-    }
-  }, []);
-
   // Load saved voice config on mount so the correct TTS provider is used
   useEffect(() => {
-    void loadVoiceConfig();
-  }, [loadVoiceConfig]);
-
-  // Keep chat voice config synchronized when Settings/Character voice is saved.
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const handler = (event: Event) => {
-      const detail = (event as CustomEvent<VoiceConfig | undefined>).detail;
-      if (detail && typeof detail === "object") {
-        setVoiceConfig(detail);
-        return;
+    void (async () => {
+      try {
+        const cfg = await client.getConfig();
+        const messages = cfg.messages as
+          | Record<string, Record<string, string>>
+          | undefined;
+        const tts = messages?.tts as VoiceConfig | undefined;
+        if (tts) setVoiceConfig(tts);
+      } catch {
+        /* ignore — will use browser TTS fallback */
       }
-      void loadVoiceConfig();
-    };
-
-    window.addEventListener("milady:voice-config-updated", handler);
-    return () =>
-      window.removeEventListener("milady:voice-config-updated", handler);
-  }, [loadVoiceConfig]);
+    })();
+  }, []);
 
   // ── Voice chat ────────────────────────────────────────────────────
-  const pendingVoiceTurnRef = useRef<{
-    speechEndedAtMs: number;
-    expiresAtMs: number;
-    firstTokenAtMs?: number;
-    voiceStartedAtMs?: number;
-    firstSegmentCached?: boolean;
-  } | null>(null);
-
-  const [voiceLatency, setVoiceLatency] = useState<{
-    speechEndToFirstTokenMs: number | null;
-    speechEndToVoiceStartMs: number | null;
-    firstSegmentCached: boolean | null;
-  } | null>(null);
-
   const handleVoiceTranscript = useCallback(
     (text: string) => {
       if (chatSending) return;
-      const speechEndedAtMs = nowMs();
-      pendingVoiceTurnRef.current = {
-        speechEndedAtMs,
-        expiresAtMs: speechEndedAtMs + 15000,
-      };
-      setVoiceLatency(null);
       setState("chatInput", text);
-      setTimeout(() => void handleChatSend("VOICE_DM"), 50);
+      setTimeout(() => void handleChatSend(chatMode), 50);
     },
-    [chatSending, setState, handleChatSend],
+    [chatMode, chatSending, setState, handleChatSend],
   );
 
-  const handleVoicePlaybackStart = useCallback(
-    (event: VoicePlaybackStartEvent) => {
-      const pending = pendingVoiceTurnRef.current;
-      if (!pending) return;
-      if (event.startedAtMs > pending.expiresAtMs) {
-        pendingVoiceTurnRef.current = null;
-        return;
-      }
-      if (pending.voiceStartedAtMs != null) return;
-
-      pending.voiceStartedAtMs = event.startedAtMs;
-      pending.firstSegmentCached = event.cached;
-
-      const silenceMs = Math.max(
-        0,
-        Math.round(event.startedAtMs - pending.speechEndedAtMs),
-      );
-      setVoiceLatency((prev) => ({
-        speechEndToFirstTokenMs: prev?.speechEndToFirstTokenMs ?? null,
-        speechEndToVoiceStartMs: silenceMs,
-        firstSegmentCached: event.cached,
-      }));
-    },
-    [],
-  );
-
-  const voice = useVoiceChat({
-    onTranscript: handleVoiceTranscript,
-    onPlaybackStart: handleVoicePlaybackStart,
-    voiceConfig,
-  });
-  const { queueAssistantSpeech, stopSpeaking } = voice;
+  const voice = useVoiceChat({ onTranscript: handleVoiceTranscript, voiceConfig });
 
   const agentName = agentStatus?.agentName ?? "Agent";
   const msgs = conversationMessages;
@@ -318,8 +324,7 @@ export const ChatView = memo(function ChatView() {
       ),
     [msgs, chatSending, chatFirstTokenReceived],
   );
-  const agentAvatarSrc =
-    selectedVrmIndex > 0 ? getVrmPreviewUrl(selectedVrmIndex) : null;
+  const agentAvatarSrc = selectedVrmIndex > 0 ? getVrmPreviewUrl(selectedVrmIndex) : null;
   const agentInitial = agentName.trim().charAt(0).toUpperCase() || "A";
   const DEFAULT_GAME_SANDBOX =
     "allow-scripts allow-same-origin allow-popups allow-forms";
@@ -1605,107 +1610,46 @@ export const ChatView = memo(function ChatView() {
     };
   }, [quickLayerById, triggerQuickLayer]);
 
-  useEffect(() => {
-    if (agentVoiceMuted) return;
+  const lastSpokenIdRef = useRef<string | null>(null);
 
-    const latestAssistant = [...msgs]
+  useEffect(() => {
+    const lastAssistant = [...msgs]
       .reverse()
-      .find((message) => message.role === "assistant");
-    if (!latestAssistant || !latestAssistant.text.trim()) return;
-
-    queueAssistantSpeech(
-      latestAssistant.id,
-      latestAssistant.text,
-      !chatSending,
-    );
-  }, [msgs, chatSending, agentVoiceMuted, queueAssistantSpeech]);
-
-  useEffect(() => {
-    if (!agentVoiceMuted) return;
-    stopSpeaking();
-  }, [agentVoiceMuted, stopSpeaking]);
-
-  useEffect(() => {
-    setState(
-      "chatAvatarSpeaking",
-      voice.isSpeaking && !voice.usingAudioAnalysis,
-    );
-    return () => {
-      setState("chatAvatarSpeaking", false);
-    };
-  }, [setState, voice.isSpeaking, voice.usingAudioAnalysis]);
-
-  useEffect(() => {
-    const pending = pendingVoiceTurnRef.current;
-    if (!pending || !chatFirstTokenReceived) return;
-    if (nowMs() > pending.expiresAtMs) {
-      pendingVoiceTurnRef.current = null;
-      return;
-    }
-    if (pending.firstTokenAtMs != null) return;
-
-    const firstTokenAtMs = nowMs();
-    pending.firstTokenAtMs = firstTokenAtMs;
-    const ttftMs = Math.max(
-      0,
-      Math.round(firstTokenAtMs - pending.speechEndedAtMs),
-    );
-
-    setVoiceLatency((prev) => ({
-      speechEndToFirstTokenMs: ttftMs,
-      speechEndToVoiceStartMs: prev?.speechEndToVoiceStartMs ?? null,
-      firstSegmentCached: prev?.firstSegmentCached ?? null,
-    }));
-  }, [chatFirstTokenReceived]);
-
-  useEffect(() => {
-    const pending = pendingVoiceTurnRef.current;
-    if (!pending) return;
-    if (nowMs() > pending.expiresAtMs) {
-      pendingVoiceTurnRef.current = null;
-    }
-  }, []);
+      .find((message) => message.role === "assistant" && message.text.trim());
+    if (!lastAssistant || chatSending || agentVoiceMuted) return;
+    if (lastAssistant.id === lastSpokenIdRef.current) return;
+    lastSpokenIdRef.current = lastAssistant.id;
+    voice.speak(lastAssistant.text);
+  }, [msgs, chatSending, agentVoiceMuted, voice]);
 
   // Smooth auto-scroll while streaming and on new messages.
   useEffect(() => {
-    if (!chatSending && visibleMsgs.length === 0) {
-      return;
-    }
     const el = messagesRef.current;
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [chatSending, visibleMsgs]);
+  }, [conversationMessages, chatSending]);
 
   // Auto-resize textarea
   useEffect(() => {
     const ta = textareaRef.current;
     if (!ta) return;
-
-    // Force a compact baseline when empty so the composer never boots oversized.
-    if (!chatInput) {
-      ta.style.height = `${CHAT_INPUT_MIN_HEIGHT_PX}px`;
-      ta.style.overflowY = "hidden";
-      return;
-    }
-
     ta.style.height = "auto";
     ta.style.overflowY = "hidden";
-    const h = Math.min(ta.scrollHeight, CHAT_INPUT_MAX_HEIGHT_PX);
+    const h = Math.min(ta.scrollHeight, 200);
     ta.style.height = `${h}px`;
-    ta.style.overflowY =
-      ta.scrollHeight > CHAT_INPUT_MAX_HEIGHT_PX ? "auto" : "hidden";
+    ta.style.overflowY = ta.scrollHeight > 200 ? "auto" : "hidden";
   }, [chatInput]);
 
   // Keep input focused for fast multi-turn chat.
   useEffect(() => {
-    if (chatSending || isMobileViewport()) return;
+    if (chatSending) return;
     textareaRef.current?.focus();
   }, [chatSending]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      void handleChatSend();
+      void handleChatSend(chatMode);
     }
   };
   const showQuickLayersInChat = false;
@@ -1723,72 +1667,6 @@ export const ChatView = memo(function ChatView() {
         />
       )}
 
-      const readers = imageFiles.map(
-        (file) =>
-          new Promise<ImageAttachment>((resolve) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-              const result = reader.result as string;
-              // result is "data:<mime>;base64,<data>" — strip the prefix
-              const commaIdx = result.indexOf(",");
-              const data = commaIdx >= 0 ? result.slice(commaIdx + 1) : result;
-              resolve({ data, mimeType: file.type, name: file.name });
-            };
-            reader.readAsDataURL(file);
-          }),
-      );
-
-      void Promise.all(readers).then((attachments) => {
-        setChatPendingImages((prev) => {
-          const combined = [...prev, ...attachments];
-          // Mirror the server-side MAX_CHAT_IMAGES=4 limit so the user gets
-          // immediate feedback rather than a 400 after upload.
-          return combined.slice(0, 4);
-        });
-      });
-    },
-    [setChatPendingImages],
-  );
-
-  const handleImageDrop = useCallback(
-    (e: DragEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      setImageDragOver(false);
-      if (e.dataTransfer.files.length) {
-        addImageFiles(e.dataTransfer.files);
-      }
-    },
-    [addImageFiles],
-  );
-
-  const handleFileInputChange = useCallback(
-    (e: ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files) {
-        addImageFiles(e.target.files);
-      }
-      e.target.value = "";
-    },
-    [addImageFiles],
-  );
-
-  const removeImage = useCallback(
-    (index: number) => {
-      setChatPendingImages((prev) => prev.filter((_, i) => i !== index));
-    },
-    [setChatPendingImages],
-  );
-
-  return (
-    <section
-      aria-label="Chat workspace"
-      className={`flex flex-col flex-1 min-h-0 px-2 sm:px-3 relative${imageDragOver ? " ring-2 ring-accent ring-inset" : ""}`}
-      onDragOver={(e) => {
-        e.preventDefault();
-        setImageDragOver(true);
-      }}
-      onDragLeave={() => setImageDragOver(false)}
-      onDrop={handleImageDrop}
-    >
       {/* ── Messages ───────────────────────────────────────────────── */}
       {(showQuickLayersInChat || autoRunOpen) && (
         <>
@@ -1998,7 +1876,7 @@ export const ChatView = memo(function ChatView() {
             Send a message to start chatting.
           </div>
         ) : (
-          <div className="w-full pr-2 sm:pr-3">
+          <div className="w-full px-0">
             {visibleMsgs.map((msg, i) => {
               const prev = i > 0 ? visibleMsgs[i - 1] : null;
               const grouped = prev?.role === msg.role;
@@ -2007,7 +1885,7 @@ export const ChatView = memo(function ChatView() {
               return (
                 <div
                   key={msg.id}
-                  className={`flex items-start gap-1.5 sm:gap-2 ${isUser ? "justify-end" : "justify-start"} ${grouped ? "mt-1" : "mt-3"}`}
+                  className={`flex items-start gap-2 ${isUser ? "justify-end" : "justify-start"} ${grouped ? "mt-1" : "mt-3"}`}
                   data-testid="chat-message"
                   data-role={msg.role}
                 >
@@ -2030,7 +1908,7 @@ export const ChatView = memo(function ChatView() {
                       </div>
                     ))}
                   <div
-                    className={`max-w-[92%] sm:max-w-[85%] min-w-0 px-0 py-1 text-sm leading-relaxed whitespace-pre-wrap break-words ${isUser ? "mr-1 sm:mr-2" : ""}`}
+                    className="max-w-[85%] px-0 py-1 text-sm leading-relaxed whitespace-pre-wrap break-words"
                   >
                     {!grouped && (
                       <div className="font-bold text-[12px] mb-1 text-accent">
@@ -2039,15 +1917,13 @@ export const ChatView = memo(function ChatView() {
                           typeof msg.source === "string" &&
                           msg.source &&
                           msg.source !== "client_chat" && (
-                            <span className="ml-1.5 text-[10px] font-normal text-muted opacity-40">
+                            <span className="ml-1.5 text-[10px] font-normal text-muted">
                               via {msg.source}
                             </span>
                           )}
                       </div>
                     )}
-                    <div>
-                      <MessageContent message={msg} />
-                    </div>
+                    <div><MessageContent message={msg} /></div>
                   </div>
                 </div>
               );
@@ -2068,10 +1944,8 @@ export const ChatView = memo(function ChatView() {
                     </div>
                   )}
                 </div>
-                <div className="max-w-[92%] sm:max-w-[85%] min-w-0 px-0 py-1 pr-1 sm:pr-2 text-sm leading-relaxed">
-                  <div className="font-bold text-[12px] mb-1 text-accent">
-                    {agentName}
-                  </div>
+                <div className="max-w-[85%] px-0 py-1 text-sm leading-relaxed">
+                  <div className="font-bold text-[12px] mb-1 text-accent">{agentName}</div>
                   <div className="flex gap-1 py-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-muted-strong animate-[typing-bounce_1.2s_ease-in-out_infinite]" />
                     <span className="w-1.5 h-1.5 rounded-full bg-muted-strong animate-[typing-bounce_1.2s_ease-in-out_infinite_0.2s]" />
@@ -2086,104 +1960,36 @@ export const ChatView = memo(function ChatView() {
 
       {/* Share ingest notice */}
       {shareIngestNotice && (
-        <div className="text-xs text-ok py-1 relative" style={{ zIndex: 1 }}>
-          {shareIngestNotice}
-        </div>
+        <div className="text-xs text-ok py-1 relative" style={{ zIndex: 1 }}>{shareIngestNotice}</div>
       )}
 
       {/* Dropped files */}
       {droppedFiles.length > 0 && (
-        <div
-          className="text-xs text-muted py-0.5 flex gap-2 relative"
-          style={{ zIndex: 1 }}
-        >
-          {droppedFiles.map((f) => (
-            <span key={f}>{f}</span>
+        <div className="text-xs text-muted py-0.5 flex gap-2 relative" style={{ zIndex: 1 }}>
+          {droppedFiles.map((f, i) => (
+            <span key={i}>{f}</span>
           ))}
         </div>
       )}
 
-      {/* Pending image thumbnails */}
-      {chatPendingImages.length > 0 && (
-        <div
-          className="flex gap-2 flex-wrap py-1 relative"
-          style={{ zIndex: 1 }}
-        >
-          {chatPendingImages.map((img, i) => (
-            <div
-              key={`${img.name}-${i}`}
-              className="relative group w-16 h-16 shrink-0"
-            >
-              <img
-                src={`data:${img.mimeType};base64,${img.data}`}
-                alt={img.name}
-                className="w-16 h-16 object-cover border border-border rounded"
-              />
-              <button
-                type="button"
-                title="Remove image"
-                aria-label={`Remove image ${img.name}`}
-                onClick={() => removeImage(i)}
-                className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-danger text-white text-[10px] flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity cursor-pointer"
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {voiceLatency && (
-        <div
-          className="pb-1 text-[10px] text-muted relative"
-          style={{ zIndex: 1 }}
-        >
-          Silence end→first token: {voiceLatency.speechEndToFirstTokenMs ?? "—"}
-          ms · end→voice start: {voiceLatency.speechEndToVoiceStartMs ?? "—"}ms
-          · first sentence:{" "}
-          {voiceLatency.firstSegmentCached == null
-            ? "—"
-            : voiceLatency.firstSegmentCached
-              ? "cached"
-              : "uncached"}
-        </div>
-      )}
-
-      {/* ── Input row: mic + paperclip + textarea + send ───────────── */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        className="hidden"
-        onChange={handleFileInputChange}
-      />
+      {/* ── Avatar / voice toggles ────────────────────────────────── */}
       <div
-        className="flex gap-1.5 sm:gap-2 items-end border-t border-border pt-3 pb-3 sm:pb-4 relative"
+        className="flex items-center justify-between gap-2 pb-1.5 relative"
         style={{ zIndex: 1 }}
       >
-        {/* Paperclip / image attach button */}
-        <button
-          type="button"
-          className={`h-[38px] w-[38px] shrink-0 flex items-center justify-center border rounded cursor-pointer transition-all self-end ${
-            chatPendingImages.length > 0
-              ? "border-accent bg-accent/10 text-accent"
-              : "border-border bg-card text-muted hover:border-accent hover:text-accent"
-          }`}
-          onClick={() => fileInputRef.current?.click()}
-          aria-label="Attach image"
-          title="Attach image"
-          disabled={chatSending}
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+        <div className="flex items-center gap-1">
+          <span className="text-[11px] text-muted uppercase tracking-wide">
+            Mode
+          </span>
+          <button
+            className={`px-2 py-1 text-xs border rounded cursor-pointer transition-all ${
+              chatMode === "simple"
+                ? "border-accent text-accent bg-card"
+                : "border-border text-muted bg-card hover:border-accent hover:text-accent"
+            }`}
+            onClick={() => setChatMode("simple")}
+            title="Simple mode: reply only, no tools"
+            disabled={chatSending}
           >
             Simple
           </button>
@@ -2269,30 +2075,15 @@ export const ChatView = memo(function ChatView() {
         {/* Mic button — user voice input */}
         {voice.supported && (
           <button
-            type="button"
             className={`h-[38px] w-[38px] flex-shrink-0 flex items-center justify-center border rounded cursor-pointer transition-all self-end ${
               voice.isListening
                 ? "bg-accent border-accent text-accent-fg shadow-[0_0_10px_rgba(124,58,237,0.4)] animate-pulse"
                 : "border-border bg-card text-muted hover:border-accent hover:text-accent"
             }`}
             onClick={voice.toggleListening}
-            aria-label={
-              voice.isListening ? "Stop voice input" : "Start voice input"
-            }
-            aria-pressed={voice.isListening}
             title={voice.isListening ? "Stop listening" : "Voice input"}
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill={voice.isListening ? "currentColor" : "none"}
-              stroke="currentColor"
-              strokeWidth={voice.isListening ? "0" : "2"}
-            >
-              <title>
-                {voice.isListening ? "Stop listening" : "Voice input"}
-              </title>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill={voice.isListening ? "currentColor" : "none"} stroke="currentColor" strokeWidth={voice.isListening ? "0" : "2"}>
               {voice.isListening ? (
                 <>
                   <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
@@ -2312,18 +2103,15 @@ export const ChatView = memo(function ChatView() {
 
         {/* Textarea / live transcript */}
         {voice.isListening && voice.interimTranscript ? (
-          <div className="flex-1 min-w-0 px-3 py-2 border border-accent bg-card text-txt text-sm font-body leading-relaxed min-h-[38px] flex items-center">
+          <div className="flex-1 px-3 py-2 border border-accent bg-card text-txt text-sm font-body leading-relaxed min-h-[38px] flex items-center">
             <span className="text-muted italic">{voice.interimTranscript}</span>
           </div>
         ) : (
           <textarea
             ref={textareaRef}
-            className="flex-1 min-w-0 px-3 py-2 border border-border bg-card text-txt text-sm font-body leading-relaxed resize-none overflow-y-hidden min-h-[38px] max-h-[200px] focus:border-accent focus:outline-none"
+            className="flex-1 px-3 py-2 border border-border bg-card text-txt text-sm font-body leading-relaxed resize-none overflow-y-hidden min-h-[38px] max-h-[200px] focus:border-accent focus:outline-none"
             rows={1}
-            aria-label="Chat message"
-            placeholder={
-              voice.isListening ? "Listening..." : "Type a message..."
-            }
+            placeholder={voice.isListening ? "Listening..." : "Type a message..."}
             value={chatInput}
             onChange={(e) => setState("chatInput", e.target.value)}
             onKeyDown={handleKeyDown}
@@ -2358,6 +2146,6 @@ export const ChatView = memo(function ChatView() {
           </button>
         )}
       </div>
-    </section>
+    </div>
   );
 });

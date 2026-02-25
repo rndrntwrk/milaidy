@@ -698,65 +698,6 @@ export function CustomActionEditor({
     }
   };
 
-  const handleSave = async () => {
-    if (!name.trim()) {
-      alert("Name is required");
-      return;
-    }
-
-    let handler: CustomActionHandler;
-
-    if (handlerType === "http") {
-      const headers: Record<string, string> = {};
-      httpHeaders.forEach(h => {
-        if (h.key.trim()) {
-          headers[h.key.trim()] = h.value;
-        }
-      });
-
-      handler = {
-        type: "http",
-        method: httpMethod,
-        url: httpUrl,
-        headers: Object.keys(headers).length > 0 ? headers : undefined,
-        bodyTemplate: httpBody || undefined
-      };
-    } else if (handlerType === "shell") {
-      handler = {
-        type: "shell",
-        command: shellCommand
-      };
-    } else {
-      handler = {
-        type: "code",
-        code
-      };
-    }
-
-    const actionDef = {
-      name: name.trim(),
-      description: description.trim(),
-      similes: [] as string[],
-      parameters: parameters.filter(p => p.name.trim()).map(p => ({
-        name: p.name.trim(),
-        description: p.description.trim(),
-        required: p.required
-      })),
-      handler,
-      enabled: action?.enabled ?? true,
-    };
-
-    try {
-      const saved = action?.id
-        ? await client.updateCustomAction(action.id, actionDef)
-        : await client.createCustomAction(actionDef);
-
-      onSave(saved);
-    } catch (err: any) {
-      alert(`Failed to save: ${err.message || String(err)}`);
-    }
-  };
-
   return (
     <Dialog open={open} onClose={onClose} ariaLabelledBy="action-editor-title">
       <div className="w-full max-w-2xl border border-border bg-card shadow-lg flex flex-col overflow-hidden">

@@ -2217,109 +2217,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [fetchGreeting]);
 
-  const handleChatSend = useCallback(async (mode: ConversationMode = "simple") => {
-    const text = chatInput.trim();
-    if (!text) return;
-    if (chatSendBusyRef.current || chatSending) return;
-    chatSendBusyRef.current = true;
+  const handleChatSend = useCallback(
+    async (channelType: ConversationChannelType = "DM") => {
+      const text = chatInput.trim();
+      if (!text) return;
+      if (chatSendBusyRef.current || chatSending) return;
+      chatSendBusyRef.current = true;
 
-    try {
-      let convId: string = activeConversationId ?? "";
-      if (!convId) {
-        try {
-          const { conversation } = await client.createConversation();
-          setConversations((prev) => [conversation, ...prev]);
-          setActiveConversationId(conversation.id);
-          activeConversationIdRef.current = conversation.id;
-          convId = conversation.id;
-        } catch {
-          return;
-        }
-      }
-
-      // Keep server-side active conversation in sync for proactive routing.
-      client.sendWsMessage({ type: "active-conversation", conversationId: convId });
-
-      const now = Date.now();
-      const userMsgId = `temp-${now}`;
-      const assistantMsgId = `temp-resp-${now}`;
-
-      setConversationMessages((prev: ConversationMessage[]) => [
-        ...prev,
-        { id: userMsgId, role: "user", text, timestamp: now },
-        { id: assistantMsgId, role: "assistant", text: "", timestamp: now },
-      ]);
-      setChatInput("");
-      setChatSending(true);
-      setChatFirstTokenReceived(false);
-
-      const controller = new AbortController();
-      chatAbortRef.current = controller;
-      const flushPendingTokens = () => {
-        if (tokenRafIdRef.current) {
-          cancelAnimationFrame(tokenRafIdRef.current);
-          tokenRafIdRef.current = 0;
-        }
-        const batch = pendingTokensRef.current;
-        pendingTokensRef.current = "";
-        if (!batch) return;
-        setConversationMessages((prev) =>
-          prev.map((message) =>
-            message.id === assistantMsgId
-              ? { ...message, text: `${message.text}${batch}` }
-              : message,
-          ),
-        );
-      };
+      // Capture and clear pending images before async work
+      const imagesToSend = chatPendingImages.length
+        ? chatPendingImages
+        : undefined;
+      setChatPendingImages([]);
 
       try {
-        const data = await client.sendConversationMessageStream(
-          convId,
-          text,
-          (token) => {
-            setChatFirstTokenReceived(true);
-            pendingTokensRef.current += token;
-            if (!tokenRafIdRef.current) {
-              tokenRafIdRef.current = requestAnimationFrame(() => {
-                const batch = pendingTokensRef.current;
-                pendingTokensRef.current = "";
-                tokenRafIdRef.current = 0;
-                setConversationMessages((prev) =>
-                  prev.map((message) =>
-                    message.id === assistantMsgId
-                      ? { ...message, text: `${message.text}${batch}` }
-                      : message,
-                  ),
-                );
-              });
-            }
-          },
-          mode,
-          controller.signal,
-        );
-
-        setConversationMessages((prev) =>
-          prev.map((message) =>
-            message.id === assistantMsgId
-              ? { ...message, text: data.text }
-              : message,
-          ),
-        );
-        await loadConversations();
-      } catch (err) {
-        const abortError = err as Error;
-        if (abortError.name === "AbortError") {
-          // Flush any buffered tokens before pruning empty assistant placeholder.
-          flushPendingTokens();
-          setConversationMessages((prev) =>
-            prev.filter((message) => !(message.id === assistantMsgId && !message.text.trim())),
-          );
-          return;
-        }
-
-        // If the conversation was lost (server restart), create a fresh one and retry once.
-        const status = (err as { status?: number }).status;
-        if (status === 404) {
+        let convId: string = activeConversationId ?? "";
+        if (!convId) {
           try {
             const { conversation } = await client.createConversation();
             setConversations((prev) => [conversation, ...prev]);
@@ -2453,17 +2366,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setChatFirstTokenReceived(false);
         }
       } finally {
-        // Cancel any pending token batch frame
-        if (tokenRafIdRef.current) {
-          cancelAnimationFrame(tokenRafIdRef.current);
-          tokenRafIdRef.current = 0;
-          pendingTokensRef.current = "";
-        }
-        if (chatAbortRef.current === controller) {
-          chatAbortRef.current = null;
-        }
-        setChatSending(false);
-        setChatFirstTokenReceived(false);
+        chatSendBusyRef.current = false;
       }
     },
     [
@@ -3678,83 +3581,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [onboardingStep, onboardingOptions, onboardingRunMode]);
 
-  const handleOnboardingFinish = useCallback(async () => {
-    if (!onboardingOptions) return;
-    const style = resolveOnboardingStylePreset(onboardingOptions, onboardingStyle);
-    const styleCatchphrase = style?.catchphrase
-      ?? resolveOnboardingStyleCatchphrase(onboardingOptions, onboardingStyle);
-    const systemPrompt = style?.system
-      ? style.system.replace(/\{\{name\}\}/g, onboardingName)
-      : `You are ${onboardingName}, an autonomous AI agent powered by ElizaOS. ${onboardingOptions.sharedStyleRules}`;
-
-    const isLocalMode = onboardingRunMode === "local-rawdog" || onboardingRunMode === "local-sandbox";
-    const inventoryProviders: Array<{ chain: string; rpcProvider: string; rpcApiKey?: string }> = [];
-    if (isLocalMode) {
-      for (const chain of onboardingSelectedChains) {
-        const rpcProvider = onboardingRpcSelections[chain] || "elizacloud";
-        const rpcApiKey = onboardingRpcKeys[`${chain}:${rpcProvider}`] || undefined;
-        inventoryProviders.push({ chain, rpcProvider, rpcApiKey });
-      }
-    }
-
-    // Map the 3-mode selection to the API's runMode field
-    // "local-rawdog" and "local-sandbox" both map to "local" for backward compat
-    // Sandbox mode is additionally stored as a separate flag
-    const apiRunMode = onboardingRunMode === "cloud" ? "cloud" : "local";
-
-    setOnboardingRestarting(true);
-    try {
-      await client.submitOnboarding({
-        name: onboardingName,
-        theme: onboardingTheme,
-        runMode: apiRunMode as "local" | "cloud",
-        sandboxMode: onboardingRunMode === "local-sandbox" ? "standard" : onboardingRunMode === "cloud" ? "light" : "off",
-        bio: style?.bio ?? ["An autonomous AI agent."],
-        systemPrompt,
-        styleCatchphrase,
-        style: style?.style,
-        adjectives: style?.adjectives,
-        topics: style?.topics,
-        postExamples: style?.postExamples,
-        messageExamples: style?.messageExamples,
-        cloudProvider: onboardingRunMode === "cloud" ? onboardingCloudProvider : undefined,
-        smallModel: onboardingRunMode === "cloud" ? onboardingSmallModel : undefined,
-        largeModel: onboardingRunMode === "cloud" ? onboardingLargeModel : undefined,
-        provider: isLocalMode ? onboardingProvider || undefined : undefined,
-        providerApiKey: isLocalMode ? onboardingApiKey || undefined : undefined,
-        inventoryProviders: inventoryProviders.length > 0 ? inventoryProviders : undefined,
-        // Connectors
-        telegramToken: onboardingTelegramToken.trim() || undefined,
-        discordToken: onboardingDiscordToken.trim() || undefined,
-        whatsappSessionPath: onboardingWhatsAppSessionPath.trim() || undefined,
-        twilioAccountSid: onboardingTwilioAccountSid.trim() || undefined,
-        twilioAuthToken: onboardingTwilioAuthToken.trim() || undefined,
-        twilioPhoneNumber: onboardingTwilioPhoneNumber.trim() || undefined,
-        blooioApiKey: onboardingBlooioApiKey.trim() || undefined,
-        blooioPhoneNumber: onboardingBlooioPhoneNumber.trim() || undefined,
-      });
-    } catch (err) {
-      setOnboardingRestarting(false);
-      window.alert(`Setup failed: ${err instanceof Error ? err.message : "network error"}. Please try again.`);
-      return;
-    }
-
-    setOnboardingComplete(true);
-    setTab("chat");
-    try {
-      setAgentStatus(await client.restartAgent());
-    } catch {
-      /* ignore */
-    }
-    setOnboardingRestarting(false);
-  }, [
-    onboardingStep,
-    onboardingRunMode,
-    dropStatus?.dropEnabled,
-    dropStatus?.userHasMinted,
-    dropStatus?.mintedOut,
-  ]);
-
   // ── Cloud ──────────────────────────────────────────────────────────
 
   const handleCloudLogin = useCallback(async () => {
@@ -4524,34 +4350,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (!parsed) return;
           const { conversationId: convId, message: msg } = parsed;
 
-        if (convId === activeConversationIdRef.current) {
-          // Active conversation — append in real-time.
-          // If this is an echo of the streamed temporary assistant message,
-          // reconcile IDs instead of rendering duplicate content.
-          setConversationMessages((prev) => {
-            if (prev.some((m) => m.id === msg.id)) return prev;
+          if (convId === activeConversationIdRef.current) {
+            // Active conversation — append in real-time.
+            // If this is an echo of the streamed temporary assistant message,
+            // reconcile IDs instead of rendering duplicate content.
+            setConversationMessages((prev) => {
+              if (prev.some((m) => m.id === msg.id)) return prev;
 
-            if (msg.role === "assistant" && msg.text.trim().length > 0) {
-              const tempIndex = prev.findIndex(
-                (m) =>
-                  m.role === "assistant" &&
-                  m.id.startsWith("temp-resp-") &&
-                  m.text.trim().length > 0 &&
-                  m.text.trim() === msg.text.trim(),
-              );
-              if (tempIndex !== -1) {
-                const next = [...prev];
-                next[tempIndex] = {
-                  ...next[tempIndex],
-                  id: msg.id,
-                  timestamp: msg.timestamp,
-                  source: msg.source ?? next[tempIndex].source,
-                };
-                return next;
+              if (msg.role === "assistant" && msg.text.trim().length > 0) {
+                const tempIndex = prev.findIndex(
+                  (m) =>
+                    m.role === "assistant" &&
+                    m.id.startsWith("temp-resp-") &&
+                    m.text.trim().length > 0 &&
+                    m.text.trim() === msg.text.trim(),
+                );
+                if (tempIndex !== -1) {
+                  const next = [...prev];
+                  next[tempIndex] = {
+                    ...next[tempIndex],
+                    id: msg.id,
+                    timestamp: msg.timestamp,
+                    source: msg.source ?? next[tempIndex].source,
+                  };
+                  return next;
+                }
               }
-            }
 
-            return [...prev, msg];
+              return [...prev, msg];
+            });
+          } else {
+            // Non-active — mark unread
+            setUnreadConversations((prev) => new Set([...prev, convId]));
+          }
+
+          // Bump conversation to top of list
+          setConversations((prev) => {
+            const updated = prev.map((c) =>
+              c.id === convId ? { ...c, updatedAt: new Date().toISOString() } : c,
+            );
+            return updated.sort(
+              (a, b) =>
+                new Date(b.updatedAt).getTime() -
+                new Date(a.updatedAt).getTime(),
+            );
           });
         },
       );

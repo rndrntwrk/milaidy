@@ -241,9 +241,6 @@ export function App() {
   if (authRequired) return <PairingView />;
   if (!onboardingComplete) return <ErrorBoundary><OnboardingWizard /></ErrorBoundary>;
 
-  const isChat = tab === "chat";
-  const isAdvancedTab = advancedTabs.has(tab);
-
   return (
     <>
       <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[10001] focus:px-4 focus:py-2 focus:bg-accent focus:text-accent-fg focus:rounded">

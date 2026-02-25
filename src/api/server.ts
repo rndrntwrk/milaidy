@@ -1,5 +1,5 @@
 /**
- * REST API server for the Milady Control UI.
+ * REST API server for the Milaidy Control UI.
  *
  * Exposes HTTP endpoints that the UI frontend expects, backed by the
  * ElizaOS AgentRuntime. Default port: 2138. In dev mode, the Vite UI
@@ -7,10 +7,8 @@
  */
 
 import crypto from "node:crypto";
-import { lookup as dnsLookup } from "node:dns/promises";
 import fs from "node:fs";
 import http from "node:http";
-import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -19,31 +17,34 @@ import {
   type AgentRuntime,
   ChannelType,
   type Content,
-  ContentType,
   createMessageMemory,
   logger,
-  type Media,
   ModelType,
   stringToUuid,
   type Task,
   type UUID,
 } from "@elizaos/core";
-import { listPiAiModelOptions } from "@elizaos/plugin-pi-ai";
-import { createCodingAgentRouteHandler } from "@milaidy/plugin-coding-agent";
+import * as piAi from "@mariozechner/pi-ai";
 import { type WebSocket, WebSocketServer } from "ws";
-import type { CloudManager } from "../cloud/cloud-manager";
+import { CloudManager } from "../cloud/cloud-manager.js";
 import {
   configFileExists,
-  loadMiladyConfig,
-  type MiladyConfig,
-  saveMiladyConfig,
-} from "../config/config";
-import { resolveModelsCacheDir, resolveStateDir } from "../config/paths";
-import { isConnectorConfigured } from "../config/plugin-auto-enable";
-import type { ConnectorConfig, CustomActionDef } from "../config/types.milady";
-import { EMOTE_BY_ID, EMOTE_CATALOG } from "../emotes/catalog";
-import { resolveDefaultAgentWorkspaceDir } from "../providers/workspace";
-import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "../runtime/core-plugins";
+  loadMilaidyConfig,
+  type MilaidyConfig,
+  saveMilaidyConfig,
+} from "../config/config.js";
+import { resolveModelsCacheDir, resolveStateDir } from "../config/paths.js";
+import type {
+  ConnectorConfig,
+  CustomActionDef,
+} from "../config/types.milaidy.js";
+import { CharacterSchema } from "../config/zod-schema.js";
+import { EMOTE_BY_ID, EMOTE_CATALOG } from "../emotes/catalog.js";
+import { resolveDefaultAgentWorkspaceDir } from "../providers/workspace.js";
+import {
+  CORE_PLUGINS,
+  OPTIONAL_CORE_PLUGINS,
+} from "../runtime/core-plugins.js";
 import {
   buildTestHandler,
   registerCustomActionLive,
@@ -55,77 +56,33 @@ import {
 import { resolveFive55CapabilityForRequest } from "../runtime/five55-capability-routing.js";
 import { createPiCredentialProvider } from "../runtime/pi-credentials.js";
 import {
-  isBlockedPrivateOrLinkLocalIp,
-  normalizeHostLike,
-} from "../security/network-policy";
-import { AppManager } from "../services/app-manager";
-import { FallbackTrainingService } from "../services/fallback-training-service";
+  AgentExportError,
+  estimateExportSize,
+  exportAgent,
+  importAgent,
+} from "../services/agent-export.js";
+import { AppManager } from "../services/app-manager.js";
 import {
   getMcpServerDetails,
   searchMcpMarketplace,
-} from "../services/mcp-marketplace";
-import {
-  type CoreManagerLike,
-  type InstallProgressLike,
-  isCoreManagerLike,
-  isPluginManagerLike,
-  type PluginManagerLike,
-} from "../services/plugin-manager-types";
-import type { SandboxManager } from "../services/sandbox-manager";
+} from "../services/mcp-marketplace.js";
+import type { SandboxManager } from "../services/sandbox-manager.js";
 import {
   installMarketplaceSkill,
   listInstalledMarketplaceSkills,
   searchSkillsMarketplace,
   uninstallMarketplaceSkill,
-} from "../services/skill-marketplace";
-import { streamManager } from "../services/stream-manager";
+} from "../services/skill-marketplace.js";
+import { TrainingService } from "../services/training-service.js";
 import {
   listTriggerTasks,
   readTriggerConfig,
   taskToTriggerSummary,
-} from "../triggers/runtime";
-import { parseClampedInteger } from "../utils/number-parsing";
-import { handleAgentAdminRoutes } from "./agent-admin-routes";
-import { handleAgentLifecycleRoutes } from "./agent-lifecycle-routes";
-import { handleAgentTransferRoutes } from "./agent-transfer-routes";
-import { handleAppsHyperscapeRoutes } from "./apps-hyperscape-routes";
-import { handleAppsRoutes } from "./apps-routes";
-import { handleAuthRoutes } from "./auth-routes";
-import { getAutonomyState, handleAutonomyRoutes } from "./autonomy-routes";
-import { handleBugReportRoutes } from "./bug-report-routes";
-import { handleCharacterRoutes } from "./character-routes";
-import { type CloudRouteState, handleCloudRoute } from "./cloud-routes";
-import { handleCloudStatusRoutes } from "./cloud-status-routes";
-import {
-  extractAnthropicSystemAndLastUser,
-  extractCompatTextContent,
-  extractOpenAiSystemAndLastUser,
-  resolveCompatRoomKey,
-} from "./compat-utils";
-import { handleDatabaseRoute } from "./database";
-import { handleDiagnosticsRoutes } from "./diagnostics-routes";
-import { DropService } from "./drop-service";
-import {
-  readJsonBody as parseJsonBody,
-  type ReadJsonBodyOptions,
-  readRequestBody,
-  readRequestBodyBuffer,
-  sendJson,
-  sendJsonError,
-} from "./http-helpers";
-import { handleKnowledgeRoutes } from "./knowledge-routes";
-import {
-  evictOldestConversation,
-  getOrReadCachedFile,
-  pushWithBatchEvict,
-  sweepExpiredEntries,
-} from "./memory-bounds";
-import { handleModelsRoutes } from "./models-routes";
-import { handlePermissionRoutes } from "./permissions-routes";
-import {
-  createRateLimitMiddleware,
-  type RateLimitMiddleware,
-} from "./middleware/rate-limiter.js";
+} from "../triggers/runtime.js";
+import { type CloudRouteState, handleCloudRoute } from "./cloud-routes.js";
+import { handleDatabaseRoute } from "./database.js";
+import { DropService } from "./drop-service.js";
+import { handleKnowledgeRoutes } from "./knowledge-routes.js";
 import {
   createRateLimitMiddleware,
   type RateLimitMiddleware,
@@ -133,20 +90,12 @@ import {
 import {
   type PluginParamInfo,
   validatePluginConfig,
-} from "./plugin-validation";
-import {
-  applySubscriptionProviderConfig,
-  clearSubscriptionProviderConfig,
-} from "./provider-switch-config";
-import { handleRegistryRoutes } from "./registry-routes";
-import { RegistryService } from "./registry-service";
-import { handleSandboxRoute } from "./sandbox-routes";
-import { handleSubscriptionRoutes } from "./subscription-routes";
-import { resolveTerminalRunLimits } from "./terminal-run-limits";
-import { handleTrainingRoutes } from "./training-routes";
-import type { TrainingServiceWithRuntime } from "./training-service-like";
-import { handleTrajectoryRoute } from "./trajectory-routes";
-import { handleTriggerRoutes } from "./trigger-routes";
+} from "./plugin-validation.js";
+import { RegistryService } from "./registry-service.js";
+import { handleSandboxRoute } from "./sandbox-routes.js";
+import { handleTrainingRoutes } from "./training-routes.js";
+import { handleTrajectoryRoute } from "./trajectory-routes.js";
+import { handleTriggerRoutes } from "./trigger-routes.js";
 import {
   enforceSimpleModeReplyBoundaries,
   resolveEffectiveChatMode,
@@ -156,10 +105,8 @@ import {
   isAddressWhitelisted,
   markAddressVerified,
   verifyTweet,
-} from "./twitter-verify";
-import { TxService } from "./tx-service";
-import { generateWalletKeys, getWalletAddresses } from "./wallet";
-import { handleWalletRoutes } from "./wallet-routes";
+} from "./twitter-verify.js";
+import { TxService } from "./tx-service.js";
 import {
   fetchEvmBalances,
   fetchEvmNfts,
@@ -369,22 +316,6 @@ function getAgentEventSvc(
   return runtime.getService("AGENT_EVENT") as AgentEventServiceLike | null;
 }
 
-function requirePluginManager(runtime: AgentRuntime | null): PluginManagerLike {
-  const service = runtime?.getService("plugin_manager");
-  if (!isPluginManagerLike(service)) {
-    throw new Error("Plugin manager service not found");
-  }
-  return service;
-}
-
-function requireCoreManager(runtime: AgentRuntime | null): CoreManagerLike {
-  const service = runtime?.getService("core_manager");
-  if (!isCoreManagerLike(service)) {
-    throw new Error("Core manager service not found");
-  }
-  return service;
-}
-
 function isUuidLike(value: string): value is UUID {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
     value,
@@ -422,17 +353,11 @@ interface ConversationMeta {
   updatedAt: string;
 }
 
-interface AgentStartupDiagnostics {
-  phase: string;
-  attempt: number;
-  lastError?: string;
-  lastErrorAt?: number;
-  nextRetryAt?: number;
-}
+type ChatMode = "simple" | "power";
 
 interface ServerState {
   runtime: AgentRuntime | null;
-  config: MiladyConfig;
+  config: MilaidyConfig;
   agentState:
     | "not_started"
     | "starting"
@@ -444,7 +369,6 @@ interface ServerState {
   agentName: string;
   model: string | undefined;
   startedAt: number | undefined;
-  startup: AgentStartupDiagnostics;
   plugins: PluginEntry[];
   skills: SkillEntry[];
   logBuffer: LogEntry[];
@@ -463,7 +387,7 @@ interface ServerState {
   /** App manager for launching and managing ElizaOS apps. */
   appManager: AppManager;
   /** Fine-tuning/training orchestration service. */
-  trainingService: TrainingServiceLike | null;
+  trainingService: TrainingService | null;
   /** ERC-8004 registry service (null when not configured). */
   registryService: RegistryService | null;
   /** Drop/mint service (null when not configured). */
@@ -474,15 +398,11 @@ interface ServerState {
   broadcastStatus: (() => void) | null;
   /** Broadcast an arbitrary JSON message to all WebSocket clients. Set by startApiServer. */
   broadcastWs: ((data: Record<string, unknown>) => void) | null;
-  /** Broadcast a JSON payload to WebSocket clients bound to a specific client id. */
-  broadcastWsToClientId:
-    | ((clientId: string, data: Record<string, unknown>) => number)
-    | null;
   /** Currently active conversation ID from the frontend (sent via WS). */
   activeConversationId: string | null;
   /** Transient OAuth flow state for subscription auth. */
-  _anthropicFlow?: import("../auth/anthropic").AnthropicFlow;
-  _codexFlow?: import("../auth/openai-codex").CodexFlow;
+  _anthropicFlow?: import("../auth/anthropic.js").AnthropicFlow;
+  _codexFlow?: import("../auth/openai-codex.js").CodexFlow;
   _codexFlowTimer?: ReturnType<typeof setTimeout>;
   /** System permission states (cached from Electron IPC). */
   permissionStates?: Record<
@@ -496,15 +416,6 @@ interface ServerState {
   >;
   /** Whether shell access is enabled (can be toggled in UI). */
   shellEnabled?: boolean;
-  /** Reasons a restart is pending. Empty array = no restart needed. */
-  pendingRestartReasons: string[];
-  /** Route handlers registered by connector plugins (loaded dynamically). */
-  connectorRouteHandlers: ConnectorRouteHandler[];
-  /** Active WhatsApp pairing sessions (QR code flow). */
-  whatsappPairingSessions?: Map<
-    string,
-    import("../services/whatsapp-pairing").WhatsAppPairingSession
-  >;
 }
 
 const FIVE55_HTTP_CAPABILITY_POLICY = createFive55CapabilityPolicy();
@@ -542,7 +453,7 @@ interface PluginEntry {
   configured: boolean;
   envKey: string | null;
   category: "ai-provider" | "connector" | "database" | "feature";
-  /** Where the plugin comes from: "bundled" (ships with Milady) or "store" (user-installed from registry). */
+  /** Where the plugin comes from: "bundled" (ships with Milaidy) or "store" (user-installed from registry). */
   source: "bundled" | "store";
   configKeys: string[];
   parameters: PluginParamDef[];
@@ -776,8 +687,7 @@ function _extractResponseBlocks(
 // Package root resolution (for reading bundled plugins.json)
 // ---------------------------------------------------------------------------
 
-export function findOwnPackageRoot(startDir: string): string {
-  const KNOWN_NAMES = new Set(["milady", "milaidy", "miladyai"]);
+function findOwnPackageRoot(startDir: string): string {
   let dir = startDir;
   for (let i = 0; i < 10; i++) {
     const pkgPath = path.join(dir, "package.json");
@@ -787,11 +697,7 @@ export function findOwnPackageRoot(startDir: string): string {
           string,
           unknown
         >;
-        const pkgName =
-          typeof pkg.name === "string" ? pkg.name.toLowerCase() : "";
-        if (KNOWN_NAMES.has(pkgName)) return dir;
-        // Also match if plugins.json exists at this level (resilient to renames)
-        if (fs.existsSync(path.join(dir, "plugins.json"))) return dir;
+        if (pkg.name === "milaidy") return dir;
       } catch {
         /* keep searching */
       }
@@ -1024,54 +930,10 @@ const BLOCKED_ENV_KEYS = new Set([
   "PATH",
   "HOME",
   "SHELL",
-  "MILADY_API_TOKEN",
-  "MILADY_WALLET_EXPORT_TOKEN",
+  "MILAIDY_API_TOKEN",
+  "MILAIDY_WALLET_EXPORT_TOKEN",
   "DATABASE_URL",
   "POSTGRES_URL",
-]);
-
-/**
- * Top-level config keys accepted by `PUT /api/config`.
- * Keep this in sync with MiladyConfig root fields and include both modern and
- * legacy aliases (e.g. `connectors` + `channels`).
- */
-export const CONFIG_WRITE_ALLOWED_TOP_KEYS = new Set([
-  "meta",
-  "auth",
-  "env",
-  "wizard",
-  "diagnostics",
-  "logging",
-  "update",
-  "browser",
-  "ui",
-  "skills",
-  "plugins",
-  "models",
-  "nodeHost",
-  "agents",
-  "tools",
-  "bindings",
-  "broadcast",
-  "audio",
-  "messages",
-  "commands",
-  "approvals",
-  "session",
-  "web",
-  "connectors",
-  "channels",
-  "cron",
-  "hooks",
-  "discovery",
-  "talk",
-  "gateway",
-  "memory",
-  "database",
-  "cloud",
-  "x402",
-  "mcp",
-  "features",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -1203,7 +1065,7 @@ function aggregateSecrets(plugins: PluginEntry[]): SecretEntry[] {
  * Reads from config.plugins.installs and tries to enrich with package.json metadata.
  */
 function discoverInstalledPlugins(
-  config: MiladyConfig,
+  config: MilaidyConfig,
   bundledIds: Set<string>,
 ): PluginEntry[] {
   const installs = config.plugins?.installs;
@@ -1300,8 +1162,6 @@ function discoverInstalledPlugins(
 
   return entries.sort((a, b) => a.name.localeCompare(b.name));
 }
-
-// applyWhatsAppQrOverride is imported from ./whatsapp-routes
 
 /**
  * Discover available plugins from the bundled plugins.json manifest.
@@ -1940,14 +1800,14 @@ function discoverPluginsFromManifest(): PluginEntry[] {
       return manifestEntries.sort((a, b) => a.name.localeCompare(b.name));
     } catch (err) {
       logger.debug(
-        `[milady-api] Failed to read plugins.json: ${err instanceof Error ? err.message : err}`,
+        `[milaidy-api] Failed to read plugins.json: ${err instanceof Error ? err.message : err}`,
       );
     }
   }
 
   // Fallback: no manifest found
   logger.debug(
-    "[milady-api] plugins.json not found — run `npm run generate:plugins`",
+    "[milaidy-api] plugins.json not found — run `npm run generate:plugins`",
   );
   return [];
 }
@@ -1973,7 +1833,6 @@ function categorizePlugin(
     "qwen",
     "minimax",
     "zai",
-    "pi-ai",
   ];
   const connectors = [
     "telegram",
@@ -1999,7 +1858,6 @@ function categorizePlugin(
     "twitch",
     "nextcloud-talk",
     "instagram",
-    "retake",
   ];
   const databases = ["sql", "localdb", "inmemorydb"];
 
@@ -2014,7 +1872,7 @@ function categorizePlugin(
 // ---------------------------------------------------------------------------
 
 /** Cache key for persisting skill enable/disable state in the agent database. */
-const SKILL_PREFS_CACHE_KEY = "milady:skill-preferences";
+const SKILL_PREFS_CACHE_KEY = "milaidy:skill-preferences";
 
 /** Shape stored in the cache: maps skill ID → enabled flag. */
 type SkillPreferencesMap = Record<string, boolean>;
@@ -2048,7 +1906,7 @@ async function saveSkillPreferences(
     await runtime.setCache(SKILL_PREFS_CACHE_KEY, prefs);
   } catch (err) {
     logger.debug(
-      `[milady-api] Failed to save skill preferences: ${err instanceof Error ? err.message : err}`,
+      `[milaidy-api] Failed to save skill preferences: ${err instanceof Error ? err.message : err}`,
     );
   }
 }
@@ -2057,7 +1915,7 @@ async function saveSkillPreferences(
 // Skill scan acknowledgments — tracks user review of security findings
 // ---------------------------------------------------------------------------
 
-const SKILL_ACK_CACHE_KEY = "milady:skill-scan-acknowledgments";
+const SKILL_ACK_CACHE_KEY = "milaidy:skill-scan-acknowledgments";
 
 type SkillAcknowledgmentMap = Record<
   string,
@@ -2085,7 +1943,7 @@ async function saveSkillAcknowledgments(
     await runtime.setCache(SKILL_ACK_CACHE_KEY, acks);
   } catch (err) {
     logger.debug(
-      `[milady-api] Failed to save skill acknowledgments: ${err instanceof Error ? err.message : err}`,
+      `[milaidy-api] Failed to save skill acknowledgments: ${err instanceof Error ? err.message : err}`,
     );
   }
 }
@@ -2174,7 +2032,7 @@ async function loadScanReportFromDisk(
  */
 function resolveSkillEnabled(
   id: string,
-  config: MiladyConfig,
+  config: MilaidyConfig,
   dbPrefs: SkillPreferencesMap,
 ): boolean {
   // Database preference takes priority (explicit user action)
@@ -2209,7 +2067,7 @@ function resolveSkillEnabled(
  */
 async function discoverSkills(
   workspaceDir: string,
-  config: MiladyConfig,
+  config: MilaidyConfig,
   runtime: AgentRuntime | null,
 ): Promise<SkillEntry[]> {
   // Load persisted preferences from the agent database
@@ -2278,7 +2136,7 @@ async function discoverSkills(
       }
     } catch {
       logger.debug(
-        "[milady-api] AgentSkillsService not available, falling back to filesystem scan",
+        "[milaidy-api] AgentSkillsService not available, falling back to filesystem scan",
       );
     }
   }
@@ -2288,7 +2146,7 @@ async function discoverSkills(
 
   // Bundled skills from the @elizaos/skills package
   try {
-    const skillsPkg = (await import(/* @vite-ignore */ "@elizaos/skills")) as {
+    const skillsPkg = (await import("@elizaos/skills")) as {
       getSkillsDir: () => string;
     };
     const bundledDir = skillsPkg.getSkillsDir();
@@ -2297,7 +2155,7 @@ async function discoverSkills(
     }
   } catch {
     logger.debug(
-      "[milady-api] @elizaos/skills not available for skill discovery",
+      "[milaidy-api] @elizaos/skills not available for skill discovery",
     );
   }
 
@@ -2332,7 +2190,7 @@ function scanSkillsDir(
   dir: string,
   skills: SkillEntry[],
   seen: Set<string>,
-  config: MiladyConfig,
+  config: MilaidyConfig,
   dbPrefs: SkillPreferencesMap,
 ): void {
   if (!fs.existsSync(dir)) return;
@@ -2415,209 +2273,106 @@ function scanSkillsDir(
 
 /** Maximum request body size (1 MB) — prevents memory-based DoS. */
 const MAX_BODY_BYTES = 1_048_576;
+const MAX_IMPORT_BYTES = 512 * 1_048_576; // 512 MB for agent imports
+const AGENT_TRANSFER_MIN_PASSWORD_LENGTH = 4;
+const AGENT_TRANSFER_MAX_PASSWORD_LENGTH = 1024;
 
-/**
- * Raised body limit for chat endpoints that accept base64-encoded image
- * attachments. A single smartphone JPEG is typically 2–5 MB binary
- * (~3–7 MB base64); 20 MB accommodates up to 4 images with room to spare.
- */
-const CHAT_MAX_BODY_BYTES = 20 * 1_048_576;
-const ELEVENLABS_FETCH_TIMEOUT_MS = 20_000;
-const ELEVENLABS_AUDIO_MAX_BYTES = 20 * 1_048_576;
-
-type StreamableServerResponse = Pick<
-  http.ServerResponse,
-  "write" | "once" | "off" | "removeListener"
-> & {
-  writableEnded?: boolean;
-  destroyed?: boolean;
-};
-
-function removeResponseListener(
-  res: StreamableServerResponse,
-  event: "drain" | "error",
-  handler: (...args: unknown[]) => void,
-): void {
-  if (typeof res.off === "function") {
-    res.off(event, handler);
-    return;
-  }
-  if (typeof res.removeListener === "function") {
-    res.removeListener(event, handler);
-  }
-}
-
-function responseContentLength(headers: Pick<Headers, "get">): number | null {
-  const raw = headers.get("content-length");
-  if (!raw) return null;
-  const parsed = Number.parseInt(raw, 10);
-  if (!Number.isFinite(parsed) || parsed < 0) return null;
-  return parsed;
-}
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException
-    ? error.name === "AbortError" || error.name === "TimeoutError"
-    : error instanceof Error &&
-        (error.name === "AbortError" || error.name === "TimeoutError");
-}
-
-function createTimeoutError(message: string): Error {
-  const timeoutError = new Error(message);
-  timeoutError.name = "TimeoutError";
-  return timeoutError;
-}
-
-export async function fetchWithTimeoutGuard(
-  input: string | URL,
-  init: RequestInit,
-  timeoutMs: number,
-): Promise<Response> {
-  const controller = new AbortController();
-  const upstreamSignal = init.signal;
-  let timedOut = false;
-
-  const onAbort = () => {
-    controller.abort();
-  };
-
-  if (upstreamSignal) {
-    if (upstreamSignal.aborted) {
-      controller.abort();
-    } else {
-      upstreamSignal.addEventListener("abort", onAbort, { once: true });
-    }
-  }
-
-  const timeoutHandle = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, timeoutMs);
-
-  try {
-    return await fetch(input, {
-      ...init,
-      signal: controller.signal,
-    });
-  } catch (err) {
-    if (timedOut && isAbortError(err)) {
-      throw createTimeoutError(
-        `Upstream request timed out after ${timeoutMs}ms`,
-      );
-    }
-    throw err;
-  } finally {
-    clearTimeout(timeoutHandle);
-    if (upstreamSignal) {
-      upstreamSignal.removeEventListener("abort", onAbort);
-    }
-  }
-}
-
-async function waitForDrain(res: StreamableServerResponse): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const onDrain = () => {
-      cleanup();
-      resolve();
-    };
-    const onError = (err: unknown) => {
-      cleanup();
-      reject(err instanceof Error ? err : new Error(String(err)));
-    };
+function readBody(req: http.IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
+    let tooLarge = false;
+    let settled = false;
     const cleanup = () => {
-      removeResponseListener(
-        res,
-        "drain",
-        onDrain as (...args: unknown[]) => void,
-      );
-      removeResponseListener(
-        res,
-        "error",
-        onError as (...args: unknown[]) => void,
-      );
+      req.off("data", onData);
+      req.off("end", onEnd);
+      req.off("error", onError);
     };
-
-    res.once("drain", onDrain);
-    res.once("error", onError);
+    const onData = (c: Buffer) => {
+      if (settled) return;
+      totalBytes += c.length;
+      if (totalBytes > MAX_BODY_BYTES) {
+        // Keep draining the stream, but stop buffering to avoid memory growth.
+        tooLarge = true;
+        return;
+      }
+      chunks.push(c);
+    };
+    const onEnd = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (tooLarge) {
+        reject(
+          new Error(
+            `Request body exceeds maximum size (${MAX_BODY_BYTES} bytes)`,
+          ),
+        );
+        return;
+      }
+      resolve(Buffer.concat(chunks).toString("utf-8"));
+    };
+    const onError = (err: Error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(err);
+    };
+    req.on("data", onData);
+    req.on("end", onEnd);
+    req.on("error", onError);
   });
 }
 
 /**
- * Stream a web Response body to an HTTP response while enforcing a strict byte cap.
- * Returns the number of bytes forwarded.
+ * Read raw binary request body with a configurable size limit.
+ * Used for agent import file uploads.
  */
-export async function streamResponseBodyWithByteLimit(
-  upstream: Response,
-  res: StreamableServerResponse,
+function readRawBody(
+  req: http.IncomingMessage,
   maxBytes: number,
-  timeoutMs?: number,
-): Promise<number> {
-  const declaredLength = responseContentLength(upstream.headers);
-  if (declaredLength !== null && declaredLength > maxBytes) {
-    throw new Error(
-      `Upstream response exceeds maximum size of ${maxBytes} bytes`,
-    );
-  }
-
-  if (!upstream.body) {
-    throw new Error("Upstream response did not include a body stream");
-  }
-
-  const reader = upstream.body.getReader();
-  let totalBytes = 0;
-  let streamTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
-  const streamTimeoutPromise =
-    typeof timeoutMs === "number" && timeoutMs > 0
-      ? new Promise<never>((_resolve, reject) => {
-          streamTimeoutHandle = setTimeout(() => {
-            reject(
-              createTimeoutError(
-                `Upstream response body timed out after ${timeoutMs}ms`,
-              ),
-            );
-          }, timeoutMs);
-        })
-      : null;
-
-  try {
-    while (true) {
-      const { done, value } = streamTimeoutPromise
-        ? await Promise.race([reader.read(), streamTimeoutPromise])
-        : await reader.read();
-      if (done) break;
-      if (!value || value.byteLength === 0) continue;
-
-      totalBytes += value.byteLength;
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
+    let tooLarge = false;
+    let settled = false;
+    const cleanup = () => {
+      req.off("data", onData);
+      req.off("end", onEnd);
+      req.off("error", onError);
+    };
+    const onData = (c: Buffer) => {
+      if (settled) return;
+      totalBytes += c.length;
       if (totalBytes > maxBytes) {
-        throw new Error(
-          `Upstream response exceeds maximum size of ${maxBytes} bytes`,
+        tooLarge = true;
+        return;
+      }
+      chunks.push(c);
+    };
+    const onEnd = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (tooLarge) {
+        reject(
+          new Error(`Request body exceeds maximum size (${maxBytes} bytes)`),
         );
+        return;
       }
-
-      if (res.writableEnded || res.destroyed) {
-        throw new Error("Client connection closed while streaming response");
-      }
-
-      const canContinue = res.write(Buffer.from(value));
-      if (!canContinue) {
-        await waitForDrain(res);
-      }
-    }
-  } catch (err) {
-    try {
-      await reader.cancel(err);
-    } catch {
-      // Best effort cleanup; keep original error.
-    }
-    throw err;
-  } finally {
-    if (streamTimeoutHandle !== null) {
-      clearTimeout(streamTimeoutHandle);
-    }
-    reader.releaseLock();
-  }
-
-  return totalBytes;
+      resolve(Buffer.concat(chunks));
+    };
+    const onError = (err: Error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(err);
+    };
+    req.on("data", onData);
+    req.on("end", onEnd);
+    req.on("error", onError);
+  });
 }
 
 /**
@@ -2627,27 +2382,37 @@ export async function streamResponseBodyWithByteLimit(
 async function readJsonBody<T = Record<string, unknown>>(
   req: http.IncomingMessage,
   res: http.ServerResponse,
-  options: ReadJsonBodyOptions = {},
 ): Promise<T | null> {
-  return parseJsonBody(req, res, {
-    maxBytes: MAX_BODY_BYTES,
-    ...options,
-  });
+  let raw: string;
+  try {
+    raw = await readBody(req);
+  } catch (err) {
+    const msg =
+      err instanceof Error ? err.message : "Failed to read request body";
+    error(res, msg, 413);
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed == null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      error(res, "Request body must be a JSON object", 400);
+      return null;
+    }
+    return parsed as T;
+  } catch {
+    error(res, "Invalid JSON in request body", 400);
+    return null;
+  }
 }
 
-const readBody = (req: http.IncomingMessage): Promise<string> =>
-  readRequestBody(req, { maxBytes: MAX_BODY_BYTES }).then(
-    (value) => value ?? "",
-  );
-
-let activeTerminalRunCount = 0;
-
 function json(res: http.ServerResponse, data: unknown, status = 200): void {
-  sendJson(res, data, status);
+  res.statusCode = status;
+  res.setHeader("Content-Type", "application/json");
+  res.end(JSON.stringify(data));
 }
 
 function error(res: http.ServerResponse, message: string, status = 400): void {
-  sendJsonError(res, message, status);
+  json(res, { error: message }, status);
 }
 
 // ---------------------------------------------------------------------------
@@ -2700,7 +2465,7 @@ function resolveUiDir(): string | null {
       if (fs.statSync(indexPath).isFile()) {
         uiDir = candidate;
         uiIndexHtml = fs.readFileSync(indexPath);
-        logger.info(`[milady-api] Serving dashboard UI from ${candidate}`);
+        logger.info(`[milaidy-api] Serving dashboard UI from ${candidate}`);
         return uiDir;
       }
     } catch {
@@ -2709,7 +2474,9 @@ function resolveUiDir(): string | null {
   }
 
   uiDir = null;
-  logger.info("[milady-api] No built UI found — dashboard routes are disabled");
+  logger.info(
+    "[milaidy-api] No built UI found — dashboard routes are disabled",
+  );
   return null;
 }
 
@@ -2728,22 +2495,6 @@ function sendStaticResponse(
   res.end(body);
 }
 
-// ── Static file cache ─────────────────────────────────────────────────
-const STATIC_CACHE_MAX = 50;
-const STATIC_CACHE_FILE_LIMIT = 512 * 1024; // 512 KB
-const staticFileCache = new Map<string, { body: Buffer; mtimeMs: number }>();
-
-function getCachedFile(filePath: string, mtimeMs: number): Buffer {
-  return getOrReadCachedFile(
-    staticFileCache,
-    filePath,
-    mtimeMs,
-    (p) => fs.readFileSync(p),
-    STATIC_CACHE_MAX,
-    STATIC_CACHE_FILE_LIMIT,
-  );
-}
-
 /**
  * Serve built dashboard assets from apps/app/dist with SPA fallback.
  * Returns true when the request is handled.
@@ -2758,7 +2509,6 @@ function serveStaticUi(
 
   // Keep API and WebSocket namespaces exclusively owned by server handlers.
   if (pathname === "/api" || pathname.startsWith("/api/")) return false;
-  if (pathname === "/v1" || pathname.startsWith("/v1/")) return false;
   if (pathname === "/ws") return false;
 
   let decodedPath: string;
@@ -2783,7 +2533,7 @@ function serveStaticUi(
     const stat = fs.statSync(candidatePath);
     if (stat.isFile()) {
       const ext = path.extname(candidatePath).toLowerCase();
-      const body = getCachedFile(candidatePath, stat.mtimeMs);
+      const body = fs.readFileSync(candidatePath);
       const cacheControl = relativePath.startsWith("assets/")
         ? "public, max-age=31536000, immutable"
         : "public, max-age=0, must-revalidate";
@@ -2993,6 +2743,49 @@ function normalizeChatResponseText(
   return resolveNoResponseFallback(logBuffer);
 }
 
+function resolveCloudApiBaseUrl(rawBaseUrl?: string): string {
+  const base = (rawBaseUrl ?? DEFAULT_CLOUD_API_BASE_URL)
+    .trim()
+    .replace(/\/+$/, "");
+  if (base.endsWith("/api/v1")) return base;
+  return `${base}/api/v1`;
+}
+
+async function fetchCloudCreditsByApiKey(
+  baseUrl: string,
+  apiKey: string,
+): Promise<number | null> {
+  const response = await fetch(`${baseUrl}/credits/balance`, {
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    signal: AbortSignal.timeout(10_000),
+  });
+
+  const creditResponse = (await response.json().catch(() => ({}))) as Record<
+    string,
+    unknown
+  >;
+
+  if (!response.ok) {
+    const message =
+      typeof creditResponse.error === "string" && creditResponse.error.trim()
+        ? creditResponse.error
+        : `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+
+  const rawBalance =
+    typeof creditResponse.balance === "number"
+      ? creditResponse.balance
+      : typeof (creditResponse.data as Record<string, unknown>)?.balance ===
+          "number"
+        ? ((creditResponse.data as Record<string, unknown>).balance as number)
+        : undefined;
+  return typeof rawBalance === "number" ? rawBalance : null;
+}
+
 function initSse(res: http.ServerResponse): void {
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
@@ -3120,383 +2913,17 @@ async function generateChatResponse(
     `[perf] chat response: mode=${chatMode}, model=${modelHint}, timeout=false, total=${totalMs}ms, first-token=${firstTokenMs || "n/a"}ms, length=${boundedText.length}`,
   );
 
-  const totalMs = Date.now() - t0;
-  logger.info(
-    `[perf] chat response: total=${totalMs}ms, first-token=${firstTokenMs || "n/a"}ms, length=${finalText.length}`,
-  );
-
   return {
     text: boundedText,
     agentName,
   };
 }
 
-async function generateConversationTitle(
-  runtime: AgentRuntime,
-  userMessage: string,
-  agentName: string,
-): Promise<string | null> {
-  // Use small model for speed
-  const modelClass = ModelType.TEXT_SMALL;
-
-  const prompt = `Based on the user's first message in a new chat, generate a very short, concise title (max 4-5 words) for the conversation.
-The agent's name is "${agentName}". The title should reflect the topic or intent of the user.
-Ideally, the title should fit the persona/vibe of the agent if possible, but clarity is more important.
-Do not use quotes. Do not include "Title:" prefix.
-
-User message: "${userMessage}"
-
-Title:`;
-
-  try {
-    // Use maxTokens instead of max_tokens
-    const title = await runtime.useModel(modelClass, {
-      prompt,
-      maxTokens: 20,
-      temperature: 0.7,
-    });
-
-    if (!title) return null;
-
-    let cleanTitle = title.trim();
-    // Remove surrounding quotes if present
-    if (
-      (cleanTitle.startsWith('"') && cleanTitle.endsWith('"')) ||
-      (cleanTitle.startsWith("'") && cleanTitle.endsWith("'"))
-    ) {
-      cleanTitle = cleanTitle.slice(1, -1);
-    }
-
-    // Fallback if empty or too long
-    if (!cleanTitle || cleanTitle.length > 50) return null;
-
-    return cleanTitle;
-  } catch (err) {
-    logger.warn(
-      `[milady] Failed to generate conversation title: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    return null;
-  }
-}
-
-function isDuplicateMemoryError(err: unknown): boolean {
-  if (!(err instanceof Error)) return false;
-  const msg = err.message.toLowerCase();
-  return (
-    msg.includes("duplicate") ||
-    msg.includes("already exists") ||
-    msg.includes("unique constraint")
-  );
-}
-
-async function persistConversationMemory(
-  runtime: AgentRuntime,
-  memory: ReturnType<typeof createMessageMemory>,
-): Promise<void> {
-  try {
-    await runtime.createMemory(memory, "messages");
-  } catch (err) {
-    if (isDuplicateMemoryError(err)) return;
-    throw err;
-  }
-}
-
-async function hasRecentAssistantMemory(
-  runtime: AgentRuntime,
-  roomId: UUID,
-  text: string,
-  sinceMs: number,
-): Promise<boolean> {
-  const trimmed = text.trim();
-  if (!trimmed) return false;
-
-  try {
-    const recent = await runtime.getMemories({
-      roomId,
-      tableName: "messages",
-      count: 12,
-    });
-
-    return recent.some((memory) => {
-      const contentText = (memory.content as { text?: string })?.text?.trim();
-      const createdAt = memory.createdAt ?? 0;
-      return (
-        memory.entityId === runtime.agentId &&
-        contentText === trimmed &&
-        createdAt >= sinceMs - 2000
-      );
-    });
-  } catch {
-    return false;
-  }
-}
-
-async function persistAssistantConversationMemory(
-  runtime: AgentRuntime,
-  roomId: UUID,
-  text: string,
-  channelType: ChannelType,
-  dedupeSinceMs?: number,
-): Promise<void> {
-  const trimmed = text.trim();
-  if (!trimmed) return;
-
-  if (typeof dedupeSinceMs === "number") {
-    const alreadyPersisted = await hasRecentAssistantMemory(
-      runtime,
-      roomId,
-      trimmed,
-      dedupeSinceMs,
-    );
-    if (alreadyPersisted) return;
-  }
-
-  await persistConversationMemory(
-    runtime,
-    createMessageMemory({
-      id: crypto.randomUUID() as UUID,
-      entityId: runtime.agentId,
-      roomId,
-      content: {
-        text: trimmed,
-        source: "client_chat",
-        channelType,
-      },
-    }),
-  );
-}
-
-const VALID_CHANNEL_TYPES = new Set<string>(Object.values(ChannelType));
-
-function parseRequestChannelType(
-  value: unknown,
-  fallback: ChannelType = ChannelType.DM,
-): ChannelType | null {
-  if (value === undefined || value === null) {
-    return fallback;
-  }
-  if (typeof value !== "string") {
-    return null;
-  }
-  const normalized = value.trim().toUpperCase();
-  if (!VALID_CHANNEL_TYPES.has(normalized)) {
-    return null;
-  }
-  return normalized as ChannelType;
-}
-
-interface ChatImageAttachment {
-  /** Base64-encoded image data (no data URL prefix). */
-  data: string;
-  mimeType: string;
-  name: string;
-}
-
-const MAX_CHAT_IMAGES = 4;
-
-/** Maximum base64 data length for a single image (~3.75 MB binary). */
-const MAX_IMAGE_DATA_BYTES = 5 * 1_048_576;
-
-/** Maximum length of an image filename. */
-const MAX_IMAGE_NAME_LENGTH = 255;
-
-/** Matches a valid standard-alphabet base64 string (RFC 4648 §4, `+/`, optional `=` padding). */
-const BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/;
-
-const ALLOWED_IMAGE_MIME_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/gif",
-  "image/webp",
-]);
-
-/** Returns an error message string, or null if valid. Exported for unit tests. */
-export function validateChatImages(images: unknown): string | null {
-  if (!Array.isArray(images) || images.length === 0) return null;
-  if (images.length > MAX_CHAT_IMAGES)
-    return `Too many images (max ${MAX_CHAT_IMAGES})`;
-  for (const img of images) {
-    if (!img || typeof img !== "object") return "Each image must be an object";
-    const { data, mimeType, name } = img as Record<string, unknown>;
-    if (typeof data !== "string" || !data)
-      return "Each image must have a non-empty data string";
-    if (data.startsWith("data:"))
-      return "Image data must be raw base64, not a data URL";
-    if (data.length > MAX_IMAGE_DATA_BYTES)
-      return `Image too large (max ${MAX_IMAGE_DATA_BYTES / 1_048_576} MB per image)`;
-    if (!BASE64_RE.test(data))
-      return "Image data contains invalid base64 characters";
-    if (typeof mimeType !== "string" || !mimeType)
-      return "Each image must have a mimeType string";
-    if (!ALLOWED_IMAGE_MIME_TYPES.has(mimeType.toLowerCase()))
-      return `Unsupported image type: ${mimeType}`;
-    if (typeof name !== "string" || !name)
-      return "Each image must have a name string";
-    if (name.length > MAX_IMAGE_NAME_LENGTH)
-      return `Image name too long (max ${MAX_IMAGE_NAME_LENGTH} characters)`;
-  }
-  return null;
-}
-
-/**
- * Extension of the core Media attachment shape that carries raw image bytes for
- * action handlers (e.g. POST_TWEET) while the message is in-memory. The
- * extra fields are intentionally stripped before the message is persisted.
- *
- * Note: `_data`/`_mimeType` survive only because ElizaOS passes the
- * `userMessage` object reference directly to action handlers without
- * deep-cloning or serializing it. If that ever changes, action handlers
- * that read these fields will silently receive `undefined`.
- */
-export interface ChatAttachmentWithData extends Media {
-  /** Raw base64 image data — never written to the database. */
-  _data: string;
-  /** MIME type corresponding to `_data`. */
-  _mimeType: string;
-}
-
-/**
- * Builds in-memory and compact (DB-persisted) attachment arrays from
- * validated images. Exported so it can be unit-tested independently.
- */
-export function buildChatAttachments(
-  images: ChatImageAttachment[] | undefined,
-): {
-  /** In-memory attachments that include `_data`/`_mimeType` for action handlers. */
-  attachments: ChatAttachmentWithData[] | undefined;
-  /** Persistence-safe attachments with `_data`/`_mimeType` stripped. */
-  compactAttachments: Media[] | undefined;
-} {
-  if (!images?.length)
-    return { attachments: undefined, compactAttachments: undefined };
-  // Compact placeholder URL (no base64) keeps the LLM context lean. The raw
-  // image bytes are stashed in `_data`/`_mimeType` for action handlers (e.g.
-  // POST_TWEET) that need to upload them.
-  const attachments: ChatAttachmentWithData[] = images.map((img, i) => ({
-    id: `img-${i}`,
-    url: `attachment:img-${i}`,
-    title: img.name,
-    source: "client_chat",
-    description: "User-attached image",
-    text: "",
-    contentType: ContentType.IMAGE,
-    _data: img.data,
-    _mimeType: img.mimeType,
-  }));
-  // DB-persisted version omits _data/_mimeType so raw bytes aren't stored.
-  const compactAttachments: Media[] = attachments.map(
-    ({ _data: _d, _mimeType: _m, ...rest }) => rest,
-  );
-  return { attachments, compactAttachments };
-}
-
-type MessageMemory = ReturnType<typeof createMessageMemory>;
-
-/**
- * Constructs the in-memory user message (with image data for action handlers)
- * and the persistence-safe counterpart (image data stripped). Extracted to
- * avoid duplicating this logic across the stream and non-stream chat endpoints.
- */
-export function buildUserMessages(params: {
-  images: ChatImageAttachment[] | undefined;
-  prompt: string;
-  userId: UUID;
-  roomId: UUID;
-  channelType: ChannelType;
-}): { userMessage: MessageMemory; messageToStore: MessageMemory } {
-  const { images, prompt, userId, roomId, channelType } = params;
-  const { attachments, compactAttachments } = buildChatAttachments(images);
-  const id = crypto.randomUUID() as UUID;
-  // In-memory message carries _data/_mimeType so action handlers can upload.
-  const userMessage = createMessageMemory({
-    id,
-    entityId: userId,
-    roomId,
-    content: {
-      text: prompt,
-      source: "client_chat",
-      channelType,
-      ...(attachments?.length ? { attachments } : {}),
-    },
-  });
-  // Persisted message: compact placeholder URL, no raw bytes in DB.
-  const messageToStore = compactAttachments?.length
-    ? createMessageMemory({
-        id,
-        entityId: userId,
-        roomId,
-        content: {
-          text: prompt,
-          source: "client_chat",
-          channelType,
-          attachments: compactAttachments,
-        },
-      })
-    : userMessage;
-  return { userMessage, messageToStore };
-}
-
-async function readChatRequestPayload(
-  req: http.IncomingMessage,
-  res: http.ServerResponse,
-  helpers: {
-    readJsonBody: <T = Record<string, unknown>>(
-      req: http.IncomingMessage,
-      res: http.ServerResponse,
-      options?: ReadJsonBodyOptions,
-    ) => Promise<T | null>;
-    error: (res: http.ServerResponse, message: string, status?: number) => void;
-  },
-  /** Body size limit. Image-capable endpoints pass CHAT_MAX_BODY_BYTES (20 MB);
-   *  legacy/cloud-proxy endpoints that don't process images pass MAX_BODY_BYTES (1 MB). */
-  maxBytes = CHAT_MAX_BODY_BYTES,
-): Promise<{
-  prompt: string;
-  channelType: ChannelType;
-  images?: ChatImageAttachment[];
-} | null> {
-  const body = await helpers.readJsonBody<{
-    text?: string;
-    channelType?: string;
-    images?: ChatImageAttachment[];
-  }>(req, res, { maxBytes });
-  if (!body) return null;
-  if (!body.text?.trim()) {
-    helpers.error(res, "text is required");
-    return null;
-  }
-  const channelType = parseRequestChannelType(body.channelType, ChannelType.DM);
-  if (!channelType) {
-    helpers.error(res, "channelType is invalid", 400);
-    return null;
-  }
-  const imageValidationError = validateChatImages(body.images);
-  if (imageValidationError) {
-    helpers.error(res, imageValidationError, 400);
-    return null;
-  }
-  // Normalize mimeType to lowercase so downstream consumers (Twitter
-  // uploadMedia, content-type headers) never encounter mixed-case variants
-  // that slipped past the allowlist check.
-  const images = Array.isArray(body.images)
-    ? (body.images as ChatImageAttachment[]).map((img) => ({
-        ...img,
-        mimeType: img.mimeType.toLowerCase(),
-      }))
-    : undefined;
-  return {
-    prompt: body.text.trim(),
-    channelType,
-    images,
-  };
-}
-
 function parseBoundedLimit(rawLimit: string | null, fallback = 15): number {
-  return parseClampedInteger(rawLimit, {
-    min: 1,
-    max: 50,
-    fallback,
-  });
+  if (!rawLimit) return fallback;
+  const parsed = Number.parseInt(rawLimit, 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(Math.max(parsed, 1), 50);
 }
 
 interface GitHubRepoListIntent {
@@ -3698,7 +3125,7 @@ async function tryGitHubRepoListShortcut(params: {
 
 /**
  * Key patterns that indicate a value is sensitive and must be redacted.
- * Matches against the property key at unknown nesting depth.  Aligned with
+ * Matches against the property key at any nesting depth.  Aligned with
  * SENSITIVE_PATTERNS in src/config/schema.ts so every field the UI marks
  * as sensitive is also redacted in the API response.
  *
@@ -3744,7 +3171,7 @@ function cloneWithoutBlockedObjectKeys<T>(value: T): T {
 }
 
 /**
- * Replace unknown non-empty value with "[REDACTED]".  For arrays, each string
+ * Replace any non-empty value with "[REDACTED]".  For arrays, each string
  * element is individually redacted; for objects, all string leaves are
  * redacted.  Non-string primitives (booleans, numbers) are replaced with
  * the string "[REDACTED]" to avoid leaking e.g. numeric PINs.
@@ -3800,19 +3227,13 @@ function redactConfigSecrets(
   return redactDeep(config) as Record<string, unknown>;
 }
 
-function isRedactedSecretValue(value: unknown): boolean {
-  return (
-    typeof value === "string" && value.trim().toUpperCase() === "[REDACTED]"
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Skill-ID path-traversal guard
 // ---------------------------------------------------------------------------
 
 /**
  * Validate that a user-supplied skill ID is safe to use in filesystem paths.
- * Rejects IDs containing path separators, ".." sequences, or unknown characters
+ * Rejects IDs containing path separators, ".." sequences, or any characters
  * outside the safe set used by the marketplace (`safeName()` in
  * skill-marketplace.ts).  Returns `null` and sends a 400 response if the
  * ID is invalid.
@@ -3836,313 +3257,6 @@ function validateSkillId(
   return skillId;
 }
 
-const ALLOWED_MCP_CONFIG_TYPES = new Set([
-  "stdio",
-  "http",
-  "streamable-http",
-  "sse",
-]);
-
-const ALLOWED_MCP_COMMANDS = new Set([
-  "npx",
-  "node",
-  "bun",
-  "bunx",
-  "deno",
-  "python",
-  "python3",
-  "uvx",
-  "uv",
-  "docker",
-  "podman",
-]);
-
-const BLOCKED_MCP_ENV_KEYS = new Set([
-  "LD_PRELOAD",
-  "LD_LIBRARY_PATH",
-  "DYLD_INSERT_LIBRARIES",
-  "DYLD_LIBRARY_PATH",
-  "NODE_OPTIONS",
-  "NODE_EXTRA_CA_CERTS",
-  "ELECTRON_RUN_AS_NODE",
-  "PATH",
-  "HOME",
-  "SHELL",
-]);
-
-const INTERPRETER_MCP_COMMANDS = new Set([
-  "node",
-  "bun",
-  "deno",
-  "python",
-  "python3",
-  "uv",
-]);
-
-const PACKAGE_RUNNER_MCP_COMMANDS = new Set(["npx", "bunx", "uvx"]);
-const CONTAINER_MCP_COMMANDS = new Set(["docker", "podman"]);
-
-const BLOCKED_INTERPRETER_FLAGS = new Set([
-  "-e",
-  "--eval",
-  "-p",
-  "--print",
-  "-r",
-  "--require",
-  "--import",
-  "--loader",
-  "--experimental-loader",
-  "--preload",
-  "-c",
-  "-m",
-]);
-
-const BLOCKED_PACKAGE_RUNNER_FLAGS = new Set(["-c", "--call", "-e", "--eval"]);
-const BLOCKED_CONTAINER_FLAGS = new Set([
-  "--privileged",
-  "-v",
-  "--volume",
-  "--mount",
-  "--cap-add",
-  "--security-opt",
-  "--pid",
-  "--network",
-]);
-const BLOCKED_DENO_SUBCOMMANDS = new Set(["eval"]);
-const BLOCKED_MCP_REMOTE_HOST_LITERALS = new Set([
-  "localhost",
-  "metadata.google.internal",
-]);
-
-function normalizeMcpCommand(command: string): string {
-  const baseName = command.replace(/\\/g, "/").split("/").pop() ?? "";
-  return baseName.replace(/\.(exe|cmd|bat)$/i, "").toLowerCase();
-}
-
-function hasBlockedFlag(
-  args: string[],
-  blockedFlags: ReadonlySet<string>,
-): string | null {
-  for (const arg of args) {
-    const trimmed = arg.trim();
-    for (const flag of blockedFlags) {
-      if (trimmed === flag || trimmed.startsWith(`${flag}=`)) {
-        return flag;
-      }
-      // Block attached short-option forms like -cpayload or -epayload.
-      if (
-        /^-[A-Za-z]$/.test(flag) &&
-        trimmed.startsWith(flag) &&
-        trimmed.length > flag.length
-      ) {
-        return flag;
-      }
-    }
-  }
-  return null;
-}
-
-function firstPositionalArg(args: string[]): string | null {
-  for (const arg of args) {
-    const trimmed = arg.trim();
-    if (!trimmed || trimmed === "--" || trimmed.startsWith("-")) continue;
-    return trimmed.toLowerCase();
-  }
-  return null;
-}
-
-async function resolveMcpRemoteUrlRejection(
-  rawUrl: string,
-): Promise<string | null> {
-  let parsed: URL;
-  try {
-    parsed = new URL(rawUrl);
-  } catch {
-    return "URL must be a valid absolute URL";
-  }
-
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    return "URL must use http:// or https://";
-  }
-
-  const hostname = normalizeHostLike(parsed.hostname);
-  if (!hostname) return "URL hostname is required";
-
-  if (
-    BLOCKED_MCP_REMOTE_HOST_LITERALS.has(hostname) ||
-    hostname.endsWith(".localhost") ||
-    hostname.endsWith(".local")
-  ) {
-    return `URL host "${hostname}" is blocked for security reasons`;
-  }
-
-  if (net.isIP(hostname)) {
-    if (isBlockedPrivateOrLinkLocalIp(hostname)) {
-      return `URL host "${hostname}" is blocked for security reasons`;
-    }
-    return null;
-  }
-
-  let addresses: Array<{ address: string }>;
-  try {
-    const resolved = await dnsLookup(hostname, { all: true });
-    addresses = Array.isArray(resolved) ? resolved : [resolved];
-  } catch {
-    return `Could not resolve URL host "${hostname}"`;
-  }
-
-  if (addresses.length === 0) {
-    return `Could not resolve URL host "${hostname}"`;
-  }
-
-  for (const entry of addresses) {
-    if (isBlockedPrivateOrLinkLocalIp(entry.address)) {
-      return `URL host "${hostname}" resolves to blocked address ${entry.address}`;
-    }
-  }
-
-  return null;
-}
-
-export async function validateMcpServerConfig(
-  config: Record<string, unknown>,
-): Promise<string | null> {
-  const configType = config.type;
-  if (
-    typeof configType !== "string" ||
-    !ALLOWED_MCP_CONFIG_TYPES.has(configType)
-  ) {
-    return `Invalid config type. Must be one of: ${[...ALLOWED_MCP_CONFIG_TYPES].join(", ")}`;
-  }
-
-  if (configType === "stdio") {
-    const command =
-      typeof config.command === "string" ? config.command.trim() : "";
-    if (!command) {
-      return "Command is required for stdio servers";
-    }
-    if (!/^[A-Za-z0-9._-]+$/.test(command)) {
-      return "Command must be a bare executable name without path separators";
-    }
-
-    const normalizedCommand = normalizeMcpCommand(command);
-    if (!ALLOWED_MCP_COMMANDS.has(normalizedCommand)) {
-      return (
-        `Command "${command}" is not allowed. ` +
-        `Allowed commands: ${[...ALLOWED_MCP_COMMANDS].join(", ")}`
-      );
-    }
-
-    if (config.args !== undefined) {
-      if (!Array.isArray(config.args)) {
-        return "args must be an array of strings";
-      }
-      for (const arg of config.args) {
-        if (typeof arg !== "string") {
-          return "Each arg must be a string";
-        }
-      }
-      const args = config.args as string[];
-      if (INTERPRETER_MCP_COMMANDS.has(normalizedCommand)) {
-        const blocked = hasBlockedFlag(args, BLOCKED_INTERPRETER_FLAGS);
-        if (blocked) {
-          return `Flag "${blocked}" is not allowed for ${normalizedCommand} MCP servers`;
-        }
-      }
-      if (PACKAGE_RUNNER_MCP_COMMANDS.has(normalizedCommand)) {
-        const blocked = hasBlockedFlag(args, BLOCKED_PACKAGE_RUNNER_FLAGS);
-        if (blocked) {
-          return `Flag "${blocked}" is not allowed for ${normalizedCommand} MCP servers`;
-        }
-      }
-      if (CONTAINER_MCP_COMMANDS.has(normalizedCommand)) {
-        const blocked = hasBlockedFlag(args, BLOCKED_CONTAINER_FLAGS);
-        if (blocked) {
-          return `Flag "${blocked}" is not allowed for ${normalizedCommand} MCP servers`;
-        }
-      }
-      if (normalizedCommand === "deno") {
-        const subcommand = firstPositionalArg(args);
-        if (subcommand && BLOCKED_DENO_SUBCOMMANDS.has(subcommand)) {
-          return `Subcommand "${subcommand}" is not allowed for deno MCP servers`;
-        }
-      }
-    }
-  } else {
-    const url = typeof config.url === "string" ? config.url.trim() : "";
-    if (!url) {
-      return "URL is required for remote servers";
-    }
-    const urlRejection = await resolveMcpRemoteUrlRejection(url);
-    if (urlRejection) return urlRejection;
-  }
-
-  if (config.env !== undefined) {
-    if (
-      typeof config.env !== "object" ||
-      config.env === null ||
-      Array.isArray(config.env)
-    ) {
-      return "env must be a plain object of string key-value pairs";
-    }
-
-    for (const [key, value] of Object.entries(config.env)) {
-      if (isBlockedObjectKey(key)) {
-        return `env key "${key}" is blocked for security reasons`;
-      }
-      if (typeof value !== "string") {
-        return `env.${key} must be a string`;
-      }
-      if (BLOCKED_MCP_ENV_KEYS.has(key.toUpperCase())) {
-        return `env variable "${key}" is not allowed for security reasons`;
-      }
-    }
-  }
-
-  if (config.cwd !== undefined && typeof config.cwd !== "string") {
-    return "cwd must be a string";
-  }
-
-  if (config.timeoutInMillis !== undefined) {
-    if (
-      typeof config.timeoutInMillis !== "number" ||
-      !Number.isFinite(config.timeoutInMillis) ||
-      config.timeoutInMillis < 0
-    ) {
-      return "timeoutInMillis must be a non-negative number";
-    }
-  }
-
-  return null;
-}
-
-export async function resolveMcpServersRejection(
-  servers: Record<string, unknown>,
-): Promise<string | null> {
-  for (const [serverName, serverConfig] of Object.entries(servers)) {
-    if (isBlockedObjectKey(serverName)) {
-      return `Invalid server name: "${serverName}"`;
-    }
-    if (
-      !serverConfig ||
-      typeof serverConfig !== "object" ||
-      Array.isArray(serverConfig)
-    ) {
-      return `Server "${serverName}" config must be a JSON object`;
-    }
-    if (hasBlockedObjectKeyDeep(serverConfig)) {
-      return `Server "${serverName}" contains blocked object keys`;
-    }
-    const configError = await validateMcpServerConfig(
-      serverConfig as Record<string, unknown>,
-    );
-    if (configError) {
-      return `Server "${serverName}": ${configError}`;
-    }
-  }
-  return null;
-}
-
 // ---------------------------------------------------------------------------
 // Onboarding helpers
 // ---------------------------------------------------------------------------
@@ -4155,7 +3269,7 @@ import {
   STYLE_PRESETS,
 } from "../onboarding-presets.js";
 
-import { pickRandomNames } from "../runtime/onboarding-names";
+import { pickRandomNames } from "../runtime/onboarding-names.js";
 
 const LEGACY_ALICE_STYLE_MARKERS = [
   "playful, clever, a little mischievous",
@@ -4228,10 +3342,10 @@ function getProviderOptions(): Array<{
       id: "pi-ai",
       name: "Pi Credentials (pi-ai)",
       envKey: null,
-      pluginName: "@elizaos/plugin-pi-ai",
+      pluginName: "@mariozechner/pi-ai",
       keyPrefix: null,
       description:
-        "Use credentials from ~/.pi/agent/auth.json (API keys or OAuth).",
+        "Use pi auth (~/.pi/agent/auth.json) for API keys / OAuth (no Milaidy API key required).",
     },
     {
       id: "anthropic",
@@ -4260,7 +3374,7 @@ function getProviderOptions(): Array<{
     {
       id: "gemini",
       name: "Gemini",
-      envKey: "GOOGLE_GENERATIVE_AI_API_KEY",
+      envKey: "GOOGLE_API_KEY",
       pluginName: "@elizaos/plugin-google-genai",
       keyPrefix: null,
       description: "Google's Gemini models.",
@@ -4710,7 +3824,7 @@ const PROVIDER_ENV_KEYS: Record<
   },
   "google-genai": {
     envKey: "GOOGLE_GENERATIVE_AI_API_KEY",
-    altEnvKeys: ["GOOGLE_API_KEY", "GEMINI_API_KEY"],
+    altEnvKeys: ["GOOGLE_API_KEY"],
   },
   ollama: { envKey: "OLLAMA_BASE_URL" },
   "vercel-ai-gateway": {
@@ -4755,7 +3869,7 @@ function writeProviderCache(cache: ProviderCache): void {
 
 // ── Provider fetchers ────────────────────────────────────────────────────
 
-/** Fetch models from unknown provider's /v1/models endpoint (standard REST). */
+/** Fetch models from any provider's /v1/models endpoint (standard REST). */
 async function fetchModelsREST(
   providerId: string,
   apiKey: string,
@@ -4852,11 +3966,8 @@ async function fetchGoogleModels(apiKey: string): Promise<CachedModel[]> {
 
 async function fetchOllamaModels(baseUrl: string): Promise<CachedModel[]> {
   try {
-    let urlStr = baseUrl.replace(/\/+$/, "");
-    if (!urlStr.startsWith("http://") && !urlStr.startsWith("https://")) {
-      urlStr = `http://${urlStr}`;
-    }
-    const res = await fetch(`${urlStr}/api/tags`);
+    const url = baseUrl.replace(/\/+$/, "");
+    const res = await fetch(`${url}/api/tags`);
     if (!res.ok) return [];
     const data = (await res.json()) as { models?: Array<{ name: string }> };
     return (data.models ?? []).map((m) => ({
@@ -4962,7 +4073,7 @@ async function fetchProviderModels(
     case "google-genai":
       return fetchGoogleModels(apiKey);
     case "ollama":
-      return fetchOllamaModels(baseUrl || "http://localhost:11434");
+      return fetchOllamaModels(apiKey);
     case "openrouter":
       return fetchOpenRouterModels(apiKey);
     case "openai":
@@ -5052,6 +4163,45 @@ async function getOrFetchAllProviders(
   return result;
 }
 
+function getPiModelOptions(): Array<{
+  id: string;
+  name: string;
+  provider: string;
+  description: string;
+}> {
+  const options: Array<{
+    id: string;
+    name: string;
+    provider: string;
+    description: string;
+  }> = [];
+
+  try {
+    for (const providerId of piAi.getProviders()) {
+      for (const model of piAi.getModels(providerId)) {
+        const id = `${model.provider}/${model.id}`;
+        options.push({
+          id,
+          name: model.id,
+          provider: model.provider,
+          description: model.api,
+        });
+
+        // Safety cap in case a provider returns an unexpectedly huge list.
+        if (options.length >= 2000) {
+          return options;
+        }
+      }
+    }
+  } catch (err) {
+    logger.warn(
+      `[milaidy-api] Failed to enumerate pi-ai models: ${String(err)}`,
+    );
+  }
+
+  return options;
+}
+
 function getInventoryProviderOptions(): Array<{
   id: string;
   name: string;
@@ -5131,54 +4281,6 @@ function getInventoryProviderOptions(): Array<{
   ];
 }
 
-function ensureWalletKeysInEnvAndConfig(config: MiladyConfig): boolean {
-  const missingEvm =
-    typeof process.env.EVM_PRIVATE_KEY !== "string" ||
-    !process.env.EVM_PRIVATE_KEY.trim();
-  const missingSolana =
-    typeof process.env.SOLANA_PRIVATE_KEY !== "string" ||
-    !process.env.SOLANA_PRIVATE_KEY.trim();
-
-  if (!missingEvm && !missingSolana) {
-    return false;
-  }
-
-  try {
-    const walletKeys = generateWalletKeys();
-    if (
-      !config.env ||
-      typeof config.env !== "object" ||
-      Array.isArray(config.env)
-    ) {
-      config.env = {};
-    }
-    const envConfig = config.env as Record<string, string>;
-
-    if (missingEvm) {
-      envConfig.EVM_PRIVATE_KEY = walletKeys.evmPrivateKey;
-      process.env.EVM_PRIVATE_KEY = walletKeys.evmPrivateKey;
-      logger.info(
-        `[milady-api] Generated EVM wallet: ${walletKeys.evmAddress}`,
-      );
-    }
-
-    if (missingSolana) {
-      envConfig.SOLANA_PRIVATE_KEY = walletKeys.solanaPrivateKey;
-      process.env.SOLANA_PRIVATE_KEY = walletKeys.solanaPrivateKey;
-      logger.info(
-        `[milady-api] Generated Solana wallet: ${walletKeys.solanaAddress}`,
-      );
-    }
-
-    return true;
-  } catch (err) {
-    logger.warn(
-      `[milady-api] Failed to generate wallet keys: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    return false;
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Route handler
 // ---------------------------------------------------------------------------
@@ -5187,40 +4289,7 @@ interface RequestContext {
   onRestart: (() => Promise<AgentRuntime | null>) | null;
 }
 
-type TrainingServiceLike = TrainingServiceWithRuntime;
-
-type TrainingServiceCtor = new (options: {
-  getRuntime: () => AgentRuntime | null;
-  getConfig: () => MiladyConfig;
-  setConfig: (nextConfig: MiladyConfig) => void;
-}) => TrainingServiceLike;
-
-async function resolveTrainingServiceCtor(): Promise<TrainingServiceCtor | null> {
-  const candidates = [
-    "../services/training-service",
-    "@elizaos/plugin-training",
-  ] as const;
-
-  for (const specifier of candidates) {
-    try {
-      const loaded = (await import(/* @vite-ignore */ specifier)) as Record<
-        string,
-        unknown
-      >;
-      const ctor = loaded.TrainingService;
-      if (typeof ctor === "function") {
-        return ctor as TrainingServiceCtor;
-      }
-    } catch {
-      // Keep trying fallbacks.
-    }
-  }
-
-  return null;
-}
-
-const LOCAL_ORIGIN_RE =
-  /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|\[0:0:0:0:0:0:0:1\])(:\d+)?$/i;
+const LOCAL_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
 const APP_ORIGIN_RE =
   /^(capacitor|capacitor-electron|app):\/\/(localhost|-)?$/i;
 
@@ -5230,7 +4299,7 @@ function resolveCorsOrigin(origin?: string): string | null {
   if (!trimmed) return null;
 
   // Explicit allowlist via env (comma-separated)
-  const extra = process.env.MILADY_ALLOWED_ORIGINS;
+  const extra = process.env.MILAIDY_ALLOWED_ORIGINS;
   if (extra) {
     const allow = extra
       .split(",")
@@ -5241,7 +4310,7 @@ function resolveCorsOrigin(origin?: string): string | null {
 
   if (LOCAL_ORIGIN_RE.test(trimmed)) return trimmed;
   if (APP_ORIGIN_RE.test(trimmed)) return trimmed;
-  if (trimmed === "null" && process.env.MILADY_ALLOW_NULL_ORIGIN === "1")
+  if (trimmed === "null" && process.env.MILAIDY_ALLOW_NULL_ORIGIN === "1")
     return "null";
   return null;
 }
@@ -5265,15 +4334,9 @@ function applyCors(
     );
     res.setHeader(
       "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, X-Milady-Token, X-Api-Key, X-Milady-Export-Token, X-Milady-Client-Id, X-Milady-Terminal-Token",
+      "Content-Type, Authorization, X-Milaidy-Token, X-Api-Key, X-Milaidy-Export-Token",
     );
   }
-
-  // Security headers
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-Frame-Options", "DENY");
-  res.setHeader("X-XSS-Protection", "1; mode=block");
-  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
 
   return true;
 }
@@ -5282,17 +4345,16 @@ const PAIRING_TTL_MS = 10 * 60 * 1000;
 const PAIRING_WINDOW_MS = 10 * 60 * 1000;
 const PAIRING_MAX_ATTEMPTS = 5;
 const PAIRING_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const API_RESTART_EXIT_CODE = 75;
 
 let pairingCode: string | null = null;
-/** Guard against concurrent provider switch requests (P0 §3). */
-let providerSwitchInProgress = false;
 let pairingExpiresAt = 0;
 const pairingAttempts = new Map<string, { count: number; resetAt: number }>();
 
 function pairingEnabled(): boolean {
   return (
-    Boolean(process.env.MILADY_API_TOKEN?.trim()) &&
-    process.env.MILADY_PAIRING_DISABLED !== "1"
+    Boolean(process.env.MILAIDY_API_TOKEN?.trim()) &&
+    process.env.MILAIDY_PAIRING_DISABLED !== "1"
   );
 }
 
@@ -5316,7 +4378,7 @@ function ensurePairingCode(): string | null {
     pairingCode = generatePairingCode();
     pairingExpiresAt = now + PAIRING_TTL_MS;
     logger.warn(
-      `[milady-api] Pairing code: ${pairingCode} (valid for 10 minutes)`,
+      `[milaidy-api] Pairing code: ${pairingCode} (valid for 10 minutes)`,
     );
   }
   return pairingCode;
@@ -5328,10 +4390,6 @@ function rateLimitPairing(ip: string | null): boolean {
   }
   const key = ip ?? "unknown";
   const now = Date.now();
-
-  // Lazy sweep: evict expired entries when map grows beyond 100
-  sweepExpiredEntries(pairingAttempts, now, 100);
-
   const current = pairingAttempts.get(key);
   if (!current || now > current.resetAt) {
     pairingAttempts.set(key, { count: 1, resetAt: now + PAIRING_WINDOW_MS });
@@ -5353,8 +4411,8 @@ function extractAuthToken(req: http.IncomingMessage): string | null {
   }
 
   const header =
-    (typeof req.headers["x-milady-token"] === "string" &&
-      req.headers["x-milady-token"]) ||
+    (typeof req.headers["x-milaidy-token"] === "string" &&
+      req.headers["x-milaidy-token"]) ||
     (typeof req.headers["x-api-key"] === "string" && req.headers["x-api-key"]);
   if (typeof header === "string" && header.trim()) return header.trim();
 
@@ -5384,38 +4442,14 @@ function tokenMatches(expected: string, provided: string): boolean {
 }
 
 function isLoopbackBindHost(host: string): boolean {
-  let normalized = host.trim().toLowerCase();
-
-  if (!normalized) return true;
-
-  // Allow users to provide full URLs by mistake (e.g. http://localhost:2138)
-  if (normalized.startsWith("http://") || normalized.startsWith("https://")) {
-    try {
-      const parsed = new URL(normalized);
-      normalized = parsed.hostname.toLowerCase();
-    } catch {
-      // Fall through and parse as raw host value.
-    }
-  }
-
-  // [::1]:2138 -> ::1
-  const bracketedIpv6 = /^\[([^\]]+)\](?::\d+)?$/.exec(normalized);
-  if (bracketedIpv6?.[1]) {
-    normalized = bracketedIpv6[1];
-  } else {
-    // localhost:2138 -> localhost, 127.0.0.1:2138 -> 127.0.0.1
-    const singleColonHostPort = /^([^:]+):(\d+)$/.exec(normalized);
-    if (singleColonHostPort?.[1]) {
-      normalized = singleColonHostPort[1];
-    }
-  }
-
-  normalized = normalized.replace(/^\[|\]$/g, "");
+  const normalized = host
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "");
   if (!normalized) return true;
   if (
     normalized === "localhost" ||
     normalized === "::1" ||
-    normalized === "0:0:0:0:0:0:0:1" ||
     normalized === "::ffff:127.0.0.1"
   ) {
     return true;
@@ -5424,25 +4458,24 @@ function isLoopbackBindHost(host: string): boolean {
   return false;
 }
 
-export function ensureApiTokenForBindHost(host: string): void {
-  const token = process.env.MILADY_API_TOKEN?.trim();
+function ensureApiTokenForBindHost(host: string): void {
+  const token = process.env.MILAIDY_API_TOKEN?.trim();
   if (token) return;
   if (isLoopbackBindHost(host)) return;
 
   const generated = crypto.randomBytes(32).toString("hex");
-  process.env.MILADY_API_TOKEN = generated;
+  process.env.MILAIDY_API_TOKEN = generated;
 
   logger.warn(
-    `[milady-api] MILADY_API_BIND=${host} is non-loopback and MILADY_API_TOKEN is unset.`,
+    `[milaidy-api] MILAIDY_API_BIND=${host} is non-loopback and MILAIDY_API_TOKEN is unset.`,
   );
-  const tokenFingerprint = `${generated.slice(0, 4)}...${generated.slice(-4)}`;
   logger.warn(
-    `[milady-api] Generated temporary MILADY_API_TOKEN (${tokenFingerprint}) for this process. Set MILADY_API_TOKEN explicitly to override.`,
+    `[milaidy-api] Generated temporary MILAIDY_API_TOKEN=${generated}. Set MILAIDY_API_TOKEN explicitly to override.`,
   );
 }
 
 function isAuthorized(req: http.IncomingMessage): boolean {
-  const expected = process.env.MILADY_API_TOKEN?.trim();
+  const expected = process.env.MILAIDY_API_TOKEN?.trim();
   if (!expected) return true;
   const provided = extractAuthToken(req);
   if (!provided) return false;
@@ -5507,18 +4540,18 @@ export function resolveWalletExportRejection(
     };
   }
 
-  const expected = process.env.MILADY_WALLET_EXPORT_TOKEN?.trim();
+  const expected = process.env.MILAIDY_WALLET_EXPORT_TOKEN?.trim();
   if (!expected) {
     return {
       status: 403,
       reason:
-        "Wallet export is disabled. Set MILADY_WALLET_EXPORT_TOKEN to enable secure exports.",
+        "Wallet export is disabled. Set MILAIDY_WALLET_EXPORT_TOKEN to enable secure exports.",
     };
   }
 
   const headerToken =
-    typeof req.headers["x-milady-export-token"] === "string"
-      ? req.headers["x-milady-export-token"].trim()
+    typeof req.headers["x-milaidy-export-token"] === "string"
+      ? req.headers["x-milaidy-export-token"].trim()
       : "";
   const bodyToken =
     typeof body.exportToken === "string" ? body.exportToken.trim() : "";
@@ -5528,7 +4561,7 @@ export function resolveWalletExportRejection(
     return {
       status: 401,
       reason:
-        "Missing export token. Provide X-Milady-Export-Token header or exportToken in request body.",
+        "Missing export token. Provide X-Milaidy-Export-Token header or exportToken in request body.",
     };
   }
 
@@ -5539,66 +4572,7 @@ export function resolveWalletExportRejection(
   return null;
 }
 
-interface TerminalRunRequestBody {
-  terminalToken?: string;
-}
-
-export interface TerminalRunRejection {
-  status: 401 | 403;
-  reason: string;
-}
-
-export function resolveTerminalRunRejection(
-  req: http.IncomingMessage,
-  body: TerminalRunRequestBody,
-): TerminalRunRejection | null {
-  const expected = process.env.MILADY_TERMINAL_RUN_TOKEN?.trim();
-  const apiTokenEnabled = Boolean(process.env.MILADY_API_TOKEN?.trim());
-
-  // Compatibility mode: local loopback sessions without API token keep
-  // existing behavior unless an explicit terminal token is configured.
-  if (!expected && !apiTokenEnabled) {
-    return null;
-  }
-
-  if (!expected) {
-    return {
-      status: 403,
-      reason:
-        "Terminal run is disabled for token-authenticated API sessions. Set MILADY_TERMINAL_RUN_TOKEN to enable command execution.",
-    };
-  }
-
-  const headerToken =
-    typeof req.headers["x-milady-terminal-token"] === "string"
-      ? req.headers["x-milady-terminal-token"].trim()
-      : "";
-  const bodyToken =
-    typeof body.terminalToken === "string" ? body.terminalToken.trim() : "";
-  const provided = headerToken || bodyToken;
-
-  if (!provided) {
-    return {
-      status: 401,
-      reason:
-        "Missing terminal token. Provide X-Milady-Terminal-Token header or terminalToken in request body.",
-    };
-  }
-
-  if (!tokenMatches(expected, provided)) {
-    return {
-      status: 401,
-      reason: "Invalid terminal token.",
-    };
-  }
-
-  return null;
-}
-
 function extractWsQueryToken(url: URL): string | null {
-  const allowQueryToken = process.env.MILADY_ALLOW_WS_QUERY_TOKEN === "1";
-  if (!allowQueryToken) return null;
-
   const token =
     url.searchParams.get("token") ??
     url.searchParams.get("apiKey") ??
@@ -5610,7 +4584,7 @@ function isWebSocketAuthorized(
   request: http.IncomingMessage,
   url: URL,
 ): boolean {
-  const expected = process.env.MILADY_API_TOKEN?.trim();
+  const expected = process.env.MILAIDY_API_TOKEN?.trim();
   if (!expected) return true;
 
   const headerToken = extractAuthToken(request);
@@ -5648,7 +4622,7 @@ export function resolveWebSocketUpgradeRejection(
   return null;
 }
 
-const RESET_STATE_ALLOWED_SEGMENTS = new Set([".milady", "milady"]);
+const RESET_STATE_ALLOWED_SEGMENTS = new Set([".milaidy", "milaidy"]);
 
 function hasAllowedResetSegment(resolvedState: string): boolean {
   return resolvedState
@@ -6261,20 +5235,28 @@ function serializeForRuntimeDebug(
 // ── Autonomy → User message routing ──────────────────────────────────
 
 /**
- * Route non-conversation text output to the user's active conversation.
+ * Route non-conversation output to the user's active conversation.
  * Stores the message as a Memory in the conversation room and broadcasts
  * a `proactive-message` WS event to the frontend.
+ *
+ * @param source - Channel label shown in the UI (e.g. "autonomy", "telegram").
  */
-async function routeAutonomyTextToUser(
+async function routeAutonomyToUser(
   state: ServerState,
-  responseText: string,
+  responseMessages: import("@elizaos/core").Memory[],
   source = "autonomy",
 ): Promise<void> {
   const runtime = state.runtime;
   if (!runtime) return;
 
-  const normalizedText = responseText.trim();
-  if (!normalizedText) return;
+  // Collect response text from all response messages
+  const texts: string[] = [];
+  for (const mem of responseMessages) {
+    const text = mem.content?.text?.trim();
+    if (text) texts.push(text);
+  }
+  if (texts.length === 0) return;
+  const responseText = texts.join("\n\n");
 
   // Find target conversation (active, or most recent)
   let conv: ConversationMeta | undefined;
@@ -6297,7 +5279,7 @@ async function routeAutonomyTextToUser(
     entityId: runtime.agentId,
     roomId: conv.roomId,
     content: {
-      text: normalizedText,
+      text: responseText,
       source,
     },
   });
@@ -6311,7 +5293,7 @@ async function routeAutonomyTextToUser(
     message: {
       id: agentMessage.id ?? `auto-${Date.now()}`,
       role: "assistant",
-      text: normalizedText,
+      text: responseText,
       timestamp: Date.now(),
       source,
     },
@@ -6319,88 +5301,59 @@ async function routeAutonomyTextToUser(
 }
 
 /**
- * Route non-conversation agent events into the active user chat.
- * This avoids monkey-patching the message service and relies on explicit
- * event stream plumbing from AGENT_EVENT.
+ * Monkey-patch `runtime.messageService.handleMessage` to intercept
+ * autonomy output and route it to the user's active conversation.
+ * Follows the same pattern as phetta-companion-plugin.ts:222-280.
  */
-async function maybeRouteAutonomyEventToConversation(
-  state: ServerState,
-  event: AgentEventPayloadLike,
-): Promise<void> {
-  if (event.stream !== "assistant") return;
+function patchMessageServiceForAutonomy(state: ServerState): void {
+  const runtime = state.runtime;
+  if (!runtime?.messageService) return;
 
-  const payload =
-    event.data && typeof event.data === "object"
-      ? (event.data as Record<string, unknown>)
-      : null;
-  const text = typeof payload?.text === "string" ? payload.text.trim() : "";
-  if (!text) return;
+  const svc = runtime.messageService as unknown as {
+    handleMessage: (
+      rt: import("@elizaos/core").IAgentRuntime,
+      message: import("@elizaos/core").Memory,
+      callback?: (
+        content: Content,
+      ) => Promise<import("@elizaos/core").Memory[]>,
+      options?: import("@elizaos/core").MessageProcessingOptions,
+    ) => Promise<import("@elizaos/core").MessageProcessingResult>;
+    __milaidyAutonomyPatched?: boolean;
+  };
 
-  const hasExplicitSource =
-    typeof payload?.source === "string" && payload.source.trim().length > 0;
-  const source = hasExplicitSource
-    ? (payload?.source as string).trim()
-    : "autonomy";
+  if (svc.__milaidyAutonomyPatched) return;
+  svc.__milaidyAutonomyPatched = true;
 
-  // Regular user conversation turns should never be re-routed as proactive.
-  // Some AGENT_EVENT payloads may omit roomId metadata, so rely on source too.
-  if (source === "client_chat") return;
-  if (!hasExplicitSource && !event.roomId) return;
+  const orig = svc.handleMessage.bind(svc);
 
-  // Keep regular conversation messages in their own room only.
-  if (
-    event.roomId &&
-    Array.from(state.conversations.values()).some(
-      (c) => c.roomId === event.roomId,
-    )
-  ) {
-    return;
-  }
+  svc.handleMessage = async (
+    rt: import("@elizaos/core").IAgentRuntime,
+    message: import("@elizaos/core").Memory,
+    callback?: (content: Content) => Promise<import("@elizaos/core").Memory[]>,
+    options?: import("@elizaos/core").MessageProcessingOptions,
+  ): Promise<import("@elizaos/core").MessageProcessingResult> => {
+    const result = await orig(rt, message, callback, options);
 
-  await routeAutonomyTextToUser(state, text, source);
-}
+    // Detect non-conversation messages (autonomy, background tasks, etc.)
+    const isFromConversation = Array.from(state.conversations.values()).some(
+      (c) => c.roomId === message.roomId,
+    );
 
-// Rate limiter middleware instance (created lazily)
-let _rateLimiter: RateLimitMiddleware | null = null;
+    if (!isFromConversation && result?.responseMessages?.length > 0) {
+      // Forward to user's active conversation (fire-and-forget)
+      const rawSource = message.content?.source;
+      const source = typeof rawSource === "string" ? rawSource : "autonomy";
+      void routeAutonomyToUser(state, result.responseMessages, source).catch(
+        (err) => {
+          logger.warn(
+            `[autonomy-route] Failed to route proactive output: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        },
+      );
+    }
 
-function getRateLimiter(): RateLimitMiddleware {
-  if (!_rateLimiter) {
-    _rateLimiter = createRateLimitMiddleware({
-      // Skip rate limiting for health checks
-      skipPaths: ["/api/health", "/api/status", "/health", "/health/live", "/health/ready"],
-    });
-  }
-  return _rateLimiter;
-}
-
-// Health check handler (created lazily per state)
-let _healthHandler: ReturnType<typeof createHealthHandler> | null = null;
-let _healthHandlerState: ServerState | null = null;
-
-function getHealthHandler(state: ServerState): ReturnType<typeof createHealthHandler> {
-  // Recreate if state changed (e.g., runtime updated)
-  if (!_healthHandler || _healthHandlerState !== state) {
-    const checks = createHealthChecks({
-      runtime: state.runtime
-        ? {
-            getLoadedPlugins: () =>
-              state.plugins
-                .filter((p) => p.enabled && p.isActive)
-                .map((p) => ({ name: p.name })),
-            getFailedPlugins: () =>
-              state.plugins
-                .filter((p) => p.enabled && !p.isActive && p.validationErrors.length > 0)
-                .map((p) => ({
-                  name: p.name,
-                  error: p.validationErrors.map((e) => e.message).join("; ") || "Failed to load",
-                })),
-          }
-        : undefined,
-    });
-    _healthHandler = createHealthHandler(checks);
-    _healthHandlerState = state;
-  }
-  return _healthHandler;
+    return result;
+  };
 }
 
 // Rate limiter middleware instance (created lazily)
@@ -6486,24 +5439,57 @@ async function handleRequest(
   const registryService = state.registryService;
   const dropService = state.dropService;
 
-  const scheduleRuntimeRestart = (reason: string): void => {
-    if (state.pendingRestartReasons.length >= 50) {
-      // Prevent unbounded growth — keep only first entry + latest
-      state.pendingRestartReasons.splice(
-        1,
-        state.pendingRestartReasons.length - 1,
+  const scheduleRuntimeRestart = (reason: string, delayMs = 300): void => {
+    const restart = () => {
+      if (ctx?.onRestart) {
+        logger.info(`[milaidy-api] Triggering runtime restart (${reason})...`);
+        Promise.resolve(ctx.onRestart())
+          .then((newRuntime) => {
+            if (!newRuntime) {
+              logger.warn("[milaidy-api] Runtime restart returned null");
+              return;
+            }
+            state.runtime = newRuntime;
+            state.chatConnectionReady = null;
+            state.chatConnectionPromise = null;
+            state.agentState = "running";
+            state.agentName = newRuntime.character.name ?? "Milaidy";
+            state.startedAt = Date.now();
+            logger.info("[milaidy-api] Runtime restarted successfully");
+            // Notify WebSocket clients so the UI can refresh
+            state.broadcastWs?.({
+              type: "status",
+              state: state.agentState,
+              agentName: state.agentName,
+              startedAt: state.startedAt,
+              restarted: true,
+            });
+          })
+          .catch((err) => {
+            logger.error(
+              `[milaidy-api] Runtime restart failed: ${err instanceof Error ? err.message : err}`,
+            );
+          });
+        return;
+      }
+
+      logger.info(
+        `[milaidy-api] No in-process restart handler; exiting for external restart (${reason})`,
       );
+      if (process.env.VITEST || process.env.NODE_ENV === "test") {
+        logger.info(
+          "[milaidy-api] Skipping process.exit during test execution",
+        );
+        return;
+      }
+      process.exit(API_RESTART_EXIT_CODE);
+    };
+
+    if (delayMs <= 0) {
+      restart();
+      return;
     }
-    if (!state.pendingRestartReasons.includes(reason)) {
-      state.pendingRestartReasons.push(reason);
-    }
-    logger.info(
-      `[milady-api] Restart required: ${reason} (${state.pendingRestartReasons.length} pending)`,
-    );
-    state.broadcastWs?.({
-      type: "restart-required",
-      reasons: [...state.pendingRestartReasons],
-    });
+    setTimeout(restart, delayMs);
   };
 
   const resolveHyperscapeApiBaseUrl = async (): Promise<string> => {
@@ -6514,6 +5500,22 @@ async function handleRequest(
     // Default to the local Hyperscape API server. Viewer URLs can point at a
     // client dev server (for example :3333) which does not expose API routes.
     return "http://localhost:5555";
+  };
+
+  const resolveHyperscapeAuthorizationHeader = (): string | null => {
+    const requestAuth =
+      typeof req.headers.authorization === "string"
+        ? req.headers.authorization.trim()
+        : "";
+    if (requestAuth) {
+      return requestAuth;
+    }
+
+    const envToken = process.env.HYPERSCAPE_AUTH_TOKEN?.trim();
+    if (!envToken) {
+      return null;
+    }
+    return /^Bearer\s+/i.test(envToken) ? envToken : `Bearer ${envToken}`;
   };
 
   const relayHyperscapeApi = async (
@@ -6564,7 +5566,7 @@ async function handleRequest(
     if (contentType && rawBody !== undefined) {
       outboundHeaders["Content-Type"] = contentType;
     }
-    const authorization = resolveHyperscapeAuthorizationHeader(req);
+    const authorization = resolveHyperscapeAuthorizationHeader();
     if (authorization) {
       outboundHeaders.Authorization = authorization;
     }
@@ -6655,282 +5657,46 @@ async function handleRequest(
     return;
   }
 
-  // ── POST /api/provider/switch ─────────────────────────────────────────
-  // Atomically switch the active AI provider.  Clears competing credentials
-  // and env vars so the runtime loads the correct plugin on restart.
-  if (method === "POST" && pathname === "/api/provider/switch") {
-    const body = await readJsonBody<{ provider: string; apiKey?: string }>(
-      req,
-      res,
-    );
+  // ── GET /api/auth/status ───────────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/auth/status") {
+    const required = Boolean(process.env.MILAIDY_API_TOKEN?.trim());
+    const enabled = pairingEnabled();
+    if (enabled) ensurePairingCode();
+    json(res, {
+      required,
+      pairingEnabled: enabled,
+      expiresAt: enabled ? pairingExpiresAt : null,
+    });
+    return;
+  }
+
+  // ── POST /api/auth/pair ────────────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/auth/pair") {
+    const body = await readJsonBody<{ code?: string }>(req, res);
     if (!body) return;
-    const provider = body.provider;
-    if (!provider || typeof provider !== "string") {
-      error(res, "Missing provider", 400);
+
+    const token = process.env.MILAIDY_API_TOKEN?.trim();
+    if (!token) {
+      error(res, "Pairing not enabled", 400);
+      return;
+    }
+    if (!pairingEnabled()) {
+      error(res, "Pairing disabled", 403);
+      return;
+    }
+    if (!rateLimitPairing(req.socket.remoteAddress ?? null)) {
+      error(res, "Too many attempts. Try again later.", 429);
       return;
     }
 
-    // P1 §7 — explicit provider allowlist
-    const VALID_PROVIDERS = new Set([
-      "elizacloud",
-      "pi-ai",
-      "openai-codex",
-      "openai-subscription",
-      "anthropic-subscription",
-      "openai",
-      "anthropic",
-      "deepseek",
-      "google",
-      "groq",
-      "xai",
-      "openrouter",
-    ]);
-    if (!VALID_PROVIDERS.has(provider)) {
-      error(res, "Invalid provider", 400);
-      return;
-    }
-
-    // P0 §3 — race guard: reject concurrent provider switch requests
-    if (providerSwitchInProgress) {
-      error(res, "Provider switch already in progress", 409);
-      return;
-    }
-    providerSwitchInProgress = true;
-
-    const config = state.config;
-    if (!config.cloud) config.cloud = {} as NonNullable<typeof config.cloud>;
-    if (!config.env) config.env = {};
-    const envCfg = config.env as Record<string, string>;
-
-    // Helper: clear cloud config & env vars
-    const clearCloud = () => {
-      (config.cloud as Record<string, unknown>).enabled = false;
-      delete (config.cloud as Record<string, unknown>).apiKey;
-      delete process.env.ELIZAOS_CLOUD_API_KEY;
-      delete process.env.ELIZAOS_CLOUD_ENABLED;
-      delete envCfg.ELIZAOS_CLOUD_API_KEY;
-      delete envCfg.ELIZAOS_CLOUD_ENABLED;
-      // Also clear from runtime character secrets if available
-      if (state.runtime?.character?.secrets) {
-        const secrets = state.runtime.character.secrets as Record<
-          string,
-          unknown
-        >;
-        delete secrets.ELIZAOS_CLOUD_API_KEY;
-        delete secrets.ELIZAOS_CLOUD_ENABLED;
-      }
-    };
-
-    // Helper: clear pi-ai mode
-    const clearPiAi = () => {
-      delete process.env.MILAIDY_USE_PI_AI;
-      delete envCfg.MILAIDY_USE_PI_AI;
-
-      const envRoot = config.env as Record<string, unknown>;
-      const vars = envRoot.vars;
-      if (vars && typeof vars === "object" && !Array.isArray(vars)) {
-        delete (vars as Record<string, unknown>).MILAIDY_USE_PI_AI;
-      }
-
-      if (state.runtime?.character?.secrets) {
-        const secrets = state.runtime.character.secrets as Record<
-          string,
-          unknown
-        >;
-        delete secrets.MILAIDY_USE_PI_AI;
-      }
-    };
-
-    // Helper: clear subscription credentials
-    const clearSubscriptions = async () => {
-      try {
-        const { deleteCredentials } = await import("../auth/index");
-        deleteCredentials("anthropic-subscription");
-        deleteCredentials("openai-codex");
-      } catch (err) {
-        logger.warn(
-          `[api] Failed to clear subscriptions: ${err instanceof Error ? err.message : err}`,
-        );
-      }
-      // Don't clear the env keys here — applySubscriptionCredentials on
-      // restart will simply not set them if creds are gone.
-    };
-
-    // Provider-specific env key map
-    const PROVIDER_ENV_KEYS: Record<string, string> = {
-      openai: "OPENAI_API_KEY",
-      anthropic: "ANTHROPIC_API_KEY",
-      deepseek: "DEEPSEEK_API_KEY",
-      google: "GOOGLE_API_KEY",
-      groq: "GROQ_API_KEY",
-      xai: "XAI_API_KEY",
-      openrouter: "OPENROUTER_API_KEY",
-    };
-
-    // Helper: clear all direct API keys from env (except the one we're switching to)
-    const clearOtherApiKeys = (keepKey?: string) => {
-      for (const [, envKey] of Object.entries(PROVIDER_ENV_KEYS)) {
-        if (envKey === keepKey) continue;
-        delete process.env[envKey];
-        delete envCfg[envKey];
-        // P1 §6 — also clear from runtime character secrets
-        if (state.runtime?.character?.secrets) {
-          const secrets = state.runtime.character.secrets as Record<
-            string,
-            unknown
-          >;
-          delete secrets[envKey];
-        }
-      }
-    };
-
-    try {
-      // P0 §4 — input validation for direct API key providers
-      if (PROVIDER_ENV_KEYS[provider]) {
-        const trimmedKey =
-          typeof body.apiKey === "string" ? body.apiKey.trim() : "";
-        if (!trimmedKey) {
-          providerSwitchInProgress = false;
-          error(res, "API key is required for this provider", 400);
-          return;
-        }
-        if (trimmedKey.length > 512) {
-          providerSwitchInProgress = false;
-          error(res, "API key is too long", 400);
-          return;
-        }
-        // Store trimmed key back for use below
-        body.apiKey = trimmedKey;
-      }
-
-      if (provider === "elizacloud") {
-        // Switching TO elizacloud
-        clearPiAi();
-        await clearSubscriptions();
-        clearOtherApiKeys();
-        clearSubscriptionProviderConfig(config);
-        // Restore cloud config — the actual API key should already be in
-        // config.cloud.apiKey from the original cloud login.  If it was
-        // wiped, the user will need to re-login via cloud.
-        (config.cloud as Record<string, unknown>).enabled = true;
-        if (config.cloud.apiKey) {
-          process.env.ELIZAOS_CLOUD_API_KEY = config.cloud.apiKey;
-          process.env.ELIZAOS_CLOUD_ENABLED = "true";
-        }
-      } else if (provider === "pi-ai") {
-        // Switching TO pi-ai credentials mode
-        clearCloud();
-        await clearSubscriptions();
-        clearOtherApiKeys();
-        process.env.MILAIDY_USE_PI_AI = "1";
-        envCfg.MILAIDY_USE_PI_AI = "1";
-
-        const envRoot = config.env as Record<string, unknown>;
-        const vars =
-          envRoot.vars &&
-          typeof envRoot.vars === "object" &&
-          !Array.isArray(envRoot.vars)
-            ? (envRoot.vars as Record<string, unknown>)
-            : {};
-        vars.MILAIDY_USE_PI_AI = "1";
-        envRoot.vars = vars;
-      } else if (
-        provider === "openai-codex" ||
-        provider === "openai-subscription"
-      ) {
-        // Switching TO OpenAI subscription
-        clearPiAi();
-        clearCloud();
-        clearOtherApiKeys("OPENAI_API_KEY");
-        applySubscriptionProviderConfig(config, provider);
-        // Delete Anthropic subscription but keep OpenAI
-        try {
-          const { deleteCredentials } = await import("../auth/index");
-          deleteCredentials("anthropic-subscription");
-        } catch (err) {
-          logger.warn(
-            `[api] Failed to clear Anthropic subscription: ${err instanceof Error ? err.message : err}`,
-          );
-        }
-        // Apply the OpenAI subscription credentials to env + install stealth
-        try {
-          const { applySubscriptionCredentials } = await import(
-            "../auth/index"
-          );
-          await applySubscriptionCredentials(config);
-        } catch (err) {
-          logger.warn(
-            `[api] Failed to apply OpenAI subscription creds: ${err instanceof Error ? err.message : err}`,
-          );
-        }
-      } else if (provider === "anthropic-subscription") {
-        // Switching TO Anthropic subscription
-        clearPiAi();
-        clearCloud();
-        clearOtherApiKeys("ANTHROPIC_API_KEY");
-        applySubscriptionProviderConfig(config, provider);
-        // Delete OpenAI subscription but keep Anthropic
-        try {
-          const { deleteCredentials } = await import("../auth/index");
-          deleteCredentials("openai-codex");
-        } catch (err) {
-          logger.warn(
-            `[api] Failed to clear OpenAI subscription: ${err instanceof Error ? err.message : err}`,
-          );
-        }
-        // Apply the Anthropic subscription credentials to env + install stealth
-        try {
-          const { applySubscriptionCredentials } = await import(
-            "../auth/index"
-          );
-          await applySubscriptionCredentials(config);
-        } catch (err) {
-          logger.warn(
-            `[api] Failed to apply Anthropic subscription creds: ${err instanceof Error ? err.message : err}`,
-          );
-        }
-      } else if (PROVIDER_ENV_KEYS[provider]) {
-        // Switching TO a direct API key provider
-        clearPiAi();
-        clearCloud();
-        await clearSubscriptions();
-        clearSubscriptionProviderConfig(config);
-        const envKey = PROVIDER_ENV_KEYS[provider];
-        clearOtherApiKeys(envKey);
-        const apiKey = body.apiKey;
-        if (!apiKey) {
-          providerSwitchInProgress = false;
-          error(res, "API key is required for this provider", 400);
-          return;
-        }
-        process.env[envKey] = apiKey;
-        envCfg[envKey] = apiKey;
-      }
-
-      saveMiladyConfig(config);
-
-      // Schedule runtime restart so the new provider takes effect.
-      scheduleRuntimeRestart(`provider switch to ${provider}`);
-      // Keep the lock briefly in restart-capable environments to prevent
-      // double-submits from racing with restart-required propagation.
-      if (ctx?.onRestart) {
-        setTimeout(() => {
-          providerSwitchInProgress = false;
-        }, 250);
-      } else {
-        providerSwitchInProgress = false;
-      }
-
-      json(res, {
-        success: true,
-        provider,
-        restarting: true,
-      });
-    } catch (err) {
-      providerSwitchInProgress = false;
-      // P1 §8 — don't leak internal error details to client
-      logger.error(
-        `[api] Provider switch failed: ${err instanceof Error ? err.stack : err}`,
+    const provided = normalizePairingCode(body.code ?? "");
+    const current = ensurePairingCode();
+    if (!current || Date.now() > pairingExpiresAt) {
+      ensurePairingCode();
+      error(
+        res,
+        "Pairing code expired. Check server logs for a new code.",
+        410,
       );
       return;
     }
@@ -6966,25 +5732,26 @@ async function handleRequest(
     return;
   }
 
+  // ── POST /api/subscription/anthropic/start ──────────────────────────────
+  // Start Anthropic OAuth flow — returns URL for user to visit
+  if (method === "POST" && pathname === "/api/subscription/anthropic/start") {
+    try {
+      const { startAnthropicLogin } = await import("../auth/index.js");
+      const flow = await startAnthropicLogin();
+      // Store flow in server state for the exchange step
+      state._anthropicFlow = flow;
+      json(res, { authUrl: flow.authUrl });
+    } catch (err) {
+      error(res, `Failed to start Anthropic login: ${err}`, 500);
+    }
+    return;
+  }
+
+  // ── POST /api/subscription/anthropic/exchange ───────────────────────────
+  // Exchange Anthropic auth code for tokens
   if (
-    await handleAuthRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      readJsonBody,
-      json,
-      error,
-      pairingEnabled,
-      ensurePairingCode,
-      normalizePairingCode,
-      rateLimitPairing,
-      getPairingExpiresAt: () => pairingExpiresAt,
-      clearPairing: () => {
-        pairingCode = null;
-        pairingExpiresAt = 0;
-      },
-    })
+    method === "POST" &&
+    pathname === "/api/subscription/anthropic/exchange"
   ) {
     const body = await readJsonBody<{ code: string }>(req, res);
     if (!body) return;
@@ -7017,18 +5784,11 @@ async function handleRequest(
     return;
   }
 
+  // ── POST /api/subscription/anthropic/setup-token ────────────────────────
+  // Accept an Anthropic setup-token (sk-ant-oat01-...) directly
   if (
-    await handleSubscriptionRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      state,
-      readJsonBody,
-      json,
-      error,
-      saveConfig: saveMiladyConfig,
-    })
+    method === "POST" &&
+    pathname === "/api/subscription/anthropic/setup-token"
   ) {
     const body = await readJsonBody<{ token: string }>(req, res);
     if (!body) return;
@@ -7224,20 +5984,25 @@ async function handleRequest(
   // ── GET /api/status ─────────────────────────────────────────────────────
   if (method === "GET" && pathname === "/api/status") {
     const uptime = state.startedAt ? Date.now() - state.startedAt : undefined;
-    const cloudStatus = {
-      connectionStatus: "disconnected",
-      activeAgentId: null,
-    };
+
+    // Cloud mode: report cloud connection status alongside local state
+    const cloudProxy = state.cloudManager?.getProxy();
+    const runMode = cloudProxy ? "cloud" : "local";
+    const cloudStatus = state.cloudManager
+      ? {
+          connectionStatus: state.cloudManager.getStatus(),
+          activeAgentId: state.cloudManager.getActiveAgentId(),
+        }
+      : undefined;
 
     json(res, {
-      state: state.agentState,
-      agentName: state.agentName,
-      model: state.model,
+      state: cloudProxy ? "running" : state.agentState,
+      agentName: cloudProxy ? cloudProxy.agentName : state.agentName,
+      model: cloudProxy ? "cloud" : state.model,
       uptime,
-      startup: state.startup,
+      startedAt: state.startedAt,
+      runMode,
       cloud: cloudStatus,
-      pendingRestart: state.pendingRestartReasons.length > 0,
-      pendingRestartReasons: state.pendingRestartReasons,
     });
     return;
   }
@@ -7390,23 +6155,8 @@ async function handleRequest(
 
   // ── GET /api/onboarding/options ─────────────────────────────────────────
   if (method === "GET" && pathname === "/api/onboarding/options") {
-    let piAiModels: Array<{
-      id: string;
-      name: string;
-      provider: string;
-      isDefault: boolean;
-    }> = [];
-    let piAiDefaultModel: string | null = null;
-
-    try {
-      const piAi = await listPiAiModelOptions();
-      piAiModels = piAi.models;
-      piAiDefaultModel = piAi.defaultModelSpec ?? null;
-    } catch (err) {
-      logger.warn(
-        `[api] Failed to load pi-ai model options: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
+    const piCreds = await createPiCredentialProvider();
+    const piDefaultModel = (await piCreds.getDefaultModelSpec()) ?? undefined;
 
     json(res, {
       names: pickRandomNames(5),
@@ -7416,11 +6166,10 @@ async function handleRequest(
       providers: getProviderOptions(),
       cloudProviders: getCloudProviderOptions(),
       models: getModelOptions(),
-      piAiModels,
-      piAiDefaultModel,
+      piModels: getPiModelOptions(),
+      piDefaultModel,
       inventoryProviders: getInventoryProviderOptions(),
       sharedStyleRules: "Keep responses brief. Be helpful and concise.",
-      githubOAuthAvailable: Boolean(process.env.GITHUB_OAUTH_CLIENT_ID?.trim()),
     });
     return;
   }
@@ -7539,7 +6288,7 @@ async function handleRequest(
           unknown
         >
       ).mode = sandboxMode;
-      logger.info(`[milady-api] Sandbox mode set to: ${sandboxMode}`);
+      logger.info(`[milaidy-api] Sandbox mode set to: ${sandboxMode}`);
     }
 
     if (runMode === "cloud") {
@@ -7547,7 +6296,7 @@ async function handleRequest(
         config.cloud.provider = body.cloudProvider as string;
       }
       // Always ensure model defaults when cloud is selected so the cloud
-      // plugin has valid models to call even if the user didn't pick unknown.
+      // plugin has valid models to call even if the user didn't pick any.
       if (!config.models) config.models = {};
       config.models.small =
         (body.smallModel as string) ||
@@ -7566,6 +6315,7 @@ async function handleRequest(
     // Also supports pi-ai (reads credentials from ~/.pi/agent/auth.json and
     // subscription OAuth credentials from Milaidy secure storage).
     {
+      // Ensure we don't keep stale pi-ai mode when the user switches providers.
       if (!config.env) config.env = {};
       const envCfg = config.env as Record<string, unknown>;
       const vars = (envCfg.vars ?? {}) as Record<string, string>;
@@ -7630,35 +6380,6 @@ async function handleRequest(
       // Persist vars back onto config.env
       (envCfg as Record<string, unknown>).vars = vars;
 
-      const clearPiAiFlag = () => {
-        delete vars.MILAIDY_USE_PI_AI;
-        delete (config.env as Record<string, string>).MILAIDY_USE_PI_AI;
-        delete process.env.MILAIDY_USE_PI_AI;
-      };
-
-      if (runMode === "local" && providerId === "pi-ai") {
-        vars.MILAIDY_USE_PI_AI = "1";
-        process.env.MILAIDY_USE_PI_AI = "1";
-
-        // Optional primary model override (provider/model).
-        if (!config.agents) config.agents = {};
-        if (!config.agents.defaults) config.agents.defaults = {};
-        const defaults = config.agents.defaults as Record<string, unknown>;
-        const modelConfig = (defaults.model ?? {}) as Record<string, unknown>;
-        const primaryModel =
-          typeof body.primaryModel === "string" ? body.primaryModel.trim() : "";
-
-        if (primaryModel) {
-          modelConfig.primary = primaryModel;
-        } else {
-          delete modelConfig.primary;
-        }
-
-        defaults.model = modelConfig;
-      } else {
-        clearPiAiFlag();
-      }
-
       // API-key providers (envKey backed)
       if (runMode === "local" && providerId && body.providerApiKey) {
         const providerOpt = getProviderOptions().find(
@@ -7686,38 +6407,8 @@ async function handleRequest(
       (config.agents.defaults as Record<string, unknown>).subscriptionProvider =
         body.provider;
       logger.info(
-        `[milady-api] Subscription provider selected: ${body.provider} — complete OAuth via /api/subscription/ endpoints`,
+        `[milaidy-api] Subscription provider selected: ${body.provider} — complete OAuth via /api/subscription/ endpoints`,
       );
-
-      // Handle Anthropic setup token (sk-ant-oat01-...) provided during
-      // onboarding. The API-key gate above skips subscription providers
-      // because their envKey is null. Mirrors POST /api/subscription/
-      // anthropic/setup-token in subscription-routes.ts.
-      if (
-        body.provider === "anthropic-subscription" &&
-        typeof body.providerApiKey === "string" &&
-        body.providerApiKey.trim().startsWith("sk-ant-")
-      ) {
-        const token = body.providerApiKey.trim();
-        if (!config.env) config.env = {};
-        (config.env as Record<string, string>).ANTHROPIC_API_KEY = token;
-        process.env.ANTHROPIC_API_KEY = token;
-        logger.info(
-          "[milady-api] Anthropic setup token saved during onboarding",
-        );
-      }
-    }
-
-    // ── GitHub token ────────────────────────────────────────────────────
-    if (
-      body.githubToken &&
-      typeof body.githubToken === "string" &&
-      body.githubToken.trim()
-    ) {
-      if (!config.env) config.env = {};
-      (config.env as Record<string, string>).GITHUB_TOKEN =
-        body.githubToken.trim();
-      process.env.GITHUB_TOKEN = body.githubToken.trim();
     }
 
     const selectedSubscriptionProvider = toCanonicalSubscriptionProvider(
@@ -7759,7 +6450,7 @@ async function handleRequest(
       typeof body.discordToken === "string" &&
       body.discordToken.trim()
     ) {
-      config.connectors.discord = { token: body.discordToken.trim() };
+      config.connectors.discord = { botToken: body.discordToken.trim() };
     }
     if (
       body.whatsappSessionPath &&
@@ -7845,37 +6536,141 @@ async function handleRequest(
       }
     }
 
-    // ── Ensure wallet keys exist so inventory can resolve addresses ───────
-    ensureWalletKeysInEnvAndConfig(config);
+    // ── Generate wallet keys if not already present ───────────────────────
+    if (!process.env.EVM_PRIVATE_KEY || !process.env.SOLANA_PRIVATE_KEY) {
+      try {
+        const walletKeys = generateWalletKeys();
+
+        if (!process.env.EVM_PRIVATE_KEY) {
+          if (!config.env) config.env = {};
+          (config.env as Record<string, string>).EVM_PRIVATE_KEY =
+            walletKeys.evmPrivateKey;
+          process.env.EVM_PRIVATE_KEY = walletKeys.evmPrivateKey;
+          logger.info(
+            `[milaidy-api] Generated EVM wallet: ${walletKeys.evmAddress}`,
+          );
+        }
+
+        if (!process.env.SOLANA_PRIVATE_KEY) {
+          if (!config.env) config.env = {};
+          (config.env as Record<string, string>).SOLANA_PRIVATE_KEY =
+            walletKeys.solanaPrivateKey;
+          process.env.SOLANA_PRIVATE_KEY = walletKeys.solanaPrivateKey;
+          logger.info(
+            `[milaidy-api] Generated Solana wallet: ${walletKeys.solanaAddress}`,
+          );
+        }
+      } catch (err) {
+        logger.warn(`[milaidy-api] Failed to generate wallet keys: ${err}`);
+      }
+    }
 
     state.config = config;
     state.agentName = (body.name as string) ?? state.agentName;
     try {
-      saveMiladyConfig(config);
+      saveMilaidyConfig(config);
     } catch (err) {
       logger.error(
-        `[milady-api] Failed to save config after onboarding: ${err}`,
+        `[milaidy-api] Failed to save config after onboarding: ${err}`,
       );
       error(res, "Failed to save configuration", 500);
       return;
     }
     logger.info(
-      `[milady-api] Onboarding complete for agent "${body.name}" (mode: ${(body.runMode as string) || "local"})`,
+      `[milaidy-api] Onboarding complete for agent "${body.name}" (mode: ${(body.runMode as string) || "local"})`,
     );
     json(res, { ok: true });
     return;
   }
 
-  if (
-    await handleAgentLifecycleRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      state,
-      json,
-    })
-  ) {
+  // ── POST /api/agent/start ───────────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/agent/start") {
+    state.agentState = "running";
+    state.startedAt = Date.now();
+    const detectedModel = state.runtime
+      ? (state.runtime.plugins.find(
+          (p) =>
+            p.name.includes("anthropic") ||
+            p.name.includes("openai") ||
+            p.name.includes("groq"),
+        )?.name ?? "unknown")
+      : "unknown";
+    state.model = detectedModel;
+
+    // Enable the autonomy task — the core TaskService will pick it up
+    // and fire the first tick immediately (updatedAt starts at 0).
+    const svc = getAutonomySvc(state.runtime);
+    if (svc) await svc.enableAutonomy();
+
+    // Patch messageService for autonomy routing (may be first time if runtime
+    // was provided before the API server's patch ran, or after a restart).
+    patchMessageServiceForAutonomy(state);
+
+    json(res, {
+      ok: true,
+      status: {
+        state: state.agentState,
+        agentName: state.agentName,
+        model: state.model,
+        uptime: 0,
+        startedAt: state.startedAt,
+      },
+    });
+    return;
+  }
+
+  // ── POST /api/agent/stop ────────────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/agent/stop") {
+    const svc = getAutonomySvc(state.runtime);
+    if (svc) await svc.disableAutonomy();
+
+    state.agentState = "stopped";
+    state.startedAt = undefined;
+    state.model = undefined;
+    json(res, {
+      ok: true,
+      status: { state: state.agentState, agentName: state.agentName },
+    });
+    return;
+  }
+
+  // ── POST /api/agent/pause ───────────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/agent/pause") {
+    const svc = getAutonomySvc(state.runtime);
+    if (svc) await svc.disableAutonomy();
+
+    state.agentState = "paused";
+    json(res, {
+      ok: true,
+      status: {
+        state: state.agentState,
+        agentName: state.agentName,
+        model: state.model,
+        uptime: state.startedAt ? Date.now() - state.startedAt : undefined,
+        startedAt: state.startedAt,
+      },
+    });
+    return;
+  }
+
+  // ── POST /api/agent/resume ──────────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/agent/resume") {
+    // Re-enable the autonomy task — first tick fires immediately
+    // because the new task is created with updatedAt: 0.
+    const svc = getAutonomySvc(state.runtime);
+    if (svc) await svc.enableAutonomy();
+
+    state.agentState = "running";
+    json(res, {
+      ok: true,
+      status: {
+        state: state.agentState,
+        agentName: state.agentName,
+        model: state.model,
+        uptime: state.startedAt ? Date.now() - state.startedAt : undefined,
+        startedAt: state.startedAt,
+      },
+    });
     return;
   }
 
@@ -7928,72 +6723,278 @@ async function handleRequest(
     if (knowledgeHandled) return;
   }
 
-  if (
-    await handleAgentAdminRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      state,
-      onRestart: ctx?.onRestart ?? undefined,
-      json,
-      error,
-      resolveStateDir,
-      resolvePath: path.resolve,
-      getHomeDir: os.homedir,
-      isSafeResetStateDir,
-      stateDirExists: fs.existsSync,
-      removeStateDir: (resolvedState) => {
+  // ── POST /api/agent/restart ────────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/agent/restart") {
+    if (!ctx?.onRestart) {
+      error(
+        res,
+        "Restart is not supported in this mode (no restart handler registered)",
+        501,
+      );
+      return;
+    }
+
+    // Reject if already mid-restart to prevent overlapping restarts.
+    if (state.agentState === "restarting") {
+      error(res, "A restart is already in progress", 409);
+      return;
+    }
+
+    const previousState = state.agentState;
+    state.agentState = "restarting";
+    try {
+      const newRuntime = await ctx.onRestart();
+      if (newRuntime) {
+        state.runtime = newRuntime;
+        state.chatConnectionReady = null;
+        state.chatConnectionPromise = null;
+        state.agentState = "running";
+        state.agentName = newRuntime.character.name ?? "Milaidy";
+        state.startedAt = Date.now();
+        patchMessageServiceForAutonomy(state);
+        json(res, {
+          ok: true,
+          status: {
+            state: state.agentState,
+            agentName: state.agentName,
+            startedAt: state.startedAt,
+          },
+        });
+      } else {
+        // Restore previous state instead of permanently stuck in "error"
+        state.agentState = previousState;
+        error(
+          res,
+          "Restart handler returned null — runtime failed to re-initialize",
+          500,
+        );
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // Restore previous state so the UI can retry
+      state.agentState = previousState;
+      error(res, `Restart failed: ${msg}`, 500);
+    }
+    return;
+  }
+
+  // ── POST /api/agent/reset ──────────────────────────────────────────────
+  // Wipe config, workspace (memory), and return to onboarding.
+  if (method === "POST" && pathname === "/api/agent/reset") {
+    try {
+      // 1. Stop the runtime if it's running
+      if (state.runtime) {
+        try {
+          await state.runtime.stop();
+        } catch (stopErr) {
+          const msg =
+            stopErr instanceof Error ? stopErr.message : String(stopErr);
+          logger.warn(
+            `[milaidy-api] Error stopping runtime during reset: ${msg}`,
+          );
+        }
+        state.runtime = null;
+      }
+
+      // 2. Delete the state directory (~/.milaidy/) which contains
+      //    config, workspace, memory, oauth tokens, etc.
+      const stateDir = resolveStateDir();
+
+      // Safety: validate the resolved path before recursive deletion.
+      // MILAIDY_STATE_DIR can be overridden via env/config — if set to
+      // "/" or another sensitive path, rmSync would wipe the filesystem.
+      const resolvedState = path.resolve(stateDir);
+      const home = os.homedir();
+      const isSafe = isSafeResetStateDir(resolvedState, home);
+      if (!isSafe) {
+        logger.warn(
+          `[milaidy-api] Refusing to delete unsafe state dir: "${resolvedState}"`,
+        );
+        error(
+          res,
+          `Reset aborted: state directory "${resolvedState}" does not appear safe to delete`,
+          400,
+        );
+        return;
+      }
+
+      if (fs.existsSync(resolvedState)) {
         fs.rmSync(resolvedState, { recursive: true, force: true });
-      },
-      logWarn: (message) => logger.warn(message),
-    })
-  ) {
+      }
+
+      // 3. Reset server state
+      state.agentState = "stopped";
+      state.agentName = "Milaidy";
+      state.model = undefined;
+      state.startedAt = undefined;
+      state.config = {} as MilaidyConfig;
+      state.chatRoomId = null;
+      state.chatUserId = null;
+      state.chatConnectionReady = null;
+      state.chatConnectionPromise = null;
+
+      json(res, { ok: true });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      error(res, `Reset failed: ${msg}`, 500);
+    }
     return;
   }
 
-  if (
-    await handleAgentTransferRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      state,
-      readJsonBody,
-      json,
-      error,
-    })
-  ) {
+  // ── POST /api/agent/export ─────────────────────────────────────────────
+  // Export the entire agent as a password-encrypted binary file.
+  if (method === "POST" && pathname === "/api/agent/export") {
+    if (!state.runtime) {
+      error(res, "Agent is not running — start it before exporting.", 503);
+      return;
+    }
+
+    const body = await readJsonBody<{
+      password?: string;
+      includeLogs?: boolean;
+    }>(req, res);
+    if (!body) return;
+
+    if (!body.password || typeof body.password !== "string") {
+      error(
+        res,
+        `A password of at least ${AGENT_TRANSFER_MIN_PASSWORD_LENGTH} characters is required.`,
+        400,
+      );
+      return;
+    }
+
+    if (body.password.length < AGENT_TRANSFER_MIN_PASSWORD_LENGTH) {
+      error(
+        res,
+        `A password of at least ${AGENT_TRANSFER_MIN_PASSWORD_LENGTH} characters is required.`,
+        400,
+      );
+      return;
+    }
+
+    try {
+      const fileBuffer = await exportAgent(state.runtime, body.password, {
+        includeLogs: body.includeLogs === true,
+      });
+
+      const agentName = (state.runtime.character.name ?? "agent")
+        .replace(/[^a-zA-Z0-9_-]/g, "_")
+        .toLowerCase();
+      const timestamp = new Date()
+        .toISOString()
+        .replace(/[:.]/g, "-")
+        .slice(0, 19);
+      const filename = `${agentName}-${timestamp}.eliza-agent`;
+
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "application/octet-stream");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${filename}"`,
+      );
+      res.setHeader("Content-Length", fileBuffer.length);
+      res.end(fileBuffer);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (err instanceof AgentExportError) {
+        error(res, msg, 400);
+      } else {
+        error(res, `Export failed: ${msg}`, 500);
+      }
+    }
     return;
   }
 
-  if (
-    await handleAutonomyRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      runtime: state.runtime,
-      readJsonBody,
-      json,
-    })
-  ) {
+  // ── GET /api/agent/export/estimate ─────────────────────────────────────────
+  // Get an estimate of the export size before downloading.
+  if (method === "GET" && pathname === "/api/agent/export/estimate") {
+    if (!state.runtime) {
+      error(res, "Agent is not running.", 503);
+      return;
+    }
+
+    try {
+      const estimate = await estimateExportSize(state.runtime);
+      json(res, estimate);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      error(res, `Estimate failed: ${msg}`, 500);
+    }
     return;
   }
 
-  if (
-    await handleCharacterRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      state,
-      readJsonBody,
-      json,
-      error,
-      pickRandomNames,
-    })
-  ) {
+  // ── POST /api/agent/import ─────────────────────────────────────────────
+  // Import an agent from a password-encrypted .eliza-agent file.
+  if (method === "POST" && pathname === "/api/agent/import") {
+    if (!state.runtime) {
+      error(res, "Agent is not running — start it before importing.", 503);
+      return;
+    }
+
+    let rawBody: Buffer;
+    try {
+      rawBody = await readRawBody(req, MAX_IMPORT_BYTES);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      error(res, msg, 413);
+      return;
+    }
+
+    if (rawBody.length < 5) {
+      error(
+        res,
+        "Request body is too small — expected password + file data.",
+        400,
+      );
+      return;
+    }
+
+    // Parse binary envelope: [4 bytes password length][password][file data]
+    const passwordLength = rawBody.readUInt32BE(0);
+    if (passwordLength < AGENT_TRANSFER_MIN_PASSWORD_LENGTH) {
+      error(
+        res,
+        `Password must be at least ${AGENT_TRANSFER_MIN_PASSWORD_LENGTH} characters.`,
+        400,
+      );
+      return;
+    }
+    if (passwordLength > AGENT_TRANSFER_MAX_PASSWORD_LENGTH) {
+      error(
+        res,
+        `Password is too long (max ${AGENT_TRANSFER_MAX_PASSWORD_LENGTH} bytes).`,
+        400,
+      );
+      return;
+    }
+    if (rawBody.length < 4 + passwordLength + 1) {
+      error(
+        res,
+        "Request body is incomplete — missing file data after password.",
+        400,
+      );
+      return;
+    }
+
+    const password = rawBody.subarray(4, 4 + passwordLength).toString("utf-8");
+    const fileBuffer = rawBody.subarray(4 + passwordLength);
+
+    try {
+      const result = await importAgent(
+        state.runtime,
+        fileBuffer as Buffer,
+        password,
+      );
+      json(res, result);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (err instanceof AgentExportError) {
+        error(res, msg, 400);
+      } else {
+        error(res, `Import failed: ${msg}`, 500);
+      }
+    }
     return;
   }
 
@@ -8952,9 +7953,9 @@ async function handleRequest(
   // ── GET /api/plugins ────────────────────────────────────────────────────
   if (method === "GET" && pathname === "/api/plugins") {
     // Re-read config from disk so we pick up plugins installed since server start.
-    let freshConfig: MiladyConfig;
+    let freshConfig: MilaidyConfig;
     try {
-      freshConfig = loadMiladyConfig();
+      freshConfig = loadMilaidyConfig();
     } catch {
       freshConfig = state.config;
     }
@@ -9041,8 +8042,6 @@ async function handleRequest(
       plugin.validationWarnings = validation.warnings;
     }
 
-    applyWhatsAppQrOverride(allPlugins, resolveDefaultAgentWorkspaceDir());
-
     // Inject per-provider model options into configUiHints for MODEL fields.
     // Each provider's cache is independent — no cross-population.
     // Always set type: "select" on MODEL fields so they render as dropdowns,
@@ -9126,7 +8125,7 @@ async function handleRequest(
         pluginId,
         plugin.category,
         plugin.envKey,
-        plugin.configKeys,
+        Object.keys(body.config),
         body.config,
         submittedParamInfos,
       );
@@ -9162,10 +8161,10 @@ async function handleRequest(
       // Save config even when only config values changed (no enable toggle)
       if (body.enabled === undefined) {
         try {
-          saveMiladyConfig(state.config);
+          saveMilaidyConfig(state.config);
         } catch (err) {
           logger.warn(
-            `[milady-api] Failed to save config: ${err instanceof Error ? err.message : err}`,
+            `[milaidy-api] Failed to save config: ${err instanceof Error ? err.message : err}`,
           );
         }
       }
@@ -9206,7 +8205,7 @@ async function handleRequest(
         .entries as Record<string, Record<string, unknown>>;
       entries[pluginId] = { enabled: body.enabled };
       logger.info(
-        `[milady-api] ${body.enabled ? "Enabled" : "Disabled"} plugin: ${packageName}`,
+        `[milaidy-api] ${body.enabled ? "Enabled" : "Disabled"} plugin: ${packageName}`,
       );
 
       // Persist capability toggle state in config.features so the runtime
@@ -9216,7 +8215,6 @@ async function handleRequest(
         "vision",
         "browser",
         "computeruse",
-        "coding-agent",
       ]);
       if (CAPABILITY_FEATURE_IDS.has(pluginId)) {
         if (!state.config.features) {
@@ -9227,14 +8225,14 @@ async function handleRequest(
 
       // Save updated config
       try {
-        saveMiladyConfig(state.config);
+        saveMilaidyConfig(state.config);
       } catch (err) {
         logger.warn(
-          `[milady-api] Failed to save config: ${err instanceof Error ? err.message : err}`,
+          `[milaidy-api] Failed to save config: ${err instanceof Error ? err.message : err}`,
         );
       }
 
-      scheduleRuntimeRestart(`Plugin toggle: ${pluginId}`);
+      scheduleRuntimeRestart(`Plugin toggle: ${pluginId}`, 300);
     }
 
     json(res, { ok: true, plugin });
@@ -9314,6 +8312,126 @@ async function handleRequest(
     return;
   }
 
+  // ── GET /api/registry/plugins ──────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/registry/plugins") {
+    const { getRegistryPlugins } = await import(
+      "../services/registry-client.js"
+    );
+    const { listInstalledPlugins: listInstalled } = await import(
+      "../services/plugin-installer.js"
+    );
+    try {
+      const registry = await getRegistryPlugins();
+      const installed = await listInstalled();
+      const installedNames = new Set(installed.map((p) => p.name));
+
+      // Also check which plugins are loaded in the runtime
+      const loadedNames = state.runtime
+        ? new Set(state.runtime.plugins.map((p) => p.name))
+        : new Set<string>();
+
+      // Cross-reference with bundled manifest so the Store can hide them
+      const bundledIds = new Set(state.plugins.map((p) => p.id));
+
+      const plugins = Array.from(registry.values()).map((p) => {
+        const shortId = p.name
+          .replace(/^@[^/]+\/plugin-/, "")
+          .replace(/^@[^/]+\//, "")
+          .replace(/^plugin-/, "");
+        return {
+          ...p,
+          installed: installedNames.has(p.name),
+          installedVersion:
+            installed.find((i) => i.name === p.name)?.version ?? null,
+          loaded:
+            loadedNames.has(p.name) ||
+            loadedNames.has(p.name.replace("@elizaos/", "")),
+          bundled: bundledIds.has(shortId),
+        };
+      });
+      json(res, { count: plugins.length, plugins });
+    } catch (err) {
+      error(
+        res,
+        `Failed to fetch registry: ${err instanceof Error ? err.message : String(err)}`,
+        502,
+      );
+    }
+    return;
+  }
+
+  // ── GET /api/registry/plugins/:name ─────────────────────────────────────
+  if (
+    method === "GET" &&
+    pathname.startsWith("/api/registry/plugins/") &&
+    pathname.length > "/api/registry/plugins/".length
+  ) {
+    const name = decodeURIComponent(
+      pathname.slice("/api/registry/plugins/".length),
+    );
+    const { getPluginInfo } = await import("../services/registry-client.js");
+
+    try {
+      const info = await getPluginInfo(name);
+      if (!info) {
+        error(res, `Plugin "${name}" not found in registry`, 404);
+        return;
+      }
+      json(res, { plugin: info });
+    } catch (err) {
+      error(
+        res,
+        `Failed to look up plugin: ${err instanceof Error ? err.message : String(err)}`,
+        502,
+      );
+    }
+    return;
+  }
+
+  // ── GET /api/registry/search?q=... ──────────────────────────────────────
+  if (method === "GET" && pathname === "/api/registry/search") {
+    const query = url.searchParams.get("q") || "";
+    if (!query.trim()) {
+      error(res, "Query parameter 'q' is required", 400);
+      return;
+    }
+
+    const { searchPlugins } = await import("../services/registry-client.js");
+
+    try {
+      const limitParam = url.searchParams.get("limit");
+      const limit = limitParam
+        ? Math.min(Math.max(Number(limitParam), 1), 50)
+        : 15;
+      const results = await searchPlugins(query, limit);
+      json(res, { query, count: results.length, results });
+    } catch (err) {
+      error(
+        res,
+        `Search failed: ${err instanceof Error ? err.message : String(err)}`,
+        502,
+      );
+    }
+    return;
+  }
+
+  // ── POST /api/registry/refresh ──────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/registry/refresh") {
+    const { refreshRegistry } = await import("../services/registry-client.js");
+
+    try {
+      const registry = await refreshRegistry();
+      json(res, { ok: true, count: registry.size });
+    } catch (err) {
+      error(
+        res,
+        `Refresh failed: ${err instanceof Error ? err.message : String(err)}`,
+        502,
+      );
+    }
+    return;
+  }
+
   // ── POST /api/plugins/:id/test ────────────────────────────────────────
   // Test a plugin's connection / configuration validity.
   const pluginTestMatch =
@@ -9325,21 +8443,10 @@ async function handleRequest(
     try {
       // Find the plugin in the runtime
       const allPlugins = state.runtime?.plugins ?? [];
-      const normalizePluginId = (value: string): string =>
-        value.replace(/^@[^/]+\//, "").replace(/^plugin-/, "");
-
-      const normalizedPluginId = normalizePluginId(pluginId);
-
-      const plugin = allPlugins.find((p: { id?: string; name?: string }) => {
-        const runtimeName = p.name ?? "";
-        const runtimeId = normalizePluginId(runtimeName);
-        return (
-          p.id === pluginId ||
-          p.name === pluginId ||
-          runtimeId === pluginId ||
-          runtimeId === normalizedPluginId
-        );
-      });
+      const plugin = allPlugins.find(
+        (p: { id?: string; name?: string }) =>
+          p.id === pluginId || p.name === pluginId,
+      );
 
       if (!plugin) {
         json(
@@ -9420,20 +8527,18 @@ async function handleRequest(
       return;
     }
 
+    const { installPlugin } = await import("../services/plugin-installer.js");
+
     try {
-      const pluginManager = requirePluginManager(state.runtime);
-      const result = await pluginManager.installPlugin(
-        pluginName,
-        (progress: InstallProgressLike) => {
-          logger.info(`[install] ${progress.phase}: ${progress.message}`);
-          state.broadcastWs?.({
-            type: "install-progress",
-            pluginName: progress.pluginName,
-            phase: progress.phase,
-            message: progress.message,
-          });
-        },
-      );
+      const result = await installPlugin(pluginName, (progress) => {
+        logger.info(`[install] ${progress.phase}: ${progress.message}`);
+        state.broadcastWs?.({
+          type: "install-progress",
+          pluginName: progress.pluginName,
+          phase: progress.phase,
+          message: progress.message,
+        });
+      });
 
       if (!result.success) {
         json(res, { ok: false, error: result.error }, 422);
@@ -9442,7 +8547,7 @@ async function handleRequest(
 
       // If autoRestart is not explicitly false, restart the agent
       if (body.autoRestart !== false && result.requiresRestart) {
-        scheduleRuntimeRestart(`Plugin ${result.pluginName} installed`);
+        scheduleRuntimeRestart(`Plugin ${result.pluginName} installed`, 500);
       }
 
       json(res, {
@@ -9481,9 +8586,10 @@ async function handleRequest(
       return;
     }
 
+    const { uninstallPlugin } = await import("../services/plugin-installer.js");
+
     try {
-      const pluginManager = requirePluginManager(state.runtime);
-      const result = await pluginManager.uninstallPlugin(pluginName);
+      const result = await uninstallPlugin(pluginName);
 
       if (!result.success) {
         json(res, { ok: false, error: result.error }, 422);
@@ -9491,7 +8597,7 @@ async function handleRequest(
       }
 
       if (body.autoRestart !== false && result.requiresRestart) {
-        scheduleRuntimeRestart(`Plugin ${pluginName} uninstalled`);
+        scheduleRuntimeRestart(`Plugin ${pluginName} uninstalled`, 500);
       }
 
       json(res, {
@@ -9512,165 +8618,20 @@ async function handleRequest(
     return;
   }
 
-  // ── POST /api/plugins/:id/eject ─────────────────────────────────────────
-  if (method === "POST" && pathname.match(/^\/api\/plugins\/[^/]+\/eject$/)) {
-    const pluginName = decodeURIComponent(
-      pathname.slice("/api/plugins/".length, pathname.length - "/eject".length),
-    );
-    try {
-      const pluginManager = requirePluginManager(state.runtime);
-      // Ensure the method exists on the service (it should)
-      if (typeof pluginManager.ejectPlugin !== "function") {
-        throw new Error("Plugin manager does not support ejecting plugins");
-      }
-      const result = await pluginManager.ejectPlugin(pluginName);
-      if (!result.success) {
-        json(res, { ok: false, error: result.error }, 422);
-        return;
-      }
-      if (result.requiresRestart) {
-        scheduleRuntimeRestart(`Plugin ${pluginName} ejected`);
-      }
-      json(res, {
-        ok: true,
-        pluginName: result.pluginName,
-        requiresRestart: result.requiresRestart,
-        message: `${pluginName} ejected to local source.`,
-      });
-    } catch (err) {
-      error(
-        res,
-        `Eject failed: ${err instanceof Error ? err.message : String(err)}`,
-        500,
-      );
-    }
-    return;
-  }
-
-  // ── POST /api/plugins/:id/sync ──────────────────────────────────────────
-  if (method === "POST" && pathname.match(/^\/api\/plugins\/[^/]+\/sync$/)) {
-    const pluginName = decodeURIComponent(
-      pathname.slice("/api/plugins/".length, pathname.length - "/sync".length),
-    );
-    try {
-      const pluginManager = requirePluginManager(state.runtime);
-      if (typeof pluginManager.syncPlugin !== "function") {
-        throw new Error("Plugin manager does not support syncing plugins");
-      }
-      const result = await pluginManager.syncPlugin(pluginName);
-      if (!result.success) {
-        json(res, { ok: false, error: result.error }, 422);
-        return;
-      }
-      if (result.requiresRestart) {
-        scheduleRuntimeRestart(`Plugin ${pluginName} synced`);
-      }
-      json(res, {
-        ok: true,
-        pluginName: result.pluginName,
-        requiresRestart: result.requiresRestart,
-        message: `${pluginName} synced with upstream.`,
-      });
-    } catch (err) {
-      error(
-        res,
-        `Sync failed: ${err instanceof Error ? err.message : String(err)}`,
-        500,
-      );
-    }
-    return;
-  }
-
-  // ── POST /api/plugins/:id/reinject ──────────────────────────────────────
-  if (
-    method === "POST" &&
-    pathname.match(/^\/api\/plugins\/[^/]+\/reinject$/)
-  ) {
-    const pluginName = decodeURIComponent(
-      pathname.slice(
-        "/api/plugins/".length,
-        pathname.length - "/reinject".length,
-      ),
-    );
-    try {
-      const pluginManager = requirePluginManager(state.runtime);
-      if (typeof pluginManager.reinjectPlugin !== "function") {
-        throw new Error("Plugin manager does not support reinjecting plugins");
-      }
-      const result = await pluginManager.reinjectPlugin(pluginName);
-      if (!result.success) {
-        json(res, { ok: false, error: result.error }, 422);
-        return;
-      }
-      if (result.requiresRestart) {
-        scheduleRuntimeRestart(`Plugin ${pluginName} reinjected`);
-      }
-      json(res, {
-        ok: true,
-        pluginName: result.pluginName,
-        requiresRestart: result.requiresRestart,
-        message: `${pluginName} restored to registry version.`,
-      });
-    } catch (err) {
-      error(
-        res,
-        `Reinject failed: ${err instanceof Error ? err.message : String(err)}`,
-        500,
-      );
-    }
-    return;
-  }
-
   // ── GET /api/plugins/installed ──────────────────────────────────────────
   // List plugins that were installed from the registry at runtime.
   if (method === "GET" && pathname === "/api/plugins/installed") {
+    const { listInstalledPlugins } = await import(
+      "../services/plugin-installer.js"
+    );
+
     try {
-      const pluginManager = requirePluginManager(state.runtime);
-      const installed = await pluginManager.listInstalledPlugins();
+      const installed = await listInstalledPlugins();
       json(res, { count: installed.length, plugins: installed });
     } catch (err) {
       error(
         res,
         `Failed to list installed plugins: ${err instanceof Error ? err.message : String(err)}`,
-        500,
-      );
-    }
-    return;
-  }
-
-  // ── GET /api/plugins/ejected ────────────────────────────────────────────
-  // List plugins ejected to local source checkouts with upstream metadata.
-  if (method === "GET" && pathname === "/api/plugins/ejected") {
-    try {
-      const pluginManager = requirePluginManager(state.runtime);
-      if (typeof pluginManager.listEjectedPlugins !== "function") {
-        throw new Error(
-          "Plugin manager does not support listing ejected plugins",
-        );
-      }
-      const plugins = await pluginManager.listEjectedPlugins();
-      json(res, { count: plugins.length, plugins });
-    } catch (err) {
-      error(
-        res,
-        `Failed to list ejected plugins: ${err instanceof Error ? err.message : String(err)}`,
-        500,
-      );
-    }
-    return;
-  }
-
-  // ── GET /api/core/status ────────────────────────────────────────────────
-  // Returns whether @elizaos/core is ejected or resolved from npm.
-  if (method === "GET" && pathname === "/api/core/status") {
-    try {
-      const coreManager = requireCoreManager(state.runtime);
-      const status = await coreManager.getCoreStatus();
-      json(res, status);
-    } catch (err) {
-      error(
-        res,
-        `Failed to get core status: ${err instanceof Error ? err.message : String(err)}`,
         500,
       );
     }
@@ -9772,7 +8733,7 @@ async function handleRequest(
     }
 
     try {
-      saveMiladyConfig(state.config);
+      saveMilaidyConfig(state.config);
     } catch (err) {
       logger.warn(
         `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
@@ -9782,6 +8743,7 @@ async function handleRequest(
     // Auto-restart so the change takes effect
     scheduleRuntimeRestart(
       `Plugin ${shortId} ${body.enabled ? "enabled" : "disabled"}`,
+      300,
     );
 
     json(res, {
@@ -9797,7 +8759,7 @@ async function handleRequest(
   if (method === "GET" && pathname === "/api/skills/catalog") {
     try {
       const { getCatalogSkills } = await import(
-        "../services/skill-catalog-client"
+        "../services/skill-catalog-client.js"
       );
       const all = await getCatalogSkills();
       const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
@@ -9880,7 +8842,7 @@ async function handleRequest(
     }
     try {
       const { searchCatalogSkills } = await import(
-        "../services/skill-catalog-client"
+        "../services/skill-catalog-client.js"
       );
       const limit = Math.min(
         100,
@@ -9907,7 +8869,7 @@ async function handleRequest(
     if (slug && slug !== "search") {
       try {
         const { getCatalogSkill } = await import(
-          "../services/skill-catalog-client"
+          "../services/skill-catalog-client.js"
         );
         const skill = await getCatalogSkill(slug);
         if (!skill) {
@@ -9930,7 +8892,7 @@ async function handleRequest(
   if (method === "POST" && pathname === "/api/skills/catalog/refresh") {
     try {
       const { refreshCatalog } = await import(
-        "../services/skill-catalog-client"
+        "../services/skill-catalog-client.js"
       );
       const skills = await refreshCatalog();
       json(res, { ok: true, count: skills.length });
@@ -10355,7 +9317,9 @@ async function handleRequest(
           : "xdg-open";
     execFile(opener, [skillPath], (err) => {
       if (err)
-        logger.warn(`[milady-api] Failed to open skill folder: ${err.message}`);
+        logger.warn(
+          `[milaidy-api] Failed to open skill folder: ${err.message}`,
+        );
     });
     json(res, { ok: true, path: skillPath });
     return;
@@ -10520,7 +9484,7 @@ async function handleRequest(
 
     try {
       fs.writeFileSync(skillMdPath, parsed.content, "utf-8");
-      // Re-discover skills to pick up unknown name/description changes
+      // Re-discover skills to pick up any name/description changes
       state.skills = await discoverSkills(
         workspaceDir,
         state.config,
@@ -10565,7 +9529,7 @@ async function handleRequest(
     } else if (fs.existsSync(path.join(mpDir, "SKILL.md"))) {
       try {
         const { uninstallMarketplaceSkill } = await import(
-          "../services/skill-marketplace"
+          "../services/skill-marketplace.js"
         );
         await uninstallMarketplaceSkill(workspaceDir, skillId);
         deleted = true;
@@ -10629,9 +9593,7 @@ async function handleRequest(
     }
     try {
       const limitStr = url.searchParams.get("limit");
-      const limit = limitStr
-        ? parseClampedInteger(limitStr, { min: 1, max: 50, fallback: 20 })
-        : 20;
+      const limit = limitStr ? Math.min(Math.max(Number(limitStr), 1), 50) : 20;
       const results = await searchSkillsMarketplace(query, { limit });
       json(res, { ok: true, results });
     } catch (err) {
@@ -10662,22 +9624,16 @@ async function handleRequest(
   // ── POST /api/skills/marketplace/install ──────────────────────────────
   if (method === "POST" && pathname === "/api/skills/marketplace/install") {
     const body = await readJsonBody<{
-      slug?: string;
       githubUrl?: string;
       repository?: string;
       path?: string;
       name?: string;
       description?: string;
-      source?: "clawhub" | "skillsmp" | "manual";
     }>(req, res);
     if (!body) return;
 
-    const slug = body.slug?.trim() || "";
-    const githubUrl = body.githubUrl?.trim() || "";
-    const repository = body.repository?.trim() || "";
-
-    if (!slug && !githubUrl && !repository) {
-      error(res, "Install requires a slug, githubUrl, or repository", 400);
+    if (!body.githubUrl?.trim() && !body.repository?.trim()) {
+      error(res, "Install requires a githubUrl or repository", 400);
       return;
     }
 
@@ -10685,91 +9641,15 @@ async function handleRequest(
       const workspaceDir =
         state.config.agents?.defaults?.workspace ??
         resolveDefaultAgentWorkspaceDir();
-
-      // ClawHub-native install path (slug-based via AgentSkillsService).
-      if (slug && !githubUrl && !repository) {
-        if (!state.runtime) {
-          error(
-            res,
-            "Agent runtime not available — start the agent first",
-            503,
-          );
-          return;
-        }
-
-        const service = state.runtime.getService("AGENT_SKILLS_SERVICE") as
-          | {
-              install?: (
-                skillSlug: string,
-                opts?: { version?: string; force?: boolean },
-              ) => Promise<boolean>;
-              isInstalled?: (skillSlug: string) => Promise<boolean>;
-            }
-          | undefined;
-
-        if (!service || typeof service.install !== "function") {
-          error(
-            res,
-            "AgentSkillsService not available — ensure @elizaos/plugin-agent-skills is loaded",
-            501,
-          );
-          return;
-        }
-
-        const alreadyInstalled =
-          typeof service.isInstalled === "function"
-            ? await service.isInstalled(slug)
-            : false;
-
-        if (alreadyInstalled) {
-          json(res, {
-            ok: true,
-            skill: {
-              id: slug,
-              name: body.name?.trim() || slug,
-              source: "clawhub",
-              installedAt: new Date().toISOString(),
-            },
-            alreadyInstalled: true,
-          });
-          return;
-        }
-
-        const success = await service.install(slug);
-        if (!success) {
-          error(res, `Failed to install skill "${slug}"`, 500);
-          return;
-        }
-
-        state.skills = await discoverSkills(
-          workspaceDir,
-          state.config,
-          state.runtime,
-        );
-
-        json(res, {
-          ok: true,
-          skill: {
-            id: slug,
-            name: body.name?.trim() || slug,
-            source: "clawhub",
-            installedAt: new Date().toISOString(),
-          },
-        });
-      } else {
-        const result = await installMarketplaceSkill(workspaceDir, {
-          githubUrl: body.githubUrl,
-          repository: body.repository,
-          path: body.path,
-          name: body.name,
-          description: body.description,
-          source:
-            body.source === "manual" || body.source === "skillsmp"
-              ? body.source
-              : "clawhub",
-        });
-        json(res, { ok: true, skill: result });
-      }
+      const result = await installMarketplaceSkill(workspaceDir, {
+        githubUrl: body.githubUrl,
+        repository: body.repository,
+        path: body.path,
+        name: body.name,
+        description: body.description,
+        source: "skillsmp",
+      });
+      json(res, { ok: true, skill: result });
     } catch (err) {
       error(
         res,
@@ -10827,7 +9707,7 @@ async function handleRequest(
     process.env.SKILLSMP_API_KEY = apiKey;
     if (!state.config.env) state.config.env = {};
     (state.config.env as Record<string, string>).SKILLSMP_API_KEY = apiKey;
-    saveMiladyConfig(state.config);
+    saveMilaidyConfig(state.config);
     json(res, { ok: true, keySet: true });
     return;
   }
@@ -10894,37 +9774,96 @@ async function handleRequest(
     return;
   }
 
-  if (
-    await handleDiagnosticsRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      url,
-      logBuffer: state.logBuffer,
-      eventBuffer: state.eventBuffer,
-      initSse,
-      writeSseJson,
-      json,
-    })
-  ) {
+  // ── GET /api/logs ───────────────────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/logs") {
+    let entries = state.logBuffer;
+
+    const sourceFilter = url.searchParams.get("source");
+    if (sourceFilter)
+      entries = entries.filter((e) => e.source === sourceFilter);
+
+    const levelFilter = url.searchParams.get("level");
+    if (levelFilter) entries = entries.filter((e) => e.level === levelFilter);
+
+    // Filter by tag — entries must contain the requested tag
+    const tagFilter = url.searchParams.get("tag");
+    if (tagFilter) entries = entries.filter((e) => e.tags.includes(tagFilter));
+
+    const sinceFilter = url.searchParams.get("since");
+    if (sinceFilter) {
+      const sinceTs = Number(sinceFilter);
+      if (!Number.isNaN(sinceTs))
+        entries = entries.filter((e) => e.timestamp >= sinceTs);
+    }
+
+    const sources = [...new Set(state.logBuffer.map((e) => e.source))].sort();
+    const tags = [...new Set(state.logBuffer.flatMap((e) => e.tags))].sort();
+    json(res, { entries: entries.slice(-200), sources, tags });
     return;
   }
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // Bug report routes
-  // ═══════════════════════════════════════════════════════════════════════
-  if (
-    await handleBugReportRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      readJsonBody,
-      json,
-      error,
-    })
-  ) {
+  // ── GET /api/agent/events?after=evt-123&limit=200 ───────────────────────
+  if (method === "GET" && pathname === "/api/agent/events") {
+    const limitRaw = Number(url.searchParams.get("limit") ?? "200");
+    const limit = Number.isFinite(limitRaw)
+      ? Math.min(Math.max(Math.trunc(limitRaw), 1), 1000)
+      : 200;
+    const afterEventId = url.searchParams.get("after");
+    const autonomyEvents = state.eventBuffer.filter(
+      (event) =>
+        event.type === "agent_event" || event.type === "heartbeat_event",
+    );
+    let startIndex = 0;
+    if (afterEventId) {
+      const idx = autonomyEvents.findIndex(
+        (event) => event.eventId === afterEventId,
+      );
+      if (idx >= 0) startIndex = idx + 1;
+    }
+    const events = autonomyEvents.slice(startIndex, startIndex + limit);
+    const latestEventId =
+      events.length > 0 ? events[events.length - 1].eventId : null;
+    json(res, {
+      events,
+      latestEventId,
+      totalBuffered: autonomyEvents.length,
+      replayed: true,
+    });
+    return;
+  }
+
+  // ── GET /api/extension/status ─────────────────────────────────────────
+  // Check if the Chrome extension relay server is reachable.
+  if (method === "GET" && pathname === "/api/extension/status") {
+    const relayPort = 18792;
+    let relayReachable = false;
+    try {
+      const resp = await fetch(`http://127.0.0.1:${relayPort}/`, {
+        method: "HEAD",
+        signal: AbortSignal.timeout(2000),
+      });
+      relayReachable = resp.ok || resp.status < 500;
+    } catch {
+      relayReachable = false;
+    }
+
+    // Resolve the extension source path (always available in the repo)
+    let extensionPath: string | null = null;
+    try {
+      const serverDir = path.dirname(fileURLToPath(import.meta.url));
+      extensionPath = path.resolve(
+        serverDir,
+        "..",
+        "..",
+        "apps",
+        "chrome-extension",
+      );
+      if (!fs.existsSync(extensionPath)) extensionPath = null;
+    } catch {
+      // ignore
+    }
+
+    json(res, { relayReachable, relayPort, extensionPath });
     return;
   }
 
@@ -11256,7 +10195,7 @@ async function handleRequest(
     }>(req, res);
     if (!body) return;
 
-    const agentName = body.name || state.agentName || "Milady Agent";
+    const agentName = body.name || state.agentName || "Milaidy Agent";
     const endpoint = body.endpoint || "";
     const tokenURI = body.tokenURI || "";
 
@@ -11297,7 +10236,7 @@ async function handleRequest(
     }>(req, res);
     if (!body) return;
 
-    const agentName = body.name || state.agentName || "Milady Agent";
+    const agentName = body.name || state.agentName || "Milaidy Agent";
     const endpoint = body.endpoint || "";
     const tokenURI = body.tokenURI || "";
 
@@ -11314,29 +10253,12 @@ async function handleRequest(
 
   if (method === "GET" && pathname === "/api/registry/config") {
     const registryConfig = state.config.registry;
-    let chainId = 1;
-    if (registryService) {
-      try {
-        chainId = await registryService.getChainId();
-      } catch {
-        // Keep default if chain RPC is unavailable.
-      }
-    }
-
-    const explorerByChainId: Record<number, string> = {
-      1: "https://etherscan.io",
-      10: "https://optimistic.etherscan.io",
-      137: "https://polygonscan.com",
-      8453: "https://basescan.org",
-      42161: "https://arbiscan.io",
-    };
-
     json(res, {
       configured: Boolean(registryService),
-      chainId,
+      chainId: 1,
       registryAddress: registryConfig?.registryAddress ?? null,
       collectionAddress: registryConfig?.collectionAddress ?? null,
-      explorerUrl: explorerByChainId[chainId] ?? "",
+      explorerUrl: "https://etherscan.io",
     });
     return;
   }
@@ -11376,7 +10298,7 @@ async function handleRequest(
     }>(req, res);
     if (!body) return;
 
-    const agentName = body.name || state.agentName || "Milady Agent";
+    const agentName = body.name || state.agentName || "Milaidy Agent";
     const endpoint = body.endpoint || "";
 
     const result = body.shiny
@@ -11401,7 +10323,7 @@ async function handleRequest(
       return;
     }
 
-    const agentName = body.name || state.agentName || "Milady Agent";
+    const agentName = body.name || state.agentName || "Milaidy Agent";
     const endpoint = body.endpoint || "";
     const result = await dropService.mintWithWhitelist(
       agentName,
@@ -11440,7 +10362,7 @@ async function handleRequest(
       error(res, "EVM wallet not configured. Complete onboarding first.");
       return;
     }
-    const agentName = state.agentName || "Milady Agent";
+    const agentName = state.agentName || "Milaidy Agent";
     const message = generateVerificationMessage(agentName, walletAddress);
     json(res, { message, walletAddress });
     return;
@@ -11470,14 +10392,14 @@ async function handleRequest(
 
   // ── GET /api/update/status ───────────────────────────────────────────────
   if (method === "GET" && pathname === "/api/update/status") {
-    const { VERSION } = await import("../runtime/version");
+    const { VERSION } = await import("../runtime/version.js");
     const {
       resolveChannel,
       checkForUpdate,
       fetchAllChannelVersions,
       CHANNEL_DIST_TAGS,
-    } = await import("../services/update-checker");
-    const { detectInstallMethod } = await import("../services/self-updater");
+    } = await import("../services/update-checker.js");
+    const { detectInstallMethod } = await import("../services/self-updater.js");
     const channel = resolveChannel(state.config.update);
 
     const [check, versions] = await Promise.all([
@@ -11518,7 +10440,7 @@ async function handleRequest(
       lastCheckAt: undefined,
       lastCheckVersion: undefined,
     };
-    saveMiladyConfig(state.config);
+    saveMilaidyConfig(state.config);
     json(res, { channel: ch });
     return;
   }
@@ -11559,7 +10481,7 @@ async function handleRequest(
     if (!state.config.connectors) state.config.connectors = {};
     state.config.connectors[connectorName] = config as ConnectorConfig;
     try {
-      saveMiladyConfig(state.config);
+      saveMilaidyConfig(state.config);
     } catch {
       /* test envs */
     }
@@ -11589,7 +10511,7 @@ async function handleRequest(
       delete state.config.channels[name];
     }
     try {
-      saveMiladyConfig(state.config);
+      saveMilaidyConfig(state.config);
     } catch {
       /* test envs */
     }
@@ -11601,23 +10523,6 @@ async function handleRequest(
     return;
   }
 
-  // ── WhatsApp routes (/api/whatsapp/*) ────────────────────────────────────
-  // Auth: these routes are protected by the isAuthorized(req) gate at L5331.
-  if (pathname.startsWith("/api/whatsapp")) {
-    if (!state.whatsappPairingSessions) {
-      state.whatsappPairingSessions = new Map();
-    }
-    const handled = await handleWhatsAppRoute(req, res, pathname, method, {
-      whatsappPairingSessions: state.whatsappPairingSessions,
-      broadcastWs: state.broadcastWs ?? undefined,
-      config: state.config,
-      runtime: state.runtime ?? undefined,
-      saveConfig: () => saveMiladyConfig(state.config),
-      workspaceDir: resolveDefaultAgentWorkspaceDir(),
-    });
-    if (handled) return;
-  }
-
   // ── POST /api/restart ───────────────────────────────────────────────────
   if (method === "POST" && pathname === "/api/restart") {
     json(res, { ok: true, message: "Restarting..." });
@@ -11625,262 +10530,9 @@ async function handleRequest(
     return;
   }
 
-  // ── POST /api/tts/elevenlabs ─────────────────────────────────────────────
-  if (method === "POST" && pathname === "/api/tts/elevenlabs") {
-    const body = await readJsonBody<{
-      text?: string;
-      voiceId?: string;
-      modelId?: string;
-      outputFormat?: string;
-      apiKey?: string;
-      apply_text_normalization?: "auto" | "on" | "off";
-      voice_settings?: {
-        stability?: number;
-        similarity_boost?: number;
-        speed?: number;
-      };
-    }>(req, res);
-    if (!body) return;
-
-    const text = typeof body.text === "string" ? body.text.trim() : "";
-    if (!text) {
-      error(res, "Missing text", 400);
-      return;
-    }
-
-    const messages =
-      state.config && typeof state.config === "object"
-        ? ((state.config as Record<string, unknown>).messages as
-            | Record<string, unknown>
-            | undefined)
-        : undefined;
-    const tts =
-      messages && typeof messages === "object"
-        ? ((messages.tts as Record<string, unknown>) ?? undefined)
-        : undefined;
-    const eleven =
-      tts && typeof tts === "object"
-        ? ((tts.elevenlabs as Record<string, unknown>) ?? undefined)
-        : undefined;
-
-    const requestedApiKey =
-      typeof body.apiKey === "string" ? body.apiKey.trim() : "";
-    const configuredApiKey =
-      typeof eleven?.apiKey === "string" ? eleven.apiKey.trim() : "";
-    const envApiKey =
-      typeof process.env.ELEVENLABS_API_KEY === "string"
-        ? process.env.ELEVENLABS_API_KEY.trim()
-        : "";
-
-    const resolvedApiKey =
-      requestedApiKey && !isRedactedSecretValue(requestedApiKey)
-        ? requestedApiKey
-        : configuredApiKey && !isRedactedSecretValue(configuredApiKey)
-          ? configuredApiKey
-          : envApiKey && !isRedactedSecretValue(envApiKey)
-            ? envApiKey
-            : "";
-
-    if (!resolvedApiKey) {
-      error(
-        res,
-        "ElevenLabs API key is not available. Set ELEVENLABS_API_KEY in Secrets.",
-        400,
-      );
-      return;
-    }
-
-    const voiceId =
-      (typeof body.voiceId === "string" && body.voiceId.trim()) ||
-      (typeof eleven?.voiceId === "string" && eleven.voiceId.trim()) ||
-      "EXAVITQu4vr4xnSDxMaL";
-    const modelId =
-      (typeof body.modelId === "string" && body.modelId.trim()) ||
-      (typeof eleven?.modelId === "string" && eleven.modelId.trim()) ||
-      "eleven_flash_v2_5";
-    const outputFormat =
-      (typeof body.outputFormat === "string" && body.outputFormat.trim()) ||
-      "mp3_22050_32";
-
-    const requestedVoiceSettings =
-      body.voice_settings &&
-      typeof body.voice_settings === "object" &&
-      !Array.isArray(body.voice_settings)
-        ? body.voice_settings
-        : undefined;
-
-    const voiceSettings: Record<string, number> = {};
-    const stability = requestedVoiceSettings?.stability;
-    if (typeof stability === "number" && stability >= 0 && stability <= 1) {
-      voiceSettings.stability = stability;
-    }
-    const similarityBoost = requestedVoiceSettings?.similarity_boost;
-    if (
-      typeof similarityBoost === "number" &&
-      similarityBoost >= 0 &&
-      similarityBoost <= 1
-    ) {
-      voiceSettings.similarity_boost = similarityBoost;
-    }
-    const speed = requestedVoiceSettings?.speed;
-    if (typeof speed === "number" && speed >= 0.5 && speed <= 2) {
-      voiceSettings.speed = speed;
-    }
-
-    const payload: Record<string, unknown> = {
-      text,
-      model_id: modelId,
-      apply_text_normalization:
-        body.apply_text_normalization === "on" ||
-        body.apply_text_normalization === "off"
-          ? body.apply_text_normalization
-          : "auto",
-    };
-    if (Object.keys(voiceSettings).length > 0) {
-      payload.voice_settings = voiceSettings;
-    }
-
-    try {
-      const upstreamUrl = new URL(
-        `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/stream`,
-      );
-      upstreamUrl.searchParams.set("output_format", outputFormat);
-
-      const upstream = await fetchWithTimeoutGuard(
-        upstreamUrl.toString(),
-        {
-          method: "POST",
-          headers: {
-            "xi-api-key": resolvedApiKey,
-            "Content-Type": "application/json",
-            Accept: "audio/mpeg",
-          },
-          body: JSON.stringify(payload),
-        },
-        ELEVENLABS_FETCH_TIMEOUT_MS,
-      );
-
-      if (!upstream.ok) {
-        const upstreamBody = await upstream.text().catch(() => "");
-        error(
-          res,
-          `ElevenLabs request failed (${upstream.status}): ${upstreamBody.slice(0, 240)}`,
-          upstream.status === 429 ? 429 : 502,
-        );
-        return;
-      }
-
-      const contentType = upstream.headers.get("content-type") || "audio/mpeg";
-      const contentLength = responseContentLength(upstream.headers);
-      if (
-        contentLength !== null &&
-        contentLength > ELEVENLABS_AUDIO_MAX_BYTES
-      ) {
-        error(
-          res,
-          `ElevenLabs response exceeds maximum size of ${ELEVENLABS_AUDIO_MAX_BYTES} bytes`,
-          502,
-        );
-        return;
-      }
-
-      res.writeHead(200, {
-        "Content-Type": contentType,
-        "Cache-Control": "no-store",
-        ...(contentLength !== null
-          ? { "Content-Length": String(contentLength) }
-          : {}),
-      });
-
-      await streamResponseBodyWithByteLimit(
-        upstream,
-        res,
-        ELEVENLABS_AUDIO_MAX_BYTES,
-        ELEVENLABS_FETCH_TIMEOUT_MS,
-      );
-      res.end();
-      return;
-    } catch (err) {
-      if (res.headersSent) {
-        res.destroy(
-          err instanceof Error
-            ? err
-            : new Error(
-                `ElevenLabs proxy error: ${typeof err === "string" ? err : String(err)}`,
-              ),
-        );
-        return;
-      }
-      error(
-        res,
-        `ElevenLabs proxy error: ${err instanceof Error ? err.message : String(err)}`,
-        isAbortError(err) ? 504 : 502,
-      );
-      return;
-    }
-  }
-
-  // ── POST /api/avatar/vrm ─────────────────────────────────────────────────
-  // Upload a custom VRM avatar file. Saved to ~/.milady/avatars/custom.vrm.
-  if (method === "POST" && pathname === "/api/avatar/vrm") {
-    const MAX_VRM_BYTES = 50 * 1024 * 1024; // 50 MB
-    const rawBody = await readRequestBodyBuffer(req, {
-      maxBytes: MAX_VRM_BYTES,
-      returnNullOnTooLarge: true,
-    });
-    if (!rawBody || rawBody.length === 0) {
-      error(res, "Request body is empty or exceeds 50 MB", 400);
-      return;
-    }
-    // VRM files are GLB (binary glTF) — validate the 4-byte magic header
-    const GLB_MAGIC = Buffer.from([0x67, 0x6c, 0x54, 0x46]); // "glTF"
-    if (rawBody.length < 4 || !rawBody.subarray(0, 4).equals(GLB_MAGIC)) {
-      error(res, "Invalid VRM file: not a valid glTF/GLB file", 400);
-      return;
-    }
-    const avatarDir = path.join(resolveStateDir(), "avatars");
-    fs.mkdirSync(avatarDir, { recursive: true });
-    const vrmPath = path.join(avatarDir, "custom.vrm");
-    fs.writeFileSync(vrmPath, rawBody);
-    json(res, { ok: true, size: rawBody.length });
-    return;
-  }
-
-  // ── GET /api/avatar/vrm ──────────────────────────────────────────────────
-  // Serve the user's custom VRM avatar file if it exists.
-  if (
-    (method === "GET" || method === "HEAD") &&
-    pathname === "/api/avatar/vrm"
-  ) {
-    const vrmPath = path.join(resolveStateDir(), "avatars", "custom.vrm");
-    try {
-      const stat = fs.statSync(vrmPath);
-      if (!stat.isFile()) {
-        error(res, "No custom avatar found", 404);
-        return;
-      }
-      const headers: Record<string, string | number> = {
-        "Content-Type": "model/gltf-binary",
-        "Content-Length": stat.size,
-        "Cache-Control": "no-cache",
-      };
-      if (method === "HEAD") {
-        res.writeHead(200, headers);
-        res.end();
-        return;
-      }
-      const body = fs.readFileSync(vrmPath);
-      res.writeHead(200, headers);
-      res.end(body);
-    } catch {
-      error(res, "No custom avatar found", 404);
-    }
-    return;
-  }
-
   // ── GET /api/config/schema ───────────────────────────────────────────────
   if (method === "GET" && pathname === "/api/config/schema") {
-    const { buildConfigSchema } = await import("../config/schema");
+    const { buildConfigSchema } = await import("../config/schema.js");
     const result = buildConfigSchema();
     json(res, result);
     return;
@@ -11898,6 +10550,46 @@ async function handleRequest(
     if (!body) return;
 
     // --- Security: validate and safely merge config updates ----------------
+
+    // Only accept known top-level keys from MilaidyConfig.
+    // Unknown or dangerous keys are silently dropped.
+    const ALLOWED_TOP_KEYS = new Set([
+      "meta",
+      "auth",
+      "env",
+      "wizard",
+      "diagnostics",
+      "logging",
+      "update",
+      "browser",
+      "ui",
+      "skills",
+      "plugins",
+      "models",
+      "nodeHost",
+      "agents",
+      "tools",
+      "bindings",
+      "broadcast",
+      "audio",
+      "messages",
+      "commands",
+      "approvals",
+      "session",
+      "web",
+      "channels",
+      "cron",
+      "hooks",
+      "discovery",
+      "talk",
+      "gateway",
+      "memory",
+      "database",
+      "cloud",
+      "x402",
+      "mcp",
+      "features",
+    ]);
 
     // Keys that could enable prototype pollution.
     /**
@@ -11935,7 +10627,7 @@ async function handleRequest(
     // Filter to allowed top-level keys, then deep-merge.
     const filtered: Record<string, unknown> = {};
     for (const key of Object.keys(body)) {
-      if (CONFIG_WRITE_ALLOWED_TOP_KEYS.has(key) && !isBlockedObjectKey(key)) {
+      if (ALLOWED_TOP_KEYS.has(key) && !isBlockedObjectKey(key)) {
         filtered[key] = body[key];
       }
     }
@@ -11952,41 +10644,16 @@ async function handleRequest(
       // merge, even though BLOCKED_ENV_KEYS also blocks them during process.env
       // sync below. Keeping both guards prevents accidental persistence if one
       // path changes in future refactors.
-      delete envPatch.MILADY_API_TOKEN;
-      delete envPatch.MILADY_WALLET_EXPORT_TOKEN;
+      delete envPatch.MILAIDY_API_TOKEN;
+      delete envPatch.MILAIDY_WALLET_EXPORT_TOKEN;
       if (
         envPatch.vars &&
         typeof envPatch.vars === "object" &&
         !Array.isArray(envPatch.vars)
       ) {
-        delete (envPatch.vars as Record<string, unknown>).MILADY_API_TOKEN;
+        delete (envPatch.vars as Record<string, unknown>).MILAIDY_API_TOKEN;
         delete (envPatch.vars as Record<string, unknown>)
-          .MILADY_WALLET_EXPORT_TOKEN;
-      }
-    }
-
-    if (
-      filtered.mcp &&
-      typeof filtered.mcp === "object" &&
-      !Array.isArray(filtered.mcp)
-    ) {
-      const mcpPatch = filtered.mcp as Record<string, unknown>;
-      if (mcpPatch.servers !== undefined) {
-        if (
-          !mcpPatch.servers ||
-          typeof mcpPatch.servers !== "object" ||
-          Array.isArray(mcpPatch.servers)
-        ) {
-          error(res, "mcp.servers must be a JSON object", 400);
-          return;
-        }
-        const mcpRejection = await resolveMcpServersRejection(
-          mcpPatch.servers as Record<string, unknown>,
-        );
-        if (mcpRejection) {
-          error(res, mcpRejection, 400);
-          return;
-        }
+          .MILAIDY_WALLET_EXPORT_TOKEN;
       }
     }
 
@@ -12005,7 +10672,7 @@ async function handleRequest(
     }
 
     // If the client updated env vars, synchronise them into process.env so
-    // subsequent hot-restarts see the latest values (loadMiladyConfig()
+    // subsequent hot-restarts see the latest values (loadMilaidyConfig()
     // only fills missing env vars and does not override existing ones).
     if (
       filtered.env &&
@@ -12055,7 +10722,7 @@ async function handleRequest(
     }
 
     try {
-      saveMiladyConfig(state.config);
+      saveMilaidyConfig(state.config);
     } catch (err) {
       logger.warn(
         `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
@@ -12065,20 +10732,171 @@ async function handleRequest(
     return;
   }
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // Permission routes (/api/permissions/*)
+  // System permissions for computer use, microphone, camera, etc.
+  // ═══════════════════════════════════════════════════════════════════════
+
+  // ── GET /api/permissions ───────────────────────────────────────────────
+  // Returns all system permission states
+  if (method === "GET" && pathname === "/api/permissions") {
+    const permStates = state.permissionStates ?? {};
+    json(res, {
+      permissions: permStates,
+      platform: process.platform,
+      shellEnabled: state.shellEnabled ?? true,
+    });
+    return;
+  }
+
+  // ── GET /api/permissions/shell ─────────────────────────────────────────
+  // Return shell toggle status in a stable shape for UI clients.
+  if (method === "GET" && pathname === "/api/permissions/shell") {
+    const enabled = state.shellEnabled ?? true;
+    if (!state.permissionStates) {
+      state.permissionStates = {};
+    }
+    const shellState = state.permissionStates.shell;
+    const permission = {
+      id: "shell",
+      status: enabled ? "granted" : "denied",
+      lastChecked: shellState?.lastChecked ?? Date.now(),
+      canRequest: false,
+    };
+    state.permissionStates.shell = permission;
+
+    // Keep the legacy top-level permission fields for compatibility with
+    // callers that previously treated /api/permissions/shell as a generic
+    // /api/permissions/:id response.
+    json(res, {
+      enabled,
+      ...permission,
+      permission,
+    });
+    return;
+  }
+
+  // ── GET /api/permissions/:id ───────────────────────────────────────────
+  // Returns a single permission state
+  if (method === "GET" && pathname.startsWith("/api/permissions/")) {
+    const permId = pathname.slice("/api/permissions/".length);
+    if (!permId || permId.includes("/")) {
+      error(res, "Invalid permission ID", 400);
+      return;
+    }
+    const permStates = state.permissionStates ?? {};
+    const permState = permStates[permId];
+    if (!permState) {
+      json(res, {
+        id: permId,
+        status: "not-applicable",
+        lastChecked: Date.now(),
+        canRequest: false,
+      });
+      return;
+    }
+    json(res, permState);
+    return;
+  }
+
+  // ── POST /api/permissions/refresh ──────────────────────────────────────
+  // Force refresh all permission states (clears cache)
+  if (method === "POST" && pathname === "/api/permissions/refresh") {
+    // Signal to the client that they should refresh permissions via IPC
+    // The actual permission checking happens in the Electron main process
+    json(res, {
+      message: "Permission refresh requested",
+      action: "ipc:permissions:refresh",
+    });
+    return;
+  }
+
+  // ── POST /api/permissions/:id/request ──────────────────────────────────
+  // Request a specific permission (triggers system prompt or opens settings)
   if (
-    await handlePermissionRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      state,
-      readJsonBody,
-      json,
-      error,
-      saveConfig: saveMiladyConfig,
-      scheduleRuntimeRestart,
-    })
+    method === "POST" &&
+    pathname.match(/^\/api\/permissions\/[^/]+\/request$/)
   ) {
+    const permId = pathname.split("/")[3];
+    json(res, {
+      message: `Permission request for ${permId}`,
+      action: `ipc:permissions:request:${permId}`,
+    });
+    return;
+  }
+
+  // ── POST /api/permissions/:id/open-settings ────────────────────────────
+  // Open system settings for a specific permission
+  if (
+    method === "POST" &&
+    pathname.match(/^\/api\/permissions\/[^/]+\/open-settings$/)
+  ) {
+    const permId = pathname.split("/")[3];
+    json(res, {
+      message: `Opening settings for ${permId}`,
+      action: `ipc:permissions:openSettings:${permId}`,
+    });
+    return;
+  }
+
+  // ── PUT /api/permissions/shell ─────────────────────────────────────────
+  // Toggle shell access enabled/disabled
+  if (method === "PUT" && pathname === "/api/permissions/shell") {
+    const body = await readJsonBody(req, res);
+    if (!body) return;
+    const enabled = body.enabled === true;
+    state.shellEnabled = enabled;
+
+    // Update permission state
+    if (!state.permissionStates) {
+      state.permissionStates = {};
+    }
+    state.permissionStates.shell = {
+      id: "shell",
+      status: enabled ? "granted" : "denied",
+      lastChecked: Date.now(),
+      canRequest: false,
+    };
+
+    // Save to config
+    if (!state.config.features) {
+      state.config.features = {};
+    }
+    state.config.features.shellEnabled = enabled;
+    saveMilaidyConfig(state.config);
+
+    // If a runtime is active, restart so plugin loading honors the new
+    // shellEnabled flag and shell tools are loaded/unloaded consistently.
+    if (state.runtime && ctx?.onRestart) {
+      scheduleRuntimeRestart(
+        `Shell access ${enabled ? "enabled" : "disabled"}`,
+      );
+    }
+
+    json(res, {
+      shellEnabled: enabled,
+      permission: state.permissionStates.shell,
+    });
+    return;
+  }
+
+  // ── PUT /api/permissions/state ─────────────────────────────────────────
+  // Update permission states from Electron (called by renderer after IPC)
+  if (method === "PUT" && pathname === "/api/permissions/state") {
+    const body = await readJsonBody(req, res);
+    if (!body) return;
+    if (body.permissions && typeof body.permissions === "object") {
+      state.permissionStates = body.permissions as Record<
+        string,
+        {
+          id: string;
+          status: string;
+          lastChecked: number;
+          canRequest: boolean;
+        }
+      >;
+    }
+    json(res, { updated: true, permissions: state.permissionStates });
     return;
   }
 
@@ -12122,7 +10940,7 @@ async function handleRequest(
         : (stringToUuid(`${state.agentName}-admin-entity`) as UUID);
     if (configured && !isUuidLike(configured)) {
       logger.warn(
-        `[milady-api] Invalid agents.defaults.adminEntityId "${configured}", using deterministic fallback`,
+        `[milaidy-api] Invalid agents.defaults.adminEntityId "${configured}", using deterministic fallback`,
       );
     }
     state.adminEntityId = nextAdminEntityId;
@@ -12173,7 +10991,7 @@ async function handleRequest(
   ): Promise<void> => {
     if (!state.runtime) return;
     const runtime = state.runtime;
-    const agentName = runtime.character.name ?? "Milady";
+    const agentName = runtime.character.name ?? "Milaidy";
     const userId = ensureAdminEntityId();
     const worldId = stringToUuid(`${agentName}-web-chat-world`);
     const messageServerId = stringToUuid(`${agentName}-web-server`) as UUID;
@@ -12257,585 +11075,6 @@ async function handleRequest(
     }
   };
 
-  const ensureCompatChatConnection = async (
-    runtime: AgentRuntime,
-    agentName: string,
-    channelIdPrefix: string,
-    roomKey: string,
-  ): Promise<{ userId: UUID; roomId: UUID; worldId: UUID }> => {
-    const userId = ensureAdminEntityId();
-    const roomId = stringToUuid(
-      `${agentName}-${channelIdPrefix}-room-${roomKey}`,
-    ) as UUID;
-    const worldId = stringToUuid(`${agentName}-web-chat-world`) as UUID;
-    const messageServerId = stringToUuid(`${agentName}-web-server`) as UUID;
-
-    await runtime.ensureConnection({
-      entityId: userId,
-      roomId,
-      worldId,
-      userName: "User",
-      source: "client_chat",
-      channelId: `${channelIdPrefix}-${roomKey}`,
-      type: ChannelType.DM,
-      messageServerId,
-      metadata: { ownership: { ownerId: userId } },
-    });
-    await ensureWorldOwnershipAndRoles(runtime, worldId, userId);
-
-    return { userId, roomId, worldId };
-  };
-
-  // -------------------------------------------------------------------------
-  // OpenAI / Anthropic compatibility endpoints
-  // -------------------------------------------------------------------------
-
-  // ── GET /v1/models (OpenAI compatible) ─────────────────────────────────
-  if (method === "GET" && pathname === "/v1/models") {
-    const created = Math.floor(Date.now() / 1000);
-    const ids = new Set<string>();
-    ids.add("milady");
-    if (state.agentName?.trim()) ids.add(state.agentName.trim());
-    if (state.runtime?.character.name?.trim())
-      ids.add(state.runtime.character.name.trim());
-
-    json(res, {
-      object: "list",
-      data: Array.from(ids).map((id) => ({
-        id,
-        object: "model",
-        created,
-        owned_by: "milady",
-      })),
-    });
-    return;
-  }
-
-  // ── GET /v1/models/:id (OpenAI compatible) ─────────────────────────────
-  if (method === "GET" && /^\/v1\/models\/[^/]+$/.test(pathname)) {
-    const created = Math.floor(Date.now() / 1000);
-    const raw = pathname.split("/")[3] ?? "";
-    const decoded = decodePathComponent(raw, res, "model id");
-    if (!decoded) return;
-    const id = decoded.trim();
-    if (!id) {
-      json(
-        res,
-        {
-          error: {
-            message: "Model id is required",
-            type: "invalid_request_error",
-          },
-        },
-        400,
-      );
-      return;
-    }
-    json(res, { id, object: "model", created, owned_by: "milady" });
-    return;
-  }
-
-  // ── POST /v1/chat/completions (OpenAI compatible) ──────────────────────
-  if (method === "POST" && pathname === "/v1/chat/completions") {
-    const body = await readJsonBody<Record<string, unknown>>(req, res);
-    if (!body) return;
-    if (hasBlockedObjectKeyDeep(body)) {
-      json(
-        res,
-        {
-          error: {
-            message: "Request body contains a blocked object key",
-            type: "invalid_request_error",
-          },
-        },
-        400,
-      );
-      return;
-    }
-    const safeBody = cloneWithoutBlockedObjectKeys(body);
-
-    const extracted = extractOpenAiSystemAndLastUser(safeBody.messages);
-    if (!extracted) {
-      json(
-        res,
-        {
-          error: {
-            message:
-              "messages must be an array containing at least one user message",
-            type: "invalid_request_error",
-          },
-        },
-        400,
-      );
-      return;
-    }
-
-    const roomKey = resolveCompatRoomKey(safeBody).slice(0, 120);
-    const wantsStream =
-      safeBody.stream === true ||
-      (req.headers.accept ?? "").includes("text/event-stream");
-    const requestedModel =
-      typeof safeBody.model === "string" && safeBody.model.trim()
-        ? safeBody.model.trim()
-        : null;
-
-    const prompt = extracted.system
-      ? `${extracted.system}\n\n${extracted.user}`.trim()
-      : extracted.user;
-
-    const created = Math.floor(Date.now() / 1000);
-    const id = `chatcmpl-${crypto.randomUUID()}`;
-    const model = requestedModel ?? state.agentName ?? "milady";
-
-    if (wantsStream) {
-      initSse(res);
-      let aborted = false;
-      req.on("close", () => {
-        aborted = true;
-      });
-
-      const sendChunk = (
-        delta: Record<string, unknown>,
-        finishReason: string | null,
-      ) => {
-        writeSseData(
-          res,
-          JSON.stringify({
-            id,
-            object: "chat.completion.chunk",
-            created,
-            model,
-            choices: [
-              {
-                index: 0,
-                delta,
-                finish_reason: finishReason,
-              },
-            ],
-          }),
-        );
-      };
-
-      try {
-        if (!state.runtime) {
-          writeSseData(
-            res,
-            JSON.stringify({
-              error: {
-                message: "Agent is not running",
-                type: "service_unavailable",
-              },
-            }),
-          );
-          writeSseData(res, "[DONE]");
-          return;
-        }
-
-        sendChunk({ role: "assistant" }, null);
-
-        let fullText = "";
-
-        {
-          const runtime = state.runtime;
-          if (!runtime) throw new Error("Agent is not running");
-          const agentName = runtime.character.name ?? "Milady";
-          const { userId, roomId } = await ensureCompatChatConnection(
-            runtime,
-            agentName,
-            "openai-compat",
-            roomKey,
-          );
-
-          const message = createMessageMemory({
-            id: crypto.randomUUID() as UUID,
-            entityId: userId,
-            agentId: runtime.agentId,
-            roomId,
-            content: {
-              text: prompt,
-              source: "compat_openai",
-              channelType: ChannelType.API,
-            },
-          });
-
-          await generateChatResponse(runtime, message, state.agentName, {
-            isAborted: () => aborted,
-            onChunk: (chunk) => {
-              fullText += chunk;
-              if (chunk) sendChunk({ content: chunk }, null);
-            },
-            resolveNoResponseText: () =>
-              resolveNoResponseFallback(state.logBuffer),
-          });
-        }
-
-        const resolved = normalizeChatResponseText(fullText, state.logBuffer);
-        if (
-          (fullText.trim().length === 0 || isNoResponsePlaceholder(fullText)) &&
-          resolved.trim()
-        ) {
-          // Ensure clients receive a non-empty completion even if the model returned "(no response)".
-          sendChunk({ content: resolved }, null);
-        }
-
-        sendChunk({}, "stop");
-        writeSseData(res, "[DONE]");
-      } catch (err) {
-        if (!aborted) {
-          writeSseData(
-            res,
-            JSON.stringify({
-              error: {
-                message: getErrorMessage(err),
-                type: "server_error",
-              },
-            }),
-          );
-          writeSseData(res, "[DONE]");
-        }
-      } finally {
-        res.end();
-      }
-      return;
-    }
-
-    // Non-streaming
-    try {
-      let responseText: string;
-
-      {
-        if (!state.runtime) {
-          json(
-            res,
-            {
-              error: {
-                message: "Agent is not running",
-                type: "service_unavailable",
-              },
-            },
-            503,
-          );
-          return;
-        }
-        const runtime = state.runtime;
-        const agentName = runtime.character.name ?? "Milady";
-        const { userId, roomId } = await ensureCompatChatConnection(
-          runtime,
-          agentName,
-          "openai-compat",
-          roomKey,
-        );
-        const message = createMessageMemory({
-          id: crypto.randomUUID() as UUID,
-          entityId: userId,
-          roomId,
-          content: {
-            text: prompt,
-            source: "compat_openai",
-            channelType: ChannelType.API,
-          },
-        });
-        const result = await generateChatResponse(
-          runtime,
-          message,
-          state.agentName,
-          {
-            resolveNoResponseText: () =>
-              resolveNoResponseFallback(state.logBuffer),
-          },
-        );
-        responseText = result.text;
-      }
-
-      const resolvedText = normalizeChatResponseText(
-        responseText,
-        state.logBuffer,
-      );
-      json(res, {
-        id,
-        object: "chat.completion",
-        created,
-        model,
-        choices: [
-          {
-            index: 0,
-            message: { role: "assistant", content: resolvedText },
-            finish_reason: "stop",
-          },
-        ],
-      });
-    } catch (err) {
-      json(
-        res,
-        { error: { message: getErrorMessage(err), type: "server_error" } },
-        500,
-      );
-    }
-    return;
-  }
-
-  // ── POST /v1/messages (Anthropic compatible) ───────────────────────────
-  if (method === "POST" && pathname === "/v1/messages") {
-    const body = await readJsonBody<Record<string, unknown>>(req, res);
-    if (!body) return;
-    if (hasBlockedObjectKeyDeep(body)) {
-      json(
-        res,
-        {
-          error: {
-            type: "invalid_request_error",
-            message: "Request body contains a blocked object key",
-          },
-        },
-        400,
-      );
-      return;
-    }
-    const safeBody = cloneWithoutBlockedObjectKeys(body);
-
-    const extracted = extractAnthropicSystemAndLastUser({
-      system: safeBody.system,
-      messages: safeBody.messages,
-    });
-    if (!extracted) {
-      json(
-        res,
-        {
-          error: {
-            type: "invalid_request_error",
-            message:
-              "messages must be an array containing at least one user message",
-          },
-        },
-        400,
-      );
-      return;
-    }
-
-    const roomKey = resolveCompatRoomKey(safeBody).slice(0, 120);
-    const wantsStream =
-      safeBody.stream === true ||
-      (req.headers.accept ?? "").includes("text/event-stream");
-    const requestedModel =
-      typeof safeBody.model === "string" && safeBody.model.trim()
-        ? safeBody.model.trim()
-        : null;
-
-    const prompt = extracted.system
-      ? `${extracted.system}\n\n${extracted.user}`.trim()
-      : extracted.user;
-
-    const id = `msg_${crypto.randomUUID().replace(/-/g, "")}`;
-    const model = requestedModel ?? state.agentName ?? "milady";
-
-    if (wantsStream) {
-      initSse(res);
-      let aborted = false;
-      req.on("close", () => {
-        aborted = true;
-      });
-
-      try {
-        if (!state.runtime) {
-          writeSseJson(
-            res,
-            {
-              type: "error",
-              error: {
-                type: "service_unavailable",
-                message: "Agent is not running",
-              },
-            },
-            "error",
-          );
-          return;
-        }
-
-        writeSseJson(
-          res,
-          {
-            type: "message_start",
-            message: {
-              id,
-              type: "message",
-              role: "assistant",
-              model,
-              content: [],
-              stop_reason: null,
-              stop_sequence: null,
-              usage: { input_tokens: 0, output_tokens: 0 },
-            },
-          },
-          "message_start",
-        );
-        writeSseJson(
-          res,
-          {
-            type: "content_block_start",
-            index: 0,
-            content_block: { type: "text", text: "" },
-          },
-          "content_block_start",
-        );
-
-        let fullText = "";
-
-        const onDelta = (chunk: string) => {
-          if (!chunk) return;
-          fullText += chunk;
-          writeSseJson(
-            res,
-            {
-              type: "content_block_delta",
-              index: 0,
-              delta: { type: "text_delta", text: chunk },
-            },
-            "content_block_delta",
-          );
-        };
-
-        {
-          const runtime = state.runtime;
-          if (!runtime) throw new Error("Agent is not running");
-          const agentName = runtime.character.name ?? "Milady";
-          const { userId, roomId } = await ensureCompatChatConnection(
-            runtime,
-            agentName,
-            "anthropic-compat",
-            roomKey,
-          );
-
-          const message = createMessageMemory({
-            id: crypto.randomUUID() as UUID,
-            entityId: userId,
-            roomId,
-            content: {
-              text: prompt,
-              source: "compat_anthropic",
-              channelType: ChannelType.API,
-            },
-          });
-
-          await generateChatResponse(runtime, message, state.agentName, {
-            isAborted: () => aborted,
-            onChunk: onDelta,
-            resolveNoResponseText: () =>
-              resolveNoResponseFallback(state.logBuffer),
-          });
-        }
-
-        const resolved = normalizeChatResponseText(fullText, state.logBuffer);
-        if (
-          (fullText.trim().length === 0 || isNoResponsePlaceholder(fullText)) &&
-          resolved.trim()
-        ) {
-          onDelta(resolved);
-        }
-
-        writeSseJson(
-          res,
-          { type: "content_block_stop", index: 0 },
-          "content_block_stop",
-        );
-        writeSseJson(
-          res,
-          {
-            type: "message_delta",
-            delta: { stop_reason: "end_turn", stop_sequence: null },
-            usage: { output_tokens: 0 },
-          },
-          "message_delta",
-        );
-        writeSseJson(res, { type: "message_stop" }, "message_stop");
-      } catch (err) {
-        if (!aborted) {
-          writeSseJson(
-            res,
-            {
-              type: "error",
-              error: { type: "server_error", message: getErrorMessage(err) },
-            },
-            "error",
-          );
-        }
-      } finally {
-        res.end();
-      }
-      return;
-    }
-
-    // Non-streaming
-    try {
-      let responseText: string;
-
-      {
-        if (!state.runtime) {
-          json(
-            res,
-            {
-              error: {
-                type: "service_unavailable",
-                message: "Agent is not running",
-              },
-            },
-            503,
-          );
-          return;
-        }
-        const runtime = state.runtime;
-        const agentName = runtime.character.name ?? "Milady";
-        const { userId, roomId } = await ensureCompatChatConnection(
-          runtime,
-          agentName,
-          "anthropic-compat",
-          roomKey,
-        );
-        const message = createMessageMemory({
-          id: crypto.randomUUID() as UUID,
-          entityId: userId,
-          roomId,
-          content: {
-            text: prompt,
-            source: "compat_anthropic",
-            channelType: ChannelType.API,
-          },
-        });
-        const result = await generateChatResponse(
-          runtime,
-          message,
-          state.agentName,
-          {
-            resolveNoResponseText: () =>
-              resolveNoResponseFallback(state.logBuffer),
-          },
-        );
-        responseText = result.text;
-      }
-
-      const resolvedText = normalizeChatResponseText(
-        responseText,
-        state.logBuffer,
-      );
-      json(res, {
-        id,
-        type: "message",
-        role: "assistant",
-        model,
-        content: [{ type: "text", text: resolvedText }],
-        stop_reason: "end_turn",
-        stop_sequence: null,
-        usage: { input_tokens: 0, output_tokens: 0 },
-      });
-    } catch (err) {
-      json(
-        res,
-        { error: { type: "server_error", message: getErrorMessage(err) } },
-        500,
-      );
-    }
-    return;
-  }
-
   // ── GET /api/conversations ──────────────────────────────────────────
   if (method === "GET" && pathname === "/api/conversations") {
     const convos = Array.from(state.conversations.values()).sort(
@@ -12861,10 +11100,6 @@ async function handleRequest(
       updatedAt: now,
     };
     state.conversations.set(id, conv);
-
-    // Soft cap: evict the oldest conversation when the map exceeds 500
-    evictOldestConversation(state.conversations, 500);
-
     if (state.runtime) {
       await ensureConversationRoom(conv);
       await syncConversationRoomTitle(conv);
@@ -12884,20 +11119,19 @@ async function handleRequest(
       error(res, "Conversation not found", 404);
       return;
     }
-    if (!state.runtime) {
+    if (!state.runtime || state.agentState !== "running") {
       json(res, { messages: [] });
       return;
     }
-    const runtime = state.runtime;
     try {
-      const memories = await runtime.getMemories({
+      const memories = await state.runtime.getMemories({
         roomId: conv.roomId,
         tableName: "messages",
         count: 200,
       });
       // Sort by createdAt ascending
       memories.sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
-      const agentId = runtime.agentId;
+      const agentId = state.runtime.agentId;
       const messages = memories.map((m) => {
         const contentSource = (m.content as Record<string, unknown>)?.source;
         return {
@@ -13017,37 +11251,6 @@ async function handleRequest(
       return;
     }
 
-    const userId = ensureAdminEntityId();
-    const turnStartedAt = Date.now();
-
-    try {
-      await ensureConversationRoom(conv);
-    } catch (err) {
-      error(
-        res,
-        `Failed to initialize conversation room: ${getErrorMessage(err)}`,
-        500,
-      );
-      return;
-    }
-
-    const { userMessage, messageToStore } = buildUserMessages({
-      images,
-      prompt,
-      userId,
-      roomId: conv.roomId,
-      channelType,
-    });
-
-    try {
-      await persistConversationMemory(runtime, messageToStore);
-    } catch (err) {
-      error(res, `Failed to store user message: ${getErrorMessage(err)}`, 500);
-      return;
-    }
-
-    // ── Local runtime path (existing code below) ───────────────────────
-
     initSse(res);
     writeSse(res, {
       type: "ready",
@@ -13103,7 +11306,7 @@ async function handleRequest(
 
       const result = await generateChatResponse(
         runtime,
-        userMessage,
+        message,
         state.agentName,
         {
           mode,
@@ -13119,13 +11322,6 @@ async function handleRequest(
       );
 
       if (!aborted) {
-        await persistAssistantConversationMemory(
-          runtime,
-          conv.roomId,
-          result.text,
-          channelType,
-          turnStartedAt,
-        );
         conv.updatedAt = new Date().toISOString();
         writeSse(res, {
           type: "done",
@@ -13135,48 +11331,17 @@ async function handleRequest(
           requestedMode,
           autoEscalated: modeDecision.autoEscalated,
         });
-
-        // Background chat renaming
-        if (conv.title === "New Chat") {
-          // Fire and forget (don't await) to not block the response stream close
-          generateConversationTitle(runtime, prompt, state.agentName).then(
-            (newTitle) => {
-              if (newTitle && state.broadcastWs) {
-                conv.title = newTitle;
-                // Broadcast full conversations list update for simplicity
-                // (or ideally a specific event, but the frontend listens for reloads)
-                state.broadcastWs({
-                  type: "conversation-updated",
-                  conversation: conv,
-                });
-              }
-            },
-          );
-        }
       }
     } catch (err) {
       if (!aborted) {
         const creditReply = getInsufficientCreditsReplyFromError(err);
         if (creditReply) {
-          try {
-            await persistAssistantConversationMemory(
-              runtime,
-              conv.roomId,
-              creditReply,
-              channelType,
-            );
-            conv.updatedAt = new Date().toISOString();
-            writeSse(res, {
-              type: "done",
-              fullText: creditReply,
-              agentName: state.agentName,
-            });
-          } catch (persistErr) {
-            writeSse(res, {
-              type: "error",
-              message: getErrorMessage(persistErr),
-            });
-          }
+          conv.updatedAt = new Date().toISOString();
+          writeSse(res, {
+            type: "done",
+            fullText: creditReply,
+            agentName: state.agentName,
+          });
         } else {
           writeSse(res, {
             type: "error",
@@ -13228,8 +11393,6 @@ async function handleRequest(
       error(res, "Agent is not running", 503);
       return;
     }
-    const userId = ensureAdminEntityId();
-    const turnStartedAt = Date.now();
 
     // Cloud proxy path
     const proxy = state.cloudManager?.getProxy();
@@ -13301,7 +11464,7 @@ async function handleRequest(
 
       const result = await generateChatResponse(
         runtime,
-        userMessage,
+        message,
         state.agentName,
         {
           mode,
@@ -13311,13 +11474,6 @@ async function handleRequest(
         },
       );
 
-      await persistAssistantConversationMemory(
-        runtime,
-        conv.roomId,
-        result.text,
-        channelType,
-        turnStartedAt,
-      );
       conv.updatedAt = new Date().toISOString();
       json(res, {
         text: result.text,
@@ -13327,26 +11483,13 @@ async function handleRequest(
         autoEscalated: modeDecision.autoEscalated,
       });
     } catch (err) {
-      logger.warn(
-        `[conversations] POST /messages failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
       const creditReply = getInsufficientCreditsReplyFromError(err);
       if (creditReply) {
-        try {
-          await persistAssistantConversationMemory(
-            runtime,
-            conv.roomId,
-            creditReply,
-            channelType,
-          );
-          conv.updatedAt = new Date().toISOString();
-          json(res, {
-            text: creditReply,
-            agentName: state.agentName,
-          });
-        } catch (persistErr) {
-          error(res, getErrorMessage(persistErr), 500);
-        }
+        conv.updatedAt = new Date().toISOString();
+        json(res, {
+          text: creditReply,
+          agentName: state.agentName,
+        });
       } else {
         error(res, getErrorMessage(err), 500);
       }
@@ -13370,41 +11513,21 @@ async function handleRequest(
     }
 
     const runtime = state.runtime;
-    if (!runtime) {
-      error(res, "Agent is not running", 503);
-      return;
-    }
-    const charName = runtime.character.name ?? state.agentName ?? "Milady";
+    const charName = runtime?.character.name ?? state.agentName ?? "Milaidy";
+    const FALLBACK_MSG = `Hey! I'm ${charName}. What's on your mind?`;
 
     // Collect post examples from the character
-    const postExamples = runtime.character.postExamples ?? [];
+    const postExamples = runtime?.character.postExamples ?? [];
     const greeting =
-      postExamples[Math.floor(Math.random() * postExamples.length)];
+      postExamples.length > 0
+        ? postExamples[Math.floor(Math.random() * postExamples.length)]
+        : FALLBACK_MSG;
 
-    if (!greeting?.trim()) {
-      json(res, {
-        text: "",
-        agentName: charName,
-        generated: false,
-      });
-      return;
-    }
-
-    try {
-      await ensureConversationRoom(conv);
-    } catch (err) {
-      error(
-        res,
-        `Failed to initialize conversation room: ${getErrorMessage(err)}`,
-        500,
-      );
-      return;
-    }
-
-    try {
-      await persistConversationMemory(
-        runtime,
-        createMessageMemory({
+    // Store the greeting as an agent message so it persists on refresh
+    if (runtime && state.agentState === "running") {
+      try {
+        await ensureConversationRoom(conv);
+        const agentMemory = createMessageMemory({
           id: crypto.randomUUID() as UUID,
           entityId: runtime.agentId,
           roomId: conv.roomId,
@@ -13413,15 +11536,13 @@ async function handleRequest(
             source: "agent_greeting",
             channelType: ChannelType.DM,
           },
-        }),
-      );
-    } catch (err) {
-      error(
-        res,
-        `Failed to store greeting message: ${getErrorMessage(err)}`,
-        500,
-      );
-      return;
+        });
+        await runtime.createMemory(agentMemory, "messages");
+      } catch (memErr) {
+        logger.debug(
+          `[greeting] Failed to store greeting memory: ${memErr instanceof Error ? memErr.message : String(memErr)}`,
+        );
+      }
     }
 
     conv.updatedAt = new Date().toISOString();
@@ -13561,7 +11682,7 @@ async function handleRequest(
 
     try {
       const runtime = state.runtime;
-      const agentName = runtime.character.name ?? "Milady";
+      const agentName = runtime.character.name ?? "Milaidy";
       await ensureLegacyChatConnection(runtime, agentName);
       const chatUserId = state.chatUserId;
       const chatRoomId = state.chatRoomId;
@@ -13572,12 +11693,13 @@ async function handleRequest(
       const message = createMessageMemory({
         id: crypto.randomUUID() as UUID,
         entityId: chatUserId,
-        agentId: runtime.agentId,
         roomId: chatRoomId,
         content: {
           text: prompt,
+          mode,
+          simple: mode === "simple",
           source: "client_chat",
-          channelType,
+          channelType: ChannelType.DM,
         },
       });
 
@@ -13803,7 +11925,7 @@ async function handleRequest(
 
     try {
       const runtime = state.runtime;
-      const agentName = runtime.character.name ?? "Milady";
+      const agentName = runtime.character.name ?? "Milaidy";
       await ensureLegacyChatConnection(runtime, agentName);
       const chatUserId = state.chatUserId;
       const chatRoomId = state.chatRoomId;
@@ -13814,14 +11936,13 @@ async function handleRequest(
       const message = createMessageMemory({
         id: crypto.randomUUID() as UUID,
         entityId: chatUserId,
-        agentId: runtime.agentId,
         roomId: chatRoomId,
         content: {
           text: prompt,
           mode,
           simple: mode === "simple",
           source: "client_chat",
-          channelType,
+          channelType: ChannelType.DM,
         },
       });
 
@@ -13886,41 +12007,154 @@ async function handleRequest(
 
   // ── Trajectory management API ──────────────────────────────────────────
   if (pathname.startsWith("/api/trajectories")) {
-    if (state.runtime) {
-      const handled = await handleTrajectoryRoute(
-        req,
-        res,
-        state.runtime,
-        pathname,
-        method,
-      );
-      if (handled) return;
-    }
-  }
-
-  // ── Coding Agent API (/api/coding-agents/*, /api/workspace/*, /api/issues/*) ──
-  if (
-    state.runtime &&
-    (pathname.startsWith("/api/coding-agents") ||
-      pathname.startsWith("/api/workspace") ||
-      pathname.startsWith("/api/issues"))
-  ) {
-    const handler = createCodingAgentRouteHandler(state.runtime);
-    const handled = await handler(req, res, pathname);
+    const handled = await handleTrajectoryRoute(
+      req,
+      res,
+      state.runtime,
+      pathname,
+    );
     if (handled) return;
   }
 
-  if (
-    await handleCloudStatusRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      config: state.config,
-      runtime: state.runtime,
-      json,
-    })
-  ) {
+  // ── GET /api/cloud/status ─────────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/cloud/status") {
+    const cloudEnabled = Boolean(state.config.cloud?.enabled);
+    const hasApiKey = Boolean(state.config.cloud?.apiKey);
+    const rt = state.runtime;
+    if (!rt) {
+      json(res, {
+        connected: false,
+        enabled: cloudEnabled,
+        hasApiKey,
+        reason: "runtime_not_started",
+      });
+      return;
+    }
+    const cloudAuth = rt.getService("CLOUD_AUTH") as {
+      isAuthenticated: () => boolean;
+      getUserId: () => string | undefined;
+      getOrganizationId: () => string | undefined;
+    } | null;
+    if (cloudAuth?.isAuthenticated()) {
+      json(res, {
+        connected: true,
+        enabled: cloudEnabled,
+        hasApiKey,
+        userId: cloudAuth.getUserId(),
+        organizationId: cloudAuth.getOrganizationId(),
+        topUpUrl: "https://www.elizacloud.ai/dashboard/billing",
+      });
+      return;
+    }
+    json(res, {
+      connected: false,
+      enabled: cloudEnabled,
+      hasApiKey,
+      reason: hasApiKey
+        ? "api_key_present_not_authenticated"
+        : "not_authenticated",
+    });
+    return;
+  }
+
+  // ── GET /api/cloud/credits ──────────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/cloud/credits") {
+    const rt = state.runtime;
+    const cloudAuth = rt
+      ? (rt.getService("CLOUD_AUTH") as {
+          isAuthenticated: () => boolean;
+          getClient: () => { get: <T>(path: string) => Promise<T> };
+        } | null)
+      : null;
+    const configApiKey = state.config.cloud?.apiKey?.trim();
+
+    if (!cloudAuth || !cloudAuth.isAuthenticated()) {
+      if (!configApiKey) {
+        json(res, { balance: null, connected: false });
+        return;
+      }
+
+      try {
+        const balance = await fetchCloudCreditsByApiKey(
+          resolveCloudApiBaseUrl(state.config.cloud?.baseUrl),
+          configApiKey,
+        );
+        if (typeof balance !== "number") {
+          json(res, {
+            balance: null,
+            connected: true,
+            error: "unexpected response",
+          });
+          return;
+        }
+        const low = balance < 2.0;
+        const critical = balance < 0.5;
+        json(res, {
+          connected: true,
+          balance,
+          low,
+          critical,
+          topUpUrl: "https://www.elizacloud.ai/dashboard/billing",
+        });
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : "cloud API unreachable";
+        logger.debug(
+          `[cloud/credits] Failed to fetch balance via API key: ${msg}`,
+        );
+        json(res, { balance: null, connected: true, error: msg });
+      }
+      return;
+    }
+
+    const authenticatedCloudAuth = cloudAuth as {
+      isAuthenticated: () => boolean;
+      getClient: () => { get: <T>(path: string) => Promise<T> };
+    };
+
+    let balance: number;
+    const client = authenticatedCloudAuth.getClient();
+    try {
+      // The cloud API returns either { balance: number } (direct)
+      // or { success: true, data: { balance: number } } (wrapped).
+      // Handle both formats gracefully.
+      const creditResponse =
+        await client.get<Record<string, unknown>>("/credits/balance");
+      const rawBalance =
+        typeof creditResponse?.balance === "number"
+          ? creditResponse.balance
+          : typeof (creditResponse?.data as Record<string, unknown>)
+                ?.balance === "number"
+            ? ((creditResponse.data as Record<string, unknown>)
+                .balance as number)
+            : undefined;
+      if (typeof rawBalance !== "number") {
+        logger.debug(
+          `[cloud/credits] Unexpected response shape: ${JSON.stringify(creditResponse)}`,
+        );
+        json(res, {
+          balance: null,
+          connected: true,
+          error: "unexpected response",
+        });
+        return;
+      }
+      balance = rawBalance;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "cloud API unreachable";
+      logger.debug(`[cloud/credits] Failed to fetch balance: ${msg}`);
+      json(res, { balance: null, connected: true, error: msg });
+      return;
+    }
+    const low = balance < 2.0;
+    const critical = balance < 0.5;
+    json(res, {
+      connected: true,
+      balance,
+      low,
+      critical,
+      topUpUrl: "https://www.elizacloud.ai/dashboard/billing",
+    });
     return;
   }
 
@@ -15217,18 +13451,84 @@ async function handleRequest(
   }
 
   // ── Hyperscape control proxy routes ──────────────────────────────────
-  if (
-    await handleAppsHyperscapeRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      relayHyperscapeApi,
-      readJsonBody,
-      error,
-    })
-  ) {
+  if (method === "GET" && pathname === "/api/apps/hyperscape/embedded-agents") {
+    await relayHyperscapeApi("GET", "/api/embedded-agents");
     return;
+  }
+
+  if (
+    method === "POST" &&
+    pathname === "/api/apps/hyperscape/embedded-agents"
+  ) {
+    await relayHyperscapeApi("POST", "/api/embedded-agents");
+    return;
+  }
+
+  if (method === "POST") {
+    const embeddedActionMatch = pathname.match(
+      /^\/api\/apps\/hyperscape\/embedded-agents\/([^/]+)\/(start|stop|pause|resume|command)$/,
+    );
+    if (embeddedActionMatch) {
+      const characterId = decodeURIComponent(embeddedActionMatch[1]);
+      const action = embeddedActionMatch[2];
+      await relayHyperscapeApi(
+        "POST",
+        `/api/embedded-agents/${encodeURIComponent(characterId)}/${action}`,
+      );
+      return;
+    }
+
+    const messageMatch = pathname.match(
+      /^\/api\/apps\/hyperscape\/agents\/([^/]+)\/message$/,
+    );
+    if (messageMatch) {
+      const agentId = decodeURIComponent(messageMatch[1]);
+      const body = await readJsonBody<{ content?: string }>(req, res);
+      if (!body) return;
+      const content = body.content?.trim();
+      if (!content) {
+        error(res, "content is required");
+        return;
+      }
+      await relayHyperscapeApi(
+        "POST",
+        `/api/embedded-agents/${encodeURIComponent(agentId)}/command`,
+        {
+          rawBodyOverride: JSON.stringify({
+            command: "chat",
+            data: { message: content },
+          }),
+          contentTypeOverride: "application/json",
+        },
+      );
+      return;
+    }
+  }
+
+  if (method === "GET") {
+    const goalMatch = pathname.match(
+      /^\/api\/apps\/hyperscape\/agents\/([^/]+)\/goal$/,
+    );
+    if (goalMatch) {
+      const agentId = decodeURIComponent(goalMatch[1]);
+      await relayHyperscapeApi(
+        "GET",
+        `/api/agents/${encodeURIComponent(agentId)}/goal`,
+      );
+      return;
+    }
+
+    const quickActionsMatch = pathname.match(
+      /^\/api\/apps\/hyperscape\/agents\/([^/]+)\/quick-actions$/,
+    );
+    if (quickActionsMatch) {
+      const agentId = decodeURIComponent(quickActionsMatch[1]);
+      await relayHyperscapeApi(
+        "GET",
+        `/api/agents/${encodeURIComponent(agentId)}/quick-actions`,
+      );
+      return;
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -15259,10 +13559,10 @@ async function handleRequest(
             event.stream === "provider" ||
             event.stream === "evaluator"),
       );
-    const autonomyState = getAutonomyState(state.runtime);
+    const autonomySvc = getAutonomySvc(state.runtime);
     const autonomy = {
-      enabled: autonomyState.enabled,
-      thinking: autonomyState.thinking,
+      enabled: true,
+      thinking: autonomySvc?.isLoopRunning() ?? false,
       lastEventAt: latestAutonomyEvent?.ts ?? null,
     };
     let tasksAvailable = false;
@@ -15978,9 +14278,7 @@ async function handleRequest(
   if (method === "GET" && pathname === "/api/mcp/marketplace/search") {
     const query = url.searchParams.get("q") ?? "";
     const limitStr = url.searchParams.get("limit");
-    const limit = limitStr
-      ? parseClampedInteger(limitStr, { min: 1, max: 50, fallback: 30 })
-      : 30;
+    const limit = limitStr ? Math.min(Math.max(Number(limitStr), 1), 50) : 30;
     try {
       const result = await searchMcpMarketplace(query || undefined, limit);
       json(res, { ok: true, results: result.results });
@@ -16060,16 +14358,42 @@ async function handleRequest(
     }
 
     const config = body.config as Record<string, unknown> | undefined;
-    if (!config || typeof config !== "object" || Array.isArray(config)) {
+    if (!config || typeof config !== "object") {
       error(res, "Server config object is required", 400);
       return;
     }
+    if (hasBlockedObjectKeyDeep(config)) {
+      error(
+        res,
+        'Invalid server config: "__proto__", "constructor", and "prototype" are not allowed',
+        400,
+      );
+      return;
+    }
 
-    const mcpRejection = await resolveMcpServersRejection({
-      [serverName]: config,
-    });
-    if (mcpRejection) {
-      error(res, mcpRejection, 400);
+    const configType = config.type as string | undefined;
+    const validTypes = ["stdio", "http", "streamable-http", "sse"];
+    if (!configType || !validTypes.includes(configType)) {
+      error(
+        res,
+        `Invalid config type. Must be one of: ${validTypes.join(", ")}`,
+        400,
+      );
+      return;
+    }
+
+    if (configType === "stdio" && !config.command) {
+      error(res, "Command is required for stdio servers", 400);
+      return;
+    }
+
+    if (
+      (configType === "http" ||
+        configType === "streamable-http" ||
+        configType === "sse") &&
+      !config.url
+    ) {
+      error(res, "URL is required for remote servers", 400);
       return;
     }
 
@@ -16081,7 +14405,7 @@ async function handleRequest(
     >[string];
 
     try {
-      saveMiladyConfig(state.config);
+      saveMilaidyConfig(state.config);
     } catch (err) {
       logger.warn(
         `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
@@ -16112,7 +14436,7 @@ async function handleRequest(
     if (state.config.mcp?.servers?.[serverName]) {
       delete state.config.mcp.servers[serverName];
       try {
-        saveMiladyConfig(state.config);
+        saveMilaidyConfig(state.config);
       } catch (err) {
         logger.warn(
           `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
@@ -16132,20 +14456,13 @@ async function handleRequest(
     if (!body) return;
 
     if (!state.config.mcp) state.config.mcp = {};
-    if (body.servers !== undefined) {
-      if (
-        !body.servers ||
-        typeof body.servers !== "object" ||
-        Array.isArray(body.servers)
-      ) {
-        error(res, "servers must be a JSON object", 400);
-        return;
-      }
-      const mcpRejection = await resolveMcpServersRejection(
-        body.servers as Record<string, unknown>,
-      );
-      if (mcpRejection) {
-        error(res, mcpRejection, 400);
+    if (body.servers && typeof body.servers === "object") {
+      if (hasBlockedObjectKeyDeep(body.servers)) {
+        error(
+          res,
+          'Invalid servers config: "__proto__", "constructor", and "prototype" are not allowed',
+          400,
+        );
         return;
       }
       const sanitized = cloneWithoutBlockedObjectKeys(body.servers);
@@ -16155,7 +14472,7 @@ async function handleRequest(
     }
 
     try {
-      saveMiladyConfig(state.config);
+      saveMilaidyConfig(state.config);
     } catch (err) {
       logger.warn(
         `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
@@ -16247,19 +14564,8 @@ async function handleRequest(
       return;
     }
 
-    const body = await readJsonBody<{
-      command?: string;
-      clientId?: unknown;
-      terminalToken?: string;
-    }>(req, res);
+    const body = await readJsonBody<{ command?: string }>(req, res);
     if (!body) return;
-
-    const terminalRejection = resolveTerminalRunRejection(req, body);
-    if (terminalRejection) {
-      error(res, terminalRejection.reason, terminalRejection.status);
-      return;
-    }
-
     const command = typeof body.command === "string" ? body.command.trim() : "";
     if (!command) {
       error(res, "Missing or empty command");
@@ -16272,63 +14578,18 @@ async function handleRequest(
       return;
     }
 
-    // Prevent multiline/control-character payloads that can smuggle
-    // unintended command chains through a single request.
-    if (
-      command.includes("\n") ||
-      command.includes("\r") ||
-      command.includes("\0")
-    ) {
-      error(
-        res,
-        "Command must be a single line without control characters",
-        400,
-      );
-      return;
-    }
-
-    const targetClientId = resolveTerminalRunClientId(req, body);
-    if (!targetClientId) {
-      error(
-        res,
-        "Missing client id. Provide X-Milady-Client-Id header or clientId in the request body.",
-        400,
-      );
-      return;
-    }
-
-    const emitTerminalEvent = (payload: Record<string, unknown>) => {
-      if (isSharedTerminalClientId(targetClientId)) {
-        state.broadcastWs?.(payload);
-        return;
-      }
-      if (typeof state.broadcastWsToClientId !== "function") return;
-      state.broadcastWsToClientId(targetClientId, payload);
-    };
-
-    const { maxConcurrent, maxDurationMs } = resolveTerminalRunLimits();
-    if (activeTerminalRunCount >= maxConcurrent) {
-      error(
-        res,
-        `Too many active terminal runs (${maxConcurrent}). Wait for a command to finish.`,
-        429,
-      );
-      return;
-    }
-
     // Respond immediately — output streams via WebSocket
     json(res, { ok: true });
 
     // Spawn in background and broadcast output
     const { spawn } = await import("node:child_process");
-    const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const runId = `run-${Date.now()}`;
 
-    emitTerminalEvent({
+    state.broadcastWs?.({
       type: "terminal-output",
       runId,
       event: "start",
       command,
-      maxDurationMs,
     });
 
     const proc = spawn(command, {
@@ -16337,32 +14598,8 @@ async function handleRequest(
       env: { ...process.env, FORCE_COLOR: "0" },
     });
 
-    activeTerminalRunCount += 1;
-    let finalized = false;
-    const finalize = () => {
-      if (finalized) return;
-      finalized = true;
-      activeTerminalRunCount = Math.max(0, activeTerminalRunCount - 1);
-      clearTimeout(timeoutHandle);
-    };
-
-    const timeoutHandle = setTimeout(() => {
-      if (proc.killed) return;
-      proc.kill("SIGTERM");
-      emitTerminalEvent({
-        type: "terminal-output",
-        runId,
-        event: "timeout",
-        maxDurationMs,
-      });
-
-      setTimeout(() => {
-        if (!proc.killed) proc.kill("SIGKILL");
-      }, 3000);
-    }, maxDurationMs);
-
     proc.stdout?.on("data", (chunk: Buffer) => {
-      emitTerminalEvent({
+      state.broadcastWs?.({
         type: "terminal-output",
         runId,
         event: "stdout",
@@ -16371,7 +14608,7 @@ async function handleRequest(
     });
 
     proc.stderr?.on("data", (chunk: Buffer) => {
-      emitTerminalEvent({
+      state.broadcastWs?.({
         type: "terminal-output",
         runId,
         event: "stderr",
@@ -16380,8 +14617,7 @@ async function handleRequest(
     });
 
     proc.on("close", (code: number | null) => {
-      finalize();
-      emitTerminalEvent({
+      state.broadcastWs?.({
         type: "terminal-output",
         runId,
         event: "exit",
@@ -16390,8 +14626,7 @@ async function handleRequest(
     });
 
     proc.on("error", (err: Error) => {
-      finalize();
-      emitTerminalEvent({
+      state.broadcastWs?.({
         type: "terminal-output",
         runId,
         event: "error",
@@ -16405,7 +14640,7 @@ async function handleRequest(
   // ── Custom Actions CRUD ──────────────────────────────────────────────
 
   if (method === "GET" && pathname === "/api/custom-actions") {
-    const config = loadMiladyConfig();
+    const config = loadMilaidyConfig();
     json(res, { actions: config.customActions ?? [] });
     return;
   }
@@ -16478,10 +14713,10 @@ async function handleRequest(
       updatedAt: now,
     };
 
-    const config = loadMiladyConfig();
+    const config = loadMilaidyConfig();
     if (!config.customActions) config.customActions = [];
     config.customActions.push(actionDef);
-    saveMiladyConfig(config);
+    saveMilaidyConfig(config);
 
     // Hot-register into the running agent so it's available immediately
     if (actionDef.enabled) {
@@ -16516,7 +14751,6 @@ async function handleRequest(
         "",
         "- name: string (UPPER_SNAKE_CASE action name)",
         "- description: string (clear description of what the action does)",
-        "- similes: optional string[] of alternative action names and phrases",
         '- handlerType: "http" | "shell" | "code"',
         "- handler: object with type-specific fields:",
         '  For http: { type: "http", method: "GET"|"POST"|etc, url: string, headers?: object, bodyTemplate?: string }',
@@ -16532,6 +14766,7 @@ async function handleRequest(
 
       const llmResponse = await runtime.useModel(ModelType.TEXT_SMALL, {
         prompt: `${systemPrompt}\n\nUser request: ${prompt}`,
+        stopSequences: [],
       });
 
       // Parse the JSON from the LLM response
@@ -16568,7 +14803,7 @@ async function handleRequest(
     );
     if (!body) return;
 
-    const config = loadMiladyConfig();
+    const config = loadMilaidyConfig();
     const def = (config.customActions ?? []).find((a) => a.id === actionId);
     if (!def) {
       error(res, "Action not found", 404);
@@ -16601,7 +14836,7 @@ async function handleRequest(
     const body = await readJsonBody<Record<string, unknown>>(req, res);
     if (!body) return;
 
-    const config = loadMiladyConfig();
+    const config = loadMilaidyConfig();
     const actions = config.customActions ?? [];
     const idx = actions.findIndex((a) => a.id === actionId);
     if (idx === -1) {
@@ -16647,7 +14882,7 @@ async function handleRequest(
 
     actions[idx] = updated;
     config.customActions = actions;
-    saveMiladyConfig(config);
+    saveMilaidyConfig(config);
 
     json(res, { ok: true, action: updated });
     return;
@@ -16656,7 +14891,7 @@ async function handleRequest(
   if (method === "DELETE" && customActionMatch) {
     const actionId = decodeURIComponent(customActionMatch[1]);
 
-    const config = loadMiladyConfig();
+    const config = loadMilaidyConfig();
     const actions = config.customActions ?? [];
     const idx = actions.findIndex((a) => a.id === actionId);
     if (idx === -1) {
@@ -16666,95 +14901,15 @@ async function handleRequest(
 
     actions.splice(idx, 1);
     config.customActions = actions;
-    saveMiladyConfig(config);
+    saveMilaidyConfig(config);
 
     json(res, { ok: true });
     return;
   }
 
-  // ── Stream Manager (macOS-compatible RTMP via FFmpeg) ────────────────────
-  if (method === "POST" && pathname === "/api/stream/start") {
-    try {
-      const body = await readJsonBody(req, res, { maxBytes: MAX_BODY_BYTES });
-      const rtmpUrl = body?.rtmpUrl as string | undefined;
-      const rtmpKey = body?.rtmpKey as string | undefined;
-
-      if (!rtmpUrl || !rtmpKey) {
-        error(res, "rtmpUrl and rtmpKey are required", 400);
-        return;
-      }
-
-      await streamManager.start({
-        rtmpUrl,
-        rtmpKey,
-        inputMode: (body?.inputMode as "testsrc" | "avfoundation") || "testsrc",
-        resolution: (body?.resolution as string) || "1280x720",
-        bitrate: (body?.bitrate as string) || "2500k",
-        framerate: (body?.framerate as number) || 30,
-      });
-
-      json(res, { ok: true, message: "Stream started" });
-    } catch (err) {
-      error(
-        res,
-        err instanceof Error ? err.message : "Stream start failed",
-        500,
-      );
-    }
-    return;
-  }
-
-  if (method === "POST" && pathname === "/api/stream/stop") {
-    try {
-      const result = await streamManager.stop();
-      json(res, { ok: true, ...result });
-    } catch (err) {
-      error(
-        res,
-        err instanceof Error ? err.message : "Stream stop failed",
-        500,
-      );
-    }
-    return;
-  }
-
-  if (method === "GET" && pathname === "/api/stream/status") {
-    json(res, streamManager.getHealth());
-    return;
-  }
-
-  // ── Stream frame push (pipe mode — Electron capturePage → FFmpeg stdin)
-  if (method === "POST" && pathname === "/api/stream/frame") {
-    if (!streamManager.isRunning()) {
-      error(res, "Stream not running", 400);
-      return;
-    }
-    try {
-      const buf = await readRequestBodyBuffer(req, {
-        maxBytes: 2 * 1024 * 1024,
-      });
-      if (!buf || buf.length === 0) {
-        error(res, "Empty frame", 400);
-        return;
-      }
-      const ok = streamManager.writeFrame(buf);
-      // Minimal response to reduce overhead at 15fps
-      res.writeHead(200);
-      res.end(ok ? "1" : "0");
-    } catch (err) {
-      error(
-        res,
-        err instanceof Error ? err.message : "Frame write failed",
-        500,
-      );
-    }
-    return;
-  }
-
-  // ── Connector plugin routes (dynamically registered) ────────────────────
-  for (const handler of state.connectorRouteHandlers) {
-    const handled = await handler(req, res, pathname, method);
-    if (handled) return;
+  // ── Static UI serving (production) ──────────────────────────────────────
+  if (method === "GET" || method === "HEAD") {
+    if (serveStaticUi(req, res, pathname)) return;
   }
 
   // ── Fallback ────────────────────────────────────────────────────────────
@@ -16768,8 +14923,8 @@ async function handleRequest(
 // the entire server dependency graph into lightweight consumers (e.g. the
 // headless `startEliza()` path).
 // ---------------------------------------------------------------------------
-import { type captureEarlyLogs, flushEarlyLogs } from "./early-logs";
-export type { captureEarlyLogs };
+import { captureEarlyLogs, flushEarlyLogs } from "./early-logs";
+export { captureEarlyLogs };
 
 // ---------------------------------------------------------------------------
 // Server start
@@ -16790,33 +14945,21 @@ export async function startApiServer(opts?: {
   port: number;
   close: () => Promise<void>;
   updateRuntime: (rt: AgentRuntime) => void;
-  updateStartup: (
-    update: Partial<AgentStartupDiagnostics> & {
-      phase?: string;
-      attempt?: number;
-      state?: ServerState["agentState"];
-    },
-  ) => void;
 }> {
-  const apiStartTime = Date.now();
-  console.log(`[milady-api] startApiServer called`);
-
   const port = opts?.port ?? 2138;
   const host =
-    (process.env.MILADY_API_BIND ?? "127.0.0.1").trim() || "127.0.0.1";
+    (process.env.MILAIDY_API_BIND ?? "127.0.0.1").trim() || "127.0.0.1";
   ensureApiTokenForBindHost(host);
-  console.log(`[milady-api] Token check done (${Date.now() - apiStartTime}ms)`);
 
-  let config: MiladyConfig;
+  let config: MilaidyConfig;
   try {
-    config = loadMiladyConfig();
+    config = loadMilaidyConfig();
   } catch (err) {
     logger.warn(
-      `[milady-api] Failed to load config, starting with defaults: ${err instanceof Error ? err.message : err}`,
+      `[milaidy-api] Failed to load config, starting with defaults: ${err instanceof Error ? err.message : err}`,
     );
-    config = {} as MiladyConfig;
+    config = {} as MilaidyConfig;
   }
-  console.log(`[milady-api] Config loaded (${Date.now() - apiStartTime}ms)`);
 
   // One-time migration for Alice instances that still carry legacy "hehe~"/
   // old "lol k" profile fields. Persist immediately so restarts stay canonical.
@@ -16847,22 +14990,7 @@ export async function startApiServer(opts?: {
     }
   }
 
-  // Self-heal older configs where wallet keys were never provisioned
-  // (e.g. RPC/cloud configured outside onboarding).
-  if (ensureWalletKeysInEnvAndConfig(config)) {
-    try {
-      saveMiladyConfig(config);
-    } catch (err) {
-      logger.warn(
-        `[milady-api] Failed to persist generated wallet keys: ${err instanceof Error ? err.message : err}`,
-      );
-    }
-  }
-
   const plugins = discoverPluginsFromManifest();
-  console.log(
-    `[milady-api] Plugins discovered (${Date.now() - apiStartTime}ms)`,
-  );
   const workspaceDir =
     config.agents?.defaults?.workspace ?? resolveDefaultAgentWorkspaceDir();
 
@@ -16870,17 +14998,11 @@ export async function startApiServer(opts?: {
   const initialAgentState = hasRuntime
     ? "running"
     : (opts?.initialAgentState ?? "not_started");
-  const initialStartup: AgentStartupDiagnostics =
-    initialAgentState === "running"
-      ? { phase: "running", attempt: 0 }
-      : initialAgentState === "starting"
-        ? { phase: "starting", attempt: 0 }
-        : { phase: "idle", attempt: 0 };
   const agentName = hasRuntime
-    ? (opts.runtime?.character.name ?? "Milady")
+    ? (opts.runtime?.character.name ?? "Milaidy")
     : (config.agents?.list?.[0]?.name ??
       config.ui?.assistant?.name ??
-      "Milady");
+      "Milaidy");
 
   const state: ServerState = {
     runtime: opts?.runtime ?? null,
@@ -16890,7 +15012,6 @@ export async function startApiServer(opts?: {
     model: hasRuntime ? "provided" : undefined,
     startedAt:
       hasRuntime || initialAgentState === "starting" ? Date.now() : undefined,
-    startup: initialStartup,
     plugins,
     // Filled asynchronously after server start to keep startup latency low.
     skills: [],
@@ -16912,39 +15033,28 @@ export async function startApiServer(opts?: {
     shareIngestQueue: [],
     broadcastStatus: null,
     broadcastWs: null,
-    broadcastWsToClientId: null,
     activeConversationId: null,
     permissionStates: {},
     shellEnabled: config.features?.shellEnabled !== false,
-    pendingRestartReasons: [],
-    connectorRouteHandlers: [],
   };
 
-  const trainingServiceCtor = await resolveTrainingServiceCtor();
-  const trainingServiceOptions = {
+  const trainingService = new TrainingService({
     getRuntime: () => state.runtime,
     getConfig: () => state.config,
-    setConfig: (nextConfig: MiladyConfig) => {
+    setConfig: (nextConfig: MilaidyConfig) => {
       state.config = nextConfig;
-      saveMiladyConfig(nextConfig);
+      saveMilaidyConfig(nextConfig);
     },
-  };
-  if (trainingServiceCtor) {
-    state.trainingService = new trainingServiceCtor(trainingServiceOptions);
-  } else {
-    logger.warn(
-      "[milady-api] Training service package unavailable; using fallback in-memory implementation",
-    );
-    state.trainingService = new FallbackTrainingService(trainingServiceOptions);
-  }
+  });
   // Register immediately so /api/training routes are available without a startup race.
+  state.trainingService = trainingService;
   const configuredAdminEntityId = config.agents?.defaults?.adminEntityId;
   if (configuredAdminEntityId && isUuidLike(configuredAdminEntityId)) {
     state.adminEntityId = configuredAdminEntityId;
     state.chatUserId = state.adminEntityId;
   } else if (configuredAdminEntityId) {
     logger.warn(
-      `[milady-api] Ignoring invalid agents.defaults.adminEntityId "${configuredAdminEntityId}"`,
+      `[milaidy-api] Ignoring invalid agents.defaults.adminEntityId "${configuredAdminEntityId}"`,
     );
   }
 
@@ -16975,18 +15085,14 @@ export async function startApiServer(opts?: {
             : resolvedSource === "cloud"
               ? ["server", "cloud"]
               : ["system"];
-    pushWithBatchEvict(
-      state.logBuffer,
-      {
-        timestamp: Date.now(),
-        level,
-        message,
-        source: resolvedSource,
-        tags: resolvedTags,
-      },
-      1200,
-      200,
-    );
+    state.logBuffer.push({
+      timestamp: Date.now(),
+      level,
+      message,
+      source: resolvedSource,
+      tags: resolvedTags,
+    });
+    if (state.logBuffer.length > 1000) state.logBuffer.shift();
   };
 
   // ── Flush early-captured logs into the main buffer ────────────────────
@@ -17021,7 +15127,7 @@ export async function startApiServer(opts?: {
   // eliza.ts, services, plugins, etc.) AND the runtime instance logger.
   // A marker prevents double-patching on hot-restart and avoids stacking
   // wrapper functions that would leak memory.
-  const PATCHED_MARKER = "__miladyLogPatched";
+  const PATCHED_MARKER = "__milaidyLogPatched";
   const LEVELS = ["debug", "info", "warn", "error"] as const;
 
   /**
@@ -17057,7 +15163,7 @@ export async function startApiServer(opts?: {
           }
           msg = typeof args[1] === "string" ? args[1] : JSON.stringify(obj);
         }
-        // Auto-extract source from [bracket] prefixes (e.g. "[milady] ...")
+        // Auto-extract source from [bracket] prefixes (e.g. "[milaidy] ...")
         const bracketMatch = /^\[([^\]]+)\]\s*/.exec(msg);
         if (bracketMatch && source === defaultSource) {
           source = bracketMatch[1];
@@ -17116,9 +15222,6 @@ export async function startApiServer(opts?: {
   // Store the restart callback on the state so the route handler can access it.
   const onRestart = opts?.onRestart ?? null;
 
-  console.log(
-    `[milady-api] Creating http server (${Date.now() - apiStartTime}ms)`,
-  );
   const server = http.createServer(async (req, res) => {
     try {
       await handleRequest(req, res, state, { onRestart });
@@ -17128,7 +15231,6 @@ export async function startApiServer(opts?: {
       error(res, msg, 500);
     }
   });
-  console.log(`[milady-api] Server created (${Date.now() - apiStartTime}ms)`);
 
   const broadcastWs = (payload: object): void => {
     const message = JSON.stringify(payload);
@@ -17138,7 +15240,7 @@ export async function startApiServer(opts?: {
           client.send(message);
         } catch (err) {
           logger.error(
-            `[milady-api] WebSocket broadcast error: ${err instanceof Error ? err.message : err}`,
+            `[milaidy-api] WebSocket broadcast error: ${err instanceof Error ? err.message : err}`,
           );
         }
       }
@@ -17183,12 +15285,6 @@ export async function startApiServer(opts?: {
         roomId: event.roomId,
         payload: event.data,
       });
-
-      void maybeRouteAutonomyEventToConversation(state, event).catch((err) => {
-        logger.warn(
-          `[autonomy-route] Failed to route proactive event: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      });
     });
 
     const unsubHeartbeat = svc.subscribeHeartbeat((event) => {
@@ -17211,13 +15307,11 @@ export async function startApiServer(opts?: {
       detachTrainingStream = null;
     }
     if (!state.trainingService) return;
-    detachTrainingStream = state.trainingService.subscribe((event: unknown) => {
-      const payload =
-        typeof event === "object" && event !== null ? event : { value: event };
+    detachTrainingStream = state.trainingService.subscribe((event) => {
       pushEvent({
         type: "training_event",
         ts: Date.now(),
-        payload,
+        payload: event,
       });
     });
   };
@@ -17241,14 +15335,12 @@ export async function startApiServer(opts?: {
         );
       } catch (err) {
         logger.warn(
-          `[milady-api] Skill discovery failed during startup: ${err instanceof Error ? err.message : String(err)}`,
+          `[milaidy-api] Skill discovery failed during startup: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
     })();
 
     void (async () => {
-      const trainingService = state.trainingService;
-      if (!trainingService) return;
       try {
         await trainingService.initialize();
         bindTrainingStream();
@@ -17258,7 +15350,37 @@ export async function startApiServer(opts?: {
         ]);
       } catch (err) {
         logger.error(
-          `[milady-api] Training service init failed: ${err instanceof Error ? err.message : String(err)}`,
+          `[milaidy-api] Training service init failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    })();
+
+    void (async () => {
+      if (!state.config.cloud?.enabled || !state.config.cloud.apiKey) return;
+      const mgr = new CloudManager(state.config.cloud, {
+        onStatusChange: (s) => {
+          addLog("info", `Cloud connection status: ${s}`, "cloud", [
+            "server",
+            "cloud",
+          ]);
+        },
+      });
+
+      try {
+        await mgr.init();
+        state.cloudManager = mgr;
+        addLog(
+          "info",
+          "Cloud manager initialised (Eliza Cloud enabled)",
+          "cloud",
+          ["server", "cloud"],
+        );
+      } catch (err) {
+        addLog(
+          "warn",
+          `Cloud manager init failed: ${err instanceof Error ? err.message : String(err)}`,
+          "cloud",
+          ["server", "cloud"],
         );
       }
     })();
@@ -17311,45 +15433,11 @@ export async function startApiServer(opts?: {
         logger.warn({ err }, "Failed to initialize ERC-8004 registry service");
       }
     })();
-
-    // ── Dynamic connector route loading ──────────────────────────────────
-    // Connectors that need HTTP routes register them here, gated by config.
-    // Each loader dynamically imports its route module only when configured.
-    void (async () => {
-      const connectors = state.config.connectors ?? {};
-      if (isConnectorConfigured("retake", connectors.retake)) {
-        try {
-          const { handleRetakeRoute, initRetakeAutoStart } = await import(
-            "./retake-routes.js"
-          );
-          const retakeState = {
-            streamManager,
-            port,
-            config: connectors.retake as
-              | { accessToken?: string; apiUrl?: string; captureUrl?: string }
-              | undefined,
-          };
-          state.connectorRouteHandlers.push((req, res, pathname, method) =>
-            handleRetakeRoute(req, res, pathname, method, retakeState),
-          );
-          initRetakeAutoStart(retakeState);
-          addLog("info", "Retake connector routes registered", "system", [
-            "system",
-            "connectors",
-          ]);
-        } catch (err) {
-          logger.warn(
-            `[milady-api] Failed to load retake routes: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
-      }
-    })();
   };
 
   // ── WebSocket Server ─────────────────────────────────────────────────────
   const wss = new WebSocketServer({ noServer: true });
   const wsClients = new Set<WebSocket>();
-  const wsClientIds = new WeakMap<WebSocket, string>();
   bindRuntimeStreams(opts?.runtime ?? null);
   bindTrainingStream();
 
@@ -17370,25 +15458,14 @@ export async function startApiServer(opts?: {
       });
     } catch (err) {
       logger.error(
-        `[milady-api] WebSocket upgrade error: ${err instanceof Error ? err.message : err}`,
+        `[milaidy-api] WebSocket upgrade error: ${err instanceof Error ? err.message : err}`,
       );
       rejectWebSocketUpgrade(socket, 404, "Not found");
     }
   });
 
   // Handle WebSocket connections
-  wss.on("connection", (ws: WebSocket, request: http.IncomingMessage) => {
-    try {
-      const wsUrl = new URL(
-        request.url ?? "/",
-        `http://${request.headers.host ?? "localhost"}`,
-      );
-      const clientId = normalizeWsClientId(wsUrl.searchParams.get("clientId"));
-      if (clientId) wsClientIds.set(ws, clientId);
-    } catch {
-      // Ignore malformed WS URL metadata; auth/path were already validated.
-    }
-
+  wss.on("connection", (ws: WebSocket) => {
     wsClients.add(ws);
     addLog("info", "WebSocket client connected", "websocket", [
       "server",
@@ -17404,7 +15481,6 @@ export async function startApiServer(opts?: {
           agentName: state.agentName,
           model: state.model,
           startedAt: state.startedAt,
-          startup: state.startup,
         }),
       );
       const replay = state.eventBuffer.slice(-120);
@@ -17413,7 +15489,7 @@ export async function startApiServer(opts?: {
       }
     } catch (err) {
       logger.error(
-        `[milady-api] WebSocket send error: ${err instanceof Error ? err.message : err}`,
+        `[milaidy-api] WebSocket send error: ${err instanceof Error ? err.message : err}`,
       );
     }
 
@@ -17428,7 +15504,7 @@ export async function startApiServer(opts?: {
         }
       } catch (err) {
         logger.error(
-          `[milady-api] WebSocket message error: ${err instanceof Error ? err.message : err}`,
+          `[milaidy-api] WebSocket message error: ${err instanceof Error ? err.message : err}`,
         );
       }
     });
@@ -17443,7 +15519,7 @@ export async function startApiServer(opts?: {
 
     ws.on("error", (err) => {
       logger.error(
-        `[milady-api] WebSocket error: ${err instanceof Error ? err.message : err}`,
+        `[milaidy-api] WebSocket error: ${err instanceof Error ? err.message : err}`,
       );
       wsClients.delete(ws);
     });
@@ -17457,9 +15533,6 @@ export async function startApiServer(opts?: {
       agentName: state.agentName,
       model: state.model,
       startedAt: state.startedAt,
-      startup: state.startup,
-      pendingRestart: state.pendingRestartReasons.length > 0,
-      pendingRestartReasons: state.pendingRestartReasons,
     });
   };
 
@@ -17475,32 +15548,30 @@ export async function startApiServer(opts?: {
           client.send(message);
         } catch (err) {
           logger.error(
-            `[milady-api] WebSocket broadcast error: ${err instanceof Error ? err.message : err}`,
+            `[milaidy-api] WebSocket broadcast error: ${err instanceof Error ? err.message : err}`,
           );
         }
       }
     }
   };
 
-  state.broadcastWsToClientId = (
-    clientId: string,
-    data: Record<string, unknown>,
-  ) => {
+  // Make broadcastStatus accessible to route handlers via state
+  state.broadcastStatus = broadcastStatus;
+
+  // Generic broadcast — sends an arbitrary JSON payload to all WS clients.
+  state.broadcastWs = (data: Record<string, unknown>) => {
     const message = JSON.stringify(data);
-    let delivered = 0;
     for (const client of wsClients) {
-      if (client.readyState !== 1) continue;
-      if (wsClientIds.get(client) !== clientId) continue;
-      try {
-        client.send(message);
-        delivered += 1;
-      } catch (err) {
-        logger.error(
-          `[milady-api] WebSocket targeted send error: ${err instanceof Error ? err.message : err}`,
-        );
+      if (client.readyState === 1) {
+        try {
+          client.send(message);
+        } catch (err) {
+          logger.error(
+            `[milaidy-api] WebSocket broadcast error: ${err instanceof Error ? err.message : err}`,
+          );
+        }
       }
     }
-    return delivered;
   };
 
   // Broadcast status every 5 seconds
@@ -17515,7 +15586,7 @@ export async function startApiServer(opts?: {
     rt: AgentRuntime,
   ): Promise<void> => {
     try {
-      const agentName = rt.character.name ?? "Milady";
+      const agentName = rt.character.name ?? "Milaidy";
       const worldId = stringToUuid(`${agentName}-web-chat-world`);
       const rooms = await rt.getRoomsByWorld(worldId);
       if (!rooms?.length) return;
@@ -17565,7 +15636,7 @@ export async function startApiServer(opts?: {
       }
     } catch (err) {
       logger.warn(
-        `[milady-api] Failed to restore conversations from DB: ${err instanceof Error ? err.message : err}`,
+        `[milaidy-api] Failed to restore conversations from DB: ${err instanceof Error ? err.message : err}`,
       );
     }
   };
@@ -17583,12 +15654,8 @@ export async function startApiServer(opts?: {
     bindRuntimeStreams(rt);
     // AppManager doesn't need a runtime reference
     state.agentState = "running";
-    state.agentName = rt.character.name ?? "Milady";
+    state.agentName = rt.character.name ?? "Milaidy";
     state.startedAt = Date.now();
-    state.startup = {
-      phase: "running",
-      attempt: 0,
-    };
     addLog("info", `Runtime restarted — agent: ${state.agentName}`, "system", [
       "system",
       "agent",
@@ -17599,54 +15666,15 @@ export async function startApiServer(opts?: {
 
     // Broadcast status update immediately after restart
     broadcastStatus();
+    // Re-patch the new runtime's messageService for autonomy routing
+    patchMessageServiceForAutonomy(state);
   };
 
-  const updateStartup = (
-    update: Partial<AgentStartupDiagnostics> & {
-      phase?: string;
-      attempt?: number;
-      state?: ServerState["agentState"];
-    },
-  ): void => {
-    const { state: nextState, ...startupUpdate } = update;
-    state.startup = {
-      ...state.startup,
-      ...startupUpdate,
-    };
-    if (nextState) {
-      state.agentState = nextState;
-      if (nextState === "error") {
-        state.startedAt = undefined;
-      } else if (
-        (nextState === "starting" || nextState === "running") &&
-        !state.startedAt
-      ) {
-        state.startedAt = Date.now();
-      }
-    }
-    broadcastStatus();
-  };
+  // Patch the initial runtime (if provided) for autonomy routing
+  patchMessageServiceForAutonomy(state);
 
-  console.log(
-    `[milady-api] Calling server.listen (${Date.now() - apiStartTime}ms)`,
-  );
-  return new Promise((resolve, reject) => {
-    server.on("error", (err: NodeJS.ErrnoException) => {
-      if (err.code === "EADDRINUSE") {
-        console.error(
-          `[milady-api] Port ${port} is already in use. Another process may be running.`,
-        );
-      } else {
-        console.error(
-          `[milady-api] Server error: ${err.message} (code: ${err.code})`,
-        );
-      }
-      reject(err);
-    });
+  return new Promise((resolve) => {
     server.listen(port, host, () => {
-      console.log(
-        `[milady-api] server.listen callback fired (${Date.now() - apiStartTime}ms)`,
-      );
       const addr = server.address();
       const actualPort = typeof addr === "object" && addr ? addr.port : port;
       const displayHost =
@@ -17658,7 +15686,7 @@ export async function startApiServer(opts?: {
         ["server", "system"],
       );
       logger.info(
-        `[milady-api] Listening on http://${displayHost}:${actualPort}`,
+        `[milaidy-api] Listening on http://${displayHost}:${actualPort}`,
       );
       startDeferredStartupWork();
       resolve({
@@ -17677,7 +15705,6 @@ export async function startApiServer(opts?: {
           await new Promise<void>((r) => server.close(() => r()));
         },
         updateRuntime,
-        updateStartup,
       });
     });
   });

@@ -85,3 +85,8 @@ export function createChannelProfileProvider(): Provider {
     },
   };
 }
+
+// Backward-compat alias for older runtime imports.
+export function createSimpleModeProvider(): Provider {
+  return createChannelProfileProvider();
+}

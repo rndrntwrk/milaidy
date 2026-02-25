@@ -2138,32 +2138,49 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                   </div>
                 </div>
 
-              {/* Dialog footer — actions (hidden for showcase) */}
-              {!isShowcase && (
-                <div className="flex justify-end gap-2.5 px-5 py-3 border-t border-border shrink-0">
-                  {p.enabled && !p.isActive && p.npmName && !p.loadError && (
-                    <button
-                      type="button"
-                      className="px-3 py-1.5 text-[11px] border border-accent text-accent bg-transparent hover:bg-accent hover:text-accent-fg cursor-pointer rounded-sm transition-colors max-w-[260px] truncate"
-                      disabled={installingPlugins.has(p.id)}
-                      onClick={() => handleInstallPlugin(p.id, p.npmName!)}
-                    >
-                      {installingPlugins.has(p.id)
-                        ? installProgress.get(p.npmName!)?.message || "Installing..."
-                        : "Install Plugin"}
-                    </button>
-                  )}
-                  {p.loadError && (
-                    <span className="px-3 py-1.5 text-[11px] text-destructive" title={p.loadError}>
-                      Installed but inactive — see logs
-                    </span>
-                  )}
-                  {p.isActive && (
-                    <button
-                      type="button"
-                      className={`px-3 py-1.5 text-[11px] border rounded-sm transition-colors ${
-                        testResults.get(p.id)?.loading
-                          ? "border-[var(--border)] text-[var(--muted)] cursor-wait"
+                {/* Dialog footer — actions (hidden for showcase) */}
+                {!isShowcase && (
+                  <div className="flex justify-end gap-2.5 px-5 py-3 border-t border-border shrink-0">
+                    {p.enabled && !p.isActive && p.npmName && !p.loadError && (
+                      <button
+                        type="button"
+                        className="px-3 py-1.5 text-[11px] border border-accent text-accent bg-transparent hover:bg-accent hover:text-accent-fg cursor-pointer rounded-sm transition-colors max-w-[260px] truncate"
+                        disabled={installingPlugins.has(p.id)}
+                        onClick={() =>
+                          handleInstallPlugin(p.id, p.npmName ?? "")
+                        }
+                      >
+                        {installingPlugins.has(p.id)
+                          ? installProgress.get(p.npmName ?? "")?.message ||
+                            "Installing..."
+                          : "Install Plugin"}
+                      </button>
+                    )}
+                    {p.loadError && (
+                      <span
+                        className="px-3 py-1.5 text-[11px] text-destructive"
+                        title={p.loadError}
+                      >
+                        Package broken — missing compiled files
+                      </span>
+                    )}
+                    {p.isActive && (
+                      <button
+                        type="button"
+                        className={`px-3 py-1.5 text-[11px] border rounded-sm transition-colors ${
+                          testResults.get(p.id)?.loading
+                            ? "border-[var(--border)] text-[var(--muted)] cursor-wait"
+                            : testResults.get(p.id)?.success
+                              ? "border-[var(--ok)] text-[var(--ok)] bg-[color-mix(in_srgb,var(--ok)_5%,transparent)]"
+                              : testResults.get(p.id)?.error
+                                ? "border-[var(--destructive)] text-[var(--destructive)]"
+                                : "border-[var(--border)] text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--accent)] cursor-pointer"
+                        }`}
+                        disabled={testResults.get(p.id)?.loading}
+                        onClick={() => handleTestConnection(p.id)}
+                      >
+                        {testResults.get(p.id)?.loading
+                          ? "Testing..."
                           : testResults.get(p.id)?.success
                             ? `\u2713 OK (${testResults.get(p.id)?.durationMs}ms)`
                             : testResults.get(p.id)?.error

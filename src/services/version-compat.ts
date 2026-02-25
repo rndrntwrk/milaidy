@@ -188,21 +188,73 @@ export async function getInstalledVersion(
   packageName: string,
 ): Promise<string | null> {
   try {
-    // Dynamic import of package.json is not universally supported, so we
-    // use createRequire as a robust fallback for reading metadata.
     const { createRequire } = await import("node:module");
+    const path = await import("node:path");
+    const { existsSync, readFileSync } = await import("node:fs");
     const require = createRequire(import.meta.url);
-    const pkgPath = require.resolve(`${packageName}/package.json`);
-    const { readFileSync } = await import("node:fs");
-    const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as {
-      version: string;
-    };
-    return pkg.version ?? null;
+
+    const candidates = [
+      packageName,
+      `${packageName}/dist/index.js`,
+      `${packageName}/dist/index.mjs`,
+      `${packageName}/index.js`,
+      `${packageName}/index.mjs`,
+    ];
+
+    let resolvedEntry: string | null = null;
+    for (const specifier of candidates) {
+      try {
+        resolvedEntry = require.resolve(specifier);
+        break;
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code;
+        if (
+          code === "MODULE_NOT_FOUND" ||
+          code === "ERR_MODULE_NOT_FOUND" ||
+          code === "ERR_PACKAGE_PATH_NOT_EXPORTED"
+        ) {
+          continue;
+        }
+      }
+    }
+
+    if (!resolvedEntry) return null;
+
+    let dir = path.dirname(resolvedEntry);
+    const fsRoot = path.parse(dir).root;
+    while (true) {
+      const pkgPath = path.join(dir, "package.json");
+      if (existsSync(pkgPath)) {
+        try {
+          const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as {
+            name?: string;
+            version?: string;
+          };
+          if (
+            pkg.name === packageName &&
+            typeof pkg.version === "string" &&
+            pkg.version.trim()
+          ) {
+            return pkg.version.trim();
+          }
+        } catch {
+          // Keep walking upward to locate the owning package root.
+        }
+      }
+
+      if (dir === fsRoot) break;
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+
+    return null;
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
     if (
       code === "MODULE_NOT_FOUND" ||
       code === "ERR_MODULE_NOT_FOUND" ||
+      code === "ERR_PACKAGE_PATH_NOT_EXPORTED" ||
       code === "ENOENT"
     ) {
       return null;

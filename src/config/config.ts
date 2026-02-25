@@ -7,6 +7,7 @@ import { resolveConfigPath, resolveUserPath } from "./paths";
 import type { MiladyConfig } from "./types";
 
 export * from "./types";
+export type MilaidyConfig = MiladyConfig;
 
 export function loadMiladyConfig(): MiladyConfig {
   const configPath = resolveConfigPath();
@@ -99,6 +100,8 @@ export function loadMiladyConfig(): MiladyConfig {
   return resolved;
 }
 
+export const loadMilaidyConfig = loadMiladyConfig;
+
 export function saveMiladyConfig(config: MiladyConfig): void {
   const configPath = resolveConfigPath();
   const dir = path.dirname(configPath);
@@ -112,6 +115,8 @@ export function saveMiladyConfig(config: MiladyConfig): void {
     mode: 0o600, // Owner read+write only — config may contain private keys in env section
   });
 }
+
+export const saveMilaidyConfig = saveMiladyConfig;
 
 export function configFileExists(): boolean {
   return fs.existsSync(resolveConfigPath());
