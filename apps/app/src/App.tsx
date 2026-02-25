@@ -25,12 +25,15 @@ import { InventoryView } from "./components/InventoryView.js";
 import { KnowledgeView } from "./components/KnowledgeView.js";
 import { SettingsView } from "./components/SettingsView.js";
 import { LoadingScreen } from "./components/LoadingScreen.js";
+import { StartupFailureView } from "./components/StartupFailureView.js";
+import { GameViewOverlay } from "./components/GameViewOverlay.js";
 import { useContextMenu } from "./hooks/useContextMenu.js";
 import { TerminalPanel } from "./components/TerminalPanel.js";
 import { ToastContainer } from "./components/ui/Toast.js";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary.js";
 
 const advancedTabs = new Set(TAB_GROUPS.find(g => g.label === "Advanced")?.tabs ?? []);
+const CHAT_MOBILE_BREAKPOINT_PX = 1024;
 
 function ViewRouter() {
   const { tab } = useApp();
@@ -70,6 +73,10 @@ export function App() {
     onboardingComplete,
     retryStartup,
     tab,
+    agentStatus,
+    unreadConversations,
+    activeGameViewerUrl,
+    gameOverlayEnabled,
     toasts,
     dismissToast,
   } = useApp();
@@ -89,18 +96,7 @@ export function App() {
   const [mobileAutonomousOpen, setMobileAutonomousOpen] = useState(false);
 
   const isChat = tab === "chat";
-  const isAdvancedTab =
-    tab === "advanced" ||
-    tab === "plugins" ||
-    tab === "skills" ||
-    tab === "actions" ||
-    tab === "triggers" ||
-    tab === "fine-tuning" ||
-    tab === "trajectories" ||
-    tab === "runtime" ||
-    tab === "database" ||
-    tab === "logs" ||
-    tab === "security";
+  const isAdvancedTab = advancedTabs.has(tab);
   const unreadCount = unreadConversations?.size ?? 0;
   const statusIndicatorClass =
     agentStatus?.state === "running"
@@ -221,8 +217,6 @@ export function App() {
       setMobileAutonomousOpen(false);
     }
   }, [isChat]);
-
-  const bugReport = useBugReportState();
 
   const agentStarting = agentStatus?.state === "starting";
 
