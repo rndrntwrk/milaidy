@@ -27,7 +27,9 @@ import { SettingsView } from "./components/SettingsView.js";
 import { LoadingScreen } from "./components/LoadingScreen.js";
 import { StartupFailureView } from "./components/StartupFailureView.js";
 import { GameViewOverlay } from "./components/GameViewOverlay.js";
+import { BugReportModal } from "./components/BugReportModal.js";
 import { useContextMenu } from "./hooks/useContextMenu.js";
+import { BugReportProvider, useBugReportState } from "./hooks/useBugReport.js";
 import { TerminalPanel } from "./components/TerminalPanel.js";
 import { ToastContainer } from "./components/ui/Toast.js";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary.js";
@@ -218,6 +220,7 @@ export function App() {
     }
   }, [isChat]);
 
+  const bugReport = useBugReportState();
   const agentStarting = agentStatus?.state === "starting";
 
   if (startupError) {
@@ -236,7 +239,7 @@ export function App() {
   if (!onboardingComplete) return <ErrorBoundary><OnboardingWizard /></ErrorBoundary>;
 
   return (
-    <>
+    <BugReportProvider value={bugReport}>
       <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[10001] focus:px-4 focus:py-2 focus:bg-accent focus:text-accent-fg focus:rounded">
         Skip to content
       </a>
@@ -292,7 +295,8 @@ export function App() {
           setEditingAction(null);
         }}
       />
+      <BugReportModal />
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
-    </>
+    </BugReportProvider>
   );
 }
