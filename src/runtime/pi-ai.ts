@@ -1,13 +1,16 @@
-import type { AgentRuntime } from "@elizaos/core";
+import type { IAgentRuntime } from "@elizaos/core";
+import {
+  isPiAiEnabledFromEnv as pluginIsPiAiEnabledFromEnv,
+  registerPiAiRuntime as pluginRegisterPiAiRuntime,
+  type RegisterPiAiRuntimeOptions as PluginRegisterPiAiRuntimeOptions,
+} from "@elizaos/plugin-pi-ai";
 
-export interface RegisterPiAiRuntimeOptions {
-  modelSpec?: string;
-  smallModelSpec?: string;
-  largeModelSpec?: string;
-}
+export type RegisterPiAiRuntimeOptions = PluginRegisterPiAiRuntimeOptions;
 
 export interface PiAiRuntimeRegistration {
   modelSpec: string;
+  provider: string;
+  id: string;
 }
 
 function parseBool(value: string | undefined): boolean {
@@ -19,17 +22,13 @@ function parseBool(value: string | undefined): boolean {
 export function isPiAiEnabledFromEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
+  if (pluginIsPiAiEnabledFromEnv(env)) return true;
   return parseBool(env.PI_AI_ENABLED) || parseBool(env.MILAIDY_PI_AI_ENABLED);
 }
 
 export async function registerPiAiRuntime(
-  _runtime: AgentRuntime,
+  runtime: IAgentRuntime,
   options: RegisterPiAiRuntimeOptions = {},
 ): Promise<PiAiRuntimeRegistration> {
-  const modelSpec =
-    options.largeModelSpec?.trim() ||
-    options.modelSpec?.trim() ||
-    options.smallModelSpec?.trim() ||
-    "pi-ai/default";
-  return { modelSpec };
+  return pluginRegisterPiAiRuntime(runtime, options);
 }
