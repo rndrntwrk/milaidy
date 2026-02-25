@@ -11,6 +11,15 @@ import type {
 export const REQUIRED_ONBOARDING_PERMISSION_IDS: ReadonlyArray<SystemPermissionId> =
   ["accessibility", "screen-recording", "microphone"];
 
+export const ONBOARDING_PERMISSION_LABELS: Readonly<Record<SystemPermissionId, string>> =
+  {
+    accessibility: "Accessibility",
+    "screen-recording": "Screen Recording",
+    microphone: "Microphone",
+    camera: "Camera",
+    shell: "Shell Access",
+  };
+
 export function isOnboardingPermissionGranted(
   status: PermissionStatus | undefined,
 ): boolean {

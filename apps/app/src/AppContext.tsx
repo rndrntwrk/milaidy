@@ -58,7 +58,11 @@ import {
   type WorkbenchOverview,
 } from "./api-client";
 import { tabFromPath, pathForTab, type Tab } from "./navigation";
-import { SkillScanReportSummary } from "./api-client";
+import { resolveAppAssetUrl } from "./asset-url";
+import {
+  getMissingOnboardingPermissions,
+  ONBOARDING_PERMISSION_LABELS,
+} from "./onboarding-permissions";
 import type { ToastItem } from "./components/ui/Toast";
 
 // ── VRM helpers ─────────────────────────────────────────────────────────
@@ -955,6 +959,10 @@ export interface AppActions {
   // Clipboard
   copyToClipboard: (text: string) => Promise<void>;
 }
+
+type OnboardingNextOptions = {
+  allowPermissionBypass?: boolean;
+};
 
 type AppContextValue = AppState & AppActions;
 
