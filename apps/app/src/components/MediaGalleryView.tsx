@@ -132,10 +132,23 @@ export function MediaGalleryView() {
   const [filter, setFilter] = useState<MediaType>("all");
   const [search, setSearch] = useState("");
   const [lightboxItem, setLightboxItem] = useState<MediaItem | null>(null);
+  const [failedImageUrls, setFailedImageUrls] = useState<Set<string>>(
+    () => new Set(),
+  );
+
+  const markImageLoadFailed = useCallback((url: string) => {
+    setFailedImageUrls((prev) => {
+      if (prev.has(url)) return prev;
+      const next = new Set(prev);
+      next.add(url);
+      return next;
+    });
+  }, []);
 
   const loadMedia = useCallback(async () => {
     setLoading(true);
     setError("");
+    setFailedImageUrls(new Set());
     try {
       // Discover tables
       const { tables } = await client.getDatabaseTables();
@@ -271,20 +284,17 @@ export function MediaGalleryView() {
               {/* Thumbnail area */}
               <div className="w-full aspect-square bg-[var(--bg)] flex items-center justify-center overflow-hidden">
                 {item.type === "image" ? (
-                  <img
-                    src={item.url}
-                    alt={item.filename}
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                    onError={(e) => {
-                      const image = e.target as HTMLImageElement;
-                      image.style.display = "none";
-                      if (image.parentElement) {
-                        image.parentElement.innerHTML =
-                          '<span style="font-size:24px">🖼</span>';
-                      }
-                    }}
-                  />
+                  failedImageUrls.has(item.url) ? (
+                    <span className="text-2xl opacity-50">🖼</span>
+                  ) : (
+                    <img
+                      src={item.url}
+                      alt={item.filename}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                      onError={() => markImageLoadFailed(item.url)}
+                    />
+                  )
                 ) : item.type === "video" ? (
                   <span className="text-2xl opacity-50">🎬</span>
                 ) : (
