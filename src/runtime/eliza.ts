@@ -1931,13 +1931,13 @@ interface StartupPluginRequirement {
 const STARTUP_PLUGIN_DEFAULT_VERSION_OVERRIDES: Readonly<Record<string, string>> =
   {
     "@elizaos/plugin-discord": "2.0.0-alpha.10",
-    "@elizaos/plugin-rolodex": "next",
-    "@elizaos/plugin-github": "2.0.0-alpha.10",
+    "@elizaos/plugin-rolodex": "2.0.0-alpha.9",
+    "@elizaos/plugin-github": "2.0.0-alpha.4",
     "@elizaos/plugin-mcp": "2.0.0-alpha.10",
-    "@elizaos/plugin-telegram": "2.0.0-alpha.7",
+    "@elizaos/plugin-telegram": "2.0.0-alpha.4",
     "@elizaos/plugin-secrets-manager": "next",
     "@elizaos/plugin-n8n": "2.0.0-alpha.10",
-    "@elizaos/plugin-trust": "next",
+    "@elizaos/plugin-trust": "2.0.0-alpha.1",
   };
 
 const STARTUP_PLUGIN_VERSION_ENV_KEYS: Readonly<Record<string, string>> = {

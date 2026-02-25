@@ -158,8 +158,10 @@ export interface UninstallResult {
 // ---------------------------------------------------------------------------
 
 function pluginsBaseDir(): string {
-  const stateDir = process.env.MILADY_STATE_DIR?.trim();
-  const base = stateDir || path.join(os.homedir(), ".milady");
+  const stateDir =
+    process.env.MILAIDY_STATE_DIR?.trim() ||
+    process.env.MILADY_STATE_DIR?.trim();
+  const base = stateDir || path.join(os.homedir(), ".milaidy");
   return path.join(base, "plugins", "installed");
 }
 

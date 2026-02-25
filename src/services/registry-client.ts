@@ -10,6 +10,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { logger } from "@elizaos/core";
 import { loadMiladyConfig, saveMiladyConfig } from "../config/config.js";
 import type { RegistryEndpoint } from "../config/types.milady.js";
@@ -331,7 +332,9 @@ function uniquePaths(paths: string[]): string[] {
 }
 
 function resolveWorkspaceRoots(): string[] {
-  const envRoot = process.env.MILAIDY_WORKSPACE_ROOT?.trim();
+  const envRoot =
+    process.env.MILAIDY_WORKSPACE_ROOT?.trim() ||
+    process.env.MILADY_WORKSPACE_ROOT?.trim();
   if (envRoot) return uniquePaths([envRoot]);
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));
   const packageRoot = path.resolve(moduleDir, "..", "..");
@@ -406,7 +409,7 @@ function resolveStateDir(): string {
   if (explicit && explicit.length > 0) {
     return explicit;
   }
-  return path.join(os.homedir(), ".milady");
+  return path.join(os.homedir(), ".milaidy");
 }
 
 async function readJsonFile<T>(filePath: string): Promise<T | null> {

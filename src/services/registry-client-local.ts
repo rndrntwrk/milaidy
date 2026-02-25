@@ -63,7 +63,9 @@ function uniquePaths(paths: string[]): string[] {
 }
 
 function resolveWorkspaceRoots(): string[] {
-  const envRoot = process.env.MILADY_WORKSPACE_ROOT?.trim();
+  const envRoot =
+    process.env.MILAIDY_WORKSPACE_ROOT?.trim() ||
+    process.env.MILADY_WORKSPACE_ROOT?.trim();
   if (envRoot) return uniquePaths([envRoot]);
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));
   const packageRoot = path.resolve(moduleDir, "..", "..");
@@ -253,7 +255,9 @@ async function discoverLocalWorkspaceApps(): Promise<
   }
 
   const stateDir =
-    process.env.MILADY_STATE_DIR?.trim() || path.join(os.homedir(), ".milady");
+    process.env.MILAIDY_STATE_DIR?.trim() ||
+    process.env.MILADY_STATE_DIR?.trim() ||
+    path.join(os.homedir(), ".milaidy");
   const installedBase = path.join(stateDir, "plugins", "installed");
   try {
     const installedEntries = await fs.readdir(installedBase, {
