@@ -1,5 +1,6 @@
 import { useEffect, useRef, useMemo } from "react";
 import { useApp } from "../AppContext.js";
+import { useBugReport } from "../hooks/useBugReport.js";
 import { Dialog } from "./ui/Dialog.js";
 
 interface CommandItem {
