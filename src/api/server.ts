@@ -2472,6 +2472,129 @@ async function readJsonBody<T = Record<string, unknown>>(
   }
 }
 
+function createTimeoutError(message: string): Error {
+  const timeoutError = new Error(message);
+  timeoutError.name = "TimeoutError";
+  return timeoutError;
+}
+
+async function readWithTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string,
+): Promise<T> {
+  return await new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(createTimeoutError(message));
+    }, timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+export async function fetchWithTimeoutGuard(
+  input: string | URL | Request,
+  init: RequestInit = {},
+  timeoutMs = 20_000,
+): Promise<Response> {
+  const controller = new AbortController();
+  const inputSignal = init.signal;
+  let timedOut = false;
+
+  if (inputSignal) {
+    if (inputSignal.aborted) {
+      controller.abort(inputSignal.reason);
+    } else {
+      inputSignal.addEventListener(
+        "abort",
+        () => {
+          controller.abort(inputSignal.reason);
+        },
+        { once: true },
+      );
+    }
+  }
+
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (timedOut) {
+      throw createTimeoutError(`Upstream request timed out after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function streamResponseBodyWithByteLimit(
+  upstreamResponse: Response,
+  writable: Pick<http.ServerResponse, "write">,
+  maxBytes: number,
+  bodyTimeoutMs = 20_000,
+): Promise<number> {
+  const contentLengthHeader = upstreamResponse.headers.get("content-length");
+  if (contentLengthHeader) {
+    const contentLength = Number.parseInt(contentLengthHeader, 10);
+    if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+      throw new Error(
+        `Upstream response exceeds maximum size of ${maxBytes} bytes`,
+      );
+    }
+  }
+
+  if (!upstreamResponse.body) {
+    return 0;
+  }
+
+  const reader = upstreamResponse.body.getReader();
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const chunkResult = await readWithTimeout(
+        reader.read(),
+        bodyTimeoutMs,
+        `Upstream response body timed out after ${bodyTimeoutMs}ms`,
+      );
+
+      if (chunkResult.done) break;
+      const value = chunkResult.value ?? new Uint8Array();
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        throw new Error(
+          `Upstream response exceeds maximum size of ${maxBytes} bytes`,
+        );
+      }
+      writable.write(Buffer.from(value));
+    }
+  } catch (error) {
+    try {
+      await reader.cancel();
+    } catch {
+      // no-op
+    }
+    throw error;
+  }
+
+  return totalBytes;
+}
+
 function json(res: http.ServerResponse, data: unknown, status = 200): void {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
@@ -6097,6 +6220,187 @@ async function handleRequest(
       });
     } catch (err) {
       error(res, `Failed to delete credentials: ${err}`, 500);
+    }
+    return;
+  }
+
+  // ── POST /api/tts/elevenlabs ───────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/tts/elevenlabs") {
+    const body = await readJsonBody<Record<string, unknown>>(req, res);
+    if (!body) return;
+
+    const asObject = (value: unknown): Record<string, unknown> | null =>
+      value && typeof value === "object" && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : null;
+    const asTrimmedString = (value: unknown): string | null =>
+      typeof value === "string" && value.trim().length > 0
+        ? value.trim()
+        : null;
+    const asNonRedactedSecret = (value: unknown): string | null => {
+      const normalized = asTrimmedString(value);
+      if (!normalized) return null;
+      if (normalized.toUpperCase() === "[REDACTED]") return null;
+      return normalized;
+    };
+    const resolveBoundedInt = (
+      value: string | undefined,
+      fallback: number,
+      min: number,
+      max: number,
+    ): number => {
+      const parsed = Number.parseInt(value ?? "", 10);
+      if (!Number.isFinite(parsed)) return fallback;
+      return Math.min(max, Math.max(min, parsed));
+    };
+
+    const text = asTrimmedString(body.text);
+    if (!text) {
+      error(res, "text is required", 400);
+      return;
+    }
+
+    const messages = asObject(state.config.messages);
+    const tts = asObject(messages?.tts);
+    const elevenlabsConfig = asObject(tts?.elevenlabs);
+    const talkConfig = asObject(state.config.talk);
+
+    const apiKey =
+      asNonRedactedSecret(process.env.ELEVENLABS_API_KEY) ??
+      asNonRedactedSecret(elevenlabsConfig?.apiKey) ??
+      asNonRedactedSecret(talkConfig?.apiKey);
+
+    if (!apiKey) {
+      error(
+        res,
+        "ElevenLabs API key is not configured (set ELEVENLABS_API_KEY or messages.tts.elevenlabs.apiKey).",
+        400,
+      );
+      return;
+    }
+
+    const voiceId =
+      asTrimmedString(body.voiceId) ??
+      asTrimmedString(elevenlabsConfig?.voiceId) ??
+      asTrimmedString(process.env.ELEVENLABS_VOICE_ID) ??
+      "EXAVITQu4vr4xnSDxMaL";
+
+    const modelId =
+      asTrimmedString(body.modelId) ??
+      asTrimmedString(body.model_id) ??
+      asTrimmedString(elevenlabsConfig?.modelId) ??
+      asTrimmedString(process.env.ELEVENLABS_MODEL_ID) ??
+      "eleven_flash_v2_5";
+
+    const outputFormat =
+      asTrimmedString(body.outputFormat) ??
+      asTrimmedString(process.env.ELEVENLABS_OUTPUT_FORMAT) ??
+      "mp3_22050_32";
+
+    const applyTextNormalizationRaw =
+      asTrimmedString(body.apply_text_normalization) ??
+      asTrimmedString(elevenlabsConfig?.applyTextNormalization) ??
+      "auto";
+    const applyTextNormalization =
+      applyTextNormalizationRaw === "on" ||
+      applyTextNormalizationRaw === "off" ||
+      applyTextNormalizationRaw === "auto"
+        ? applyTextNormalizationRaw
+        : "auto";
+
+    const voiceSettings =
+      asObject(body.voice_settings) ??
+      asObject(body.voiceSettings) ??
+      asObject(elevenlabsConfig?.voiceSettings);
+
+    const requestBody: Record<string, unknown> = {
+      text,
+      model_id: modelId,
+      apply_text_normalization: applyTextNormalization,
+    };
+    if (voiceSettings) {
+      requestBody.voice_settings = voiceSettings;
+    }
+
+    const requestTimeoutMs = resolveBoundedInt(
+      process.env.MILAIDY_ELEVENLABS_PROXY_TIMEOUT_MS,
+      20_000,
+      1_000,
+      120_000,
+    );
+    const maxAudioBytes = resolveBoundedInt(
+      process.env.MILAIDY_ELEVENLABS_PROXY_MAX_BYTES,
+      10 * 1024 * 1024,
+      1024,
+      100 * 1024 * 1024,
+    );
+
+    const upstreamUrl = new URL(
+      `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/stream`,
+    );
+    upstreamUrl.searchParams.set("output_format", outputFormat);
+
+    let upstreamResponse: Response;
+    try {
+      upstreamResponse = await fetchWithTimeoutGuard(
+        upstreamUrl.toString(),
+        {
+          method: "POST",
+          headers: {
+            "xi-api-key": apiKey,
+            "Content-Type": "application/json",
+            Accept: "audio/mpeg",
+          },
+          body: JSON.stringify(requestBody),
+        },
+        requestTimeoutMs,
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to reach ElevenLabs";
+      error(res, message, err instanceof Error && err.name === "TimeoutError" ? 504 : 502);
+      return;
+    }
+
+    if (!upstreamResponse.ok) {
+      const upstreamBody = await upstreamResponse.text().catch(() => "");
+      const contentType =
+        upstreamResponse.headers.get("content-type") ?? "application/json";
+      res.statusCode = upstreamResponse.status;
+      res.setHeader("Content-Type", contentType);
+      if (upstreamBody) {
+        res.end(upstreamBody);
+      } else {
+        res.end(
+          JSON.stringify({
+            error: `ElevenLabs request failed with status ${upstreamResponse.status}`,
+          }),
+        );
+      }
+      return;
+    }
+
+    const contentType =
+      upstreamResponse.headers.get("content-type") ?? "audio/mpeg";
+    res.statusCode = 200;
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Cache-Control", "no-store");
+
+    try {
+      await streamResponseBodyWithByteLimit(
+        upstreamResponse,
+        res,
+        maxAudioBytes,
+        requestTimeoutMs,
+      );
+      res.end();
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to stream ElevenLabs response";
+      if (!res.writableEnded && !res.headersSent) {
+        error(res, message, err instanceof Error && err.name === "TimeoutError" ? 504 : 502);
+      } else {
+        res.destroy(err instanceof Error ? err : undefined);
+      }
     }
     return;
   }
