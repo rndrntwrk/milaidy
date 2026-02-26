@@ -246,11 +246,15 @@
     "ai": "6.0.30",
     "tar": "^7.5.7",
     "@elizaos/core": "next",
-    "@elizaos/plugin-sql": "$@elizaos/plugin-sql"
+    "@elizaos/plugin-sql": "$@elizaos/plugin-sql",
+    "pg": "8.16.3",
+    "pg-protocol": "1.11.0"
   },
   "pnpm": {
     "overrides": {
-      "@elizaos/core": "2.0.0-alpha.10"
+      "@elizaos/core": "2.0.0-alpha.10",
+      "pg": "8.16.3",
+      "pg-protocol": "1.11.0"
     }
   },
   "engines": {

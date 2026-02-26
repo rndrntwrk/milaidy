@@ -681,6 +681,9 @@ const OPTIONAL_PLUGIN_MAP: Readonly<Record<string, string>> = {
   vision: "@elizaos/plugin-vision",
   cron: "@elizaos/plugin-cron",
   computeruse: "@elizaos/plugin-computeruse",
+  "coding-agent": "@milaidy/plugin-coding-agent",
+  scheduling: "@elizaos/plugin-scheduling",
+  webhooks: "@elizaos/plugin-webhooks",
   x402: "@elizaos/plugin-x402",
 };
 
@@ -889,6 +892,57 @@ function parseBooleanToggle(raw: string | undefined): boolean | null {
   if (["1", "true", "on", "yes"].includes(normalized)) return true;
   if (["0", "false", "off", "no"].includes(normalized)) return false;
   return null;
+}
+
+function isAliceFullDutyModeEnabled(): boolean {
+  return parseBooleanToggle(process.env.ALICE_FULL_DUTY_MODE) === true;
+}
+
+export function applyAliceFullDutyDefaults(config: MilaidyConfig): {
+  changed: boolean;
+  changes: string[];
+} {
+  if (!isAliceFullDutyModeEnabled()) {
+    return { changed: false, changes: [] };
+  }
+
+  const changes: string[] = [];
+  let changed = false;
+
+  if (!config.features || typeof config.features !== "object") {
+    config.features = {};
+  }
+  const featureConfig = config.features as Record<string, unknown>;
+  for (const featureName of ["browser", "computeruse", "vision"] as const) {
+    if (featureConfig[featureName] !== undefined) continue;
+    featureConfig[featureName] = true;
+    changed = true;
+    changes.push(`features.${featureName}=true`);
+  }
+
+  if (!config.plugins || typeof config.plugins !== "object") {
+    config.plugins = {};
+  }
+  if (!config.plugins.entries || typeof config.plugins.entries !== "object") {
+    config.plugins.entries = {};
+  }
+
+  const pluginEntries = config.plugins.entries as Record<string, unknown>;
+  for (const entryKey of [
+    "browser",
+    "computeruse",
+    "vision",
+    "coding-agent",
+    "scheduling",
+    "webhooks",
+  ] as const) {
+    if (pluginEntries[entryKey] !== undefined) continue;
+    pluginEntries[entryKey] = { enabled: true };
+    changed = true;
+    changes.push(`plugins.entries.${entryKey}.enabled=true`);
+  }
+
+  return { changed, changes };
 }
 
 export function resolveFive55PluginEnabled(
@@ -1950,6 +2004,8 @@ const STARTUP_PLUGIN_VERSION_ENV_KEYS: Readonly<Record<string, string>> = {
     "MILAIDY_STARTUP_PLUGIN_SECRETS_MANAGER_VERSION",
   "@elizaos/plugin-n8n": "MILAIDY_STARTUP_PLUGIN_N8N_VERSION",
   "@elizaos/plugin-trust": "MILAIDY_STARTUP_PLUGIN_TRUST_VERSION",
+  "@elizaos/plugin-scheduling": "MILAIDY_STARTUP_PLUGIN_SCHEDULING_VERSION",
+  "@elizaos/plugin-webhooks": "MILAIDY_STARTUP_PLUGIN_WEBHOOKS_VERSION",
 };
 
 function resolveStartupPluginInstallSpec(packageName: string): string {
@@ -2080,8 +2136,20 @@ function collectStartupPluginRequirements(
     add("@elizaos/plugin-vision", "vision feature enabled");
   }
 
+  if (isFeatureEnabled(config, "computeruse")) {
+    add("@elizaos/plugin-computeruse", "computeruse feature enabled");
+  }
+
   if (isFeatureEnabled(config, "cron")) {
     add("@elizaos/plugin-cron", "cron feature enabled");
+  }
+
+  if (isPluginEntryEnabled(config, "scheduling")) {
+    add("@elizaos/plugin-scheduling", "scheduling plugin entry enabled");
+  }
+
+  if (isPluginEntryEnabled(config, "webhooks")) {
+    add("@elizaos/plugin-webhooks", "webhooks plugin entry enabled");
   }
 
   if (isPluginEntryEnabled(config, "mcp")) {
@@ -3296,6 +3364,20 @@ export async function startEliza(
     config = await runFirstTimeSetup(config);
   }
 
+  const fullDutyDefaults = applyAliceFullDutyDefaults(config);
+  if (fullDutyDefaults.changed) {
+    try {
+      saveMilaidyConfig(config);
+      logger.info(
+        `[milaidy] Applied ALICE full-duty defaults: ${fullDutyDefaults.changes.join(", ")}`,
+      );
+    } catch (err) {
+      logger.warn(
+        `[milaidy] Failed to persist ALICE full-duty defaults: ${formatError(err)}`,
+      );
+    }
+  }
+
   // 1c. Apply logging level from config to process.env so the global
   //     @elizaos/core logger (used by plugins) respects it.
   //     config.logging.level is guaranteed to be set (defaults to "error").
@@ -4153,6 +4235,20 @@ export async function startEliza(
 
           // Reload config from disk (updated by API)
           let freshConfig = loadMilaidyConfig();
+          const hotReloadFullDutyDefaults =
+            applyAliceFullDutyDefaults(freshConfig);
+          if (hotReloadFullDutyDefaults.changed) {
+            try {
+              saveMilaidyConfig(freshConfig);
+              logger.info(
+                `[milaidy] Hot-reload applied ALICE full-duty defaults: ${hotReloadFullDutyDefaults.changes.join(", ")}`,
+              );
+            } catch (err) {
+              logger.warn(
+                `[milaidy] Hot-reload failed to persist ALICE full-duty defaults: ${formatError(err)}`,
+              );
+            }
+          }
 
           // Propagate secrets & cloud config into process.env so plugins
           // (especially plugin-elizacloud) can discover them.  The initial

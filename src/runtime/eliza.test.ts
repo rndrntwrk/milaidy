@@ -15,6 +15,7 @@ import { findPluginExport } from "../cli/plugins-cli";
 import type { MiladyConfig } from "../config/config";
 import { CONNECTOR_IDS } from "../config/schema";
 import {
+  applyAliceFullDutyDefaults,
   applyCloudConfigToEnv,
   applyConnectorSecretsToEnv,
   applyRuntimeSecretAliases,
@@ -81,6 +82,7 @@ describe("collectPluginNames", () => {
     "ALICE_GH_TOKEN",
     "ELIZAOS_CLOUD_API_KEY",
     "ELIZAOS_CLOUD_ENABLED",
+    "ALICE_FULL_DUTY_MODE",
     "MILAIDY_USE_PI_AI",
     "OBSIDIAN_VAULT_PATH",
     "OBSIDAN_VAULT_PATH",
@@ -316,6 +318,19 @@ describe("collectPluginNames", () => {
     ).toBe(false);
   });
 
+  it("maps plugins.entries.coding-agent to @milaidy/plugin-coding-agent", () => {
+    const config = {
+      plugins: {
+        entries: {
+          "coding-agent": { enabled: true },
+        },
+      },
+    } as unknown as MiladyConfig;
+    const names = collectPluginNames(config);
+    expect(names.has("@milaidy/plugin-coding-agent")).toBe(true);
+    expect(names.has("@elizaos/plugin-coding-agent")).toBe(false);
+  });
+
   it("normalizes legacy @milaidy/plugin-telegram-enhanced allowlist entry", () => {
     const config = {
       plugins: {
@@ -331,6 +346,35 @@ describe("collectPluginNames", () => {
     process.env.GITHUB_API_TOKEN = "ghp_test";
     const names = collectPluginNames({} as MilaidyConfig);
     expect(names.has("@elizaos/plugin-github")).toBe(false);
+  });
+
+  it("applies full-duty defaults for features and plugin entries when enabled", () => {
+    process.env.ALICE_FULL_DUTY_MODE = "true";
+    const config = {} as MiladyConfig;
+    const result = applyAliceFullDutyDefaults(config);
+    expect(result.changed).toBe(true);
+    expect(config.features).toMatchObject({
+      browser: true,
+      computeruse: true,
+      vision: true,
+    });
+    expect(config.plugins?.entries).toMatchObject({
+      browser: { enabled: true },
+      computeruse: { enabled: true },
+      vision: { enabled: true },
+      "coding-agent": { enabled: true },
+      scheduling: { enabled: true },
+      webhooks: { enabled: true },
+    });
+  });
+
+  it("does not apply full-duty defaults when ALICE_FULL_DUTY_MODE is disabled", () => {
+    delete process.env.ALICE_FULL_DUTY_MODE;
+    const config = {} as MiladyConfig;
+    const result = applyAliceFullDutyDefaults(config);
+    expect(result.changed).toBe(false);
+    expect(config.features).toBeUndefined();
+    expect(config.plugins).toBeUndefined();
   });
 
   it("does not auto-load upstream github plugin when only ALICE_GH_TOKEN is present", () => {

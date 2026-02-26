@@ -355,6 +355,72 @@ interface ConversationMeta {
 
 type ChatMode = "simple" | "power";
 
+type CachedPermissionState = {
+  id: string;
+  status: string;
+  lastChecked: number;
+  canRequest: boolean;
+};
+
+const SYSTEM_PERMISSION_IDS = [
+  "accessibility",
+  "screen-recording",
+  "microphone",
+  "camera",
+  "shell",
+] as const;
+
+type SystemPermissionId = (typeof SYSTEM_PERMISSION_IDS)[number];
+
+function getDefaultPermissionStatus(
+  permissionId: SystemPermissionId,
+  shellEnabled: boolean,
+): string {
+  if (permissionId === "shell") {
+    return shellEnabled ? "granted" : "denied";
+  }
+  return process.platform === "darwin" ? "not-determined" : "not-applicable";
+}
+
+function getDefaultCanRequest(permissionId: SystemPermissionId): boolean {
+  if (permissionId === "shell") return false;
+  return process.platform === "darwin";
+}
+
+function buildPermissionStateMap(
+  rawStates: Record<string, CachedPermissionState> | undefined,
+  shellEnabled: boolean,
+): Record<string, CachedPermissionState> {
+  const now = Date.now();
+  const next: Record<string, CachedPermissionState> = {};
+
+  for (const permissionId of SYSTEM_PERMISSION_IDS) {
+    const existing = rawStates?.[permissionId];
+    const status =
+      permissionId === "shell"
+        ? shellEnabled
+          ? "granted"
+          : "denied"
+        : typeof existing?.status === "string" && existing.status.trim().length
+          ? existing.status
+          : getDefaultPermissionStatus(permissionId, shellEnabled);
+
+    next[permissionId] = {
+      id: permissionId,
+      status,
+      lastChecked: existing?.lastChecked ?? now,
+      canRequest:
+        permissionId === "shell"
+          ? false
+          : typeof existing?.canRequest === "boolean"
+            ? existing.canRequest
+            : getDefaultCanRequest(permissionId),
+    };
+  }
+
+  return next;
+}
+
 interface ServerState {
   runtime: AgentRuntime | null;
   config: MilaidyConfig;
@@ -405,15 +471,7 @@ interface ServerState {
   _codexFlow?: import("../auth/openai-codex.js").CodexFlow;
   _codexFlowTimer?: ReturnType<typeof setTimeout>;
   /** System permission states (cached from Electron IPC). */
-  permissionStates?: Record<
-    string,
-    {
-      id: string;
-      status: string;
-      lastChecked: number;
-      canRequest: boolean;
-    }
-  >;
+  permissionStates?: Record<string, CachedPermissionState>;
   /** Whether shell access is enabled (can be toggled in UI). */
   shellEnabled?: boolean;
 }
@@ -687,7 +745,9 @@ function _extractResponseBlocks(
 // Package root resolution (for reading bundled plugins.json)
 // ---------------------------------------------------------------------------
 
-function findOwnPackageRoot(startDir: string): string {
+const OWN_PACKAGE_NAME_CANDIDATES = new Set(["milaidy", "milady", "miladyai"]);
+
+export function findOwnPackageRoot(startDir: string): string {
   let dir = startDir;
   for (let i = 0; i < 10; i++) {
     const pkgPath = path.join(dir, "package.json");
@@ -697,7 +757,10 @@ function findOwnPackageRoot(startDir: string): string {
           string,
           unknown
         >;
-        if (pkg.name === "milaidy") return dir;
+        const packageName =
+          typeof pkg.name === "string" ? pkg.name.trim().toLowerCase() : "";
+        if (OWN_PACKAGE_NAME_CANDIDATES.has(packageName)) return dir;
+        if (fs.existsSync(path.join(dir, "plugins.json"))) return dir;
       } catch {
         /* keep searching */
       }
@@ -10740,11 +10803,16 @@ async function handleRequest(
   // ── GET /api/permissions ───────────────────────────────────────────────
   // Returns all system permission states
   if (method === "GET" && pathname === "/api/permissions") {
-    const permStates = state.permissionStates ?? {};
+    const shellEnabled = state.shellEnabled ?? true;
+    const permStates = buildPermissionStateMap(
+      state.permissionStates,
+      shellEnabled,
+    );
+    state.permissionStates = permStates;
     json(res, {
       permissions: permStates,
       platform: process.platform,
-      shellEnabled: state.shellEnabled ?? true,
+      shellEnabled,
     });
     return;
   }
@@ -10753,17 +10821,11 @@ async function handleRequest(
   // Return shell toggle status in a stable shape for UI clients.
   if (method === "GET" && pathname === "/api/permissions/shell") {
     const enabled = state.shellEnabled ?? true;
-    if (!state.permissionStates) {
-      state.permissionStates = {};
-    }
-    const shellState = state.permissionStates.shell;
-    const permission = {
-      id: "shell",
-      status: enabled ? "granted" : "denied",
-      lastChecked: shellState?.lastChecked ?? Date.now(),
-      canRequest: false,
-    };
-    state.permissionStates.shell = permission;
+    state.permissionStates = buildPermissionStateMap(
+      state.permissionStates,
+      enabled,
+    );
+    const permission = state.permissionStates.shell;
 
     // Keep the legacy top-level permission fields for compatibility with
     // callers that previously treated /api/permissions/shell as a generic
@@ -10784,7 +10846,11 @@ async function handleRequest(
       error(res, "Invalid permission ID", 400);
       return;
     }
-    const permStates = state.permissionStates ?? {};
+    const permStates = buildPermissionStateMap(
+      state.permissionStates,
+      state.shellEnabled ?? true,
+    );
+    state.permissionStates = permStates;
     const permState = permStates[permId];
     if (!permState) {
       json(res, {
@@ -10846,17 +10912,10 @@ async function handleRequest(
     if (!body) return;
     const enabled = body.enabled === true;
     state.shellEnabled = enabled;
-
-    // Update permission state
-    if (!state.permissionStates) {
-      state.permissionStates = {};
-    }
-    state.permissionStates.shell = {
-      id: "shell",
-      status: enabled ? "granted" : "denied",
-      lastChecked: Date.now(),
-      canRequest: false,
-    };
+    state.permissionStates = buildPermissionStateMap(
+      state.permissionStates,
+      enabled,
+    );
 
     // Save to config
     if (!state.config.features) {
@@ -10886,15 +10945,18 @@ async function handleRequest(
     const body = await readJsonBody(req, res);
     if (!body) return;
     if (body.permissions && typeof body.permissions === "object") {
-      state.permissionStates = body.permissions as Record<
-        string,
+      state.permissionStates = buildPermissionStateMap(
         {
-          id: string;
-          status: string;
-          lastChecked: number;
-          canRequest: boolean;
-        }
-      >;
+          ...(state.permissionStates ?? {}),
+          ...(body.permissions as Record<string, CachedPermissionState>),
+        },
+        state.shellEnabled ?? true,
+      );
+    } else {
+      state.permissionStates = buildPermissionStateMap(
+        state.permissionStates,
+        state.shellEnabled ?? true,
+      );
     }
     json(res, { updated: true, permissions: state.permissionStates });
     return;

@@ -4136,7 +4136,24 @@ export class MiladyClient {
    * Get all system permission states.
    */
   async getPermissions(): Promise<AllPermissionsState> {
-    return this.fetch("/api/permissions");
+    const payload = await this.fetch<
+      | AllPermissionsState
+      | {
+          permissions?: AllPermissionsState;
+        }
+    >("/api/permissions");
+
+    if (
+      payload &&
+      typeof payload === "object" &&
+      "permissions" in payload &&
+      payload.permissions &&
+      typeof payload.permissions === "object"
+    ) {
+      return payload.permissions;
+    }
+
+    return payload as AllPermissionsState;
   }
 
   /**
@@ -4166,7 +4183,8 @@ export class MiladyClient {
    * Refresh all permission states from the OS.
    */
   async refreshPermissions(): Promise<AllPermissionsState> {
-    return this.fetch("/api/permissions/refresh", { method: "POST" });
+    await this.fetch("/api/permissions/refresh", { method: "POST" });
+    return this.getPermissions();
   }
 
   /**

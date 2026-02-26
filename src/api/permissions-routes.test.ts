@@ -57,10 +57,19 @@ describe("permission routes", () => {
     });
 
     expect(result.status).toBe(200);
+    const payload = result.payload as {
+      permissions: Record<string, { status: string }>;
+      shellEnabled: boolean;
+    };
+    expect(payload.permissions).toHaveProperty("accessibility");
+    expect(payload.permissions).toHaveProperty("screen-recording");
+    expect(payload.permissions).toHaveProperty("microphone");
+    expect(payload.permissions).toHaveProperty("camera");
+    expect(payload.permissions).toHaveProperty("shell");
     expect(result.payload).toMatchObject({
-      permissions: {},
       shellEnabled: true,
     });
+    expect(payload.permissions.shell?.status).toBe("granted");
   });
 
   test("returns shell permission in compatibility shape", async () => {

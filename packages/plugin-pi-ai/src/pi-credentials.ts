@@ -9,8 +9,42 @@ import {
   getProviders,
   type OAuthCredentials,
 } from "@mariozechner/pi-ai";
-import { getAccessToken, loadCredentials } from "../auth/credentials.js";
-import type { SubscriptionProvider } from "../auth/types.js";
+
+type SubscriptionProvider = "openai-codex" | "anthropic-subscription";
+
+interface MilaidyAuthCredentialsModule {
+  loadCredentials: (
+    provider: SubscriptionProvider,
+  ) => Promise<OAuthCredentials | null>;
+  getAccessToken: (provider: SubscriptionProvider) => Promise<string | undefined>;
+}
+
+let cachedMilaidyAuthModule: Promise<MilaidyAuthCredentialsModule | null> | null =
+  null;
+
+async function loadMilaidyAuthModule(): Promise<MilaidyAuthCredentialsModule | null> {
+  if (cachedMilaidyAuthModule) {
+    return cachedMilaidyAuthModule;
+  }
+  cachedMilaidyAuthModule = (async () => {
+    try {
+      const module = await import("../../../src/auth/credentials.js");
+      if (
+        module &&
+        typeof module.loadCredentials === "function" &&
+        typeof module.getAccessToken === "function"
+      ) {
+        return module as MilaidyAuthCredentialsModule;
+      }
+    } catch (error) {
+      logger.debug(
+        `pi-ai: secure credential bridge unavailable (${error instanceof Error ? error.message : String(error)})`,
+      );
+    }
+    return null;
+  })();
+  return cachedMilaidyAuthModule;
+}
 
 interface PiAuthApiKeyEntry {
   type: "api_key";
@@ -78,6 +112,7 @@ export async function createPiCredentialProvider(): Promise<PiCredentialProvider
   const agentDir = resolvePiAgentDir();
   const authPath = path.join(agentDir, "auth.json");
   const settingsPath = path.join(agentDir, "settings.json");
+  const authModule = await loadMilaidyAuthModule();
 
   const auth = (await readJsonFile<PiAuthFile>(authPath)) ?? {};
   const settings = (await readJsonFile<PiSettingsFile>(settingsPath)) ?? {};
@@ -102,8 +137,9 @@ export async function createPiCredentialProvider(): Promise<PiCredentialProvider
   await Promise.all(
     Array.from(secureProviderByPiProvider.entries()).map(
       async ([piProvider, subscriptionProvider]) => {
+        if (!authModule) return;
         try {
-          const stored = await loadCredentials(subscriptionProvider);
+          const stored = await authModule.loadCredentials(subscriptionProvider);
           if (stored) {
             secureProvidersAvailable.add(piProvider);
           }
@@ -148,9 +184,9 @@ export async function createPiCredentialProvider(): Promise<PiCredentialProvider
 
       // Fallback: Milaidy secure storage OAuth credentials (subscription flows).
       const subscriptionProvider = secureProviderByPiProvider.get(provider);
-      if (!subscriptionProvider) return undefined;
+      if (!subscriptionProvider || !authModule) return undefined;
       try {
-        const token = await getAccessToken(subscriptionProvider);
+        const token = await authModule.getAccessToken(subscriptionProvider);
         if (token) {
           secureProvidersAvailable.add(provider);
           return token;
