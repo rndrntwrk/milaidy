@@ -14,41 +14,51 @@ import * as path from "node:path";
 import type { IAgentRuntime } from "@elizaos/core";
 import { createConnection } from "node:net";
 import { logger } from "@elizaos/core";
-import {
-  installPlugin,
-  listInstalledPlugins,
-  type ProgressCallback,
-  uninstallPlugin,
-} from "./plugin-installer.js";
+import { deriveEvmAddress, deriveSolanaAddress } from "../api/wallet.js";
+import type {
+  AppLaunchResult,
+  AppStopResult,
+  AppViewerAuthMessage,
+  InstalledAppInfo,
+} from "../contracts/apps.js";
+import type {
+  InstalledPluginInfo,
+  InstallProgressLike,
+  PluginManagerLike,
+  RegistryPluginInfo,
+  RegistrySearchResult,
+} from "./plugin-manager-types.js";
+import { listInstalledPlugins } from "./plugin-installer.js";
 import {
   type RegistryAppInfo,
   getAppInfo as registryGetAppInfo,
+  getRegistryPlugins as registryGetPlugins,
   getPluginInfo as registryGetPluginInfo,
-  listApps as registryListApps,
-  searchApps as registrySearchApps,
 } from "./registry-client.js";
 
+const LOCAL_PLUGINS_DIR = "plugins";
 const DEFAULT_VIEWER_SANDBOX = "allow-scripts allow-same-origin allow-popups";
 const HYPERSCAPE_APP_NAME = "@elizaos/app-hyperscape";
 const HYPERSCAPE_AUTH_MESSAGE_TYPE = "HYPERSCAPE_AUTH";
 const RS_2004SCAPE_APP_NAME = "@elizaos/app-2004scape";
 const RS_2004SCAPE_AUTH_MESSAGE_TYPE = "RS_2004SCAPE_AUTH";
 const SAFE_APP_URL_PROTOCOLS = new Set(["http:", "https:"]);
+type AppViewerConfig = NonNullable<AppLaunchResult["viewer"]>;
 const LOCAL_APP_DEFAULT_FALLBACK_URLS: Readonly<Record<string, string>> = {
   "@elizaos/app-hyperfy": "https://hyperfy.io/",
   "@elizaos/app-hyperscape": "https://hyperscapeai.github.io/hyperscape/",
   "@elizaos/app-2004scape": "https://rs-sdk-demo.fly.dev/",
 };
 
+export type {
+  AppLaunchResult,
+  AppStopResult,
+  AppViewerAuthMessage,
+  InstalledAppInfo,
+} from "../contracts/apps.js";
+
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-export interface AppViewerAuthMessage {
-  type: string;
-  authToken?: string;
-  sessionToken?: string;
-  agentId?: string;
 }
 
 interface RegistryAppPlugin extends RegistryPluginInfo {
@@ -58,8 +68,8 @@ interface RegistryAppPlugin extends RegistryPluginInfo {
     postMessageAuth?: boolean;
     sandbox?: string;
   };
-  launchType?: "connect" | "local";
-  launchUrl?: string;
+  launchType?: string;
+  launchUrl?: string | null;
   displayName?: string;
 }
 
@@ -89,6 +99,58 @@ function mergeAppMeta(
   appInfo.category = meta.category ?? appInfo.category;
   appInfo.capabilities = meta.capabilities ?? appInfo.capabilities;
   appInfo.icon = meta.icon ?? appInfo.icon;
+}
+
+function mergeRegistryAppFallback(
+  appInfo: RegistryAppPlugin,
+  fallback: RegistryAppInfo,
+): RegistryAppPlugin {
+  appInfo.displayName = appInfo.displayName ?? fallback.displayName;
+  appInfo.launchType = appInfo.launchType ?? fallback.launchType;
+  appInfo.launchUrl = appInfo.launchUrl ?? fallback.launchUrl;
+  appInfo.icon = appInfo.icon ?? fallback.icon;
+  appInfo.category = appInfo.category ?? fallback.category;
+  appInfo.capabilities =
+    appInfo.capabilities && appInfo.capabilities.length > 0
+      ? appInfo.capabilities
+      : fallback.capabilities;
+  appInfo.viewer = appInfo.viewer ?? fallback.viewer;
+  if (!appInfo.description || appInfo.description.trim().length === 0) {
+    appInfo.description = fallback.description;
+  }
+  if ((!appInfo.gitRepo || appInfo.gitRepo.trim().length === 0) && fallback.repository) {
+    appInfo.gitRepo = fallback.repository;
+  }
+  if ((!appInfo.gitUrl || appInfo.gitUrl.trim().length === 0) && fallback.repository) {
+    appInfo.gitUrl = fallback.repository;
+  }
+  if (!Array.isArray(appInfo.topics)) {
+    appInfo.topics = [];
+  }
+  return appInfo;
+}
+
+function toPluginInfoFromAppInfo(appInfo: RegistryAppInfo): RegistryAppPlugin {
+  return {
+    name: appInfo.name,
+    gitRepo: appInfo.repository,
+    gitUrl: appInfo.repository,
+    displayName: appInfo.displayName,
+    description: appInfo.description,
+    homepage: appInfo.repository,
+    topics: [],
+    stars: appInfo.stars,
+    language: "TypeScript",
+    kind: "app",
+    launchType: appInfo.launchType,
+    launchUrl: appInfo.launchUrl,
+    icon: appInfo.icon,
+    category: appInfo.category,
+    capabilities: [...appInfo.capabilities],
+    viewer: appInfo.viewer,
+    npm: appInfo.npm,
+    supports: appInfo.supports,
+  };
 }
 
 function isAutoInstallable(appInfo: RegistryPluginInfo): boolean {
@@ -185,7 +247,10 @@ function shouldValidateLocalAppUpstream(): boolean {
 }
 
 function resolveLocalUpstreamCandidate(
-  appInfo: RegistryAppInfo,
+  appInfo: {
+    viewer?: { url: string };
+    launchUrl?: string | null;
+  },
 ): string | null {
   const candidates = [appInfo.viewer?.url, appInfo.launchUrl]
     .map((value) =>
@@ -248,7 +313,10 @@ async function isLoopbackUpstreamReachable(
   });
 }
 
-function resolveAppLaunchFallbackUrl(appInfo: RegistryAppInfo): string | null {
+function resolveAppLaunchFallbackUrl(appInfo: {
+  name: string;
+  repository?: string | null;
+}): string | null {
   const slug = appInfo.name
     .replace(/^@[^/]+\//, "")
     .replace(/^app-/, "")
@@ -450,8 +518,135 @@ function buildViewerConfig(
   return null;
 }
 
+function getWalletAddressesFromRuntime(
+  runtime: IAgentRuntime | null | undefined,
+): { evmAddress: string | null; solanaAddress: string | null } {
+  let evmAddress: string | null = null;
+  let solanaAddress: string | null = null;
+  const evmKey =
+    (runtime?.getSetting?.("EVM_PRIVATE_KEY") as string | undefined)?.trim() ||
+    process.env.EVM_PRIVATE_KEY?.trim();
+  if (evmKey) {
+    try {
+      evmAddress = deriveEvmAddress(evmKey);
+    } catch (error) {
+      logger.warn(
+        `[app-manager] Invalid EVM key for hyperscape auth: ${describeError(error)}`,
+      );
+    }
+  }
+
+  const solanaKey =
+    (runtime?.getSetting?.("SOLANA_PRIVATE_KEY") as string | undefined)?.trim() ||
+    process.env.SOLANA_PRIVATE_KEY?.trim();
+  if (solanaKey) {
+    try {
+      solanaAddress = deriveSolanaAddress(solanaKey);
+    } catch (error) {
+      logger.warn(
+        `[app-manager] Invalid Solana key for hyperscape auth: ${describeError(error)}`,
+      );
+    }
+  }
+
+  return { evmAddress, solanaAddress };
+}
+
+async function autoProvisionHyperscapeAgent(
+  runtime: IAgentRuntime | null | undefined,
+): Promise<{
+  characterId: string;
+  authToken?: string;
+} | null> {
+  const existingCharacterId =
+    (
+      runtime?.getSetting?.("HYPERSCAPE_CHARACTER_ID") as string | undefined
+    )?.trim() || process.env.HYPERSCAPE_CHARACTER_ID?.trim();
+  const existingToken =
+    (
+      runtime?.getSetting?.("HYPERSCAPE_AUTH_TOKEN") as string | undefined
+    )?.trim() || process.env.HYPERSCAPE_AUTH_TOKEN?.trim();
+  if (existingCharacterId && existingToken) {
+    return { characterId: existingCharacterId, authToken: existingToken };
+  }
+
+  const walletAddresses = getWalletAddressesFromRuntime(runtime);
+  const walletAddress = walletAddresses.evmAddress || walletAddresses.solanaAddress;
+  if (!walletAddress) {
+    logger.warn(
+      "[app-manager] Hyperscape auto-provision skipped: no EVM or Solana private key available.",
+    );
+    return null;
+  }
+
+  const walletType = walletAddresses.evmAddress ? "evm" : "solana";
+  const serverUrl =
+    (
+      runtime?.getSetting?.("HYPERSCAPE_SERVER_URL") as string | undefined
+    )?.trim() ||
+    process.env.HYPERSCAPE_SERVER_URL?.trim() ||
+    "ws://localhost:5555/ws";
+  const apiBaseUrl = serverUrl
+    .replace(/^ws:/, "http:")
+    .replace(/^wss:/, "https:")
+    .replace(/\/ws$/, "");
+  const agentName =
+    runtime?.character?.name ||
+    (runtime?.getSetting?.("BOT_NAME") as string | undefined)?.trim() ||
+    process.env.BOT_NAME ||
+    "Agent";
+
+  try {
+    const response = await fetch(`${apiBaseUrl}/api/agents/wallet-auth`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ walletAddress, walletType, agentName }),
+    });
+    if (!response.ok) {
+      const details = await response.text().catch(() => "");
+      logger.warn(
+        `[app-manager] Hyperscape wallet-auth failed (${response.status}): ${details}`,
+      );
+      return null;
+    }
+
+    const payload = (await response.json()) as {
+      success?: boolean;
+      authToken?: string;
+      characterId?: string;
+    };
+    if (!payload.success || !payload.characterId || !payload.authToken) {
+      logger.warn("[app-manager] Hyperscape wallet-auth returned incomplete payload.");
+      return null;
+    }
+
+    process.env.HYPERSCAPE_CHARACTER_ID = payload.characterId;
+    process.env.HYPERSCAPE_AUTH_TOKEN = payload.authToken;
+    logger.info(
+      `[app-manager] Auto-provisioned hyperscape agent: ${payload.characterId}`,
+    );
+    return {
+      characterId: payload.characterId,
+      authToken: payload.authToken,
+    };
+  } catch (error) {
+    logger.warn(
+      `[app-manager] Hyperscape auto-provision failed: ${describeError(error)}`,
+    );
+    return null;
+  }
+}
+
 function getPluginPackageName(
-  appInfo: RegistryAppInfo,
+  appInfo: {
+    name: string;
+    npm: {
+      package: string;
+      v0Version?: string | null;
+      v1Version?: string | null;
+      v2Version?: string | null;
+    };
+  },
   pluginInfo?: {
     npm: {
       package: string;
@@ -472,7 +667,13 @@ function getPluginPackageName(
 }
 
 function isPluginInstallable(
-  appInfo: RegistryAppInfo,
+  appInfo: {
+    npm: {
+      v0Version?: string | null;
+      v1Version?: string | null;
+      v2Version?: string | null;
+    };
+  },
   pluginInfo?: {
     localPath?: string;
     npm: {
@@ -528,7 +729,7 @@ export class AppManager {
     // registry-client but not by the elizaos
     // plugin-manager service.
     try {
-      const localRegistry = await getRegistryPlugins();
+      const localRegistry = await registryGetPlugins();
       for (const [name, info] of localRegistry) {
         if (!registry.has(name) && info.kind === "app") {
           registry.set(name, info);
@@ -579,7 +780,29 @@ export class AppManager {
     pluginManager: PluginManagerLike,
     name: string,
   ): Promise<RegistryPluginInfo | null> {
-    return pluginManager.getRegistryPlugin(name);
+    const pluginInfo = (await pluginManager.getRegistryPlugin(
+      name,
+    )) as RegistryAppPlugin | null;
+    let fallbackInfo: RegistryAppInfo | null = null;
+    try {
+      fallbackInfo = await registryGetAppInfo(name);
+    } catch (error) {
+      logger.warn(
+        `[app-manager] Failed to load app metadata for "${name}": ${describeError(error)}`,
+      );
+    }
+
+    if (!pluginInfo && !fallbackInfo) return null;
+    if (!pluginInfo && fallbackInfo) {
+      return toPluginInfoFromAppInfo(fallbackInfo);
+    }
+
+    const merged = { ...(pluginInfo as RegistryAppPlugin) };
+    mergeAppMeta(merged, merged.appMeta);
+    if (fallbackInfo) {
+      mergeRegistryAppFallback(merged, fallbackInfo);
+    }
+    return merged;
   }
 
   /**
@@ -597,27 +820,7 @@ export class AppManager {
     onProgress?: (progress: InstallProgressLike) => void,
     runtime?: IAgentRuntime | null,
   ): Promise<AppLaunchResult> {
-    let appInfo = (await pluginManager.getRegistryPlugin(
-      name,
-    )) as RegistryAppPlugin | null;
-    // Supplement with local registry metadata since the elizaos plugin-manager
-    // service doesn't include our local workspace app discovery.
-    try {
-      const localInfo = await getPluginInfo(name);
-      if (localInfo) {
-        const meta = localInfo.appMeta;
-        if (!appInfo) {
-          appInfo = { ...localInfo } as RegistryAppPlugin;
-          mergeAppMeta(appInfo, meta);
-        } else if (meta && !appInfo.viewer) {
-          // Merge local metadata into existing registry entry
-          mergeAppMeta(appInfo, meta);
-          appInfo.kind = localInfo.kind ?? appInfo.kind;
-        }
-      }
-    } catch {
-      // local lookup is best-effort
-    }
+    const appInfo = (await this.getInfo(pluginManager, name)) as RegistryAppPlugin | null;
     if (!appInfo) {
       throw new Error(`App "${name}" not found in the registry.`);
     }
@@ -701,6 +904,8 @@ export class AppManager {
         viewer,
       };
     }
+
+    const isLocal = isLocalPlugin(appInfo);
 
     // Check if the plugin is already installed
     const installed = await pluginManager.listInstalledPlugins();
