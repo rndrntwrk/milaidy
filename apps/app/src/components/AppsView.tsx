@@ -48,6 +48,38 @@ const CATEGORY_LABELS: Record<string, string> = {
   world: "World",
 };
 
+function isLoopbackHostname(hostname: string | null | undefined): boolean {
+  const normalized =
+    typeof hostname === "string"
+      ? hostname
+          .trim()
+          .toLowerCase()
+          .replace(/^\[|\]$/g, "")
+      : "";
+  if (!normalized) return false;
+  if (normalized === "localhost" || normalized === "::1") return true;
+  if (normalized === "0.0.0.0") return true;
+  if (normalized === "::ffff:127.0.0.1") return true;
+  return normalized.startsWith("127.");
+}
+
+function toBrowserViewerUrl(appName: string, rawUrl: string): string {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return "";
+  if (trimmed.startsWith("/")) return trimmed;
+  try {
+    const parsed = new URL(trimmed);
+    if (!/^https?:$/i.test(parsed.protocol)) return trimmed;
+    if (!isLoopbackHostname(parsed.hostname)) return trimmed;
+    const appSegment = encodeURIComponent(appName);
+    const upstreamPath =
+      parsed.pathname && parsed.pathname.length > 0 ? parsed.pathname : "/";
+    return `/api/apps/local/${appSegment}${upstreamPath}${parsed.search}${parsed.hash}`;
+  } catch {
+    return trimmed;
+  }
+}
+
 function formatHyperscapePosition(
   position: HyperscapeEmbeddedAgent["position"],
 ): string {
@@ -183,9 +215,10 @@ export function AppsView() {
         return next;
       });
       if (result.viewer?.url) {
+        const viewerUrl = toBrowserViewerUrl(app.name, result.viewer.url);
         setState("activeGameApp", app.name);
         setState("activeGameDisplayName", app.displayName ?? app.name);
-        setState("activeGameViewerUrl", result.viewer.url);
+        setState("activeGameViewerUrl", viewerUrl);
         setState(
           "activeGameSandbox",
           result.viewer.sandbox ?? DEFAULT_VIEWER_SANDBOX,
@@ -211,8 +244,15 @@ export function AppsView() {
       }
       clearActiveGameState();
       const targetUrl = result.launchUrl ?? app.launchUrl;
-      if (targetUrl) {
-        const popup = window.open(targetUrl, "_blank", "noopener,noreferrer");
+      const resolvedTargetUrl = targetUrl
+        ? toBrowserViewerUrl(app.name, targetUrl)
+        : "";
+      if (resolvedTargetUrl) {
+        const popup = window.open(
+          resolvedTargetUrl,
+          "_blank",
+          "noopener,noreferrer",
+        );
         if (popup) {
           setActionNotice(
             `${app.displayName ?? app.name} opened in a new tab.`,
@@ -252,8 +292,20 @@ export function AppsView() {
 
   const handleOpenCurrentGameInNewTab = useCallback(() => {
     if (!hasCurrentGame) return;
-    const popup = window.open(
+    const safeViewerUrl = toBrowserViewerUrl(
+      activeGameApp || "@elizaos/app-unknown",
       currentGameViewerUrl,
+    );
+    if (!safeViewerUrl) {
+      setActionNotice(
+        "Current game URL is unavailable.",
+        "error",
+        3200,
+      );
+      return;
+    }
+    const popup = window.open(
+      safeViewerUrl,
       "_blank",
       "noopener,noreferrer",
     );
@@ -266,7 +318,7 @@ export function AppsView() {
       "error",
       4200,
     );
-  }, [currentGameViewerUrl, hasCurrentGame, setActionNotice]);
+  }, [activeGameApp, currentGameViewerUrl, hasCurrentGame, setActionNotice]);
 
   const selectedHyperscapeAgent = useMemo(
     () =>

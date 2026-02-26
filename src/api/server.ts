@@ -12726,6 +12726,72 @@ async function handleRequest(
       ...optionalFields,
     };
   };
+  const resolvePlayPayload = (
+    parsed: unknown,
+    defaults: {
+      gameId: string;
+      mode: string;
+      sessionId?: string;
+    },
+  ): Record<string, unknown> | null => {
+    const parsedRecord = asRecord(parsed);
+    const upstreamGame = asRecord(parsedRecord?.game);
+    const fallbackGameId = defaults.gameId.trim() || "unknown-game";
+    const upstreamGameId =
+      typeof parsedRecord?.gameId === "string" && parsedRecord.gameId.trim().length > 0
+        ? parsedRecord.gameId.trim()
+        : typeof upstreamGame?.id === "string" && upstreamGame.id.trim().length > 0
+          ? upstreamGame.id.trim()
+          : fallbackGameId;
+    const upstreamPath =
+      typeof upstreamGame?.path === "string" && upstreamGame.path.trim().length > 0
+        ? upstreamGame.path.trim()
+        : upstreamGameId;
+    const useNameAsTitle =
+      (typeof upstreamGame?.title !== "string" ||
+        upstreamGame.title.trim().length === 0) &&
+      typeof upstreamGame?.name === "string" &&
+      upstreamGame.name.trim().length > 0;
+    const normalizedGame =
+      normalizeCatalogGame({
+        ...upstreamGame,
+        id: upstreamGameId,
+        ...(useNameAsTitle ? { title: upstreamGame.name } : {}),
+        path: upstreamPath,
+      }) ??
+      normalizeCatalogGame({
+        id: upstreamGameId,
+        title: upstreamGameId,
+        description: "Playable app surfaced in Alice.",
+        category: "arcade",
+        difficulty: "medium",
+        path: upstreamPath,
+      });
+    if (!normalizedGame) return null;
+
+    const viewerUrl = buildViewerUrl(upstreamPath, defaults.mode);
+    const responsePayload: Record<string, unknown> = {
+      game: normalizedGame,
+      mode: defaults.mode,
+      viewer: {
+        url: viewerUrl,
+        sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
+        postMessageAuth: false,
+      },
+      launchUrl: viewerUrl,
+      startedAt: new Date().toISOString(),
+    };
+    if (typeof defaults.sessionId === "string" && defaults.sessionId.trim().length > 0) {
+      responsePayload.sessionId = defaults.sessionId;
+    }
+    if (typeof parsedRecord?.requestId === "string") {
+      responsePayload.requestId = parsedRecord.requestId;
+    }
+    if (typeof parsedRecord?.sourceId === "string") {
+      responsePayload.sourceId = parsedRecord.sourceId;
+    }
+    return responsePayload;
+  };
   const resolveCatalogPayload = (
     parsed: unknown,
     defaults: {
@@ -13065,8 +13131,12 @@ async function handleRequest(
           error(res, extractGamesError(parsed, raw), upstreamRes.status);
           return;
         }
-        if (parsed && typeof parsed === "object") {
-          json(res, parsed);
+        const responsePayload = resolvePlayPayload(parsed, {
+          gameId: typeof body.gameId === "string" ? body.gameId.trim() : "",
+          mode,
+        });
+        if (responsePayload) {
+          json(res, responsePayload);
           return;
         }
         error(res, "Invalid upstream game play payload", 502);
@@ -13199,61 +13269,14 @@ async function handleRequest(
         return;
       }
 
-      const parsedRecord = asRecord(parsed);
-      const upstreamGame = asRecord(parsedRecord?.game);
-      const upstreamGameId =
-        typeof parsedRecord?.gameId === "string" && parsedRecord.gameId.trim().length > 0
-          ? parsedRecord.gameId.trim()
-          : typeof upstreamGame?.id === "string" && upstreamGame.id.trim().length > 0
-            ? upstreamGame.id.trim()
-            : gameId;
-      const upstreamPath =
-        typeof upstreamGame?.path === "string" && upstreamGame.path.trim().length > 0
-          ? upstreamGame.path.trim()
-          : upstreamGameId;
-      const useNameAsTitle =
-        (typeof upstreamGame?.title !== "string" ||
-          upstreamGame.title.trim().length === 0) &&
-        typeof upstreamGame?.name === "string" &&
-        upstreamGame.name.trim().length > 0;
-      const normalizedGame =
-        normalizeCatalogGame({
-          ...upstreamGame,
-          id: upstreamGameId,
-          ...(useNameAsTitle ? { title: upstreamGame.name } : {}),
-          path: upstreamPath,
-        }) ??
-        normalizeCatalogGame({
-          id: upstreamGameId,
-          title: upstreamGameId,
-          description: "Playable app surfaced in Alice.",
-          category: "arcade",
-          difficulty: "medium",
-          path: upstreamPath,
-        });
-      if (!normalizedGame) {
+      const responsePayload = resolvePlayPayload(parsed, {
+        gameId,
+        mode,
+        sessionId,
+      });
+      if (!responsePayload) {
         error(res, "Invalid upstream game play payload", 502);
         return;
-      }
-
-      const viewerUrl = buildViewerUrl(upstreamPath, mode);
-      const responsePayload: Record<string, unknown> = {
-        game: normalizedGame,
-        mode,
-        viewer: {
-          url: viewerUrl,
-          sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
-          postMessageAuth: false,
-        },
-        launchUrl: viewerUrl,
-        startedAt: new Date().toISOString(),
-        sessionId,
-      };
-      if (typeof parsedRecord?.requestId === "string") {
-        responsePayload.requestId = parsedRecord.requestId;
-      }
-      if (typeof parsedRecord?.sourceId === "string") {
-        responsePayload.sourceId = parsedRecord.sourceId;
       }
       json(res, responsePayload);
     } catch (err) {

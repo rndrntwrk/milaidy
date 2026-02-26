@@ -274,4 +274,97 @@ describe("ChatView quick layers", () => {
     });
     expect(ctx.handleChatSend).toHaveBeenCalledWith("power");
   });
+
+  it("Play Games falls back to API play launch when tool payload returns localhost", async () => {
+    const ctx = createContext({
+      plugins: [
+        { id: "five55-games", name: "five55-games", enabled: true, isActive: true },
+      ],
+    });
+    mockUseApp.mockReturnValue(ctx);
+    mockClient.getFive55GamesCatalog.mockResolvedValue({
+      games: [
+        {
+          id: "ninja-evilcorp",
+          title: "ninja_vs_evilcorp.555",
+          description: "Stealth platformer",
+          category: "arcade",
+          difficulty: "hard",
+          path: "/games/ninja/index.html",
+        },
+      ],
+      total: 1,
+      includeBeta: true,
+      category: "all",
+    });
+    mockClient.executeAutonomyPlan.mockResolvedValue({
+      ok: true,
+      allSucceeded: true,
+      stoppedEarly: false,
+      failedStepIndex: null,
+      stopOnFailure: true,
+      successCount: 1,
+      failedCount: 0,
+      results: [
+        {
+          success: true,
+          result: {
+            text: JSON.stringify({
+              ok: true,
+              action: "FIVE55_GAMES_PLAY",
+              message: "game play started",
+              status: 200,
+              data: {
+                game: {
+                  id: "ninja-evilcorp",
+                  title: "ninja_vs_evilcorp.555",
+                },
+                mode: "spectate",
+                viewer: {
+                  url: "http://127.0.0.1:3333/games/ninja/index.html?bot=true",
+                  sandbox:
+                    "allow-scripts allow-same-origin allow-popups allow-forms",
+                  postMessageAuth: false,
+                },
+              },
+            }),
+          },
+        },
+      ],
+    });
+    mockClient.playFive55Game.mockResolvedValue({
+      game: {
+        id: "ninja-evilcorp",
+        title: "ninja_vs_evilcorp.555",
+        description: "Stealth platformer",
+        category: "arcade",
+        difficulty: "hard",
+        path: "/games/ninja/index.html",
+      },
+      mode: "spectate",
+      viewer: {
+        url: "https://555.example/games/ninja/index.html?bot=true",
+        sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
+        postMessageAuth: false,
+      },
+      launchUrl: "https://555.example/games/ninja/index.html?bot=true",
+      startedAt: new Date().toISOString(),
+    });
+
+    await act(async () => {
+      TestRenderer.create(React.createElement(ChatView));
+    });
+    await flush();
+
+    await triggerQuickLayer("play-games");
+
+    expect(mockClient.playFive55Game).toHaveBeenCalledWith({
+      gameId: "ninja-evilcorp",
+      mode: "spectate",
+    });
+    expect(ctx.setState).toHaveBeenCalledWith(
+      "activeGameViewerUrl",
+      "https://555.example/games/ninja/index.html?bot=true",
+    );
+  });
 });

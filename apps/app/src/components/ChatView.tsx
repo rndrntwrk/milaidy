@@ -120,6 +120,38 @@ type ParsedGameLaunch = {
   postMessageAuth: boolean;
 };
 
+function isLoopbackHostname(hostname: string | null | undefined): boolean {
+  const normalized =
+    typeof hostname === "string"
+      ? hostname
+          .trim()
+          .toLowerCase()
+          .replace(/^\[|\]$/g, "")
+      : "";
+  if (!normalized) return false;
+  if (normalized === "localhost" || normalized === "::1") return true;
+  if (normalized === "0.0.0.0") return true;
+  if (normalized === "::ffff:127.0.0.1") return true;
+  return normalized.startsWith("127.");
+}
+
+function isLoopbackUrl(rawUrl: string): boolean {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return false;
+  try {
+    const parsed = new URL(trimmed);
+    return isLoopbackHostname(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function isUnreachableLoopbackViewerUrl(rawUrl: string): boolean {
+  if (!isLoopbackUrl(rawUrl)) return false;
+  if (typeof window === "undefined") return true;
+  return !isLoopbackHostname(window.location.hostname);
+}
+
 function parseAdIdFromEnvelope(
   envelope: ParsedToolEnvelope | null,
 ): string | undefined {
@@ -169,7 +201,9 @@ function parseGameLaunchFromEnvelope(
   const viewerUrl =
     (viewer && typeof viewer.url === "string" ? viewer.url : undefined) ??
     (typeof data.launchUrl === "string" ? data.launchUrl : undefined);
-  if (!viewerUrl) return null;
+  const normalizedViewerUrl = viewerUrl?.trim();
+  if (!normalizedViewerUrl) return null;
+  if (isLoopbackUrl(normalizedViewerUrl)) return null;
 
   const gameId =
     (game && typeof game.id === "string" ? game.id : undefined) ??
@@ -186,7 +220,7 @@ function parseGameLaunchFromEnvelope(
   return {
     gameId,
     gameTitle,
-    viewerUrl,
+    viewerUrl: normalizedViewerUrl,
     sandbox,
     postMessageAuth,
   };
@@ -477,6 +511,44 @@ export const ChatView = memo(function ChatView() {
       throw new Error(`${label} failed`);
     },
     [setActionNotice],
+  );
+
+  const resolveAutonomousGameLaunch = useCallback(
+    async (
+      planResults: unknown[],
+      selectedGameId?: string,
+    ): Promise<ParsedGameLaunch> => {
+      const launchFromPlan = parseGameLaunchFromEnvelope(
+        findLastToolEnvelope(planResults, "FIVE55_GAMES_PLAY"),
+      );
+      if (launchFromPlan) return launchFromPlan;
+
+      const playResult = await client.playFive55Game({
+        gameId: selectedGameId,
+        mode: "spectate",
+      });
+      const fallbackViewerUrl =
+        typeof playResult.viewer?.url === "string"
+          ? playResult.viewer.url.trim()
+          : "";
+      if (!fallbackViewerUrl) {
+        throw new Error("Game launch did not return a viewer URL.");
+      }
+      if (isUnreachableLoopbackViewerUrl(fallbackViewerUrl)) {
+        throw new Error(
+          "Game launch returned a localhost viewer URL. Configure FIVE55_GAMES_VIEWER_BASE_URL to a public URL.",
+        );
+      }
+
+      return {
+        gameId: playResult.game.id,
+        gameTitle: playResult.game.title,
+        viewerUrl: fallbackViewerUrl,
+        sandbox: playResult.viewer.sandbox,
+        postMessageAuth: Boolean(playResult.viewer.postMessageAuth),
+      };
+    },
+    [],
   );
 
   const runAutonomousEstimate = useCallback(async () => {
@@ -1257,22 +1329,10 @@ export const ChatView = memo(function ChatView() {
             options: { stopOnFailure: true },
           }, { label: "Play games" });
 
-          let launch = parseGameLaunchFromEnvelope(
-            findLastToolEnvelope(playPlan.results, "FIVE55_GAMES_PLAY"),
+          const launch = await resolveAutonomousGameLaunch(
+            playPlan.results,
+            selectedGameId,
           );
-          if (!launch) {
-            const playResult = await client.playFive55Game({
-              gameId: selectedGameId,
-              mode: "spectate",
-            });
-            launch = {
-              gameId: playResult.game.id,
-              gameTitle: playResult.game.title,
-              viewerUrl: playResult.viewer.url,
-              sandbox: playResult.viewer.sandbox,
-              postMessageAuth: Boolean(playResult.viewer.postMessageAuth),
-            };
-          }
 
           if (launch?.viewerUrl) {
             const resolvedGameId = launch.gameId || selectedGameId || "unknown-game";
@@ -1482,17 +1542,10 @@ export const ChatView = memo(function ChatView() {
           request: { source: "user", sourceTrust: 1 },
           options: { stopOnFailure: true },
         }, { label: "Autonomous game launch" });
-        const launch = parseGameLaunchFromEnvelope(
-          findLastToolEnvelope(playPlan.results, "FIVE55_GAMES_PLAY"),
+        const launch = await resolveAutonomousGameLaunch(
+          playPlan.results,
+          selectedGameId,
         );
-        if (!launch?.viewerUrl) {
-          setActionNotice(
-            "Could not launch a game viewer for autonomous gameplay.",
-            "error",
-            4200,
-          );
-          return;
-        }
 
         gameTitle = launch.gameTitle;
         setState("activeGameApp", `five55:${launch.gameId}`);

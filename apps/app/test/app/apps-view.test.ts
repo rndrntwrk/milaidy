@@ -235,7 +235,7 @@ describe("AppsView", () => {
     );
     expect(setState).toHaveBeenCalledWith(
       "activeGameViewerUrl",
-      "http://localhost:5175",
+      "/api/apps/local/%40elizaos%2Fapp-hyperscape/",
     );
     expect(setState).toHaveBeenCalledWith("activeGamePostMessageAuth", true);
     expect(setState).toHaveBeenCalledWith("tab", "apps");
@@ -320,6 +320,39 @@ describe("AppsView", () => {
       "Babylon opened in a new tab.",
       "success",
       2600,
+    );
+  });
+
+  it("proxies localhost launch URLs before opening new tabs", async () => {
+    const setState = vi.fn<AppsContextStub["setState"]>();
+    const setActionNotice = vi.fn<AppsContextStub["setActionNotice"]>();
+    mockUseApp.mockReturnValue({ setState, setActionNotice });
+    const app = createApp("@elizaos/app-hyperscape", "Hyperscape", "Arena");
+    mockClientFns.listApps.mockResolvedValue([app]);
+    mockClientFns.launchApp.mockResolvedValue(
+      createLaunchResult({
+        displayName: app.displayName,
+        launchUrl: "http://localhost:3333/play?embedded=true",
+        viewer: null,
+      }),
+    );
+
+    const popupSpy = vi.spyOn(window, "open").mockReturnValue({} as Window);
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(AppsView));
+    });
+    await flush();
+
+    await act(async () => {
+      await findButtonByText(tree?.root, "Launch").props.onClick();
+    });
+
+    expect(popupSpy).toHaveBeenCalledWith(
+      "/api/apps/local/%40elizaos%2Fapp-hyperscape/play?embedded=true",
+      "_blank",
+      "noopener,noreferrer",
     );
   });
 
