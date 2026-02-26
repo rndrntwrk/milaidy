@@ -30,6 +30,10 @@ import type {
 } from "./plugin-manager-types.js";
 import { listInstalledPlugins } from "./plugin-installer.js";
 import {
+  ALICE_APP_CATALOG,
+  resolveManagedAppFallbackUrl,
+} from "./app-catalog.js";
+import {
   type RegistryAppInfo,
   getAppInfo as registryGetAppInfo,
   getRegistryPlugins as registryGetPlugins,
@@ -44,11 +48,12 @@ const RS_2004SCAPE_APP_NAME = "@elizaos/app-2004scape";
 const RS_2004SCAPE_AUTH_MESSAGE_TYPE = "RS_2004SCAPE_AUTH";
 const SAFE_APP_URL_PROTOCOLS = new Set(["http:", "https:"]);
 type AppViewerConfig = NonNullable<AppLaunchResult["viewer"]>;
-const LOCAL_APP_DEFAULT_FALLBACK_URLS: Readonly<Record<string, string>> = {
-  "@elizaos/app-hyperfy": "https://hyperfy.io/",
-  "@elizaos/app-hyperscape": "https://hyperscapeai.github.io/hyperscape/",
-  "@elizaos/app-2004scape": "https://rs-sdk-demo.fly.dev/",
-};
+const LOCAL_APP_DEFAULT_FALLBACK_URLS: Readonly<Record<string, string>> =
+  Object.fromEntries(
+    Object.entries(ALICE_APP_CATALOG)
+      .map(([packageName]) => [packageName, resolveManagedAppFallbackUrl(packageName)])
+      .filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+  );
 
 export type {
   AppLaunchResult,

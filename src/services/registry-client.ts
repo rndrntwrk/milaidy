@@ -15,8 +15,13 @@ import { logger } from "@elizaos/core";
 import { loadMiladyConfig, saveMiladyConfig } from "../config/config.js";
 import type { RegistryEndpoint } from "../config/types.milady.js";
 import {
+  ALICE_APP_CATALOG,
+  resolveManagedAppGitRepo,
+  resolveManagedAppUpstreamUrl,
+} from "./app-catalog.js";
+import {
   LOCAL_APP_DEFAULT_SANDBOX,
-  resolveAppOverride,
+  resolveAppOverride as resolveAppOverrideMeta,
   sanitizeSandbox,
 } from "./registry-client-app-meta.js";
 import {
@@ -188,74 +193,6 @@ interface LocalPluginManifest {
   app?: LocalPackageAppMeta;
 }
 
-interface LocalAppOverride {
-  displayName?: string;
-  category?: string;
-  launchType?: string;
-  launchUrl?: string | null;
-  capabilities?: string[];
-  viewer?: RegistryAppViewerMeta;
-}
-
-const LOCAL_APP_OVERRIDES: Readonly<Record<string, LocalAppOverride>> = {
-  "@elizaos/app-babylon": {
-    launchType: "url",
-    launchUrl: "http://localhost:3000",
-    viewer: {
-      url: "http://localhost:3000",
-      sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
-    },
-  },
-  "@elizaos/app-hyperscape": {
-    launchType: "connect",
-    launchUrl: "http://localhost:3333",
-    viewer: {
-      url: "http://localhost:3333",
-      embedParams: {
-        embedded: "true",
-        mode: "spectator",
-        quality: "medium",
-      },
-      postMessageAuth: true,
-      sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
-    },
-  },
-  "@elizaos/app-hyperfy": {
-    launchType: "connect",
-    launchUrl: "http://localhost:3003",
-    viewer: {
-      url: "http://localhost:3003",
-      sandbox: LOCAL_APP_DEFAULT_SANDBOX,
-    },
-  },
-  "@elizaos/app-2004scape": {
-    launchType: "connect",
-    launchUrl: "http://localhost:8880",
-    viewer: {
-      url: "http://localhost:8880",
-      embedParams: { bot: "{RS_SDK_BOT_NAME}" },
-      postMessageAuth: true,
-      sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
-    },
-  },
-  "@elizaos/app-agent-town": {
-    launchType: "url",
-    launchUrl: "http://localhost:5173/",
-    viewer: {
-      url: "http://localhost:5173/",
-      sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
-    },
-  },
-  "@elizaos/app-dungeons": {
-    launchType: "local",
-    launchUrl: "http://localhost:3345",
-    viewer: {
-      url: "http://localhost:3345",
-      sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
-    },
-  },
-};
-
 function fallbackAppDisplayName(packageName: string): string {
   const bare = packageName.replace(/^@[^/]+\//, "");
   return bare
@@ -269,26 +206,35 @@ function ensureFallbackApps(plugins: Map<string, RegistryPluginInfo>): void {
   // cannot be fetched (offline / restricted networks). These are "wrappers"
   // that provide viewer + launch metadata; install behavior is handled by the
   // AppManager (and is skipped in test mode).
-  for (const [packageName, override] of Object.entries(LOCAL_APP_OVERRIDES)) {
-    const repoName = packageName.replace(/^@[^/]+\//, "");
-    const gitRepo = `elizaos/${repoName}`;
+  for (const [packageName, entry] of Object.entries(ALICE_APP_CATALOG)) {
+    const gitRepo =
+      resolveManagedAppGitRepo(packageName) ??
+      packageName.replace(/^@[^/]+\//, "");
 
     const existing = plugins.get(packageName);
+    const resolvedMeta = resolveAppOverrideMeta(packageName, existing?.appMeta);
+    const resolvedLaunchUrl =
+      resolveManagedAppUpstreamUrl(packageName) ?? entry.defaultUpstreamUrl;
+    const fallbackViewer =
+      resolvedMeta?.viewer ??
+      (entry.viewer
+        ? {
+            ...entry.viewer,
+            url: resolvedLaunchUrl,
+          }
+        : undefined);
 
     const fallbackMeta: RegistryAppMeta = {
-      displayName:
-        override.displayName ??
-        existing?.appMeta?.displayName ??
-        fallbackAppDisplayName(packageName),
-      category: override.category ?? existing?.appMeta?.category ?? "game",
+      displayName: resolvedMeta?.displayName ?? fallbackAppDisplayName(packageName),
+      category: resolvedMeta?.category ?? "game",
       launchType:
-        override.launchType ??
+        resolvedMeta?.launchType ??
         existing?.appMeta?.launchType ??
-        (override.viewer ? "connect" : "url"),
-      launchUrl: override.launchUrl ?? existing?.appMeta?.launchUrl ?? null,
+        entry.launchType,
+      launchUrl: resolvedMeta?.launchUrl ?? resolvedLaunchUrl,
       capabilities:
-        override.capabilities ?? existing?.appMeta?.capabilities ?? [],
-      viewer: mergeViewer(existing?.appMeta?.viewer, override.viewer),
+        resolvedMeta?.capabilities ?? existing?.appMeta?.capabilities ?? [],
+      viewer: mergeViewer(existing?.appMeta?.viewer, fallbackViewer),
     };
 
     plugins.set(packageName, {
@@ -297,7 +243,7 @@ function ensureFallbackApps(plugins: Map<string, RegistryPluginInfo>): void {
       gitRepo: existing?.gitRepo ?? gitRepo,
       gitUrl: existing?.gitUrl ?? `https://github.com/${gitRepo}.git`,
       description: existing?.description ?? "",
-      homepage: existing?.homepage ?? override.launchUrl ?? null,
+      homepage: existing?.homepage ?? fallbackMeta.launchUrl ?? null,
       topics: existing?.topics ?? [],
       stars: existing?.stars ?? 0,
       language: existing?.language ?? "TypeScript",
@@ -463,37 +409,11 @@ function parseRepositoryMetadata(
   };
 }
 
-function resolveAppOverride(
+function resolveDiscoveredAppOverride(
   packageName: string,
   appMeta: RegistryAppMeta | undefined,
 ): RegistryAppMeta | undefined {
-  const override = LOCAL_APP_OVERRIDES[packageName];
-  if (!override) return appMeta;
-  const base: RegistryAppMeta = appMeta ?? {
-    displayName:
-      override.displayName ?? packageName.replace(/^@elizaos\/app-/, ""),
-    category: override.category ?? "game",
-    launchType: override.launchType ?? "url",
-    launchUrl: override.launchUrl ?? null,
-    icon: null,
-    capabilities: override.capabilities ?? [],
-    minPlayers: null,
-    maxPlayers: null,
-    viewer: override.viewer,
-  };
-  return {
-    ...base,
-    displayName: override.displayName ?? base.displayName,
-    category: override.category ?? base.category,
-    launchType: override.launchType ?? base.launchType,
-    launchUrl:
-      override.launchUrl !== undefined ? override.launchUrl : base.launchUrl,
-    capabilities:
-      override.capabilities !== undefined
-        ? override.capabilities
-        : base.capabilities,
-    viewer: mergeViewer(base.viewer, override.viewer),
-  };
+  return resolveAppOverrideMeta(packageName, appMeta);
 }
 
 function buildDiscoveredEntry(
@@ -513,7 +433,10 @@ function buildDiscoveredEntry(
     toDisplayNameFromDirName(dirName),
   );
   const mergedMeta = mergeAppMeta(manifestAppMeta, packageAppMeta);
-  const overriddenMeta = resolveAppOverride(packageJson.name, mergedMeta);
+  const overriddenMeta = resolveDiscoveredAppOverride(
+    packageJson.name,
+    mergedMeta,
+  );
 
   const kind =
     packageJson.elizaos?.kind === "app" || manifest?.kind === "app"
@@ -913,7 +836,7 @@ export async function listApps(): Promise<RegistryAppInfo[]> {
   const apps: RegistryAppInfo[] = [];
 
   for (const p of registry.values()) {
-    const appEntry = toAppEntry(p, resolveAppOverride);
+    const appEntry = toAppEntry(p, resolveDiscoveredAppOverride);
     if (!appEntry) continue;
     apps.push(toAppInfo(appEntry, sanitizeSandbox, LOCAL_APP_DEFAULT_SANDBOX));
   }
@@ -928,7 +851,7 @@ export async function getAppInfo(
 ): Promise<RegistryAppInfo | null> {
   const info = await getPluginInfo(name);
   if (!info) return null;
-  const appEntry = toAppEntry(info, resolveAppOverride);
+  const appEntry = toAppEntry(info, resolveDiscoveredAppOverride);
   if (!appEntry) return null;
   return toAppInfo(appEntry, sanitizeSandbox, LOCAL_APP_DEFAULT_SANDBOX);
 }
@@ -941,7 +864,7 @@ export async function searchApps(
   const registry = await getRegistryPlugins();
   const appEntries: RegistryPluginInfo[] = [];
   for (const p of registry.values()) {
-    const appEntry = toAppEntry(p, resolveAppOverride);
+    const appEntry = toAppEntry(p, resolveDiscoveredAppOverride);
     if (appEntry) appEntries.push(appEntry);
   }
 

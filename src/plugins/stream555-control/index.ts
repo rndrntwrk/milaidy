@@ -24,6 +24,7 @@ import {
   resolveAgentBearer,
 } from "../five55-shared/agent-auth.js";
 import { getPluginInfo, type RegistryPluginInfo } from "../../services/registry-client.js";
+import { resolveManagedAppStreamUrl } from "../../services/app-catalog.js";
 
 const STREAM555_BASE_ENV = "STREAM555_BASE_URL";
 const STREAM_SESSION_ENV = "STREAM_SESSION_ID";
@@ -193,6 +194,10 @@ function parseAllowLocalhost(raw: string | undefined): boolean | undefined {
   const normalized = raw.trim().toLowerCase();
   if (!normalized) return undefined;
   return !["false", "0", "no", "off"].includes(normalized);
+}
+
+function defaultAllowLocalhostForEnv(): boolean {
+  return process.env.NODE_ENV !== "production";
 }
 
 async function fetchJson(
@@ -434,7 +439,7 @@ const goLiveAppAction: Action = {
           readParam(options as HandlerOptions | undefined, "allowLocalhost"),
         ) ??
         parseAllowLocalhost(process.env.STREAM555_ALLOW_LOCALHOST_APP_URLS) ??
-        true;
+        defaultAllowLocalhostForEnv();
       const scene = readParam(options as HandlerOptions | undefined, "scene") || "default";
       const requestedSessionId = readParam(
         options as HandlerOptions | undefined,
@@ -445,6 +450,13 @@ const goLiveAppAction: Action = {
 
       let resolvedUrl = viewerUrlOverride?.trim() ?? "";
       let resolvedFrom: "viewerUrl" | "viewer" | "launchUrl" | "homepage" = "viewerUrl";
+      if (!resolvedUrl) {
+        const managedStreamUrl = resolveManagedAppStreamUrl(appName);
+        if (managedStreamUrl && managedStreamUrl.trim().length > 0) {
+          resolvedUrl = managedStreamUrl.trim();
+          resolvedFrom = "homepage";
+        }
+      }
       const pluginInfo = await getPluginInfo(appName);
       if (pluginInfo && pluginInfo.kind !== "app") {
         throw new Error(`"${pluginInfo.name}" is not an app.`);

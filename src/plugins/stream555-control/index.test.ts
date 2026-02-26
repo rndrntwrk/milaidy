@@ -298,7 +298,7 @@ describe("stream555-control plugin actions", () => {
       "/api/agent/v1/sessions/session-4/stream/start",
     );
     expect(parseFetchBody(streamStartCall)).toEqual({
-      input: { type: "website", url: "https://babylon.social" },
+      input: { type: "website", url: "https://babylon.market/" },
       options: {
         scene: "default",
         appName: "@elizaos/app-babylon",
@@ -322,7 +322,7 @@ describe("stream555-control plugin actions", () => {
     expect(parseEnvelope(result as { text: string }).code).toBe("OK");
   });
 
-  it("falls back to localhost launchUrl for local-only apps when wrapper URL is not provided", async () => {
+  it("prefers managed stream URL defaults for known apps", async () => {
     const { getPluginInfo } = await import("../../services/registry-client.js");
     vi.mocked(getPluginInfo).mockResolvedValue({
       name: "@elizaos/app-hyperscape",
@@ -374,11 +374,11 @@ describe("stream555-control plugin actions", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const [, streamStartCall] = fetchMock.mock.calls;
     expect(parseFetchBody(streamStartCall)).toEqual({
-      input: { type: "website", url: "http://localhost:3333" },
+      input: { type: "website", url: "https://hyperscapeai.github.io/hyperscape/" },
       options: {
         scene: "default",
         appName: "@elizaos/app-hyperscape",
-        resolvedFrom: "launchUrl",
+        resolvedFrom: "homepage",
         app: {
           name: "@elizaos/app-hyperscape",
           displayName: "Hyperscape",

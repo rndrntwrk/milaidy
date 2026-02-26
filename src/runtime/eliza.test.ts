@@ -15,6 +15,12 @@ import { findPluginExport } from "../cli/plugins-cli";
 import type { MiladyConfig } from "../config/config";
 import { CONNECTOR_IDS } from "../config/schema";
 import {
+  ALICE_APP_CATALOG,
+  resolveAppFallbackEnvKey,
+  resolveAppStreamEnvKey,
+  resolveAppUpstreamEnvKey,
+} from "../services/app-catalog";
+import {
   applyAliceFullDutyDefaults,
   applyCloudConfigToEnv,
   applyConnectorSecretsToEnv,
@@ -349,23 +355,57 @@ describe("collectPluginNames", () => {
   });
 
   it("applies full-duty defaults for features and plugin entries when enabled", () => {
+    const appEnvKeys = Object.keys(ALICE_APP_CATALOG).flatMap((packageName) => [
+      resolveAppStreamEnvKey(packageName),
+      resolveAppUpstreamEnvKey(packageName),
+      resolveAppFallbackEnvKey(packageName),
+    ]);
+    const appEnvSnapshot = envSnapshot(appEnvKeys);
+    appEnvSnapshot.save();
+    for (const key of appEnvKeys) delete process.env[key];
+
     process.env.ALICE_FULL_DUTY_MODE = "true";
     const config = {} as MiladyConfig;
-    const result = applyAliceFullDutyDefaults(config);
-    expect(result.changed).toBe(true);
-    expect(config.features).toMatchObject({
-      browser: true,
-      computeruse: true,
-      vision: true,
-    });
-    expect(config.plugins?.entries).toMatchObject({
-      browser: { enabled: true },
-      computeruse: { enabled: true },
-      vision: { enabled: true },
-      "coding-agent": { enabled: true },
-      scheduling: { enabled: true },
-      webhooks: { enabled: true },
-    });
+    try {
+      const result = applyAliceFullDutyDefaults(config);
+      expect(result.changed).toBe(true);
+      expect(config.features).toMatchObject({
+        browser: true,
+        computeruse: true,
+        vision: true,
+      });
+      expect(config.plugins?.entries).toMatchObject({
+        browser: { enabled: true },
+        computeruse: { enabled: true },
+        vision: { enabled: true },
+        "coding-agent": { enabled: true },
+        scheduling: { enabled: true },
+        webhooks: { enabled: true },
+      });
+
+      const envVars = (config.env?.vars ?? {}) as Record<string, string>;
+      for (const [packageName, appEntry] of Object.entries(ALICE_APP_CATALOG)) {
+        const defaultUrl = appEntry.defaultPublicUrl ?? appEntry.defaultUpstreamUrl;
+        const streamKey = resolveAppStreamEnvKey(packageName);
+        const upstreamKey = resolveAppUpstreamEnvKey(packageName);
+        const fallbackKey = resolveAppFallbackEnvKey(packageName);
+
+        expect(envVars[streamKey]).toBe(defaultUrl);
+        expect(process.env[streamKey]).toBe(defaultUrl);
+        expect(envVars[upstreamKey]).toBe(defaultUrl);
+        expect(process.env[upstreamKey]).toBe(defaultUrl);
+
+        if (appEntry.defaultPublicUrl) {
+          expect(envVars[fallbackKey]).toBe(appEntry.defaultPublicUrl);
+          expect(process.env[fallbackKey]).toBe(appEntry.defaultPublicUrl);
+        } else {
+          expect(envVars[fallbackKey]).toBeUndefined();
+          expect(process.env[fallbackKey]).toBeUndefined();
+        }
+      }
+    } finally {
+      appEnvSnapshot.restore();
+    }
   });
 
   it("does not apply full-duty defaults when ALICE_FULL_DUTY_MODE is disabled", () => {

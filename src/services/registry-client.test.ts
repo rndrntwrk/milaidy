@@ -303,7 +303,7 @@ describe("registry-client", () => {
       const { getRegistryPlugins } = await loadModule();
       const registry = await getRegistryPlugins();
 
-      expect(registry.size).toBe(6);
+      expect(registry.size).toBe(10);
       const solana = registry.get("@elizaos/plugin-solana");
       expect(solana).toBeDefined();
       expect(solana?.description).toBe("Solana blockchain integration");
@@ -343,7 +343,7 @@ describe("registry-client", () => {
       const { getRegistryPlugins } = await loadModule();
       const registry = await getRegistryPlugins();
 
-      expect(registry.size).toBe(2);
+      expect(registry.size).toBe(8);
       // index.json has no descriptions — should be empty
       const solana = registry.get("@elizaos/plugin-solana");
       expect(solana).toBeDefined();
@@ -409,7 +409,7 @@ describe("registry-client", () => {
       const mod2 = await loadModule();
       const registry = await mod2.getRegistryPlugins();
       expect(mockFetch2).not.toHaveBeenCalled();
-      expect(registry.size).toBe(6);
+      expect(registry.size).toBe(10);
     });
   });
 
@@ -594,7 +594,7 @@ describe("registry-client", () => {
       const { listApps } = await loadModule();
       const apps = await listApps();
 
-      expect(apps.length).toBe(2);
+      expect(apps.length).toBe(6);
       const names = apps.map((a: { name: string }) => a.name);
       expect(names).toContain("@elizaos/app-dungeons");
       expect(names).toContain("@elizaos/app-babylon");
@@ -623,7 +623,7 @@ describe("registry-client", () => {
       expect(babylon.displayName).toBe("Babylon");
       expect(babylon.category).toBe("platform");
       expect(babylon.launchType).toBe("url");
-      expect(babylon.launchUrl).toBe("https://babylon.social");
+      expect(babylon.launchUrl).toBe("http://localhost:3000");
       expect(babylon.icon).toBe("https://babylon.social/icon.png");
       expect(babylon.capabilities).toEqual([
         "trading",
@@ -631,7 +631,9 @@ describe("registry-client", () => {
         "prediction-markets",
       ]);
       expect(babylon.stars).toBe(200);
-      expect(babylon.repository).toBe("https://github.com/elizaos/app-babylon");
+      expect(babylon.repository).toBe(
+        "https://github.com/elizaos/app-babylon",
+      );
       expect(babylon.latestVersion).toBe("1.0.0");
       expect(babylon.supports.v2).toBe(true);
       expect(babylon.npm.package).toBe("@elizaos/app-babylon");
@@ -648,7 +650,7 @@ describe("registry-client", () => {
       expect(dungeons.displayName).toBe("Dungeons");
       expect(dungeons.category).toBe("game");
       expect(dungeons.launchType).toBe("local");
-      expect(dungeons.launchUrl).toBe("http://localhost:{port}");
+      expect(dungeons.launchUrl).toBe("http://localhost:3345");
       expect(dungeons.icon).toBeNull();
       expect(dungeons.capabilities).toContain("combat");
     });
@@ -682,7 +684,7 @@ describe("registry-client", () => {
       const { listApps } = await loadModule();
       const apps = await listApps();
       expect(apps[0]?.viewer?.sandbox).toBe(
-        "allow-scripts allow-same-origin allow-popups",
+        "allow-scripts allow-same-origin allow-popups allow-forms",
       );
     });
 
@@ -705,7 +707,7 @@ describe("registry-client", () => {
       vi.resetModules();
       const { listApps } = await loadModule();
       const apps = await listApps();
-      expect(apps).toEqual([]);
+      expect(apps.length).toBe(6);
     });
   });
 

@@ -67,6 +67,12 @@ import {
   installPlugin,
   resolvePackageRuntimeEntry,
 } from "../services/plugin-installer.js";
+import {
+  ALICE_APP_CATALOG,
+  resolveAppFallbackEnvKey,
+  resolveAppStreamEnvKey,
+  resolveAppUpstreamEnvKey,
+} from "../services/app-catalog.js";
 import { diagnoseNoAIProvider } from "../services/version-compat.js";
 import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins.js";
 import { MiladyEmbeddingManager } from "./embedding-manager.js";
@@ -910,6 +916,56 @@ export function applyAliceFullDutyDefaults(config: MilaidyConfig): {
     pluginEntries[entryKey] = { enabled: true };
     changed = true;
     changes.push(`plugins.entries.${entryKey}.enabled=true`);
+  }
+
+  if (!config.env || typeof config.env !== "object") {
+    config.env = {};
+  }
+  const envConfig = config.env as Record<string, unknown>;
+  if (!envConfig.vars || typeof envConfig.vars !== "object") {
+    envConfig.vars = {};
+  }
+  const envVars = envConfig.vars as Record<string, string>;
+
+  for (const [packageName, appEntry] of Object.entries(ALICE_APP_CATALOG)) {
+    const defaultUrl = appEntry.defaultPublicUrl ?? appEntry.defaultUpstreamUrl;
+
+    const streamEnvKey = resolveAppStreamEnvKey(packageName);
+    const streamConfigured =
+      (typeof envVars[streamEnvKey] === "string" &&
+        envVars[streamEnvKey].trim().length > 0) ||
+      Boolean(process.env[streamEnvKey]?.trim());
+    if (!streamConfigured) {
+      envVars[streamEnvKey] = defaultUrl;
+      process.env[streamEnvKey] = defaultUrl;
+      changed = true;
+      changes.push(`env.vars.${streamEnvKey}=set`);
+    }
+
+    const upstreamEnvKey = resolveAppUpstreamEnvKey(packageName);
+    const upstreamConfigured =
+      (typeof envVars[upstreamEnvKey] === "string" &&
+        envVars[upstreamEnvKey].trim().length > 0) ||
+      Boolean(process.env[upstreamEnvKey]?.trim());
+    if (!upstreamConfigured) {
+      envVars[upstreamEnvKey] = defaultUrl;
+      process.env[upstreamEnvKey] = defaultUrl;
+      changed = true;
+      changes.push(`env.vars.${upstreamEnvKey}=set`);
+    }
+
+    if (!appEntry.defaultPublicUrl) continue;
+    const fallbackEnvKey = resolveAppFallbackEnvKey(packageName);
+    const fallbackConfigured =
+      (typeof envVars[fallbackEnvKey] === "string" &&
+        envVars[fallbackEnvKey].trim().length > 0) ||
+      Boolean(process.env[fallbackEnvKey]?.trim());
+    if (!fallbackConfigured) {
+      envVars[fallbackEnvKey] = appEntry.defaultPublicUrl;
+      process.env[fallbackEnvKey] = appEntry.defaultPublicUrl;
+      changed = true;
+      changes.push(`env.vars.${fallbackEnvKey}=set`);
+    }
   }
 
   return { changed, changes };

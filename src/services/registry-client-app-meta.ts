@@ -3,9 +3,12 @@ import type {
   RegistryAppMeta,
   RegistryAppViewerMeta,
 } from "./registry-client.js";
-
-export const LOCAL_APP_DEFAULT_SANDBOX =
-  "allow-scripts allow-same-origin allow-popups";
+import {
+  ALICE_APP_CATALOG,
+  LOCAL_APP_DEFAULT_SANDBOX,
+  resolveManagedAppUpstreamUrl,
+} from "./app-catalog.js";
+export { LOCAL_APP_DEFAULT_SANDBOX } from "./app-catalog.js";
 
 const ALLOWED_SANDBOX_TOKENS = new Set([
   "allow-downloads",
@@ -31,64 +34,30 @@ interface LocalAppOverride {
   viewer?: RegistryAppViewerMeta;
 }
 
-const LOCAL_APP_OVERRIDES: Readonly<Record<string, LocalAppOverride>> = {
-  "@elizaos/app-babylon": {
-    launchType: "url",
-    launchUrl: "http://localhost:3000",
-    viewer: {
-      url: "http://localhost:3000",
-      sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
-    },
-  },
-  "@elizaos/app-hyperscape": {
-    launchType: "connect",
-    launchUrl: "http://localhost:3333",
-    viewer: {
-      url: "http://localhost:3333",
-      embedParams: {
-        embedded: "true",
-        mode: "spectator",
-        quality: "medium",
-      },
-      postMessageAuth: true,
-      sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
-    },
-  },
-  "@elizaos/app-hyperfy": {
-    launchType: "connect",
-    launchUrl: "http://localhost:3003",
-    viewer: {
-      url: "http://localhost:3003",
-      sandbox: LOCAL_APP_DEFAULT_SANDBOX,
-    },
-  },
-  "@elizaos/app-2004scape": {
-    launchType: "connect",
-    launchUrl: "http://localhost:8880",
-    viewer: {
-      url: "http://localhost:8880",
-      embedParams: { bot: "{RS_SDK_BOT_NAME}" },
-      postMessageAuth: true,
-      sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
-    },
-  },
-  "@elizaos/app-agent-town": {
-    launchType: "url",
-    launchUrl: "http://localhost:5173/",
-    viewer: {
-      url: "http://localhost:5173/",
-      sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
-    },
-  },
-  "@elizaos/app-dungeons": {
-    launchType: "local",
-    launchUrl: "http://localhost:3345",
-    viewer: {
-      url: "http://localhost:3345",
-      sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
-    },
-  },
-};
+const LOCAL_APP_OVERRIDES: Readonly<Record<string, LocalAppOverride>> =
+  Object.fromEntries(
+    Object.entries(ALICE_APP_CATALOG).map(([packageName, entry]) => {
+      const upstreamUrl =
+        resolveManagedAppUpstreamUrl(packageName) ?? entry.defaultUpstreamUrl;
+      const viewer = entry.viewer
+        ? {
+            ...entry.viewer,
+            url: upstreamUrl,
+          }
+        : undefined;
+      return [
+        packageName,
+        {
+          displayName: entry.displayName,
+          category: entry.category,
+          launchType: entry.launchType,
+          launchUrl: upstreamUrl,
+          capabilities: entry.capabilities,
+          viewer,
+        },
+      ];
+    }),
+  );
 
 export function sanitizeSandbox(rawSandbox?: string): string {
   if (!rawSandbox || !rawSandbox.trim()) {
