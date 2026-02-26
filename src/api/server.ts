@@ -62,6 +62,10 @@ import {
   importAgent,
 } from "../services/agent-export.js";
 import { AppManager } from "../services/app-manager.js";
+import type {
+  InstallProgressLike,
+  PluginManagerLike,
+} from "../services/plugin-manager-types.js";
 import {
   getMcpServerDetails,
   searchMcpMarketplace,
@@ -5468,6 +5472,52 @@ function getHealthHandler(state: ServerState): ReturnType<typeof createHealthHan
   return _healthHandler;
 }
 
+type AppRoutePluginManager = Pick<
+  PluginManagerLike,
+  | "refreshRegistry"
+  | "listInstalledPlugins"
+  | "getRegistryPlugin"
+  | "searchRegistry"
+  | "installPlugin"
+  | "uninstallPlugin"
+>;
+
+function createAppRoutePluginManager(): AppRoutePluginManager {
+  return {
+    refreshRegistry: async () => {
+      const { refreshRegistry } = await import("../services/registry-client.js");
+      return refreshRegistry();
+    },
+    listInstalledPlugins: async () => {
+      const { listInstalledPlugins } = await import(
+        "../services/plugin-installer.js"
+      );
+      return listInstalledPlugins();
+    },
+    getRegistryPlugin: async (name: string) => {
+      const { getPluginInfo } = await import("../services/registry-client.js");
+      return getPluginInfo(name);
+    },
+    searchRegistry: async (query: string, limit = 15) => {
+      const { searchPlugins } = await import("../services/registry-client.js");
+      return searchPlugins(query, limit);
+    },
+    installPlugin: async (
+      pluginName: string,
+      onProgress?: (progress: InstallProgressLike) => void,
+    ) => {
+      const { installPlugin } = await import("../services/plugin-installer.js");
+      return installPlugin(pluginName, onProgress);
+    },
+    uninstallPlugin: async (pluginName: string) => {
+      const { uninstallPlugin } = await import(
+        "../services/plugin-installer.js"
+      );
+      return uninstallPlugin(pluginName);
+    },
+  };
+}
+
 async function handleRequest(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -5483,6 +5533,13 @@ async function handleRequest(
     return;
   }
   const pathname = url.pathname;
+  let appPluginManager: AppRoutePluginManager | null = null;
+  const getAppPluginManager = (): AppRoutePluginManager => {
+    if (!appPluginManager) {
+      appPluginManager = createAppRoutePluginManager();
+    }
+    return appPluginManager;
+  };
   const requiredCapability = resolveFive55CapabilityForRequest(method, pathname);
   if (requiredCapability) {
     try {
@@ -13214,7 +13271,10 @@ async function handleRequest(
       return;
     }
 
-    const appInfo = await state.appManager.getInfo(appName);
+    const appInfo = await state.appManager.getInfo(
+      getAppPluginManager(),
+      appName,
+    );
     if (!appInfo) {
       error(res, `App "${appName}" not found in registry`, 404);
       return;
@@ -13388,7 +13448,7 @@ async function handleRequest(
   }
 
   if (method === "GET" && pathname === "/api/apps") {
-    const apps = await state.appManager.listAvailable();
+    const apps = await state.appManager.listAvailable(getAppPluginManager());
     json(res, apps);
     return;
   }
@@ -13400,13 +13460,20 @@ async function handleRequest(
       return;
     }
     const limit = parseBoundedLimit(url.searchParams.get("limit"));
-    const results = await state.appManager.search(query, limit);
+    const results = await state.appManager.search(
+      getAppPluginManager(),
+      query,
+      limit,
+    );
     json(res, results);
     return;
   }
 
   if (method === "GET" && pathname === "/api/apps/installed") {
-    json(res, state.appManager.listInstalled());
+    const installed = await state.appManager.listInstalled(
+      getAppPluginManager(),
+    );
+    json(res, installed);
     return;
   }
 
@@ -13418,7 +13485,10 @@ async function handleRequest(
       error(res, "name is required");
       return;
     }
-    const result = await state.appManager.launch(body.name.trim());
+    const result = await state.appManager.launch(
+      getAppPluginManager(),
+      body.name.trim(),
+    );
     json(res, result);
     return;
   }
@@ -13432,7 +13502,7 @@ async function handleRequest(
       return;
     }
     const appName = body.name.trim();
-    const result = await state.appManager.stop(appName);
+    const result = await state.appManager.stop(getAppPluginManager(), appName);
     json(res, result);
     return;
   }
@@ -13445,7 +13515,7 @@ async function handleRequest(
       error(res, "app name is required");
       return;
     }
-    const info = await state.appManager.getInfo(appName);
+    const info = await state.appManager.getInfo(getAppPluginManager(), appName);
     if (!info) {
       error(res, `App "${appName}" not found in registry`, 404);
       return;
