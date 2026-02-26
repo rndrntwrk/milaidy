@@ -77,6 +77,7 @@ import {
   type EmbeddingPreset,
   type EmbeddingTier,
 } from "./embedding-presets.js";
+import { inferMessagingParams } from "./messaging-params.js";
 import { createMilaidyPlugin } from "./milaidy-plugin.js";
 import {
   createPhettaCompanionPlugin,
@@ -214,21 +215,6 @@ const ACTION_FILTER_ALWAYS_INCLUDE_NAMES = new Set<string>([
   "SEND_TELEGRAM_MESSAGE",
 ]);
 
-const SUPPORTED_MESSAGING_CHANNELS = [
-  "discord",
-  "telegram",
-  "slack",
-  "whatsapp",
-  "twitch",
-] as const;
-
-const MESSAGING_CHANNEL_REGEX =
-  /\b(discord|telegram|slack|whatsapp|twitch)\b/i;
-const MESSAGING_TARGET_ID_REGEX =
-  /(?:user(?:\s+id)?|chat(?:\s+id)?|target(?:\s+id)?|id)\s*[:#]?\s*(-?\d{6,})\b/i;
-const GENERIC_NUMERIC_ID_REGEX = /\b-?\d{6,}\b/;
-const TELEGRAM_HANDLE_REGEX = /@([a-zA-Z0-9_]{4,})/;
-
 type MutableRecord = Record<string, unknown>;
 
 function asRecord(value: unknown): MutableRecord | null {
@@ -239,49 +225,6 @@ function asString(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
-}
-
-function inferMessageBody(text: string): string | null {
-  const quoted = text.match(/["“]([^"”]+)["”]/);
-  if (quoted?.[1]?.trim()) return quoted[1].trim();
-
-  const byVerb = text.match(/\b(?:saying|say|message|text)\b[:\s-]+(.+)$/i);
-  if (byVerb?.[1]?.trim()) return byVerb[1].trim();
-
-  return null;
-}
-
-function inferMessagingParams(text: string): {
-  channel?: string;
-  to?: string;
-  messageText?: string;
-} {
-  const inferred: { channel?: string; to?: string; messageText?: string } = {};
-  if (!text.trim()) return inferred;
-
-  const channelMatch = text.match(MESSAGING_CHANNEL_REGEX);
-  const channel = channelMatch?.[1]?.toLowerCase();
-  if (channel && SUPPORTED_MESSAGING_CHANNELS.includes(channel as never)) {
-    inferred.channel = channel;
-  }
-
-  const explicitId = text.match(MESSAGING_TARGET_ID_REGEX)?.[1];
-  const fallbackId = text.match(GENERIC_NUMERIC_ID_REGEX)?.[0];
-  const telegramHandle = text.match(TELEGRAM_HANDLE_REGEX)?.[1];
-  if (explicitId) {
-    inferred.to = explicitId;
-  } else if (fallbackId) {
-    inferred.to = fallbackId;
-  } else if (inferred.channel === "telegram" && telegramHandle) {
-    inferred.to = `@${telegramHandle}`;
-  }
-
-  const messageText = inferMessageBody(text);
-  if (messageText) {
-    inferred.messageText = messageText;
-  }
-
-  return inferred;
 }
 
 function addMissingParameters(
