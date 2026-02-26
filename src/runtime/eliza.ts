@@ -790,6 +790,8 @@ const PLUGIN_ENTRY_RESOLVE_CANDIDATES = [
   "/index.mjs",
 ] as const;
 
+const OWN_PACKAGE_NAME_CANDIDATES = new Set(["milaidy", "milady", "miladyai"]);
+
 function resolveBundledPackageRootFromNodeModules(
   packageName: string,
 ): string | null {
@@ -827,6 +829,31 @@ function resolveBundledPluginEntryPath(packageName: string): string | null {
     }
   }
   return null;
+}
+
+function findMilaidyProjectRoot(startDir: string): string {
+  let dir = startDir;
+  for (let i = 0; i < 12; i += 1) {
+    const pkgPath = path.join(dir, "package.json");
+    if (existsSync(pkgPath)) {
+      try {
+        const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as {
+          name?: string;
+        };
+        const packageName =
+          typeof pkg.name === "string" ? pkg.name.trim().toLowerCase() : "";
+        if (OWN_PACKAGE_NAME_CANDIDATES.has(packageName)) {
+          return dir;
+        }
+      } catch {
+        // Keep searching upward.
+      }
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return process.cwd();
 }
 
 function resolvePackageRootFromEntryPath(
@@ -1609,19 +1636,37 @@ async function resolvePlugins(
           mod = await importFromPath(installRecord.installPath, pluginName);
         }
       } else if (pluginName.startsWith("@milaidy/plugin-")) {
-        // Local Milaidy plugin — resolve from the compiled dist directory.
-        // These are built by tsdown into dist/plugins/<name>/ and are not
-        // published to npm.  import.meta.url points to dist/runtime/eliza.js
-        // (unbundled) or dist/eliza.js (bundled), so we resolve relative to
-        // the dist root via the parent of the current file's directory.
-        const shortName = pluginName.replace("@milaidy/plugin-", "");
-        const thisDir = path.dirname(fileURLToPath(import.meta.url));
-        // Walk up until we find the dist directory that contains plugins/
-        const distRoot = thisDir.endsWith("runtime")
-          ? path.resolve(thisDir, "..")
-          : thisDir;
-        const distDir = path.resolve(distRoot, "plugins", shortName);
-        mod = await importFromPath(distDir, pluginName);
+        // Local Milaidy workspace plugin. Prefer normal package resolution,
+        // then fall back to known workspace/dist roots for source runs.
+        try {
+          mod = (await import(pluginName)) as PluginModuleShape;
+        } catch (packageImportErr) {
+          const noScopeName = pluginName.replace("@milaidy/", "");
+          const shortName = noScopeName.replace(/^plugin-/, "");
+          const thisDir = path.dirname(fileURLToPath(import.meta.url));
+          const projectRoot = findMilaidyProjectRoot(thisDir);
+          const candidateRoots = [
+            resolveBundledPackageRootFromNodeModules(pluginName),
+            path.join(projectRoot, "packages", noScopeName),
+            path.join(projectRoot, "dist", "plugins", shortName),
+          ].filter((candidate): candidate is string => Boolean(candidate));
+
+          let lastError: unknown = packageImportErr;
+          let importedFromFallback = false;
+          for (const candidateRoot of candidateRoots) {
+            try {
+              mod = await importFromPath(candidateRoot, pluginName);
+              importedFromFallback = true;
+              break;
+            } catch (fallbackErr) {
+              lastError = fallbackErr;
+            }
+          }
+
+          if (!importedFromFallback) {
+            throw lastError;
+          }
+        }
       } else {
         // Built-in/npm plugin — import by package name from node_modules.
         mod = (await import(pluginName)) as PluginModuleShape;
