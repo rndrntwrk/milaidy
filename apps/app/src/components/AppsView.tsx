@@ -248,24 +248,19 @@ export function AppsView() {
         ? toBrowserViewerUrl(app.name, targetUrl)
         : "";
       if (resolvedTargetUrl) {
-        const popup = window.open(
-          resolvedTargetUrl,
-          "_blank",
-          "noopener,noreferrer",
+        setState("activeGameApp", app.name);
+        setState("activeGameDisplayName", app.displayName ?? app.name);
+        setState("activeGameViewerUrl", resolvedTargetUrl);
+        setState("activeGameSandbox", DEFAULT_VIEWER_SANDBOX);
+        setState("activeGamePostMessageAuth", false);
+        setState("activeGamePostMessagePayload", null);
+        setState("tab", "apps");
+        setState("appsSubTab", "games");
+        setActionNotice(
+          `${app.displayName ?? app.name} launched. Spectator view is ready in Games.`,
+          "success",
+          2800,
         );
-        if (popup) {
-          setActionNotice(
-            `${app.displayName ?? app.name} opened in a new tab.`,
-            "success",
-            2600,
-          );
-        } else {
-          setActionNotice(
-            `Popup blocked while opening ${app.displayName ?? app.name}. Allow popups and try again.`,
-            "error",
-            4200,
-          );
-        }
         return;
       }
       setActionNotice(

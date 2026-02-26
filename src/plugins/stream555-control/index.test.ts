@@ -12,6 +12,7 @@ const ENV_KEYS = [
   "STREAM555_AGENT_API_KEY",
   "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
   "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
+  "STREAM555_ALLOW_LOCALHOST_APP_URLS",
   "STREAM_API_BEARER_TOKEN",
 ] as const;
 
@@ -311,8 +312,88 @@ describe("stream555-control plugin actions", () => {
           requirements: {
             wrapperRequired: false,
             wrapperProvided: false,
-            publicUrlRequired: true,
-            localhostAllowed: false,
+            publicUrlRequired: false,
+            localhostAllowed: true,
+          },
+        },
+      },
+    });
+    expect(result?.success).toBe(true);
+    expect(parseEnvelope(result as { text: string }).code).toBe("OK");
+  });
+
+  it("falls back to localhost launchUrl for local-only apps when wrapper URL is not provided", async () => {
+    const { getPluginInfo } = await import("../../services/registry-client.js");
+    vi.mocked(getPluginInfo).mockResolvedValue({
+      name: "@elizaos/app-hyperscape",
+      gitRepo: "elizaos/app-hyperscape",
+      gitUrl: "https://github.com/elizaos/app-hyperscape.git",
+      description: "Hyperscape",
+      homepage: "",
+      topics: ["rpg"],
+      stars: 50,
+      language: "TypeScript",
+      npm: {
+        package: "@elizaos/app-hyperscape",
+        v0Version: null,
+        v1Version: null,
+        v2Version: "1.0.0",
+      },
+      git: { v0Branch: null, v1Branch: null, v2Branch: "main" },
+      supports: { v0: false, v1: false, v2: true },
+      kind: "app",
+      appMeta: {
+        displayName: "Hyperscape",
+        category: "game",
+        launchType: "connect",
+        launchUrl: "http://localhost:3333",
+        icon: null,
+        capabilities: [],
+        minPlayers: null,
+        maxPlayers: null,
+        viewer: {
+          url: "http://localhost:3333",
+          postMessageAuth: true,
+        },
+      },
+    });
+
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { sessionId: "session-local" }))
+      .mockResolvedValueOnce(jsonResponse(200, { accepted: true }));
+
+    const action = await resolveAction("STREAM555_GO_LIVE_APP");
+    const result = await action.handler?.(
+      INTERNAL_RUNTIME,
+      INTERNAL_MESSAGE,
+      INTERNAL_STATE,
+      { parameters: { appName: "hyperscape", sessionId: "session-local" } } as never,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, streamStartCall] = fetchMock.mock.calls;
+    expect(parseFetchBody(streamStartCall)).toEqual({
+      input: { type: "website", url: "http://localhost:3333" },
+      options: {
+        scene: "default",
+        appName: "@elizaos/app-hyperscape",
+        resolvedFrom: "launchUrl",
+        app: {
+          name: "@elizaos/app-hyperscape",
+          displayName: "Hyperscape",
+          category: "game",
+          launchType: "connect",
+          viewer: {
+            postMessageAuth: true,
+            sandbox: null,
+            embedParamKeys: [],
+          },
+          requirements: {
+            wrapperRequired: true,
+            wrapperProvided: false,
+            publicUrlRequired: false,
+            localhostAllowed: true,
           },
         },
       },

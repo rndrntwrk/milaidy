@@ -683,9 +683,7 @@ describe("AppManager Integration", () => {
       delete process.env.TEST_VIEWER_BOT;
     });
 
-    it("rewrites localhost app URLs through local proxy when enabled", async () => {
-      process.env.MILAIDY_PROXY_LOCAL_APP_URLS = "1";
-
+    it("preserves localhost app URLs for runtime-side app launch", async () => {
       const { getAppInfo } = await import("./registry-client.js");
       vi.mocked(getAppInfo).mockResolvedValue({
         name: "@elizaos/app-agent-town",
@@ -726,24 +724,18 @@ describe("AppManager Integration", () => {
       const mgr = new AppManager();
       const result = await mgr.launch("@elizaos/app-agent-town");
 
-      expect(result.launchUrl).toBe(
-        "/api/apps/local/%40elizaos%2Fapp-agent-town/",
-      );
+      expect(result.launchUrl).toBe("http://localhost:5173/");
       expect(result.viewer?.url).toBe(
-        "/api/apps/local/%40elizaos%2Fapp-agent-town/ai-town/index.html?embedded=true",
+        "http://localhost:5173/ai-town/index.html?embedded=true",
       );
-
-      delete process.env.MILAIDY_PROXY_LOCAL_APP_URLS;
     });
 
-    it("rewrites localhost app URLs by default outside test mode", async () => {
+    it("keeps localhost app URLs unchanged outside test mode", async () => {
       const savedNodeEnv = process.env.NODE_ENV;
       const savedVitest = process.env.VITEST;
-      const savedProxyFlag = process.env.MILAIDY_PROXY_LOCAL_APP_URLS;
 
       process.env.NODE_ENV = "production";
       delete process.env.VITEST;
-      delete process.env.MILAIDY_PROXY_LOCAL_APP_URLS;
 
       try {
         const { getAppInfo } = await import("./registry-client.js");
@@ -785,21 +777,14 @@ describe("AppManager Integration", () => {
         const mgr = new AppManager();
         const result = await mgr.launch("@elizaos/app-hyperfy");
 
-        expect(result.launchUrl).toBe("/api/apps/local/%40elizaos%2Fapp-hyperfy/");
-        expect(result.viewer?.url).toBe(
-          "/api/apps/local/%40elizaos%2Fapp-hyperfy/",
-        );
+        expect(result.launchUrl).toBe("http://localhost:3003/");
+        expect(result.viewer?.url).toBe("http://localhost:3003/");
       } finally {
         process.env.NODE_ENV = savedNodeEnv;
         if (savedVitest === undefined) {
           delete process.env.VITEST;
         } else {
           process.env.VITEST = savedVitest;
-        }
-        if (savedProxyFlag === undefined) {
-          delete process.env.MILAIDY_PROXY_LOCAL_APP_URLS;
-        } else {
-          process.env.MILAIDY_PROXY_LOCAL_APP_URLS = savedProxyFlag;
         }
       }
     });

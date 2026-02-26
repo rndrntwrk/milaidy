@@ -219,15 +219,6 @@ function isLoopbackHostname(hostname: string): boolean {
   return normalized.startsWith("127.");
 }
 
-function shouldProxyLocalAppUrls(): boolean {
-  const explicit =
-    process.env.MILAIDY_PROXY_LOCAL_APP_URLS?.trim().toLowerCase();
-  if (explicit === "1" || explicit === "true") return true;
-  if (explicit === "0" || explicit === "false") return false;
-  if (isRuntimeTestEnvironment()) return false;
-  return true;
-}
-
 function isRuntimeTestEnvironment(): boolean {
   return (
     process.env.NODE_ENV === "test" ||
@@ -340,22 +331,6 @@ function resolveAppLaunchFallbackUrl(appInfo: {
   return repository.length > 0 ? repository : null;
 }
 
-function toProxyAppUrl(appName: string, candidate: string): string {
-  if (!shouldProxyLocalAppUrls()) return candidate;
-  let parsed: URL;
-  try {
-    parsed = new URL(candidate);
-  } catch {
-    return candidate;
-  }
-  if (!/^https?:$/i.test(parsed.protocol)) return candidate;
-  if (!isLoopbackHostname(parsed.hostname)) return candidate;
-  const appSegment = encodeURIComponent(appName);
-  const upstreamPath =
-    parsed.pathname && parsed.pathname.length > 0 ? parsed.pathname : "/";
-  return `/api/apps/local/${appSegment}${upstreamPath}${parsed.search}${parsed.hash}`;
-}
-
 function substituteTemplateVars(raw: string): string {
   return raw.replace(/\{([A-Z0-9_]+)\}/g, (_full, key: string) => {
     const value = process.env[key];
@@ -367,12 +342,11 @@ function substituteTemplateVars(raw: string): string {
 }
 
 function buildViewerUrl(
-  appName: string,
   baseUrl: string,
   embedParams?: Record<string, string>,
 ): string {
   if (!embedParams || Object.keys(embedParams).length === 0) {
-    return toProxyAppUrl(appName, substituteTemplateVars(baseUrl));
+    return substituteTemplateVars(baseUrl);
   }
   const resolvedBaseUrl = substituteTemplateVars(baseUrl);
   const [beforeHash, hashPartRaw] = resolvedBaseUrl.split("#", 2);
@@ -384,7 +358,7 @@ function buildViewerUrl(
   const query = queryParams.toString();
   const hash = hashPartRaw ? `#${hashPartRaw}` : "";
   const urlWithParams = `${pathPart}${query.length > 0 ? `?${query}` : ""}${hash}`;
-  return toProxyAppUrl(appName, urlWithParams);
+  return urlWithParams;
 }
 
 function normalizeSafeAppUrl(url: string): string | null {
@@ -480,7 +454,7 @@ function buildViewerConfig(
       }
     }
     const viewerUrl = normalizeSafeAppUrl(
-      buildViewerUrl(appInfo.name, viewerInfo.url, viewerInfo.embedParams),
+      buildViewerUrl(viewerInfo.url, viewerInfo.embedParams),
     );
     if (!viewerUrl) {
       throw new Error(
@@ -490,7 +464,6 @@ function buildViewerConfig(
 
     return {
       url: buildViewerUrl(
-        appInfo.name,
         appInfo.viewer.url,
         appInfo.viewer.embedParams,
       ),
@@ -511,7 +484,7 @@ function buildViewerConfig(
       );
     }
     return {
-      url: toProxyAppUrl(appInfo.name, launchUrl),
+      url: launchUrl,
       sandbox: DEFAULT_VIEWER_SANDBOX,
     };
   }
@@ -828,9 +801,7 @@ export class AppManager {
     const launchUrlRaw = appInfo.launchUrl
       ? substituteTemplateVars(appInfo.launchUrl)
       : null;
-    let launchUrl = launchUrlRaw
-      ? toProxyAppUrl(appInfo.name, launchUrlRaw)
-      : null;
+    let launchUrl = launchUrlRaw;
     let viewer = buildViewerConfig(appInfo, launchUrl);
 
     const isTestRun = isRuntimeTestEnvironment();

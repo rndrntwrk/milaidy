@@ -188,10 +188,10 @@ function resolveAppUrlCandidates(
     .filter((entry) => entry.url.length > 0);
 }
 
-function parseAllowLocalhost(raw: string | undefined): boolean {
-  if (!raw) return false;
+function parseAllowLocalhost(raw: string | undefined): boolean | undefined {
+  if (!raw) return undefined;
   const normalized = raw.trim().toLowerCase();
-  if (!normalized) return false;
+  if (!normalized) return undefined;
   return !["false", "0", "no", "off"].includes(normalized);
 }
 
@@ -429,9 +429,12 @@ const goLiveAppAction: Action = {
         options as HandlerOptions | undefined,
         "viewerUrl",
       );
-      const allowLocalhost = parseAllowLocalhost(
-        readParam(options as HandlerOptions | undefined, "allowLocalhost"),
-      );
+      const allowLocalhost =
+        parseAllowLocalhost(
+          readParam(options as HandlerOptions | undefined, "allowLocalhost"),
+        ) ??
+        parseAllowLocalhost(process.env.STREAM555_ALLOW_LOCALHOST_APP_URLS) ??
+        true;
       const scene = readParam(options as HandlerOptions | undefined, "scene") || "default";
       const requestedSessionId = readParam(
         options as HandlerOptions | undefined,
@@ -448,25 +451,31 @@ const goLiveAppAction: Action = {
       }
       const wrapperRequired = Boolean(pluginInfo?.appMeta?.viewer?.postMessageAuth);
       const wrapperProvided = Boolean(viewerUrlOverride && viewerUrlOverride.trim().length > 0);
-      if (wrapperRequired && !wrapperProvided) {
-        throw new Error(
-          `App "${appName}" requires embed auth (postMessageAuth). Provide a wrapper viewerUrl that performs the auth handshake.`,
-        );
-      }
 
       if (!resolvedUrl) {
         if (!pluginInfo) {
           throw new Error(`App "${appNameRaw}" not found in the registry.`);
         }
 
-        const candidates = resolveAppUrlCandidates(pluginInfo);
+        const candidates = resolveAppUrlCandidates(pluginInfo).filter(
+          (entry) => !(wrapperRequired && !wrapperProvided && entry.source === "viewer"),
+        );
         if (candidates.length === 0) {
+          if (wrapperRequired && !wrapperProvided) {
+            throw new Error(
+              `App "${appName}" requires embed auth and has no fallback launch/homepage URL. Provide a wrapper viewerUrl that performs the auth handshake.`,
+            );
+          }
           throw new Error(`"${pluginInfo.name}" has no streamable viewer URL.`);
         }
 
-        const chosen = allowLocalhost
-          ? candidates[0]
-          : candidates.find((entry) => !isLocalhostUrl(entry.url)) ?? candidates[0];
+        const nonLocal = candidates.find((entry) => !isLocalhostUrl(entry.url));
+        const chosen = nonLocal ?? (allowLocalhost ? candidates[0] : null);
+        if (!chosen) {
+          throw new Error(
+            `resolved viewer URL is localhost. Provide a public viewerUrl override or set allowLocalhost=true.`,
+          );
+        }
 
         resolvedUrl = chosen.url;
         resolvedFrom = chosen.source;

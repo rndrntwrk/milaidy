@@ -283,7 +283,7 @@ describe("AppsView", () => {
     expect(setState).toHaveBeenCalledWith("appsSubTab", "games");
   });
 
-  it("opens non-viewer launches in a new tab and resets active game state", async () => {
+  it("loads non-viewer launches into Games spectator state", async () => {
     const setState = vi.fn<AppsContextStub["setState"]>();
     const setActionNotice = vi.fn<AppsContextStub["setActionNotice"]>();
     mockUseApp.mockReturnValue({ setState, setActionNotice });
@@ -297,8 +297,6 @@ describe("AppsView", () => {
       }),
     );
 
-    const popupSpy = vi.spyOn(window, "open").mockReturnValue({} as Window);
-
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(AppsView));
@@ -309,21 +307,22 @@ describe("AppsView", () => {
       await findButtonByText(tree?.root, "Launch").props.onClick();
     });
 
-    expect(popupSpy).toHaveBeenCalledWith(
+    expect(setState).toHaveBeenCalledWith("activeGameApp", "@elizaos/app-babylon");
+    expect(setState).toHaveBeenCalledWith("activeGameDisplayName", "Babylon");
+    expect(setState).toHaveBeenCalledWith(
+      "activeGameViewerUrl",
       "https://example.com/babylon",
-      "_blank",
-      "noopener,noreferrer",
     );
-    expect(setState).toHaveBeenCalledWith("activeGameApp", "");
-    expect(setState).toHaveBeenCalledWith("activeGameViewerUrl", "");
+    expect(setState).toHaveBeenCalledWith("tab", "apps");
+    expect(setState).toHaveBeenCalledWith("appsSubTab", "games");
     expect(setActionNotice).toHaveBeenCalledWith(
-      "Babylon opened in a new tab.",
+      "Babylon launched. Spectator view is ready in Games.",
       "success",
-      2600,
+      2800,
     );
   });
 
-  it("proxies localhost launch URLs before opening new tabs", async () => {
+  it("proxies localhost launch URLs for Games spectator view", async () => {
     const setState = vi.fn<AppsContextStub["setState"]>();
     const setActionNotice = vi.fn<AppsContextStub["setActionNotice"]>();
     mockUseApp.mockReturnValue({ setState, setActionNotice });
@@ -337,8 +336,6 @@ describe("AppsView", () => {
       }),
     );
 
-    const popupSpy = vi.spyOn(window, "open").mockReturnValue({} as Window);
-
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(AppsView));
@@ -349,45 +346,29 @@ describe("AppsView", () => {
       await findButtonByText(tree?.root, "Launch").props.onClick();
     });
 
-    expect(popupSpy).toHaveBeenCalledWith(
+    expect(setState).toHaveBeenCalledWith("activeGameApp", "@elizaos/app-hyperscape");
+    expect(setState).toHaveBeenCalledWith("activeGameDisplayName", "Hyperscape");
+    expect(setState).toHaveBeenCalledWith(
+      "activeGameViewerUrl",
       "/api/apps/local/%40elizaos%2Fapp-hyperscape/play?embedded=true",
-      "_blank",
-      "noopener,noreferrer",
     );
+    expect(setState).toHaveBeenCalledWith("tab", "apps");
+    expect(setState).toHaveBeenCalledWith("appsSubTab", "games");
   });
 
-  it("reports popup-blocked errors and launch failures", async () => {
+  it("reports launch failures", async () => {
     const setState = vi.fn<AppsContextStub["setState"]>();
     const setActionNotice = vi.fn<AppsContextStub["setActionNotice"]>();
     mockUseApp.mockReturnValue({ setState, setActionNotice });
     const app = createApp("@elizaos/app-babylon", "Babylon", "Wallet app");
     mockClientFns.listApps.mockResolvedValue([app]);
-    mockClientFns.launchApp
-      .mockResolvedValueOnce(
-        createLaunchResult({
-          displayName: app.displayName,
-          launchUrl: "https://example.com/babylon",
-          viewer: null,
-        }),
-      )
-      .mockRejectedValueOnce(new Error("network down"));
-
-    vi.spyOn(window, "open").mockReturnValue(null);
+    mockClientFns.launchApp.mockRejectedValueOnce(new Error("network down"));
 
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(AppsView));
     });
     await flush();
-
-    await act(async () => {
-      await findButtonByText(tree?.root, "Launch").props.onClick();
-    });
-    expect(setActionNotice).toHaveBeenCalledWith(
-      "Popup blocked while opening Babylon. Allow popups and try again.",
-      "error",
-      4200,
-    );
 
     await act(async () => {
       await findButtonByText(tree?.root, "Launch").props.onClick();
