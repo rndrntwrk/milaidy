@@ -191,15 +191,9 @@ function resolveManagedAppUpstreamOrigin(
 ): string {
   if (appName !== HYPERSCAPE_APP_NAME) return defaultOrigin;
   if (
-    upstreamPath.startsWith("/assets/") ||
-    upstreamPath.startsWith("/fonts/") ||
-    upstreamPath.startsWith("/images/") ||
     upstreamPath.startsWith("/manifests/") ||
     upstreamPath.startsWith("/game-assets/") ||
-    upstreamPath.startsWith("/web/") ||
-    upstreamPath === "/favicon.ico" ||
-    upstreamPath === "/favicon.svg" ||
-    upstreamPath === "/manifest.webmanifest"
+    upstreamPath.startsWith("/web/")
   ) {
     return HYPERSCAPE_ASSET_ORIGIN;
   }
