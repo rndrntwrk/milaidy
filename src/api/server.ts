@@ -255,9 +255,28 @@ function rewriteManagedAppProxyJavaScript(
     .replaceAll('"/env.js"', `"${localProxyRoot}env.js"`)
     .replaceAll("'/env.js'", `'${localProxyRoot}env.js'`)
     .replaceAll("`/env.js`", `\`${localProxyRoot}env.js\``)
-    .replaceAll(HYPERSCAPE_ASSET_ORIGIN, localProxyBase);
+    .replaceAll(HYPERSCAPE_ASSET_ORIGIN, localProxyBase)
+    .replaceAll(HYPERSCAPE_RUNTIME_API_ORIGIN, localProxyBase);
 
   return rewritten;
+}
+
+function isJavaScriptLikeResponse(
+  contentType: string,
+  upstreamPath: string,
+): boolean {
+  const jsContentType =
+    /(?:application|text)\/(?:javascript|ecmascript|x-javascript|javascipt)/i.test(
+      contentType,
+    );
+  if (jsContentType) return true;
+
+  const normalizedPath = upstreamPath.toLowerCase();
+  return (
+    normalizedPath.endsWith(".js") ||
+    normalizedPath.endsWith(".mjs") ||
+    normalizedPath.endsWith(".cjs")
+  );
 }
 
 function lookupIpv4Only(
@@ -14001,15 +14020,8 @@ async function handleRequest(
       return rewriteManagedAppProxyHtml(appName, rewrittenHtml, localProxyRoot);
     };
 
-    if (/text\/html/i.test(contentType)) {
-      const rawHtml = await upstreamResponse.text();
-      res.end(rewriteHtmlForProxy(rawHtml));
-      return;
-    }
-
-    if (
-      /(?:application|text)\/(?:javascript|ecmascript)/i.test(contentType)
-    ) {
+    if (isJavaScriptLikeResponse(contentType, upstreamPath)) {
+      res.setHeader("content-type", "application/javascript; charset=utf-8");
       const rawScript = await upstreamResponse.text();
       const rewrittenScript = rewriteManagedAppProxyJavaScript(
         appName,
@@ -14019,6 +14031,12 @@ async function handleRequest(
         upstreamPath,
       );
       res.end(rewrittenScript);
+      return;
+    }
+
+    if (/text\/html/i.test(contentType)) {
+      const rawHtml = await upstreamResponse.text();
+      res.end(rewriteHtmlForProxy(rawHtml));
       return;
     }
 
