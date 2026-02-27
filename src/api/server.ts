@@ -273,6 +273,9 @@ function rewriteManagedAppProxyJavaScript(
       .replaceAll(`}/${segment}/`, `}${localProxyRoot}${segment}/`)
       .replaceAll(`}/${segment}`, `}${localProxyRoot}${segment}`);
   }
+  rewritten = rewritten
+    .replaceAll('return"/"+', `return"${localProxyRoot}"+`)
+    .replaceAll("return'/'+", `return'${localProxyRoot}'+`);
   const interpolationPrefix = "$" + "{";
   const localWsUrl =
     `${interpolationPrefix}window.location.protocol === "https:" ? "wss" : "ws"}://`
