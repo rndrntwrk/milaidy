@@ -35,7 +35,7 @@ export const ALICE_APP_CATALOG: Readonly<Record<string, ManagedAppEntry>> = {
     gitRepo: "HyperscapeAI/hyperscape",
     launchType: "connect",
     defaultUpstreamUrl: "http://localhost:3333",
-    defaultPublicUrl: "https://hyperscapeai.github.io/hyperscape/",
+    defaultPublicUrl: "https://hyperscape.gg/",
     viewer: {
       embedParams: {
         embedded: "true",

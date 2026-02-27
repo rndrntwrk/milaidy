@@ -374,7 +374,7 @@ describe("stream555-control plugin actions", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const [, streamStartCall] = fetchMock.mock.calls;
     expect(parseFetchBody(streamStartCall)).toEqual({
-      input: { type: "website", url: "https://hyperscapeai.github.io/hyperscape/" },
+      input: { type: "website", url: "https://hyperscape.gg/" },
       options: {
         scene: "default",
         appName: "@elizaos/app-hyperscape",
