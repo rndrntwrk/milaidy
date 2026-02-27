@@ -1,6 +1,10 @@
 export const LOCAL_APP_DEFAULT_SANDBOX =
   "allow-scripts allow-same-origin allow-popups";
 
+const HYPERSCAPE_PACKAGE = "@elizaos/app-hyperscape";
+const HYPERSCAPE_LEGACY_DOWNLOAD_HOST = "hyperscapeai.github.io";
+const HYPERSCAPE_LEGACY_DOWNLOAD_PATH = "/hyperscape";
+
 export interface ManagedAppViewerDefaults {
   embedParams?: Record<string, string>;
   postMessageAuth?: boolean;
@@ -119,11 +123,37 @@ export function resolveManagedAppGitRepo(packageName: string): string | null {
   return resolveManagedAppEntry(packageName)?.gitRepo ?? null;
 }
 
-function readConfiguredUrl(envKey: string): string | null {
+export function normalizeManagedAppConfiguredUrl(
+  packageName: string,
+  value: string,
+): string {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return "";
+
+  if (packageName === HYPERSCAPE_PACKAGE) {
+    try {
+      const parsed = new URL(trimmed);
+      const host = parsed.hostname.trim().toLowerCase();
+      const path = parsed.pathname.trim().replace(/\/+$/g, "");
+      if (
+        host === HYPERSCAPE_LEGACY_DOWNLOAD_HOST &&
+        path === HYPERSCAPE_LEGACY_DOWNLOAD_PATH
+      ) {
+        return ALICE_APP_CATALOG[HYPERSCAPE_PACKAGE].defaultPublicUrl ?? trimmed;
+      }
+    } catch {
+      return trimmed;
+    }
+  }
+
+  return trimmed;
+}
+
+function readConfiguredUrl(packageName: string, envKey: string): string | null {
   const value = process.env[envKey];
   if (!value) return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
+  const normalized = normalizeManagedAppConfiguredUrl(packageName, value);
+  return normalized.length > 0 ? normalized : null;
 }
 
 export function resolveManagedAppUpstreamUrl(
@@ -131,7 +161,10 @@ export function resolveManagedAppUpstreamUrl(
 ): string | null {
   const entry = resolveManagedAppEntry(packageName);
   if (!entry) return null;
-  const fromEnv = readConfiguredUrl(resolveAppUpstreamEnvKey(packageName));
+  const fromEnv = readConfiguredUrl(
+    packageName,
+    resolveAppUpstreamEnvKey(packageName),
+  );
   if (fromEnv) return fromEnv;
   return entry.defaultUpstreamUrl;
 }
@@ -139,7 +172,10 @@ export function resolveManagedAppUpstreamUrl(
 export function resolveManagedAppFallbackUrl(
   packageName: string,
 ): string | null {
-  const fromEnv = readConfiguredUrl(resolveAppFallbackEnvKey(packageName));
+  const fromEnv = readConfiguredUrl(
+    packageName,
+    resolveAppFallbackEnvKey(packageName),
+  );
   if (fromEnv) return fromEnv;
   const entry = resolveManagedAppEntry(packageName);
   if (!entry) return null;
@@ -147,7 +183,10 @@ export function resolveManagedAppFallbackUrl(
 }
 
 export function resolveManagedAppStreamUrl(packageName: string): string | null {
-  const fromEnv = readConfiguredUrl(resolveAppStreamEnvKey(packageName));
+  const fromEnv = readConfiguredUrl(
+    packageName,
+    resolveAppStreamEnvKey(packageName),
+  );
   if (fromEnv) return fromEnv;
   const fallback = resolveManagedAppFallbackUrl(packageName);
   if (fallback) return fallback;
