@@ -9,6 +9,7 @@ export interface ManagedAppViewerDefaults {
   embedParams?: Record<string, string>;
   postMessageAuth?: boolean;
   sandbox?: string;
+  remoteProxyHosts?: string[];
 }
 
 export interface ManagedAppEntry {
@@ -48,6 +49,11 @@ export const ALICE_APP_CATALOG: Readonly<Record<string, ManagedAppEntry>> = {
       },
       postMessageAuth: true,
       sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
+      remoteProxyHosts: [
+        "hyperscape.gg",
+        "www.hyperscape.gg",
+        "hyperscape-production.up.railway.app",
+      ],
     },
   },
   "@elizaos/app-hyperfy": {
@@ -121,6 +127,22 @@ export function resolveManagedAppEntry(
 
 export function resolveManagedAppGitRepo(packageName: string): string | null {
   return resolveManagedAppEntry(packageName)?.gitRepo ?? null;
+}
+
+export function isManagedAppRemoteProxyHostAllowed(
+  packageName: string,
+  hostname: string,
+): boolean {
+  const entry = resolveManagedAppEntry(packageName);
+  if (!entry) return false;
+  const allowed = entry.viewer?.remoteProxyHosts;
+  if (!Array.isArray(allowed) || allowed.length === 0) return false;
+
+  const normalizedHost = hostname.trim().toLowerCase().replace(/^\[|\]$/g, "");
+  if (normalizedHost.length === 0) return false;
+  return allowed.some(
+    (candidate) => candidate.trim().toLowerCase() === normalizedHost,
+  );
 }
 
 export function normalizeManagedAppConfiguredUrl(

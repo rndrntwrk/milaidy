@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  isManagedAppRemoteProxyHostAllowed,
   normalizeManagedAppConfiguredUrl,
   resolveAppFallbackEnvKey,
   resolveAppStreamEnvKey,
@@ -68,5 +69,20 @@ describe("app-catalog managed URLs", () => {
   it("normalizes legacy upstream env values at read time", () => {
     process.env[upstreamKey] = "https://hyperscapeai.github.io/hyperscape/";
     expect(resolveManagedAppUpstreamUrl(HYPERSCAPE_APP)).toBe(HYPERSCAPE_LIVE_URL);
+  });
+
+  it("allows known hyperscape remote hosts for embedded proxying", () => {
+    expect(
+      isManagedAppRemoteProxyHostAllowed(HYPERSCAPE_APP, "hyperscape.gg"),
+    ).toBe(true);
+    expect(
+      isManagedAppRemoteProxyHostAllowed(
+        HYPERSCAPE_APP,
+        "hyperscape-production.up.railway.app",
+      ),
+    ).toBe(true);
+    expect(
+      isManagedAppRemoteProxyHostAllowed(HYPERSCAPE_APP, "example.com"),
+    ).toBe(false);
   });
 });

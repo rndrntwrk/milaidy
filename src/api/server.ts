@@ -62,6 +62,7 @@ import {
   importAgent,
 } from "../services/agent-export.js";
 import { AppManager } from "../services/app-manager.js";
+import { isManagedAppRemoteProxyHostAllowed } from "../services/app-catalog.js";
 import type {
   InstallProgressLike,
   PluginManagerLike,
@@ -13634,6 +13635,10 @@ async function handleRequest(
       error(res, `App "${appName}" has an invalid upstream URL`, 500);
       return;
     }
+    if (!/^https?:$/i.test(upstreamSource.protocol)) {
+      error(res, `App "${appName}" has an unsupported upstream protocol`, 400);
+      return;
+    }
 
     const normalizeHost = (value: string): string =>
       value.trim().toLowerCase().replace(/^\[|\]$/g, "");
@@ -13644,7 +13649,10 @@ async function handleRequest(
       host === "::1" ||
       host === "::ffff:127.0.0.1" ||
       host.startsWith("127.");
-    if (!isLoopbackHost) {
+    const allowRemoteProxy =
+      !isLoopbackHost &&
+      isManagedAppRemoteProxyHostAllowed(appName, upstreamSource.hostname);
+    if (!isLoopbackHost && !allowRemoteProxy) {
       error(
         res,
         `App "${appName}" is not configured for local proxy access`,
@@ -13715,7 +13723,11 @@ async function handleRequest(
           parsedHost === "::1" ||
           parsedHost === "::ffff:127.0.0.1" ||
           parsedHost.startsWith("127.");
-        if (!parsedLoopback) return trimmed;
+        const parsedRemoteAllowed = isManagedAppRemoteProxyHostAllowed(
+          appName,
+          parsedHost,
+        );
+        if (!parsedLoopback && !parsedRemoteAllowed) return trimmed;
         return `${localProxyBase}${parsed.pathname}${parsed.search}${parsed.hash}`;
       } catch {
         return trimmed;
@@ -13730,8 +13742,6 @@ async function handleRequest(
       "expires",
       "last-modified",
       "vary",
-      "x-frame-options",
-      "content-security-policy",
       "referrer-policy",
       "x-content-type-options",
     ] as const;
@@ -13739,6 +13749,21 @@ async function handleRequest(
       const value = upstreamResponse.headers.get(headerName);
       if (value) {
         res.setHeader(headerName, value);
+      }
+    }
+    res.setHeader("x-frame-options", "SAMEORIGIN");
+    const rawCsp = upstreamResponse.headers.get("content-security-policy");
+    if (rawCsp) {
+      const sanitizedCsp = rawCsp
+        .split(";")
+        .map((directive) => directive.trim())
+        .filter((directive) => directive.length > 0)
+        .filter(
+          (directive) => !directive.toLowerCase().startsWith("frame-ancestors"),
+        )
+        .join("; ");
+      if (sanitizedCsp.length > 0) {
+        res.setHeader("content-security-policy", sanitizedCsp);
       }
     }
     const locationHeader = upstreamResponse.headers.get("location");
@@ -13755,12 +13780,26 @@ async function handleRequest(
     const contentType = upstreamResponse.headers.get("content-type") ?? "";
     const rewriteHtmlForProxy = (html: string): string => {
       const localProxyRoot = `${localProxyBase}/`;
+      const upstreamOrigin = upstreamSource.origin.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&",
+      );
+      const absoluteOriginPattern = new RegExp(
+        `(\\s(?:src|href|action|poster)=["'])${upstreamOrigin}/`,
+        "gi",
+      );
+      const absoluteCssPattern = new RegExp(
+        `url\\((['"]?)${upstreamOrigin}/`,
+        "gi",
+      );
       return html
         .replace(
           /(\s(?:src|href|action|poster)=["'])\/(?!\/)/gi,
           `$1${localProxyRoot}`,
         )
-        .replace(/url\((['"]?)\/(?!\/)/gi, `url($1${localProxyRoot}`);
+        .replace(/url\((['"]?)\/(?!\/)/gi, `url($1${localProxyRoot}`)
+        .replace(absoluteOriginPattern, `$1${localProxyRoot}`)
+        .replace(absoluteCssPattern, `url($1${localProxyRoot}`);
     };
 
     if (/text\/html/i.test(contentType)) {

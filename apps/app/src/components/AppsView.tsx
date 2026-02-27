@@ -48,6 +48,8 @@ const CATEGORY_LABELS: Record<string, string> = {
   world: "World",
 };
 
+const FORCE_PROXY_APP_NAMES = new Set<string>(["@elizaos/app-hyperscape"]);
+
 function isLoopbackHostname(hostname: string | null | undefined): boolean {
   const normalized =
     typeof hostname === "string"
@@ -70,7 +72,9 @@ function toBrowserViewerUrl(appName: string, rawUrl: string): string {
   try {
     const parsed = new URL(trimmed);
     if (!/^https?:$/i.test(parsed.protocol)) return trimmed;
-    if (!isLoopbackHostname(parsed.hostname)) return trimmed;
+    const shouldUseProxy =
+      isLoopbackHostname(parsed.hostname) || FORCE_PROXY_APP_NAMES.has(appName);
+    if (!shouldUseProxy) return trimmed;
     const appSegment = encodeURIComponent(appName);
     const upstreamPath =
       parsed.pathname && parsed.pathname.length > 0 ? parsed.pathname : "/";
