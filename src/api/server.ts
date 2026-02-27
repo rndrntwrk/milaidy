@@ -180,6 +180,9 @@ const HYPERSCAPE_APP_NAME = "@elizaos/app-hyperscape";
 const HYPERSCAPE_ASSET_ORIGIN = "https://assets.hyperscape.club";
 const HYPERSCAPE_RUNTIME_API_ORIGIN =
   "https://hyperscape-production.up.railway.app";
+const HYPERSCAPE_RUNTIME_WS_URL = "wss://hyperscape-production.up.railway.app/ws";
+const HYPERSCAPE_RUNTIME_WS_URL_INSECURE =
+  "ws://hyperscape-production.up.railway.app/ws";
 
 function resolveManagedAppUpstreamOrigin(
   appName: string,
@@ -188,9 +191,15 @@ function resolveManagedAppUpstreamOrigin(
 ): string {
   if (appName !== HYPERSCAPE_APP_NAME) return defaultOrigin;
   if (
+    upstreamPath.startsWith("/assets/") ||
+    upstreamPath.startsWith("/fonts/") ||
+    upstreamPath.startsWith("/images/") ||
     upstreamPath.startsWith("/manifests/") ||
     upstreamPath.startsWith("/game-assets/") ||
-    upstreamPath.startsWith("/web/")
+    upstreamPath.startsWith("/web/") ||
+    upstreamPath === "/favicon.ico" ||
+    upstreamPath === "/favicon.svg" ||
+    upstreamPath === "/manifest.webmanifest"
   ) {
     return HYPERSCAPE_ASSET_ORIGIN;
   }
@@ -229,8 +238,17 @@ function rewriteManagedAppProxyJavaScript(
     return "/* service worker registration disabled for proxied embeds */\n";
   }
 
+  const proxyBootstrap = [
+    "if (typeof window !== \"undefined\") {",
+    `  window.__CDN_URL = window.__CDN_URL || ${JSON.stringify(localProxyBase)};`,
+    `  window.__HYPERSCAPE_PROXY_BASE = ${JSON.stringify(localProxyBase)};`,
+    "}",
+    "",
+  ].join("\n");
+
   if (upstreamPath.endsWith("/env.js")) {
     return [
+      proxyBootstrap,
       "window.env = {",
       "  ...(window.env || {}),",
       `  PUBLIC_CDN_URL: ${JSON.stringify(localProxyBase)},`,
@@ -241,13 +259,30 @@ function rewriteManagedAppProxyJavaScript(
   }
 
   let rewritten = script;
-  const rootedSegments = ["web", "manifests", "game-assets", "api/errors"];
+  const rootedSegments = [
+    "assets",
+    "fonts",
+    "images",
+    "web",
+    "manifests",
+    "game-assets",
+    "api/errors",
+  ];
   for (const segment of rootedSegments) {
     rewritten = rewritten
       .replaceAll(`"/${segment}/`, `"${localProxyRoot}${segment}/`)
       .replaceAll(`'/${segment}/`, `'${localProxyRoot}${segment}/`)
-      .replaceAll(`\`/${segment}/`, `\`${localProxyRoot}${segment}/`);
+      .replaceAll(`\`/${segment}/`, `\`${localProxyRoot}${segment}/`)
+      .replaceAll(`"/${segment}"`, `"${localProxyRoot}${segment}"`)
+      .replaceAll(`'/${segment}'`, `'${localProxyRoot}${segment}'`)
+      .replaceAll(`\`/${segment}\``, `\`${localProxyRoot}${segment}\``)
+      .replaceAll(`}/${segment}/`, `}${localProxyRoot}${segment}/`)
+      .replaceAll(`}/${segment}`, `}${localProxyRoot}${segment}`);
   }
+  const interpolationPrefix = "$" + "{";
+  const localWsUrl =
+    `${interpolationPrefix}window.location.protocol === "https:" ? "wss" : "ws"}://`
+    + `${interpolationPrefix}window.location.host}/ws`;
   rewritten = rewritten
     .replaceAll('"/sw.js"', `"${localProxyRoot}sw.js"`)
     .replaceAll("'/sw.js'", `'${localProxyRoot}sw.js'`)
@@ -255,10 +290,14 @@ function rewriteManagedAppProxyJavaScript(
     .replaceAll('"/env.js"', `"${localProxyRoot}env.js"`)
     .replaceAll("'/env.js'", `'${localProxyRoot}env.js'`)
     .replaceAll("`/env.js`", `\`${localProxyRoot}env.js\``)
+    .replaceAll(`"${HYPERSCAPE_RUNTIME_WS_URL}"`, `\`${localWsUrl}\``)
+    .replaceAll(`'${HYPERSCAPE_RUNTIME_WS_URL}'`, `\`${localWsUrl}\``)
+    .replaceAll(`"${HYPERSCAPE_RUNTIME_WS_URL_INSECURE}"`, `\`${localWsUrl}\``)
+    .replaceAll(`'${HYPERSCAPE_RUNTIME_WS_URL_INSECURE}'`, `\`${localWsUrl}\``)
     .replaceAll(HYPERSCAPE_ASSET_ORIGIN, localProxyBase)
     .replaceAll(HYPERSCAPE_RUNTIME_API_ORIGIN, localProxyBase);
 
-  return rewritten;
+  return `${proxyBootstrap}${rewritten}`;
 }
 
 function isJavaScriptLikeResponse(
