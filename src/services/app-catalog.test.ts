@@ -12,6 +12,7 @@ import {
 
 const HYPERSCAPE_APP = "@elizaos/app-hyperscape";
 const HYPERSCAPE_LIVE_URL = "https://hyperscape.gg/";
+const BABYLON_APP = "@elizaos/app-babylon";
 
 function envSnapshot(keys: string[]): {
   restore: () => void;
@@ -89,6 +90,18 @@ describe("app-catalog managed URLs", () => {
     ).toBe(true);
     expect(
       isManagedAppRemoteProxyHostAllowed(HYPERSCAPE_APP, "example.com"),
+    ).toBe(false);
+  });
+
+  it("allows babylon remote hosts for embedded proxying", () => {
+    expect(
+      isManagedAppRemoteProxyHostAllowed(BABYLON_APP, "babylon.market"),
+    ).toBe(true);
+    expect(
+      isManagedAppRemoteProxyHostAllowed(BABYLON_APP, "www.babylon.market"),
+    ).toBe(true);
+    expect(
+      isManagedAppRemoteProxyHostAllowed(BABYLON_APP, "example.com"),
     ).toBe(false);
   });
 });

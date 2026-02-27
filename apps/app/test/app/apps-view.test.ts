@@ -311,7 +311,7 @@ describe("AppsView", () => {
     expect(setState).toHaveBeenCalledWith("activeGameDisplayName", "Babylon");
     expect(setState).toHaveBeenCalledWith(
       "activeGameViewerUrl",
-      "https://example.com/babylon",
+      "/api/apps/local/%40elizaos%2Fapp-babylon/babylon",
     );
     expect(setState).toHaveBeenCalledWith("tab", "apps");
     expect(setState).toHaveBeenCalledWith("appsSubTab", "games");

@@ -33,6 +33,7 @@ export const ALICE_APP_CATALOG: Readonly<Record<string, ManagedAppEntry>> = {
     defaultPublicUrl: "https://babylon.market/",
     viewer: {
       sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
+      remoteProxyHosts: ["babylon.market", "www.babylon.market"],
     },
   },
   "@elizaos/app-hyperscape": {

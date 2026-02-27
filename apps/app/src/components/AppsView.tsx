@@ -48,7 +48,10 @@ const CATEGORY_LABELS: Record<string, string> = {
   world: "World",
 };
 
-const FORCE_PROXY_APP_NAMES = new Set<string>(["@elizaos/app-hyperscape"]);
+const FORCE_PROXY_APP_NAMES = new Set<string>([
+  "@elizaos/app-hyperscape",
+  "@elizaos/app-babylon",
+]);
 
 function isLoopbackHostname(hostname: string | null | undefined): boolean {
   const normalized =
