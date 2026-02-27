@@ -176,6 +176,90 @@ function describeProxyError(error: unknown): string {
   return String(error);
 }
 
+const HYPERSCAPE_APP_NAME = "@elizaos/app-hyperscape";
+const HYPERSCAPE_ASSET_ORIGIN = "https://assets.hyperscape.club";
+const HYPERSCAPE_RUNTIME_API_ORIGIN =
+  "https://hyperscape-production.up.railway.app";
+
+function resolveManagedAppUpstreamOrigin(
+  appName: string,
+  upstreamPath: string,
+  defaultOrigin: string,
+): string {
+  if (appName !== HYPERSCAPE_APP_NAME) return defaultOrigin;
+  if (
+    upstreamPath.startsWith("/manifests/") ||
+    upstreamPath.startsWith("/game-assets/") ||
+    upstreamPath.startsWith("/web/")
+  ) {
+    return HYPERSCAPE_ASSET_ORIGIN;
+  }
+  if (upstreamPath.startsWith("/api/errors/")) {
+    return HYPERSCAPE_RUNTIME_API_ORIGIN;
+  }
+  return defaultOrigin;
+}
+
+function rewriteManagedAppProxyHtml(
+  appName: string,
+  html: string,
+  localProxyRoot: string,
+): string {
+  if (appName !== HYPERSCAPE_APP_NAME) return html;
+  return html
+    .replace(
+      /<script[^>]*id=["']vite-plugin-pwa:register-sw["'][^>]*><\/script>/gi,
+      "",
+    )
+    .replaceAll(`${HYPERSCAPE_ASSET_ORIGIN}/`, localProxyRoot);
+}
+
+function rewriteManagedAppProxyJavaScript(
+  appName: string,
+  script: string,
+  localProxyBase: string,
+  localProxyRoot: string,
+  upstreamPath: string,
+): string {
+  if (appName !== HYPERSCAPE_APP_NAME) return script;
+
+  // Service workers should stay disabled for proxied embeds. Registering with
+  // root scope (`/`) on the parent origin breaks both the app and host shell.
+  if (upstreamPath.endsWith("/registerSW.js")) {
+    return "/* service worker registration disabled for proxied embeds */\n";
+  }
+
+  if (upstreamPath.endsWith("/env.js")) {
+    return [
+      "window.env = {",
+      "  ...(window.env || {}),",
+      `  PUBLIC_CDN_URL: ${JSON.stringify(localProxyBase)},`,
+      `  PUBLIC_API_URL: ${JSON.stringify(localProxyBase)},`,
+      "};",
+      "",
+    ].join("\n");
+  }
+
+  let rewritten = script;
+  const rootedSegments = ["web", "manifests", "game-assets", "api/errors"];
+  for (const segment of rootedSegments) {
+    rewritten = rewritten
+      .replaceAll(`"/${segment}/`, `"${localProxyRoot}${segment}/`)
+      .replaceAll(`'/${segment}/`, `'${localProxyRoot}${segment}/`)
+      .replaceAll(`\`/${segment}/`, `\`${localProxyRoot}${segment}/`);
+  }
+  rewritten = rewritten
+    .replaceAll('"/sw.js"', `"${localProxyRoot}sw.js"`)
+    .replaceAll("'/sw.js'", `'${localProxyRoot}sw.js'`)
+    .replaceAll("`/sw.js`", `\`${localProxyRoot}sw.js\``)
+    .replaceAll('"/env.js"', `"${localProxyRoot}env.js"`)
+    .replaceAll("'/env.js'", `'${localProxyRoot}env.js'`)
+    .replaceAll("`/env.js`", `\`${localProxyRoot}env.js\``)
+    .replaceAll(HYPERSCAPE_ASSET_ORIGIN, localProxyBase);
+
+  return rewritten;
+}
+
 function lookupIpv4Only(
   hostname: string,
   options: number | dns.LookupAllOptions | dns.LookupOneOptions,
@@ -13761,7 +13845,12 @@ async function handleRequest(
         : upstreamSource.pathname && upstreamSource.pathname.length > 0
           ? upstreamSource.pathname
           : "/";
-    const upstreamUrl = new URL(upstreamSource.origin);
+    const upstreamOrigin = resolveManagedAppUpstreamOrigin(
+      appName,
+      upstreamPath,
+      upstreamSource.origin,
+    );
+    const upstreamUrl = new URL(upstreamOrigin);
     upstreamUrl.pathname = upstreamPath.startsWith("/")
       ? upstreamPath
       : `/${upstreamPath}`;
@@ -13817,6 +13906,7 @@ async function handleRequest(
     }
 
     const localProxyBase = `/api/apps/local/${encodeURIComponent(appName)}`;
+    const localProxyRoot = `${localProxyBase}/`;
     const mapLocationHeader = (locationValue: string): string => {
       const trimmed = locationValue.trim();
       if (!trimmed) return trimmed;
@@ -13888,20 +13978,19 @@ async function handleRequest(
 
     const contentType = upstreamResponse.headers.get("content-type") ?? "";
     const rewriteHtmlForProxy = (html: string): string => {
-      const localProxyRoot = `${localProxyBase}/`;
-      const upstreamOrigin = upstreamSource.origin.replace(
+      const escapedUpstreamOrigin = upstreamOrigin.replace(
         /[.*+?^${}()|[\]\\]/g,
         "\\$&",
       );
       const absoluteOriginPattern = new RegExp(
-        `(\\s(?:src|href|action|poster)=["'])${upstreamOrigin}/`,
+        `(\\s(?:src|href|action|poster)=["'])${escapedUpstreamOrigin}/`,
         "gi",
       );
       const absoluteCssPattern = new RegExp(
-        `url\\((['"]?)${upstreamOrigin}/`,
+        `url\\((['"]?)${escapedUpstreamOrigin}/`,
         "gi",
       );
-      return html
+      const rewrittenHtml = html
         .replace(
           /(\s(?:src|href|action|poster)=["'])\/(?!\/)/gi,
           `$1${localProxyRoot}`,
@@ -13909,11 +13998,27 @@ async function handleRequest(
         .replace(/url\((['"]?)\/(?!\/)/gi, `url($1${localProxyRoot}`)
         .replace(absoluteOriginPattern, `$1${localProxyRoot}`)
         .replace(absoluteCssPattern, `url($1${localProxyRoot}`);
+      return rewriteManagedAppProxyHtml(appName, rewrittenHtml, localProxyRoot);
     };
 
     if (/text\/html/i.test(contentType)) {
       const rawHtml = await upstreamResponse.text();
       res.end(rewriteHtmlForProxy(rawHtml));
+      return;
+    }
+
+    if (
+      /(?:application|text)\/(?:javascript|ecmascript)/i.test(contentType)
+    ) {
+      const rawScript = await upstreamResponse.text();
+      const rewrittenScript = rewriteManagedAppProxyJavaScript(
+        appName,
+        rawScript,
+        localProxyBase,
+        localProxyRoot,
+        upstreamPath,
+      );
+      res.end(rewrittenScript);
       return;
     }
 

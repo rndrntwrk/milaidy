@@ -52,6 +52,7 @@ export const ALICE_APP_CATALOG: Readonly<Record<string, ManagedAppEntry>> = {
       remoteProxyHosts: [
         "hyperscape.gg",
         "www.hyperscape.gg",
+        "assets.hyperscape.club",
         "hyperscape-production.up.railway.app",
       ],
     },

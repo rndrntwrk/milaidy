@@ -82,6 +82,12 @@ describe("app-catalog managed URLs", () => {
       ),
     ).toBe(true);
     expect(
+      isManagedAppRemoteProxyHostAllowed(
+        HYPERSCAPE_APP,
+        "assets.hyperscape.club",
+      ),
+    ).toBe(true);
+    expect(
       isManagedAppRemoteProxyHostAllowed(HYPERSCAPE_APP, "example.com"),
     ).toBe(false);
   });
