@@ -843,23 +843,15 @@ export class AppManager {
           process.env.HYPERSCAPE_CHARACTER_ID?.trim() ||
           process.env.HYPERSCAPE_AUTH_TOKEN?.trim(),
       );
-      // If auto-provisioning failed and no credentials exist, don't launch viewer
       if (!hasHyperscapeCredentials) {
         logger.warn(
-          "[app-manager] Hyperscape requires authentication but auto-provisioning failed. " +
-            "Set HYPERSCAPE_CHARACTER_ID and HYPERSCAPE_AUTH_TOKEN, or ensure the hyperscape server is running.",
+          "[app-manager] Hyperscape credentials unavailable after auto-provision attempt; launching embedded viewer without postMessage auth.",
         );
-        throw new Error(
-          "Hyperscape authentication required. Set HYPERSCAPE_CHARACTER_ID and HYPERSCAPE_AUTH_TOKEN, " +
-            "or ensure the hyperscape server is running at " +
-            (process.env.HYPERSCAPE_SERVER_URL || "localhost:5555") +
-            " for auto-provisioning.",
-        );
+      } else {
+        // Viewer metadata is env-derived; re-resolve now that hyperscape
+        // credentials may have been hydrated from runtime settings.
+        viewer = buildViewerConfig(appInfo, launchUrl);
       }
-
-      // Viewer metadata is env-derived; re-resolve now that hyperscape
-      // credentials may have been hydrated from runtime settings.
-      viewer = buildViewerConfig(appInfo, launchUrl);
     }
 
     // The app's plugin is what the agent needs to play the game.
