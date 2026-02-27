@@ -180,6 +180,7 @@ const HYPERSCAPE_APP_NAME = "@elizaos/app-hyperscape";
 const HYPERSCAPE_ASSET_ORIGIN = "https://assets.hyperscape.club";
 const HYPERSCAPE_RUNTIME_API_ORIGIN =
   "https://hyperscape-production.up.railway.app";
+const DEFAULT_HYPERSCAPE_API_BASE_URL = "http://localhost:5555";
 
 function resolveManagedAppUpstreamOrigin(
   appName: string,
@@ -198,6 +199,64 @@ function resolveManagedAppUpstreamOrigin(
     return HYPERSCAPE_RUNTIME_API_ORIGIN;
   }
   return defaultOrigin;
+}
+
+function normalizeHyperscapeApiBaseUrl(raw: string | undefined): string | null {
+  const trimmed = raw?.trim();
+  if (!trimmed) return null;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return null;
+  }
+
+  if (parsed.protocol === "ws:") {
+    parsed.protocol = "http:";
+  } else if (parsed.protocol === "wss:") {
+    parsed.protocol = "https:";
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return null;
+  }
+
+  parsed.hash = "";
+  parsed.pathname = parsed.pathname.replace(/\/+$/g, "");
+  if (parsed.pathname.toLowerCase().endsWith("/ws")) {
+    parsed.pathname = parsed.pathname.slice(0, -3);
+  }
+  if (!parsed.pathname) {
+    parsed.pathname = "/";
+  }
+
+  return parsed.toString().replace(/\/+$/g, "");
+}
+
+export function resolveHyperscapeApiBaseUrl(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const fromApiUrl = normalizeHyperscapeApiBaseUrl(env.HYPERSCAPE_API_URL);
+  if (fromApiUrl) return fromApiUrl;
+
+  const fromServerUrl = normalizeHyperscapeApiBaseUrl(
+    env.HYPERSCAPE_SERVER_URL,
+  );
+  if (fromServerUrl) return fromServerUrl;
+
+  return DEFAULT_HYPERSCAPE_API_BASE_URL;
+}
+
+export function resolveHyperscapeAuthorizationHeader(
+  _req: Pick<http.IncomingMessage, "headers">,
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  const envToken = env.HYPERSCAPE_AUTH_TOKEN?.trim();
+  if (!envToken) {
+    return null;
+  }
+  return /^Bearer\s+/i.test(envToken) ? envToken : `Bearer ${envToken}`;
 }
 
 function rewriteManagedAppProxyHtml(
@@ -5958,32 +6017,6 @@ async function handleRequest(
     setTimeout(restart, delayMs);
   };
 
-  const resolveHyperscapeApiBaseUrl = async (): Promise<string> => {
-    const fromEnv = process.env.HYPERSCAPE_API_URL?.trim();
-    if (fromEnv) {
-      return fromEnv.replace(/\/+$/, "");
-    }
-    // Default to the local Hyperscape API server. Viewer URLs can point at a
-    // client dev server (for example :3333) which does not expose API routes.
-    return "http://localhost:5555";
-  };
-
-  const resolveHyperscapeAuthorizationHeader = (): string | null => {
-    const requestAuth =
-      typeof req.headers.authorization === "string"
-        ? req.headers.authorization.trim()
-        : "";
-    if (requestAuth) {
-      return requestAuth;
-    }
-
-    const envToken = process.env.HYPERSCAPE_AUTH_TOKEN?.trim();
-    if (!envToken) {
-      return null;
-    }
-    return /^Bearer\s+/i.test(envToken) ? envToken : `Bearer ${envToken}`;
-  };
-
   const relayHyperscapeApi = async (
     outboundMethod: "GET" | "POST",
     outboundPath: string,
@@ -5992,7 +6025,7 @@ async function handleRequest(
       contentTypeOverride?: string | null;
     },
   ): Promise<void> => {
-    const baseUrl = await resolveHyperscapeApiBaseUrl();
+    const baseUrl = resolveHyperscapeApiBaseUrl();
 
     let upstreamUrl: URL;
     try {
@@ -6032,7 +6065,7 @@ async function handleRequest(
     if (contentType && rawBody !== undefined) {
       outboundHeaders["Content-Type"] = contentType;
     }
-    const authorization = resolveHyperscapeAuthorizationHeader();
+    const authorization = resolveHyperscapeAuthorizationHeader(req);
     if (authorization) {
       outboundHeaders.Authorization = authorization;
     }
