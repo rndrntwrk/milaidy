@@ -269,9 +269,7 @@ function rewriteManagedAppProxyJavaScript(
       .replaceAll(`\`/${segment}/`, `\`${localProxyRoot}${segment}/`)
       .replaceAll(`"/${segment}"`, `"${localProxyRoot}${segment}"`)
       .replaceAll(`'/${segment}'`, `'${localProxyRoot}${segment}'`)
-      .replaceAll(`\`/${segment}\``, `\`${localProxyRoot}${segment}\``)
-      .replaceAll(`}/${segment}/`, `}${localProxyRoot}${segment}/`)
-      .replaceAll(`}/${segment}`, `}${localProxyRoot}${segment}`);
+      .replaceAll(`\`/${segment}\``, `\`${localProxyRoot}${segment}\``);
   }
   rewritten = rewritten
     .replaceAll('return"/"+', `return"${localProxyRoot}"+`)
