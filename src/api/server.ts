@@ -13969,6 +13969,12 @@ async function handleRequest(
         res.setHeader(headerName, value);
       }
     }
+    if (appName === HYPERSCAPE_APP_NAME) {
+      // Hyperscape embed payload is rewritten per-request. Disable browser cache
+      // to prevent stale chunk maps from resolving to HTML fallback responses.
+      res.setHeader("cache-control", "no-store, no-cache, must-revalidate");
+      res.setHeader("pragma", "no-cache");
+    }
     res.setHeader("x-frame-options", "SAMEORIGIN");
     const rawCsp = upstreamResponse.headers.get("content-security-policy");
     if (rawCsp) {
