@@ -7,8 +7,10 @@
  */
 
 import crypto from "node:crypto";
+import dns from "node:dns";
 import fs from "node:fs";
 import http from "node:http";
+import https from "node:https";
 import os from "node:os";
 import path from "node:path";
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -167,6 +169,96 @@ function getAutonomySvc(
 ): AutonomyServiceLike | null {
   if (!runtime) return null;
   return runtime.getService("AUTONOMY") as AutonomyServiceLike | null;
+}
+
+function describeProxyError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+function lookupIpv4Only(
+  hostname: string,
+  options: number | dns.LookupAllOptions | dns.LookupOneOptions,
+  callback: (
+    err: NodeJS.ErrnoException | null,
+    address: string | dns.LookupAddress[],
+    family?: number,
+  ) => void,
+): void {
+  const shouldReturnAll =
+    typeof options === "object" && options !== null && options.all === true;
+  dns.lookup(hostname, { family: 4, all: shouldReturnAll }, (error, address, family) => {
+    if (error) {
+      callback(error, shouldReturnAll ? [] : "", family);
+      return;
+    }
+    if (shouldReturnAll) {
+      callback(null, address as dns.LookupAddress[]);
+      return;
+    }
+    callback(null, address as string, family);
+  });
+}
+
+async function fetchWithIpv4Lookup(
+  targetUrl: string,
+  method: string,
+  headers: Record<string, string>,
+): Promise<Response> {
+  const target = new URL(targetUrl);
+  if (target.protocol !== "http:" && target.protocol !== "https:") {
+    throw new Error(`Unsupported protocol: ${target.protocol}`);
+  }
+
+  const client = target.protocol === "https:" ? https : http;
+  return await new Promise<Response>((resolve, reject) => {
+    const request = client.request(
+      target,
+      {
+        method,
+        headers,
+        lookup: lookupIpv4Only,
+        timeout: 15_000,
+      },
+      (upstreamResponse) => {
+        const chunks: Buffer[] = [];
+        upstreamResponse.on("data", (chunk) => {
+          if (Buffer.isBuffer(chunk)) {
+            chunks.push(chunk);
+          } else {
+            chunks.push(Buffer.from(chunk));
+          }
+        });
+        upstreamResponse.on("error", (error) => {
+          reject(error);
+        });
+        upstreamResponse.on("end", () => {
+          const responseHeaders = new Headers();
+          for (const [headerName, headerValue] of Object.entries(
+            upstreamResponse.headers,
+          )) {
+            if (headerValue === undefined) continue;
+            if (Array.isArray(headerValue)) {
+              responseHeaders.set(headerName, headerValue.join(", "));
+              continue;
+            }
+            responseHeaders.set(headerName, String(headerValue));
+          }
+          resolve(
+            new Response(Buffer.concat(chunks), {
+              status: upstreamResponse.statusCode ?? 502,
+              headers: responseHeaders,
+            }),
+          );
+        });
+      },
+    );
+    request.on("timeout", () => {
+      request.destroy(new Error("upstream request timed out"));
+    });
+    request.on("error", (error) => reject(error));
+    request.end();
+  });
 }
 
 function findRuntimeAction(
@@ -13699,12 +13791,29 @@ async function handleRequest(
         redirect: "manual",
       });
     } catch (err) {
-      error(
-        res,
-        `Failed to reach local app upstream: ${err instanceof Error ? err.message : String(err)}`,
-        502,
-      );
-      return;
+      if (!allowRemoteProxy) {
+        error(
+          res,
+          `Failed to reach local app upstream: ${describeProxyError(err)}`,
+          502,
+        );
+        return;
+      }
+
+      try {
+        upstreamResponse = await fetchWithIpv4Lookup(
+          upstreamUrl.toString(),
+          method,
+          forwardHeaders,
+        );
+      } catch (ipv4Error) {
+        error(
+          res,
+          `Failed to reach app upstream: ${describeProxyError(err)}; IPv4 retry failed: ${describeProxyError(ipv4Error)}`,
+          502,
+        );
+        return;
+      }
     }
 
     const localProxyBase = `/api/apps/local/${encodeURIComponent(appName)}`;
