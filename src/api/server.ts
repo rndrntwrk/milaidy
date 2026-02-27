@@ -180,9 +180,6 @@ const HYPERSCAPE_APP_NAME = "@elizaos/app-hyperscape";
 const HYPERSCAPE_ASSET_ORIGIN = "https://assets.hyperscape.club";
 const HYPERSCAPE_RUNTIME_API_ORIGIN =
   "https://hyperscape-production.up.railway.app";
-const HYPERSCAPE_RUNTIME_WS_URL = "wss://hyperscape-production.up.railway.app/ws";
-const HYPERSCAPE_RUNTIME_WS_URL_INSECURE =
-  "ws://hyperscape-production.up.railway.app/ws";
 
 function resolveManagedAppUpstreamOrigin(
   appName: string,
@@ -274,10 +271,6 @@ function rewriteManagedAppProxyJavaScript(
   rewritten = rewritten
     .replaceAll('return"/"+', `return"${localProxyRoot}"+`)
     .replaceAll("return'/'+", `return'${localProxyRoot}'+`);
-  const interpolationPrefix = "$" + "{";
-  const localWsUrl =
-    `${interpolationPrefix}window.location.protocol === "https:" ? "wss" : "ws"}://`
-    + `${interpolationPrefix}window.location.host}/ws`;
   rewritten = rewritten
     .replaceAll('"/sw.js"', `"${localProxyRoot}sw.js"`)
     .replaceAll("'/sw.js'", `'${localProxyRoot}sw.js'`)
@@ -285,10 +278,6 @@ function rewriteManagedAppProxyJavaScript(
     .replaceAll('"/env.js"', `"${localProxyRoot}env.js"`)
     .replaceAll("'/env.js'", `'${localProxyRoot}env.js'`)
     .replaceAll("`/env.js`", `\`${localProxyRoot}env.js\``)
-    .replaceAll(`"${HYPERSCAPE_RUNTIME_WS_URL}"`, `\`${localWsUrl}\``)
-    .replaceAll(`'${HYPERSCAPE_RUNTIME_WS_URL}'`, `\`${localWsUrl}\``)
-    .replaceAll(`"${HYPERSCAPE_RUNTIME_WS_URL_INSECURE}"`, `\`${localWsUrl}\``)
-    .replaceAll(`'${HYPERSCAPE_RUNTIME_WS_URL_INSECURE}'`, `\`${localWsUrl}\``)
     .replaceAll(HYPERSCAPE_ASSET_ORIGIN, localProxyBase)
     .replaceAll(HYPERSCAPE_RUNTIME_API_ORIGIN, localProxyBase);
 
@@ -341,6 +330,7 @@ async function fetchWithIpv4Lookup(
   targetUrl: string,
   method: string,
   headers: Record<string, string>,
+  body?: Buffer,
 ): Promise<Response> {
   const target = new URL(targetUrl);
   if (target.protocol !== "http:" && target.protocol !== "https:") {
@@ -394,6 +384,9 @@ async function fetchWithIpv4Lookup(
       request.destroy(new Error("upstream request timed out"));
     });
     request.on("error", (error) => reject(error));
+    if (body && body.length > 0) {
+      request.write(body);
+    }
     request.end();
   });
 }
@@ -13807,7 +13800,7 @@ async function handleRequest(
 
   // ── App routes (/api/apps/*) ──────────────────────────────────────────
   if (
-    (method === "GET" || method === "HEAD") &&
+    (method === "GET" || method === "HEAD" || method === "POST") &&
     pathname.startsWith("/api/apps/local/")
   ) {
     const proxyPrefix = "/api/apps/local/";
@@ -13913,9 +13906,12 @@ async function handleRequest(
     const acceptedHeaders = [
       "accept",
       "accept-language",
+      "content-type",
       "if-none-match",
       "if-modified-since",
+      "origin",
       "range",
+      "referer",
       "user-agent",
     ] as const;
     for (const headerName of acceptedHeaders) {
@@ -13925,11 +13921,31 @@ async function handleRequest(
       }
     }
 
+    let upstreamRequestBody: Buffer | undefined;
+    if (method === "POST") {
+      try {
+        upstreamRequestBody = await readRawBody(req, MAX_BODY_BYTES);
+        if (upstreamRequestBody.length === 0) {
+          upstreamRequestBody = undefined;
+        }
+      } catch (err) {
+        error(
+          res,
+          err instanceof Error
+            ? err.message
+            : "Request body exceeds maximum size",
+          413,
+        );
+        return;
+      }
+    }
+
     let upstreamResponse: Response;
     try {
       upstreamResponse = await fetch(upstreamUrl.toString(), {
         method,
         headers: forwardHeaders,
+        body: upstreamRequestBody,
         redirect: "manual",
       });
     } catch (err) {
@@ -13947,6 +13963,7 @@ async function handleRequest(
           upstreamUrl.toString(),
           method,
           forwardHeaders,
+          upstreamRequestBody,
         );
       } catch (ipv4Error) {
         error(
