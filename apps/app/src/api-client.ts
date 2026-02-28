@@ -1846,6 +1846,8 @@ const GENERIC_NO_RESPONSE_TEXT =
   "Sorry, I couldn't generate a response right now. Please try again.";
 const AGENT_TRANSFER_MIN_PASSWORD_LENGTH = 4;
 const DEFAULT_FETCH_TIMEOUT_MS = 10_000;
+const APP_LAUNCH_FETCH_TIMEOUT_MS = 45_000;
+const HYPERSCAPE_API_FETCH_TIMEOUT_MS = 30_000;
 
 export class MiladyClient {
   private _baseUrl: string;
@@ -1958,7 +1960,7 @@ export class MiladyClient {
   private async rawRequest(
     path: string,
     init?: RequestInit,
-    options?: { allowNonOk?: boolean },
+    options?: { allowNonOk?: boolean; timeoutMs?: number },
   ): Promise<Response> {
     if (!this.apiAvailable) {
       throw new ApiError({
@@ -1968,10 +1970,11 @@ export class MiladyClient {
       });
     }
     const makeRequest = async (token: string | null): Promise<Response> => {
+      const timeoutMs = Math.max(1, options?.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS);
       const timeoutController = new AbortController();
       const timeoutId = setTimeout(() => {
         timeoutController.abort();
-      }, DEFAULT_FETCH_TIMEOUT_MS);
+      }, timeoutMs);
       const signal =
         init?.signal && typeof AbortSignal.any === "function"
           ? AbortSignal.any([init.signal, timeoutController.signal])
@@ -1992,7 +1995,7 @@ export class MiladyClient {
           throw new ApiError({
             kind: "timeout",
             path,
-            message: `Request timed out after ${DEFAULT_FETCH_TIMEOUT_MS}ms`,
+            message: `Request timed out after ${timeoutMs}ms`,
             cause: err,
           });
         }
@@ -2032,14 +2035,18 @@ export class MiladyClient {
     return res;
   }
 
-  private async fetch<T>(path: string, init?: RequestInit): Promise<T> {
+  private async fetch<T>(
+    path: string,
+    init?: RequestInit,
+    options?: { timeoutMs?: number },
+  ): Promise<T> {
     const res = await this.rawRequest(path, {
       ...init,
       headers: {
         "Content-Type": "application/json",
         ...init?.headers,
       },
-    });
+    }, options);
     return res.json() as Promise<T>;
   }
 
@@ -3056,10 +3063,14 @@ export class MiladyClient {
   }
   /** Launch an app: installs its plugin (if needed), returns viewer config for iframe. */
   async launchApp(name: string): Promise<AppLaunchResult> {
-    return this.fetch("/api/apps/launch", {
-      method: "POST",
-      body: JSON.stringify({ name }),
-    });
+    return this.fetch(
+      "/api/apps/launch",
+      {
+        method: "POST",
+        body: JSON.stringify({ name }),
+      },
+      { timeoutMs: APP_LAUNCH_FETCH_TIMEOUT_MS },
+    );
   }
   async listRegistryPlugins(): Promise<RegistryPluginItem[]> {
     return this.fetch("/api/apps/plugins");
@@ -3102,17 +3113,23 @@ export class MiladyClient {
     });
   }
   async listHyperscapeEmbeddedAgents(): Promise<HyperscapeEmbeddedAgentsResponse> {
-    return this.fetch("/api/apps/hyperscape/embedded-agents");
+    return this.fetch("/api/apps/hyperscape/embedded-agents", undefined, {
+      timeoutMs: HYPERSCAPE_API_FETCH_TIMEOUT_MS,
+    });
   }
   async createHyperscapeEmbeddedAgent(input: {
     characterId: string;
     autoStart?: boolean;
     scriptedRole?: HyperscapeScriptedRole;
   }): Promise<HyperscapeEmbeddedAgentMutationResponse> {
-    return this.fetch("/api/apps/hyperscape/embedded-agents", {
-      method: "POST",
-      body: JSON.stringify(input),
-    });
+    return this.fetch(
+      "/api/apps/hyperscape/embedded-agents",
+      {
+        method: "POST",
+        body: JSON.stringify(input),
+      },
+      { timeoutMs: HYPERSCAPE_API_FETCH_TIMEOUT_MS },
+    );
   }
   async controlHyperscapeEmbeddedAgent(
     characterId: string,
@@ -3121,6 +3138,7 @@ export class MiladyClient {
     return this.fetch(
       `/api/apps/hyperscape/embedded-agents/${encodeURIComponent(characterId)}/${action}`,
       { method: "POST" },
+      { timeoutMs: HYPERSCAPE_API_FETCH_TIMEOUT_MS },
     );
   }
   async sendHyperscapeEmbeddedAgentCommand(
@@ -3134,6 +3152,7 @@ export class MiladyClient {
         method: "POST",
         body: JSON.stringify({ command, data }),
       },
+      { timeoutMs: HYPERSCAPE_API_FETCH_TIMEOUT_MS },
     );
   }
   async sendHyperscapeAgentMessage(
@@ -3146,6 +3165,7 @@ export class MiladyClient {
         method: "POST",
         body: JSON.stringify({ content }),
       },
+      { timeoutMs: HYPERSCAPE_API_FETCH_TIMEOUT_MS },
     );
   }
   async getHyperscapeAgentGoal(
@@ -3153,6 +3173,8 @@ export class MiladyClient {
   ): Promise<HyperscapeAgentGoalResponse> {
     return this.fetch(
       `/api/apps/hyperscape/agents/${encodeURIComponent(agentId)}/goal`,
+      undefined,
+      { timeoutMs: HYPERSCAPE_API_FETCH_TIMEOUT_MS },
     );
   }
   async getHyperscapeAgentQuickActions(
@@ -3160,6 +3182,8 @@ export class MiladyClient {
   ): Promise<HyperscapeQuickActionsResponse> {
     return this.fetch(
       `/api/apps/hyperscape/agents/${encodeURIComponent(agentId)}/quick-actions`,
+      undefined,
+      { timeoutMs: HYPERSCAPE_API_FETCH_TIMEOUT_MS },
     );
   }
 
