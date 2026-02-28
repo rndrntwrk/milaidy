@@ -182,7 +182,7 @@ const HYPERSCAPE_RUNTIME_API_ORIGIN =
   "https://hyperscape-production.up.railway.app";
 const DEFAULT_HYPERSCAPE_API_BASE_URL = "http://localhost:5555";
 
-function resolveManagedAppUpstreamOrigin(
+export function resolveManagedAppUpstreamOrigin(
   appName: string,
   upstreamPath: string,
   defaultOrigin: string,
@@ -191,7 +191,8 @@ function resolveManagedAppUpstreamOrigin(
   if (
     upstreamPath.startsWith("/manifests/") ||
     upstreamPath.startsWith("/game-assets/") ||
-    upstreamPath.startsWith("/web/")
+    upstreamPath.startsWith("/web/") ||
+    upstreamPath.startsWith("/audio/")
   ) {
     return HYPERSCAPE_ASSET_ORIGIN;
   }
@@ -345,6 +346,7 @@ export function rewriteManagedAppProxyJavaScript(
 
   const rootedSegments = [
     "assets",
+    "audio",
     "fonts",
     "images",
     "web",

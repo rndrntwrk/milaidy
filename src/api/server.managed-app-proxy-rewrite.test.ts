@@ -66,4 +66,20 @@ describe("managed app proxy path rewriting", () => {
     expect(output).toContain(`"${localProxyRoot}sw.js"`);
     expect(output).toContain(`"${localProxyRoot}manifest.webmanifest"`);
   });
+
+  it("rewrites root-relative hyperscape audio paths", () => {
+    const localProxyBase = "/api/apps/local/%40elizaos%2Fapp-hyperscape";
+    const localProxyRoot = `${localProxyBase}/`;
+    const input = 'const track="/audio/music/river.mp3";';
+
+    const output = rewriteManagedAppProxyJavaScript(
+      "@elizaos/app-hyperscape",
+      input,
+      localProxyBase,
+      localProxyRoot,
+      "/assets/index.js",
+    );
+
+    expect(output).toContain(`"${localProxyRoot}audio/music/river.mp3"`);
+  });
 });
