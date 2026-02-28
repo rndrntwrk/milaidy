@@ -33,6 +33,13 @@ const LOCAL_TOKEN_ENV = "MILAIDY_API_TOKEN";
 const STREAM555_BASE_ENV = "STREAM555_BASE_URL";
 const STREAM_SESSION_ENV = "STREAM_SESSION_ID";
 const STREAM555_SESSION_ENV = "STREAM555_DEFAULT_SESSION_ID";
+const CF_CONNECT_TIMEOUT_MS_ENV = "FIVE55_GAMES_CF_CONNECT_TIMEOUT_MS";
+const CF_CONNECT_POLL_MS_ENV = "FIVE55_GAMES_CF_CONNECT_POLL_MS";
+const CF_RECOVERY_ATTEMPTS_ENV = "FIVE55_GAMES_CF_RECOVERY_ATTEMPTS";
+
+const DEFAULT_CF_CONNECT_TIMEOUT_MS = 45_000;
+const DEFAULT_CF_CONNECT_POLL_MS = 5_000;
+const DEFAULT_CF_RECOVERY_ATTEMPTS = 1;
 
 type GamesDialect = "five55-web" | "milaidy-proxy" | "agent-v1";
 type GameSessionMode = "standard" | "ranked" | "spectate" | "solo" | "agent";
@@ -42,6 +49,22 @@ let cachedAgentSessionId: string | undefined;
 function trimEnv(key: string): string | undefined {
   const value = process.env[key]?.trim();
   return value ? value : undefined;
+}
+
+function readPositiveIntEnv(key: string, fallback: number): number {
+  const raw = trimEnv(key);
+  if (!raw) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return parsed;
+}
+
+function readNonNegativeIntEnv(key: string, fallback: number): number {
+  const raw = trimEnv(key);
+  if (!raw) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return parsed;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -251,9 +274,28 @@ function readNonEmptyString(value: unknown): string | undefined {
   return normalized.length > 0 ? normalized : undefined;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 type AgentSessionSnapshot = {
   active: boolean;
   cfSessionId?: string;
+};
+
+type AgentStreamStatusSnapshot = {
+  active: boolean;
+  phase?: string;
+  cfSessionId?: string;
+  cloudflareConnected: boolean;
+  cloudflareState?: string;
+};
+
+type CloudflareConnectCheck = {
+  connected: boolean;
+  lastSnapshot?: AgentStreamStatusSnapshot;
 };
 
 async function fetchAgentSessionSnapshot(
@@ -282,6 +324,7 @@ async function stopAgentStream(
   base: string,
   token: string,
   sessionId: string,
+  options?: { allowMissing?: boolean },
 ): Promise<void> {
   const response = await fetchJson(
     "POST",
@@ -290,7 +333,13 @@ async function stopAgentStream(
     token,
     {},
   );
-  if (!response.ok) {
+  if (
+    !response.ok &&
+    !(
+      options?.allowMissing &&
+      (response.status === 404 || response.status === 409)
+    )
+  ) {
     throw new Error(
       `stream/stop failed (${response.status}): ${getErrorDetail(response)}`,
     );
@@ -345,6 +394,64 @@ async function ensureAgentCloudflareOutput(
   throw new Error(
     "Cloudflare output provisioning did not produce cfSessionId for session",
   );
+}
+
+async function fetchAgentStreamStatusSnapshot(
+  base: string,
+  token: string,
+  sessionId: string,
+): Promise<AgentStreamStatusSnapshot> {
+  const response = await fetchJson(
+    "GET",
+    base,
+    `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/stream/status`,
+    token,
+  );
+  if (!response.ok) {
+    throw new Error(
+      `stream status check failed (${response.status}): ${getErrorDetail(response)}`,
+    );
+  }
+
+  const cloudflare = asRecord(response.data?.cloudflare);
+  return {
+    active: Boolean(response.data?.active),
+    phase: readNonEmptyString(response.data?.phase),
+    cfSessionId: readNonEmptyString(response.data?.cfSessionId),
+    cloudflareConnected: Boolean(cloudflare?.isConnected),
+    cloudflareState: readNonEmptyString(cloudflare?.state),
+  };
+}
+
+async function waitForAgentCloudflareConnection(
+  base: string,
+  token: string,
+  sessionId: string,
+  timeoutMs: number,
+  pollMs: number,
+): Promise<CloudflareConnectCheck> {
+  const deadline = Date.now() + timeoutMs;
+  let lastSnapshot: AgentStreamStatusSnapshot | undefined;
+
+  while (Date.now() <= deadline) {
+    lastSnapshot = await fetchAgentStreamStatusSnapshot(base, token, sessionId);
+    if (lastSnapshot.cloudflareConnected) {
+      return { connected: true, lastSnapshot };
+    }
+
+    if (Date.now() >= deadline) break;
+    await sleep(pollMs);
+  }
+
+  return {
+    connected: false,
+    lastSnapshot,
+  };
+}
+
+function isActionSuccess(result: unknown): boolean {
+  const envelope = asRecord(result);
+  return envelope?.success === true;
 }
 
 const gamesProvider: Provider = {
@@ -662,6 +769,18 @@ const goLivePlayAction: Action = {
         readParam(options as HandlerOptions | undefined, "mode"),
         dialect,
       );
+      const cfConnectTimeoutMs = readPositiveIntEnv(
+        CF_CONNECT_TIMEOUT_MS_ENV,
+        DEFAULT_CF_CONNECT_TIMEOUT_MS,
+      );
+      const cfConnectPollMs = readPositiveIntEnv(
+        CF_CONNECT_POLL_MS_ENV,
+        DEFAULT_CF_CONNECT_POLL_MS,
+      );
+      const cfRecoveryAttempts = readNonNegativeIntEnv(
+        CF_RECOVERY_ATTEMPTS_ENV,
+        DEFAULT_CF_RECOVERY_ATTEMPTS,
+      );
 
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
       await ensureAgentCloudflareOutput(base, token, sessionId);
@@ -676,38 +795,70 @@ const goLivePlayAction: Action = {
         throw new Error("No playable game could be resolved for go-live launch");
       }
 
-      const playResult = await executeApiAction({
-        module: "five55.games",
-        action: "FIVE55_GAMES_GO_LIVE_PLAY",
-        base,
-        endpoint: resolvePlayEndpoint(dialect, sessionId),
-        payload: {
-          gameId: resolvedGameId,
-          mode,
-        },
-        requestContract: {
-          gameId: { required: true, type: "string", nonEmpty: true },
-          mode: {
-            required: true,
-            type: "string",
-            nonEmpty: true,
-            oneOf: ["standard", "ranked", "spectate", "solo", "agent"],
+      let lastConnectivity: CloudflareConnectCheck | undefined;
+      for (let attempt = 0; attempt <= cfRecoveryAttempts; attempt += 1) {
+        const playResult = await executeApiAction({
+          module: "five55.games",
+          action: "FIVE55_GAMES_GO_LIVE_PLAY",
+          base,
+          endpoint: resolvePlayEndpoint(dialect, sessionId),
+          payload: {
+            gameId: resolvedGameId,
+            mode,
           },
-        },
-        responseContract: {},
-        successMessage: "game play started",
-        transport: {
-          service: "games",
-          operation: "command",
-          idempotent: true,
-          headers: {
-            Authorization: `Bearer ${token}`,
+          requestContract: {
+            gameId: { required: true, type: "string", nonEmpty: true },
+            mode: {
+              required: true,
+              type: "string",
+              nonEmpty: true,
+              oneOf: ["standard", "ranked", "spectate", "solo", "agent"],
+            },
           },
-        },
-        context: { sessionId },
-      });
+          responseContract: {},
+          successMessage: "game play started",
+          transport: {
+            service: "games",
+            operation: "command",
+            idempotent: true,
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+          context: { sessionId },
+        });
 
-      return playResult;
+        if (!isActionSuccess(playResult)) {
+          return playResult;
+        }
+
+        lastConnectivity = await waitForAgentCloudflareConnection(
+          base,
+          token,
+          sessionId,
+          cfConnectTimeoutMs,
+          cfConnectPollMs,
+        );
+        if (lastConnectivity.connected) {
+          return playResult;
+        }
+
+        if (attempt >= cfRecoveryAttempts) {
+          break;
+        }
+
+        await stopAgentStream(base, token, sessionId, {
+          allowMissing: true,
+        });
+        await ensureAgentCloudflareOutput(base, token, sessionId);
+      }
+
+      const phase = lastConnectivity?.lastSnapshot?.phase ?? "unknown";
+      const cloudflareState =
+        lastConnectivity?.lastSnapshot?.cloudflareState ?? "unknown";
+      throw new Error(
+        `Cloudflare ingest stayed disconnected after ${cfRecoveryAttempts + 1} play attempt(s) (phase=${phase}, cloudflareState=${cloudflareState})`,
+      );
     } catch (err) {
       return exceptionAction("five55.games", "FIVE55_GAMES_GO_LIVE_PLAY", err);
     }

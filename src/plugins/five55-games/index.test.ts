@@ -5,6 +5,9 @@ type EnvSnapshot = Record<string, string | undefined>;
 const ENV_KEYS = [
   "FIVE55_GAMES_API_URL",
   "FIVE55_GAMES_API_DIALECT",
+  "FIVE55_GAMES_CF_CONNECT_TIMEOUT_MS",
+  "FIVE55_GAMES_CF_CONNECT_POLL_MS",
+  "FIVE55_GAMES_CF_RECOVERY_ATTEMPTS",
   "MILAIDY_API_URL",
   "MILAIDY_PORT",
   "MILAIDY_API_TOKEN",
@@ -80,6 +83,9 @@ describe("five55-games plugin actions", () => {
     vi.resetModules();
     envBefore = snapshotEnv();
     process.env.FIVE55_GAMES_API_DIALECT = "agent-v1";
+    process.env.FIVE55_GAMES_CF_CONNECT_TIMEOUT_MS = "1";
+    process.env.FIVE55_GAMES_CF_CONNECT_POLL_MS = "1";
+    process.env.FIVE55_GAMES_CF_RECOVERY_ATTEMPTS = "1";
     process.env.STREAM555_BASE_URL = "http://control-plane:3000";
     process.env.STREAM555_AGENT_TOKEN = "agent-token";
     delete process.env.FIVE55_GAMES_API_URL;
@@ -205,6 +211,17 @@ describe("five55-games plugin actions", () => {
         jsonResponse(200, {
           game: { id: "ninja", path: "games/ninja" },
         }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          active: true,
+          phase: "live",
+          cfSessionId: "cf-4",
+          cloudflare: {
+            isConnected: true,
+            state: "connected",
+          },
+        }),
       );
 
     const action = await resolveAction("FIVE55_GAMES_GO_LIVE_PLAY");
@@ -219,8 +236,8 @@ describe("five55-games plugin actions", () => {
       } as never,
     );
 
-    expect(fetchMock).toHaveBeenCalledTimes(4);
-    const [, , streamStartCall, playCall] = fetchMock.mock.calls;
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    const [, , streamStartCall, playCall, statusCall] = fetchMock.mock.calls;
     expect(String(streamStartCall[0])).toContain(
       "/api/agent/v1/sessions/session-4/stream/start",
     );
@@ -234,6 +251,9 @@ describe("five55-games plugin actions", () => {
       gameId: "ninja",
       mode: "agent",
     });
+    expect(String(statusCall[0])).toContain(
+      "/api/agent/v1/sessions/session-4/stream/status",
+    );
     expect(result?.success).toBe(true);
     const envelope = parseEnvelope(result as { text: string });
     expect(envelope.code).toBe("OK");
@@ -256,6 +276,41 @@ describe("five55-games plugin actions", () => {
         jsonResponse(200, {
           game: { id: "ninja", path: "games/ninja" },
         }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          active: true,
+          phase: "queued",
+          cfSessionId: "cf-5",
+          cloudflare: {
+            isConnected: false,
+            state: "disconnected",
+          },
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse(200, { stopped: true }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          active: false,
+          cfSessionId: null,
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse(201, { status: "created", cfSessionId: "cf-5b" }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          game: { id: "ninja", path: "games/ninja" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          active: true,
+          phase: "live",
+          cfSessionId: "cf-5b",
+          cloudflare: {
+            isConnected: true,
+            state: "connected",
+          },
+        }),
       );
 
     const action = await resolveAction("FIVE55_GAMES_GO_LIVE_PLAY");
@@ -270,8 +325,20 @@ describe("five55-games plugin actions", () => {
       } as never,
     );
 
-    expect(fetchMock).toHaveBeenCalledTimes(5);
-    const [, , stopCall, startCall, playCall] = fetchMock.mock.calls;
+    const calledUrls = fetchMock.mock.calls.map((entry) => String(entry[0]));
+    expect(
+      calledUrls.filter((url) => url.includes("/stream/stop")).length,
+    ).toBeGreaterThanOrEqual(2);
+    expect(
+      calledUrls.filter((url) => url.includes("/stream/start")).length,
+    ).toBeGreaterThanOrEqual(1);
+    expect(
+      calledUrls.filter((url) => url.includes("/games/play")).length,
+    ).toBe(2);
+    expect(
+      calledUrls.filter((url) => url.includes("/stream/status")).length,
+    ).toBeGreaterThanOrEqual(2);
+    const [, , stopCall, startCall] = fetchMock.mock.calls;
     expect(String(stopCall[0])).toContain("/api/agent/v1/sessions/session-5/stream/stop");
     expect(String(startCall[0])).toContain("/api/agent/v1/sessions/session-5/stream/start");
     expect(parseFetchBody(startCall)).toEqual({
@@ -279,7 +346,6 @@ describe("five55-games plugin actions", () => {
         type: "screen",
       },
     });
-    expect(String(playCall[0])).toContain("/api/agent/v1/sessions/session-5/games/play");
     expect(result?.success).toBe(true);
   });
 
@@ -297,6 +363,17 @@ describe("five55-games plugin actions", () => {
         jsonResponse(200, {
           game: { id: "ninja", path: "games/ninja" },
         }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          active: true,
+          phase: "live",
+          cfSessionId: "cf-6",
+          cloudflare: {
+            isConnected: true,
+            state: "connected",
+          },
+        }),
       );
 
     const action = await resolveAction("FIVE55_GAMES_GO_LIVE_PLAY");
@@ -311,7 +388,7 @@ describe("five55-games plugin actions", () => {
       } as never,
     );
 
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     const calledUrls = fetchMock.mock.calls.map((entry) => String(entry[0]));
     expect(calledUrls.some((url) => url.includes("/stream/start"))).toBe(false);
     expect(calledUrls.some((url) => url.includes("/stream/stop"))).toBe(false);
@@ -347,5 +424,95 @@ describe("five55-games plugin actions", () => {
     const envelope = parseEnvelope(result as { text: string });
     expect(envelope.code).toBe("E_RUNTIME_EXCEPTION");
     expect(String(envelope.message)).toContain("stream/start provisioning failed (502)");
+  });
+
+  it("returns failure when Cloudflare never connects after recovery budget", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { sessionId: "session-8" }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          active: false,
+          cfSessionId: null,
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse(201, { status: "created", cfSessionId: "cf-8" }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          game: { id: "ninja", path: "games/ninja" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          active: true,
+          phase: "queued",
+          cfSessionId: "cf-8",
+          cloudflare: {
+            isConnected: false,
+            state: "disconnected",
+          },
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse(200, { stopped: true }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          active: false,
+          cfSessionId: null,
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse(201, { status: "created", cfSessionId: "cf-8b" }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          game: { id: "ninja", path: "games/ninja" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          active: true,
+          phase: "queued",
+          cfSessionId: "cf-8b",
+          cloudflare: {
+            isConnected: false,
+            state: "disconnected",
+          },
+        }),
+      )
+      .mockResolvedValue(
+        jsonResponse(200, {
+          active: true,
+          phase: "queued",
+          cfSessionId: "cf-8b",
+          cloudflare: {
+            isConnected: false,
+            state: "disconnected",
+          },
+        }),
+      );
+
+    const action = await resolveAction("FIVE55_GAMES_GO_LIVE_PLAY");
+    const result = await action.handler?.(
+      INTERNAL_RUNTIME,
+      INTERNAL_MESSAGE,
+      INTERNAL_STATE,
+      {
+        parameters: {
+          gameId: "ninja",
+        },
+      } as never,
+    );
+
+    const calledUrls = fetchMock.mock.calls.map((entry) => String(entry[0]));
+    expect(
+      calledUrls.filter((url) => url.includes("/games/play")).length,
+    ).toBe(2);
+    expect(
+      calledUrls.filter((url) => url.includes("/stream/status")).length,
+    ).toBeGreaterThanOrEqual(2);
+    expect(result?.success).toBe(false);
+    const envelope = parseEnvelope(result as { text: string });
+    expect(envelope.code).toBe("E_RUNTIME_EXCEPTION");
+    expect(String(envelope.message)).toContain(
+      "Cloudflare ingest stayed disconnected after 2 play attempt(s)",
+    );
   });
 });
