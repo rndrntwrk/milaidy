@@ -44,6 +44,8 @@ const LOCAL_PLUGINS_DIR = "plugins";
 const DEFAULT_VIEWER_SANDBOX = "allow-scripts allow-same-origin allow-popups";
 const HYPERSCAPE_APP_NAME = "@elizaos/app-hyperscape";
 const HYPERSCAPE_AUTH_MESSAGE_TYPE = "HYPERSCAPE_AUTH";
+const HYPERSCAPE_AUTH_REQUIRED_ERROR =
+  "Hyperscape authentication required: HYPERSCAPE_AUTH_TOKEN is missing. Fix wallet-auth token issuance and redeploy secrets before launching Hyperscape.";
 const RS_2004SCAPE_APP_NAME = "@elizaos/app-2004scape";
 const RS_2004SCAPE_AUTH_MESSAGE_TYPE = "RS_2004SCAPE_AUTH";
 const HYPERSCAPE_WALLET_AUTH_MAX_ATTEMPTS = 3;
@@ -406,8 +408,8 @@ function buildViewerAuthMessage(
     const authToken = process.env.HYPERSCAPE_AUTH_TOKEN?.trim();
     const characterId = process.env.HYPERSCAPE_CHARACTER_ID?.trim();
 
-    // Need at least authToken OR characterId for spectator mode
-    if (!authToken && !characterId) return undefined;
+    // Spectator mode is authenticated; token is mandatory.
+    if (!authToken) return undefined;
 
     const sessionToken = process.env.HYPERSCAPE_SESSION_TOKEN?.trim();
     const agentId = process.env.HYPERSCAPE_EMBED_AGENT_ID?.trim();
@@ -993,21 +995,19 @@ export class AppManager {
     // so spectator viewer launches always include postMessage credentials.
     if (!isTestRun && name === HYPERSCAPE_APP_NAME) {
       const provisionResult = await autoProvisionHyperscapeAgent(runtime);
-      const hasHyperscapeCredentials = Boolean(
-        provisionResult?.characterId?.trim() ||
-          provisionResult?.authToken?.trim() ||
-          process.env.HYPERSCAPE_CHARACTER_ID?.trim() ||
-          process.env.HYPERSCAPE_AUTH_TOKEN?.trim(),
-      );
-      if (!hasHyperscapeCredentials) {
-        logger.warn(
-          "[app-manager] Hyperscape credentials unavailable after auto-provision attempt; launching embedded viewer without postMessage auth.",
+      const hyperscapeAuthToken =
+        provisionResult?.authToken?.trim() ||
+        process.env.HYPERSCAPE_AUTH_TOKEN?.trim();
+      if (!hyperscapeAuthToken) {
+        logger.error(
+          "[app-manager] Hyperscape launch blocked: missing HYPERSCAPE_AUTH_TOKEN after auto-provision attempt.",
         );
-      } else {
-        // Viewer metadata is env-derived; re-resolve now that hyperscape
-        // credentials may have been hydrated from runtime settings.
-        viewer = buildViewerConfig(appInfo, launchUrl);
+        throw new Error(HYPERSCAPE_AUTH_REQUIRED_ERROR);
       }
+      process.env.HYPERSCAPE_AUTH_TOKEN = hyperscapeAuthToken;
+      // Viewer metadata is env-derived; re-resolve now that hyperscape
+      // credentials may have been hydrated from runtime settings.
+      viewer = buildViewerConfig(appInfo, launchUrl);
     }
 
     // The app's plugin is what the agent needs to play the game.

@@ -158,7 +158,7 @@ describe("AppManager hyperscape auto-provisioning resilience", () => {
     vi.restoreAllMocks();
   });
 
-  it("retries wallet-auth network failures and still performs embedded-agent fallback", async () => {
+  it("fails fast when fallback returns only characterId and no auth token", async () => {
     const appManager = new AppManager();
     const pluginManager = createPluginManager();
     let walletAuthCalls = 0;
@@ -186,12 +186,13 @@ describe("AppManager hyperscape auto-provisioning resilience", () => {
       throw new Error(`Unexpected fetch url: ${url}`);
     }) as typeof global.fetch;
 
-    const result = await appManager.launch(pluginManager, HYPERSCAPE_APP_NAME);
+    await expect(
+      appManager.launch(pluginManager, HYPERSCAPE_APP_NAME),
+    ).rejects.toThrow(/HYPERSCAPE_AUTH_TOKEN is missing/);
 
     expect(walletAuthCalls).toBe(3);
     expect(fallbackCalls).toBe(1);
-    expect(result.viewer?.postMessageAuth).toBe(true);
-    expect(result.viewer?.authMessage?.characterId).toBe("fallback-char-1");
-    expect(result.viewer?.authMessage?.authToken).toBeUndefined();
+    expect(process.env.HYPERSCAPE_CHARACTER_ID).toBe("fallback-char-1");
+    expect(process.env.HYPERSCAPE_AUTH_TOKEN).toBeUndefined();
   });
 });
