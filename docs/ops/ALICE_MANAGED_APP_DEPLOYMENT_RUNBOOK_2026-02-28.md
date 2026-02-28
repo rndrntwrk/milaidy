@@ -259,6 +259,17 @@ Actions:
 2. If either endpoint returns `502`, treat as upstream incident and escalate.
 3. Do not treat this condition as an Alice deploy rollback trigger unless Alice health/runtime validation also fails.
 
+### Symptom: WebSocket close `4001` (`Authentication required for spectator mode`)
+Likely cause: launch payload missing `HYPERSCAPE_AUTH_TOKEN` (characterId-only fallback is no longer sufficient when upstream enforces spectator auth).
+
+Actions:
+
+1. Check Alice secret keys:
+   - `kubectl -n production get secret alice-secrets -o json | jq -r '.data | keys[]' | grep HYPERSCAPE`
+2. Verify launch payload includes auth:
+   - `POST /api/apps/launch` for `@elizaos/app-hyperscape` should return `viewer.postMessageAuth=true` and `viewer.authMessage.authToken`.
+3. If auto-provision logs show `wallet-auth ... 403` with CSRF failure, escalate to Hyperscape backend owners (server-to-server wallet-auth flow requires CSRF-compatible contract or token pre-provisioning).
+
 ### Symptom: deploy fails during build on external dependency fetch (e.g. transient 503)
 Likely cause: upstream package/CDN transient failure.
 

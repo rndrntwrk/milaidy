@@ -49,6 +49,7 @@ const RS_2004SCAPE_AUTH_MESSAGE_TYPE = "RS_2004SCAPE_AUTH";
 const HYPERSCAPE_WALLET_AUTH_MAX_ATTEMPTS = 3;
 const HYPERSCAPE_WALLET_AUTH_TIMEOUT_MS = 10_000;
 const HYPERSCAPE_WALLET_AUTH_BACKOFF_MS = 1_500;
+const HYPERSCAPE_EMBEDDED_FALLBACK_MAX_ATTEMPTS = 3;
 const SAFE_APP_URL_PROTOCOLS = new Set(["http:", "https:"]);
 type AppViewerConfig = NonNullable<AppLaunchResult["viewer"]>;
 const LOCAL_APP_DEFAULT_FALLBACK_URLS: Readonly<Record<string, string>> =
@@ -610,13 +611,14 @@ async function autoProvisionHyperscapeAgent(
 
   const walletAuthBody = JSON.stringify({ walletAddress, walletType, agentName });
 
-  try {
-    for (
-      let attempt = 1;
-      attempt <= HYPERSCAPE_WALLET_AUTH_MAX_ATTEMPTS;
-      attempt += 1
-    ) {
-      const response = await withTimeout(
+  for (
+    let attempt = 1;
+    attempt <= HYPERSCAPE_WALLET_AUTH_MAX_ATTEMPTS;
+    attempt += 1
+  ) {
+    let response: Response;
+    try {
+      response = await withTimeout(
         `${apiBaseUrl}/api/agents/wallet-auth`,
         {
           method: "POST",
@@ -625,71 +627,111 @@ async function autoProvisionHyperscapeAgent(
         },
         HYPERSCAPE_WALLET_AUTH_TIMEOUT_MS,
       );
-
-      if (!response.ok) {
-        const details = await response.text().catch(() => "");
-        logger.warn(
-          `[app-manager] Hyperscape wallet-auth failed (${response.status}) on attempt ${attempt}/${HYPERSCAPE_WALLET_AUTH_MAX_ATTEMPTS}: ${details}`,
+    } catch (error) {
+      logger.warn(
+        `[app-manager] Hyperscape wallet-auth request failed on attempt ${attempt}/${HYPERSCAPE_WALLET_AUTH_MAX_ATTEMPTS}: ${describeError(error)}`,
+      );
+      if (attempt < HYPERSCAPE_WALLET_AUTH_MAX_ATTEMPTS) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, HYPERSCAPE_WALLET_AUTH_BACKOFF_MS * attempt),
         );
-
-        const shouldRetry =
-          attempt < HYPERSCAPE_WALLET_AUTH_MAX_ATTEMPTS &&
-          [408, 429, 500, 502, 503, 504].includes(response.status);
-        if (shouldRetry) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, HYPERSCAPE_WALLET_AUTH_BACKOFF_MS * attempt),
-          );
-          continue;
-        }
-        break;
       }
-
-      const payload = (await response.json()) as {
-        success?: boolean;
-        authToken?: string;
-        characterId?: string;
-        data?: { authToken?: string; characterId?: string; agentId?: string };
-        token?: string;
-        agentId?: string;
-      };
-      const authToken =
-        payload.authToken?.trim() ||
-        payload.data?.authToken?.trim() ||
-        payload.token?.trim();
-      const characterId =
-        payload.characterId?.trim() ||
-        payload.data?.characterId?.trim() ||
-        payload.data?.agentId?.trim() ||
-        payload.agentId?.trim();
-
-      if (!payload.success || !characterId || !authToken) {
-        logger.warn(
-          `[app-manager] Hyperscape wallet-auth returned incomplete payload on attempt ${attempt}/${HYPERSCAPE_WALLET_AUTH_MAX_ATTEMPTS}.`,
-        );
-        break;
-      }
-
-      process.env.HYPERSCAPE_CHARACTER_ID = characterId;
-      process.env.HYPERSCAPE_AUTH_TOKEN = authToken;
-      logger.info(`[app-manager] Auto-provisioned hyperscape agent: ${characterId}`);
-      return {
-        characterId,
-        authToken,
-      };
+      continue;
     }
 
-    const fallbackResponse = await withTimeout(
-      `${apiBaseUrl}/api/embedded-agents`,
-      { method: "GET" },
-      HYPERSCAPE_WALLET_AUTH_TIMEOUT_MS,
-    );
+    if (!response.ok) {
+      const details = await response.text().catch(() => "");
+      logger.warn(
+        `[app-manager] Hyperscape wallet-auth failed (${response.status}) on attempt ${attempt}/${HYPERSCAPE_WALLET_AUTH_MAX_ATTEMPTS}: ${details}`,
+      );
+
+      const shouldRetry =
+        attempt < HYPERSCAPE_WALLET_AUTH_MAX_ATTEMPTS &&
+        [408, 429, 500, 502, 503, 504].includes(response.status);
+      if (shouldRetry) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, HYPERSCAPE_WALLET_AUTH_BACKOFF_MS * attempt),
+        );
+        continue;
+      }
+      break;
+    }
+
+    const payload = (await response.json()) as {
+      success?: boolean;
+      authToken?: string;
+      characterId?: string;
+      data?: { authToken?: string; characterId?: string; agentId?: string };
+      token?: string;
+      agentId?: string;
+    };
+    const authToken =
+      payload.authToken?.trim() ||
+      payload.data?.authToken?.trim() ||
+      payload.token?.trim();
+    const characterId =
+      payload.characterId?.trim() ||
+      payload.data?.characterId?.trim() ||
+      payload.data?.agentId?.trim() ||
+      payload.agentId?.trim();
+
+    if (!payload.success || !characterId || !authToken) {
+      logger.warn(
+        `[app-manager] Hyperscape wallet-auth returned incomplete payload on attempt ${attempt}/${HYPERSCAPE_WALLET_AUTH_MAX_ATTEMPTS}.`,
+      );
+      break;
+    }
+
+    process.env.HYPERSCAPE_CHARACTER_ID = characterId;
+    process.env.HYPERSCAPE_AUTH_TOKEN = authToken;
+    logger.info(`[app-manager] Auto-provisioned hyperscape agent: ${characterId}`);
+    return {
+      characterId,
+      authToken,
+    };
+  }
+
+  for (
+    let fallbackAttempt = 1;
+    fallbackAttempt <= HYPERSCAPE_EMBEDDED_FALLBACK_MAX_ATTEMPTS;
+    fallbackAttempt += 1
+  ) {
+    let fallbackResponse: Response;
+    try {
+      fallbackResponse = await withTimeout(
+        `${apiBaseUrl}/api/embedded-agents`,
+        { method: "GET" },
+        HYPERSCAPE_WALLET_AUTH_TIMEOUT_MS,
+      );
+    } catch (error) {
+      logger.warn(
+        `[app-manager] Hyperscape embedded-agent fallback request failed on attempt ${fallbackAttempt}/${HYPERSCAPE_EMBEDDED_FALLBACK_MAX_ATTEMPTS}: ${describeError(error)}`,
+      );
+      if (fallbackAttempt < HYPERSCAPE_EMBEDDED_FALLBACK_MAX_ATTEMPTS) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, HYPERSCAPE_WALLET_AUTH_BACKOFF_MS * fallbackAttempt),
+        );
+      }
+      continue;
+    }
+
     if (!fallbackResponse.ok) {
       const fallbackDetails = await fallbackResponse.text().catch(() => "");
       logger.warn(
-        `[app-manager] Hyperscape embedded-agent fallback failed (${fallbackResponse.status}): ${fallbackDetails}`,
+        `[app-manager] Hyperscape embedded-agent fallback failed (${fallbackResponse.status}) on attempt ${fallbackAttempt}/${HYPERSCAPE_EMBEDDED_FALLBACK_MAX_ATTEMPTS}: ${fallbackDetails}`,
       );
+      const shouldRetry =
+        fallbackAttempt < HYPERSCAPE_EMBEDDED_FALLBACK_MAX_ATTEMPTS &&
+        [408, 429, 500, 502, 503, 504].includes(fallbackResponse.status);
+      if (shouldRetry) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, HYPERSCAPE_WALLET_AUTH_BACKOFF_MS * fallbackAttempt),
+        );
+        continue;
+      }
       return null;
     }
+
     const fallbackPayload = (await fallbackResponse.json()) as {
       success?: boolean;
       agents?: Array<{
@@ -709,21 +751,26 @@ async function autoProvisionHyperscapeAgent(
       fallbackPayload.agents?.[0]?.agentId?.trim();
     if (!fallbackCharacterId) {
       logger.warn(
-        "[app-manager] Hyperscape embedded-agent fallback returned no usable character id.",
+        `[app-manager] Hyperscape embedded-agent fallback returned no usable character id on attempt ${fallbackAttempt}/${HYPERSCAPE_EMBEDDED_FALLBACK_MAX_ATTEMPTS}.`,
       );
+      if (fallbackAttempt < HYPERSCAPE_EMBEDDED_FALLBACK_MAX_ATTEMPTS) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, HYPERSCAPE_WALLET_AUTH_BACKOFF_MS * fallbackAttempt),
+        );
+        continue;
+      }
       return null;
     }
+
     process.env.HYPERSCAPE_CHARACTER_ID = fallbackCharacterId;
     logger.warn(
       `[app-manager] Using existing hyperscape character fallback without auth token: ${fallbackCharacterId}`,
     );
     return { characterId: fallbackCharacterId };
-  } catch (error) {
-    logger.warn(
-      `[app-manager] Hyperscape auto-provision failed: ${describeError(error)}`,
-    );
-    return null;
   }
+
+  logger.warn("[app-manager] Hyperscape auto-provision exhausted all fallback attempts.");
+  return null;
 }
 
 function getPluginPackageName(

@@ -8,8 +8,6 @@
 import type {
   AudioGenConfig,
   AudioGenProvider,
-  CustomActionDef,
-  CustomActionHandler,
   DatabaseProviderType,
   ImageConfig,
   ImageProvider,
@@ -35,20 +33,11 @@ import type {
   WalletConfigStatus,
   WalletNftsResponse,
 } from "../../../src/contracts/wallet";
-import type {
-  AllPermissionsState,
-  PermissionState,
-  PermissionStatus,
-  SystemPermissionDefinition,
-  SystemPermissionId,
-} from "../../../src/permissions/types";
 import type { ConfigUiHint } from "./types";
 
 export type {
   AudioGenConfig,
   AudioGenProvider,
-  CustomActionDef,
-  CustomActionHandler,
   DatabaseProviderType,
   ImageConfig,
   ImageProvider,
@@ -74,13 +63,6 @@ export type {
 };
 export type { DropStatus, MintResult };
 export type { VerificationResult };
-export type {
-  AllPermissionsState,
-  PermissionState,
-  PermissionStatus,
-  SystemPermissionId,
-  SystemPermissionDefinition as PermissionDefinition,
-};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -153,7 +135,13 @@ export interface QueryResult {
 
 // Custom actions types
 export type CustomActionHandler =
-  | { type: "http"; method: string; url: string; headers?: Record<string, string>; bodyTemplate?: string }
+  | {
+      type: "http";
+      method: string;
+      url: string;
+      headers?: Record<string, string>;
+      bodyTemplate?: string;
+    }
   | { type: "shell"; command: string }
   | { type: "code"; code: string };
 
@@ -220,7 +208,14 @@ export interface AutonomyQuarantineStats {
   pendingReview: number;
 }
 
-export type AgentState = "not_started" | "starting" | "running" | "paused" | "stopped" | "restarting" | "error";
+export type AgentState =
+  | "not_started"
+  | "starting"
+  | "running"
+  | "paused"
+  | "stopped"
+  | "restarting"
+  | "error";
 
 export interface AgentStartupDiagnostics {
   phase: string;
@@ -1539,6 +1534,116 @@ export interface HyperscapeQuickActionsResponse {
   error?: string;
 }
 
+export type HyperscapeAutonomySessionState =
+  | "created"
+  | "wallet_ready"
+  | "auth_ready"
+  | "agent_starting"
+  | "in_world"
+  | "streaming"
+  | "degraded"
+  | "failed"
+  | "stopped";
+
+export type HyperscapeWalletType = "evm" | "solana";
+
+export type HyperscapeWalletSource = "existing_agent_wallet" | "managed_signer";
+
+export interface HyperscapeWalletProvenance {
+  agentId: string;
+  walletAddress: string;
+  walletType: HyperscapeWalletType;
+  source: HyperscapeWalletSource;
+  createdAt: string;
+  lastUsedAt: string;
+}
+
+export interface HyperscapeAutonomyActionRecord {
+  at: string;
+  type: string;
+  detail: string;
+}
+
+export interface HyperscapeAutonomyStreamStatus {
+  sessionId: string | null;
+  startedAt: string | null;
+  interruptions: number;
+  recoveryAttempts: number;
+  lastError: string | null;
+  lastErrorAt: string | null;
+}
+
+export interface HyperscapeAutonomySession {
+  sessionId: string;
+  agentId: string;
+  state: HyperscapeAutonomySessionState;
+  goal: string | null;
+  streamProfile: Record<string, unknown> | null;
+  walletAddress: string | null;
+  walletType: HyperscapeWalletType | null;
+  walletSource: HyperscapeWalletSource | null;
+  characterId: string | null;
+  embeddedAgentId: string | null;
+  failureReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+  stateChangedAt: string;
+  startedAt: string | null;
+  inWorldAt: string | null;
+  firstActionAt: string | null;
+  streamStartedAt: string | null;
+  stoppedAt: string | null;
+  retryCount: number;
+  recoveries: number;
+  actionHistory: HyperscapeAutonomyActionRecord[];
+  stream: HyperscapeAutonomyStreamStatus | null;
+}
+
+export interface CreateHyperscapeAutonomySessionInput {
+  agentId?: string;
+  goal?: string;
+  streamProfile?: Record<string, unknown>;
+}
+
+export interface CreateHyperscapeAutonomySessionResult {
+  sessionId: string;
+  walletAddress: string | null;
+  characterId: string | null;
+  state: HyperscapeAutonomySessionState;
+  session: HyperscapeAutonomySession;
+}
+
+export interface HyperscapeAutonomySessionResult {
+  session: HyperscapeAutonomySession;
+}
+
+export interface HyperscapeWalletProvenanceResponse {
+  wallet: HyperscapeWalletProvenance;
+}
+
+export interface HyperscapeHealthCheckResult {
+  healthy: boolean;
+  message?: string;
+  details?: Record<string, unknown>;
+}
+
+export interface HyperscapeAutonomyOperationalSnapshot {
+  totalSessions: number;
+  activeSessions: number;
+  states: Record<HyperscapeAutonomySessionState, number>;
+  failedSessions: number;
+  degradedSessions: number;
+}
+
+export interface HyperscapeOperationalHealthResponse {
+  status: "healthy" | "degraded" | "unhealthy";
+  checks: Record<string, HyperscapeHealthCheckResult>;
+  autonomy: HyperscapeAutonomyOperationalSnapshot;
+  baseUrl: string;
+  wsUrl: string;
+  at: string;
+}
+
 // Trajectories
 export interface TrajectoryRecord {
   id: string;
@@ -1970,7 +2075,10 @@ export class MiladyClient {
       });
     }
     const makeRequest = async (token: string | null): Promise<Response> => {
-      const timeoutMs = Math.max(1, options?.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS);
+      const timeoutMs = Math.max(
+        1,
+        options?.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS,
+      );
       const timeoutController = new AbortController();
       const timeoutId = setTimeout(() => {
         timeoutController.abort();
@@ -2040,13 +2148,17 @@ export class MiladyClient {
     init?: RequestInit,
     options?: { timeoutMs?: number },
   ): Promise<T> {
-    const res = await this.rawRequest(path, {
-      ...init,
-      headers: {
-        "Content-Type": "application/json",
-        ...init?.headers,
+    const res = await this.rawRequest(
+      path,
+      {
+        ...init,
+        headers: {
+          "Content-Type": "application/json",
+          ...init?.headers,
+        },
       },
-    }, options);
+      options,
+    );
     return res.json() as Promise<T>;
   }
 
@@ -2154,7 +2266,9 @@ export class MiladyClient {
     return this.fetch("/api/subscription/status");
   }
 
-  async exchangeAnthropicCode(code: string): Promise<{ success: boolean; expiresAt?: string }> {
+  async exchangeAnthropicCode(
+    code: string,
+  ): Promise<{ success: boolean; expiresAt?: string }> {
     return this.fetch("/api/subscription/anthropic/exchange", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -3182,6 +3296,59 @@ export class MiladyClient {
   ): Promise<HyperscapeQuickActionsResponse> {
     return this.fetch(
       `/api/apps/hyperscape/agents/${encodeURIComponent(agentId)}/quick-actions`,
+      undefined,
+      { timeoutMs: HYPERSCAPE_API_FETCH_TIMEOUT_MS },
+    );
+  }
+  async getHyperscapeHealth(): Promise<HyperscapeOperationalHealthResponse> {
+    return this.fetch("/api/apps/hyperscape/health", undefined, {
+      timeoutMs: HYPERSCAPE_API_FETCH_TIMEOUT_MS,
+    });
+  }
+  async createHyperscapeAutonomySession(
+    input: CreateHyperscapeAutonomySessionInput,
+  ): Promise<CreateHyperscapeAutonomySessionResult> {
+    return this.fetch(
+      "/api/apps/hyperscape/autonomy/sessions",
+      {
+        method: "POST",
+        body: JSON.stringify(input),
+      },
+      { timeoutMs: HYPERSCAPE_API_FETCH_TIMEOUT_MS },
+    );
+  }
+  async getHyperscapeAutonomySession(
+    sessionId: string,
+  ): Promise<HyperscapeAutonomySessionResult> {
+    return this.fetch(
+      `/api/apps/hyperscape/autonomy/sessions/${encodeURIComponent(sessionId)}`,
+      undefined,
+      { timeoutMs: HYPERSCAPE_API_FETCH_TIMEOUT_MS },
+    );
+  }
+  async stopHyperscapeAutonomySession(
+    sessionId: string,
+  ): Promise<HyperscapeAutonomySessionResult> {
+    return this.fetch(
+      `/api/apps/hyperscape/autonomy/sessions/${encodeURIComponent(sessionId)}/stop`,
+      { method: "POST" },
+      { timeoutMs: HYPERSCAPE_API_FETCH_TIMEOUT_MS },
+    );
+  }
+  async recoverHyperscapeAutonomySession(
+    sessionId: string,
+  ): Promise<HyperscapeAutonomySessionResult> {
+    return this.fetch(
+      `/api/apps/hyperscape/autonomy/sessions/${encodeURIComponent(sessionId)}/recover`,
+      { method: "POST" },
+      { timeoutMs: HYPERSCAPE_API_FETCH_TIMEOUT_MS },
+    );
+  }
+  async getHyperscapeWalletProvenance(
+    agentId: string,
+  ): Promise<HyperscapeWalletProvenanceResponse> {
+    return this.fetch(
+      `/api/agents/${encodeURIComponent(agentId)}/wallet-provenance`,
       undefined,
       { timeoutMs: HYPERSCAPE_API_FETCH_TIMEOUT_MS },
     );
@@ -4397,10 +4564,19 @@ export class MiladyClient {
   async getIdentityConfig(): Promise<{ identity: AutonomyIdentity | null }> {
     return this.fetch("/api/agent/identity");
   }
-  async updateIdentityConfig(patch: Partial<AutonomyIdentity>): Promise<{ identity: AutonomyIdentity }> {
-    return this.fetch("/api/agent/identity", { method: "PUT", body: JSON.stringify(patch) });
+  async updateIdentityConfig(
+    patch: Partial<AutonomyIdentity>,
+  ): Promise<{ identity: AutonomyIdentity }> {
+    return this.fetch("/api/agent/identity", {
+      method: "PUT",
+      body: JSON.stringify(patch),
+    });
   }
-  async getIdentityHistory(): Promise<{ version: number; hash: string | null; history: AutonomyIdentity[] }> {
+  async getIdentityHistory(): Promise<{
+    version: number;
+    hash: string | null;
+    history: AutonomyIdentity[];
+  }> {
     return this.fetch("/api/agent/identity/history");
   }
 
@@ -4431,21 +4607,39 @@ export class MiladyClient {
   }
 
   // Autonomy — Approvals
-  async getApprovals(): Promise<{ pending: AutonomyApproval[]; recent: AutonomyApprovalLogEntry[] }> {
+  async getApprovals(): Promise<{
+    pending: AutonomyApproval[];
+    recent: AutonomyApprovalLogEntry[];
+  }> {
     return this.fetch("/api/agent/approvals");
   }
-  async resolveApproval(id: string, decision: "approved" | "denied", decidedBy?: string): Promise<{ ok: boolean }> {
-    return this.fetch(`/api/agent/approvals/${encodeURIComponent(id)}/resolve`, {
-      method: "POST",
-      body: JSON.stringify({ decision, decidedBy }),
-    });
+  async resolveApproval(
+    id: string,
+    decision: "approved" | "denied",
+    decidedBy?: string,
+  ): Promise<{ ok: boolean }> {
+    return this.fetch(
+      `/api/agent/approvals/${encodeURIComponent(id)}/resolve`,
+      {
+        method: "POST",
+        body: JSON.stringify({ decision, decidedBy }),
+      },
+    );
   }
 
   // Autonomy — Safe Mode
-  async getSafeModeStatus(): Promise<{ active: boolean; consecutiveErrors: number; state: string }> {
+  async getSafeModeStatus(): Promise<{
+    active: boolean;
+    consecutiveErrors: number;
+    state: string;
+  }> {
     return this.fetch("/api/agent/safe-mode");
   }
-  async exitSafeMode(): Promise<{ ok: boolean; state?: string; error?: string }> {
+  async exitSafeMode(): Promise<{
+    ok: boolean;
+    state?: string;
+    error?: string;
+  }> {
     return this.fetch("/api/agent/safe-mode/exit", { method: "POST" });
   }
 }

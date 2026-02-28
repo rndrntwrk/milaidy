@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveHyperscapeApiBaseUrl } from "./server";
+import { resolveHyperscapeApiBaseUrl, resolveHyperscapeWsProbeUrl } from "./server";
 
 describe("resolveHyperscapeApiBaseUrl", () => {
   it("uses HYPERSCAPE_API_URL when configured", () => {
@@ -33,5 +33,23 @@ describe("resolveHyperscapeApiBaseUrl", () => {
         HYPERSCAPE_SERVER_URL: "also-not-a-url",
       } as NodeJS.ProcessEnv),
     ).toBe("http://localhost:5555");
+  });
+});
+
+describe("resolveHyperscapeWsProbeUrl", () => {
+  it("uses explicit HYPERSCAPE_WS_URL when configured", () => {
+    expect(
+      resolveHyperscapeWsProbeUrl({
+        HYPERSCAPE_WS_URL: "wss://hyperscape.example/ws?mode=spectator",
+      } as NodeJS.ProcessEnv),
+    ).toBe("wss://hyperscape.example/ws?mode=spectator");
+  });
+
+  it("derives a /ws endpoint from HYPERSCAPE_API_URL", () => {
+    expect(
+      resolveHyperscapeWsProbeUrl({
+        HYPERSCAPE_API_URL: "https://hyperscape-production.up.railway.app",
+      } as NodeJS.ProcessEnv),
+    ).toBe("wss://hyperscape-production.up.railway.app/ws");
   });
 });

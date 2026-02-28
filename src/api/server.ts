@@ -27,7 +27,7 @@ import {
   type UUID,
 } from "@elizaos/core";
 import * as piAi from "@mariozechner/pi-ai";
-import { type WebSocket, WebSocketServer } from "ws";
+import { WebSocket as WsClient, type WebSocket, WebSocketServer } from "ws";
 import { CloudManager } from "../cloud/cloud-manager.js";
 import {
   configFileExists,
@@ -64,7 +64,17 @@ import {
   importAgent,
 } from "../services/agent-export.js";
 import { AppManager } from "../services/app-manager.js";
-import { isManagedAppRemoteProxyHostAllowed } from "../services/app-catalog.js";
+import {
+  isManagedAppRemoteProxyHostAllowed,
+  resolveManagedAppFallbackUrl,
+  resolveManagedAppUpstreamUrl,
+} from "../services/app-catalog.js";
+import {
+  HyperscapeAutonomySessionManager,
+  logHyperscapeAutonomyEvent,
+  resolveDefaultHyperscapeAutonomyAgentId,
+  resolveHyperscapeAutonomyEnabled,
+} from "../services/hyperscape-autonomy-session-manager.js";
 import type {
   InstallProgressLike,
   PluginManagerLike,
@@ -181,6 +191,9 @@ const HYPERSCAPE_ASSET_ORIGIN = "https://assets.hyperscape.club";
 const HYPERSCAPE_RUNTIME_API_ORIGIN =
   "https://hyperscape-production.up.railway.app";
 const DEFAULT_HYPERSCAPE_API_BASE_URL = "http://localhost:5555";
+const HYPERSCAPE_WS_PROBE_TIMEOUT_MS = 6_000;
+const HYPERSCAPE_HTTP_PROBE_TIMEOUT_MS = 6_000;
+const HYPERSCAPE_SCRIPT_MIME_PROBE_TIMEOUT_MS = 8_000;
 
 export function resolveManagedAppUpstreamOrigin(
   appName: string,
@@ -247,6 +260,292 @@ export function resolveHyperscapeApiBaseUrl(
   if (fromServerUrl) return fromServerUrl;
 
   return DEFAULT_HYPERSCAPE_API_BASE_URL;
+}
+
+function normalizeHyperscapeWsUrl(raw: string | undefined): string | null {
+  const trimmed = raw?.trim();
+  if (!trimmed) return null;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return null;
+  }
+
+  if (parsed.protocol === "http:") {
+    parsed.protocol = "ws:";
+  } else if (parsed.protocol === "https:") {
+    parsed.protocol = "wss:";
+  }
+  if (parsed.protocol !== "ws:" && parsed.protocol !== "wss:") {
+    return null;
+  }
+  if (!parsed.pathname || parsed.pathname === "/") {
+    parsed.pathname = "/ws";
+  }
+  return parsed.toString();
+}
+
+export function resolveHyperscapeWsProbeUrl(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const explicit = normalizeHyperscapeWsUrl(env.HYPERSCAPE_WS_URL);
+  if (explicit) return explicit;
+
+  const derived = new URL(resolveHyperscapeApiBaseUrl(env));
+  derived.protocol = derived.protocol === "https:" ? "wss:" : "ws:";
+  derived.pathname = `${derived.pathname.replace(/\/+$/g, "")}/ws`;
+  derived.search = "";
+  derived.hash = "";
+  return derived.toString();
+}
+
+type HyperscapeProbeResult = {
+  healthy: boolean;
+  message?: string;
+  details?: Record<string, unknown>;
+};
+
+async function probeHyperscapeApiReachability(
+  baseUrl: string,
+  timeoutMs = HYPERSCAPE_HTTP_PROBE_TIMEOUT_MS,
+): Promise<HyperscapeProbeResult> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(new URL("/api/embedded-agents", baseUrl), {
+      method: "GET",
+      signal: controller.signal,
+    });
+    const status = response.status;
+    const healthy = status < 500;
+    return {
+      healthy,
+      message: healthy
+        ? undefined
+        : `Hyperscape API probe returned status ${status}`,
+      details: {
+        status,
+        baseUrl,
+      },
+    };
+  } catch (error) {
+    return {
+      healthy: false,
+      message: `Hyperscape API probe failed: ${describeProxyError(error)}`,
+      details: { baseUrl },
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function probeHyperscapeWsReachability(
+  wsUrl: string,
+  timeoutMs = HYPERSCAPE_WS_PROBE_TIMEOUT_MS,
+): Promise<HyperscapeProbeResult> {
+  return await new Promise((resolve) => {
+    const startedAt = Date.now();
+    let settled = false;
+    let opened = false;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    let ws: WsClient | null = null;
+
+    const finalize = (result: HyperscapeProbeResult): void => {
+      if (settled) return;
+      settled = true;
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+      if (ws) {
+        try {
+          ws.close();
+          ws.terminate();
+        } catch {
+          // ignore close errors
+        }
+      }
+      resolve(result);
+    };
+
+    timeout = setTimeout(() => {
+      finalize({
+        healthy: false,
+        message: `Hyperscape WebSocket probe timed out after ${timeoutMs}ms`,
+        details: { wsUrl, timeoutMs },
+      });
+    }, timeoutMs);
+
+    try {
+      ws = new WsClient(wsUrl, {
+        handshakeTimeout: timeoutMs,
+      });
+    } catch (error) {
+      finalize({
+        healthy: false,
+        message: `Hyperscape WebSocket probe failed to initialize: ${describeProxyError(error)}`,
+        details: { wsUrl },
+      });
+      return;
+    }
+
+    ws.once("open", () => {
+      opened = true;
+      finalize({
+        healthy: true,
+        details: { wsUrl, latencyMs: Date.now() - startedAt },
+      });
+    });
+
+    ws.once("close", (code, reasonBuffer) => {
+      const reason = reasonBuffer.toString();
+      const reachableByClose = opened || code !== 1006;
+      finalize({
+        healthy: reachableByClose,
+        message: reachableByClose
+          ? undefined
+          : `Hyperscape WebSocket closed before handshake (code ${code}${reason ? `, reason: ${reason}` : ""})`,
+        details: { wsUrl, code, reason },
+      });
+    });
+
+    ws.once("error", (error) => {
+      finalize({
+        healthy: false,
+        message: `Hyperscape WebSocket probe error: ${describeProxyError(error)}`,
+        details: { wsUrl },
+      });
+    });
+  });
+}
+
+function extractFirstJavaScriptAssetUrl(html: string): string | null {
+  const scriptSrcPattern = /<script[^>]+src=["']([^"']+)["']/gi;
+  let match: RegExpExecArray | null;
+  while ((match = scriptSrcPattern.exec(html)) !== null) {
+    const candidate = match[1]?.trim();
+    if (!candidate) continue;
+    const normalized = candidate.toLowerCase();
+    if (
+      normalized.endsWith(".js") ||
+      normalized.includes(".js?") ||
+      normalized.endsWith(".mjs") ||
+      normalized.includes(".mjs?")
+    ) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+async function probeManagedAppScriptMime(
+  appName: string,
+  timeoutMs = HYPERSCAPE_SCRIPT_MIME_PROBE_TIMEOUT_MS,
+): Promise<HyperscapeProbeResult> {
+  const configuredUrl =
+    resolveManagedAppFallbackUrl(appName) ?? resolveManagedAppUpstreamUrl(appName);
+  if (!configuredUrl) {
+    return {
+      healthy: false,
+      message: `No managed app URL configured for ${appName}`,
+      details: { appName },
+    };
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const htmlResponse = await fetch(configuredUrl, {
+      method: "GET",
+      headers: { Accept: "text/html" },
+      signal: controller.signal,
+    });
+    if (!htmlResponse.ok) {
+      return {
+        healthy: false,
+        message: `Managed app HTML probe failed with status ${htmlResponse.status}`,
+        details: { appName, url: configuredUrl, status: htmlResponse.status },
+      };
+    }
+
+    const html = await htmlResponse.text();
+    const scriptSrc = extractFirstJavaScriptAssetUrl(html);
+    if (!scriptSrc) {
+      return {
+        healthy: false,
+        message: "Managed app probe could not find a JavaScript asset URL",
+        details: { appName, url: configuredUrl },
+      };
+    }
+
+    const scriptUrl = new URL(scriptSrc, htmlResponse.url || configuredUrl).toString();
+    const scriptResponse = await fetch(scriptUrl, {
+      method: "GET",
+      headers: { Accept: "application/javascript,text/javascript,*/*;q=0.1" },
+      signal: controller.signal,
+    });
+    const contentType = scriptResponse.headers.get("content-type") ?? "";
+    const isHtmlContent = /text\/html/i.test(contentType);
+    const healthy = scriptResponse.ok && !isHtmlContent;
+    return {
+      healthy,
+      message: healthy
+        ? undefined
+        : `Managed app script probe returned invalid MIME (${contentType || "unknown"})`,
+      details: {
+        appName,
+        url: scriptUrl,
+        status: scriptResponse.status,
+        contentType,
+      },
+    };
+  } catch (error) {
+    return {
+      healthy: false,
+      message: `Managed app script MIME probe failed: ${describeProxyError(error)}`,
+      details: { appName, url: configuredUrl },
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function runHyperscapeOperationalHealthSnapshot(
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<{
+  status: "healthy" | "degraded" | "unhealthy";
+  checks: Record<string, HyperscapeProbeResult>;
+}> {
+  const baseUrl = resolveHyperscapeApiBaseUrl(env);
+  const wsUrl = resolveHyperscapeWsProbeUrl(env);
+  const [api, ws, scriptMime] = await Promise.all([
+    probeHyperscapeApiReachability(baseUrl),
+    probeHyperscapeWsReachability(wsUrl),
+    probeManagedAppScriptMime(HYPERSCAPE_APP_NAME),
+  ]);
+
+  const checks: Record<string, HyperscapeProbeResult> = { api, ws, scriptMime };
+  const unhealthyCount = Object.values(checks).filter((check) => !check.healthy).length;
+  const status =
+    unhealthyCount === 0
+      ? "healthy"
+      : unhealthyCount === Object.keys(checks).length
+        ? "unhealthy"
+        : "degraded";
+
+  metrics.gauge("milaidy.hyperscape.ops_probe_unhealthy_checks", unhealthyCount);
+  metrics.gauge(
+    "milaidy.hyperscape.ops_probe_status",
+    status === "healthy" ? 0 : status === "degraded" ? 1 : 2,
+  );
+  if (status !== "healthy") {
+    metrics.counter("milaidy.hyperscape.ops_probe_fail_total", 1, {
+      status,
+    });
+  }
+
+  return { status, checks };
 }
 
 export function resolveHyperscapeAuthorizationHeader(
@@ -416,22 +715,28 @@ export function resolveManagedAppLeakedAssetRedirect(
   return `${localProxyBase}${pathname}${search}`;
 }
 
-function isJavaScriptLikeResponse(
-  contentType: string,
-  upstreamPath: string,
-): boolean {
-  const jsContentType =
-    /(?:application|text)\/(?:javascript|ecmascript|x-javascript|javascipt)/i.test(
-      contentType,
-    );
-  if (jsContentType) return true;
-
+function isJavaScriptAssetPath(upstreamPath: string): boolean {
   const normalizedPath = upstreamPath.toLowerCase();
   return (
     normalizedPath.endsWith(".js") ||
     normalizedPath.endsWith(".mjs") ||
     normalizedPath.endsWith(".cjs")
   );
+}
+
+export function isJavaScriptLikeResponse(
+  contentType: string,
+  upstreamPath: string,
+): boolean {
+  if (/text\/html|application\/xhtml\+xml/i.test(contentType)) {
+    return false;
+  }
+  const jsContentType =
+    /(?:application|text)\/(?:javascript|ecmascript|x-javascript|javascipt)/i.test(
+      contentType,
+    );
+  if (jsContentType) return true;
+  return isJavaScriptAssetPath(upstreamPath);
 }
 
 function lookupIpv4Only(
@@ -811,6 +1116,8 @@ interface ServerState {
   sandboxManager: SandboxManager | null;
   /** App manager for launching and managing ElizaOS apps. */
   appManager: AppManager;
+  /** Hyperscape autonomy orchestration manager. */
+  hyperscapeAutonomy: HyperscapeAutonomySessionManager;
   /** Fine-tuning/training orchestration service. */
   trainingService: TrainingService | null;
   /** ERC-8004 registry service (null when not configured). */
@@ -5920,6 +6227,71 @@ function getRateLimiter(): RateLimitMiddleware {
   return _rateLimiter;
 }
 
+function createHyperscapeOperationalChecks(state: ServerState): HealthCheck[] {
+  if (!resolveHyperscapeAutonomyEnabled(process.env)) {
+    return [];
+  }
+
+  const baseUrl = resolveHyperscapeApiBaseUrl();
+  const wsUrl = resolveHyperscapeWsProbeUrl();
+  return [
+    {
+      name: "hyperscape_api",
+      critical: false,
+      timeoutMs: HYPERSCAPE_HTTP_PROBE_TIMEOUT_MS,
+      check: async () => {
+        const result = await probeHyperscapeApiReachability(baseUrl);
+        return {
+          healthy: result.healthy,
+          message: result.message,
+          details: result.details,
+        };
+      },
+    },
+    {
+      name: "hyperscape_ws",
+      critical: false,
+      timeoutMs: HYPERSCAPE_WS_PROBE_TIMEOUT_MS,
+      check: async () => {
+        const result = await probeHyperscapeWsReachability(wsUrl);
+        return {
+          healthy: result.healthy,
+          message: result.message,
+          details: result.details,
+        };
+      },
+    },
+    {
+      name: "hyperscape_script_mime",
+      critical: false,
+      timeoutMs: HYPERSCAPE_SCRIPT_MIME_PROBE_TIMEOUT_MS,
+      check: async () => {
+        const result = await probeManagedAppScriptMime(HYPERSCAPE_APP_NAME);
+        return {
+          healthy: result.healthy,
+          message: result.message,
+          details: result.details,
+        };
+      },
+    },
+    {
+      name: "hyperscape_autonomy_sessions",
+      critical: false,
+      check: async () => {
+        const snapshot = state.hyperscapeAutonomy.getOperationalSnapshot();
+        const healthy = snapshot.failedSessions === 0;
+        return {
+          healthy,
+          message: healthy
+            ? undefined
+            : `${snapshot.failedSessions} failed autonomy sessions are present`,
+          details: snapshot as unknown as Record<string, unknown>,
+        };
+      },
+    },
+  ];
+}
+
 // Health check handler (created lazily per state)
 let _healthHandler: ReturnType<typeof createHealthHandler> | null = null;
 let _healthHandlerState: ServerState | null = null;
@@ -5943,6 +6315,7 @@ function getHealthHandler(state: ServerState): ReturnType<typeof createHealthHan
                 })),
           }
         : undefined,
+      extraChecks: createHyperscapeOperationalChecks(state),
     });
     _healthHandler = createHealthHandler(checks);
     _healthHandlerState = state;
@@ -14199,6 +14572,28 @@ async function handleRequest(
       return rewriteManagedAppProxyHtml(appName, rewrittenHtml, localProxyRoot);
     };
 
+    if (
+      isJavaScriptAssetPath(upstreamPath) &&
+      /text\/html|application\/xhtml\+xml/i.test(contentType)
+    ) {
+      metrics.counter("milaidy.managed_app.chunk_html_fallback_total", 1, {
+        appName,
+        status: String(upstreamResponse.status),
+      });
+      logger.warn(
+        `[managed-app-proxy] JavaScript asset returned HTML (app=${appName}, path=${upstreamPath}, status=${upstreamResponse.status})`,
+      );
+      res.statusCode = upstreamResponse.status >= 400 ? upstreamResponse.status : 502;
+      res.setHeader("content-type", "application/javascript; charset=utf-8");
+      res.setHeader("x-milaidy-managed-app-proxy-error", "js-asset-returned-html");
+      res.end(
+        `throw new Error(${JSON.stringify(
+          `Managed app JS asset returned HTML (${appName} ${upstreamPath}, status ${upstreamResponse.status})`,
+        )});`,
+      );
+      return;
+    }
+
     if (isJavaScriptLikeResponse(contentType, upstreamPath)) {
       res.setHeader("content-type", "application/javascript; charset=utf-8");
       const rawScript = await upstreamResponse.text();
@@ -14357,6 +14752,131 @@ async function handleRequest(
       );
     }
     return;
+  }
+
+  if (method === "GET" && pathname === "/api/apps/hyperscape/health") {
+    const snapshot = await runHyperscapeOperationalHealthSnapshot();
+    const autonomy = state.hyperscapeAutonomy.getOperationalSnapshot();
+    const statusCode = snapshot.status === "unhealthy" ? 503 : 200;
+    json(
+      res,
+      {
+        status: snapshot.status,
+        checks: snapshot.checks,
+        autonomy,
+        baseUrl: resolveHyperscapeApiBaseUrl(),
+        wsUrl: resolveHyperscapeWsProbeUrl(),
+        at: new Date().toISOString(),
+      },
+      statusCode,
+    );
+    return;
+  }
+
+  const isHyperscapeAutonomyRoute = pathname.startsWith(
+    "/api/apps/hyperscape/autonomy/",
+  );
+  if (isHyperscapeAutonomyRoute && !resolveHyperscapeAutonomyEnabled()) {
+    error(
+      res,
+      "Hyperscape autonomy is disabled (set HYPERSCAPE_AUTONOMY_ENABLED=1 to enable)",
+      503,
+    );
+    return;
+  }
+
+  if (method === "POST" && pathname === "/api/apps/hyperscape/autonomy/sessions") {
+    const body = await readJsonBody<{
+      agentId?: string;
+      goal?: string;
+      streamProfile?: unknown;
+    }>(req, res);
+    if (!body) return;
+
+    const runtime = state.runtime;
+    const agentId =
+      body.agentId?.trim() || resolveDefaultHyperscapeAutonomyAgentId(runtime);
+    if (!agentId) {
+      error(res, "agentId is required");
+      return;
+    }
+
+    const streamProfile =
+      body.streamProfile &&
+      typeof body.streamProfile === "object" &&
+      !Array.isArray(body.streamProfile)
+        ? (body.streamProfile as Record<string, unknown>)
+        : undefined;
+
+    try {
+      const created = await state.hyperscapeAutonomy.createSession({
+        agentId,
+        goal: body.goal?.trim() || undefined,
+        streamProfile,
+      });
+      json(res, created, 202);
+    } catch (err) {
+      error(
+        res,
+        `Failed to create Hyperscape autonomy session: ${err instanceof Error ? err.message : String(err)}`,
+        502,
+      );
+    }
+    return;
+  }
+
+  if (method === "GET") {
+    const walletProvenanceMatch = pathname.match(
+      /^\/api\/agents\/([^/]+)\/wallet-provenance$/,
+    );
+    if (walletProvenanceMatch) {
+      const agentId = decodeURIComponent(walletProvenanceMatch[1]).trim();
+      if (!agentId) {
+        error(res, "agentId is required");
+        return;
+      }
+      const provenance = state.hyperscapeAutonomy.getWalletProvenance(agentId);
+      if (!provenance) {
+        error(res, `No wallet provenance found for agent "${agentId}"`, 404);
+        return;
+      }
+      json(res, { wallet: provenance });
+      return;
+    }
+
+    const sessionMatch = pathname.match(
+      /^\/api\/apps\/hyperscape\/autonomy\/sessions\/([^/]+)$/,
+    );
+    if (sessionMatch) {
+      const sessionId = decodeURIComponent(sessionMatch[1]).trim();
+      const found = state.hyperscapeAutonomy.getSession(sessionId);
+      if (!found) {
+        error(res, `Hyperscape autonomy session "${sessionId}" not found`, 404);
+        return;
+      }
+      json(res, found);
+      return;
+    }
+  }
+
+  if (method === "POST") {
+    const sessionActionMatch = pathname.match(
+      /^\/api\/apps\/hyperscape\/autonomy\/sessions\/([^/]+)\/(stop|recover)$/,
+    );
+    if (sessionActionMatch) {
+      const sessionId = decodeURIComponent(sessionActionMatch[1]).trim();
+      const action = sessionActionMatch[2];
+      const result =
+        action === "stop"
+          ? await state.hyperscapeAutonomy.stopSession(sessionId)
+          : await state.hyperscapeAutonomy.recoverSession(sessionId);
+      if (!result) {
+        error(res, `Hyperscape autonomy session "${sessionId}" not found`, 404);
+        return;
+      }
+      json(res, result);
+      return;
+    }
   }
 
   // ── Hyperscape control proxy routes ──────────────────────────────────
@@ -15913,6 +16433,16 @@ export async function startApiServer(opts?: {
       config.ui?.assistant?.name ??
       "Milaidy");
 
+  let stateRef: ServerState | null = null;
+  const hyperscapeAutonomy = new HyperscapeAutonomySessionManager({
+    getRuntime: () => stateRef?.runtime ?? null,
+    getHyperscapeApiBaseUrl: () => resolveHyperscapeApiBaseUrl(),
+    onEvent: (event) => {
+      logHyperscapeAutonomyEvent(event);
+      stateRef?.broadcastWs?.(event as unknown as Record<string, unknown>);
+    },
+  });
+
   const state: ServerState = {
     runtime: opts?.runtime ?? null,
     config,
@@ -15936,6 +16466,7 @@ export async function startApiServer(opts?: {
     cloudManager: null,
     sandboxManager: null,
     appManager: new AppManager(),
+    hyperscapeAutonomy,
     trainingService: null,
     registryService: null,
     dropService: null,
@@ -15946,6 +16477,7 @@ export async function startApiServer(opts?: {
     permissionStates: {},
     shellEnabled: config.features?.shellEnabled !== false,
   };
+  stateRef = state;
 
   const trainingService = new TrainingService({
     getRuntime: () => state.runtime,
@@ -16602,6 +17134,7 @@ export async function startApiServer(opts?: {
         port: actualPort,
         close: async () => {
           clearInterval(statusInterval);
+          state.hyperscapeAutonomy.dispose();
           if (detachRuntimeStreams) {
             detachRuntimeStreams();
             detachRuntimeStreams = null;

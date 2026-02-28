@@ -82,6 +82,7 @@ export function createHealthChecks(deps: {
   config?: {
     models?: { large?: string };
   };
+  extraChecks?: HealthCheck[];
 }): HealthCheck[] {
   const checks: HealthCheck[] = [];
 
@@ -203,6 +204,10 @@ export function createHealthChecks(deps: {
       };
     },
   });
+
+  if (Array.isArray(deps.extraChecks) && deps.extraChecks.length > 0) {
+    checks.push(...deps.extraChecks);
+  }
 
   return checks;
 }

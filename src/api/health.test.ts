@@ -55,6 +55,21 @@ describe("createHealthChecks", () => {
 
     expect(pluginsCheck).toBeDefined();
   });
+
+  test("appends extra checks when provided", () => {
+    const checks = createHealthChecks({
+      extraChecks: [
+        {
+          name: "hyperscape_api",
+          critical: false,
+          check: async () => ({ healthy: true }),
+        },
+      ],
+    });
+
+    const extraCheck = checks.find((check) => check.name === "hyperscape_api");
+    expect(extraCheck).toBeDefined();
+  });
 });
 
 describe("runHealthChecks", () => {

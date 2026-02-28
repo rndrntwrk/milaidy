@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isJavaScriptLikeResponse,
   rewriteManagedAppProxyHtml,
   rewriteManagedAppProxyJavaScript,
 } from "./server";
@@ -81,5 +82,11 @@ describe("managed app proxy path rewriting", () => {
     );
 
     expect(output).toContain(`"${localProxyRoot}audio/music/river.mp3"`);
+  });
+
+  it("does not treat HTML responses as JavaScript for chunk paths", () => {
+    expect(isJavaScriptLikeResponse("text/html; charset=utf-8", "/_next/static/chunks/main.js")).toBe(
+      false,
+    );
   });
 });

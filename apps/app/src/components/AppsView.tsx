@@ -7,18 +7,24 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApp } from "../AppContext";
 import {
+  type CreateHyperscapeAutonomySessionInput,
   client,
   type HyperscapeAgentGoalResponse,
+  type HyperscapeAutonomySession,
   type HyperscapeEmbeddedAgent,
   type HyperscapeEmbeddedAgentControlAction,
   type HyperscapeJsonValue,
+  type HyperscapeOperationalHealthResponse,
   type HyperscapeQuickActionsResponse,
   type HyperscapeScriptedRole,
+  type HyperscapeWalletProvenance,
   type RegistryAppInfo,
 } from "../api-client";
 
 const DEFAULT_VIEWER_SANDBOX = "allow-scripts allow-same-origin allow-popups";
 const HYPERSCAPE_APP_NAME = "@elizaos/app-hyperscape";
+const HYPERSCAPE_AUTONOMY_POLL_MS = 2_500;
+const HYPERSCAPE_HEALTH_POLL_MS = 7_500;
 const HYPERSCAPE_COMMAND_OPTIONS = [
   "chat",
   "move",
@@ -52,6 +58,26 @@ const FORCE_PROXY_APP_NAMES = new Set<string>([
   "@elizaos/app-hyperscape",
   "@elizaos/app-babylon",
 ]);
+const HYPERSCAPE_AUTONOMY_LIVE_STATES = new Set([
+  "created",
+  "wallet_ready",
+  "auth_ready",
+  "agent_starting",
+  "in_world",
+  "streaming",
+  "degraded",
+]);
+const HYPERSCAPE_AUTONOMY_PHASE_LABELS: Record<string, string> = {
+  created: "Creating session",
+  wallet_ready: "Preparing wallet",
+  auth_ready: "Authenticating",
+  agent_starting: "Starting Alice",
+  in_world: "Alice in world",
+  streaming: "Streaming live",
+  degraded: "Degraded (recovery in progress)",
+  failed: "Launch failed",
+  stopped: "Stopped",
+};
 
 function isLoopbackHostname(hostname: string | null | undefined): boolean {
   const normalized =
@@ -118,6 +144,67 @@ function parseHyperscapeCommandData(
   }
 }
 
+function formatHyperscapeAutonomyPhase(
+  state: string | null | undefined,
+): string {
+  if (!state) return "Unknown";
+  return HYPERSCAPE_AUTONOMY_PHASE_LABELS[state] ?? state.replace(/_/g, " ");
+}
+
+function formatHyperscapeHealthLabel(
+  status: string | null | undefined,
+): string {
+  if (!status) return "Unknown";
+  if (status === "healthy") return "Healthy";
+  if (status === "degraded") return "Degraded";
+  if (status === "unhealthy") return "Unhealthy";
+  return status;
+}
+
+function formatHyperscapeHealthCheckName(key: string): string {
+  if (key === "api") return "API";
+  if (key === "ws") return "WebSocket";
+  if (key === "scriptMime") return "Script MIME";
+  return key.replace(/_/g, " ");
+}
+
+function isActiveHyperscapeAutonomyState(
+  state: string | null | undefined,
+): boolean {
+  if (!state) return false;
+  return HYPERSCAPE_AUTONOMY_LIVE_STATES.has(state);
+}
+
+function applyHyperscapeViewerFollowParams(
+  rawUrl: string,
+  characterId: string | null,
+): string {
+  const trimmed = rawUrl.trim();
+  if (!trimmed || !characterId) return trimmed;
+
+  try {
+    const isAbsolute = /^https?:\/\//i.test(trimmed);
+    const parsed = new URL(
+      trimmed,
+      isAbsolute ? undefined : window.location.origin,
+    );
+    parsed.searchParams.set("characterId", characterId);
+    if (!parsed.searchParams.get("followEntity")) {
+      parsed.searchParams.set("followEntity", characterId);
+    }
+    if (!parsed.searchParams.get("mode")) {
+      parsed.searchParams.set("mode", "spectator");
+    }
+    if (!parsed.searchParams.get("embedded")) {
+      parsed.searchParams.set("embedded", "true");
+    }
+    if (isAbsolute) return parsed.toString();
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return trimmed;
+  }
+}
+
 export function AppsView() {
   const {
     activeGameApp,
@@ -162,6 +249,25 @@ export function AppsView() {
     useState<(typeof HYPERSCAPE_COMMAND_OPTIONS)[number]>("chat");
   const [hyperscapeCommandDataInput, setHyperscapeCommandDataInput] =
     useState("{}");
+  const [hyperscapeAutonomySessionId, setHyperscapeAutonomySessionId] =
+    useState<string | null>(null);
+  const [hyperscapeAutonomySession, setHyperscapeAutonomySession] =
+    useState<HyperscapeAutonomySession | null>(null);
+  const [hyperscapeAutonomyGoalInput, setHyperscapeAutonomyGoalInput] =
+    useState("Explore, gather resources, and keep moving.");
+  const [hyperscapeAutonomyBusyAction, setHyperscapeAutonomyBusyAction] =
+    useState<"start" | "stop" | "recover" | "refresh" | null>(null);
+  const [hyperscapeAutonomyError, setHyperscapeAutonomyError] = useState<
+    string | null
+  >(null);
+  const [hyperscapeWalletProvenance, setHyperscapeWalletProvenance] =
+    useState<HyperscapeWalletProvenance | null>(null);
+  const [hyperscapeHealth, setHyperscapeHealth] =
+    useState<HyperscapeOperationalHealthResponse | null>(null);
+  const [hyperscapeHealthLoading, setHyperscapeHealthLoading] = useState(false);
+  const [hyperscapeHealthError, setHyperscapeHealthError] = useState<
+    string | null
+  >(null);
   const currentGameViewerUrl =
     typeof activeGameViewerUrl === "string" ? activeGameViewerUrl : "";
   const hasCurrentGame = currentGameViewerUrl.trim().length > 0;
@@ -215,6 +321,22 @@ export function AppsView() {
   const handleLaunch = async (app: RegistryAppInfo) => {
     setBusyApp(app.name);
     try {
+      let autonomySessionForLaunch: HyperscapeAutonomySession | null = null;
+      if (app.name === HYPERSCAPE_APP_NAME) {
+        autonomySessionForLaunch = await ensureHyperscapeAutonomyReady();
+        if (!autonomySessionForLaunch) {
+          throw new Error(
+            "Unable to start autonomous gameplay session. Check Hyperscape autonomy status and retry.",
+          );
+        }
+        const phaseState = autonomySessionForLaunch.state;
+        setActionNotice(
+          `Hyperscape autonomy: ${formatHyperscapeAutonomyPhase(phaseState)}.`,
+          phaseState === "failed" ? "error" : "success",
+          2800,
+        );
+      }
+
       const result = await client.launchApp(app.name);
       setActiveAppNames((previous) => {
         const next = new Set(previous);
@@ -222,7 +344,14 @@ export function AppsView() {
         return next;
       });
       if (result.viewer?.url) {
-        const viewerUrl = toBrowserViewerUrl(app.name, result.viewer.url);
+        const viewerUrl = applyHyperscapeViewerFollowParams(
+          toBrowserViewerUrl(app.name, result.viewer.url),
+          app.name === HYPERSCAPE_APP_NAME
+            ? (autonomySessionForLaunch?.characterId ??
+                hyperscapeAutonomySession?.characterId ??
+                null)
+            : null,
+        );
         setState("activeGameApp", app.name);
         setState("activeGameDisplayName", app.displayName ?? app.name);
         setState("activeGameViewerUrl", viewerUrl);
@@ -252,7 +381,14 @@ export function AppsView() {
       clearActiveGameState();
       const targetUrl = result.launchUrl ?? app.launchUrl;
       const resolvedTargetUrl = targetUrl
-        ? toBrowserViewerUrl(app.name, targetUrl)
+        ? applyHyperscapeViewerFollowParams(
+            toBrowserViewerUrl(app.name, targetUrl),
+            app.name === HYPERSCAPE_APP_NAME
+              ? (autonomySessionForLaunch?.characterId ??
+                  hyperscapeAutonomySession?.characterId ??
+                  null)
+              : null,
+          )
         : "";
       if (resolvedTargetUrl) {
         setState("activeGameApp", app.name);
@@ -276,8 +412,22 @@ export function AppsView() {
         4000,
       );
     } catch (err) {
+      let launchDiagnostics = "";
+      if (app.name === HYPERSCAPE_APP_NAME) {
+        const health = await refreshHyperscapeHealth({ quiet: true });
+        if (health) {
+          const failingChecks = Object.entries(health.checks).filter(
+            ([, check]) => !check.healthy,
+          );
+          if (failingChecks.length > 0) {
+            launchDiagnostics = ` (Health: ${failingChecks
+              .map(([key]) => formatHyperscapeHealthCheckName(key))
+              .join(", ")})`;
+          }
+        }
+      }
       setActionNotice(
-        `Failed to launch ${app.displayName ?? app.name}: ${err instanceof Error ? err.message : "error"}`,
+        `Failed to launch ${app.displayName ?? app.name}: ${err instanceof Error ? err.message : "error"}${launchDiagnostics}`,
         "error",
         4000,
       );
@@ -299,18 +449,10 @@ export function AppsView() {
       currentGameViewerUrl,
     );
     if (!safeViewerUrl) {
-      setActionNotice(
-        "Current game URL is unavailable.",
-        "error",
-        3200,
-      );
+      setActionNotice("Current game URL is unavailable.", "error", 3200);
       return;
     }
-    const popup = window.open(
-      safeViewerUrl,
-      "_blank",
-      "noopener,noreferrer",
-    );
+    const popup = window.open(safeViewerUrl, "_blank", "noopener,noreferrer");
     if (popup) {
       setActionNotice("Current game opened in a new tab.", "success", 2600);
       return;
@@ -329,6 +471,191 @@ export function AppsView() {
       ) ?? null,
     [hyperscapeAgents, hyperscapeSelectedAgentId],
   );
+  const hyperscapeAutonomyPhaseLabel = useMemo(
+    () => formatHyperscapeAutonomyPhase(hyperscapeAutonomySession?.state),
+    [hyperscapeAutonomySession?.state],
+  );
+  const failingHyperscapeChecks = useMemo(() => {
+    if (!hyperscapeHealth?.checks) return [];
+    return Object.entries(hyperscapeHealth.checks).filter(
+      ([, check]) => !check.healthy,
+    );
+  }, [hyperscapeHealth?.checks]);
+
+  const refreshHyperscapeAutonomySession = useCallback(
+    async (sessionId: string, options?: { quiet?: boolean }) => {
+      if (!sessionId.trim()) return null;
+      if (!options?.quiet) {
+        setHyperscapeAutonomyBusyAction("refresh");
+      }
+      try {
+        const response = await client.getHyperscapeAutonomySession(sessionId);
+        setHyperscapeAutonomySession(response.session);
+        setHyperscapeAutonomyError(null);
+        return response.session;
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Failed to load autonomy session";
+        setHyperscapeAutonomyError(message);
+        if (!options?.quiet) {
+          setActionNotice(`Hyperscape autonomy: ${message}`, "error", 4200);
+        }
+        return null;
+      } finally {
+        if (!options?.quiet) {
+          setHyperscapeAutonomyBusyAction(null);
+        }
+      }
+    },
+    [setActionNotice],
+  );
+
+  const startHyperscapeAutonomySession = useCallback(
+    async (
+      overrides?: Partial<CreateHyperscapeAutonomySessionInput>,
+      options?: { quiet?: boolean },
+    ) => {
+      if (!options?.quiet) {
+        setHyperscapeAutonomyBusyAction("start");
+      }
+
+      const payload: CreateHyperscapeAutonomySessionInput = {
+        agentId: overrides?.agentId?.trim() || "alice",
+        goal:
+          overrides?.goal?.trim() ||
+          hyperscapeAutonomyGoalInput.trim() ||
+          undefined,
+        streamProfile: overrides?.streamProfile,
+      };
+
+      try {
+        const created = await client.createHyperscapeAutonomySession(payload);
+        setHyperscapeAutonomySessionId(created.sessionId);
+        setHyperscapeAutonomySession(created.session);
+        setHyperscapeAutonomyError(null);
+        if (!options?.quiet) {
+          setActionNotice(
+            `Hyperscape autonomy session started (${formatHyperscapeAutonomyPhase(created.state)}).`,
+            "success",
+            3200,
+          );
+        }
+        return created.session;
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Failed to start autonomy session";
+        setHyperscapeAutonomyError(message);
+        if (!options?.quiet) {
+          setActionNotice(`Hyperscape autonomy: ${message}`, "error", 4200);
+        }
+        return null;
+      } finally {
+        if (!options?.quiet) {
+          setHyperscapeAutonomyBusyAction(null);
+        }
+      }
+    },
+    [hyperscapeAutonomyGoalInput, setActionNotice],
+  );
+
+  const stopHyperscapeAutonomySession = useCallback(async () => {
+    if (!hyperscapeAutonomySessionId) return;
+    setHyperscapeAutonomyBusyAction("stop");
+    try {
+      const response = await client.stopHyperscapeAutonomySession(
+        hyperscapeAutonomySessionId,
+      );
+      setHyperscapeAutonomySession(response.session);
+      setHyperscapeAutonomyError(null);
+      setActionNotice("Hyperscape autonomy session stopped.", "success", 2800);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to stop autonomy session";
+      setHyperscapeAutonomyError(message);
+      setActionNotice(`Hyperscape autonomy: ${message}`, "error", 4200);
+    } finally {
+      setHyperscapeAutonomyBusyAction(null);
+    }
+  }, [hyperscapeAutonomySessionId, setActionNotice]);
+
+  const recoverHyperscapeAutonomySession = useCallback(async () => {
+    if (!hyperscapeAutonomySessionId) return;
+    setHyperscapeAutonomyBusyAction("recover");
+    try {
+      const response = await client.recoverHyperscapeAutonomySession(
+        hyperscapeAutonomySessionId,
+      );
+      setHyperscapeAutonomySession(response.session);
+      setHyperscapeAutonomyError(null);
+      setActionNotice(
+        "Recovery requested for Hyperscape autonomy.",
+        "success",
+        3000,
+      );
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to recover autonomy session";
+      setHyperscapeAutonomyError(message);
+      setActionNotice(`Hyperscape autonomy: ${message}`, "error", 4200);
+    } finally {
+      setHyperscapeAutonomyBusyAction(null);
+    }
+  }, [hyperscapeAutonomySessionId, setActionNotice]);
+
+  const loadHyperscapeWalletProvenance = useCallback(
+    async (agentId?: string, options?: { quiet?: boolean }) => {
+      const resolvedAgentId =
+        agentId?.trim() || hyperscapeAutonomySession?.agentId?.trim();
+      if (!resolvedAgentId) return null;
+      try {
+        const response =
+          await client.getHyperscapeWalletProvenance(resolvedAgentId);
+        setHyperscapeWalletProvenance(response.wallet);
+        return response.wallet;
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Failed to load wallet provenance";
+        if (!options?.quiet) {
+          setActionNotice(`Hyperscape wallet: ${message}`, "error", 4200);
+        }
+        return null;
+      }
+    },
+    [hyperscapeAutonomySession?.agentId, setActionNotice],
+  );
+
+  const ensureHyperscapeAutonomyReady = useCallback(async () => {
+    const existingState = hyperscapeAutonomySession?.state ?? null;
+    if (
+      hyperscapeAutonomySessionId &&
+      existingState &&
+      existingState !== "failed" &&
+      existingState !== "stopped"
+    ) {
+      const refreshed = await refreshHyperscapeAutonomySession(
+        hyperscapeAutonomySessionId,
+        { quiet: true },
+      );
+      return refreshed ?? hyperscapeAutonomySession;
+    }
+    return startHyperscapeAutonomySession(
+      { agentId: hyperscapeAutonomySession?.agentId ?? "alice" },
+      { quiet: true },
+    );
+  }, [
+    hyperscapeAutonomySession,
+    hyperscapeAutonomySessionId,
+    refreshHyperscapeAutonomySession,
+    startHyperscapeAutonomySession,
+  ]);
 
   const loadHyperscapeAgents = useCallback(async () => {
     setHyperscapeAgentsLoading(true);
@@ -377,10 +704,56 @@ export function AppsView() {
     [setActionNotice],
   );
 
+  const refreshHyperscapeHealth = useCallback(
+    async (options?: { quiet?: boolean }) => {
+      if (!options?.quiet) {
+        setHyperscapeHealthLoading(true);
+      }
+      try {
+        const response = await client.getHyperscapeHealth();
+        setHyperscapeHealth(response);
+        setHyperscapeHealthError(null);
+        return response;
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Failed to load Hyperscape operational health";
+        setHyperscapeHealthError(message);
+        if (!options?.quiet) {
+          setActionNotice(`Hyperscape health: ${message}`, "error", 4200);
+        }
+        return null;
+      } finally {
+        if (!options?.quiet) {
+          setHyperscapeHealthLoading(false);
+        }
+      }
+    },
+    [setActionNotice],
+  );
+
   useEffect(() => {
     if (!hyperscapeDetailOpen || !hyperscapePanelOpen) return;
     void loadHyperscapeAgents();
   }, [hyperscapeDetailOpen, hyperscapePanelOpen, loadHyperscapeAgents]);
+
+  useEffect(() => {
+    if (!hyperscapeDetailOpen || !hyperscapePanelOpen) return;
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled) return;
+      await refreshHyperscapeHealth({ quiet: true });
+    };
+    const timer = window.setInterval(() => {
+      void tick();
+    }, HYPERSCAPE_HEALTH_POLL_MS);
+    void tick();
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [hyperscapeDetailOpen, hyperscapePanelOpen, refreshHyperscapeHealth]);
 
   useEffect(() => {
     if (
@@ -397,6 +770,82 @@ export function AppsView() {
     hyperscapeSelectedAgentId,
     refreshHyperscapeTelemetry,
   ]);
+
+  useEffect(() => {
+    const unbind = client.onWsEvent(
+      "hyperscape-autonomy",
+      (data: Record<string, unknown>) => {
+        if (data.event !== "session-update") return;
+        const rawSession = data.session;
+        if (!rawSession || typeof rawSession !== "object") return;
+        const session = rawSession as HyperscapeAutonomySession;
+        if (
+          hyperscapeAutonomySessionId &&
+          session.sessionId !== hyperscapeAutonomySessionId
+        ) {
+          return;
+        }
+        if (!hyperscapeAutonomySessionId) {
+          setHyperscapeAutonomySessionId(session.sessionId);
+        }
+        setHyperscapeAutonomySession(session);
+        setHyperscapeAutonomyError(null);
+      },
+    );
+    return () => {
+      unbind();
+    };
+  }, [hyperscapeAutonomySessionId]);
+
+  useEffect(() => {
+    if (!hyperscapeAutonomySessionId) return;
+    if (!isActiveHyperscapeAutonomyState(hyperscapeAutonomySession?.state)) {
+      return;
+    }
+
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled) return;
+      await refreshHyperscapeAutonomySession(hyperscapeAutonomySessionId, {
+        quiet: true,
+      });
+    };
+    const timer = window.setInterval(() => {
+      void tick();
+    }, HYPERSCAPE_AUTONOMY_POLL_MS);
+    void tick();
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [
+    hyperscapeAutonomySession?.state,
+    hyperscapeAutonomySessionId,
+    refreshHyperscapeAutonomySession,
+  ]);
+
+  useEffect(() => {
+    if (!hyperscapeAutonomySession?.characterId) return;
+    if (hyperscapeAgents.length === 0) return;
+    const matching = hyperscapeAgents.find(
+      (agent) => agent.characterId === hyperscapeAutonomySession.characterId,
+    );
+    if (matching?.agentId && matching.agentId !== hyperscapeSelectedAgentId) {
+      setHyperscapeSelectedAgentId(matching.agentId);
+    }
+  }, [
+    hyperscapeAgents,
+    hyperscapeAutonomySession?.characterId,
+    hyperscapeSelectedAgentId,
+  ]);
+
+  useEffect(() => {
+    if (!hyperscapeAutonomySession?.agentId) return;
+    void loadHyperscapeWalletProvenance(hyperscapeAutonomySession.agentId, {
+      quiet: true,
+    });
+  }, [hyperscapeAutonomySession?.agentId, loadHyperscapeWalletProvenance]);
 
   const handleToggleHyperscapePanel = useCallback(() => {
     setHyperscapePanelOpen((open) => !open);
@@ -616,6 +1065,182 @@ export function AppsView() {
               {hyperscapeError}
             </div>
           ) : null}
+          {hyperscapeAutonomyError ? (
+            <div className="p-2 border border-danger text-danger text-xs">
+              {hyperscapeAutonomyError}
+            </div>
+          ) : null}
+          {hyperscapeHealthError ? (
+            <div className="p-2 border border-danger text-danger text-xs">
+              {hyperscapeHealthError}
+            </div>
+          ) : null}
+
+          <div className="border border-border p-2 flex flex-col gap-2">
+            <div className="font-bold text-xs">Operational Health</div>
+            <div className="text-[11px] text-muted">
+              Status: {formatHyperscapeHealthLabel(hyperscapeHealth?.status)}
+            </div>
+            {hyperscapeHealth ? (
+              <>
+                <div className="text-[11px] text-muted break-all">
+                  API: {hyperscapeHealth.baseUrl}
+                </div>
+                <div className="text-[11px] text-muted break-all">
+                  WS: {hyperscapeHealth.wsUrl}
+                </div>
+                <div className="text-[11px] text-muted">
+                  Sessions: active {hyperscapeHealth.autonomy.activeSessions} /
+                  total {hyperscapeHealth.autonomy.totalSessions} • degraded{" "}
+                  {hyperscapeHealth.autonomy.degradedSessions} • failed{" "}
+                  {hyperscapeHealth.autonomy.failedSessions}
+                </div>
+                <div className="flex flex-col gap-1">
+                  {Object.entries(hyperscapeHealth.checks).map(
+                    ([key, check]) => (
+                      <div
+                        key={key}
+                        className={`text-[11px] ${check.healthy ? "text-muted" : "text-danger"}`}
+                      >
+                        {formatHyperscapeHealthCheckName(key)}:{" "}
+                        {check.healthy ? "ok" : (check.message ?? "unhealthy")}
+                      </div>
+                    ),
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="text-[11px] text-muted">
+                Health diagnostics not loaded yet.
+              </div>
+            )}
+            {failingHyperscapeChecks.length > 0 ? (
+              <div className="text-[11px] text-danger">
+                Launch blockers:{" "}
+                {failingHyperscapeChecks
+                  .map(([key]) => formatHyperscapeHealthCheckName(key))
+                  .join(", ")}
+              </div>
+            ) : null}
+            <button
+              type="button"
+              className="px-3 py-1 text-xs bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover disabled:opacity-40 self-start"
+              disabled={hyperscapeHealthLoading}
+              onClick={() => void refreshHyperscapeHealth()}
+            >
+              {hyperscapeHealthLoading ? "Refreshing..." : "Refresh Health"}
+            </button>
+          </div>
+
+          <div className="border border-border p-2 flex flex-col gap-2">
+            <div className="font-bold text-xs">Autonomous Session</div>
+            <div className="text-[11px] text-muted">
+              Phase: {hyperscapeAutonomyPhaseLabel}
+              {hyperscapeAutonomySession?.state
+                ? ` (${hyperscapeAutonomySession.state})`
+                : ""}
+            </div>
+            <div className="text-[11px] text-muted break-all">
+              Session: {hyperscapeAutonomySession?.sessionId ?? "none"}
+            </div>
+            <div className="text-[11px] text-muted break-all">
+              Agent: {hyperscapeAutonomySession?.agentId ?? "alice"}
+              {hyperscapeAutonomySession?.characterId
+                ? ` • Character: ${hyperscapeAutonomySession.characterId}`
+                : ""}
+            </div>
+            {hyperscapeAutonomySession?.failureReason ? (
+              <div className="text-[11px] text-danger break-all">
+                {hyperscapeAutonomySession.failureReason}
+              </div>
+            ) : null}
+
+            <textarea
+              rows={2}
+              value={hyperscapeAutonomyGoalInput}
+              onChange={(event) =>
+                setHyperscapeAutonomyGoalInput(event.target.value)
+              }
+              placeholder="Primary objective for Alice"
+              className="px-3 py-2 border border-border rounded-md bg-card text-txt text-xs focus:border-accent focus:outline-none resize-y"
+            />
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="px-3 py-1 text-xs bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover disabled:opacity-40"
+                disabled={hyperscapeAutonomyBusyAction === "start"}
+                onClick={() => void startHyperscapeAutonomySession()}
+              >
+                {hyperscapeAutonomyBusyAction === "start"
+                  ? "Starting..."
+                  : "Start / Restart Alice"}
+              </button>
+              <button
+                type="button"
+                className="px-3 py-1 text-xs bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover disabled:opacity-40"
+                disabled={
+                  !hyperscapeAutonomySessionId ||
+                  hyperscapeAutonomyBusyAction === "refresh"
+                }
+                onClick={() =>
+                  void (hyperscapeAutonomySessionId
+                    ? refreshHyperscapeAutonomySession(
+                        hyperscapeAutonomySessionId,
+                      )
+                    : Promise.resolve(null))
+                }
+              >
+                {hyperscapeAutonomyBusyAction === "refresh"
+                  ? "Refreshing..."
+                  : "Refresh Session"}
+              </button>
+              <button
+                type="button"
+                className="px-3 py-1 text-xs bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover disabled:opacity-40"
+                disabled={
+                  !hyperscapeAutonomySessionId ||
+                  hyperscapeAutonomyBusyAction === "recover"
+                }
+                onClick={() => void recoverHyperscapeAutonomySession()}
+              >
+                {hyperscapeAutonomyBusyAction === "recover"
+                  ? "Recovering..."
+                  : "Recover"}
+              </button>
+              <button
+                type="button"
+                className="px-3 py-1 text-xs bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover disabled:opacity-40"
+                disabled={
+                  !hyperscapeAutonomySessionId ||
+                  hyperscapeAutonomyBusyAction === "stop"
+                }
+                onClick={() => void stopHyperscapeAutonomySession()}
+              >
+                {hyperscapeAutonomyBusyAction === "stop"
+                  ? "Stopping..."
+                  : "Stop"}
+              </button>
+              <button
+                type="button"
+                className="px-3 py-1 text-xs bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover"
+                onClick={() =>
+                  void loadHyperscapeWalletProvenance(undefined, {
+                    quiet: false,
+                  })
+                }
+              >
+                Refresh Wallet Provenance
+              </button>
+            </div>
+
+            {hyperscapeWalletProvenance ? (
+              <div className="text-[11px] text-muted break-all">
+                Wallet: {hyperscapeWalletProvenance.walletAddress} • Source:{" "}
+                {hyperscapeWalletProvenance.source}
+              </div>
+            ) : null}
+          </div>
 
           <div className="flex flex-wrap gap-2">
             <button
