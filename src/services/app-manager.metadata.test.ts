@@ -158,4 +158,32 @@ describe("AppManager metadata fallback", () => {
     expect(info?.npm.package).toBe(APP_INFO.npm.package);
     expect(info?.viewer?.url).toBe(APP_INFO.viewer?.url);
   });
+
+  it("omits unresolved empty embed params from viewer URLs", async () => {
+    const appManager = new AppManager();
+    const pluginManager = createPluginManager({
+      getRegistryPlugin: vi.fn(async () => ({ ...BASE_APP_PLUGIN })),
+    });
+    mockRegistryGetAppInfo.mockResolvedValue({
+      ...APP_INFO,
+      viewer: {
+        url: "https://example.test/viewer",
+        embedParams: {
+          embedded: "true",
+          mode: "spectator",
+          characterId: "{MISSING_HYPERSCAPE_CHARACTER_ID}",
+          followEntity: "{MISSING_HYPERSCAPE_FOLLOW_ENTITY}",
+        },
+      },
+    });
+
+    const result = await appManager.launch(
+      pluginManager,
+      "@elizaos/app-hyperscape",
+    );
+
+    expect(result.viewer?.url).toBe(
+      "https://example.test/viewer?embedded=true&mode=spectator",
+    );
+  });
 });

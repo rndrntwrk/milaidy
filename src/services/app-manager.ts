@@ -361,7 +361,12 @@ function buildViewerUrl(
   const [pathPart, queryPartRaw] = beforeHash.split("?", 2);
   const queryParams = new URLSearchParams(queryPartRaw ?? "");
   for (const [key, rawValue] of Object.entries(embedParams)) {
-    queryParams.set(key, substituteTemplateVars(rawValue));
+    const value = substituteTemplateVars(rawValue).trim();
+    if (value.length === 0) {
+      queryParams.delete(key);
+      continue;
+    }
+    queryParams.set(key, value);
   }
   const query = queryParams.toString();
   const hash = hashPartRaw ? `#${hashPartRaw}` : "";
