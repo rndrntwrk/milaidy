@@ -259,34 +259,69 @@ export function resolveHyperscapeAuthorizationHeader(
   return /^Bearer\s+/i.test(envToken) ? envToken : `Bearer ${envToken}`;
 }
 
-function rewriteManagedAppProxyHtml(
+function rewriteRootRelativeAssetPaths(
+  value: string,
+  localProxyRoot: string,
+): string {
+  return value
+    .replaceAll('"/_next/', `"${localProxyRoot}_next/`)
+    .replaceAll("'/_next/", `'${localProxyRoot}_next/`)
+    .replaceAll("`/_next/", `\`${localProxyRoot}_next/`)
+    .replaceAll('"/sw.js"', `"${localProxyRoot}sw.js"`)
+    .replaceAll("'/sw.js'", `'${localProxyRoot}sw.js'`)
+    .replaceAll("`/sw.js`", `\`${localProxyRoot}sw.js\``)
+    .replaceAll(
+      '"/manifest.webmanifest"',
+      `"${localProxyRoot}manifest.webmanifest"`,
+    )
+    .replaceAll(
+      "'/manifest.webmanifest'",
+      `'${localProxyRoot}manifest.webmanifest'`,
+    )
+    .replaceAll(
+      "`/manifest.webmanifest`",
+      `\`${localProxyRoot}manifest.webmanifest\``,
+    )
+    .replaceAll('\\"/_next/', `\\"${localProxyRoot}_next/`)
+    .replaceAll("\\'/_next/", `\\'${localProxyRoot}_next/`);
+}
+
+export function rewriteManagedAppProxyHtml(
   appName: string,
   html: string,
   localProxyRoot: string,
 ): string {
-  if (appName !== HYPERSCAPE_APP_NAME) return html;
-  return html
+  let rewritten = rewriteRootRelativeAssetPaths(html, localProxyRoot);
+  if (appName !== HYPERSCAPE_APP_NAME) return rewritten;
+  rewritten = rewritten
     .replace(
       /<script[^>]*id=["']vite-plugin-pwa:register-sw["'][^>]*><\/script>/gi,
       "",
     )
     .replaceAll(`${HYPERSCAPE_ASSET_ORIGIN}/`, localProxyRoot);
+  return rewritten;
 }
 
-function rewriteManagedAppProxyJavaScript(
+export function rewriteManagedAppProxyJavaScript(
   appName: string,
   script: string,
   localProxyBase: string,
   localProxyRoot: string,
   upstreamPath: string,
 ): string {
-  if (appName !== HYPERSCAPE_APP_NAME) return script;
-
   // Service workers should stay disabled for proxied embeds. Registering with
   // root scope (`/`) on the parent origin breaks both the app and host shell.
   if (upstreamPath.endsWith("/registerSW.js")) {
     return "/* service worker registration disabled for proxied embeds */\n";
   }
+
+  let rewritten = rewriteRootRelativeAssetPaths(script, localProxyRoot);
+  rewritten = rewritten.replace(
+    /\.p\s*=\s*(['"])\/_next\/\1/g,
+    `.p="${localProxyRoot}_next/"`,
+  );
+
+  if (appName !== HYPERSCAPE_APP_NAME) return rewritten;
 
   const proxyBootstrap = [
     "if (typeof window !== \"undefined\") {",
@@ -308,7 +343,6 @@ function rewriteManagedAppProxyJavaScript(
     ].join("\n");
   }
 
-  let rewritten = script;
   const rootedSegments = [
     "assets",
     "fonts",
@@ -331,9 +365,6 @@ function rewriteManagedAppProxyJavaScript(
     .replaceAll('return"/"+', `return"${localProxyRoot}"+`)
     .replaceAll("return'/'+", `return'${localProxyRoot}'+`);
   rewritten = rewritten
-    .replaceAll('"/sw.js"', `"${localProxyRoot}sw.js"`)
-    .replaceAll("'/sw.js'", `'${localProxyRoot}sw.js'`)
-    .replaceAll("`/sw.js`", `\`${localProxyRoot}sw.js\``)
     .replaceAll('"/env.js"', `"${localProxyRoot}env.js"`)
     .replaceAll("'/env.js'", `'${localProxyRoot}env.js'`)
     .replaceAll("`/env.js`", `\`${localProxyRoot}env.js\``)
