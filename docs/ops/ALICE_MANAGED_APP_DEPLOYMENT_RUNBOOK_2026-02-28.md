@@ -38,6 +38,9 @@ Wallet-auth path was brittle when upstream responses were partial or temporarily
 ### E) Hyperscape audio origin mismatch (fixed)
 `/audio/...` requests from the proxied Hyperscape client were routed to the app origin instead of the Hyperscape asset CDN, returning HTML fallback pages that broke audio decoding.
 
+### F) Leaked root asset requests from managed iframes (fixed)
+Some managed apps leaked chunk/script requests to root paths like `/_next/static/chunks/...` and `/script.js` instead of staying under `/api/apps/local/<app>/...`. Root paths returned HTML shell content, causing `Unexpected token '<'`.
+
 ## Code Fixes (Source of Truth)
 Applied in commit `1ad9fe32` on branch `alice` in `milaidy`.
 
@@ -77,6 +80,8 @@ Additional coverage:
 
 - `/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/src/api/server.hyperscape-asset-origin.test.ts`
   - verifies Hyperscape `/audio/...` requests route to `https://assets.hyperscape.club`
+- `/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/src/api/server.managed-app-leaked-asset-redirect.test.ts`
+  - verifies leaked root asset requests are redirected back to the correct managed-app proxy base
 
 ## Deployment Technique (Canonical)
 This is the exact deployment flow that worked reliably after failures in lock handling, transient build downloads, and missing GHCR env wiring.
@@ -176,6 +181,7 @@ kubectl -n production exec "$POD" -- sh -lc "curl -sS -D - -H 'x-api-key: $TOKEN
 kubectl -n production exec "$POD" -- sh -lc "curl -sS -D - -H 'x-api-key: $TOKEN' 'http://127.0.0.1:3000/api/apps/local/%40elizaos%2Fapp-hyperscape/web/physx-js-webidl.js?v=1.0.0' -o /tmp/physx.js && head -c 80 /tmp/physx.js"
 kubectl -n production exec "$POD" -- sh -lc "curl -sS -D - -H 'x-api-key: $TOKEN' 'http://127.0.0.1:3000/api/apps/local/%40elizaos%2Fapp-hyperscape/web/physx-js-webidl.wasm?v=1.0.0' -o /tmp/physx.wasm && wc -c /tmp/physx.wasm"
 kubectl -n production exec "$POD" -- sh -lc "curl -sS -D - -H 'x-api-key: $TOKEN' 'http://127.0.0.1:3000/api/apps/local/%40elizaos%2Fapp-hyperscape/audio/music/twilight_fields.mp3' -o /tmp/track.mp3 && file -b /tmp/track.mp3"
+kubectl -n production exec "$POD" -- sh -lc "curl -sS -D - -o /dev/null -H 'x-api-key: $TOKEN' -e 'https://alice.rndrntwrk.com/api/apps/local/%40elizaos%2Fapp-babylon/' 'http://127.0.0.1:3000/_next/static/chunks/32767-b6a167b4f967188b.js?dpl=dpl_EW7XwVJQzt4thDwES2NA5p4oras9' | grep -i '^location:'"
 
 unset TOKEN
 ```
@@ -185,7 +191,8 @@ Expected:
 1. JS endpoints return JavaScript payload, not HTML.
 2. WASM endpoint returns non-trivial binary byte count.
 3. Audio endpoint returns binary media (not `<!doctype` HTML fallback).
-4. No `<!doctype` in response body snippets.
+4. Root leaked chunk probes return `Location: /api/apps/local/.../_next/...` redirect.
+5. No `<!doctype` in response body snippets.
 
 ## Browser Recovery Checklist (Required After Asset/Service-Worker Incidents)
 Even after a correct deploy, clients can keep stale chunks/service-worker state.
@@ -212,8 +219,9 @@ Likely cause: HTML response served for JS request (stale SW, stale HTML fallback
 Actions:
 
 1. Verify chunk URL in Network panel returns JS `content-type`.
-2. Run browser recovery checklist.
-3. Validate proxy rewrites are present in currently deployed image (`1ad9fe32+`).
+2. If chunk URL is root (`/_next/...`) while inside a managed iframe, validate leaked-root redirect behavior.
+3. Run browser recovery checklist.
+4. Validate proxy rewrites are present in currently deployed image.
 
 ### Symptom: `sw.js` unsupported MIME type
 Likely cause: worker script path resolving to HTML fallback or stale SW registration.
@@ -288,3 +296,4 @@ kubectl -n production rollout status deployment/alice-bot --timeout=600s
 ## Change Log
 - **2026-02-28**: Initial runbook created after managed-app proxy rewrite + Hyperscape auth fallback deployment and production verification.
 - **2026-02-28 (follow-up)**: Added audio-origin routing guidance and explicit handling for WebSocket `1006` during upstream `502` incidents.
+- **2026-02-28 (follow-up #2)**: Added leaked-root asset redirect strategy for managed iframes (`/_next/...`, `/script.js`) and validation probes.

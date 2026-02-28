@@ -376,6 +376,46 @@ export function rewriteManagedAppProxyJavaScript(
   return `${proxyBootstrap}${rewritten}`;
 }
 
+const MANAGED_APP_LEAKY_ROOT_PATHS = new Set([
+  "/sw.js",
+  "/manifest.webmanifest",
+  "/script.js",
+]);
+
+function parseRefererUrl(value: string): URL | null {
+  try {
+    return new URL(value);
+  } catch {
+    try {
+      return new URL(value, "http://localhost");
+    } catch {
+      return null;
+    }
+  }
+}
+
+export function resolveManagedAppLeakedAssetRedirect(
+  pathname: string,
+  search: string,
+  refererHeader: string | undefined,
+): string | null {
+  const isRootLeakedAssetPath =
+    pathname.startsWith("/_next/") || MANAGED_APP_LEAKY_ROOT_PATHS.has(pathname);
+  if (!isRootLeakedAssetPath) return null;
+  if (!refererHeader) return null;
+
+  const referer = parseRefererUrl(refererHeader);
+  if (!referer) return null;
+
+  const refererMatch = referer.pathname.match(
+    /^\/api\/apps\/local\/([^/]+)(?:\/|$)/,
+  );
+  if (!refererMatch) return null;
+
+  const localProxyBase = `/api/apps/local/${refererMatch[1]}`;
+  return `${localProxyBase}${pathname}${search}`;
+}
+
 function isJavaScriptLikeResponse(
   contentType: string,
   upstreamPath: string,
@@ -6187,6 +6227,22 @@ async function handleRequest(
     res.statusCode = 204;
     res.end();
     return;
+  }
+
+  if (method === "GET" || method === "HEAD") {
+    const refererHeader = readSingleHeaderValue(req.headers.referer);
+    const managedAppRedirect = resolveManagedAppLeakedAssetRedirect(
+      pathname,
+      url.search,
+      refererHeader,
+    );
+    if (managedAppRedirect) {
+      res.statusCode = 307;
+      res.setHeader("Location", managedAppRedirect);
+      res.setHeader("Cache-Control", "no-store");
+      res.end();
+      return;
+    }
   }
 
   // ── GET /api/auth/status ───────────────────────────────────────────────
