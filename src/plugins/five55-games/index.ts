@@ -12,6 +12,7 @@ import {
   assertFive55Capability,
   createFive55CapabilityPolicy,
 } from "../../runtime/five55-capability-policy.js";
+import { assertTrustedAdminForAction } from "../../runtime/trusted-admin.js";
 import {
   exceptionAction,
   executeApiAction,
@@ -34,12 +35,44 @@ const STREAM_SESSION_ENV = "STREAM_SESSION_ID";
 const STREAM555_SESSION_ENV = "STREAM555_DEFAULT_SESSION_ID";
 
 type GamesDialect = "five55-web" | "milaidy-proxy" | "agent-v1";
+type GameSessionMode = "standard" | "ranked" | "spectate" | "solo" | "agent";
 
 let cachedAgentSessionId: string | undefined;
 
 function trimEnv(key: string): string | undefined {
   const value = process.env[key]?.trim();
   return value ? value : undefined;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function normalizeMode(
+  mode: string | undefined,
+  dialect: GamesDialect,
+): GameSessionMode {
+  const normalized = mode?.trim().toLowerCase();
+  if (
+    normalized === "standard" ||
+    normalized === "ranked" ||
+    normalized === "spectate" ||
+    normalized === "solo" ||
+    normalized === "agent"
+  ) {
+    return normalized;
+  }
+  if (
+    normalized === "autonomous" ||
+    normalized === "auto" ||
+    normalized === "bot" ||
+    normalized === "play"
+  ) {
+    return "agent";
+  }
+  return dialect === "agent-v1" ? "agent" : "spectate";
 }
 
 function resolveGamesDialect(): GamesDialect {
@@ -99,21 +132,24 @@ function resolvePlayEndpoint(
 }
 
 async function fetchJson(
-  method: "POST",
+  method: "GET" | "POST",
   base: string,
   endpoint: string,
   token: string,
-  body: Record<string, unknown>,
+  body?: Record<string, unknown>,
 ): Promise<{ ok: boolean; status: number; data?: Record<string, unknown>; rawBody: string }> {
   const target = new URL(endpoint, base);
-  const response = await fetch(target, {
+  const init: RequestInit = {
     method,
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify(body),
-  });
+  };
+  if (body !== undefined) {
+    init.body = JSON.stringify(body);
+  }
+  const response = await fetch(target, init);
   const rawBody = await response.text();
   let data: Record<string, unknown> | undefined;
   try {
@@ -139,6 +175,37 @@ function getErrorDetail(payload: {
   const fromData = payload.data?.error;
   if (typeof fromData === "string" && fromData.trim()) return fromData;
   return payload.rawBody || "upstream request failed";
+}
+
+function resolveCatalogGameId(data: Record<string, unknown> | undefined): string | undefined {
+  if (!data) return undefined;
+  const games = Array.isArray(data.games) ? data.games : [];
+  for (const game of games) {
+    const gameRecord = asRecord(game);
+    const gameId = typeof gameRecord?.id === "string" ? gameRecord.id.trim() : "";
+    if (gameId.length > 0) return gameId;
+  }
+  return undefined;
+}
+
+async function resolveAgentGameId(
+  base: string,
+  token: string,
+  sessionId: string,
+  requestedGameId?: string,
+): Promise<string | undefined> {
+  const preferred = requestedGameId?.trim();
+  if (preferred) return preferred;
+
+  const catalog = await fetchJson(
+    "POST",
+    base,
+    resolveCatalogEndpoint("agent-v1", sessionId),
+    token,
+    { includeBeta: true },
+  );
+  if (!catalog.ok) return undefined;
+  return resolveCatalogGameId(catalog.data);
 }
 
 async function ensureAgentSessionId(
@@ -178,6 +245,108 @@ async function ensureAgentSessionId(
   return sessionId;
 }
 
+function readNonEmptyString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+type AgentSessionSnapshot = {
+  active: boolean;
+  cfSessionId?: string;
+};
+
+async function fetchAgentSessionSnapshot(
+  base: string,
+  token: string,
+  sessionId: string,
+): Promise<AgentSessionSnapshot> {
+  const response = await fetchJson(
+    "GET",
+    base,
+    `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}`,
+    token,
+  );
+  if (!response.ok) {
+    throw new Error(
+      `session status preflight failed (${response.status}): ${getErrorDetail(response)}`,
+    );
+  }
+  return {
+    active: Boolean(response.data?.active),
+    cfSessionId: readNonEmptyString(response.data?.cfSessionId),
+  };
+}
+
+async function stopAgentStream(
+  base: string,
+  token: string,
+  sessionId: string,
+): Promise<void> {
+  const response = await fetchJson(
+    "POST",
+    base,
+    `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/stream/stop`,
+    token,
+    {},
+  );
+  if (!response.ok) {
+    throw new Error(
+      `stream/stop failed (${response.status}): ${getErrorDetail(response)}`,
+    );
+  }
+}
+
+async function startAgentScreenStream(
+  base: string,
+  token: string,
+  sessionId: string,
+): Promise<string | undefined> {
+  const response = await fetchJson(
+    "POST",
+    base,
+    `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/stream/start`,
+    token,
+    {
+      input: {
+        type: "screen",
+      },
+    },
+  );
+
+  const cfSessionId = readNonEmptyString(response.data?.cfSessionId);
+  if (!response.ok && !(response.status === 409 && cfSessionId)) {
+    throw new Error(
+      `stream/start provisioning failed (${response.status}): ${getErrorDetail(response)}`,
+    );
+  }
+
+  return cfSessionId;
+}
+
+async function ensureAgentCloudflareOutput(
+  base: string,
+  token: string,
+  sessionId: string,
+): Promise<void> {
+  const snapshot = await fetchAgentSessionSnapshot(base, token, sessionId);
+  if (snapshot.cfSessionId) return;
+
+  if (snapshot.active) {
+    await stopAgentStream(base, token, sessionId);
+  }
+
+  const startedCfSessionId = await startAgentScreenStream(base, token, sessionId);
+  if (startedCfSessionId) return;
+
+  const verifiedSnapshot = await fetchAgentSessionSnapshot(base, token, sessionId);
+  if (verifiedSnapshot.cfSessionId) return;
+
+  throw new Error(
+    "Cloudflare output provisioning did not produce cfSessionId for session",
+  );
+}
+
 const gamesProvider: Provider = {
   name: "five55Games",
   description: "Five55 game discovery and launch orchestration surface",
@@ -197,7 +366,7 @@ const gamesProvider: Provider = {
       text: [
         "## Five55 Games Surface",
         "",
-        "Actions: FIVE55_GAMES_CATALOG, FIVE55_GAMES_PLAY",
+        "Actions: FIVE55_GAMES_CATALOG, FIVE55_GAMES_PLAY, FIVE55_GAMES_GO_LIVE_PLAY",
         `API configured: ${configured ? "yes" : "no"} (${dialect === "five55-web" ? API_ENV : dialect === "agent-v1" ? `${STREAM555_BASE_ENV}|${describeAgentAuthSource()}` : `${LOCAL_API_URL_ENV}|${LOCAL_PORT_ENV}`})`,
         `Dialect: ${dialect}`,
         ...(dialect === "agent-v1"
@@ -345,7 +514,10 @@ const playAction: Action = {
       assertFive55Capability(CAPABILITY_POLICY, "games.play");
       const dialect = resolveGamesDialect();
       const gameId = readParam(options as HandlerOptions | undefined, "gameId");
-      const mode = readParam(options as HandlerOptions | undefined, "mode");
+      const mode = normalizeMode(
+        readParam(options as HandlerOptions | undefined, "mode"),
+        dialect,
+      );
       const requestedSessionId = readParam(
         options as HandlerOptions | undefined,
         "sessionId",
@@ -359,14 +531,20 @@ const playAction: Action = {
           token,
           requestedSessionId,
         );
+        const resolvedGameId = await resolveAgentGameId(
+          base,
+          token,
+          sessionId,
+          gameId,
+        );
         return executeApiAction({
           module: "five55.games",
           action: "FIVE55_GAMES_PLAY",
           base,
           endpoint: resolvePlayEndpoint(dialect, sessionId),
           payload: {
-            ...(gameId ? { gameId } : {}),
-            mode: mode ?? "spectate",
+            ...(resolvedGameId ? { gameId: resolvedGameId } : {}),
+            mode,
           },
           requestContract: {
             gameId: { required: true, type: "string", nonEmpty: true },
@@ -374,7 +552,7 @@ const playAction: Action = {
               required: true,
               type: "string",
               nonEmpty: true,
-              oneOf: ["standard", "ranked", "spectate"],
+              oneOf: ["standard", "ranked", "spectate", "solo", "agent"],
             },
           },
           responseContract: {},
@@ -398,7 +576,7 @@ const playAction: Action = {
         endpoint: resolvePlayEndpoint(dialect),
         payload: {
           ...(gameId ? { gameId } : {}),
-          mode: mode ?? "spectate",
+          mode,
         },
         requestContract: {
           gameId: { required: false, type: "string", nonEmpty: true },
@@ -406,7 +584,7 @@ const playAction: Action = {
             required: true,
             type: "string",
             nonEmpty: true,
-            oneOf: ["standard", "ranked", "spectate"],
+            oneOf: ["standard", "ranked", "spectate", "solo", "agent"],
           },
         },
         responseContract: {},
@@ -433,7 +611,117 @@ const playAction: Action = {
     },
     {
       name: "mode",
-      description: "Session mode (standard|ranked|spectate)",
+      description: "Session mode (standard|ranked|spectate|solo|agent)",
+      required: false,
+      schema: { type: "string" as const },
+    },
+    {
+      name: "sessionId",
+      description: "Optional stream session id for agent-v1 dialect",
+      required: false,
+      schema: { type: "string" as const },
+    },
+  ],
+};
+
+const goLivePlayAction: Action = {
+  name: "FIVE55_GAMES_GO_LIVE_PLAY",
+  similes: [
+    "PLAY_GAME_GO_LIVE",
+    "GO_LIVE_PLAY_GAME",
+    "START_GAME_STREAM",
+    "FIVE55_GO_LIVE_PLAY",
+  ],
+  description:
+    "Launches a Five55 game in agent mode and ensures Cloudflare stream output is provisioned for the session.",
+  validate: async () => true,
+  handler: async (runtime, message, state, options) => {
+    try {
+      assertTrustedAdminForAction(runtime, message, state, "FIVE55_GAMES_GO_LIVE_PLAY");
+      assertFive55Capability(CAPABILITY_POLICY, "games.play");
+      assertFive55Capability(CAPABILITY_POLICY, "stream.control");
+
+      const dialect = resolveGamesDialect();
+      if (dialect !== "agent-v1") {
+        throw new Error(
+          "FIVE55_GAMES_GO_LIVE_PLAY requires agent-v1 dialect (set FIVE55_GAMES_API_DIALECT=agent-v1 with STREAM555_BASE_URL + agent auth)",
+        );
+      }
+
+      const base = resolveGamesBase(dialect);
+      const token = await resolveAgentBearer(base);
+      const requestedSessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+      const requestedGameId = readParam(
+        options as HandlerOptions | undefined,
+        "gameId",
+      );
+      const mode = normalizeMode(
+        readParam(options as HandlerOptions | undefined, "mode"),
+        dialect,
+      );
+
+      const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+      await ensureAgentCloudflareOutput(base, token, sessionId);
+
+      const resolvedGameId = await resolveAgentGameId(
+        base,
+        token,
+        sessionId,
+        requestedGameId,
+      );
+      if (!resolvedGameId) {
+        throw new Error("No playable game could be resolved for go-live launch");
+      }
+
+      const playResult = await executeApiAction({
+        module: "five55.games",
+        action: "FIVE55_GAMES_GO_LIVE_PLAY",
+        base,
+        endpoint: resolvePlayEndpoint(dialect, sessionId),
+        payload: {
+          gameId: resolvedGameId,
+          mode,
+        },
+        requestContract: {
+          gameId: { required: true, type: "string", nonEmpty: true },
+          mode: {
+            required: true,
+            type: "string",
+            nonEmpty: true,
+            oneOf: ["standard", "ranked", "spectate", "solo", "agent"],
+          },
+        },
+        responseContract: {},
+        successMessage: "game play started",
+        transport: {
+          service: "games",
+          operation: "command",
+          idempotent: true,
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+        context: { sessionId },
+      });
+
+      return playResult;
+    } catch (err) {
+      return exceptionAction("five55.games", "FIVE55_GAMES_GO_LIVE_PLAY", err);
+    }
+  },
+  parameters: [
+    {
+      name: "gameId",
+      description: "Canonical game identifier (optional, resolves first playable game when omitted)",
+      required: false,
+      schema: { type: "string" as const },
+    },
+    {
+      name: "mode",
+      description: "Session mode (defaults to agent for agent-v1)",
       required: false,
       schema: { type: "string" as const },
     },
@@ -451,7 +739,7 @@ export function createFive55GamesPlugin(): Plugin {
     name: "five55-games",
     description: "Five55 games orchestration plugin",
     providers: [gamesProvider],
-    actions: [catalogAction, playAction],
+    actions: [catalogAction, playAction, goLivePlayAction],
   };
 }
 

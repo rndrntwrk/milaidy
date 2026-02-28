@@ -2618,7 +2618,7 @@ export function buildCharacterFromConfig(config: MilaidyConfig): Character {
     "Use the same operation standards across all channels (web chat, Discord, Telegram, and direct text).",
     "For theme/event controls, use FIVE55_THEME_SET and FIVE55_EVENT_TRIGGER with explicit operator intent.",
     "For live-stream actions, call STREAM_STATUS before and after STREAM_CONTROL changes.",
-    "For game actions, call FIVE55_GAMES_CATALOG before FIVE55_GAMES_PLAY unless a valid gameId is already known.",
+    "For game actions, call FIVE55_GAMES_CATALOG before FIVE55_GAMES_PLAY unless a valid gameId is already known; use FIVE55_GAMES_GO_LIVE_PLAY when gameplay and stream start should be orchestrated together.",
     "For battle creation, use FIVE55_BATTLES_CREATE before resolution flows.",
     "For wallet and swap actions, perform read checks before write operations and summarize risk before execution.",
     "When a run requests autonomous operation, confirm duration and cost constraints before starting.",
