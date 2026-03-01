@@ -190,6 +190,101 @@ describe("stream555-control plugin actions", () => {
     expect(parseEnvelope(result as { text: string }).code).toBe("OK");
   });
 
+  it("routes l-bar ad creation through brand-intake template endpoint", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { sessionId: "session-ad-1" }))
+      .mockResolvedValueOnce(jsonResponse(201, { success: true, ad: { id: "ad-1" } }));
+
+    const action = await resolveAction("STREAM555_AD_CREATE");
+    const result = await action.handler?.(
+      INTERNAL_RUNTIME,
+      INTERNAL_MESSAGE,
+      INTERNAL_STATE,
+      {
+        parameters: {
+          sessionId: "session-ad-1",
+          type: "l-bar",
+          adName: "Alice Promo",
+          brandName: "Alice Promo",
+          imageUrl: "https://cdn.example.com/promo.png",
+          text: "Level up with Alice",
+          ctaUrl: "https://example.com/play",
+          durationMs: "15000",
+        },
+      } as never,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, createCall] = fetchMock.mock.calls;
+    expect(String(createCall[0])).toContain(
+      "/api/agent/v1/sessions/session-ad-1/ads/l-bar/from-brand",
+    );
+    const payload = parseFetchBody(createCall);
+    expect(payload._adName).toBe("Alice Promo");
+    expect(payload._duration).toBe(15000);
+    const brand = payload.brand as Record<string, unknown>;
+    expect(typeof brand.id).toBe("string");
+    expect(String(brand.id)).toContain("alice-promo");
+    expect(brand.name).toBe("Alice Promo");
+    expect(brand.color).toBe("#6D28D9");
+    expect(brand.tagline).toBe("Level up with Alice");
+    expect(brand.video).toEqual({
+      src: "https://cdn.example.com/promo.png",
+      aspect: "square",
+      type: "image",
+    });
+    expect(brand.cta).toEqual({
+      text: "Level up with Alice",
+      url: "https://example.com/play",
+    });
+    expect(brand.qr).toEqual({
+      url: "https://example.com/play",
+      label: "Level up with Alice",
+    });
+    expect(result?.success).toBe(true);
+    expect(parseEnvelope(result as { text: string }).code).toBe("OK");
+  });
+
+  it("falls back to generic ads endpoint when l-bar media input is missing", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { sessionId: "session-ad-2" }))
+      .mockResolvedValueOnce(jsonResponse(201, { success: true, ad: { id: "ad-2" } }));
+
+    const action = await resolveAction("STREAM555_AD_CREATE");
+    const result = await action.handler?.(
+      INTERNAL_RUNTIME,
+      INTERNAL_MESSAGE,
+      INTERNAL_STATE,
+      {
+        parameters: {
+          sessionId: "session-ad-2",
+          type: "l-bar",
+          adName: "Fallback Ad",
+          text: "Fallback copy",
+          durationMs: "12000",
+        },
+      } as never,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, createCall] = fetchMock.mock.calls;
+    expect(String(createCall[0])).toContain("/api/agent/v1/sessions/session-ad-2/ads");
+    expect(String(createCall[0])).not.toContain("/from-brand");
+    expect(parseFetchBody(createCall)).toEqual({
+      type: "l-bar",
+      layout: "l-bar",
+      name: "Fallback Ad",
+      duration: 12000,
+      mainContent: {
+        title: "Fallback copy",
+      },
+    });
+    expect(result?.success).toBe(true);
+    expect(parseEnvelope(result as { text: string }).code).toBe("OK");
+  });
+
   it("normalizes category csv and posts marketplace earnings request", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch");
     fetchMock.mockResolvedValueOnce(

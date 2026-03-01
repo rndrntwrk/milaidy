@@ -34,6 +34,7 @@ const CAPABILITY_POLICY = createFive55CapabilityPolicy();
 let cachedAgentSessionId: string | undefined;
 
 type JsonObject = Record<string, unknown>;
+type LBarVideoAspect = "square" | "landscape";
 
 function trimEnv(key: string): string | undefined {
   const value = process.env[key]?.trim();
@@ -71,6 +72,122 @@ function parseCsvList(value: string | undefined): string[] | undefined {
     .map((entry) => entry.trim().toLowerCase())
     .filter(Boolean);
   return list.length > 0 ? list : undefined;
+}
+
+const HEX_COLOR_PATTERN = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
+const DEFAULT_L_BAR_COLOR = "#6D28D9";
+const DEFAULT_QR_URL = "https://555stream.tv";
+
+function sanitizeHexColor(value: string | undefined): string {
+  if (!value) return DEFAULT_L_BAR_COLOR;
+  const trimmed = value.trim();
+  return HEX_COLOR_PATTERN.test(trimmed) ? trimmed : DEFAULT_L_BAR_COLOR;
+}
+
+function normalizeVideoAspect(value: string | undefined): LBarVideoAspect {
+  if (!value) return "square";
+  return value.trim().toLowerCase() === "landscape" ? "landscape" : "square";
+}
+
+function sanitizeBrandToken(value: string | undefined, fallback: string): string {
+  const normalized = (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (normalized.length > 0) return normalized.slice(0, 48);
+  return fallback;
+}
+
+function buildLBarFromBrandPayload(input: {
+  type: string;
+  imageUrl?: string;
+  videoUrl?: string;
+  text?: string;
+  durationMs?: number;
+  adName?: string;
+  brandName?: string;
+  brandId?: string;
+  ctaText?: string;
+  ctaUrl?: string;
+  qrUrl?: string;
+  color?: string;
+  logoUrl?: string;
+  twitter?: string;
+  handle?: string;
+  videoAspect?: string;
+}): JsonObject | null {
+  if (input.type.trim().toLowerCase() !== "l-bar") return null;
+  const videoSrc = input.videoUrl?.trim() || input.imageUrl?.trim();
+  if (!videoSrc) return null;
+
+  const brandName =
+    input.brandName?.trim() ||
+    input.adName?.trim() ||
+    "Alice Sponsor";
+  const timestamp = Date.now().toString(36);
+  const inferredBrandId = sanitizeBrandToken(brandName, "alice-sponsor");
+  const brandId = sanitizeBrandToken(input.brandId, inferredBrandId);
+  const tagline = input.text?.trim();
+  const ctaText = input.ctaText?.trim() || tagline || "Learn more";
+  const destinationUrl =
+    input.qrUrl?.trim() ||
+    input.ctaUrl?.trim() ||
+    input.twitter?.trim() ||
+    DEFAULT_QR_URL;
+  const aspect = normalizeVideoAspect(input.videoAspect);
+  const isImageFallback = !input.videoUrl?.trim() && Boolean(input.imageUrl?.trim());
+
+  return {
+    type: "l-bar",
+    brand: {
+      id: `${brandId}-${timestamp}`,
+      name: brandName,
+      color: sanitizeHexColor(input.color),
+      video: {
+        src: videoSrc,
+        aspect,
+        ...(isImageFallback ? { type: "image" } : {}),
+      },
+      ...(input.imageUrl?.trim() && input.videoUrl?.trim()
+        ? { banners: [input.imageUrl.trim()] }
+        : {}),
+      ...(tagline ? { tagline } : {}),
+      ...(input.logoUrl?.trim() ? { logoUrl: input.logoUrl.trim() } : {}),
+      ...(input.twitter?.trim() ? { twitter: input.twitter.trim() } : {}),
+      ...(input.handle?.trim() ? { handle: input.handle.trim() } : {}),
+      cta: {
+        text: ctaText,
+        url: destinationUrl,
+      },
+      qr: {
+        url: destinationUrl,
+        label: ctaText,
+      },
+    },
+    ...(input.adName?.trim() ? { _adName: input.adName.trim() } : {}),
+    ...(Number.isFinite(input.durationMs) ? { _duration: input.durationMs } : {}),
+  };
+}
+
+function buildGenericAdPayload(input: {
+  type: string;
+  imageUrl?: string;
+  text?: string;
+  durationMs?: number;
+  adName?: string;
+}): JsonObject {
+  const normalizedLayout = input.type?.trim() ? input.type.trim() : "l-bar";
+  return {
+    type: normalizedLayout,
+    layout: normalizedLayout,
+    name: input.adName?.trim() || `Ad ${new Date().toISOString()}`,
+    ...(Number.isFinite(input.durationMs) ? { duration: input.durationMs } : {}),
+    mainContent: {
+      ...(input.text?.trim() ? { title: input.text.trim() } : {}),
+      ...(input.imageUrl?.trim() ? { imageUrl: input.imageUrl.trim() } : {}),
+    },
+  };
 }
 
 function normalizeAppName(raw: string): string {
@@ -850,7 +967,8 @@ const endLiveAction: Action = {
 const adsCreateAction: Action = {
   name: "STREAM555_AD_CREATE",
   similes: ["STREAM555_CREATE_AD", "CREATE_AD_STREAM555"],
-  description: "Creates an ad in the resolved session for immediate or scheduled playback.",
+  description:
+    "Creates an ad in the resolved session. L-Bar defaults to the same brand-intake template path used by Studio.",
   validate: async () => true,
   handler: async (runtime, message, state, options) => {
     try {
@@ -869,23 +987,69 @@ const adsCreateAction: Action = {
         options as HandlerOptions | undefined,
         "durationMs",
       );
+      const adName = readParam(options as HandlerOptions | undefined, "adName");
+      const brandName = readParam(
+        options as HandlerOptions | undefined,
+        "brandName",
+      );
+      const brandId = readParam(options as HandlerOptions | undefined, "brandId");
+      const videoUrl = readParam(
+        options as HandlerOptions | undefined,
+        "videoUrl",
+      );
+      const videoAspect = readParam(
+        options as HandlerOptions | undefined,
+        "videoAspect",
+      );
+      const ctaText = readParam(options as HandlerOptions | undefined, "ctaText");
+      const ctaUrl = readParam(options as HandlerOptions | undefined, "ctaUrl");
+      const qrUrl = readParam(options as HandlerOptions | undefined, "qrUrl");
+      const color = readParam(options as HandlerOptions | undefined, "color");
+      const logoUrl = readParam(options as HandlerOptions | undefined, "logoUrl");
+      const twitter = readParam(options as HandlerOptions | undefined, "twitter");
+      const handle = readParam(options as HandlerOptions | undefined, "handle");
       const durationMs = durationMsRaw ? Number.parseInt(durationMsRaw, 10) : undefined;
 
       const base = resolveBaseUrl();
       const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+      const lBarPayload = buildLBarFromBrandPayload({
+        type,
+        imageUrl,
+        videoUrl,
+        text,
+        durationMs,
+        adName,
+        brandName,
+        brandId,
+        ctaText,
+        ctaUrl,
+        qrUrl,
+        color,
+        logoUrl,
+        twitter,
+        handle,
+        videoAspect,
+      });
+      const endpoint = lBarPayload
+        ? `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/ads/l-bar/from-brand`
+        : `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/ads`;
+      const payload = lBarPayload
+        ? lBarPayload
+        : buildGenericAdPayload({
+            type,
+            imageUrl,
+            text,
+            durationMs,
+            adName,
+          });
 
       return executeApiAction({
         module: "stream555.control",
         action: "STREAM555_AD_CREATE",
         base,
-        endpoint: `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/ads`,
-        payload: {
-          type,
-          ...(imageUrl ? { imageUrl } : {}),
-          ...(text ? { text } : {}),
-          ...(Number.isFinite(durationMs) ? { durationMs } : {}),
-        },
+        endpoint,
+        payload,
         requestContract: {
           type: { required: true, type: "string", nonEmpty: true },
         },
@@ -900,9 +1064,21 @@ const adsCreateAction: Action = {
   },
   parameters: [
     { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
-    { name: "type", description: "Ad type (default l-bar)", required: false, schema: { type: "string" as const } },
+    { name: "type", description: "Ad layout/type (default l-bar)", required: false, schema: { type: "string" as const } },
+    { name: "adName", description: "Ad display name", required: false, schema: { type: "string" as const } },
     { name: "imageUrl", description: "Creative image URL", required: false, schema: { type: "string" as const } },
+    { name: "videoUrl", description: "Creative video URL (preferred for l-bar template flow)", required: false, schema: { type: "string" as const } },
+    { name: "videoAspect", description: "Video aspect for l-bar (square|landscape)", required: false, schema: { type: "string" as const } },
     { name: "text", description: "Creative text/caption", required: false, schema: { type: "string" as const } },
+    { name: "brandName", description: "Brand display name for l-bar template flow", required: false, schema: { type: "string" as const } },
+    { name: "brandId", description: "Brand identifier for l-bar template flow", required: false, schema: { type: "string" as const } },
+    { name: "ctaText", description: "CTA copy for l-bar template flow", required: false, schema: { type: "string" as const } },
+    { name: "ctaUrl", description: "CTA destination URL for l-bar template flow", required: false, schema: { type: "string" as const } },
+    { name: "qrUrl", description: "QR destination URL for l-bar template flow", required: false, schema: { type: "string" as const } },
+    { name: "color", description: "Brand primary hex color for l-bar template flow", required: false, schema: { type: "string" as const } },
+    { name: "logoUrl", description: "Brand logo URL for l-bar template flow", required: false, schema: { type: "string" as const } },
+    { name: "twitter", description: "Brand X/Twitter URL or handle", required: false, schema: { type: "string" as const } },
+    { name: "handle", description: "Brand social handle", required: false, schema: { type: "string" as const } },
     { name: "durationMs", description: "Playback duration in milliseconds", required: false, schema: { type: "string" as const } },
   ],
 };
