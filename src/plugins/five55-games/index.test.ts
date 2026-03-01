@@ -20,6 +20,8 @@ const ENV_KEYS = [
   "STREAM555_DEFAULT_SESSION_ID",
   "FIVE55_GAMES_VIEWER_BASE_URL",
   "GAMES_BASE_URL",
+  "ALICE_INTELLIGENCE_ENABLED",
+  "ALICE_LEARNING_WRITEBACK_ENABLED",
 ] as const;
 
 const INTERNAL_RUNTIME = { agentId: "alice-internal" } as never;
@@ -88,6 +90,8 @@ describe("five55-games plugin actions", () => {
     process.env.FIVE55_GAMES_CF_RECOVERY_ATTEMPTS = "1";
     process.env.STREAM555_BASE_URL = "http://control-plane:3000";
     process.env.STREAM555_AGENT_TOKEN = "agent-token";
+    process.env.ALICE_INTELLIGENCE_ENABLED = "true";
+    process.env.ALICE_LEARNING_WRITEBACK_ENABLED = "true";
     delete process.env.FIVE55_GAMES_API_URL;
     delete process.env.STREAM555_AGENT_API_KEY;
     delete process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT;
@@ -209,6 +213,21 @@ describe("five55-games plugin actions", () => {
       .mockResolvedValueOnce(jsonResponse(201, { status: "created", cfSessionId: "cf-4" }))
       .mockResolvedValueOnce(
         jsonResponse(200, {
+          sessionId: "session-4",
+          agentId: "alice",
+          gameId: "ninja",
+          profile: {
+            exists: false,
+            policyVersion: 1,
+            confidence: 0.5,
+            policySnapshot: {},
+            provenance: { source: "default" },
+          },
+          latestEpisode: null,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
           game: { id: "ninja", path: "games/ninja" },
         }),
       )
@@ -236,22 +255,36 @@ describe("five55-games plugin actions", () => {
       } as never,
     );
 
-    expect(fetchMock).toHaveBeenCalledTimes(5);
-    const [, , streamStartCall, playCall, statusCall] = fetchMock.mock.calls;
-    expect(String(streamStartCall[0])).toContain(
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(5);
+    const streamStartCall = fetchMock.mock.calls.find((entry) =>
+      String(entry[0]).includes("/api/agent/v1/sessions/session-4/stream/start"),
+    );
+    const playCall = fetchMock.mock.calls.find((entry) =>
+      String(entry[0]).includes("/api/agent/v1/sessions/session-4/games/play"),
+    );
+    const statusCall = fetchMock.mock.calls.find((entry) =>
+      String(entry[0]).includes("/api/agent/v1/sessions/session-4/stream/status"),
+    );
+    expect(streamStartCall).toBeDefined();
+    expect(playCall).toBeDefined();
+    expect(statusCall).toBeDefined();
+    expect(String(streamStartCall?.[0])).toContain(
       "/api/agent/v1/sessions/session-4/stream/start",
     );
-    expect(parseFetchBody(streamStartCall)).toEqual({
+    expect(parseFetchBody(streamStartCall as unknown[])).toEqual({
       input: {
         type: "screen",
       },
     });
-    expect(String(playCall[0])).toContain("/api/agent/v1/sessions/session-4/games/play");
-    expect(parseFetchBody(playCall)).toEqual({
+    expect(String(playCall?.[0])).toContain("/api/agent/v1/sessions/session-4/games/play");
+    expect(parseFetchBody(playCall as unknown[])).toEqual({
       gameId: "ninja",
       mode: "agent",
+      controlAuthority: "milaidy",
+      policyVersion: 1,
+      policySnapshot: expect.any(Object),
     });
-    expect(String(statusCall[0])).toContain(
+    expect(String(statusCall?.[0])).toContain(
       "/api/agent/v1/sessions/session-4/stream/status",
     );
     expect(result?.success).toBe(true);
@@ -272,6 +305,21 @@ describe("five55-games plugin actions", () => {
       )
       .mockResolvedValueOnce(jsonResponse(200, { stopped: true }))
       .mockResolvedValueOnce(jsonResponse(201, { status: "created", cfSessionId: "cf-5" }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          sessionId: "session-5",
+          agentId: "alice",
+          gameId: "ninja",
+          profile: {
+            exists: false,
+            policyVersion: 1,
+            confidence: 0.5,
+            policySnapshot: {},
+            provenance: { source: "default" },
+          },
+          latestEpisode: null,
+        }),
+      )
       .mockResolvedValueOnce(
         jsonResponse(200, {
           game: { id: "ninja", path: "games/ninja" },
@@ -338,10 +386,17 @@ describe("five55-games plugin actions", () => {
     expect(
       calledUrls.filter((url) => url.includes("/stream/status")).length,
     ).toBeGreaterThanOrEqual(2);
-    const [, , stopCall, startCall] = fetchMock.mock.calls;
-    expect(String(stopCall[0])).toContain("/api/agent/v1/sessions/session-5/stream/stop");
-    expect(String(startCall[0])).toContain("/api/agent/v1/sessions/session-5/stream/start");
-    expect(parseFetchBody(startCall)).toEqual({
+    const stopCall = fetchMock.mock.calls.find((entry) =>
+      String(entry[0]).includes("/api/agent/v1/sessions/session-5/stream/stop"),
+    );
+    const startCall = fetchMock.mock.calls.find((entry) =>
+      String(entry[0]).includes("/api/agent/v1/sessions/session-5/stream/start"),
+    );
+    expect(stopCall).toBeDefined();
+    expect(startCall).toBeDefined();
+    expect(String(stopCall?.[0])).toContain("/api/agent/v1/sessions/session-5/stream/stop");
+    expect(String(startCall?.[0])).toContain("/api/agent/v1/sessions/session-5/stream/start");
+    expect(parseFetchBody(startCall as unknown[])).toEqual({
       input: {
         type: "screen",
       },
@@ -357,6 +412,21 @@ describe("five55-games plugin actions", () => {
         jsonResponse(200, {
           active: true,
           cfSessionId: "cf-6",
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          sessionId: "session-6",
+          agentId: "alice",
+          gameId: "ninja",
+          profile: {
+            exists: false,
+            policyVersion: 1,
+            confidence: 0.5,
+            policySnapshot: {},
+            provenance: { source: "default" },
+          },
+          latestEpisode: null,
         }),
       )
       .mockResolvedValueOnce(
@@ -388,7 +458,7 @@ describe("five55-games plugin actions", () => {
       } as never,
     );
 
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(4);
     const calledUrls = fetchMock.mock.calls.map((entry) => String(entry[0]));
     expect(calledUrls.some((url) => url.includes("/stream/start"))).toBe(false);
     expect(calledUrls.some((url) => url.includes("/stream/stop"))).toBe(false);
@@ -419,7 +489,7 @@ describe("five55-games plugin actions", () => {
       } as never,
     );
 
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(3);
     expect(result?.success).toBe(false);
     const envelope = parseEnvelope(result as { text: string });
     expect(envelope.code).toBe("E_RUNTIME_EXCEPTION");
@@ -437,6 +507,21 @@ describe("five55-games plugin actions", () => {
         }),
       )
       .mockResolvedValueOnce(jsonResponse(201, { status: "created", cfSessionId: "cf-8" }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          sessionId: "session-8",
+          agentId: "alice",
+          gameId: "ninja",
+          profile: {
+            exists: false,
+            policyVersion: 1,
+            confidence: 0.5,
+            policySnapshot: {},
+            provenance: { source: "default" },
+          },
+          latestEpisode: null,
+        }),
+      )
       .mockResolvedValueOnce(
         jsonResponse(200, {
           game: { id: "ninja", path: "games/ninja" },

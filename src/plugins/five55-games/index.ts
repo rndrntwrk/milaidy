@@ -23,6 +23,14 @@ import {
   isAgentAuthConfigured,
   resolveAgentBearer,
 } from "../five55-shared/agent-auth.js";
+import {
+  AutonomySupervisor,
+  LearningClient,
+  OutcomeAnalyzer,
+  PolicyEngine,
+  type AgentRequest,
+  type LaunchPolicyContext,
+} from "./intelligence/index.js";
 
 const CAPABILITY_POLICY = createFive55CapabilityPolicy();
 const API_ENV = "FIVE55_GAMES_API_URL";
@@ -36,6 +44,9 @@ const STREAM555_SESSION_ENV = "STREAM555_DEFAULT_SESSION_ID";
 const CF_CONNECT_TIMEOUT_MS_ENV = "FIVE55_GAMES_CF_CONNECT_TIMEOUT_MS";
 const CF_CONNECT_POLL_MS_ENV = "FIVE55_GAMES_CF_CONNECT_POLL_MS";
 const CF_RECOVERY_ATTEMPTS_ENV = "FIVE55_GAMES_CF_RECOVERY_ATTEMPTS";
+const ALICE_INTELLIGENCE_ENABLED_ENV = "ALICE_INTELLIGENCE_ENABLED";
+const ALICE_LEARNING_WRITEBACK_ENABLED_ENV =
+  "ALICE_LEARNING_WRITEBACK_ENABLED";
 
 const DEFAULT_CF_CONNECT_TIMEOUT_MS = 45_000;
 const DEFAULT_CF_CONNECT_POLL_MS = 5_000;
@@ -65,6 +76,15 @@ function readNonNegativeIntEnv(key: string, fallback: number): number {
   const parsed = Number.parseInt(raw, 10);
   if (!Number.isFinite(parsed) || parsed < 0) return fallback;
   return parsed;
+}
+
+function readBooleanEnv(key: string, fallback: boolean): boolean {
+  const raw = trimEnv(key);
+  if (!raw) return fallback;
+  const normalized = raw.toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return fallback;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -155,7 +175,7 @@ function resolvePlayEndpoint(
 }
 
 async function fetchJson(
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "PUT",
   base: string,
   endpoint: string,
   token: string,
@@ -189,6 +209,10 @@ async function fetchJson(
     data,
     rawBody,
   };
+}
+
+function createAgentRequest(base: string, token: string): AgentRequest {
+  return (method, endpoint, body) => fetchJson(method, base, endpoint, token, body);
 }
 
 function getErrorDetail(payload: {
@@ -394,6 +418,31 @@ async function ensureAgentCloudflareOutput(
   throw new Error(
     "Cloudflare output provisioning did not produce cfSessionId for session",
   );
+}
+
+async function prepareLaunchPolicyContext(
+  base: string,
+  token: string,
+  sessionId: string,
+  gameId: string,
+): Promise<LaunchPolicyContext | null> {
+  const intelligenceEnabled = readBooleanEnv(ALICE_INTELLIGENCE_ENABLED_ENV, true);
+  if (!intelligenceEnabled) return null;
+
+  const learningWritebackEnabled = readBooleanEnv(
+    ALICE_LEARNING_WRITEBACK_ENABLED_ENV,
+    true,
+  );
+
+  const request = createAgentRequest(base, token);
+  const supervisor = new AutonomySupervisor({
+    learningClient: new LearningClient(request),
+    policyEngine: new PolicyEngine(),
+    outcomeAnalyzer: new OutcomeAnalyzer(),
+    learningWritebackEnabled,
+  });
+
+  return supervisor.prepareLaunchContext(sessionId, gameId);
 }
 
 async function fetchAgentStreamStatusSnapshot(
@@ -795,6 +844,21 @@ const goLivePlayAction: Action = {
         throw new Error("No playable game could be resolved for go-live launch");
       }
 
+      let launchPolicyContext: LaunchPolicyContext | null = null;
+      try {
+        launchPolicyContext = await prepareLaunchPolicyContext(
+          base,
+          token,
+          sessionId,
+          resolvedGameId,
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(
+          `[five55.games] intelligence bootstrap skipped for ${resolvedGameId}: ${message}`,
+        );
+      }
+
       let lastConnectivity: CloudflareConnectCheck | undefined;
       for (let attempt = 0; attempt <= cfRecoveryAttempts; attempt += 1) {
         const playResult = await executeApiAction({
@@ -805,6 +869,13 @@ const goLivePlayAction: Action = {
           payload: {
             gameId: resolvedGameId,
             mode,
+            ...(launchPolicyContext
+              ? {
+                controlAuthority: launchPolicyContext.controlAuthority,
+                policyVersion: launchPolicyContext.policyVersion,
+                policySnapshot: launchPolicyContext.policySnapshot,
+              }
+              : {}),
           },
           requestContract: {
             gameId: { required: true, type: "string", nonEmpty: true },
@@ -813,6 +884,20 @@ const goLivePlayAction: Action = {
               type: "string",
               nonEmpty: true,
               oneOf: ["standard", "ranked", "spectate", "solo", "agent"],
+            },
+            controlAuthority: {
+              required: false,
+              type: "string",
+              nonEmpty: true,
+              oneOf: ["milaidy"],
+            },
+            policyVersion: {
+              required: false,
+              type: "number",
+            },
+            policySnapshot: {
+              required: false,
+              type: "object",
             },
           },
           responseContract: {},
