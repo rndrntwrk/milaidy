@@ -1,7 +1,8 @@
 import { LearningClient } from "./learning-client.js";
+import { EpisodeReflectionPipeline } from "./episode-reflection-pipeline.js";
 import { OutcomeAnalyzer } from "./outcome-analyzer.js";
 import { PolicyEngine } from "./policy-engine.js";
-import type { JsonRecord, LaunchPolicyContext } from "./types.js";
+import type { LaunchPolicyContext } from "./types.js";
 
 interface AutonomySupervisorConfig {
   learningClient: LearningClient;
@@ -12,15 +13,16 @@ interface AutonomySupervisorConfig {
 
 export class AutonomySupervisor {
   private readonly learningClient: LearningClient;
-  private readonly policyEngine: PolicyEngine;
-  private readonly outcomeAnalyzer: OutcomeAnalyzer;
-  private readonly learningWritebackEnabled: boolean;
+  private readonly reflectionPipeline: EpisodeReflectionPipeline;
 
   constructor(config: AutonomySupervisorConfig) {
     this.learningClient = config.learningClient;
-    this.policyEngine = config.policyEngine;
-    this.outcomeAnalyzer = config.outcomeAnalyzer;
-    this.learningWritebackEnabled = config.learningWritebackEnabled;
+    this.reflectionPipeline = new EpisodeReflectionPipeline({
+      learningClient: config.learningClient,
+      policyEngine: config.policyEngine,
+      outcomeAnalyzer: config.outcomeAnalyzer,
+      writebackEnabled: config.learningWritebackEnabled,
+    });
   }
 
   async prepareLaunchContext(
@@ -31,69 +33,26 @@ export class AutonomySupervisor {
       sessionId,
       gameId,
     );
-    const latestEpisode = sessionLearning.latestEpisode || null;
-    let profile = this.policyEngine.resolveLaunchProfile(
+    const pipelineResult = await this.reflectionPipeline.applyIfNeeded({
+      sessionId,
+      agentId: sessionLearning.agentId,
       gameId,
-      sessionLearning.profile,
-    );
-    let reflectionApplied = false;
-    let reflectionReason: string | undefined;
-
-    const lastAppliedEpisodeId = sessionLearning.profile.lastEpisodeId || null;
-    const latestEpisodeId = latestEpisode?.id;
-    const shouldReflect =
-      Boolean(latestEpisodeId) &&
-      latestEpisodeId !== lastAppliedEpisodeId &&
-      this.learningWritebackEnabled;
-
-    if (shouldReflect) {
-      const decision = this.outcomeAnalyzer.proposeReflection(
-        gameId,
-        profile,
-        latestEpisode,
-      );
-      if (decision.applied && decision.nextProfile) {
-        const persistedProfile = await this.learningClient.updateAgentLearning(
-          sessionLearning.agentId,
-          gameId,
-          decision.nextProfile,
-          this.buildReflectionProvenance(
-            latestEpisodeId as string,
-            decision.reason,
-            sessionId,
-          ),
-        );
-
-        profile = this.policyEngine.resolveLaunchProfile(gameId, persistedProfile);
-        reflectionApplied = true;
-        reflectionReason = decision.reason;
-      }
-    }
+      profile: sessionLearning.profile,
+      latestEpisode: sessionLearning.latestEpisode || null,
+    });
+    const latestEpisodeId = sessionLearning.latestEpisode?.id;
 
     return {
       agentId: sessionLearning.agentId,
       gameId,
+      policyFamily: pipelineResult.profile.policyFamily,
       controlAuthority: "milaidy",
-      policyVersion: profile.policyVersion,
-      policySnapshot: profile.policySnapshot,
-      confidence: profile.confidence,
-      reflectionApplied,
-      reflectionReason,
+      policyVersion: pipelineResult.profile.policyVersion,
+      policySnapshot: pipelineResult.profile.policySnapshot,
+      confidence: pipelineResult.profile.confidence,
+      reflectionApplied: pipelineResult.reflectionApplied,
+      reflectionReason: pipelineResult.reflectionReason,
       latestEpisodeId: latestEpisodeId || undefined,
-    };
-  }
-
-  private buildReflectionProvenance(
-    latestEpisodeId: string,
-    reason: string | undefined,
-    sessionId: string,
-  ): JsonRecord {
-    return {
-      source: "milaidy_reflection",
-      latestEpisodeId,
-      reason: reason || "unspecified",
-      triggerSessionId: sessionId,
-      occurredAt: new Date().toISOString(),
     };
   }
 }

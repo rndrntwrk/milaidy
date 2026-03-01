@@ -40,6 +40,7 @@ export interface PolicyProfile {
   policyVersion: number;
   confidence: number;
   policySnapshot: JsonRecord;
+  policyFamily: string;
   source: string;
 }
 
@@ -52,6 +53,7 @@ export interface ReflectionDecision {
 export interface LaunchPolicyContext {
   agentId: string;
   gameId: string;
+  policyFamily: string;
   controlAuthority: "milaidy";
   policyVersion: number;
   policySnapshot: JsonRecord;

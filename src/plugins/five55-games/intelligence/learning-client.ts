@@ -134,6 +134,7 @@ export class LearningClient {
         policyVersion: profile.policyVersion,
         confidence: profile.confidence,
         policySnapshot: profile.policySnapshot,
+        policyFamily: profile.policyFamily,
         provenance: provenance || {},
       },
     );
@@ -141,6 +142,30 @@ export class LearningClient {
       throw responseError("learning profile update failed", response);
     }
 
+    return asLearningProfile(response.data?.profile);
+  }
+
+  async applyRuntimePolicy(
+    sessionId: string,
+    gameId: string,
+    profile: PolicyProfile,
+    provenance?: JsonRecord,
+  ): Promise<LearningProfile> {
+    const response = await this.request(
+      "POST",
+      `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/${encodeURIComponent(gameId)}/policy/apply`,
+      {
+        source: profile.source,
+        policyVersion: profile.policyVersion,
+        confidence: profile.confidence,
+        policySnapshot: profile.policySnapshot,
+        policyFamily: profile.policyFamily,
+        provenance: provenance || {},
+      },
+    );
+    if (!response.ok) {
+      throw responseError("runtime policy apply failed", response);
+    }
     return asLearningProfile(response.data?.profile);
   }
 }

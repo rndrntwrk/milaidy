@@ -4,6 +4,7 @@ import type {
   PolicyProfile,
   ReflectionDecision,
 } from "./types.js";
+import { GamePolicyRegistry } from "./game-policy-registry.js";
 
 const MAX_FLOAT_STEP = 0.04;
 const MAX_INT_STEP = 3;
@@ -56,12 +57,14 @@ function readInt(snapshot: JsonRecord, key: string, fallback: number): number {
 }
 
 export class OutcomeAnalyzer {
+  constructor(private readonly registry = new GamePolicyRegistry()) {}
+
   proposeReflection(
     gameId: string,
     profile: PolicyProfile,
     latestEpisode: EpisodeSummary | null | undefined,
   ): ReflectionDecision {
-    if (gameId !== "knighthood" || !latestEpisode) {
+    if (!latestEpisode) {
       return { applied: false };
     }
 
@@ -75,8 +78,10 @@ export class OutcomeAnalyzer {
     const extraneousFlightRatio =
       readNumber(metrics.extraneousFlightRatio) ??
       readNumber(asRecord(metrics.currentRound).extraneousFlightRatio);
+    const survivalMs = readNumber(latestEpisode.survivalMs);
+    const safeGameId = String(gameId || "").toLowerCase();
 
-    if (cause === "SPIKE") {
+    if (safeGameId === "knighthood" && cause === "SPIKE") {
       next.spikePrepBonus = boundedIntAdjust(
         readInt(current, "spikePrepBonus", 0),
         readInt(current, "spikePrepBonus", 0) + 2,
@@ -91,7 +96,7 @@ export class OutcomeAnalyzer {
       );
       reasons.push("spike_death_correction");
       changed = true;
-    } else if (cause === "GAP" || cause === "WATER_FALL") {
+    } else if (safeGameId === "knighthood" && (cause === "GAP" || cause === "WATER_FALL")) {
       next.gapPrepBonus = boundedIntAdjust(
         readInt(current, "gapPrepBonus", 0),
         readInt(current, "gapPrepBonus", 0) + 2,
@@ -108,7 +113,7 @@ export class OutcomeAnalyzer {
       changed = true;
     }
 
-    if (extraneousFlightRatio != null && extraneousFlightRatio >= 0.22) {
+    if (safeGameId === "knighthood" && extraneousFlightRatio != null && extraneousFlightRatio >= 0.22) {
       next.flightCooldownFrames = boundedIntAdjust(
         readInt(current, "flightCooldownFrames", 8),
         readInt(current, "flightCooldownFrames", 8) + 1,
@@ -131,6 +136,43 @@ export class OutcomeAnalyzer {
       changed = true;
     }
 
+    const family = this.registry.getFamily(gameId);
+    if (family !== "runner_survival") {
+      if (
+        cause.includes("SPIKE")
+        || cause.includes("GAP")
+        || cause.includes("FALL")
+        || cause.includes("COLLISION")
+        || cause.includes("HIT")
+      ) {
+        next.riskTolerance = boundedFloatAdjust(
+          readFloat(current, "riskTolerance", 0.45),
+          readFloat(current, "riskTolerance", 0.45) - 0.03,
+          0.05,
+          0.95,
+        );
+        next.recoveryBias = boundedFloatAdjust(
+          readFloat(current, "recoveryBias", 0.6),
+          readFloat(current, "recoveryBias", 0.6) + 0.03,
+          0.05,
+          0.95,
+        );
+        reasons.push("hazard_correction");
+        changed = true;
+      }
+
+      if (survivalMs != null && survivalMs < 20_000) {
+        next.reactionWindowMs = boundedIntAdjust(
+          readInt(current, "reactionWindowMs", 180),
+          readInt(current, "reactionWindowMs", 180) + 10,
+          80,
+          450,
+        );
+        reasons.push("short_survival_reaction_window");
+        changed = true;
+      }
+    }
+
     if (!changed) {
       return { applied: false };
     }
@@ -142,6 +184,7 @@ export class OutcomeAnalyzer {
         policyVersion: Math.max(1, profile.policyVersion + 1),
         confidence: Number(clamp(profile.confidence + 0.02, 0, 1).toFixed(3)),
         policySnapshot: next,
+        policyFamily: profile.policyFamily,
         source: "reflection_update",
       },
     };

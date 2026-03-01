@@ -25,6 +25,7 @@ import {
 } from "../five55-shared/agent-auth.js";
 import {
   AutonomySupervisor,
+  GamePolicyRegistry,
   LearningClient,
   OutcomeAnalyzer,
   PolicyEngine,
@@ -435,10 +436,11 @@ async function prepareLaunchPolicyContext(
   );
 
   const request = createAgentRequest(base, token);
+  const policyRegistry = new GamePolicyRegistry();
   const supervisor = new AutonomySupervisor({
     learningClient: new LearningClient(request),
-    policyEngine: new PolicyEngine(),
-    outcomeAnalyzer: new OutcomeAnalyzer(),
+    policyEngine: new PolicyEngine(policyRegistry),
+    outcomeAnalyzer: new OutcomeAnalyzer(policyRegistry),
     learningWritebackEnabled,
   });
 
@@ -874,6 +876,7 @@ const goLivePlayAction: Action = {
                 controlAuthority: launchPolicyContext.controlAuthority,
                 policyVersion: launchPolicyContext.policyVersion,
                 policySnapshot: launchPolicyContext.policySnapshot,
+                policyFamily: launchPolicyContext.policyFamily,
               }
               : {}),
           },
@@ -898,6 +901,11 @@ const goLivePlayAction: Action = {
             policySnapshot: {
               required: false,
               type: "object",
+            },
+            policyFamily: {
+              required: false,
+              type: "string",
+              nonEmpty: true,
             },
           },
           responseContract: {},

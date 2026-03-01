@@ -277,13 +277,16 @@ describe("five55-games plugin actions", () => {
       },
     });
     expect(String(playCall?.[0])).toContain("/api/agent/v1/sessions/session-4/games/play");
-    expect(parseFetchBody(playCall as unknown[])).toEqual({
-      gameId: "ninja",
-      mode: "agent",
-      controlAuthority: "milaidy",
-      policyVersion: 1,
-      policySnapshot: expect.any(Object),
-    });
+    expect(parseFetchBody(playCall as unknown[])).toEqual(
+      expect.objectContaining({
+        gameId: "ninja",
+        mode: "agent",
+        controlAuthority: "milaidy",
+        policyVersion: 1,
+        policySnapshot: expect.any(Object),
+        policyFamily: expect.any(String),
+      }),
+    );
     expect(String(statusCall?.[0])).toContain(
       "/api/agent/v1/sessions/session-4/stream/status",
     );
