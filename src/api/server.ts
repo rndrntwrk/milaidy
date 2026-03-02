@@ -1990,13 +1990,15 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             "STREAM555_BASE_URL",
             "STREAM555_AGENT_TOKEN",
             "STREAM555_AGENT_API_KEY",
+            "STREAM_API_BEARER_TOKEN",
             "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
             "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
             "STREAM555_DEFAULT_SESSION_ID",
             "STREAM_SESSION_ID",
             "STREAM_API_DIALECT",
+            "STREAM_DEFAULT_INPUT_TYPE",
+            "STREAM_DEFAULT_INPUT_URL",
             "STREAM_PLUGIN_ENABLED",
-            "STREAM555_CONTROL_PLUGIN_ENABLED",
           ],
           parameters: [
             {
@@ -2042,6 +2044,18 @@ function discoverPluginsFromManifest(): PluginEntry[] {
                 ? maskValue(process.env.STREAM555_AGENT_API_KEY)
                 : null,
               isSet: Boolean(process.env.STREAM555_AGENT_API_KEY?.trim()),
+            },
+            {
+              key: "STREAM_API_BEARER_TOKEN",
+              type: "string",
+              description:
+                "Legacy bearer token fallback when STREAM555_AGENT_API_KEY / STREAM555_AGENT_TOKEN are unset",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM_API_BEARER_TOKEN
+                ? maskValue(process.env.STREAM_API_BEARER_TOKEN)
+                : null,
+              isSet: Boolean(process.env.STREAM_API_BEARER_TOKEN?.trim()),
             },
             {
               key: "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
@@ -2100,6 +2114,26 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               isSet: Boolean(process.env.STREAM_API_DIALECT?.trim()),
             },
             {
+              key: "STREAM_DEFAULT_INPUT_TYPE",
+              type: "string",
+              description:
+                "Default stream input type used by STREAM_LIVE_START when input.type is omitted (e.g. website/screen)",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM_DEFAULT_INPUT_TYPE ?? null,
+              isSet: Boolean(process.env.STREAM_DEFAULT_INPUT_TYPE?.trim()),
+            },
+            {
+              key: "STREAM_DEFAULT_INPUT_URL",
+              type: "string",
+              description:
+                "Default website input URL used when STREAM_DEFAULT_INPUT_TYPE=website and no input.url is provided",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM_DEFAULT_INPUT_URL ?? null,
+              isSet: Boolean(process.env.STREAM_DEFAULT_INPUT_URL?.trim()),
+            },
+            {
               key: "STREAM_PLUGIN_ENABLED",
               type: "string",
               description: "Enable/disable legacy stream plugin (1/0)",
@@ -2109,11 +2143,223 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               currentValue: process.env.STREAM_PLUGIN_ENABLED ?? null,
               isSet: Boolean(process.env.STREAM_PLUGIN_ENABLED?.trim()),
             },
+          ],
+          configUiHints: {
+            STREAM_API_URL: {
+              label: "Legacy API URL",
+              group: "Connection",
+              width: "half",
+            },
+            STREAM555_BASE_URL: {
+              label: "555stream Base URL",
+              group: "Connection",
+              width: "half",
+            },
+            STREAM_API_DIALECT: {
+              label: "Dialect",
+              group: "Connection",
+              width: "half",
+              type: "select",
+              options: [
+                { value: "agent-v1", label: "agent-v1 (recommended)" },
+                { value: "five55-v1", label: "five55-v1 (legacy)" },
+              ],
+            },
+            STREAM555_AGENT_API_KEY: {
+              label: "Agent API Key",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN: {
+              label: "Agent Bearer Token",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM_API_BEARER_TOKEN: {
+              label: "Legacy Bearer Token",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT: {
+              label: "Token Exchange Endpoint",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS: {
+              label: "Token Refresh Window (s)",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_DEFAULT_SESSION_ID: {
+              label: "Default Session ID",
+              group: "Session",
+              width: "half",
+            },
+            STREAM_SESSION_ID: {
+              label: "Session Override",
+              group: "Session",
+              width: "half",
+            },
+            STREAM_DEFAULT_INPUT_TYPE: {
+              label: "Default Input Type",
+              group: "Defaults",
+              width: "half",
+              type: "select",
+              options: [
+                { value: "website", label: "Website" },
+                { value: "screen", label: "Screen Capture" },
+              ],
+            },
+            STREAM_DEFAULT_INPUT_URL: {
+              label: "Default Input URL",
+              group: "Defaults",
+              width: "full",
+            },
+            STREAM_PLUGIN_ENABLED: {
+              label: "Enabled",
+              group: "Runtime",
+              width: "half",
+            },
+          },
+          validationErrors: [],
+          validationWarnings: [],
+        },
+        {
+          id: "stream555-control",
+          name: "Stream555 Control",
+          description:
+            "Primary 555stream control plugin for go-live, scene, segment, and ad operations.",
+          enabled: false,
+          configured: Boolean(
+            process.env.STREAM555_BASE_URL?.trim() &&
+              (process.env.STREAM555_AGENT_API_KEY?.trim() ||
+                process.env.STREAM555_AGENT_TOKEN?.trim() ||
+                process.env.STREAM_API_BEARER_TOKEN?.trim()),
+          ),
+          envKey: "STREAM555_BASE_URL",
+          category: "feature",
+          source: "bundled",
+          configKeys: [
+            "STREAM555_BASE_URL",
+            "STREAM555_AGENT_TOKEN",
+            "STREAM555_AGENT_API_KEY",
+            "STREAM_API_BEARER_TOKEN",
+            "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
+            "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
+            "STREAM555_DEFAULT_SESSION_ID",
+            "STREAM_SESSION_ID",
+            "STREAM555_ALLOW_LOCALHOST_APP_URLS",
+            "STREAM555_CONTROL_PLUGIN_ENABLED",
+          ],
+          parameters: [
+            {
+              key: "STREAM555_BASE_URL",
+              type: "string",
+              description: "555stream control-plane base URL",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM555_BASE_URL ?? null,
+              isSet: Boolean(process.env.STREAM555_BASE_URL?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_API_KEY",
+              type: "string",
+              description:
+                "Agent API key exchanged for short-lived JWTs (recommended)",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_AGENT_API_KEY
+                ? maskValue(process.env.STREAM555_AGENT_API_KEY)
+                : null,
+              isSet: Boolean(process.env.STREAM555_AGENT_API_KEY?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN",
+              type: "string",
+              description: "Static bearer token for 555stream agent routes",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_AGENT_TOKEN
+                ? maskValue(process.env.STREAM555_AGENT_TOKEN)
+                : null,
+              isSet: Boolean(process.env.STREAM555_AGENT_TOKEN?.trim()),
+            },
+            {
+              key: "STREAM_API_BEARER_TOKEN",
+              type: "string",
+              description:
+                "Legacy bearer token fallback for agent route authentication",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM_API_BEARER_TOKEN
+                ? maskValue(process.env.STREAM_API_BEARER_TOKEN)
+                : null,
+              isSet: Boolean(process.env.STREAM_API_BEARER_TOKEN?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
+              type: "string",
+              description:
+                "Optional token exchange path (default /api/agent/v1/auth/token/exchange)",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
+              type: "number",
+              description:
+                "Token refresh buffer for exchanged JWTs in seconds (default 300)",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEFAULT_SESSION_ID",
+              type: "string",
+              description:
+                "Preferred 555stream session ID for control operations",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM555_DEFAULT_SESSION_ID ?? null,
+              isSet: Boolean(process.env.STREAM555_DEFAULT_SESSION_ID?.trim()),
+            },
+            {
+              key: "STREAM_SESSION_ID",
+              type: "string",
+              description:
+                "One-off session override for immediate control actions",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM_SESSION_ID ?? null,
+              isSet: Boolean(process.env.STREAM_SESSION_ID?.trim()),
+            },
+            {
+              key: "STREAM555_ALLOW_LOCALHOST_APP_URLS",
+              type: "string",
+              description:
+                "Allow localhost app URLs for STREAM555_GO_LIVE_APP in production (true/false)",
+              required: false,
+              sensitive: false,
+              default: "false",
+              currentValue:
+                process.env.STREAM555_ALLOW_LOCALHOST_APP_URLS ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_ALLOW_LOCALHOST_APP_URLS?.trim(),
+              ),
+            },
             {
               key: "STREAM555_CONTROL_PLUGIN_ENABLED",
               type: "string",
-              description:
-                "Enable/disable stream555-control plugin (1/0) for agent-v1 stream actions",
+              description: "Enable/disable stream555-control plugin (1/0)",
               required: false,
               sensitive: false,
               default: "0",
@@ -2124,6 +2370,440 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               ),
             },
           ],
+          configUiHints: {
+            STREAM555_BASE_URL: {
+              label: "Base URL",
+              group: "Connection",
+              width: "half",
+            },
+            STREAM555_DEFAULT_SESSION_ID: {
+              label: "Default Session ID",
+              group: "Session",
+              width: "half",
+            },
+            STREAM_SESSION_ID: {
+              label: "Session Override",
+              group: "Session",
+              width: "half",
+            },
+            STREAM555_AGENT_API_KEY: {
+              label: "Agent API Key",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN: {
+              label: "Agent Token",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM_API_BEARER_TOKEN: {
+              label: "Legacy Bearer Token",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT: {
+              label: "Exchange Endpoint",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS: {
+              label: "Refresh Window (s)",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_ALLOW_LOCALHOST_APP_URLS: {
+              label: "Allow Localhost App URLs",
+              group: "Safety",
+              width: "half",
+            },
+            STREAM555_CONTROL_PLUGIN_ENABLED: {
+              label: "Enabled",
+              group: "Runtime",
+              width: "half",
+            },
+          },
+          validationErrors: [],
+          validationWarnings: [],
+        },
+        {
+          id: "stream555-auth",
+          name: "Stream555 Auth",
+          description:
+            "Agent auth/key-management plugin for provisioning and validating 555stream credentials.",
+          enabled: false,
+          configured: Boolean(
+            (process.env.STREAM555_BASE_URL?.trim() ||
+              process.env.STREAM_API_URL?.trim()) &&
+              (process.env.STREAM555_ADMIN_API_KEY?.trim() ||
+                process.env.STREAM555_AGENT_API_KEY?.trim() ||
+                process.env.STREAM555_AGENT_TOKEN?.trim() ||
+                process.env.STREAM_API_BEARER_TOKEN?.trim()),
+          ),
+          envKey: "STREAM555_BASE_URL",
+          category: "feature",
+          source: "bundled",
+          configKeys: [
+            "STREAM555_BASE_URL",
+            "STREAM_API_URL",
+            "STREAM555_ADMIN_API_KEY",
+            "STREAM555_AGENT_DEFAULT_USER_ID",
+            "STREAM555_AGENT_API_KEY",
+            "STREAM555_AGENT_TOKEN",
+            "STREAM_API_BEARER_TOKEN",
+            "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
+            "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
+            "STREAM555_AUTH_PLUGIN_ENABLED",
+          ],
+          parameters: [
+            {
+              key: "STREAM555_BASE_URL",
+              type: "string",
+              description:
+                "Primary 555stream control-plane URL for auth endpoints",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM555_BASE_URL ?? null,
+              isSet: Boolean(process.env.STREAM555_BASE_URL?.trim()),
+            },
+            {
+              key: "STREAM_API_URL",
+              type: "string",
+              description:
+                "Legacy base URL fallback when STREAM555_BASE_URL is unset",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM_API_URL ?? null,
+              isSet: Boolean(process.env.STREAM_API_URL?.trim()),
+            },
+            {
+              key: "STREAM555_ADMIN_API_KEY",
+              type: "string",
+              description:
+                "Admin API key required for API-key mint/list/revoke operations",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_ADMIN_API_KEY
+                ? maskValue(process.env.STREAM555_ADMIN_API_KEY)
+                : null,
+              isSet: Boolean(process.env.STREAM555_ADMIN_API_KEY?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_DEFAULT_USER_ID",
+              type: "string",
+              description:
+                "Default userId used when creating agent API keys",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.STREAM555_AGENT_DEFAULT_USER_ID ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_AGENT_DEFAULT_USER_ID?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_AGENT_API_KEY",
+              type: "string",
+              description:
+                "Current active agent API key (recommended runtime auth source)",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_AGENT_API_KEY
+                ? maskValue(process.env.STREAM555_AGENT_API_KEY)
+                : null,
+              isSet: Boolean(process.env.STREAM555_AGENT_API_KEY?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN",
+              type: "string",
+              description:
+                "Current active static agent bearer token (legacy fallback)",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_AGENT_TOKEN
+                ? maskValue(process.env.STREAM555_AGENT_TOKEN)
+                : null,
+              isSet: Boolean(process.env.STREAM555_AGENT_TOKEN?.trim()),
+            },
+            {
+              key: "STREAM_API_BEARER_TOKEN",
+              type: "string",
+              description:
+                "Legacy bearer token fallback if STREAM555_AGENT_TOKEN is unset",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM_API_BEARER_TOKEN
+                ? maskValue(process.env.STREAM_API_BEARER_TOKEN)
+                : null,
+              isSet: Boolean(process.env.STREAM_API_BEARER_TOKEN?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
+              type: "string",
+              description:
+                "Optional token exchange endpoint path override",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
+              type: "number",
+              description:
+                "Token refresh buffer for exchanged JWTs in seconds (default 300)",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_AUTH_PLUGIN_ENABLED",
+              type: "string",
+              description: "Enable/disable stream555-auth plugin (1/0)",
+              required: false,
+              sensitive: false,
+              default: "0",
+              currentValue:
+                process.env.STREAM555_AUTH_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(process.env.STREAM555_AUTH_PLUGIN_ENABLED?.trim()),
+            },
+          ],
+          configUiHints: {
+            STREAM555_BASE_URL: {
+              label: "Primary Base URL",
+              group: "Connection",
+              width: "half",
+            },
+            STREAM_API_URL: {
+              label: "Legacy Base URL",
+              group: "Connection",
+              width: "half",
+            },
+            STREAM555_ADMIN_API_KEY: {
+              label: "Admin API Key",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AGENT_DEFAULT_USER_ID: {
+              label: "Default User ID",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AGENT_API_KEY: {
+              label: "Agent API Key",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN: {
+              label: "Agent Bearer Token",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM_API_BEARER_TOKEN: {
+              label: "Legacy Bearer Token",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT: {
+              label: "Token Exchange Endpoint",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS: {
+              label: "Refresh Window (s)",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AUTH_PLUGIN_ENABLED: {
+              label: "Enabled",
+              group: "Runtime",
+              width: "half",
+            },
+          },
+          validationErrors: [],
+          validationWarnings: [],
+        },
+        {
+          id: "stream555-ads",
+          name: "Stream555 Ads",
+          description:
+            "Ad rotation and monetization controls for active 555stream sessions.",
+          enabled: false,
+          configured: Boolean(
+            process.env.STREAM555_BASE_URL?.trim() &&
+              (process.env.STREAM555_AGENT_API_KEY?.trim() ||
+                process.env.STREAM555_AGENT_TOKEN?.trim() ||
+                process.env.STREAM_API_BEARER_TOKEN?.trim()),
+          ),
+          envKey: "STREAM555_BASE_URL",
+          category: "feature",
+          source: "bundled",
+          configKeys: [
+            "STREAM555_BASE_URL",
+            "STREAM555_AGENT_TOKEN",
+            "STREAM555_AGENT_API_KEY",
+            "STREAM_API_BEARER_TOKEN",
+            "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
+            "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
+            "STREAM555_DEFAULT_SESSION_ID",
+            "STREAM_SESSION_ID",
+            "STREAM555_ADS_PLUGIN_ENABLED",
+          ],
+          parameters: [
+            {
+              key: "STREAM555_BASE_URL",
+              type: "string",
+              description: "555stream control-plane base URL",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM555_BASE_URL ?? null,
+              isSet: Boolean(process.env.STREAM555_BASE_URL?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_API_KEY",
+              type: "string",
+              description:
+                "Agent API key exchanged for short-lived JWTs (recommended)",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_AGENT_API_KEY
+                ? maskValue(process.env.STREAM555_AGENT_API_KEY)
+                : null,
+              isSet: Boolean(process.env.STREAM555_AGENT_API_KEY?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN",
+              type: "string",
+              description: "Static bearer token for ads endpoints",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_AGENT_TOKEN
+                ? maskValue(process.env.STREAM555_AGENT_TOKEN)
+                : null,
+              isSet: Boolean(process.env.STREAM555_AGENT_TOKEN?.trim()),
+            },
+            {
+              key: "STREAM_API_BEARER_TOKEN",
+              type: "string",
+              description: "Legacy bearer token fallback for ads operations",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM_API_BEARER_TOKEN
+                ? maskValue(process.env.STREAM_API_BEARER_TOKEN)
+                : null,
+              isSet: Boolean(process.env.STREAM_API_BEARER_TOKEN?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
+              type: "string",
+              description:
+                "Optional token exchange path (default /api/agent/v1/auth/token/exchange)",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
+              type: "number",
+              description:
+                "Token refresh buffer for exchanged JWTs in seconds (default 300)",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEFAULT_SESSION_ID",
+              type: "string",
+              description:
+                "Preferred session ID for ad setup/trigger operations",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM555_DEFAULT_SESSION_ID ?? null,
+              isSet: Boolean(process.env.STREAM555_DEFAULT_SESSION_ID?.trim()),
+            },
+            {
+              key: "STREAM_SESSION_ID",
+              type: "string",
+              description:
+                "One-off session override for ad setup/trigger operations",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM_SESSION_ID ?? null,
+              isSet: Boolean(process.env.STREAM_SESSION_ID?.trim()),
+            },
+            {
+              key: "STREAM555_ADS_PLUGIN_ENABLED",
+              type: "string",
+              description: "Enable/disable stream555-ads plugin (1/0)",
+              required: false,
+              sensitive: false,
+              default: "0",
+              currentValue:
+                process.env.STREAM555_ADS_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(process.env.STREAM555_ADS_PLUGIN_ENABLED?.trim()),
+            },
+          ],
+          configUiHints: {
+            STREAM555_BASE_URL: {
+              label: "Base URL",
+              group: "Connection",
+              width: "half",
+            },
+            STREAM555_DEFAULT_SESSION_ID: {
+              label: "Default Session ID",
+              group: "Session",
+              width: "half",
+            },
+            STREAM_SESSION_ID: {
+              label: "Session Override",
+              group: "Session",
+              width: "half",
+            },
+            STREAM555_AGENT_API_KEY: {
+              label: "Agent API Key",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN: {
+              label: "Agent Token",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM_API_BEARER_TOKEN: {
+              label: "Legacy Bearer Token",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT: {
+              label: "Exchange Endpoint",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS: {
+              label: "Refresh Window (s)",
+              group: "Authentication",
+              width: "half",
+            },
+            STREAM555_ADS_PLUGIN_ENABLED: {
+              label: "Enabled",
+              group: "Runtime",
+              width: "half",
+            },
+          },
           validationErrors: [],
           validationWarnings: [],
         },
@@ -2167,7 +2847,13 @@ function discoverPluginsFromManifest(): PluginEntry[] {
           name: "Five55 Games",
           description: "Five55 game discovery and play orchestration plugin.",
           enabled: false,
-          configured: Boolean(process.env.FIVE55_GAMES_API_URL?.trim()),
+          configured: Boolean(
+            process.env.FIVE55_GAMES_API_URL?.trim() ||
+              (process.env.STREAM555_BASE_URL?.trim() &&
+                (process.env.STREAM555_AGENT_API_KEY?.trim() ||
+                  process.env.STREAM555_AGENT_TOKEN?.trim() ||
+                  process.env.STREAM_API_BEARER_TOKEN?.trim())),
+          ),
           envKey: "FIVE55_GAMES_API_URL",
           category: "feature",
           source: "bundled",
@@ -2175,6 +2861,23 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             "FIVE55_GAMES_API_URL",
             "FIVE55_GAMES_API_DIALECT",
             "FIVE55_GAMES_API_BEARER_TOKEN",
+            "STREAM555_BASE_URL",
+            "STREAM555_AGENT_TOKEN",
+            "STREAM555_AGENT_API_KEY",
+            "STREAM_API_BEARER_TOKEN",
+            "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
+            "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
+            "STREAM555_DEFAULT_SESSION_ID",
+            "STREAM_SESSION_ID",
+            "FIVE55_GAMES_VIEWER_BASE_URL",
+            "GAMES_BASE_URL",
+            "FIVE55_GAMES_CF_CONNECT_TIMEOUT_MS",
+            "FIVE55_GAMES_CF_CONNECT_POLL_MS",
+            "FIVE55_GAMES_CF_RECOVERY_ATTEMPTS",
+            "FIVE55_GAMES_SPRINT_SLOT_SECONDS",
+            "FIVE55_GAMES_SPRINT_AD_OFFSET_SECONDS",
+            "ALICE_INTELLIGENCE_ENABLED",
+            "ALICE_LEARNING_WRITEBACK_ENABLED",
             "FIVE55_GAMES_PLUGIN_ENABLED",
           ],
           parameters: [
@@ -2210,17 +2913,331 @@ function discoverPluginsFromManifest(): PluginEntry[] {
                 : null,
               isSet: Boolean(process.env.FIVE55_GAMES_API_BEARER_TOKEN?.trim()),
             },
-	            {
-	              key: "FIVE55_GAMES_PLUGIN_ENABLED",
-	              type: "string",
-	              description: "Enable/disable Five55 games plugin (1/0)",
-	              required: false,
-	              sensitive: false,
-	              default: "0",
-	              currentValue: process.env.FIVE55_GAMES_PLUGIN_ENABLED ?? null,
-	              isSet: Boolean(process.env.FIVE55_GAMES_PLUGIN_ENABLED?.trim()),
-	            },
+            {
+              key: "STREAM555_BASE_URL",
+              type: "string",
+              description:
+                "555stream control-plane base URL (required for agent-v1 gameplay)",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM555_BASE_URL ?? null,
+              isSet: Boolean(process.env.STREAM555_BASE_URL?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_API_KEY",
+              type: "string",
+              description:
+                "Agent API key exchanged for short-lived JWTs (recommended for agent-v1 gameplay)",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_AGENT_API_KEY
+                ? maskValue(process.env.STREAM555_AGENT_API_KEY)
+                : null,
+              isSet: Boolean(process.env.STREAM555_AGENT_API_KEY?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN",
+              type: "string",
+              description:
+                "Static bearer token fallback for agent-v1 gameplay routes",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_AGENT_TOKEN
+                ? maskValue(process.env.STREAM555_AGENT_TOKEN)
+                : null,
+              isSet: Boolean(process.env.STREAM555_AGENT_TOKEN?.trim()),
+            },
+            {
+              key: "STREAM_API_BEARER_TOKEN",
+              type: "string",
+              description:
+                "Legacy bearer fallback if STREAM555_AGENT_TOKEN is unset",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM_API_BEARER_TOKEN
+                ? maskValue(process.env.STREAM_API_BEARER_TOKEN)
+                : null,
+              isSet: Boolean(process.env.STREAM_API_BEARER_TOKEN?.trim()),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
+              type: "string",
+              description:
+                "Optional token exchange endpoint path for agent API key mode",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
+              type: "number",
+              description:
+                "Token refresh buffer for exchanged JWTs in seconds (default 300)",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEFAULT_SESSION_ID",
+              type: "string",
+              description:
+                "Preferred session ID for GO_LIVE_PLAY / sprint orchestration",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM555_DEFAULT_SESSION_ID ?? null,
+              isSet: Boolean(process.env.STREAM555_DEFAULT_SESSION_ID?.trim()),
+            },
+            {
+              key: "STREAM_SESSION_ID",
+              type: "string",
+              description:
+                "One-off session override for games orchestration actions",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM_SESSION_ID ?? null,
+              isSet: Boolean(process.env.STREAM_SESSION_ID?.trim()),
+            },
+            {
+              key: "FIVE55_GAMES_VIEWER_BASE_URL",
+              type: "string",
+              description:
+                "Viewer base URL used to build playable game links (defaults to https://555.rndrntwrk.com)",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.FIVE55_GAMES_VIEWER_BASE_URL ?? null,
+              isSet: Boolean(process.env.FIVE55_GAMES_VIEWER_BASE_URL?.trim()),
+            },
+            {
+              key: "GAMES_BASE_URL",
+              type: "string",
+              description:
+                "Legacy fallback viewer base URL when FIVE55_GAMES_VIEWER_BASE_URL is unset",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.GAMES_BASE_URL ?? null,
+              isSet: Boolean(process.env.GAMES_BASE_URL?.trim()),
+            },
+            {
+              key: "FIVE55_GAMES_CF_CONNECT_TIMEOUT_MS",
+              type: "number",
+              description:
+                "Cloudflare output provisioning timeout for GO_LIVE_PLAY (ms, default 45000)",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.FIVE55_GAMES_CF_CONNECT_TIMEOUT_MS ?? null,
+              isSet: Boolean(
+                process.env.FIVE55_GAMES_CF_CONNECT_TIMEOUT_MS?.trim(),
+              ),
+            },
+            {
+              key: "FIVE55_GAMES_CF_CONNECT_POLL_MS",
+              type: "number",
+              description:
+                "Cloudflare provisioning poll interval for GO_LIVE_PLAY (ms, default 5000)",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.FIVE55_GAMES_CF_CONNECT_POLL_MS ?? null,
+              isSet: Boolean(
+                process.env.FIVE55_GAMES_CF_CONNECT_POLL_MS?.trim(),
+              ),
+            },
+            {
+              key: "FIVE55_GAMES_CF_RECOVERY_ATTEMPTS",
+              type: "number",
+              description:
+                "Recovery attempts when output provisioning/connectivity fails (default 1)",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.FIVE55_GAMES_CF_RECOVERY_ATTEMPTS ?? null,
+              isSet: Boolean(
+                process.env.FIVE55_GAMES_CF_RECOVERY_ATTEMPTS?.trim(),
+              ),
+            },
+            {
+              key: "FIVE55_GAMES_SPRINT_SLOT_SECONDS",
+              type: "number",
+              description:
+                "Per-slot gameplay duration for live capability sprint action (seconds, default 300)",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.FIVE55_GAMES_SPRINT_SLOT_SECONDS ?? null,
+              isSet: Boolean(
+                process.env.FIVE55_GAMES_SPRINT_SLOT_SECONDS?.trim(),
+              ),
+            },
+            {
+              key: "FIVE55_GAMES_SPRINT_AD_OFFSET_SECONDS",
+              type: "number",
+              description:
+                "Ad trigger offset inside sprint slots (seconds, default 270)",
+              required: false,
+              sensitive: false,
+              currentValue:
+                process.env.FIVE55_GAMES_SPRINT_AD_OFFSET_SECONDS ?? null,
+              isSet: Boolean(
+                process.env.FIVE55_GAMES_SPRINT_AD_OFFSET_SECONDS?.trim(),
+              ),
+            },
+            {
+              key: "ALICE_INTELLIGENCE_ENABLED",
+              type: "string",
+              description:
+                "Enable advanced Alice-only policy orchestration for gameplay (true/false)",
+              required: false,
+              sensitive: false,
+              default: "true",
+              currentValue: process.env.ALICE_INTELLIGENCE_ENABLED ?? null,
+              isSet: Boolean(process.env.ALICE_INTELLIGENCE_ENABLED?.trim()),
+            },
+            {
+              key: "ALICE_LEARNING_WRITEBACK_ENABLED",
+              type: "string",
+              description:
+                "Persist learning deltas between rounds for Alice gameplay loops (true/false)",
+              required: false,
+              sensitive: false,
+              default: "true",
+              currentValue:
+                process.env.ALICE_LEARNING_WRITEBACK_ENABLED ?? null,
+              isSet: Boolean(
+                process.env.ALICE_LEARNING_WRITEBACK_ENABLED?.trim(),
+              ),
+            },
+            {
+              key: "FIVE55_GAMES_PLUGIN_ENABLED",
+              type: "string",
+              description: "Enable/disable Five55 games plugin (1/0)",
+              required: false,
+              sensitive: false,
+              default: "0",
+              currentValue: process.env.FIVE55_GAMES_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(process.env.FIVE55_GAMES_PLUGIN_ENABLED?.trim()),
+            },
           ],
+          configUiHints: {
+            FIVE55_GAMES_API_URL: {
+              label: "Games API URL",
+              group: "Connection",
+              width: "half",
+            },
+            FIVE55_GAMES_API_DIALECT: {
+              label: "Dialect",
+              group: "Connection",
+              width: "half",
+              type: "select",
+              options: [
+                { value: "agent-v1", label: "agent-v1 (recommended)" },
+                { value: "milaidy-proxy", label: "milaidy-proxy" },
+                { value: "five55-web", label: "five55-web (legacy)" },
+              ],
+            },
+            FIVE55_GAMES_API_BEARER_TOKEN: {
+              label: "Games API Token",
+              group: "Connection",
+              width: "half",
+            },
+            STREAM555_BASE_URL: {
+              label: "Stream Base URL",
+              group: "Agent Runtime",
+              width: "half",
+            },
+            STREAM555_AGENT_API_KEY: {
+              label: "Agent API Key",
+              group: "Agent Runtime",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN: {
+              label: "Agent Token",
+              group: "Agent Runtime",
+              width: "half",
+            },
+            STREAM_API_BEARER_TOKEN: {
+              label: "Legacy Bearer Token",
+              group: "Agent Runtime",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT: {
+              label: "Token Exchange Endpoint",
+              group: "Agent Runtime",
+              width: "half",
+            },
+            STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS: {
+              label: "Token Refresh Window (s)",
+              group: "Agent Runtime",
+              width: "half",
+            },
+            STREAM555_DEFAULT_SESSION_ID: {
+              label: "Default Session ID",
+              group: "Session",
+              width: "half",
+            },
+            STREAM_SESSION_ID: {
+              label: "Session Override",
+              group: "Session",
+              width: "half",
+            },
+            FIVE55_GAMES_VIEWER_BASE_URL: {
+              label: "Viewer Base URL",
+              group: "Viewer",
+              width: "half",
+            },
+            GAMES_BASE_URL: {
+              label: "Legacy Viewer Base URL",
+              group: "Viewer",
+              width: "half",
+            },
+            FIVE55_GAMES_CF_CONNECT_TIMEOUT_MS: {
+              label: "CF Connect Timeout (ms)",
+              group: "Reliability",
+              width: "half",
+            },
+            FIVE55_GAMES_CF_CONNECT_POLL_MS: {
+              label: "CF Poll Interval (ms)",
+              group: "Reliability",
+              width: "half",
+            },
+            FIVE55_GAMES_CF_RECOVERY_ATTEMPTS: {
+              label: "CF Recovery Attempts",
+              group: "Reliability",
+              width: "half",
+            },
+            FIVE55_GAMES_SPRINT_SLOT_SECONDS: {
+              label: "Sprint Slot Seconds",
+              group: "Sprint",
+              width: "half",
+            },
+            FIVE55_GAMES_SPRINT_AD_OFFSET_SECONDS: {
+              label: "Sprint Ad Offset Seconds",
+              group: "Sprint",
+              width: "half",
+            },
+            ALICE_INTELLIGENCE_ENABLED: {
+              label: "Alice Intelligence",
+              group: "Alice Pilot",
+              width: "half",
+            },
+            ALICE_LEARNING_WRITEBACK_ENABLED: {
+              label: "Alice Learning Writeback",
+              group: "Alice Pilot",
+              width: "half",
+            },
+            FIVE55_GAMES_PLUGIN_ENABLED: {
+              label: "Enabled",
+              group: "Runtime",
+              width: "half",
+            },
+          },
           validationErrors: [],
           validationWarnings: [],
         },
@@ -2514,6 +3531,80 @@ function discoverPluginsFromManifest(): PluginEntry[] {
 	              isSet: Boolean(process.env.FIVE55_REWARDS_PLUGIN_ENABLED?.trim()),
 	            },
           ],
+          validationErrors: [],
+          validationWarnings: [],
+        },
+        {
+          id: "five55-github",
+          name: "Five55 GitHub",
+          description:
+            "GitHub repository discovery surface for Alice operator workflows.",
+          enabled: false,
+          configured: Boolean(
+            process.env.GITHUB_API_TOKEN?.trim() ||
+              process.env.ALICE_GH_TOKEN?.trim(),
+          ),
+          envKey: "GITHUB_API_TOKEN",
+          category: "feature",
+          source: "bundled",
+          configKeys: [
+            "GITHUB_API_TOKEN",
+            "ALICE_GH_TOKEN",
+            "FIVE55_GITHUB_PLUGIN_ENABLED",
+          ],
+          parameters: [
+            {
+              key: "GITHUB_API_TOKEN",
+              type: "string",
+              description:
+                "Primary GitHub token used for repository listing actions",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.GITHUB_API_TOKEN
+                ? maskValue(process.env.GITHUB_API_TOKEN)
+                : null,
+              isSet: Boolean(process.env.GITHUB_API_TOKEN?.trim()),
+            },
+            {
+              key: "ALICE_GH_TOKEN",
+              type: "string",
+              description:
+                "Legacy GitHub token fallback used by internal Five55 GitHub actions",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.ALICE_GH_TOKEN
+                ? maskValue(process.env.ALICE_GH_TOKEN)
+                : null,
+              isSet: Boolean(process.env.ALICE_GH_TOKEN?.trim()),
+            },
+            {
+              key: "FIVE55_GITHUB_PLUGIN_ENABLED",
+              type: "string",
+              description: "Enable/disable Five55 GitHub plugin (1/0)",
+              required: false,
+              sensitive: false,
+              default: "0",
+              currentValue: process.env.FIVE55_GITHUB_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(process.env.FIVE55_GITHUB_PLUGIN_ENABLED?.trim()),
+            },
+          ],
+          configUiHints: {
+            GITHUB_API_TOKEN: {
+              label: "GitHub API Token",
+              group: "Authentication",
+              width: "half",
+            },
+            ALICE_GH_TOKEN: {
+              label: "Legacy GitHub Token",
+              group: "Authentication",
+              width: "half",
+            },
+            FIVE55_GITHUB_PLUGIN_ENABLED: {
+              label: "Enabled",
+              group: "Runtime",
+              width: "half",
+            },
+          },
           validationErrors: [],
           validationWarnings: [],
         },

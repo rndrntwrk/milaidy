@@ -2638,6 +2638,59 @@ describe("API Server E2E (no runtime)", () => {
       const parameterKeys = parameters.map((param) => param.key);
       expect(parameterKeys).not.toContain("VERCEL_OIDC_TOKEN");
     });
+
+    it("exposes Five55 streaming/game plugin setup surfaces", async () => {
+      const { data } = await req(port, "GET", "/api/plugins");
+      const plugins = data.plugins as Array<Record<string, unknown>>;
+
+      const requiredPluginIds = [
+        "stream",
+        "stream555-control",
+        "stream555-auth",
+        "stream555-ads",
+        "five55-games",
+        "five55-score-capture",
+        "five55-leaderboard",
+        "five55-quests",
+        "five55-battles",
+        "five55-admin",
+        "five55-social",
+        "five55-rewards",
+        "five55-github",
+      ];
+
+      for (const pluginId of requiredPluginIds) {
+        expect(plugins.some((plugin) => plugin.id === pluginId)).toBe(true);
+      }
+
+      const streamControl = plugins.find((plugin) => plugin.id === "stream555-control");
+      const streamControlKeys = Array.isArray(streamControl?.configKeys)
+        ? (streamControl.configKeys as string[])
+        : [];
+      expect(streamControlKeys).toContain("STREAM555_BASE_URL");
+      expect(streamControlKeys).toContain("STREAM555_CONTROL_PLUGIN_ENABLED");
+
+      const streamAds = plugins.find((plugin) => plugin.id === "stream555-ads");
+      const streamAdsKeys = Array.isArray(streamAds?.configKeys)
+        ? (streamAds.configKeys as string[])
+        : [];
+      expect(streamAdsKeys).toContain("STREAM555_ADS_PLUGIN_ENABLED");
+
+      const streamAuth = plugins.find((plugin) => plugin.id === "stream555-auth");
+      const streamAuthKeys = Array.isArray(streamAuth?.configKeys)
+        ? (streamAuth.configKeys as string[])
+        : [];
+      expect(streamAuthKeys).toContain("STREAM555_ADMIN_API_KEY");
+      expect(streamAuthKeys).toContain("STREAM555_AUTH_PLUGIN_ENABLED");
+
+      const games = plugins.find((plugin) => plugin.id === "five55-games");
+      const gamesKeys = Array.isArray(games?.configKeys)
+        ? (games.configKeys as string[])
+        : [];
+      expect(gamesKeys).toContain("FIVE55_GAMES_VIEWER_BASE_URL");
+      expect(gamesKeys).toContain("FIVE55_GAMES_CF_CONNECT_TIMEOUT_MS");
+      expect(gamesKeys).toContain("ALICE_INTELLIGENCE_ENABLED");
+    });
   });
 
   // -- Skills discovery --
