@@ -94,6 +94,7 @@ import { isPiAiEnabledFromEnv, registerPiAiRuntime } from "./pi-ai.js";
 import { createSwapPlugin } from "../plugins/swap/index.js";
 import { createStreamPlugin } from "../plugins/stream/index.js";
 import { createStream555ControlPlugin } from "../plugins/stream555-control/index.js";
+import { createStream555AdsPlugin } from "../plugins/stream555-ads/index.js";
 import { createStream555AuthPlugin } from "../plugins/stream555-auth/index.js";
 import { createFive55GamesPlugin } from "../plugins/five55-games/index.js";
 import { createFive55ScoreCapturePlugin } from "../plugins/five55-score-capture/index.js";
@@ -645,6 +646,7 @@ const INTERNAL_BUNDLED_PLUGIN_ENTRY_KEYS = new Set<string>([
   "swap",
   "stream",
   "stream555-control",
+  "stream555-ads",
   "stream555-auth",
   "five55-games",
   "five55-score-capture",
@@ -661,6 +663,7 @@ const FIVE55_DEFAULT_ENABLED_ENTRY_KEYS = new Set<string>([
   "swap",
   "stream",
   "stream555-control",
+  "stream555-ads",
   "stream555-auth",
   "five55-games",
   "five55-score-capture",
@@ -706,6 +709,7 @@ function isFive55PluginDefaultEnabled(entryKey: string): boolean {
 function normalizeFive55FlagNameToEntryKey(name: string): string {
   const map: Record<string, string> = {
     stream555Control: "stream555-control",
+    stream555Ads: "stream555-ads",
     stream555Auth: "stream555-auth",
     five55Games: "five55-games",
     five55ScoreCapture: "five55-score-capture",
@@ -3603,6 +3607,11 @@ export async function startEliza(
       "STREAM555_CONTROL_PLUGIN_ENABLED",
       "stream555-control",
     ),
+    stream555Ads: resolveFive55PluginEnabled(
+      config,
+      "STREAM555_ADS_PLUGIN_ENABLED",
+      "stream555-ads",
+    ),
     stream555Auth: resolveStream555AuthPluginEnabled(config),
     five55Games: resolveFive55PluginEnabled(
       config,
@@ -3661,6 +3670,7 @@ export async function startEliza(
     ...(five55PluginFlags.swap ? [createSwapPlugin()] : []),
     ...(five55PluginFlags.stream ? [createStreamPlugin()] : []),
     ...(five55PluginFlags.stream555Control ? [createStream555ControlPlugin()] : []),
+    ...(five55PluginFlags.stream555Ads ? [createStream555AdsPlugin()] : []),
     ...(five55PluginFlags.stream555Auth ? [createStream555AuthPlugin()] : []),
     ...(five55PluginFlags.five55Games ? [createFive55GamesPlugin()] : []),
     ...(five55PluginFlags.five55ScoreCapture
@@ -4386,6 +4396,11 @@ export async function startEliza(
               "STREAM555_CONTROL_PLUGIN_ENABLED",
               "stream555-control",
             ),
+            stream555Ads: resolveFive55PluginEnabled(
+              freshConfig,
+              "STREAM555_ADS_PLUGIN_ENABLED",
+              "stream555-ads",
+            ),
             stream555Auth: resolveStream555AuthPluginEnabled(freshConfig),
             five55Games: resolveFive55PluginEnabled(
               freshConfig,
@@ -4445,6 +4460,9 @@ export async function startEliza(
             ...(freshFive55PluginFlags.stream ? [createStreamPlugin()] : []),
             ...(freshFive55PluginFlags.stream555Control
               ? [createStream555ControlPlugin()]
+              : []),
+            ...(freshFive55PluginFlags.stream555Ads
+              ? [createStream555AdsPlugin()]
               : []),
             ...(freshFive55PluginFlags.stream555Auth
               ? [createStream555AuthPlugin()]
