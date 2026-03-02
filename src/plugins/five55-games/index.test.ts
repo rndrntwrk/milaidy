@@ -603,4 +603,136 @@ describe("five55-games plugin actions", () => {
       "Cloudflare ingest stayed disconnected after 2 play attempt(s)",
     );
   });
+
+  it("runs dry-run live capability sprint with 16 games plus 2 diagnostics", async () => {
+    const learningCalls = new Map<string, number>();
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+
+      if (url.endsWith("/api/agent/v1/sessions")) {
+        return jsonResponse(200, { sessionId: "session-sprint-1" });
+      }
+
+      if (url.includes("/api/agent/v1/sessions/session-sprint-1/ads")) {
+        return jsonResponse(200, {
+          ads: [
+            { id: "ad01", name: "Ad 1" },
+            { id: "ad02", name: "Ad 2" },
+            { id: "ad03", name: "Ad 3" },
+            { id: "ad04", name: "Ad 4" },
+            { id: "ad05", name: "Ad 5" },
+            { id: "ad06", name: "Ad 6" },
+          ],
+        });
+      }
+
+      if (
+        url.includes("/api/agent/v1/sessions/session-sprint-1")
+        && !url.includes("/games/")
+        && !url.includes("/stream/")
+      ) {
+        return jsonResponse(200, {
+          active: true,
+          cfSessionId: "cf-sprint-1",
+        });
+      }
+
+      if (url.includes("/api/agent/v1/sessions/session-sprint-1/stream/status")) {
+        return jsonResponse(200, {
+          active: true,
+          phase: "live",
+          cfSessionId: "cf-sprint-1",
+          cloudflare: {
+            isConnected: true,
+            state: "connected",
+          },
+        });
+      }
+
+      if (url.includes("/api/agent/v1/sessions/session-sprint-1/games/catalog")) {
+        return jsonResponse(200, {
+          games: [
+            { id: "knighthood" },
+            { id: "sector-13" },
+            { id: "ninja" },
+            { id: "clawstrike" },
+            { id: "555drive" },
+            { id: "chesspursuit" },
+            { id: "wolf-and-sheep" },
+            { id: "leftandright" },
+            { id: "playback" },
+            { id: "fighter-planes" },
+            { id: "floor13" },
+            { id: "godai-is-back" },
+            { id: "peanball" },
+            { id: "eat-my-dust" },
+            { id: "where-were-going-we-do-need-roads" },
+            { id: "vedas-run" },
+          ],
+        });
+      }
+
+      const learningMatch = url.match(
+        /\/api\/agent\/v1\/sessions\/session-sprint-1\/games\/([^/]+)\/learning/,
+      );
+      if (learningMatch?.[1]) {
+        const gameId = decodeURIComponent(learningMatch[1]);
+        const nextCount = (learningCalls.get(gameId) ?? 0) + 1;
+        learningCalls.set(gameId, nextCount);
+        return jsonResponse(200, {
+          sessionId: "session-sprint-1",
+          agentId: "alice",
+          gameId,
+          profile: {
+            exists: true,
+            id: `profile-${gameId}`,
+            policyVersion: nextCount,
+            confidence: 0.5,
+            policySnapshot: { profileBias: 0.5 },
+            provenance: { source: "test" },
+            lastTelemetryAt: null,
+            lastEpisodeId: null,
+            lastEpisodeAt: null,
+            updatedAt: new Date().toISOString(),
+          },
+          latestEpisode: {
+            id: `episode-${gameId}-${nextCount}`,
+            score: nextCount * 100,
+            survivalMs: nextCount * 1000,
+            causeOfDeath: nextCount % 2 === 0 ? null : "SPIKE",
+            policyVersion: nextCount,
+          },
+        });
+      }
+
+      return jsonResponse(404, { error: `Unhandled URL in test: ${url}` });
+    });
+
+    const action = await resolveAction("FIVE55_GAMES_LIVE_CAPABILITY_SPRINT");
+    const result = await action.handler?.(
+      INTERNAL_RUNTIME,
+      INTERNAL_MESSAGE,
+      INTERNAL_STATE,
+      {
+        parameters: {
+          dryRun: "true",
+          slotSeconds: "0",
+        },
+      } as never,
+    );
+
+    expect(result?.success).toBe(true);
+    const envelope = parseEnvelope(result as { text: string });
+    expect(envelope.code).toBe("OK");
+    const data = envelope.data as Record<string, unknown>;
+    const summary = data.summary as Record<string, unknown>;
+    const slots = data.slots as Array<Record<string, unknown>>;
+    expect(summary.completedSlots).toBe(18);
+    expect(summary.expectedSlots).toBe(18);
+    expect(slots).toHaveLength(18);
+    expect(
+      slots.filter((entry) => entry.diagnosticRetest === true).length,
+    ).toBe(2);
+  });
 });
