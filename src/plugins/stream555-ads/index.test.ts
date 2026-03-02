@@ -190,4 +190,51 @@ describe("stream555-ads plugin actions", () => {
     expect(data.adCount).toBe(1);
     expect((data.earnings as Record<string, unknown>).totalEarned).toBe(123);
   });
+
+  it("retries ad trigger once on short cooldown and succeeds", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { sessionId: "session-ads-retry" }))
+      .mockResolvedValueOnce(jsonResponse(200, { ads: [{ id: "ad-1" }] }))
+      .mockResolvedValueOnce(
+        jsonResponse(409, {
+          code: "AD_COOLDOWN_ACTIVE",
+          error: "Ad cooldown active. Try again in 0s.",
+          retryAfterSeconds: 0,
+          nextEligibleAt: "2026-03-02T10:00:00.000Z",
+          cooldownSeconds: 300,
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse(200, { graphic: { id: "graphic-1" } }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          active: {
+            adId: "ad-1",
+            graphicId: "graphic-1",
+            renderAcked: true,
+          },
+        }),
+      );
+
+    const action = await resolveAction("STREAM555_ADS_TRIGGER_NEXT");
+    const result = await action.handler?.(
+      INTERNAL_RUNTIME,
+      INTERNAL_MESSAGE,
+      INTERNAL_STATE,
+      {
+        parameters: {
+          sessionId: "session-ads-retry",
+        },
+      } as never,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(result?.success).toBe(true);
+    const envelope = parseEnvelope(result as { text: string });
+    const data = envelope.data as Record<string, unknown>;
+    expect(data.sessionId).toBe("session-ads-retry");
+    expect(data.adId).toBe("ad-1");
+    expect(data.rendered).toBe(true);
+    expect(data.attempts).toBe(2);
+  });
 });

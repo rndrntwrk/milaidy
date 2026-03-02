@@ -54,6 +54,51 @@ function readNonEmptyString(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function parseIntLike(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(0, Math.floor(value));
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number.parseInt(value.trim(), 10);
+    if (Number.isFinite(parsed)) return Math.max(0, parsed);
+  }
+  return undefined;
+}
+
+function parseRetryAfterFromMessage(message: string | undefined): number | undefined {
+  if (!message) return undefined;
+  const match = message.match(/(\d+)\s*s/i);
+  if (!match?.[1]) return undefined;
+  const parsed = Number.parseInt(match[1], 10);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : undefined;
+}
+
+function parseCooldownInfo(response: {
+  data?: Record<string, unknown>;
+  rawBody: string;
+}): {
+  active: boolean;
+  code?: string;
+  retryAfterSeconds?: number;
+  nextEligibleAt?: string;
+  cooldownSeconds?: number;
+  hint?: string;
+} {
+  const code = readNonEmptyString(response.data?.code);
+  const errorText = readNonEmptyString(response.data?.error) ?? response.rawBody;
+  const active = code === "AD_COOLDOWN_ACTIVE"
+    || Boolean(errorText && errorText.toLowerCase().includes("cooldown active"));
+  return {
+    active,
+    code,
+    retryAfterSeconds:
+      parseIntLike(response.data?.retryAfterSeconds) ?? parseRetryAfterFromMessage(errorText),
+    nextEligibleAt: readNonEmptyString(response.data?.nextEligibleAt),
+    cooldownSeconds: parseIntLike(response.data?.cooldownSeconds),
+    hint: readNonEmptyString(response.data?.hint),
+  };
+}
+
 function mapFailureCode(status: number): string {
   if (status === 400) return "E_UPSTREAM_BAD_REQUEST";
   if (status === 401) return "E_UPSTREAM_UNAUTHORIZED";
@@ -73,6 +118,7 @@ function buildEnvelopeActionResult({
   message,
   data,
   details,
+  retryable,
 }: {
   ok: boolean;
   module: string;
@@ -81,6 +127,7 @@ function buildEnvelopeActionResult({
   message: string;
   data?: unknown;
   details?: unknown;
+  retryable?: boolean;
 }): { success: boolean; text: string } {
   return {
     success: ok,
@@ -91,7 +138,7 @@ function buildEnvelopeActionResult({
       action,
       message,
       status,
-      retryable: status === 429 || status >= 500,
+      retryable: retryable ?? (status === 429 || status >= 500),
       ...(ok ? { data } : { details }),
     }),
   };
@@ -288,20 +335,77 @@ async function triggerAdAndAwaitRender(
   sessionId: string,
   adId: string,
   durationMs?: number,
-): Promise<{ triggered: boolean; rendered: boolean; detail?: string; status: number }> {
-  const triggerResponse = await fetchJson(
-    "POST",
-    base,
-    `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/ads/${encodeURIComponent(adId)}/trigger`,
-    token,
-    Number.isFinite(durationMs) ? { durationMs } : {},
-  );
-  if (!triggerResponse.ok) {
+): Promise<{
+  triggered: boolean;
+  rendered: boolean;
+  detail?: string;
+  status: number;
+  cooldownActive?: boolean;
+  retryAfterSeconds?: number;
+  nextEligibleAt?: string;
+  cooldownSeconds?: number;
+  upstreamCode?: string;
+  attempts?: number;
+}> {
+  const triggerEndpoint = `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/ads/${encodeURIComponent(adId)}/trigger`;
+  const maxAttempts = 2;
+  const maxCooldownRetrySeconds = 5;
+
+  let triggerResponse:
+    | {
+      ok: boolean;
+      status: number;
+      data?: Record<string, unknown>;
+      rawBody: string;
+    }
+    | undefined;
+  let attempts = 0;
+
+  while (attempts < maxAttempts) {
+    attempts += 1;
+    triggerResponse = await fetchJson(
+      "POST",
+      base,
+      triggerEndpoint,
+      token,
+      Number.isFinite(durationMs) ? { durationMs } : {},
+    );
+    if (triggerResponse.ok) break;
+
+    const cooldown = parseCooldownInfo(triggerResponse);
+    const canRetryCooldown =
+      cooldown.active
+      && attempts < maxAttempts
+      && typeof cooldown.retryAfterSeconds === "number"
+      && cooldown.retryAfterSeconds <= maxCooldownRetrySeconds;
+    if (!canRetryCooldown) {
+      return {
+        triggered: false,
+        rendered: false,
+        status: triggerResponse.status,
+        detail: `ad trigger failed (${triggerResponse.status}): ${getErrorDetail(triggerResponse)}`,
+        cooldownActive: cooldown.active,
+        retryAfterSeconds: cooldown.retryAfterSeconds,
+        nextEligibleAt: cooldown.nextEligibleAt,
+        cooldownSeconds: cooldown.cooldownSeconds,
+        upstreamCode: cooldown.code,
+        attempts,
+      };
+    }
+
+    const waitMs = Math.max(0, cooldown.retryAfterSeconds * 1000);
+    if (waitMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+  }
+
+  if (!triggerResponse || !triggerResponse.ok) {
     return {
       triggered: false,
       rendered: false,
-      status: triggerResponse.status,
-      detail: `ad trigger failed (${triggerResponse.status}): ${getErrorDetail(triggerResponse)}`,
+      status: triggerResponse?.status ?? 500,
+      detail: `ad trigger failed (${triggerResponse?.status ?? 500}): ${getErrorDetail(triggerResponse ?? { rawBody: "unknown trigger failure" })}`,
+      attempts,
     };
   }
 
@@ -346,7 +450,7 @@ async function triggerAdAndAwaitRender(
       continue;
     }
     if (renderAcked) {
-      return { triggered: true, rendered: true, status: 200 };
+      return { triggered: true, rendered: true, status: 200, attempts };
     }
 
     detail = "render acknowledgement pending";
@@ -358,6 +462,7 @@ async function triggerAdAndAwaitRender(
     rendered: false,
     status: 504,
     detail,
+    attempts,
   };
 }
 
@@ -709,6 +814,7 @@ const triggerNextAction: Action = {
           action: "STREAM555_ADS_TRIGGER_NEXT",
           status: triggerResult.status,
           message: "ad trigger did not render successfully",
+          retryable: triggerResult.cooldownActive ? true : undefined,
           details: {
             sessionId,
             adId,
