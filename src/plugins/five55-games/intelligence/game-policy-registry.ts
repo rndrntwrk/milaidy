@@ -19,6 +19,9 @@ const BASE_POLICY_DEFAULTS: JsonRecord = Object.freeze({
   menuPulseMs: 1400,
   pausePulseMs: 1200,
   recenterBias: 0.5,
+  collectibleBias: 0.68,
+  enemyEngageRiskMax: 0.36,
+  hazardAvoidanceBias: 0.74,
 });
 
 const BASE_BOUNDS: Record<string, NumericBounds> = Object.freeze({
@@ -28,6 +31,9 @@ const BASE_BOUNDS: Record<string, NumericBounds> = Object.freeze({
   menuPulseMs: { min: 500, max: 5000, kind: "int" },
   pausePulseMs: { min: 500, max: 5000, kind: "int" },
   recenterBias: { min: 0, max: 1, kind: "float" },
+  collectibleBias: { min: 0.2, max: 0.95, kind: "float" },
+  enemyEngageRiskMax: { min: 0.12, max: 0.85, kind: "float" },
+  hazardAvoidanceBias: { min: 0.2, max: 0.98, kind: "float" },
   minFuelReserve: { min: 0.18, max: 0.42, kind: "float" },
   gemFuelReserve: { min: 0.6, max: 0.92, kind: "float" },
   boostFuelReserve: { min: 0.35, max: 0.86, kind: "float" },
@@ -35,6 +41,7 @@ const BASE_BOUNDS: Record<string, NumericBounds> = Object.freeze({
   flightCooldownFrames: { min: 4, max: 20, kind: "int" },
   spikePrepBonus: { min: 0, max: 20, kind: "int" },
   gapPrepBonus: { min: 0, max: 20, kind: "int" },
+  spikeNoAttackBuffer: { min: 6, max: 36, kind: "int" },
 });
 
 const DEFAULT_ENTRY: PolicyRegistryEntry = Object.freeze({
@@ -56,6 +63,10 @@ const ENTRIES: Record<string, PolicyRegistryEntry> = Object.freeze({
       spikePrepBonus: 0,
       gapPrepBonus: 0,
       recenterBias: 0.72,
+      collectibleBias: 0.76,
+      enemyEngageRiskMax: 0.33,
+      spikeNoAttackBuffer: 18,
+      hazardAvoidanceBias: 0.82,
     },
     bounds: BASE_BOUNDS,
   },
@@ -82,7 +93,9 @@ const ENTRIES: Record<string, PolicyRegistryEntry> = Object.freeze({
     defaults: {
       ...BASE_POLICY_DEFAULTS,
       reactionWindowMs: 150,
-      riskTolerance: 0.52,
+      riskTolerance: 0.46,
+      enemyEngageRiskMax: 0.34,
+      hazardAvoidanceBias: 0.78,
     },
     bounds: BASE_BOUNDS,
   },
@@ -108,7 +121,13 @@ const ENTRIES: Record<string, PolicyRegistryEntry> = Object.freeze({
   },
   leftandright: {
     family: "reflex_timing",
-    defaults: BASE_POLICY_DEFAULTS,
+    defaults: {
+      ...BASE_POLICY_DEFAULTS,
+      collectibleBias: 0.78,
+      hazardAvoidanceBias: 0.82,
+      recenterBias: 0.62,
+      riskTolerance: 0.34,
+    },
     bounds: BASE_BOUNDS,
   },
   playback: {
@@ -118,7 +137,13 @@ const ENTRIES: Record<string, PolicyRegistryEntry> = Object.freeze({
   },
   "fighter-planes": {
     family: "target_evasion",
-    defaults: BASE_POLICY_DEFAULTS,
+    defaults: {
+      ...BASE_POLICY_DEFAULTS,
+      enemyEngageRiskMax: 0.3,
+      hazardAvoidanceBias: 0.84,
+      recenterBias: 0.58,
+      riskTolerance: 0.32,
+    },
     bounds: BASE_BOUNDS,
   },
   floor13: {
@@ -208,4 +233,3 @@ export class GamePolicyRegistry {
     return out;
   }
 }
-
