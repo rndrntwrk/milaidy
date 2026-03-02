@@ -20,6 +20,7 @@ import {
 } from "../five55-shared/action-kit.js";
 import {
   describeAgentAuthSource,
+  invalidateExchangedAgentTokenCache,
   isAgentAuthConfigured,
   resolveAgentBearer,
 } from "../five55-shared/agent-auth.js";
@@ -82,6 +83,7 @@ const SPRINT_GAME_ORDER = [
 
 type GamesDialect = "five55-web" | "milaidy-proxy" | "agent-v1";
 type GameSessionMode = "standard" | "ranked" | "spectate" | "solo" | "agent";
+type AgentBearerSource = string | (() => Promise<string>);
 
 let cachedAgentSessionId: string | undefined;
 
@@ -250,40 +252,61 @@ async function fetchJson(
   method: "GET" | "POST" | "PUT",
   base: string,
   endpoint: string,
-  token: string,
+  token: AgentBearerSource,
   body?: Record<string, unknown>,
 ): Promise<{ ok: boolean; status: number; data?: Record<string, unknown>; rawBody: string }> {
   const target = new URL(endpoint, base);
-  const init: RequestInit = {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-  };
-  if (body !== undefined) {
-    init.body = JSON.stringify(body);
-  }
-  const response = await fetch(target, init);
-  const rawBody = await response.text();
-  let data: Record<string, unknown> | undefined;
-  try {
-    const parsed: unknown = JSON.parse(rawBody);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      data = parsed as Record<string, unknown>;
+  const resolveToken = async (): Promise<string> =>
+    typeof token === "function" ? await token() : token;
+
+  const executeWithToken = async (
+    bearerToken: string,
+  ): Promise<{
+    ok: boolean;
+    status: number;
+    data?: Record<string, unknown>;
+    rawBody: string;
+  }> => {
+    const init: RequestInit = {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${bearerToken}`,
+      },
+    };
+    if (body !== undefined) {
+      init.body = JSON.stringify(body);
     }
-  } catch {
-    // non-JSON response
-  }
-  return {
-    ok: response.ok,
-    status: response.status,
-    data,
-    rawBody,
+    const response = await fetch(target, init);
+    const rawBody = await response.text();
+    let data: Record<string, unknown> | undefined;
+    try {
+      const parsed: unknown = JSON.parse(rawBody);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        data = parsed as Record<string, unknown>;
+      }
+    } catch {
+      // non-JSON response
+    }
+    return {
+      ok: response.ok,
+      status: response.status,
+      data,
+      rawBody,
+    };
   };
+
+  let bearerToken = await resolveToken();
+  let result = await executeWithToken(bearerToken);
+  if (result.status === 401 && typeof token === "function") {
+    invalidateExchangedAgentTokenCache();
+    bearerToken = await resolveToken();
+    result = await executeWithToken(bearerToken);
+  }
+  return result;
 }
 
-function createAgentRequest(base: string, token: string): AgentRequest {
+function createAgentRequest(base: string, token: AgentBearerSource): AgentRequest {
   return (method, endpoint, body) => fetchJson(method, base, endpoint, token, body);
 }
 
@@ -602,7 +625,7 @@ async function ensureAgentCloudflareOutput(
 
 async function prepareLaunchPolicyContext(
   base: string,
-  token: string,
+  token: AgentBearerSource,
   sessionId: string,
   gameId: string,
 ): Promise<LaunchPolicyContext | null> {
@@ -818,7 +841,7 @@ function selectDiagnosticRetests(
 
 async function fetchSprintCatalogGameIds(
   base: string,
-  token: string,
+  token: AgentBearerSource,
   sessionId: string,
 ): Promise<Set<string>> {
   const response = await fetchJson(
@@ -854,7 +877,7 @@ function resolveSprintGameOrder(availableGames: Set<string>): string[] {
 
 async function fetchSprintAds(
   base: string,
-  token: string,
+  token: AgentBearerSource,
   sessionId: string,
 ): Promise<SprintAdSummary[]> {
   const response = await fetchJson(
@@ -890,7 +913,7 @@ async function fetchSprintAds(
 
 async function triggerSprintAd(
   base: string,
-  token: string,
+  token: AgentBearerSource,
   sessionId: string,
   adId: string,
 ): Promise<{ triggered: boolean; rendered: boolean; detail?: string }> {
@@ -1218,7 +1241,8 @@ const goLivePlayAction: Action = {
       }
 
       const base = resolveGamesBase(dialect);
-      const token = await resolveAgentBearer(base);
+      const tokenProvider = async (): Promise<string> => resolveAgentBearer(base);
+      const token = await tokenProvider();
       const requestedSessionId = readParam(
         options as HandlerOptions | undefined,
         "sessionId",
@@ -1419,7 +1443,8 @@ const liveCapabilitySprintAction: Action = {
       }
 
       const base = resolveGamesBase(dialect);
-      const token = await resolveAgentBearer(base);
+      const tokenProvider = async (): Promise<string> => resolveAgentBearer(base);
+      const token = await tokenProvider();
       const requestedSessionId = readParam(
         options as HandlerOptions | undefined,
         "sessionId",
@@ -1455,10 +1480,14 @@ const liveCapabilitySprintAction: Action = {
         throw new Error("session stream is not active after Cloudflare provisioning");
       }
 
-      const availableGameIds = await fetchSprintCatalogGameIds(base, token, sessionId);
+      const availableGameIds = await fetchSprintCatalogGameIds(
+        base,
+        tokenProvider,
+        sessionId,
+      );
       const orderedGameIds = resolveSprintGameOrder(availableGameIds);
-      const sprintAds = await fetchSprintAds(base, token, sessionId);
-      const learningClient = new LearningClient(createAgentRequest(base, token));
+      const sprintAds = await fetchSprintAds(base, tokenProvider, sessionId);
+      const learningClient = new LearningClient(createAgentRequest(base, tokenProvider));
       const slotResults: SprintSlotResult[] = [];
 
       const runSlot = async (
@@ -1476,7 +1505,7 @@ const liveCapabilitySprintAction: Action = {
           ? null
           : await prepareLaunchPolicyContext(
             base,
-            token,
+            tokenProvider,
             sessionId,
             gameId,
           ).catch(() => null);
@@ -1502,7 +1531,7 @@ const liveCapabilitySprintAction: Action = {
             "POST",
             base,
             resolveSwitchEndpoint(dialect, sessionId),
-            token,
+            tokenProvider,
             switchPayload,
           );
           if (!switchResponse.ok && switchResponse.status === 404) {
@@ -1510,14 +1539,14 @@ const liveCapabilitySprintAction: Action = {
               "POST",
               base,
               resolveStopEndpoint(dialect, sessionId),
-              token,
+              tokenProvider,
               { reason: "sprint_switch_fallback" },
             );
             switchResponse = await fetchJson(
               "POST",
               base,
               resolvePlayEndpoint(dialect, sessionId),
-              token,
+              tokenProvider,
               switchPayload,
             );
           }
@@ -1544,14 +1573,24 @@ const liveCapabilitySprintAction: Action = {
         let adOutcome = { triggered: false, rendered: false, detail: "ad not attempted" };
         if (!dryRun) {
           await waitUntil(startedMs, adOffsetSeconds);
-          adOutcome = await triggerSprintAd(base, token, sessionId, ad.adId);
+          adOutcome = await triggerSprintAd(
+            base,
+            tokenProvider,
+            sessionId,
+            ad.adId,
+          );
           if (
             !adOutcome.triggered
             && (adOutcome.detail || "").toLowerCase().includes("cooldown")
             && DEFAULT_SPRINT_AD_RETRY_OFFSET_SECONDS <= slotSeconds
           ) {
             await waitUntil(startedMs, DEFAULT_SPRINT_AD_RETRY_OFFSET_SECONDS);
-            adOutcome = await triggerSprintAd(base, token, sessionId, ad.adId);
+            adOutcome = await triggerSprintAd(
+              base,
+              tokenProvider,
+              sessionId,
+              ad.adId,
+            );
           }
         }
 
