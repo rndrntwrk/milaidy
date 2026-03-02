@@ -61,6 +61,8 @@ const DEFAULT_SPRINT_SLOT_SECONDS = 5 * 60;
 const DEFAULT_SPRINT_AD_OFFSET_SECONDS = 4 * 60 + 30;
 const DEFAULT_SPRINT_AD_RETRY_OFFSET_SECONDS = 4 * 60 + 55;
 const DEFAULT_SPRINT_SLOT_CHECKPOINTS_SECONDS = [15, 60, 150];
+const DEFAULT_SPRINT_LEARNING_BACKFILL_WAIT_MS = 12_000;
+const DEFAULT_SPRINT_LEARNING_BACKFILL_POLL_MS = 2_000;
 
 const SPRINT_GAME_ORDER = [
   "knighthood",
@@ -719,6 +721,45 @@ function asSprintSlotSnapshot(
     survivalMs: toFiniteNumber(episode?.survivalMs),
     causeOfDeath: episode?.causeOfDeath ?? null,
   };
+}
+
+function parseIsoMs(value: string | undefined): number | null {
+  if (!value) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isEpisodeFreshForSlot(
+  episode: Awaited<ReturnType<LearningClient["fetchSessionLearning"]>>["latestEpisode"],
+  slotStartedMs: number,
+): boolean {
+  if (!episode?.id) return false;
+  const episodeCreatedMs = parseIsoMs(episode.createdAt);
+  if (episodeCreatedMs == null) return true;
+  return episodeCreatedMs >= slotStartedMs - 1_000;
+}
+
+async function fetchSlotFinalLearningSnapshot(
+  learningClient: LearningClient,
+  sessionId: string,
+  gameId: string,
+  slotStartedMs: number,
+): Promise<Awaited<ReturnType<LearningClient["fetchSessionLearning"]>>> {
+  let snapshot = await learningClient.fetchSessionLearning(sessionId, gameId);
+  if (isEpisodeFreshForSlot(snapshot.latestEpisode, slotStartedMs)) {
+    return snapshot;
+  }
+
+  const deadline = Date.now() + DEFAULT_SPRINT_LEARNING_BACKFILL_WAIT_MS;
+  while (Date.now() < deadline) {
+    await sleep(DEFAULT_SPRINT_LEARNING_BACKFILL_POLL_MS);
+    snapshot = await learningClient.fetchSessionLearning(sessionId, gameId);
+    if (isEpisodeFreshForSlot(snapshot.latestEpisode, slotStartedMs)) {
+      break;
+    }
+  }
+
+  return snapshot;
 }
 
 function computeCompositeScore(slot: SprintSlotResult): number {
@@ -1489,6 +1530,24 @@ const liveCapabilitySprintAction: Action = {
       const sprintAds = await fetchSprintAds(base, tokenProvider, sessionId);
       const learningClient = new LearningClient(createAgentRequest(base, tokenProvider));
       const slotResults: SprintSlotResult[] = [];
+      const reconcilePendingSlots = async (): Promise<void> => {
+        for (const slot of slotResults) {
+          if (slot.episodeId) continue;
+          const startedMs = parseIsoMs(slot.startedAt);
+          if (startedMs == null) continue;
+          const snapshot = await learningClient.fetchSessionLearning(sessionId, slot.gameId)
+            .catch(() => null);
+          if (!snapshot || !isEpisodeFreshForSlot(snapshot.latestEpisode, startedMs)) {
+            continue;
+          }
+          slot.episodeId = snapshot.latestEpisode?.id ?? null;
+          slot.score = toFiniteNumber(snapshot.latestEpisode?.score);
+          slot.policyVersionAfter = snapshot.profile.policyVersion ?? slot.policyVersionAfter;
+          slot.snapshots.push(asSprintSlotSnapshot("final", snapshot));
+          slot.compositeScore = computeCompositeScore(slot);
+          slot.issues = buildSlotIssues(slot);
+        }
+      };
 
       const runSlot = async (
         slotId: number,
@@ -1598,7 +1657,12 @@ const liveCapabilitySprintAction: Action = {
           await waitUntil(startedMs, slotSeconds);
         }
 
-        const postLearning = await learningClient.fetchSessionLearning(sessionId, gameId);
+        const postLearning = await fetchSlotFinalLearningSnapshot(
+          learningClient,
+          sessionId,
+          gameId,
+          startedMs,
+        );
         snapshots.push(asSprintSlotSnapshot("final", postLearning));
 
         const slotResult: SprintSlotResult = {
@@ -1646,6 +1710,7 @@ const liveCapabilitySprintAction: Action = {
         const slotId = index + 1;
         const result = await runSlot(slotId, gameId, false);
         slotResults.push(result);
+        await reconcilePendingSlots();
       }
 
       const diagnostics = selectDiagnosticRetests(
@@ -1662,7 +1727,10 @@ const liveCapabilitySprintAction: Action = {
           selection.sourceSlotId,
         );
         slotResults.push(result);
+        await reconcilePendingSlots();
       }
+
+      await reconcilePendingSlots();
 
       const summary = {
         sprintId,
