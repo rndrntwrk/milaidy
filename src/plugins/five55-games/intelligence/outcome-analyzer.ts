@@ -74,6 +74,14 @@ export class OutcomeAnalyzer {
     const reasons: string[] = [];
 
     const cause = String(latestEpisode.causeOfDeath || "").toUpperCase();
+    const hasHazardDeath = Boolean(
+      cause
+      && (cause.includes("SPIKE")
+        || cause.includes("GAP")
+        || cause.includes("FALL")
+        || cause.includes("COLLISION")
+        || cause.includes("HIT")),
+    );
     const metrics = asRecord(latestEpisode.metrics);
     const extraneousFlightRatio =
       readNumber(metrics.extraneousFlightRatio) ??
@@ -87,6 +95,30 @@ export class OutcomeAnalyzer {
         readInt(current, "spikePrepBonus", 0) + 2,
         0,
         20,
+      );
+      next.spikeNoAttackBuffer = boundedIntAdjust(
+        readInt(current, "spikeNoAttackBuffer", 18),
+        readInt(current, "spikeNoAttackBuffer", 18) + 3,
+        6,
+        36,
+      );
+      next.enemyEngageRiskMax = boundedFloatAdjust(
+        readFloat(current, "enemyEngageRiskMax", 0.38),
+        readFloat(current, "enemyEngageRiskMax", 0.38) - 0.03,
+        0.12,
+        0.85,
+      );
+      next.hazardAvoidanceBias = boundedFloatAdjust(
+        readFloat(current, "hazardAvoidanceBias", 0.82),
+        readFloat(current, "hazardAvoidanceBias", 0.82) + 0.04,
+        0.2,
+        0.98,
+      );
+      next.collectibleBias = boundedFloatAdjust(
+        readFloat(current, "collectibleBias", 0.76),
+        readFloat(current, "collectibleBias", 0.76) - 0.03,
+        0.2,
+        0.95,
       );
       next.boostFuelReserve = boundedFloatAdjust(
         readFloat(current, "boostFuelReserve", 0.46),
@@ -157,6 +189,24 @@ export class OutcomeAnalyzer {
           0.05,
           0.95,
         );
+        next.enemyEngageRiskMax = boundedFloatAdjust(
+          readFloat(current, "enemyEngageRiskMax", 0.36),
+          readFloat(current, "enemyEngageRiskMax", 0.36) - 0.03,
+          0.12,
+          0.85,
+        );
+        next.hazardAvoidanceBias = boundedFloatAdjust(
+          readFloat(current, "hazardAvoidanceBias", 0.74),
+          readFloat(current, "hazardAvoidanceBias", 0.74) + 0.04,
+          0.2,
+          0.98,
+        );
+        next.collectibleBias = boundedFloatAdjust(
+          readFloat(current, "collectibleBias", 0.68),
+          readFloat(current, "collectibleBias", 0.68) - 0.02,
+          0.2,
+          0.95,
+        );
         reasons.push("hazard_correction");
         changed = true;
       }
@@ -169,6 +219,23 @@ export class OutcomeAnalyzer {
           450,
         );
         reasons.push("short_survival_reaction_window");
+        changed = true;
+      }
+
+      if (survivalMs != null && survivalMs >= 45_000 && !hasHazardDeath) {
+        next.collectibleBias = boundedFloatAdjust(
+          readFloat(current, "collectibleBias", 0.68),
+          readFloat(current, "collectibleBias", 0.68) + 0.02,
+          0.2,
+          0.95,
+        );
+        next.enemyEngageRiskMax = boundedFloatAdjust(
+          readFloat(current, "enemyEngageRiskMax", 0.36),
+          readFloat(current, "enemyEngageRiskMax", 0.36) + 0.01,
+          0.12,
+          0.85,
+        );
+        reasons.push("stable_survival_expand_objectives");
         changed = true;
       }
     }

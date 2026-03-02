@@ -986,3 +986,5 @@ export function createStream555AdsPlugin(): Plugin {
     services: [],
   };
 }
+
+export default createStream555AdsPlugin;

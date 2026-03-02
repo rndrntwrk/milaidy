@@ -250,6 +250,16 @@ function resolveAdTriggerEndpoint(
   return `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/ads/${encodeURIComponent(adId)}/trigger`;
 }
 
+function resolveAdActiveEndpoint(
+  dialect: GamesDialect,
+  sessionId: string,
+): string {
+  if (dialect !== "agent-v1") {
+    throw new Error("ads active endpoint requires agent-v1 dialect");
+  }
+  return `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/ads/active`;
+}
+
 async function fetchJson(
   method: "GET" | "POST" | "PUT",
   base: string,
@@ -965,13 +975,68 @@ async function triggerSprintAd(
     token,
     {},
   );
-  if (response.ok) {
-    return { triggered: true, rendered: true };
+  if (!response.ok) {
+    return {
+      triggered: false,
+      rendered: false,
+      detail: `ad trigger failed (${response.status}): ${getErrorDetail(response)}`,
+    };
   }
+
+  const expectedGraphicId = readNonEmptyString(response.data?.graphic?.id);
+  const timeoutMs = 9_000;
+  const pollMs = 600;
+  const startedAt = Date.now();
+  let lastObservedDetail = "render acknowledgement pending";
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const activeResponse = await fetchJson(
+      "GET",
+      base,
+      resolveAdActiveEndpoint("agent-v1", sessionId),
+      token,
+    );
+    if (!activeResponse.ok) {
+      lastObservedDetail = `active ad lookup failed (${activeResponse.status}): ${getErrorDetail(activeResponse)}`;
+      await sleep(pollMs);
+      continue;
+    }
+
+    const active = asRecord(activeResponse.data?.active);
+    const activeAdId = readNonEmptyString(active?.adId);
+    const activeGraphicId = readNonEmptyString(active?.graphicId);
+    const renderAcked = active?.renderAcked === true;
+
+    if (!active) {
+      lastObservedDetail = "ad became inactive before render acknowledgement";
+      await sleep(pollMs);
+      continue;
+    }
+
+    if (activeAdId !== adId) {
+      lastObservedDetail = `active ad mismatch (expected ${adId}, saw ${activeAdId ?? "none"})`;
+      await sleep(pollMs);
+      continue;
+    }
+
+    if (expectedGraphicId && activeGraphicId && activeGraphicId !== expectedGraphicId) {
+      lastObservedDetail = `graphic mismatch (expected ${expectedGraphicId}, saw ${activeGraphicId})`;
+      await sleep(pollMs);
+      continue;
+    }
+
+    if (renderAcked) {
+      return { triggered: true, rendered: true };
+    }
+
+    lastObservedDetail = "render acknowledgement pending";
+    await sleep(pollMs);
+  }
+
   return {
-    triggered: false,
+    triggered: true,
     rendered: false,
-    detail: `ad trigger failed (${response.status}): ${getErrorDetail(response)}`,
+    detail: lastObservedDetail,
   };
 }
 
