@@ -1353,6 +1353,123 @@ export interface Five55GamePlayResponse {
   startedAt: string;
 }
 
+export interface Five55MasteryGateResult {
+  gateId: string;
+  metric: string;
+  operator: ">=" | "<=" | "==" | "!=";
+  threshold: number;
+  observed: number | null;
+  passed: boolean;
+  reason: string;
+}
+
+export interface Five55MasteryVerdict {
+  passed: boolean;
+  confidence: number;
+  reasons: string[];
+  gateResults: Five55MasteryGateResult[];
+}
+
+export interface Five55MasteryContract {
+  gameId: string;
+  aliases: string[];
+  title: string;
+  objective: {
+    summary: string;
+    winCondition: string;
+    masteryDefinition: string;
+  };
+  controls: Array<{
+    action: string;
+    input: string;
+    note?: string;
+  }>;
+  progression: Array<{
+    id: string;
+    label: string;
+    description: string;
+    successSignal: string;
+    failureSignals: string[];
+  }>;
+  risks: Array<{
+    id: string;
+    label: string;
+    symptom: string;
+    mitigation: string;
+  }>;
+  passGates: Array<{
+    id: string;
+    metric: string;
+    operator: ">=" | "<=" | "==" | "!=";
+    threshold: number;
+    description: string;
+  }>;
+  recovery: {
+    menu: string;
+    paused: string;
+    gameOver: string;
+    stuck: string;
+  };
+}
+
+export interface Five55MasteryRun {
+  runId: string;
+  suiteId: string;
+  status: "queued" | "running" | "success" | "failed" | "canceled";
+  strict: boolean;
+  seedMode: "fixed" | "mixed" | "rolling";
+  maxDurationSec: number;
+  episodesPerGame: number;
+  games: string[];
+  startedAt: string;
+  finishedAt: string | null;
+  durationMs: number | null;
+  progress: {
+    totalEpisodes: number;
+    completedEpisodes: number;
+    passedEpisodes: number;
+    failedEpisodes: number;
+  };
+  summary: {
+    passedGames: string[];
+    failedGames: string[];
+    gamePassRate: number;
+  };
+  error: string | null;
+}
+
+export interface Five55MasteryEpisode {
+  runId: string;
+  episodeId: string;
+  gameId: string;
+  gameTitle: string;
+  episodeIndex: number;
+  seed: number;
+  status: "queued" | "running" | "success" | "failed" | "canceled";
+  startedAt: string;
+  finishedAt: string | null;
+  durationMs: number | null;
+  actionResult: {
+    ok: boolean;
+    requestId: string;
+    error: string | null;
+  };
+  verdict: Five55MasteryVerdict;
+  metadata: Record<string, unknown>;
+}
+
+export interface Five55MasteryGameSnapshot {
+  gameId: string;
+  updatedAt: string;
+  latestRunId: string;
+  latestEpisodeId: string;
+  latestVerdict: Five55MasteryVerdict;
+  latestStatus: "queued" | "running" | "success" | "failed" | "canceled";
+  objective: Five55MasteryContract["objective"];
+  controls: Five55MasteryContract["controls"];
+  riskFlags: string[];
+}
+
 export type Five55AutonomyMode = "newscast" | "topic" | "games" | "free";
 
 export interface Five55AutonomyPreviewRequest {
@@ -1953,6 +2070,7 @@ const AGENT_TRANSFER_MIN_PASSWORD_LENGTH = 4;
 const DEFAULT_FETCH_TIMEOUT_MS = 10_000;
 const APP_LAUNCH_FETCH_TIMEOUT_MS = 45_000;
 const HYPERSCAPE_API_FETCH_TIMEOUT_MS = 30_000;
+const AUTONOMY_EXECUTE_FETCH_TIMEOUT_MS = 90_000;
 
 export class MiladyClient {
   private _baseUrl: string;
@@ -2191,10 +2309,14 @@ export class MiladyClient {
   async executeAutonomyPlan(
     input: AutonomyExecutePlanRequest,
   ): Promise<AutonomyExecutePlanResponse> {
-    return this.fetch("/api/agent/autonomy/execute-plan", {
-      method: "POST",
-      body: JSON.stringify(input),
-    });
+    return this.fetch(
+      "/api/agent/autonomy/execute-plan",
+      {
+        method: "POST",
+        body: JSON.stringify(input),
+      },
+      { timeoutMs: AUTONOMY_EXECUTE_FETCH_TIMEOUT_MS },
+    );
   }
 
   async playEmote(emoteId: string): Promise<{ ok: boolean }> {
@@ -3225,6 +3347,103 @@ export class MiladyClient {
       method: "POST",
       body: JSON.stringify(input),
     });
+  }
+  async getFive55MasteryCatalog(): Promise<{
+    contracts: Five55MasteryContract[];
+    total: number;
+    updatedAt: string;
+  }> {
+    return this.fetch("/api/five55/mastery/catalog");
+  }
+  async startFive55MasteryRun(input: {
+    suiteId?: string;
+    games?: string[];
+    episodesPerGame?: number;
+    seedMode?: "fixed" | "mixed" | "rolling";
+    maxDurationSec?: number;
+    strict?: boolean;
+  }): Promise<{
+    ok: boolean;
+    runId: string;
+    run: Five55MasteryRun | null;
+    executionMode: string;
+    durationMs: number;
+  }> {
+    return this.fetch("/api/five55/mastery/runs", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+  async listFive55MasteryRuns(input?: {
+    limit?: number;
+    cursor?: string;
+    status?: "queued" | "running" | "success" | "failed" | "canceled";
+  }): Promise<{
+    runs: Five55MasteryRun[];
+    limit: number;
+    cursor: string | null;
+    nextCursor: string | null;
+    total: number;
+  }> {
+    const qs = new URLSearchParams();
+    if (typeof input?.limit === "number" && Number.isFinite(input.limit)) {
+      qs.set("limit", String(input.limit));
+    }
+    if (input?.cursor) qs.set("cursor", input.cursor);
+    if (input?.status) qs.set("status", input.status);
+    const suffix = qs.size > 0 ? `?${qs.toString()}` : "";
+    return this.fetch(`/api/five55/mastery/runs${suffix}`);
+  }
+  async getFive55MasteryRun(runId: string): Promise<{ run: Five55MasteryRun }> {
+    return this.fetch(`/api/five55/mastery/runs/${encodeURIComponent(runId)}`);
+  }
+  async getFive55MasteryEpisodes(runId: string): Promise<{
+    runId: string;
+    total: number;
+    episodes: Five55MasteryEpisode[];
+  }> {
+    return this.fetch(
+      `/api/five55/mastery/runs/${encodeURIComponent(runId)}/episodes`,
+    );
+  }
+  async getFive55MasteryLogs(
+    runId: string,
+    input?: { afterSeq?: number; limit?: number },
+  ): Promise<{
+    runId: string;
+    logs: Array<{
+      runId: string;
+      seq: number;
+      ts: string;
+      level: "info" | "warn" | "error";
+      message: string;
+      stage?: string;
+      gameId?: string;
+      episodeId?: string;
+    }>;
+    count: number;
+    nextAfterSeq: number;
+  }> {
+    const qs = new URLSearchParams();
+    if (typeof input?.afterSeq === "number" && Number.isFinite(input.afterSeq)) {
+      qs.set("afterSeq", String(input.afterSeq));
+    }
+    if (typeof input?.limit === "number" && Number.isFinite(input.limit)) {
+      qs.set("limit", String(input.limit));
+    }
+    const suffix = qs.size > 0 ? `?${qs.toString()}` : "";
+    return this.fetch(
+      `/api/five55/mastery/runs/${encodeURIComponent(runId)}/logs${suffix}`,
+    );
+  }
+  async getFive55MasteryLatest(gameId: string): Promise<{
+    gameId: string;
+    contract: Five55MasteryContract;
+    latest: Five55MasteryGameSnapshot | null;
+  }> {
+    return this.fetch(
+      `/api/five55/mastery/games/${encodeURIComponent(gameId)}/latest`,
+    );
   }
   async listHyperscapeEmbeddedAgents(): Promise<HyperscapeEmbeddedAgentsResponse> {
     return this.fetch("/api/apps/hyperscape/embedded-agents", undefined, {

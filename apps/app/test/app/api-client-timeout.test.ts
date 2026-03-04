@@ -155,4 +155,51 @@ describe("MiladyClient request timeout handling", () => {
       message: "Request timed out after 30000ms",
     });
   });
+
+  it("uses extended timeout for autonomy execute-plan requests", async () => {
+    vi.useFakeTimers();
+
+    const fetchMock = vi.fn(
+      (_url: string, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("Aborted", "AbortError"));
+          });
+        }),
+    );
+    Object.defineProperty(globalThis, "fetch", {
+      value: fetchMock,
+      writable: true,
+      configurable: true,
+    });
+
+    const client = new MiladyClient("http://localhost:2138");
+    let settled = false;
+    const request = client
+      .executeAutonomyPlan({
+        plan: {
+          id: "timeout-check",
+          steps: [{ id: "1", toolName: "STREAM555_AUTH_WALLET_LOGIN", params: {} }],
+        },
+        request: { source: "test", sourceTrust: 1 },
+      })
+      .catch((err: unknown) => err)
+      .then((value) => {
+        settled = true;
+        return value;
+      });
+
+    await vi.advanceTimersByTimeAsync(10_001);
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(80_001);
+    const error = await request;
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({
+      kind: "timeout",
+      path: "/api/agent/autonomy/execute-plan",
+      message: "Request timed out after 90000ms",
+    });
+  });
 });
