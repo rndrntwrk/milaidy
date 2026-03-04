@@ -11567,6 +11567,126 @@ async function handleRequest(
     const startMs = Date.now();
 
     try {
+      if (pluginId === "stream555-control") {
+        const baseUrl =
+          process.env.STREAM555_BASE_URL?.trim() ||
+          process.env.STREAM555_PUBLIC_BASE_URL?.trim() ||
+          process.env.STREAM555_INTERNAL_BASE_URL?.trim() ||
+          process.env.STREAM_API_URL?.trim() ||
+          "";
+        const bearerToken =
+          process.env.STREAM555_AGENT_TOKEN?.trim() ||
+          process.env.STREAM_API_BEARER_TOKEN?.trim() ||
+          "";
+        const hasApiKey = Boolean(process.env.STREAM555_AGENT_API_KEY?.trim());
+
+        if (!baseUrl) {
+          json(
+            res,
+            {
+              success: false,
+              pluginId,
+              error: "STREAM555 base URL is not configured",
+              durationMs: Date.now() - startMs,
+            },
+            400,
+          );
+          return;
+        }
+
+        const base = new URL(baseUrl);
+        const healthController = new AbortController();
+        const healthTimeout = setTimeout(() => healthController.abort(), 10_000);
+        let healthResponse: Response;
+        try {
+          healthResponse = await fetch(new URL("/healthz", base), {
+            signal: healthController.signal,
+          });
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : "failed to reach control plane";
+          json(
+            res,
+            {
+              success: false,
+              pluginId,
+              error: `Control plane unreachable: ${message}`,
+              durationMs: Date.now() - startMs,
+            },
+            502,
+          );
+          return;
+        } finally {
+          clearTimeout(healthTimeout);
+        }
+
+        if (!healthResponse.ok) {
+          json(
+            res,
+            {
+              success: false,
+              pluginId,
+              error: `Control plane health check failed (${healthResponse.status})`,
+              durationMs: Date.now() - startMs,
+            },
+            502,
+          );
+          return;
+        }
+
+        let authStatus = "missing";
+        let authValidated = false;
+        if (bearerToken) {
+          const authController = new AbortController();
+          const authTimeout = setTimeout(() => authController.abort(), 10_000);
+          try {
+            const authResponse = await fetch(
+              new URL("/api/agent/v1/platforms", base),
+              {
+                method: "GET",
+                headers: {
+                  Authorization: `Bearer ${bearerToken}`,
+                },
+                signal: authController.signal,
+              },
+            );
+            authValidated = authResponse.status !== 401 && authResponse.status !== 403;
+            authStatus = authValidated
+              ? `bearer ok (${authResponse.status})`
+              : `bearer rejected (${authResponse.status})`;
+          } catch (err) {
+            authStatus =
+              err instanceof Error
+                ? `bearer check failed (${err.message})`
+                : "bearer check failed";
+          } finally {
+            clearTimeout(authTimeout);
+          }
+        } else if (hasApiKey) {
+          authStatus = "api-key configured (runtime exchange path)";
+          authValidated = true;
+        }
+
+        json(
+          res,
+          {
+            success: authValidated || hasApiKey,
+            pluginId,
+            message:
+              authValidated || hasApiKey
+                ? `Control plane reachable; auth: ${authStatus}`
+                : "Control plane reachable but stream auth is not configured",
+            details: {
+              baseUrl,
+              authStatus,
+            },
+            durationMs: Date.now() - startMs,
+          },
+          authValidated || hasApiKey ? 200 : 400,
+        );
+        return;
+      }
+
       // Find the plugin in the runtime
       const allPlugins = state.runtime?.plugins ?? [];
       const plugin = allPlugins.find(
