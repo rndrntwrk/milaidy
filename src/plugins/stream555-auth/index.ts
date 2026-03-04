@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type {
   Action,
   HandlerOptions,
@@ -8,6 +9,8 @@ import type {
   ProviderResult,
   State,
 } from "@elizaos/core";
+import { ethers } from "ethers";
+import { deriveEvmAddress, deriveSolanaAddress } from "../../api/wallet.js";
 import {
   assertFive55Capability,
   createFive55CapabilityPolicy,
@@ -28,10 +31,25 @@ const MODULE = "stream555.auth";
 const CAPABILITY_POLICY = createFive55CapabilityPolicy();
 const STREAM555_BASE_ENV = "STREAM555_BASE_URL";
 const STREAM_API_ENV = "STREAM_API_URL";
+const STREAM555_PUBLIC_BASE_ENV = "STREAM555_PUBLIC_BASE_URL";
+const STREAM555_INTERNAL_BASE_ENV = "STREAM555_INTERNAL_BASE_URL";
+const STREAM555_INTERNAL_AGENT_IDS_ENV = "STREAM555_INTERNAL_AGENT_IDS";
 const STREAM555_ADMIN_API_KEY_ENV = "STREAM555_ADMIN_API_KEY";
 const STREAM555_AGENT_DEFAULT_USER_ID_ENV = "STREAM555_AGENT_DEFAULT_USER_ID";
+const DEFAULT_STREAM555_PUBLIC_BASE_URL = "https://stream.rndrntwrk.com";
+const DEFAULT_STREAM555_INTERNAL_BASE_URL = "http://control-plane:3000";
+const DEFAULT_INTERNAL_AGENT_IDS = ["alice", "alice-internal"];
 
 type JsonObject = Record<string, unknown>;
+type WalletChainType = "evm" | "solana";
+type WalletSource = "runtime_wallet" | "sw4p_linked_wallet";
+
+interface WalletCandidate {
+  chainType: WalletChainType;
+  walletAddress: string;
+  privateKey: string;
+  source: WalletSource;
+}
 
 function trimEnv(key: string): string | undefined {
   const value = process.env[key]?.trim();
@@ -55,20 +73,64 @@ function parseCsv(value: string | undefined): string[] | undefined {
   return parsed.length > 0 ? parsed : undefined;
 }
 
-function resolveBaseUrl(): string {
-  const base = trimEnv(STREAM555_BASE_ENV) || trimEnv(STREAM_API_ENV);
-  if (!base) {
-    throw new Error(
-      `${STREAM555_BASE_ENV} (or ${STREAM_API_ENV}) must be configured`,
+function readParamValue(
+  options: HandlerOptions | undefined,
+  key: string,
+): string | undefined {
+  const value = readParam(options, key);
+  return value?.trim() ? value.trim() : undefined;
+}
+
+function getObject(value: unknown): JsonObject | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  return value as JsonObject;
+}
+
+function getStringField(value: unknown, key: string): string | undefined {
+  const objectValue = getObject(value);
+  const field = objectValue?.[key];
+  return typeof field === "string" && field.trim() ? field.trim() : undefined;
+}
+
+function isInternalAgentId(agentId: string | undefined): boolean {
+  const normalized = agentId?.trim().toLowerCase();
+  if (!normalized) return false;
+  const configured = parseCsv(trimEnv(STREAM555_INTERNAL_AGENT_IDS_ENV))?.map(
+    (entry) => entry.toLowerCase(),
+  );
+  const allowList = configured?.length ? configured : DEFAULT_INTERNAL_AGENT_IDS;
+  return allowList.includes(normalized);
+}
+
+function resolveBaseUrl(
+  runtime: IAgentRuntime,
+  options?: HandlerOptions,
+): string {
+  const explicit =
+    readParamValue(options, "baseUrl") ||
+    trimEnv(STREAM555_BASE_ENV) ||
+    trimEnv(STREAM_API_ENV);
+  if (explicit) return explicit;
+
+  const agentHint =
+    readParamValue(options, "agentId") || runtime.agentId?.toString();
+  if (isInternalAgentId(agentHint)) {
+    return (
+      trimEnv(STREAM555_INTERNAL_BASE_ENV) || DEFAULT_STREAM555_INTERNAL_BASE_URL
     );
   }
-  return base;
+
+  return trimEnv(STREAM555_PUBLIC_BASE_ENV) || DEFAULT_STREAM555_PUBLIC_BASE_URL;
 }
 
 function resolveBaseEnvSource(): string {
   if (trimEnv(STREAM555_BASE_ENV)) return STREAM555_BASE_ENV;
   if (trimEnv(STREAM_API_ENV)) return STREAM_API_ENV;
-  return `${STREAM555_BASE_ENV}|${STREAM_API_ENV}`;
+  if (trimEnv(STREAM555_PUBLIC_BASE_ENV)) return STREAM555_PUBLIC_BASE_ENV;
+  if (trimEnv(STREAM555_INTERNAL_BASE_ENV)) return STREAM555_INTERNAL_BASE_ENV;
+  return `${STREAM555_BASE_ENV}|${STREAM_API_ENV}|${STREAM555_PUBLIC_BASE_ENV}|${STREAM555_INTERNAL_BASE_ENV}`;
 }
 
 function assertStreamReadAccess(): void {
@@ -83,6 +145,186 @@ function assertStreamControlAccess(
 ): void {
   assertTrustedAdminForAction(runtime, message, state, actionName);
   assertFive55Capability(CAPABILITY_POLICY, "stream.control");
+}
+
+function readRuntimeSetting(
+  runtime: IAgentRuntime,
+  key: string,
+): string | undefined {
+  const fromRuntime = runtime.getSetting?.(key) as string | undefined;
+  if (typeof fromRuntime === "string" && fromRuntime.trim()) {
+    return fromRuntime.trim();
+  }
+  return trimEnv(key);
+}
+
+function normalizeEvmPrivateKey(privateKey: string): string {
+  const trimmed = privateKey.trim();
+  if (!trimmed) throw new Error("EVM private key is empty");
+  return trimmed.startsWith("0x") ? trimmed : `0x${trimmed}`;
+}
+
+function collectRuntimeWalletCandidates(runtime: IAgentRuntime): WalletCandidate[] {
+  const candidates: WalletCandidate[] = [];
+  const solanaPrivateKey = readRuntimeSetting(runtime, "SOLANA_PRIVATE_KEY");
+  if (solanaPrivateKey) {
+    try {
+      const walletAddress = deriveSolanaAddress(solanaPrivateKey);
+      candidates.push({
+        chainType: "solana",
+        walletAddress,
+        privateKey: solanaPrivateKey,
+        source: "runtime_wallet",
+      });
+    } catch {
+      // invalid key in env/runtime; skip and continue
+    }
+  }
+
+  const evmPrivateKey = readRuntimeSetting(runtime, "EVM_PRIVATE_KEY");
+  if (evmPrivateKey) {
+    try {
+      const normalized = normalizeEvmPrivateKey(evmPrivateKey);
+      const walletAddress = deriveEvmAddress(normalized);
+      candidates.push({
+        chainType: "evm",
+        walletAddress,
+        privateKey: normalized,
+        source: "runtime_wallet",
+      });
+    } catch {
+      // invalid key in env/runtime; skip and continue
+    }
+  }
+  return candidates;
+}
+
+function pickPreferredWallet(
+  candidates: WalletCandidate[],
+  preferredChain: WalletChainType,
+): WalletCandidate | null {
+  if (candidates.length === 0) return null;
+  const preferred = candidates.find(
+    (candidate) => candidate.chainType === preferredChain,
+  );
+  if (preferred) return preferred;
+  return candidates[0] ?? null;
+}
+
+const BASE58_ALPHABET =
+  "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+const BASE58_ALPHABET_MAP = new Map(
+  BASE58_ALPHABET.split("").map((char, index) => [char, index]),
+);
+
+function base58Encode(bytes: Buffer): string {
+  if (bytes.length === 0) return "";
+  let value = BigInt(`0x${bytes.toString("hex")}`);
+  const output: string[] = [];
+  while (value > 0n) {
+    const mod = Number(value % 58n);
+    output.unshift(BASE58_ALPHABET[mod] ?? "");
+    value /= 58n;
+  }
+  for (const byte of bytes) {
+    if (byte === 0) output.unshift("1");
+    else break;
+  }
+  return output.join("") || "1";
+}
+
+function base58Decode(value: string): Buffer {
+  const normalized = value.trim();
+  if (!normalized) return Buffer.alloc(0);
+  let result = 0n;
+  for (const char of normalized) {
+    const digit = BASE58_ALPHABET_MAP.get(char);
+    if (digit === undefined) {
+      throw new Error("invalid base58 input");
+    }
+    result = result * 58n + BigInt(digit);
+  }
+  let hex = result.toString(16);
+  if (hex.length % 2 !== 0) hex = `0${hex}`;
+  let buffer = hex ? Buffer.from(hex, "hex") : Buffer.alloc(0);
+  let leadingOnes = 0;
+  for (const char of normalized) {
+    if (char === "1") leadingOnes += 1;
+    else break;
+  }
+  if (leadingOnes > 0) {
+    buffer = Buffer.concat([Buffer.alloc(leadingOnes), buffer]);
+  }
+  return buffer;
+}
+
+function signSolanaMessage(privateKey: string, message: string): string {
+  const decoded = base58Decode(privateKey);
+  const seed =
+    decoded.length === 64
+      ? decoded.subarray(0, 32)
+      : decoded.length === 32
+        ? decoded
+        : null;
+  if (!seed) {
+    throw new Error(
+      `Unsupported Solana private key length: ${decoded.length} (expected 32 or 64 bytes)`,
+    );
+  }
+
+  const keyObject = crypto.createPrivateKey({
+    key: Buffer.concat([
+      Buffer.from("302e020100300506032b657004220420", "hex"),
+      seed,
+    ]),
+    format: "der",
+    type: "pkcs8",
+  });
+  const signature = crypto.sign(null, Buffer.from(message, "utf8"), keyObject);
+  return base58Encode(signature);
+}
+
+async function signWalletChallenge(
+  wallet: WalletCandidate,
+  message: string,
+): Promise<string> {
+  if (wallet.chainType === "evm") {
+    const signer = new ethers.Wallet(normalizeEvmPrivateKey(wallet.privateKey));
+    return signer.signMessage(message);
+  }
+  return signSolanaMessage(wallet.privateKey, message);
+}
+
+function inferWalletChainType(value: unknown): WalletChainType {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (normalized.includes("sol")) return "solana";
+  return "evm";
+}
+
+function extractLinkedWalletCandidate(data: JsonObject | undefined): WalletCandidate | null {
+  const linkedWallet = getObject(data?.linkedWallet);
+  const walletAddress =
+    getStringField(linkedWallet, "address") || getStringField(data, "walletAddress");
+  if (!walletAddress) return null;
+
+  const chainType = inferWalletChainType(
+    getStringField(data, "chainType") ||
+      getStringField(linkedWallet, "chainType") ||
+      getStringField(linkedWallet, "blockchain"),
+  );
+  const privateKey =
+    getStringField(linkedWallet, "privateKey") ||
+    getStringField(linkedWallet, "secretKey") ||
+    getStringField(data, "privateKey") ||
+    getStringField(data, "secretKey");
+  if (!privateKey) return null;
+
+  return {
+    chainType,
+    walletAddress,
+    privateKey: chainType === "evm" ? normalizeEvmPrivateKey(privateKey) : privateKey,
+    source: "sw4p_linked_wallet",
+  };
 }
 
 async function requestJson(
@@ -225,7 +467,10 @@ const stream555AuthProvider: Provider = {
     _state: State,
   ): Promise<ProviderResult> {
     const baseConfigured = Boolean(
-      trimEnv(STREAM555_BASE_ENV) || trimEnv(STREAM_API_ENV),
+      trimEnv(STREAM555_BASE_ENV) ||
+        trimEnv(STREAM_API_ENV) ||
+        trimEnv(STREAM555_PUBLIC_BASE_ENV) ||
+        trimEnv(STREAM555_INTERNAL_BASE_ENV),
     );
     const adminConfigured = Boolean(trimEnv(STREAM555_ADMIN_API_KEY_ENV));
     const authConfigured = isAgentAuthConfigured();
@@ -233,7 +478,7 @@ const stream555AuthProvider: Provider = {
       text: [
         "## 555stream Auth Surface",
         "",
-        "Actions: STREAM555_AUTH_APIKEY_CREATE, STREAM555_AUTH_APIKEY_LIST, STREAM555_AUTH_APIKEY_REVOKE, STREAM555_AUTH_APIKEY_SET_ACTIVE, STREAM555_AUTH_WALLET_CHALLENGE, STREAM555_AUTH_WALLET_VERIFY, STREAM555_AUTH_WALLET_PROVISION_LINKED",
+        "Actions: STREAM555_AUTH_APIKEY_CREATE, STREAM555_AUTH_APIKEY_LIST, STREAM555_AUTH_APIKEY_REVOKE, STREAM555_AUTH_APIKEY_SET_ACTIVE, STREAM555_AUTH_WALLET_LOGIN, STREAM555_AUTH_WALLET_CHALLENGE, STREAM555_AUTH_WALLET_VERIFY, STREAM555_AUTH_WALLET_PROVISION_LINKED",
         `Base configured: ${baseConfigured ? "yes" : "no"} (${resolveBaseEnvSource()})`,
         `Admin API key configured: ${adminConfigured ? "yes" : "no"} (${STREAM555_ADMIN_API_KEY_ENV})`,
         `Agent auth configured: ${authConfigured ? "yes" : "no"} (${describeAgentAuthSource()})`,
@@ -260,7 +505,7 @@ const createApiKeyAction: Action = {
         state,
         "STREAM555_AUTH_APIKEY_CREATE",
       );
-      const base = resolveBaseUrl();
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const headers = await resolveManagementHeaders(base);
       const name =
         readParam(options as HandlerOptions | undefined, "name") ||
@@ -414,7 +659,7 @@ const listApiKeysAction: Action = {
         state,
         "STREAM555_AUTH_APIKEY_LIST",
       );
-      const base = resolveBaseUrl();
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const headers = await resolveManagementHeaders(base);
       const userId = readParam(options as HandlerOptions | undefined, "userId");
       const status = readParam(options as HandlerOptions | undefined, "status");
@@ -468,7 +713,7 @@ const revokeApiKeyAction: Action = {
       );
       const keyId = readParam(options as HandlerOptions | undefined, "keyId");
       if (!keyId) throw new Error("keyId is required");
-      const base = resolveBaseUrl();
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const headers = await resolveManagementHeaders(base);
       const response = await requestJson(
         "DELETE",
@@ -537,7 +782,10 @@ const setActiveApiKeyAction: Action = {
 
       if (verifyExchange) {
         try {
-          const base = resolveBaseUrl();
+          const base = resolveBaseUrl(
+            runtime,
+            options as HandlerOptions | undefined,
+          );
           await resolveAgentBearer(base);
         } catch (err) {
           if (previousApiKey !== undefined) {
@@ -599,7 +847,7 @@ const provisionLinkedWalletAction: Action = {
         "STREAM555_AUTH_WALLET_PROVISION_LINKED",
       );
       assertStreamReadAccess();
-      const base = resolveBaseUrl();
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const headers = await resolveBearerHeaders(base);
       const targetChain = readParam(
         options as HandlerOptions | undefined,
@@ -639,6 +887,237 @@ const provisionLinkedWalletAction: Action = {
   ],
 };
 
+const walletLoginAction: Action = {
+  name: "STREAM555_AUTH_WALLET_LOGIN",
+  similes: [
+    "STREAM555_WALLET_LOGIN",
+    "STREAM555_AUTH_AUTO",
+    "STREAM555_AUTH_SELF_SERVE",
+  ],
+  description:
+    "Runs end-to-end wallet auth using local wallets (Solana preferred, EVM fallback) and sw4p linked-wallet provisioning when no local wallet exists.",
+  validate: async () => true,
+  handler: async (runtime, message, state, options) => {
+    try {
+      assertStreamControlAccess(runtime, message, state, "STREAM555_AUTH_WALLET_LOGIN");
+      assertStreamReadAccess();
+
+      const handlerOptions = options as HandlerOptions | undefined;
+      const base = resolveBaseUrl(runtime, handlerOptions);
+      const preferredChain =
+        readParam(handlerOptions, "preferredChain")?.trim().toLowerCase() === "evm"
+          ? "evm"
+          : "solana";
+      const allowProvision = parseBoolean(
+        readParam(handlerOptions, "allowProvision"),
+        true,
+      );
+      const provisionTargetChain =
+        readParam(handlerOptions, "provisionTargetChain")?.trim() || "eth";
+      const setActive = parseBoolean(
+        readParam(handlerOptions, "setActive"),
+        true,
+      );
+      const revealToken = parseBoolean(
+        readParam(handlerOptions, "revealToken"),
+        false,
+      );
+      const requestedAgentId = readParam(handlerOptions, "agentId")?.trim();
+      const runtimeAgentId =
+        typeof runtime.agentId === "string" ? runtime.agentId.trim() : "";
+      const agentIdCandidate = requestedAgentId || runtimeAgentId;
+      const agentIdPattern = /^[a-zA-Z0-9][a-zA-Z0-9-]{1,62}[a-zA-Z0-9]$/;
+      const challengeAgentId = agentIdPattern.test(agentIdCandidate)
+        ? agentIdCandidate
+        : undefined;
+
+      const runtimeCandidates = collectRuntimeWalletCandidates(runtime);
+      let selectedWallet = pickPreferredWallet(runtimeCandidates, preferredChain);
+      let linkedWalletProvisioned = false;
+      let linkedWalletChain: string | null = null;
+
+      if (!selectedWallet && allowProvision) {
+        const managementHeaders = await resolveBearerHeaders(base);
+        const provisionResponse = await requestJson(
+          "POST",
+          base,
+          "/api/auth/wallets/linked",
+          managementHeaders,
+          {
+            targetChain: provisionTargetChain,
+          },
+        );
+        if (!provisionResponse.ok) {
+          return buildEnvelope({
+            ok: false,
+            action: "STREAM555_AUTH_WALLET_LOGIN",
+            status: provisionResponse.status || 502,
+            message: `linked wallet provisioning failed (${provisionResponse.status}): ${getErrorDetail(provisionResponse)}`,
+            details: provisionResponse.data ?? provisionResponse.rawBody,
+          });
+        }
+        linkedWalletProvisioned = true;
+        linkedWalletChain = getStringField(
+          provisionResponse.data?.linkedWallet,
+          "blockchain",
+        ) ?? null;
+        selectedWallet = extractLinkedWalletCandidate(provisionResponse.data);
+        if (!selectedWallet) {
+          return buildEnvelope({
+            ok: false,
+            action: "STREAM555_AUTH_WALLET_LOGIN",
+            status: 424,
+            message:
+              "linked wallet was provisioned but no signing material was returned for challenge verification",
+            details: provisionResponse.data ?? {},
+          });
+        }
+      }
+
+      if (!selectedWallet) {
+        return buildEnvelope({
+          ok: false,
+          action: "STREAM555_AUTH_WALLET_LOGIN",
+          status: 412,
+          message:
+            "no wallet available for auth; configure SOLANA_PRIVATE_KEY/EVM_PRIVATE_KEY or enable linked-wallet provisioning",
+          details: {
+            preferredChain,
+            allowProvision,
+          },
+        });
+      }
+
+      const challengeResponse = await requestJson(
+        "POST",
+        base,
+        "/api/agent/v1/auth/wallet/challenge",
+        {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        {
+          walletAddress: selectedWallet.walletAddress,
+          chainType: selectedWallet.chainType,
+          ...(challengeAgentId ? { agentId: challengeAgentId } : {}),
+        },
+      );
+      if (!challengeResponse.ok) {
+        return buildEnvelope({
+          ok: false,
+          action: "STREAM555_AUTH_WALLET_LOGIN",
+          status: challengeResponse.status || 502,
+          message: `wallet challenge failed (${challengeResponse.status}): ${getErrorDetail(challengeResponse)}`,
+          details: challengeResponse.data ?? challengeResponse.rawBody,
+        });
+      }
+      const challengeId = getStringField(challengeResponse.data, "challengeId");
+      const signMessagePayload = getStringField(challengeResponse.data, "message");
+      if (!challengeId || !signMessagePayload) {
+        return buildEnvelope({
+          ok: false,
+          action: "STREAM555_AUTH_WALLET_LOGIN",
+          status: 502,
+          message: "wallet challenge response missing challengeId or message",
+          details: challengeResponse.data ?? {},
+        });
+      }
+
+      const signature = await signWalletChallenge(selectedWallet, signMessagePayload);
+      const verifyResponse = await requestJson(
+        "POST",
+        base,
+        "/api/agent/v1/auth/wallet/verify",
+        {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        {
+          challengeId,
+          signature,
+        },
+      );
+      if (!verifyResponse.ok) {
+        return buildEnvelope({
+          ok: false,
+          action: "STREAM555_AUTH_WALLET_LOGIN",
+          status: verifyResponse.status || 502,
+          message: `wallet verify failed (${verifyResponse.status}): ${getErrorDetail(verifyResponse)}`,
+          details: verifyResponse.data ?? verifyResponse.rawBody,
+        });
+      }
+
+      const token =
+        typeof verifyResponse.data?.token === "string"
+          ? verifyResponse.data.token
+          : null;
+      if (setActive && token) {
+        setActiveBearerToken(token);
+      }
+
+      const data: JsonObject = {
+        baseUrl: base,
+        walletAddress: selectedWallet.walletAddress,
+        chainType: selectedWallet.chainType,
+        walletSource: selectedWallet.source,
+        linkedWalletProvisioned,
+        linkedWalletChain,
+        authSource: describeAgentAuthSource(),
+        activeTokenSet: Boolean(setActive && token),
+        agentId:
+          typeof verifyResponse.data?.agentId === "string"
+            ? verifyResponse.data.agentId
+            : null,
+        userId:
+          typeof verifyResponse.data?.userId === "string"
+            ? verifyResponse.data.userId
+            : null,
+        actorId:
+          typeof verifyResponse.data?.actorId === "string"
+            ? verifyResponse.data.actorId
+            : null,
+        policyId:
+          typeof verifyResponse.data?.policyId === "string"
+            ? verifyResponse.data.policyId
+            : null,
+        sessionKind:
+          typeof verifyResponse.data?.sessionKind === "string"
+            ? verifyResponse.data.sessionKind
+            : null,
+        expiresAt:
+          typeof verifyResponse.data?.expiresAt === "string"
+            ? verifyResponse.data.expiresAt
+            : null,
+        scopes: Array.isArray(verifyResponse.data?.scopes)
+          ? verifyResponse.data.scopes
+          : null,
+      };
+      if (revealToken && token) {
+        data.token = token;
+      }
+
+      return buildEnvelope({
+        ok: true,
+        action: "STREAM555_AUTH_WALLET_LOGIN",
+        status: verifyResponse.status,
+        message: "wallet auth completed",
+        data,
+      });
+    } catch (err) {
+      return exceptionAction(MODULE, "STREAM555_AUTH_WALLET_LOGIN", err);
+    }
+  },
+  parameters: [
+    { name: "agentId", description: "Optional stable agent id for wallet challenge", required: false, schema: { type: "string" as const } },
+    { name: "preferredChain", description: "solana|evm (default solana)", required: false, schema: { type: "string" as const } },
+    { name: "allowProvision", description: "Allow linked-wallet provisioning when no local wallet exists (default true)", required: false, schema: { type: "string" as const } },
+    { name: "provisionTargetChain", description: "sw4p linked wallet target chain when provisioning (default eth)", required: false, schema: { type: "string" as const } },
+    { name: "setActive", description: "Set returned token as active runtime auth (default true)", required: false, schema: { type: "string" as const } },
+    { name: "revealToken", description: "Include returned token in response envelope (default false)", required: false, schema: { type: "string" as const } },
+    { name: "baseUrl", description: "Optional 555stream base URL override for this action", required: false, schema: { type: "string" as const } },
+  ],
+};
+
 const walletChallengeAction: Action = {
   name: "STREAM555_AUTH_WALLET_CHALLENGE",
   similes: [
@@ -663,7 +1142,7 @@ const walletChallengeAction: Action = {
       if (!walletAddress) {
         throw new Error("walletAddress is required");
       }
-      const base = resolveBaseUrl();
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const chainType =
         readParam(options as HandlerOptions | undefined, "chainType") || "evm";
       const agentId = readParam(
@@ -754,7 +1233,7 @@ const walletVerifyAction: Action = {
         false,
       );
 
-      const base = resolveBaseUrl();
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const response = await requestJson(
         "POST",
         base,
@@ -843,6 +1322,7 @@ export function createStream555AuthPlugin(): Plugin {
       listApiKeysAction,
       revokeApiKeyAction,
       setActiveApiKeyAction,
+      walletLoginAction,
       walletChallengeAction,
       walletVerifyAction,
       provisionLinkedWalletAction,

@@ -27,9 +27,16 @@ import { getPluginInfo, type RegistryPluginInfo } from "../../services/registry-
 import { resolveManagedAppStreamUrl } from "../../services/app-catalog.js";
 
 const STREAM555_BASE_ENV = "STREAM555_BASE_URL";
+const STREAM_API_ENV = "STREAM_API_URL";
+const STREAM555_PUBLIC_BASE_ENV = "STREAM555_PUBLIC_BASE_URL";
+const STREAM555_INTERNAL_BASE_ENV = "STREAM555_INTERNAL_BASE_URL";
+const STREAM555_INTERNAL_AGENT_IDS_ENV = "STREAM555_INTERNAL_AGENT_IDS";
 const STREAM_SESSION_ENV = "STREAM_SESSION_ID";
 const STREAM555_SESSION_ENV = "STREAM555_DEFAULT_SESSION_ID";
 const CAPABILITY_POLICY = createFive55CapabilityPolicy();
+const DEFAULT_STREAM555_PUBLIC_BASE_URL = "https://stream.rndrntwrk.com";
+const DEFAULT_STREAM555_INTERNAL_BASE_URL = "http://control-plane:3000";
+const DEFAULT_INTERNAL_AGENT_IDS = ["alice", "alice-internal"];
 
 let cachedAgentSessionId: string | undefined;
 
@@ -39,6 +46,14 @@ type LBarVideoAspect = "square" | "landscape";
 function trimEnv(key: string): string | undefined {
   const value = process.env[key]?.trim();
   return value ? value : undefined;
+}
+
+function readParamValue(
+  options: HandlerOptions | undefined,
+  key: string,
+): string | undefined {
+  const value = readParam(options, key);
+  return value?.trim() ? value.trim() : undefined;
 }
 
 function assertStreamReadAccess(): void {
@@ -55,10 +70,33 @@ function assertStreamControlAccess(
   assertFive55Capability(CAPABILITY_POLICY, "stream.control");
 }
 
-function resolveBaseUrl(): string {
-  const base = trimEnv(STREAM555_BASE_ENV);
-  if (!base) throw new Error(`${STREAM555_BASE_ENV} is not configured`);
-  return base;
+function isInternalAgentId(agentId: string | undefined): boolean {
+  const normalized = agentId?.trim().toLowerCase();
+  if (!normalized) return false;
+  const configured = parseCsvList(trimEnv(STREAM555_INTERNAL_AGENT_IDS_ENV));
+  const allowList = configured?.length ? configured : DEFAULT_INTERNAL_AGENT_IDS;
+  return allowList.includes(normalized);
+}
+
+function resolveBaseUrl(
+  runtime: IAgentRuntime,
+  options?: HandlerOptions,
+): string {
+  const explicit =
+    readParamValue(options, "baseUrl") ||
+    trimEnv(STREAM555_BASE_ENV) ||
+    trimEnv(STREAM_API_ENV);
+  if (explicit) return explicit;
+
+  const agentHint =
+    readParamValue(options, "agentId") || runtime.agentId?.toString();
+  if (isInternalAgentId(agentHint)) {
+    return (
+      trimEnv(STREAM555_INTERNAL_BASE_ENV) || DEFAULT_STREAM555_INTERNAL_BASE_URL
+    );
+  }
+
+  return trimEnv(STREAM555_PUBLIC_BASE_ENV) || DEFAULT_STREAM555_PUBLIC_BASE_URL;
 }
 
 async function resolveAgentToken(baseUrl: string): Promise<string> {
@@ -462,18 +500,24 @@ const stream555ControlProvider: Provider = {
   name: "stream555Control",
   description: "555stream orchestration controls (go-live, ads, radio, guests, scenes)",
   async get(
-    _runtime: IAgentRuntime,
+    runtime: IAgentRuntime,
     _message: Memory,
     _state: State,
   ): Promise<ProviderResult> {
-    const configured = Boolean(trimEnv(STREAM555_BASE_ENV));
+    const configured = Boolean(
+      trimEnv(STREAM555_BASE_ENV) ||
+      trimEnv(STREAM_API_ENV) ||
+      trimEnv(STREAM555_PUBLIC_BASE_ENV) ||
+      trimEnv(STREAM555_INTERNAL_BASE_ENV),
+    );
     const hasToken = isAgentAuthConfigured();
     return {
       text: [
         "## 555stream Control Surface",
         "",
         "Actions: STREAM555_GO_LIVE, STREAM555_GO_LIVE_APP, STREAM555_GO_LIVE_SEGMENTS, STREAM555_SEGMENT_STATE, STREAM555_SCREEN_SHARE, STREAM555_END_LIVE, STREAM555_AD_CREATE, STREAM555_AD_TRIGGER, STREAM555_AD_DISMISS, STREAM555_RADIO_CONTROL, STREAM555_GUEST_INVITE, STREAM555_SCENE_SET, STREAM555_PIP_ENABLE, STREAM555_SEGMENT_OVERRIDE, STREAM555_EARNINGS_ESTIMATE",
-        `Base URL configured: ${configured ? "yes" : "no"} (${STREAM555_BASE_ENV})`,
+        `Base URL configured: ${configured ? "yes" : "no"} (${STREAM555_BASE_ENV}|${STREAM_API_ENV}|${STREAM555_PUBLIC_BASE_ENV}|${STREAM555_INTERNAL_BASE_ENV})`,
+        `Resolved base URL: ${resolveBaseUrl(runtime)}`,
         `Agent auth configured: ${hasToken ? "yes" : "no"} (${describeAgentAuthSource()})`,
       ].join("\n"),
     };
@@ -498,7 +542,7 @@ const goLiveAction: Action = {
       const inputUrl = readParam(options as HandlerOptions | undefined, "inputUrl");
       const scene = readParam(options as HandlerOptions | undefined, "scene") || "default";
 
-      const base = resolveBaseUrl();
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
 
@@ -616,7 +660,7 @@ const goLiveAppAction: Action = {
         );
       }
 
-      const base = resolveBaseUrl();
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
 
@@ -773,7 +817,7 @@ const goLiveSegmentsAction: Action = {
         optionsPayload.autoStop = normalizedAutoStop;
       }
 
-      const base = resolveBaseUrl();
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
 
@@ -821,14 +865,14 @@ const segmentStateAction: Action = {
   description:
     "Fetches segment runtime state for the resolved session (queue, active segment, overrides, metrics).",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, _message, _state, options) => {
     try {
       assertStreamReadAccess();
       const requestedSessionId = readParam(
         options as HandlerOptions | undefined,
         "sessionId",
       );
-      const base = resolveBaseUrl();
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
       const response = await fetchJson(
@@ -888,7 +932,7 @@ const screenShareAction: Action = {
       const sceneId =
         readParam(options as HandlerOptions | undefined, "sceneId") || "active-pip";
 
-      const base = resolveBaseUrl();
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
 
@@ -936,7 +980,7 @@ const endLiveAction: Action = {
         options as HandlerOptions | undefined,
         "sessionId",
       );
-      const base = resolveBaseUrl();
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
 
@@ -1010,7 +1054,7 @@ const adsCreateAction: Action = {
       const handle = readParam(options as HandlerOptions | undefined, "handle");
       const durationMs = durationMsRaw ? Number.parseInt(durationMsRaw, 10) : undefined;
 
-      const base = resolveBaseUrl();
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
       const lBarPayload = buildLBarFromBrandPayload({
@@ -1103,7 +1147,7 @@ const adsTriggerAction: Action = {
         "durationMs",
       );
       const durationMs = durationMsRaw ? Number.parseInt(durationMsRaw, 10) : undefined;
-      const base = resolveBaseUrl();
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
 
@@ -1144,7 +1188,7 @@ const adsDismissAction: Action = {
         options as HandlerOptions | undefined,
         "sessionId",
       );
-      const base = resolveBaseUrl();
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
 
@@ -1207,7 +1251,7 @@ const radioControlAction: Action = {
       if (Number.isFinite(level)) radioPayload.level = level;
       if (background) radioPayload.backgroundId = background;
 
-      const base = resolveBaseUrl();
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
 
@@ -1272,7 +1316,7 @@ const guestInviteAction: Action = {
         ? Number.parseInt(expiresInRaw, 10)
         : undefined;
 
-      const base = resolveBaseUrl();
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
 
@@ -1319,7 +1363,7 @@ const sceneSetAction: Action = {
         "sessionId",
       );
 
-      const base = resolveBaseUrl();
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
 
@@ -1362,7 +1406,7 @@ const pipEnableAction: Action = {
       );
       const pipScene =
         readParam(options as HandlerOptions | undefined, "sceneId") || "active-pip";
-      const base = resolveBaseUrl();
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
 
@@ -1416,7 +1460,7 @@ const segmentOverrideAction: Action = {
         "requestedBy",
       );
 
-      const base = resolveBaseUrl();
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
 
@@ -1456,7 +1500,7 @@ const earningsEstimateAction: Action = {
   description:
     "Evaluates marketplace inventory and returns projected payout-per-impression opportunities.",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, _message, _state, options) => {
     try {
       assertStreamReadAccess();
       const categoriesRaw = readParam(
@@ -1471,7 +1515,7 @@ const earningsEstimateAction: Action = {
       );
       const limit = limitRaw ? Number.parseInt(limitRaw, 10) : 5;
       const poolSize = poolSizeRaw ? Number.parseInt(poolSizeRaw, 10) : 30;
-      const base = resolveBaseUrl();
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const token = await resolveAgentToken(base);
 
       return executeApiAction({

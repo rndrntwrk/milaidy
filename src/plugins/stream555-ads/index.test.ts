@@ -8,6 +8,10 @@ type EnvSnapshot = Record<string, string | undefined>;
 
 const ENV_KEYS = [
   "STREAM555_BASE_URL",
+  "STREAM_API_URL",
+  "STREAM555_PUBLIC_BASE_URL",
+  "STREAM555_INTERNAL_BASE_URL",
+  "STREAM555_INTERNAL_AGENT_IDS",
   "STREAM555_AGENT_TOKEN",
   "STREAM555_AGENT_API_KEY",
   "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
@@ -52,12 +56,21 @@ async function resolveAction(name: string) {
   return action;
 }
 
-const INTERNAL_RUNTIME = { agentId: "alice-internal" } as never;
-const INTERNAL_MESSAGE = {
-  entityId: "alice-internal",
-  content: { source: "system" },
-} as never;
 const INTERNAL_STATE = { values: {} } as never;
+
+function makeRuntime(agentId = "alice-internal") {
+  return {
+    agentId,
+    getSetting: (key: string) => process.env[key],
+  } as never;
+}
+
+function makeMessage(agentId = "alice-internal") {
+  return {
+    entityId: agentId,
+    content: { source: "system" },
+  } as never;
+}
 
 describe("stream555-ads plugin actions", () => {
   let envBefore: EnvSnapshot;
@@ -66,6 +79,9 @@ describe("stream555-ads plugin actions", () => {
     vi.resetModules();
     envBefore = snapshotEnv();
     process.env.STREAM555_BASE_URL = "http://control-plane:3000";
+    process.env.STREAM555_PUBLIC_BASE_URL = "https://stream.rndrntwrk.com";
+    process.env.STREAM555_INTERNAL_BASE_URL = "http://control-plane:3000";
+    process.env.STREAM555_INTERNAL_AGENT_IDS = "alice,alice-internal";
     process.env.STREAM555_AGENT_TOKEN = "test-token";
     delete process.env.STREAM555_AGENT_API_KEY;
     delete process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT;
@@ -98,8 +114,8 @@ describe("stream555-ads plugin actions", () => {
 
     const action = await resolveAction("STREAM555_ADS_SETUP_DEFAULTS");
     const result = await action.handler?.(
-      INTERNAL_RUNTIME,
-      INTERNAL_MESSAGE,
+      makeRuntime(),
+      makeMessage(),
       INTERNAL_STATE,
       {
         parameters: {
@@ -137,8 +153,8 @@ describe("stream555-ads plugin actions", () => {
 
     const action = await resolveAction("STREAM555_ADS_TRIGGER_NEXT");
     const result = await action.handler?.(
-      INTERNAL_RUNTIME,
-      INTERNAL_MESSAGE,
+      makeRuntime(),
+      makeMessage(),
       INTERNAL_STATE,
       {
         parameters: {
@@ -175,8 +191,8 @@ describe("stream555-ads plugin actions", () => {
 
     const action = await resolveAction("STREAM555_ADS_STATUS");
     const result = await action.handler?.(
-      INTERNAL_RUNTIME,
-      INTERNAL_MESSAGE,
+      makeRuntime(),
+      makeMessage(),
       INTERNAL_STATE,
       {
         parameters: { sessionId: "session-ads-3" },
@@ -218,8 +234,8 @@ describe("stream555-ads plugin actions", () => {
 
     const action = await resolveAction("STREAM555_ADS_TRIGGER_NEXT");
     const result = await action.handler?.(
-      INTERNAL_RUNTIME,
-      INTERNAL_MESSAGE,
+      makeRuntime(),
+      makeMessage(),
       INTERNAL_STATE,
       {
         parameters: {
@@ -236,5 +252,55 @@ describe("stream555-ads plugin actions", () => {
     expect(data.adId).toBe("ad-1");
     expect(data.rendered).toBe(true);
     expect(data.attempts).toBe(2);
+  });
+
+  it("falls back to public base URL for non-internal agents when explicit base env is missing", async () => {
+    delete process.env.STREAM555_BASE_URL;
+    delete process.env.STREAM_API_URL;
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, {
+        earnings: { totalEarned: 12, totalImpressions: 3 },
+      }),
+    );
+
+    const action = await resolveAction("STREAM555_ADS_EARNINGS");
+    const result = await action.handler?.(
+      makeRuntime("builder-agent"),
+      makeMessage("builder-agent"),
+      INTERNAL_STATE,
+      { parameters: {} } as never,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "https://stream.rndrntwrk.com/api/agent/v1/marketplace/earnings",
+    );
+    expect(result?.success).toBe(true);
+  });
+
+  it("falls back to internal base URL for internal agents when explicit base env is missing", async () => {
+    delete process.env.STREAM555_BASE_URL;
+    delete process.env.STREAM_API_URL;
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, {
+        earnings: { totalEarned: 12, totalImpressions: 3 },
+      }),
+    );
+
+    const action = await resolveAction("STREAM555_ADS_EARNINGS");
+    const result = await action.handler?.(
+      makeRuntime("alice"),
+      makeMessage("alice"),
+      INTERNAL_STATE,
+      { parameters: {} } as never,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "http://control-plane:3000/api/agent/v1/marketplace/earnings",
+    );
+    expect(result?.success).toBe(true);
   });
 });

@@ -8,6 +8,10 @@ type EnvSnapshot = Record<string, string | undefined>;
 
 const ENV_KEYS = [
   "STREAM555_BASE_URL",
+  "STREAM_API_URL",
+  "STREAM555_PUBLIC_BASE_URL",
+  "STREAM555_INTERNAL_BASE_URL",
+  "STREAM555_INTERNAL_AGENT_IDS",
   "STREAM555_AGENT_TOKEN",
   "STREAM555_AGENT_API_KEY",
   "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
@@ -63,12 +67,21 @@ async function resolveAction(name: string) {
   return action;
 }
 
-const INTERNAL_RUNTIME = { agentId: "alice-internal" } as never;
-const INTERNAL_MESSAGE = {
-  entityId: "alice-internal",
-  content: { source: "system" },
-} as never;
 const INTERNAL_STATE = { values: {} } as never;
+
+function makeRuntime(agentId = "alice-internal") {
+  return {
+    agentId,
+    getSetting: (key: string) => process.env[key],
+  } as never;
+}
+
+function makeMessage(agentId = "alice-internal") {
+  return {
+    entityId: agentId,
+    content: { source: "system" },
+  } as never;
+}
 
 describe("stream555-control plugin actions", () => {
   let envBefore: EnvSnapshot;
@@ -77,6 +90,9 @@ describe("stream555-control plugin actions", () => {
     vi.resetModules();
     envBefore = snapshotEnv();
     process.env.STREAM555_BASE_URL = "http://control-plane:3000";
+    process.env.STREAM555_PUBLIC_BASE_URL = "https://stream.rndrntwrk.com";
+    process.env.STREAM555_INTERNAL_BASE_URL = "http://control-plane:3000";
+    process.env.STREAM555_INTERNAL_AGENT_IDS = "alice,alice-internal";
     process.env.STREAM555_AGENT_TOKEN = "test-token";
     delete process.env.STREAM555_AGENT_API_KEY;
     delete process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT;
@@ -97,8 +113,8 @@ describe("stream555-control plugin actions", () => {
 
     const action = await resolveAction("STREAM555_RADIO_CONTROL");
     const result = await action.handler?.(
-      INTERNAL_RUNTIME,
-      INTERNAL_MESSAGE,
+      makeRuntime(),
+      makeMessage(),
       INTERNAL_STATE,
       {
         parameters: {
@@ -136,8 +152,8 @@ describe("stream555-control plugin actions", () => {
 
     const action = await resolveAction("STREAM555_SCREEN_SHARE");
     const result = await action.handler?.(
-      INTERNAL_RUNTIME,
-      INTERNAL_MESSAGE,
+      makeRuntime(),
+      makeMessage(),
       INTERNAL_STATE,
       { parameters: { sessionId: "session-2" } } as never,
     );
@@ -163,8 +179,8 @@ describe("stream555-control plugin actions", () => {
 
     const action = await resolveAction("STREAM555_SEGMENT_OVERRIDE");
     const result = await action.handler?.(
-      INTERNAL_RUNTIME,
-      INTERNAL_MESSAGE,
+      makeRuntime(),
+      makeMessage(),
       INTERNAL_STATE,
       {
         parameters: {
@@ -198,8 +214,8 @@ describe("stream555-control plugin actions", () => {
 
     const action = await resolveAction("STREAM555_AD_CREATE");
     const result = await action.handler?.(
-      INTERNAL_RUNTIME,
-      INTERNAL_MESSAGE,
+      makeRuntime(),
+      makeMessage(),
       INTERNAL_STATE,
       {
         parameters: {
@@ -254,8 +270,8 @@ describe("stream555-control plugin actions", () => {
 
     const action = await resolveAction("STREAM555_AD_CREATE");
     const result = await action.handler?.(
-      INTERNAL_RUNTIME,
-      INTERNAL_MESSAGE,
+      makeRuntime(),
+      makeMessage(),
       INTERNAL_STATE,
       {
         parameters: {
@@ -297,8 +313,8 @@ describe("stream555-control plugin actions", () => {
 
     const action = await resolveAction("STREAM555_EARNINGS_ESTIMATE");
     const result = await action.handler?.(
-      INTERNAL_RUNTIME,
-      INTERNAL_MESSAGE,
+      makeRuntime(),
+      makeMessage(),
       INTERNAL_STATE,
       {
         parameters: {
@@ -323,23 +339,54 @@ describe("stream555-control plugin actions", () => {
     expect(parseEnvelope(result as { text: string }).code).toBe("OK");
   });
 
-  it("returns a runtime exception envelope when base url is missing", async () => {
+  it("falls back to public base URL for non-internal agents when explicit base env is missing", async () => {
     delete process.env.STREAM555_BASE_URL;
+    delete process.env.STREAM_API_URL;
     const fetchMock = vi.spyOn(globalThis, "fetch");
-    const action = await resolveAction("STREAM555_SCREEN_SHARE");
-
-    const result = await action.handler?.(
-      INTERNAL_RUNTIME,
-      INTERNAL_MESSAGE,
-      INTERNAL_STATE,
-      { parameters: { sessionId: "session-fail" } } as never,
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, {
+        summary: { projectedPayoutPerImpression: 0.12 },
+      }),
     );
 
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(result?.success).toBe(false);
-    const envelope = parseEnvelope(result as { text: string });
-    expect(envelope.code).toBe("E_RUNTIME_EXCEPTION");
-    expect(String(envelope.message)).toContain("STREAM555_BASE_URL");
+    const action = await resolveAction("STREAM555_EARNINGS_ESTIMATE");
+    const result = await action.handler?.(
+      makeRuntime("builder-agent"),
+      makeMessage("builder-agent"),
+      INTERNAL_STATE,
+      { parameters: {} } as never,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "https://stream.rndrntwrk.com/api/agent/v1/marketplace/evaluate",
+    );
+    expect(result?.success).toBe(true);
+  });
+
+  it("falls back to internal base URL for internal agents when explicit base env is missing", async () => {
+    delete process.env.STREAM555_BASE_URL;
+    delete process.env.STREAM_API_URL;
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, {
+        summary: { projectedPayoutPerImpression: 0.12 },
+      }),
+    );
+
+    const action = await resolveAction("STREAM555_EARNINGS_ESTIMATE");
+    const result = await action.handler?.(
+      makeRuntime("alice"),
+      makeMessage("alice"),
+      INTERNAL_STATE,
+      { parameters: {} } as never,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "http://control-plane:3000/api/agent/v1/marketplace/evaluate",
+    );
+    expect(result?.success).toBe(true);
   });
 
   it("resolves app viewer URL (prefers non-local) and starts website go-live", async () => {
@@ -381,8 +428,8 @@ describe("stream555-control plugin actions", () => {
 
     const action = await resolveAction("STREAM555_GO_LIVE_APP");
     const result = await action.handler?.(
-      INTERNAL_RUNTIME,
-      INTERNAL_MESSAGE,
+      makeRuntime(),
+      makeMessage(),
       INTERNAL_STATE,
       { parameters: { appName: "babylon", sessionId: "session-4" } } as never,
     );
@@ -460,8 +507,8 @@ describe("stream555-control plugin actions", () => {
 
     const action = await resolveAction("STREAM555_GO_LIVE_APP");
     const result = await action.handler?.(
-      INTERNAL_RUNTIME,
-      INTERNAL_MESSAGE,
+      makeRuntime(),
+      makeMessage(),
       INTERNAL_STATE,
       { parameters: { appName: "hyperscape", sessionId: "session-local" } } as never,
     );

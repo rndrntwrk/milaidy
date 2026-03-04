@@ -21,9 +21,16 @@ import {
 } from "../five55-shared/agent-auth.js";
 
 const STREAM555_BASE_ENV = "STREAM555_BASE_URL";
+const STREAM_API_ENV = "STREAM_API_URL";
+const STREAM555_PUBLIC_BASE_ENV = "STREAM555_PUBLIC_BASE_URL";
+const STREAM555_INTERNAL_BASE_ENV = "STREAM555_INTERNAL_BASE_URL";
+const STREAM555_INTERNAL_AGENT_IDS_ENV = "STREAM555_INTERNAL_AGENT_IDS";
 const STREAM_SESSION_ENV = "STREAM_SESSION_ID";
 const STREAM555_SESSION_ENV = "STREAM555_DEFAULT_SESSION_ID";
 const CAPABILITY_POLICY = createFive55CapabilityPolicy();
+const DEFAULT_STREAM555_PUBLIC_BASE_URL = "https://stream.rndrntwrk.com";
+const DEFAULT_STREAM555_INTERNAL_BASE_URL = "http://control-plane:3000";
+const DEFAULT_INTERNAL_AGENT_IDS = ["alice", "alice-internal"];
 
 type AgentBearerSource = string | (() => Promise<string>);
 
@@ -33,6 +40,14 @@ const adRotationIndex = new Map<string, number>();
 function trimEnv(key: string): string | undefined {
   const value = process.env[key]?.trim();
   return value ? value : undefined;
+}
+
+function readParamValue(
+  options: HandlerOptions | undefined,
+  key: string,
+): string | undefined {
+  const value = readParam(options, key);
+  return value?.trim() ? value.trim() : undefined;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -183,10 +198,33 @@ function readIntOption(value: string | undefined, fallback: number, min = 0): nu
   return Math.max(min, parsed);
 }
 
-function resolveBaseUrl(): string {
-  const base = trimEnv(STREAM555_BASE_ENV);
-  if (!base) throw new Error(`${STREAM555_BASE_ENV} is not configured`);
-  return base;
+function isInternalAgentId(agentId: string | undefined): boolean {
+  const normalized = agentId?.trim().toLowerCase();
+  if (!normalized) return false;
+  const configured = parseCsvList(trimEnv(STREAM555_INTERNAL_AGENT_IDS_ENV));
+  const allowList = configured?.length ? configured : DEFAULT_INTERNAL_AGENT_IDS;
+  return allowList.includes(normalized);
+}
+
+function resolveBaseUrl(
+  runtime: IAgentRuntime,
+  options?: HandlerOptions,
+): string {
+  const explicit =
+    readParamValue(options, "baseUrl") ||
+    trimEnv(STREAM555_BASE_ENV) ||
+    trimEnv(STREAM_API_ENV);
+  if (explicit) return explicit;
+
+  const agentHint =
+    readParamValue(options, "agentId") || runtime.agentId?.toString();
+  if (isInternalAgentId(agentHint)) {
+    return (
+      trimEnv(STREAM555_INTERNAL_BASE_ENV) || DEFAULT_STREAM555_INTERNAL_BASE_URL
+    );
+  }
+
+  return trimEnv(STREAM555_PUBLIC_BASE_ENV) || DEFAULT_STREAM555_PUBLIC_BASE_URL;
 }
 
 async function resolveAgentToken(baseUrl: string): Promise<string> {
@@ -471,13 +509,19 @@ const stream555AdsProvider: Provider = {
   description:
     "Dedicated livestream ads surface for campaign loading, rotation, trigger status, and earnings.",
   dynamic: true,
-  get: async (): Promise<ProviderResult> => {
-    const configured = Boolean(trimEnv(STREAM555_BASE_ENV) && isAgentAuthConfigured());
+  get: async (runtime): Promise<ProviderResult> => {
+    const configured = Boolean(
+      (trimEnv(STREAM555_BASE_ENV) ||
+        trimEnv(STREAM_API_ENV) ||
+        trimEnv(STREAM555_PUBLIC_BASE_ENV) ||
+        trimEnv(STREAM555_INTERNAL_BASE_ENV)) &&
+        isAgentAuthConfigured(),
+    );
     return {
       text: [
         "Stream555 Ads plugin status:",
         `Configured: ${configured ? "yes" : "no"}`,
-        `Base env: ${trimEnv(STREAM555_BASE_ENV) ?? "unset"}`,
+        `Resolved base URL: ${resolveBaseUrl(runtime)}`,
         `Auth source: ${describeAgentAuthSource()}`,
         "Actions: STREAM555_ADS_SETUP_DEFAULTS, STREAM555_ADS_ROTATION_START, STREAM555_ADS_TRIGGER_NEXT, STREAM555_ADS_STATUS, STREAM555_ADS_EARNINGS",
       ].join("\n"),
@@ -525,7 +569,7 @@ const setupDefaultsAction: Action = {
         0,
       );
 
-      const base = resolveBaseUrl();
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const tokenProvider = async (): Promise<string> => resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, tokenProvider, requestedSessionId);
 
@@ -689,7 +733,7 @@ const rotationStartAction: Action = {
         ),
       );
 
-      const base = resolveBaseUrl();
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const tokenProvider = async (): Promise<string> => resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, tokenProvider, requestedSessionId);
       const ads = await listSessionAds(base, tokenProvider, sessionId);
@@ -785,7 +829,7 @@ const triggerNextAction: Action = {
         0,
       );
 
-      const base = resolveBaseUrl();
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const tokenProvider = async (): Promise<string> => resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, tokenProvider, requestedSessionId);
       const ads = await listSessionAds(base, tokenProvider, sessionId);
@@ -855,14 +899,14 @@ const statusAction: Action = {
   description:
     "Returns ads inventory, active ad runtime state, cooldown, and marketplace earnings snapshot.",
   validate: async () => true,
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, _message, _state, options) => {
     try {
       assertAdsReadAccess();
       const requestedSessionId = readParam(
         options as HandlerOptions | undefined,
         "sessionId",
       );
-      const base = resolveBaseUrl();
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const tokenProvider = async (): Promise<string> => resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, tokenProvider, requestedSessionId);
       const ads = await listSessionAds(base, tokenProvider, sessionId);
@@ -928,10 +972,10 @@ const earningsAction: Action = {
   description:
     "Returns realized marketplace earnings for the authenticated agent owner.",
   validate: async () => true,
-  handler: async () => {
+  handler: async (runtime, _message, _state, options) => {
     try {
       assertAdsReadAccess();
-      const base = resolveBaseUrl();
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const tokenProvider = async (): Promise<string> => resolveAgentToken(base);
       const earningsResponse = await fetchJson(
         "GET",

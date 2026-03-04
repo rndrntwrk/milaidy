@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createStream555AuthPlugin } from "./index.js";
 
@@ -6,6 +7,9 @@ type EnvSnapshot = Record<string, string | undefined>;
 const ENV_KEYS = [
   "STREAM555_BASE_URL",
   "STREAM_API_URL",
+  "STREAM555_PUBLIC_BASE_URL",
+  "STREAM555_INTERNAL_BASE_URL",
+  "STREAM555_INTERNAL_AGENT_IDS",
   "STREAM555_ADMIN_API_KEY",
   "STREAM555_AGENT_TOKEN",
   "STREAM555_AGENT_API_KEY",
@@ -13,14 +17,25 @@ const ENV_KEYS = [
   "STREAM555_AGENT_DEFAULT_USER_ID",
   "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
   "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
+  "EVM_PRIVATE_KEY",
+  "SOLANA_PRIVATE_KEY",
 ] as const;
 
-const INTERNAL_RUNTIME = { agentId: "alice-internal" } as never;
-const INTERNAL_MESSAGE = {
-  entityId: "alice-internal",
-  content: { source: "system" },
-} as never;
 const INTERNAL_STATE = { values: {} } as never;
+
+function makeRuntime(agentId = "alice-internal") {
+  return {
+    agentId,
+    getSetting: (key: string) => process.env[key],
+  } as never;
+}
+
+function makeMessage(agentId = "alice-internal") {
+  return {
+    entityId: agentId,
+    content: { source: "system" },
+  } as never;
+}
 
 function snapshotEnv(): EnvSnapshot {
   const snapshot: EnvSnapshot = {};
@@ -58,6 +73,37 @@ function parseFetchBody(call: unknown[]): Record<string, unknown> {
   return JSON.parse(body) as Record<string, unknown>;
 }
 
+const BASE58_ALPHABET =
+  "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
+function base58Encode(bytes: Buffer): string {
+  if (bytes.length === 0) return "";
+  let value = BigInt(`0x${bytes.toString("hex")}`);
+  const output: string[] = [];
+  while (value > 0n) {
+    const mod = Number(value % 58n);
+    output.unshift(BASE58_ALPHABET[mod] ?? "");
+    value /= 58n;
+  }
+  for (const byte of bytes) {
+    if (byte === 0) output.unshift("1");
+    else break;
+  }
+  return output.join("") || "1";
+}
+
+function generateSolanaPrivateKey(): string {
+  const { privateKey, publicKey } = crypto.generateKeyPairSync("ed25519");
+  const privBytes = privateKey.export({ type: "pkcs8", format: "der" }) as Buffer;
+  const pubBytes = publicKey.export({ type: "spki", format: "der" }) as Buffer;
+  const seed = privBytes.subarray(16, 48);
+  const pubRaw = pubBytes.subarray(12, 44);
+  return base58Encode(Buffer.concat([seed, pubRaw]));
+}
+
+const TEST_EVM_PRIVATE_KEY =
+  "0x59c6995e998f97a5a0044966f0945382db6a20db9f0f5ebf57a9df85f7f9c3d3";
+
 function resolveAction(name: string) {
   const plugin = createStream555AuthPlugin();
   const actions = plugin.actions ?? [];
@@ -74,6 +120,9 @@ describe("stream555-auth plugin actions", () => {
   beforeEach(() => {
     envBefore = snapshotEnv();
     process.env.STREAM555_BASE_URL = "http://control-plane:3000";
+    process.env.STREAM555_PUBLIC_BASE_URL = "https://stream.rndrntwrk.com";
+    process.env.STREAM555_INTERNAL_BASE_URL = "http://control-plane:3000";
+    process.env.STREAM555_INTERNAL_AGENT_IDS = "alice,alice-internal";
     process.env.STREAM555_ADMIN_API_KEY = "admin-secret";
     process.env.STREAM555_AGENT_TOKEN = "agent-token";
     delete process.env.STREAM555_AGENT_API_KEY;
@@ -104,8 +153,8 @@ describe("stream555-auth plugin actions", () => {
 
     const action = resolveAction("STREAM555_AUTH_APIKEY_CREATE");
     const result = await action.handler?.(
-      INTERNAL_RUNTIME,
-      INTERNAL_MESSAGE,
+      makeRuntime(),
+      makeMessage(),
       INTERNAL_STATE,
       {
         parameters: {
@@ -135,8 +184,8 @@ describe("stream555-auth plugin actions", () => {
   it("returns runtime exception when setting invalid active API key", async () => {
     const action = resolveAction("STREAM555_AUTH_APIKEY_SET_ACTIVE");
     const result = await action.handler?.(
-      INTERNAL_RUNTIME,
-      INTERNAL_MESSAGE,
+      makeRuntime(),
+      makeMessage(),
       INTERNAL_STATE,
       {
         parameters: {
@@ -161,8 +210,8 @@ describe("stream555-auth plugin actions", () => {
 
     const action = resolveAction("STREAM555_AUTH_APIKEY_LIST");
     const result = await action.handler?.(
-      INTERNAL_RUNTIME,
-      INTERNAL_MESSAGE,
+      makeRuntime(),
+      makeMessage(),
       INTERNAL_STATE,
       {
         parameters: {
@@ -198,8 +247,8 @@ describe("stream555-auth plugin actions", () => {
 
     const action = resolveAction("STREAM555_AUTH_WALLET_PROVISION_LINKED");
     const result = await action.handler?.(
-      INTERNAL_RUNTIME,
-      INTERNAL_MESSAGE,
+      makeRuntime(),
+      makeMessage(),
       INTERNAL_STATE,
       {
         parameters: {
@@ -234,8 +283,8 @@ describe("stream555-auth plugin actions", () => {
 
     const action = resolveAction("STREAM555_AUTH_WALLET_CHALLENGE");
     const result = await action.handler?.(
-      INTERNAL_RUNTIME,
-      INTERNAL_MESSAGE,
+      makeRuntime(),
+      makeMessage(),
       INTERNAL_STATE,
       {
         parameters: {
@@ -282,8 +331,8 @@ describe("stream555-auth plugin actions", () => {
 
     const action = resolveAction("STREAM555_AUTH_WALLET_VERIFY");
     const result = await action.handler?.(
-      INTERNAL_RUNTIME,
-      INTERNAL_MESSAGE,
+      makeRuntime(),
+      makeMessage(),
       INTERNAL_STATE,
       {
         parameters: {
@@ -308,5 +357,214 @@ describe("stream555-auth plugin actions", () => {
     const envelope = parseEnvelope(result as { text: string });
     expect(envelope.code).toBe("OK");
     expect(envelope.action).toBe("STREAM555_AUTH_WALLET_VERIFY");
+  });
+
+  it("prefers Solana wallet when both Solana and EVM keys exist", async () => {
+    process.env.SOLANA_PRIVATE_KEY = generateSolanaPrivateKey();
+    process.env.EVM_PRIVATE_KEY = TEST_EVM_PRIVATE_KEY;
+    delete process.env.STREAM555_AGENT_API_KEY;
+    process.env.STREAM555_AGENT_TOKEN = "agent-bearer-token";
+
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          challengeId: "challenge-solana",
+          message: "sign this solana challenge",
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(201, {
+          token: "wallet-auth-token-sol",
+          chainType: "solana",
+          walletAddress: "ExampleAddress",
+        }),
+      );
+
+    const action = resolveAction("STREAM555_AUTH_WALLET_LOGIN");
+    const result = await action.handler?.(
+      makeRuntime(),
+      makeMessage(),
+      INTERNAL_STATE,
+      {
+        parameters: {
+          agentId: "alice-wallet",
+        },
+      } as never,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(parseFetchBody(fetchMock.mock.calls[0]).chainType).toBe("solana");
+    expect(result?.success).toBe(true);
+    expect(process.env.STREAM555_AGENT_TOKEN).toBe("wallet-auth-token-sol");
+    expect(parseEnvelope(result as { text: string }).action).toBe(
+      "STREAM555_AUTH_WALLET_LOGIN",
+    );
+  });
+
+  it("falls back to EVM wallet when Solana key is unavailable", async () => {
+    delete process.env.SOLANA_PRIVATE_KEY;
+    process.env.EVM_PRIVATE_KEY = TEST_EVM_PRIVATE_KEY;
+    process.env.STREAM555_AGENT_TOKEN = "agent-bearer-token";
+
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          challengeId: "challenge-evm",
+          message: "sign this evm challenge",
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(201, {
+          token: "wallet-auth-token-evm",
+          chainType: "evm",
+        }),
+      );
+
+    const action = resolveAction("STREAM555_AUTH_WALLET_LOGIN");
+    const result = await action.handler?.(
+      makeRuntime(),
+      makeMessage(),
+      INTERNAL_STATE,
+      {} as never,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(parseFetchBody(fetchMock.mock.calls[0]).chainType).toBe("evm");
+    expect(result?.success).toBe(true);
+    expect(process.env.STREAM555_AGENT_TOKEN).toBe("wallet-auth-token-evm");
+  });
+
+  it("provisions linked wallet via sw4p when no local wallet exists", async () => {
+    delete process.env.SOLANA_PRIVATE_KEY;
+    delete process.env.EVM_PRIVATE_KEY;
+    process.env.STREAM555_AGENT_TOKEN = "agent-bearer-token";
+
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          success: true,
+          linkedWallet: {
+            walletId: "wallet-1",
+            address: "0xD43bA26f6f6A0C8f0C95181cA259539fF3A743F1",
+            blockchain: "BASE",
+            privateKey: TEST_EVM_PRIVATE_KEY,
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          challengeId: "challenge-provisioned",
+          message: "sign provisioned challenge",
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(201, {
+          token: "wallet-auth-token-provisioned",
+          chainType: "evm",
+        }),
+      );
+
+    const action = resolveAction("STREAM555_AUTH_WALLET_LOGIN");
+    const result = await action.handler?.(
+      makeRuntime(),
+      makeMessage(),
+      INTERNAL_STATE,
+      {
+        parameters: {
+          provisionTargetChain: "eth",
+        },
+      } as never,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/api/auth/wallets/linked");
+    expect(parseFetchBody(fetchMock.mock.calls[1]).walletAddress).toBe(
+      "0xD43bA26f6f6A0C8f0C95181cA259539fF3A743F1",
+    );
+    expect(parseFetchBody(fetchMock.mock.calls[1]).chainType).toBe("evm");
+    const envelope = parseEnvelope(result as { text: string });
+    expect(result?.success).toBe(true);
+    expect(envelope.action).toBe("STREAM555_AUTH_WALLET_LOGIN");
+    const data = envelope.data as Record<string, unknown>;
+    expect(data.linkedWalletProvisioned).toBe(true);
+    expect(data.walletSource).toBe("sw4p_linked_wallet");
+  });
+
+  it("returns explicit failure when linked wallet has no signing key material", async () => {
+    delete process.env.SOLANA_PRIVATE_KEY;
+    delete process.env.EVM_PRIVATE_KEY;
+    process.env.STREAM555_AGENT_TOKEN = "agent-bearer-token";
+
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, {
+        success: true,
+        linkedWallet: {
+          walletId: "wallet-1",
+          address: "0xD43bA26f6f6A0C8f0C95181cA259539fF3A743F1",
+          blockchain: "BASE",
+        },
+      }),
+    );
+
+    const action = resolveAction("STREAM555_AUTH_WALLET_LOGIN");
+    const result = await action.handler?.(
+      makeRuntime(),
+      makeMessage(),
+      INTERNAL_STATE,
+      {} as never,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result?.success).toBe(false);
+    const envelope = parseEnvelope(result as { text: string });
+    expect(String(envelope.message)).toContain("signing material");
+  });
+
+  it("defaults to public URL for non-internal agents when base env is missing", async () => {
+    delete process.env.STREAM555_BASE_URL;
+    delete process.env.STREAM_API_URL;
+
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { keys: [], count: 0 }));
+
+    const action = resolveAction("STREAM555_AUTH_APIKEY_LIST");
+    const result = await action.handler?.(
+      makeRuntime("builder-agent"),
+      makeMessage("builder-agent"),
+      INTERNAL_STATE,
+      {} as never,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "https://stream.rndrntwrk.com/api/agent/v1/auth/apikeys",
+    );
+    expect(result?.success).toBe(true);
+  });
+
+  it("defaults to internal URL for Alice agents when base env is missing", async () => {
+    delete process.env.STREAM555_BASE_URL;
+    delete process.env.STREAM_API_URL;
+
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { keys: [], count: 0 }));
+
+    const action = resolveAction("STREAM555_AUTH_APIKEY_LIST");
+    const result = await action.handler?.(
+      makeRuntime("alice"),
+      makeMessage("alice"),
+      INTERNAL_STATE,
+      {} as never,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "http://control-plane:3000/api/agent/v1/auth/apikeys",
+    );
+    expect(result?.success).toBe(true);
   });
 });
