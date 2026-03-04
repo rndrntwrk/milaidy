@@ -357,29 +357,42 @@ function applyStream555UiHints(
   });
 
   const destinationHintByKey: Record<string, ConfigUiHint> = {
+    STREAM555_DEST_PUMPFUN_ENABLED: {
+      label: "Enable Pump.fun Destination",
+      group: "Pump.fun",
+      width: "full",
+      order: 250,
+      type: "boolean",
+    },
     STREAM555_DEST_PUMPFUN_RTMP_URL: {
       label: "Pump.fun RTMPS URL",
       group: "Pump.fun",
       width: "half",
       order: 260,
       icon: "🟠",
+      showIf: {
+        field: "STREAM555_DEST_PUMPFUN_ENABLED",
+        op: "eq",
+        value: "true",
+      },
     },
     STREAM555_DEST_PUMPFUN_STREAM_KEY: {
       label: "Pump.fun Stream Key",
       group: "Pump.fun",
       width: "half",
       order: 270,
+      showIf: {
+        field: "STREAM555_DEST_PUMPFUN_ENABLED",
+        op: "eq",
+        value: "true",
+      },
     },
-    STREAM555_DEST_PUMPFUN_ENABLED: {
-      label: "Enable Pump.fun",
-      group: "Pump.fun",
-      width: "half",
-      order: 280,
-      type: "radio",
-      options: [
-        { value: "true", label: "Enabled", icon: "✅" },
-        { value: "false", label: "Disabled", icon: "⛔" },
-      ],
+    STREAM555_DEST_X_ENABLED: {
+      label: "Enable X Destination",
+      group: "X",
+      width: "full",
+      order: 300,
+      type: "boolean",
     },
     STREAM555_DEST_X_RTMP_URL: {
       label: "X RTMPS URL",
@@ -387,23 +400,29 @@ function applyStream555UiHints(
       width: "half",
       order: 310,
       icon: "✖️",
+      showIf: {
+        field: "STREAM555_DEST_X_ENABLED",
+        op: "eq",
+        value: "true",
+      },
     },
     STREAM555_DEST_X_STREAM_KEY: {
       label: "X Stream Key",
       group: "X",
       width: "half",
       order: 320,
+      showIf: {
+        field: "STREAM555_DEST_X_ENABLED",
+        op: "eq",
+        value: "true",
+      },
     },
-    STREAM555_DEST_X_ENABLED: {
-      label: "Enable X",
-      group: "X",
-      width: "half",
-      order: 330,
-      type: "radio",
-      options: [
-        { value: "true", label: "Enabled", icon: "✅" },
-        { value: "false", label: "Disabled", icon: "⛔" },
-      ],
+    STREAM555_DEST_TWITCH_ENABLED: {
+      label: "Enable Twitch Destination",
+      group: "Twitch",
+      width: "full",
+      order: 400,
+      type: "boolean",
     },
     STREAM555_DEST_TWITCH_RTMP_URL: {
       label: "Twitch RTMPS URL",
@@ -411,23 +430,29 @@ function applyStream555UiHints(
       width: "half",
       order: 410,
       icon: "🟣",
+      showIf: {
+        field: "STREAM555_DEST_TWITCH_ENABLED",
+        op: "eq",
+        value: "true",
+      },
     },
     STREAM555_DEST_TWITCH_STREAM_KEY: {
       label: "Twitch Stream Key",
       group: "Twitch",
       width: "half",
       order: 420,
+      showIf: {
+        field: "STREAM555_DEST_TWITCH_ENABLED",
+        op: "eq",
+        value: "true",
+      },
     },
-    STREAM555_DEST_TWITCH_ENABLED: {
-      label: "Enable Twitch",
-      group: "Twitch",
-      width: "half",
-      order: 430,
-      type: "radio",
-      options: [
-        { value: "true", label: "Enabled", icon: "✅" },
-        { value: "false", label: "Disabled", icon: "⛔" },
-      ],
+    STREAM555_DEST_KICK_ENABLED: {
+      label: "Enable Kick Destination",
+      group: "Kick",
+      width: "full",
+      order: 500,
+      type: "boolean",
     },
     STREAM555_DEST_KICK_RTMP_URL: {
       label: "Kick RTMPS URL",
@@ -435,23 +460,29 @@ function applyStream555UiHints(
       width: "half",
       order: 510,
       icon: "🟢",
+      showIf: {
+        field: "STREAM555_DEST_KICK_ENABLED",
+        op: "eq",
+        value: "true",
+      },
     },
     STREAM555_DEST_KICK_STREAM_KEY: {
       label: "Kick Stream Key",
       group: "Kick",
       width: "half",
       order: 520,
+      showIf: {
+        field: "STREAM555_DEST_KICK_ENABLED",
+        op: "eq",
+        value: "true",
+      },
     },
-    STREAM555_DEST_KICK_ENABLED: {
-      label: "Enable Kick",
-      group: "Kick",
-      width: "half",
-      order: 530,
-      type: "radio",
-      options: [
-        { value: "true", label: "Enabled", icon: "✅" },
-        { value: "false", label: "Disabled", icon: "⛔" },
-      ],
+    STREAM555_DEST_YOUTUBE_ENABLED: {
+      label: "Enable YouTube Destination",
+      group: "YouTube",
+      width: "full",
+      order: 600,
+      type: "boolean",
     },
     STREAM555_DEST_YOUTUBE_RTMP_URL: {
       label: "YouTube RTMPS URL",
@@ -459,23 +490,29 @@ function applyStream555UiHints(
       width: "half",
       order: 610,
       icon: "🔴",
+      showIf: {
+        field: "STREAM555_DEST_YOUTUBE_ENABLED",
+        op: "eq",
+        value: "true",
+      },
     },
     STREAM555_DEST_YOUTUBE_STREAM_KEY: {
       label: "YouTube Stream Key",
       group: "YouTube",
       width: "half",
       order: 620,
+      showIf: {
+        field: "STREAM555_DEST_YOUTUBE_ENABLED",
+        op: "eq",
+        value: "true",
+      },
     },
-    STREAM555_DEST_YOUTUBE_ENABLED: {
-      label: "Enable YouTube",
-      group: "YouTube",
-      width: "half",
-      order: 630,
-      type: "radio",
-      options: [
-        { value: "true", label: "Enabled", icon: "✅" },
-        { value: "false", label: "Disabled", icon: "⛔" },
-      ],
+    STREAM555_DEST_FACEBOOK_ENABLED: {
+      label: "Enable Facebook Destination",
+      group: "Facebook",
+      width: "full",
+      order: 700,
+      type: "boolean",
     },
     STREAM555_DEST_FACEBOOK_RTMP_URL: {
       label: "Facebook RTMPS URL",
@@ -483,23 +520,29 @@ function applyStream555UiHints(
       width: "half",
       order: 710,
       icon: "🔵",
+      showIf: {
+        field: "STREAM555_DEST_FACEBOOK_ENABLED",
+        op: "eq",
+        value: "true",
+      },
     },
     STREAM555_DEST_FACEBOOK_STREAM_KEY: {
       label: "Facebook Stream Key",
       group: "Facebook",
       width: "half",
       order: 720,
+      showIf: {
+        field: "STREAM555_DEST_FACEBOOK_ENABLED",
+        op: "eq",
+        value: "true",
+      },
     },
-    STREAM555_DEST_FACEBOOK_ENABLED: {
-      label: "Enable Facebook",
-      group: "Facebook",
-      width: "half",
-      order: 730,
-      type: "radio",
-      options: [
-        { value: "true", label: "Enabled", icon: "✅" },
-        { value: "false", label: "Disabled", icon: "⛔" },
-      ],
+    STREAM555_DEST_CUSTOM_ENABLED: {
+      label: "Enable Custom Destination",
+      group: "Custom",
+      width: "full",
+      order: 800,
+      type: "boolean",
     },
     STREAM555_DEST_CUSTOM_RTMP_URL: {
       label: "Custom RTMP URL",
@@ -507,23 +550,22 @@ function applyStream555UiHints(
       width: "half",
       order: 810,
       icon: "🧩",
+      showIf: {
+        field: "STREAM555_DEST_CUSTOM_ENABLED",
+        op: "eq",
+        value: "true",
+      },
     },
     STREAM555_DEST_CUSTOM_STREAM_KEY: {
       label: "Custom Stream Key",
       group: "Custom",
       width: "half",
       order: 820,
-    },
-    STREAM555_DEST_CUSTOM_ENABLED: {
-      label: "Enable Custom",
-      group: "Custom",
-      width: "half",
-      order: 830,
-      type: "radio",
-      options: [
-        { value: "true", label: "Enabled", icon: "✅" },
-        { value: "false", label: "Disabled", icon: "⛔" },
-      ],
+      showIf: {
+        field: "STREAM555_DEST_CUSTOM_ENABLED",
+        op: "eq",
+        value: "true",
+      },
     },
   };
   for (const [key, hint] of Object.entries(destinationHintByKey)) {
@@ -1814,13 +1856,15 @@ function PluginConfigForm({
   // Array-typed fields need comma-separated strings parsed into arrays.
   const values = useMemo(() => {
     const v: Record<string, unknown> = {};
+    const draftValues = pluginConfigs[plugin.id] ?? {};
+    const paramByKey = new Map(params.map((param) => [param.key, param]));
     const props = (schema.properties ?? {}) as Record<
       string,
       Record<string, unknown>
     >;
     for (const p of params) {
       const isArrayField = props[p.key]?.type === "array";
-      const configValue = pluginConfigs[plugin.id]?.[p.key];
+      const configValue = draftValues[p.key];
       if (configValue !== undefined) {
         if (isArrayField && typeof configValue === "string") {
           v[p.key] = configValue
@@ -1845,6 +1889,26 @@ function PluginConfigForm({
         }
       }
     }
+
+    if (isStream555PrimaryPlugin(plugin.id)) {
+      for (const destinationSpec of STREAM555_DESTINATION_SPECS) {
+        if (v[destinationSpec.enabledKey] !== undefined) continue;
+        if (draftValues[destinationSpec.enabledKey] !== undefined) continue;
+
+        const draftStreamKeyValue = draftValues[destinationSpec.streamKeyKey];
+        const streamKeyParam = paramByKey.get(destinationSpec.streamKeyKey);
+        const hasDraftStreamKey =
+          typeof draftStreamKeyValue === "string"
+            ? draftStreamKeyValue.trim().length > 0
+            : draftStreamKeyValue !== undefined && draftStreamKeyValue !== null;
+        const hasPersistedStreamKey = Boolean(streamKeyParam?.isSet);
+
+        if (hasDraftStreamKey || hasPersistedStreamKey) {
+          v[destinationSpec.enabledKey] = "true";
+        }
+      }
+    }
+
     return v;
   }, [params, plugin.id, pluginConfigs, schema]);
 

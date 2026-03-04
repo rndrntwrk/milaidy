@@ -213,6 +213,12 @@ describe("Stream555 operator controls", () => {
     mockUseApp.mockReturnValue(
       createContext([
         {
+          key: "STREAM555_DEST_X_ENABLED",
+          type: "string",
+          isSet: true,
+          currentValue: "true",
+        },
+        {
           key: "STREAM555_DEST_X_RTMP_URL",
           type: "string",
           isSet: false,
@@ -253,5 +259,76 @@ describe("Stream555 operator controls", () => {
         }),
       }),
     );
+  });
+
+  it("hides destination URL/key fields when destination is disabled", async () => {
+    mockUseApp.mockReturnValue(
+      createContext([
+        {
+          key: "STREAM555_DEST_KICK_ENABLED",
+          type: "string",
+          isSet: true,
+          currentValue: "false",
+        },
+        {
+          key: "STREAM555_DEST_KICK_RTMP_URL",
+          type: "string",
+          isSet: false,
+          currentValue: null,
+        },
+      ]),
+    );
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(PluginsView));
+    });
+
+    expect(
+      tree!.root.findAll(
+        (node) =>
+          node.type === "input" &&
+          node.props["data-config-key"] === "STREAM555_DEST_KICK_RTMP_URL",
+      ).length,
+    ).toBe(0);
+  });
+
+  it("auto-enables destination section when a stream key is already saved", async () => {
+    mockUseApp.mockReturnValue(
+      createContext([
+        {
+          key: "STREAM555_DEST_TWITCH_ENABLED",
+          type: "string",
+          isSet: false,
+          currentValue: null,
+        },
+        {
+          key: "STREAM555_DEST_TWITCH_STREAM_KEY",
+          type: "string",
+          sensitive: true,
+          isSet: true,
+          currentValue: null,
+        },
+        {
+          key: "STREAM555_DEST_TWITCH_RTMP_URL",
+          type: "string",
+          isSet: false,
+          currentValue: null,
+        },
+      ]),
+    );
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(PluginsView));
+    });
+
+    expect(
+      tree!.root.findAll(
+        (node) =>
+          node.type === "input" &&
+          node.props["data-config-key"] === "STREAM555_DEST_TWITCH_RTMP_URL",
+      ).length,
+    ).toBeGreaterThan(0);
   });
 });
