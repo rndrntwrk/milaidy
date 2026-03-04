@@ -617,6 +617,14 @@ export const ConfigRenderer = forwardRef<
         const isGroupOpen = isCollapsibleGroup
           ? (groupOpenState[group] ?? true)
           : true;
+        const visibleDestinationCount = fields.filter((field) =>
+          field.key.startsWith("STREAM555_DEST_") &&
+          field.key.endsWith("_ENABLED"),
+        ).length;
+        const groupCount =
+          isCollapsibleGroup && visibleDestinationCount > 0
+            ? visibleDestinationCount
+            : fields.length;
 
         return (
           <div key={group} className={groupIndex > 0 ? "mt-5" : ""}>
@@ -639,7 +647,7 @@ export const ConfigRenderer = forwardRef<
                     {group}
                   </span>
                   <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-bold bg-[var(--accent-subtle,rgba(255,255,255,0.05))] text-[var(--accent)] border border-[var(--border)] rounded-sm">
-                    {fields.length}
+                    {groupCount}
                   </span>
                   <span className="flex-1 h-px bg-[var(--border)] ml-1" />
                 </button>

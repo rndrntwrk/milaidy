@@ -373,6 +373,14 @@ describe("Stream555 operator controls", () => {
       (node) =>
         node.type === "button" && node.props["aria-expanded"] === true,
     );
+    expect(
+      tree!.root.findAll(
+        (node) =>
+          node.children.some(
+            (child) => child === 7 || child === "7",
+          ),
+      ).length,
+    ).toBeGreaterThan(0);
 
     await act(async () => {
       destinationsHeader.props.onClick();

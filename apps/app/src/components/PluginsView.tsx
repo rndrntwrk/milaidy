@@ -2823,7 +2823,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                   ? "Auth connected"
                   : streamSummary.authState === "wallet_enabled"
                     ? "Wallet auth enabled"
-                    : "Auth required"}${streamSummary.authMode ? ` (${streamSummary.authMode})` : ""} • ${streamSummary.savedDestinations}/${streamSummary.destinations.length} channel keys saved`}
+                    : "Auth required"}${streamSummary.authMode ? ` (${streamSummary.authMode})` : ""} • ${streamSummary.savedDestinations}/${streamSummary.destinations.length} destination keys saved`}
               >
                 {streamSummary.authState === "connected"
                   ? "Auth connected"
@@ -2833,7 +2833,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                 {streamSummary.authMode ? ` (${streamSummary.authMode})` : ""}
                 {" • "}
                 {streamSummary.savedDestinations}/
-                {streamSummary.destinations.length} channel keys saved
+                {streamSummary.destinations.length} destination keys saved
               </span>
             </div>
           ) : !hasParams && !isShowcase ? (
@@ -3168,11 +3168,11 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                             streamSummary.destinations.filter(
                               (destination) => destination.streamKeySet,
                             );
-                          const keysSavedSummary = `${streamSummary.savedDestinations}/${streamSummary.destinations.length} channel keys saved`;
+                          const keysSavedSummary = `${streamSummary.savedDestinations}/${streamSummary.destinations.length} destination keys saved`;
                           const enabledReadySummary =
                             streamSummary.enabledDestinations > 0
-                              ? `${streamSummary.readyDestinations}/${streamSummary.enabledDestinations} enabled channels fully configured`
-                              : "No channels enabled yet";
+                              ? `${streamSummary.readyDestinations}/${streamSummary.enabledDestinations} enabled destinations fully configured`
+                              : "No destinations enabled yet";
                           const configuredSummary =
                             configuredDestinations.length > 0
                               ? configuredDestinations
@@ -3184,7 +3184,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                                     return `${destination.icon} ${destination.label} ${suffix}`;
                                   })
                                   .join("  ·  ")
-                              : "No channel stream keys saved yet";
+                              : "No destination stream keys saved yet";
                           const authSummary =
                             streamSummary.authState === "connected"
                               ? `Connected (${streamSummary.authMode})`
