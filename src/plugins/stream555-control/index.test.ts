@@ -17,6 +17,10 @@ const ENV_KEYS = [
   "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
   "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
   "STREAM555_ALLOW_LOCALHOST_APP_URLS",
+  "STREAM555_DEST_SYNC_ON_GO_LIVE",
+  "STREAM555_DEST_X_RTMP_URL",
+  "STREAM555_DEST_X_STREAM_KEY",
+  "STREAM555_DEST_X_ENABLED",
   "STREAM_API_BEARER_TOKEN",
 ] as const;
 
@@ -98,6 +102,10 @@ describe("stream555-control plugin actions", () => {
     delete process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT;
     delete process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS;
     delete process.env.STREAM_API_BEARER_TOKEN;
+    delete process.env.STREAM555_DEST_SYNC_ON_GO_LIVE;
+    delete process.env.STREAM555_DEST_X_RTMP_URL;
+    delete process.env.STREAM555_DEST_X_STREAM_KEY;
+    delete process.env.STREAM555_DEST_X_ENABLED;
   });
 
   afterEach(() => {
@@ -142,6 +150,107 @@ describe("stream555-control plugin actions", () => {
     });
     expect(result?.success).toBe(true);
     expect(parseEnvelope(result as { text: string }).code).toBe("OK");
+  });
+
+  it("applies configured destination credentials to platform + session toggle", async () => {
+    process.env.STREAM555_DEST_X_RTMP_URL = "rtmps://or.pscp.tv:443/x";
+    process.env.STREAM555_DEST_X_STREAM_KEY = "x-key";
+    process.env.STREAM555_DEST_X_ENABLED = "true";
+
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { sessionId: "session-plat-1" }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          platformId: "x",
+          enabled: true,
+          configured: true,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          platformId: "x",
+          enabled: true,
+        }),
+      );
+
+    const action = await resolveAction("STREAM555_DESTINATIONS_APPLY");
+    const result = await action.handler?.(
+      makeRuntime(),
+      makeMessage(),
+      INTERNAL_STATE,
+      {
+        parameters: {
+          sessionId: "session-plat-1",
+          platforms: "x",
+        },
+      } as never,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("/api/agent/v1/platforms/x");
+    expect(parseFetchBody(fetchMock.mock.calls[1])).toEqual({
+      rtmpUrl: "rtmps://or.pscp.tv:443/x",
+      streamKey: "x-key",
+      enabled: true,
+    });
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
+      "/api/agent/v1/sessions/session-plat-1/platforms/x/toggle",
+    );
+    expect(parseFetchBody(fetchMock.mock.calls[2])).toEqual({ enabled: true });
+    expect(result?.success).toBe(true);
+    const envelope = parseEnvelope(result as { text: string });
+    expect(envelope.code).toBe("OK");
+    const data = envelope.data as Record<string, unknown>;
+    expect(data.attempted).toBe(1);
+  });
+
+  it("syncs destinations automatically before go-live when enabled", async () => {
+    process.env.STREAM555_DEST_SYNC_ON_GO_LIVE = "true";
+    process.env.STREAM555_DEST_X_RTMP_URL = "rtmps://or.pscp.tv:443/x";
+    process.env.STREAM555_DEST_X_STREAM_KEY = "x-key";
+    process.env.STREAM555_DEST_X_ENABLED = "true";
+
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { sessionId: "session-live-1" }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          platformId: "x",
+          enabled: true,
+          configured: true,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          platformId: "x",
+          enabled: true,
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse(200, { accepted: true }));
+
+    const action = await resolveAction("STREAM555_GO_LIVE");
+    const result = await action.handler?.(
+      makeRuntime(),
+      makeMessage(),
+      INTERNAL_STATE,
+      {
+        parameters: {
+          sessionId: "session-live-1",
+          inputType: "screen",
+        },
+      } as never,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("/api/agent/v1/platforms/x");
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
+      "/api/agent/v1/sessions/session-live-1/platforms/x/toggle",
+    );
+    expect(String(fetchMock.mock.calls[3]?.[0])).toContain(
+      "/api/agent/v1/sessions/session-live-1/stream/start",
+    );
+    expect(result?.success).toBe(true);
   });
 
   it("uses screen input + default pip scene for screen share action", async () => {

@@ -33,15 +33,86 @@ const STREAM555_INTERNAL_BASE_ENV = "STREAM555_INTERNAL_BASE_URL";
 const STREAM555_INTERNAL_AGENT_IDS_ENV = "STREAM555_INTERNAL_AGENT_IDS";
 const STREAM_SESSION_ENV = "STREAM_SESSION_ID";
 const STREAM555_SESSION_ENV = "STREAM555_DEFAULT_SESSION_ID";
+const STREAM555_DEST_SYNC_ON_GO_LIVE_ENV = "STREAM555_DEST_SYNC_ON_GO_LIVE";
 const CAPABILITY_POLICY = createFive55CapabilityPolicy();
 const DEFAULT_STREAM555_PUBLIC_BASE_URL = "https://stream.rndrntwrk.com";
 const DEFAULT_STREAM555_INTERNAL_BASE_URL = "http://control-plane:3000";
 const DEFAULT_INTERNAL_AGENT_IDS = ["alice", "alice-internal"];
 
-let cachedAgentSessionId: string | undefined;
-
 type JsonObject = Record<string, unknown>;
 type LBarVideoAspect = "square" | "landscape";
+interface DestinationEnvMapping {
+  platformId: string;
+  label: string;
+  rtmpUrlEnv: string;
+  streamKeyEnv: string;
+  enabledEnv: string;
+  defaultRtmpUrl?: string;
+}
+
+interface DestinationApplySuccess {
+  platformId: string;
+  enabled: boolean;
+  configured: boolean;
+}
+
+interface DestinationApplyFailure {
+  platformId: string;
+  status: number;
+  error: string;
+}
+
+let cachedAgentSessionId: string | undefined;
+
+const DESTINATION_ENV_MAPPINGS: DestinationEnvMapping[] = [
+  {
+    platformId: "x",
+    label: "X",
+    rtmpUrlEnv: "STREAM555_DEST_X_RTMP_URL",
+    streamKeyEnv: "STREAM555_DEST_X_STREAM_KEY",
+    enabledEnv: "STREAM555_DEST_X_ENABLED",
+    defaultRtmpUrl: "rtmps://or.pscp.tv:443/x",
+  },
+  {
+    platformId: "twitch",
+    label: "Twitch",
+    rtmpUrlEnv: "STREAM555_DEST_TWITCH_RTMP_URL",
+    streamKeyEnv: "STREAM555_DEST_TWITCH_STREAM_KEY",
+    enabledEnv: "STREAM555_DEST_TWITCH_ENABLED",
+    defaultRtmpUrl: "rtmps://ingest.global-contribute.live-video.net/app",
+  },
+  {
+    platformId: "kick",
+    label: "Kick",
+    rtmpUrlEnv: "STREAM555_DEST_KICK_RTMP_URL",
+    streamKeyEnv: "STREAM555_DEST_KICK_STREAM_KEY",
+    enabledEnv: "STREAM555_DEST_KICK_ENABLED",
+    defaultRtmpUrl: "rtmps://fa723fc1b171.global-contribute.live-video.net",
+  },
+  {
+    platformId: "youtube",
+    label: "YouTube",
+    rtmpUrlEnv: "STREAM555_DEST_YOUTUBE_RTMP_URL",
+    streamKeyEnv: "STREAM555_DEST_YOUTUBE_STREAM_KEY",
+    enabledEnv: "STREAM555_DEST_YOUTUBE_ENABLED",
+    defaultRtmpUrl: "rtmps://a.rtmp.youtube.com/live2",
+  },
+  {
+    platformId: "facebook",
+    label: "Facebook",
+    rtmpUrlEnv: "STREAM555_DEST_FACEBOOK_RTMP_URL",
+    streamKeyEnv: "STREAM555_DEST_FACEBOOK_STREAM_KEY",
+    enabledEnv: "STREAM555_DEST_FACEBOOK_ENABLED",
+    defaultRtmpUrl: "rtmps://live-api-s.facebook.com:443/rtmp/",
+  },
+  {
+    platformId: "custom",
+    label: "Custom",
+    rtmpUrlEnv: "STREAM555_DEST_CUSTOM_RTMP_URL",
+    streamKeyEnv: "STREAM555_DEST_CUSTOM_STREAM_KEY",
+    enabledEnv: "STREAM555_DEST_CUSTOM_ENABLED",
+  },
+];
 
 function trimEnv(key: string): string | undefined {
   const value = process.env[key]?.trim();
@@ -110,6 +181,65 @@ function parseCsvList(value: string | undefined): string[] | undefined {
     .map((entry) => entry.trim().toLowerCase())
     .filter(Boolean);
   return list.length > 0 ? list : undefined;
+}
+
+function parseBooleanFlag(value: string | undefined, fallback: boolean): boolean {
+  if (!value) return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return fallback;
+  if (["1", "true", "yes", "on", "enabled"].includes(normalized)) return true;
+  if (["0", "false", "no", "off", "disabled"].includes(normalized)) return false;
+  return fallback;
+}
+
+function selectDestinationMappings(
+  requestedPlatforms: string[] | undefined,
+): DestinationEnvMapping[] {
+  if (!requestedPlatforms || requestedPlatforms.length === 0) {
+    return DESTINATION_ENV_MAPPINGS;
+  }
+  const requestedSet = new Set(requestedPlatforms.map((entry) => entry.trim().toLowerCase()));
+  return DESTINATION_ENV_MAPPINGS.filter((mapping) =>
+    requestedSet.has(mapping.platformId.toLowerCase()),
+  );
+}
+
+function buildDestinationPayloads(
+  mappings: DestinationEnvMapping[],
+): Array<{
+  platformId: string;
+  rtmpUrl?: string;
+  streamKey?: string;
+  enabled: boolean;
+}> {
+  const payloads: Array<{
+    platformId: string;
+    rtmpUrl?: string;
+    streamKey?: string;
+    enabled: boolean;
+  }> = [];
+
+  for (const mapping of mappings) {
+    const configuredRtmpUrl = trimEnv(mapping.rtmpUrlEnv);
+    const configuredStreamKey = trimEnv(mapping.streamKeyEnv);
+    const enabledRaw = trimEnv(mapping.enabledEnv);
+
+    if (!configuredRtmpUrl && !configuredStreamKey && !enabledRaw) {
+      continue;
+    }
+
+    const enabled = parseBooleanFlag(enabledRaw, Boolean(configuredStreamKey));
+    const rtmpUrl = configuredRtmpUrl || (configuredStreamKey ? mapping.defaultRtmpUrl : undefined);
+
+    payloads.push({
+      platformId: mapping.platformId,
+      ...(rtmpUrl ? { rtmpUrl } : {}),
+      ...(configuredStreamKey ? { streamKey: configuredStreamKey } : {}),
+      enabled,
+    });
+  }
+
+  return payloads;
 }
 
 const HEX_COLOR_PATTERN = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
@@ -440,6 +570,75 @@ function buildEnvelopeActionResult({
   };
 }
 
+async function applyConfiguredDestinations(params: {
+  base: string;
+  token: string;
+  sessionId: string;
+  requestedPlatforms?: string[];
+}): Promise<{
+  attempted: number;
+  applied: DestinationApplySuccess[];
+  failed: DestinationApplyFailure[];
+}> {
+  const mappings = selectDestinationMappings(params.requestedPlatforms);
+  const payloads = buildDestinationPayloads(mappings);
+
+  const applied: DestinationApplySuccess[] = [];
+  const failed: DestinationApplyFailure[] = [];
+
+  for (const payload of payloads) {
+    const updateResponse = await fetchJson(
+      "PUT",
+      params.base,
+      `/api/agent/v1/platforms/${encodeURIComponent(payload.platformId)}`,
+      params.token,
+      {
+        ...(payload.rtmpUrl ? { rtmpUrl: payload.rtmpUrl } : {}),
+        ...(payload.streamKey ? { streamKey: payload.streamKey } : {}),
+        enabled: payload.enabled,
+      },
+    );
+
+    if (!updateResponse.ok) {
+      failed.push({
+        platformId: payload.platformId,
+        status: updateResponse.status || 502,
+        error: getErrorDetail(updateResponse),
+      });
+      continue;
+    }
+
+    const toggleResponse = await fetchJson(
+      "POST",
+      params.base,
+      `/api/agent/v1/sessions/${encodeURIComponent(params.sessionId)}/platforms/${encodeURIComponent(payload.platformId)}/toggle`,
+      params.token,
+      { enabled: payload.enabled },
+    );
+
+    if (!toggleResponse.ok) {
+      failed.push({
+        platformId: payload.platformId,
+        status: toggleResponse.status || 502,
+        error: getErrorDetail(toggleResponse),
+      });
+      continue;
+    }
+
+    applied.push({
+      platformId: payload.platformId,
+      enabled: payload.enabled,
+      configured: true,
+    });
+  }
+
+  return {
+    attempted: payloads.length,
+    applied,
+    failed,
+  };
+}
+
 async function ensureAgentSessionId(
   base: string,
   token: string,
@@ -515,7 +714,7 @@ const stream555ControlProvider: Provider = {
       text: [
         "## 555stream Control Surface",
         "",
-        "Actions: STREAM555_GO_LIVE, STREAM555_GO_LIVE_APP, STREAM555_GO_LIVE_SEGMENTS, STREAM555_SEGMENT_STATE, STREAM555_SCREEN_SHARE, STREAM555_END_LIVE, STREAM555_AD_CREATE, STREAM555_AD_TRIGGER, STREAM555_AD_DISMISS, STREAM555_RADIO_CONTROL, STREAM555_GUEST_INVITE, STREAM555_SCENE_SET, STREAM555_PIP_ENABLE, STREAM555_SEGMENT_OVERRIDE, STREAM555_EARNINGS_ESTIMATE",
+        "Actions: STREAM555_GO_LIVE, STREAM555_DESTINATIONS_APPLY, STREAM555_GO_LIVE_APP, STREAM555_GO_LIVE_SEGMENTS, STREAM555_SEGMENT_STATE, STREAM555_SCREEN_SHARE, STREAM555_END_LIVE, STREAM555_AD_CREATE, STREAM555_AD_TRIGGER, STREAM555_AD_DISMISS, STREAM555_RADIO_CONTROL, STREAM555_GUEST_INVITE, STREAM555_SCENE_SET, STREAM555_PIP_ENABLE, STREAM555_SEGMENT_OVERRIDE, STREAM555_EARNINGS_ESTIMATE",
         `Base URL configured: ${configured ? "yes" : "no"} (${STREAM555_BASE_ENV}|${STREAM_API_ENV}|${STREAM555_PUBLIC_BASE_ENV}|${STREAM555_INTERNAL_BASE_ENV})`,
         `Resolved base URL: ${resolveBaseUrl(runtime)}`,
         `Agent auth configured: ${hasToken ? "yes" : "no"} (${describeAgentAuthSource()})`,
@@ -541,10 +740,31 @@ const goLiveAction: Action = {
         readParam(options as HandlerOptions | undefined, "inputType") || "website";
       const inputUrl = readParam(options as HandlerOptions | undefined, "inputUrl");
       const scene = readParam(options as HandlerOptions | undefined, "scene") || "default";
+      const applyDestinations = parseBooleanFlag(
+        readParam(options as HandlerOptions | undefined, "applyDestinations"),
+        parseBooleanFlag(trimEnv(STREAM555_DEST_SYNC_ON_GO_LIVE_ENV), true),
+      );
+      const destinationPlatforms = parseCsvList(
+        readParam(options as HandlerOptions | undefined, "destinationPlatforms"),
+      );
 
       const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
       const token = await resolveAgentToken(base);
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+      if (applyDestinations) {
+        const destinationSync = await applyConfiguredDestinations({
+          base,
+          token,
+          sessionId,
+          requestedPlatforms: destinationPlatforms,
+        });
+        if (destinationSync.failed.length > 0) {
+          console.warn("[stream555.control] destination sync failed", {
+            sessionId,
+            failed: destinationSync.failed,
+          });
+        }
+      }
 
       return executeApiAction({
         module: "stream555.control",
@@ -576,6 +796,92 @@ const goLiveAction: Action = {
     { name: "inputType", description: "camera|screen|website|avatar|radio|...", required: false, schema: { type: "string" as const } },
     { name: "inputUrl", description: "Optional source url for website/rtmp/file", required: false, schema: { type: "string" as const } },
     { name: "scene", description: "Initial scene id", required: false, schema: { type: "string" as const } },
+    { name: "applyDestinations", description: "Apply configured RTMP destinations before go-live (default true)", required: false, schema: { type: "string" as const } },
+    { name: "destinationPlatforms", description: "Comma-separated subset of destinations to apply before go-live", required: false, schema: { type: "string" as const } },
+  ],
+};
+
+const destinationsApplyAction: Action = {
+  name: "STREAM555_DESTINATIONS_APPLY",
+  similes: [
+    "STREAM555_APPLY_DESTINATIONS",
+    "STREAM555_SYNC_PLATFORMS",
+    "STREAM555_CONFIGURE_RTMP_DESTINATIONS",
+  ],
+  description:
+    "Sync stored RTMP destination credentials (X, Twitch, Kick, YouTube, Facebook, Custom) into 555stream and toggle platform states on the active session.",
+  validate: async () => true,
+  handler: async (runtime, message, state, options) => {
+    try {
+      assertStreamControlAccess(runtime, message, state, "STREAM555_DESTINATIONS_APPLY");
+      const requestedSessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+      const requestedPlatforms = parseCsvList(
+        readParam(options as HandlerOptions | undefined, "platforms"),
+      );
+
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
+      const token = await resolveAgentToken(base);
+      const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+      const syncResult = await applyConfiguredDestinations({
+        base,
+        token,
+        sessionId,
+        requestedPlatforms,
+      });
+
+      if (syncResult.attempted === 0) {
+        return buildEnvelopeActionResult({
+          ok: true,
+          module: "stream555.control",
+          action: "STREAM555_DESTINATIONS_APPLY",
+          status: 200,
+          message: "no destination credentials configured in env",
+          data: {
+            sessionId,
+            attempted: 0,
+            configuredPlatforms: DESTINATION_ENV_MAPPINGS.map((mapping) => mapping.platformId),
+          },
+        });
+      }
+
+      if (syncResult.failed.length > 0) {
+        return buildEnvelopeActionResult({
+          ok: false,
+          module: "stream555.control",
+          action: "STREAM555_DESTINATIONS_APPLY",
+          status: 424,
+          message: `${syncResult.failed.length} destination updates failed`,
+          details: {
+            sessionId,
+            attempted: syncResult.attempted,
+            applied: syncResult.applied,
+            failed: syncResult.failed,
+          },
+        });
+      }
+
+      return buildEnvelopeActionResult({
+        ok: true,
+        module: "stream555.control",
+        action: "STREAM555_DESTINATIONS_APPLY",
+        status: 200,
+        message: "destination credentials synced",
+        data: {
+          sessionId,
+          attempted: syncResult.attempted,
+          applied: syncResult.applied,
+        },
+      });
+    } catch (err) {
+      return exceptionAction("stream555.control", "STREAM555_DESTINATIONS_APPLY", err);
+    }
+  },
+  parameters: [
+    { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
+    { name: "platforms", description: "Optional comma-separated platform subset (x,twitch,kick,youtube,facebook,custom)", required: false, schema: { type: "string" as const } },
   ],
 };
 
@@ -1559,6 +1865,7 @@ export function createStream555ControlPlugin(
 ): Plugin {
   const actions: Action[] = [
     goLiveAction,
+    destinationsApplyAction,
     goLiveAppAction,
     goLiveSegmentsAction,
     segmentStateAction,

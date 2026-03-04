@@ -36,6 +36,12 @@ const STREAM555_INTERNAL_BASE_ENV = "STREAM555_INTERNAL_BASE_URL";
 const STREAM555_INTERNAL_AGENT_IDS_ENV = "STREAM555_INTERNAL_AGENT_IDS";
 const STREAM555_ADMIN_API_KEY_ENV = "STREAM555_ADMIN_API_KEY";
 const STREAM555_AGENT_DEFAULT_USER_ID_ENV = "STREAM555_AGENT_DEFAULT_USER_ID";
+const STREAM555_WALLET_AUTH_PREFERRED_CHAIN_ENV =
+  "STREAM555_WALLET_AUTH_PREFERRED_CHAIN";
+const STREAM555_WALLET_AUTH_ALLOW_PROVISION_ENV =
+  "STREAM555_WALLET_AUTH_ALLOW_PROVISION";
+const STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN_ENV =
+  "STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN";
 const DEFAULT_STREAM555_PUBLIC_BASE_URL = "https://stream.rndrntwrk.com";
 const DEFAULT_STREAM555_INTERNAL_BASE_URL = "http://control-plane:3000";
 const DEFAULT_INTERNAL_AGENT_IDS = ["alice", "alice-internal"];
@@ -904,16 +910,32 @@ const walletLoginAction: Action = {
 
       const handlerOptions = options as HandlerOptions | undefined;
       const base = resolveBaseUrl(runtime, handlerOptions);
+      const preferredChainParam = readParam(
+        handlerOptions,
+        "preferredChain",
+      )
+        ?.trim()
+        .toLowerCase();
+      const preferredChainFromEnv = trimEnv(
+        STREAM555_WALLET_AUTH_PREFERRED_CHAIN_ENV,
+      )?.toLowerCase();
+      const preferredChainSource = preferredChainParam || preferredChainFromEnv;
       const preferredChain =
-        readParam(handlerOptions, "preferredChain")?.trim().toLowerCase() === "evm"
+        preferredChainSource === "evm" || preferredChainSource === "ethereum"
           ? "evm"
           : "solana";
-      const allowProvision = parseBoolean(
-        readParam(handlerOptions, "allowProvision"),
+      const allowProvisionDefault = parseBoolean(
+        trimEnv(STREAM555_WALLET_AUTH_ALLOW_PROVISION_ENV),
         true,
       );
+      const allowProvision = parseBoolean(
+        readParam(handlerOptions, "allowProvision"),
+        allowProvisionDefault,
+      );
       const provisionTargetChain =
-        readParam(handlerOptions, "provisionTargetChain")?.trim() || "eth";
+        readParam(handlerOptions, "provisionTargetChain")?.trim() ||
+        trimEnv(STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN_ENV) ||
+        "eth";
       const setActive = parseBoolean(
         readParam(handlerOptions, "setActive"),
         true,

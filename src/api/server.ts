@@ -56,6 +56,16 @@ import {
   createFive55CapabilityPolicy,
 } from "../runtime/five55-capability-policy.js";
 import { resolveFive55CapabilityForRequest } from "../runtime/five55-capability-routing.js";
+import {
+  canonicalizeMasteryGameId,
+  getMasteryContract,
+  listMasteryContracts,
+  listMasteryRuns as listPersistedMasteryRuns,
+  readMasteryEpisodes,
+  readMasteryGameSnapshot,
+  readMasteryLogs,
+  readMasteryRun,
+} from "../plugins/five55-games/mastery/index.js";
 import { createPiCredentialProvider } from "../runtime/pi-credentials.js";
 import {
   AgentExportError,
@@ -2231,16 +2241,21 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             "Primary 555stream control plugin for go-live, scene, segment, and ad operations.",
           enabled: false,
           configured: Boolean(
-            process.env.STREAM555_BASE_URL?.trim() &&
+            (process.env.STREAM555_BASE_URL?.trim() ||
+              process.env.STREAM555_PUBLIC_BASE_URL?.trim() ||
+              process.env.STREAM555_INTERNAL_BASE_URL?.trim()) &&
               (process.env.STREAM555_AGENT_API_KEY?.trim() ||
                 process.env.STREAM555_AGENT_TOKEN?.trim() ||
                 process.env.STREAM_API_BEARER_TOKEN?.trim()),
           ),
-          envKey: "STREAM555_BASE_URL",
+          envKey: "STREAM555_PUBLIC_BASE_URL",
           category: "feature",
           source: "bundled",
           configKeys: [
             "STREAM555_BASE_URL",
+            "STREAM555_PUBLIC_BASE_URL",
+            "STREAM555_INTERNAL_BASE_URL",
+            "STREAM555_INTERNAL_AGENT_IDS",
             "STREAM555_AGENT_TOKEN",
             "STREAM555_AGENT_API_KEY",
             "STREAM_API_BEARER_TOKEN",
@@ -2249,17 +2264,75 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             "STREAM555_DEFAULT_SESSION_ID",
             "STREAM_SESSION_ID",
             "STREAM555_ALLOW_LOCALHOST_APP_URLS",
+            "STREAM555_DEST_SYNC_ON_GO_LIVE",
+            "STREAM555_DEST_X_RTMP_URL",
+            "STREAM555_DEST_X_STREAM_KEY",
+            "STREAM555_DEST_X_ENABLED",
+            "STREAM555_DEST_TWITCH_RTMP_URL",
+            "STREAM555_DEST_TWITCH_STREAM_KEY",
+            "STREAM555_DEST_TWITCH_ENABLED",
+            "STREAM555_DEST_KICK_RTMP_URL",
+            "STREAM555_DEST_KICK_STREAM_KEY",
+            "STREAM555_DEST_KICK_ENABLED",
+            "STREAM555_DEST_YOUTUBE_RTMP_URL",
+            "STREAM555_DEST_YOUTUBE_STREAM_KEY",
+            "STREAM555_DEST_YOUTUBE_ENABLED",
+            "STREAM555_DEST_FACEBOOK_RTMP_URL",
+            "STREAM555_DEST_FACEBOOK_STREAM_KEY",
+            "STREAM555_DEST_FACEBOOK_ENABLED",
+            "STREAM555_DEST_CUSTOM_RTMP_URL",
+            "STREAM555_DEST_CUSTOM_STREAM_KEY",
+            "STREAM555_DEST_CUSTOM_ENABLED",
             "STREAM555_CONTROL_PLUGIN_ENABLED",
           ],
           parameters: [
             {
               key: "STREAM555_BASE_URL",
               type: "string",
-              description: "555stream control-plane base URL",
+              description: "Legacy base URL override for all agents",
               required: false,
               sensitive: false,
               currentValue: process.env.STREAM555_BASE_URL ?? null,
               isSet: Boolean(process.env.STREAM555_BASE_URL?.trim()),
+            },
+            {
+              key: "STREAM555_PUBLIC_BASE_URL",
+              type: "string",
+              description:
+                "Public control-plane base URL for external agents (default https://stream.rndrntwrk.com)",
+              required: false,
+              sensitive: false,
+              default: "https://stream.rndrntwrk.com",
+              currentValue:
+                process.env.STREAM555_PUBLIC_BASE_URL ??
+                "https://stream.rndrntwrk.com",
+              isSet: Boolean(process.env.STREAM555_PUBLIC_BASE_URL?.trim()),
+            },
+            {
+              key: "STREAM555_INTERNAL_BASE_URL",
+              type: "string",
+              description:
+                "Internal control-plane base URL for allow-listed internal agents",
+              required: false,
+              sensitive: false,
+              default: "http://control-plane:3000",
+              currentValue:
+                process.env.STREAM555_INTERNAL_BASE_URL ??
+                "http://control-plane:3000",
+              isSet: Boolean(process.env.STREAM555_INTERNAL_BASE_URL?.trim()),
+            },
+            {
+              key: "STREAM555_INTERNAL_AGENT_IDS",
+              type: "string",
+              description:
+                "Comma-separated internal agent IDs that should use internal base URL",
+              required: false,
+              sensitive: false,
+              default: "alice,alice-internal",
+              currentValue:
+                process.env.STREAM555_INTERNAL_AGENT_IDS ??
+                "alice,alice-internal",
+              isSet: Boolean(process.env.STREAM555_INTERNAL_AGENT_IDS?.trim()),
             },
             {
               key: "STREAM555_AGENT_API_KEY",
@@ -2357,6 +2430,239 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               ),
             },
             {
+              key: "STREAM555_DEST_SYNC_ON_GO_LIVE",
+              type: "string",
+              description:
+                "Automatically sync configured RTMP destinations before STREAM555_GO_LIVE (true/false)",
+              required: false,
+              sensitive: false,
+              default: "true",
+              currentValue:
+                process.env.STREAM555_DEST_SYNC_ON_GO_LIVE ?? "true",
+              isSet: Boolean(
+                process.env.STREAM555_DEST_SYNC_ON_GO_LIVE?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_X_RTMP_URL",
+              type: "string",
+              description: "X RTMPS endpoint URL",
+              required: false,
+              sensitive: false,
+              default: "rtmps://or.pscp.tv:443/x",
+              currentValue:
+                process.env.STREAM555_DEST_X_RTMP_URL ??
+                "rtmps://or.pscp.tv:443/x",
+              isSet: Boolean(process.env.STREAM555_DEST_X_RTMP_URL?.trim()),
+            },
+            {
+              key: "STREAM555_DEST_X_STREAM_KEY",
+              type: "string",
+              description: "X stream key",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_DEST_X_STREAM_KEY
+                ? maskValue(process.env.STREAM555_DEST_X_STREAM_KEY)
+                : null,
+              isSet: Boolean(process.env.STREAM555_DEST_X_STREAM_KEY?.trim()),
+            },
+            {
+              key: "STREAM555_DEST_X_ENABLED",
+              type: "string",
+              description: "Enable X simulcast destination (true/false)",
+              required: false,
+              sensitive: false,
+              default: "false",
+              currentValue: process.env.STREAM555_DEST_X_ENABLED ?? "false",
+              isSet: Boolean(process.env.STREAM555_DEST_X_ENABLED?.trim()),
+            },
+            {
+              key: "STREAM555_DEST_TWITCH_RTMP_URL",
+              type: "string",
+              description: "Twitch RTMPS endpoint URL",
+              required: false,
+              sensitive: false,
+              default: "rtmps://ingest.global-contribute.live-video.net/app",
+              currentValue:
+                process.env.STREAM555_DEST_TWITCH_RTMP_URL ??
+                "rtmps://ingest.global-contribute.live-video.net/app",
+              isSet: Boolean(
+                process.env.STREAM555_DEST_TWITCH_RTMP_URL?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_TWITCH_STREAM_KEY",
+              type: "string",
+              description: "Twitch stream key",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_DEST_TWITCH_STREAM_KEY
+                ? maskValue(process.env.STREAM555_DEST_TWITCH_STREAM_KEY)
+                : null,
+              isSet: Boolean(
+                process.env.STREAM555_DEST_TWITCH_STREAM_KEY?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_TWITCH_ENABLED",
+              type: "string",
+              description: "Enable Twitch simulcast destination (true/false)",
+              required: false,
+              sensitive: false,
+              default: "false",
+              currentValue:
+                process.env.STREAM555_DEST_TWITCH_ENABLED ?? "false",
+              isSet: Boolean(process.env.STREAM555_DEST_TWITCH_ENABLED?.trim()),
+            },
+            {
+              key: "STREAM555_DEST_KICK_RTMP_URL",
+              type: "string",
+              description: "Kick RTMPS endpoint URL",
+              required: false,
+              sensitive: false,
+              default: "rtmps://fa723fc1b171.global-contribute.live-video.net",
+              currentValue:
+                process.env.STREAM555_DEST_KICK_RTMP_URL ??
+                "rtmps://fa723fc1b171.global-contribute.live-video.net",
+              isSet: Boolean(process.env.STREAM555_DEST_KICK_RTMP_URL?.trim()),
+            },
+            {
+              key: "STREAM555_DEST_KICK_STREAM_KEY",
+              type: "string",
+              description: "Kick stream key",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_DEST_KICK_STREAM_KEY
+                ? maskValue(process.env.STREAM555_DEST_KICK_STREAM_KEY)
+                : null,
+              isSet: Boolean(process.env.STREAM555_DEST_KICK_STREAM_KEY?.trim()),
+            },
+            {
+              key: "STREAM555_DEST_KICK_ENABLED",
+              type: "string",
+              description: "Enable Kick simulcast destination (true/false)",
+              required: false,
+              sensitive: false,
+              default: "false",
+              currentValue: process.env.STREAM555_DEST_KICK_ENABLED ?? "false",
+              isSet: Boolean(process.env.STREAM555_DEST_KICK_ENABLED?.trim()),
+            },
+            {
+              key: "STREAM555_DEST_YOUTUBE_RTMP_URL",
+              type: "string",
+              description: "YouTube RTMPS endpoint URL",
+              required: false,
+              sensitive: false,
+              default: "rtmps://a.rtmp.youtube.com/live2",
+              currentValue:
+                process.env.STREAM555_DEST_YOUTUBE_RTMP_URL ??
+                "rtmps://a.rtmp.youtube.com/live2",
+              isSet: Boolean(
+                process.env.STREAM555_DEST_YOUTUBE_RTMP_URL?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_YOUTUBE_STREAM_KEY",
+              type: "string",
+              description: "YouTube stream key",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_DEST_YOUTUBE_STREAM_KEY
+                ? maskValue(process.env.STREAM555_DEST_YOUTUBE_STREAM_KEY)
+                : null,
+              isSet: Boolean(
+                process.env.STREAM555_DEST_YOUTUBE_STREAM_KEY?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_YOUTUBE_ENABLED",
+              type: "string",
+              description: "Enable YouTube simulcast destination (true/false)",
+              required: false,
+              sensitive: false,
+              default: "false",
+              currentValue:
+                process.env.STREAM555_DEST_YOUTUBE_ENABLED ?? "false",
+              isSet: Boolean(
+                process.env.STREAM555_DEST_YOUTUBE_ENABLED?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_FACEBOOK_RTMP_URL",
+              type: "string",
+              description: "Facebook RTMPS endpoint URL",
+              required: false,
+              sensitive: false,
+              default: "rtmps://live-api-s.facebook.com:443/rtmp/",
+              currentValue:
+                process.env.STREAM555_DEST_FACEBOOK_RTMP_URL ??
+                "rtmps://live-api-s.facebook.com:443/rtmp/",
+              isSet: Boolean(
+                process.env.STREAM555_DEST_FACEBOOK_RTMP_URL?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_FACEBOOK_STREAM_KEY",
+              type: "string",
+              description: "Facebook stream key",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_DEST_FACEBOOK_STREAM_KEY
+                ? maskValue(process.env.STREAM555_DEST_FACEBOOK_STREAM_KEY)
+                : null,
+              isSet: Boolean(
+                process.env.STREAM555_DEST_FACEBOOK_STREAM_KEY?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_FACEBOOK_ENABLED",
+              type: "string",
+              description: "Enable Facebook simulcast destination (true/false)",
+              required: false,
+              sensitive: false,
+              default: "false",
+              currentValue:
+                process.env.STREAM555_DEST_FACEBOOK_ENABLED ?? "false",
+              isSet: Boolean(
+                process.env.STREAM555_DEST_FACEBOOK_ENABLED?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_CUSTOM_RTMP_URL",
+              type: "string",
+              description: "Custom RTMP/RTMPS destination URL",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM555_DEST_CUSTOM_RTMP_URL ?? null,
+              isSet: Boolean(
+                process.env.STREAM555_DEST_CUSTOM_RTMP_URL?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_CUSTOM_STREAM_KEY",
+              type: "string",
+              description: "Custom destination stream key",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_DEST_CUSTOM_STREAM_KEY
+                ? maskValue(process.env.STREAM555_DEST_CUSTOM_STREAM_KEY)
+                : null,
+              isSet: Boolean(
+                process.env.STREAM555_DEST_CUSTOM_STREAM_KEY?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_CUSTOM_ENABLED",
+              type: "string",
+              description: "Enable custom simulcast destination (true/false)",
+              required: false,
+              sensitive: false,
+              default: "false",
+              currentValue:
+                process.env.STREAM555_DEST_CUSTOM_ENABLED ?? "false",
+              isSet: Boolean(process.env.STREAM555_DEST_CUSTOM_ENABLED?.trim()),
+            },
+            {
               key: "STREAM555_CONTROL_PLUGIN_ENABLED",
               type: "string",
               description: "Enable/disable stream555-control plugin (1/0)",
@@ -2372,7 +2678,25 @@ function discoverPluginsFromManifest(): PluginEntry[] {
           ],
           configUiHints: {
             STREAM555_BASE_URL: {
-              label: "Base URL",
+              label: "Primary Base URL Override",
+              group: "Connection",
+              width: "half",
+              advanced: true,
+            },
+            STREAM555_PUBLIC_BASE_URL: {
+              label: "Public Base URL",
+              group: "Connection",
+              width: "half",
+              icon: "🌐",
+            },
+            STREAM555_INTERNAL_BASE_URL: {
+              label: "Internal Base URL",
+              group: "Connection",
+              width: "half",
+              icon: "🏠",
+            },
+            STREAM555_INTERNAL_AGENT_IDS: {
+              label: "Internal Agent IDs",
               group: "Connection",
               width: "half",
             },
@@ -2416,6 +2740,142 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               group: "Safety",
               width: "half",
             },
+            STREAM555_DEST_SYNC_ON_GO_LIVE: {
+              label: "Auto Sync Destinations",
+              group: "Destinations",
+              width: "half",
+              type: "radio",
+              options: [
+                { value: "true", label: "Enabled", icon: "✅" },
+                { value: "false", label: "Disabled", icon: "⛔" },
+              ],
+            },
+            STREAM555_DEST_X_RTMP_URL: {
+              label: "X RTMPS URL",
+              group: "Destinations · X",
+              width: "half",
+              icon: "✖️",
+            },
+            STREAM555_DEST_X_STREAM_KEY: {
+              label: "X Stream Key",
+              group: "Destinations · X",
+              width: "half",
+            },
+            STREAM555_DEST_X_ENABLED: {
+              label: "Enable X",
+              group: "Destinations · X",
+              width: "half",
+              type: "radio",
+              options: [
+                { value: "true", label: "Enabled", icon: "✅" },
+                { value: "false", label: "Disabled", icon: "⛔" },
+              ],
+            },
+            STREAM555_DEST_TWITCH_RTMP_URL: {
+              label: "Twitch RTMPS URL",
+              group: "Destinations · Twitch",
+              width: "half",
+              icon: "🟣",
+            },
+            STREAM555_DEST_TWITCH_STREAM_KEY: {
+              label: "Twitch Stream Key",
+              group: "Destinations · Twitch",
+              width: "half",
+            },
+            STREAM555_DEST_TWITCH_ENABLED: {
+              label: "Enable Twitch",
+              group: "Destinations · Twitch",
+              width: "half",
+              type: "radio",
+              options: [
+                { value: "true", label: "Enabled", icon: "✅" },
+                { value: "false", label: "Disabled", icon: "⛔" },
+              ],
+            },
+            STREAM555_DEST_KICK_RTMP_URL: {
+              label: "Kick RTMPS URL",
+              group: "Destinations · Kick",
+              width: "half",
+              icon: "🟢",
+            },
+            STREAM555_DEST_KICK_STREAM_KEY: {
+              label: "Kick Stream Key",
+              group: "Destinations · Kick",
+              width: "half",
+            },
+            STREAM555_DEST_KICK_ENABLED: {
+              label: "Enable Kick",
+              group: "Destinations · Kick",
+              width: "half",
+              type: "radio",
+              options: [
+                { value: "true", label: "Enabled", icon: "✅" },
+                { value: "false", label: "Disabled", icon: "⛔" },
+              ],
+            },
+            STREAM555_DEST_YOUTUBE_RTMP_URL: {
+              label: "YouTube RTMPS URL",
+              group: "Destinations · YouTube",
+              width: "half",
+              icon: "🔴",
+            },
+            STREAM555_DEST_YOUTUBE_STREAM_KEY: {
+              label: "YouTube Stream Key",
+              group: "Destinations · YouTube",
+              width: "half",
+            },
+            STREAM555_DEST_YOUTUBE_ENABLED: {
+              label: "Enable YouTube",
+              group: "Destinations · YouTube",
+              width: "half",
+              type: "radio",
+              options: [
+                { value: "true", label: "Enabled", icon: "✅" },
+                { value: "false", label: "Disabled", icon: "⛔" },
+              ],
+            },
+            STREAM555_DEST_FACEBOOK_RTMP_URL: {
+              label: "Facebook RTMPS URL",
+              group: "Destinations · Facebook",
+              width: "half",
+              icon: "🔵",
+            },
+            STREAM555_DEST_FACEBOOK_STREAM_KEY: {
+              label: "Facebook Stream Key",
+              group: "Destinations · Facebook",
+              width: "half",
+            },
+            STREAM555_DEST_FACEBOOK_ENABLED: {
+              label: "Enable Facebook",
+              group: "Destinations · Facebook",
+              width: "half",
+              type: "radio",
+              options: [
+                { value: "true", label: "Enabled", icon: "✅" },
+                { value: "false", label: "Disabled", icon: "⛔" },
+              ],
+            },
+            STREAM555_DEST_CUSTOM_RTMP_URL: {
+              label: "Custom RTMP URL",
+              group: "Destinations · Custom",
+              width: "half",
+              icon: "🧩",
+            },
+            STREAM555_DEST_CUSTOM_STREAM_KEY: {
+              label: "Custom Stream Key",
+              group: "Destinations · Custom",
+              width: "half",
+            },
+            STREAM555_DEST_CUSTOM_ENABLED: {
+              label: "Enable Custom",
+              group: "Destinations · Custom",
+              width: "half",
+              type: "radio",
+              options: [
+                { value: "true", label: "Enabled", icon: "✅" },
+                { value: "false", label: "Disabled", icon: "⛔" },
+              ],
+            },
             STREAM555_CONTROL_PLUGIN_ENABLED: {
               label: "Enabled",
               group: "Runtime",
@@ -2433,18 +2893,22 @@ function discoverPluginsFromManifest(): PluginEntry[] {
           enabled: false,
           configured: Boolean(
             (process.env.STREAM555_BASE_URL?.trim() ||
-              process.env.STREAM_API_URL?.trim()) &&
-              (process.env.STREAM555_ADMIN_API_KEY?.trim() ||
-                process.env.STREAM555_AGENT_API_KEY?.trim() ||
-                process.env.STREAM555_AGENT_TOKEN?.trim() ||
-                process.env.STREAM_API_BEARER_TOKEN?.trim()),
+              process.env.STREAM_API_URL?.trim() ||
+              process.env.STREAM555_PUBLIC_BASE_URL?.trim() ||
+              process.env.STREAM555_INTERNAL_BASE_URL?.trim()),
           ),
-          envKey: "STREAM555_BASE_URL",
+          envKey: "STREAM555_PUBLIC_BASE_URL",
           category: "feature",
           source: "bundled",
           configKeys: [
             "STREAM555_BASE_URL",
             "STREAM_API_URL",
+            "STREAM555_PUBLIC_BASE_URL",
+            "STREAM555_INTERNAL_BASE_URL",
+            "STREAM555_INTERNAL_AGENT_IDS",
+            "STREAM555_WALLET_AUTH_PREFERRED_CHAIN",
+            "STREAM555_WALLET_AUTH_ALLOW_PROVISION",
+            "STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN",
             "STREAM555_ADMIN_API_KEY",
             "STREAM555_AGENT_DEFAULT_USER_ID",
             "STREAM555_AGENT_API_KEY",
@@ -2466,6 +2930,45 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               isSet: Boolean(process.env.STREAM555_BASE_URL?.trim()),
             },
             {
+              key: "STREAM555_PUBLIC_BASE_URL",
+              type: "string",
+              description:
+                "Public 555stream base URL used for external agents (default https://stream.rndrntwrk.com)",
+              required: false,
+              sensitive: false,
+              default: "https://stream.rndrntwrk.com",
+              currentValue:
+                process.env.STREAM555_PUBLIC_BASE_URL ??
+                "https://stream.rndrntwrk.com",
+              isSet: Boolean(process.env.STREAM555_PUBLIC_BASE_URL?.trim()),
+            },
+            {
+              key: "STREAM555_INTERNAL_BASE_URL",
+              type: "string",
+              description:
+                "Internal 555stream base URL used by allow-listed internal agents",
+              required: false,
+              sensitive: false,
+              default: "http://control-plane:3000",
+              currentValue:
+                process.env.STREAM555_INTERNAL_BASE_URL ??
+                "http://control-plane:3000",
+              isSet: Boolean(process.env.STREAM555_INTERNAL_BASE_URL?.trim()),
+            },
+            {
+              key: "STREAM555_INTERNAL_AGENT_IDS",
+              type: "string",
+              description:
+                "Comma-separated agent IDs that should use internal base URL",
+              required: false,
+              sensitive: false,
+              default: "alice,alice-internal",
+              currentValue:
+                process.env.STREAM555_INTERNAL_AGENT_IDS ??
+                "alice,alice-internal",
+              isSet: Boolean(process.env.STREAM555_INTERNAL_AGENT_IDS?.trim()),
+            },
+            {
               key: "STREAM_API_URL",
               type: "string",
               description:
@@ -2474,6 +2977,49 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               sensitive: false,
               currentValue: process.env.STREAM_API_URL ?? null,
               isSet: Boolean(process.env.STREAM_API_URL?.trim()),
+            },
+            {
+              key: "STREAM555_WALLET_AUTH_PREFERRED_CHAIN",
+              type: "string",
+              description:
+                "Wallet auth chain preference. Use solana first, fallback to ethereum when unavailable.",
+              required: false,
+              sensitive: false,
+              default: "solana",
+              currentValue:
+                process.env.STREAM555_WALLET_AUTH_PREFERRED_CHAIN ?? "solana",
+              isSet: Boolean(
+                process.env.STREAM555_WALLET_AUTH_PREFERRED_CHAIN?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_WALLET_AUTH_ALLOW_PROVISION",
+              type: "string",
+              description:
+                "Allow linked wallet provisioning via sw4p when no runtime wallet exists.",
+              required: false,
+              sensitive: false,
+              default: "true",
+              currentValue:
+                process.env.STREAM555_WALLET_AUTH_ALLOW_PROVISION ?? "true",
+              isSet: Boolean(
+                process.env.STREAM555_WALLET_AUTH_ALLOW_PROVISION?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN",
+              type: "string",
+              description:
+                "Target chain for sw4p-linked provisioning when fallback is needed.",
+              required: false,
+              sensitive: false,
+              default: "eth",
+              currentValue:
+                process.env.STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN ??
+                "eth",
+              isSet: Boolean(
+                process.env.STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN?.trim(),
+              ),
             },
             {
               key: "STREAM555_ADMIN_API_KEY",
@@ -2576,7 +3122,25 @@ function discoverPluginsFromManifest(): PluginEntry[] {
           ],
           configUiHints: {
             STREAM555_BASE_URL: {
-              label: "Primary Base URL",
+              label: "Primary Base URL Override",
+              group: "Connection",
+              width: "half",
+              advanced: true,
+            },
+            STREAM555_PUBLIC_BASE_URL: {
+              label: "Public Base URL",
+              group: "Connection",
+              width: "half",
+              icon: "🌐",
+            },
+            STREAM555_INTERNAL_BASE_URL: {
+              label: "Internal Base URL",
+              group: "Connection",
+              width: "half",
+              icon: "🏠",
+            },
+            STREAM555_INTERNAL_AGENT_IDS: {
+              label: "Internal Agent IDs",
               group: "Connection",
               width: "half",
             },
@@ -2584,6 +3148,44 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               label: "Legacy Base URL",
               group: "Connection",
               width: "half",
+              advanced: true,
+            },
+            STREAM555_WALLET_AUTH_PREFERRED_CHAIN: {
+              label: "Preferred Wallet Chain",
+              group: "Wallet Auth",
+              width: "half",
+              type: "radio",
+              icon: "👛",
+              options: [
+                {
+                  value: "solana",
+                  label: "Solana (recommended)",
+                  description: "Use Solana wallet first when present.",
+                  icon: "◎",
+                },
+                {
+                  value: "evm",
+                  label: "Ethereum fallback",
+                  description: "Use EVM wallet only when Solana is unavailable.",
+                  icon: "◇",
+                },
+              ],
+            },
+            STREAM555_WALLET_AUTH_ALLOW_PROVISION: {
+              label: "Allow Wallet Provisioning",
+              group: "Wallet Auth",
+              width: "half",
+              type: "radio",
+              options: [
+                { value: "true", label: "Enabled", icon: "✅" },
+                { value: "false", label: "Disabled", icon: "⛔" },
+              ],
+            },
+            STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN: {
+              label: "Provision Target Chain",
+              group: "Wallet Auth",
+              width: "half",
+              icon: "🔁",
             },
             STREAM555_ADMIN_API_KEY: {
               label: "Admin API Key",
@@ -2636,16 +3238,23 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             "Ad rotation and monetization controls for active 555stream sessions.",
           enabled: false,
           configured: Boolean(
-            process.env.STREAM555_BASE_URL?.trim() &&
+            (process.env.STREAM555_BASE_URL?.trim() ||
+              process.env.STREAM_API_URL?.trim() ||
+              process.env.STREAM555_PUBLIC_BASE_URL?.trim() ||
+              process.env.STREAM555_INTERNAL_BASE_URL?.trim()) &&
               (process.env.STREAM555_AGENT_API_KEY?.trim() ||
                 process.env.STREAM555_AGENT_TOKEN?.trim() ||
                 process.env.STREAM_API_BEARER_TOKEN?.trim()),
           ),
-          envKey: "STREAM555_BASE_URL",
+          envKey: "STREAM555_PUBLIC_BASE_URL",
           category: "feature",
           source: "bundled",
           configKeys: [
             "STREAM555_BASE_URL",
+            "STREAM_API_URL",
+            "STREAM555_PUBLIC_BASE_URL",
+            "STREAM555_INTERNAL_BASE_URL",
+            "STREAM555_INTERNAL_AGENT_IDS",
             "STREAM555_AGENT_TOKEN",
             "STREAM555_AGENT_API_KEY",
             "STREAM_API_BEARER_TOKEN",
@@ -2659,11 +3268,60 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "STREAM555_BASE_URL",
               type: "string",
-              description: "555stream control-plane base URL",
+              description: "Legacy base URL override for all agents",
               required: false,
               sensitive: false,
               currentValue: process.env.STREAM555_BASE_URL ?? null,
               isSet: Boolean(process.env.STREAM555_BASE_URL?.trim()),
+            },
+            {
+              key: "STREAM555_PUBLIC_BASE_URL",
+              type: "string",
+              description:
+                "Public control-plane base URL for external agents (default https://stream.rndrntwrk.com)",
+              required: false,
+              sensitive: false,
+              default: "https://stream.rndrntwrk.com",
+              currentValue:
+                process.env.STREAM555_PUBLIC_BASE_URL ??
+                "https://stream.rndrntwrk.com",
+              isSet: Boolean(process.env.STREAM555_PUBLIC_BASE_URL?.trim()),
+            },
+            {
+              key: "STREAM555_INTERNAL_BASE_URL",
+              type: "string",
+              description:
+                "Internal control-plane base URL for allow-listed internal agents",
+              required: false,
+              sensitive: false,
+              default: "http://control-plane:3000",
+              currentValue:
+                process.env.STREAM555_INTERNAL_BASE_URL ??
+                "http://control-plane:3000",
+              isSet: Boolean(process.env.STREAM555_INTERNAL_BASE_URL?.trim()),
+            },
+            {
+              key: "STREAM555_INTERNAL_AGENT_IDS",
+              type: "string",
+              description:
+                "Comma-separated internal agent IDs that should use internal base URL",
+              required: false,
+              sensitive: false,
+              default: "alice,alice-internal",
+              currentValue:
+                process.env.STREAM555_INTERNAL_AGENT_IDS ??
+                "alice,alice-internal",
+              isSet: Boolean(process.env.STREAM555_INTERNAL_AGENT_IDS?.trim()),
+            },
+            {
+              key: "STREAM_API_URL",
+              type: "string",
+              description:
+                "Legacy base URL fallback when STREAM555_BASE_URL is unset",
+              required: false,
+              sensitive: false,
+              currentValue: process.env.STREAM_API_URL ?? null,
+              isSet: Boolean(process.env.STREAM_API_URL?.trim()),
             },
             {
               key: "STREAM555_AGENT_API_KEY",
@@ -2759,9 +3417,33 @@ function discoverPluginsFromManifest(): PluginEntry[] {
           ],
           configUiHints: {
             STREAM555_BASE_URL: {
-              label: "Base URL",
+              label: "Primary Base URL Override",
               group: "Connection",
               width: "half",
+              advanced: true,
+            },
+            STREAM555_PUBLIC_BASE_URL: {
+              label: "Public Base URL",
+              group: "Connection",
+              width: "half",
+              icon: "🌐",
+            },
+            STREAM555_INTERNAL_BASE_URL: {
+              label: "Internal Base URL",
+              group: "Connection",
+              width: "half",
+              icon: "🏠",
+            },
+            STREAM555_INTERNAL_AGENT_IDS: {
+              label: "Internal Agent IDs",
+              group: "Connection",
+              width: "half",
+            },
+            STREAM_API_URL: {
+              label: "Legacy Base URL",
+              group: "Connection",
+              width: "half",
+              advanced: true,
             },
             STREAM555_DEFAULT_SESSION_ID: {
               label: "Default Session ID",
@@ -14387,6 +15069,208 @@ async function handleRequest(
       critical,
       topUpUrl: "https://www.elizacloud.ai/dashboard/billing",
     });
+    return;
+  }
+
+  // ── Five55 mastery API (/api/five55/mastery/*) ───────────────────────
+  const parseActionTextEnvelope = (value: unknown): Record<string, unknown> => {
+    const record =
+      value && typeof value === "object" && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : {};
+    const text = typeof record.text === "string" ? record.text : "";
+    if (!text) return {};
+    try {
+      const parsed = JSON.parse(text) as unknown;
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : {};
+    } catch {
+      return {};
+    }
+  };
+
+  if (method === "GET" && pathname === "/api/five55/mastery/catalog") {
+    try {
+      const contracts = listMasteryContracts();
+      json(res, {
+        contracts,
+        total: contracts.length,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      error(
+        res,
+        err instanceof Error ? err.message : "Failed to load mastery catalog",
+        500,
+      );
+    }
+    return;
+  }
+
+  if (method === "POST" && pathname === "/api/five55/mastery/runs") {
+    const body = await readJsonBody<{
+      suiteId?: string;
+      games?: string[];
+      episodesPerGame?: number;
+      seedMode?: "fixed" | "mixed" | "rolling";
+      maxDurationSec?: number;
+      strict?: boolean;
+    }>(req, res);
+    if (!body) return;
+
+    const runtime = state.runtime;
+    if (!runtime) {
+      error(res, "Agent runtime not available", 503);
+      return;
+    }
+
+    const execution = await executeRuntimeActionDirect({
+      runtime,
+      toolName: "FIVE55_GAMES_MASTERY_CERTIFY",
+      requestId: `mastery-certify-${Date.now()}`,
+      parameters: {
+        suiteId: body.suiteId,
+        games: Array.isArray(body.games) ? body.games : undefined,
+        episodesPerGame: body.episodesPerGame,
+        seedMode: body.seedMode,
+        maxDurationSec: body.maxDurationSec,
+        strict: body.strict,
+      },
+    });
+
+    if (!execution.success) {
+      error(
+        res,
+        execution.error || "Failed to start mastery run",
+        500,
+      );
+      return;
+    }
+
+    const actionEnvelope = parseActionTextEnvelope(execution.result);
+    const actionData =
+      actionEnvelope.data &&
+      typeof actionEnvelope.data === "object" &&
+      !Array.isArray(actionEnvelope.data)
+        ? (actionEnvelope.data as Record<string, unknown>)
+        : {};
+    const runId =
+      typeof actionData.runId === "string" && actionData.runId.trim().length > 0
+        ? actionData.runId.trim()
+        : undefined;
+    if (!runId) {
+      error(res, "Mastery certify action did not return runId", 500);
+      return;
+    }
+    const run = await readMasteryRun(runId);
+    json(res, {
+      ok: true,
+      runId,
+      run,
+      executionMode: execution.executionMode,
+      durationMs: execution.durationMs,
+    });
+    return;
+  }
+
+  if (method === "GET" && pathname === "/api/five55/mastery/runs") {
+    const limitRaw = url.searchParams.get("limit");
+    const status = url.searchParams.get("status") ?? undefined;
+    const cursor = url.searchParams.get("cursor");
+    const limit = Number.parseInt(limitRaw ?? "20", 10);
+    try {
+      const page = await listPersistedMasteryRuns({
+        limit: Number.isFinite(limit) ? limit : 20,
+        cursor,
+        status: status && status.trim().length > 0 ? status.trim() : undefined,
+      });
+      json(res, page);
+    } catch (err) {
+      error(
+        res,
+        err instanceof Error ? err.message : "Failed to list mastery runs",
+        500,
+      );
+    }
+    return;
+  }
+
+  if (method === "GET" && pathname.startsWith("/api/five55/mastery/runs/")) {
+    const suffix = pathname.slice("/api/five55/mastery/runs/".length);
+    const [encodedRunId, subresource] = suffix.split("/");
+    const runId = decodeURIComponent(encodedRunId || "").trim();
+    if (!runId) {
+      error(res, "runId is required", 400);
+      return;
+    }
+
+    const run = await readMasteryRun(runId);
+    if (!run) {
+      error(res, "runId not found", 404);
+      return;
+    }
+
+    if (!subresource) {
+      json(res, { run });
+      return;
+    }
+
+    if (subresource === "episodes") {
+      const episodes = await readMasteryEpisodes(runId);
+      json(res, {
+        runId,
+        total: episodes.length,
+        episodes,
+      });
+      return;
+    }
+
+    if (subresource === "logs") {
+      const afterSeqRaw = url.searchParams.get("afterSeq");
+      const limitRaw = url.searchParams.get("limit");
+      const afterSeq = Number.parseInt(afterSeqRaw ?? "0", 10);
+      const limit = Number.parseInt(limitRaw ?? "500", 10);
+      const logs = await readMasteryLogs({
+        runId,
+        afterSeq: Number.isFinite(afterSeq) ? afterSeq : 0,
+        limit: Number.isFinite(limit) ? limit : 500,
+      });
+      json(res, {
+        runId,
+        logs,
+        count: logs.length,
+        nextAfterSeq: logs.length > 0 ? logs[logs.length - 1].seq : afterSeq,
+      });
+      return;
+    }
+
+    error(res, "Unknown mastery run subresource", 404);
+    return;
+  }
+
+  if (method === "GET" && pathname.startsWith("/api/five55/mastery/games/")) {
+    const match = pathname.match(/^\/api\/five55\/mastery\/games\/([^/]+)\/latest$/);
+    if (!match) {
+      error(res, "Unknown mastery game route", 404);
+      return;
+    }
+    try {
+      const gameId = canonicalizeMasteryGameId(decodeURIComponent(match[1] || ""));
+      const contract = getMasteryContract(gameId);
+      const latest = await readMasteryGameSnapshot(gameId);
+      json(res, {
+        gameId,
+        contract,
+        latest,
+      });
+    } catch (err) {
+      error(
+        res,
+        err instanceof Error ? err.message : "Failed to fetch mastery snapshot",
+        400,
+      );
+    }
     return;
   }
 

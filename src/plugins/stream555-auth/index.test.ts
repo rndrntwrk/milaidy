@@ -17,6 +17,9 @@ const ENV_KEYS = [
   "STREAM555_AGENT_DEFAULT_USER_ID",
   "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
   "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
+  "STREAM555_WALLET_AUTH_PREFERRED_CHAIN",
+  "STREAM555_WALLET_AUTH_ALLOW_PROVISION",
+  "STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN",
   "EVM_PRIVATE_KEY",
   "SOLANA_PRIVATE_KEY",
 ] as const;
@@ -131,6 +134,9 @@ describe("stream555-auth plugin actions", () => {
     delete process.env.STREAM555_AGENT_DEFAULT_USER_ID;
     delete process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT;
     delete process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS;
+    delete process.env.STREAM555_WALLET_AUTH_PREFERRED_CHAIN;
+    delete process.env.STREAM555_WALLET_AUTH_ALLOW_PROVISION;
+    delete process.env.STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN;
   });
 
   afterEach(() => {
@@ -436,6 +442,40 @@ describe("stream555-auth plugin actions", () => {
     expect(process.env.STREAM555_AGENT_TOKEN).toBe("wallet-auth-token-evm");
   });
 
+  it("uses preferred chain from env when set to ethereum", async () => {
+    process.env.STREAM555_WALLET_AUTH_PREFERRED_CHAIN = "ethereum";
+    process.env.SOLANA_PRIVATE_KEY = generateSolanaPrivateKey();
+    process.env.EVM_PRIVATE_KEY = TEST_EVM_PRIVATE_KEY;
+    process.env.STREAM555_AGENT_TOKEN = "agent-bearer-token";
+
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          challengeId: "challenge-env-evm",
+          message: "sign this evm challenge",
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(201, {
+          token: "wallet-auth-token-env-evm",
+          chainType: "evm",
+        }),
+      );
+
+    const action = resolveAction("STREAM555_AUTH_WALLET_LOGIN");
+    const result = await action.handler?.(
+      makeRuntime(),
+      makeMessage(),
+      INTERNAL_STATE,
+      {} as never,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(parseFetchBody(fetchMock.mock.calls[0]).chainType).toBe("evm");
+    expect(result?.success).toBe(true);
+  });
+
   it("provisions linked wallet via sw4p when no local wallet exists", async () => {
     delete process.env.SOLANA_PRIVATE_KEY;
     delete process.env.EVM_PRIVATE_KEY;
@@ -522,6 +562,29 @@ describe("stream555-auth plugin actions", () => {
     expect(result?.success).toBe(false);
     const envelope = parseEnvelope(result as { text: string });
     expect(String(envelope.message)).toContain("signing material");
+  });
+
+  it("disables provisioning when env default is false", async () => {
+    process.env.STREAM555_WALLET_AUTH_ALLOW_PROVISION = "false";
+    delete process.env.SOLANA_PRIVATE_KEY;
+    delete process.env.EVM_PRIVATE_KEY;
+    process.env.STREAM555_AGENT_TOKEN = "agent-bearer-token";
+
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+
+    const action = resolveAction("STREAM555_AUTH_WALLET_LOGIN");
+    const result = await action.handler?.(
+      makeRuntime(),
+      makeMessage(),
+      INTERNAL_STATE,
+      {} as never,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(0);
+    expect(result?.success).toBe(false);
+    const envelope = parseEnvelope(result as { text: string });
+    expect(envelope.status).toBe(412);
+    expect(String(envelope.message)).toContain("no wallet available");
   });
 
   it("defaults to public URL for non-internal agents when base env is missing", async () => {
