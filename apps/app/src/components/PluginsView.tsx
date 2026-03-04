@@ -2807,7 +2807,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
               </span>
             </>
           ) : isStream555 && streamSummary ? (
-            <div className="flex items-center gap-1.5 min-w-0">
+            <div className="flex items-center gap-1.5 min-w-0 flex-1">
               <span
                 className={`inline-block w-[7px] h-[7px] rounded-full shrink-0 ${
                   streamSummary.authState === "connected"
@@ -2817,18 +2817,21 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                       : "bg-destructive"
                 }`}
               />
-              <span className="text-[10px] text-muted shrink-0">
+              <span
+                className="text-[10px] text-muted truncate min-w-0"
+                title={`${streamSummary.authState === "connected"
+                  ? "Auth connected"
+                  : streamSummary.authState === "wallet_enabled"
+                    ? "Wallet auth enabled"
+                    : "Auth required"}${streamSummary.authMode ? ` (${streamSummary.authMode})` : ""} • ${streamSummary.savedDestinations}/${streamSummary.destinations.length} channel keys saved`}
+              >
                 {streamSummary.authState === "connected"
                   ? "Auth connected"
                   : streamSummary.authState === "wallet_enabled"
                     ? "Wallet auth enabled"
                     : "Auth required"}
                 {streamSummary.authMode ? ` (${streamSummary.authMode})` : ""}
-              </span>
-              <span className="text-[10px] text-muted opacity-60 shrink-0">
-                •
-              </span>
-              <span className="text-[10px] text-muted shrink-0">
+                {" • "}
                 {streamSummary.savedDestinations}/
                 {streamSummary.destinations.length} channel keys saved
               </span>
@@ -2842,7 +2845,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
               23 field demos
             </span>
           )}
-          <div className="flex-1" />
+          {(!isStream555 || !streamSummary) && <div className="flex-1" />}
           {p.enabled &&
             !p.isActive &&
             p.npmName &&
