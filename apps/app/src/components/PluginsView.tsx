@@ -359,20 +359,20 @@ function applyStream555UiHints(
   const destinationHintByKey: Record<string, ConfigUiHint> = {
     STREAM555_DEST_PUMPFUN_RTMP_URL: {
       label: "Pump.fun RTMPS URL",
-      group: "Destinations · Pump.fun",
+      group: "Pump.fun",
       width: "half",
       order: 260,
       icon: "🟠",
     },
     STREAM555_DEST_PUMPFUN_STREAM_KEY: {
       label: "Pump.fun Stream Key",
-      group: "Destinations · Pump.fun",
+      group: "Pump.fun",
       width: "half",
       order: 270,
     },
     STREAM555_DEST_PUMPFUN_ENABLED: {
       label: "Enable Pump.fun",
-      group: "Destinations · Pump.fun",
+      group: "Pump.fun",
       width: "half",
       order: 280,
       type: "radio",
@@ -383,20 +383,20 @@ function applyStream555UiHints(
     },
     STREAM555_DEST_X_RTMP_URL: {
       label: "X RTMPS URL",
-      group: "Destinations · X",
+      group: "X",
       width: "half",
       order: 310,
       icon: "✖️",
     },
     STREAM555_DEST_X_STREAM_KEY: {
       label: "X Stream Key",
-      group: "Destinations · X",
+      group: "X",
       width: "half",
       order: 320,
     },
     STREAM555_DEST_X_ENABLED: {
       label: "Enable X",
-      group: "Destinations · X",
+      group: "X",
       width: "half",
       order: 330,
       type: "radio",
@@ -407,20 +407,20 @@ function applyStream555UiHints(
     },
     STREAM555_DEST_TWITCH_RTMP_URL: {
       label: "Twitch RTMPS URL",
-      group: "Destinations · Twitch",
+      group: "Twitch",
       width: "half",
       order: 410,
       icon: "🟣",
     },
     STREAM555_DEST_TWITCH_STREAM_KEY: {
       label: "Twitch Stream Key",
-      group: "Destinations · Twitch",
+      group: "Twitch",
       width: "half",
       order: 420,
     },
     STREAM555_DEST_TWITCH_ENABLED: {
       label: "Enable Twitch",
-      group: "Destinations · Twitch",
+      group: "Twitch",
       width: "half",
       order: 430,
       type: "radio",
@@ -431,20 +431,20 @@ function applyStream555UiHints(
     },
     STREAM555_DEST_KICK_RTMP_URL: {
       label: "Kick RTMPS URL",
-      group: "Destinations · Kick",
+      group: "Kick",
       width: "half",
       order: 510,
       icon: "🟢",
     },
     STREAM555_DEST_KICK_STREAM_KEY: {
       label: "Kick Stream Key",
-      group: "Destinations · Kick",
+      group: "Kick",
       width: "half",
       order: 520,
     },
     STREAM555_DEST_KICK_ENABLED: {
       label: "Enable Kick",
-      group: "Destinations · Kick",
+      group: "Kick",
       width: "half",
       order: 530,
       type: "radio",
@@ -455,20 +455,20 @@ function applyStream555UiHints(
     },
     STREAM555_DEST_YOUTUBE_RTMP_URL: {
       label: "YouTube RTMPS URL",
-      group: "Destinations · YouTube",
+      group: "YouTube",
       width: "half",
       order: 610,
       icon: "🔴",
     },
     STREAM555_DEST_YOUTUBE_STREAM_KEY: {
       label: "YouTube Stream Key",
-      group: "Destinations · YouTube",
+      group: "YouTube",
       width: "half",
       order: 620,
     },
     STREAM555_DEST_YOUTUBE_ENABLED: {
       label: "Enable YouTube",
-      group: "Destinations · YouTube",
+      group: "YouTube",
       width: "half",
       order: 630,
       type: "radio",
@@ -479,20 +479,20 @@ function applyStream555UiHints(
     },
     STREAM555_DEST_FACEBOOK_RTMP_URL: {
       label: "Facebook RTMPS URL",
-      group: "Destinations · Facebook",
+      group: "Facebook",
       width: "half",
       order: 710,
       icon: "🔵",
     },
     STREAM555_DEST_FACEBOOK_STREAM_KEY: {
       label: "Facebook Stream Key",
-      group: "Destinations · Facebook",
+      group: "Facebook",
       width: "half",
       order: 720,
     },
     STREAM555_DEST_FACEBOOK_ENABLED: {
       label: "Enable Facebook",
-      group: "Destinations · Facebook",
+      group: "Facebook",
       width: "half",
       order: 730,
       type: "radio",
@@ -503,20 +503,20 @@ function applyStream555UiHints(
     },
     STREAM555_DEST_CUSTOM_RTMP_URL: {
       label: "Custom RTMP URL",
-      group: "Destinations · Custom",
+      group: "Custom",
       width: "half",
       order: 810,
       icon: "🧩",
     },
     STREAM555_DEST_CUSTOM_STREAM_KEY: {
       label: "Custom Stream Key",
-      group: "Destinations · Custom",
+      group: "Custom",
       width: "half",
       order: 820,
     },
     STREAM555_DEST_CUSTOM_ENABLED: {
       label: "Enable Custom",
-      group: "Destinations · Custom",
+      group: "Custom",
       width: "half",
       order: 830,
       type: "radio",
@@ -2351,6 +2351,44 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
     if (pluginId === "__ui-showcase__") return;
     const config = pluginConfigs[pluginId] ?? {};
     await handlePluginConfigSave(pluginId, config);
+    const shouldSyncDestinations =
+      pluginId === "stream555-control" &&
+      Object.keys(config).some((key) => key.startsWith("STREAM555_DEST_"));
+    if (shouldSyncDestinations) {
+      try {
+        const response = await client.executeAutonomyPlan({
+          plan: {
+            id: "stream555-control-sync-destinations-after-save",
+            steps: [
+              {
+                id: "1",
+                toolName: "STREAM555_DESTINATIONS_APPLY",
+                params: {},
+              },
+            ],
+          },
+          request: { source: "user", sourceTrust: 1 },
+          options: { stopOnFailure: true },
+        });
+        const step = toRecord(response.results?.[0] ?? null);
+        const success = step?.success === true;
+        const message = readAutonomyStepMessage(
+          step,
+          success
+            ? "Saved and activated destination settings on the active session."
+            : "Settings were saved, but destination activation failed.",
+        );
+        setActionNotice(message, success ? "success" : "error", 4200);
+      } catch (err) {
+        setActionNotice(
+          `Settings were saved, but destination activation request failed: ${
+            err instanceof Error ? err.message : "unknown error"
+          }`,
+          "error",
+          4200,
+        );
+      }
+    }
     setPluginConfigs((prev) => {
       const next = { ...prev };
       delete next[pluginId];

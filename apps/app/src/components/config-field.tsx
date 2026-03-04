@@ -57,10 +57,7 @@ function inputCls(hasError: boolean): string {
 export function renderTextField(props: FieldRenderProps) {
   const value = props.isSet ? String(props.value ?? "") : "";
   const placeholder =
-    (props.hint.placeholder as string | undefined) ??
-    (props.schema.default != null
-      ? `Default: ${props.schema.default}`
-      : "Enter value...");
+    (props.hint.placeholder as string | undefined) ?? "Enter value...";
 
   return (
     <input
@@ -171,10 +168,7 @@ function NumberFieldInner({ fp: props }: { fp: FieldRenderProps }) {
   const stepVal = (props.hint.step as number | undefined) ?? 1;
   const unit = props.hint.unit as string | undefined;
   const placeholder =
-    (props.hint.placeholder as string | undefined) ??
-    (props.schema.default != null
-      ? `Default: ${props.schema.default}`
-      : "Enter number...");
+    (props.hint.placeholder as string | undefined) ?? "Enter number...";
 
   const initial = props.isSet ? String(props.value ?? "") : "";
   const [val, setVal] = useState(initial);
@@ -1873,12 +1867,6 @@ export function ConfigField({
             }}
           >
             {renderProps.hint.help ?? renderProps.schema.description}
-            {renderProps.schema.default != null && (
-              <span className="opacity-70">
-                {" "}
-                (default: {String(renderProps.schema.default)})
-              </span>
-            )}
           </div>
         )}
       </div>

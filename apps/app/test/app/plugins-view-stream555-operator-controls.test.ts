@@ -208,4 +208,50 @@ describe("Stream555 operator controls", () => {
     ).toBeGreaterThan(0);
     expect(mockExecuteAutonomyPlan).not.toHaveBeenCalled();
   });
+
+  it("syncs destinations after saving RTMP destination config", async () => {
+    mockUseApp.mockReturnValue(
+      createContext([
+        {
+          key: "STREAM555_DEST_X_RTMP_URL",
+          type: "string",
+          isSet: false,
+          currentValue: null,
+        },
+      ]),
+    );
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(PluginsView));
+    });
+
+    const input = tree!.root.find(
+      (node) =>
+        node.type === "input" &&
+        node.props["data-config-key"] === "STREAM555_DEST_X_RTMP_URL",
+    );
+
+    await act(async () => {
+      input.props.onChange({ target: { value: "rtmps://example/x" } });
+    });
+
+    const saveButton = findButtonByText(tree!.root, "Save Settings");
+    await act(async () => {
+      await saveButton.props.onClick();
+    });
+
+    expect(mockHandlePluginConfigSave).toHaveBeenCalled();
+    expect(mockExecuteAutonomyPlan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan: expect.objectContaining({
+          steps: expect.arrayContaining([
+            expect.objectContaining({
+              toolName: "STREAM555_DESTINATIONS_APPLY",
+            }),
+          ]),
+        }),
+      }),
+    );
+  });
 });
