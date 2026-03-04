@@ -103,7 +103,6 @@ function PasswordFieldInner({ fp: props }: { fp: FieldRenderProps }) {
     if (visible) {
       // Currently showing -- hide it
       setVisible(false);
-      input.value = "";
       return;
     }
 

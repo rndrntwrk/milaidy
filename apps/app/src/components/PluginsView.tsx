@@ -3094,6 +3094,11 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                             streamSummary.destinations.filter(
                               (destination) => destination.streamKeySet,
                             );
+                          const keysSavedSummary = `${streamSummary.savedDestinations}/${streamSummary.destinations.length} channel keys saved`;
+                          const enabledReadySummary =
+                            streamSummary.enabledDestinations > 0
+                              ? `${streamSummary.readyDestinations}/${streamSummary.enabledDestinations} enabled channels fully configured`
+                              : "No channels enabled yet";
                           const configuredSummary =
                             configuredDestinations.length > 0
                               ? configuredDestinations
@@ -3116,11 +3121,8 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                             <>
                               <div className="mb-3 px-3 py-2 border border-border bg-surface">
                                 <div className="text-[11px] text-muted mb-1">
-                                  {authSummary}
-                                  {"  ·  "}
-                                  {streamSummary.readyDestinations}/
-                                  {streamSummary.enabledDestinations} enabled
-                                  channels fully configured
+                                  {authSummary} {"  ·  "} {keysSavedSummary}
+                                  {"  ·  "} {enabledReadySummary}
                                 </div>
                                 <div className="text-[10px] text-muted leading-relaxed">
                                   {configuredSummary}
