@@ -343,10 +343,12 @@ function applyStream555UiHints(
   });
 
   applyHint("STREAM555_DEST_SYNC_ON_GO_LIVE", {
-    label: "Auto-sync Destinations",
+    label: "Auto-sync destinations before go-live",
+    help: "Automatically sync saved RTMP destinations to 555 Stream before go-live.",
     group: "Destinations",
-    width: "half",
+    width: "full",
     order: 210,
+    advanced: true,
     type: "radio",
     options: [
       { value: "true", label: "Enabled", icon: "✅" },

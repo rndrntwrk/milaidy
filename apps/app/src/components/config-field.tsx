@@ -1787,6 +1787,7 @@ export function ConfigField({
   const errors = renderProps.errors ?? [];
   const hasError = errors.length > 0;
   const isRequiredEmpty = renderProps.required && !renderProps.isSet;
+  const isStream555Plugin = pluginId === "stream555-control";
 
   const renderFn =
     renderer ??
@@ -1813,7 +1814,7 @@ export function ConfigField({
         {/* Label row */}
         <div className="flex items-center gap-2 mb-1.5">
           <span
-            className="font-semibold leading-tight truncate"
+            className={`font-semibold leading-tight ${isStream555Plugin ? "break-words" : "truncate"}`}
             style={{
               fontSize: "var(--plugin-label-size)",
               color: "var(--plugin-label)",
@@ -1865,7 +1866,7 @@ export function ConfigField({
         {/* Help text */}
         {(renderProps.hint.help || renderProps.schema.description) && (
           <div
-            className="mt-1 leading-relaxed line-clamp-2"
+            className={`mt-1 leading-relaxed ${isStream555Plugin ? "whitespace-normal" : "line-clamp-2"}`}
             style={{
               fontSize: "var(--plugin-help-size)",
               color: "var(--plugin-help)",
