@@ -18,6 +18,9 @@ const ENV_KEYS = [
   "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
   "STREAM555_ALLOW_LOCALHOST_APP_URLS",
   "STREAM555_DEST_SYNC_ON_GO_LIVE",
+  "STREAM555_DEST_PUMPFUN_RTMP_URL",
+  "STREAM555_DEST_PUMPFUN_STREAM_KEY",
+  "STREAM555_DEST_PUMPFUN_ENABLED",
   "STREAM555_DEST_X_RTMP_URL",
   "STREAM555_DEST_X_STREAM_KEY",
   "STREAM555_DEST_X_ENABLED",
@@ -103,6 +106,9 @@ describe("stream555-control plugin actions", () => {
     delete process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS;
     delete process.env.STREAM_API_BEARER_TOKEN;
     delete process.env.STREAM555_DEST_SYNC_ON_GO_LIVE;
+    delete process.env.STREAM555_DEST_PUMPFUN_RTMP_URL;
+    delete process.env.STREAM555_DEST_PUMPFUN_STREAM_KEY;
+    delete process.env.STREAM555_DEST_PUMPFUN_ENABLED;
     delete process.env.STREAM555_DEST_X_RTMP_URL;
     delete process.env.STREAM555_DEST_X_STREAM_KEY;
     delete process.env.STREAM555_DEST_X_ENABLED;
@@ -203,6 +209,60 @@ describe("stream555-control plugin actions", () => {
     expect(envelope.code).toBe("OK");
     const data = envelope.data as Record<string, unknown>;
     expect(data.attempted).toBe(1);
+  });
+
+  it("supports pumpfun destination sync and toggle", async () => {
+    process.env.STREAM555_DEST_PUMPFUN_RTMP_URL =
+      "rtmps://pump-prod-tg2x8veh.rtmp.livekit.cloud/x";
+    process.env.STREAM555_DEST_PUMPFUN_STREAM_KEY = "pump-key";
+    process.env.STREAM555_DEST_PUMPFUN_ENABLED = "true";
+
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { sessionId: "session-pump-1" }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          platformId: "pumpfun",
+          enabled: true,
+          configured: true,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          platformId: "pumpfun",
+          enabled: true,
+        }),
+      );
+
+    const action = await resolveAction("STREAM555_DESTINATIONS_APPLY");
+    const result = await action.handler?.(
+      makeRuntime(),
+      makeMessage(),
+      INTERNAL_STATE,
+      {
+        parameters: {
+          sessionId: "session-pump-1",
+          platforms: "pumpfun",
+        },
+      } as never,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
+      "/api/agent/v1/platforms/pumpfun",
+    );
+    expect(parseFetchBody(fetchMock.mock.calls[1])).toEqual({
+      rtmpUrl: "rtmps://pump-prod-tg2x8veh.rtmp.livekit.cloud/x",
+      streamKey: "pump-key",
+      enabled: true,
+    });
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
+      "/api/agent/v1/sessions/session-pump-1/platforms/pumpfun/toggle",
+    );
+    expect(parseFetchBody(fetchMock.mock.calls[2])).toEqual({ enabled: true });
+    expect(result?.success).toBe(true);
+    const envelope = parseEnvelope(result as { text: string });
+    expect(envelope.code).toBe("OK");
   });
 
   it("syncs destinations automatically before go-live when enabled", async () => {

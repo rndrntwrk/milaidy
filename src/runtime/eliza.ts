@@ -663,7 +663,6 @@ const INTERNAL_BUNDLED_PLUGIN_ENTRY_KEYS = new Set<string>([
 const FIVE55_DEFAULT_ENABLED_ENTRY_KEYS = new Set<string>([
   "swap",
   "stream",
-  "stream555-control",
   "stream555-ads",
   "stream555-auth",
   "five55-games",
@@ -976,9 +975,14 @@ export function applyAliceFullDutyDefaults(config: MilaidyConfig): {
   }
 
   if (pluginEntries["stream555-control"] === undefined) {
-    pluginEntries["stream555-control"] = { enabled: true };
+    const stream555ControlDefaultEnabled = !canonicalStreamPluginAvailable;
+    pluginEntries["stream555-control"] = {
+      enabled: stream555ControlDefaultEnabled,
+    };
     changed = true;
-    changes.push("plugins.entries.stream555-control.enabled=true");
+    changes.push(
+      `plugins.entries.stream555-control.enabled=${stream555ControlDefaultEnabled}`,
+    );
   }
 
   if (!config.env || typeof config.env !== "object") {
@@ -1089,19 +1093,26 @@ export function resolveStream555AuthPluginEnabled(
 
   if (process.env.STREAM555_AUTH_PLUGIN_ENABLED?.trim()) {
     logger.warn(
-      `[milaidy] Unrecognized STREAM555_AUTH_PLUGIN_ENABLED="${process.env.STREAM555_AUTH_PLUGIN_ENABLED}"; expected true/false. Falling back to config/control plugin defaults.`,
+      `[milaidy] Unrecognized STREAM555_AUTH_PLUGIN_ENABLED="${process.env.STREAM555_AUTH_PLUGIN_ENABLED}"; expected true/false. Falling back to canonical/control plugin defaults.`,
     );
+  }
+
+  const canonicalEnabled = resolveStream555CanonicalPluginEnabled(config);
+  const controlEnabled = resolveFive55PluginEnabled(
+    config,
+    "STREAM555_CONTROL_PLUGIN_ENABLED",
+    "stream555-control",
+  );
+
+  if (canonicalEnabled || controlEnabled) {
+    return true;
   }
 
   if (config.plugins?.entries?.["stream555-auth"] !== undefined) {
     return isPluginEntryEnabled(config, "stream555-auth");
   }
 
-  return resolveFive55PluginEnabled(
-    config,
-    "STREAM555_CONTROL_PLUGIN_ENABLED",
-    "stream555-control",
-  );
+  return isFive55PluginDefaultEnabled("stream555-auth");
 }
 
 export function resolveStream555CanonicalPluginEnabled(
@@ -3743,7 +3754,14 @@ export async function startEliza(
       "five55-rewards",
     ),
     five55Github: resolveFive55GithubPluginEnabled(config),
-  } as const;
+  };
+
+  if (five55PluginFlags.stream555Canonical && five55PluginFlags.stream555Control) {
+    five55PluginFlags.stream555Control = false;
+    logger.info(
+      "[milaidy] STREAM555_CONTROL_PLUGIN_ENABLED suppressed because STREAM555_CANONICAL_PLUGIN_ENABLED is active",
+    );
+  }
 
   const shouldLoadLegacyStreamPlugin =
     five55PluginFlags.stream && !five55PluginFlags.stream555Canonical;

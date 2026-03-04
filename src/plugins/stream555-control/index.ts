@@ -66,6 +66,14 @@ let cachedAgentSessionId: string | undefined;
 
 const DESTINATION_ENV_MAPPINGS: DestinationEnvMapping[] = [
   {
+    platformId: "pumpfun",
+    label: "Pump.fun",
+    rtmpUrlEnv: "STREAM555_DEST_PUMPFUN_RTMP_URL",
+    streamKeyEnv: "STREAM555_DEST_PUMPFUN_STREAM_KEY",
+    enabledEnv: "STREAM555_DEST_PUMPFUN_ENABLED",
+    defaultRtmpUrl: "rtmps://pump-prod-tg2x8veh.rtmp.livekit.cloud/x",
+  },
+  {
     platformId: "x",
     label: "X",
     rtmpUrlEnv: "STREAM555_DEST_X_RTMP_URL",
@@ -715,6 +723,7 @@ const stream555ControlProvider: Provider = {
         "## 555stream Control Surface",
         "",
         "Actions: STREAM555_GO_LIVE, STREAM555_DESTINATIONS_APPLY, STREAM555_GO_LIVE_APP, STREAM555_GO_LIVE_SEGMENTS, STREAM555_SEGMENT_STATE, STREAM555_SCREEN_SHARE, STREAM555_END_LIVE, STREAM555_AD_CREATE, STREAM555_AD_TRIGGER, STREAM555_AD_DISMISS, STREAM555_RADIO_CONTROL, STREAM555_GUEST_INVITE, STREAM555_SCENE_SET, STREAM555_PIP_ENABLE, STREAM555_SEGMENT_OVERRIDE, STREAM555_EARNINGS_ESTIMATE",
+        "Wallet Auth Actions: STREAM555_AUTH_WALLET_LOGIN, STREAM555_AUTH_WALLET_CHALLENGE, STREAM555_AUTH_WALLET_VERIFY, STREAM555_AUTH_WALLET_PROVISION_LINKED",
         `Base URL configured: ${configured ? "yes" : "no"} (${STREAM555_BASE_ENV}|${STREAM_API_ENV}|${STREAM555_PUBLIC_BASE_ENV}|${STREAM555_INTERNAL_BASE_ENV})`,
         `Resolved base URL: ${resolveBaseUrl(runtime)}`,
         `Agent auth configured: ${hasToken ? "yes" : "no"} (${describeAgentAuthSource()})`,
@@ -809,7 +818,7 @@ const destinationsApplyAction: Action = {
     "STREAM555_CONFIGURE_RTMP_DESTINATIONS",
   ],
   description:
-    "Sync stored RTMP destination credentials (X, Twitch, Kick, YouTube, Facebook, Custom) into 555stream and toggle platform states on the active session.",
+    "Sync stored RTMP destination credentials (Pump.fun, X, Twitch, Kick, YouTube, Facebook, Custom) into 555stream and toggle platform states on the active session.",
   validate: async () => true,
   handler: async (runtime, message, state, options) => {
     try {
@@ -881,7 +890,7 @@ const destinationsApplyAction: Action = {
   },
   parameters: [
     { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
-    { name: "platforms", description: "Optional comma-separated platform subset (x,twitch,kick,youtube,facebook,custom)", required: false, schema: { type: "string" as const } },
+    { name: "platforms", description: "Optional comma-separated platform subset (pumpfun,x,twitch,kick,youtube,facebook,custom)", required: false, schema: { type: "string" as const } },
   ],
 };
 

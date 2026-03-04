@@ -2396,6 +2396,9 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             "STREAM_SESSION_ID",
             "STREAM555_ALLOW_LOCALHOST_APP_URLS",
             "STREAM555_DEST_SYNC_ON_GO_LIVE",
+            "STREAM555_DEST_PUMPFUN_RTMP_URL",
+            "STREAM555_DEST_PUMPFUN_STREAM_KEY",
+            "STREAM555_DEST_PUMPFUN_ENABLED",
             "STREAM555_DEST_X_RTMP_URL",
             "STREAM555_DEST_X_STREAM_KEY",
             "STREAM555_DEST_X_ENABLED",
@@ -2572,6 +2575,46 @@ function discoverPluginsFromManifest(): PluginEntry[] {
                 process.env.STREAM555_DEST_SYNC_ON_GO_LIVE ?? "true",
               isSet: Boolean(
                 process.env.STREAM555_DEST_SYNC_ON_GO_LIVE?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_PUMPFUN_RTMP_URL",
+              type: "string",
+              description: "Pump.fun RTMPS endpoint URL",
+              required: false,
+              sensitive: false,
+              default: "rtmps://pump-prod-tg2x8veh.rtmp.livekit.cloud/x",
+              currentValue:
+                process.env.STREAM555_DEST_PUMPFUN_RTMP_URL ??
+                "rtmps://pump-prod-tg2x8veh.rtmp.livekit.cloud/x",
+              isSet: Boolean(
+                process.env.STREAM555_DEST_PUMPFUN_RTMP_URL?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_PUMPFUN_STREAM_KEY",
+              type: "string",
+              description: "Pump.fun stream key",
+              required: false,
+              sensitive: true,
+              currentValue: process.env.STREAM555_DEST_PUMPFUN_STREAM_KEY
+                ? maskValue(process.env.STREAM555_DEST_PUMPFUN_STREAM_KEY)
+                : null,
+              isSet: Boolean(
+                process.env.STREAM555_DEST_PUMPFUN_STREAM_KEY?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_DEST_PUMPFUN_ENABLED",
+              type: "string",
+              description: "Enable Pump.fun simulcast destination (true/false)",
+              required: false,
+              sensitive: false,
+              default: "false",
+              currentValue:
+                process.env.STREAM555_DEST_PUMPFUN_ENABLED ?? "false",
+              isSet: Boolean(
+                process.env.STREAM555_DEST_PUMPFUN_ENABLED?.trim(),
               ),
             },
             {
@@ -2874,6 +2917,27 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             STREAM555_DEST_SYNC_ON_GO_LIVE: {
               label: "Auto Sync Destinations",
               group: "Destinations",
+              width: "half",
+              type: "radio",
+              options: [
+                { value: "true", label: "Enabled", icon: "✅" },
+                { value: "false", label: "Disabled", icon: "⛔" },
+              ],
+            },
+            STREAM555_DEST_PUMPFUN_RTMP_URL: {
+              label: "Pump.fun RTMPS URL",
+              group: "Destinations · Pump.fun",
+              width: "half",
+              icon: "🟠",
+            },
+            STREAM555_DEST_PUMPFUN_STREAM_KEY: {
+              label: "Pump.fun Stream Key",
+              group: "Destinations · Pump.fun",
+              width: "half",
+            },
+            STREAM555_DEST_PUMPFUN_ENABLED: {
+              label: "Enable Pump.fun",
+              group: "Destinations · Pump.fun",
               width: "half",
               type: "radio",
               options: [

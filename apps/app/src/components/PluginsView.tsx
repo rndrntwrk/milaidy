@@ -47,6 +47,14 @@ type Stream555DestinationSpec = {
 
 const STREAM555_DESTINATION_SPECS: Stream555DestinationSpec[] = [
   {
+    id: "pumpfun",
+    label: "Pump.fun",
+    icon: "🟠",
+    urlKey: "STREAM555_DEST_PUMPFUN_RTMP_URL",
+    streamKeyKey: "STREAM555_DEST_PUMPFUN_STREAM_KEY",
+    enabledKey: "STREAM555_DEST_PUMPFUN_ENABLED",
+  },
+  {
     id: "x",
     label: "X",
     icon: "✖️",
@@ -315,6 +323,30 @@ function applyStream555UiHints(
   });
 
   const destinationHintByKey: Record<string, ConfigUiHint> = {
+    STREAM555_DEST_PUMPFUN_RTMP_URL: {
+      label: "Pump.fun RTMPS URL",
+      group: "Destinations · Pump.fun",
+      width: "half",
+      order: 260,
+      icon: "🟠",
+    },
+    STREAM555_DEST_PUMPFUN_STREAM_KEY: {
+      label: "Pump.fun Stream Key",
+      group: "Destinations · Pump.fun",
+      width: "half",
+      order: 270,
+    },
+    STREAM555_DEST_PUMPFUN_ENABLED: {
+      label: "Enable Pump.fun",
+      group: "Destinations · Pump.fun",
+      width: "half",
+      order: 280,
+      type: "radio",
+      options: [
+        { value: "true", label: "Enabled", icon: "✅" },
+        { value: "false", label: "Disabled", icon: "⛔" },
+      ],
+    },
     STREAM555_DEST_X_RTMP_URL: {
       label: "X RTMPS URL",
       group: "Destinations · X",
