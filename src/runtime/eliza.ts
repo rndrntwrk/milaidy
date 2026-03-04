@@ -618,6 +618,7 @@ const INTEGRATION_PLUGIN_MAP: Readonly<Record<string, string>> = {
 const PLUGIN_NAME_ALIASES: Readonly<Record<string, string>> = {
   "@milaidy/plugin-telegram-enhanced": "@elizaos/plugin-telegram",
   "telegram-enhanced": "@elizaos/plugin-telegram",
+  "stream555-canonical": "@elizaos-plugins/plugin-555stream",
 };
 
 /**
@@ -708,6 +709,7 @@ function isFive55PluginDefaultEnabled(entryKey: string): boolean {
 
 function normalizeFive55FlagNameToEntryKey(name: string): string {
   const map: Record<string, string> = {
+    stream555Canonical: "stream555-canonical",
     stream555Control: "stream555-control",
     stream555Ads: "stream555-ads",
     stream555Auth: "stream555-auth",
@@ -857,6 +859,36 @@ function canResolvePluginPackage(
   );
 }
 
+const CANONICAL_STREAM_PLUGIN_PACKAGE_CANDIDATES = [
+  "@elizaos-plugins/plugin-555stream",
+  "@rndrntwrk/plugin-555stream",
+] as const;
+
+async function resolveCanonicalStreamPlugin(
+  config: MilaidyConfig,
+): Promise<Plugin | null> {
+  for (const packageName of CANONICAL_STREAM_PLUGIN_PACKAGE_CANDIDATES) {
+    if (!canResolvePluginPackage(config, packageName)) continue;
+    try {
+      const mod = (await import(packageName)) as PluginModuleShape & {
+        stream555Plugin?: Plugin;
+      };
+      const plugin = mod.default ?? mod.plugin ?? mod.stream555Plugin;
+      if (plugin) {
+        logger.info(
+          `[milaidy] Canonical stream plugin resolved from ${packageName}`,
+        );
+        return plugin;
+      }
+    } catch (err) {
+      logger.warn(
+        `[milaidy] Failed to load canonical stream plugin package ${packageName}: ${formatError(err)}`,
+      );
+    }
+  }
+  return null;
+}
+
 export function isPluginEntryEnabled(
   config: MilaidyConfig,
   entryKey: string,
@@ -921,6 +953,32 @@ export function applyAliceFullDutyDefaults(config: MilaidyConfig): {
     pluginEntries[entryKey] = { enabled: true };
     changed = true;
     changes.push(`plugins.entries.${entryKey}.enabled=true`);
+  }
+
+  const canonicalStreamPluginAvailable =
+    CANONICAL_STREAM_PLUGIN_PACKAGE_CANDIDATES.some((packageName) =>
+      canResolvePluginPackage(config, packageName),
+    );
+
+  if (
+    canonicalStreamPluginAvailable &&
+    pluginEntries["stream555-canonical"] === undefined
+  ) {
+    pluginEntries["stream555-canonical"] = { enabled: true };
+    changed = true;
+    changes.push("plugins.entries.stream555-canonical.enabled=true");
+  }
+
+  if (pluginEntries["stream"] === undefined) {
+    pluginEntries.stream = { enabled: false };
+    changed = true;
+    changes.push("plugins.entries.stream.enabled=false");
+  }
+
+  if (pluginEntries["stream555-control"] === undefined) {
+    pluginEntries["stream555-control"] = { enabled: true };
+    changed = true;
+    changes.push("plugins.entries.stream555-control.enabled=true");
   }
 
   if (!config.env || typeof config.env !== "object") {
@@ -1044,6 +1102,27 @@ export function resolveStream555AuthPluginEnabled(
     "STREAM555_CONTROL_PLUGIN_ENABLED",
     "stream555-control",
   );
+}
+
+export function resolveStream555CanonicalPluginEnabled(
+  config: MilaidyConfig,
+): boolean {
+  const parsed = parseBooleanToggle(
+    process.env.STREAM555_CANONICAL_PLUGIN_ENABLED,
+  );
+  if (parsed !== null) return parsed;
+
+  if (process.env.STREAM555_CANONICAL_PLUGIN_ENABLED?.trim()) {
+    logger.warn(
+      `[milaidy] Unrecognized STREAM555_CANONICAL_PLUGIN_ENABLED="${process.env.STREAM555_CANONICAL_PLUGIN_ENABLED}"; expected true/false. Falling back to config/alice defaults.`,
+    );
+  }
+
+  if (config.plugins?.entries?.["stream555-canonical"] !== undefined) {
+    return isPluginEntryEnabled(config, "stream555-canonical");
+  }
+
+  return isAliceFullDutyModeEnabled();
 }
 
 function normalizePluginPackageName(name: string): string {
@@ -3594,6 +3673,14 @@ export async function startEliza(
   const phettaPlugin = phettaOpts.enabled
     ? createPhettaCompanionPlugin(phettaOpts)
     : null;
+  const canonicalStreamPluginRequested =
+    resolveStream555CanonicalPluginEnabled(config);
+  const canonicalStreamPlugin = await resolveCanonicalStreamPlugin(config);
+  if (canonicalStreamPluginRequested && !canonicalStreamPlugin) {
+    logger.warn(
+      "[milaidy] STREAM555_CANONICAL_PLUGIN_ENABLED requested but canonical stream plugin package is not installed; continuing without canonical plugin.",
+    );
+  }
 
   const five55PluginFlags = {
     swap: resolveFive55PluginEnabled(config, "SWAP_PLUGIN_ENABLED", "swap"),
@@ -3602,6 +3689,8 @@ export async function startEliza(
       "STREAM_PLUGIN_ENABLED",
       "stream",
     ),
+    stream555Canonical:
+      canonicalStreamPluginRequested && Boolean(canonicalStreamPlugin),
     stream555Control: resolveFive55PluginEnabled(
       config,
       "STREAM555_CONTROL_PLUGIN_ENABLED",
@@ -3656,6 +3745,11 @@ export async function startEliza(
     five55Github: resolveFive55GithubPluginEnabled(config),
   } as const;
 
+  const shouldLoadLegacyStreamPlugin =
+    five55PluginFlags.stream && !five55PluginFlags.stream555Canonical;
+  const shouldOmitCanonicalOverlapActions =
+    five55PluginFlags.stream555Canonical;
+
   logger.info(
     `[milaidy] Five55 surface plugin plan: ${JSON.stringify(
       Object.entries(five55PluginFlags).map(([name, enabled]) => ({
@@ -3666,10 +3760,25 @@ export async function startEliza(
     )}`,
   );
 
+  if (five55PluginFlags.stream && !shouldLoadLegacyStreamPlugin) {
+    logger.info(
+      "[milaidy] STREAM_PLUGIN_ENABLED suppressed because STREAM555_CANONICAL_PLUGIN_ENABLED is active",
+    );
+  }
+
   const five55SurfacePlugins: Plugin[] = [
     ...(five55PluginFlags.swap ? [createSwapPlugin()] : []),
-    ...(five55PluginFlags.stream ? [createStreamPlugin()] : []),
-    ...(five55PluginFlags.stream555Control ? [createStream555ControlPlugin()] : []),
+    ...(shouldLoadLegacyStreamPlugin ? [createStreamPlugin()] : []),
+    ...(five55PluginFlags.stream555Canonical && canonicalStreamPlugin
+      ? [canonicalStreamPlugin]
+      : []),
+    ...(five55PluginFlags.stream555Control
+      ? [
+          createStream555ControlPlugin({
+            omitCanonicalOverlapActions: shouldOmitCanonicalOverlapActions,
+          }),
+        ]
+      : []),
     ...(five55PluginFlags.stream555Ads ? [createStream555AdsPlugin()] : []),
     ...(five55PluginFlags.stream555Auth ? [createStream555AuthPlugin()] : []),
     ...(five55PluginFlags.five55Games ? [createFive55GamesPlugin()] : []),
@@ -4380,6 +4489,18 @@ export async function startEliza(
           const freshOtherPlugins = resolvedPlugins.filter(
             (p) => !PREREGISTER_PLUGINS.has(p.name),
           );
+          const freshCanonicalStreamPluginRequested =
+            resolveStream555CanonicalPluginEnabled(freshConfig);
+          const freshCanonicalStreamPlugin =
+            await resolveCanonicalStreamPlugin(freshConfig);
+          if (
+            freshCanonicalStreamPluginRequested &&
+            !freshCanonicalStreamPlugin
+          ) {
+            logger.warn(
+              "[milaidy] Hot-reload requested canonical stream plugin but package is unavailable; continuing without canonical plugin.",
+            );
+          }
           const freshFive55PluginFlags = {
             swap: resolveFive55PluginEnabled(
               freshConfig,
@@ -4391,6 +4512,9 @@ export async function startEliza(
               "STREAM_PLUGIN_ENABLED",
               "stream",
             ),
+            stream555Canonical:
+              freshCanonicalStreamPluginRequested &&
+              Boolean(freshCanonicalStreamPlugin),
             stream555Control: resolveFive55PluginEnabled(
               freshConfig,
               "STREAM555_CONTROL_PLUGIN_ENABLED",
@@ -4444,6 +4568,11 @@ export async function startEliza(
             ),
             five55Github: resolveFive55GithubPluginEnabled(freshConfig),
           } as const;
+          const shouldLoadFreshLegacyStreamPlugin =
+            freshFive55PluginFlags.stream &&
+            !freshFive55PluginFlags.stream555Canonical;
+          const shouldOmitFreshCanonicalOverlapActions =
+            freshFive55PluginFlags.stream555Canonical;
           logger.info(
             `[milaidy] Hot-reload five55 surface plugin plan: ${JSON.stringify(
               Object.entries(freshFive55PluginFlags).map(([name, enabled]) => ({
@@ -4455,11 +4584,28 @@ export async function startEliza(
               })),
             )}`,
           );
+          if (
+            freshFive55PluginFlags.stream &&
+            !shouldLoadFreshLegacyStreamPlugin
+          ) {
+            logger.info(
+              "[milaidy] Hot-reload suppressed legacy stream plugin because canonical stream plugin is active",
+            );
+          }
           const freshFive55SurfacePlugins: Plugin[] = [
             ...(freshFive55PluginFlags.swap ? [createSwapPlugin()] : []),
-            ...(freshFive55PluginFlags.stream ? [createStreamPlugin()] : []),
+            ...(shouldLoadFreshLegacyStreamPlugin ? [createStreamPlugin()] : []),
+            ...(freshFive55PluginFlags.stream555Canonical &&
+            freshCanonicalStreamPlugin
+              ? [freshCanonicalStreamPlugin]
+              : []),
             ...(freshFive55PluginFlags.stream555Control
-              ? [createStream555ControlPlugin()]
+              ? [
+                  createStream555ControlPlugin({
+                    omitCanonicalOverlapActions:
+                      shouldOmitFreshCanonicalOverlapActions,
+                  }),
+                ]
               : []),
             ...(freshFive55PluginFlags.stream555Ads
               ? [createStream555AdsPlugin()]

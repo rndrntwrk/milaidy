@@ -1500,29 +1500,47 @@ const earningsEstimateAction: Action = {
   ],
 };
 
-export function createStream555ControlPlugin(): Plugin {
+interface Stream555ControlPluginOptions {
+  omitCanonicalOverlapActions?: boolean;
+}
+
+const CANONICAL_STREAM_ACTION_OVERLAP = new Set<string>([
+  "STREAM555_GO_LIVE_APP",
+  "STREAM555_RADIO_CONTROL",
+  "STREAM555_GUEST_INVITE",
+]);
+
+export function createStream555ControlPlugin(
+  options: Stream555ControlPluginOptions = {},
+): Plugin {
+  const actions: Action[] = [
+    goLiveAction,
+    goLiveAppAction,
+    goLiveSegmentsAction,
+    segmentStateAction,
+    screenShareAction,
+    endLiveAction,
+    adsCreateAction,
+    adsTriggerAction,
+    adsDismissAction,
+    radioControlAction,
+    guestInviteAction,
+    sceneSetAction,
+    pipEnableAction,
+    segmentOverrideAction,
+    earningsEstimateAction,
+  ];
+
+  const resolvedActions = options.omitCanonicalOverlapActions
+    ? actions.filter((action) => !CANONICAL_STREAM_ACTION_OVERLAP.has(action.name))
+    : actions;
+
   return {
     name: "stream555-control",
     description:
       "Direct 555stream control surface for go-live, ads, radio, guests, and studio scene operations.",
     providers: [stream555ControlProvider],
-    actions: [
-      goLiveAction,
-      goLiveAppAction,
-      goLiveSegmentsAction,
-      segmentStateAction,
-      screenShareAction,
-      endLiveAction,
-      adsCreateAction,
-      adsTriggerAction,
-      adsDismissAction,
-      radioControlAction,
-      guestInviteAction,
-      sceneSetAction,
-      pipEnableAction,
-      segmentOverrideAction,
-      earningsEstimateAction,
-    ],
+    actions: resolvedActions,
   };
 }
 
