@@ -1903,16 +1903,31 @@ function discoverInstalledPlugins(
 }
 
 const STREAM555_PLUGIN_CONTROL_ID = "stream555-control";
-const STREAM555_PLUGIN_MERGED_IDS = new Set([
-  "stream555-auth",
-  "stream555-ads",
-]);
+const STREAM555_PLUGIN_LEGACY_IDS = new Set(["stream555-auth", "stream555-ads"]);
+
+function normalizeStream555PluginId(pluginId: string): string {
+  return pluginId
+    .trim()
+    .toLowerCase()
+    .replace(/^@[^/]+\//, "")
+    .replace(/^plugin-/, "");
+}
+
+function isStream555LegacyPluginId(pluginId: string): boolean {
+  return STREAM555_PLUGIN_LEGACY_IDS.has(normalizeStream555PluginId(pluginId));
+}
+
+function isStream555ControlPluginId(pluginId: string): boolean {
+  return normalizeStream555PluginId(pluginId) === STREAM555_PLUGIN_CONTROL_ID;
+}
 
 function resolveCanonicalPluginId(pluginId: string): string {
-  if (STREAM555_PLUGIN_MERGED_IDS.has(pluginId)) {
+  if (isStream555LegacyPluginId(pluginId)) {
     return STREAM555_PLUGIN_CONTROL_ID;
   }
-  return pluginId;
+  return normalizeStream555PluginId(pluginId) === STREAM555_PLUGIN_CONTROL_ID
+    ? STREAM555_PLUGIN_CONTROL_ID
+    : pluginId;
 }
 
 function dedupePluginValidationIssues(
@@ -1941,30 +1956,37 @@ function dedupePluginParams(parameters: PluginParamDef[]): PluginParamDef[] {
 }
 
 function collapseStream555PluginEntries(entries: PluginEntry[]): PluginEntry[] {
-  const controlEntry = entries.find(
-    (entry) => entry.id === STREAM555_PLUGIN_CONTROL_ID,
-  );
-  if (!controlEntry) return entries;
-
   const relatedEntries = entries.filter((entry) =>
-    STREAM555_PLUGIN_MERGED_IDS.has(entry.id),
+    isStream555LegacyPluginId(entry.id),
   );
-  if (relatedEntries.length === 0) return entries;
+  const controlEntry = entries.find((entry) =>
+    isStream555ControlPluginId(entry.id),
+  );
+  if (!controlEntry && relatedEntries.length === 0) return entries;
+  if (controlEntry && relatedEntries.length === 0) return entries;
+
+  const baseEntry = controlEntry ?? relatedEntries[0];
+  if (!baseEntry) return entries;
 
   const mergedEntry: PluginEntry = {
-    ...controlEntry,
+    ...baseEntry,
+    id: STREAM555_PLUGIN_CONTROL_ID,
+    name: "Stream555 Control",
     description:
       "Unified 555stream plugin for auth, go-live control, destination routing, and ad operations.",
-    configured: controlEntry.configured,
-    enabled: controlEntry.enabled,
-    isActive: controlEntry.isActive,
-    loadError: controlEntry.loadError,
-    configKeys: [...controlEntry.configKeys],
-    parameters: controlEntry.parameters.map((parameter) => ({ ...parameter })),
-    validationErrors: [...controlEntry.validationErrors],
-    validationWarnings: [...controlEntry.validationWarnings],
-    ...(controlEntry.configUiHints
-      ? { configUiHints: { ...controlEntry.configUiHints } }
+    configured: baseEntry.configured,
+    enabled: baseEntry.enabled,
+    isActive: baseEntry.isActive,
+    loadError: baseEntry.loadError,
+    category: "feature",
+    source: baseEntry.source ?? "bundled",
+    envKey: baseEntry.envKey ?? "STREAM555_PUBLIC_BASE_URL",
+    configKeys: [...baseEntry.configKeys],
+    parameters: baseEntry.parameters.map((parameter) => ({ ...parameter })),
+    validationErrors: [...baseEntry.validationErrors],
+    validationWarnings: [...baseEntry.validationWarnings],
+    ...(baseEntry.configUiHints
+      ? { configUiHints: { ...baseEntry.configUiHints } }
       : {}),
   };
 
@@ -2005,8 +2027,8 @@ function collapseStream555PluginEntries(entries: PluginEntry[]): PluginEntry[] {
   return entries
     .filter(
       (entry) =>
-        entry.id !== STREAM555_PLUGIN_CONTROL_ID &&
-        !STREAM555_PLUGIN_MERGED_IDS.has(entry.id),
+        !isStream555ControlPluginId(entry.id) &&
+        !isStream555LegacyPluginId(entry.id),
     )
     .concat(mergedEntry);
 }
