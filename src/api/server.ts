@@ -138,6 +138,7 @@ import {
 import { handleRegistryRoutes } from "./registry-routes";
 import { RegistryService } from "./registry-service";
 import { handleSandboxRoute } from "./sandbox-routes";
+import { shouldServeSpaFallback } from "./spa-fallback-guard";
 import { handleSubscriptionRoutes } from "./subscription-routes";
 import { resolveTerminalRunLimits } from "./terminal-run-limits";
 import { handleTrainingRoutes } from "./training-routes";
@@ -2008,6 +2009,8 @@ function error(res: http.ServerResponse, message: string, status = 400): void {
 const STATIC_MIME: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
   ".gif": "image/gif",
+  ".glb": "model/gltf-binary",
+  ".gltf": "model/gltf+json",
   ".html": "text/html; charset=utf-8",
   ".ico": "image/x-icon",
   ".jpeg": "image/jpeg",
@@ -2016,11 +2019,15 @@ const STATIC_MIME: Record<string, string> = {
   ".json": "application/json; charset=utf-8",
   ".map": "application/json",
   ".mjs": "application/javascript; charset=utf-8",
+  ".mp3": "audio/mpeg",
+  ".ogg": "audio/ogg",
   ".png": "image/png",
   ".svg": "image/svg+xml",
   ".ttf": "font/ttf",
   ".txt": "text/plain; charset=utf-8",
+  ".vrm": "model/gltf-binary",
   ".wasm": "application/wasm",
+  ".wav": "audio/wav",
   ".webp": "image/webp",
   ".woff": "font/woff",
   ".woff2": "font/woff2",
@@ -2150,8 +2157,14 @@ function serveStaticUi(
       return true;
     }
   } catch {
-    // Missing file falls through to SPA index fallback.
+    // File not found on disk.
+    if (!shouldServeSpaFallback(decodedPath)) {
+      error(res, "Not Found", 404);
+      return true; // handled — do not fall through to auth gate
+    }
   }
+
+  if (!shouldServeSpaFallback(decodedPath)) return false;
 
   if (!uiIndexHtml) return false;
   sendStaticResponse(

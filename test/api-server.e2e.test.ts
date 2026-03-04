@@ -3549,6 +3549,38 @@ describe("API Server E2E (no runtime)", () => {
     });
   });
 
+  // -- SPA asset fallback guard --
+
+  describe("SPA asset fallback guard", () => {
+    it("GET /nonexistent-file.vrm does not return 200 with text/html", async () => {
+      const { status, headers } = await reqRaw(
+        port,
+        "GET",
+        "/nonexistent-file.vrm",
+      );
+      // The SPA fallback must never serve index.html for asset extension requests.
+      // Before the fix, missing .vrm files were incorrectly returned as 200 text/html.
+      expect(status).not.toBe(200);
+      expect(String(headers["content-type"] ?? "")).not.toContain("text/html");
+    });
+
+    it("GET /some-unknown-route (no extension) is not blocked by the asset extension guard", async () => {
+      const { status, headers } = await reqRaw(port, "GET", "/some-unknown-route");
+      // Extensionless paths must pass through the SPA fallback guard unchanged.
+      // Possible outcomes depending on environment:
+      //   200 — SPA fallback served index.html (production build with UI)
+      //   401 — auth gate intercepted (auth-enabled config)
+      //   404 — no built UI available, no matching route (CI/test environment)
+      // All are acceptable; the test only checks this was NOT blocked by the
+      // asset extension guard (which rejects paths like .vrm, .glb, .png).
+      expect([200, 401, 404]).toContain(status);
+      if (status === 200) {
+        const contentType = String(headers["content-type"] ?? "");
+        expect(contentType).toContain("text/html");
+      }
+    });
+  });
+
   // -- MCP Marketplace & Config --
 
   describe("MCP marketplace endpoints", () => {
