@@ -162,6 +162,25 @@ export function CustomActionsPanel({
     onOpenEditor(null);
   };
 
+  const enabledCount = useMemo(
+    () => actions.filter((action) => action.enabled).length,
+    [actions],
+  );
+
+  const filteredActions = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    if (!needle) return actions;
+    return actions.filter((action) => {
+      const aliases = (action.similes ?? []).join(" ").toLowerCase();
+      return (
+        action.name.toLowerCase().includes(needle) ||
+        (action.description ?? "").toLowerCase().includes(needle) ||
+        aliases.includes(needle) ||
+        action.handler.type.toLowerCase().includes(needle)
+      );
+    });
+  }, [actions, search]);
+
   return (
     <div
       className={`border-l border-border bg-card flex flex-col transition-all duration-200 ${
