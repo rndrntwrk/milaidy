@@ -273,6 +273,9 @@ export const ConfigRenderer = forwardRef<
   ref,
 ) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [groupOpenState, setGroupOpenState] = useState<Record<string, boolean>>(
+    {},
+  );
   const [fieldErrors, setFieldErrors] = useState<Map<string, string[]>>(
     new Map(),
   );
@@ -367,6 +370,13 @@ export const ConfigRenderer = forwardRef<
     },
     [validateField, onChange],
   );
+
+  const toggleGroupOpen = useCallback((group: string) => {
+    setGroupOpenState((prev) => ({
+      ...prev,
+      [group]: !(prev[group] ?? true),
+    }));
+  }, []);
 
   // ── Action execution ─────────────────────────────────────────────────
 
@@ -602,22 +612,54 @@ export const ConfigRenderer = forwardRef<
         />
       ) : null}
 
-      {[...groups.entries()].map(([group, fields], groupIndex) => (
-        <div key={group} className={groupIndex > 0 ? "mt-5" : ""}>
-          {showHeaders && (
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-base leading-none">{groupIcon(group)}</span>
-              <span className="text-[12px] font-bold uppercase tracking-wider text-[var(--text)] opacity-70">
-                {group}
-              </span>
-              <span className="flex-1 h-px bg-[var(--border)] ml-1" />
-            </div>
-          )}
-          <div className="grid grid-cols-6 gap-x-5 gap-y-0">
-            {fields.map((f) => renderField(f))}
+      {[...groups.entries()].map(([group, fields], groupIndex) => {
+        const isCollapsibleGroup = group.toLowerCase() === "destinations";
+        const isGroupOpen = isCollapsibleGroup
+          ? (groupOpenState[group] ?? true)
+          : true;
+
+        return (
+          <div key={group} className={groupIndex > 0 ? "mt-5" : ""}>
+            {(showHeaders || isCollapsibleGroup) &&
+              (isCollapsibleGroup ? (
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-2 mb-3 cursor-pointer bg-transparent border-none p-0 text-left group"
+                  onClick={() => toggleGroupOpen(group)}
+                  aria-expanded={isGroupOpen}
+                >
+                  <span
+                    className="inline-block text-[10px] text-[var(--muted)] transition-transform duration-200 group-hover:text-[var(--text)]"
+                    style={{ transform: isGroupOpen ? "rotate(90deg)" : "none" }}
+                  >
+                    &#9654;
+                  </span>
+                  <span className="text-base leading-none">{groupIcon(group)}</span>
+                  <span className="text-[12px] font-bold uppercase tracking-wider text-[var(--text)] opacity-70">
+                    {group}
+                  </span>
+                  <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-bold bg-[var(--accent-subtle,rgba(255,255,255,0.05))] text-[var(--accent)] border border-[var(--border)] rounded-sm">
+                    {fields.length}
+                  </span>
+                  <span className="flex-1 h-px bg-[var(--border)] ml-1" />
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-base leading-none">{groupIcon(group)}</span>
+                  <span className="text-[12px] font-bold uppercase tracking-wider text-[var(--text)] opacity-70">
+                    {group}
+                  </span>
+                  <span className="flex-1 h-px bg-[var(--border)] ml-1" />
+                </div>
+              ))}
+            {isGroupOpen && (
+              <div className="grid grid-cols-6 gap-x-5 gap-y-0">
+                {fields.map((f) => renderField(f))}
+              </div>
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       {advanced.length > 0 && (
         <div className="mt-5 pt-4 border-t border-[var(--border)]">

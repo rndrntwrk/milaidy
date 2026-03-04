@@ -331,4 +331,64 @@ describe("Stream555 operator controls", () => {
       ).length,
     ).toBeGreaterThan(0);
   });
+
+  it("shows all destination toggles inside collapsible Destinations group", async () => {
+    mockUseApp.mockReturnValue(
+      createContext([
+        { key: "STREAM555_DEST_PUMPFUN_ENABLED", type: "string", currentValue: "true", isSet: true },
+        { key: "STREAM555_DEST_X_ENABLED", type: "string", currentValue: "false", isSet: true },
+        { key: "STREAM555_DEST_TWITCH_ENABLED", type: "string", currentValue: "true", isSet: true },
+        { key: "STREAM555_DEST_KICK_ENABLED", type: "string", currentValue: "true", isSet: true },
+        { key: "STREAM555_DEST_YOUTUBE_ENABLED", type: "string", currentValue: "false", isSet: true },
+        { key: "STREAM555_DEST_FACEBOOK_ENABLED", type: "string", currentValue: "false", isSet: true },
+        { key: "STREAM555_DEST_CUSTOM_ENABLED", type: "string", currentValue: "false", isSet: true },
+      ]),
+    );
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(PluginsView));
+    });
+
+    const destinationsToggleKeys = [
+      "STREAM555_DEST_PUMPFUN_ENABLED",
+      "STREAM555_DEST_X_ENABLED",
+      "STREAM555_DEST_TWITCH_ENABLED",
+      "STREAM555_DEST_KICK_ENABLED",
+      "STREAM555_DEST_YOUTUBE_ENABLED",
+      "STREAM555_DEST_FACEBOOK_ENABLED",
+      "STREAM555_DEST_CUSTOM_ENABLED",
+    ];
+
+    for (const key of destinationsToggleKeys) {
+      expect(
+        tree!.root.findAll(
+          (node) =>
+            node.type === "button" && node.props["data-config-key"] === key,
+        ).length,
+      ).toBe(1);
+    }
+
+    const destinationsHeader = tree!.root.find(
+      (node) =>
+        node.type === "button" && node.props["aria-expanded"] === true,
+    );
+
+    await act(async () => {
+      destinationsHeader.props.onClick();
+    });
+
+    const collapsedDestinationsHeader = tree!.root.find(
+      (node) =>
+        node.type === "button" && node.props["aria-expanded"] === false,
+    );
+    expect(collapsedDestinationsHeader.props["aria-expanded"]).toBe(false);
+    expect(
+      tree!.root.findAll(
+        (node) =>
+          node.type === "button" &&
+          node.props["data-config-key"] === "STREAM555_DEST_X_ENABLED",
+      ).length,
+    ).toBe(0);
+  });
 });

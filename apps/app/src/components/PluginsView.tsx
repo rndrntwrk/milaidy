@@ -359,14 +359,15 @@ function applyStream555UiHints(
   const destinationHintByKey: Record<string, ConfigUiHint> = {
     STREAM555_DEST_PUMPFUN_ENABLED: {
       label: "Enable Pump.fun Destination",
-      group: "Pump.fun",
+      group: "Destinations",
       width: "full",
       order: 250,
       type: "boolean",
+      advanced: false,
     },
     STREAM555_DEST_PUMPFUN_RTMP_URL: {
       label: "Pump.fun RTMPS URL",
-      group: "Pump.fun",
+      group: "Destinations",
       width: "half",
       order: 260,
       icon: "🟠",
@@ -378,7 +379,7 @@ function applyStream555UiHints(
     },
     STREAM555_DEST_PUMPFUN_STREAM_KEY: {
       label: "Pump.fun Stream Key",
-      group: "Pump.fun",
+      group: "Destinations",
       width: "half",
       order: 270,
       showIf: {
@@ -389,14 +390,15 @@ function applyStream555UiHints(
     },
     STREAM555_DEST_X_ENABLED: {
       label: "Enable X Destination",
-      group: "X",
+      group: "Destinations",
       width: "full",
       order: 300,
       type: "boolean",
+      advanced: false,
     },
     STREAM555_DEST_X_RTMP_URL: {
       label: "X RTMPS URL",
-      group: "X",
+      group: "Destinations",
       width: "half",
       order: 310,
       icon: "✖️",
@@ -408,7 +410,7 @@ function applyStream555UiHints(
     },
     STREAM555_DEST_X_STREAM_KEY: {
       label: "X Stream Key",
-      group: "X",
+      group: "Destinations",
       width: "half",
       order: 320,
       showIf: {
@@ -419,14 +421,15 @@ function applyStream555UiHints(
     },
     STREAM555_DEST_TWITCH_ENABLED: {
       label: "Enable Twitch Destination",
-      group: "Twitch",
+      group: "Destinations",
       width: "full",
       order: 400,
       type: "boolean",
+      advanced: false,
     },
     STREAM555_DEST_TWITCH_RTMP_URL: {
       label: "Twitch RTMPS URL",
-      group: "Twitch",
+      group: "Destinations",
       width: "half",
       order: 410,
       icon: "🟣",
@@ -438,7 +441,7 @@ function applyStream555UiHints(
     },
     STREAM555_DEST_TWITCH_STREAM_KEY: {
       label: "Twitch Stream Key",
-      group: "Twitch",
+      group: "Destinations",
       width: "half",
       order: 420,
       showIf: {
@@ -449,14 +452,15 @@ function applyStream555UiHints(
     },
     STREAM555_DEST_KICK_ENABLED: {
       label: "Enable Kick Destination",
-      group: "Kick",
+      group: "Destinations",
       width: "full",
       order: 500,
       type: "boolean",
+      advanced: false,
     },
     STREAM555_DEST_KICK_RTMP_URL: {
       label: "Kick RTMPS URL",
-      group: "Kick",
+      group: "Destinations",
       width: "half",
       order: 510,
       icon: "🟢",
@@ -468,7 +472,7 @@ function applyStream555UiHints(
     },
     STREAM555_DEST_KICK_STREAM_KEY: {
       label: "Kick Stream Key",
-      group: "Kick",
+      group: "Destinations",
       width: "half",
       order: 520,
       showIf: {
@@ -479,14 +483,15 @@ function applyStream555UiHints(
     },
     STREAM555_DEST_YOUTUBE_ENABLED: {
       label: "Enable YouTube Destination",
-      group: "YouTube",
+      group: "Destinations",
       width: "full",
       order: 600,
       type: "boolean",
+      advanced: false,
     },
     STREAM555_DEST_YOUTUBE_RTMP_URL: {
       label: "YouTube RTMPS URL",
-      group: "YouTube",
+      group: "Destinations",
       width: "half",
       order: 610,
       icon: "🔴",
@@ -498,7 +503,7 @@ function applyStream555UiHints(
     },
     STREAM555_DEST_YOUTUBE_STREAM_KEY: {
       label: "YouTube Stream Key",
-      group: "YouTube",
+      group: "Destinations",
       width: "half",
       order: 620,
       showIf: {
@@ -509,14 +514,15 @@ function applyStream555UiHints(
     },
     STREAM555_DEST_FACEBOOK_ENABLED: {
       label: "Enable Facebook Destination",
-      group: "Facebook",
+      group: "Destinations",
       width: "full",
       order: 700,
       type: "boolean",
+      advanced: false,
     },
     STREAM555_DEST_FACEBOOK_RTMP_URL: {
       label: "Facebook RTMPS URL",
-      group: "Facebook",
+      group: "Destinations",
       width: "half",
       order: 710,
       icon: "🔵",
@@ -528,7 +534,7 @@ function applyStream555UiHints(
     },
     STREAM555_DEST_FACEBOOK_STREAM_KEY: {
       label: "Facebook Stream Key",
-      group: "Facebook",
+      group: "Destinations",
       width: "half",
       order: 720,
       showIf: {
@@ -539,14 +545,15 @@ function applyStream555UiHints(
     },
     STREAM555_DEST_CUSTOM_ENABLED: {
       label: "Enable Custom Destination",
-      group: "Custom",
+      group: "Destinations",
       width: "full",
       order: 800,
       type: "boolean",
+      advanced: false,
     },
     STREAM555_DEST_CUSTOM_RTMP_URL: {
       label: "Custom RTMP URL",
-      group: "Custom",
+      group: "Destinations",
       width: "half",
       order: 810,
       icon: "🧩",
@@ -558,7 +565,7 @@ function applyStream555UiHints(
     },
     STREAM555_DEST_CUSTOM_STREAM_KEY: {
       label: "Custom Stream Key",
-      group: "Custom",
+      group: "Destinations",
       width: "half",
       order: 820,
       showIf: {
