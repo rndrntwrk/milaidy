@@ -118,6 +118,11 @@ type Stream555StatusSummary = {
   authState: "connected" | "wallet_enabled" | "not_configured";
   authMode: string;
   authSource: string | null;
+  preferredChain: "solana" | "evm";
+  walletProvisionAllowed: boolean;
+  hasSolanaWallet: boolean;
+  hasEvmWallet: boolean;
+  walletDetectionAvailable: boolean;
   destinations: Stream555DestinationStatus[];
   savedDestinations: number;
   enabledDestinations: number;
@@ -157,6 +162,16 @@ function buildStream555StatusSummary(
   params: PluginParamDef[],
 ): Stream555StatusSummary {
   const paramByKey = new Map(params.map((param) => [param.key, param]));
+  const hasConfiguredParam = (keys: string[]): { configured: boolean; present: boolean } => {
+    let present = false;
+    for (const key of keys) {
+      const param = paramByKey.get(key);
+      if (!param) continue;
+      present = true;
+      if (param.isSet) return { configured: true, present: true };
+    }
+    return { configured: false, present };
+  };
   const authSourceKey = [
     "STREAM555_AGENT_API_KEY",
     "STREAM555_AGENT_TOKEN",
@@ -167,14 +182,27 @@ function buildStream555StatusSummary(
     paramByKey.get("STREAM555_WALLET_AUTH_PREFERRED_CHAIN")?.currentValue ??
     paramByKey.get("STREAM555_WALLET_AUTH_PREFERRED_CHAIN")?.default ??
     "solana";
-  const preferredChain = String(preferredChainRaw ?? "solana")
+  const preferredChain = (String(preferredChainRaw ?? "solana")
     .trim()
-    .toLowerCase();
+    .toLowerCase() === "evm"
+    ? "evm"
+    : "solana") as "solana" | "evm";
   const walletProvisionAllowed = parseBoolish(
     paramByKey.get("STREAM555_WALLET_AUTH_ALLOW_PROVISION")?.currentValue ??
       paramByKey.get("STREAM555_WALLET_AUTH_ALLOW_PROVISION")?.default ??
       "true",
   );
+  const solanaWalletState = hasConfiguredParam([
+    "SOLANA_PRIVATE_KEY",
+    "SOLANA_WALLET_PRIVATE_KEY",
+    "STREAM555_SOLANA_PRIVATE_KEY",
+  ]);
+  const evmWalletState = hasConfiguredParam([
+    "EVM_PRIVATE_KEY",
+    "ETH_PRIVATE_KEY",
+    "STREAM555_EVM_PRIVATE_KEY",
+  ]);
+  const walletDetectionAvailable = solanaWalletState.present || evmWalletState.present;
   const walletAuthEnabled =
     preferredChain === "solana" || preferredChain === "evm" || walletProvisionAllowed;
   const authState = credentialAuthReady
@@ -221,6 +249,11 @@ function buildStream555StatusSummary(
     authState,
     authMode,
     authSource: authSourceKey ?? null,
+    preferredChain,
+    walletProvisionAllowed,
+    hasSolanaWallet: solanaWalletState.configured,
+    hasEvmWallet: evmWalletState.configured,
+    walletDetectionAvailable,
     destinations,
     savedDestinations,
     enabledDestinations,
@@ -248,6 +281,7 @@ function applyStream555UiHints(
     "STREAM555_INTERNAL_BASE_URL",
     "STREAM555_INTERNAL_AGENT_IDS",
     "STREAM_API_URL",
+    "STREAM555_PUBLIC_BASE_URL",
     "STREAM555_ADMIN_API_KEY",
     "STREAM555_AGENT_DEFAULT_USER_ID",
     "STREAM555_AGENT_API_KEY",
@@ -261,20 +295,13 @@ function applyStream555UiHints(
     "STREAM555_CONTROL_PLUGIN_ENABLED",
     "STREAM555_AUTH_PLUGIN_ENABLED",
     "STREAM555_ADS_PLUGIN_ENABLED",
+    "STREAM555_WALLET_AUTH_PREFERRED_CHAIN",
+    "STREAM555_WALLET_AUTH_ALLOW_PROVISION",
+    "STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN",
   ];
   for (const key of hiddenKeys) {
     applyHint(key, { hidden: true });
   }
-
-  applyHint("STREAM555_PUBLIC_BASE_URL", {
-    label: "Control Plane URL",
-    group: "Connection",
-    width: "full",
-    icon: "🌐",
-    readonly: true,
-    order: 10,
-    help: "Public 555stream endpoint used by agents. Managed by ops.",
-  });
 
   applyHint("STREAM555_WALLET_AUTH_PREFERRED_CHAIN", {
     label: "Preferred Wallet Chain",
@@ -581,6 +608,7 @@ function Stream555ControlActionsPanel({
     tone: "success" | "error";
     message: string;
   } | null>(null);
+  const [walletModalOpen, setWalletModalOpen] = useState(false);
 
   const paramByKey = useMemo(
     () => new Map((plugin.parameters ?? []).map((param) => [param.key, param])),
@@ -604,8 +632,13 @@ function Stream555ControlActionsPanel({
       params: Record<string, unknown> = {},
       successFallback: string,
       errorFallback: string,
-    ) => {
-      if (busyAction) return;
+    ): Promise<{ success: boolean; message: string }> => {
+      if (busyAction) {
+        return {
+          success: false,
+          message: "Another action is currently in progress.",
+        };
+      }
       setBusyAction(key);
       setLastNotice(null);
       try {
@@ -631,11 +664,13 @@ function Stream555ControlActionsPanel({
           setLastNotice({ tone: "error", message });
           setActionNotice(message, "error", 4200);
         }
+        return { success, message };
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "action execution failed";
         setLastNotice({ tone: "error", message });
         setActionNotice(message, "error", 4200);
+        return { success: false, message };
       } finally {
         setBusyAction(null);
       }
@@ -643,14 +678,82 @@ function Stream555ControlActionsPanel({
     [busyAction, onRefresh, setActionNotice],
   );
 
+  const isAuthenticated = summary.authState === "connected";
+  const shouldPromptForSolanaProvision =
+    summary.preferredChain === "solana" &&
+    summary.walletDetectionAvailable &&
+    !summary.hasSolanaWallet;
+
+  const runWalletAuthentication = useCallback(async () => {
+    const result = await executeStreamAction(
+      "wallet-login",
+      "STREAM555_AUTH_WALLET_LOGIN",
+      {},
+      "Wallet authentication completed.",
+      "Wallet authentication failed.",
+    );
+    const noWalletDetected =
+      !result.success &&
+      /no wallet available|no wallet found|configure solana_private_key/i.test(
+        result.message.toLowerCase(),
+      );
+    if (noWalletDetected && summary.preferredChain === "solana") {
+      setWalletModalOpen(true);
+    }
+    return result;
+  }, [executeStreamAction, summary.preferredChain]);
+
+  const handleAuthenticateClick = useCallback(async () => {
+    if (busyAction || isAuthenticated) return;
+    if (shouldPromptForSolanaProvision) {
+      setWalletModalOpen(true);
+      return;
+    }
+    await runWalletAuthentication();
+  }, [
+    busyAction,
+    isAuthenticated,
+    shouldPromptForSolanaProvision,
+    runWalletAuthentication,
+  ]);
+
+  const handleProvisionAndAuthenticate = useCallback(async () => {
+    if (busyAction) return;
+    const provisionResult = await executeStreamAction(
+      "wallet-provision",
+      "STREAM555_AUTH_WALLET_PROVISION_LINKED",
+      { targetChain: provisionTargetChain },
+      `Linked wallet provisioned via sw4p (${provisionTargetChain}).`,
+      "Linked wallet provisioning failed.",
+    );
+    if (!provisionResult.success) return;
+    const authResult = await runWalletAuthentication();
+    if (authResult.success) {
+      setWalletModalOpen(false);
+    }
+  }, [
+    busyAction,
+    executeStreamAction,
+    provisionTargetChain,
+    runWalletAuthentication,
+  ]);
+
+  const handleFallbackAuthenticate = useCallback(async () => {
+    if (busyAction) return;
+    const result = await runWalletAuthentication();
+    if (result.success) {
+      setWalletModalOpen(false);
+    }
+  }, [busyAction, runWalletAuthentication]);
+
   const authIndicatorClass =
-    summary.authState === "connected"
+    isAuthenticated
       ? "bg-ok"
       : summary.authState === "wallet_enabled"
         ? "bg-warn"
         : "bg-destructive";
   const authLabel =
-    summary.authState === "connected"
+    isAuthenticated
       ? "Connected"
       : summary.authState === "wallet_enabled"
         ? "Wallet auth enabled (not verified)"
@@ -662,6 +765,12 @@ function Stream555ControlActionsPanel({
           summary.authSource === "STREAM_API_BEARER_TOKEN"
         ? "Bearer token"
         : "None";
+  const authButtonLabel =
+    busyAction === "wallet-login"
+      ? "Authenticating..."
+      : isAuthenticated
+        ? "Authenticated"
+        : "Authenticate Wallet";
 
   return (
     <div className="mb-3 border border-border bg-surface px-3 py-2">
@@ -681,37 +790,15 @@ function Stream555ControlActionsPanel({
       <div className="mt-2 flex flex-wrap gap-1.5">
         <button
           type="button"
-          className="px-2.5 py-1 text-[11px] border border-accent text-accent bg-transparent hover:bg-accent hover:text-accent-fg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-          disabled={Boolean(busyAction)}
-          onClick={() =>
-            void executeStreamAction(
-              "wallet-login",
-              "STREAM555_AUTH_WALLET_LOGIN",
-              {},
-              "Wallet authentication completed.",
-              "Wallet authentication failed.",
-            )
-          }
+          className={`px-2.5 py-1 text-[11px] border transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
+            isAuthenticated
+              ? "border-ok text-ok bg-transparent"
+              : "border-accent text-accent bg-transparent hover:bg-accent hover:text-accent-fg"
+          }`}
+          disabled={Boolean(busyAction) || isAuthenticated}
+          onClick={() => void handleAuthenticateClick()}
         >
-          {busyAction === "wallet-login" ? "Authenticating..." : "Authenticate Wallet"}
-        </button>
-        <button
-          type="button"
-          className="px-2.5 py-1 text-[11px] border border-border text-muted bg-transparent hover:border-accent hover:text-accent transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-          disabled={Boolean(busyAction)}
-          onClick={() =>
-            void executeStreamAction(
-              "wallet-provision",
-              "STREAM555_AUTH_WALLET_PROVISION_LINKED",
-              { targetChain: provisionTargetChain },
-              `Linked wallet provisioned via sw4p (${provisionTargetChain}).`,
-              "Linked wallet provisioning failed.",
-            )
-          }
-        >
-          {busyAction === "wallet-provision"
-            ? "Provisioning..."
-            : "Provision Wallet via sw4p"}
+          {authButtonLabel}
         </button>
         <button
           type="button"
@@ -732,7 +819,7 @@ function Stream555ControlActionsPanel({
         <button
           type="button"
           className="px-2.5 py-1 text-[11px] border border-destructive text-destructive bg-transparent hover:bg-destructive hover:text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-          disabled={Boolean(busyAction)}
+          disabled={Boolean(busyAction) || !isAuthenticated}
           onClick={() =>
             void executeStreamAction(
               "disconnect-auth",
@@ -747,7 +834,7 @@ function Stream555ControlActionsPanel({
         </button>
       </div>
       <div className="mt-1 text-[10px] text-muted">
-        Use these controls to connect, verify, provision via sw4p, or disconnect runtime auth.
+        Agent action: <span className="font-mono">STREAM555_AUTH_WALLET_LOGIN</span>. Use the button for operator-driven authentication.
       </div>
       {lastNotice && (
         <div
@@ -756,6 +843,50 @@ function Stream555ControlActionsPanel({
           }`}
         >
           {lastNotice.message}
+        </div>
+      )}
+      {walletModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-lg border border-border bg-card p-4 shadow-lg">
+            <div className="text-sm font-semibold text-txt mb-2">
+              Solana wallet required
+            </div>
+            <div className="text-xs text-muted leading-relaxed">
+              No Solana runtime wallet was detected for this agent. Provision a linked wallet via sw4p or authenticate using fallback if available.
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {summary.walletProvisionAllowed && (
+                <button
+                  type="button"
+                  className="px-2.5 py-1 text-[11px] border border-accent text-accent bg-transparent hover:bg-accent hover:text-accent-fg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  disabled={Boolean(busyAction)}
+                  onClick={() => void handleProvisionAndAuthenticate()}
+                >
+                  {busyAction === "wallet-provision"
+                    ? "Provisioning..."
+                    : "Provision via sw4p"}
+                </button>
+              )}
+              {summary.hasEvmWallet && (
+                <button
+                  type="button"
+                  className="px-2.5 py-1 text-[11px] border border-border text-muted bg-transparent hover:border-accent hover:text-accent transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  disabled={Boolean(busyAction)}
+                  onClick={() => void handleFallbackAuthenticate()}
+                >
+                  Authenticate fallback wallet
+                </button>
+              )}
+              <button
+                type="button"
+                className="px-2.5 py-1 text-[11px] border border-border text-muted bg-transparent hover:bg-bg-hover transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled={Boolean(busyAction)}
+                onClick={() => setWalletModalOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
