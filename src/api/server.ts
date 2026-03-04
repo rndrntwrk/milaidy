@@ -1902,6 +1902,115 @@ function discoverInstalledPlugins(
   return entries.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+const STREAM555_PLUGIN_CONTROL_ID = "stream555-control";
+const STREAM555_PLUGIN_MERGED_IDS = new Set([
+  "stream555-auth",
+  "stream555-ads",
+]);
+
+function resolveCanonicalPluginId(pluginId: string): string {
+  if (STREAM555_PLUGIN_MERGED_IDS.has(pluginId)) {
+    return STREAM555_PLUGIN_CONTROL_ID;
+  }
+  return pluginId;
+}
+
+function dedupePluginValidationIssues(
+  issues: Array<{ field: string; message: string }>,
+): Array<{ field: string; message: string }> {
+  const seen = new Set<string>();
+  const deduped: Array<{ field: string; message: string }> = [];
+  for (const issue of issues) {
+    const key = `${issue.field}::${issue.message}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(issue);
+  }
+  return deduped;
+}
+
+function dedupePluginParams(parameters: PluginParamDef[]): PluginParamDef[] {
+  const seen = new Set<string>();
+  const deduped: PluginParamDef[] = [];
+  for (const parameter of parameters) {
+    if (seen.has(parameter.key)) continue;
+    seen.add(parameter.key);
+    deduped.push(parameter);
+  }
+  return deduped;
+}
+
+function collapseStream555PluginEntries(entries: PluginEntry[]): PluginEntry[] {
+  const controlEntry = entries.find(
+    (entry) => entry.id === STREAM555_PLUGIN_CONTROL_ID,
+  );
+  if (!controlEntry) return entries;
+
+  const relatedEntries = entries.filter((entry) =>
+    STREAM555_PLUGIN_MERGED_IDS.has(entry.id),
+  );
+  if (relatedEntries.length === 0) return entries;
+
+  const mergedEntry: PluginEntry = {
+    ...controlEntry,
+    description:
+      "Unified 555stream plugin for auth, go-live control, destination routing, and ad operations.",
+    configured: controlEntry.configured,
+    enabled: controlEntry.enabled,
+    isActive: controlEntry.isActive,
+    loadError: controlEntry.loadError,
+    configKeys: [...controlEntry.configKeys],
+    parameters: controlEntry.parameters.map((parameter) => ({ ...parameter })),
+    validationErrors: [...controlEntry.validationErrors],
+    validationWarnings: [...controlEntry.validationWarnings],
+    ...(controlEntry.configUiHints
+      ? { configUiHints: { ...controlEntry.configUiHints } }
+      : {}),
+  };
+
+  for (const related of relatedEntries) {
+    mergedEntry.configured ||= related.configured;
+    mergedEntry.enabled ||= related.enabled;
+    mergedEntry.isActive = Boolean(mergedEntry.isActive || related.isActive);
+    if (!mergedEntry.loadError && related.loadError) {
+      mergedEntry.loadError = related.loadError;
+    }
+
+    mergedEntry.configKeys.push(...related.configKeys);
+    mergedEntry.parameters.push(
+      ...related.parameters.map((parameter) => ({ ...parameter })),
+    );
+    mergedEntry.validationErrors.push(...related.validationErrors);
+    mergedEntry.validationWarnings.push(...related.validationWarnings);
+
+    if (related.configUiHints) {
+      if (!mergedEntry.configUiHints) mergedEntry.configUiHints = {};
+      for (const [key, hint] of Object.entries(related.configUiHints)) {
+        if (!mergedEntry.configUiHints[key]) {
+          mergedEntry.configUiHints[key] = hint;
+        }
+      }
+    }
+  }
+
+  mergedEntry.configKeys = Array.from(new Set(mergedEntry.configKeys));
+  mergedEntry.parameters = dedupePluginParams(mergedEntry.parameters);
+  mergedEntry.validationErrors = dedupePluginValidationIssues(
+    mergedEntry.validationErrors,
+  );
+  mergedEntry.validationWarnings = dedupePluginValidationIssues(
+    mergedEntry.validationWarnings,
+  );
+
+  return entries
+    .filter(
+      (entry) =>
+        entry.id !== STREAM555_PLUGIN_CONTROL_ID &&
+        !STREAM555_PLUGIN_MERGED_IDS.has(entry.id),
+    )
+    .concat(mergedEntry);
+}
+
 /**
  * Discover available plugins from the bundled plugins.json manifest.
  * Falls back to filesystem scanning for monorepo development.
@@ -4299,7 +4408,9 @@ function discoverPluginsFromManifest(): PluginEntry[] {
         }
       }
 
-      return manifestEntries.sort((a, b) => a.name.localeCompare(b.name));
+      return collapseStream555PluginEntries(manifestEntries).sort((a, b) =>
+        a.name.localeCompare(b.name),
+      );
     } catch (err) {
       logger.debug(
         `[milaidy-api] Failed to read plugins.json: ${err instanceof Error ? err.message : err}`,
@@ -10878,7 +10989,10 @@ async function handleRequest(
     // Merge user-installed plugins into the list (they don't exist in plugins.json)
     const bundledIds = new Set(state.plugins.map((p) => p.id));
     const installedEntries = discoverInstalledPlugins(freshConfig, bundledIds);
-    const allPlugins: PluginEntry[] = [...state.plugins, ...installedEntries];
+    const allPlugins: PluginEntry[] = collapseStream555PluginEntries([
+      ...state.plugins,
+      ...installedEntries,
+    ]);
 
     // Resolve enabled state from config and loaded state from runtime.
     // "enabled" = user wants it active (config). "isActive" = actually loaded.
@@ -10991,7 +11105,8 @@ async function handleRequest(
 
   // ── PUT /api/plugins/:id ────────────────────────────────────────────────
   if (method === "PUT" && pathname.startsWith("/api/plugins/")) {
-    const pluginId = pathname.slice("/api/plugins/".length);
+    const requestedPluginId = pathname.slice("/api/plugins/".length);
+    const pluginId = resolveCanonicalPluginId(requestedPluginId);
     const body = await readJsonBody<{
       enabled?: boolean;
       config?: Record<string, string>;
@@ -11119,6 +11234,10 @@ async function handleRequest(
       const entries = (state.config.plugins as Record<string, unknown>)
         .entries as Record<string, Record<string, unknown>>;
       entries[pluginId] = { enabled: body.enabled };
+      if (pluginId === STREAM555_PLUGIN_CONTROL_ID) {
+        entries["stream555-auth"] = { enabled: body.enabled };
+        entries["stream555-ads"] = { enabled: body.enabled };
+      }
       logger.info(
         `[milaidy-api] ${body.enabled ? "Enabled" : "Disabled"} plugin: ${packageName}`,
       );
@@ -11159,7 +11278,10 @@ async function handleRequest(
     // Merge bundled + installed plugins for full parameter coverage
     const bundledIds = new Set(state.plugins.map((p) => p.id));
     const installedEntries = discoverInstalledPlugins(state.config, bundledIds);
-    const allPlugins: PluginEntry[] = [...state.plugins, ...installedEntries];
+    const allPlugins: PluginEntry[] = collapseStream555PluginEntries([
+      ...state.plugins,
+      ...installedEntries,
+    ]);
 
     // Sync enabled status from runtime (same logic as GET /api/plugins)
     if (state.runtime) {
@@ -11198,7 +11320,10 @@ async function handleRequest(
     // Build allowlist from all plugin-declared sensitive params
     const bundledIds = new Set(state.plugins.map((p) => p.id));
     const installedEntries = discoverInstalledPlugins(state.config, bundledIds);
-    const allPlugins: PluginEntry[] = [...state.plugins, ...installedEntries];
+    const allPlugins: PluginEntry[] = collapseStream555PluginEntries([
+      ...state.plugins,
+      ...installedEntries,
+    ]);
     const allowedKeys = new Set<string>();
     for (const plugin of allPlugins) {
       for (const param of plugin.parameters) {
