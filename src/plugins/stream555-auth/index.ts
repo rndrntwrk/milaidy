@@ -484,7 +484,7 @@ const stream555AuthProvider: Provider = {
       text: [
         "## 555stream Auth Surface",
         "",
-        "Actions: STREAM555_AUTH_APIKEY_CREATE, STREAM555_AUTH_APIKEY_LIST, STREAM555_AUTH_APIKEY_REVOKE, STREAM555_AUTH_APIKEY_SET_ACTIVE, STREAM555_AUTH_WALLET_LOGIN, STREAM555_AUTH_WALLET_CHALLENGE, STREAM555_AUTH_WALLET_VERIFY, STREAM555_AUTH_WALLET_PROVISION_LINKED",
+        "Actions: STREAM555_AUTH_APIKEY_CREATE, STREAM555_AUTH_APIKEY_LIST, STREAM555_AUTH_APIKEY_REVOKE, STREAM555_AUTH_APIKEY_SET_ACTIVE, STREAM555_AUTH_WALLET_LOGIN, STREAM555_AUTH_WALLET_CHALLENGE, STREAM555_AUTH_WALLET_VERIFY, STREAM555_AUTH_WALLET_PROVISION_LINKED, STREAM555_AUTH_DISCONNECT",
         `Base configured: ${baseConfigured ? "yes" : "no"} (${resolveBaseEnvSource()})`,
         `Admin API key configured: ${adminConfigured ? "yes" : "no"} (${STREAM555_ADMIN_API_KEY_ENV})`,
         `Agent auth configured: ${authConfigured ? "yes" : "no"} (${describeAgentAuthSource()})`,
@@ -832,6 +832,50 @@ const setActiveApiKeyAction: Action = {
     { name: "apiKey", description: "Raw API key (sk_ag_...)", required: true, schema: { type: "string" as const } },
     { name: "verifyExchange", description: "Verify token exchange after setting (default true)", required: false, schema: { type: "string" as const } },
   ],
+};
+
+const disconnectAuthAction: Action = {
+  name: "STREAM555_AUTH_DISCONNECT",
+  similes: [
+    "STREAM555_AUTH_LOGOUT",
+    "STREAM555_AUTH_CLEAR_ACTIVE",
+    "STREAM555_AUTH_DISCONNECT_ACTIVE",
+  ],
+  description:
+    "Clears active 555stream credentials from runtime env (token + API key) without revoking server-side keys.",
+  validate: async () => true,
+  handler: async (runtime, message, state) => {
+    try {
+      assertStreamControlAccess(
+        runtime,
+        message,
+        state,
+        "STREAM555_AUTH_DISCONNECT",
+      );
+      const previousSource = describeAgentAuthSource();
+      const hadCredentials = isAgentAuthConfigured();
+      delete process.env[STREAM555_AGENT_API_KEY_ENV];
+      delete process.env[STREAM555_AGENT_TOKEN_ENV];
+      delete process.env[STREAM_API_BEARER_TOKEN_ENV];
+      invalidateExchangedAgentTokenCache();
+      return buildEnvelope({
+        ok: true,
+        action: "STREAM555_AUTH_DISCONNECT",
+        status: 200,
+        message: hadCredentials
+          ? "active stream auth cleared from runtime"
+          : "no active stream auth was present",
+        data: {
+          cleared: hadCredentials,
+          previousAuthSource: previousSource,
+          authSource: describeAgentAuthSource(),
+        },
+      });
+    } catch (err) {
+      return exceptionAction(MODULE, "STREAM555_AUTH_DISCONNECT", err);
+    }
+  },
+  parameters: [],
 };
 
 const provisionLinkedWalletAction: Action = {
@@ -1344,6 +1388,7 @@ export function createStream555AuthPlugin(): Plugin {
       listApiKeysAction,
       revokeApiKeyAction,
       setActiveApiKeyAction,
+      disconnectAuthAction,
       walletLoginAction,
       walletChallengeAction,
       walletVerifyAction,

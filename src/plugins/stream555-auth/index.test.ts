@@ -205,6 +205,30 @@ describe("stream555-auth plugin actions", () => {
     expect(envelope.code).toBe("E_RUNTIME_EXCEPTION");
   });
 
+  it("disconnects active auth credentials from runtime env", async () => {
+    process.env.STREAM555_AGENT_API_KEY =
+      "sk_ag_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    process.env.STREAM555_AGENT_TOKEN = "agent-token";
+    process.env.STREAM_API_BEARER_TOKEN = "legacy-token";
+
+    const action = resolveAction("STREAM555_AUTH_DISCONNECT");
+    const result = await action.handler?.(
+      makeRuntime(),
+      makeMessage(),
+      INTERNAL_STATE,
+      {} as never,
+    );
+
+    expect(result?.success).toBe(true);
+    expect(process.env.STREAM555_AGENT_API_KEY).toBeUndefined();
+    expect(process.env.STREAM555_AGENT_TOKEN).toBeUndefined();
+    expect(process.env.STREAM_API_BEARER_TOKEN).toBeUndefined();
+    const envelope = parseEnvelope(result as { text: string });
+    expect(envelope.code).toBe("OK");
+    expect(envelope.action).toBe("STREAM555_AUTH_DISCONNECT");
+    expect(String(envelope.message)).toContain("cleared");
+  });
+
   it("lists API keys with query filters", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch");
     fetchMock.mockResolvedValueOnce(

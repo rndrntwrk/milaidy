@@ -115,8 +115,9 @@ type Stream555DestinationStatus = {
 };
 
 type Stream555StatusSummary = {
-  authReady: boolean;
+  authState: "connected" | "wallet_enabled" | "not_configured";
   authMode: string;
+  authSource: string | null;
   destinations: Stream555DestinationStatus[];
   savedDestinations: number;
   enabledDestinations: number;
@@ -156,11 +157,12 @@ function buildStream555StatusSummary(
   params: PluginParamDef[],
 ): Stream555StatusSummary {
   const paramByKey = new Map(params.map((param) => [param.key, param]));
-  const credentialAuthReady = [
+  const authSourceKey = [
     "STREAM555_AGENT_API_KEY",
     "STREAM555_AGENT_TOKEN",
     "STREAM_API_BEARER_TOKEN",
-  ].some((key) => paramByKey.get(key)?.isSet ?? false);
+  ].find((key) => paramByKey.get(key)?.isSet ?? false);
+  const credentialAuthReady = Boolean(authSourceKey);
   const preferredChainRaw =
     paramByKey.get("STREAM555_WALLET_AUTH_PREFERRED_CHAIN")?.currentValue ??
     paramByKey.get("STREAM555_WALLET_AUTH_PREFERRED_CHAIN")?.default ??
@@ -173,15 +175,17 @@ function buildStream555StatusSummary(
       paramByKey.get("STREAM555_WALLET_AUTH_ALLOW_PROVISION")?.default ??
       "true",
   );
-  const walletAuthReady =
-    preferredChain === "solana" ||
-    preferredChain === "evm" ||
-    walletProvisionAllowed;
-  const authReady = credentialAuthReady || walletAuthReady;
+  const walletAuthEnabled =
+    preferredChain === "solana" || preferredChain === "evm" || walletProvisionAllowed;
+  const authState = credentialAuthReady
+    ? "connected"
+    : walletAuthEnabled
+      ? "wallet_enabled"
+      : "not_configured";
   const authMode = credentialAuthReady
     ? "API key/token"
-    : walletAuthReady
-      ? `Wallet auth (${preferredChain === "evm" ? "Ethereum fallback" : "Solana"})`
+    : walletAuthEnabled
+      ? `Wallet auth (${preferredChain === "evm" ? "Ethereum fallback" : "Solana preferred"})`
       : "Not configured";
 
   const destinations = STREAM555_DESTINATION_SPECS.map((spec) => {
@@ -214,8 +218,9 @@ function buildStream555StatusSummary(
   ).length;
 
   return {
-    authReady,
+    authState,
     authMode,
+    authSource: authSourceKey ?? null,
     destinations,
     savedDestinations,
     enabledDestinations,
@@ -507,6 +512,254 @@ function applyStream555UiHints(
   }
 
   return hints;
+}
+
+function toRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function readAutonomyStepMessage(
+  step: Record<string, unknown> | null,
+  fallback: string,
+): string {
+  if (!step) return fallback;
+  if (typeof step.error === "string" && step.error.trim()) {
+    return step.error.trim();
+  }
+  const result = toRecord(step.result);
+  if (!result) return fallback;
+  if (typeof result.message === "string" && result.message.trim()) {
+    return result.message.trim();
+  }
+  if (typeof result.error === "string" && result.error.trim()) {
+    return result.error.trim();
+  }
+  if (typeof result.text === "string" && result.text.trim()) {
+    try {
+      const parsed = JSON.parse(result.text) as Record<string, unknown>;
+      if (typeof parsed.message === "string" && parsed.message.trim()) {
+        return parsed.message.trim();
+      }
+    } catch {
+      // no-op: text may not be JSON
+    }
+    return result.text.trim();
+  }
+  const data = toRecord(result.data);
+  if (data) {
+    if (typeof data.message === "string" && data.message.trim()) {
+      return data.message.trim();
+    }
+    if (Array.isArray(data.keys)) {
+      return `Found ${data.keys.length} API key record${data.keys.length === 1 ? "" : "s"}.`;
+    }
+    if (typeof data.count === "number" && Number.isFinite(data.count)) {
+      return `Found ${data.count} API key record${data.count === 1 ? "" : "s"}.`;
+    }
+  }
+  return fallback;
+}
+
+function Stream555ControlActionsPanel({
+  plugin,
+  summary,
+  onRefresh,
+  setActionNotice,
+}: {
+  plugin: PluginInfo;
+  summary: Stream555StatusSummary;
+  onRefresh: () => Promise<void>;
+  setActionNotice: (
+    text: string,
+    tone?: "info" | "success" | "error",
+    ttlMs?: number,
+  ) => void;
+}) {
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [lastNotice, setLastNotice] = useState<{
+    tone: "success" | "error";
+    message: string;
+  } | null>(null);
+
+  const paramByKey = useMemo(
+    () => new Map((plugin.parameters ?? []).map((param) => [param.key, param])),
+    [plugin.parameters],
+  );
+  const provisionTargetChain =
+    String(
+      paramByKey.get("STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN")
+        ?.currentValue ??
+        paramByKey.get("STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN")
+          ?.default ??
+        "eth",
+    )
+      .trim()
+      .toLowerCase() || "eth";
+
+  const executeStreamAction = useCallback(
+    async (
+      key: string,
+      toolName: string,
+      params: Record<string, unknown> = {},
+      successFallback: string,
+      errorFallback: string,
+    ) => {
+      if (busyAction) return;
+      setBusyAction(key);
+      setLastNotice(null);
+      try {
+        const response = await client.executeAutonomyPlan({
+          plan: {
+            id: `stream555-control-${toolName.toLowerCase()}`,
+            steps: [{ id: "1", toolName, params }],
+          },
+          request: { source: "user", sourceTrust: 1 },
+          options: { stopOnFailure: true },
+        });
+        const step = toRecord(response.results?.[0] ?? null);
+        const success = step?.success === true;
+        const message = readAutonomyStepMessage(
+          step,
+          success ? successFallback : errorFallback,
+        );
+        if (success) {
+          setLastNotice({ tone: "success", message });
+          setActionNotice(message, "success", 3200);
+          await onRefresh();
+        } else {
+          setLastNotice({ tone: "error", message });
+          setActionNotice(message, "error", 4200);
+        }
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "action execution failed";
+        setLastNotice({ tone: "error", message });
+        setActionNotice(message, "error", 4200);
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [busyAction, onRefresh, setActionNotice],
+  );
+
+  const authIndicatorClass =
+    summary.authState === "connected"
+      ? "bg-ok"
+      : summary.authState === "wallet_enabled"
+        ? "bg-warn"
+        : "bg-destructive";
+  const authLabel =
+    summary.authState === "connected"
+      ? "Connected"
+      : summary.authState === "wallet_enabled"
+        ? "Wallet auth enabled (not verified)"
+        : "Authentication required";
+  const authSource =
+    summary.authSource === "STREAM555_AGENT_API_KEY"
+      ? "API key"
+      : summary.authSource === "STREAM555_AGENT_TOKEN" ||
+          summary.authSource === "STREAM_API_BEARER_TOKEN"
+        ? "Bearer token"
+        : "None";
+
+  return (
+    <div className="mb-3 border border-border bg-surface px-3 py-2">
+      <div className="text-[11px] uppercase tracking-wide text-muted mb-1.5">
+        Operator Controls
+      </div>
+      <div className="flex items-center gap-2 text-[11px] text-muted flex-wrap">
+        <span className={`inline-block w-[7px] h-[7px] rounded-full ${authIndicatorClass}`} />
+        <span>{authLabel}</span>
+        <span className="opacity-60">•</span>
+        <span>Source: {authSource}</span>
+        <span className="opacity-60">•</span>
+        <span>
+          Destinations ready: {summary.readyDestinations}/{summary.enabledDestinations}
+        </span>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          className="px-2.5 py-1 text-[11px] border border-accent text-accent bg-transparent hover:bg-accent hover:text-accent-fg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          disabled={Boolean(busyAction)}
+          onClick={() =>
+            void executeStreamAction(
+              "wallet-login",
+              "STREAM555_AUTH_WALLET_LOGIN",
+              {},
+              "Wallet authentication completed.",
+              "Wallet authentication failed.",
+            )
+          }
+        >
+          {busyAction === "wallet-login" ? "Authenticating..." : "Authenticate Wallet"}
+        </button>
+        <button
+          type="button"
+          className="px-2.5 py-1 text-[11px] border border-border text-muted bg-transparent hover:border-accent hover:text-accent transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          disabled={Boolean(busyAction)}
+          onClick={() =>
+            void executeStreamAction(
+              "wallet-provision",
+              "STREAM555_AUTH_WALLET_PROVISION_LINKED",
+              { targetChain: provisionTargetChain },
+              `Linked wallet provisioned via sw4p (${provisionTargetChain}).`,
+              "Linked wallet provisioning failed.",
+            )
+          }
+        >
+          {busyAction === "wallet-provision"
+            ? "Provisioning..."
+            : "Provision Wallet via sw4p"}
+        </button>
+        <button
+          type="button"
+          className="px-2.5 py-1 text-[11px] border border-border text-muted bg-transparent hover:border-accent hover:text-accent transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          disabled={Boolean(busyAction)}
+          onClick={() =>
+            void executeStreamAction(
+              "verify-auth",
+              "STREAM555_AUTH_APIKEY_LIST",
+              { status: "active" },
+              "Authentication verified against control plane.",
+              "Authentication verification failed.",
+            )
+          }
+        >
+          {busyAction === "verify-auth" ? "Verifying..." : "Verify Auth"}
+        </button>
+        <button
+          type="button"
+          className="px-2.5 py-1 text-[11px] border border-destructive text-destructive bg-transparent hover:bg-destructive hover:text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          disabled={Boolean(busyAction)}
+          onClick={() =>
+            void executeStreamAction(
+              "disconnect-auth",
+              "STREAM555_AUTH_DISCONNECT",
+              {},
+              "Disconnected active stream auth from runtime.",
+              "Disconnect failed.",
+            )
+          }
+        >
+          {busyAction === "disconnect-auth" ? "Disconnecting..." : "Disconnect Auth"}
+        </button>
+      </div>
+      <div className="mt-1 text-[10px] text-muted">
+        Use these controls to connect, verify, provision via sw4p, or disconnect runtime auth.
+      </div>
+      {lastNotice && (
+        <div
+          className={`mt-2 text-[10px] ${
+            lastNotice.tone === "success" ? "text-ok" : "text-destructive"
+          }`}
+        >
+          {lastNotice.message}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ── UI Showcase Plugin ────────────────────────────────────────────── */
@@ -2315,12 +2568,20 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
             <div className="flex items-center gap-1.5 min-w-0">
               <span
                 className={`inline-block w-[7px] h-[7px] rounded-full shrink-0 ${
-                  streamSummary.authReady ? "bg-ok" : "bg-destructive"
+                  streamSummary.authState === "connected"
+                    ? "bg-ok"
+                    : streamSummary.authState === "wallet_enabled"
+                      ? "bg-warn"
+                      : "bg-destructive"
                 }`}
               />
               <span className="text-[10px] text-muted shrink-0">
-                {streamSummary.authReady ? "Auth ready" : "Auth required"}
-                {streamSummary.authReady ? ` (${streamSummary.authMode})` : ""}
+                {streamSummary.authState === "connected"
+                  ? "Auth connected"
+                  : streamSummary.authState === "wallet_enabled"
+                    ? "Wallet auth enabled"
+                    : "Auth required"}
+                {streamSummary.authMode ? ` (${streamSummary.authMode})` : ""}
               </span>
               <span className="text-[10px] text-muted opacity-60 shrink-0">
                 •
@@ -2653,7 +2914,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
 
                   <div className="px-5 py-3">
                     {isStream555PrimaryPlugin(p.id) && (
-                      <div className="mb-3 px-3 py-2 border border-border bg-surface">
+                      <>
                         {(() => {
                           const streamSummary = buildStream555StatusSummary(
                             p.parameters ?? [],
@@ -2674,24 +2935,36 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                                   })
                                   .join("  ·  ")
                               : "No channel stream keys saved yet";
+                          const authSummary =
+                            streamSummary.authState === "connected"
+                              ? `Connected (${streamSummary.authMode})`
+                              : streamSummary.authState === "wallet_enabled"
+                                ? `Wallet auth enabled (${streamSummary.authMode})`
+                                : "Authentication required";
                           return (
                             <>
-                              <div className="text-[11px] text-muted mb-1">
-                                {streamSummary.authReady
-                                  ? `Authentication ready (${streamSummary.authMode})`
-                                  : "Authentication required"}
-                                {"  ·  "}
-                                {streamSummary.readyDestinations}/
-                                {streamSummary.enabledDestinations} enabled
-                                channels fully configured
+                              <div className="mb-3 px-3 py-2 border border-border bg-surface">
+                                <div className="text-[11px] text-muted mb-1">
+                                  {authSummary}
+                                  {"  ·  "}
+                                  {streamSummary.readyDestinations}/
+                                  {streamSummary.enabledDestinations} enabled
+                                  channels fully configured
+                                </div>
+                                <div className="text-[10px] text-muted leading-relaxed">
+                                  {configuredSummary}
+                                </div>
                               </div>
-                              <div className="text-[10px] text-muted leading-relaxed">
-                                {configuredSummary}
-                              </div>
+                              <Stream555ControlActionsPanel
+                                plugin={p}
+                                summary={streamSummary}
+                                onRefresh={loadPlugins}
+                                setActionNotice={setActionNotice}
+                              />
                             </>
                           );
                         })()}
-                      </div>
+                      </>
                     )}
                     <PluginConfigForm
                       plugin={p}

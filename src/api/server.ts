@@ -1971,9 +1971,9 @@ function collapseStream555PluginEntries(entries: PluginEntry[]): PluginEntry[] {
   const mergedEntry: PluginEntry = {
     ...baseEntry,
     id: STREAM555_PLUGIN_CONTROL_ID,
-    name: "Stream555 Control",
+    name: "555 Stream",
     description:
-      "Unified 555stream plugin for auth, go-live control, destination routing, and ad operations.",
+      "Unified 555 Stream plugin for auth, go-live control, destination routing, and ad operations.",
     configured: baseEntry.configured,
     enabled: baseEntry.enabled,
     isActive: baseEntry.isActive,
@@ -2367,9 +2367,9 @@ function discoverPluginsFromManifest(): PluginEntry[] {
         },
         {
           id: "stream555-control",
-          name: "Stream555 Control",
+          name: "555 Stream",
           description:
-            "Primary 555stream control plugin for go-live, scene, segment, and ad operations.",
+            "Primary 555 Stream plugin for go-live, scene, segment, and ad operations.",
           enabled: false,
           configured: Boolean(
             (process.env.STREAM555_BASE_URL?.trim() ||
