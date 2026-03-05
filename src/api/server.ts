@@ -1833,6 +1833,7 @@ function discoverInstalledPlugins(
     let description = `Installed from registry (v${(record as Record<string, string>).version ?? "unknown"})`;
     let pluginConfigKeys: string[] = [];
     let pluginParameters: PluginParamDef[] = [];
+    let pluginConfigUiHints: Record<string, Record<string, unknown>> | undefined;
 
     if (installPath) {
       // Check npm layout first, then direct layout
@@ -1855,14 +1856,74 @@ function discoverInstalledPlugins(
                 displayName?: string;
                 configKeys?: string[];
                 configDefaults?: Record<string, string>;
+                pluginParameters?: Record<string, Record<string, unknown>>;
+                configUiHints?: Record<string, Record<string, unknown>>;
+                configSchemaFile?: string;
+              };
+              agentConfig?: {
+                pluginParameters?: Record<string, Record<string, unknown>>;
               };
             };
             if (pkg.name) name = pkg.name;
             if (pkg.description) description = pkg.description;
             if (pkg.elizaos?.displayName) name = pkg.elizaos.displayName;
-            if (pkg.elizaos?.configKeys) {
-              pluginConfigKeys = pkg.elizaos.configKeys;
-              const defaults = pkg.elizaos.configDefaults ?? {};
+
+            let schemaConfigKeys: string[] | undefined;
+            let schemaPluginParameters:
+              | Record<string, Record<string, unknown>>
+              | undefined;
+            let schemaConfigUiHints:
+              | Record<string, Record<string, unknown>>
+              | undefined;
+
+            if (pkg.elizaos?.configSchemaFile) {
+              const schemaPath = path.resolve(
+                path.dirname(pkgPath),
+                pkg.elizaos.configSchemaFile,
+              );
+              if (fs.existsSync(schemaPath)) {
+                const schema = JSON.parse(
+                  fs.readFileSync(schemaPath, "utf-8"),
+                ) as {
+                  configKeys?: string[];
+                  pluginParameters?: Record<string, Record<string, unknown>>;
+                  configUiHints?: Record<string, Record<string, unknown>>;
+                };
+                if (Array.isArray(schema.configKeys)) {
+                  schemaConfigKeys = schema.configKeys;
+                }
+                if (
+                  schema.pluginParameters &&
+                  typeof schema.pluginParameters === "object"
+                ) {
+                  schemaPluginParameters = schema.pluginParameters;
+                }
+                if (
+                  schema.configUiHints &&
+                  typeof schema.configUiHints === "object"
+                ) {
+                  schemaConfigUiHints = schema.configUiHints;
+                }
+              }
+            }
+
+            const pluginParamsMeta =
+              schemaPluginParameters ??
+              pkg.elizaos?.pluginParameters ??
+              pkg.agentConfig?.pluginParameters;
+
+            pluginConfigKeys = Array.from(
+              new Set([
+                ...(schemaConfigKeys ?? []),
+                ...(pkg.elizaos?.configKeys ?? []),
+                ...Object.keys(pluginParamsMeta ?? {}),
+              ]),
+            );
+
+            if (pluginParamsMeta && Object.keys(pluginParamsMeta).length > 0) {
+              pluginParameters = buildParamDefs(pluginParamsMeta);
+            } else if (pluginConfigKeys.length > 0) {
+              const defaults = pkg.elizaos?.configDefaults ?? {};
               pluginParameters = pluginConfigKeys.map((key) => ({
                 key,
                 label: key,
@@ -1877,6 +1938,9 @@ function discoverInstalledPlugins(
                 currentValue: null,
               }));
             }
+
+            pluginConfigUiHints =
+              schemaConfigUiHints ?? pkg.elizaos?.configUiHints;
             break;
           }
         } catch {
@@ -1899,6 +1963,7 @@ function discoverInstalledPlugins(
       parameters: pluginParameters,
       validationErrors: [],
       validationWarnings: [],
+      ...(pluginConfigUiHints ? { configUiHints: pluginConfigUiHints } : {}),
     });
   }
 
@@ -1913,6 +1978,11 @@ const STREAM555_PLUGIN_PRIMARY_IDS = new Set([
 const STREAM555_PLUGIN_LEGACY_IDS = new Set([
   "stream555-auth",
   "stream555-ads",
+]);
+const STREAM555_SYNTHETIC_PLUGIN_IDS = new Set([
+  "stream",
+  STREAM555_PLUGIN_CONTROL_ID,
+  ...STREAM555_PLUGIN_LEGACY_IDS,
 ]);
 const ARCADE555_PLUGIN_CONTROL_ID = "555arcade";
 const ARCADE555_PLUGIN_PRIMARY_IDS = new Set([
@@ -1933,149 +2003,48 @@ const ARCADE555_PLUGIN_LEGACY_IDS = new Set([
 ]);
 
 type Stream555ChannelUiSpec = {
-  label: string;
-  icon: string;
   enabledKey: string;
   urlKey: string;
   streamKeyKey: string;
-  urlLabel?: string;
 };
 
 const STREAM555_CHANNEL_UI_SPECS: Stream555ChannelUiSpec[] = [
   {
-    label: "Pump.fun",
-    icon: "🟠",
     enabledKey: "STREAM555_DEST_PUMPFUN_ENABLED",
     urlKey: "STREAM555_DEST_PUMPFUN_RTMP_URL",
     streamKeyKey: "STREAM555_DEST_PUMPFUN_STREAM_KEY",
-    urlLabel: "Pump.fun RTMPS URL",
   },
   {
-    label: "X",
-    icon: "✖️",
     enabledKey: "STREAM555_DEST_X_ENABLED",
     urlKey: "STREAM555_DEST_X_RTMP_URL",
     streamKeyKey: "STREAM555_DEST_X_STREAM_KEY",
-    urlLabel: "X RTMPS URL",
   },
   {
-    label: "Twitch",
-    icon: "🟣",
     enabledKey: "STREAM555_DEST_TWITCH_ENABLED",
     urlKey: "STREAM555_DEST_TWITCH_RTMP_URL",
     streamKeyKey: "STREAM555_DEST_TWITCH_STREAM_KEY",
-    urlLabel: "Twitch RTMPS URL",
   },
   {
-    label: "Kick",
-    icon: "🟢",
     enabledKey: "STREAM555_DEST_KICK_ENABLED",
     urlKey: "STREAM555_DEST_KICK_RTMP_URL",
     streamKeyKey: "STREAM555_DEST_KICK_STREAM_KEY",
-    urlLabel: "Kick RTMPS URL",
   },
   {
-    label: "YouTube",
-    icon: "🔴",
     enabledKey: "STREAM555_DEST_YOUTUBE_ENABLED",
     urlKey: "STREAM555_DEST_YOUTUBE_RTMP_URL",
     streamKeyKey: "STREAM555_DEST_YOUTUBE_STREAM_KEY",
-    urlLabel: "YouTube RTMPS URL",
   },
   {
-    label: "Facebook",
-    icon: "🔵",
     enabledKey: "STREAM555_DEST_FACEBOOK_ENABLED",
     urlKey: "STREAM555_DEST_FACEBOOK_RTMP_URL",
     streamKeyKey: "STREAM555_DEST_FACEBOOK_STREAM_KEY",
-    urlLabel: "Facebook RTMPS URL",
   },
   {
-    label: "Custom",
-    icon: "🧩",
     enabledKey: "STREAM555_DEST_CUSTOM_ENABLED",
     urlKey: "STREAM555_DEST_CUSTOM_RTMP_URL",
     streamKeyKey: "STREAM555_DEST_CUSTOM_STREAM_KEY",
-    urlLabel: "Custom RTMP URL",
   },
 ];
-
-function buildStream555ControlUiHintOverrides(): Record<string, Record<string, unknown>> {
-  const hints: Record<string, Record<string, unknown>> = {
-    STREAM555_BASE_URL: { hidden: true },
-    STREAM555_PUBLIC_BASE_URL: { hidden: true },
-    STREAM555_INTERNAL_BASE_URL: { hidden: true },
-    STREAM555_INTERNAL_AGENT_IDS: { hidden: true },
-    STREAM555_AGENT_TOKEN: { hidden: true },
-    STREAM555_AGENT_API_KEY: { hidden: true },
-    STREAM_API_BEARER_TOKEN: { hidden: true },
-    STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT: { hidden: true },
-    STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS: { hidden: true },
-    STREAM555_DEFAULT_SESSION_ID: { hidden: true },
-    STREAM_SESSION_ID: { hidden: true },
-    STREAM555_ALLOW_LOCALHOST_APP_URLS: { hidden: true },
-    STREAM555_WALLET_AUTH_PREFERRED_CHAIN: { hidden: true },
-    STREAM555_WALLET_AUTH_ALLOW_PROVISION: { hidden: true },
-    STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN: { hidden: true },
-    STREAM555_CONTROL_PLUGIN_ENABLED: { hidden: true },
-    STREAM555_DEST_SYNC_ON_GO_LIVE: {
-      label: "Auto-sync channels before go-live",
-      group: "Channels",
-      width: "full",
-      advanced: true,
-      order: 210,
-      type: "radio",
-      options: [
-        { value: "true", label: "Enabled", icon: "✅" },
-        { value: "false", label: "Disabled", icon: "⛔" },
-      ],
-      help: "Sync enabled channels right before go-live starts.",
-    },
-  };
-
-  let order = 300;
-  for (const spec of STREAM555_CHANNEL_UI_SPECS) {
-    hints[spec.enabledKey] = {
-      label: `${spec.icon} ${spec.label}`,
-      group: "Channels",
-      width: "full",
-      order,
-      advanced: false,
-      type: "boolean",
-      help: `Enable simulcast to ${spec.label}.`,
-    };
-    hints[spec.urlKey] = {
-      label: spec.urlLabel ?? `${spec.label} RTMPS URL`,
-      group: "Channels",
-      width: "half",
-      order: order + 10,
-      advanced: false,
-      icon: spec.icon,
-      help: `Ingest URL for ${spec.label}.`,
-      showIf: {
-        field: spec.enabledKey,
-        op: "eq",
-        value: "true",
-      },
-    };
-    hints[spec.streamKeyKey] = {
-      label: `${spec.label} Stream Key`,
-      group: "Channels",
-      width: "half",
-      order: order + 20,
-      advanced: false,
-      help: `Stream key used by ${spec.label}.`,
-      showIf: {
-        field: spec.enabledKey,
-        op: "eq",
-        value: "true",
-      },
-    };
-    order += 30;
-  }
-
-  return hints;
-}
 
 function normalizeStream555PluginId(pluginId: string): string {
   return pluginId
@@ -2145,12 +2114,15 @@ function dedupePluginParams(parameters: PluginParamDef[]): PluginParamDef[] {
 }
 
 function collapseStream555PluginEntries(entries: PluginEntry[]): PluginEntry[] {
-  const relatedEntries = entries.filter((entry) =>
-    isStream555LegacyPluginId(entry.id),
+  const canonicalEntry = entries.find(
+    (entry) => normalizeStream555PluginId(entry.id) === "555stream",
   );
-  const controlEntry = entries.find((entry) =>
-    isStream555ControlPluginId(entry.id),
-  );
+  const relatedEntries = canonicalEntry
+    ? []
+    : entries.filter((entry) => isStream555LegacyPluginId(entry.id));
+  const controlEntry =
+    canonicalEntry ??
+    entries.find((entry) => isStream555ControlPluginId(entry.id));
   if (!controlEntry && relatedEntries.length === 0) return entries;
 
   const baseEntry = controlEntry ?? relatedEntries[0];
@@ -2178,8 +2150,6 @@ function collapseStream555PluginEntries(entries: PluginEntry[]): PluginEntry[] {
       : {}),
   };
 
-  const streamHintOverrides = buildStream555ControlUiHintOverrides();
-
   for (const related of relatedEntries) {
     mergedEntry.configured ||= related.configured;
     mergedEntry.enabled ||= related.enabled;
@@ -2199,21 +2169,6 @@ function collapseStream555PluginEntries(entries: PluginEntry[]): PluginEntry[] {
   mergedEntry.validationWarnings = dedupePluginValidationIssues(
     mergedEntry.validationWarnings,
   );
-
-  const unknownFieldHintOverrides: Record<string, Record<string, unknown>> = {};
-  for (const parameter of mergedEntry.parameters) {
-    if (!streamHintOverrides[parameter.key]) {
-      unknownFieldHintOverrides[parameter.key] = {
-        hidden: true,
-        advanced: true,
-      };
-    }
-  }
-  mergedEntry.configUiHints = {
-    ...(mergedEntry.configUiHints ?? {}),
-    ...unknownFieldHintOverrides,
-    ...streamHintOverrides,
-  };
 
   return entries
     .filter(
@@ -4909,8 +4864,23 @@ function discoverPluginsFromManifest(): PluginEntry[] {
         },
       ];
 
+      const hasCanonicalStreamPluginPackage = fs.existsSync(
+        path.join(
+          packageRoot,
+          "node_modules",
+          "@rndrntwrk",
+          "plugin-555stream",
+          "package.json",
+        ),
+      );
       const presentIds = new Set(manifestEntries.map((entry) => entry.id));
       for (const entry of syntheticFive55Entries) {
+        if (
+          hasCanonicalStreamPluginPackage &&
+          STREAM555_SYNTHETIC_PLUGIN_IDS.has(entry.id)
+        ) {
+          continue;
+        }
         if (!presentIds.has(entry.id)) {
           manifestEntries.push(entry);
         }
@@ -11748,6 +11718,7 @@ async function handleRequest(
         .entries as Record<string, Record<string, unknown>>;
       entries[pluginId] = { enabled: body.enabled };
       if (pluginId === STREAM555_PLUGIN_CONTROL_ID) {
+        entries["555stream"] = { enabled: body.enabled };
         entries["stream555-auth"] = { enabled: body.enabled };
         entries["stream555-ads"] = { enabled: body.enabled };
       }
