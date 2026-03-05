@@ -107,6 +107,21 @@ const STREAM555_DESTINATION_SPECS: Stream555DestinationSpec[] = [
   },
 ];
 
+const STREAM555_DESTINATION_KEY_MAP = new Map<
+  string,
+  Stream555DestinationSpec
+>(
+  STREAM555_DESTINATION_SPECS.flatMap((spec) => [
+    [spec.enabledKey, spec] as const,
+    [spec.urlKey, spec] as const,
+    [spec.streamKeyKey, spec] as const,
+  ]),
+);
+
+const STREAM555_DESTINATION_ORDER_MAP = new Map<string, number>(
+  STREAM555_DESTINATION_SPECS.map((spec, index) => [spec.id, index]),
+);
+
 type Stream555DestinationStatus = {
   id: string;
   label: string;
@@ -1185,6 +1200,7 @@ export function paramsToSchema(
   const properties: Record<string, Record<string, unknown>> = {};
   const required: string[] = [];
   const hints: Record<string, ConfigUiHint> = {};
+  const isStream555Plugin = isStream555PrimaryPlugin(pluginId);
 
   for (const p of params) {
     // Build JSON Schema property
@@ -1357,6 +1373,9 @@ export function paramsToSchema(
       sensitive: p.sensitive ?? false,
       advanced: isAdvancedParam(p),
     };
+    const streamChannelSpec = isStream555Plugin
+      ? STREAM555_DESTINATION_KEY_MAP.get(p.key)
+      : undefined;
 
     // Port numbers — constrain range
     if (keyUpper.includes("PORT")) {
@@ -1494,13 +1513,51 @@ export function paramsToSchema(
       }
     }
 
+    if (streamChannelSpec) {
+      const channelIndex =
+        STREAM555_DESTINATION_ORDER_MAP.get(streamChannelSpec.id) ?? 0;
+      const baseOrder = 300 + channelIndex * 30;
+      hint.group = "Channels";
+      hint.advanced = false;
+
+      if (p.key === streamChannelSpec.enabledKey) {
+        hint.type = "boolean";
+        hint.label = `${streamChannelSpec.icon} ${streamChannelSpec.label}`;
+        hint.order = baseOrder;
+        hint.help = `Enable simulcast to ${streamChannelSpec.label}.`;
+      } else if (p.key === streamChannelSpec.urlKey) {
+        hint.label =
+          streamChannelSpec.urlKey === "STREAM555_DEST_CUSTOM_RTMP_URL"
+            ? "Custom RTMP URL"
+            : `${streamChannelSpec.label} RTMPS URL`;
+        hint.order = baseOrder + 10;
+        hint.showIf = {
+          field: streamChannelSpec.enabledKey,
+          op: "eq",
+          value: "true",
+        };
+      } else if (p.key === streamChannelSpec.streamKeyKey) {
+        hint.label = `${streamChannelSpec.label} Stream Key`;
+        hint.order = baseOrder + 20;
+        hint.showIf = {
+          field: streamChannelSpec.enabledKey,
+          op: "eq",
+          value: "true",
+        };
+      }
+    }
+
     if (p.description) {
       hint.help = p.description;
-      if (p.default != null) hint.help += ` (default: ${String(p.default)})`;
+      if (!isStream555Plugin && p.default != null) {
+        hint.help += ` (default: ${String(p.default)})`;
+      }
     }
     if (p.sensitive)
       hint.placeholder = p.isSet ? "********  (already set)" : "Enter value...";
-    else if (p.default) hint.placeholder = `Default: ${String(p.default)}`;
+    else if (!isStream555Plugin && p.default) {
+      hint.placeholder = `Default: ${String(p.default)}`;
+    }
     hints[p.key] = hint;
   }
 
@@ -1544,6 +1601,7 @@ function PluginConfigForm({
   const values = useMemo(() => {
     const v: Record<string, unknown> = {};
     const draftValues = pluginConfigs[plugin.id] ?? {};
+    const paramByKey = new Map(params.map((param) => [param.key, param]));
     const props = (schema.properties ?? {}) as Record<
       string,
       Record<string, unknown>
@@ -1572,6 +1630,35 @@ function PluginConfigForm({
             : [];
         } else {
           v[p.key] = p.currentValue;
+        }
+      }
+    }
+
+    if (isStream555PrimaryPlugin(plugin.id)) {
+      for (const spec of STREAM555_DESTINATION_SPECS) {
+        const enabledValue = v[spec.enabledKey];
+        const hasExplicitEnabledValue =
+          enabledValue !== undefined &&
+          enabledValue !== null &&
+          String(enabledValue).trim().length > 0;
+        const hasDraftEnabledValue =
+          draftValues[spec.enabledKey] !== undefined &&
+          String(draftValues[spec.enabledKey] ?? "").trim().length > 0;
+        const hasSavedChannelConfig = Boolean(
+          draftValues[spec.streamKeyKey]?.trim() ||
+            draftValues[spec.urlKey]?.trim() ||
+            paramByKey.get(spec.streamKeyKey)?.isSet ||
+            paramByKey.get(spec.urlKey)?.isSet,
+        );
+
+        if (
+          !hasExplicitEnabledValue &&
+          !hasDraftEnabledValue &&
+          hasSavedChannelConfig
+        ) {
+          v[spec.enabledKey] = "true";
+        } else if (typeof enabledValue === "boolean") {
+          v[spec.enabledKey] = String(enabledValue);
         }
       }
     }
@@ -2082,6 +2169,39 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
     if (pluginId === "__ui-showcase__") return;
     const config = pluginConfigs[pluginId] ?? {};
     await handlePluginConfigSave(pluginId, config);
+    const shouldSyncChannels =
+      isStream555PrimaryPlugin(pluginId) &&
+      Object.keys(config).some((key) =>
+        STREAM555_DESTINATION_KEY_MAP.has(key),
+      );
+    if (shouldSyncChannels) {
+      try {
+        await client.executeAutonomyPlan({
+          plan: {
+            id: "stream555-control-apply-destinations",
+            steps: [
+              {
+                id: "1",
+                toolName: "STREAM555_DESTINATIONS_APPLY",
+                params: {},
+              },
+            ],
+          },
+          request: { source: "user", sourceTrust: 1 },
+          options: { stopOnFailure: true },
+        });
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Failed to sync channels after saving settings.";
+        setActionNotice(
+          `Settings saved, but channel sync failed: ${message}`,
+          "error",
+          4200,
+        );
+      }
+    }
     setPluginConfigs((prev) => {
       const next = { ...prev };
       delete next[pluginId];
