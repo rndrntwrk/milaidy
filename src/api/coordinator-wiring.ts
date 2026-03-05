@@ -9,13 +9,13 @@ export interface WirableState {
   broadcastWs?: ((data: Record<string, unknown>) => void) | null;
 }
 
-export interface WireCoordinatorOpts {
+export interface WireCoordinatorOpts<S extends WirableState = WirableState> {
   /** Wire the chat bridge. Returns true on success. */
-  wireChatBridge: (state: WirableState) => boolean;
+  wireChatBridge: (state: S) => boolean;
   /** Wire the WebSocket bridge. Returns true on success. */
-  wireWsBridge: (state: WirableState) => boolean;
+  wireWsBridge: (state: S) => boolean;
   /** Wire the event-routing bridge. Returns true on success. */
-  wireEventRouting: (state: WirableState) => boolean;
+  wireEventRouting: (state: S) => boolean;
   /** Label for log messages (e.g. "boot", "restart"). */
   context: string;
   /** Logger with warn/debug methods. */
@@ -43,9 +43,9 @@ const SERVICE_TIMEOUT_MS = 60_000;
  *
  * Safe for fire-and-forget (`void wireCoordinatorBridgesWhenReady(...)`).
  */
-export async function wireCoordinatorBridgesWhenReady(
-  state: WirableState,
-  opts: WireCoordinatorOpts,
+export async function wireCoordinatorBridgesWhenReady<S extends WirableState>(
+  state: S,
+  opts: WireCoordinatorOpts<S>,
 ): Promise<WireResult> {
   const { wireChatBridge, wireWsBridge, wireEventRouting, context, logger } =
     opts;
@@ -68,8 +68,8 @@ export async function wireCoordinatorBridgesWhenReady(
     const runtime = state.runtime;
     if (
       !runtime ||
-      typeof (runtime as Record<string, unknown>).getServiceLoadPromise !==
-        "function"
+      !("getServiceLoadPromise" in runtime) ||
+      typeof runtime.getServiceLoadPromise !== "function"
     ) {
       broadcastWarning(
         state,

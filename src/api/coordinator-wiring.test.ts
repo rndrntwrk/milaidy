@@ -41,6 +41,7 @@ describe("wireCoordinatorBridgesWhenReady", () => {
   });
 
   afterEach(() => {
+    vi.clearAllTimers();
     vi.useRealTimers();
   });
 

@@ -4208,6 +4208,7 @@ function ensureWalletKeysInEnvAndConfig(config: MiladyConfig): boolean {
 
 interface RequestContext {
   onRestart: (() => Promise<AgentRuntime | null>) | null;
+  onRuntimeSwapped?: () => void;
 }
 
 type TrainingServiceLike = TrainingServiceWithRuntime;
@@ -7021,16 +7022,7 @@ async function handleRequest(
       pathname,
       state,
       onRestart: ctx?.onRestart ?? undefined,
-      onRuntimeSwapped: () => {
-        bindRuntimeStreams(state.runtime);
-        void wireCoordinatorBridgesWhenReady(state, {
-          wireChatBridge: wireCodingAgentChatBridge,
-          wireWsBridge: wireCodingAgentWsBridge,
-          wireEventRouting: wireCoordinatorEventRouting,
-          context: "restart",
-          logger,
-        });
-      },
+      onRuntimeSwapped: ctx?.onRuntimeSwapped,
       json,
       error,
       resolveStateDir,
@@ -13586,7 +13578,19 @@ export async function startApiServer(opts?: {
   );
   const server = http.createServer(async (req, res) => {
     try {
-      await handleRequest(req, res, state, { onRestart });
+      await handleRequest(req, res, state, {
+        onRestart,
+        onRuntimeSwapped: () => {
+          bindRuntimeStreams(state.runtime);
+          void wireCoordinatorBridgesWhenReady(state, {
+            wireChatBridge: wireCodingAgentChatBridge,
+            wireWsBridge: wireCodingAgentWsBridge,
+            wireEventRouting: wireCoordinatorEventRouting,
+            context: "restart",
+            logger,
+          });
+        },
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "internal error";
       addLog("error", msg, "api", ["server", "api"]);
