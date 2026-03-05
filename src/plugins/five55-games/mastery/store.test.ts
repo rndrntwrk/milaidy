@@ -239,7 +239,7 @@ describe("five55 mastery store", () => {
     const modern = evidence.find((entry) => entry.episodeId === evidenceEpisodeId);
     expect(modern).toBeTruthy();
     expect(modern?.frameCount).toBe(2);
-    expect(modern?.consistency.status).toBe("consistent");
+    expect(modern?.consistency.status).toBe("pass");
     expect(modern?.consistency.checkedAt).toBe(checkedAt);
     expect(modern?.syntheticSignals).toEqual(["stable_run"]);
   });

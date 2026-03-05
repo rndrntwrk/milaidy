@@ -8,6 +8,7 @@ import type {
   Five55MasteryLog,
   Five55MasteryRun,
   Five55MasteryRunsPage,
+  MasteryConsistencyVerdict,
 } from "./types.js";
 import { canonicalizeMasteryGameId } from "./aliases.js";
 
@@ -21,13 +22,6 @@ const RUN_LOGS_FILE = "logs.jsonl";
 
 type RunsIndex = {
   runIds: string[];
-};
-
-type MasteryConsistencyVerdict = {
-  status: "consistent" | "mismatch" | "insufficient";
-  checkedAt: string;
-  reasons: string[];
-  mismatchDetails: Array<Record<string, unknown>>;
 };
 
 type MasteryEpisodeEvidenceRecord = {
@@ -70,12 +64,16 @@ function normalizeConsistencyVerdict(value: unknown): MasteryConsistencyVerdict 
   const record = asRecord(value);
   if (!record) return defaultConsistencyVerdict();
 
-  const status =
-    record.status === "consistent" ||
-    record.status === "mismatch" ||
-    record.status === "insufficient"
-      ? record.status
+  const rawStatus =
+    typeof record.status === "string"
+      ? record.status.trim().toLowerCase()
       : "insufficient";
+  const status: MasteryConsistencyVerdict["status"] =
+    rawStatus === "pass" || rawStatus === "consistent"
+      ? "pass"
+      : rawStatus === "fail" || rawStatus === "mismatch"
+        ? "fail"
+        : "insufficient";
 
   const checkedAt =
     typeof record.checkedAt === "string" && record.checkedAt.trim().length > 0
@@ -84,8 +82,16 @@ function normalizeConsistencyVerdict(value: unknown): MasteryConsistencyVerdict 
 
   const mismatchDetails = Array.isArray(record.mismatchDetails)
     ? record.mismatchDetails
-        .map((entry) => asRecord(entry))
-        .filter((entry): entry is Record<string, unknown> => Boolean(entry))
+        .map((entry) => {
+          if (typeof entry === "string") return entry.trim();
+          if (!entry || typeof entry !== "object") return "";
+          try {
+            return JSON.stringify(entry);
+          } catch {
+            return "";
+          }
+        })
+        .filter((entry) => entry.length > 0)
     : [];
 
   const reasons = normalizeStringArray(record.reasons);
@@ -272,7 +278,7 @@ export async function readMasteryEpisodes(runId: string): Promise<Five55MasteryE
   }
 }
 
-async function readMasteryEpisodeById(
+export async function readMasteryEpisodeById(
   runId: string,
   episodeId: string,
 ): Promise<Five55MasteryEpisode | null> {
@@ -283,6 +289,38 @@ async function readMasteryEpisodeById(
       (episode) => String(episode.episodeId).trim() === normalizedEpisodeId,
     ) ?? null
   );
+}
+
+export async function findMasteryEpisodeById(input: {
+  episodeId: string;
+  gameId?: string;
+}): Promise<Five55MasteryEpisode | null> {
+  const normalizedEpisodeId = String(input.episodeId ?? "").trim();
+  if (!normalizedEpisodeId) return null;
+
+  const normalizedGameId = input.gameId?.trim()
+    ? canonicalizeMasteryGameId(input.gameId.trim())
+    : null;
+
+  const index = await readRunsIndex();
+  for (const runId of index.runIds) {
+    const episode = await readMasteryEpisodeById(runId, normalizedEpisodeId);
+    if (!episode) continue;
+    if (normalizedGameId && canonicalizeMasteryGameId(episode.gameId) !== normalizedGameId) {
+      continue;
+    }
+    return episode;
+  }
+  return null;
+}
+
+export async function readMasteryEpisodeEvidence(input: {
+  runId: string;
+  episodeId: string;
+}): Promise<MasteryEpisodeEvidenceRecord | null> {
+  const episode = await readMasteryEpisodeById(input.runId, input.episodeId);
+  if (!episode) return null;
+  return normalizeEpisodeEvidence(episode);
 }
 
 export async function readMasteryRunEvidence(

@@ -18,9 +18,12 @@ export {
 export {
   appendMasteryEpisode,
   appendMasteryLog,
+  findMasteryEpisodeById,
   listMasteryRuns,
   readAllMasteryGameSnapshots,
+  readMasteryEpisodeById,
   readMasteryEpisodeConsistency,
+  readMasteryEpisodeEvidence,
   readMasteryEpisodeFrames,
   readMasteryEpisodes,
   readMasteryGameSnapshot,
