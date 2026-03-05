@@ -2,11 +2,34 @@
  * Navigation — tabs + onboarding.
  */
 
+import type { LucideIcon } from "lucide-react";
+import {
+  Bot,
+  Brain,
+  Gamepad2,
+  Heart,
+  MessageSquare,
+  Radio,
+  Settings,
+  Share2,
+  Sparkles,
+  Wallet,
+} from "lucide-react";
+
 /** Apps are only enabled in dev mode; production builds hide this feature. */
 export const APPS_ENABLED = import.meta.env.DEV;
 
+/** Stream tab — enabled when the "streaming-base" plugin is active (or in dev mode). */
+export const STREAM_ENABLED = import.meta.env.DEV;
+/** Companion tab is feature-flagged and disabled by default. */
+export const COMPANION_ENABLED =
+  String(import.meta.env.VITE_ENABLE_COMPANION_MODE ?? "").toLowerCase() ===
+  "true";
+
 export type Tab =
   | "chat"
+  | "companion"
+  | "stream"
   | "apps"
   | "character"
   | "wallets"
@@ -21,18 +44,73 @@ export type Tab =
   | "trajectories"
   | "runtime"
   | "database"
+  | "lifo"
   | "settings"
   | "logs"
   | "security";
 
-const ALL_TAB_GROUPS = [
-  { label: "Chat", tabs: ["chat"] as Tab[] },
-  { label: "Character", tabs: ["character"] as Tab[] },
-  { label: "Wallets", tabs: ["wallets"] as Tab[] },
-  { label: "Knowledge", tabs: ["knowledge"] as Tab[] },
-  { label: "Social", tabs: ["connectors"] as Tab[] },
-  { label: "Apps", tabs: ["apps"] as Tab[] },
-  { label: "Settings", tabs: ["settings"] as Tab[] },
+export interface TabGroup {
+  label: string;
+  tabs: Tab[];
+  icon: LucideIcon;
+  description?: string;
+}
+
+export const ALL_TAB_GROUPS: TabGroup[] = [
+  {
+    label: "Chat",
+    tabs: ["chat"],
+    icon: MessageSquare,
+    description: "Conversations and messaging",
+  },
+  {
+    label: "Companion",
+    tabs: ["companion"],
+    icon: Heart,
+    description: "Companion mode (feature flag)",
+  },
+  {
+    label: "Stream",
+    tabs: ["stream"],
+    icon: Radio,
+    description: "Live streaming controls",
+  },
+  {
+    label: "Character",
+    tabs: ["character"],
+    icon: Bot,
+    description: "AI personality and behavior",
+  },
+  {
+    label: "Wallets",
+    tabs: ["wallets"],
+    icon: Wallet,
+    description: "Crypto wallets and inventory",
+  },
+  {
+    label: "Knowledge",
+    tabs: ["knowledge"],
+    icon: Brain,
+    description: "Documents and memory",
+  },
+  {
+    label: "Social",
+    tabs: ["connectors"],
+    icon: Share2,
+    description: "Platform connections",
+  },
+  {
+    label: "Apps",
+    tabs: ["apps"],
+    icon: Gamepad2,
+    description: "Games and integrations",
+  },
+  {
+    label: "Settings",
+    tabs: ["settings"],
+    icon: Settings,
+    description: "Configuration and preferences",
+  },
   {
     label: "Advanced",
     tabs: [
@@ -49,18 +127,29 @@ const ALL_TAB_GROUPS = [
       "trajectories",
       "runtime",
       "database",
+      "lifo",
       "logs",
       "security",
-    ] as Tab[],
+    ],
+    icon: Sparkles,
+    description: "Developer and power user tools",
   },
-] as const;
+];
 
-export const TAB_GROUPS = APPS_ENABLED
-  ? ALL_TAB_GROUPS
-  : ALL_TAB_GROUPS.filter((g) => g.label !== "Apps");
+/** Compute visible tab groups. Pass streamEnabled explicitly for React reactivity. */
+export function getTabGroups(streamEnabled = STREAM_ENABLED): TabGroup[] {
+  return ALL_TAB_GROUPS.filter(
+    (g) =>
+      (COMPANION_ENABLED || g.label !== "Companion") &&
+      (APPS_ENABLED || g.label !== "Apps") &&
+      (streamEnabled || g.label !== "Stream"),
+  );
+}
 
 const TAB_PATHS: Record<Tab, string> = {
   chat: "/chat",
+  companion: "/companion",
+  stream: "/stream",
   apps: "/apps",
   character: "/character",
   triggers: "/triggers",
@@ -75,6 +164,7 @@ const TAB_PATHS: Record<Tab, string> = {
   trajectories: "/trajectories",
   runtime: "/runtime",
   database: "/database",
+  lifo: "/lifo",
   settings: "/settings",
   logs: "/logs",
   security: "/security",
@@ -113,8 +203,16 @@ export function tabFromPath(pathname: string, basePath = ""): Tab | null {
   if (normalized.endsWith("/index.html")) normalized = "/";
   if (normalized === "/") return "chat";
   if (normalized === "/voice") return "settings";
+  // Companion disabled unless explicitly feature-flagged
+  if (!COMPANION_ENABLED && normalized === "/companion") {
+    return "chat";
+  }
   // Apps disabled in production builds — redirect to chat
   if (!APPS_ENABLED && (normalized === "/apps" || normalized === "/game")) {
+    return "chat";
+  }
+  // Stream tab hidden — redirect to chat
+  if (!STREAM_ENABLED && normalized === "/stream") {
     return "chat";
   }
   // Check current paths first, then legacy redirects
@@ -143,6 +241,8 @@ export function titleForTab(tab: Tab): string {
   switch (tab) {
     case "chat":
       return "Chat";
+    case "companion":
+      return "Companion";
     case "apps":
       return "Apps";
     case "character":
@@ -173,10 +273,14 @@ export function titleForTab(tab: Tab): string {
       return "Runtime";
     case "database":
       return "Databases";
+    case "lifo":
+      return "Lifo";
     case "settings":
       return "Settings";
     case "logs":
       return "Logs";
+    case "stream":
+      return "Stream";
     case "security":
       return "Security";
     default:

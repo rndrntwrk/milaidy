@@ -405,12 +405,14 @@ function InlinePluginConfig({ pluginId }: { pluginId: string }) {
 
 function UiSpecBlock({ spec, raw }: { spec: UiSpec; raw: string }) {
   const [showRaw, setShowRaw] = useState(false);
+  const { sendActionMessage } = useApp();
 
-  // Actions from UiSpec elements — currently a no-op.
-  // TODO(#35): Wire to chat API for server-round-trip actions.
   const handleAction = useCallback(
-    (_action: string, _params?: Record<string, unknown>) => {},
-    [],
+    (action: string, params?: Record<string, unknown>) => {
+      const paramsStr = params ? ` ${JSON.stringify(params)}` : "";
+      void sendActionMessage(`[action:${action}]${paramsStr}`);
+    },
+    [sendActionMessage],
   );
 
   return (
@@ -456,7 +458,7 @@ export function MessageContent({ message }: MessageContentProps) {
 
   // Fast path: single plain-text segment (most messages)
   if (segments.length === 1 && segments[0].kind === "text") {
-    return <div className="text-txt whitespace-pre-wrap">{message.text}</div>;
+    return <div className="whitespace-pre-wrap">{message.text}</div>;
   }
 
   return (
@@ -481,7 +483,7 @@ export function MessageContent({ message }: MessageContentProps) {
           switch (seg.kind) {
             case "text":
               return (
-                <div key={segmentKey} className="text-txt whitespace-pre-wrap">
+                <div key={segmentKey} className="whitespace-pre-wrap">
                   {seg.text}
                 </div>
               );

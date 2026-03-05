@@ -125,11 +125,47 @@ export default defineConfig({
         ),
       },
       {
+        find: "@milady/plugin-streaming-base",
+        replacement: path.join(
+          repoRoot,
+          "packages",
+          "plugin-streaming-base",
+          "src",
+          "index.ts",
+        ),
+      },
+      {
         // @elizaos/skills has a broken package.json entry; the code handles the
 
         // missing module gracefully (try/catch), so redirect to an empty stub.
         find: "@elizaos/skills",
         replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
+      },
+      {
+        // @elizaos/plugin-repoprompt has a broken package.json entry; redirect
+        // to an empty stub so Vite import analysis doesn't fail.
+        find: "@elizaos/plugin-repoprompt",
+        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
+      },
+      {
+        // @elizaos/plugin-agent-orchestrator is optional; stub it for tests.
+        find: "@elizaos/plugin-agent-orchestrator",
+        replacement: path.join(
+          repoRoot,
+          "test",
+          "stubs",
+          "coding-agent-module.ts",
+        ),
+      },
+      {
+        // @elizaos/plugin-coding-agent is optional; stub it for tests.
+        find: "@elizaos/plugin-coding-agent",
+        replacement: path.join(
+          repoRoot,
+          "test",
+          "stubs",
+          "coding-agent-module.ts",
+        ),
       },
       {
         find: "electron",
@@ -154,6 +190,7 @@ export default defineConfig({
       "apps/app/test/electron-ui/electron-startup-failure.e2e.spec.ts",
       "test/api-server.e2e.test.ts",
       "test/format-error.test.ts",
+      "test/trajectory-database.e2e.test.ts",
     ],
     setupFiles: ["test/setup.ts"],
     exclude: ["dist/**", "**/node_modules/**", "**/*.live.test.ts"],

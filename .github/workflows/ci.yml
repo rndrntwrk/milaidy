@@ -10,9 +10,6 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  NODE_VERSION: "22"
-
 jobs:
   lint:
     name: Lint & Format
@@ -25,7 +22,15 @@ jobs:
         with:
           bun-version: latest
 
-      - run: bun install
+      - name: Cache Bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: bun install
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -47,7 +52,15 @@ jobs:
         with:
           bun-version: latest
 
-      - run: bun install
+      - name: Cache Bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: bun install
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -66,7 +79,15 @@ jobs:
         with:
           bun-version: latest
 
-      - run: bun install
+      - name: Cache Bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: bun install
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -85,7 +106,15 @@ jobs:
         with:
           bun-version: latest
 
-      - run: bun install
+      - name: Cache Bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: bun install
 
       - name: Run repository postinstall patches
         run: bun run postinstall

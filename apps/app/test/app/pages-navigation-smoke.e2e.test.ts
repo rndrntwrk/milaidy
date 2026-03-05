@@ -3,11 +3,14 @@ import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Tab } from "../../src/navigation";
-import { TAB_GROUPS } from "../../src/navigation";
+import { getTabGroups } from "../../src/navigation";
 
 const { mockUseApp, noop } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
   noop: vi.fn(),
+}));
+const { mockUseLifoAutoPopout } = vi.hoisted(() => ({
+  mockUseLifoAutoPopout: vi.fn(),
 }));
 
 vi.mock("../../src/AppContext", () => ({
@@ -42,6 +45,10 @@ vi.mock("../../src/components/ChatView", () => ({
   ChatView: () => React.createElement("section", null, "ChatView Ready"),
 }));
 
+vi.mock("../../src/components/StreamView", () => ({
+  StreamView: () => React.createElement("section", null, "StreamView Ready"),
+}));
+
 vi.mock("../../src/components/ConversationsSidebar", () => ({
   ConversationsSidebar: () =>
     React.createElement("aside", null, "ConversationsSidebar"),
@@ -69,6 +76,11 @@ vi.mock("../../src/components/AppsPageView", () => ({
 vi.mock("../../src/components/CharacterView", () => ({
   CharacterView: () =>
     React.createElement("section", null, "CharacterView Ready"),
+}));
+
+vi.mock("../../src/components/CompanionView", () => ({
+  CompanionView: () =>
+    React.createElement("section", null, "CompanionView Ready"),
 }));
 
 vi.mock("../../src/components/TriggersView", () => ({
@@ -102,6 +114,9 @@ vi.mock("../../src/components/LoadingScreen", () => ({
 
 vi.mock("../../src/components/TerminalPanel", () => ({
   TerminalPanel: () => React.createElement("footer", null, "TerminalPanel"),
+}));
+vi.mock("../../src/hooks/useLifoAutoPopout", () => ({
+  useLifoAutoPopout: (options: unknown) => mockUseLifoAutoPopout(options),
 }));
 
 vi.mock("../../src/components/PluginsPageView", () => ({
@@ -147,6 +162,11 @@ vi.mock("../../src/components/LogsPageView", () => ({
     React.createElement("section", null, "LogsPageView Ready"),
 }));
 
+vi.mock("../../src/components/LifoSandboxView", () => ({
+  LifoSandboxView: () =>
+    React.createElement("section", null, "LifoSandboxView Ready"),
+}));
+
 vi.mock("../../src/hooks/useContextMenu", () => ({
   useContextMenu: () => ({
     saveCommandModalOpen: false,
@@ -166,6 +186,7 @@ type HarnessState = {
   actionNotice: null;
   toasts: never[];
   dismissToast: () => void;
+  plugins: Array<{ id: string; enabled: boolean }>;
   setTab: (tab: Tab) => void;
 };
 
@@ -242,11 +263,13 @@ describe("pages navigation smoke (e2e)", () => {
       actionNotice: null,
       toasts: [],
       dismissToast: () => {},
+      plugins: [],
       setTab: (tab: Tab) => {
         state.tab = tab;
       },
     };
     mockUseApp.mockReset();
+    mockUseLifoAutoPopout.mockReset();
     mockUseApp.mockImplementation(() => state);
   });
 
@@ -262,6 +285,8 @@ describe("pages navigation smoke (e2e)", () => {
 
     const expectedByPrimaryTab: Record<Tab, string> = {
       chat: "ChatView Ready",
+      companion: "ChatView Ready", // falls back to ChatView when feature flag is off
+      stream: "StreamView Ready",
       character: "CharacterView Ready",
       wallets: "InventoryView Ready",
       knowledge: "KnowledgeView Ready",
@@ -280,7 +305,7 @@ describe("pages navigation smoke (e2e)", () => {
       logs: "LogsPageView Ready",
     };
 
-    for (const group of TAB_GROUPS) {
+    for (const group of getTabGroups(false)) {
       await clickAndRerender(renderedTree, group.label);
       const nextTab = group.tabs[0];
       const content = mainContent(renderedTree);
@@ -335,6 +360,7 @@ describe("pages navigation smoke (e2e)", () => {
       },
       { label: "Runtime", tab: "runtime", token: "RuntimeView Ready" },
       { label: "Databases", tab: "database", token: "DatabasePageView Ready" },
+      { label: "Lifo", tab: "lifo", token: "LifoSandboxView Ready" },
       { label: "Logs", tab: "logs", token: "LogsPageView Ready" },
     ];
 
@@ -368,6 +394,7 @@ describe("pages navigation smoke (e2e)", () => {
 
     const expectedByTab: Array<{ tab: Tab; token: string }> = [
       { tab: "chat", token: "ChatView Ready" },
+      { tab: "companion", token: "ChatView Ready" }, // falls back to ChatView when feature flag is off
       { tab: "apps", token: "AppsPageView Ready" },
       { tab: "character", token: "CharacterView Ready" },
       { tab: "wallets", token: "InventoryView Ready" },
@@ -382,6 +409,7 @@ describe("pages navigation smoke (e2e)", () => {
       { tab: "trajectories", token: "TrajectoriesView Ready" },
       { tab: "runtime", token: "RuntimeView Ready" },
       { tab: "database", token: "DatabasePageView Ready" },
+      { tab: "lifo", token: "LifoSandboxView Ready" },
       { tab: "settings", token: "SettingsView Ready" },
       { tab: "logs", token: "LogsPageView Ready" },
     ];
@@ -459,6 +487,9 @@ describe("pages navigation smoke (e2e)", () => {
         onboardingComplete: true,
         tab: "chat",
         actionNotice: null,
+        toasts: [],
+        dismissToast: () => {},
+        plugins: [],
         setTab: (tab: Tab) => {
           state.tab = tab;
         },

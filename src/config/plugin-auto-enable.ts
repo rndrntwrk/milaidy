@@ -30,6 +30,15 @@ export const CONNECTOR_PLUGINS: Record<string, string> = {
   matrix: "@elizaos/plugin-matrix",
   nostr: "@elizaos/plugin-nostr",
   retake: "@milady/plugin-retake",
+  blooio: "@elizaos/plugin-blooio",
+  twitch: "@elizaos/plugin-twitch",
+};
+
+export const STREAMING_PLUGINS: Record<string, string> = {
+  retake: "@milady/plugin-retake",
+  twitch: "@milady/plugin-twitch-streaming",
+  youtube: "@milady/plugin-youtube-streaming",
+  customRtmp: "@milady/plugin-custom-rtmp",
 };
 
 const PROVIDER_PLUGINS: Record<string, string> = {
@@ -81,7 +90,7 @@ export const AUTH_PROVIDER_PLUGINS: Record<string, string> = {
   OBSIDIAN_VAULT_PATH: "@elizaos/plugin-obsidian",
   OBSIDAN_VAULT_PATH: "@elizaos/plugin-obsidian",
   REPOPROMPT_CLI_PATH: "@elizaos/plugin-repoprompt",
-  CLAUDE_CODE_WORKBENCH_ENABLED: "@milaidy/plugin-claude-code-workbench",
+  CLAUDE_CODE_WORKBENCH_ENABLED: "@elizaos/plugin-claude-code-workbench",
 };
 
 const FEATURE_PLUGINS: Record<string, string> = {
@@ -109,7 +118,7 @@ const FEATURE_PLUGINS: Record<string, string> = {
   vision: "@elizaos/plugin-vision",
   computeruse: "@elizaos/plugin-computeruse",
   repoprompt: "@elizaos/plugin-repoprompt",
-  claudeCodeWorkbench: "@milaidy/plugin-claude-code-workbench",
+  claudeCodeWorkbench: "@elizaos/plugin-claude-code-workbench",
 };
 
 export function isConnectorConfigured(
@@ -184,6 +193,32 @@ export function isConnectorConfigured(
       );
     case "retake":
       return Boolean(config.accessToken || config.enabled === true);
+    case "twitch":
+      return Boolean(
+        config.accessToken || config.clientId || config.enabled === true,
+      );
+    default:
+      return false;
+  }
+}
+
+export function isStreamingDestinationConfigured(
+  destName: string,
+  destConfig: unknown,
+): boolean {
+  if (!destConfig || typeof destConfig !== "object") return false;
+  const config = destConfig as Record<string, unknown>;
+  if (config.enabled === false) return false;
+
+  switch (destName) {
+    case "retake":
+      return Boolean(config.accessToken || config.enabled === true);
+    case "twitch":
+      return Boolean(config.streamKey || config.enabled === true);
+    case "youtube":
+      return Boolean(config.streamKey || config.enabled === true);
+    case "customRtmp":
+      return Boolean(config.rtmpUrl && config.rtmpKey);
     default:
       return false;
   }
@@ -243,6 +278,33 @@ export function applyPluginAutoEnable(
         connectorName,
         changes,
         `connector: ${connectorName}`,
+      );
+    }
+  }
+
+  // Streaming destinations
+  const streaming = (updatedConfig as Record<string, unknown>).streaming as
+    | Record<string, unknown>
+    | undefined;
+  if (streaming) {
+    for (const [destName, destConfig] of Object.entries(streaming)) {
+      if (destName === "activeDestination") continue; // skip meta field
+      const pluginName = STREAMING_PLUGINS[destName];
+      if (!pluginName) continue;
+      if (!isStreamingDestinationConfigured(destName, destConfig)) continue;
+      // Derive short ID from the package name (e.g. "@milady/plugin-twitch-streaming" → "twitch-streaming")
+      const shortId = pluginName.includes("/plugin-")
+        ? pluginName.slice(
+            pluginName.lastIndexOf("/plugin-") + "/plugin-".length,
+          )
+        : destName;
+      if (pluginsConfig.entries[shortId]?.enabled === false) continue;
+      addToAllowlist(
+        pluginsConfig.allow,
+        pluginName,
+        shortId,
+        changes,
+        `streaming: ${destName}`,
       );
     }
   }

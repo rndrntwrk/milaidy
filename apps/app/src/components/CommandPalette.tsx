@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useApp } from "../AppContext";
 import { useBugReport } from "../hooks/useBugReport";
 
@@ -26,9 +26,12 @@ export function CommandPalette() {
     handleChatClear,
     activeGameViewerUrl,
     setState,
-    closeCommandPalette,
   } = useApp();
   const { open: openBugReport } = useBugReport();
+  const closeCommandPalette = useCallback(
+    () => setState("commandPaletteOpen", false),
+    [setState],
+  );
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -117,6 +120,11 @@ export function CommandPalette() {
         id: "nav-security",
         label: "Open Security",
         action: () => setTab("security"),
+      },
+      {
+        id: "nav-lifo",
+        label: "Open Lifo",
+        action: () => setTab("lifo"),
       },
     );
 

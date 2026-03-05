@@ -73,7 +73,8 @@ describe("header status", () => {
       .join("\n");
 
     expect(renderedText).toContain("starting");
-    expect(renderedText).toContain("⏳");
+    // Check that pause button is not present during starting state
+    // (Loader2 spinner is shown instead of the pause/resume button)
     expect(renderedText).not.toContain("⏸️");
   });
 
@@ -90,7 +91,8 @@ describe("header status", () => {
     });
 
     const restartButton = tree?.root.find(
-      (node) => node.type === "button" && node.props.title === "Restart agent",
+      (node) =>
+        node.type === "button" && node.props["aria-label"] === "Restart agent",
     );
     expect(restartButton.props.disabled).toBe(true);
 
@@ -101,7 +103,8 @@ describe("header status", () => {
     expect(renderedText).toContain("Restarting...");
 
     const pauseResumeButton = tree?.root.find(
-      (node) => node.type === "button" && node.props.title === "Pause autonomy",
+      (node) =>
+        node.type === "button" && node.props["aria-label"] === "Pause autonomy",
     );
     expect(pauseResumeButton.props.disabled).toBe(true);
   });

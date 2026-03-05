@@ -19,10 +19,12 @@ import {
   type AppViewerAuthMessage,
   type CatalogSkill,
   type CharacterData,
+  type CodingAgentSession,
   type Conversation,
   type ConversationChannelType,
   type ConversationMessage,
   type CreateTriggerRequest,
+  type CustomActionDef,
   client,
   type DropStatus,
   type ExtensionStatus,
@@ -57,9 +59,25 @@ import {
   type WhitelistStatus,
   type WorkbenchOverview,
 } from "./api-client";
-import { tabFromPath, pathForTab, type Tab } from "./navigation";
-import { SkillScanReportSummary } from "./api-client";
 import type { ToastItem } from "./components/ui/Toast";
+import { resolveApiUrl, resolveAppAssetUrl } from "./asset-url";
+import {
+  type AutonomyEventStore,
+  type AutonomyRunHealthMap,
+  buildAutonomyGapReplayRequests,
+  hasPendingAutonomyGaps,
+  markPendingAutonomyGapsPartial,
+  mergeAutonomyEvents,
+} from "./autonomy-events";
+import {
+  expandSavedCustomCommand,
+  loadSavedCustomCommands,
+  normalizeSlashCommandName,
+  splitCommandArgs,
+} from "./chat-commands";
+import { isLifoPopoutMode } from "./lifo-popout";
+import { pathForTab, type Tab, tabFromPath } from "./navigation";
+import { getMissingOnboardingPermissions } from "./onboarding-permissions";
 
 // ── VRM helpers ─────────────────────────────────────────────────────────
 
@@ -395,6 +413,7 @@ function parseConversationMessageEvent(
   const text = value.text;
   const timestamp = value.timestamp;
   const source = value.source;
+  const from = value.from;
   if (
     typeof id !== "string" ||
     (role !== "user" && role !== "assistant") ||
@@ -406,6 +425,9 @@ function parseConversationMessageEvent(
   const parsed: ConversationMessage = { id, role, text, timestamp };
   if (typeof source === "string" && source.length > 0) {
     parsed.source = source;
+  }
+  if (typeof from === "string" && from.length > 0) {
+    parsed.from = from;
   }
   return parsed;
 }
@@ -457,6 +479,104 @@ function shouldApplyFinalStreamText(
     normalizeStreamComparisonText(streamed) !==
     normalizeStreamComparisonText(finalText)
   );
+}
+
+type SlashCommandInput = {
+  name: string;
+  argsRaw: string;
+};
+
+function parseSlashCommandInput(text: string): SlashCommandInput | null {
+  if (!text.startsWith("/")) return null;
+  const body = text.slice(1).trim();
+  if (!body) return null;
+  const firstSpace = body.search(/\s/);
+  if (firstSpace === -1) {
+    return { name: normalizeSlashCommandName(body), argsRaw: "" };
+  }
+  return {
+    name: normalizeSlashCommandName(body.slice(0, firstSpace)),
+    argsRaw: body.slice(firstSpace + 1).trim(),
+  };
+}
+
+function normalizeCustomActionName(value: string): string {
+  return value
+    .trim()
+    .replace(/[\s-]+/g, "_")
+    .toUpperCase();
+}
+
+function parseCustomActionParams(
+  action: CustomActionDef,
+  argsRaw: string,
+): {
+  params: Record<string, string>;
+  missingRequired: string[];
+} {
+  const tokens = splitCommandArgs(argsRaw);
+  const named = new Map<string, string>();
+  const positional: string[] = [];
+
+  for (const token of tokens) {
+    const eq = token.indexOf("=");
+    if (eq > 0) {
+      const key = token.slice(0, eq).trim().toLowerCase();
+      const value = token.slice(eq + 1).trim();
+      if (key) {
+        named.set(key, value);
+        continue;
+      }
+    }
+    positional.push(token);
+  }
+
+  const params: Record<string, string> = {};
+  const defs = Array.isArray(action.parameters) ? action.parameters : [];
+  const defsByLower = new Map(
+    defs.map((def) => [def.name.trim().toLowerCase(), def.name]),
+  );
+
+  for (const [key, value] of named) {
+    const canonical = defsByLower.get(key);
+    if (canonical) {
+      params[canonical] = value;
+    } else {
+      params[key] = value;
+    }
+  }
+
+  for (const def of defs) {
+    if (params[def.name] == null && positional.length > 0) {
+      params[def.name] = positional.shift() as string;
+    }
+  }
+
+  if (positional.length > 0) {
+    const sink = defs.find((def) =>
+      ["input", "text", "query", "message", "prompt"].includes(
+        def.name.toLowerCase(),
+      ),
+    );
+    if (sink) {
+      const existing = params[sink.name];
+      params[sink.name] = existing
+        ? `${existing} ${positional.join(" ")}`
+        : positional.join(" ");
+    }
+  }
+
+  const missingRequired = defs
+    .filter((def) => def.required)
+    .map((def) => def.name)
+    .filter((name) => !(params[name] ?? "").trim());
+
+  return { params, missingRequired };
+}
+
+function formatSearchBullet(label: string, items: string[]): string {
+  if (items.length === 0) return `${label}: none`;
+  return `${label}:\n${items.map((item) => `- ${item}`).join("\n")}`;
 }
 
 type LoadConversationMessagesResult =
@@ -547,6 +667,15 @@ export interface AppState {
   pendingRestartReasons: string[];
   restartBannerDismissed: boolean;
 
+  // Backend connection state (for crash handling)
+  backendConnection: {
+    state: "connected" | "disconnected" | "reconnecting" | "failed";
+    reconnectAttempt: number;
+    maxReconnectAttempts: number;
+    showDisconnectedUI: boolean;
+  };
+  backendDisconnectedBannerDismissed: boolean;
+
   // Pairing
   pairingEnabled: boolean;
   pairingExpiresAt: number | null;
@@ -566,6 +695,9 @@ export interface AppState {
   conversationMessages: ConversationMessage[];
   autonomousEvents: StreamEventEnvelope[];
   autonomousLatestEventId: string | null;
+  autonomousRunHealthByRunId: AutonomyRunHealthMap;
+  /** Active PTY coding agent sessions from the SwarmCoordinator. */
+  ptySessions: CodingAgentSession[];
   /** Conversation IDs with unread proactive messages from the agent. */
   unreadConversations: Set<string>;
 
@@ -579,7 +711,7 @@ export interface AppState {
 
   // Plugins
   plugins: PluginInfo[];
-  pluginFilter: "all" | "ai-provider" | "connector" | "feature";
+  pluginFilter: "all" | "ai-provider" | "connector" | "feature" | "streaming";
   pluginStatusFilter: "all" | "enabled" | "disabled";
   pluginSearch: string;
   pluginSettingsOpen: Set<string>;
@@ -746,6 +878,7 @@ export interface AppState {
   onboardingBlooioPhoneNumber: string;
   onboardingGithubToken: string;
   onboardingSubscriptionTab: "token" | "oauth";
+  onboardingElizaCloudTab: "login" | "apikey";
   onboardingSelectedChains: Set<string>;
   onboardingRpcSelections: Record<string, string>;
   onboardingRpcKeys: Record<string, string>;
@@ -756,6 +889,7 @@ export interface AppState {
   commandPaletteOpen: boolean;
   commandQuery: string;
   commandActiveIndex: number;
+  closeCommandPalette: () => void;
 
   // Emote picker
   emotePickerOpen: boolean;
@@ -815,16 +949,21 @@ export interface AppActions {
   retryStartup: () => void;
   dismissRestartBanner: () => void;
   triggerRestart: () => Promise<void>;
+  dismissBackendDisconnectedBanner: () => void;
+  retryBackendConnection: () => void;
+  restartBackend: () => Promise<void>;
 
   // Chat
   handleChatSend: (channelType?: ConversationChannelType) => Promise<void>;
   handleChatStop: () => void;
   handleChatClear: () => Promise<void>;
   handleNewConversation: () => Promise<void>;
-  setChatPendingImages: (images: ImageAttachment[]) => void;
+  setChatPendingImages: React.Dispatch<React.SetStateAction<ImageAttachment[]>>;
   handleSelectConversation: (id: string) => Promise<void>;
   handleDeleteConversation: (id: string) => Promise<void>;
   handleRenameConversation: (id: string, title: string) => Promise<void>;
+  /** Send a programmatic message (e.g. from a UiSpec action) without touching chatInput. */
+  sendActionMessage: (text: string) => Promise<void>;
 
   // Triggers
   loadTriggers: () => Promise<void>;
@@ -977,6 +1116,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
   const [restartBannerDismissed, setRestartBannerDismissed] = useState(false);
 
+  // --- Backend connection state (for crash handling) ---
+  const [_backendConnection, setBackendConnection] = useState<{
+    state: "connected" | "disconnected" | "reconnecting" | "failed";
+    reconnectAttempt: number;
+    maxReconnectAttempts: number;
+    showDisconnectedUI: boolean;
+  }>({
+    state: "disconnected",
+    reconnectAttempt: 0,
+    maxReconnectAttempts: 15,
+    showDisconnectedUI: false,
+  });
+  const [
+    _backendDisconnectedBannerDismissed,
+    setBackendDisconnectedBannerDismissed,
+  ] = useState(false);
+
   // --- Pairing ---
   const [pairingEnabled, setPairingEnabled] = useState(false);
   const [pairingExpiresAt, setPairingExpiresAt] = useState<number | null>(null);
@@ -1007,11 +1163,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [autonomousLatestEventId, setAutonomousLatestEventId] = useState<
     string | null
   >(null);
+  const [autonomousRunHealthByRunId, setAutonomousRunHealthByRunId] =
+    useState<AutonomyRunHealthMap>({});
+  const [ptySessions, setPtySessions] = useState<CodingAgentSession[]>([]);
   const [unreadConversations, setUnreadConversations] = useState<Set<string>>(
     new Set(),
   );
+  const autonomousStoreRef = useRef<AutonomyEventStore>({
+    eventsById: {},
+    eventOrder: [],
+    runIndex: {},
+    watermark: null,
+  });
+  const autonomousEventsRef = useRef<StreamEventEnvelope[]>([]);
+  const autonomousLatestEventIdRef = useRef<string | null>(null);
+  const autonomousRunHealthByRunIdRef = useRef<AutonomyRunHealthMap>({});
+  const autonomousReplayInFlightRef = useRef(false);
   const activeConversationIdRef = useRef<string | null>(null);
   const conversationsRef = useRef<Conversation[]>([]);
+
+  useEffect(() => {
+    autonomousEventsRef.current = autonomousEvents;
+  }, [autonomousEvents]);
+
+  useEffect(() => {
+    autonomousLatestEventIdRef.current = autonomousLatestEventId;
+  }, [autonomousLatestEventId]);
+
+  useEffect(() => {
+    autonomousRunHealthByRunIdRef.current = autonomousRunHealthByRunId;
+  }, [autonomousRunHealthByRunId]);
 
   useEffect(() => {
     conversationsRef.current = conversations;
@@ -1039,7 +1220,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // --- Plugins ---
   const [plugins, setPlugins] = useState<PluginInfo[]>([]);
   const [pluginFilter, setPluginFilter] = useState<
-    "all" | "ai-provider" | "connector" | "feature"
+    "all" | "ai-provider" | "connector" | "feature" | "streaming"
   >("all");
   const [pluginStatusFilter, setPluginStatusFilter] = useState<
     "all" | "enabled" | "disabled"
@@ -1157,6 +1338,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const normalized = normalizeAvatarIndex(v);
     setSelectedVrmIndexRaw(normalized);
     saveAvatarIndex(normalized);
+    // Sync to server so headless stream capture uses the same avatar
+    client.saveStreamSettings({ avatarIndex: normalized }).catch(() => {});
   }, []);
 
   // --- Cloud ---
@@ -1283,6 +1466,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [onboardingSubscriptionTab, setOnboardingSubscriptionTab] = useState<
     "token" | "oauth"
   >("token");
+  const [onboardingElizaCloudTab, setOnboardingElizaCloudTab] = useState<
+    "login" | "apikey"
+  >("login");
   const [onboardingSelectedChains, setOnboardingSelectedChains] = useState<
     Set<string>
   >(new Set(["evm", "solana"]));
@@ -1378,9 +1564,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const chatAbortRef = useRef<AbortController | null>(null);
   /** Synchronous lock so same-tick chat submits cannot double-send. */
   const chatSendBusyRef = useRef(false);
-  /** Batches streaming tokens so we update state once per animation frame. */
-  const pendingTokensRef = useRef("");
-  const tokenRafIdRef = useRef(0);
   /** Synchronous lock for export action to prevent duplicate clicks in the same tick. */
   const exportBusyRef = useRef(false);
   /** Synchronous lock for import action to prevent duplicate clicks in the same tick. */
@@ -1445,6 +1628,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setTheme = useCallback((name: ThemeName) => {
     setCurrentTheme(name);
     applyTheme(name);
+    // Sync to server so headless stream capture uses the same theme
+    client.saveStreamSettings({ theme: name }).catch(() => {});
   }, []);
 
   // ── Navigation ─────────────────────────────────────────────────────
@@ -1695,19 +1880,90 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [loadTriggerHealth, loadTriggerRuns, loadTriggers, sortTriggersByNextRun],
   );
 
-  const appendAutonomousEvent = useCallback((event: StreamEventEnvelope) => {
-    setAutonomousEvents((prev) => {
-      if (prev.some((entry) => entry.eventId === event.eventId)) {
-        return prev;
-      }
-      const merged = [...prev, event];
-      if (merged.length > 1200) {
-        return merged.slice(merged.length - 1200);
-      }
+  const applyAutonomyEventMerge = useCallback(
+    (incomingEvents: StreamEventEnvelope[], replay = false) => {
+      const merged = mergeAutonomyEvents({
+        store: autonomousStoreRef.current,
+        incomingEvents,
+        runHealthByRunId: autonomousRunHealthByRunIdRef.current,
+        replay,
+      });
+      autonomousStoreRef.current = merged.store;
+      autonomousEventsRef.current = merged.events;
+      autonomousLatestEventIdRef.current = merged.latestEventId;
+      autonomousRunHealthByRunIdRef.current = merged.runHealthByRunId;
+
+      setAutonomousEvents(merged.events);
+      setAutonomousLatestEventId(merged.latestEventId);
+      setAutonomousRunHealthByRunId(merged.runHealthByRunId);
+
       return merged;
-    });
-    setAutonomousLatestEventId(event.eventId);
-  }, []);
+    },
+    [],
+  );
+
+  const fetchAutonomyReplay = useCallback(async () => {
+    if (autonomousReplayInFlightRef.current) return;
+    autonomousReplayInFlightRef.current = true;
+    try {
+      const afterEventId = autonomousStoreRef.current.watermark ?? undefined;
+      const replay = await client.getAgentEvents({
+        afterEventId,
+        limit: 300,
+      });
+
+      if (replay.events.length > 0) {
+        applyAutonomyEventMerge(replay.events);
+      }
+
+      const gapReplays = buildAutonomyGapReplayRequests(
+        autonomousRunHealthByRunIdRef.current,
+        autonomousStoreRef.current,
+      ).slice(0, 4);
+
+      for (const request of gapReplays) {
+        const gapReplay = await client.getAgentEvents({
+          runId: request.runId,
+          fromSeq: request.fromSeq,
+          limit: 300,
+        });
+        if (gapReplay.events.length > 0) {
+          applyAutonomyEventMerge(gapReplay.events);
+        }
+      }
+
+      if (hasPendingAutonomyGaps(autonomousRunHealthByRunIdRef.current)) {
+        const partial = markPendingAutonomyGapsPartial(
+          autonomousRunHealthByRunIdRef.current,
+          Date.now(),
+        );
+        autonomousRunHealthByRunIdRef.current = partial;
+        setAutonomousRunHealthByRunId(partial);
+      }
+    } catch (err) {
+      if (hasPendingAutonomyGaps(autonomousRunHealthByRunIdRef.current)) {
+        const partial = markPendingAutonomyGapsPartial(
+          autonomousRunHealthByRunIdRef.current,
+          Date.now(),
+        );
+        autonomousRunHealthByRunIdRef.current = partial;
+        setAutonomousRunHealthByRunId(partial);
+      }
+      console.warn("[milady] Failed to fetch autonomous event replay", err);
+    } finally {
+      autonomousReplayInFlightRef.current = false;
+    }
+  }, [applyAutonomyEventMerge]);
+
+  const appendAutonomousEvent = useCallback(
+    (event: StreamEventEnvelope) => {
+      const merged = applyAutonomyEventMerge([event]);
+      if (merged.runsWithNewGaps.length > 0) {
+        void fetchAutonomyReplay();
+      }
+    },
+    [applyAutonomyEventMerge, fetchAutonomyReplay],
+  );
 
   const loadConversations = useCallback(async (): Promise<
     Conversation[] | null
@@ -2078,6 +2334,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await handleRestart();
   }, [handleRestart]);
 
+  // Backend disconnection banner actions
+  const _dismissBackendDisconnectedBanner = useCallback(() => {
+    setBackendDisconnectedBannerDismissed(true);
+  }, []);
+
+  const _retryBackendConnection = useCallback(() => {
+    setBackendDisconnectedBannerDismissed(false);
+    client.resetConnection();
+  }, []);
+
+  const _restartBackend = useCallback(async () => {
+    const electron = (
+      window as {
+        electron?: {
+          ipcRenderer: { invoke: (channel: string) => Promise<unknown> };
+        };
+      }
+    ).electron;
+    if (electron?.ipcRenderer) {
+      // Electron: Use IPC to restart embedded agent
+      await electron.ipcRenderer.invoke("agent:restart");
+    } else {
+      // Fallback for web: call API restart endpoint
+      await client.restart();
+    }
+    // Reset connection state after restart
+    setBackendConnection((prev) => ({
+      ...prev,
+      state: "disconnected",
+      reconnectAttempt: 0,
+      showDisconnectedUI: false,
+    }));
+    setBackendDisconnectedBannerDismissed(false);
+  }, []);
+
   const retryStartup = useCallback(() => {
     setStartupError(null);
     setAuthRequired(false);
@@ -2186,61 +2477,252 @@ export function AppProvider({ children }: { children: ReactNode }) {
       /* ignore */
     }
   }, [fetchGreeting]);
+  const appendLocalCommandTurn = useCallback(
+    (userText: string, assistantText: string) => {
+      const now = Date.now();
+      const nonce = Math.random().toString(36).slice(2, 8);
+      setConversationMessages((prev: ConversationMessage[]) => [
+        ...prev,
+        {
+          id: `local-user-${now}-${nonce}`,
+          role: "user",
+          text: userText,
+          timestamp: now,
+        },
+        {
+          id: `local-assistant-${now}-${nonce}`,
+          role: "assistant",
+          text: assistantText,
+          timestamp: now,
+          source: "local_command",
+        },
+      ]);
+    },
+    [],
+  );
 
-  const handleChatSend = useCallback(async (mode: ConversationMode = "simple") => {
-    const text = chatInput.trim();
-    if (!text) return;
-    if (chatSendBusyRef.current || chatSending) return;
-    chatSendBusyRef.current = true;
+  const tryHandlePrefixedChatCommand = useCallback(
+    async (
+      rawText: string,
+    ): Promise<{ handled: boolean; rewrittenText?: string }> => {
+      const slash = parseSlashCommandInput(rawText);
+      if (slash) {
+        const savedCommand = loadSavedCustomCommands().find(
+          (command) => normalizeSlashCommandName(command.name) === slash.name,
+        );
+        if (savedCommand) {
+          const rewrittenText = expandSavedCustomCommand(
+            savedCommand.text,
+            slash.argsRaw,
+          );
+          if (!rewrittenText.trim()) {
+            appendLocalCommandTurn(
+              rawText,
+              `Saved command "/${slash.name}" is empty.`,
+            );
+            return { handled: true };
+          }
+          return { handled: false, rewrittenText };
+        }
 
-    try {
-      let convId: string = activeConversationId ?? "";
-      if (!convId) {
+        if (slash.name === "commands") {
+          const customActions = (await client.listCustomActions()).filter(
+            (action) => action.enabled,
+          );
+          const customCommandNames = customActions
+            .map((action) => `/${action.name.toLowerCase()}`)
+            .sort();
+          const savedCommandNames = loadSavedCustomCommands()
+            .map((command) => `/${normalizeSlashCommandName(command.name)}`)
+            .sort();
+          const lines = [
+            formatSearchBullet("Saved / commands", savedCommandNames),
+            formatSearchBullet("Custom action / commands", customCommandNames),
+            "Use #remember ... to save memory notes. Use #memory or #knowledge to target retrieval.",
+            "Use $query for a quick, non-persistent context answer.",
+          ];
+          appendLocalCommandTurn(rawText, lines.join("\n\n"));
+          return { handled: true };
+        }
+
+        let customActions: CustomActionDef[] = [];
         try {
-          const { conversation } = await client.createConversation();
-          setConversations((prev) => [conversation, ...prev]);
-          setActiveConversationId(conversation.id);
-          activeConversationIdRef.current = conversation.id;
-          convId = conversation.id;
+          customActions = (await client.listCustomActions()).filter(
+            (action) => action.enabled,
+          );
         } catch {
-          return;
+          // If custom actions can't be loaded, fall back to normal slash routing.
+          return { handled: false };
+        }
+
+        const customAction = customActions.find(
+          (action) =>
+            normalizeCustomActionName(action.name).toLowerCase() === slash.name,
+        );
+        if (customAction) {
+          const { params, missingRequired } = parseCustomActionParams(
+            customAction,
+            slash.argsRaw,
+          );
+          if (missingRequired.length > 0) {
+            appendLocalCommandTurn(
+              rawText,
+              `Missing required parameter(s): ${missingRequired.join(", ")}`,
+            );
+            return { handled: true };
+          }
+
+          const result = await client.testCustomAction(customAction.id, params);
+          if (!result.ok) {
+            appendLocalCommandTurn(
+              rawText,
+              `Custom action "${customAction.name}" failed: ${
+                result.error ?? "unknown error"
+              }`,
+            );
+            return { handled: true };
+          }
+
+          appendLocalCommandTurn(
+            rawText,
+            result.output?.trim() || `(no output from ${customAction.name})`,
+          );
+          return { handled: true };
         }
       }
 
-      // Keep server-side active conversation in sync for proactive routing.
-      client.sendWsMessage({ type: "active-conversation", conversationId: convId });
-
-      const now = Date.now();
-      const userMsgId = `temp-${now}`;
-      const assistantMsgId = `temp-resp-${now}`;
-
-      setConversationMessages((prev: ConversationMessage[]) => [
-        ...prev,
-        { id: userMsgId, role: "user", text, timestamp: now },
-        { id: assistantMsgId, role: "assistant", text: "", timestamp: now },
-      ]);
-      setChatInput("");
-      setChatSending(true);
-      setChatFirstTokenReceived(false);
-
-      const controller = new AbortController();
-      chatAbortRef.current = controller;
-      const flushPendingTokens = () => {
-        if (tokenRafIdRef.current) {
-          cancelAnimationFrame(tokenRafIdRef.current);
-          tokenRafIdRef.current = 0;
+      if (rawText.startsWith("#")) {
+        const commandBody = rawText.slice(1).trim();
+        if (!commandBody) {
+          appendLocalCommandTurn(
+            rawText,
+            "Usage: #remember <text>, #memory <query>, #knowledge <query>, or #<query>.",
+          );
+          return { handled: true };
         }
-        const batch = pendingTokensRef.current;
-        pendingTokensRef.current = "";
-        if (!batch) return;
-        setConversationMessages((prev) =>
-          prev.map((message) =>
-            message.id === assistantMsgId
-              ? { ...message, text: `${message.text}${batch}` }
-              : message,
-          ),
+
+        const lower = commandBody.toLowerCase();
+        if (
+          lower.startsWith("remember ") ||
+          lower.startsWith("remmeber ") ||
+          lower.startsWith("save ")
+        ) {
+          const memoryText = commandBody
+            .replace(/^(remember|remmeber|save)\s+/i, "")
+            .trim();
+          if (!memoryText) {
+            appendLocalCommandTurn(rawText, "Nothing to remember.");
+            return { handled: true };
+          }
+          await client.rememberMemory(memoryText);
+          appendLocalCommandTurn(rawText, `Saved memory note: "${memoryText}"`);
+          return { handled: true };
+        }
+
+        let scope: "memory" | "knowledge" | "all" = "all";
+        let query = commandBody;
+        if (lower.startsWith("memory ")) {
+          scope = "memory";
+          query = commandBody.slice("memory ".length).trim();
+        } else if (lower.startsWith("knowledge ")) {
+          scope = "knowledge";
+          query = commandBody.slice("knowledge ".length).trim();
+        } else if (lower.startsWith("all ")) {
+          scope = "all";
+          query = commandBody.slice("all ".length).trim();
+        }
+
+        if (!query) {
+          appendLocalCommandTurn(rawText, "Search query cannot be empty.");
+          return { handled: true };
+        }
+
+        const [memoryResult, knowledgeResult] = await Promise.all([
+          scope === "knowledge"
+            ? Promise.resolve(null)
+            : client.searchMemory(query, { limit: 6 }),
+          scope === "memory"
+            ? Promise.resolve(null)
+            : client.searchKnowledge(query, { threshold: 0.2, limit: 6 }),
+        ]);
+
+        const memoryLines =
+          memoryResult?.results.map(
+            (item, index) =>
+              `${index + 1}. ${item.text.replace(/\s+/g, " ").trim()}`,
+          ) ?? [];
+        const knowledgeLines =
+          knowledgeResult?.results.map(
+            (item, index) =>
+              `${index + 1}. ${item.text.replace(/\s+/g, " ").trim()} (sim ${item.similarity.toFixed(2)})`,
+          ) ?? [];
+
+        appendLocalCommandTurn(
+          rawText,
+          [
+            scope === "memory"
+              ? "Memory search"
+              : scope === "knowledge"
+                ? "Knowledge search"
+                : "Memory + knowledge search",
+            "",
+            scope === "knowledge"
+              ? ""
+              : formatSearchBullet("Memories", memoryLines),
+            scope === "memory"
+              ? ""
+              : formatSearchBullet("Knowledge", knowledgeLines),
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
         );
-      };
+        return { handled: true };
+      }
+
+      if (rawText.startsWith("$")) {
+        const queryRaw = rawText.slice(1).trim();
+        if (queryRaw) {
+          appendLocalCommandTurn(
+            rawText,
+            "Use bare `$` only. `$ <text>` is not supported.",
+          );
+          return { handled: true };
+        }
+        const query =
+          "What is most relevant from memory and knowledge right now?";
+
+        const quick = await client.quickContext(query, { limit: 6 });
+        const memoryLines = quick.memories.map(
+          (item, index) =>
+            `${index + 1}. ${item.text.replace(/\s+/g, " ").trim()}`,
+        );
+        const knowledgeLines = quick.knowledge.map(
+          (item, index) =>
+            `${index + 1}. ${item.text.replace(/\s+/g, " ").trim()} (sim ${item.similarity.toFixed(2)})`,
+        );
+        appendLocalCommandTurn(
+          rawText,
+          [
+            quick.answer,
+            "",
+            formatSearchBullet("Memories used", memoryLines),
+            formatSearchBullet("Knowledge used", knowledgeLines),
+          ].join("\n"),
+        );
+        return { handled: true };
+      }
+
+      return { handled: false };
+    },
+    [appendLocalCommandTurn],
+  );
+
+  const handleChatSend = useCallback(
+    async (channelType: ConversationChannelType = "DM") => {
+      const rawText = chatInput.trim();
+      if (!rawText) return;
+      if (chatSendBusyRef.current || chatSending) return;
+      chatSendBusyRef.current = true;
 
       // Capture and clear pending images before async work
       const imagesToSend = chatPendingImages.length
@@ -2249,53 +2731,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setChatPendingImages([]);
 
       try {
-        const data = await client.sendConversationMessageStream(
-          convId,
-          text,
-          (token) => {
-            setChatFirstTokenReceived(true);
-            pendingTokensRef.current += token;
-            if (!tokenRafIdRef.current) {
-              tokenRafIdRef.current = requestAnimationFrame(() => {
-                const batch = pendingTokensRef.current;
-                pendingTokensRef.current = "";
-                tokenRafIdRef.current = 0;
-                setConversationMessages((prev) =>
-                  prev.map((message) =>
-                    message.id === assistantMsgId
-                      ? { ...message, text: `${message.text}${batch}` }
-                      : message,
-                  ),
-                );
-              });
-            }
-          },
-          mode,
-          controller.signal,
-        );
-
-        setConversationMessages((prev) =>
-          prev.map((message) =>
-            message.id === assistantMsgId
-              ? { ...message, text: data.text }
-              : message,
-          ),
-        );
-        await loadConversations();
-      } catch (err) {
-        const abortError = err as Error;
-        if (abortError.name === "AbortError") {
-          // Flush any buffered tokens before pruning empty assistant placeholder.
-          flushPendingTokens();
-          setConversationMessages((prev) =>
-            prev.filter((message) => !(message.id === assistantMsgId && !message.text.trim())),
+        let text = rawText;
+        let commandResult: { handled: boolean; rewrittenText?: string };
+        try {
+          commandResult = await tryHandlePrefixedChatCommand(rawText);
+        } catch (err) {
+          appendLocalCommandTurn(
+            rawText,
+            `Command failed: ${err instanceof Error ? err.message : "unknown error"}`,
           );
+          setChatInput("");
           return;
         }
+        if (commandResult.handled) {
+          setChatInput("");
+          return;
+        }
+        if (
+          typeof commandResult.rewrittenText === "string" &&
+          commandResult.rewrittenText.trim()
+        ) {
+          text = commandResult.rewrittenText.trim();
+        }
 
-        // If the conversation was lost (server restart), create a fresh one and retry once.
-        const status = (err as { status?: number }).status;
-        if (status === 404) {
+        let convId: string = activeConversationId ?? "";
+        if (!convId) {
           try {
             const { conversation } = await client.createConversation();
             setConversations((prev) => [conversation, ...prev]);
@@ -2429,23 +2889,122 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setChatFirstTokenReceived(false);
         }
       } finally {
-        // Cancel any pending token batch frame
-        if (tokenRafIdRef.current) {
-          cancelAnimationFrame(tokenRafIdRef.current);
-          tokenRafIdRef.current = 0;
-          pendingTokensRef.current = "";
-        }
-        if (chatAbortRef.current === controller) {
-          chatAbortRef.current = null;
-        }
-        setChatSending(false);
-        setChatFirstTokenReceived(false);
+        chatSendBusyRef.current = false;
       }
     },
     [
       chatInput,
       chatSending,
       chatPendingImages,
+      activeConversationId,
+      loadConversationMessages,
+      loadConversations,
+      appendLocalCommandTurn,
+      tryHandlePrefixedChatCommand,
+    ],
+  );
+
+  const sendActionMessage = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      if (chatSendBusyRef.current || chatSending) return;
+      chatSendBusyRef.current = true;
+
+      try {
+        let convId: string = activeConversationId ?? "";
+        if (!convId) {
+          try {
+            const { conversation } = await client.createConversation();
+            setConversations((prev) => [conversation, ...prev]);
+            setActiveConversationId(conversation.id);
+            activeConversationIdRef.current = conversation.id;
+            convId = conversation.id;
+          } catch {
+            return;
+          }
+        }
+
+        client.sendWsMessage({
+          type: "active-conversation",
+          conversationId: convId,
+        });
+
+        const now = Date.now();
+        const userMsgId = `temp-action-${now}`;
+        const assistantMsgId = `temp-action-resp-${now}`;
+
+        setConversationMessages((prev: ConversationMessage[]) => [
+          ...prev,
+          { id: userMsgId, role: "user", text: trimmed, timestamp: now },
+          { id: assistantMsgId, role: "assistant", text: "", timestamp: now },
+        ]);
+        setChatSending(true);
+        setChatFirstTokenReceived(false);
+
+        const controller = new AbortController();
+        chatAbortRef.current = controller;
+        let streamedAssistantText = "";
+
+        try {
+          const data = await client.sendConversationMessageStream(
+            convId,
+            trimmed,
+            (token) => {
+              const delta = computeStreamingDelta(streamedAssistantText, token);
+              if (!delta) return;
+              streamedAssistantText += delta;
+              setChatFirstTokenReceived(true);
+              setConversationMessages((prev) =>
+                prev.map((message) =>
+                  message.id === assistantMsgId
+                    ? { ...message, text: `${message.text}${delta}` }
+                    : message,
+                ),
+              );
+            },
+            "DM",
+            controller.signal,
+          );
+
+          if (shouldApplyFinalStreamText(streamedAssistantText, data.text)) {
+            setConversationMessages((prev) => {
+              let changed = false;
+              const next = prev.map((message) => {
+                if (message.id !== assistantMsgId) return message;
+                if (message.text === data.text) return message;
+                changed = true;
+                return { ...message, text: data.text };
+              });
+              return changed ? next : prev;
+            });
+          }
+          void loadConversations();
+        } catch (err) {
+          const abortError = err as Error;
+          if (abortError.name === "AbortError") {
+            setConversationMessages((prev) =>
+              prev.filter(
+                (message) =>
+                  !(message.id === assistantMsgId && !message.text.trim()),
+              ),
+            );
+            return;
+          }
+          await loadConversationMessages(convId);
+        } finally {
+          if (chatAbortRef.current === controller) {
+            chatAbortRef.current = null;
+          }
+          setChatSending(false);
+          setChatFirstTokenReceived(false);
+        }
+      } finally {
+        chatSendBusyRef.current = false;
+      }
+    },
+    [
+      chatSending,
       activeConversationId,
       loadConversationMessages,
       loadConversations,
@@ -3864,6 +4423,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ── Emote picker ────────────────────────────────────────────────────
 
+  const closeCommandPalette = useCallback(() => {
+    _setCommandPaletteOpen(false);
+    setCommandQuery("");
+    setCommandActiveIndex(0);
+  }, []);
+
   const openEmotePicker = useCallback(() => {
     setEmotePickerOpen(true);
   }, []);
@@ -3884,6 +4449,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         chatAvatarVisible: setChatAvatarVisible,
         chatAgentVoiceMuted: setChatAgentVoiceMuted,
         chatAvatarSpeaking: setChatAvatarSpeaking,
+        autonomousRunHealthByRunId: setAutonomousRunHealthByRunId,
         startupError: setStartupError,
         pairingCodeInput: setPairingCodeInput,
         pluginFilter: setPluginFilter,
@@ -3933,6 +4499,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         onboardingBlooioPhoneNumber: setOnboardingBlooioPhoneNumber,
         onboardingGithubToken: setOnboardingGithubToken,
         onboardingSubscriptionTab: setOnboardingSubscriptionTab,
+        onboardingElizaCloudTab: setOnboardingElizaCloudTab,
         onboardingRpcKeys: setOnboardingRpcKeys,
         onboardingAvatar: setOnboardingAvatar,
         onboardingRestarting: setOnboardingRestarting,
@@ -4074,7 +4641,74 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.warn(`${STARTUP_WARN_PREFIX} ${scope}`, err);
     };
 
+    // Detect Lifo popout mode — lightweight init that skips agent lifecycle.
+    const isPopoutMode = isLifoPopoutMode();
+
     const initApp = async () => {
+      // Popout fast-path: just connect WS and fetch events. No agent
+      // lifecycle, no onboarding, no auth gates.
+      if (isPopoutMode) {
+        const navPath =
+          window.location.protocol === "file:"
+            ? window.location.hash.replace(/^#/, "") || "/"
+            : window.location.pathname;
+        const urlTab = tabFromPath(navPath);
+        setTabRaw(urlTab ?? "lifo");
+        setOnboardingComplete(true);
+        setOnboardingLoading(false);
+
+        // Wait for API to be reachable (it's already running from the main window)
+        for (let i = 0; i < 30 && !cancelled; i++) {
+          try {
+            const status = await client.getStatus();
+            setAgentStatus(status);
+            setConnected(true);
+            break;
+          } catch {
+            await new Promise<void>((r) => setTimeout(r, 500));
+          }
+        }
+
+        client.connectWs();
+        unbindStatus = client.onWsEvent(
+          "status",
+          (data: Record<string, unknown>) => {
+            const nextStatus = parseAgentStatusEvent(data);
+            if (nextStatus) setAgentStatus(nextStatus);
+          },
+        );
+        unbindAgentEvents = client.onWsEvent(
+          "agent_event",
+          (data: Record<string, unknown>) => {
+            const event = parseStreamEventEnvelopeEvent(data);
+            if (event) appendAutonomousEvent(event);
+          },
+        );
+        unbindHeartbeatEvents = client.onWsEvent(
+          "heartbeat_event",
+          (data: Record<string, unknown>) => {
+            const event = parseStreamEventEnvelopeEvent(data);
+            if (event) appendAutonomousEvent(event);
+          },
+        );
+
+        await fetchAutonomyReplay();
+
+        // Restore custom avatar in the popout so the stream captures it.
+        const popoutAvatarIndex = loadAvatarIndex();
+        if (popoutAvatarIndex === 0) {
+          const hasVrm = await client.hasCustomVrm();
+          if (hasVrm) {
+            setSelectedVrmIndex(0);
+            setCustomVrmUrl(resolveApiUrl(`/api/avatar/vrm?t=${Date.now()}`));
+          }
+        } else {
+          setSelectedVrmIndex(popoutAvatarIndex);
+        }
+
+        return;
+      }
+
       if (import.meta.env.DEV && startupRunId > 0) {
         console.debug(`[milady] Retrying startup run #${startupRunId}`);
       }
@@ -4354,6 +4988,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       void loadWorkbench();
+      void loadPlugins(); // Hydrate plugin state early so Nav sees streaming-base toggle
+
+      // Hydrate coding agent sessions
+      client
+        .getCodingAgentStatus()
+        .then((status) => {
+          if (status?.tasks) {
+            setPtySessions(
+              status.tasks.map((t) => ({
+                sessionId: t.sessionId,
+                agentType: t.agentType ?? "claude",
+                label: t.label ?? t.sessionId,
+                originalTask: t.originalTask ?? "",
+                workdir: t.workdir ?? "",
+                status: t.status ?? "active",
+                decisionCount: t.decisionCount ?? 0,
+                autoResolvedCount: t.autoResolvedCount ?? 0,
+              })),
+            );
+          }
+        })
+        .catch(() => {}); // non-critical
 
       // Connect WebSocket
       client.connectWs();
@@ -4411,15 +5067,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         },
       );
 
-      try {
-        const replay = await client.getAgentEvents({ limit: 300 });
-        if (replay.events.length > 0) {
-          setAutonomousEvents(replay.events);
-          setAutonomousLatestEventId(replay.latestEventId);
-        }
-      } catch (err) {
-        console.warn("[milady] Failed to fetch autonomous event replay", err);
-      }
+      await fetchAutonomyReplay();
 
       // Handle proactive messages from autonomy
       unbindProactiveMessages = client.onWsEvent(
@@ -4438,6 +5086,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
           } else {
             // Non-active — mark unread
             setUnreadConversations((prev) => new Set([...prev, convId]));
+          }
+
+          // Synthesize agent_event for non-retake sources (e.g. discord)
+          // so they appear in the StreamView activity feed
+          if (
+            msg.source &&
+            msg.source !== "retake" &&
+            msg.source !== "client_chat" &&
+            msg.role === "user"
+          ) {
+            appendAutonomousEvent({
+              type: "agent_event",
+              version: 1,
+              eventId: `synth-${msg.id}`,
+              ts: msg.timestamp,
+              stream: "message",
+              payload: {
+                text: msg.text,
+                from: msg.from,
+                source: msg.source,
+                direction: "inbound",
+                channel: msg.source,
+              },
+            });
           }
 
           // Bump conversation to top of list
@@ -4474,6 +5146,83 @@ export function AppProvider({ children }: { children: ReactNode }) {
         },
       );
 
+      // Handle PTY session events from SwarmCoordinator
+      client.onWsEvent("pty-session-event", (data: Record<string, unknown>) => {
+        const eventType = (data.eventType ?? data.type) as string;
+        const sessionId = data.sessionId as string;
+        if (!sessionId) return;
+
+        if (eventType === "task_registered") {
+          const d = data.data as Record<string, unknown> | undefined;
+          setPtySessions((prev) => [
+            ...prev.filter((s) => s.sessionId !== sessionId),
+            {
+              sessionId,
+              agentType: (d?.agentType as string) ?? "claude",
+              label: (d?.label as string) ?? sessionId,
+              originalTask: (d?.originalTask as string) ?? "",
+              workdir: (d?.workdir as string) ?? "",
+              status: "active",
+              decisionCount: 0,
+              autoResolvedCount: 0,
+            },
+          ]);
+        } else if (eventType === "task_complete" || eventType === "stopped") {
+          setPtySessions((prev) =>
+            prev.filter((s) => s.sessionId !== sessionId),
+          );
+        } else if (eventType === "blocked" || eventType === "escalation") {
+          setPtySessions((prev) =>
+            prev.map((s) =>
+              s.sessionId === sessionId
+                ? { ...s, status: "blocked" as const }
+                : s,
+            ),
+          );
+        } else if (eventType === "tool_running") {
+          const d = data.data as Record<string, unknown> | undefined;
+          const toolDesc =
+            (d?.description as string) ??
+            (d?.toolName as string) ??
+            "external tool";
+          setPtySessions((prev) =>
+            prev.map((s) =>
+              s.sessionId === sessionId
+                ? {
+                    ...s,
+                    status: "tool_running" as const,
+                    toolDescription: toolDesc,
+                  }
+                : s,
+            ),
+          );
+        } else if (
+          eventType === "coordination_decision" ||
+          eventType === "blocked_auto_resolved" ||
+          eventType === "ready"
+        ) {
+          setPtySessions((prev) =>
+            prev.map((s) =>
+              s.sessionId === sessionId
+                ? {
+                    ...s,
+                    status: "active" as const,
+                    toolDescription: undefined,
+                  }
+                : s,
+            ),
+          );
+        } else if (eventType === "error") {
+          setPtySessions((prev) =>
+            prev.map((s) =>
+              s.sessionId === sessionId
+                ? { ...s, status: "error" as const }
+                : s,
+            ),
+          );
+        }
+      });
+
       // Load wallet addresses for header
       try {
         setWalletAddresses(await client.getWalletAddresses());
@@ -4497,7 +5246,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (resolvedIndex === 0) {
         const hasVrm = await client.hasCustomVrm();
         if (hasVrm) {
-          setCustomVrmUrl(`/api/avatar/vrm?t=${Date.now()}`);
+          setCustomVrmUrl(resolveApiUrl(`/api/avatar/vrm?t=${Date.now()}`));
         } else {
           setSelectedVrmIndex(1);
         }
@@ -4571,6 +5320,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     appendAutonomousEvent,
     checkExtensionStatus,
     currentTheme,
+    fetchAutonomyReplay,
     loadCharacter,
     loadInventory,
     loadPlugins,
@@ -4649,6 +5399,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     conversationMessages,
     autonomousEvents,
     autonomousLatestEventId,
+    autonomousRunHealthByRunId,
+    ptySessions,
     unreadConversations,
     triggers,
     triggersLoading,
@@ -4794,6 +5546,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     onboardingBlooioPhoneNumber,
     onboardingGithubToken,
     onboardingSubscriptionTab,
+    onboardingElizaCloudTab,
     onboardingSelectedChains,
     onboardingRpcSelections,
     onboardingRpcKeys,
@@ -4802,6 +5555,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     commandPaletteOpen,
     commandQuery,
     commandActiveIndex,
+    closeCommandPalette,
     emotePickerOpen,
     mcpConfiguredServers,
     mcpServerStatuses,
@@ -4849,6 +5603,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     handleSelectConversation,
     handleDeleteConversation,
     handleRenameConversation,
+    sendActionMessage,
     loadTriggers,
     createTrigger,
     updateTrigger,

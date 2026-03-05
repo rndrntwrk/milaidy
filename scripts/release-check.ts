@@ -5,7 +5,11 @@ import { execSync } from "node:child_process";
 type PackFile = { path: string };
 type PackResult = { files?: PackFile[] };
 
-const requiredPaths = ["dist/index", "dist/entry", "dist/build-info.json"];
+const requiredPathGroups = [
+  ["dist/index.js", "dist/index"],
+  ["dist/entry.js", "dist/entry"],
+  ["dist/build-info.json"],
+];
 const forbiddenPrefixes = ["dist/Milady.app/"];
 
 function runPackDry(): PackResult[] {
@@ -22,7 +26,9 @@ function main() {
   const files = results.flatMap((entry) => entry.files ?? []);
   const paths = new Set(files.map((file) => file.path));
 
-  const missing = requiredPaths.filter((path) => !paths.has(path));
+  const missing = requiredPathGroups
+    .filter((group) => !group.some((path) => paths.has(path)))
+    .map((group) => group[0]);
   const forbidden = [...paths].filter((path) =>
     forbiddenPrefixes.some((prefix) => path.startsWith(prefix)),
   );

@@ -241,6 +241,20 @@ export interface AgentStatus {
   startup?: AgentStartupDiagnostics;
 }
 
+// WebSocket connection state tracking
+export type WebSocketConnectionState =
+  | "connected"
+  | "disconnected"
+  | "reconnecting"
+  | "failed";
+
+export interface ConnectionStateInfo {
+  state: WebSocketConnectionState;
+  reconnectAttempt: number;
+  maxReconnectAttempts: number;
+  disconnectedAt: number | null;
+}
+
 export type ApiErrorKind = "timeout" | "network" | "http";
 
 export class ApiError extends Error {
@@ -556,6 +570,33 @@ export interface SandboxStartResponse {
   error?: string;
 }
 
+export interface SandboxBrowserEndpoints {
+  cdpEndpoint?: string | null;
+  wsEndpoint?: string | null;
+  noVncEndpoint?: string | null;
+}
+
+export interface SandboxScreenshotRegion {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface SandboxScreenshotPayload {
+  format: string;
+  encoding: string;
+  width: number | null;
+  height: number | null;
+  data: string;
+}
+
+export interface SandboxWindowInfo {
+  id: string;
+  title: string;
+  app: string;
+}
+
 export interface SecretInfo {
   key: string;
   description: string;
@@ -587,7 +628,13 @@ export interface PluginInfo {
   enabled: boolean;
   configured: boolean;
   envKey: string | null;
-  category: "ai-provider" | "connector" | "database" | "app" | "feature";
+  category:
+    | "ai-provider"
+    | "connector"
+    | "streaming"
+    | "database"
+    | "app"
+    | "feature";
   source: "bundled" | "store";
   parameters: PluginParamDef[];
   validationErrors: Array<{ field: string; message: string }>;
@@ -686,6 +733,8 @@ export interface ConversationMessage {
   blocks?: ContentBlock[];
   /** Source channel when forwarded from another channel (e.g. "autonomy"). */
   source?: string;
+  /** Username of the sender (e.g. retake viewer username, discord username). */
+  from?: string;
 }
 
 export type ConversationChannelType =
@@ -1155,6 +1204,33 @@ export interface WorkbenchOverview {
   };
 }
 
+// Coding Agent Sessions
+export interface CodingAgentSession {
+  sessionId: string;
+  agentType: string;
+  label: string;
+  originalTask: string;
+  workdir: string;
+  status:
+    | "active"
+    | "blocked"
+    | "completed"
+    | "stopped"
+    | "error"
+    | "tool_running";
+  decisionCount: number;
+  autoResolvedCount: number;
+  /** Description of the active tool when status is "tool_running". */
+  toolDescription?: string;
+}
+
+export interface CodingAgentStatus {
+  supervisionLevel: string;
+  taskCount: number;
+  tasks: CodingAgentSession[];
+  pendingConfirmations: number;
+}
+
 // MCP
 export interface McpServerConfig {
   type: "stdio" | "streamable-http" | "sse";
@@ -1614,6 +1690,53 @@ export interface KnowledgeUploadResult {
   warnings?: string[];
 }
 
+export interface KnowledgeBulkUploadItemResult {
+  index: number;
+  ok: boolean;
+  filename: string;
+  documentId?: string;
+  fragmentCount?: number;
+  error?: string;
+  warnings?: string[];
+}
+
+export interface KnowledgeBulkUploadResult {
+  ok: boolean;
+  total: number;
+  successCount: number;
+  failureCount: number;
+  results: KnowledgeBulkUploadItemResult[];
+}
+
+// Memory / context command types
+export interface MemorySearchResult {
+  id: string;
+  text: string;
+  createdAt: number;
+  score: number;
+}
+
+export interface MemorySearchResponse {
+  query: string;
+  results: MemorySearchResult[];
+  count: number;
+  limit: number;
+}
+
+export interface MemoryRememberResponse {
+  ok: boolean;
+  id: string;
+  text: string;
+  createdAt: number;
+}
+
+export interface QuickContextResponse {
+  query: string;
+  answer: string;
+  memories: MemorySearchResult[];
+  knowledge: KnowledgeSearchResult[];
+}
+
 // WebSocket
 
 export type WsEventHandler = (data: Record<string, unknown>) => void;
@@ -1691,6 +1814,15 @@ export class MiladyClient {
   private readonly wsSendQueueLimit = 32;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private backoffMs = 500;
+
+  // Connection state tracking for backend crash handling
+  private connectionState: WebSocketConnectionState = "disconnected";
+  private reconnectAttempt = 0;
+  private disconnectedAt: number | null = null;
+  private connectionStateListeners = new Set<
+    (state: ConnectionStateInfo) => void
+  >();
+  private readonly maxReconnectAttempts = 15;
 
   private static resolveElectronLocalFallbackBase(): string {
     if (typeof window === "undefined") return "";
@@ -2038,6 +2170,33 @@ export class MiladyClient {
 
   async getSandboxPlatform(): Promise<SandboxPlatformStatus> {
     return this.fetch("/api/sandbox/platform");
+  }
+
+  async getSandboxBrowser(): Promise<SandboxBrowserEndpoints> {
+    return this.fetch("/api/sandbox/browser");
+  }
+
+  async getSandboxScreenshot(
+    region?: SandboxScreenshotRegion,
+  ): Promise<SandboxScreenshotPayload> {
+    if (!region) {
+      return this.fetch("/api/sandbox/screen/screenshot", {
+        method: "POST",
+      });
+    }
+
+    return this.fetch("/api/sandbox/screen/screenshot", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(region),
+    });
+  }
+
+  async getSandboxWindows(): Promise<{
+    windows: SandboxWindowInfo[];
+    error?: string;
+  }> {
+    return this.fetch("/api/sandbox/screen/windows");
   }
 
   async startDocker(): Promise<SandboxStartResponse> {
@@ -2554,11 +2713,16 @@ export class MiladyClient {
   async getAgentEvents(opts?: {
     afterEventId?: string;
     limit?: number;
+    runId?: string;
+    fromSeq?: number;
   }): Promise<AgentEventsResponse> {
     const params = new URLSearchParams();
     if (opts?.afterEventId) params.set("after", opts.afterEventId);
     if (typeof opts?.limit === "number")
       params.set("limit", String(opts.limit));
+    if (opts?.runId) params.set("runId", opts.runId);
+    if (typeof opts?.fromSeq === "number")
+      params.set("fromSeq", String(Math.trunc(opts.fromSeq)));
     const qs = params.toString();
     return this.fetch(`/api/agent/events${qs ? `?${qs}` : ""}`);
   }
@@ -3260,6 +3424,20 @@ export class MiladyClient {
     });
   }
 
+  async uploadKnowledgeDocumentsBulk(data: {
+    documents: Array<{
+      content: string;
+      filename: string;
+      contentType?: string;
+      metadata?: Record<string, unknown>;
+    }>;
+  }): Promise<KnowledgeBulkUploadResult> {
+    return this.fetch("/api/knowledge/documents/bulk", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
   async uploadKnowledgeFromUrl(
     url: string,
     metadata?: Record<string, unknown>,
@@ -3288,6 +3466,35 @@ export class MiladyClient {
     return this.fetch(
       `/api/knowledge/fragments/${encodeURIComponent(documentId)}`,
     );
+  }
+
+  // Memory commands
+
+  async rememberMemory(text: string): Promise<MemoryRememberResponse> {
+    return this.fetch("/api/memory/remember", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    });
+  }
+
+  async searchMemory(
+    query: string,
+    options?: { limit?: number },
+  ): Promise<MemorySearchResponse> {
+    const params = new URLSearchParams({ q: query });
+    if (options?.limit !== undefined)
+      params.set("limit", String(options.limit));
+    return this.fetch(`/api/memory/search?${params}`);
+  }
+
+  async quickContext(
+    query: string,
+    options?: { limit?: number },
+  ): Promise<QuickContextResponse> {
+    const params = new URLSearchParams({ q: query });
+    if (options?.limit !== undefined)
+      params.set("limit", String(options.limit));
+    return this.fetch(`/api/context/quick?${params}`);
   }
 
   // MCP
@@ -3371,6 +3578,12 @@ export class MiladyClient {
 
     this.ws.onopen = () => {
       this.backoffMs = 500;
+      // Reset connection state on successful connection
+      this.reconnectAttempt = 0;
+      this.disconnectedAt = null;
+      this.connectionState = "connected";
+      this.emitConnectionStateChange();
+
       if (
         this.wsSendQueue.length > 0 &&
         this.ws?.readyState === WebSocket.OPEN
@@ -3419,6 +3632,18 @@ export class MiladyClient {
 
     this.ws.onclose = () => {
       this.ws = null;
+      // Track disconnection time if not already set
+      if (this.disconnectedAt === null) {
+        this.disconnectedAt = Date.now();
+      }
+      this.reconnectAttempt++;
+      // Update state based on attempt count
+      if (this.reconnectAttempt >= this.maxReconnectAttempts) {
+        this.connectionState = "failed";
+      } else {
+        this.connectionState = "reconnecting";
+      }
+      this.emitConnectionStateChange();
       this.scheduleReconnect();
     };
 
@@ -3429,11 +3654,60 @@ export class MiladyClient {
 
   private scheduleReconnect(): void {
     if (this.reconnectTimer) return;
+    // Stop reconnecting if we've hit max attempts
+    if (this.reconnectAttempt >= this.maxReconnectAttempts) {
+      return;
+    }
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.connectWs();
     }, this.backoffMs);
     this.backoffMs = Math.min(this.backoffMs * 1.5, 10000);
+  }
+
+  private emitConnectionStateChange(): void {
+    const state = this.getConnectionState();
+    for (const listener of this.connectionStateListeners) {
+      try {
+        listener(state);
+      } catch {
+        // ignore listener errors
+      }
+    }
+  }
+
+  /** Get the current WebSocket connection state. */
+  getConnectionState(): ConnectionStateInfo {
+    return {
+      state: this.connectionState,
+      reconnectAttempt: this.reconnectAttempt,
+      maxReconnectAttempts: this.maxReconnectAttempts,
+      disconnectedAt: this.disconnectedAt,
+    };
+  }
+
+  /** Subscribe to connection state changes. Returns an unsubscribe function. */
+  onConnectionStateChange(
+    listener: (state: ConnectionStateInfo) => void,
+  ): () => void {
+    this.connectionStateListeners.add(listener);
+    return () => {
+      this.connectionStateListeners.delete(listener);
+    };
+  }
+
+  /** Reset connection state and restart reconnection attempts. */
+  resetConnection(): void {
+    this.reconnectAttempt = 0;
+    this.disconnectedAt = null;
+    this.connectionState = "disconnected";
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.backoffMs = 500;
+    this.emitConnectionStateChange();
+    this.connectWs();
   }
 
   /** Send an arbitrary JSON message over the WebSocket connection. */
@@ -3998,6 +4272,11 @@ export class MiladyClient {
     this.ws?.close();
     this.ws = null;
     this.wsSendQueue = [];
+    // Reset connection state on intentional disconnect
+    this.reconnectAttempt = 0;
+    this.disconnectedAt = null;
+    this.connectionState = "disconnected";
+    this.emitConnectionStateChange();
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -4223,6 +4502,216 @@ export class MiladyClient {
     return this.fetch("/api/bug-report", {
       method: "POST",
       body: JSON.stringify(report),
+    });
+  }
+
+  // ── Coding Agents ───────────────────────────────────────────────────
+
+  async getCodingAgentStatus(): Promise<CodingAgentStatus | null> {
+    try {
+      return await this.fetch<CodingAgentStatus>(
+        "/api/coding-agents/coordinator/status",
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  async stopCodingAgent(sessionId: string): Promise<boolean> {
+    try {
+      await this.fetch(
+        `/api/coding-agents/${encodeURIComponent(sessionId)}/stop`,
+        { method: "POST" },
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // ── PTY Terminal (xterm.js bridge) ─────────────────────────────────────
+
+  /** Subscribe to live PTY output for a session over WebSocket. */
+  subscribePtyOutput(sessionId: string): void {
+    this.sendWsMessage({ type: "pty-subscribe", sessionId });
+  }
+
+  /** Unsubscribe from live PTY output for a session. */
+  unsubscribePtyOutput(sessionId: string): void {
+    this.sendWsMessage({ type: "pty-unsubscribe", sessionId });
+  }
+
+  /** Send raw keyboard input to a PTY session. */
+  sendPtyInput(sessionId: string, data: string): void {
+    this.sendWsMessage({ type: "pty-input", sessionId, data });
+  }
+
+  /** Resize a PTY session's terminal dimensions. */
+  resizePty(sessionId: string, cols: number, rows: number): void {
+    this.sendWsMessage({ type: "pty-resize", sessionId, cols, rows });
+  }
+
+  /** Fetch buffered terminal output (raw ANSI) for xterm.js hydration. */
+  async getPtyBufferedOutput(sessionId: string): Promise<string> {
+    try {
+      const res = await this.fetch<{ output: string }>(
+        `/api/coding-agents/${encodeURIComponent(sessionId)}/buffered-output`,
+      );
+      return res.output ?? "";
+    } catch {
+      return "";
+    }
+  }
+
+  // ── Stream controls ─────────────────────────────────────────────────────
+
+  async streamGoLive(): Promise<{
+    ok: boolean;
+    live: boolean;
+    rtmpUrl?: string;
+    inputMode?: string;
+    audioSource?: string;
+    message?: string;
+    destination?: string;
+  }> {
+    return this.fetch("/api/stream/live", { method: "POST" });
+  }
+
+  async streamGoOffline(): Promise<{ ok: boolean; live: boolean }> {
+    return this.fetch("/api/stream/offline", { method: "POST" });
+  }
+
+  async streamStatus(): Promise<{
+    ok: boolean;
+    running: boolean;
+    ffmpegAlive: boolean;
+    uptime: number;
+    frameCount: number;
+    volume: number;
+    muted: boolean;
+    audioSource: string;
+    inputMode: string | null;
+    destination?: { id: string; name: string } | null;
+  }> {
+    return this.fetch("/api/stream/status");
+  }
+
+  async getStreamingDestinations(): Promise<{
+    ok: boolean;
+    destinations: Array<{ id: string; name: string }>;
+  }> {
+    return this.fetch("/api/streaming/destinations");
+  }
+
+  async setActiveDestination(destinationId: string): Promise<{
+    ok: boolean;
+    destination?: { id: string; name: string };
+  }> {
+    return this.fetch("/api/streaming/destination", {
+      method: "POST",
+      body: JSON.stringify({ destinationId }),
+    });
+  }
+
+  async setStreamVolume(
+    volume: number,
+  ): Promise<{ ok: boolean; volume: number; muted: boolean }> {
+    return this.fetch("/api/stream/volume", {
+      method: "POST",
+      body: JSON.stringify({ volume }),
+    });
+  }
+
+  async muteStream(): Promise<{ ok: boolean; muted: boolean; volume: number }> {
+    return this.fetch("/api/stream/mute", { method: "POST" });
+  }
+
+  async unmuteStream(): Promise<{
+    ok: boolean;
+    muted: boolean;
+    volume: number;
+  }> {
+    return this.fetch("/api/stream/unmute", { method: "POST" });
+  }
+
+  // ── Stream voice (TTS) ───────────────────────────────────────────────
+
+  async getStreamVoice(): Promise<{
+    ok: boolean;
+    enabled: boolean;
+    autoSpeak: boolean;
+    provider: string | null;
+    configuredProvider: string | null;
+    hasApiKey: boolean;
+    isSpeaking: boolean;
+    isAttached: boolean;
+  }> {
+    return this.fetch("/api/stream/voice");
+  }
+
+  async saveStreamVoice(settings: {
+    enabled?: boolean;
+    autoSpeak?: boolean;
+    provider?: string;
+  }): Promise<{
+    ok: boolean;
+    voice: { enabled: boolean; autoSpeak: boolean };
+  }> {
+    return this.fetch("/api/stream/voice", {
+      method: "POST",
+      body: JSON.stringify(settings),
+    });
+  }
+
+  async streamVoiceSpeak(
+    text: string,
+  ): Promise<{ ok: boolean; speaking: boolean }> {
+    return this.fetch("/api/stream/voice/speak", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    });
+  }
+
+  // ── Overlay layout ────────────────────────────────────────────────────
+
+  async getOverlayLayout(
+    destinationId?: string | null,
+  ): Promise<{ ok: boolean; layout: unknown; destinationId?: string }> {
+    const qs = destinationId
+      ? `?destination=${encodeURIComponent(destinationId)}`
+      : "";
+    return this.fetch(`/api/stream/overlay-layout${qs}`);
+  }
+
+  async saveOverlayLayout(
+    layout: unknown,
+    destinationId?: string | null,
+  ): Promise<{ ok: boolean; layout: unknown; destinationId?: string }> {
+    const qs = destinationId
+      ? `?destination=${encodeURIComponent(destinationId)}`
+      : "";
+    return this.fetch(`/api/stream/overlay-layout${qs}`, {
+      method: "POST",
+      body: JSON.stringify({ layout }),
+    });
+  }
+
+  // ── Stream visual settings (theme, avatar for headless parity) ────────
+
+  async getStreamSettings(): Promise<{
+    ok: boolean;
+    settings: { theme?: string; avatarIndex?: number };
+  }> {
+    return this.fetch("/api/stream/settings");
+  }
+
+  async saveStreamSettings(settings: {
+    theme?: string;
+    avatarIndex?: number;
+  }): Promise<{ ok: boolean; settings: unknown }> {
+    return this.fetch("/api/stream/settings", {
+      method: "POST",
+      body: JSON.stringify({ settings }),
     });
   }
 }

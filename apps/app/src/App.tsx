@@ -2,7 +2,7 @@
  * Root App component — routing shell.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApp } from "./AppContext";
 import { AdvancedPageView } from "./components/AdvancedPageView";
 import { AppsPageView } from "./components/AppsPageView";
@@ -11,6 +11,7 @@ import { BugReportModal } from "./components/BugReportModal";
 import { CharacterView } from "./components/CharacterView";
 import { ChatView } from "./components/ChatView";
 import { CommandPalette } from "./components/CommandPalette";
+import { CompanionView } from "./components/CompanionView";
 import { ConnectorsPageView } from "./components/ConnectorsPageView";
 import { ConversationsSidebar } from "./components/ConversationsSidebar";
 import { CustomActionEditor } from "./components/CustomActionEditor";
@@ -20,7 +21,9 @@ import { GameViewOverlay } from "./components/GameViewOverlay";
 import { Header } from "./components/Header";
 import { InventoryView } from "./components/InventoryView";
 import { KnowledgeView } from "./components/KnowledgeView";
+import { LifoSandboxView } from "./components/LifoSandboxView";
 import { LoadingScreen } from "./components/LoadingScreen";
+import { MemoryDebugPanel } from "./components/MemoryDebugPanel";
 import { Nav } from "./components/Nav";
 import { OnboardingWizard } from "./components/OnboardingWizard";
 import { PairingView } from "./components/PairingView";
@@ -28,18 +31,46 @@ import { RestartBanner } from "./components/RestartBanner";
 import { SaveCommandModal } from "./components/SaveCommandModal";
 import { SettingsView } from "./components/SettingsView";
 import { StartupFailureView } from "./components/StartupFailureView";
+import { StreamView } from "./components/StreamView";
 import { TerminalPanel } from "./components/TerminalPanel";
+import { ErrorBoundary } from "./components/ui/ErrorBoundary";
 import { BugReportProvider, useBugReportState } from "./hooks/useBugReport";
 import { useContextMenu } from "./hooks/useContextMenu";
-import { APPS_ENABLED } from "./navigation";
+import { useLifoAutoPopout } from "./hooks/useLifoAutoPopout";
+import { isLifoPopoutMode } from "./lifo-popout";
+import {
+  ALL_TAB_GROUPS,
+  APPS_ENABLED,
+  COMPANION_ENABLED,
+  pathForTab,
+} from "./navigation";
 
-const advancedTabs = new Set(TAB_GROUPS.find(g => g.label === "Advanced")?.tabs ?? []);
+const advancedTabs = new Set(
+  ALL_TAB_GROUPS.find((group) => group.label === "Advanced")?.tabs ?? [],
+);
+const CHAT_MOBILE_BREAKPOINT_PX = 1024;
+
+/** Check if we're in pop-out mode (StreamView only, no chrome). */
+function useIsPopout(): boolean {
+  const [popout] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const params = new URLSearchParams(
+      window.location.search || window.location.hash.split("?")[1] || "",
+    );
+    return params.has("popout");
+  });
+  return popout;
+}
 
 function ViewRouter() {
   const { tab } = useApp();
   switch (tab) {
     case "chat":
       return <ChatView />;
+    case "companion":
+      return COMPANION_ENABLED ? <CompanionView /> : <ChatView />;
+    case "stream":
+      return <StreamView />;
     case "apps":
       // Apps disabled in production builds; fall through to chat
       return APPS_ENABLED ? <AppsPageView /> : <ChatView />;
@@ -64,6 +95,7 @@ function ViewRouter() {
     case "trajectories":
     case "runtime":
     case "database":
+    case "lifo":
     case "logs":
     case "security":
       return <AdvancedPageView />;
@@ -81,13 +113,33 @@ export function App() {
     onboardingComplete,
     retryStartup,
     tab,
+    setTab,
     actionNotice,
     agentStatus,
     unreadConversations,
     activeGameViewerUrl,
     gameOverlayEnabled,
+    setActionNotice,
   } = useApp();
+  const isPopout = useIsPopout();
   const contextMenu = useContextMenu();
+
+  // When the stream is popped out, navigate away; when closed, navigate back.
+  const [streamPoppedOut, setStreamPoppedOut] = useState(false);
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail === "opened") {
+        setStreamPoppedOut(true);
+        setTab("chat");
+      } else if (detail === "closed") {
+        setStreamPoppedOut(false);
+        setTab("stream");
+      }
+    };
+    window.addEventListener("stream-popout", handler);
+    return () => window.removeEventListener("stream-popout", handler);
+  }, [setTab]);
 
   const [customActionsPanelOpen, setCustomActionsPanelOpen] = useState(false);
   const [customActionsEditorOpen, setCustomActionsEditorOpen] = useState(false);
@@ -113,6 +165,7 @@ export function App() {
     tab === "trajectories" ||
     tab === "runtime" ||
     tab === "database" ||
+    tab === "lifo" ||
     tab === "logs" ||
     tab === "security";
   const unreadCount = unreadConversations?.size ?? 0;
@@ -237,8 +290,45 @@ export function App() {
   }, [isChat]);
 
   const bugReport = useBugReportState();
+  const lifoPopoutMode = useMemo(() => isLifoPopoutMode(), []);
+
+  useLifoAutoPopout({
+    enabled:
+      !lifoPopoutMode &&
+      !onboardingLoading &&
+      onboardingComplete &&
+      !authRequired,
+    targetPath: pathForTab("lifo", import.meta.env.BASE_URL),
+    onPopupBlocked: () => {
+      setActionNotice(
+        "Lifo popout blocked by the browser. Allow popups to watch agent computer-use live.",
+        "error",
+        3800,
+      );
+    },
+  });
 
   const agentStarting = agentStatus?.state === "starting";
+
+  useEffect(() => {
+    const STARTUP_TIMEOUT_MS = 300_000;
+    if ((startupPhase as string) !== "ready" && !startupError) {
+      const timer = setTimeout(() => {
+        retryStartup();
+      }, STARTUP_TIMEOUT_MS);
+      return () => clearTimeout(timer);
+    }
+  }, [startupPhase, startupError, retryStartup]);
+
+  // Pop-out mode — render only StreamView, skip startup gates.
+  // Platform init is skipped in main.tsx; AppProvider hydrates WS in background.
+  if (isPopout) {
+    return (
+      <div className="flex flex-col h-screen w-screen font-body text-txt bg-bg overflow-hidden">
+        <StreamView />
+      </div>
+    );
+  }
 
   if (startupError) {
     return <StartupFailureView error={startupError} onRetry={retryStartup} />;
@@ -255,21 +345,73 @@ export function App() {
   if (authRequired) return <PairingView />;
   if (!onboardingComplete) return <ErrorBoundary><OnboardingWizard /></ErrorBoundary>;
 
-  const isChat = tab === "chat";
-  const isAdvancedTab = advancedTabs.has(tab);
+  if (lifoPopoutMode) {
+    return (
+      <BugReportProvider value={bugReport}>
+        <div className="flex h-screen w-screen min-h-0 bg-bg text-txt">
+          <main className="flex-1 min-h-0 overflow-hidden p-3 xl:p-4">
+            <LifoSandboxView />
+          </main>
+        </div>
+      </BugReportProvider>
+    );
+  }
 
   return (
     <BugReportProvider value={bugReport}>
-      {isChat ? (
+      {tab === "stream" && !streamPoppedOut ? (
+        <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
+          <Header />
+          <Nav />
+          <main className="flex-1 min-h-0 overflow-hidden">
+            <StreamView />
+          </main>
+        </div>
+      ) : isChat || (tab === "stream" && streamPoppedOut) ? (
         <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
           <Header />
           <Nav mobileLeft={mobileChatControls} />
           <div className="flex flex-1 min-h-0 relative">
-            <ConversationsSidebar />
-            <main id="main-content" className="flex flex-col flex-1 min-w-0 overflow-visible pt-3 px-5">
-              <ErrorBoundary><ChatView /></ErrorBoundary>
-            </main>
-            <AutonomousPanel />
+            {isChatMobileLayout ? (
+              <>
+                <main className="flex flex-col flex-1 min-w-0 overflow-visible pt-2 px-2">
+                  <ErrorBoundary>
+                    <ChatView />
+                  </ErrorBoundary>
+                </main>
+
+                {mobileConversationsOpen && (
+                  <div className="fixed inset-0 z-[120] bg-bg">
+                    <ConversationsSidebar
+                      mobile
+                      onClose={() => setMobileConversationsOpen(false)}
+                    />
+                  </div>
+                )}
+
+                {mobileAutonomousOpen && (
+                  <div className="fixed inset-0 z-[120] bg-bg">
+                    <AutonomousPanel
+                      mobile
+                      onClose={() => setMobileAutonomousOpen(false)}
+                    />
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <ConversationsSidebar />
+                <main
+                  id="main-content"
+                  className="flex flex-col flex-1 min-w-0 overflow-visible pt-3 px-3 xl:px-5"
+                >
+                  <ErrorBoundary>
+                    <ChatView />
+                  </ErrorBoundary>
+                </main>
+                <AutonomousPanel />
+              </>
+            )}
             <CustomActionsPanel
               open={customActionsPanelOpen}
               onClose={() => setCustomActionsPanelOpen(false)}
@@ -315,6 +457,7 @@ export function App() {
         }}
       />
       <RestartBanner />
+      <MemoryDebugPanel />
       <BugReportModal />
       {actionNotice && (
         <div

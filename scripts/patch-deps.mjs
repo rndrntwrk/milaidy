@@ -1,18 +1,21 @@
 #!/usr/bin/env node
 /**
- * Post-install patches for @elizaos/plugin-sql.
+ * Post-install patches for various @elizaos and dependency packages.
  *
- * 1) Adds .onConflictDoNothing() to createWorld() to prevent duplicate world
- *    insert errors on repeated ensureWorldExists() calls.
- * 2) Guards ensureEmbeddingDimension() so unsupported dimensions don't set the
- *    embedding column to undefined (which crashes drizzle query planning).
- * 3) Removes pgcrypto from extension list (not used, causes PGlite warnings).
+ * 1) @elizaos/plugin-sql: Adds .onConflictDoNothing() to createWorld(), guards
+ *    ensureEmbeddingDimension(), removes pgcrypto from extension list.
+ *    Remove once plugin-sql publishes fixes.
  *
- * Remove these once plugin-sql publishes fixes for both paths.
+ * 2) Bun exports: Some published @elizaos packages set exports["."].bun =
+ *    "./src/index.ts", which only exists in their dev workspace, not in the
+ *    npm tarball. Bun picks "bun" first and fails. We remove the dead "bun"/
+ *    "default" conditions so Bun resolves via "import" → dist/. WHY: See
+ *    docs/plugin-resolution-and-node-path.md "Bun and published package exports".
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { patchBunExports } from "./lib/patch-bun-exports.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
@@ -524,3 +527,123 @@ if (!existsSync(twitterTarget)) {
     );
   }
 }
+
+/**
+ * Patch @elizaos/plugin-pdf to fix ESM compatibility with pdfjs-dist.
+ *
+ * pdfjs-dist doesn't provide a default export in ESM mode, so
+ * `import pkg from "pdfjs-dist"` fails. We patch it to use namespace import.
+ *
+ * Remove once plugin-pdf publishes a fix for ESM compatibility.
+ */
+function findAllPluginPdfDists() {
+  const targets = [];
+  const distPaths = [
+    "dist/node/index.node.js",
+    "dist/browser/index.browser.js",
+  ];
+
+  const searchRoots = [root];
+  const homeDir = process.env.HOME || process.env.USERPROFILE || "";
+  const homeNodeModules = resolve(homeDir, "node_modules");
+  if (existsSync(homeNodeModules)) {
+    searchRoots.push(resolve(homeNodeModules, ".."));
+  }
+
+  for (const searchRoot of searchRoots) {
+    for (const distPath of distPaths) {
+      const npmTarget = resolve(
+        searchRoot,
+        `node_modules/@elizaos/plugin-pdf/${distPath}`,
+      );
+      if (existsSync(npmTarget) && !targets.includes(npmTarget)) {
+        targets.push(npmTarget);
+      }
+    }
+
+    const bunCacheDir = resolve(searchRoot, "node_modules/.bun");
+    if (existsSync(bunCacheDir)) {
+      try {
+        const entries = readdirSync(bunCacheDir);
+        for (const entry of entries) {
+          if (entry.startsWith("@elizaos+plugin-pdf@")) {
+            for (const distPath of distPaths) {
+              const bunTarget = resolve(
+                bunCacheDir,
+                entry,
+                `node_modules/@elizaos/plugin-pdf/${distPath}`,
+              );
+              if (existsSync(bunTarget) && !targets.includes(bunTarget)) {
+                targets.push(bunTarget);
+              }
+            }
+          }
+        }
+      } catch {
+        // Ignore errors reading bun cache
+      }
+    }
+  }
+
+  return targets;
+}
+
+const pdfTargets = findAllPluginPdfDists();
+
+if (pdfTargets.length === 0) {
+  console.log("[patch-deps] plugin-pdf dist not found, skipping patch.");
+} else {
+  console.log(
+    `[patch-deps] Found ${pdfTargets.length} plugin-pdf dist file(s) to patch.`,
+  );
+
+  // Use regex to match various minified patterns of the default import
+  // Pattern: import <var> from "pdfjs-dist" or import <var> from"pdfjs-dist"
+  const pdfBuggyImportRegex = /import\s+(\w+)\s+from\s*"pdfjs-dist"/g;
+
+  for (const target of pdfTargets) {
+    console.log(`[patch-deps] Patching plugin-pdf: ${target}`);
+    let src = readFileSync(target, "utf8");
+    let patched = false;
+
+    if (src.includes("import * as") && src.includes("pdfjs-dist")) {
+      console.log("  - pdfjs-dist ESM import patch already present.");
+    } else {
+      // Find all default imports from pdfjs-dist and replace with namespace imports
+      const matches = [...src.matchAll(pdfBuggyImportRegex)];
+      if (matches.length > 0) {
+        for (const match of matches) {
+          const varName = match[1];
+          const originalImport = match[0];
+          const fixedImport = `import * as ${varName} from "pdfjs-dist"`;
+          src = src.replace(originalImport, fixedImport);
+          patched = true;
+        }
+        if (patched) {
+          console.log(
+            `  - Applied pdfjs-dist ESM namespace import patch (${matches.length} occurrence(s)).`,
+          );
+        }
+      } else if (src.includes("pdfjs-dist")) {
+        console.log(
+          "  - pdfjs-dist import pattern changed — patch may need updating.",
+        );
+      } else {
+        console.log(
+          "  - pdfjs-dist import not found — patch may no longer be needed.",
+        );
+      }
+    }
+
+    if (patched) {
+      writeFileSync(target, src, "utf8");
+      console.log("  - Wrote pdfjs-dist ESM patch.");
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Patch @elizaos packages whose exports["."].bun points to ./src/index.ts.
+// Logic lives in scripts/lib/patch-bun-exports.mjs (testable).
+// ---------------------------------------------------------------------------
+patchBunExports(root, "@elizaos/plugin-coding-agent");

@@ -27,8 +27,11 @@ import {
   type Task,
   type UUID,
 } from "@elizaos/core";
+import type {
+  PTYService,
+  SwarmEvent,
+} from "@elizaos/plugin-agent-orchestrator";
 import { listPiAiModelOptions } from "@elizaos/plugin-pi-ai";
-import { createCodingAgentRouteHandler } from "@milaidy/plugin-coding-agent";
 import { type WebSocket, WebSocketServer } from "ws";
 import type { CloudManager } from "../cloud/cloud-manager";
 import {
@@ -80,6 +83,7 @@ import {
 import { parseClampedInteger } from "../utils/number-parsing";
 import { handleAgentAdminRoutes } from "./agent-admin-routes";
 import { handleAgentLifecycleRoutes } from "./agent-lifecycle-routes";
+import { detectRuntimeModel } from "./agent-model";
 import { handleAgentTransferRoutes } from "./agent-transfer-routes";
 import { handleAppsHyperscapeRoutes } from "./apps-hyperscape-routes";
 import { handleAppsRoutes } from "./apps-routes";
@@ -113,7 +117,10 @@ import {
   pushWithBatchEvict,
   sweepExpiredEntries,
 } from "./memory-bounds";
+import { handleMemoryRoutes } from "./memory-routes";
+import { buildWhitelistTree, generateProof } from "./merkle-tree";
 import { handleModelsRoutes } from "./models-routes";
+import { verifyAndWhitelistHolder } from "./nft-verify";
 import { handlePermissionRoutes } from "./permissions-routes";
 import {
   createRateLimitMiddleware,
@@ -339,7 +346,7 @@ interface PluginEntry {
   enabled: boolean;
   configured: boolean;
   envKey: string | null;
-  category: "ai-provider" | "connector" | "database" | "feature";
+  category: "ai-provider" | "connector" | "streaming" | "database" | "feature";
   /** Where the plugin comes from: "bundled" (ships with Milady) or "store" (user-installed from registry). */
   source: "bundled" | "store";
   configKeys: string[];
@@ -611,7 +618,7 @@ interface PluginIndexEntry {
   name: string;
   npmName: string;
   description: string;
-  category: "ai-provider" | "connector" | "database" | "feature";
+  category: "ai-provider" | "connector" | "streaming" | "database" | "feature";
   envKey: string | null;
   configKeys: string[];
   pluginParameters?: Record<string, Record<string, unknown>>;
@@ -812,6 +819,7 @@ function prefixLabel(key: string, suffix: string): string {
 // ---------------------------------------------------------------------------
 
 const BLOCKED_ENV_KEYS = new Set([
+  // System-level injection vectors
   "LD_PRELOAD",
   "LD_LIBRARY_PATH",
   "DYLD_INSERT_LIBRARIES",
@@ -819,11 +827,36 @@ const BLOCKED_ENV_KEYS = new Set([
   "NODE_OPTIONS",
   "NODE_EXTRA_CA_CERTS",
   "ELECTRON_RUN_AS_NODE",
+  // TLS bypass — setting to "0" disables ALL certificate verification,
+  // enabling MITM interception of every outbound HTTPS request (API keys
+  // for OpenAI, Anthropic, ElevenLabs etc. sent in plaintext headers).
+  "NODE_TLS_REJECT_UNAUTHORIZED",
+  // Proxy hijack — routes all HTTP/HTTPS traffic through attacker proxy,
+  // exposing Authorization headers and API keys in transit.
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "ALL_PROXY",
+  "NO_PROXY",
+  // Module resolution override
+  "NODE_PATH",
+  // CA certificate override — trust rogue CAs for MITM
+  "SSL_CERT_FILE",
+  "SSL_CERT_DIR",
+  "CURL_CA_BUNDLE",
   "PATH",
   "HOME",
   "SHELL",
+  // Auth / step-up tokens — writable via API would grant privilege escalation
   "MILADY_API_TOKEN",
   "MILADY_WALLET_EXPORT_TOKEN",
+  "MILADY_TERMINAL_RUN_TOKEN",
+  "HYPERSCAPE_AUTH_TOKEN",
+  // Wallet private keys — writable via API would enable key theft / replacement
+  "EVM_PRIVATE_KEY",
+  "SOLANA_PRIVATE_KEY",
+  // Third-party auth tokens
+  "GITHUB_TOKEN",
+  // Database connection strings
   "DATABASE_URL",
   "POSTGRES_URL",
 ]);
@@ -870,6 +903,27 @@ export const CONFIG_WRITE_ALLOWED_TOP_KEYS = new Set([
   "x402",
   "mcp",
   "features",
+]);
+
+/**
+ * Stream names accepted by `POST /api/agent/event`.
+ * Plugins emit events to these streams for the StreamView UI.
+ */
+export const AGENT_EVENT_ALLOWED_STREAMS = new Set([
+  "chat",
+  "terminal",
+  "game",
+  "autonomy",
+  "retake",
+  "stream",
+  "system",
+  // Retake plugin event streams (chat-poll.ts emits these)
+  "message",
+  "new_viewer",
+  "assistant",
+  "thought",
+  "action",
+  "viewer_stats",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -1121,7 +1175,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
       const HIDDEN_KEYS = new Set(["VERCEL_OIDC_TOKEN"]);
       const entries = index.plugins
         .map((p) => {
-          const category = categorizePlugin(p.id);
+          // Use manifest category if available, otherwise fall back to hardcoded categorization
+          const category = p.category ?? categorizePlugin(p.id);
           const envKey = p.envKey;
           const filteredConfigKeys = p.configKeys.filter(
             (k) => !HIDDEN_KEYS.has(k),
@@ -1196,7 +1251,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
 
 function categorizePlugin(
   id: string,
-): "ai-provider" | "connector" | "database" | "feature" {
+): "ai-provider" | "connector" | "streaming" | "database" | "feature" {
   const aiProviders = [
     "openai",
     "anthropic",
@@ -1238,14 +1293,23 @@ function categorizePlugin(
     "zalo",
     "zalouser",
     "tlon",
-    "twitch",
     "nextcloud-talk",
     "instagram",
+    "blooio",
+    "twitch",
+  ];
+  const streamingDests = [
+    "streaming-base",
     "retake",
+    "custom-rtmp",
+    "youtube",
+    "youtube-streaming",
+    "twitch-streaming",
   ];
   const databases = ["sql", "localdb", "inmemorydb"];
 
   if (aiProviders.includes(id)) return "ai-provider";
+  if (streamingDests.includes(id)) return "streaming";
   if (connectors.includes(id)) return "connector";
   if (databases.includes(id)) return "database";
   return "feature";
@@ -1440,6 +1504,14 @@ function resolveSkillEnabled(
   return true;
 }
 
+function parseSkillDirsSetting(raw: unknown): string[] {
+  if (typeof raw !== "string") return [];
+  return raw
+    .split(",")
+    .map((dir) => dir.trim())
+    .filter((dir) => dir.length > 0);
+}
+
 /**
  * Discover skills from @elizaos/skills and workspace, applying
  * database preferences and config filtering.
@@ -1526,7 +1598,7 @@ async function discoverSkills(
   }
 
   // ── Fallback: filesystem scanning ───────────────────────────────────────
-  const skillsDirs: string[] = [];
+  const skillsDirs = new Set<string>();
 
   // Bundled skills from the @elizaos/skills package
   try {
@@ -1535,7 +1607,7 @@ async function discoverSkills(
     };
     const bundledDir = skillsPkg.getSkillsDir();
     if (bundledDir && fs.existsSync(bundledDir)) {
-      skillsDirs.push(bundledDir);
+      skillsDirs.add(bundledDir);
     }
   } catch {
     logger.debug(
@@ -1543,17 +1615,37 @@ async function discoverSkills(
     );
   }
 
+  // Runtime-provided skill directories (works even when @elizaos/skills is not installed
+  // as a direct dependency and AgentSkillsService catalog sync is degraded).
+  if (runtime && typeof runtime.getSetting === "function") {
+    for (const dir of parseSkillDirsSetting(
+      runtime.getSetting("BUNDLED_SKILLS_DIRS"),
+    )) {
+      if (fs.existsSync(dir)) skillsDirs.add(dir);
+    }
+    for (const dir of parseSkillDirsSetting(
+      runtime.getSetting("EXTRA_SKILLS_DIRS"),
+    )) {
+      if (fs.existsSync(dir)) skillsDirs.add(dir);
+    }
+    for (const dir of parseSkillDirsSetting(
+      runtime.getSetting("WORKSPACE_SKILLS_DIR"),
+    )) {
+      if (fs.existsSync(dir)) skillsDirs.add(dir);
+    }
+  }
+
   // Workspace-local skills
   const workspaceSkills = path.join(workspaceDir, "skills");
   if (fs.existsSync(workspaceSkills)) {
-    skillsDirs.push(workspaceSkills);
+    skillsDirs.add(workspaceSkills);
   }
 
   // Extra dirs from config
   const extraDirs = config.skills?.load?.extraDirs;
   if (extraDirs) {
     for (const dir of extraDirs) {
-      if (fs.existsSync(dir)) skillsDirs.push(dir);
+      if (fs.existsSync(dir)) skillsDirs.add(dir);
     }
   }
 
@@ -2785,7 +2877,15 @@ const SENSITIVE_KEY_RE =
   /password|secret|api.?key|private.?key|seed.?phrase|authorization|connection.?string|credential|(?<!max)tokens?$/i;
 
 function isBlockedObjectKey(key: string): boolean {
-  return key === "__proto__" || key === "constructor" || key === "prototype";
+  return (
+    key === "__proto__" ||
+    key === "constructor" ||
+    key === "prototype" ||
+    // Block config include directives — if an API caller embeds "$include"
+    // inside a config patch, the next loadMiladyConfig() → resolveConfigIncludes
+    // pass would read arbitrary local files and merge them into the config.
+    key === "$include"
+  );
 }
 
 function hasBlockedObjectKeyDeep(value: unknown): boolean {
@@ -2800,7 +2900,7 @@ function hasBlockedObjectKeyDeep(value: unknown): boolean {
   return false;
 }
 
-function cloneWithoutBlockedObjectKeys<T>(value: T): T {
+export function cloneWithoutBlockedObjectKeys<T>(value: T): T {
   if (value === null || value === undefined) return value;
   if (Array.isArray(value)) {
     return value.map((item) => cloneWithoutBlockedObjectKeys(item)) as T;
@@ -2937,6 +3037,15 @@ const BLOCKED_MCP_ENV_KEYS = new Set([
   "NODE_OPTIONS",
   "NODE_EXTRA_CA_CERTS",
   "ELECTRON_RUN_AS_NODE",
+  "NODE_TLS_REJECT_UNAUTHORIZED",
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "ALL_PROXY",
+  "NO_PROXY",
+  "NODE_PATH",
+  "SSL_CERT_FILE",
+  "SSL_CERT_DIR",
+  "CURL_CA_BUNDLE",
   "PATH",
   "HOME",
   "SHELL",
@@ -2967,6 +3076,17 @@ const BLOCKED_INTERPRETER_FLAGS = new Set([
   "--preload",
   "-c",
   "-m",
+  // V8 inspector — opens an unauthenticated debug port (default 9229) that
+  // allows arbitrary code execution via Chrome DevTools Protocol.  If bound
+  // to 0.0.0.0, any network peer can connect → RCE without any token.
+  "--inspect",
+  "--inspect-brk",
+  "--inspect-wait",
+  "--inspect-port",
+  "--inspect-publish-uid",
+  // Policy / diagnostics file access
+  "--experimental-policy",
+  "--diagnostic-dir",
 ]);
 
 const BLOCKED_PACKAGE_RUNNER_FLAGS = new Set(["-c", "--call", "-e", "--eval"]);
@@ -2979,6 +3099,11 @@ const BLOCKED_CONTAINER_FLAGS = new Set([
   "--security-opt",
   "--pid",
   "--network",
+  "--device",
+  "--ipc",
+  "--uts",
+  "--userns",
+  "--cgroupns",
 ]);
 const BLOCKED_DENO_SUBCOMMANDS = new Set(["eval"]);
 const BLOCKED_MCP_REMOTE_HOST_LITERALS = new Set([
@@ -4098,10 +4223,74 @@ async function resolveTrainingServiceCtor(): Promise<TrainingServiceCtor | null>
   return null;
 }
 
+function mcpServersIncludeStdio(servers: Record<string, unknown>): boolean {
+  return Object.values(servers).some((serverConfig) => {
+    if (
+      !serverConfig ||
+      typeof serverConfig !== "object" ||
+      Array.isArray(serverConfig)
+    ) {
+      return false;
+    }
+    return (serverConfig as Record<string, unknown>).type === "stdio";
+  });
+}
+
+export function resolveMcpTerminalAuthorizationRejection(
+  req: Pick<http.IncomingMessage, "headers">,
+  servers: Record<string, unknown>,
+  body: { terminalToken?: string },
+): TerminalRunRejection | null {
+  if (!mcpServersIncludeStdio(servers)) {
+    return null;
+  }
+  return resolveTerminalRunRejection(req as http.IncomingMessage, body);
+}
+
 const LOCAL_ORIGIN_RE =
   /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|\[0:0:0:0:0:0:0:1\])(:\d+)?$/i;
 const APP_ORIGIN_RE =
   /^(capacitor|capacitor-electron|app):\/\/(localhost|-)?$/i;
+
+/**
+ * Hostname allowlist for DNS rebinding protection.
+ * Requests with a Host header that doesn't match a known loopback name are
+ * rejected before CORS / auth processing.  This prevents a malicious page
+ * from rebinding its DNS to 127.0.0.1 and reading the unauthenticated API.
+ */
+const LOCAL_HOST_RE =
+  /^(localhost|127\.0\.0\.1|\[?::1\]?|\[?0:0:0:0:0:0:0:1\]?|::ffff:127\.0\.0\.1)$/;
+
+export function isAllowedHost(req: http.IncomingMessage): boolean {
+  const raw = req.headers.host;
+  if (!raw) return true; // No Host header → non-browser client (e.g. curl)
+
+  let hostname: string;
+  const trimmed = raw.trim().toLowerCase();
+  if (!trimmed) return true;
+
+  if (trimmed.startsWith("[")) {
+    // Bracketed IPv6: [::1]:31337 → ::1
+    const close = trimmed.indexOf("]");
+    hostname = close > 0 ? trimmed.slice(1, close) : trimmed.slice(1);
+  } else if ((trimmed.match(/:/g) || []).length >= 2) {
+    // Bare IPv6 (multiple colons, no brackets): ::1 → ::1
+    hostname = trimmed;
+  } else {
+    // IPv4 or hostname: localhost:31337 → localhost
+    hostname = trimmed.replace(/:\d+$/, "");
+  }
+
+  if (!hostname) return true;
+
+  // Allow configured custom bind host (if non-loopback, the token gate
+  // enforced by ensureApiTokenForBindHost already protects the API)
+  const bindHost = process.env.MILADY_API_BIND?.trim().toLowerCase();
+  if (bindHost && hostname === bindHost.replace(/:\d+$/, "").trim()) {
+    return true;
+  }
+  return LOCAL_HOST_RE.test(hostname);
+}
 
 function resolveCorsOrigin(origin?: string): string | null {
   if (!origin) return null;
@@ -4218,7 +4407,7 @@ function rateLimitPairing(ip: string | null): boolean {
   return true;
 }
 
-function extractAuthToken(req: http.IncomingMessage): string | null {
+export function extractAuthToken(req: http.IncomingMessage): string | null {
   const auth =
     typeof req.headers.authorization === "string"
       ? req.headers.authorization.trim()
@@ -4354,7 +4543,7 @@ export function ensureApiTokenForBindHost(host: string): void {
   );
 }
 
-function isAuthorized(req: http.IncomingMessage): boolean {
+export function isAuthorized(req: http.IncomingMessage): boolean {
   const expected = process.env.MILADY_API_TOKEN?.trim();
   if (!expected) return true;
   const provided = extractAuthToken(req);
@@ -4636,8 +4825,8 @@ function rejectWebSocketUpgrade(
       `Content-Length: ${Buffer.byteLength(body)}\r\n` +
       "\r\n" +
       body,
+    () => socket.end(),
   );
-  socket.destroy();
 }
 
 function decodePathComponent(
@@ -5231,6 +5420,201 @@ async function routeAutonomyTextToUser(
   });
 }
 
+// ── Coding Agent Chat Bridge ──────────────────────────────────────────
+
+/**
+ * Get the SwarmCoordinator from the runtime services (if available).
+ * The coordinator is registered by @elizaos/plugin-agent-orchestrator.
+ */
+function getCoordinatorFromRuntime(runtime: AgentRuntime): {
+  setChatCallback?: (
+    cb: (text: string, source?: string) => Promise<void>,
+  ) => void;
+  setWsBroadcast?: (cb: (event: SwarmEvent) => void) => void;
+} | null {
+  // Try to get coordinator from runtime services
+  const coordinator = runtime.getService("SWARM_COORDINATOR");
+  if (coordinator)
+    return coordinator as ReturnType<typeof getCoordinatorFromRuntime>;
+  return null;
+}
+
+/**
+ * Wire the SwarmCoordinator's chatCallback so coordinator messages
+ * appear in the user's chat UI via the existing proactive-message flow.
+ * Returns true if successfully wired.
+ */
+function wireCodingAgentChatBridge(st: ServerState): boolean {
+  if (!st.runtime) return false;
+  const coordinator = getCoordinatorFromRuntime(st.runtime);
+  if (!coordinator?.setChatCallback) return false;
+  coordinator.setChatCallback(async (text: string, source?: string) => {
+    await routeAutonomyTextToUser(st, text, source ?? "coding-agent");
+  });
+  return true;
+}
+
+/**
+ * Wire the SwarmCoordinator's wsBroadcast callback so coordinator events
+ * are relayed to all WebSocket clients as "pty-session-event" messages.
+ * Returns true if successfully wired.
+ */
+function wireCodingAgentWsBridge(st: ServerState): boolean {
+  if (!st.runtime) return false;
+  const coordinator = getCoordinatorFromRuntime(st.runtime);
+  if (!coordinator?.setWsBroadcast) return false;
+  coordinator.setWsBroadcast((event: SwarmEvent) => {
+    // Preserve the coordinator's event type (task_registered, task_complete, etc.)
+    // as `eventType` so it doesn't overwrite the WS message dispatch type.
+    const { type: eventType, ...rest } = event;
+    st.broadcastWs?.({ type: "pty-session-event", eventType, ...rest });
+  });
+  return true;
+}
+
+/**
+ * Fallback handler for /api/coding-agents/* routes when the plugin
+ * doesn't export createCodingAgentRouteHandler.
+ * Uses the AgentOrchestratorService (CODE_TASK) to provide task data.
+ */
+async function handleCodingAgentsFallback(
+  runtime: AgentRuntime,
+  pathname: string,
+  method: string,
+  _req: http.IncomingMessage,
+  res: http.ServerResponse,
+): Promise<boolean> {
+  // GET /api/coding-agents/coordinator/status
+  if (
+    method === "GET" &&
+    pathname === "/api/coding-agents/coordinator/status"
+  ) {
+    const orchestratorService = runtime.getService("CODE_TASK") as {
+      getTasks?: () => Promise<
+        Array<{
+          id?: string;
+          name?: string;
+          description?: string;
+          metadata?: {
+            status?: string;
+            providerId?: string;
+            providerLabel?: string;
+            workingDirectory?: string;
+            progress?: number;
+            steps?: Array<{ status?: string }>;
+          };
+        }>
+      >;
+    } | null;
+
+    if (!orchestratorService?.getTasks) {
+      // Return empty status if service not available
+      json(res, {
+        supervisionLevel: "autonomous",
+        taskCount: 0,
+        tasks: [],
+        pendingConfirmations: 0,
+      });
+      return true;
+    }
+
+    try {
+      const tasks = await orchestratorService.getTasks();
+
+      // Map tasks to the CodingAgentSession format expected by frontend
+      const mappedTasks = tasks.map((task) => {
+        const meta = task.metadata ?? {};
+        // Map orchestrator status to frontend status
+        let status: string = "active";
+        switch (meta.status) {
+          case "completed":
+            status = "completed";
+            break;
+          case "failed":
+          case "error":
+            status = "error";
+            break;
+          case "cancelled":
+            status = "stopped";
+            break;
+          case "paused":
+            status = "blocked";
+            break;
+          case "running":
+            status = "active";
+            break;
+          case "pending":
+            status = "active";
+            break;
+          default:
+            status = "active";
+        }
+
+        return {
+          sessionId: task.id ?? "",
+          agentType: meta.providerId ?? "eliza",
+          label: meta.providerLabel ?? task.name ?? "Task",
+          originalTask: task.description ?? task.name ?? "",
+          workdir: meta.workingDirectory ?? process.cwd(),
+          status,
+          decisionCount: meta.steps?.length ?? 0,
+          autoResolvedCount:
+            meta.steps?.filter((s) => s.status === "completed").length ?? 0,
+        };
+      });
+
+      json(res, {
+        supervisionLevel: "autonomous",
+        taskCount: mappedTasks.length,
+        tasks: mappedTasks,
+        pendingConfirmations: 0,
+      });
+      return true;
+    } catch (e) {
+      error(res, `Failed to get coding agent status: ${e}`, 500);
+      return true;
+    }
+  }
+
+  // POST /api/coding-agents/:sessionId/stop - Stop a coding agent task
+  const stopMatch = pathname.match(/^\/api\/coding-agents\/([^/]+)\/stop$/);
+  if (method === "POST" && stopMatch) {
+    const sessionId = decodeURIComponent(stopMatch[1]);
+    const orchestratorService = runtime.getService("CODE_TASK") as {
+      cancelTask?: (taskId: string) => Promise<void>;
+    } | null;
+
+    if (!orchestratorService?.cancelTask) {
+      error(res, "Orchestrator service not available", 503);
+      return true;
+    }
+
+    try {
+      await orchestratorService.cancelTask(sessionId);
+      json(res, { ok: true });
+      return true;
+    } catch (e) {
+      error(res, `Failed to stop task: ${e}`, 500);
+      return true;
+    }
+  }
+
+  // Not handled by fallback
+  return false;
+}
+
+/**
+ * Get the PTYConsoleBridge from the PTYService (if available).
+ * Used by the WS PTY handlers to subscribe to output and forward input.
+ */
+function getPtyConsoleBridge(st: ServerState) {
+  if (!st.runtime) return null;
+  const ptyService = st.runtime.getService(
+    "PTY_SERVICE",
+  ) as unknown as PTYService | null;
+  return ptyService?.consoleBridge ?? null;
+}
+
 /**
  * Route non-conversation agent events into the active user chat.
  * This avoids monkey-patching the message service and relies on explicit
@@ -5442,6 +5826,16 @@ async function handleRequest(
     res.statusCode = upstreamResponse.status;
     res.end(responseText);
   };
+
+  // ── DNS rebinding protection ──────────────────────────────────────────
+  // Reject requests whose Host header doesn't match a known loopback
+  // hostname.  Without this check an attacker can rebind their domain's
+  // DNS to 127.0.0.1 and read the unauthenticated localhost API from a
+  // malicious page.
+  if (!isAllowedHost(req)) {
+    json(res, { error: "Forbidden — invalid Host header" }, 403);
+    return;
+  }
 
   if (!applyCors(req, res)) {
     json(res, { error: "Origin not allowed" }, 403);
@@ -6208,10 +6602,34 @@ async function handleRequest(
     if (body.adjectives) agent.adjectives = body.adjectives as string[];
     if (body.topics) agent.topics = body.topics as string[];
     if (body.postExamples) agent.postExamples = body.postExamples as string[];
-    if (body.messageExamples)
-      agent.messageExamples = body.messageExamples as Array<
-        Array<{ user: string; content: { text: string } }>
-      >;
+    if (body.messageExamples) {
+      // Normalise to the {examples: [{name, content}]} format that @elizaos/core expects.
+      const raw = body.messageExamples as unknown[];
+      agent.messageExamples = raw.map((item) => {
+        if (
+          item &&
+          typeof item === "object" &&
+          "examples" in (item as Record<string, unknown>)
+        ) {
+          return item as {
+            examples: { name: string; content: { text: string } }[];
+          };
+        }
+        // Old format: [{user, content}, ...] → {examples: [{name, content}, ...]}
+        const arr = item as {
+          user?: string;
+          name?: string;
+          content: { text: string };
+        }[];
+        return {
+          examples: arr.map((m) => ({
+            name: m.name ?? m.user ?? "",
+            content: m.content,
+          })),
+        };
+        // biome-ignore lint/suspicious/noExplicitAny: mixed legacy/new formats
+      }) as any;
+    }
 
     // ── Theme preference ──────────────────────────────────────────────────
     if (body.theme) {
@@ -6425,22 +6843,25 @@ async function handleRequest(
       body.blooioApiKey.trim()
     ) {
       if (!config.env) config.env = {};
-      (config.env as Record<string, string>).BLOOIO_API_KEY = (
-        body.blooioApiKey as string
-      ).trim();
-      process.env.BLOOIO_API_KEY = (body.blooioApiKey as string).trim();
+      const trimmedKey = (body.blooioApiKey as string).trim();
+      (config.env as Record<string, string>).BLOOIO_API_KEY = trimmedKey;
+      process.env.BLOOIO_API_KEY = trimmedKey;
+
+      const blooioConnector: Record<string, string> = { apiKey: trimmedKey };
+
       if (
         body.blooioPhoneNumber &&
         typeof body.blooioPhoneNumber === "string" &&
         body.blooioPhoneNumber.trim()
       ) {
-        (config.env as Record<string, string>).BLOOIO_PHONE_NUMBER = (
-          body.blooioPhoneNumber as string
-        ).trim();
-        process.env.BLOOIO_PHONE_NUMBER = (
-          body.blooioPhoneNumber as string
-        ).trim();
+        const trimmedPhone = (body.blooioPhoneNumber as string).trim();
+        (config.env as Record<string, string>).BLOOIO_PHONE_NUMBER =
+          trimmedPhone;
+        process.env.BLOOIO_PHONE_NUMBER = trimmedPhone;
+        blooioConnector.fromNumber = trimmedPhone;
       }
+
+      config.connectors.blooio = blooioConnector;
     }
 
     // ── Inventory / RPC providers ─────────────────────────────────────────
@@ -6545,6 +6966,22 @@ async function handleRequest(
       error,
     });
     if (knowledgeHandled) return;
+  }
+
+  if (pathname.startsWith("/api/memory") || pathname === "/api/context/quick") {
+    const memoryHandled = await handleMemoryRoutes({
+      req,
+      res,
+      method,
+      pathname,
+      url,
+      runtime: state.runtime,
+      agentName: state.agentName,
+      readJsonBody,
+      json,
+      error,
+    });
+    if (memoryHandled) return;
   }
 
   if (
@@ -9783,9 +10220,24 @@ async function handleRequest(
       endpoint?: string;
       proof?: string[];
     }>(req, res);
-    if (!body || !body.proof) {
-      error(res, "proof array is required");
-      return;
+    if (!body) return;
+    let proof = body.proof;
+    if (!proof || proof.length === 0) {
+      const addrs = getWalletAddresses();
+      const walletAddress = addrs.evmAddress ?? "";
+      if (!walletAddress) {
+        error(res, "EVM wallet not configured.");
+        return;
+      }
+      const proofResult = generateProof(walletAddress);
+      if (!proofResult.isWhitelisted) {
+        error(
+          res,
+          "Address not whitelisted. Complete Twitter or NFT verification first.",
+        );
+        return;
+      }
+      proof = proofResult.proof;
     }
 
     const agentName = body.name || state.agentName || "Milady Agent";
@@ -9793,7 +10245,7 @@ async function handleRequest(
     const result = await dropService.mintWithWhitelist(
       agentName,
       endpoint,
-      body.proof,
+      proof,
     );
     json(res, result);
     return;
@@ -9811,11 +10263,23 @@ async function handleRequest(
       : false;
     const ogCode = readOGCodeFromState();
 
+    const { info } = buildWhitelistTree();
+    const proofReady = walletAddress
+      ? generateProof(walletAddress).isWhitelisted
+      : false;
+
     json(res, {
       eligible: twitterVerified,
       twitterVerified,
+      nftVerified: twitterVerified, // We'll leave it as is if there's no way to distinguish, or we can check the file
+      whitelisted: walletAddress ? isAddressWhitelisted(walletAddress) : false,
       ogCode: ogCode ?? null,
       walletAddress,
+      merkle: {
+        root: info.root,
+        addressCount: info.addressCount,
+        proofReady,
+      },
     });
     return;
   }
@@ -9851,6 +10315,78 @@ async function handleRequest(
     if (result.verified && result.handle) {
       markAddressVerified(walletAddress, body.tweetUrl, result.handle);
     }
+    json(res, result);
+    return;
+  }
+
+  // ── POST /api/whitelist/nft/verify ───────────────────────────────────────
+  // Verify Milady NFT ownership for whitelist eligibility.
+  // Security: only verifies the agent's own wallet — does not accept
+  // arbitrary addresses to prevent whitelist injection from local processes.
+  if (method === "POST" && pathname === "/api/whitelist/nft/verify") {
+    // PR 518 FIX: Restrict to the agent's own wallet to prevent injection
+    const addrs = getWalletAddresses();
+    const address = addrs.evmAddress || "";
+    if (!address) {
+      error(res, "Wallet address is required. Complete onboarding first.", 400);
+      return;
+    }
+
+    try {
+      const result = await verifyAndWhitelistHolder(address);
+      json(res, { ...result, walletAddress: address });
+    } catch (err) {
+      error(
+        res,
+        `NFT verification failed: ${err instanceof Error ? err.message : String(err)}`,
+        500,
+      );
+    }
+    return;
+  }
+
+  // ── GET /api/whitelist/nft/status ────────────────────────────────────────
+  // Check NFT verification status without modifying the whitelist.
+  if (method === "GET" && pathname === "/api/whitelist/nft/status") {
+    const addrs = getWalletAddresses();
+    const walletAddress = addrs.evmAddress ?? "";
+    const whitelisted = walletAddress
+      ? isAddressWhitelisted(walletAddress)
+      : false;
+
+    json(res, {
+      walletAddress,
+      whitelisted,
+      contractAddress:
+        process.env.MILADY_NFT_CONTRACT?.trim() ||
+        "0x5Af0D9827E0c53E4799BB226655A1de152A425a5",
+      message: whitelisted
+        ? "Address is whitelisted for mint."
+        : "Address is not whitelisted. Use POST /api/whitelist/nft/verify to verify NFT ownership.",
+    });
+    return;
+  }
+
+  // ── GET /api/whitelist/merkle/root — tree info and root hash
+  if (method === "GET" && pathname === "/api/whitelist/merkle/root") {
+    const { info } = buildWhitelistTree();
+    json(res, {
+      root: info.root,
+      addressCount: info.addressCount,
+      proofReady: true,
+    });
+    return;
+  }
+
+  // ── GET /api/whitelist/merkle/proof?address=0x... — proof for an address
+  if (method === "GET" && pathname === "/api/whitelist/merkle/proof") {
+    const url = new URL(req.url ?? "", `http://${req.headers.host}`);
+    const addr = url.searchParams.get("address");
+    if (!addr) {
+      error(res, "address query parameter is required", 400);
+      return;
+    }
+    const result = generateProof(addr);
     json(res, result);
     return;
   }
@@ -9944,7 +10480,9 @@ async function handleRequest(
       return;
     }
     if (!state.config.connectors) state.config.connectors = {};
-    state.config.connectors[connectorName] = config as ConnectorConfig;
+    state.config.connectors[connectorName] = cloneWithoutBlockedObjectKeys(
+      config,
+    ) as ConnectorConfig;
     try {
       saveMiladyConfig(state.config);
     } catch {
@@ -10341,14 +10879,48 @@ async function handleRequest(
       // path changes in future refactors.
       delete envPatch.MILADY_API_TOKEN;
       delete envPatch.MILADY_WALLET_EXPORT_TOKEN;
+      delete envPatch.MILADY_TERMINAL_RUN_TOKEN;
+      delete envPatch.HYPERSCAPE_AUTH_TOKEN;
+      delete envPatch.EVM_PRIVATE_KEY;
+      delete envPatch.SOLANA_PRIVATE_KEY;
+      delete envPatch.GITHUB_TOKEN;
       if (
         envPatch.vars &&
         typeof envPatch.vars === "object" &&
         !Array.isArray(envPatch.vars)
       ) {
-        delete (envPatch.vars as Record<string, unknown>).MILADY_API_TOKEN;
-        delete (envPatch.vars as Record<string, unknown>)
-          .MILADY_WALLET_EXPORT_TOKEN;
+        const vars = envPatch.vars as Record<string, unknown>;
+        delete vars.MILADY_API_TOKEN;
+        delete vars.MILADY_WALLET_EXPORT_TOKEN;
+        delete vars.MILADY_TERMINAL_RUN_TOKEN;
+        delete vars.HYPERSCAPE_AUTH_TOKEN;
+        delete vars.EVM_PRIVATE_KEY;
+        delete vars.SOLANA_PRIVATE_KEY;
+        delete vars.GITHUB_TOKEN;
+      }
+
+      // Defense-in-depth: strip ALL BLOCKED_ENV_KEYS from the env patch
+      // before safeMerge.  The explicit deletes above cover known step-up
+      // secrets; this loop catches process-level injection keys
+      // (NODE_OPTIONS, LD_PRELOAD, etc.) so they never reach
+      // saveMiladyConfig() and the persistence→restart RCE chain is closed.
+      for (const key of Object.keys(envPatch)) {
+        if (key === "vars" || key === "shellEnv") continue;
+        if (BLOCKED_ENV_KEYS.has(key.toUpperCase())) {
+          delete envPatch[key];
+        }
+      }
+      if (
+        envPatch.vars &&
+        typeof envPatch.vars === "object" &&
+        !Array.isArray(envPatch.vars)
+      ) {
+        const innerVars = envPatch.vars as Record<string, unknown>;
+        for (const key of Object.keys(innerVars)) {
+          if (BLOCKED_ENV_KEYS.has(key.toUpperCase())) {
+            delete innerVars[key];
+          }
+        }
       }
     }
 
@@ -10372,6 +10944,19 @@ async function handleRequest(
         );
         if (mcpRejection) {
           error(res, mcpRejection, 400);
+          return;
+        }
+        const mcpTerminalRejection = resolveMcpTerminalAuthorizationRejection(
+          req,
+          mcpPatch.servers as Record<string, unknown>,
+          body as { terminalToken?: string },
+        );
+        if (mcpTerminalRejection) {
+          error(
+            res,
+            `Configuring stdio MCP servers via /api/config requires terminal authorization. ${mcpTerminalRejection.reason}`,
+            mcpTerminalRejection.status,
+          );
           return;
         }
       }
@@ -11275,6 +11860,8 @@ async function handleRequest(
       const agentId = runtime.agentId;
       const messages = memories.map((m) => {
         const contentSource = (m.content as Record<string, unknown>)?.source;
+        const meta = m.metadata as Record<string, unknown> | undefined;
+        const entityName = meta?.entityName;
         return {
           id: m.id ?? "",
           role: m.entityId === agentId ? "assistant" : "user",
@@ -11284,6 +11871,10 @@ async function handleRequest(
             typeof contentSource === "string" && contentSource !== "client_chat"
               ? contentSource
               : undefined,
+          from:
+            typeof entityName === "string" && entityName.length > 0
+              ? entityName
+              : undefined,
         };
       });
       json(res, { messages });
@@ -11291,7 +11882,7 @@ async function handleRequest(
       logger.warn(
         `[conversations] Failed to fetch messages: ${err instanceof Error ? err.message : String(err)}`,
       );
-      json(res, { error: "Failed to fetch messages" }, 500);
+      json(res, { messages: [], error: "Failed to fetch messages" }, 500);
     }
     return;
   }
@@ -11359,6 +11950,16 @@ async function handleRequest(
     req.on("close", () => {
       aborted = true;
     });
+
+    // SSE heartbeat: keep data flowing during long generation (LLM + action
+    // execution can take 30-60s).  Without this, idle connections can be
+    // dropped by proxies, browsers, or load-balancers.  SSE comments (lines
+    // starting with ':') are ignored by the client parser.
+    const heartbeatInterval = setInterval(() => {
+      if (!aborted && !res.writableEnded) {
+        res.write(": heartbeat\n\n");
+      }
+    }, 5000);
 
     try {
       const result = await generateChatResponse(
@@ -11440,6 +12041,7 @@ async function handleRequest(
         }
       }
     } finally {
+      clearInterval(heartbeatInterval);
       logger.info(
         `[perf] SSE /conversations/stream: total=${Date.now() - sseT0}ms, first-chunk=${sseFirstChunkMs || "n/a"}ms`,
       );
@@ -11868,8 +12470,56 @@ async function handleRequest(
       pathname.startsWith("/api/workspace") ||
       pathname.startsWith("/api/issues"))
   ) {
-    const handler = createCodingAgentRouteHandler(state.runtime);
-    const handled = await handler(req, res, pathname);
+    // Try to dynamically load the route handler from the local plugin first
+    let handled = false;
+
+    // Try @elizaos/plugin-coding-agent first (local workspace plugin)
+    try {
+      const codingAgentPlugin = await import("@elizaos/plugin-coding-agent");
+      if (codingAgentPlugin.createCodingAgentRouteHandler) {
+        const coordinator = codingAgentPlugin.getCoordinator?.(state.runtime);
+        const handler = codingAgentPlugin.createCodingAgentRouteHandler(
+          state.runtime,
+          coordinator,
+        );
+        handled = await handler(req, res, pathname);
+      }
+    } catch {
+      // Local plugin not available, try npm plugin
+    }
+
+    // Fallback to @elizaos/plugin-agent-orchestrator (npm)
+    if (!handled) {
+      try {
+        const orchestratorPlugin = await import(
+          "@elizaos/plugin-agent-orchestrator"
+        );
+        if (orchestratorPlugin.createCodingAgentRouteHandler) {
+          const coordinator = orchestratorPlugin.getCoordinator?.(
+            state.runtime,
+          );
+          const handler = orchestratorPlugin.createCodingAgentRouteHandler(
+            state.runtime,
+            coordinator,
+          );
+          handled = await handler(req, res, pathname);
+        }
+      } catch {
+        // Plugin doesn't export these functions - skip routing
+      }
+    }
+
+    // Final fallback: Handle coding-agents routes using AgentOrchestratorService
+    if (!handled && pathname.startsWith("/api/coding-agents")) {
+      handled = await handleCodingAgentsFallback(
+        state.runtime,
+        pathname,
+        method,
+        req,
+        res,
+      );
+    }
+
     if (handled) return;
   }
 
@@ -12733,6 +13383,7 @@ async function handleRequest(
     const body = await readJsonBody<{
       name?: string;
       config?: Record<string, unknown>;
+      terminalToken?: string;
     }>(req, res);
     if (!body) return;
 
@@ -12761,6 +13412,20 @@ async function handleRequest(
     });
     if (mcpRejection) {
       error(res, mcpRejection, 400);
+      return;
+    }
+
+    const mcpTerminalRejection = resolveMcpTerminalAuthorizationRejection(
+      req,
+      { [serverName]: config },
+      body,
+    );
+    if (mcpTerminalRejection) {
+      error(
+        res,
+        `Configuring stdio MCP servers requires terminal authorization. ${mcpTerminalRejection.reason}`,
+        mcpTerminalRejection.status,
+      );
       return;
     }
 
@@ -12819,6 +13484,7 @@ async function handleRequest(
   if (method === "PUT" && pathname === "/api/mcp/config") {
     const body = await readJsonBody<{
       servers?: Record<string, unknown>;
+      terminalToken?: string;
     }>(req, res);
     if (!body) return;
 
@@ -12837,6 +13503,19 @@ async function handleRequest(
       );
       if (mcpRejection) {
         error(res, mcpRejection, 400);
+        return;
+      }
+      const mcpTerminalRejection = resolveMcpTerminalAuthorizationRejection(
+        req,
+        body.servers as Record<string, unknown>,
+        body,
+      );
+      if (mcpTerminalRejection) {
+        error(
+          res,
+          `Configuring stdio MCP servers requires terminal authorization. ${mcpTerminalRejection.reason}`,
+          mcpTerminalRejection.status,
+        );
         return;
       }
       const sanitized = cloneWithoutBlockedObjectKeys(body.servers);
@@ -12926,6 +13605,50 @@ async function handleRequest(
       duration: emote.duration,
       loop: emote.loop,
     });
+    json(res, { ok: true });
+    return;
+  }
+
+  // ── POST /api/agent/event ──────────────────────────────────────────────
+  // Push an event into the agent event stream (WebSocket + buffer).
+  // Used by plugins (e.g. retake) to surface activity in the StreamView.
+  // Auth: protected by the isAuthorized(req) gate at L5631.
+  if (method === "POST" && pathname === "/api/agent/event") {
+    const body = await readJsonBody<{
+      stream?: string;
+      data?: Record<string, unknown>;
+      roomId?: string;
+    }>(req, res);
+    if (!body || !body.stream) {
+      error(res, "Missing 'stream' field");
+      return;
+    }
+    if (!AGENT_EVENT_ALLOWED_STREAMS.has(body.stream)) {
+      error(
+        res,
+        `Invalid stream: ${body.stream}. Allowed: ${[...AGENT_EVENT_ALLOWED_STREAMS].join(", ")}`,
+        400,
+      );
+      return;
+    }
+    const envelope: StreamEventEnvelope = {
+      type: "agent_event",
+      version: 1,
+      eventId: `evt-${state.nextEventId}`,
+      ts: Date.now(),
+      stream: body.stream,
+      agentId: state.runtime?.agentId
+        ? String(state.runtime.agentId)
+        : undefined,
+      roomId: body.roomId,
+      payload: body.data ?? {},
+    };
+    state.nextEventId += 1;
+    state.eventBuffer.push(envelope);
+    if (state.eventBuffer.length > 1500) {
+      state.eventBuffer.splice(0, state.eventBuffer.length - 1500);
+    }
+    state.broadcastWs?.(envelope as unknown as Record<string, unknown>);
     json(res, { ok: true });
     return;
   }
@@ -13125,6 +13848,25 @@ async function handleRequest(
       return;
     }
 
+    // Security gate: shell and code handlers execute arbitrary commands or
+    // code on the host machine, and the resulting action persists in config
+    // (survives restarts). Require the MILADY_TERMINAL_RUN_TOKEN to prove
+    // the caller has explicit operator authority for code execution.
+    if (handler.type === "shell" || handler.type === "code") {
+      const terminalRejection = resolveTerminalRunRejection(
+        req,
+        body as TerminalRunRequestBody,
+      );
+      if (terminalRejection) {
+        error(
+          res,
+          `Creating ${handler.type} actions requires terminal authorization. ${terminalRejection.reason}`,
+          terminalRejection.status,
+        );
+        return;
+      }
+    }
+
     // Validate type-specific required fields
     if (
       handler.type === "http" &&
@@ -13266,6 +14008,22 @@ async function handleRequest(
       return;
     }
 
+    // Security gate: shell/code handlers execute arbitrary commands on the host.
+    if (def.handler.type === "shell" || def.handler.type === "code") {
+      const terminalRejection = resolveTerminalRunRejection(
+        req,
+        body as TerminalRunRequestBody,
+      );
+      if (terminalRejection) {
+        error(
+          res,
+          `Testing ${def.handler.type} actions requires terminal authorization. ${terminalRejection.reason}`,
+          terminalRejection.status,
+        );
+        return;
+      }
+    }
+
     const testParams = body.params ?? {};
     const start = Date.now();
     try {
@@ -13312,6 +14070,23 @@ async function handleRequest(
         return;
       }
       newHandler = h as unknown as CustomActionDef["handler"];
+    }
+
+    // Security gate: if the new/updated handler is shell or code, require
+    // terminal authorization — same gate as POST creation.
+    if (newHandler.type === "shell" || newHandler.type === "code") {
+      const terminalRejection = resolveTerminalRunRejection(
+        req,
+        body as TerminalRunRequestBody,
+      );
+      if (terminalRejection) {
+        error(
+          res,
+          `Updating to ${newHandler.type} handler requires terminal authorization. ${terminalRejection.reason}`,
+          terminalRejection.status,
+        );
+        return;
+      }
     }
 
     const updated: CustomActionDef = {
@@ -13363,83 +14138,59 @@ async function handleRequest(
     return;
   }
 
-  // ── Stream Manager (macOS-compatible RTMP via FFmpeg) ────────────────────
-  if (method === "POST" && pathname === "/api/stream/start") {
-    try {
-      const body = await readJsonBody(req, res, { maxBytes: MAX_BODY_BYTES });
-      const rtmpUrl = body?.rtmpUrl as string | undefined;
-      const rtmpKey = body?.rtmpKey as string | undefined;
+  // ── Stream Manager routes ──────────────────────────────────────────────
+  // Handled by handleStreamRoute() in stream-routes.ts (registered via
+  // connectorRouteHandlers below). Endpoints: /api/stream/*
 
-      if (!rtmpUrl || !rtmpKey) {
-        error(res, "rtmpUrl and rtmpKey are required", 400);
+  // ── LTCG Autonomy routes ─────────────────────────────────────────────
+  // The LTCG plugin registers these as ElizaOS plugin routes, but Milady's
+  // server doesn't dispatch plugin routes. Wire them up directly here.
+  if (pathname.startsWith("/api/ltcg/autonomy")) {
+    try {
+      const { getAutonomyController } = await import("@lunchtable/plugin-ltcg");
+      const ctrl = getAutonomyController();
+
+      if (method === "GET" && pathname === "/api/ltcg/autonomy/status") {
+        json(res, ctrl.getStatus());
         return;
       }
 
-      await streamManager.start({
-        rtmpUrl,
-        rtmpKey,
-        inputMode: (body?.inputMode as "testsrc" | "avfoundation") || "testsrc",
-        resolution: (body?.resolution as string) || "1280x720",
-        bitrate: (body?.bitrate as string) || "2500k",
-        framerate: (body?.framerate as number) || 30,
-      });
+      if (method === "POST" && pathname === "/api/ltcg/autonomy/start") {
+        const body = (await readJsonBody(req, res)) ?? {};
+        const bodyRecord = body as Record<string, unknown>;
+        const mode = bodyRecord.mode === "pvp" ? "pvp" : "story";
+        const continuousValue = bodyRecord.continuous;
+        const continuous =
+          typeof continuousValue === "boolean" ? continuousValue : true;
+        await ctrl.start({ mode, continuous });
+        json(res, { ok: true, mode, continuous });
+        return;
+      }
 
-      json(res, { ok: true, message: "Stream started" });
+      if (method === "POST" && pathname === "/api/ltcg/autonomy/pause") {
+        ctrl.pause();
+        json(res, { ok: true, state: "paused" });
+        return;
+      }
+
+      if (method === "POST" && pathname === "/api/ltcg/autonomy/resume") {
+        ctrl.resume();
+        json(res, { ok: true, state: "running" });
+        return;
+      }
+
+      if (method === "POST" && pathname === "/api/ltcg/autonomy/stop") {
+        await ctrl.stop();
+        json(res, { ok: true, state: "idle" });
+        return;
+      }
     } catch (err) {
-      error(
-        res,
-        err instanceof Error ? err.message : "Stream start failed",
-        500,
+      logger.error(
+        `[ltcg-autonomy] ${err instanceof Error ? err.message : err}`,
       );
-    }
-    return;
-  }
-
-  if (method === "POST" && pathname === "/api/stream/stop") {
-    try {
-      const result = await streamManager.stop();
-      json(res, { ok: true, ...result });
-    } catch (err) {
-      error(
-        res,
-        err instanceof Error ? err.message : "Stream stop failed",
-        500,
-      );
-    }
-    return;
-  }
-
-  if (method === "GET" && pathname === "/api/stream/status") {
-    json(res, streamManager.getHealth());
-    return;
-  }
-
-  // ── Stream frame push (pipe mode — Electron capturePage → FFmpeg stdin)
-  if (method === "POST" && pathname === "/api/stream/frame") {
-    if (!streamManager.isRunning()) {
-      error(res, "Stream not running", 400);
+      error(res, err instanceof Error ? err.message : "Autonomy error", 500);
       return;
     }
-    try {
-      const buf = await readRequestBodyBuffer(req, {
-        maxBytes: 2 * 1024 * 1024,
-      });
-      if (!buf || buf.length === 0) {
-        error(res, "Empty frame", 400);
-        return;
-      }
-      const ok = streamManager.writeFrame(buf);
-      // Minimal response to reduce overhead at 15fps
-      res.writeHead(200);
-      res.end(ok ? "1" : "0");
-    } catch (err) {
-      error(
-        res,
-        err instanceof Error ? err.message : "Frame write failed",
-        500,
-      );
-    }
-    return;
   }
 
   // ── Connector plugin routes (dynamically registered) ────────────────────
@@ -13569,7 +14320,7 @@ export async function startApiServer(opts?: {
     config,
     agentState: initialAgentState,
     agentName,
-    model: hasRuntime ? "provided" : undefined,
+    model: hasRuntime ? detectRuntimeModel(opts.runtime ?? null) : undefined,
     startedAt:
       hasRuntime || initialAgentState === "starting" ? Date.now() : undefined,
     startup: initialStartup,
@@ -13601,6 +14352,18 @@ export async function startApiServer(opts?: {
     pendingRestartReasons: [],
     connectorRouteHandlers: [],
   };
+
+  // Closure-captured refs for auto-TTS triggering in the event pipeline.
+  // Set when the streaming connector initializes its route state.
+  let streamRouteStateRef:
+    | import("./stream-routes.js").StreamRouteState
+    | null = null;
+  let onAgentMessageFn:
+    | ((
+        text: string,
+        state: import("./stream-routes.js").StreamRouteState,
+      ) => Promise<void>)
+    | null = null;
 
   const trainingServiceCtor = await resolveTrainingServiceCtor();
   const trainingServiceOptions = {
@@ -13851,7 +14614,14 @@ export async function startApiServer(opts?: {
       detachRuntimeStreams = null;
     }
     const svc = getAgentEventSvc(runtime);
-    if (!svc) return;
+    if (!svc) {
+      if (runtime) {
+        logger.warn(
+          "[milady-api] AGENT_EVENT service not found on runtime — event streaming will be unavailable",
+        );
+      }
+      return;
+    }
 
     const unsubAgentEvents = svc.subscribe((event) => {
       pushEvent({
@@ -13871,6 +14641,25 @@ export async function startApiServer(opts?: {
           `[autonomy-route] Failed to route proactive event: ${err instanceof Error ? err.message : String(err)}`,
         );
       });
+
+      // Auto-trigger TTS for assistant messages on the stream
+      const srs = streamRouteStateRef;
+      const ttsHandler = onAgentMessageFn;
+      if (event.stream === "assistant" && srs && ttsHandler) {
+        const payload =
+          event.data && typeof event.data === "object"
+            ? (event.data as Record<string, unknown>)
+            : null;
+        const text =
+          typeof payload?.text === "string" ? payload.text.trim() : "";
+        if (text) {
+          void ttsHandler(text, srs).catch((err) => {
+            logger.warn(
+              `[stream-voice] Auto-TTS trigger failed: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          });
+        }
+      }
     });
 
     const unsubHeartbeat = svc.subscribeHeartbeat((event) => {
@@ -13994,46 +14783,191 @@ export async function startApiServer(opts?: {
       }
     })();
 
-    // ── Dynamic connector route loading ──────────────────────────────────
-    // Connectors that need HTTP routes register them here, gated by config.
-    // Each loader dynamically imports its route module only when configured.
+    // ── Dynamic streaming + connector route loading ────────────────────────
+    // Always register generic stream routes. If a streaming destination is
+    // configured, inject it so /api/stream/live can fetch credentials.
     void (async () => {
-      const connectors = state.config.connectors ?? {};
-      if (isConnectorConfigured("retake", connectors.retake)) {
-        try {
-          const { handleRetakeRoute, initRetakeAutoStart } = await import(
-            "./retake-routes.js"
-          );
-          const retakeState = {
-            streamManager,
-            port,
-            config: connectors.retake as
-              | { accessToken?: string; apiUrl?: string; captureUrl?: string }
-              | undefined,
-          };
-          state.connectorRouteHandlers.push((req, res, pathname, method) =>
-            handleRetakeRoute(req, res, pathname, method, retakeState),
-          );
-          initRetakeAutoStart(retakeState);
-          addLog("info", "Retake connector routes registered", "system", [
-            "system",
-            "connectors",
-          ]);
-        } catch (err) {
-          logger.warn(
-            `[milady-api] Failed to load retake routes: ${err instanceof Error ? err.message : String(err)}`,
-          );
+      try {
+        const { handleStreamRoute, onAgentMessage } = await import(
+          "./stream-routes.js"
+        );
+        onAgentMessageFn = onAgentMessage;
+        // Screen capture manager is injected by Electron host via globalThis
+        const screenCapture = (globalThis as Record<string, unknown>)
+          .__miladyScreenCapture as
+          | {
+              isFrameCaptureActive(): boolean;
+              startFrameCapture(opts: {
+                fps?: number;
+                quality?: number;
+                endpoint?: string;
+              }): Promise<void>;
+            }
+          | undefined;
+
+        // Determine active streaming destination
+        let destination:
+          | import("./stream-routes.js").StreamingDestination
+          | undefined;
+
+        // Check connectors.retake (primary retake config location)
+        const connectors = state.config.connectors ?? {};
+        if (isConnectorConfigured("retake", connectors.retake)) {
+          try {
+            const retakeMod = "@milady/plugin-retake";
+            const { createRetakeDestination } = await import(retakeMod);
+            destination = createRetakeDestination(
+              connectors.retake as
+                | { accessToken?: string; apiUrl?: string }
+                | undefined,
+            );
+          } catch (err) {
+            logger.warn(
+              `[milady-api] Failed to load retake destination: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
         }
+
+        // Check streaming.customRtmp
+        const streaming = (state.config as Record<string, unknown>).streaming as
+          | Record<string, unknown>
+          | undefined;
+        if (
+          !destination &&
+          streaming?.customRtmp &&
+          typeof streaming.customRtmp === "object"
+        ) {
+          const rtmpConfig = streaming.customRtmp as Record<string, unknown>;
+          if (rtmpConfig.rtmpUrl && rtmpConfig.rtmpKey) {
+            try {
+              const { createCustomRtmpDestination } = await import(
+                "../plugins/custom-rtmp/index.js"
+              );
+              destination = createCustomRtmpDestination(
+                rtmpConfig as { rtmpUrl?: string; rtmpKey?: string },
+              );
+            } catch (err) {
+              logger.warn(
+                `[milady-api] Failed to load custom-rtmp destination: ${err instanceof Error ? err.message : String(err)}`,
+              );
+            }
+          }
+        }
+
+        // Check streaming.twitch
+        if (
+          !destination &&
+          streaming?.twitch &&
+          typeof streaming.twitch === "object"
+        ) {
+          const twitchConfig = streaming.twitch as Record<string, unknown>;
+          if (twitchConfig.streamKey) {
+            try {
+              const twitchMod = "@milady/plugin-twitch-streaming";
+              const { createTwitchDestination } = await import(twitchMod);
+              destination = createTwitchDestination(
+                twitchConfig as { streamKey?: string },
+              );
+            } catch (err) {
+              logger.warn(
+                `[milady-api] Failed to load twitch destination: ${err instanceof Error ? err.message : String(err)}`,
+              );
+            }
+          }
+        }
+
+        // Check streaming.youtube
+        if (
+          !destination &&
+          streaming?.youtube &&
+          typeof streaming.youtube === "object"
+        ) {
+          const ytConfig = streaming.youtube as Record<string, unknown>;
+          if (ytConfig.streamKey) {
+            try {
+              const youtubeMod = "@milady/plugin-youtube-streaming";
+              const { createYoutubeDestination } = await import(youtubeMod);
+              destination = createYoutubeDestination(
+                ytConfig as { streamKey?: string; rtmpUrl?: string },
+              );
+            } catch (err) {
+              logger.warn(
+                `[milady-api] Failed to load youtube destination: ${err instanceof Error ? err.message : String(err)}`,
+              );
+            }
+          }
+        }
+
+        const streamState = {
+          streamManager,
+          port,
+          screenCapture,
+          captureUrl: (connectors.retake as Record<string, unknown> | undefined)
+            ?.captureUrl as string | undefined,
+          destination,
+          get config() {
+            const cfg = state.config as Record<string, unknown> | undefined;
+            const msgs = cfg?.messages as Record<string, unknown> | undefined;
+            return msgs
+              ? {
+                  messages: {
+                    tts: msgs.tts as
+                      | import("../config/types.messages").TtsConfig
+                      | undefined,
+                  },
+                }
+              : undefined;
+          },
+        };
+        // Capture streamState in closure for auto-TTS triggering and route handling
+        streamRouteStateRef = streamState;
+        state.connectorRouteHandlers.push((req, res, pathname, method) =>
+          handleStreamRoute(req, res, pathname, method, streamState),
+        );
+
+        const destLabel = destination
+          ? `destination: ${destination.name}`
+          : "no destination";
+        addLog("info", `Stream routes registered (${destLabel})`, "system", [
+          "system",
+          "streaming",
+        ]);
+      } catch (err) {
+        logger.warn(
+          `[milady-api] Failed to load stream routes: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     })();
   };
 
   // ── WebSocket Server ─────────────────────────────────────────────────────
-  const wss = new WebSocketServer({ noServer: true });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
   const wsClients = new Set<WebSocket>();
   const wsClientIds = new WeakMap<WebSocket, string>();
+  /** Per-WS-client PTY output subscriptions: sessionId → unsubscribe */
+  const wsClientPtySubscriptions = new WeakMap<
+    WebSocket,
+    Map<string, () => void>
+  >();
   bindRuntimeStreams(opts?.runtime ?? null);
   bindTrainingStream();
+
+  // Wire coding-agent bridges at initial boot (coordinator may not exist yet)
+  if (opts?.runtime) {
+    const chatOk = wireCodingAgentChatBridge(state);
+    const wsOk = wireCodingAgentWsBridge(state);
+    if (!chatOk || !wsOk) {
+      let wireAttempts = 0;
+      const wireInterval = setInterval(() => {
+        wireAttempts++;
+        const chatDone = chatOk || wireCodingAgentChatBridge(state);
+        const wsDone = wsOk || wireCodingAgentWsBridge(state);
+        if ((chatDone && wsDone) || wireAttempts >= 15) {
+          clearInterval(wireInterval);
+        }
+      }, 1000);
+    }
+  }
 
   // Handle upgrade requests for WebSocket
   server.on("upgrade", (request, socket, head) => {
@@ -14087,6 +15021,8 @@ export async function startApiServer(opts?: {
           model: state.model,
           startedAt: state.startedAt,
           startup: state.startup,
+          pendingRestart: state.pendingRestartReasons.length > 0,
+          pendingRestartReasons: state.pendingRestartReasons,
         }),
       );
       const replay = state.eventBuffer.slice(-120);
@@ -14107,6 +15043,102 @@ export async function startApiServer(opts?: {
         } else if (msg.type === "active-conversation") {
           state.activeConversationId =
             typeof msg.conversationId === "string" ? msg.conversationId : null;
+        } else if (
+          msg.type === "pty-subscribe" &&
+          typeof msg.sessionId === "string"
+        ) {
+          const bridge = getPtyConsoleBridge(state);
+          if (bridge) {
+            let subs = wsClientPtySubscriptions.get(ws);
+            if (!subs) {
+              subs = new Map();
+              wsClientPtySubscriptions.set(ws, subs);
+            }
+            // Don't double-subscribe
+            if (!subs.has(msg.sessionId)) {
+              const targetId = msg.sessionId;
+              const listener = (evt: { sessionId: string; data: string }) => {
+                if (evt.sessionId !== targetId) return;
+                if (ws.readyState === 1) {
+                  ws.send(
+                    JSON.stringify({
+                      type: "pty-output",
+                      sessionId: targetId,
+                      data: evt.data,
+                    }),
+                  );
+                }
+              };
+              bridge.on("session_output", listener);
+              subs.set(targetId, () => bridge.off("session_output", listener));
+            }
+          }
+        } else if (
+          msg.type === "pty-unsubscribe" &&
+          typeof msg.sessionId === "string"
+        ) {
+          const subs = wsClientPtySubscriptions.get(ws);
+          const unsub = subs?.get(msg.sessionId);
+          if (unsub) {
+            unsub();
+            subs?.delete(msg.sessionId);
+          }
+        } else if (
+          msg.type === "pty-input" &&
+          typeof msg.sessionId === "string" &&
+          typeof msg.data === "string"
+        ) {
+          // Only allow input to sessions this client has subscribed to
+          const subs = wsClientPtySubscriptions.get(ws);
+          if (!subs?.has(msg.sessionId)) {
+            logger.warn(
+              `[milady-api] pty-input rejected: client not subscribed to session ${msg.sessionId}`,
+            );
+          } else if (msg.data.length > 4096) {
+            logger.warn(
+              `[milady-api] pty-input rejected: payload too large (${msg.data.length} bytes) for session ${msg.sessionId}`,
+            );
+          } else {
+            const bridge = getPtyConsoleBridge(state);
+            if (bridge) {
+              logger.debug(
+                `[milady-api] pty-input: session=${msg.sessionId} len=${msg.data.length}`,
+              );
+              bridge.writeRaw(msg.sessionId, msg.data);
+            }
+          }
+        } else if (
+          msg.type === "pty-resize" &&
+          typeof msg.sessionId === "string"
+        ) {
+          // Only allow resize for sessions this client has subscribed to
+          const subs = wsClientPtySubscriptions.get(ws);
+          if (!subs?.has(msg.sessionId)) {
+            logger.warn(
+              `[milady-api] pty-resize rejected: client not subscribed to session ${msg.sessionId}`,
+            );
+          } else {
+            const bridge = getPtyConsoleBridge(state);
+            if (
+              bridge &&
+              typeof msg.cols === "number" &&
+              typeof msg.rows === "number" &&
+              Number.isFinite(msg.cols) &&
+              Number.isFinite(msg.rows) &&
+              Number.isInteger(msg.cols) &&
+              Number.isInteger(msg.rows) &&
+              msg.cols >= 1 &&
+              msg.cols <= 500 &&
+              msg.rows >= 1 &&
+              msg.rows <= 500
+            ) {
+              bridge.resize(msg.sessionId, msg.cols, msg.rows);
+            } else {
+              logger.warn(
+                `[milady-api] pty-resize rejected: invalid dimensions cols=${msg.cols} rows=${msg.rows}`,
+              );
+            }
+          }
         }
       } catch (err) {
         logger.error(
@@ -14117,6 +15149,12 @@ export async function startApiServer(opts?: {
 
     ws.on("close", () => {
       wsClients.delete(ws);
+      // Clean up any PTY output subscriptions for this client
+      const subs = wsClientPtySubscriptions.get(ws);
+      if (subs) {
+        for (const unsub of subs.values()) unsub();
+        subs.clear();
+      }
       addLog("info", "WebSocket client disconnected", "websocket", [
         "server",
         "websocket",
@@ -14128,6 +15166,12 @@ export async function startApiServer(opts?: {
         `[milady-api] WebSocket error: ${err instanceof Error ? err.message : err}`,
       );
       wsClients.delete(ws);
+      // Clean up PTY subscriptions on error too
+      const subs = wsClientPtySubscriptions.get(ws);
+      if (subs) {
+        for (const unsub of subs.values()) unsub();
+        subs.clear();
+      }
     });
   });
 
@@ -14266,6 +15310,7 @@ export async function startApiServer(opts?: {
     // AppManager doesn't need a runtime reference
     state.agentState = "running";
     state.agentName = rt.character.name ?? "Milady";
+    state.model = detectRuntimeModel(rt);
     state.startedAt = Date.now();
     state.startup = {
       phase: "running",
@@ -14281,6 +15326,23 @@ export async function startApiServer(opts?: {
 
     // Broadcast status update immediately after restart
     broadcastStatus();
+
+    // Wire coding-agent bridges (coordinator may not exist yet — retry)
+    {
+      const chatOk = wireCodingAgentChatBridge(state);
+      const wsOk = wireCodingAgentWsBridge(state);
+      if (!chatOk || !wsOk) {
+        let wireAttempts = 0;
+        const wireInterval = setInterval(() => {
+          wireAttempts++;
+          const chatDone = chatOk || wireCodingAgentChatBridge(state);
+          const wsDone = wsOk || wireCodingAgentWsBridge(state);
+          if ((chatDone && wsDone) || wireAttempts >= 15) {
+            clearInterval(wireInterval);
+          }
+        }, 1000);
+      }
+    }
   };
 
   const updateStartup = (
@@ -14313,11 +15375,19 @@ export async function startApiServer(opts?: {
     `[milady-api] Calling server.listen (${Date.now() - apiStartTime}ms)`,
   );
   return new Promise((resolve, reject) => {
+    let currentPort = port;
+
     server.on("error", (err: NodeJS.ErrnoException) => {
       if (err.code === "EADDRINUSE") {
-        console.error(
-          `[milady-api] Port ${port} is already in use. Another process may be running.`,
+        console.warn(
+          `[milady-api] Port ${currentPort} is already in use. Checking fallback...`,
         );
+        if (currentPort !== 0) {
+          console.warn(`[milady-api] Retrying with dynamic port (0)...`);
+          currentPort = 0;
+          server.listen(0, host);
+          return;
+        }
       } else {
         console.error(
           `[milady-api] Server error: ${err.message} (code: ${err.code})`,
@@ -14325,12 +15395,14 @@ export async function startApiServer(opts?: {
       }
       reject(err);
     });
+
     server.listen(port, host, () => {
       console.log(
         `[milady-api] server.listen callback fired (${Date.now() - apiStartTime}ms)`,
       );
       const addr = server.address();
-      const actualPort = typeof addr === "object" && addr ? addr.port : port;
+      const actualPort =
+        typeof addr === "object" && addr ? addr.port : currentPort;
       const displayHost =
         typeof addr === "object" && addr ? addr.address : host;
       addLog(

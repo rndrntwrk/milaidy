@@ -4,6 +4,81 @@
  * Renders a unified plugin list with searchable/filterable cards and per-plugin settings.
  */
 
+import type { LucideIcon } from "lucide-react";
+import {
+  Binary,
+  BookOpen,
+  Bot,
+  Brain,
+  BrickWall,
+  Briefcase,
+  Calendar,
+  Chrome,
+  Circle,
+  CircleDashed,
+  CircleDot,
+  ClipboardList,
+  Clock,
+  Cloud,
+  Command,
+  Construction,
+  CreditCard,
+  Diamond,
+  Dna,
+  Droplets,
+  Eye,
+  Feather,
+  FileKey,
+  FileText,
+  Fingerprint,
+  Gamepad,
+  Gamepad2,
+  Github,
+  Handshake,
+  Hash,
+  Layers,
+  Leaf,
+  Link,
+  Lock,
+  LockKeyhole,
+  Mail,
+  MessageCircle,
+  MessageSquare,
+  MessagesSquare,
+  Mic,
+  Monitor,
+  MousePointer2,
+  Package,
+  PenTool,
+  Phone,
+  Pickaxe,
+  Puzzle,
+  RefreshCw,
+  Rss,
+  ScrollText,
+  Send,
+  Server,
+  Settings,
+  Shell,
+  Shuffle,
+  Smartphone,
+  Sparkle,
+  Sparkles,
+  Square,
+  Star,
+  StickyNote,
+  Target,
+  Tornado,
+  TrendingDown,
+  Triangle,
+  Twitter,
+  Video,
+  Volume2,
+  Wallet,
+  Webhook,
+  Wrench,
+  Zap,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../AppContext";
 import type { PluginInfo, PluginParamDef } from "../api-client";
@@ -997,115 +1072,115 @@ function PluginConfigForm({
 
 /* ── Default Icons ─────────────────────────────────────────────────── */
 
-const DEFAULT_ICONS: Record<string, string> = {
+const DEFAULT_ICONS: Record<string, LucideIcon> = {
   // AI Providers
-  anthropic: "🧠",
-  "google-genai": "✦",
-  groq: "⚡",
-  "local-ai": "🖥️",
-  ollama: "🦙",
-  openai: "◐",
-  openrouter: "🔀",
-  "vercel-ai-gateway": "▲",
-  xai: "𝕏",
+  anthropic: Brain,
+  "google-genai": Sparkles,
+  groq: Zap,
+  "local-ai": Monitor,
+  ollama: Bot,
+  openai: CircleDashed,
+  openrouter: Shuffle,
+  "vercel-ai-gateway": Triangle,
+  xai: Hash,
   // Connectors — chat & social
-  discord: "💬",
-  telegram: "✈️",
-  slack: "💼",
-  twitter: "🐦",
-  whatsapp: "📱",
-  signal: "🔒",
-  imessage: "💭",
-  bluebubbles: "🫧",
-  bluesky: "🦋",
-  farcaster: "🟣",
-  instagram: "📸",
-  nostr: "🔑",
-  twitch: "🎮",
-  matrix: "🔗",
-  mattermost: "💠",
-  msteams: "🟦",
-  "google-chat": "💚",
-  feishu: "🪶",
-  line: "🟢",
-  "nextcloud-talk": "☁️",
-  tlon: "🌀",
-  zalo: "💙",
-  zalouser: "💙",
+  discord: MessageCircle,
+  telegram: Send,
+  slack: Briefcase,
+  twitter: Twitter,
+  whatsapp: Smartphone,
+  signal: Lock,
+  imessage: MessageSquare,
+  bluebubbles: Droplets,
+  bluesky: Leaf,
+  farcaster: Circle,
+  instagram: Video,
+  nostr: Fingerprint,
+  twitch: Gamepad2,
+  matrix: Link,
+  mattermost: Diamond,
+  msteams: Square,
+  "google-chat": MessagesSquare,
+  feishu: Feather,
+  line: Circle,
+  "nextcloud-talk": Cloud,
+  tlon: Tornado,
+  zalo: Circle,
+  zalouser: Circle,
   // Features — voice & audio
-  "edge-tts": "🗣️",
-  elevenlabs: "🎙️",
-  tts: "🔊",
-  "simple-voice": "🎤",
-  "robot-voice": "🤖",
+  "edge-tts": Volume2,
+  elevenlabs: Mic,
+  tts: Volume2,
+  "simple-voice": Mic,
+  "robot-voice": Bot,
   // Features — blockchain & finance
-  evm: "⛓️",
-  solana: "◎",
-  "auto-trader": "📈",
-  "lp-manager": "💹",
-  "social-alpha": "📊",
-  polymarket: "🎲",
-  x402: "💳",
-  trust: "🤝",
-  iq: "🧩",
+  evm: Link,
+  solana: CircleDot,
+  "auto-trader": TrendingDown,
+  "lp-manager": Wallet,
+  "social-alpha": Layers,
+  polymarket: Gamepad2,
+  x402: CreditCard,
+  trust: Handshake,
+  iq: Puzzle,
   // Features — dev tools & infra
-  cli: "⌨️",
-  code: "💻",
-  shell: "🐚",
-  github: "🐙",
-  linear: "◻️",
-  mcp: "🔌",
-  browser: "🌐",
-  computeruse: "🖱️",
-  n8n: "⚙️",
-  webhooks: "🪝",
+  cli: Hash,
+  code: Puzzle,
+  shell: Shell,
+  github: Github,
+  linear: Square,
+  mcp: Puzzle,
+  browser: Chrome,
+  computeruse: MousePointer2,
+  n8n: Settings,
+  webhooks: Webhook,
   // Features — knowledge & memory
-  knowledge: "📚",
-  memory: "🧬",
-  "local-embedding": "📐",
-  pdf: "📄",
-  "secrets-manager": "🔐",
-  scratchpad: "📝",
-  rlm: "🔄",
+  knowledge: BookOpen,
+  memory: Dna,
+  "local-embedding": Binary,
+  pdf: FileText,
+  "secrets-manager": FileKey,
+  scratchpad: StickyNote,
+  rlm: RefreshCw,
   // Features — agents & orchestration
-  "agent-orchestrator": "🎯",
-  "agent-skills": "🛠️",
-  "plugin-manager": "📦",
-  "copilot-proxy": "🤝",
-  directives: "📋",
-  goals: "🎯",
-  "eliza-classic": "👩",
+  "agent-orchestrator": Target,
+  "agent-skills": Wrench,
+  "plugin-manager": Package,
+  "copilot-proxy": Handshake,
+  directives: ClipboardList,
+  goals: Target,
+  "eliza-classic": Bot,
   // Features — media & content
-  vision: "👁️",
-  rss: "📡",
-  "gmail-watch": "📧",
-  prose: "✍️",
-  form: "📝",
+  vision: Eye,
+  rss: Rss,
+  "gmail-watch": Mail,
+  prose: PenTool,
+  form: ClipboardList,
   // Features — scheduling & automation
-  cron: "⏰",
-  scheduling: "📅",
-  todo: "✅",
-  commands: "⌘",
+  cron: Clock,
+  scheduling: Calendar,
+  todo: ClipboardList,
+  commands: Command,
   // Features — storage & logging
-  "s3-storage": "🗄️",
-  "trajectory-logger": "📉",
-  experience: "🌟",
+  "s3-storage": Server,
+  "trajectory-logger": TrendingDown,
+  experience: Star,
   // Features — gaming & misc
-  minecraft: "⛏️",
-  roblox: "🧱",
-  babylon: "🎮",
-  mysticism: "🔮",
-  personality: "🎭",
-  moltbook: "📖",
-  tee: "🔏",
-  blooio: "🟠",
-  acp: "🏗️",
-  elizacloud: "☁️",
-  twilio: "📞",
+  minecraft: Pickaxe,
+  roblox: BrickWall,
+  babylon: Gamepad,
+  mysticism: Sparkle,
+  personality: Target,
+  moltbook: ScrollText,
+  tee: LockKeyhole,
+  blooio: Circle,
+  acp: Construction,
+  elizacloud: Cloud,
+  twilio: Phone,
 };
 
 /** Resolve display icon: explicit plugin.icon, fallback to default map, or null. */
-function resolveIcon(p: PluginInfo): string | null {
+function resolveIcon(p: PluginInfo): LucideIcon | string | null {
   if (p.icon) return p.icon;
   return DEFAULT_ICONS[p.id] ?? null;
 }
@@ -1184,6 +1259,7 @@ const FEATURE_SUBGROUP: Record<string, string> = {
 const SUBGROUP_DISPLAY_ORDER = [
   "ai-provider",
   "connector",
+  "streaming",
   "voice",
   "blockchain",
   "devtools",
@@ -1210,6 +1286,7 @@ const SUBGROUP_LABELS: Record<string, string> = {
   storage: "Storage & Logging",
   gaming: "Gaming & Creative",
   "feature-other": "Other Features",
+  streaming: "Streaming Destinations",
   showcase: "Showcase",
 };
 
@@ -1217,11 +1294,12 @@ function subgroupForPlugin(plugin: PluginInfo): string {
   if (plugin.id === "__ui-showcase__") return "showcase";
   if (plugin.category === "ai-provider") return "ai-provider";
   if (plugin.category === "connector") return "connector";
+  if (plugin.category === "streaming") return "streaming";
   return FEATURE_SUBGROUP[plugin.id] ?? "feature-other";
 }
 
 type StatusFilter = "all" | "enabled";
-type PluginsViewMode = "all" | "connectors";
+type PluginsViewMode = "all" | "connectors" | "streaming";
 
 /* ── Shared PluginListView ─────────────────────────────────────────── */
 
@@ -1335,7 +1413,8 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
         (p: PluginInfo) =>
           p.category !== "database" &&
           !ALWAYS_ON_PLUGIN_IDS.has(p.id) &&
-          (mode !== "connectors" || p.category === "connector"),
+          (mode !== "connectors" || p.category === "connector") &&
+          (mode !== "streaming" || p.category === "streaming"),
       ),
     [plugins, mode],
   );
@@ -1402,7 +1481,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
   );
 
   const [subgroupFilter, setSubgroupFilter] = useState<string>("all");
-  const showSubgroupFilters = mode !== "connectors";
+  const showSubgroupFilters = mode !== "connectors" && mode !== "streaming";
 
   const subgroupCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -1707,16 +1786,20 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
             {(() => {
               const icon = resolveIcon(p);
               if (!icon) return null;
-              return icon.startsWith("http") ? (
-                <img
-                  src={icon}
-                  alt=""
-                  className="w-4 h-4 rounded-sm object-cover"
-                  loading="lazy"
-                />
-              ) : (
-                <span className="text-sm">{icon}</span>
-              );
+              if (typeof icon === "string") {
+                return icon.startsWith("http") ? (
+                  <img
+                    src={icon}
+                    alt=""
+                    className="w-4 h-4 rounded-sm object-cover"
+                    loading="lazy"
+                  />
+                ) : (
+                  <span className="text-sm">{icon}</span>
+                );
+              }
+              const IconComponent = icon;
+              return <IconComponent className="w-4 h-4" />;
             })()}
             {p.name}
           </span>
@@ -2056,16 +2139,20 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                     {(() => {
                       const icon = resolveIcon(p);
                       if (!icon) return null;
-                      return icon.startsWith("http") ? (
-                        <img
-                          src={icon}
-                          alt=""
-                          className="w-4 h-4 rounded-sm object-cover"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <span className="text-sm">{icon}</span>
-                      );
+                      if (typeof icon === "string") {
+                        return icon.startsWith("http") ? (
+                          <img
+                            src={icon}
+                            alt=""
+                            className="w-4 h-4 rounded-sm object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <span className="text-sm">{icon}</span>
+                        );
+                      }
+                      const IconComponent = icon;
+                      return <IconComponent className="w-4 h-4" />;
                     })()}
                     {p.name}
                   </span>

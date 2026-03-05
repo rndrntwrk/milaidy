@@ -12,6 +12,7 @@ import {
   app,
   BrowserWindow,
   clipboard,
+  ipcMain,
   Menu,
   MenuItem,
   nativeImage,
@@ -26,6 +27,29 @@ import {
   buildMissingWebAssetsMessage,
   resolveWebAssetDirectory,
 } from "./web-assets";
+
+/**
+ * Check if a URL has the "popout" query parameter, supporting both
+ * standard query strings (?popout) and hash-based routing (#/?popout).
+ * Electron's capacitor-electron: protocol uses hash routing, so the
+ * param lands in the fragment rather than the query string.
+ */
+export function hasPopoutParam(urlStr: string): boolean {
+  try {
+    const parsed = new URL(urlStr);
+    if (parsed.searchParams.has("popout")) return true;
+    const hash = parsed.hash;
+    if (hash) {
+      const qIdx = hash.indexOf("?");
+      if (qIdx >= 0) {
+        return new URLSearchParams(hash.slice(qIdx + 1)).has("popout");
+      }
+    }
+  } catch {
+    // malformed URL — fall through
+  }
+  return false;
+}
 
 // Define components for a watcher to detect when the webapp is changed so we can reload in Dev mode.
 const reloadWatcher = {
@@ -259,6 +283,10 @@ export class ElectronCapacitorApp {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
+        // Allow ElevenLabs TTS and other audio to play without requiring a
+        // click inside the renderer (AudioContext.resume() would throw a
+        // DOMException otherwise when triggered from WebSocket callbacks).
+        autoplayPolicy: "no-user-gesture-required",
         // Use preload to inject the electron variant overrides for capacitor plugins.
         preload: preloadPath,
       },
@@ -339,6 +367,7 @@ export class ElectronCapacitorApp {
       try {
         const url = new URL(raw);
         if (url.protocol === `${this.customScheme}:`) return true;
+        if (url.protocol === "file:") return true;
         if (
           electronIsDev &&
           (url.protocol === "http:" || url.protocol === "https:")
@@ -362,13 +391,198 @@ export class ElectronCapacitorApp {
       }
     };
 
+    // ── LIFO integration (disabled until fully integrated) ──────────────
+    const LIFO_ENABLED = true;
+
+    const isLifoPopoutFlag = (value: string | null): boolean => {
+      if (value == null) return false;
+      const normalized = value.trim().toLowerCase();
+      return normalized === "lifo";
+    };
+
+    const getPopoutValueFromHash = (hash: string): string | null => {
+      if (!hash) return null;
+      const normalized = hash.startsWith("#") ? hash.slice(1) : hash;
+      const queryIndex = normalized.indexOf("?");
+      if (queryIndex < 0) return null;
+      return new URLSearchParams(normalized.slice(queryIndex + 1)).get(
+        "popout",
+      );
+    };
+
+    const isLifoPopoutUrl = (raw: string): boolean => {
+      try {
+        const parsed = new URL(raw);
+        const searchValue = new URLSearchParams(parsed.search).get("popout");
+        const hashValue = getPopoutValueFromHash(parsed.hash);
+        if (!isLifoPopoutFlag(searchValue ?? hashValue)) return false;
+
+        const hashPath = (
+          parsed.hash.startsWith("#") ? parsed.hash.slice(1) : parsed.hash
+        )
+          .split("?")[0]
+          .toLowerCase();
+        const pathname = parsed.pathname.toLowerCase();
+        return pathname.endsWith("/lifo") || hashPath.endsWith("/lifo");
+      } catch {
+        return false;
+      }
+    };
+
+    const isStreamPopoutUrl = (raw: string): boolean => {
+      try {
+        const parsed = new URL(raw);
+        const searchValue = new URLSearchParams(parsed.search).get("popout");
+        const hashValue = getPopoutValueFromHash(parsed.hash);
+        if (searchValue === "lifo" || hashValue === "lifo") return false;
+
+        if (parsed.searchParams.has("popout")) return true;
+        const hash = parsed.hash;
+        if (hash) {
+          const qIdx = hash.indexOf("?");
+          if (qIdx >= 0) {
+            return new URLSearchParams(hash.slice(qIdx + 1)).has("popout");
+          }
+        }
+      } catch {
+        // malformed URL
+      }
+      return false;
+    };
+
+    const VALID_PIP_LEVELS = new Set<string>([
+      "normal",
+      "floating",
+      "torn-off-menu",
+      "modal-panel",
+      "main-menu",
+      "status",
+      "pop-up-menu",
+      "screen-saver",
+    ]);
+
+    if (LIFO_ENABLED) {
+      ipcMain.removeHandler("lifo:setPip");
+      ipcMain.removeHandler("lifo:getPipState");
+
+      ipcMain.handle(
+        "lifo:setPip",
+        (event, options?: { flag?: boolean; level?: string }) => {
+          const senderWindow = BrowserWindow.fromWebContents(event.sender);
+          if (!senderWindow || senderWindow.isDestroyed()) {
+            return { enabled: false };
+          }
+
+          const enabled = options?.flag === true;
+          const rawLevel = options?.level ?? "floating";
+          const level = VALID_PIP_LEVELS.has(rawLevel) ? rawLevel : "floating";
+          senderWindow.setAlwaysOnTop(
+            enabled,
+            level as Parameters<BrowserWindow["setAlwaysOnTop"]>[1],
+          );
+          senderWindow.setVisibleOnAllWorkspaces(enabled, {
+            visibleOnFullScreen: enabled,
+          });
+          return { enabled };
+        },
+      );
+
+      ipcMain.handle("lifo:getPipState", (event) => {
+        const senderWindow = BrowserWindow.fromWebContents(event.sender);
+        if (!senderWindow || senderWindow.isDestroyed()) {
+          return { enabled: false };
+        }
+        return { enabled: senderWindow.isAlwaysOnTop() };
+      });
+    }
+
     this.MainWindow.webContents.setWindowOpenHandler((details) => {
       if (!isAllowedUrl(details.url)) {
         openExternal(details.url);
         return { action: "deny" };
       }
-      return { action: "allow" };
+      // Stream popout windows: PIP-friendly, frameless, autoplay-enabled.
+      if (isStreamPopoutUrl(details.url)) {
+        return {
+          action: "allow",
+          overrideBrowserWindowOptions: {
+            alwaysOnTop: true,
+            visibleOnAllWorkspaces: true,
+            frame: false,
+            titleBarStyle: "hidden",
+            backgroundColor: "#0a0a0a",
+            fullscreenable: false,
+            minimizable: false,
+            webPreferences: {
+              nodeIntegration: false,
+              contextIsolation: true,
+              autoplayPolicy: "no-user-gesture-required",
+              preload: preloadPath,
+            },
+          },
+        };
+      }
+
+      return {
+        action: "allow",
+        overrideBrowserWindowOptions: isLifoPopoutUrl(details.url)
+          ? {
+              webPreferences: {
+                nodeIntegration: false,
+                contextIsolation: true,
+                autoplayPolicy: "no-user-gesture-required",
+                preload: preloadPath,
+              },
+            }
+          : undefined,
+      };
     });
+
+    // Stream popout: configure PIP and switch capture target.
+    // LIFO popouts are gated behind LIFO_ENABLED flag.
+    this.MainWindow.webContents.on(
+      "did-create-window",
+      (childWindow, { url }) => {
+        const isLifo = LIFO_ENABLED && isLifoPopoutUrl(url);
+        const isStreamPopout = isStreamPopoutUrl(url);
+        if (!isLifo && !isStreamPopout) return;
+
+        if (isStreamPopout) {
+          childWindow.setAlwaysOnTop(true, "floating");
+          childWindow.setVisibleOnAllWorkspaces(true, {
+            visibleOnFullScreen: true,
+          });
+          console.log(
+            "[Setup] Stream popout created — configuring PIP + capture target",
+          );
+        } else {
+          console.log(
+            "[Setup] Lifo popout created — configuring capture target",
+          );
+        }
+
+        // Switch stream capture to the popout window
+        const scm = (
+          globalThis as unknown as {
+            __miladyScreenCaptureManager?: {
+              setCaptureTarget(w: BrowserWindow | null): void;
+            };
+          }
+        ).__miladyScreenCaptureManager;
+
+        if (scm) {
+          scm.setCaptureTarget(childWindow);
+
+          childWindow.on("closed", () => {
+            console.log(
+              "[Setup] Popout closed — reverting capture to main window",
+            );
+            scm.setCaptureTarget(null);
+          });
+        }
+      },
+    );
+
     this.MainWindow.webContents.on("will-navigate", (event, newURL) => {
       if (!isAllowedUrl(newURL)) {
         event.preventDefault();
@@ -482,7 +696,7 @@ export class ElectronCapacitorApp {
         menuItems.push(
           {
             label: "Open Link in Browser",
-            click: () => shell.openExternal(params.linkURL),
+            click: () => openExternal(params.linkURL),
           },
           {
             label: "Copy Link Address",
@@ -563,6 +777,8 @@ export function setupContentSecurityPolicy(customScheme: string): void {
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     // For sub-frame requests (iframes), strip frame-ancestors so embedded
     // apps like Privy auth can load inside our GameView iframe.
+    // Also strip COOP/COEP headers that break popup-based auth flows
+    // (e.g. Base Smart Wallet SDK requires COOP to NOT be 'same-origin').
     // This is safe because Electron windows are native containers and
     // aren't vulnerable to clickjacking via frame-ancestors.
     if (details.resourceType === "subFrame") {
@@ -579,6 +795,14 @@ export function setupContentSecurityPolicy(customScheme: string): void {
               v.replace(/frame-ancestors\s+[^;]+(;|$)/gi, ""),
             );
           }
+        }
+        // Strip COOP/COEP from subframes — these headers prevent embedded
+        // apps from opening popups for auth flows (Privy, Base Wallet SDK).
+        if (
+          lk === "cross-origin-opener-policy" ||
+          lk === "cross-origin-embedder-policy"
+        ) {
+          delete headers[key];
         }
       }
       callback({ responseHeaders: headers });
@@ -602,11 +826,16 @@ export function setupContentSecurityPolicy(customScheme: string): void {
       `worker-src 'self' blob:`,
     ].join("; ");
 
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        "Content-Security-Policy": [base],
-      },
-    });
+    // For main-frame responses, use 'same-origin-allow-popups' instead of
+    // 'same-origin' for COOP. This allows embedded apps to open popup
+    // windows for auth flows (Privy, Base Smart Wallet SDK) while still
+    // maintaining cross-origin isolation for the main window.
+    const responseHeaders = {
+      ...details.responseHeaders,
+      "Content-Security-Policy": [base],
+      "Cross-Origin-Opener-Policy": ["same-origin-allow-popups"],
+    };
+
+    callback({ responseHeaders });
   });
 }

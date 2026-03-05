@@ -1,6 +1,6 @@
 {
   "name": "@milady/app",
-  "version": "2.0.0-alpha.27",
+  "version": "2.0.0-alpha.75",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,7 +12,7 @@
     "test:electron:packaged:e2e": "playwright test --config playwright.electron.packaged.config.ts",
     "plugin:build": "for d in gateway swabble camera screencapture canvas desktop location talkmode agent; do echo \"[plugin:$d] building...\" && (cd plugins/$d && ../../../../scripts/rt.sh run build) || exit 1; done",
     "sync:electron:web-assets": "node scripts/sync-electron-web-assets.mjs",
-    "build": "../../scripts/rt.sh install && ../../scripts/rt.sh run plugin:build && ../../scripts/rt.sh install && vite build",
+    "build": "(cd ../.. && scripts/rt.sh run install:build) && ../../scripts/rt.sh run plugin:build && ../../scripts/rt.sh install --ignore-scripts && vite build",
     "build:ios": "../../scripts/rt.sh run build && capacitor sync ios",
     "build:android": "../../scripts/rt.sh run build && capacitor sync android",
     "build:electron": "../../scripts/rt.sh run build && ../../scripts/rt.sh run sync:electron:web-assets",
@@ -45,16 +45,20 @@
     "@milady/capacitor-screencapture": "workspace:*",
     "@milady/capacitor-swabble": "workspace:*",
     "@milady/capacitor-talkmode": "workspace:*",
+    "@lifo-sh/core": "0.4.4",
+    "@lifo-sh/ui": "0.4.2",
     "@noble/curves": "^2.0.1",
     "@pixiv/three-vrm": "^3.4.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "three": "^0.182.0",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@capacitor/cli": "8.0.2",
-    "@playwright/test": "^1.55.0",
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/vite": "^4.1.18",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

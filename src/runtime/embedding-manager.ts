@@ -23,18 +23,43 @@ import { detectEmbeddingPreset } from "./embedding-presets.js";
 // Lazy-imported to keep the module lightweight at parse time.
 // node-llama-cpp pulls in native binaries — importing at the top would slow
 // down every CLI invocation even when embeddings aren't needed.
-type LlamaInstance = Awaited<
-  ReturnType<typeof import("node-llama-cpp")["getLlama"]>
->;
-type LlamaModelInstance = Awaited<ReturnType<LlamaInstance["loadModel"]>>;
-type LlamaEmbeddingContextInstance = Awaited<
-  ReturnType<LlamaModelInstance["createEmbeddingContext"]>
->;
+//
+// IMPORTANT: We use `unknown` types here instead of `typeof import("node-llama-cpp")`
+// to prevent bundlers from hoisting the dynamic import to a static one.
+// The native module must remain a runtime-only import for Electron packaging.
+
+// biome-ignore lint/suspicious/noExplicitAny: dynamic llama.cpp import types
+type LlamaInstance = any;
+// biome-ignore lint/suspicious/noExplicitAny: dynamic llama.cpp import types
+type LlamaModelInstance = any;
+// biome-ignore lint/suspicious/noExplicitAny: dynamic llama.cpp import types
+type LlamaEmbeddingContextInstance = any;
+
+/**
+ * Dynamically import node-llama-cpp at runtime.
+ * Uses indirection to prevent bundlers from converting to static import.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: dynamic llama.cpp import types
+async function importNodeLlamaCpp(): Promise<any> {
+  // The string concatenation prevents static analysis by bundlers
+  const moduleName = ["node", "llama", "cpp"].join("-");
+  return import(moduleName);
+}
+
+/**
+ * Conservative chars-per-token ratio for truncation.
+ * GGML crashes hard (process abort) when input exceeds the model context
+ * window, so we must truncate *before* calling getEmbeddingFor().
+ * Using 2 chars/token is intentionally conservative — most English text
+ * averages 3–4 chars/token, but code and special characters can be ~1.
+ */
+const SAFE_CHARS_PER_TOKEN = 2;
 
 export class MiladyEmbeddingManager {
   private readonly model: string;
   private readonly modelRepo: string;
   private readonly dimensions: number;
+  private readonly contextSize: number;
   private readonly gpuLayers: "auto" | "max" | number;
   private readonly idleTimeoutMs: number;
   private readonly modelsDir: string;
@@ -61,6 +86,7 @@ export class MiladyEmbeddingManager {
     this.model = config.model ?? detected.model;
     this.modelRepo = config.modelRepo ?? detected.modelRepo;
     this.dimensions = config.dimensions ?? detected.dimensions;
+    this.contextSize = config.contextSize ?? detected.contextSize;
     this.gpuLayers = config.gpuLayers ?? detected.gpuLayers;
     this.idleTimeoutMs = config.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
     this.modelsDir = config.modelsDir ?? DEFAULT_MODELS_DIR;
@@ -83,7 +109,18 @@ export class MiladyEmbeddingManager {
         throw new Error("[milaidy] Embedding context not available after init");
       }
 
-      const result = await this.embeddingContext.getEmbeddingFor(text);
+      // Truncate to prevent GGML assertion crash when text exceeds context window.
+      const maxChars = this.contextSize * SAFE_CHARS_PER_TOKEN;
+      let input = text;
+      if (input.length > maxChars) {
+        getLogger().warn(
+          `[milaidy] Embedding input too long (${input.length} chars, ~${Math.ceil(input.length / SAFE_CHARS_PER_TOKEN)} tokens est.) ` +
+            `— truncating to ${maxChars} chars for ${this.contextSize}-token context window`,
+        );
+        input = input.slice(0, maxChars);
+      }
+
+      const result = await this.embeddingContext.getEmbeddingFor(input);
       return Array.from(result.vector);
     } catch (err) {
       getLogger().error(`[milaidy] Embedding generation failed: ${err}`);
@@ -144,7 +181,7 @@ export class MiladyEmbeddingManager {
       this.model,
     );
 
-    const { getLlama, LlamaLogLevel } = await import("node-llama-cpp");
+    const { getLlama, LlamaLogLevel } = await importNodeLlamaCpp();
 
     log.info(
       `[milaidy] Initializing embedding model: ${this.model} ` +
@@ -154,7 +191,7 @@ export class MiladyEmbeddingManager {
     if (!this.llama) {
       this.llama = await getLlama({
         logLevel: LlamaLogLevel.error,
-        logger: (level, message) => {
+        logger: (level: string, message: string) => {
           if (level === "error" || level === "fatal") {
             const text = message.trim();
             if (text) {

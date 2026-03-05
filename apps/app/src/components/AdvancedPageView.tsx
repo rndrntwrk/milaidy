@@ -9,6 +9,7 @@
  *   - Trajectories: LLM call viewer and analysis
  *   - Runtime: Runtime object inspection
  *   - Databases: Tables/media/vector browser
+ *   - Lifo: Browser-native terminal sandbox
  *   - Logs: Runtime log viewer
  */
 
@@ -18,6 +19,7 @@ import type { Tab } from "../navigation";
 import { CustomActionsView } from "./CustomActionsView";
 import { DatabasePageView } from "./DatabasePageView";
 import { FineTuningView } from "./FineTuningView";
+import { LifoSandboxView } from "./LifoSandboxView";
 import { LogsPageView } from "./LogsPageView";
 import { PluginsPageView } from "./PluginsPageView";
 import { RuntimeView } from "./RuntimeView";
@@ -30,7 +32,6 @@ import { IdentityPanel } from "./IdentityPanel";
 import { ApprovalPanel } from "./ApprovalPanel";
 import { SafeModePanel } from "./SafeModePanel";
 import { GovernancePanel } from "./GovernancePanel";
-import type { Tab } from "../navigation";
 
 type SubTab =
   | "plugins"
@@ -45,6 +46,7 @@ type SubTab =
   | "trajectories"
   | "runtime"
   | "database"
+  | "lifo"
   | "logs"
   | "security";
 
@@ -52,15 +54,56 @@ const SUB_TABS: Array<{ id: SubTab; label: string; description: string }> = [
   { id: "plugins", label: "Plugins", description: "Features and connectors" },
   { id: "skills", label: "Skills", description: "Custom agent skills" },
   { id: "actions", label: "Actions", description: "Custom agent actions" },
-  { id: "triggers", label: "Triggers", description: "Scheduled and event-based automations" },
-  { id: "identity", label: "Identity", description: "Agent identity and preferences" },
-  { id: "approvals", label: "Approvals", description: "Pending approval queue" },
-  { id: "safe-mode", label: "Safe Mode", description: "Safe mode status and controls" },
-  { id: "governance", label: "Governance", description: "Policies, compliance, and retention" },
-  { id: "fine-tuning", label: "Fine-Tuning", description: "Dataset and model training workflows" },
-  { id: "trajectories", label: "Trajectories", description: "LLM call history and analysis" },
-  { id: "runtime", label: "Runtime", description: "Deep runtime object introspection and load order" },
-  { id: "database", label: "Databases", description: "Tables, media, and vector browser" },
+  {
+    id: "triggers",
+    label: "Triggers",
+    description: "Scheduled and event-based automations",
+  },
+  {
+    id: "identity",
+    label: "Identity",
+    description: "Agent identity and preferences",
+  },
+  {
+    id: "approvals",
+    label: "Approvals",
+    description: "Pending approval queue",
+  },
+  {
+    id: "safe-mode",
+    label: "Safe Mode",
+    description: "Safe mode status and controls",
+  },
+  {
+    id: "governance",
+    label: "Governance",
+    description: "Policies, compliance, and retention",
+  },
+  {
+    id: "fine-tuning",
+    label: "Fine-Tuning",
+    description: "Dataset and model training workflows",
+  },
+  {
+    id: "trajectories",
+    label: "Trajectories",
+    description: "LLM call history and analysis",
+  },
+  {
+    id: "runtime",
+    label: "Runtime",
+    description: "Deep runtime object introspection and load order",
+  },
+  {
+    id: "database",
+    label: "Databases",
+    description: "Tables, media, and vector browser",
+  },
+  {
+    id: "lifo",
+    label: "Lifo",
+    description: "Browser-native shell sandbox and file explorer",
+  },
   { id: "logs", label: "Logs", description: "Runtime and service logs" },
   {
     id: "security",
@@ -87,6 +130,8 @@ function mapTabToSubTab(tab: Tab): SubTab {
       return "runtime";
     case "database":
       return "database";
+    case "lifo":
+      return "lifo";
     case "logs":
       return "logs";
     case "security":
@@ -143,6 +188,9 @@ export function AdvancedPageView() {
       case "database":
         setTab("database");
         break;
+      case "lifo":
+        setTab("lifo");
+        break;
       case "logs":
         setTab("logs");
         break;
@@ -190,6 +238,8 @@ export function AdvancedPageView() {
         return <RuntimeView />;
       case "database":
         return <DatabasePageView />;
+      case "lifo":
+        return <LifoSandboxView />;
       case "logs":
         return <LogsPageView />;
       case "security":

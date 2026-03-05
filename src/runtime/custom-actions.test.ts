@@ -1,9 +1,19 @@
 import type { IAgentRuntime } from "@elizaos/core";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ToolRegistry } from "../autonomy/tools/registry.js";
-import { customActionPostConditions } from "../autonomy/verification/postconditions/custom-action.postcondition.js";
-import type { CustomActionDef } from "../config/types.milaidy.js";
-import { registerCustomActionLive, setCustomActionsRuntime } from "./custom-actions.js";
+import type { CustomActionDef } from "../config/types.milady";
+
+vi.mock("node:dns/promises", () => ({
+  lookup: vi.fn(),
+}));
+
+import { lookup as dnsLookup } from "node:dns/promises";
+import {
+  __setPinnedFetchImplForTests,
+  buildTestHandler,
+  registerCustomActionLive,
+  setCustomActionsRuntime,
+} from "./custom-actions";
 
 function makeDef(overrides: Partial<CustomActionDef> = {}): CustomActionDef {
   return {
@@ -17,6 +27,24 @@ function makeDef(overrides: Partial<CustomActionDef> = {}): CustomActionDef {
     createdAt: "2026-02-17T00:00:00.000Z",
     updatedAt: "2026-02-17T00:00:00.000Z",
     ...overrides,
+  };
+}
+
+function makeHttpAction(url: string): CustomActionDef {
+  return {
+    id: "test-action",
+    name: "TEST_HTTP_ACTION",
+    description: "test",
+    similes: [],
+    parameters: [],
+    handler: {
+      type: "http",
+      method: "GET",
+      url,
+    },
+    enabled: true,
+    createdAt: new Date(0).toISOString(),
+    updatedAt: new Date(0).toISOString(),
   };
 }
 
@@ -54,7 +82,7 @@ function makeShellAction(command: string): CustomActionDef {
   };
 }
 
-describe("custom action SSRF guard", () => {
+describe("custom action live registration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -95,6 +123,147 @@ describe("custom action SSRF guard", () => {
     expect(action).not.toBeNull();
     expect(runtime.registerAction).toHaveBeenCalledTimes(1);
   });
+});
+
+describe("custom action SSRF guard", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    __setPinnedFetchImplForTests(({ url, init }) => {
+      return fetch(url.toString(), init);
+    });
+  });
+
+  afterEach(() => {
+    __setPinnedFetchImplForTests(null);
+    vi.restoreAllMocks();
+  });
+
+  it("rejects hostname aliases resolving to link-local metadata IPs", async () => {
+    vi.mocked(dnsLookup).mockResolvedValue([
+      { address: "169.254.169.254", family: 4 },
+    ]);
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const handler = buildTestHandler(
+      makeHttpAction("http://169.254.169.254.nip.io/latest/meta-data"),
+    );
+
+    const result = await handler({});
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain("Blocked");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects hostname aliases resolving to loopback", async () => {
+    vi.mocked(dnsLookup).mockResolvedValue([
+      { address: "127.0.0.1", family: 4 },
+    ]);
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const handler = buildTestHandler(
+      makeHttpAction("http://localhost.nip.io:2138/api/status"),
+    );
+
+    const result = await handler({});
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain("Blocked");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects direct IPv6 link-local targets across fe80::/10", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const handler = buildTestHandler(makeHttpAction("http://[fea0::1]/test"));
+
+    const result = await handler({});
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain("Blocked");
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(vi.mocked(dnsLookup)).not.toHaveBeenCalled();
+  });
+
+  it("allows explicit localhost API target on the configured API port", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue({ ok: true, text: async () => "ok" } as Response);
+
+    const handler = buildTestHandler(
+      makeHttpAction("http://localhost:2138/api/status"),
+    );
+
+    const result = await handler({});
+    expect(result.ok).toBe(true);
+    expect(result.output).toBe("ok");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(dnsLookup)).not.toHaveBeenCalled();
+  });
+
+  it("allows public hosts when DNS resolves to public IPs", async () => {
+    vi.mocked(dnsLookup).mockResolvedValue([
+      { address: "93.184.216.34", family: 4 },
+    ]);
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue({ ok: true, text: async () => "ok" } as Response);
+
+    const handler = buildTestHandler(
+      makeHttpAction("https://example.com/test"),
+    );
+
+    const result = await handler({});
+    expect(result.ok).toBe(true);
+    expect(result.output).toBe("ok");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("pins HTTP handler fetches to the validated DNS address", async () => {
+    vi.mocked(dnsLookup).mockResolvedValue([
+      { address: "93.184.216.34", family: 4 },
+    ]);
+    const transportSpy = vi.fn(async () => {
+      return new Response("ok", { status: 200 });
+    });
+    __setPinnedFetchImplForTests(transportSpy);
+
+    const handler = buildTestHandler(
+      makeHttpAction("https://example.com/pinned"),
+    );
+    const result = await handler({});
+
+    expect(result.ok).toBe(true);
+    expect(transportSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: expect.objectContaining({
+          hostname: "example.com",
+          pinnedAddress: "93.184.216.34",
+        }),
+      }),
+    );
+  });
+
+  it("blocks redirect responses and uses manual redirect mode", async () => {
+    vi.mocked(dnsLookup).mockResolvedValue([
+      { address: "93.184.216.34", family: 4 },
+    ]);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: false,
+      status: 302,
+      statusText: "Found",
+      headers: new Headers({ location: "http://169.254.169.254/latest" }),
+      text: async () => "",
+    } as Response);
+
+    const handler = buildTestHandler(
+      makeHttpAction("https://example.com/redirect"),
+    );
+
+    const result = await handler({});
+    expect(result.ok).toBe(false);
+    expect(result.output).toContain("redirects are not allowed");
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "https://example.com/redirect",
+      expect.objectContaining({ redirect: "manual" }),
+    );
+  });
 
   it("blocks code handlers from fetching internal addresses", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
@@ -129,6 +298,36 @@ describe("custom action SSRF guard", () => {
     expect(fetchSpy).toHaveBeenCalledWith(
       "https://example.com/data",
       expect.objectContaining({ redirect: "manual" }),
+    );
+  });
+
+  it("pins code-handler fetches during DNS rebinding attempts", async () => {
+    vi.mocked(dnsLookup)
+      .mockResolvedValueOnce([{ address: "93.184.216.34", family: 4 }])
+      .mockResolvedValueOnce([{ address: "127.0.0.1", family: 4 }]);
+    const transportSpy = vi.fn(async () => {
+      return new Response("ok", { status: 200 });
+    });
+    __setPinnedFetchImplForTests(transportSpy);
+
+    const handler = buildTestHandler(
+      makeCodeAction(`
+        const response = await fetch("https://example.com/code");
+        return await response.text();
+      `),
+    );
+
+    const result = await handler({});
+    expect(result.ok).toBe(true);
+    expect(result.output).toBe("ok");
+    expect(vi.mocked(dnsLookup)).toHaveBeenCalledTimes(1);
+    expect(transportSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: expect.objectContaining({
+          hostname: "example.com",
+          pinnedAddress: "93.184.216.34",
+        }),
+      }),
     );
   });
 
@@ -208,4 +407,3 @@ describe("custom action SSRF guard", () => {
     }
   });
 });
-

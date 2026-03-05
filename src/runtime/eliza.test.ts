@@ -13,6 +13,7 @@ import { logger, type Plugin } from "@elizaos/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { findPluginExport } from "../cli/plugins-cli";
 import type { MiladyConfig } from "../config/config";
+import { CONNECTOR_PLUGINS } from "../config/plugin-auto-enable";
 import { CONNECTOR_IDS } from "../config/schema";
 import {
   applyCloudConfigToEnv,
@@ -126,7 +127,7 @@ describe("collectPluginNames", () => {
 
   it("includes all core plugins for an empty config", () => {
     // Guard against accidental removal from CORE_PLUGINS array
-    expect(CORE_PLUGINS).toHaveLength(13);
+    expect(CORE_PLUGINS).toHaveLength(18);
 
     const expectedCorePlugins = [
       "@elizaos/plugin-sql",
@@ -136,12 +137,17 @@ describe("collectPluginNames", () => {
       "@elizaos/plugin-rolodex",
       "@elizaos/plugin-trajectory-logger",
       "@elizaos/plugin-agent-orchestrator",
+      "@elizaos/plugin-coding-agent",
       "@elizaos/plugin-cron",
       "@elizaos/plugin-shell",
       "@elizaos/plugin-plugin-manager",
       "@elizaos/plugin-agent-skills",
       "@elizaos/plugin-pdf",
       "@elizaos/plugin-secrets-manager",
+      "@elizaos/plugin-trust",
+      "@elizaos/plugin-todo",
+      "@elizaos/plugin-personality",
+      "@elizaos/plugin-experience",
     ];
     const names = collectPluginNames({} as MiladyConfig);
     for (const plugin of expectedCorePlugins) {
@@ -579,10 +585,37 @@ describe("collectPluginNames", () => {
     expect(names.has("@elizaos/plugin-obsidian")).toBe(true);
   });
 
+  it("preserves fully-qualified optional plugin package names from plugins.allow", () => {
+    const optionalPlugins = [
+      "@elizaos/plugin-cua",
+      "@elizaos/plugin-code",
+      "@elizaos/plugin-xai",
+      "@elizaos/plugin-deepseek",
+      "@elizaos/plugin-mistral",
+      "@elizaos/plugin-together",
+      "@elizaos/plugin-claude-code-workbench",
+    ];
+    const config = {
+      plugins: { allow: optionalPlugins },
+    } as unknown as MiladyConfig;
+
+    const names = collectPluginNames(config);
+
+    for (const pluginName of optionalPlugins) {
+      expect(names.has(pluginName)).toBe(true);
+    }
+  });
+
   it("CHANNEL_PLUGIN_MAP keys match CONNECTOR_IDS from schema", () => {
     expect([...Object.keys(CHANNEL_PLUGIN_MAP)].sort()).toEqual(
       [...CONNECTOR_IDS].sort(),
     );
+  });
+
+  it("CHANNEL_PLUGIN_MAP values match CONNECTOR_PLUGINS for every connector", () => {
+    for (const id of Object.keys(CHANNEL_PLUGIN_MAP)) {
+      expect(CHANNEL_PLUGIN_MAP[id]).toBe(CONNECTOR_PLUGINS[id]);
+    }
   });
 });
 

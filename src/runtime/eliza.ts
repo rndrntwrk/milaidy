@@ -45,6 +45,42 @@ import {
   type TargetInfo,
   type UUID,
 } from "@elizaos/core";
+import * as pluginAgentOrchestrator from "@elizaos/plugin-agent-orchestrator";
+import * as pluginAgentSkills from "@elizaos/plugin-agent-skills";
+import * as pluginAnthropic from "@elizaos/plugin-anthropic";
+import * as pluginBrowser from "@elizaos/plugin-browser";
+import * as pluginCli from "@elizaos/plugin-cli";
+import * as pluginCodingAgent from "@elizaos/plugin-coding-agent";
+import * as pluginComputeruse from "@elizaos/plugin-computeruse";
+import * as pluginCron from "@elizaos/plugin-cron";
+import * as pluginDiscord from "@elizaos/plugin-discord";
+import * as pluginEdgeTts from "@elizaos/plugin-edge-tts";
+import * as pluginElevenlabs from "@elizaos/plugin-elevenlabs";
+import * as pluginElizacloud from "@elizaos/plugin-elizacloud";
+import * as pluginExperience from "@elizaos/plugin-experience";
+import * as pluginForm from "@elizaos/plugin-form";
+import * as pluginGoogleGenai from "@elizaos/plugin-google-genai";
+import * as pluginGroq from "@elizaos/plugin-groq";
+import * as pluginKnowledge from "@elizaos/plugin-knowledge";
+import * as pluginLocalEmbedding from "@elizaos/plugin-local-embedding";
+import * as pluginOllama from "@elizaos/plugin-ollama";
+import * as pluginOpenai from "@elizaos/plugin-openai";
+import * as pluginOpenrouter from "@elizaos/plugin-openrouter";
+import * as pluginPdf from "@elizaos/plugin-pdf";
+import * as pluginPersonality from "@elizaos/plugin-personality";
+import * as pluginPluginManager from "@elizaos/plugin-plugin-manager";
+import * as pluginRolodex from "@elizaos/plugin-rolodex";
+import * as pluginSecretsManager from "@elizaos/plugin-secrets-manager";
+import * as pluginShell from "@elizaos/plugin-shell";
+// Static plugin imports - plugins with proper type declarations are imported
+// statically to enable TypeScript type checking. Plugins without types or not
+// installed will fall back to dynamic import at runtime.
+import * as pluginSql from "@elizaos/plugin-sql";
+import * as pluginTelegram from "@elizaos/plugin-telegram";
+import * as pluginTodo from "@elizaos/plugin-todo";
+import * as pluginTrajectoryLogger from "@elizaos/plugin-trajectory-logger";
+import * as pluginTrust from "@elizaos/plugin-trust";
+import * as pluginTwitch from "@elizaos/plugin-twitch";
 import {
   debugLogResolvedContext,
   validateRuntimeContext,
@@ -78,6 +114,85 @@ import { SandboxManager, type SandboxMode } from "../services/sandbox-manager";
 import { diagnoseNoAIProvider } from "../services/version-compat";
 import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins";
 import { createMiladyPlugin } from "./milady-plugin";
+import { installDatabaseTrajectoryLogger } from "./trajectory-persistence";
+
+/**
+ * Map of @elizaos plugin names to their statically imported modules.
+ *
+ * Note: Some OPTIONAL_CORE_PLUGINS are intentionally excluded from static imports:
+ * - plugin-cua, plugin-obsidian, plugin-code, plugin-repoprompt, plugin-claude-code-workbench:
+ *   These are specialized workflow plugins that may not be installed or have optional deps.
+ * - plugin-vision: Feature-gated with heavy native dependencies (TensorFlow, canvas).
+ *
+ * Excluded plugins fall through to dynamic import() which works in Node.js/CLI.
+ * For Electron builds, these plugins should be explicitly included if needed.
+ */
+const STATIC_ELIZA_PLUGINS: Record<string, unknown> = {
+  "@elizaos/plugin-sql": pluginSql,
+  "@elizaos/plugin-local-embedding": pluginLocalEmbedding,
+  "@elizaos/plugin-secrets-manager": pluginSecretsManager,
+  "@elizaos/plugin-form": pluginForm,
+  "@elizaos/plugin-knowledge": pluginKnowledge,
+  "@elizaos/plugin-rolodex": pluginRolodex,
+  "@elizaos/plugin-trajectory-logger": pluginTrajectoryLogger,
+  "@elizaos/plugin-agent-orchestrator": pluginAgentOrchestrator,
+  "@elizaos/plugin-coding-agent": pluginCodingAgent,
+  "@elizaos/plugin-cron": pluginCron,
+  "@elizaos/plugin-shell": pluginShell,
+  "@elizaos/plugin-plugin-manager": pluginPluginManager,
+  "@elizaos/plugin-agent-skills": pluginAgentSkills,
+  "@elizaos/plugin-pdf": pluginPdf,
+  "@elizaos/plugin-openai": pluginOpenai,
+  "@elizaos/plugin-anthropic": pluginAnthropic,
+  "@elizaos/plugin-google-genai": pluginGoogleGenai,
+  "@elizaos/plugin-groq": pluginGroq,
+  "@elizaos/plugin-openrouter": pluginOpenrouter,
+  "@elizaos/plugin-ollama": pluginOllama,
+  "@elizaos/plugin-elizacloud": pluginElizacloud,
+  "@elizaos/plugin-trust": pluginTrust,
+  "@elizaos/plugin-browser": pluginBrowser,
+  "@elizaos/plugin-discord": pluginDiscord,
+  "@elizaos/plugin-twitch": pluginTwitch,
+  "@elizaos/plugin-computeruse": pluginComputeruse,
+  "@elizaos/plugin-cli": pluginCli,
+  "@elizaos/plugin-telegram": pluginTelegram,
+  "@elizaos/plugin-elevenlabs": pluginElevenlabs,
+  "@elizaos/plugin-edge-tts": pluginEdgeTts,
+  "@elizaos/plugin-todo": pluginTodo,
+  "@elizaos/plugin-personality": pluginPersonality,
+  "@elizaos/plugin-experience": pluginExperience,
+};
+
+// NODE_PATH so dynamic plugin imports (e.g. @elizaos/plugin-coding-agent) resolve.
+// WHY: When eliza is loaded from dist/ or by a test runner, Node's resolution does not
+// search repo root node_modules; import("@elizaos/plugin-*") then fails. We prepend
+// repo root node_modules only if not already in NODE_PATH (run-node.mjs may have set it)
+// to avoid duplicate entries; _initPaths() makes Node re-read NODE_PATH. See docs/plugin-resolution-and-node-path.md.
+// We walk up from this file to find node_modules — we do not assume a fixed depth
+// (e.g. two levels for src/runtime/ or dist/runtime/) so we still work if build
+// output structure changes (e.g. flat dist). First directory with node_modules wins.
+const _elizaDir = path.dirname(fileURLToPath(import.meta.url));
+let _dir = _elizaDir;
+let _rootModules: string | null = null;
+while (_dir !== path.dirname(_dir)) {
+  const candidate = path.join(_dir, "node_modules");
+  if (existsSync(candidate)) {
+    _rootModules = candidate;
+    break;
+  }
+  _dir = path.dirname(_dir);
+}
+if (_rootModules) {
+  const prev = process.env.NODE_PATH ?? "";
+  const entries = prev ? prev.split(path.delimiter) : [];
+  const normalizedRoot = path.resolve(_rootModules);
+  if (!entries.some((e) => path.resolve(e) === normalizedRoot)) {
+    process.env.NODE_PATH = prev
+      ? `${_rootModules}${path.delimiter}${prev}`
+      : _rootModules;
+    createRequire(import.meta.url)("node:module").Module._initPaths();
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -397,6 +512,8 @@ function cancelOnboarding(): never {
  * Milady stores channel credentials under `config.channels.<name>.<field>`,
  * while ElizaOS plugins read them from process.env.
  */
+const RETAKE_CHANNEL_ACCESS_TOKEN_ENV = "RETAKE_AGENT_TOKEN";
+
 const CHANNEL_ENV_MAP: Readonly<
   Record<string, Readonly<Record<string, string>>>
 > = {
@@ -426,6 +543,17 @@ const CHANNEL_ENV_MAP: Readonly<
   },
   googlechat: {
     serviceAccountKey: "GOOGLE_CHAT_SERVICE_ACCOUNT_KEY",
+  },
+  blooio: {
+    apiKey: "BLOOIO_API_KEY",
+    fromNumber: "BLOOIO_PHONE_NUMBER",
+    webhookSecret: "BLOOIO_WEBHOOK_SECRET",
+    webhookUrl: "BLOOIO_WEBHOOK_URL",
+    webhookPort: "BLOOIO_WEBHOOK_PORT",
+  },
+  retake: {
+    accessToken: RETAKE_CHANNEL_ACCESS_TOKEN_ENV,
+    apiUrl: "RETAKE_API_URL",
   },
 };
 
@@ -466,6 +594,8 @@ export const CHANNEL_PLUGIN_MAP: Readonly<Record<string, string>> = {
   matrix: "@elizaos/plugin-matrix",
   nostr: "@elizaos/plugin-nostr",
   retake: "@milady/plugin-retake",
+  blooio: "@elizaos/plugin-blooio",
+  twitch: "@elizaos/plugin-twitch",
 };
 
 const PI_AI_PLUGIN_PACKAGE = "@elizaos/plugin-pi-ai";
@@ -515,7 +645,9 @@ const OPTIONAL_PLUGIN_MAP: Readonly<Record<string, string>> = {
   "pi-ai": PI_AI_PLUGIN_PACKAGE,
   piAi: PI_AI_PLUGIN_PACKAGE,
   x402: "@elizaos/plugin-x402",
-  "coding-agent": "@milaidy/plugin-coding-agent",
+  "coding-agent": "@elizaos/plugin-agent-orchestrator",
+  "twitch-streaming": "@milady/plugin-twitch-streaming",
+  "youtube-streaming": "@milady/plugin-youtube-streaming",
 };
 
 function looksLikePlugin(value: unknown): value is Plugin {
@@ -807,8 +939,8 @@ export function collectPluginNames(config: MiladyConfig): Set<string> {
   if (shellPluginDisabled) {
     pluginsToLoad.delete("@elizaos/plugin-shell");
   }
-  if (isPluginExplicitlyDisabled("@milaidy/plugin-coding-agent")) {
-    pluginsToLoad.delete("@milaidy/plugin-coding-agent");
+  if (isPluginExplicitlyDisabled("@elizaos/plugin-agent-orchestrator")) {
+    pluginsToLoad.delete("@elizaos/plugin-agent-orchestrator");
   }
 
   return pluginsToLoad;
@@ -915,6 +1047,9 @@ const WORKSPACE_PLUGIN_OVERRIDES = new Set<string>([
   // "@elizaos/plugin-trajectory-logger",
   // "@elizaos/plugin-plugin-manager",
   // "@elizaos/plugin-media-generation",
+  "@milady/plugin-twitch-streaming",
+  "@milady/plugin-youtube-streaming",
+  "@milady/plugin-retake",
 ]);
 
 function getWorkspacePluginOverridePath(pluginName: string): string | null {
@@ -1048,6 +1183,14 @@ export function ensureBrowserServerLink(): boolean {
  * Each plugin is loaded inside an error boundary so a single failing plugin
  * cannot crash the entire agent startup.
  */
+/**
+ * Resolve a statically-imported @elizaos plugin by name.
+ * Returns the module if found in STATIC_ELIZA_PLUGINS, otherwise null.
+ */
+function resolveStaticElizaPlugin(pluginName: string): unknown | null {
+  return STATIC_ELIZA_PLUGINS[pluginName] ?? null;
+}
+
 async function resolvePlugins(
   config: MiladyConfig,
   opts?: { quiet?: boolean },
@@ -1121,6 +1264,13 @@ async function resolvePlugins(
   logger.info(`[milady] Resolving ${pluginsToLoad.size} plugins...`);
   const loadStartTime = Date.now();
 
+  // Built once so we don't rebuild on every optional plugin failure.
+  const optionalPluginNames = new Set([
+    ...Object.values(OPTIONAL_PLUGIN_MAP),
+    ...Object.values(CHANNEL_PLUGIN_MAP),
+    ...OPTIONAL_CORE_PLUGINS,
+  ]);
+
   // Load a single plugin - returns result or null on skip/failure
   async function loadSinglePlugin(pluginName: string): Promise<{
     name: string;
@@ -1166,7 +1316,10 @@ async function resolvePlugins(
 
         if (isOfficialElizaPlugin) {
           try {
-            mod = (await import(pluginName)) as PluginModuleShape;
+            const staticMod = await resolveStaticElizaPlugin(pluginName);
+            mod = staticMod
+              ? (staticMod as PluginModuleShape)
+              : ((await import(pluginName)) as PluginModuleShape);
             if (repairBrokenInstallRecord(config, pluginName)) {
               repairedInstallRecords.add(pluginName);
             }
@@ -1184,7 +1337,10 @@ async function resolvePlugins(
             logger.warn(
               `[milady] Installed plugin ${pluginName} failed at ${installRecord.installPath} (${formatError(installErr)}). Falling back to node_modules resolution.`,
             );
-            mod = (await import(pluginName)) as PluginModuleShape;
+            const staticMod = await resolveStaticElizaPlugin(pluginName);
+            mod = staticMod
+              ? (staticMod as PluginModuleShape)
+              : ((await import(pluginName)) as PluginModuleShape);
             if (repairBrokenInstallRecord(config, pluginName)) {
               repairedInstallRecords.add(pluginName);
             }
@@ -1210,8 +1366,14 @@ async function resolvePlugins(
           pathToFileURL(indexPath).href
         )) as PluginModuleShape;
       } else {
-        // Built-in/npm plugin — import by package name from node_modules.
-        mod = (await import(pluginName)) as PluginModuleShape;
+        // Built-in/npm plugin — try bundled static import first, then
+        // fall back to bare node_modules resolution.
+        const staticMod = pluginName.startsWith("@elizaos/plugin-")
+          ? await resolveStaticElizaPlugin(pluginName)
+          : null;
+        mod = staticMod
+          ? (staticMod as PluginModuleShape)
+          : ((await import(pluginName)) as PluginModuleShape);
       }
 
       const pluginInstance = findRuntimePluginExport(mod);
@@ -1246,11 +1408,7 @@ async function resolvePlugins(
           `[milady] Failed to load core plugin ${pluginName}: ${msg}`,
         );
       } else {
-        const optionalNames = new Set([
-          ...Object.values(OPTIONAL_PLUGIN_MAP),
-          ...Object.values(CHANNEL_PLUGIN_MAP),
-        ]);
-        if (optionalNames.has(pluginName)) {
+        if (optionalPluginNames.has(pluginName)) {
           logger.debug(
             `[milady] Optional plugin ${pluginName} not available: ${msg}`,
           );
@@ -1540,8 +1698,12 @@ export function applyConnectorSecretsToEnv(config: MiladyConfig): void {
 
     for (const [configField, envKey] of Object.entries(envMap)) {
       const value = configObj[configField];
-      if (typeof value === "string" && value.trim() && !process.env[envKey]) {
-        process.env[envKey] = value;
+      if (typeof value === "string" && value.trim()) {
+        // Set if unset, or overwrite stale [REDACTED] placeholders
+        const existing = process.env[envKey];
+        if (!existing || existing.startsWith("[REDACT")) {
+          process.env[envKey] = value;
+        }
       }
     }
   }
@@ -2129,12 +2291,34 @@ export function buildCharacterFromConfig(config: MiladyConfig): Character {
     }
   }
 
-  // The messageExamples stored in config use the loose preset format
-  // ({ user, content: { text } }).  The core Character type requires a
-  // `name` field on each example, so we map `user` → `name` here.
-  const mappedExamples = messageExamples?.map((convo) =>
-    convo.map((msg) => ({ ...msg, name: msg.user })),
-  );
+  // Normalise messageExamples to the {examples: [{name,content}]} shape
+  // that @elizaos/core expects.  Config may contain EITHER format:
+  //   OLD (preset/onboarding): [[{user, content}, ...], ...]
+  //   NEW (@elizaos/core):     [{examples: [{name, content}, ...]}, ...]
+  const mappedExamples = messageExamples?.map((item: unknown) => {
+    // Already in new format — pass through
+    if (
+      item &&
+      typeof item === "object" &&
+      "examples" in (item as Record<string, unknown>)
+    ) {
+      return item as {
+        examples: { name: string; content: { text: string } }[];
+      };
+    }
+    // Old format — array of {user, content} entries
+    const arr = item as {
+      user?: string;
+      name?: string;
+      content: { text: string };
+    }[];
+    return {
+      examples: arr.map((msg) => ({
+        name: msg.name ?? msg.user ?? "",
+        content: msg.content,
+      })),
+    };
+  });
 
   return mergeCharacterDefaults({
     name,
@@ -3053,7 +3237,14 @@ export async function startEliza(
               enabled: (browserSettings.enabled as boolean) ?? false,
               image: (browserSettings.image as string) ?? undefined,
               cdpPort: (browserSettings.cdpPort as number) ?? undefined,
+              vncPort: (browserSettings.vncPort as number) ?? undefined,
+              noVncPort: (browserSettings.noVncPort as number) ?? undefined,
+              headless: (browserSettings.headless as boolean) ?? undefined,
+              enableNoVnc:
+                (browserSettings.enableNoVnc as boolean) ?? undefined,
               autoStart: (browserSettings.autoStart as boolean) ?? true,
+              autoStartTimeoutMs:
+                (browserSettings.autoStartTimeoutMs as number) ?? undefined,
             }
           : undefined,
       });
@@ -3285,6 +3476,7 @@ export async function startEliza(
     await runtime.initialize();
     await waitForTrajectoryLoggerService(runtime, "runtime.initialize()");
     ensureTrajectoryLoggerEnabled(runtime, "runtime.initialize()");
+    installDatabaseTrajectoryLogger(runtime);
 
     // 8b. Ensure AutonomyService is available for trigger dispatch.
     // IGNORE_BOOTSTRAP=true prevents the bootstrap plugin (which normally

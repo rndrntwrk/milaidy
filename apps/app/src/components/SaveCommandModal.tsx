@@ -154,6 +154,6 @@ export function SaveCommandModal({
           </button>
         </div>
       </div>
-    </Dialog>
+    </div>
   );
 }

@@ -1,5 +1,10 @@
-import { useState, useEffect } from "react";
-import { client, type CustomActionDef, type CustomActionHandler } from "../api-client";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  type CustomActionDef,
+  type CustomActionHandler,
+  client,
+} from "../api-client";
 import { Dialog } from "./ui/Dialog.js";
 
 interface CustomActionEditorProps {
@@ -698,65 +703,6 @@ export function CustomActionEditor({
     }
   };
 
-  const handleSave = async () => {
-    if (!name.trim()) {
-      alert("Name is required");
-      return;
-    }
-
-    let handler: CustomActionHandler;
-
-    if (handlerType === "http") {
-      const headers: Record<string, string> = {};
-      httpHeaders.forEach(h => {
-        if (h.key.trim()) {
-          headers[h.key.trim()] = h.value;
-        }
-      });
-
-      handler = {
-        type: "http",
-        method: httpMethod,
-        url: httpUrl,
-        headers: Object.keys(headers).length > 0 ? headers : undefined,
-        bodyTemplate: httpBody || undefined
-      };
-    } else if (handlerType === "shell") {
-      handler = {
-        type: "shell",
-        command: shellCommand
-      };
-    } else {
-      handler = {
-        type: "code",
-        code
-      };
-    }
-
-    const actionDef = {
-      name: name.trim(),
-      description: description.trim(),
-      similes: [] as string[],
-      parameters: parameters.filter(p => p.name.trim()).map(p => ({
-        name: p.name.trim(),
-        description: p.description.trim(),
-        required: p.required
-      })),
-      handler,
-      enabled: action?.enabled ?? true,
-    };
-
-    try {
-      const saved = action?.id
-        ? await client.updateCustomAction(action.id, actionDef)
-        : await client.createCustomAction(actionDef);
-
-      onSave(saved);
-    } catch (err: any) {
-      alert(`Failed to save: ${err.message || String(err)}`);
-    }
-  };
-
   return (
     <Dialog open={open} onClose={onClose} ariaLabelledBy="action-editor-title">
       <div className="w-full max-w-2xl border border-border bg-card shadow-lg flex flex-col overflow-hidden">
@@ -1075,7 +1021,13 @@ export function CustomActionEditor({
               className="flex items-center justify-between text-xs text-muted hover:text-txt cursor-pointer"
             >
               <span>Test Action</span>
-              <span>{testExpanded ? "▼" : "▶"}</span>
+              <span>
+                {testExpanded ? (
+                  <ChevronDown className="w-3 h-3" />
+                ) : (
+                  <ChevronRight className="w-3 h-3" />
+                )}
+              </span>
             </button>
             {testExpanded && (
               <div className="flex flex-col gap-2 pl-2 border-l-2 border-border">
