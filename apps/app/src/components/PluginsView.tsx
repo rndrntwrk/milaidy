@@ -22,6 +22,22 @@ const STREAM555_LEGACY_PLUGIN_IDS = new Set([
   "stream555-auth",
   "stream555-ads",
 ]);
+const ARCADE555_PRIMARY_PLUGIN_IDS = new Set([
+  "555arcade",
+  "arcade555",
+  "arcade555-canonical",
+]);
+const ARCADE555_LEGACY_PLUGIN_IDS = new Set([
+  "five55-games",
+  "five55-score-capture",
+  "five55-leaderboard",
+  "five55-quests",
+  "five55-battles",
+  "five55-admin",
+  "five55-social",
+  "five55-rewards",
+  "five55-github",
+]);
 
 function normalizeStream555PluginId(rawId: string): string {
   return rawId
@@ -37,6 +53,22 @@ function isStream555PrimaryPlugin(pluginId: string): boolean {
 
 function isStream555LegacyPlugin(pluginId: string): boolean {
   return STREAM555_LEGACY_PLUGIN_IDS.has(normalizeStream555PluginId(pluginId));
+}
+
+function normalizeArcade555PluginId(rawId: string): string {
+  return rawId
+    .trim()
+    .toLowerCase()
+    .replace(/^@[^/]+\//, "")
+    .replace(/^plugin-/, "");
+}
+
+function isArcade555PrimaryPlugin(pluginId: string): boolean {
+  return ARCADE555_PRIMARY_PLUGIN_IDS.has(normalizeArcade555PluginId(pluginId));
+}
+
+function isArcade555LegacyPlugin(pluginId: string): boolean {
+  return ARCADE555_LEGACY_PLUGIN_IDS.has(normalizeArcade555PluginId(pluginId));
 }
 
 type Stream555DestinationSpec = {
@@ -1882,6 +1914,9 @@ const FEATURE_SUBGROUP: Record<string, string> = {
   roblox: "gaming",
   babylon: "gaming",
   mysticism: "gaming",
+  "555arcade": "gaming",
+  "arcade555": "gaming",
+  "arcade555-canonical": "gaming",
   personality: "gaming",
   moltbook: "gaming",
 };
@@ -2033,6 +2068,11 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
 
   // ── Derived data ───────────────────────────────────────────────────
 
+  const hasArcadePrimaryPlugin = useMemo(
+    () => plugins.some((p: PluginInfo) => isArcade555PrimaryPlugin(p.id)),
+    [plugins],
+  );
+
   /** Plugins shown in the unified view (hide always-on internals + database-only entries). */
   const categoryPlugins = useMemo(
     () =>
@@ -2041,9 +2081,10 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
           p.category !== "database" &&
           !ALWAYS_ON_PLUGIN_IDS.has(p.id) &&
           !isStream555LegacyPlugin(p.id) &&
+          !(hasArcadePrimaryPlugin && isArcade555LegacyPlugin(p.id)) &&
           (mode !== "connectors" || p.category === "connector"),
       ),
-    [plugins, mode],
+    [plugins, mode, hasArcadePrimaryPlugin],
   );
 
   const nonDbPlugins = useMemo(() => {

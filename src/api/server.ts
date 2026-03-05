@@ -1914,6 +1914,23 @@ const STREAM555_PLUGIN_LEGACY_IDS = new Set([
   "stream555-auth",
   "stream555-ads",
 ]);
+const ARCADE555_PLUGIN_CONTROL_ID = "555arcade";
+const ARCADE555_PLUGIN_PRIMARY_IDS = new Set([
+  ARCADE555_PLUGIN_CONTROL_ID,
+  "arcade555",
+  "arcade555-canonical",
+]);
+const ARCADE555_PLUGIN_LEGACY_IDS = new Set([
+  "five55-games",
+  "five55-score-capture",
+  "five55-leaderboard",
+  "five55-quests",
+  "five55-battles",
+  "five55-admin",
+  "five55-social",
+  "five55-rewards",
+  "five55-github",
+]);
 
 type Stream555ChannelUiSpec = {
   label: string;
@@ -2080,7 +2097,26 @@ function resolveCanonicalPluginId(pluginId: string): string {
   if (isStream555LegacyPluginId(pluginId) || isStream555ControlPluginId(pluginId)) {
     return STREAM555_PLUGIN_CONTROL_ID;
   }
+  if (isArcade555LegacyPluginId(pluginId) || isArcade555ControlPluginId(pluginId)) {
+    return ARCADE555_PLUGIN_CONTROL_ID;
+  }
   return pluginId;
+}
+
+function normalizeArcade555PluginId(pluginId: string): string {
+  return pluginId
+    .trim()
+    .toLowerCase()
+    .replace(/^@[^/]+\//, "")
+    .replace(/^plugin-/, "");
+}
+
+function isArcade555LegacyPluginId(pluginId: string): boolean {
+  return ARCADE555_PLUGIN_LEGACY_IDS.has(normalizeArcade555PluginId(pluginId));
+}
+
+function isArcade555ControlPluginId(pluginId: string): boolean {
+  return ARCADE555_PLUGIN_PRIMARY_IDS.has(normalizeArcade555PluginId(pluginId));
 }
 
 function dedupePluginValidationIssues(
@@ -2186,6 +2222,83 @@ function collapseStream555PluginEntries(entries: PluginEntry[]): PluginEntry[] {
         !isStream555LegacyPluginId(entry.id),
     )
     .concat(mergedEntry);
+}
+
+function collapseArcade555PluginEntries(entries: PluginEntry[]): PluginEntry[] {
+  const relatedEntries = entries.filter((entry) =>
+    isArcade555LegacyPluginId(entry.id),
+  );
+  const controlEntry = entries.find((entry) =>
+    isArcade555ControlPluginId(entry.id),
+  );
+  if (!controlEntry && relatedEntries.length === 0) return entries;
+
+  const baseEntry = controlEntry ?? relatedEntries[0];
+  if (!baseEntry) return entries;
+
+  const mergedEntry: PluginEntry = {
+    ...baseEntry,
+    id: ARCADE555_PLUGIN_CONTROL_ID,
+    name: "555 Arcade",
+    description:
+      "Unified 555 Arcade plugin for game sessions, score telemetry, quests, leaderboard, and progression operations.",
+    configured: baseEntry.configured,
+    enabled: baseEntry.enabled,
+    isActive: baseEntry.isActive,
+    loadError: baseEntry.loadError,
+    category: "feature",
+    source: baseEntry.source ?? "bundled",
+    envKey: baseEntry.envKey ?? "ARCADE555_BASE_URL",
+    configKeys: [...baseEntry.configKeys],
+    parameters: baseEntry.parameters.map((parameter) => ({ ...parameter })),
+    validationErrors: [...baseEntry.validationErrors],
+    validationWarnings: [...baseEntry.validationWarnings],
+    ...(baseEntry.configUiHints
+      ? { configUiHints: { ...baseEntry.configUiHints } }
+      : {}),
+  };
+
+  for (const related of relatedEntries) {
+    mergedEntry.configured ||= related.configured;
+    mergedEntry.enabled ||= related.enabled;
+    mergedEntry.isActive = Boolean(mergedEntry.isActive || related.isActive);
+    if (!mergedEntry.loadError && related.loadError) {
+      mergedEntry.loadError = related.loadError;
+    }
+    mergedEntry.configKeys.push(...related.configKeys);
+    mergedEntry.parameters.push(
+      ...related.parameters.map((parameter) => ({ ...parameter })),
+    );
+    mergedEntry.validationErrors.push(...related.validationErrors);
+    mergedEntry.validationWarnings.push(...related.validationWarnings);
+    if (related.configUiHints) {
+      mergedEntry.configUiHints = {
+        ...(mergedEntry.configUiHints ?? {}),
+        ...related.configUiHints,
+      };
+    }
+  }
+
+  mergedEntry.configKeys = Array.from(new Set(mergedEntry.configKeys));
+  mergedEntry.parameters = dedupePluginParams(mergedEntry.parameters);
+  mergedEntry.validationErrors = dedupePluginValidationIssues(
+    mergedEntry.validationErrors,
+  );
+  mergedEntry.validationWarnings = dedupePluginValidationIssues(
+    mergedEntry.validationWarnings,
+  );
+
+  return entries
+    .filter(
+      (entry) =>
+        !isArcade555ControlPluginId(entry.id) &&
+        !isArcade555LegacyPluginId(entry.id),
+    )
+    .concat(mergedEntry);
+}
+
+function collapseFive55PluginEntries(entries: PluginEntry[]): PluginEntry[] {
+  return collapseArcade555PluginEntries(collapseStream555PluginEntries(entries));
 }
 
 function applyStream555ChannelAutoEnableConfig(
@@ -4803,7 +4916,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
         }
       }
 
-      return collapseStream555PluginEntries(manifestEntries).sort((a, b) =>
+      return collapseFive55PluginEntries(manifestEntries).sort((a, b) =>
         a.name.localeCompare(b.name),
       );
     } catch (err) {
@@ -11384,7 +11497,7 @@ async function handleRequest(
     // Merge user-installed plugins into the list (they don't exist in plugins.json)
     const bundledIds = new Set(state.plugins.map((p) => p.id));
     const installedEntries = discoverInstalledPlugins(freshConfig, bundledIds);
-    const allPlugins: PluginEntry[] = collapseStream555PluginEntries([
+    const allPlugins: PluginEntry[] = collapseFive55PluginEntries([
       ...state.plugins,
       ...installedEntries,
     ]);
@@ -11638,6 +11751,14 @@ async function handleRequest(
         entries["stream555-auth"] = { enabled: body.enabled };
         entries["stream555-ads"] = { enabled: body.enabled };
       }
+      if (pluginId === ARCADE555_PLUGIN_CONTROL_ID) {
+        entries["arcade555-canonical"] = { enabled: body.enabled };
+        entries["arcade555"] = { enabled: body.enabled };
+        entries["555arcade"] = { enabled: body.enabled };
+        for (const legacyPluginId of ARCADE555_PLUGIN_LEGACY_IDS) {
+          entries[legacyPluginId] = { enabled: body.enabled };
+        }
+      }
       logger.info(
         `[milaidy-api] ${body.enabled ? "Enabled" : "Disabled"} plugin: ${packageName}`,
       );
@@ -11678,7 +11799,7 @@ async function handleRequest(
     // Merge bundled + installed plugins for full parameter coverage
     const bundledIds = new Set(state.plugins.map((p) => p.id));
     const installedEntries = discoverInstalledPlugins(state.config, bundledIds);
-    const allPlugins: PluginEntry[] = collapseStream555PluginEntries([
+    const allPlugins: PluginEntry[] = collapseFive55PluginEntries([
       ...state.plugins,
       ...installedEntries,
     ]);
@@ -11720,7 +11841,7 @@ async function handleRequest(
     // Build allowlist from all plugin-declared sensitive params
     const bundledIds = new Set(state.plugins.map((p) => p.id));
     const installedEntries = discoverInstalledPlugins(state.config, bundledIds);
-    const allPlugins: PluginEntry[] = collapseStream555PluginEntries([
+    const allPlugins: PluginEntry[] = collapseFive55PluginEntries([
       ...state.plugins,
       ...installedEntries,
     ]);
