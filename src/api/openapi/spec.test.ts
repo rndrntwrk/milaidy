@@ -7,15 +7,16 @@ import { describe, expect, it } from "vitest";
 import { buildOpenApiSpec } from "./spec.js";
 
 describe("buildOpenApiSpec", () => {
-  const spec = buildOpenApiSpec();
-
   it("returns valid OpenAPI 3.1 structure", () => {
+    const spec = buildOpenApiSpec();
     expect(spec.openapi).toBe("3.1.0");
     expect(spec.info).toBeDefined();
     expect((spec.info as Record<string, unknown>).title).toContain("Milaidy");
   });
 
-  it("includes paths for autonomy endpoints", () => {
+  it("includes canonical arcade mastery paths and omits legacy aliases by default", () => {
+    delete process.env.ARCADE555_ENABLE_LEGACY_HTTP_ALIASES;
+    const spec = buildOpenApiSpec();
     const paths = spec.paths as Record<string, unknown>;
     expect(paths["/api/agent/autonomy"]).toBeDefined();
     expect(paths["/api/agent/autonomy/execute-plan"]).toBeDefined();
@@ -33,19 +34,30 @@ describe("buildOpenApiSpec", () => {
     expect(paths["/api/agent/identity/history"]).toBeDefined();
     expect(paths["/api/agent/approvals"]).toBeDefined();
     expect(paths["/api/agent/safe-mode"]).toBeDefined();
-    expect(paths["/api/five55/mastery/catalog"]).toBeDefined();
-    expect(paths["/api/five55/mastery/runs"]).toBeDefined();
-    expect(paths["/api/five55/mastery/runs/{runId}"]).toBeDefined();
-    expect(paths["/api/five55/mastery/runs/{runId}/episodes"]).toBeDefined();
-    expect(paths["/api/five55/mastery/runs/{runId}/logs"]).toBeDefined();
-    expect(paths["/api/five55/mastery/runs/{runId}/evidence"]).toBeDefined();
-    expect(paths["/api/five55/mastery/runs/{runId}/episodes/{episodeId}/frames"]).toBeDefined();
-    expect(paths["/api/five55/mastery/runs/{runId}/episodes/{episodeId}/consistency"]).toBeDefined();
-    expect(paths["/api/five55/mastery/games/{gameId}/latest"]).toBeDefined();
+    expect(paths["/api/arcade555/mastery/catalog"]).toBeDefined();
+    expect(paths["/api/arcade555/mastery/runs"]).toBeDefined();
+    expect(paths["/api/arcade555/mastery/runs/{runId}"]).toBeDefined();
+    expect(paths["/api/arcade555/mastery/runs/{runId}/episodes"]).toBeDefined();
+    expect(paths["/api/arcade555/mastery/runs/{runId}/logs"]).toBeDefined();
+    expect(paths["/api/arcade555/mastery/runs/{runId}/evidence"]).toBeDefined();
+    expect(paths["/api/arcade555/mastery/runs/{runId}/episodes/{episodeId}/frames"]).toBeDefined();
+    expect(paths["/api/arcade555/mastery/runs/{runId}/episodes/{episodeId}/consistency"]).toBeDefined();
+    expect(paths["/api/arcade555/mastery/games/{gameId}/latest"]).toBeDefined();
+    expect(paths["/api/five55/mastery/catalog"]).toBeUndefined();
     expect(paths["/metrics"]).toBeDefined();
   });
 
+  it("includes deprecated legacy arcade mastery aliases when compatibility mode is enabled", () => {
+    process.env.ARCADE555_ENABLE_LEGACY_HTTP_ALIASES = "true";
+    const spec = buildOpenApiSpec();
+    const paths = spec.paths as Record<string, Record<string, { deprecated?: boolean }>>;
+    expect(paths["/api/five55/mastery/catalog"]).toBeDefined();
+    expect(paths["/api/five55/mastery/catalog"]?.get?.deprecated).toBe(true);
+    delete process.env.ARCADE555_ENABLE_LEGACY_HTTP_ALIASES;
+  });
+
   it("includes component schemas", () => {
+    const spec = buildOpenApiSpec();
     const components = spec.components as Record<string, Record<string, unknown>>;
     expect(components.schemas.Identity).toBeDefined();
     expect(components.schemas.ApprovalRequest).toBeDefined();
@@ -53,10 +65,11 @@ describe("buildOpenApiSpec", () => {
   });
 
   it("includes tags", () => {
+    const spec = buildOpenApiSpec();
     const tags = spec.tags as Array<{ name: string }>;
     const tagNames = tags.map((t) => t.name);
     expect(tagNames).toContain("Autonomy");
-    expect(tagNames).toContain("Five55");
+    expect(tagNames).toContain("Arcade555");
     expect(tagNames).toContain("Identity");
     expect(tagNames).toContain("Approvals");
     expect(tagNames).toContain("Workflows");
@@ -65,6 +78,7 @@ describe("buildOpenApiSpec", () => {
   });
 
   it("identity schema has required fields", () => {
+    const spec = buildOpenApiSpec();
     const components = spec.components as Record<string, Record<string, Record<string, unknown>>>;
     const identity = components.schemas.Identity;
     const props = identity.properties as Record<string, unknown>;
@@ -76,6 +90,7 @@ describe("buildOpenApiSpec", () => {
   });
 
   it("has server definition", () => {
+    const spec = buildOpenApiSpec();
     const servers = spec.servers as Array<{ url: string }>;
     expect(servers).toHaveLength(1);
     expect(servers[0].url).toContain("2138");

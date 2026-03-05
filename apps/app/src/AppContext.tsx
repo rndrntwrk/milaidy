@@ -26,7 +26,7 @@ import {
   client,
   type DropStatus,
   type ExtensionStatus,
-  type Five55MasteryRun,
+  type Arcade555MasteryRun,
   type ImageAttachment,
   type LogEntry,
   type McpMarketplaceResult,
@@ -810,8 +810,8 @@ export interface AppState {
   activeGameSandbox: string;
   activeGamePostMessageAuth: boolean;
   activeGamePostMessagePayload: GamePostMessageAuthPayload | null;
-  five55MasteryRuns: Five55MasteryRun[];
-  five55MasteryRunsLoading: boolean;
+  arcade555MasteryRuns: Arcade555MasteryRun[];
+  arcade555MasteryRunsLoading: boolean;
 
   /** When true, the game iframe persists as a floating overlay across all tabs. */
   gameOverlayEnabled: boolean;
@@ -893,8 +893,8 @@ export interface AppActions {
 
   // Logs
   loadLogs: () => Promise<void>;
-  loadFive55MasteryRuns: () => Promise<void>;
-  startFive55MasteryRun: (input?: {
+  loadArcade555MasteryRuns: () => Promise<void>;
+  startArcade555MasteryRun: (input?: {
     suiteId?: string;
     games?: string[];
     episodesPerGame?: number;
@@ -1395,10 +1395,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     useState(false);
   const [activeGamePostMessagePayload, setActiveGamePostMessagePayload] =
     useState<GamePostMessageAuthPayload | null>(null);
-  const [five55MasteryRuns, setFive55MasteryRuns] = useState<Five55MasteryRun[]>(
+  const [arcade555MasteryRuns, setArcade555MasteryRuns] = useState<Arcade555MasteryRun[]>(
     [],
   );
-  const [five55MasteryRunsLoading, setFive55MasteryRunsLoading] =
+  const [arcade555MasteryRunsLoading, setArcade555MasteryRunsLoading] =
     useState(false);
   const [gameOverlayEnabled, setGameOverlayEnabled] = useState(false);
 
@@ -1585,19 +1585,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [logTagFilter, logLevelFilter, logSourceFilter]);
 
-  const loadFive55MasteryRuns = useCallback(async () => {
-    setFive55MasteryRunsLoading(true);
+  const loadArcade555MasteryRuns = useCallback(async () => {
+    setArcade555MasteryRunsLoading(true);
     try {
-      const page = await client.listFive55MasteryRuns({ limit: 20 });
-      setFive55MasteryRuns(page.runs);
+      const page = await client.listArcade555MasteryRuns({ limit: 20 });
+      setArcade555MasteryRuns(page.runs);
     } catch (err) {
-      console.error("[loadFive55MasteryRuns]", err);
+      console.error("[loadArcade555MasteryRuns]", err);
     } finally {
-      setFive55MasteryRunsLoading(false);
+      setArcade555MasteryRunsLoading(false);
     }
   }, []);
 
-  const startFive55MasteryRun = useCallback(
+  const startArcade555MasteryRun = useCallback(
     async (input?: {
       suiteId?: string;
       games?: string[];
@@ -1607,7 +1607,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       strict?: boolean;
     }): Promise<string | null> => {
       try {
-        const result = await client.startFive55MasteryRun({
+        const result = await client.startArcade555MasteryRun({
           suiteId: input?.suiteId,
           games: input?.games,
           episodesPerGame: input?.episodesPerGame,
@@ -1615,14 +1615,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
           maxDurationSec: input?.maxDurationSec,
           strict: input?.strict,
         });
-        await loadFive55MasteryRuns();
+        await loadArcade555MasteryRuns();
         return result.runId;
       } catch (err) {
-        console.error("[startFive55MasteryRun]", err);
+        console.error("[startArcade555MasteryRun]", err);
         return null;
       }
     },
-    [loadFive55MasteryRuns],
+    [loadArcade555MasteryRuns],
   );
 
   const loadTriggerHealth = useCallback(async () => {
@@ -4516,7 +4516,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         () => pollCloudCredits(),
         60_000,
       );
-      void loadFive55MasteryRuns();
+      void loadArcade555MasteryRuns();
 
       // Load tab from URL — use hash in file:// mode (Electron packaged builds)
       const navPath =
@@ -4580,7 +4580,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     checkExtensionStatus,
     currentTheme,
     loadCharacter,
-    loadFive55MasteryRuns,
+    loadArcade555MasteryRuns,
     loadInventory,
     loadPlugins,
     loadSkills,
@@ -4675,8 +4675,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     droppedFiles, shareIngestNotice,
     activeGameApp, activeGameDisplayName, activeGameViewerUrl, activeGameSandbox,
     activeGamePostMessageAuth,
-    five55MasteryRuns,
-    five55MasteryRunsLoading,
+    arcade555MasteryRuns,
+    arcade555MasteryRunsLoading,
     gameOverlayEnabled,
     appsSubTab,
     agentSubTab,
@@ -4729,8 +4729,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     uninstallMarketplaceSkill,
     installSkillFromGithubUrl,
     loadLogs,
-    loadFive55MasteryRuns,
-    startFive55MasteryRun,
+    loadArcade555MasteryRuns,
+    startArcade555MasteryRun,
     loadInventory,
     loadBalances,
     loadNfts,

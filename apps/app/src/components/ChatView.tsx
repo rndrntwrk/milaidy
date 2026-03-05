@@ -22,10 +22,10 @@ import { useVoiceChat } from "../hooks/useVoiceChat.js";
 import {
   client,
   type AutonomyExecutePlanRequest,
+  type Arcade555AutonomyMode,
+  type Arcade555AutonomyPreviewResponse,
   type ConversationMode,
-  type Five55AutonomyMode,
-  type Five55MasteryRun,
-  type Five55AutonomyPreviewResponse,
+  type Arcade555MasteryRun,
   type VoiceConfig,
 } from "../api-client.js";
 import { MessageContent } from "./MessageContent.js";
@@ -151,6 +151,48 @@ function isUnreachableLoopbackViewerUrl(rawUrl: string): boolean {
   if (!isLoopbackUrl(rawUrl)) return false;
   if (typeof window === "undefined") return true;
   return !isLoopbackHostname(window.location.hostname);
+}
+
+function normalizePluginId(rawId: string): string {
+  return rawId
+    .trim()
+    .toLowerCase()
+    .replace(/^@[^/]+\//, "")
+    .replace(/^plugin-/, "");
+}
+
+const ARCADE_PLUGIN_ID_ALIASES = new Set([
+  "555arcade",
+  "arcade555",
+  "arcade555-canonical",
+]);
+
+function pluginIdMatchesNeedle(
+  pluginId: string,
+  pluginName: string,
+  rawNeedle: string,
+): boolean {
+  const needle = rawNeedle.trim().toLowerCase();
+  const normalizedNeedle = normalizePluginId(needle);
+  const normalizedPluginId = normalizePluginId(pluginId);
+  const normalizedPluginName = normalizePluginId(pluginName);
+
+  if (
+    ARCADE_PLUGIN_ID_ALIASES.has(normalizedNeedle) &&
+    (ARCADE_PLUGIN_ID_ALIASES.has(normalizedPluginId) ||
+      ARCADE_PLUGIN_ID_ALIASES.has(normalizedPluginName))
+  ) {
+    return true;
+  }
+
+  return (
+    pluginId === needle ||
+    pluginId === needle.replace(/^alice-/, "") ||
+    pluginName === needle ||
+    pluginName.includes(needle) ||
+    normalizedPluginId === normalizedNeedle ||
+    normalizedPluginName === normalizedNeedle
+  );
 }
 
 function parseAdIdFromEnvelope(
@@ -301,17 +343,17 @@ export const ChatView = memo(function ChatView() {
   // ── Voice config (ElevenLabs / browser TTS) ────────────────────────
   const [voiceConfig, setVoiceConfig] = useState<VoiceConfig | null>(null);
   const [autoRunOpen, setAutoRunOpen] = useState(false);
-  const [autoRunMode, setAutoRunMode] = useState<Five55AutonomyMode>("newscast");
+  const [autoRunMode, setAutoRunMode] = useState<Arcade555AutonomyMode>("newscast");
   const [autoRunTopic, setAutoRunTopic] = useState("");
   const [autoRunDurationMin, setAutoRunDurationMin] = useState(30);
   const [autoRunAvatarRuntime, setAutoRunAvatarRuntime] = useState<
     "auto" | "local" | "premium"
   >("local");
   const [autoRunPreview, setAutoRunPreview] =
-    useState<Five55AutonomyPreviewResponse | null>(null);
+    useState<Arcade555AutonomyPreviewResponse | null>(null);
   const [autoRunPreviewBusy, setAutoRunPreviewBusy] = useState(false);
   const [autoRunLaunching, setAutoRunLaunching] = useState(false);
-  const [masteryRuns, setMasteryRuns] = useState<Five55MasteryRun[]>([]);
+  const [masteryRuns, setMasteryRuns] = useState<Arcade555MasteryRun[]>([]);
   const [masteryRunsLoading, setMasteryRunsLoading] = useState(false);
   const [masteryRunsError, setMasteryRunsError] = useState<string | null>(null);
   const [masterySuiteStarting, setMasterySuiteStarting] = useState(false);
@@ -323,7 +365,7 @@ export const ChatView = memo(function ChatView() {
   const loadMasteryRuns = useCallback(async () => {
     setMasteryRunsLoading(true);
     try {
-      const page = await client.listFive55MasteryRuns({ limit: 8 });
+      const page = await client.listArcade555MasteryRuns({ limit: 8 });
       setMasteryRuns(page.runs);
       setMasteryRunsError(null);
     } catch (err) {
@@ -339,7 +381,7 @@ export const ChatView = memo(function ChatView() {
     if (masterySuiteStarting) return;
     setMasterySuiteStarting(true);
     try {
-      const response = await client.startFive55MasteryRun({
+      const response = await client.startArcade555MasteryRun({
         suiteId: `alice-16-game-${Date.now()}`,
         episodesPerGame: 60,
         seedMode: "mixed",
@@ -427,12 +469,7 @@ export const ChatView = memo(function ChatView() {
     const plugin = plugins.find((p) => {
       const pluginId = p.id.trim().toLowerCase();
       const pluginName = p.name.trim().toLowerCase();
-      return (
-        pluginId === needle ||
-        pluginId === needle.replace(/^alice-/, "") ||
-        pluginName === needle ||
-        pluginName.includes(needle)
-      );
+      return pluginIdMatchesNeedle(pluginId, pluginName, needle);
     });
     if (!plugin) return "available";
     if (plugin.isActive === true) return "active";
@@ -447,12 +484,7 @@ export const ChatView = memo(function ChatView() {
       return plugins.some((p) => {
         const pluginId = p.id.trim().toLowerCase();
         const pluginName = p.name.trim().toLowerCase();
-        return (
-          pluginId === needle ||
-          pluginId === needle.replace(/^alice-/, "") ||
-          pluginName === needle ||
-          pluginName.includes(needle)
-        );
+        return pluginIdMatchesNeedle(pluginId, pluginName, needle);
       });
     },
     [plugins],
@@ -490,7 +522,7 @@ export const ChatView = memo(function ChatView() {
 
   const buildAutonomousPrompt = useCallback(
     (params: {
-      mode: Five55AutonomyMode;
+      mode: Arcade555AutonomyMode;
       topic: string;
       durationMin: number;
       gameTitle?: string;
@@ -569,12 +601,16 @@ export const ChatView = memo(function ChatView() {
       planResults: unknown[],
       selectedGameId?: string,
     ): Promise<ParsedGameLaunch> => {
-      const launchFromPlan = parseGameLaunchFromEnvelope(
-        findLastToolEnvelope(planResults, "FIVE55_GAMES_PLAY"),
-      );
+      const launchFromPlan =
+        parseGameLaunchFromEnvelope(
+          findLastToolEnvelope(planResults, "ARCADE555_GAMES_PLAY"),
+        ) ??
+        parseGameLaunchFromEnvelope(
+          findLastToolEnvelope(planResults, "FIVE55_GAMES_PLAY"),
+        );
       if (launchFromPlan) return launchFromPlan;
 
-      const playResult = await client.playFive55Game({
+      const playResult = await client.playArcade555Game({
         gameId: selectedGameId,
         mode: "spectate",
       });
@@ -587,7 +623,7 @@ export const ChatView = memo(function ChatView() {
       }
       if (isUnreachableLoopbackViewerUrl(fallbackViewerUrl)) {
         throw new Error(
-          "Game launch returned a localhost viewer URL. Configure FIVE55_GAMES_VIEWER_BASE_URL to a public URL.",
+          "Game launch returned a localhost viewer URL. Configure ARCADE555_VIEWER_BASE_URL to a public URL (legacy fallback: FIVE55_GAMES_VIEWER_BASE_URL).",
         );
       }
 
@@ -602,6 +638,16 @@ export const ChatView = memo(function ChatView() {
     [],
   );
 
+  const resolveGamesPlayToolName = useCallback((): string => {
+    const canonicalArcadeAvailable =
+      hasPluginRegistration("555arcade") ||
+      hasPluginRegistration("arcade555") ||
+      hasPluginRegistration("arcade555-canonical");
+    return canonicalArcadeAvailable
+      ? "ARCADE555_GAMES_PLAY"
+      : "FIVE55_GAMES_PLAY";
+  }, [hasPluginRegistration]);
+
   const runAutonomousEstimate = useCallback(async () => {
     if (autoRunMode === "topic" && autoRunTopic.trim().length === 0) {
       setActionNotice(
@@ -614,7 +660,7 @@ export const ChatView = memo(function ChatView() {
 
     setAutoRunPreviewBusy(true);
     try {
-      const preview = await client.getFive55AutonomyPreview({
+      const preview = await client.getArcade555AutonomyPreview({
         mode: autoRunMode,
         topic: autoRunTopic.trim() || undefined,
         durationMin: autoRunDurationMin,
@@ -720,10 +766,10 @@ export const ChatView = memo(function ChatView() {
     {
       id: "play-games",
       label: "Play Games",
-      pluginIds: ["five55-games"],
+      pluginIds: ["555arcade"],
       navigateToApps: true,
       prompt:
-        "Use FIVE55_GAMES_CATALOG to choose a playable game and run FIVE55_GAMES_PLAY in autonomous spectate mode (bot=true). Continue live commentary with score/capture updates.",
+        "Prefer ARCADE555_GAMES_CATALOG and ARCADE555_GAMES_PLAY to choose a playable game and launch autonomous spectate mode (bot=true). If canonical arcade actions are unavailable, fallback to FIVE55_GAMES_CATALOG and FIVE55_GAMES_PLAY. Continue live commentary with score/capture updates.",
     },
     {
       id: "swap",
@@ -1354,13 +1400,14 @@ export const ChatView = memo(function ChatView() {
 
       if (layer.id === "play-games") {
         try {
-          const catalog = await client.getFive55GamesCatalog({
+          const catalog = await client.getArcade555GamesCatalog({
             includeBeta: true,
           });
           const selectedGameId = selectPreferredGameId(catalog.games);
           const selectedGame = selectedGameId
             ? catalog.games.find((game) => game.id === selectedGameId)
             : undefined;
+          const playToolName = resolveGamesPlayToolName();
 
           const playPlan = await executePlanWithRetry({
             plan: {
@@ -1368,7 +1415,7 @@ export const ChatView = memo(function ChatView() {
               steps: [
                 {
                   id: "play-autonomous",
-                  toolName: "FIVE55_GAMES_PLAY",
+                  toolName: playToolName,
                   params: {
                     ...(selectedGameId ? { gameId: selectedGameId } : {}),
                     mode: "spectate",
@@ -1517,6 +1564,8 @@ export const ChatView = memo(function ChatView() {
       handleChatSend,
       hasPluginRegistration,
       executePlanWithRetry,
+      resolveAutonomousGameLaunch,
+      resolveGamesPlayToolName,
     ],
   );
 
@@ -1570,11 +1619,9 @@ export const ChatView = memo(function ChatView() {
       };
 
       if (autoRunMode === "games") {
-        const catalog = await client.getFive55GamesCatalog({ includeBeta: true });
+        const catalog = await client.getArcade555GamesCatalog({ includeBeta: true });
         const selectedGameId = selectPreferredGameId(catalog.games);
-        const selectedGame = selectedGameId
-          ? catalog.games.find((game) => game.id === selectedGameId)
-          : undefined;
+        const playToolName = resolveGamesPlayToolName();
 
         const playPlan = await executePlanWithRetry({
           plan: {
@@ -1582,7 +1629,7 @@ export const ChatView = memo(function ChatView() {
             steps: [
               {
                 id: "play",
-                toolName: "FIVE55_GAMES_PLAY",
+                toolName: playToolName,
                 params: {
                   ...(selectedGameId ? { gameId: selectedGameId } : {}),
                   mode: "spectate",
@@ -1682,6 +1729,7 @@ export const ChatView = memo(function ChatView() {
     chatSending,
     autoRunLaunching,
     hasPluginRegistration,
+    resolveGamesPlayToolName,
     setActionNotice,
     setTab,
     resolveLayerStatus,
@@ -1832,7 +1880,7 @@ export const ChatView = memo(function ChatView() {
                   <select
                     className="px-2 py-1 border rounded border-border bg-card text-txt"
                     value={autoRunMode}
-                    onChange={(e) => setAutoRunMode(e.target.value as Five55AutonomyMode)}
+                    onChange={(e) => setAutoRunMode(e.target.value as Arcade555AutonomyMode)}
                     disabled={autoRunPreviewBusy || autoRunLaunching}
                   >
                     <option value="newscast">Newscast</option>

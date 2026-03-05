@@ -32,7 +32,7 @@
     "./eliza": "./dist/runtime/eliza.js"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12.0"
   },
   "scripts": {
     "benchmark:server": "node --import tsx src/benchmark/server.ts",
@@ -55,12 +55,13 @@
     "autonomy:pipeline:latency": "node --import tsx scripts/autonomy/measure-pipeline-latency.ts",
     "autonomy:events:rebuild": "node --import tsx scripts/autonomy/rebuild-event-projections.ts",
     "autonomy:events:verify": "node --import tsx scripts/autonomy/verify-event-chain.ts",
-    "build": "tsdown && cp src/plugins/telegram-enhanced/package.json dist/plugins/telegram-enhanced/package.json && scripts/rt.sh scripts/write-build-info.ts && cd apps/app && ../../scripts/rt.sh run build",
+    "build": "tsdown && node -e \"const fs=require('fs');const src='src/plugins/telegram-enhanced/package.json';const dest='dist/plugins/telegram-enhanced/package.json';if(fs.existsSync(src)){fs.mkdirSync('dist/plugins/telegram-enhanced',{recursive:true});fs.copyFileSync(src,dest);}\" && scripts/rt.sh scripts/write-build-info.ts && cd apps/app && ../../scripts/rt.sh run build",
     "build:node": "tsdown && node --import tsx scripts/write-build-info.ts && cd apps/app && npm run build",
     "build:android": "cd apps/app && ../../scripts/rt.sh run build:android",
     "build:desktop": "cd apps/app && ../../scripts/rt.sh run build:electron",
     "build:ios": "cd apps/app && ../../scripts/rt.sh run build:ios",
-    "check": "scripts/rt.sh run typecheck && scripts/rt.sh run lint",
+    "check": "node scripts/check-arcade555-canonical.mjs && scripts/rt.sh run typecheck && scripts/rt.sh run lint",
+    "check:arcade555:canonical": "node scripts/check-arcade555-canonical.mjs",
     "db:check": "bunx vitest run src/api/database.security.test.ts src/api/database.readonly-query-guard.test.ts test/database-api.e2e.test.ts",
     "dev": "scripts/rt.sh scripts/dev-ui.mjs",
     "dev:all": "scripts/rt.sh scripts/dev-all.mjs",
@@ -88,13 +89,18 @@
     "prepare": "node -e \"try{require('child_process').execSync('git config core.hooksPath git-hooks',{stdio:'ignore'})}catch{}\"",
     "publish:all:next": "echo 'Use npm publish or bun publish directly'",
     "publish:plugins:next": "cd plugins && bun run publish:next",
-    "release:check": "node --import tsx scripts/release-check.ts",
+    "release:check": "node scripts/check-arcade555-canonical.mjs && node --import tsx scripts/release-check.ts",
     "smoke:api-status": "node scripts/smoke-api-status.mjs",
-    "smoke:five55:games": "node scripts/five55-game-smoke.mjs",
-    "smoke:five55:games:strict": "FIVE55_SMOKE_STRICT_ERRORS=1 FIVE55_SMOKE_REQUIRE_MASTERY=1 node scripts/five55-game-smoke.mjs --require-mastery",
-    "smoke:five55:games:mastery": "FIVE55_SMOKE_REQUIRE_MASTERY=1 node scripts/five55-game-smoke.mjs --require-mastery",
-    "smoke:five55:spectate": "FIVE55_SMOKE_HEADFUL=1 node scripts/five55-game-smoke.mjs --no-fail",
-    "smoke:five55:pipeline": "bash scripts/five55-local-pipeline.sh",
+    "smoke:arcade555:games": "node scripts/arcade555-game-smoke.mjs",
+    "smoke:arcade555:games:strict": "ARCADE555_SMOKE_STRICT_ERRORS=1 ARCADE555_SMOKE_REQUIRE_MASTERY=1 node scripts/arcade555-game-smoke.mjs --require-mastery",
+    "smoke:arcade555:games:mastery": "ARCADE555_SMOKE_REQUIRE_MASTERY=1 node scripts/arcade555-game-smoke.mjs --require-mastery",
+    "smoke:arcade555:spectate": "ARCADE555_SMOKE_HEADFUL=1 node scripts/arcade555-game-smoke.mjs --no-fail",
+    "smoke:arcade555:pipeline": "bash scripts/arcade555-local-pipeline.sh",
+    "smoke:five55:games": "npm run smoke:arcade555:games",
+    "smoke:five55:games:strict": "npm run smoke:arcade555:games:strict",
+    "smoke:five55:games:mastery": "npm run smoke:arcade555:games:mastery",
+    "smoke:five55:spectate": "npm run smoke:arcade555:spectate",
+    "smoke:five55:pipeline": "npm run smoke:arcade555:pipeline",
     "smoke:api-status:prod": "node scripts/smoke-api-status.mjs https://milady.ai https://app.milady.ai",
     "start": "scripts/rt.sh scripts/run-node.mjs start",
     "start:desktop": "cd apps/app && ../../scripts/rt.sh run build:electron && cd electron && ../../../scripts/rt.sh run electron:start",
@@ -125,13 +131,6 @@
     "typecheck": "tsc --noEmit",
     "tui": "scripts/rt.sh scripts/run-node.mjs tui",
     "tui:dev": "MILADY_PROFILE=dev scripts/rt.sh scripts/run-node.mjs --dev tui"
-  },
-  "optionalDependencies": {
-    "@temporalio/client": "^1.13.0",
-    "@temporalio/worker": "^1.13.0",
-    "@temporalio/workflow": "^1.13.0",
-    "keytar": "^7.9.0",
-    "node-machine-id": "^1.1.12"
   },
   "optionalDependencies": {
     "@temporalio/client": "^1.13.0",
@@ -175,7 +174,6 @@
     "@elizaos/plugin-signal": "next",
     "@elizaos/plugin-slack": "2.0.0-alpha.5",
     "@elizaos/plugin-social-alpha": "2.0.0-alpha.4",
-    "@elizaos/plugin-sql": "^1.7.2",
     "@elizaos/plugin-telegram": "next",
     "@elizaos/plugin-todo": "next",
     "@elizaos/plugin-trajectory-logger": "next",
@@ -220,7 +218,7 @@
     "node-llama-cpp": "^3.15.1",
     "node-pty": "^1.1.0",
     "pdfjs-dist": "^5.4.530",
-    "pg": "^8.16.3",
+    "pg": "8.16.3",
     "pty-manager": "1.6.7",
     "puppeteer-core": "^24.37.5",
     "telegraf": "^4.16.3",
@@ -263,9 +261,6 @@
       "pg": "8.16.3",
       "pg-protocol": "1.11.0"
     }
-  },
-  "engines": {
-    "node": ">=22.12.0"
   },
   "trustedDependencies": [
     "@lydell/node-pty",

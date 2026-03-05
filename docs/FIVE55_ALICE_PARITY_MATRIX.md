@@ -32,7 +32,7 @@ This document tracks capability parity for legacy `555-bot` Alice surfaces after
 
 ## Validation Coverage
 
-- `src/runtime/five55-capability-routing.test.ts`
+- `src/runtime/surface555-capability-routing.test.ts`
   - request routing for `battles.create` / `battles.resolve` / `battles.read`
   - action routing precedence (`challenge` battle intent vs quest intent)
   - policy grant for `battles.create`

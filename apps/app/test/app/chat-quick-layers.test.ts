@@ -43,6 +43,10 @@ const { mockClient, mockUseApp, mockUseVoiceChat } = vi.hoisted(() => ({
     executeAutonomyPlan: vi.fn(),
     getFive55GamesCatalog: vi.fn(),
     playFive55Game: vi.fn(),
+    getArcade555GamesCatalog: vi.fn(),
+    playArcade555Game: vi.fn(),
+    listArcade555MasteryRuns: vi.fn(),
+    startArcade555MasteryRun: vi.fn(),
   },
   mockUseApp: vi.fn(),
   mockUseVoiceChat: vi.fn(),
@@ -121,6 +125,10 @@ describe("ChatView quick layers", () => {
     mockClient.executeAutonomyPlan.mockReset();
     mockClient.getFive55GamesCatalog.mockReset();
     mockClient.playFive55Game.mockReset();
+    mockClient.getArcade555GamesCatalog.mockReset();
+    mockClient.playArcade555Game.mockReset();
+    mockClient.listArcade555MasteryRuns.mockReset();
+    mockClient.startArcade555MasteryRun.mockReset();
 
     mockUseVoiceChat.mockReturnValue({
       supported: false,
@@ -134,6 +142,13 @@ describe("ChatView quick layers", () => {
       stopSpeaking: vi.fn(),
     });
     mockClient.getConfig.mockResolvedValue({});
+    mockClient.listArcade555MasteryRuns.mockResolvedValue({
+      runs: [],
+      limit: 8,
+      cursor: null,
+      nextCursor: null,
+      total: 0,
+    });
   });
 
   afterEach(() => {
@@ -184,7 +199,7 @@ describe("ChatView quick layers", () => {
       ],
     });
     mockUseApp.mockReturnValue(ctx);
-    mockClient.getFive55GamesCatalog.mockResolvedValue({
+    mockClient.getArcade555GamesCatalog.mockResolvedValue({
       games: [
         {
           id: "ninja-evilcorp",
@@ -245,7 +260,7 @@ describe("ChatView quick layers", () => {
 
     await triggerQuickLayer("play-games");
 
-    expect(mockClient.getFive55GamesCatalog).toHaveBeenCalledWith({
+    expect(mockClient.getArcade555GamesCatalog).toHaveBeenCalledWith({
       includeBeta: true,
     });
     expect(mockClient.executeAutonomyPlan).toHaveBeenCalledWith(
@@ -255,7 +270,7 @@ describe("ChatView quick layers", () => {
         }),
       }),
     );
-    expect(mockClient.playFive55Game).not.toHaveBeenCalled();
+    expect(mockClient.playArcade555Game).not.toHaveBeenCalled();
 
     expect(ctx.setState).toHaveBeenCalledWith("activeGameApp", "five55:ninja-evilcorp");
     expect(ctx.setState).toHaveBeenCalledWith(
@@ -282,7 +297,7 @@ describe("ChatView quick layers", () => {
       ],
     });
     mockUseApp.mockReturnValue(ctx);
-    mockClient.getFive55GamesCatalog.mockResolvedValue({
+    mockClient.getArcade555GamesCatalog.mockResolvedValue({
       games: [
         {
           id: "ninja-evilcorp",
@@ -332,7 +347,7 @@ describe("ChatView quick layers", () => {
         },
       ],
     });
-    mockClient.playFive55Game.mockResolvedValue({
+    mockClient.playArcade555Game.mockResolvedValue({
       game: {
         id: "ninja-evilcorp",
         title: "ninja_vs_evilcorp.555",
@@ -358,7 +373,7 @@ describe("ChatView quick layers", () => {
 
     await triggerQuickLayer("play-games");
 
-    expect(mockClient.playFive55Game).toHaveBeenCalledWith({
+    expect(mockClient.playArcade555Game).toHaveBeenCalledWith({
       gameId: "ninja-evilcorp",
       mode: "spectate",
     });

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { client, type CustomActionDef } from "../api-client";
 import { useApp } from "../AppContext";
 import { CustomActionEditor } from "./CustomActionEditor";
-import { collectFive55ActionTimeline } from "./five55ActionEnvelope";
+import { collectArcade555ActionTimeline } from "./arcade555ActionEnvelope";
 import { QUICK_LAYER_DOCK } from "./quickLayerCatalog";
 
 export function CustomActionsView() {
@@ -68,7 +68,7 @@ export function CustomActionsView() {
   );
 
   const actionTimeline = useMemo(
-    () => collectFive55ActionTimeline(conversationMessages),
+    () => collectArcade555ActionTimeline(conversationMessages),
     [conversationMessages],
   );
   const recentActionTimeline = useMemo(

@@ -12,10 +12,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../AppContext";
 import {
   client,
-  type Five55MasteryContract,
-  type Five55MasteryEvidenceFrame,
-  type Five55MasteryGameSnapshot,
-  type Five55MasteryConsistencyVerdict,
+  type Arcade555MasteryContract,
+  type Arcade555MasteryEvidenceFrame,
+  type Arcade555MasteryGameSnapshot,
+  type Arcade555MasteryConsistencyVerdict,
   type LogEntry,
 } from "../api-client";
 import { useRetakeCapture } from "../hooks/useRetakeCapture";
@@ -27,7 +27,7 @@ const READY_EVENT_BY_AUTH_TYPE: Record<string, string> = {
   RS_2004SCAPE_AUTH: "RS_2004SCAPE_READY",
 };
 
-function resolveFive55GameId(activeGameApp: string): string | null {
+function resolveArcade555GameId(activeGameApp: string): string | null {
   if (!activeGameApp.startsWith("five55:")) return null;
   const gameId = activeGameApp.slice("five55:".length).trim();
   return gameId.length > 0 ? gameId : null;
@@ -74,13 +74,13 @@ export function GameView() {
   const [masteryLoading, setMasteryLoading] = useState(false);
   const [masteryError, setMasteryError] = useState<string | null>(null);
   const [masteryContract, setMasteryContract] =
-    useState<Five55MasteryContract | null>(null);
+    useState<Arcade555MasteryContract | null>(null);
   const [masterySnapshot, setMasterySnapshot] =
-    useState<Five55MasteryGameSnapshot | null>(null);
+    useState<Arcade555MasteryGameSnapshot | null>(null);
   const [masteryFrames, setMasteryFrames] =
-    useState<Five55MasteryEvidenceFrame[]>([]);
+    useState<Arcade555MasteryEvidenceFrame[]>([]);
   const [masteryConsistency, setMasteryConsistency] =
-    useState<Five55MasteryConsistencyVerdict | null>(null);
+    useState<Arcade555MasteryConsistencyVerdict | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const authSentRef = useRef(false);
   const viewerSessionRef = useRef<string>("");
@@ -126,8 +126,8 @@ export function GameView() {
     () => resolvePostMessageTargetOrigin(activeGameViewerUrl),
     [activeGameViewerUrl],
   );
-  const activeFive55GameId = useMemo(
-    () => resolveFive55GameId(activeGameApp),
+  const activeArcade555GameId = useMemo(
+    () => resolveArcade555GameId(activeGameApp),
     [activeGameApp],
   );
   const viewerSessionKey = useMemo(
@@ -242,7 +242,7 @@ export function GameView() {
   ]);
 
   useEffect(() => {
-    if (!activeFive55GameId) {
+    if (!activeArcade555GameId) {
       setMasteryContract(null);
       setMasterySnapshot(null);
       setMasteryFrames([]);
@@ -256,17 +256,17 @@ export function GameView() {
     const load = async () => {
       setMasteryLoading(true);
       try {
-        const latest = await client.getFive55MasteryLatest(activeFive55GameId);
+        const latest = await client.getArcade555MasteryLatest(activeArcade555GameId);
         if (cancelled) return;
         setMasteryContract(latest.contract);
         setMasterySnapshot(latest.latest);
         if (latest.latest?.latestRunId && latest.latest?.latestEpisodeId) {
           const [frames, consistency] = await Promise.all([
-            client.getFive55MasteryEpisodeFrames(
+            client.getArcade555MasteryEpisodeFrames(
               latest.latest.latestRunId,
               latest.latest.latestEpisodeId,
             ),
-            client.getFive55MasteryEpisodeConsistency(
+            client.getArcade555MasteryEpisodeConsistency(
               latest.latest.latestRunId,
               latest.latest.latestEpisodeId,
             ),
@@ -299,7 +299,7 @@ export function GameView() {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [activeFive55GameId]);
+  }, [activeArcade555GameId]);
 
   const handleOpenInNewTab = useCallback(() => {
     const popup = window.open(
@@ -548,7 +548,7 @@ export function GameView() {
           Back to Apps
         </button>
       </div>
-      {activeFive55GameId && masteryContract ? (
+      {activeArcade555GameId && masteryContract ? (
         <div className="px-4 py-2 border-b border-border bg-bg-hover/40 text-[11px]">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-accent">Mastery</span>

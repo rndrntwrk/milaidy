@@ -8,6 +8,7 @@ const env = {
 // bundle Mach-O/ELF shared libraries and will error trying to read them as
 // UTF-8.  This list covers direct + transitive native deps.
 const nativeExternals = [
+  "keytar",
   "node-llama-cpp",
   "@reflink/reflink",
   "@reflink/reflink-darwin-arm64",

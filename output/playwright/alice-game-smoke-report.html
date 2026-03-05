@@ -1,0 +1,1105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Alice Five55 Mastery Spectate</title>
+  <style>
+    :root {
+      --bg: #0c0f14;
+      --card: #151a22;
+      --text: #eef3ff;
+      --muted: #9aa5bd;
+      --ok: #17c964;
+      --warn: #f5a524;
+      --bad: #f31260;
+      --line: #273246;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .wrap { max-width: 1800px; margin: 0 auto; padding: 24px; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    .summary { color: var(--muted); margin-bottom: 20px; }
+    .summary b { color: var(--text); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); gap: 16px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .card h2 { margin: 0; font-size: 16px; }
+    .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .objective { margin-top: 8px; font-size: 12px; color: #d5e0f7; }
+    .reason { color: #cdd8ee; font-size: 12px; margin: 8px 0; }
+    .badges { display: flex; gap: 8px; flex-wrap: wrap; }
+    .badge {
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+    .badge.pass { background: color-mix(in srgb, var(--ok) 30%, transparent); color: #8ff7bc; border: 1px solid color-mix(in srgb, var(--ok) 50%, transparent); }
+    .badge.fail { background: color-mix(in srgb, var(--bad) 30%, transparent); color: #ff95bd; border: 1px solid color-mix(in srgb, var(--bad) 50%, transparent); }
+    .badge.mastered { background: color-mix(in srgb, var(--ok) 20%, transparent); color: #8ff7bc; border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent); }
+    .badge.needs-work { background: color-mix(in srgb, var(--warn) 30%, transparent); color: #ffd78a; border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); }
+    .badge.deferred { background: color-mix(in srgb, #78909c 35%, transparent); color: #d8e3ec; border: 1px solid color-mix(in srgb, #78909c 55%, transparent); }
+    .stats { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 10px; color: var(--muted); font-size: 12px; }
+    .shots {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 8px;
+    }
+    .shot {
+      display: block;
+      text-decoration: none;
+      color: inherit;
+      background: #0d1219;
+      border: 1px solid #2b3649;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .shot img {
+      width: 100%;
+      height: 90px;
+      object-fit: cover;
+      display: block;
+      background: #000;
+    }
+    .shot-meta {
+      padding: 6px;
+      font-size: 11px;
+      color: #d0d9ef;
+      border-top: 1px solid #2b3649;
+    }
+    .missing-shot {
+      padding: 24px;
+      text-align: center;
+      color: var(--muted);
+      background: #0b1118;
+      border-radius: 10px;
+      border: 1px dashed #314159;
+      margin-top: 10px;
+    }
+    .checks {
+      margin: 10px 0 0 16px;
+      color: #d9e6ff;
+      font-size: 12px;
+    }
+    .check span {
+      display: inline-block;
+      min-width: 34px;
+      font-weight: 700;
+    }
+    .check.ok span { color: #8ff7bc; }
+    .check.bad span { color: #ff95bd; }
+    .errors {
+      margin: 10px 0 0 16px;
+      color: #ffb3cf;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Alice Five55 Mastery Spectate Gallery</h1>
+    <div class="summary">
+      Generated: <b>2026-03-05T10:24:01.327Z</b> |
+      Total: <b>16</b> |
+      Mastered: <b>14</b> |
+      Deferred: <b>1</b> |
+      Required: <b>15</b> |
+      Needs Work: <b>1</b> |
+      Strict Errors: <b>on</b> |
+      Default Gameplay Window: <b>12000ms</b> |
+      Per-game Overrides: <b>on</b>
+    </div>
+    <section class="grid">
+      
+      <article class="card">
+        <div class="card-header">
+          <h2>knighthood</h2>
+          <div class="badges">
+            <span class="badge pass">pass</span>
+            <span class="badge mastered">Mastered</span>
+          </div>
+        </div>
+        <div class="meta">knighthood.555</div>
+        <div class="objective"><b>Objective:</b> Reach true mastery score in active combat loops (score &gt; 5000).</div>
+        <div class="reason">Reach true mastery score in active combat loops (score &gt; 5000). (all checks passed)</div>
+        <div class="stats">
+          <span>AliceSocket: yes</span>
+          <span>Canvas: yes</span>
+          <span>MenuShare: 0.00</span>
+          <span>PlayingShare: 0.88</span>
+          <span>Travel: 4981</span>
+          <span>ScoreDelta: 7381</span>
+          <span>Kicks: 0</span>
+        </div>
+        <div class="shots"><a class="shot" href="alice-smoke-knighthood-00-boot.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-knighthood-00-boot.png" alt="boot"/>
+    <div class="shot-meta">boot</div>
+  </a>
+<a class="shot" href="alice-smoke-knighthood-01-first-playing.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-knighthood-01-first-playing.png" alt="first-playing"/>
+    <div class="shot-meta">first-playing | PLAYING | score 2711</div>
+  </a>
+<a class="shot" href="alice-smoke-knighthood-02-progress-2.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-knighthood-02-progress-2.png" alt="progress-2"/>
+    <div class="shot-meta">progress-2 | PLAYING | score 2711</div>
+  </a>
+<a class="shot" href="alice-smoke-knighthood-03-progress-3.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-knighthood-03-progress-3.png" alt="progress-3"/>
+    <div class="shot-meta">progress-3 | PLAYING | score 4319</div>
+  </a>
+<a class="shot" href="alice-smoke-knighthood-04-progress-4.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-knighthood-04-progress-4.png" alt="progress-4"/>
+    <div class="shot-meta">progress-4 | PLAYING | score 5895</div>
+  </a>
+<a class="shot" href="alice-smoke-knighthood-05-progress-5.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-knighthood-05-progress-5.png" alt="progress-5"/>
+    <div class="shot-meta">progress-5 | PLAYING | score 7472</div>
+  </a>
+<a class="shot" href="alice-smoke-knighthood-06-final.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-knighthood-06-final.png" alt="final"/>
+    <div class="shot-meta">final | PLAYING | score 10092</div>
+  </a></div>
+        <ul class="checks"><li class="check ok"><span>PASS</span> Navigation to game page succeeded target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> AliceSocket bridge is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Game canvas is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Strict error gate passed target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> Reached PLAYING state target=&gt;= 1 observed=298</li>
+<li class="check ok"><span>PASS</span> Menu/loading share &lt;= 70% target=&lt;= 0.70 observed=0.00</li>
+<li class="check ok"><span>PASS</span> Captured at least 3 evidence frames target=&gt;= 3 observed=7</li>
+<li class="check ok"><span>PASS</span> Hard gate: peak score &gt; 5000 target=&gt;= 5001 observed=13338</li>
+<li class="check ok"><span>PASS</span> Anti-stall: longest no-progress window &lt;= 7000ms target=&lt;= 7000 observed=533</li>
+<li class="check ok"><span>PASS</span> Anti-stall: progress events &gt;= 20 target=&gt;= 20 observed=235</li>
+<li class="check ok"><span>PASS</span> Anti-stall: longest no-movement window &lt;= 7500ms target=&lt;= 7500 observed=5284</li>
+<li class="check ok"><span>PASS</span> Peak score exceeded 5000 target=&gt;= 5001 observed=13338</li>
+<li class="check ok"><span>PASS</span> Score delta &gt;= 1200 target=&gt;= 1200 observed=7381</li>
+<li class="check ok"><span>PASS</span> Sustained movement/combat traversal target=&gt;= 1200 observed=4981</li></ul>
+        
+      </article>
+
+      <article class="card">
+        <div class="card-header">
+          <h2>sector-13</h2>
+          <div class="badges">
+            <span class="badge pass">pass</span>
+            <span class="badge mastered">Mastered</span>
+          </div>
+        </div>
+        <div class="meta">sector_13.555</div>
+        <div class="objective"><b>Objective:</b> Reach sector 7 or higher with sustained combat progression.</div>
+        <div class="reason">Reach sector 7 or higher with sustained combat progression. (all checks passed)</div>
+        <div class="stats">
+          <span>AliceSocket: yes</span>
+          <span>Canvas: yes</span>
+          <span>MenuShare: 0.00</span>
+          <span>PlayingShare: 1.00</span>
+          <span>Travel: 171210</span>
+          <span>ScoreDelta: 8550</span>
+          <span>Kicks: 0</span>
+        </div>
+        <div class="shots"><a class="shot" href="alice-smoke-sector-13-00-boot.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-sector-13-00-boot.png" alt="boot"/>
+    <div class="shot-meta">boot</div>
+  </a>
+<a class="shot" href="alice-smoke-sector-13-01-first-playing.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-sector-13-01-first-playing.png" alt="first-playing"/>
+    <div class="shot-meta">first-playing | PLAYING | score 1207</div>
+  </a>
+<a class="shot" href="alice-smoke-sector-13-02-progress-2.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-sector-13-02-progress-2.png" alt="progress-2"/>
+    <div class="shot-meta">progress-2 | PLAYING | score 1207</div>
+  </a>
+<a class="shot" href="alice-smoke-sector-13-03-progress-3.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-sector-13-03-progress-3.png" alt="progress-3"/>
+    <div class="shot-meta">progress-3 | PLAYING | score 3626</div>
+  </a>
+<a class="shot" href="alice-smoke-sector-13-04-progress-4.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-sector-13-04-progress-4.png" alt="progress-4"/>
+    <div class="shot-meta">progress-4 | PLAYING | score 6059</div>
+  </a>
+<a class="shot" href="alice-smoke-sector-13-05-progress-5.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-sector-13-05-progress-5.png" alt="progress-5"/>
+    <div class="shot-meta">progress-5 | PLAYING | score 8520</div>
+  </a>
+<a class="shot" href="alice-smoke-sector-13-06-final.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-sector-13-06-final.png" alt="final"/>
+    <div class="shot-meta">final | PLAYING | score 9757</div>
+  </a></div>
+        <ul class="checks"><li class="check ok"><span>PASS</span> Navigation to game page succeeded target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> AliceSocket bridge is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Game canvas is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Strict error gate passed target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> Reached PLAYING state target=&gt;= 1 observed=341</li>
+<li class="check ok"><span>PASS</span> Menu/loading share &lt;= 70% target=&lt;= 0.70 observed=0.00</li>
+<li class="check ok"><span>PASS</span> Captured at least 3 evidence frames target=&gt;= 3 observed=7</li>
+<li class="check ok"><span>PASS</span> Hard gate: reach at least sector 7/13 target=&gt;= 7 observed=8.00</li>
+<li class="check ok"><span>PASS</span> Quality gate: peak score &gt;= 2000 target=&gt;= 2000 observed=9757</li>
+<li class="check ok"><span>PASS</span> Reached sector &gt;= 7 target=&gt;= 7 observed=8.00</li>
+<li class="check ok"><span>PASS</span> Score increased by &gt;= 400 target=&gt;= 400 observed=8550</li>
+<li class="check ok"><span>PASS</span> Entered live combat state with at least one life target=&gt;= 1 observed=3.00</li></ul>
+        
+      </article>
+
+      <article class="card">
+        <div class="card-header">
+          <h2>ninja</h2>
+          <div class="badges">
+            <span class="badge pass">pass</span>
+            <span class="badge mastered">Mastered</span>
+          </div>
+        </div>
+        <div class="meta">ninja_vs_evilcorp.555</div>
+        <div class="objective"><b>Objective:</b> Reach level 8+ through true runtime progression.</div>
+        <div class="reason">Reach level 8+ through true runtime progression. (all checks passed)</div>
+        <div class="stats">
+          <span>AliceSocket: yes</span>
+          <span>Canvas: yes</span>
+          <span>MenuShare: 0.44</span>
+          <span>PlayingShare: 0.45</span>
+          <span>Travel: 25790</span>
+          <span>ScoreDelta: 6563</span>
+          <span>Kicks: 56</span>
+        </div>
+        <div class="shots"><a class="shot" href="alice-smoke-ninja-00-boot.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-ninja-00-boot.png" alt="boot"/>
+    <div class="shot-meta">boot</div>
+  </a>
+<a class="shot" href="alice-smoke-ninja-01-first-playing.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-ninja-01-first-playing.png" alt="first-playing"/>
+    <div class="shot-meta">first-playing | PLAYING | score 875.0</div>
+  </a>
+<a class="shot" href="alice-smoke-ninja-02-progress-2.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-ninja-02-progress-2.png" alt="progress-2"/>
+    <div class="shot-meta">progress-2 | PLAYING | score 875.0</div>
+  </a>
+<a class="shot" href="alice-smoke-ninja-03-progress-3.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-ninja-03-progress-3.png" alt="progress-3"/>
+    <div class="shot-meta">progress-3 | MENU | score 1750</div>
+  </a>
+<a class="shot" href="alice-smoke-ninja-04-progress-4.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-ninja-04-progress-4.png" alt="progress-4"/>
+    <div class="shot-meta">progress-4 | MENU | score 2625</div>
+  </a>
+<a class="shot" href="alice-smoke-ninja-05-progress-5.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-ninja-05-progress-5.png" alt="progress-5"/>
+    <div class="shot-meta">progress-5 | MENU | score 3500</div>
+  </a>
+<a class="shot" href="alice-smoke-ninja-06-final.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-ninja-06-final.png" alt="final"/>
+    <div class="shot-meta">final | PLAYING | score 7438</div>
+  </a></div>
+        <ul class="checks"><li class="check ok"><span>PASS</span> Navigation to game page succeeded target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> AliceSocket bridge is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Game canvas is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Strict error gate passed target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> Reached PLAYING state target=&gt;= 1 observed=143</li>
+<li class="check ok"><span>PASS</span> Menu/loading share &lt;= 70% target=&lt;= 0.70 observed=0.44</li>
+<li class="check ok"><span>PASS</span> Captured at least 3 evidence frames target=&gt;= 3 observed=7</li>
+<li class="check ok"><span>PASS</span> Hard gate: level index &gt;= 8 target=&gt;= 8 observed=16.00</li>
+<li class="check ok"><span>PASS</span> Quality gate: score proxy &gt;= 3500 target=&gt;= 3500 observed=7438</li>
+<li class="check ok"><span>PASS</span> Anti-stall: longest no-progress window &lt;= 16000ms target=&lt;= 16000 observed=10279</li>
+<li class="check ok"><span>PASS</span> Anti-stall: progress events &gt;= 6 target=&gt;= 6 observed=15</li>
+<li class="check ok"><span>PASS</span> Anti-stall: longest no-movement window &lt;= 12000ms target=&lt;= 12000 observed=282</li>
+<li class="check ok"><span>PASS</span> Reached level &gt;= 8 target=&gt;= 8 observed=16.00</li>
+<li class="check ok"><span>PASS</span> Runtime score reflects level progression target=&gt;= 3500 observed=7438</li>
+<li class="check ok"><span>PASS</span> High traversal distance &gt;= 1200 target=&gt;= 1200 observed=25790</li></ul>
+        
+      </article>
+
+      <article class="card">
+        <div class="card-header">
+          <h2>clawstrike</h2>
+          <div class="badges">
+            <span class="badge pass">pass</span>
+            <span class="badge mastered">Mastered</span>
+          </div>
+        </div>
+        <div class="meta">clawstrike.555</div>
+        <div class="objective"><b>Objective:</b> Reach level 7+ with sustained combat progression.</div>
+        <div class="reason">Reach level 7+ with sustained combat progression. (all checks passed)</div>
+        <div class="stats">
+          <span>AliceSocket: yes</span>
+          <span>Canvas: yes</span>
+          <span>MenuShare: 0.00</span>
+          <span>PlayingShare: 1.00</span>
+          <span>Travel: 8765</span>
+          <span>ScoreDelta: 269.2</span>
+          <span>Kicks: 0</span>
+        </div>
+        <div class="shots"><a class="shot" href="alice-smoke-clawstrike-00-boot.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-clawstrike-00-boot.png" alt="boot"/>
+    <div class="shot-meta">boot</div>
+  </a>
+<a class="shot" href="alice-smoke-clawstrike-01-first-playing.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-clawstrike-01-first-playing.png" alt="first-playing"/>
+    <div class="shot-meta">first-playing | PLAYING | score 9.79</div>
+  </a>
+<a class="shot" href="alice-smoke-clawstrike-02-progress-2.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-clawstrike-02-progress-2.png" alt="progress-2"/>
+    <div class="shot-meta">progress-2 | PLAYING | score 9.79</div>
+  </a>
+<a class="shot" href="alice-smoke-clawstrike-03-progress-3.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-clawstrike-03-progress-3.png" alt="progress-3"/>
+    <div class="shot-meta">progress-3 | PLAYING | score 14.55</div>
+  </a>
+<a class="shot" href="alice-smoke-clawstrike-04-progress-4.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-clawstrike-04-progress-4.png" alt="progress-4"/>
+    <div class="shot-meta">progress-4 | PLAYING | score 18.77</div>
+  </a>
+<a class="shot" href="alice-smoke-clawstrike-05-progress-5.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-clawstrike-05-progress-5.png" alt="progress-5"/>
+    <div class="shot-meta">progress-5 | PLAYING | score 23.75</div>
+  </a>
+<a class="shot" href="alice-smoke-clawstrike-06-final.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-clawstrike-06-final.png" alt="final"/>
+    <div class="shot-meta">final | PLAYING | score 279.0</div>
+  </a></div>
+        <ul class="checks"><li class="check ok"><span>PASS</span> Navigation to game page succeeded target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> AliceSocket bridge is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Game canvas is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Strict error gate passed target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> Reached PLAYING state target=&gt;= 1 observed=337</li>
+<li class="check ok"><span>PASS</span> Menu/loading share &lt;= 70% target=&lt;= 0.70 observed=0.00</li>
+<li class="check ok"><span>PASS</span> Captured at least 3 evidence frames target=&gt;= 3 observed=7</li>
+<li class="check ok"><span>PASS</span> Hard gate: reach at least level index 7 target=&gt;= 7 observed=9.00</li>
+<li class="check ok"><span>PASS</span> Quality gate: runtime score &gt;= 240 target=&gt;= 240 observed=279.0</li>
+<li class="check ok"><span>PASS</span> Anti-stall: longest no-progress window &lt;= 20000ms target=&lt;= 20000 observed=16438</li>
+<li class="check ok"><span>PASS</span> Anti-stall: progress events &gt;= 5 target=&gt;= 5 observed=9</li>
+<li class="check ok"><span>PASS</span> Reached level &gt;= 7 target=&gt;= 7 observed=9.00</li>
+<li class="check ok"><span>PASS</span> Runtime score reached &gt;= 240 target=&gt;= 240 observed=279.0</li>
+<li class="check ok"><span>PASS</span> Player movement distance &gt;= 900 target=&gt;= 900 observed=8765</li></ul>
+        
+      </article>
+
+      <article class="card">
+        <div class="card-header">
+          <h2>555drive</h2>
+          <div class="badges">
+            <span class="badge pass">pass</span>
+            <span class="badge mastered">Mastered</span>
+          </div>
+        </div>
+        <div class="meta">drive.555</div>
+        <div class="objective"><b>Objective:</b> Sustain road progression and hit checkpoint/level momentum.</div>
+        <div class="reason">Sustain road progression and hit checkpoint/level momentum. (all checks passed)</div>
+        <div class="stats">
+          <span>AliceSocket: yes</span>
+          <span>Canvas: yes</span>
+          <span>MenuShare: 0.00</span>
+          <span>PlayingShare: 1.00</span>
+          <span>Travel: 76237</span>
+          <span>ScoreDelta: 56185</span>
+          <span>Kicks: 0</span>
+        </div>
+        <div class="shots"><a class="shot" href="alice-smoke-555drive-00-boot.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-555drive-00-boot.png" alt="boot"/>
+    <div class="shot-meta">boot</div>
+  </a>
+<a class="shot" href="alice-smoke-555drive-01-first-playing.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-555drive-01-first-playing.png" alt="first-playing"/>
+    <div class="shot-meta">first-playing | PLAYING | score 299.0</div>
+  </a>
+<a class="shot" href="alice-smoke-555drive-02-progress-2.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-555drive-02-progress-2.png" alt="progress-2"/>
+    <div class="shot-meta">progress-2 | PLAYING | score 299.0</div>
+  </a>
+<a class="shot" href="alice-smoke-555drive-03-progress-3.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-555drive-03-progress-3.png" alt="progress-3"/>
+    <div class="shot-meta">progress-3 | PLAYING | score 1158</div>
+  </a>
+<a class="shot" href="alice-smoke-555drive-04-progress-4.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-555drive-04-progress-4.png" alt="progress-4"/>
+    <div class="shot-meta">progress-4 | PLAYING | score 2034</div>
+  </a>
+<a class="shot" href="alice-smoke-555drive-05-progress-5.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-555drive-05-progress-5.png" alt="progress-5"/>
+    <div class="shot-meta">progress-5 | PLAYING | score 3039</div>
+  </a>
+<a class="shot" href="alice-smoke-555drive-06-final.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-555drive-06-final.png" alt="final"/>
+    <div class="shot-meta">final | PLAYING | score 56484</div>
+  </a></div>
+        <ul class="checks"><li class="check ok"><span>PASS</span> Navigation to game page succeeded target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> AliceSocket bridge is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Game canvas is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Strict error gate passed target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> Reached PLAYING state target=&gt;= 1 observed=275</li>
+<li class="check ok"><span>PASS</span> Menu/loading share &lt;= 70% target=&lt;= 0.70 observed=0.00</li>
+<li class="check ok"><span>PASS</span> Captured at least 3 evidence frames target=&gt;= 3 observed=7</li>
+<li class="check ok"><span>PASS</span> Half-level proxy gate: distance score &gt;= 15000 target=&gt;= 15000 observed=56484</li>
+<li class="check ok"><span>PASS</span> Anti-stall: longest no-progress window &lt;= 30000ms target=&lt;= 30000 observed=0</li>
+<li class="check ok"><span>PASS</span> Anti-stall: progress events &gt;= 3 target=&gt;= 3 observed=274</li>
+<li class="check ok"><span>PASS</span> Anti-stall: longest no-movement window &lt;= 50000ms target=&lt;= 50000 observed=6868</li>
+<li class="check ok"><span>PASS</span> Distance score increased by &gt;= 120 target=&gt;= 120 observed=56185</li>
+<li class="check ok"><span>PASS</span> Reached checkpoint tier or strong distance gain target=any observed=metric_max_level:ok, metric_max_score:ok (metric_max_level:ok, metric_max_score:ok)</li></ul>
+        
+      </article>
+
+      <article class="card">
+        <div class="card-header">
+          <h2>chesspursuit</h2>
+          <div class="badges">
+            <span class="badge pass">pass</span>
+            <span class="badge mastered">Mastered</span>
+          </div>
+        </div>
+        <div class="meta">chesspursuit.555</div>
+        <div class="objective"><b>Objective:</b> Establish real board progression (no static board/menu pass).</div>
+        <div class="reason">Establish real board progression (no static board/menu pass). (all checks passed)</div>
+        <div class="stats">
+          <span>AliceSocket: yes</span>
+          <span>Canvas: yes</span>
+          <span>MenuShare: 0.00</span>
+          <span>PlayingShare: 1.00</span>
+          <span>Travel: 0.00</span>
+          <span>ScoreDelta: 359.0</span>
+          <span>Kicks: 0</span>
+        </div>
+        <div class="shots"><a class="shot" href="alice-smoke-chesspursuit-00-boot.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-chesspursuit-00-boot.png" alt="boot"/>
+    <div class="shot-meta">boot</div>
+  </a>
+<a class="shot" href="alice-smoke-chesspursuit-01-first-playing.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-chesspursuit-01-first-playing.png" alt="first-playing"/>
+    <div class="shot-meta">first-playing | PLAYING | score 19.00</div>
+  </a>
+<a class="shot" href="alice-smoke-chesspursuit-02-progress-2.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-chesspursuit-02-progress-2.png" alt="progress-2"/>
+    <div class="shot-meta">progress-2 | PLAYING | score 19.00</div>
+  </a>
+<a class="shot" href="alice-smoke-chesspursuit-03-progress-3.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-chesspursuit-03-progress-3.png" alt="progress-3"/>
+    <div class="shot-meta">progress-3 | PLAYING | score 45.00</div>
+  </a>
+<a class="shot" href="alice-smoke-chesspursuit-04-progress-4.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-chesspursuit-04-progress-4.png" alt="progress-4"/>
+    <div class="shot-meta">progress-4 | PLAYING | score 71.00</div>
+  </a>
+<a class="shot" href="alice-smoke-chesspursuit-05-progress-5.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-chesspursuit-05-progress-5.png" alt="progress-5"/>
+    <div class="shot-meta">progress-5 | PLAYING | score 97.00</div>
+  </a>
+<a class="shot" href="alice-smoke-chesspursuit-06-final.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-chesspursuit-06-final.png" alt="final"/>
+    <div class="shot-meta">final | PLAYING | score 378.0</div>
+  </a></div>
+        <ul class="checks"><li class="check ok"><span>PASS</span> Navigation to game page succeeded target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> AliceSocket bridge is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Game canvas is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Strict error gate passed target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> Reached PLAYING state target=&gt;= 1 observed=340</li>
+<li class="check ok"><span>PASS</span> Menu/loading share &lt;= 70% target=&lt;= 0.70 observed=0.00</li>
+<li class="check ok"><span>PASS</span> Captured at least 3 evidence frames target=&gt;= 3 observed=7</li>
+<li class="check ok"><span>PASS</span> Quality gate: peak score &gt;= 250 target=&gt;= 250 observed=378.0</li>
+<li class="check ok"><span>PASS</span> Anti-stall: longest no-progress window &lt;= 12000ms target=&lt;= 12000 observed=3234</li>
+<li class="check ok"><span>PASS</span> Anti-stall: progress events &gt;= 8 target=&gt;= 8 observed=27</li>
+<li class="check ok"><span>PASS</span> Board/checkpoint progression observed target=any observed=metric_delta_score:ok, metric_max_checkpoint:ok, metric_delta_progressRow:ok (metric_delta_score:ok, metric_max_checkpoint:ok, metric_delta_progressRow:ok)</li>
+<li class="check ok"><span>PASS</span> Reached checkpoint &gt;= 2 target=&gt;= 2 observed=35.00</li></ul>
+        
+      </article>
+
+      <article class="card">
+        <div class="card-header">
+          <h2>wolf-and-sheep</h2>
+          <div class="badges">
+            <span class="badge pass">pass</span>
+            <span class="badge mastered">Mastered</span>
+          </div>
+        </div>
+        <div class="meta">wolf_and_sheep.555</div>
+        <div class="objective"><b>Objective:</b> Trap at least 2 wolves via block-push mechanics.</div>
+        <div class="reason">Trap at least 2 wolves via block-push mechanics. (all checks passed)</div>
+        <div class="stats">
+          <span>AliceSocket: yes</span>
+          <span>Canvas: yes</span>
+          <span>MenuShare: 0.00</span>
+          <span>PlayingShare: 1.00</span>
+          <span>Travel: 289.1</span>
+          <span>ScoreDelta: 378.0</span>
+          <span>Kicks: 0</span>
+        </div>
+        <div class="shots"><a class="shot" href="alice-smoke-wolf-and-sheep-00-boot.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-wolf-and-sheep-00-boot.png" alt="boot"/>
+    <div class="shot-meta">boot</div>
+  </a>
+<a class="shot" href="alice-smoke-wolf-and-sheep-01-first-playing.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-wolf-and-sheep-01-first-playing.png" alt="first-playing"/>
+    <div class="shot-meta">first-playing | PLAYING | score 20.00</div>
+  </a>
+<a class="shot" href="alice-smoke-wolf-and-sheep-02-progress-2.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-wolf-and-sheep-02-progress-2.png" alt="progress-2"/>
+    <div class="shot-meta">progress-2 | PLAYING | score 20.00</div>
+  </a>
+<a class="shot" href="alice-smoke-wolf-and-sheep-03-final.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-wolf-and-sheep-03-final.png" alt="final"/>
+    <div class="shot-meta">final | PLAYING | score 398.0</div>
+  </a></div>
+        <ul class="checks"><li class="check ok"><span>PASS</span> Navigation to game page succeeded target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> AliceSocket bridge is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Game canvas is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Strict error gate passed target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> Reached PLAYING state target=&gt;= 1 observed=341</li>
+<li class="check ok"><span>PASS</span> Menu/loading share &lt;= 70% target=&lt;= 0.70 observed=0.00</li>
+<li class="check ok"><span>PASS</span> Captured at least 3 evidence frames target=&gt;= 3 observed=4</li>
+<li class="check ok"><span>PASS</span> Hard gate: trapped wolves &gt;= 2 target=&gt;= 2 observed=2.00</li>
+<li class="check ok"><span>PASS</span> Anti-stall: longest no-progress window &lt;= 10000ms target=&lt;= 10000 observed=269</li>
+<li class="check ok"><span>PASS</span> Anti-stall: progress events &gt;= 8 target=&gt;= 8 observed=292</li>
+<li class="check ok"><span>PASS</span> Trapped at least 2 wolves target=&gt;= 2 observed=2.00</li>
+<li class="check ok"><span>PASS</span> Move score increased by &gt;= 12 target=&gt;= 12 observed=378.0</li>
+<li class="check ok"><span>PASS</span> Grid traversal distance &gt;= 40 target=&gt;= 40 observed=289.1</li></ul>
+        
+      </article>
+
+      <article class="card">
+        <div class="card-header">
+          <h2>leftandright</h2>
+          <div class="badges">
+            <span class="badge pass">pass</span>
+            <span class="badge mastered">Mastered</span>
+          </div>
+        </div>
+        <div class="meta">left_and_right.555</div>
+        <div class="objective"><b>Objective:</b> Survive for &gt;= 60s with zero wrong-coin/game-over events.</div>
+        <div class="reason">Survive for &gt;= 60s with zero wrong-coin/game-over events. (all checks passed)</div>
+        <div class="stats">
+          <span>AliceSocket: yes</span>
+          <span>Canvas: yes</span>
+          <span>MenuShare: 0.00</span>
+          <span>PlayingShare: 1.00</span>
+          <span>Travel: 0.00</span>
+          <span>ScoreDelta: 90.00</span>
+          <span>Kicks: 0</span>
+        </div>
+        <div class="shots"><a class="shot" href="alice-smoke-leftandright-00-boot.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-leftandright-00-boot.png" alt="boot"/>
+    <div class="shot-meta">boot</div>
+  </a>
+<a class="shot" href="alice-smoke-leftandright-01-first-playing.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-leftandright-01-first-playing.png" alt="first-playing"/>
+    <div class="shot-meta">first-playing | PLAYING | score 4.00</div>
+  </a>
+<a class="shot" href="alice-smoke-leftandright-02-progress-2.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-leftandright-02-progress-2.png" alt="progress-2"/>
+    <div class="shot-meta">progress-2 | PLAYING | score 4.00</div>
+  </a>
+<a class="shot" href="alice-smoke-leftandright-03-progress-3.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-leftandright-03-progress-3.png" alt="progress-3"/>
+    <div class="shot-meta">progress-3 | PLAYING | score 8.00</div>
+  </a>
+<a class="shot" href="alice-smoke-leftandright-04-progress-4.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-leftandright-04-progress-4.png" alt="progress-4"/>
+    <div class="shot-meta">progress-4 | PLAYING | score 11.00</div>
+  </a>
+<a class="shot" href="alice-smoke-leftandright-05-progress-5.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-leftandright-05-progress-5.png" alt="progress-5"/>
+    <div class="shot-meta">progress-5 | PLAYING | score 14.00</div>
+  </a>
+<a class="shot" href="alice-smoke-leftandright-06-final.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-leftandright-06-final.png" alt="final"/>
+    <div class="shot-meta">final | PLAYING | score 94.00</div>
+  </a></div>
+        <ul class="checks"><li class="check ok"><span>PASS</span> Navigation to game page succeeded target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> AliceSocket bridge is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Game canvas is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Strict error gate passed target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> Reached PLAYING state target=&gt;= 1 observed=340</li>
+<li class="check ok"><span>PASS</span> Menu/loading share &lt;= 70% target=&lt;= 0.70 observed=0.00</li>
+<li class="check ok"><span>PASS</span> Captured at least 3 evidence frames target=&gt;= 3 observed=7</li>
+<li class="check ok"><span>PASS</span> Quality gate: peak score &gt;= 4 target=&gt;= 4 observed=94.00</li>
+<li class="check ok"><span>PASS</span> Anti-stall: longest no-progress window &lt;= 20000ms target=&lt;= 20000 observed=2662</li>
+<li class="check ok"><span>PASS</span> Anti-stall: progress events &gt;= 2 target=&gt;= 2 observed=45</li>
+<li class="check ok"><span>PASS</span> Survived &gt;= 60 seconds target=&gt;= 60 observed=94.59</li>
+<li class="check ok"><span>PASS</span> Wrong coin count stayed at 0 target=&lt;= 0 observed=0.00</li>
+<li class="check ok"><span>PASS</span> No game-over events during run target=&lt;= 0 observed=0.00</li></ul>
+        
+      </article>
+
+      <article class="card">
+        <div class="card-header">
+          <h2>playback</h2>
+          <div class="badges">
+            <span class="badge pass">pass</span>
+            <span class="badge mastered">Mastered</span>
+          </div>
+        </div>
+        <div class="meta">playback.555</div>
+        <div class="objective"><b>Objective:</b> Leave blank/start states and progress rooms/time with native telemetry.</div>
+        <div class="reason">Leave blank/start states and progress rooms/time with native telemetry. (all checks passed)</div>
+        <div class="stats">
+          <span>AliceSocket: yes</span>
+          <span>Canvas: yes</span>
+          <span>MenuShare: 0.00</span>
+          <span>PlayingShare: 1.00</span>
+          <span>Travel: 0.00</span>
+          <span>ScoreDelta: 5386</span>
+          <span>Kicks: 0</span>
+        </div>
+        <div class="shots"><a class="shot" href="alice-smoke-playback-00-boot.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-playback-00-boot.png" alt="boot"/>
+    <div class="shot-meta">boot</div>
+  </a>
+<a class="shot" href="alice-smoke-playback-01-first-playing.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-playback-01-first-playing.png" alt="first-playing"/>
+    <div class="shot-meta">first-playing | PLAYING | score 285.0</div>
+  </a>
+<a class="shot" href="alice-smoke-playback-02-progress-2.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-playback-02-progress-2.png" alt="progress-2"/>
+    <div class="shot-meta">progress-2 | PLAYING | score 285.0</div>
+  </a>
+<a class="shot" href="alice-smoke-playback-03-progress-3.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-playback-03-progress-3.png" alt="progress-3"/>
+    <div class="shot-meta">progress-3 | PLAYING | score 383.0</div>
+  </a>
+<a class="shot" href="alice-smoke-playback-04-progress-4.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-playback-04-progress-4.png" alt="progress-4"/>
+    <div class="shot-meta">progress-4 | PLAYING | score 479.0</div>
+  </a>
+<a class="shot" href="alice-smoke-playback-05-progress-5.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-playback-05-progress-5.png" alt="progress-5"/>
+    <div class="shot-meta">progress-5 | PLAYING | score 575.0</div>
+  </a>
+<a class="shot" href="alice-smoke-playback-06-final.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-playback-06-final.png" alt="final"/>
+    <div class="shot-meta">final | PLAYING | score 5671</div>
+  </a></div>
+        <ul class="checks"><li class="check ok"><span>PASS</span> Navigation to game page succeeded target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> AliceSocket bridge is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Game canvas is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Strict error gate passed target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> Reached PLAYING state target=&gt;= 1 observed=340</li>
+<li class="check ok"><span>PASS</span> Menu/loading share &lt;= 70% target=&lt;= 0.70 observed=0.00</li>
+<li class="check ok"><span>PASS</span> Captured at least 3 evidence frames target=&gt;= 3 observed=7</li>
+<li class="check ok"><span>PASS</span> Playback frames are non-blank (max frame size &gt;= 9KB) target=&gt;= 9000 observed=12881</li>
+<li class="check ok"><span>PASS</span> Quality gate: peak score &gt;= 120 target=&gt;= 120 observed=5671</li>
+<li class="check ok"><span>PASS</span> Anti-stall: longest no-progress window &lt;= 12000ms target=&lt;= 12000 observed=0</li>
+<li class="check ok"><span>PASS</span> Anti-stall: progress events &gt;= 14 target=&gt;= 14 observed=339</li>
+<li class="check ok"><span>PASS</span> World age progressed by &gt;= 1800 ticks target=&gt;= 1800 observed=215470</li>
+<li class="check ok"><span>PASS</span> Progressed room/index/score target=any observed=metric_max_localIndex:ok, metric_max_roomTransitions:ok, metric_delta_score:ok (metric_max_localIndex:ok, metric_max_roomTransitions:ok, metric_delta_score:ok)</li></ul>
+        
+      </article>
+
+      <article class="card">
+        <div class="card-header">
+          <h2>fighter-planes</h2>
+          <div class="badges">
+            <span class="badge pass">pass</span>
+            <span class="badge mastered">Mastered</span>
+          </div>
+        </div>
+        <div class="meta">fighter_planes.555</div>
+        <div class="objective"><b>Objective:</b> Demonstrate active flight control + aiming + sustained combat survival.</div>
+        <div class="reason">Demonstrate active flight control + aiming + sustained combat survival. (all checks passed)</div>
+        <div class="stats">
+          <span>AliceSocket: yes</span>
+          <span>Canvas: yes</span>
+          <span>MenuShare: 0.00</span>
+          <span>PlayingShare: 0.92</span>
+          <span>Travel: 9500</span>
+          <span>ScoreDelta: 89.00</span>
+          <span>Kicks: 10</span>
+        </div>
+        <div class="shots"><a class="shot" href="alice-smoke-fighter-planes-00-boot.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-fighter-planes-00-boot.png" alt="boot"/>
+    <div class="shot-meta">boot</div>
+  </a>
+<a class="shot" href="alice-smoke-fighter-planes-01-first-playing.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-fighter-planes-01-first-playing.png" alt="first-playing"/>
+    <div class="shot-meta">first-playing | PLAYING | score 5.00</div>
+  </a>
+<a class="shot" href="alice-smoke-fighter-planes-02-progress-2.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-fighter-planes-02-progress-2.png" alt="progress-2"/>
+    <div class="shot-meta">progress-2 | PLAYING | score 5.00</div>
+  </a>
+<a class="shot" href="alice-smoke-fighter-planes-03-progress-3.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-fighter-planes-03-progress-3.png" alt="progress-3"/>
+    <div class="shot-meta">progress-3 | GAME_OVER | score 31.00</div>
+  </a>
+<a class="shot" href="alice-smoke-fighter-planes-04-progress-4.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-fighter-planes-04-progress-4.png" alt="progress-4"/>
+    <div class="shot-meta">progress-4 | GAME_OVER | score 57.00</div>
+  </a>
+<a class="shot" href="alice-smoke-fighter-planes-05-progress-5.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-fighter-planes-05-progress-5.png" alt="progress-5"/>
+    <div class="shot-meta">progress-5 | PLAYING | score 83.00</div>
+  </a>
+<a class="shot" href="alice-smoke-fighter-planes-06-final.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-fighter-planes-06-final.png" alt="final"/>
+    <div class="shot-meta">final | GAME_OVER | score 94.00</div>
+  </a></div>
+        <ul class="checks"><li class="check ok"><span>PASS</span> Navigation to game page succeeded target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> AliceSocket bridge is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Game canvas is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Strict error gate passed target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> Reached PLAYING state target=&gt;= 1 observed=317</li>
+<li class="check ok"><span>PASS</span> Menu/loading share &lt;= 70% target=&lt;= 0.70 observed=0.00</li>
+<li class="check ok"><span>PASS</span> Captured at least 3 evidence frames target=&gt;= 3 observed=7</li>
+<li class="check ok"><span>PASS</span> Quality gate: peak score &gt;= 25 target=&gt;= 25 observed=94.00</li>
+<li class="check ok"><span>PASS</span> Anti-stall: longest no-progress window &lt;= 24000ms target=&lt;= 24000 observed=14433</li>
+<li class="check ok"><span>PASS</span> Anti-stall: progress events &gt;= 6 target=&gt;= 6 observed=25</li>
+<li class="check ok"><span>PASS</span> Score increased by &gt;= 20 target=&gt;= 20 observed=89.00</li>
+<li class="check ok"><span>PASS</span> Plane movement distance &gt;= 1600 target=&gt;= 1600 observed=9500</li></ul>
+        
+      </article>
+
+      <article class="card">
+        <div class="card-header">
+          <h2>floor13</h2>
+          <div class="badges">
+            <span class="badge pass">pass</span>
+            <span class="badge mastered">Mastered</span>
+          </div>
+        </div>
+        <div class="meta">floor_13.555</div>
+        <div class="objective"><b>Objective:</b> Reach floor &gt;= 5 with active combat/traversal.</div>
+        <div class="reason">Reach floor &gt;= 5 with active combat/traversal. (all checks passed)</div>
+        <div class="stats">
+          <span>AliceSocket: yes</span>
+          <span>Canvas: yes</span>
+          <span>MenuShare: 0.00</span>
+          <span>PlayingShare: 0.99</span>
+          <span>Travel: 219.7</span>
+          <span>ScoreDelta: 4.00</span>
+          <span>Kicks: 1</span>
+        </div>
+        <div class="shots"><a class="shot" href="alice-smoke-floor13-00-boot.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-floor13-00-boot.png" alt="boot"/>
+    <div class="shot-meta">boot</div>
+  </a>
+<a class="shot" href="alice-smoke-floor13-01-first-playing.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-floor13-01-first-playing.png" alt="first-playing"/>
+    <div class="shot-meta">first-playing | PLAYING | score 2.00</div>
+  </a>
+<a class="shot" href="alice-smoke-floor13-02-progress-2.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-floor13-02-progress-2.png" alt="progress-2"/>
+    <div class="shot-meta">progress-2 | PLAYING | score 2.00</div>
+  </a>
+<a class="shot" href="alice-smoke-floor13-03-progress-3.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-floor13-03-progress-3.png" alt="progress-3"/>
+    <div class="shot-meta">progress-3 | PLAYING | score 4.00</div>
+  </a>
+<a class="shot" href="alice-smoke-floor13-04-progress-4.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-floor13-04-progress-4.png" alt="progress-4"/>
+    <div class="shot-meta">progress-4 | PLAYING | score 6.00</div>
+  </a>
+<a class="shot" href="alice-smoke-floor13-05-final.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-floor13-05-final.png" alt="final"/>
+    <div class="shot-meta">final | PLAYING | score 6.00</div>
+  </a></div>
+        <ul class="checks"><li class="check ok"><span>PASS</span> Navigation to game page succeeded target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> AliceSocket bridge is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Game canvas is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Strict error gate passed target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> Reached PLAYING state target=&gt;= 1 observed=339</li>
+<li class="check ok"><span>PASS</span> Menu/loading share &lt;= 70% target=&lt;= 0.70 observed=0.00</li>
+<li class="check ok"><span>PASS</span> Captured at least 3 evidence frames target=&gt;= 3 observed=6</li>
+<li class="check ok"><span>PASS</span> Temporary hard gate: reach floor &gt;= 5 target=&gt;= 5 observed=6.00</li>
+<li class="check ok"><span>PASS</span> Hard gate: floor &gt;= 5 target=&gt;= 5 observed=6.00</li>
+<li class="check ok"><span>PASS</span> Anti-stall: longest no-progress window &lt;= 40000ms target=&lt;= 40000 observed=18127</li>
+<li class="check ok"><span>PASS</span> Anti-stall: progress events &gt;= 4 target=&gt;= 4 observed=5</li>
+<li class="check ok"><span>PASS</span> Floor index reached &gt;= 5 target=&gt;= 5 observed=6.00</li>
+<li class="check ok"><span>PASS</span> Traversal activity observed target=&gt;= 120 observed=219.7</li></ul>
+        
+      </article>
+
+      <article class="card">
+        <div class="card-header">
+          <h2>godai-is-back</h2>
+          <div class="badges">
+            <span class="badge deferred">deferred</span>
+            <span class="badge deferred">Deferred</span>
+          </div>
+        </div>
+        <div class="meta">godai_is_back.555</div>
+        <div class="objective"><b>Objective:</b> Deferred: multiplayer gate pending.</div>
+        <div class="reason">Deferred by scope (multiplayer milestone pending).</div>
+        <div class="stats">
+          <span>AliceSocket: yes</span>
+          <span>Canvas: yes</span>
+          <span>MenuShare: 0.00</span>
+          <span>PlayingShare: 1.00</span>
+          <span>Travel: 14.00</span>
+          <span>ScoreDelta: 0.00</span>
+          <span>Kicks: 0</span>
+        </div>
+        <div class="shots"><a class="shot" href="alice-smoke-godai-is-back-00-boot.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-godai-is-back-00-boot.png" alt="boot"/>
+    <div class="shot-meta">boot</div>
+  </a>
+<a class="shot" href="alice-smoke-godai-is-back-01-first-playing.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-godai-is-back-01-first-playing.png" alt="first-playing"/>
+    <div class="shot-meta">first-playing | PLAYING | score 0.00</div>
+  </a>
+<a class="shot" href="alice-smoke-godai-is-back-02-progress-2.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-godai-is-back-02-progress-2.png" alt="progress-2"/>
+    <div class="shot-meta">progress-2 | PLAYING | score 0.00</div>
+  </a>
+<a class="shot" href="alice-smoke-godai-is-back-03-final.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-godai-is-back-03-final.png" alt="final"/>
+    <div class="shot-meta">final | PLAYING | score 0.00</div>
+  </a></div>
+        <ul class="checks"><li class="check ok"><span>PASS</span> Game is intentionally deferred from strict denominator target=deferred observed=deferred</li></ul>
+        
+      </article>
+
+      <article class="card">
+        <div class="card-header">
+          <h2>peanball</h2>
+          <div class="badges">
+            <span class="badge pass">pass</span>
+            <span class="badge mastered">Mastered</span>
+          </div>
+        </div>
+        <div class="meta">peanball.555</div>
+        <div class="objective"><b>Objective:</b> Launch stable pinball loop and clear ring/score targets.</div>
+        <div class="reason">Launch stable pinball loop and clear ring/score targets. (all checks passed)</div>
+        <div class="stats">
+          <span>AliceSocket: yes</span>
+          <span>Canvas: yes</span>
+          <span>MenuShare: 0.26</span>
+          <span>PlayingShare: 0.73</span>
+          <span>Travel: 103898</span>
+          <span>ScoreDelta: 6448</span>
+          <span>Kicks: 38</span>
+        </div>
+        <div class="shots"><a class="shot" href="alice-smoke-peanball-00-boot.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-peanball-00-boot.png" alt="boot"/>
+    <div class="shot-meta">boot</div>
+  </a>
+<a class="shot" href="alice-smoke-peanball-01-first-playing.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-peanball-01-first-playing.png" alt="first-playing"/>
+    <div class="shot-meta">first-playing | PLAYING | score 418.0</div>
+  </a>
+<a class="shot" href="alice-smoke-peanball-02-progress-2.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-peanball-02-progress-2.png" alt="progress-2"/>
+    <div class="shot-meta">progress-2 | PLAYING | score 418.0</div>
+  </a>
+<a class="shot" href="alice-smoke-peanball-03-progress-3.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-peanball-03-progress-3.png" alt="progress-3"/>
+    <div class="shot-meta">progress-3 | PLAYING | score 618.0</div>
+  </a>
+<a class="shot" href="alice-smoke-peanball-04-progress-4.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-peanball-04-progress-4.png" alt="progress-4"/>
+    <div class="shot-meta">progress-4 | PLAYING | score 819.0</div>
+  </a>
+<a class="shot" href="alice-smoke-peanball-05-progress-5.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-peanball-05-progress-5.png" alt="progress-5"/>
+    <div class="shot-meta">progress-5 | PLAYING | score 972.0</div>
+  </a>
+<a class="shot" href="alice-smoke-peanball-06-final.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-peanball-06-final.png" alt="final"/>
+    <div class="shot-meta">final | PLAYING | score 6866</div>
+  </a></div>
+        <ul class="checks"><li class="check ok"><span>PASS</span> Navigation to game page succeeded target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> AliceSocket bridge is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Game canvas is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Strict error gate passed target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> Reached PLAYING state target=&gt;= 1 observed=250</li>
+<li class="check ok"><span>PASS</span> Menu/loading share &lt;= 70% target=&lt;= 0.70 observed=0.26</li>
+<li class="check ok"><span>PASS</span> Captured at least 3 evidence frames target=&gt;= 3 observed=7</li>
+<li class="check ok"><span>PASS</span> High-score gate: peak score &gt;= 1500 target=&gt;= 1500 observed=6866</li>
+<li class="check ok"><span>PASS</span> Anti-stall: longest no-progress window &lt;= 6500ms target=&lt;= 6500 observed=267</li>
+<li class="check ok"><span>PASS</span> Anti-stall: progress events &gt;= 6 target=&gt;= 6 observed=228</li>
+<li class="check ok"><span>PASS</span> Cleared rings or increased score target=any observed=metric_decrease_ringsRemaining:fail, metric_delta_score:ok (metric_decrease_ringsRemaining:fail, metric_delta_score:ok)</li>
+<li class="check ok"><span>PASS</span> Boost system engaged target=&gt;= 1 observed=206.0</li></ul>
+        
+      </article>
+
+      <article class="card">
+        <div class="card-header">
+          <h2>eat-my-dust</h2>
+          <div class="badges">
+            <span class="badge pass">pass</span>
+            <span class="badge mastered">Mastered</span>
+          </div>
+        </div>
+        <div class="meta">eat_my_dust.555</div>
+        <div class="objective"><b>Objective:</b> Type through phrases with sustained cursor + score progression.</div>
+        <div class="reason">Type through phrases with sustained cursor + score progression. (all checks passed)</div>
+        <div class="stats">
+          <span>AliceSocket: yes</span>
+          <span>Canvas: yes</span>
+          <span>MenuShare: 0.00</span>
+          <span>PlayingShare: 0.36</span>
+          <span>Travel: 0.00</span>
+          <span>ScoreDelta: 162.2</span>
+          <span>Kicks: 56</span>
+        </div>
+        <div class="shots"><a class="shot" href="alice-smoke-eat-my-dust-00-boot.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-eat-my-dust-00-boot.png" alt="boot"/>
+    <div class="shot-meta">boot</div>
+  </a>
+<a class="shot" href="alice-smoke-eat-my-dust-01-progress-1.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-eat-my-dust-01-progress-1.png" alt="progress-1"/>
+    <div class="shot-meta">progress-1 | LOADING</div>
+  </a>
+<a class="shot" href="alice-smoke-eat-my-dust-02-first-playing.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-eat-my-dust-02-first-playing.png" alt="first-playing"/>
+    <div class="shot-meta">first-playing | PLAYING | score 0.40</div>
+  </a>
+<a class="shot" href="alice-smoke-eat-my-dust-03-progress-3.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-eat-my-dust-03-progress-3.png" alt="progress-3"/>
+    <div class="shot-meta">progress-3 | PLAYING | score 4.22</div>
+  </a>
+<a class="shot" href="alice-smoke-eat-my-dust-04-progress-4.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-eat-my-dust-04-progress-4.png" alt="progress-4"/>
+    <div class="shot-meta">progress-4 | PLAYING | score 18.28</div>
+  </a>
+<a class="shot" href="alice-smoke-eat-my-dust-05-final.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-eat-my-dust-05-final.png" alt="final"/>
+    <div class="shot-meta">final | FINISHED | score 162.2</div>
+  </a></div>
+        <ul class="checks"><li class="check ok"><span>PASS</span> Navigation to game page succeeded target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> AliceSocket bridge is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Game canvas is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Strict error gate passed target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> Reached PLAYING state target=&gt;= 1 observed=125</li>
+<li class="check ok"><span>PASS</span> Menu/loading share &lt;= 70% target=&lt;= 0.70 observed=0.00</li>
+<li class="check ok"><span>PASS</span> Captured at least 3 evidence frames target=&gt;= 3 observed=6</li>
+<li class="check ok"><span>PASS</span> High-score gate: race score &gt;= 60 target=&gt;= 60 observed=162.2</li>
+<li class="check ok"><span>PASS</span> Anti-stall: longest no-progress window &lt;= 6000ms target=&lt;= 6000 observed=264</li>
+<li class="check ok"><span>PASS</span> Anti-stall: progress events &gt;= 6 target=&gt;= 6 observed=57</li>
+<li class="check ok"><span>PASS</span> Local cursor reached &gt;= 20 target=&gt;= 20 observed=38.00</li>
+<li class="check ok"><span>PASS</span> Race score increased by &gt;= 15 target=&gt;= 15 observed=162.2</li></ul>
+        
+      </article>
+
+      <article class="card">
+        <div class="card-header">
+          <h2>where-were-going-we-do-need-roads</h2>
+          <div class="badges">
+            <span class="badge fail">probe_fail</span>
+            <span class="badge needs-work">Needs Work</span>
+          </div>
+        </div>
+        <div class="meta">where_were_going.555</div>
+        <div class="objective"><b>Objective:</b> Maintain valid road shaping with no buried/invalid placement states.</div>
+        <div class="reason">Failed checks: metric_delta_score</div>
+        <div class="stats">
+          <span>AliceSocket: yes</span>
+          <span>Canvas: yes</span>
+          <span>MenuShare: 0.00</span>
+          <span>PlayingShare: 1.00</span>
+          <span>Travel: 240.0</span>
+          <span>ScoreDelta: -372.8</span>
+          <span>Kicks: 1</span>
+        </div>
+        <div class="shots"><a class="shot" href="alice-smoke-where-were-going-we-do-need-roads-00-boot.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-where-were-going-we-do-need-roads-00-boot.png" alt="boot"/>
+    <div class="shot-meta">boot</div>
+  </a>
+<a class="shot" href="alice-smoke-where-were-going-we-do-need-roads-01-first-playing.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-where-were-going-we-do-need-roads-01-first-playing.png" alt="first-playing"/>
+    <div class="shot-meta">first-playing | PLAYING | score 372.8</div>
+  </a>
+<a class="shot" href="alice-smoke-where-were-going-we-do-need-roads-02-progress-2.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-where-were-going-we-do-need-roads-02-progress-2.png" alt="progress-2"/>
+    <div class="shot-meta">progress-2 | PLAYING | score 372.8</div>
+  </a>
+<a class="shot" href="alice-smoke-where-were-going-we-do-need-roads-03-progress-3.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-where-were-going-we-do-need-roads-03-progress-3.png" alt="progress-3"/>
+    <div class="shot-meta">progress-3 | PLAYING | score 505.6</div>
+  </a>
+<a class="shot" href="alice-smoke-where-were-going-we-do-need-roads-04-progress-4.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-where-were-going-we-do-need-roads-04-progress-4.png" alt="progress-4"/>
+    <div class="shot-meta">progress-4 | PLAYING | score 633.6</div>
+  </a>
+<a class="shot" href="alice-smoke-where-were-going-we-do-need-roads-05-progress-5.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-where-were-going-we-do-need-roads-05-progress-5.png" alt="progress-5"/>
+    <div class="shot-meta">progress-5 | PLAYING | score 761.6</div>
+  </a>
+<a class="shot" href="alice-smoke-where-were-going-we-do-need-roads-06-final.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-where-were-going-we-do-need-roads-06-final.png" alt="final"/>
+    <div class="shot-meta">final | UNKNOWN</div>
+  </a></div>
+        <ul class="checks"><li class="check ok"><span>PASS</span> Navigation to game page succeeded target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> AliceSocket bridge is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Game canvas is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Strict error gate passed target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> Reached PLAYING state target=&gt;= 1 observed=296</li>
+<li class="check ok"><span>PASS</span> Menu/loading share &lt;= 70% target=&lt;= 0.70 observed=0.00</li>
+<li class="check ok"><span>PASS</span> Captured at least 3 evidence frames target=&gt;= 3 observed=7</li>
+<li class="check ok"><span>PASS</span> High-score gate: distance score &gt;= 2200 target=&gt;= 2200 observed=7286</li>
+<li class="check ok"><span>PASS</span> Anti-stall: longest no-progress window &lt;= 6000ms target=&lt;= 6000 observed=1034</li>
+<li class="check ok"><span>PASS</span> Anti-stall: progress events &gt;= 6 target=&gt;= 6 observed=102</li>
+<li class="check bad"><span>FAIL</span> Distance increased by &gt;= 1500 target=&gt;= 1500 observed=-372.8</li>
+<li class="check ok"><span>PASS</span> Trajectory or distance progression observed target=any observed=travel_distance:ok, metric_delta_distance:ok (travel_distance:ok, metric_delta_distance:ok)</li>
+<li class="check ok"><span>PASS</span> No invalid/buried road placements target=&lt;= 0 observed=0.00</li></ul>
+        
+      </article>
+
+      <article class="card">
+        <div class="card-header">
+          <h2>vedas-run</h2>
+          <div class="badges">
+            <span class="badge pass">pass</span>
+            <span class="badge mastered">Mastered</span>
+          </div>
+        </div>
+        <div class="meta">vedas_run.555</div>
+        <div class="objective"><b>Objective:</b> Reach segment &gt;= 7 with stable route progression.</div>
+        <div class="reason">Reach segment &gt;= 7 with stable route progression. (all checks passed)</div>
+        <div class="stats">
+          <span>AliceSocket: yes</span>
+          <span>Canvas: yes</span>
+          <span>MenuShare: 0.00</span>
+          <span>PlayingShare: 0.99</span>
+          <span>Travel: 43749</span>
+          <span>ScoreDelta: 10607</span>
+          <span>Kicks: 4</span>
+        </div>
+        <div class="shots"><a class="shot" href="alice-smoke-vedas-run-00-boot.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-vedas-run-00-boot.png" alt="boot"/>
+    <div class="shot-meta">boot</div>
+  </a>
+<a class="shot" href="alice-smoke-vedas-run-01-first-playing.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-vedas-run-01-first-playing.png" alt="first-playing"/>
+    <div class="shot-meta">first-playing | PLAYING | score 759.4</div>
+  </a>
+<a class="shot" href="alice-smoke-vedas-run-02-progress-2.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-vedas-run-02-progress-2.png" alt="progress-2"/>
+    <div class="shot-meta">progress-2 | PLAYING | score 759.4</div>
+  </a>
+<a class="shot" href="alice-smoke-vedas-run-03-progress-3.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-vedas-run-03-progress-3.png" alt="progress-3"/>
+    <div class="shot-meta">progress-3 | PLAYING | score 818.0</div>
+  </a>
+<a class="shot" href="alice-smoke-vedas-run-04-progress-4.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-vedas-run-04-progress-4.png" alt="progress-4"/>
+    <div class="shot-meta">progress-4 | PLAYING | score 994.0</div>
+  </a>
+<a class="shot" href="alice-smoke-vedas-run-05-progress-5.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-vedas-run-05-progress-5.png" alt="progress-5"/>
+    <div class="shot-meta">progress-5 | PLAYING | score 1172</div>
+  </a>
+<a class="shot" href="alice-smoke-vedas-run-06-final.png" target="_blank" rel="noreferrer">
+    <img src="alice-smoke-vedas-run-06-final.png" alt="final"/>
+    <div class="shot-meta">final | PLAYING | score 11366</div>
+  </a></div>
+        <ul class="checks"><li class="check ok"><span>PASS</span> Navigation to game page succeeded target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> AliceSocket bridge is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Game canvas is present target=present observed=present</li>
+<li class="check ok"><span>PASS</span> Strict error gate passed target=ok observed=ok</li>
+<li class="check ok"><span>PASS</span> Reached PLAYING state target=&gt;= 1 observed=336</li>
+<li class="check ok"><span>PASS</span> Menu/loading share &lt;= 70% target=&lt;= 0.70 observed=0.00</li>
+<li class="check ok"><span>PASS</span> Captured at least 3 evidence frames target=&gt;= 3 observed=7</li>
+<li class="check ok"><span>PASS</span> Hard gate: segment &gt;= 7 target=&gt;= 7 observed=454.0</li>
+<li class="check ok"><span>PASS</span> Hard gate: segment &gt;= 7 target=&gt;= 7 observed=454.0</li>
+<li class="check ok"><span>PASS</span> Anti-stall: longest no-progress window &lt;= 22000ms target=&lt;= 22000 observed=1350</li>
+<li class="check ok"><span>PASS</span> Anti-stall: progress events &gt;= 5 target=&gt;= 5 observed=331</li>
+<li class="check ok"><span>PASS</span> Reached segment &gt;= 7 target=&gt;= 7 observed=454.0</li>
+<li class="check ok"><span>PASS</span> Advanced runner depth target=any observed=metric_delta_tz:ok, metric_delta_score:ok (metric_delta_tz:ok, metric_delta_score:ok)</li>
+<li class="check ok"><span>PASS</span> Player moved across lanes target=&gt;= 220 observed=43749</li></ul>
+        
+      </article>
+    </section>
+  </div>
+</body>
+</html>

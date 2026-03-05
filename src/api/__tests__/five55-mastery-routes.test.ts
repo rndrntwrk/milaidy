@@ -10,12 +10,12 @@ import {
   appendMasteryEpisode,
   appendMasteryLog,
   writeMasteryRun,
-} from "../../plugins/five55-games/mastery/index.js";
+} from "@rndrntwrk/plugin-555arcade/mastery";
 import type {
-  Five55MasteryEpisode,
-  Five55MasteryLog,
-  Five55MasteryRun,
-} from "../../plugins/five55-games/mastery/types.js";
+  Arcade555MasteryEpisode,
+  Arcade555MasteryLog,
+  Arcade555MasteryRun,
+} from "@rndrntwrk/plugin-555arcade/mastery";
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -102,7 +102,7 @@ function createState() {
   } as unknown as import("../server.js").ServerState;
 }
 
-function buildRun(runId: string): Five55MasteryRun {
+function buildRun(runId: string): Arcade555MasteryRun {
   return {
     runId,
     suiteId: "suite-routes",
@@ -134,7 +134,7 @@ function buildRun(runId: string): Five55MasteryRun {
   };
 }
 
-function buildEpisode(runId: string): Five55MasteryEpisode {
+function buildEpisode(runId: string): Arcade555MasteryEpisode {
   return {
     runId,
     episodeId: `${runId}-knighthood-ep1`,
@@ -183,7 +183,7 @@ function buildEpisode(runId: string): Five55MasteryEpisode {
   };
 }
 
-function buildLog(runId: string, seq: number): Five55MasteryLog {
+function buildLog(runId: string, seq: number): Arcade555MasteryLog {
   return {
     runId,
     seq,
@@ -194,8 +194,10 @@ function buildLog(runId: string, seq: number): Five55MasteryLog {
   };
 }
 
-describe("/api/five55/mastery/* routes", () => {
+describe("arcade mastery routes", () => {
   let stateDir: string;
+  const canonicalBase = "/api/arcade555/mastery";
+  const legacyBase = "/api/five55/mastery";
 
   beforeEach(async () => {
     stateDir = await fs.mkdtemp(path.join(os.tmpdir(), "milaidy-mastery-routes-"));
@@ -211,7 +213,7 @@ describe("/api/five55/mastery/* routes", () => {
 
   it("returns mastery catalog", async () => {
     const state = createState();
-    const { req, emitBody } = createMockReq("GET", "/api/five55/mastery/catalog");
+    const { req, emitBody } = createMockReq("GET", `${canonicalBase}/catalog`);
     const res = createMockRes();
     const pending = __testOnlyHandleRequest(req, res, state);
     emitBody();
@@ -233,7 +235,7 @@ describe("/api/five55/mastery/* routes", () => {
     const state = createState();
 
     {
-      const { req, emitBody } = createMockReq("GET", "/api/five55/mastery/runs?limit=5");
+      const { req, emitBody } = createMockReq("GET", `${canonicalBase}/runs?limit=5`);
       const res = createMockRes();
       const pending = __testOnlyHandleRequest(req, res, state);
       emitBody();
@@ -246,7 +248,7 @@ describe("/api/five55/mastery/* routes", () => {
     {
       const { req, emitBody } = createMockReq(
         "GET",
-        `/api/five55/mastery/runs/${encodeURIComponent(runId)}`,
+        `${canonicalBase}/runs/${encodeURIComponent(runId)}`,
       );
       const res = createMockRes();
       const pending = __testOnlyHandleRequest(req, res, state);
@@ -260,7 +262,7 @@ describe("/api/five55/mastery/* routes", () => {
     {
       const { req, emitBody } = createMockReq(
         "GET",
-        `/api/five55/mastery/runs/${encodeURIComponent(runId)}/episodes`,
+        `${canonicalBase}/runs/${encodeURIComponent(runId)}/episodes`,
       );
       const res = createMockRes();
       const pending = __testOnlyHandleRequest(req, res, state);
@@ -278,7 +280,7 @@ describe("/api/five55/mastery/* routes", () => {
     {
       const { req, emitBody } = createMockReq(
         "GET",
-        `/api/five55/mastery/runs/${encodeURIComponent(runId)}/logs?afterSeq=1&limit=1`,
+        `${canonicalBase}/runs/${encodeURIComponent(runId)}/logs?afterSeq=1&limit=1`,
       );
       const res = createMockRes();
       const pending = __testOnlyHandleRequest(req, res, state);
@@ -298,7 +300,7 @@ describe("/api/five55/mastery/* routes", () => {
     {
       const { req, emitBody } = createMockReq(
         "GET",
-        `/api/five55/mastery/runs/${encodeURIComponent(runId)}/evidence`,
+        `${canonicalBase}/runs/${encodeURIComponent(runId)}/evidence`,
       );
       const res = createMockRes();
       const pending = __testOnlyHandleRequest(req, res, state);
@@ -317,7 +319,7 @@ describe("/api/five55/mastery/* routes", () => {
       const episodeId = `${runId}-knighthood-ep1`;
       const { req, emitBody } = createMockReq(
         "GET",
-        `/api/five55/mastery/runs/${encodeURIComponent(runId)}/episodes/${encodeURIComponent(episodeId)}/frames`,
+        `${canonicalBase}/runs/${encodeURIComponent(runId)}/episodes/${encodeURIComponent(episodeId)}/frames`,
       );
       const res = createMockRes();
       const pending = __testOnlyHandleRequest(req, res, state);
@@ -332,7 +334,7 @@ describe("/api/five55/mastery/* routes", () => {
       const episodeId = `${runId}-knighthood-ep1`;
       const { req, emitBody } = createMockReq(
         "GET",
-        `/api/five55/mastery/runs/${encodeURIComponent(runId)}/episodes/${encodeURIComponent(episodeId)}/consistency`,
+        `${canonicalBase}/runs/${encodeURIComponent(runId)}/episodes/${encodeURIComponent(episodeId)}/consistency`,
       );
       const res = createMockRes();
       const pending = __testOnlyHandleRequest(req, res, state);
@@ -346,9 +348,43 @@ describe("/api/five55/mastery/* routes", () => {
     }
   });
 
+  it("returns 410 for legacy mastery aliases by default", async () => {
+    const state = createState();
+    const { req, emitBody } = createMockReq("GET", `${legacyBase}/catalog`);
+    const res = createMockRes();
+    const pending = __testOnlyHandleRequest(req, res, state);
+    emitBody();
+    await pending;
+
+    expect(res.statusCode).toBe(410);
+    expect(res.headers.Deprecation).toBe("true");
+    expect(res.headers.Sunset).toBe("Wed, 30 Sep 2026 00:00:00 GMT");
+    expect(res.headers.Link).toContain("</api/arcade555/mastery/catalog>; rel=\"successor-version\"");
+    const payload = JSON.parse(res.body) as { error: string; successor: string };
+    expect(payload.error).toContain("disabled by default");
+    expect(payload.successor).toBe("/api/arcade555/mastery/catalog");
+  });
+
+  it("serves legacy mastery aliases when compatibility mode is enabled", async () => {
+    process.env.ARCADE555_ENABLE_LEGACY_HTTP_ALIASES = "true";
+    const state = createState();
+    const { req, emitBody } = createMockReq("GET", `${legacyBase}/catalog`);
+    const res = createMockRes();
+    const pending = __testOnlyHandleRequest(req, res, state);
+    emitBody();
+    await pending;
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers.Deprecation).toBe("true");
+    expect(res.headers.Sunset).toBe("Wed, 30 Sep 2026 00:00:00 GMT");
+    expect(res.headers.Link).toContain("</api/arcade555/mastery/catalog>; rel=\"successor-version\"");
+    const payload = JSON.parse(res.body) as { total: number };
+    expect(payload.total).toBeGreaterThanOrEqual(16);
+  });
+
   it("rejects mastery run start when runtime is unavailable", async () => {
     const state = createState();
-    const { req, emitBody } = createMockReq("POST", "/api/five55/mastery/runs", {
+    const { req, emitBody } = createMockReq("POST", `${canonicalBase}/runs`, {
       games: ["knighthood"],
       episodesPerGame: 1,
     });
@@ -364,7 +400,7 @@ describe("/api/five55/mastery/* routes", () => {
 
   it("rejects mastery run start when strict=false is requested", async () => {
     const state = createState();
-    const { req, emitBody } = createMockReq("POST", "/api/five55/mastery/runs", {
+    const { req, emitBody } = createMockReq("POST", `${canonicalBase}/runs`, {
       games: ["knighthood"],
       episodesPerGame: 1,
       strict: false,

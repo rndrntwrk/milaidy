@@ -147,6 +147,13 @@ milady plugins add <name> # install a plugin
 milady plugins remove <name>
 ```
 
+### Arcade Plugin Packaging
+
+`@rndrntwrk/plugin-555arcade` is consumed by Milaidy as a pinned external package dependency.
+The supported release/build path is package-based, not a sibling-source shortcut like `file:../arcade-plugin`.
+
+If you need local source linking while developing the arcade plugin itself, use a dev-only TypeScript overlay such as `tsconfig.dev.local.json`. Do not restore package-manager or default `tsconfig.json` path mappings to `../arcade-plugin/src/*`.
+
 ### Misc
 
 ```bash

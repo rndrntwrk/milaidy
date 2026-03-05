@@ -12,9 +12,9 @@ import type {
 import { ethers } from "ethers";
 import { deriveEvmAddress, deriveSolanaAddress } from "../../api/wallet.js";
 import {
-  assertFive55Capability,
-  createFive55CapabilityPolicy,
-} from "../../runtime/five55-capability-policy.js";
+  assertSurface555Capability,
+  createSurface555CapabilityPolicy,
+} from "../../runtime/surface555-capability-policy.js";
 import { assertTrustedAdminForAction } from "../../runtime/trusted-admin.js";
 import { exceptionAction, readParam } from "../five55-shared/action-kit.js";
 import {
@@ -28,7 +28,7 @@ import {
 } from "../five55-shared/agent-auth.js";
 
 const MODULE = "stream555.auth";
-const CAPABILITY_POLICY = createFive55CapabilityPolicy();
+const CAPABILITY_POLICY = createSurface555CapabilityPolicy();
 const STREAM555_BASE_ENV = "STREAM555_BASE_URL";
 const STREAM_API_ENV = "STREAM_API_URL";
 const STREAM555_PUBLIC_BASE_ENV = "STREAM555_PUBLIC_BASE_URL";
@@ -140,7 +140,7 @@ function resolveBaseEnvSource(): string {
 }
 
 function assertStreamReadAccess(): void {
-  assertFive55Capability(CAPABILITY_POLICY, "stream.read");
+  assertSurface555Capability(CAPABILITY_POLICY, "stream.read");
 }
 
 function assertStreamControlAccess(
@@ -150,7 +150,7 @@ function assertStreamControlAccess(
   actionName: string,
 ): void {
   assertTrustedAdminForAction(runtime, message, state, actionName);
-  assertFive55Capability(CAPABILITY_POLICY, "stream.control");
+  assertSurface555Capability(CAPABILITY_POLICY, "stream.control");
 }
 
 function readRuntimeSetting(

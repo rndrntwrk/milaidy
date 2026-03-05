@@ -98,10 +98,10 @@ export const QUICK_LAYER_CATALOG: readonly QuickLayerDefinition[] = [
   {
     id: "play-games",
     label: "Play Games",
-    pluginIds: ["five55-games"],
+    pluginIds: ["555arcade"],
     navigateToApps: true,
     prompt:
-      "Use FIVE55_GAMES_CATALOG to choose a playable game and run FIVE55_GAMES_PLAY in autonomous spectate mode (bot=true). Continue live commentary with score/capture updates.",
+      "Prefer ARCADE555_GAMES_CATALOG and ARCADE555_GAMES_PLAY to choose a playable game and launch autonomous spectate mode (bot=true). If canonical arcade actions are unavailable, fallback to FIVE55_GAMES_CATALOG and FIVE55_GAMES_PLAY. Continue live commentary with score/capture updates.",
   },
   {
     id: "swap",

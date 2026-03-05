@@ -21,9 +21,9 @@ import { paramsToSchema } from "./PluginsView";
 import { UiRenderer } from "./ui-renderer";
 import type { UiSpec } from "./ui-spec";
 import {
-  parseFive55ActionEnvelope,
-  type Five55ActionEnvelope,
-} from "./five55ActionEnvelope";
+  parseArcade555ActionEnvelope,
+  type Arcade555ActionEnvelope,
+} from "./arcade555ActionEnvelope";
 
 /** Reject prototype-pollution plugin IDs that could slip through the regex. */
 const BLOCKED_IDS = new Set(["__proto__", "constructor", "prototype"]);
@@ -449,7 +449,7 @@ function UiSpecBlock({ spec, raw }: { spec: UiSpec; raw: string }) {
   );
 }
 
-function ActionEnvelopeBlock({ envelope }: { envelope: Five55ActionEnvelope }) {
+function ActionEnvelopeBlock({ envelope }: { envelope: Arcade555ActionEnvelope }) {
   const tone = envelope.ok
     ? "border-ok/30 bg-ok/5"
     : "border-danger/35 bg-danger/5";
@@ -489,7 +489,7 @@ function ActionEnvelopeBlock({ envelope }: { envelope: Five55ActionEnvelope }) {
 }
 
 function renderTextOrEnvelope(text: string) {
-  const envelope = parseFive55ActionEnvelope(text);
+  const envelope = parseArcade555ActionEnvelope(text);
   if (envelope) {
     return <ActionEnvelopeBlock envelope={envelope} />;
   }

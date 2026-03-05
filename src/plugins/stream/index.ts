@@ -10,9 +10,9 @@ import type {
 } from "@elizaos/core";
 import crypto from "node:crypto";
 import {
-  assertFive55Capability,
-  createFive55CapabilityPolicy,
-} from "../../runtime/five55-capability-policy.js";
+  assertSurface555Capability,
+  createSurface555CapabilityPolicy,
+} from "../../runtime/surface555-capability-policy.js";
 import { assertTrustedAdminForAction } from "../../runtime/trusted-admin.js";
 import {
   exceptionAction,
@@ -31,7 +31,7 @@ import {
   resolveAgentBearer,
 } from "../five55-shared/agent-auth.js";
 
-const CAPABILITY_POLICY = createFive55CapabilityPolicy();
+const CAPABILITY_POLICY = createSurface555CapabilityPolicy();
 const STREAM_API_ENV = "STREAM_API_URL";
 const STREAM555_BASE_ENV = "STREAM555_BASE_URL";
 const STREAM555_SESSION_ENV = "STREAM555_DEFAULT_SESSION_ID";
@@ -939,7 +939,7 @@ const streamStatusAction: Action = {
   validate: async () => true,
   handler: async (_runtime, _message, _state, options) => {
     try {
-      assertFive55Capability(CAPABILITY_POLICY, "stream.read");
+      assertSurface555Capability(CAPABILITY_POLICY, "stream.read");
       const scope =
         readParam(options as HandlerOptions | undefined, "scope") ?? "current";
       const sessionId = readParam(
@@ -1007,7 +1007,7 @@ const streamControlAction: Action = {
   handler: async (runtime, message, state, options) => {
     try {
       assertTrustedAdminForAction(runtime, message, state, "STREAM_CONTROL");
-      assertFive55Capability(CAPABILITY_POLICY, "stream.control");
+      assertSurface555Capability(CAPABILITY_POLICY, "stream.control");
       const operation = readParam(
         options as HandlerOptions | undefined,
         "operation",
@@ -1109,7 +1109,7 @@ const streamScheduleAction: Action = {
   handler: async (runtime, message, state, options) => {
     try {
       assertTrustedAdminForAction(runtime, message, state, "STREAM_SCHEDULE");
-      assertFive55Capability(CAPABILITY_POLICY, "stream.control");
+      assertSurface555Capability(CAPABILITY_POLICY, "stream.control");
       const startsAt = readParam(
         options as HandlerOptions | undefined,
         "startsAt",
@@ -1209,7 +1209,7 @@ const streamActionTimelineAction: Action = {
   validate: async () => true,
   handler: async (_runtime, _message, _state, options) => {
     try {
-      assertFive55Capability(CAPABILITY_POLICY, "stream.read");
+      assertSurface555Capability(CAPABILITY_POLICY, "stream.read");
       const limitRaw =
         readParam(options as HandlerOptions | undefined, "limit") ?? "50";
       const limit = Number.parseInt(limitRaw, 10);

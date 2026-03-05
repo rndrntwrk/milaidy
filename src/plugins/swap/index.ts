@@ -9,9 +9,9 @@ import type {
   State,
 } from "@elizaos/core";
 import {
-  assertFive55Capability,
-  createFive55CapabilityPolicy,
-} from "../../runtime/five55-capability-policy.js";
+  assertSurface555Capability,
+  createSurface555CapabilityPolicy,
+} from "../../runtime/surface555-capability-policy.js";
 import {
   exceptionAction,
   executeApiAction,
@@ -19,7 +19,7 @@ import {
   requireApiBase,
 } from "../five55-shared/action-kit.js";
 
-const CAPABILITY_POLICY = createFive55CapabilityPolicy();
+const CAPABILITY_POLICY = createSurface555CapabilityPolicy();
 const SWAP_API_ENV = "SWAP_API_URL";
 
 const swapProvider: Provider = {
@@ -51,7 +51,7 @@ const swapQuoteAction: Action = {
   validate: async () => true,
   handler: async (_runtime, _message, _state, options) => {
     try {
-      assertFive55Capability(CAPABILITY_POLICY, "wallet.read_balance");
+      assertSurface555Capability(CAPABILITY_POLICY, "wallet.read_balance");
       const fromToken = readParam(options as HandlerOptions | undefined, "fromToken");
       const toToken = readParam(options as HandlerOptions | undefined, "toToken");
       const amount = readParam(options as HandlerOptions | undefined, "amount");
@@ -130,7 +130,7 @@ const swapExecuteAction: Action = {
   validate: async () => true,
   handler: async (_runtime, _message, _state, options) => {
     try {
-      assertFive55Capability(CAPABILITY_POLICY, "wallet.prepare_transfer");
+      assertSurface555Capability(CAPABILITY_POLICY, "wallet.prepare_transfer");
       const quoteId = readParam(options as HandlerOptions | undefined, "quoteId");
       const slippageBps = readParam(
         options as HandlerOptions | undefined,
@@ -190,7 +190,7 @@ const walletPositionAction: Action = {
   validate: async () => true,
   handler: async (_runtime, _message, _state, options) => {
     try {
-      assertFive55Capability(CAPABILITY_POLICY, "wallet.read_balance");
+      assertSurface555Capability(CAPABILITY_POLICY, "wallet.read_balance");
       const chain = readParam(options as HandlerOptions | undefined, "chain");
       return executeApiAction({
         module: "swap",

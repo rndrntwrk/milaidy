@@ -29,8 +29,10 @@ import JSON5 from "json5";
 
 const API_PORT = 31337;
 const UI_PORT = 2138;
-const DEFAULT_LOCAL_FIVE55_API = (
-  process.env.MILADY_DEV_FIVE55_BASE_URL || "http://127.0.0.1:3100"
+const DEFAULT_LOCAL_ARCADE555_API = (
+  process.env.MILADY_DEV_ARCADE555_BASE_URL ||
+  process.env.MILADY_DEV_FIVE55_BASE_URL ||
+  "http://127.0.0.1:3100"
 ).trim();
 const cwd = process.cwd();
 const uiOnly = process.argv.includes("--ui-only");
@@ -175,10 +177,12 @@ function coerceBoolean(value) {
   return null;
 }
 
-function resolveFive55ApiUrlForDev() {
-  const explicit = process.env.FIVE55_GAMES_API_URL?.trim();
+function resolveArcade555ApiUrlForDev() {
+  const explicit =
+    process.env.ARCADE555_BASE_URL?.trim() ||
+    process.env.FIVE55_GAMES_API_URL?.trim();
   if (explicit) return explicit;
-  return DEFAULT_LOCAL_FIVE55_API;
+  return DEFAULT_LOCAL_ARCADE555_API;
 }
 
 function resolveMiladyConfigPath() {
@@ -1023,10 +1027,10 @@ if (uiOnly) {
     );
   }
 
-  const five55ApiUrl = resolveFive55ApiUrlForDev();
-  if (!process.env.FIVE55_GAMES_API_URL) {
+  const arcade555ApiUrl = resolveArcade555ApiUrlForDev();
+  if (!process.env.ARCADE555_BASE_URL && !process.env.FIVE55_GAMES_API_URL) {
     console.log(
-      `  ${green("[milady]")} ${dim(`Using local five55 API default: ${five55ApiUrl}`)}`,
+      `  ${green("[milady]")} ${dim(`Using local arcade555 API default: ${arcade555ApiUrl}`)}`,
     );
   }
 
@@ -1056,7 +1060,8 @@ if (uiOnly) {
       MILADY_PORT: String(API_PORT),
       MILADY_HEADLESS: "1",
       LOG_LEVEL: devLogLevel,
-      FIVE55_GAMES_API_URL: five55ApiUrl,
+      ARCADE555_BASE_URL: arcade555ApiUrl,
+      FIVE55_GAMES_API_URL: arcade555ApiUrl,
     },
     stdio: ["inherit", "pipe", "pipe"],
   });

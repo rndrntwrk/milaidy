@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@rndrntwrk/plugin-555arcade": ["../arcade-plugin/src/index.ts"],
+      "@rndrntwrk/plugin-555arcade/*": ["../arcade-plugin/src/*"],
+      "@elizaos/plugin-*": ["./packages/plugin-*/src/index.ts"],
+      "@elizaos/*": ["./plugins/*/src/index.ts"]
+    }
+  }
+}

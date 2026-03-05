@@ -4,7 +4,19 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
-const DEFAULT_BASE_URL = process.env.FIVE55_BASE_URL || "http://127.0.0.1:3100";
+function readFirstEnv(...keys) {
+  for (const key of keys) {
+    const value = process.env[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return "";
+}
+
+const DEFAULT_BASE_URL =
+  readFirstEnv("ARCADE555_BASE_URL", "ARCADE555_VIEWER_BASE_URL", "FIVE55_BASE_URL") ||
+  "http://127.0.0.1:3100";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DEFAULT_OUT_DIR = path.resolve(__dirname, "..", "output", "playwright");
@@ -62,10 +74,27 @@ const VISIT_PATH_OVERRIDES = {
 const MASTERED_LABEL = "Mastered";
 const NEEDS_WORK_LABEL = "Needs Work";
 const DEFERRED_LABEL = "Deferred";
-const DEFAULT_EVAL_TIMEOUT_MS = Number(process.env.FIVE55_SMOKE_EVAL_TIMEOUT_MS || 1800);
-const DEFAULT_SCREENSHOT_TIMEOUT_MS = Number(process.env.FIVE55_SMOKE_SCREENSHOT_TIMEOUT_MS || 4000);
-const DEFAULT_BROWSER_CLOSE_TIMEOUT_MS = Number(process.env.FIVE55_SMOKE_BROWSER_CLOSE_TIMEOUT_MS || 5000);
-const DEFAULT_PAGE_CLOSE_TIMEOUT_MS = Number(process.env.FIVE55_SMOKE_PAGE_CLOSE_TIMEOUT_MS || 5000);
+const DEFAULT_EVAL_TIMEOUT_MS = Number(
+  readFirstEnv("ARCADE555_SMOKE_EVAL_TIMEOUT_MS", "FIVE55_SMOKE_EVAL_TIMEOUT_MS") || 1800,
+);
+const DEFAULT_SCREENSHOT_TIMEOUT_MS = Number(
+  readFirstEnv(
+    "ARCADE555_SMOKE_SCREENSHOT_TIMEOUT_MS",
+    "FIVE55_SMOKE_SCREENSHOT_TIMEOUT_MS",
+  ) || 4000,
+);
+const DEFAULT_BROWSER_CLOSE_TIMEOUT_MS = Number(
+  readFirstEnv(
+    "ARCADE555_SMOKE_BROWSER_CLOSE_TIMEOUT_MS",
+    "FIVE55_SMOKE_BROWSER_CLOSE_TIMEOUT_MS",
+  ) || 5000,
+);
+const DEFAULT_PAGE_CLOSE_TIMEOUT_MS = Number(
+  readFirstEnv(
+    "ARCADE555_SMOKE_PAGE_CLOSE_TIMEOUT_MS",
+    "FIVE55_SMOKE_PAGE_CLOSE_TIMEOUT_MS",
+  ) || 5000,
+);
 
 const MASTERY_PROFILES = {
   knighthood: {
@@ -441,27 +470,50 @@ const execFileAsync = promisify(execFile);
 
 function parseArgs() {
   const args = process.argv.slice(2);
-  const envGames = String(process.env.FIVE55_SMOKE_GAMES || "")
+  const envGames = String(
+    readFirstEnv("ARCADE555_SMOKE_GAMES", "FIVE55_SMOKE_GAMES"),
+  )
     .split(",")
     .map((entry) => entry.trim())
     .filter((entry) => entry.length > 0);
   const config = {
     baseUrl: DEFAULT_BASE_URL,
-    outDir: process.env.FIVE55_SMOKE_OUT_DIR || DEFAULT_OUT_DIR,
-    timeoutMs: Number(process.env.FIVE55_SMOKE_TIMEOUT_MS || 45_000),
-    settleMs: Number(process.env.FIVE55_SMOKE_SETTLE_MS || 3_500),
-    postProbeWaitMs: Number(process.env.FIVE55_SMOKE_POST_PROBE_WAIT_MS || 1_200),
-    gameplayDurationMs: Number(process.env.FIVE55_SMOKE_GAMEPLAY_MS || 12_000),
-    sampleIntervalMs: Number(process.env.FIVE55_SMOKE_SAMPLE_INTERVAL_MS || 260),
-    forceGameplayDurationMs: Number(process.env.FIVE55_SMOKE_FORCE_GAMEPLAY_MS || 0) || null,
+    outDir: readFirstEnv("ARCADE555_SMOKE_OUT_DIR", "FIVE55_SMOKE_OUT_DIR") || DEFAULT_OUT_DIR,
+    timeoutMs: Number(readFirstEnv("ARCADE555_SMOKE_TIMEOUT_MS", "FIVE55_SMOKE_TIMEOUT_MS") || 45_000),
+    settleMs: Number(readFirstEnv("ARCADE555_SMOKE_SETTLE_MS", "FIVE55_SMOKE_SETTLE_MS") || 3_500),
+    postProbeWaitMs: Number(
+      readFirstEnv("ARCADE555_SMOKE_POST_PROBE_WAIT_MS", "FIVE55_SMOKE_POST_PROBE_WAIT_MS") || 1_200,
+    ),
+    gameplayDurationMs: Number(
+      readFirstEnv("ARCADE555_SMOKE_GAMEPLAY_MS", "FIVE55_SMOKE_GAMEPLAY_MS") || 12_000,
+    ),
+    sampleIntervalMs: Number(
+      readFirstEnv("ARCADE555_SMOKE_SAMPLE_INTERVAL_MS", "FIVE55_SMOKE_SAMPLE_INTERVAL_MS") || 260,
+    ),
+    forceGameplayDurationMs:
+      Number(
+        readFirstEnv(
+          "ARCADE555_SMOKE_FORCE_GAMEPLAY_MS",
+          "FIVE55_SMOKE_FORCE_GAMEPLAY_MS",
+        ) || 0,
+      ) || null,
     evalTimeoutMs: DEFAULT_EVAL_TIMEOUT_MS,
     screenshotTimeoutMs: DEFAULT_SCREENSHOT_TIMEOUT_MS,
-    headless: process.env.FIVE55_SMOKE_HEADFUL === "1" ? false : true,
-    strictErrors: process.env.FIVE55_SMOKE_STRICT_ERRORS === "1",
-    maxPageErrors: Number(process.env.FIVE55_SMOKE_MAX_PAGE_ERRORS || 0),
-    maxConsoleErrors: Number(process.env.FIVE55_SMOKE_MAX_CONSOLE_ERRORS || 0),
-    failOnFailure: process.env.FIVE55_SMOKE_FAIL_ON_FAILURE === "0" ? false : true,
-    requireMastery: process.env.FIVE55_SMOKE_REQUIRE_MASTERY === "1",
+    headless: readFirstEnv("ARCADE555_SMOKE_HEADFUL", "FIVE55_SMOKE_HEADFUL") === "1" ? false : true,
+    strictErrors:
+      readFirstEnv("ARCADE555_SMOKE_STRICT_ERRORS", "FIVE55_SMOKE_STRICT_ERRORS") === "1",
+    maxPageErrors: Number(
+      readFirstEnv("ARCADE555_SMOKE_MAX_PAGE_ERRORS", "FIVE55_SMOKE_MAX_PAGE_ERRORS") || 0,
+    ),
+    maxConsoleErrors: Number(
+      readFirstEnv("ARCADE555_SMOKE_MAX_CONSOLE_ERRORS", "FIVE55_SMOKE_MAX_CONSOLE_ERRORS") || 0,
+    ),
+    failOnFailure:
+      readFirstEnv("ARCADE555_SMOKE_FAIL_ON_FAILURE", "FIVE55_SMOKE_FAIL_ON_FAILURE") === "0"
+        ? false
+        : true,
+    requireMastery:
+      readFirstEnv("ARCADE555_SMOKE_REQUIRE_MASTERY", "FIVE55_SMOKE_REQUIRE_MASTERY") === "1",
     games: envGames,
   };
 

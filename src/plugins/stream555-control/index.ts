@@ -9,9 +9,9 @@ import type {
   State,
 } from "@elizaos/core";
 import {
-  assertFive55Capability,
-  createFive55CapabilityPolicy,
-} from "../../runtime/five55-capability-policy.js";
+  assertSurface555Capability,
+  createSurface555CapabilityPolicy,
+} from "../../runtime/surface555-capability-policy.js";
 import { assertTrustedAdminForAction } from "../../runtime/trusted-admin.js";
 import {
   exceptionAction,
@@ -34,7 +34,7 @@ const STREAM555_INTERNAL_AGENT_IDS_ENV = "STREAM555_INTERNAL_AGENT_IDS";
 const STREAM_SESSION_ENV = "STREAM_SESSION_ID";
 const STREAM555_SESSION_ENV = "STREAM555_DEFAULT_SESSION_ID";
 const STREAM555_DEST_SYNC_ON_GO_LIVE_ENV = "STREAM555_DEST_SYNC_ON_GO_LIVE";
-const CAPABILITY_POLICY = createFive55CapabilityPolicy();
+const CAPABILITY_POLICY = createSurface555CapabilityPolicy();
 const DEFAULT_STREAM555_PUBLIC_BASE_URL = "https://stream.rndrntwrk.com";
 const DEFAULT_STREAM555_INTERNAL_BASE_URL = "http://control-plane:3000";
 const DEFAULT_INTERNAL_AGENT_IDS = ["alice", "alice-internal"];
@@ -136,7 +136,7 @@ function readParamValue(
 }
 
 function assertStreamReadAccess(): void {
-  assertFive55Capability(CAPABILITY_POLICY, "stream.read");
+  assertSurface555Capability(CAPABILITY_POLICY, "stream.read");
 }
 
 function assertStreamControlAccess(
@@ -146,7 +146,7 @@ function assertStreamControlAccess(
   actionName: string,
 ): void {
   assertTrustedAdminForAction(runtime, message, state, actionName);
-  assertFive55Capability(CAPABILITY_POLICY, "stream.control");
+  assertSurface555Capability(CAPABILITY_POLICY, "stream.control");
 }
 
 function isInternalAgentId(agentId: string | undefined): boolean {

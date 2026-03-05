@@ -1,0 +1,383 @@
+{
+  "schemaVersion": "alice-smoke-truth-verdict.v1",
+  "generatedAt": "2026-03-05T15:47:29.649Z",
+  "sourceReport": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-game-smoke-report.json",
+  "sourceRun": {
+    "startedAt": "2026-03-05T09:58:35.850Z",
+    "finishedAt": "2026-03-05T10:24:01.327Z"
+  },
+  "policy": {
+    "mode": "visual-only-truth-gate",
+    "note": "Verdicts are based on screenshot evidence review only; telemetry-only claims are not trusted when visual corroboration is missing."
+  },
+  "summary": {
+    "reported": {
+      "total": 16,
+      "requiredTotal": 15,
+      "mastered": 14,
+      "deferred": 1,
+      "failed": 1
+    },
+    "truthGateVisualOnly": {
+      "total": 16,
+      "requiredTotal": 15,
+      "pass": 5,
+      "fail": 10,
+      "deferred": 1
+    }
+  },
+  "games": [
+    {
+      "gameId": "knighthood",
+      "reported": {
+        "status": "pass",
+        "mastery": "mastered"
+      },
+      "truth": {
+        "visualVerdict": "pass",
+        "rationale": "Active gameplay and score progression are visible; in-frame score exceeds 5000.",
+        "confidence": "high"
+      },
+      "evidence": [
+        {
+          "label": "progress-4",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-knighthood-04-progress-4.png"
+        },
+        {
+          "label": "final",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-knighthood-06-final.png"
+        }
+      ]
+    },
+    {
+      "gameId": "sector-13",
+      "reported": {
+        "status": "pass",
+        "mastery": "mastered"
+      },
+      "truth": {
+        "visualVerdict": "fail",
+        "rationale": "Screenshots show sector 1-2 and end on game-over; no visual evidence for required sector >= 7.",
+        "confidence": "high"
+      },
+      "evidence": [
+        {
+          "label": "progress-4",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-sector-13-04-progress-4.png"
+        },
+        {
+          "label": "final",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-sector-13-06-final.png"
+        }
+      ]
+    },
+    {
+      "gameId": "ninja",
+      "reported": {
+        "status": "pass",
+        "mastery": "mastered"
+      },
+      "truth": {
+        "visualVerdict": "pass",
+        "rationale": "Level progression is visibly present and reaches/exceeds required threshold (>=8).",
+        "confidence": "high"
+      },
+      "evidence": [
+        {
+          "label": "progress-5",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-ninja-05-progress-5.png"
+        },
+        {
+          "label": "final",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-ninja-06-final.png"
+        }
+      ]
+    },
+    {
+      "gameId": "clawstrike",
+      "reported": {
+        "status": "pass",
+        "mastery": "mastered"
+      },
+      "truth": {
+        "visualVerdict": "fail",
+        "rationale": "Final evidence remains on level 1; no visual evidence of reaching required level >= 7.",
+        "confidence": "high"
+      },
+      "evidence": [
+        {
+          "label": "progress-4",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-clawstrike-04-progress-4.png"
+        },
+        {
+          "label": "final",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-clawstrike-06-final.png"
+        }
+      ]
+    },
+    {
+      "gameId": "555drive",
+      "reported": {
+        "status": "pass",
+        "mastery": "mastered"
+      },
+      "truth": {
+        "visualVerdict": "pass",
+        "rationale": "Gameplay is active with visible driving progression and sustained run state.",
+        "confidence": "medium"
+      },
+      "evidence": [
+        {
+          "label": "progress-3",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-555drive-03-progress-3.png"
+        },
+        {
+          "label": "final",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-555drive-06-final.png"
+        }
+      ]
+    },
+    {
+      "gameId": "chesspursuit",
+      "reported": {
+        "status": "pass",
+        "mastery": "mastered"
+      },
+      "truth": {
+        "visualVerdict": "fail",
+        "rationale": "All captured frames are static start/menu board; no playable progression evidence.",
+        "confidence": "high"
+      },
+      "evidence": [
+        {
+          "label": "boot",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-chesspursuit-00-boot.png"
+        },
+        {
+          "label": "final",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-chesspursuit-06-final.png"
+        }
+      ]
+    },
+    {
+      "gameId": "wolf-and-sheep",
+      "reported": {
+        "status": "pass",
+        "mastery": "mastered"
+      },
+      "truth": {
+        "visualVerdict": "fail",
+        "rationale": "Frames show static board/replay state with no visible block-push trapping progression.",
+        "confidence": "high"
+      },
+      "evidence": [
+        {
+          "label": "first-playing",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-wolf-and-sheep-01-first-playing.png"
+        },
+        {
+          "label": "final",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-wolf-and-sheep-03-final.png"
+        }
+      ]
+    },
+    {
+      "gameId": "leftandright",
+      "reported": {
+        "status": "pass",
+        "mastery": "mastered"
+      },
+      "truth": {
+        "visualVerdict": "fail",
+        "rationale": "Final frame is restart/death screen with score 0; not consistent with mastery survival claim.",
+        "confidence": "high"
+      },
+      "evidence": [
+        {
+          "label": "progress-5",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-leftandright-05-progress-5.png"
+        },
+        {
+          "label": "final",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-leftandright-06-final.png"
+        }
+      ]
+    },
+    {
+      "gameId": "playback",
+      "reported": {
+        "status": "pass",
+        "mastery": "mastered"
+      },
+      "truth": {
+        "visualVerdict": "fail",
+        "rationale": "Frames are black with overlay text only; no visible gameplay scene progression.",
+        "confidence": "high"
+      },
+      "evidence": [
+        {
+          "label": "first-playing",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-playback-01-first-playing.png"
+        },
+        {
+          "label": "final",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-playback-06-final.png"
+        }
+      ]
+    },
+    {
+      "gameId": "fighter-planes",
+      "reported": {
+        "status": "pass",
+        "mastery": "mastered"
+      },
+      "truth": {
+        "visualVerdict": "fail",
+        "rationale": "Some control is visible but final is game-over with low performance; mastery not visually established.",
+        "confidence": "medium"
+      },
+      "evidence": [
+        {
+          "label": "progress-5",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-fighter-planes-05-progress-5.png"
+        },
+        {
+          "label": "final",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-fighter-planes-06-final.png"
+        }
+      ]
+    },
+    {
+      "gameId": "floor13",
+      "reported": {
+        "status": "pass",
+        "mastery": "mastered"
+      },
+      "truth": {
+        "visualVerdict": "fail",
+        "rationale": "Combat is visible, but screenshots do not clearly prove required floor progression threshold.",
+        "confidence": "medium"
+      },
+      "evidence": [
+        {
+          "label": "progress-3",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-floor13-03-progress-3.png"
+        },
+        {
+          "label": "final",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-floor13-05-final.png"
+        }
+      ]
+    },
+    {
+      "gameId": "godai-is-back",
+      "reported": {
+        "status": "deferred",
+        "mastery": "deferred"
+      },
+      "truth": {
+        "visualVerdict": "deferred",
+        "rationale": "Deferred multiplayer title; excluded from strict denominator per current plan.",
+        "confidence": "high"
+      },
+      "evidence": [
+        {
+          "label": "boot",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-godai-is-back-00-boot.png"
+        },
+        {
+          "label": "final",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-godai-is-back-03-final.png"
+        }
+      ]
+    },
+    {
+      "gameId": "peanball",
+      "reported": {
+        "status": "pass",
+        "mastery": "mastered"
+      },
+      "truth": {
+        "visualVerdict": "pass",
+        "rationale": "Active board play and progression are visibly present under current provisional bar.",
+        "confidence": "medium"
+      },
+      "evidence": [
+        {
+          "label": "progress-3",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-peanball-03-progress-3.png"
+        },
+        {
+          "label": "final",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-peanball-06-final.png"
+        }
+      ]
+    },
+    {
+      "gameId": "eat-my-dust",
+      "reported": {
+        "status": "pass",
+        "mastery": "mastered"
+      },
+      "truth": {
+        "visualVerdict": "pass",
+        "rationale": "Typing race run is visibly active and ends in a clear new-record state.",
+        "confidence": "high"
+      },
+      "evidence": [
+        {
+          "label": "progress-3",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-eat-my-dust-03-progress-3.png"
+        },
+        {
+          "label": "final",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-eat-my-dust-05-final.png"
+        }
+      ]
+    },
+    {
+      "gameId": "where-were-going-we-do-need-roads",
+      "reported": {
+        "status": "probe_fail",
+        "mastery": "needs-work"
+      },
+      "truth": {
+        "visualVerdict": "fail",
+        "rationale": "Run already probe-failed; final state is not mastery-qualified and evidence is inconsistent.",
+        "confidence": "high"
+      },
+      "evidence": [
+        {
+          "label": "progress-5",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-where-were-going-we-do-need-roads-05-progress-5.png"
+        },
+        {
+          "label": "final",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-where-were-going-we-do-need-roads-06-final.png"
+        }
+      ]
+    },
+    {
+      "gameId": "vedas-run",
+      "reported": {
+        "status": "pass",
+        "mastery": "mastered"
+      },
+      "truth": {
+        "visualVerdict": "fail",
+        "rationale": "Some movement is visible, but screenshot evidence does not clearly validate mastery segment progression.",
+        "confidence": "medium"
+      },
+      "evidence": [
+        {
+          "label": "progress-4",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-vedas-run-04-progress-4.png"
+        },
+        {
+          "label": "final",
+          "path": "/Volumes/OWC Envoy Pro FX/desktop_dump/new/Work/555/milaidy/output/playwright/alice-smoke-vedas-run-06-final.png"
+        }
+      ]
+    }
+  ]
+}

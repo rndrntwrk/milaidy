@@ -7,6 +7,8 @@
  * @module api/openapi/spec
  */
 
+import { buildArcade555OpenApiFragment } from "@rndrntwrk/plugin-555arcade/openapi";
+
 // ---------- Types ----------
 
 type SchemaObject = Record<string, unknown>;
@@ -1037,12 +1039,98 @@ const paths: Record<string, PathItem> = {
   },
 };
 
+const ARCADE555_MASTERY_PATH_ALIASES = [
+  ["/api/five55/mastery/catalog", "/api/arcade555/mastery/catalog"],
+  ["/api/five55/mastery/runs", "/api/arcade555/mastery/runs"],
+  ["/api/five55/mastery/runs/{runId}", "/api/arcade555/mastery/runs/{runId}"],
+  ["/api/five55/mastery/runs/{runId}/episodes", "/api/arcade555/mastery/runs/{runId}/episodes"],
+  ["/api/five55/mastery/runs/{runId}/logs", "/api/arcade555/mastery/runs/{runId}/logs"],
+  ["/api/five55/mastery/runs/{runId}/evidence", "/api/arcade555/mastery/runs/{runId}/evidence"],
+  [
+    "/api/five55/mastery/runs/{runId}/episodes/{episodeId}/frames",
+    "/api/arcade555/mastery/runs/{runId}/episodes/{episodeId}/frames",
+  ],
+  [
+    "/api/five55/mastery/runs/{runId}/episodes/{episodeId}/consistency",
+    "/api/arcade555/mastery/runs/{runId}/episodes/{episodeId}/consistency",
+  ],
+  ["/api/five55/mastery/games/{gameId}/latest", "/api/arcade555/mastery/games/{gameId}/latest"],
+] as const;
+
+function includeLegacyArcade555HttpAliases(): boolean {
+  const raw = process.env.ARCADE555_ENABLE_LEGACY_HTTP_ALIASES?.trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+}
+
+function deepClone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function canonicalizeArcade555OperationItem(
+  item: Record<string, unknown>,
+  legacyMode: boolean,
+): Record<string, unknown> {
+  const cloned = deepClone(item);
+  if (Array.isArray(cloned.tags)) {
+    cloned.tags = cloned.tags.map((tag) => (tag === "Five55" ? "Arcade555" : tag));
+  }
+
+  if (typeof cloned.operationId === "string") {
+    if (legacyMode) {
+      cloned.deprecated = true;
+    } else {
+      cloned.operationId = cloned.operationId.replace(/Five55/g, "Arcade555");
+    }
+  }
+
+  return cloned;
+}
+
+function buildPublicPaths(): Record<string, PathItem> {
+  const arcadeFragment = buildArcade555OpenApiFragment();
+  const publicPaths = {
+    ...(deepClone(arcadeFragment.paths) as Record<string, PathItem>),
+    ...deepClone(paths),
+  };
+  const includeLegacyAliases = includeLegacyArcade555HttpAliases();
+
+  for (const [legacyPath, canonicalPath] of ARCADE555_MASTERY_PATH_ALIASES) {
+    const legacyItem = publicPaths[legacyPath];
+    if (!legacyItem) continue;
+
+    const canonicalItem = deepClone(legacyItem);
+    for (const method of Object.keys(canonicalItem)) {
+      canonicalItem[method] = canonicalizeArcade555OperationItem(
+        canonicalItem[method] as Record<string, unknown>,
+        false,
+      );
+    }
+    publicPaths[canonicalPath] = canonicalItem;
+
+    if (includeLegacyAliases) {
+      const aliasItem = deepClone(canonicalItem);
+      for (const method of Object.keys(aliasItem)) {
+        aliasItem[method] = canonicalizeArcade555OperationItem(
+          aliasItem[method] as Record<string, unknown>,
+          true,
+        );
+      }
+      publicPaths[legacyPath] = aliasItem;
+    } else {
+      delete publicPaths[legacyPath];
+    }
+  }
+
+  return publicPaths;
+}
+
 // ---------- Spec Builder ----------
 
 /**
  * Build the complete OpenAPI 3.1 specification.
  */
 export function buildOpenApiSpec(): Record<string, unknown> {
+  const arcadeFragment = buildArcade555OpenApiFragment();
   return {
     openapi: "3.1.0",
     info: {
@@ -1053,7 +1141,7 @@ export function buildOpenApiSpec(): Record<string, unknown> {
     servers: [
       { url: "http://localhost:2138", description: "Local development" },
     ],
-    paths,
+    paths: buildPublicPaths(),
     components: {
       schemas: {
         Identity: IdentitySchema,
@@ -1063,7 +1151,7 @@ export function buildOpenApiSpec(): Record<string, unknown> {
     },
     tags: [
       { name: "Autonomy", description: "Kernel lifecycle management" },
-      { name: "Five55", description: "Five55 mastery and game intelligence endpoints" },
+      ...arcadeFragment.tags,
       { name: "Identity", description: "Agent identity and preferences" },
       { name: "Approvals", description: "Tool execution approval workflows" },
       { name: "Workflows", description: "Workflow execution and lifecycle" },

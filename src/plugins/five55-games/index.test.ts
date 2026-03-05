@@ -86,8 +86,8 @@ describe("five55-games plugin actions", () => {
     vi.resetModules();
     envBefore = snapshotEnv();
     process.env.FIVE55_GAMES_API_DIALECT = "agent-v1";
-    process.env.FIVE55_GAMES_CF_CONNECT_TIMEOUT_MS = "1";
-    process.env.FIVE55_GAMES_CF_CONNECT_POLL_MS = "1";
+    process.env.FIVE55_GAMES_CF_CONNECT_TIMEOUT_MS = "10";
+    process.env.FIVE55_GAMES_CF_CONNECT_POLL_MS = "10";
     process.env.FIVE55_GAMES_CF_RECOVERY_ATTEMPTS = "1";
     process.env.STREAM555_BASE_URL = "http://control-plane:3000";
     process.env.STREAM555_AGENT_TOKEN = "agent-token";

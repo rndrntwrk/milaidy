@@ -25,6 +25,10 @@ interface OTelConfig {
   serviceName?: string;
 }
 
+async function optionalImport<T = unknown>(specifier: string): Promise<T> {
+  return import(/* @vite-ignore */ specifier) as Promise<T>;
+}
+
 /**
  * No-op SDK for when telemetry is disabled or dependencies are missing.
  */
@@ -64,14 +68,14 @@ export async function initTelemetry(
       { BatchSpanProcessor },
       { PeriodicExportingMetricReader },
     ] = await Promise.all([
-      import("@opentelemetry/sdk-node"),
-      import("@opentelemetry/auto-instrumentations-node"),
-      import("@opentelemetry/exporter-trace-otlp-http"),
-      import("@opentelemetry/exporter-metrics-otlp-http"),
-      import("@opentelemetry/resources"),
-      import("@opentelemetry/semantic-conventions"),
-      import("@opentelemetry/sdk-trace-base"),
-      import("@opentelemetry/sdk-metrics"),
+      optionalImport("@opentelemetry/sdk-node"),
+      optionalImport("@opentelemetry/auto-instrumentations-node"),
+      optionalImport("@opentelemetry/exporter-trace-otlp-http"),
+      optionalImport("@opentelemetry/exporter-metrics-otlp-http"),
+      optionalImport("@opentelemetry/resources"),
+      optionalImport("@opentelemetry/semantic-conventions"),
+      optionalImport("@opentelemetry/sdk-trace-base"),
+      optionalImport("@opentelemetry/sdk-metrics"),
     ]);
 
     const serviceName = otelConfig.serviceName ?? "milaidy";
