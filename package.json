@@ -189,7 +189,7 @@
     "@mariozechner/pi-tui": "0.54.0",
     "@milaidy/plugin-claude-code-workbench": "workspace:*",
     "@milaidy/plugin-coding-agent": "workspace:*",
-    "@rndrntwrk/plugin-555stream": "github:rndrntwrk/stream-plugin#main",
+    "@rndrntwrk/plugin-555stream": "git+https://github.com/rndrntwrk/stream-plugin.git#main",
     "@noble/curves": "^2.0.1",
     "adze": "^2.2.5",
     "bonjour-service": "^1.3.0",
