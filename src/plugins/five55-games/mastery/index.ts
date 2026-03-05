@@ -20,10 +20,13 @@ export {
   appendMasteryLog,
   listMasteryRuns,
   readAllMasteryGameSnapshots,
+  readMasteryEpisodeConsistency,
+  readMasteryEpisodeFrames,
   readMasteryEpisodes,
   readMasteryGameSnapshot,
   readMasteryLogs,
   readMasteryRun,
+  readMasteryRunEvidence,
   writeMasteryGameSnapshot,
   writeMasteryRun,
 } from "./store.js";

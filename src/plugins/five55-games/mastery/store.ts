@@ -23,6 +23,96 @@ type RunsIndex = {
   runIds: string[];
 };
 
+type MasteryConsistencyVerdict = {
+  status: "consistent" | "mismatch" | "insufficient";
+  checkedAt: string;
+  reasons: string[];
+  mismatchDetails: Array<Record<string, unknown>>;
+};
+
+type MasteryEpisodeEvidenceRecord = {
+  frames: Array<Record<string, unknown>>;
+  consistency: MasteryConsistencyVerdict;
+  syntheticSignals: string[];
+};
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+    .filter((entry) => entry.length > 0);
+}
+
+function normalizeFrames(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => asRecord(entry))
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry));
+}
+
+function defaultConsistencyVerdict(): MasteryConsistencyVerdict {
+  return {
+    status: "insufficient",
+    checkedAt: new Date(0).toISOString(),
+    reasons: ["no_episode_evidence"],
+    mismatchDetails: [],
+  };
+}
+
+function normalizeConsistencyVerdict(value: unknown): MasteryConsistencyVerdict {
+  const record = asRecord(value);
+  if (!record) return defaultConsistencyVerdict();
+
+  const status =
+    record.status === "consistent" ||
+    record.status === "mismatch" ||
+    record.status === "insufficient"
+      ? record.status
+      : "insufficient";
+
+  const checkedAt =
+    typeof record.checkedAt === "string" && record.checkedAt.trim().length > 0
+      ? record.checkedAt
+      : new Date(0).toISOString();
+
+  const mismatchDetails = Array.isArray(record.mismatchDetails)
+    ? record.mismatchDetails
+        .map((entry) => asRecord(entry))
+        .filter((entry): entry is Record<string, unknown> => Boolean(entry))
+    : [];
+
+  const reasons = normalizeStringArray(record.reasons);
+
+  return {
+    status,
+    checkedAt,
+    reasons: reasons.length > 0 ? reasons : ["no_episode_evidence"],
+    mismatchDetails,
+  };
+}
+
+function normalizeEpisodeEvidence(episode: Five55MasteryEpisode): MasteryEpisodeEvidenceRecord {
+  const episodeRecord = asRecord(episode);
+  const evidenceRecord = asRecord(episodeRecord?.evidence);
+
+  return {
+    frames: normalizeFrames(evidenceRecord?.frames ?? episodeRecord?.frames),
+    consistency: normalizeConsistencyVerdict(
+      evidenceRecord?.consistency ?? episodeRecord?.consistency,
+    ),
+    syntheticSignals: normalizeStringArray(
+      evidenceRecord?.syntheticSignals ?? episodeRecord?.syntheticSignals,
+    ),
+  };
+}
+
 function masteryRootDir(): string {
   return path.join(resolveStateDir(process.env), ROOT_DIR);
 }
@@ -180,6 +270,65 @@ export async function readMasteryEpisodes(runId: string): Promise<Five55MasteryE
   } catch {
     return [];
   }
+}
+
+async function readMasteryEpisodeById(
+  runId: string,
+  episodeId: string,
+): Promise<Five55MasteryEpisode | null> {
+  const normalizedEpisodeId = String(episodeId).trim();
+  const episodes = await readMasteryEpisodes(runId);
+  return (
+    episodes.find(
+      (episode) => String(episode.episodeId).trim() === normalizedEpisodeId,
+    ) ?? null
+  );
+}
+
+export async function readMasteryRunEvidence(
+  runId: string,
+): Promise<
+  Array<{
+    runId: string;
+    episodeId: string;
+    gameId: string;
+    status: Five55MasteryEpisode["status"];
+    consistency: MasteryConsistencyVerdict;
+    frameCount: number;
+    syntheticSignals: string[];
+  }>
+> {
+  const episodes = await readMasteryEpisodes(runId);
+  return episodes.map((episode) => {
+    const evidence = normalizeEpisodeEvidence(episode);
+    return {
+      runId: episode.runId,
+      episodeId: episode.episodeId,
+      gameId: episode.gameId,
+      status: episode.status,
+      consistency: evidence.consistency,
+      frameCount: evidence.frames.length,
+      syntheticSignals: evidence.syntheticSignals,
+    };
+  });
+}
+
+export async function readMasteryEpisodeFrames(input: {
+  runId: string;
+  episodeId: string;
+}): Promise<Array<Record<string, unknown>>> {
+  const episode = await readMasteryEpisodeById(input.runId, input.episodeId);
+  if (!episode) return [];
+  return normalizeEpisodeEvidence(episode).frames;
+}
+
+export async function readMasteryEpisodeConsistency(input: {
+  runId: string;
+  episodeId: string;
+}): Promise<MasteryConsistencyVerdict> {
+  const episode = await readMasteryEpisodeById(input.runId, input.episodeId);
+  if (!episode) return defaultConsistencyVerdict();
+  return normalizeEpisodeEvidence(episode).consistency;
 }
 
 export async function appendMasteryLog(runId: string, log: Five55MasteryLog): Promise<void> {
