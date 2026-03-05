@@ -1906,7 +1906,14 @@ function discoverInstalledPlugins(
 }
 
 const STREAM555_PLUGIN_CONTROL_ID = "stream555-control";
-const STREAM555_PLUGIN_LEGACY_IDS = new Set(["stream555-auth", "stream555-ads"]);
+const STREAM555_PLUGIN_PRIMARY_IDS = new Set([
+  STREAM555_PLUGIN_CONTROL_ID,
+  "555stream",
+]);
+const STREAM555_PLUGIN_LEGACY_IDS = new Set([
+  "stream555-auth",
+  "stream555-ads",
+]);
 
 type Stream555ChannelUiSpec = {
   label: string;
@@ -2012,17 +2019,13 @@ function buildStream555ControlUiHintOverrides(): Record<string, Record<string, u
   let order = 300;
   for (const spec of STREAM555_CHANNEL_UI_SPECS) {
     hints[spec.enabledKey] = {
-      label: spec.label,
+      label: `${spec.icon} ${spec.label}`,
       group: "Channels",
       width: "full",
       order,
       advanced: false,
-      type: "radio",
-      options: [
-        { value: "true", label: "Enabled", icon: "✅" },
-        { value: "false", label: "Disabled", icon: "⛔" },
-      ],
-      help: `Enable or disable ${spec.label} for simulcast.`,
+      type: "boolean",
+      help: `Enable simulcast to ${spec.label}.`,
     };
     hints[spec.urlKey] = {
       label: spec.urlLabel ?? `${spec.label} RTMPS URL`,
@@ -2070,16 +2073,14 @@ function isStream555LegacyPluginId(pluginId: string): boolean {
 }
 
 function isStream555ControlPluginId(pluginId: string): boolean {
-  return normalizeStream555PluginId(pluginId) === STREAM555_PLUGIN_CONTROL_ID;
+  return STREAM555_PLUGIN_PRIMARY_IDS.has(normalizeStream555PluginId(pluginId));
 }
 
 function resolveCanonicalPluginId(pluginId: string): string {
-  if (isStream555LegacyPluginId(pluginId)) {
+  if (isStream555LegacyPluginId(pluginId) || isStream555ControlPluginId(pluginId)) {
     return STREAM555_PLUGIN_CONTROL_ID;
   }
-  return normalizeStream555PluginId(pluginId) === STREAM555_PLUGIN_CONTROL_ID
-    ? STREAM555_PLUGIN_CONTROL_ID
-    : pluginId;
+  return pluginId;
 }
 
 function dedupePluginValidationIssues(
@@ -2115,7 +2116,6 @@ function collapseStream555PluginEntries(entries: PluginEntry[]): PluginEntry[] {
     isStream555ControlPluginId(entry.id),
   );
   if (!controlEntry && relatedEntries.length === 0) return entries;
-  if (controlEntry && relatedEntries.length === 0) return entries;
 
   const baseEntry = controlEntry ?? relatedEntries[0];
   if (!baseEntry) return entries;
@@ -2143,10 +2143,6 @@ function collapseStream555PluginEntries(entries: PluginEntry[]): PluginEntry[] {
   };
 
   const streamHintOverrides = buildStream555ControlUiHintOverrides();
-  mergedEntry.configUiHints = {
-    ...(mergedEntry.configUiHints ?? {}),
-    ...streamHintOverrides,
-  };
 
   for (const related of relatedEntries) {
     mergedEntry.configured ||= related.configured;
@@ -2168,6 +2164,21 @@ function collapseStream555PluginEntries(entries: PluginEntry[]): PluginEntry[] {
     mergedEntry.validationWarnings,
   );
 
+  const unknownFieldHintOverrides: Record<string, Record<string, unknown>> = {};
+  for (const parameter of mergedEntry.parameters) {
+    if (!streamHintOverrides[parameter.key]) {
+      unknownFieldHintOverrides[parameter.key] = {
+        hidden: true,
+        advanced: true,
+      };
+    }
+  }
+  mergedEntry.configUiHints = {
+    ...(mergedEntry.configUiHints ?? {}),
+    ...unknownFieldHintOverrides,
+    ...streamHintOverrides,
+  };
+
   return entries
     .filter(
       (entry) =>
@@ -2175,6 +2186,24 @@ function collapseStream555PluginEntries(entries: PluginEntry[]): PluginEntry[] {
         !isStream555LegacyPluginId(entry.id),
     )
     .concat(mergedEntry);
+}
+
+function applyStream555ChannelAutoEnableConfig(
+  pluginId: string,
+  config: Record<string, string>,
+): Record<string, string> {
+  if (!isStream555ControlPluginId(pluginId)) return config;
+
+  const nextConfig = { ...config };
+  for (const spec of STREAM555_CHANNEL_UI_SPECS) {
+    const hasExplicitToggle = Object.hasOwn(nextConfig, spec.enabledKey);
+    const hasUrl = Boolean(nextConfig[spec.urlKey]?.trim());
+    const hasStreamKey = Boolean(nextConfig[spec.streamKeyKey]?.trim());
+    if (!hasExplicitToggle && (hasUrl || hasStreamKey)) {
+      nextConfig[spec.enabledKey] = "true";
+    }
+  }
+  return nextConfig;
 }
 
 /**
@@ -2757,7 +2786,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               key: "STREAM555_DEST_SYNC_ON_GO_LIVE",
               type: "string",
               description:
-                "Automatically sync configured RTMP destinations before STREAM555_GO_LIVE (true/false)",
+                "Automatically sync configured RTMP channels before STREAM555_GO_LIVE (true/false)",
               required: false,
               sensitive: false,
               default: "true",
@@ -2797,7 +2826,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "STREAM555_DEST_PUMPFUN_ENABLED",
               type: "string",
-              description: "Enable Pump.fun simulcast destination (true/false)",
+              description: "Enable Pump.fun simulcast channel (true/false)",
               required: false,
               sensitive: false,
               default: "false",
@@ -2833,7 +2862,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "STREAM555_DEST_X_ENABLED",
               type: "string",
-              description: "Enable X simulcast destination (true/false)",
+              description: "Enable X simulcast channel (true/false)",
               required: false,
               sensitive: false,
               default: "false",
@@ -2870,7 +2899,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "STREAM555_DEST_TWITCH_ENABLED",
               type: "string",
-              description: "Enable Twitch simulcast destination (true/false)",
+              description: "Enable Twitch simulcast channel (true/false)",
               required: false,
               sensitive: false,
               default: "false",
@@ -2904,7 +2933,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "STREAM555_DEST_KICK_ENABLED",
               type: "string",
-              description: "Enable Kick simulcast destination (true/false)",
+              description: "Enable Kick simulcast channel (true/false)",
               required: false,
               sensitive: false,
               default: "false",
@@ -2941,7 +2970,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "STREAM555_DEST_YOUTUBE_ENABLED",
               type: "string",
-              description: "Enable YouTube simulcast destination (true/false)",
+              description: "Enable YouTube simulcast channel (true/false)",
               required: false,
               sensitive: false,
               default: "false",
@@ -2981,7 +3010,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "STREAM555_DEST_FACEBOOK_ENABLED",
               type: "string",
-              description: "Enable Facebook simulcast destination (true/false)",
+              description: "Enable Facebook simulcast channel (true/false)",
               required: false,
               sensitive: false,
               default: "false",
@@ -2994,7 +3023,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "STREAM555_DEST_CUSTOM_RTMP_URL",
               type: "string",
-              description: "Custom RTMP/RTMPS destination URL",
+              description: "Custom RTMP/RTMPS channel URL",
               required: false,
               sensitive: false,
               currentValue: process.env.STREAM555_DEST_CUSTOM_RTMP_URL ?? null,
@@ -3005,7 +3034,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "STREAM555_DEST_CUSTOM_STREAM_KEY",
               type: "string",
-              description: "Custom destination stream key",
+              description: "Custom channel stream key",
               required: false,
               sensitive: true,
               currentValue: process.env.STREAM555_DEST_CUSTOM_STREAM_KEY
@@ -3018,7 +3047,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "STREAM555_DEST_CUSTOM_ENABLED",
               type: "string",
-              description: "Enable custom simulcast destination (true/false)",
+              description: "Enable custom simulcast channel (true/false)",
               required: false,
               sensitive: false,
               default: "false",
@@ -11479,7 +11508,9 @@ async function handleRequest(
     }>(req, res);
     if (!body) return;
 
-    const plugin = state.plugins.find((p) => p.id === pluginId);
+    const plugin = state.plugins.find(
+      (p) => p.id === pluginId || resolveCanonicalPluginId(p.id) === pluginId,
+    );
     if (!plugin) {
       error(res, `Plugin "${pluginId}" not found`, 404);
       return;
@@ -11506,7 +11537,10 @@ async function handleRequest(
       // fields. Users may save partial config (e.g. just the API key) from
       // the Settings page; blocking the save because OTHER required fields
       // aren't set yet is counterproductive.
-      const configObj = body.config;
+      const configObj = applyStream555ChannelAutoEnableConfig(
+        pluginId,
+        body.config,
+      );
       const submittedParamInfos: PluginParamInfo[] = plugin.parameters
         .filter((p) => p.key in configObj)
         .map((p) => ({
@@ -11521,8 +11555,8 @@ async function handleRequest(
         pluginId,
         plugin.category,
         plugin.envKey,
-        Object.keys(body.config),
-        body.config,
+        Object.keys(configObj),
+        configObj,
         submittedParamInfos,
       );
 
@@ -11541,7 +11575,7 @@ async function handleRequest(
       if (!state.config.env) {
         state.config.env = {};
       }
-      for (const [key, value] of Object.entries(body.config)) {
+      for (const [key, value] of Object.entries(configObj)) {
         if (
           allowedParamKeys.has(key) &&
           !BLOCKED_ENV_KEYS.has(key.toUpperCase()) &&
@@ -11847,7 +11881,7 @@ async function handleRequest(
     const startMs = Date.now();
 
     try {
-      if (pluginId === "stream555-control") {
+      if (isStream555ControlPluginId(pluginId)) {
         const baseUrl =
           process.env.STREAM555_BASE_URL?.trim() ||
           process.env.STREAM555_PUBLIC_BASE_URL?.trim() ||

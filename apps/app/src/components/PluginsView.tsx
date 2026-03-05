@@ -14,7 +14,10 @@ import { ConfigRenderer, defaultRegistry } from "./config-renderer";
 import { autoLabel } from "./shared/labels";
 import { WhatsAppQrOverlay } from "./WhatsAppQrOverlay";
 
-const STREAM555_PRIMARY_PLUGIN_IDS = new Set(["stream555-control"]);
+const STREAM555_PRIMARY_PLUGIN_IDS = new Set([
+  "stream555-control",
+  "555stream",
+]);
 const STREAM555_LEGACY_PLUGIN_IDS = new Set([
   "stream555-auth",
   "stream555-ads",
@@ -2413,7 +2416,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
         </p>
 
         {/* Bottom bar: config status + settings button */}
-        <div className="flex items-center gap-2 px-3 py-2 border-t border-border mt-auto">
+        <div className="flex items-center gap-2 px-3 py-2 border-t border-border mt-auto min-w-0">
           {hasParams && !isShowcase && !isStream555 ? (
             <>
               <span
@@ -2459,7 +2462,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                   title={`${streamSummary.savedDestinations}/${streamSummary.destinations.length} channel keys saved${streamSummary.enabledDestinations > 0 ? ` • ${streamSummary.readyDestinations}/${streamSummary.enabledDestinations} channels ready` : " • no channels enabled"}`}
                 >
                   {streamSummary.savedDestinations}/
-                  {streamSummary.destinations.length} channel keys
+                  {streamSummary.destinations.length} keys
                   {streamSummary.enabledDestinations > 0
                     ? ` • ${streamSummary.readyDestinations}/${streamSummary.enabledDestinations} ready`
                     : " • no channels enabled"}
