@@ -162,7 +162,9 @@ function buildStream555StatusSummary(
   params: PluginParamDef[],
 ): Stream555StatusSummary {
   const paramByKey = new Map(params.map((param) => [param.key, param]));
-  const hasConfiguredParam = (keys: string[]): { configured: boolean; present: boolean } => {
+  const hasConfiguredParam = (
+    keys: string[],
+  ): { configured: boolean; present: boolean } => {
     let present = false;
     for (const key of keys) {
       const param = paramByKey.get(key);
@@ -182,11 +184,13 @@ function buildStream555StatusSummary(
     paramByKey.get("STREAM555_WALLET_AUTH_PREFERRED_CHAIN")?.currentValue ??
     paramByKey.get("STREAM555_WALLET_AUTH_PREFERRED_CHAIN")?.default ??
     "solana";
-  const preferredChain = (String(preferredChainRaw ?? "solana")
-    .trim()
-    .toLowerCase() === "evm"
-    ? "evm"
-    : "solana") as "solana" | "evm";
+  const preferredChain = (
+    String(preferredChainRaw ?? "solana")
+      .trim()
+      .toLowerCase() === "evm"
+      ? "evm"
+      : "solana"
+  ) as "solana" | "evm";
   const walletProvisionAllowed = parseBoolish(
     paramByKey.get("STREAM555_WALLET_AUTH_ALLOW_PROVISION")?.currentValue ??
       paramByKey.get("STREAM555_WALLET_AUTH_ALLOW_PROVISION")?.default ??
@@ -202,9 +206,12 @@ function buildStream555StatusSummary(
     "ETH_PRIVATE_KEY",
     "STREAM555_EVM_PRIVATE_KEY",
   ]);
-  const walletDetectionAvailable = solanaWalletState.present || evmWalletState.present;
+  const walletDetectionAvailable =
+    solanaWalletState.present || evmWalletState.present;
   const walletAuthEnabled =
-    preferredChain === "solana" || preferredChain === "evm" || walletProvisionAllowed;
+    preferredChain === "solana" ||
+    preferredChain === "evm" ||
+    walletProvisionAllowed;
   const authState = credentialAuthReady
     ? "connected"
     : walletAuthEnabled
@@ -259,337 +266,6 @@ function buildStream555StatusSummary(
     enabledDestinations,
     readyDestinations,
   };
-}
-
-function applyStream555UiHints(
-  rawHints: Record<string, ConfigUiHint>,
-  params: PluginParamDef[],
-): Record<string, ConfigUiHint> {
-  const hints: Record<string, ConfigUiHint> = { ...rawHints };
-  const paramByKey = new Map(params.map((param) => [param.key, param]));
-
-  const applyHint = (key: string, patch: ConfigUiHint) => {
-    const existing = hints[key] ?? {};
-    hints[key] = { ...existing, ...patch };
-    if (patch.options === undefined && existing.options) {
-      hints[key].options = existing.options;
-    }
-  };
-
-  const hiddenKeys = [
-    "STREAM555_BASE_URL",
-    "STREAM555_INTERNAL_BASE_URL",
-    "STREAM555_INTERNAL_AGENT_IDS",
-    "STREAM_API_URL",
-    "STREAM555_PUBLIC_BASE_URL",
-    "STREAM555_ADMIN_API_KEY",
-    "STREAM555_AGENT_DEFAULT_USER_ID",
-    "STREAM555_AGENT_API_KEY",
-    "STREAM555_AGENT_TOKEN",
-    "STREAM_API_BEARER_TOKEN",
-    "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
-    "STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS",
-    "STREAM555_DEFAULT_SESSION_ID",
-    "STREAM_SESSION_ID",
-    "STREAM555_ALLOW_LOCALHOST_APP_URLS",
-    "STREAM555_CONTROL_PLUGIN_ENABLED",
-    "STREAM555_AUTH_PLUGIN_ENABLED",
-    "STREAM555_ADS_PLUGIN_ENABLED",
-    "STREAM555_WALLET_AUTH_PREFERRED_CHAIN",
-    "STREAM555_WALLET_AUTH_ALLOW_PROVISION",
-    "STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN",
-  ];
-  for (const key of hiddenKeys) {
-    applyHint(key, { hidden: true });
-  }
-
-  applyHint("STREAM555_WALLET_AUTH_PREFERRED_CHAIN", {
-    label: "Preferred Wallet Chain",
-    group: "Wallet Auth",
-    width: "half",
-    order: 110,
-    type: "radio",
-    options: [
-      {
-        value: "solana",
-        label: "Solana (preferred)",
-        description: "Use Solana wallet first when available.",
-        icon: "◎",
-      },
-      {
-        value: "evm",
-        label: "Ethereum fallback",
-        description: "Fallback when Solana wallet is unavailable.",
-        icon: "◇",
-      },
-    ],
-  });
-  applyHint("STREAM555_WALLET_AUTH_ALLOW_PROVISION", {
-    label: "Allow Wallet Provisioning",
-    group: "Wallet Auth",
-    width: "half",
-    order: 120,
-    type: "radio",
-    options: [
-      { value: "true", label: "Enabled", icon: "✅" },
-      { value: "false", label: "Disabled", icon: "⛔" },
-    ],
-  });
-  applyHint("STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN", {
-    label: "Provision Target Chain",
-    group: "Wallet Auth",
-    width: "half",
-    order: 130,
-  });
-
-  applyHint("STREAM555_DEST_SYNC_ON_GO_LIVE", {
-    label: "Auto-sync destinations before go-live",
-    help: "Automatically sync saved RTMP destinations to 555 Stream before go-live.",
-    group: "Destinations",
-    width: "full",
-    order: 210,
-    advanced: true,
-    type: "radio",
-    options: [
-      { value: "true", label: "Enabled", icon: "✅" },
-      { value: "false", label: "Disabled", icon: "⛔" },
-    ],
-  });
-
-  const destinationHintByKey: Record<string, ConfigUiHint> = {
-    STREAM555_DEST_PUMPFUN_ENABLED: {
-      label: "Enable Pump.fun Destination",
-      group: "Destinations",
-      width: "full",
-      order: 250,
-      type: "boolean",
-      advanced: false,
-    },
-    STREAM555_DEST_PUMPFUN_RTMP_URL: {
-      label: "Pump.fun RTMPS URL",
-      group: "Destinations",
-      width: "half",
-      order: 260,
-      icon: "🟠",
-      showIf: {
-        field: "STREAM555_DEST_PUMPFUN_ENABLED",
-        op: "eq",
-        value: "true",
-      },
-    },
-    STREAM555_DEST_PUMPFUN_STREAM_KEY: {
-      label: "Pump.fun Stream Key",
-      group: "Destinations",
-      width: "half",
-      order: 270,
-      showIf: {
-        field: "STREAM555_DEST_PUMPFUN_ENABLED",
-        op: "eq",
-        value: "true",
-      },
-    },
-    STREAM555_DEST_X_ENABLED: {
-      label: "Enable X Destination",
-      group: "Destinations",
-      width: "full",
-      order: 300,
-      type: "boolean",
-      advanced: false,
-    },
-    STREAM555_DEST_X_RTMP_URL: {
-      label: "X RTMPS URL",
-      group: "Destinations",
-      width: "half",
-      order: 310,
-      icon: "✖️",
-      showIf: {
-        field: "STREAM555_DEST_X_ENABLED",
-        op: "eq",
-        value: "true",
-      },
-    },
-    STREAM555_DEST_X_STREAM_KEY: {
-      label: "X Stream Key",
-      group: "Destinations",
-      width: "half",
-      order: 320,
-      showIf: {
-        field: "STREAM555_DEST_X_ENABLED",
-        op: "eq",
-        value: "true",
-      },
-    },
-    STREAM555_DEST_TWITCH_ENABLED: {
-      label: "Enable Twitch Destination",
-      group: "Destinations",
-      width: "full",
-      order: 400,
-      type: "boolean",
-      advanced: false,
-    },
-    STREAM555_DEST_TWITCH_RTMP_URL: {
-      label: "Twitch RTMPS URL",
-      group: "Destinations",
-      width: "half",
-      order: 410,
-      icon: "🟣",
-      showIf: {
-        field: "STREAM555_DEST_TWITCH_ENABLED",
-        op: "eq",
-        value: "true",
-      },
-    },
-    STREAM555_DEST_TWITCH_STREAM_KEY: {
-      label: "Twitch Stream Key",
-      group: "Destinations",
-      width: "half",
-      order: 420,
-      showIf: {
-        field: "STREAM555_DEST_TWITCH_ENABLED",
-        op: "eq",
-        value: "true",
-      },
-    },
-    STREAM555_DEST_KICK_ENABLED: {
-      label: "Enable Kick Destination",
-      group: "Destinations",
-      width: "full",
-      order: 500,
-      type: "boolean",
-      advanced: false,
-    },
-    STREAM555_DEST_KICK_RTMP_URL: {
-      label: "Kick RTMPS URL",
-      group: "Destinations",
-      width: "half",
-      order: 510,
-      icon: "🟢",
-      showIf: {
-        field: "STREAM555_DEST_KICK_ENABLED",
-        op: "eq",
-        value: "true",
-      },
-    },
-    STREAM555_DEST_KICK_STREAM_KEY: {
-      label: "Kick Stream Key",
-      group: "Destinations",
-      width: "half",
-      order: 520,
-      showIf: {
-        field: "STREAM555_DEST_KICK_ENABLED",
-        op: "eq",
-        value: "true",
-      },
-    },
-    STREAM555_DEST_YOUTUBE_ENABLED: {
-      label: "Enable YouTube Destination",
-      group: "Destinations",
-      width: "full",
-      order: 600,
-      type: "boolean",
-      advanced: false,
-    },
-    STREAM555_DEST_YOUTUBE_RTMP_URL: {
-      label: "YouTube RTMPS URL",
-      group: "Destinations",
-      width: "half",
-      order: 610,
-      icon: "🔴",
-      showIf: {
-        field: "STREAM555_DEST_YOUTUBE_ENABLED",
-        op: "eq",
-        value: "true",
-      },
-    },
-    STREAM555_DEST_YOUTUBE_STREAM_KEY: {
-      label: "YouTube Stream Key",
-      group: "Destinations",
-      width: "half",
-      order: 620,
-      showIf: {
-        field: "STREAM555_DEST_YOUTUBE_ENABLED",
-        op: "eq",
-        value: "true",
-      },
-    },
-    STREAM555_DEST_FACEBOOK_ENABLED: {
-      label: "Enable Facebook Destination",
-      group: "Destinations",
-      width: "full",
-      order: 700,
-      type: "boolean",
-      advanced: false,
-    },
-    STREAM555_DEST_FACEBOOK_RTMP_URL: {
-      label: "Facebook RTMPS URL",
-      group: "Destinations",
-      width: "half",
-      order: 710,
-      icon: "🔵",
-      showIf: {
-        field: "STREAM555_DEST_FACEBOOK_ENABLED",
-        op: "eq",
-        value: "true",
-      },
-    },
-    STREAM555_DEST_FACEBOOK_STREAM_KEY: {
-      label: "Facebook Stream Key",
-      group: "Destinations",
-      width: "half",
-      order: 720,
-      showIf: {
-        field: "STREAM555_DEST_FACEBOOK_ENABLED",
-        op: "eq",
-        value: "true",
-      },
-    },
-    STREAM555_DEST_CUSTOM_ENABLED: {
-      label: "Enable Custom Destination",
-      group: "Destinations",
-      width: "full",
-      order: 800,
-      type: "boolean",
-      advanced: false,
-    },
-    STREAM555_DEST_CUSTOM_RTMP_URL: {
-      label: "Custom RTMP URL",
-      group: "Destinations",
-      width: "half",
-      order: 810,
-      icon: "🧩",
-      showIf: {
-        field: "STREAM555_DEST_CUSTOM_ENABLED",
-        op: "eq",
-        value: "true",
-      },
-    },
-    STREAM555_DEST_CUSTOM_STREAM_KEY: {
-      label: "Custom Stream Key",
-      group: "Destinations",
-      width: "half",
-      order: 820,
-      showIf: {
-        field: "STREAM555_DEST_CUSTOM_ENABLED",
-        op: "eq",
-        value: "true",
-      },
-    },
-  };
-  for (const [key, hint] of Object.entries(destinationHintByKey)) {
-    const param = paramByKey.get(key);
-    if (key.endsWith("_STREAM_KEY")) {
-      const suffix = maskSuffix(param?.currentValue);
-      hint.help =
-        suffix != null
-          ? `Saved key: ••••${suffix}. Leave unchanged to keep existing value.`
-          : "No stream key saved yet.";
-    } else if (key.endsWith("_RTMP_URL") && param?.isSet) {
-      hint.help = "Saved destination URL detected.";
-    }
-    applyHint(key, hint);
-  }
-
-  return hints;
 }
 
 function toRecord(value: unknown): Record<string, unknown> | null {
@@ -797,18 +473,16 @@ function Stream555ControlActionsPanel({
     }
   }, [busyAction, runWalletAuthentication]);
 
-  const authIndicatorClass =
-    isAuthenticated
-      ? "bg-ok"
-      : summary.authState === "wallet_enabled"
-        ? "bg-warn"
-        : "bg-destructive";
-  const authLabel =
-    isAuthenticated
-      ? "Connected"
-      : summary.authState === "wallet_enabled"
-        ? "Wallet auth enabled (not verified)"
-        : "Authentication required";
+  const authIndicatorClass = isAuthenticated
+    ? "bg-ok"
+    : summary.authState === "wallet_enabled"
+      ? "bg-warn"
+      : "bg-destructive";
+  const authLabel = isAuthenticated
+    ? "Connected"
+    : summary.authState === "wallet_enabled"
+      ? "Wallet auth enabled (not verified)"
+      : "Authentication required";
   const authSource =
     summary.authSource === "STREAM555_AGENT_API_KEY"
       ? "API key"
@@ -829,13 +503,16 @@ function Stream555ControlActionsPanel({
         Operator Controls
       </div>
       <div className="flex items-center gap-2 text-[11px] text-muted flex-wrap">
-        <span className={`inline-block w-[7px] h-[7px] rounded-full ${authIndicatorClass}`} />
+        <span
+          className={`inline-block w-[7px] h-[7px] rounded-full ${authIndicatorClass}`}
+        />
         <span>{authLabel}</span>
         <span className="opacity-60">•</span>
         <span>Source: {authSource}</span>
         <span className="opacity-60">•</span>
         <span>
-          Destinations ready: {summary.readyDestinations}/{summary.enabledDestinations}
+          Channels ready: {summary.readyDestinations}/
+          {summary.enabledDestinations}
         </span>
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
@@ -881,11 +558,15 @@ function Stream555ControlActionsPanel({
             )
           }
         >
-          {busyAction === "disconnect-auth" ? "Disconnecting..." : "Disconnect Auth"}
+          {busyAction === "disconnect-auth"
+            ? "Disconnecting..."
+            : "Disconnect Auth"}
         </button>
       </div>
       <div className="mt-1 text-[10px] text-muted">
-        Agent action: <span className="font-mono">STREAM555_AUTH_WALLET_LOGIN</span>. Use the button for operator-driven authentication.
+        Agent action:{" "}
+        <span className="font-mono">STREAM555_AUTH_WALLET_LOGIN</span>. Use the
+        button for operator-driven authentication.
       </div>
       {lastNotice && (
         <div
@@ -903,7 +584,9 @@ function Stream555ControlActionsPanel({
               Solana wallet required
             </div>
             <div className="text-xs text-muted leading-relaxed">
-              No Solana runtime wallet was detected for this agent. Provision a linked wallet via sw4p or authenticate using fallback if available.
+              No Solana runtime wallet was detected for this agent. Provision a
+              linked wallet via sw4p or authenticate using fallback if
+              available.
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {summary.walletProvisionAllowed && (
@@ -1845,26 +1528,19 @@ function PluginConfigForm({
   // Server hints take priority (override auto-generated ones).
   const hints = useMemo(() => {
     const serverHints = plugin.configUiHints;
-    if (!serverHints || Object.keys(serverHints).length === 0) {
-      return isStream555PrimaryPlugin(plugin.id)
-        ? applyStream555UiHints(autoHints, params)
-        : autoHints;
-    }
+    if (!serverHints || Object.keys(serverHints).length === 0) return autoHints;
     const merged: Record<string, ConfigUiHint> = { ...autoHints };
     for (const [key, serverHint] of Object.entries(serverHints)) {
       merged[key] = { ...merged[key], ...serverHint };
     }
-    return isStream555PrimaryPlugin(plugin.id)
-      ? applyStream555UiHints(merged, params)
-      : merged;
-  }, [autoHints, params, plugin.configUiHints, plugin.id]);
+    return merged;
+  }, [autoHints, plugin.configUiHints]);
 
   // Build values from current config state + existing server values.
   // Array-typed fields need comma-separated strings parsed into arrays.
   const values = useMemo(() => {
     const v: Record<string, unknown> = {};
     const draftValues = pluginConfigs[plugin.id] ?? {};
-    const paramByKey = new Map(params.map((param) => [param.key, param]));
     const props = (schema.properties ?? {}) as Record<
       string,
       Record<string, unknown>
@@ -1893,25 +1569,6 @@ function PluginConfigForm({
             : [];
         } else {
           v[p.key] = p.currentValue;
-        }
-      }
-    }
-
-    if (isStream555PrimaryPlugin(plugin.id)) {
-      for (const destinationSpec of STREAM555_DESTINATION_SPECS) {
-        if (v[destinationSpec.enabledKey] !== undefined) continue;
-        if (draftValues[destinationSpec.enabledKey] !== undefined) continue;
-
-        const draftStreamKeyValue = draftValues[destinationSpec.streamKeyKey];
-        const streamKeyParam = paramByKey.get(destinationSpec.streamKeyKey);
-        const hasDraftStreamKey =
-          typeof draftStreamKeyValue === "string"
-            ? draftStreamKeyValue.trim().length > 0
-            : draftStreamKeyValue !== undefined && draftStreamKeyValue !== null;
-        const hasPersistedStreamKey = Boolean(streamKeyParam?.isSet);
-
-        if (hasDraftStreamKey || hasPersistedStreamKey) {
-          v[destinationSpec.enabledKey] = "true";
         }
       }
     }
@@ -2422,44 +2079,6 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
     if (pluginId === "__ui-showcase__") return;
     const config = pluginConfigs[pluginId] ?? {};
     await handlePluginConfigSave(pluginId, config);
-    const shouldSyncDestinations =
-      pluginId === "stream555-control" &&
-      Object.keys(config).some((key) => key.startsWith("STREAM555_DEST_"));
-    if (shouldSyncDestinations) {
-      try {
-        const response = await client.executeAutonomyPlan({
-          plan: {
-            id: "stream555-control-sync-destinations-after-save",
-            steps: [
-              {
-                id: "1",
-                toolName: "STREAM555_DESTINATIONS_APPLY",
-                params: {},
-              },
-            ],
-          },
-          request: { source: "user", sourceTrust: 1 },
-          options: { stopOnFailure: true },
-        });
-        const step = toRecord(response.results?.[0] ?? null);
-        const success = step?.success === true;
-        const message = readAutonomyStepMessage(
-          step,
-          success
-            ? "Saved and activated destination settings on the active session."
-            : "Settings were saved, but destination activation failed.",
-        );
-        setActionNotice(message, success ? "success" : "error", 4200);
-      } catch (err) {
-        setActionNotice(
-          `Settings were saved, but destination activation request failed: ${
-            err instanceof Error ? err.message : "unknown error"
-          }`,
-          "error",
-          4200,
-        );
-      }
-    }
     setPluginConfigs((prev) => {
       const next = { ...prev };
       delete next[pluginId];
@@ -2807,7 +2426,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
               </span>
             </>
           ) : isStream555 && streamSummary ? (
-            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
               <span
                 className={`inline-block w-[7px] h-[7px] rounded-full shrink-0 ${
                   streamSummary.authState === "connected"
@@ -2817,24 +2436,35 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                       : "bg-destructive"
                 }`}
               />
-              <span
-                className="text-[10px] text-muted truncate min-w-0"
-                title={`${streamSummary.authState === "connected"
-                  ? "Auth connected"
-                  : streamSummary.authState === "wallet_enabled"
-                    ? "Wallet auth enabled"
-                    : "Auth required"}${streamSummary.authMode ? ` (${streamSummary.authMode})` : ""} • ${streamSummary.savedDestinations}/${streamSummary.destinations.length} destination keys saved`}
+              <div
+                className="min-w-0 flex-1"
+                title={`${
+                  streamSummary.authState === "connected"
+                    ? "Auth connected"
+                    : streamSummary.authState === "wallet_enabled"
+                      ? "Wallet auth enabled"
+                      : "Auth required"
+                }${streamSummary.authMode ? ` (${streamSummary.authMode})` : ""} • ${streamSummary.savedDestinations}/${streamSummary.destinations.length} channel keys saved`}
               >
-                {streamSummary.authState === "connected"
-                  ? "Auth connected"
-                  : streamSummary.authState === "wallet_enabled"
-                    ? "Wallet auth enabled"
-                    : "Auth required"}
-                {streamSummary.authMode ? ` (${streamSummary.authMode})` : ""}
-                {" • "}
-                {streamSummary.savedDestinations}/
-                {streamSummary.destinations.length} destination keys saved
-              </span>
+                <div className="text-[10px] text-muted truncate">
+                  {streamSummary.authState === "connected"
+                    ? "Auth connected"
+                    : streamSummary.authState === "wallet_enabled"
+                      ? "Wallet auth enabled"
+                      : "Auth required"}
+                  {streamSummary.authMode ? ` (${streamSummary.authMode})` : ""}
+                </div>
+                <div
+                  className="text-[10px] text-muted truncate"
+                  title={`${streamSummary.savedDestinations}/${streamSummary.destinations.length} channel keys saved${streamSummary.enabledDestinations > 0 ? ` • ${streamSummary.readyDestinations}/${streamSummary.enabledDestinations} channels ready` : " • no channels enabled"}`}
+                >
+                  {streamSummary.savedDestinations}/
+                  {streamSummary.destinations.length} channel keys
+                  {streamSummary.enabledDestinations > 0
+                    ? ` • ${streamSummary.readyDestinations}/${streamSummary.enabledDestinations} ready`
+                    : " • no channels enabled"}
+                </div>
+              </div>
             </div>
           ) : !hasParams && !isShowcase ? (
             <span className="text-[10px] text-muted opacity-50">
@@ -2869,7 +2499,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
           {hasParams && (
             <button
               type="button"
-              className={`text-[10px] text-muted hover:text-accent cursor-pointer transition-colors flex items-center gap-1 ${
+              className={`text-[10px] text-muted hover:text-accent cursor-pointer transition-colors flex items-center gap-1 shrink-0 ${
                 isOpen ? "text-accent" : ""
               }`}
               onClick={() => toggleSettings(p.id)}
@@ -3158,61 +2788,58 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                   )}
 
                   <div className="px-5 py-3">
-                    {isStream555PrimaryPlugin(p.id) && (
-                      <>
-                        {(() => {
-                          const streamSummary = buildStream555StatusSummary(
-                            p.parameters ?? [],
+                    {isStream555PrimaryPlugin(p.id) &&
+                      (() => {
+                        const streamSummary = buildStream555StatusSummary(
+                          p.parameters ?? [],
+                        );
+                        const configuredDestinations =
+                          streamSummary.destinations.filter(
+                            (destination) => destination.streamKeySet,
                           );
-                          const configuredDestinations =
-                            streamSummary.destinations.filter(
-                              (destination) => destination.streamKeySet,
-                            );
-                          const keysSavedSummary = `${streamSummary.savedDestinations}/${streamSummary.destinations.length} destination keys saved`;
-                          const enabledReadySummary =
-                            streamSummary.enabledDestinations > 0
-                              ? `${streamSummary.readyDestinations}/${streamSummary.enabledDestinations} enabled destinations fully configured`
-                              : "No destinations enabled yet";
-                          const configuredSummary =
-                            configuredDestinations.length > 0
-                              ? configuredDestinations
-                                  .map((destination) => {
-                                    const suffix =
-                                      destination.streamKeySuffix != null
-                                        ? `••••${destination.streamKeySuffix}`
-                                        : "saved";
-                                    return `${destination.icon} ${destination.label} ${suffix}`;
-                                  })
-                                  .join("  ·  ")
-                              : "No destination stream keys saved yet";
-                          const authSummary =
-                            streamSummary.authState === "connected"
-                              ? `Connected (${streamSummary.authMode})`
-                              : streamSummary.authState === "wallet_enabled"
-                                ? `Wallet auth enabled (${streamSummary.authMode})`
-                                : "Authentication required";
-                          return (
-                            <>
-                              <div className="mb-3 px-3 py-2 border border-border bg-surface">
-                                <div className="text-[11px] text-muted mb-1">
-                                  {authSummary} {"  ·  "} {keysSavedSummary}
-                                  {"  ·  "} {enabledReadySummary}
-                                </div>
-                                <div className="text-[10px] text-muted leading-relaxed">
-                                  {configuredSummary}
-                                </div>
+                        const keysSavedSummary = `${streamSummary.savedDestinations}/${streamSummary.destinations.length} channel keys saved`;
+                        const enabledReadySummary =
+                          streamSummary.enabledDestinations > 0
+                            ? `${streamSummary.readyDestinations}/${streamSummary.enabledDestinations} enabled channels fully configured`
+                            : "No channels enabled yet";
+                        const configuredSummary =
+                          configuredDestinations.length > 0
+                            ? configuredDestinations
+                                .map((destination) => {
+                                  const suffix =
+                                    destination.streamKeySuffix != null
+                                      ? `••••${destination.streamKeySuffix}`
+                                      : "saved";
+                                  return `${destination.icon} ${destination.label} ${suffix}`;
+                                })
+                                .join("  ·  ")
+                            : "No channel stream keys saved yet";
+                        const authSummary =
+                          streamSummary.authState === "connected"
+                            ? `Connected (${streamSummary.authMode})`
+                            : streamSummary.authState === "wallet_enabled"
+                              ? `Wallet auth enabled (${streamSummary.authMode})`
+                              : "Authentication required";
+                        return (
+                          <>
+                            <div className="mb-3 px-3 py-2 border border-border bg-surface">
+                              <div className="text-[11px] text-muted mb-1">
+                                {authSummary} {"  ·  "} {keysSavedSummary}
+                                {"  ·  "} {enabledReadySummary}
                               </div>
-                              <Stream555ControlActionsPanel
-                                plugin={p}
-                                summary={streamSummary}
-                                onRefresh={loadPlugins}
-                                setActionNotice={setActionNotice}
-                              />
-                            </>
-                          );
-                        })()}
-                      </>
-                    )}
+                              <div className="text-[10px] text-muted leading-relaxed">
+                                {configuredSummary}
+                              </div>
+                            </div>
+                            <Stream555ControlActionsPanel
+                              plugin={p}
+                              summary={streamSummary}
+                              onRefresh={loadPlugins}
+                              setActionNotice={setActionNotice}
+                            />
+                          </>
+                        );
+                      })()}
                     <PluginConfigForm
                       plugin={p}
                       pluginConfigs={pluginConfigs}

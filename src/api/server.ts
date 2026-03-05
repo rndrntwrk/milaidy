@@ -61,10 +61,13 @@ import {
   getMasteryContract,
   listMasteryContracts,
   listMasteryRuns as listPersistedMasteryRuns,
+  readMasteryEpisodeConsistency,
+  readMasteryEpisodeFrames,
   readMasteryEpisodes,
   readMasteryGameSnapshot,
   readMasteryLogs,
   readMasteryRun,
+  readMasteryRunEvidence,
 } from "../plugins/five55-games/mastery/index.js";
 import { createPiCredentialProvider } from "../runtime/pi-credentials.js";
 import {
@@ -1905,6 +1908,155 @@ function discoverInstalledPlugins(
 const STREAM555_PLUGIN_CONTROL_ID = "stream555-control";
 const STREAM555_PLUGIN_LEGACY_IDS = new Set(["stream555-auth", "stream555-ads"]);
 
+type Stream555ChannelUiSpec = {
+  label: string;
+  icon: string;
+  enabledKey: string;
+  urlKey: string;
+  streamKeyKey: string;
+  urlLabel?: string;
+};
+
+const STREAM555_CHANNEL_UI_SPECS: Stream555ChannelUiSpec[] = [
+  {
+    label: "Pump.fun",
+    icon: "🟠",
+    enabledKey: "STREAM555_DEST_PUMPFUN_ENABLED",
+    urlKey: "STREAM555_DEST_PUMPFUN_RTMP_URL",
+    streamKeyKey: "STREAM555_DEST_PUMPFUN_STREAM_KEY",
+    urlLabel: "Pump.fun RTMPS URL",
+  },
+  {
+    label: "X",
+    icon: "✖️",
+    enabledKey: "STREAM555_DEST_X_ENABLED",
+    urlKey: "STREAM555_DEST_X_RTMP_URL",
+    streamKeyKey: "STREAM555_DEST_X_STREAM_KEY",
+    urlLabel: "X RTMPS URL",
+  },
+  {
+    label: "Twitch",
+    icon: "🟣",
+    enabledKey: "STREAM555_DEST_TWITCH_ENABLED",
+    urlKey: "STREAM555_DEST_TWITCH_RTMP_URL",
+    streamKeyKey: "STREAM555_DEST_TWITCH_STREAM_KEY",
+    urlLabel: "Twitch RTMPS URL",
+  },
+  {
+    label: "Kick",
+    icon: "🟢",
+    enabledKey: "STREAM555_DEST_KICK_ENABLED",
+    urlKey: "STREAM555_DEST_KICK_RTMP_URL",
+    streamKeyKey: "STREAM555_DEST_KICK_STREAM_KEY",
+    urlLabel: "Kick RTMPS URL",
+  },
+  {
+    label: "YouTube",
+    icon: "🔴",
+    enabledKey: "STREAM555_DEST_YOUTUBE_ENABLED",
+    urlKey: "STREAM555_DEST_YOUTUBE_RTMP_URL",
+    streamKeyKey: "STREAM555_DEST_YOUTUBE_STREAM_KEY",
+    urlLabel: "YouTube RTMPS URL",
+  },
+  {
+    label: "Facebook",
+    icon: "🔵",
+    enabledKey: "STREAM555_DEST_FACEBOOK_ENABLED",
+    urlKey: "STREAM555_DEST_FACEBOOK_RTMP_URL",
+    streamKeyKey: "STREAM555_DEST_FACEBOOK_STREAM_KEY",
+    urlLabel: "Facebook RTMPS URL",
+  },
+  {
+    label: "Custom",
+    icon: "🧩",
+    enabledKey: "STREAM555_DEST_CUSTOM_ENABLED",
+    urlKey: "STREAM555_DEST_CUSTOM_RTMP_URL",
+    streamKeyKey: "STREAM555_DEST_CUSTOM_STREAM_KEY",
+    urlLabel: "Custom RTMP URL",
+  },
+];
+
+function buildStream555ControlUiHintOverrides(): Record<string, Record<string, unknown>> {
+  const hints: Record<string, Record<string, unknown>> = {
+    STREAM555_BASE_URL: { hidden: true },
+    STREAM555_PUBLIC_BASE_URL: { hidden: true },
+    STREAM555_INTERNAL_BASE_URL: { hidden: true },
+    STREAM555_INTERNAL_AGENT_IDS: { hidden: true },
+    STREAM555_AGENT_TOKEN: { hidden: true },
+    STREAM555_AGENT_API_KEY: { hidden: true },
+    STREAM_API_BEARER_TOKEN: { hidden: true },
+    STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT: { hidden: true },
+    STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS: { hidden: true },
+    STREAM555_DEFAULT_SESSION_ID: { hidden: true },
+    STREAM_SESSION_ID: { hidden: true },
+    STREAM555_ALLOW_LOCALHOST_APP_URLS: { hidden: true },
+    STREAM555_WALLET_AUTH_PREFERRED_CHAIN: { hidden: true },
+    STREAM555_WALLET_AUTH_ALLOW_PROVISION: { hidden: true },
+    STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN: { hidden: true },
+    STREAM555_CONTROL_PLUGIN_ENABLED: { hidden: true },
+    STREAM555_DEST_SYNC_ON_GO_LIVE: {
+      label: "Auto-sync channels before go-live",
+      group: "Channels",
+      width: "full",
+      advanced: true,
+      order: 210,
+      type: "radio",
+      options: [
+        { value: "true", label: "Enabled", icon: "✅" },
+        { value: "false", label: "Disabled", icon: "⛔" },
+      ],
+      help: "Sync enabled channels right before go-live starts.",
+    },
+  };
+
+  let order = 300;
+  for (const spec of STREAM555_CHANNEL_UI_SPECS) {
+    hints[spec.enabledKey] = {
+      label: spec.label,
+      group: "Channels",
+      width: "full",
+      order,
+      advanced: false,
+      type: "radio",
+      options: [
+        { value: "true", label: "Enabled", icon: "✅" },
+        { value: "false", label: "Disabled", icon: "⛔" },
+      ],
+      help: `Enable or disable ${spec.label} for simulcast.`,
+    };
+    hints[spec.urlKey] = {
+      label: spec.urlLabel ?? `${spec.label} RTMPS URL`,
+      group: "Channels",
+      width: "half",
+      order: order + 10,
+      advanced: false,
+      icon: spec.icon,
+      help: `Ingest URL for ${spec.label}.`,
+      showIf: {
+        field: spec.enabledKey,
+        op: "eq",
+        value: "true",
+      },
+    };
+    hints[spec.streamKeyKey] = {
+      label: `${spec.label} Stream Key`,
+      group: "Channels",
+      width: "half",
+      order: order + 20,
+      advanced: false,
+      help: `Stream key used by ${spec.label}.`,
+      showIf: {
+        field: spec.enabledKey,
+        op: "eq",
+        value: "true",
+      },
+    };
+    order += 30;
+  }
+
+  return hints;
+}
+
 function normalizeStream555PluginId(pluginId: string): string {
   return pluginId
     .trim()
@@ -1973,7 +2125,7 @@ function collapseStream555PluginEntries(entries: PluginEntry[]): PluginEntry[] {
     id: STREAM555_PLUGIN_CONTROL_ID,
     name: "555 Stream",
     description:
-      "Unified 555 Stream plugin for auth, go-live control, destination routing, and ad operations.",
+      "Unified 555 Stream plugin for auth, go-live control, channel routing, and ad operations.",
     configured: baseEntry.configured,
     enabled: baseEntry.enabled,
     isActive: baseEntry.isActive,
@@ -1990,6 +2142,12 @@ function collapseStream555PluginEntries(entries: PluginEntry[]): PluginEntry[] {
       : {}),
   };
 
+  const streamHintOverrides = buildStream555ControlUiHintOverrides();
+  mergedEntry.configUiHints = {
+    ...(mergedEntry.configUiHints ?? {}),
+    ...streamHintOverrides,
+  };
+
   for (const related of relatedEntries) {
     mergedEntry.configured ||= related.configured;
     mergedEntry.enabled ||= related.enabled;
@@ -1997,22 +2155,8 @@ function collapseStream555PluginEntries(entries: PluginEntry[]): PluginEntry[] {
     if (!mergedEntry.loadError && related.loadError) {
       mergedEntry.loadError = related.loadError;
     }
-
-    mergedEntry.configKeys.push(...related.configKeys);
-    mergedEntry.parameters.push(
-      ...related.parameters.map((parameter) => ({ ...parameter })),
-    );
     mergedEntry.validationErrors.push(...related.validationErrors);
     mergedEntry.validationWarnings.push(...related.validationWarnings);
-
-    if (related.configUiHints) {
-      if (!mergedEntry.configUiHints) mergedEntry.configUiHints = {};
-      for (const [key, hint] of Object.entries(related.configUiHints)) {
-        if (!mergedEntry.configUiHints[key]) {
-          mergedEntry.configUiHints[key] = hint;
-        }
-      }
-    }
   }
 
   mergedEntry.configKeys = Array.from(new Set(mergedEntry.configKeys));
@@ -2395,6 +2539,9 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             "STREAM555_DEFAULT_SESSION_ID",
             "STREAM_SESSION_ID",
             "STREAM555_ALLOW_LOCALHOST_APP_URLS",
+            "STREAM555_WALLET_AUTH_PREFERRED_CHAIN",
+            "STREAM555_WALLET_AUTH_ALLOW_PROVISION",
+            "STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN",
             "STREAM555_DEST_SYNC_ON_GO_LIVE",
             "STREAM555_DEST_PUMPFUN_RTMP_URL",
             "STREAM555_DEST_PUMPFUN_STREAM_KEY",
@@ -2561,6 +2708,49 @@ function discoverPluginsFromManifest(): PluginEntry[] {
                 process.env.STREAM555_ALLOW_LOCALHOST_APP_URLS ?? null,
               isSet: Boolean(
                 process.env.STREAM555_ALLOW_LOCALHOST_APP_URLS?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_WALLET_AUTH_PREFERRED_CHAIN",
+              type: "string",
+              description:
+                "Wallet auth chain preference. Solana first, fallback to Ethereum when unavailable.",
+              required: false,
+              sensitive: false,
+              default: "solana",
+              currentValue:
+                process.env.STREAM555_WALLET_AUTH_PREFERRED_CHAIN ?? "solana",
+              isSet: Boolean(
+                process.env.STREAM555_WALLET_AUTH_PREFERRED_CHAIN?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_WALLET_AUTH_ALLOW_PROVISION",
+              type: "string",
+              description:
+                "Allow sw4p-linked wallet provisioning when no runtime wallet exists (true/false)",
+              required: false,
+              sensitive: false,
+              default: "true",
+              currentValue:
+                process.env.STREAM555_WALLET_AUTH_ALLOW_PROVISION ?? "true",
+              isSet: Boolean(
+                process.env.STREAM555_WALLET_AUTH_ALLOW_PROVISION?.trim(),
+              ),
+            },
+            {
+              key: "STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN",
+              type: "string",
+              description:
+                "Target chain for sw4p-linked wallet provisioning when fallback is needed.",
+              required: false,
+              sensitive: false,
+              default: "eth",
+              currentValue:
+                process.env.STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN ??
+                "eth",
+              isSet: Boolean(
+                process.env.STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN?.trim(),
               ),
             },
             {
@@ -2853,71 +3043,82 @@ function discoverPluginsFromManifest(): PluginEntry[] {
           configUiHints: {
             STREAM555_BASE_URL: {
               label: "Primary Base URL Override",
-              group: "Connection",
-              width: "half",
-              advanced: true,
+              hidden: true,
             },
             STREAM555_PUBLIC_BASE_URL: {
               label: "Public Base URL",
-              group: "Connection",
-              width: "half",
-              icon: "🌐",
+              hidden: true,
             },
             STREAM555_INTERNAL_BASE_URL: {
               label: "Internal Base URL",
-              group: "Connection",
-              width: "half",
-              icon: "🏠",
+              hidden: true,
             },
             STREAM555_INTERNAL_AGENT_IDS: {
               label: "Internal Agent IDs",
-              group: "Connection",
-              width: "half",
+              hidden: true,
             },
             STREAM555_DEFAULT_SESSION_ID: {
               label: "Default Session ID",
-              group: "Session",
-              width: "half",
+              hidden: true,
             },
             STREAM_SESSION_ID: {
               label: "Session Override",
-              group: "Session",
-              width: "half",
+              hidden: true,
             },
             STREAM555_AGENT_API_KEY: {
               label: "Agent API Key",
-              group: "Authentication",
-              width: "half",
+              hidden: true,
             },
             STREAM555_AGENT_TOKEN: {
               label: "Agent Token",
-              group: "Authentication",
-              width: "half",
+              hidden: true,
             },
             STREAM_API_BEARER_TOKEN: {
               label: "Legacy Bearer Token",
-              group: "Authentication",
-              width: "half",
+              hidden: true,
             },
             STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT: {
               label: "Exchange Endpoint",
-              group: "Authentication",
-              width: "half",
+              hidden: true,
             },
             STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS: {
               label: "Refresh Window (s)",
-              group: "Authentication",
-              width: "half",
+              hidden: true,
             },
             STREAM555_ALLOW_LOCALHOST_APP_URLS: {
               label: "Allow Localhost App URLs",
-              group: "Safety",
-              width: "half",
+              hidden: true,
+            },
+            STREAM555_WALLET_AUTH_PREFERRED_CHAIN: {
+              label: "Preferred Wallet Chain",
+              hidden: true,
+            },
+            STREAM555_WALLET_AUTH_ALLOW_PROVISION: {
+              label: "Allow Wallet Provisioning",
+              hidden: true,
+            },
+            STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN: {
+              label: "Provision Target Chain",
+              hidden: true,
             },
             STREAM555_DEST_SYNC_ON_GO_LIVE: {
-              label: "Auto Sync Destinations",
-              group: "Destinations",
-              width: "half",
+              label: "Auto-sync channels before go-live",
+              help: "Automatically sync configured RTMP channels before STREAM555_GO_LIVE.",
+              group: "Channels",
+              width: "full",
+              advanced: true,
+              order: 210,
+              type: "radio",
+              options: [
+                { value: "true", label: "Enabled", icon: "✅" },
+                { value: "false", label: "Disabled", icon: "⛔" },
+              ],
+            },
+            STREAM555_DEST_PUMPFUN_ENABLED: {
+              label: "Enable Pump.fun",
+              group: "Channels",
+              width: "full",
+              order: 300,
               type: "radio",
               options: [
                 { value: "true", label: "Enabled", icon: "✅" },
@@ -2926,19 +3127,32 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             },
             STREAM555_DEST_PUMPFUN_RTMP_URL: {
               label: "Pump.fun RTMPS URL",
-              group: "Destinations · Pump.fun",
+              group: "Channels",
               width: "half",
+              order: 310,
               icon: "🟠",
+              showIf: {
+                field: "STREAM555_DEST_PUMPFUN_ENABLED",
+                op: "eq",
+                value: "true",
+              },
             },
             STREAM555_DEST_PUMPFUN_STREAM_KEY: {
               label: "Pump.fun Stream Key",
-              group: "Destinations · Pump.fun",
+              group: "Channels",
               width: "half",
+              order: 320,
+              showIf: {
+                field: "STREAM555_DEST_PUMPFUN_ENABLED",
+                op: "eq",
+                value: "true",
+              },
             },
-            STREAM555_DEST_PUMPFUN_ENABLED: {
-              label: "Enable Pump.fun",
-              group: "Destinations · Pump.fun",
-              width: "half",
+            STREAM555_DEST_X_ENABLED: {
+              label: "Enable X",
+              group: "Channels",
+              width: "full",
+              order: 330,
               type: "radio",
               options: [
                 { value: "true", label: "Enabled", icon: "✅" },
@@ -2947,19 +3161,32 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             },
             STREAM555_DEST_X_RTMP_URL: {
               label: "X RTMPS URL",
-              group: "Destinations · X",
+              group: "Channels",
               width: "half",
+              order: 340,
               icon: "✖️",
+              showIf: {
+                field: "STREAM555_DEST_X_ENABLED",
+                op: "eq",
+                value: "true",
+              },
             },
             STREAM555_DEST_X_STREAM_KEY: {
               label: "X Stream Key",
-              group: "Destinations · X",
+              group: "Channels",
               width: "half",
+              order: 350,
+              showIf: {
+                field: "STREAM555_DEST_X_ENABLED",
+                op: "eq",
+                value: "true",
+              },
             },
-            STREAM555_DEST_X_ENABLED: {
-              label: "Enable X",
-              group: "Destinations · X",
-              width: "half",
+            STREAM555_DEST_TWITCH_ENABLED: {
+              label: "Enable Twitch",
+              group: "Channels",
+              width: "full",
+              order: 360,
               type: "radio",
               options: [
                 { value: "true", label: "Enabled", icon: "✅" },
@@ -2968,19 +3195,32 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             },
             STREAM555_DEST_TWITCH_RTMP_URL: {
               label: "Twitch RTMPS URL",
-              group: "Destinations · Twitch",
+              group: "Channels",
               width: "half",
+              order: 370,
               icon: "🟣",
+              showIf: {
+                field: "STREAM555_DEST_TWITCH_ENABLED",
+                op: "eq",
+                value: "true",
+              },
             },
             STREAM555_DEST_TWITCH_STREAM_KEY: {
               label: "Twitch Stream Key",
-              group: "Destinations · Twitch",
+              group: "Channels",
               width: "half",
+              order: 380,
+              showIf: {
+                field: "STREAM555_DEST_TWITCH_ENABLED",
+                op: "eq",
+                value: "true",
+              },
             },
-            STREAM555_DEST_TWITCH_ENABLED: {
-              label: "Enable Twitch",
-              group: "Destinations · Twitch",
-              width: "half",
+            STREAM555_DEST_KICK_ENABLED: {
+              label: "Enable Kick",
+              group: "Channels",
+              width: "full",
+              order: 390,
               type: "radio",
               options: [
                 { value: "true", label: "Enabled", icon: "✅" },
@@ -2989,19 +3229,32 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             },
             STREAM555_DEST_KICK_RTMP_URL: {
               label: "Kick RTMPS URL",
-              group: "Destinations · Kick",
+              group: "Channels",
               width: "half",
+              order: 400,
               icon: "🟢",
+              showIf: {
+                field: "STREAM555_DEST_KICK_ENABLED",
+                op: "eq",
+                value: "true",
+              },
             },
             STREAM555_DEST_KICK_STREAM_KEY: {
               label: "Kick Stream Key",
-              group: "Destinations · Kick",
+              group: "Channels",
               width: "half",
+              order: 410,
+              showIf: {
+                field: "STREAM555_DEST_KICK_ENABLED",
+                op: "eq",
+                value: "true",
+              },
             },
-            STREAM555_DEST_KICK_ENABLED: {
-              label: "Enable Kick",
-              group: "Destinations · Kick",
-              width: "half",
+            STREAM555_DEST_YOUTUBE_ENABLED: {
+              label: "Enable YouTube",
+              group: "Channels",
+              width: "full",
+              order: 420,
               type: "radio",
               options: [
                 { value: "true", label: "Enabled", icon: "✅" },
@@ -3010,19 +3263,32 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             },
             STREAM555_DEST_YOUTUBE_RTMP_URL: {
               label: "YouTube RTMPS URL",
-              group: "Destinations · YouTube",
+              group: "Channels",
               width: "half",
+              order: 430,
               icon: "🔴",
+              showIf: {
+                field: "STREAM555_DEST_YOUTUBE_ENABLED",
+                op: "eq",
+                value: "true",
+              },
             },
             STREAM555_DEST_YOUTUBE_STREAM_KEY: {
               label: "YouTube Stream Key",
-              group: "Destinations · YouTube",
+              group: "Channels",
               width: "half",
+              order: 440,
+              showIf: {
+                field: "STREAM555_DEST_YOUTUBE_ENABLED",
+                op: "eq",
+                value: "true",
+              },
             },
-            STREAM555_DEST_YOUTUBE_ENABLED: {
-              label: "Enable YouTube",
-              group: "Destinations · YouTube",
-              width: "half",
+            STREAM555_DEST_FACEBOOK_ENABLED: {
+              label: "Enable Facebook",
+              group: "Channels",
+              width: "full",
+              order: 450,
               type: "radio",
               options: [
                 { value: "true", label: "Enabled", icon: "✅" },
@@ -3031,19 +3297,32 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             },
             STREAM555_DEST_FACEBOOK_RTMP_URL: {
               label: "Facebook RTMPS URL",
-              group: "Destinations · Facebook",
+              group: "Channels",
               width: "half",
+              order: 460,
               icon: "🔵",
+              showIf: {
+                field: "STREAM555_DEST_FACEBOOK_ENABLED",
+                op: "eq",
+                value: "true",
+              },
             },
             STREAM555_DEST_FACEBOOK_STREAM_KEY: {
               label: "Facebook Stream Key",
-              group: "Destinations · Facebook",
+              group: "Channels",
               width: "half",
+              order: 470,
+              showIf: {
+                field: "STREAM555_DEST_FACEBOOK_ENABLED",
+                op: "eq",
+                value: "true",
+              },
             },
-            STREAM555_DEST_FACEBOOK_ENABLED: {
-              label: "Enable Facebook",
-              group: "Destinations · Facebook",
-              width: "half",
+            STREAM555_DEST_CUSTOM_ENABLED: {
+              label: "Enable Custom",
+              group: "Channels",
+              width: "full",
+              order: 480,
               type: "radio",
               options: [
                 { value: "true", label: "Enabled", icon: "✅" },
@@ -3052,29 +3331,30 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             },
             STREAM555_DEST_CUSTOM_RTMP_URL: {
               label: "Custom RTMP URL",
-              group: "Destinations · Custom",
+              group: "Channels",
               width: "half",
+              order: 490,
               icon: "🧩",
+              showIf: {
+                field: "STREAM555_DEST_CUSTOM_ENABLED",
+                op: "eq",
+                value: "true",
+              },
             },
             STREAM555_DEST_CUSTOM_STREAM_KEY: {
               label: "Custom Stream Key",
-              group: "Destinations · Custom",
+              group: "Channels",
               width: "half",
-            },
-            STREAM555_DEST_CUSTOM_ENABLED: {
-              label: "Enable Custom",
-              group: "Destinations · Custom",
-              width: "half",
-              type: "radio",
-              options: [
-                { value: "true", label: "Enabled", icon: "✅" },
-                { value: "false", label: "Disabled", icon: "⛔" },
-              ],
+              order: 500,
+              showIf: {
+                field: "STREAM555_DEST_CUSTOM_ENABLED",
+                op: "eq",
+                value: "true",
+              },
             },
             STREAM555_CONTROL_PLUGIN_ENABLED: {
               label: "Enabled",
-              group: "Runtime",
-              width: "half",
+              hidden: true,
             },
           },
           validationErrors: [],
@@ -15447,8 +15727,17 @@ async function handleRequest(
       seedMode?: "fixed" | "mixed" | "rolling";
       maxDurationSec?: number;
       strict?: boolean;
+      evidenceMode?: "strict" | "basic" | "off";
     }>(req, res);
     if (!body) return;
+    if (body.strict === false) {
+      error(
+        res,
+        "strict=false is not allowed. Truth-gated certification always runs with strict=true.",
+        400,
+      );
+      return;
+    }
 
     const runtime = state.runtime;
     if (!runtime) {
@@ -15466,7 +15755,8 @@ async function handleRequest(
         episodesPerGame: body.episodesPerGame,
         seedMode: body.seedMode,
         maxDurationSec: body.maxDurationSec,
-        strict: body.strict,
+        strict: true,
+        evidenceMode: body.evidenceMode ?? "strict",
       },
     });
 
@@ -15529,8 +15819,13 @@ async function handleRequest(
 
   if (method === "GET" && pathname.startsWith("/api/five55/mastery/runs/")) {
     const suffix = pathname.slice("/api/five55/mastery/runs/".length);
-    const [encodedRunId, subresource] = suffix.split("/");
-    const runId = decodeURIComponent(encodedRunId || "").trim();
+    const segments = suffix
+      .split("/")
+      .map((entry) => decodeURIComponent(entry || "").trim())
+      .filter((entry) => entry.length > 0);
+    const encodedRunId = segments[0] ?? "";
+    const subresource = segments[1];
+    const runId = encodedRunId;
     if (!runId) {
       error(res, "runId is required", 400);
       return;
@@ -15547,7 +15842,7 @@ async function handleRequest(
       return;
     }
 
-    if (subresource === "episodes") {
+    if (subresource === "episodes" && segments.length === 2) {
       const episodes = await readMasteryEpisodes(runId);
       json(res, {
         runId,
@@ -15557,7 +15852,7 @@ async function handleRequest(
       return;
     }
 
-    if (subresource === "logs") {
+    if (subresource === "logs" && segments.length === 2) {
       const afterSeqRaw = url.searchParams.get("afterSeq");
       const limitRaw = url.searchParams.get("limit");
       const afterSeq = Number.parseInt(afterSeqRaw ?? "0", 10);
@@ -15572,6 +15867,47 @@ async function handleRequest(
         logs,
         count: logs.length,
         nextAfterSeq: logs.length > 0 ? logs[logs.length - 1].seq : afterSeq,
+      });
+      return;
+    }
+
+    if (subresource === "evidence" && segments.length === 2) {
+      const evidence = await readMasteryRunEvidence(runId);
+      json(res, {
+        runId,
+        evidence,
+        total: evidence.length,
+      });
+      return;
+    }
+
+    if (
+      subresource === "episodes"
+      && segments.length === 4
+      && segments[3] === "frames"
+    ) {
+      const episodeId = segments[2];
+      const frames = await readMasteryEpisodeFrames({ runId, episodeId });
+      json(res, {
+        runId,
+        episodeId,
+        frames,
+        total: frames.length,
+      });
+      return;
+    }
+
+    if (
+      subresource === "episodes"
+      && segments.length === 4
+      && segments[3] === "consistency"
+    ) {
+      const episodeId = segments[2];
+      const consistency = await readMasteryEpisodeConsistency({ runId, episodeId });
+      json(res, {
+        runId,
+        episodeId,
+        consistency,
       });
       return;
     }

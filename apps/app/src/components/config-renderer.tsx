@@ -613,17 +613,29 @@ export const ConfigRenderer = forwardRef<
       ) : null}
 
       {[...groups.entries()].map(([group, fields], groupIndex) => {
-        const isCollapsibleGroup = group.toLowerCase() === "destinations";
+        const normalizedGroup = group.trim().toLowerCase();
+        const isCollapsibleGroup =
+          normalizedGroup === "destinations" || normalizedGroup === "channels";
         const isGroupOpen = isCollapsibleGroup
           ? (groupOpenState[group] ?? true)
           : true;
         const visibleDestinationCount = fields.filter((field) =>
-          field.key.startsWith("STREAM555_DEST_") &&
           field.key.endsWith("_ENABLED"),
         ).length;
+        const channelBaseCount = new Set(
+          fields
+            .map((field) =>
+              field.key.match(
+                /(.+_(?:DEST|CHANNEL)_[A-Z0-9]+)_(?:ENABLED|RTMP_URL|STREAM_KEY)$/i,
+              ),
+            )
+            .filter((match): match is RegExpMatchArray => Boolean(match))
+            .map((match) => match[1]),
+        ).size;
         const groupCount =
-          isCollapsibleGroup && visibleDestinationCount > 0
-            ? visibleDestinationCount
+          isCollapsibleGroup &&
+          (channelBaseCount > 0 || visibleDestinationCount > 0)
+            ? Math.max(channelBaseCount, visibleDestinationCount)
             : fields.length;
 
         return (
@@ -638,11 +650,15 @@ export const ConfigRenderer = forwardRef<
                 >
                   <span
                     className="inline-block text-[10px] text-[var(--muted)] transition-transform duration-200 group-hover:text-[var(--text)]"
-                    style={{ transform: isGroupOpen ? "rotate(90deg)" : "none" }}
+                    style={{
+                      transform: isGroupOpen ? "rotate(90deg)" : "none",
+                    }}
                   >
                     &#9654;
                   </span>
-                  <span className="text-base leading-none">{groupIcon(group)}</span>
+                  <span className="text-base leading-none">
+                    {groupIcon(group)}
+                  </span>
                   <span className="text-[12px] font-bold uppercase tracking-wider text-[var(--text)] opacity-70">
                     {group}
                   </span>
@@ -653,7 +669,9 @@ export const ConfigRenderer = forwardRef<
                 </button>
               ) : (
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="text-base leading-none">{groupIcon(group)}</span>
+                  <span className="text-base leading-none">
+                    {groupIcon(group)}
+                  </span>
                   <span className="text-[12px] font-bold uppercase tracking-wider text-[var(--text)] opacity-70">
                     {group}
                   </span>
