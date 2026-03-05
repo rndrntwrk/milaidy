@@ -1,5 +1,10 @@
-import { useState, useEffect } from "react";
-import { client, type CustomActionDef, type CustomActionHandler } from "../api-client";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  type CustomActionDef,
+  type CustomActionHandler,
+  client,
+} from "../api-client";
 import { Dialog } from "./ui/Dialog.js";
 
 interface CustomActionEditorProps {
@@ -1016,7 +1021,13 @@ export function CustomActionEditor({
               className="flex items-center justify-between text-xs text-muted hover:text-txt cursor-pointer"
             >
               <span>Test Action</span>
-              <span>{testExpanded ? "▼" : "▶"}</span>
+              <span>
+                {testExpanded ? (
+                  <ChevronDown className="w-3 h-3" />
+                ) : (
+                  <ChevronRight className="w-3 h-3" />
+                )}
+              </span>
             </button>
             {testExpanded && (
               <div className="flex flex-col gap-2 pl-2 border-l-2 border-border">

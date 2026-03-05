@@ -130,7 +130,12 @@ describe("subscription auth routes (e2e contract)", () => {
     if (closeServer) {
       await closeServer();
     }
-    await fs.rm(stateDir, { recursive: true, force: true });
+    await fs.rm(stateDir, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100,
+    });
     envBackup.restore();
   });
 
@@ -228,6 +233,32 @@ describe("subscription auth routes (e2e contract)", () => {
       );
       expect(res.status).toBe(400);
       expect(res.data.error).toContain("Invalid token format");
+    });
+
+    it("returns 500 when Anthropic credential exchange rejects", async () => {
+      const submitCode = vi.fn();
+      const credentialsPromise = Promise.reject(new Error("token expired"));
+      void credentialsPromise.catch(() => {});
+
+      startAnthropicLogin.mockResolvedValueOnce({
+        authUrl: "https://auth.example/anthropic",
+        submitCode,
+        credentials: credentialsPromise,
+      });
+
+      await req(port, "POST", "/api/subscription/anthropic/start");
+
+      const exchangeRes = await req(
+        port,
+        "POST",
+        "/api/subscription/anthropic/exchange",
+        { code: "valid-looking-code" },
+      );
+
+      expect(exchangeRes.status).toBe(500);
+      expect(exchangeRes.data.error).toBe("Anthropic exchange failed");
+      expect(submitCode).toHaveBeenCalledWith("valid-looking-code");
+      expect(saveCredentials).not.toHaveBeenCalled();
     });
   });
 
@@ -369,6 +400,37 @@ describe("subscription auth routes (e2e contract)", () => {
       expect(firstFlowClose).toHaveBeenCalledTimes(1);
       expect(secondFlowClose).not.toHaveBeenCalled();
     });
+
+    it("exchanges via waitForCallback path without calling submitCode", async () => {
+      const submitCode = vi.fn();
+      const closeFn = vi.fn();
+      const credentials = makeCredentials();
+
+      startCodexLogin.mockResolvedValueOnce({
+        authUrl: "https://auth.example/openai",
+        state: "callback-state",
+        submitCode,
+        credentials: Promise.resolve(credentials),
+        close: closeFn,
+      });
+
+      await req(port, "POST", "/api/subscription/openai/start");
+
+      const exchangeRes = await req(
+        port,
+        "POST",
+        "/api/subscription/openai/exchange",
+        { waitForCallback: true },
+      );
+
+      expect(exchangeRes.status).toBe(200);
+      expect(exchangeRes.data.success).toBe(true);
+      expect(exchangeRes.data.expiresAt).toBe(credentials.expires);
+      expect(submitCode).not.toHaveBeenCalled();
+      expect(saveCredentials).toHaveBeenCalledWith("openai-codex", credentials);
+      expect(applySubscriptionCredentials).toHaveBeenCalledTimes(1);
+      expect(closeFn).toHaveBeenCalledTimes(1);
+    });
   });
 
   // ── Subscription status & credential deletion ────────────────────────────
@@ -407,6 +469,109 @@ describe("subscription auth routes (e2e contract)", () => {
       );
       expect(res.status).toBe(400);
       expect(res.data.error).toContain("Unknown provider");
+    });
+  });
+
+  // ── Concurrent flow independence ─────────────────────────────────────────
+
+  describe("Concurrent flow independence", () => {
+    it("Anthropic and OpenAI flows do not interfere with each other", async () => {
+      const anthropicSubmit = vi.fn();
+      const anthropicCreds = makeCredentials(Date.now() + 120_000);
+
+      const openaiSubmit = vi.fn();
+      const openaiClose = vi.fn();
+      const openaiCreds = makeCredentials(Date.now() + 90_000);
+
+      startAnthropicLogin.mockResolvedValueOnce({
+        authUrl: "https://auth.example/anthropic",
+        submitCode: anthropicSubmit,
+        credentials: Promise.resolve(anthropicCreds),
+      });
+
+      startCodexLogin.mockResolvedValueOnce({
+        authUrl: "https://auth.example/openai",
+        state: "oi-state",
+        submitCode: openaiSubmit,
+        credentials: Promise.resolve(openaiCreds),
+        close: openaiClose,
+      });
+
+      // Start both flows
+      const [anthStart, oaiStart] = await Promise.all([
+        req(port, "POST", "/api/subscription/anthropic/start"),
+        req(port, "POST", "/api/subscription/openai/start"),
+      ]);
+      expect(anthStart.status).toBe(200);
+      expect(oaiStart.status).toBe(200);
+
+      // Complete OpenAI first — should not affect Anthropic flow
+      const oaiExchange = await req(
+        port,
+        "POST",
+        "/api/subscription/openai/exchange",
+        { code: "oai-code" },
+      );
+      expect(oaiExchange.status).toBe(200);
+      expect(oaiExchange.data.expiresAt).toBe(openaiCreds.expires);
+
+      // Anthropic should still be active
+      const anthExchange = await req(
+        port,
+        "POST",
+        "/api/subscription/anthropic/exchange",
+        { code: "anth-code" },
+      );
+      expect(anthExchange.status).toBe(200);
+      expect(anthExchange.data.expiresAt).toBe(anthropicCreds.expires);
+
+      expect(anthropicSubmit).toHaveBeenCalledWith("anth-code");
+      expect(openaiSubmit).toHaveBeenCalledWith("oai-code");
+    });
+
+    it("failing one provider flow does not poison the other", async () => {
+      const anthropicSubmit = vi.fn();
+      const failingCreds = Promise.reject(new Error("network error"));
+      void failingCreds.catch(() => {});
+
+      const openaiSubmit = vi.fn();
+      const openaiClose = vi.fn();
+      const openaiCreds = makeCredentials();
+
+      startAnthropicLogin.mockResolvedValueOnce({
+        authUrl: "https://auth.example/anthropic",
+        submitCode: anthropicSubmit,
+        credentials: failingCreds,
+      });
+      startCodexLogin.mockResolvedValueOnce({
+        authUrl: "https://auth.example/openai",
+        state: "s2",
+        submitCode: openaiSubmit,
+        credentials: Promise.resolve(openaiCreds),
+        close: openaiClose,
+      });
+
+      await req(port, "POST", "/api/subscription/anthropic/start");
+      await req(port, "POST", "/api/subscription/openai/start");
+
+      // Anthropic fails
+      const anthFail = await req(
+        port,
+        "POST",
+        "/api/subscription/anthropic/exchange",
+        { code: "bad" },
+      );
+      expect(anthFail.status).toBe(500);
+
+      // OpenAI should still succeed
+      const oaiOk = await req(
+        port,
+        "POST",
+        "/api/subscription/openai/exchange",
+        { code: "good" },
+      );
+      expect(oaiOk.status).toBe(200);
+      expect(oaiOk.data.success).toBe(true);
     });
   });
 
@@ -473,6 +638,38 @@ describe("subscription auth routes (e2e contract)", () => {
       );
       expect(secondExchange.status).toBe(400);
       expect(secondExchange.data.error).toContain("No active flow");
+    });
+
+    it("setup-token accepts any sk-ant- prefixed token", async () => {
+      const res = await req(
+        port,
+        "POST",
+        "/api/subscription/anthropic/setup-token",
+        { token: "sk-ant-api03-some-api-key" },
+      );
+      expect(res.status).toBe(200);
+      expect(res.data.success).toBe(true);
+    });
+
+    it("setup-token rejects token without sk-ant- prefix", async () => {
+      const res = await req(
+        port,
+        "POST",
+        "/api/subscription/anthropic/setup-token",
+        { token: "not-an-anthropic-key" },
+      );
+      expect(res.status).toBe(400);
+      expect(res.data.error).toContain("Invalid token format");
+    });
+
+    it("setup-token rejects empty token", async () => {
+      const res = await req(
+        port,
+        "POST",
+        "/api/subscription/anthropic/setup-token",
+        { token: "" },
+      );
+      expect(res.status).toBe(400);
     });
   });
 });

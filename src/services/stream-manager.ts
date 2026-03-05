@@ -28,12 +28,13 @@
  * @module services/stream-manager
  */
 
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, execSync, spawn } from "node:child_process";
 import { logger } from "@elizaos/core";
+import { type ITtsStreamBridge, ttsStreamBridge } from "./tts-stream-bridge";
 
 const TAG = "[StreamManager]";
 
-export type AudioSource = "silent" | "system" | "microphone";
+export type AudioSource = "silent" | "system" | "microphone" | "tts";
 
 export interface StreamConfig {
   rtmpUrl: string;
@@ -79,6 +80,15 @@ class StreamManager {
   private _volume = 80;
   /** Whether audio is muted. */
   private _muted = false;
+  /** Auto-restart state. */
+  private _restartAttempts = 0;
+  private _maxRestartAttempts = 5;
+  private _restartDecayTimer: ReturnType<typeof setInterval> | null = null;
+  private _intentionalStop = false;
+  /** Pending auto-restart timer — cleared in stop() to prevent races. */
+  private _restartTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Guard: prevents concurrent start() calls from orphaning FFmpeg. */
+  private _starting = false;
 
   isRunning(): boolean {
     return this._running;
@@ -150,6 +160,9 @@ class StreamManager {
     const savedStartedAt = this.startedAt;
     const savedFrameCount = this._frameCount;
 
+    // Detach TTS bridge before stopping FFmpeg
+    ttsStreamBridge.detach();
+
     // Stop FFmpeg without resetting tracking
     if (this.ffmpeg && !this.ffmpeg.killed && this.ffmpeg.exitCode === null) {
       if (this.ffmpeg.stdin) {
@@ -208,9 +221,32 @@ class StreamManager {
   }
 
   async start(config: StreamConfig): Promise<void> {
-    if (this._running) {
-      logger.warn(`${TAG} Already running — stop first`);
+    if (this._running || this._starting) {
+      logger.warn(`${TAG} Already running or starting — stop first`);
       return;
+    }
+    this._starting = true;
+    try {
+      await this._startInner(config);
+    } finally {
+      this._starting = false;
+    }
+  }
+
+  private async _startInner(config: StreamConfig): Promise<void> {
+    // Pre-flight: ensure FFmpeg is installed
+    try {
+      execSync("ffmpeg -version", { stdio: "ignore", timeout: 5000 });
+    } catch {
+      const installHint =
+        process.platform === "darwin"
+          ? "Install with: brew install ffmpeg"
+          : process.platform === "linux"
+            ? "Install with: sudo apt install ffmpeg  (or your distro's package manager)"
+            : "Download from https://ffmpeg.org/download.html";
+      throw new Error(
+        `FFmpeg not found. Streaming requires FFmpeg to be installed.\n${installHint}`,
+      );
     }
 
     this._config = config;
@@ -307,9 +343,17 @@ class StreamManager {
       `${TAG} Resolution: ${resolution}, Bitrate: ${bitrate}, FPS: ${framerate}`,
     );
 
-    // In pipe mode, FFmpeg reads from stdin; otherwise stdin is ignored
+    const isTts = (config.audioSource || "silent") === "tts";
+
+    // In pipe mode, FFmpeg reads from stdin; otherwise stdin is ignored.
+    // TTS mode adds a 4th stdio fd (pipe:3) for raw PCM audio input.
     this.ffmpeg = spawn("ffmpeg", ["-y", ...ffmpegArgs], {
-      stdio: [isPipe ? "pipe" : "ignore", "pipe", "pipe"],
+      stdio: [
+        isPipe ? "pipe" : "ignore",
+        "pipe",
+        "pipe",
+        ...(isTts ? (["pipe"] as const) : []),
+      ],
     });
 
     // Log all FFmpeg stderr for debugging
@@ -326,7 +370,11 @@ class StreamManager {
           `${TAG} FFmpeg exited unexpectedly (code=${code}, signal=${signal})`,
         );
         this._running = false;
-        this.startedAt = null;
+        if (!this._intentionalStop && this._config) {
+          this.autoRestart();
+        } else {
+          this.startedAt = null;
+        }
       }
     });
 
@@ -335,6 +383,13 @@ class StreamManager {
       this.ffmpeg.stdin.on("error", (err) => {
         logger.warn(`${TAG} FFmpeg stdin error: ${err.message}`);
       });
+    }
+
+    // Attach TTS bridge to pipe:3 for PCM audio
+    if (isTts && this.ffmpeg.stdio[3]) {
+      const pipe3 = this.ffmpeg.stdio[3] as import("node:stream").Writable;
+      ttsStreamBridge.attach(pipe3);
+      logger.info(`${TAG} TTS bridge attached to pipe:3`);
     }
 
     // Wait a moment to confirm it started
@@ -348,12 +403,26 @@ class StreamManager {
 
     this._running = true;
     this.startedAt = Date.now();
+    this._intentionalStop = false;
+    // Decay restart counter every 30s of healthy running
+    if (this._restartDecayTimer) clearInterval(this._restartDecayTimer);
+    this._restartDecayTimer = setInterval(() => {
+      if (this._restartAttempts > 0) {
+        this._restartAttempts = Math.max(0, this._restartAttempts - 1);
+        logger.info(
+          `${TAG} Restart counter decayed to ${this._restartAttempts}`,
+        );
+      }
+    }, 30_000);
     logger.info(`${TAG} FFmpeg streaming to RTMP — stream should be live`);
   }
 
   async stop(): Promise<{ uptime: number }> {
     const uptime = this.getUptime();
     const frames = this._frameCount;
+
+    // Detach TTS bridge before killing FFmpeg
+    ttsStreamBridge.detach();
 
     if (this.ffmpeg && !this.ffmpeg.killed && this.ffmpeg.exitCode === null) {
       const ffmpegProc = this.ffmpeg;
@@ -375,15 +444,76 @@ class StreamManager {
       }
     }
 
+    this._intentionalStop = true;
+    if (this._restartTimer) {
+      clearTimeout(this._restartTimer);
+      this._restartTimer = null;
+    }
+    if (this._restartDecayTimer) {
+      clearInterval(this._restartDecayTimer);
+      this._restartDecayTimer = null;
+    }
     this.ffmpeg = null;
     this._running = false;
     this.startedAt = null;
     this._frameCount = 0;
+    this._restartAttempts = 0;
     this._config = null;
     logger.info(
       `${TAG} Stream stopped (uptime: ${uptime}s, frames: ${frames})`,
     );
     return { uptime };
+  }
+
+  /** Attempt to restart FFmpeg after unexpected exit with exponential backoff. */
+  private autoRestart(): void {
+    if (this._restartAttempts >= this._maxRestartAttempts) {
+      logger.error(
+        `${TAG} Max restart attempts (${this._maxRestartAttempts}) reached — giving up`,
+      );
+      this.startedAt = null;
+      if (this._restartDecayTimer) {
+        clearInterval(this._restartDecayTimer);
+        this._restartDecayTimer = null;
+      }
+      return;
+    }
+
+    this._restartAttempts++;
+    const delay = Math.min(1000 * 2 ** (this._restartAttempts - 1), 60_000);
+    logger.info(
+      `${TAG} Auto-restart attempt ${this._restartAttempts}/${this._maxRestartAttempts} in ${delay}ms`,
+    );
+
+    this._restartTimer = setTimeout(async () => {
+      this._restartTimer = null;
+      if (this._intentionalStop || !this._config) return;
+
+      const savedStartedAt = this.startedAt;
+      const savedFrameCount = this._frameCount;
+
+      try {
+        this.ffmpeg = null;
+        await this.start({
+          ...this._config,
+          volume: this._volume,
+          muted: this._muted,
+        });
+        // Restore tracking so uptime is continuous
+        this.startedAt = savedStartedAt;
+        this._frameCount = savedFrameCount;
+        logger.info(`${TAG} Auto-restart successful`);
+      } catch (err) {
+        logger.error(
+          `${TAG} Auto-restart failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        // start() failed before spawning FFmpeg — no exit event will fire,
+        // so manually chain the next restart attempt if retries remain.
+        if (!this._intentionalStop && this._config) {
+          this.autoRestart();
+        }
+      }
+    }, delay);
   }
 
   // ---------------------------------------------------------------------------
@@ -494,6 +624,32 @@ class StreamManager {
     const source = config.audioSource || "silent";
 
     switch (source) {
+      case "tts": {
+        // Raw PCM from TTS bridge via pipe:3 (4th stdio fd).
+        // Format must match tts-stream-bridge output: s16le, 24kHz, mono.
+        // -use_wallclock_as_timestamps 1: raw PCM has no timestamps, so FFmpeg
+        //   uses wall-clock time to sync with the video stream.
+        // -probesize/-analyzeduration: eliminate probe buffering for immediate start.
+        // -thread_queue_size: prevent queue overflow from high-frequency tick writes.
+        return [
+          "-use_wallclock_as_timestamps",
+          "1",
+          "-probesize",
+          "32",
+          "-analyzeduration",
+          "0",
+          "-thread_queue_size",
+          "512",
+          "-f",
+          "s16le",
+          "-ar",
+          "24000",
+          "-ac",
+          "1",
+          "-i",
+          "pipe:3",
+        ];
+      }
       case "silent": {
         // Synthetic silent audio — always works, no hardware required.
         return [
@@ -539,6 +695,11 @@ class StreamManager {
         ];
       }
     }
+  }
+
+  /** Get the TTS stream bridge for external speak triggers. */
+  getTtsBridge(): ITtsStreamBridge {
+    return ttsStreamBridge;
   }
 }
 

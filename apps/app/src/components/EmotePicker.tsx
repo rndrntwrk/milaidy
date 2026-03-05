@@ -1,3 +1,4 @@
+import { Menu, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../AppContext";
 import { client } from "../api-client";
@@ -375,7 +376,7 @@ export function EmotePicker() {
         onPointerDown={onPointerDown}
       >
         <div className="flex items-center gap-2">
-          <span className="text-sm text-muted">☰</span>
+          <Menu className="h-4 w-4 text-muted" />
           <span className="text-sm font-semibold text-txt">Emotes</span>
         </div>
 
@@ -399,7 +400,7 @@ export function EmotePicker() {
             className="text-muted hover:text-txt"
             aria-label="Close emote picker"
           >
-            ✕
+            <X className="w-4 h-4" />
           </button>
         </div>
       </div>

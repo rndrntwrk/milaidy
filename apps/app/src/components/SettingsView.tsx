@@ -1,34 +1,91 @@
 /**
- * Settings view — unified scrollable preferences panel.
+ * Settings view — reorganized with sidebar navigation for better UX.
  *
- * Sections:
+ * Categories:
  *   1. Appearance — theme picker
  *   2. AI Model — provider selection + config
- *   3. Media Generation — image, video, audio, vision provider selection
- *   4. Speech (TTS / STT) — provider + transcription config
- *   5. Updates — software update channel + check
- *   6. Advanced (collapsible) — Logs, Core Plugins, Database, Secrets,
- *      Chrome Extension, Export/Import, Danger Zone
+ *   3. Integrations — GitHub, Coding Agents, Secrets
+ *   4. Media — image, video, audio, vision providers
+ *   5. Voice — TTS / STT configuration
+ *   6. Permissions — capabilities
+ *   7. Updates — software updates
+ *   8. Advanced — export/import, extension, danger zone
  */
 
-import { useEffect, useState, useCallback, useRef } from "react";
-import { useApp, THEMES } from "../AppContext";
 import {
-  client,
-  type PluginParamDef,
-  type OnboardingOptions,
-  type SubscriptionStatusProvider,
-} from "../api-client";
-import { ConfigPageView } from "./ConfigPageView";
-import { ConfigRenderer, defaultRegistry } from "./config-renderer";
-import { CodingAgentSettingsSection } from "./CodingAgentSettingsSection";
-import { GitHubSettingsSection } from "./GitHubSettingsSection";
+  AlertTriangle,
+  Bot,
+  ChevronRight,
+  Download,
+  Image,
+  Loader2,
+  Mic,
+  Palette,
+  RefreshCw,
+  Search,
+  Shield,
+  Sliders,
+  Upload,
+  X,
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { THEMES, useApp } from "../AppContext";
 import { MediaSettingsSection } from "./MediaSettingsSection";
 import { PermissionsSection } from "./PermissionsSection";
+import { ProviderSwitcher } from "./ProviderSwitcher";
 import { VoiceConfigView } from "./VoiceConfigView";
-import { Dialog } from "./ui/Dialog.js";
-import type { ConfigUiHint } from "../types";
-import type { JsonSchemaObject } from "./config-catalog";
+
+interface SettingsSectionDef {
+  id: string;
+  label: string;
+  icon: React.ElementType;
+  description?: string;
+}
+
+const SETTINGS_SECTIONS: SettingsSectionDef[] = [
+  {
+    id: "appearance",
+    label: "Appearance",
+    icon: Palette,
+    description: "Themes and visual preferences",
+  },
+  {
+    id: "ai-model",
+    label: "AI Model",
+    icon: Bot,
+    description: "Provider and model settings",
+  },
+  {
+    id: "media",
+    label: "Media",
+    icon: Image,
+    description: "Image, video, and vision providers",
+  },
+  {
+    id: "voice",
+    label: "Voice",
+    icon: Mic,
+    description: "Text-to-speech and transcription",
+  },
+  {
+    id: "permissions",
+    label: "Permissions",
+    icon: Shield,
+    description: "Capabilities and access control",
+  },
+  {
+    id: "updates",
+    label: "Updates",
+    icon: RefreshCw,
+    description: "Software update settings",
+  },
+  {
+    id: "advanced",
+    label: "Advanced",
+    icon: Sliders,
+    description: "Export, import, and dangerous actions",
+  },
+];
 
 /* ── Modal shell ─────────────────────────────────────────────────────── */
 
@@ -45,74 +102,269 @@ export function Modal({
 }) {
   const titleId = `modal-${title.toLowerCase().replace(/\s+/g, "-")}`;
   return (
-    <Dialog open={open} onClose={onClose} ariaLabelledBy={titleId}>
-      <div className="w-full max-w-md border border-border bg-card p-5 shadow-lg">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          onClose();
+        }
+      }}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="w-full max-w-md border border-border bg-card p-5 shadow-2xl rounded-lg">
         <div className="flex items-center justify-between mb-4">
           <div id={titleId} className="font-bold text-sm">{title}</div>
           <button
-            className="text-muted hover:text-txt text-lg leading-none px-1"
+            type="button"
+            className="text-muted hover:text-txt text-lg leading-none px-2 py-1 rounded-md hover:bg-bg-hover transition-colors"
             onClick={onClose}
-            aria-label="Close"
+            aria-label="Close modal"
           >
-            &times;
+            <X className="w-5 h-5" />
           </button>
         </div>
         {children}
       </div>
-    </Dialog>
+    </div>
   );
 }
 
-/* ── Auto-detection helpers ────────────────────────────────────────── */
+/* ── Section Card Component ──────────────────────────────────────────── */
 
-const ACRONYMS = new Set([
-  "API", "URL", "ID", "SSH", "SSL", "HTTP", "HTTPS", "RPC",
-  "NFT", "EVM", "TLS", "DNS", "IP", "JWT", "SDK", "LLM",
-]);
-
-function autoLabel(key: string, pluginId: string): string {
-  const prefixes = [
-    pluginId.toUpperCase().replace(/-/g, "_") + "_",
-    pluginId.toUpperCase().replace(/-/g, "") + "_",
-  ];
-  let remainder = key;
-  for (const prefix of prefixes) {
-    if (key.startsWith(prefix) && key.length > prefix.length) {
-      remainder = key.slice(prefix.length);
-      break;
-    }
-  }
-  return remainder
-    .split("_")
-    .map((w) => (ACRONYMS.has(w) ? w : w.charAt(0) + w.slice(1).toLowerCase()))
-    .join(" ");
+function SectionCard({
+  id,
+  title,
+  description,
+  children,
+  className = "",
+}: {
+  id: string;
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section
+      id={id}
+      className={`p-5 border border-border bg-card rounded-xl shadow-sm transition-all duration-200 ${className}`}
+    >
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-1 h-6 bg-accent rounded-full" />
+        <h3 className="font-bold text-base text-txt-strong">{title}</h3>
+      </div>
+      {description && <p className="text-sm text-muted mb-4">{description}</p>}
+      {children}
+    </section>
+  );
 }
 
-function formatByteSize(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes < 0) return "unknown";
-  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${bytes} B`;
+/* ── Settings Sidebar ────────────────────────────────────────────────── */
+
+function SettingsSidebar({
+  activeSection,
+  onSectionChange,
+  searchQuery,
+  onSearchChange,
+}: {
+  activeSection: string;
+  onSectionChange: (id: string) => void;
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
+}) {
+  const filteredSections = SETTINGS_SECTIONS.filter(
+    (section) =>
+      section.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      section.description?.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
+
+  return (
+    <div className="w-full lg:w-72 shrink-0 border-b lg:border-b-0 lg:border-r border-border bg-bg-accent/30">
+      <div className="p-4">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center shadow-sm">
+            <Sliders className="w-5 h-5 text-accent-fg" />
+          </div>
+          <div>
+            <h2 className="font-bold text-lg text-txt-strong">Settings</h2>
+            <p className="text-xs text-muted hidden lg:block">
+              Customize your experience
+            </p>
+          </div>
+        </div>
+
+        {/* Search - Desktop */}
+        <div className="relative mb-4 hidden lg:block">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+          <input
+            type="text"
+            placeholder="Search settings..."
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className="w-full pl-10 pr-3 py-2.5 text-sm border border-border bg-bg rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/50 placeholder:text-muted transition-all"
+          />
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex lg:flex-col gap-1 overflow-x-auto lg:overflow-x-visible scrollbar-hide">
+          {filteredSections.map((section) => {
+            const Icon = section.icon;
+            const isActive = activeSection === section.id;
+            return (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => onSectionChange(section.id)}
+                className={`flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all duration-200 min-w-fit lg:min-w-0 whitespace-nowrap lg:whitespace-normal ${
+                  isActive
+                    ? "bg-accent text-accent-fg shadow-md"
+                    : "text-txt hover:bg-bg-hover hover:shadow-sm"
+                }`}
+              >
+                <span
+                  className={`w-9 h-9 flex items-center justify-center shrink-0 rounded-lg ${
+                    isActive ? "bg-accent-foreground/20" : "bg-bg-accent"
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className={`text-sm font-semibold`}>{section.label}</div>
+                  {section.description && (
+                    <div className="text-[11px] opacity-80 hidden lg:block mt-0.5 truncate">
+                      {section.description}
+                    </div>
+                  )}
+                </div>
+                <ChevronRight
+                  className={`w-4 h-4 shrink-0 lg:hidden ${isActive ? "" : "opacity-50"}`}
+                />
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+    </div>
+  );
 }
 
-type SubscriptionProviderId = "anthropic-subscription" | "openai-subscription";
+/* ── Updates Section ─────────────────────────────────────────────────── */
 
-const SUBSCRIPTION_PROVIDER_BY_PLUGIN: Record<string, SubscriptionProviderId> = {
-  anthropic: "anthropic-subscription",
-  openai: "openai-subscription",
-};
+function UpdatesSection() {
+  const { updateStatus, updateLoading, loadUpdateStatus } = useApp();
 
-function formatSubscriptionExpiry(expiresAt: number | null): string {
-  if (!expiresAt) return "Not connected";
-  const date = new Date(expiresAt);
-  if (Number.isNaN(date.getTime())) return "Unknown";
-  return date.toLocaleString();
+  useEffect(() => {
+    void loadUpdateStatus();
+  }, [loadUpdateStatus]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between p-4 bg-bg-accent rounded-lg">
+        <div>
+          <div className="font-medium text-sm">Current Version</div>
+          <div className="text-2xl font-bold text-txt-strong mt-1">
+            {updateStatus?.currentVersion || "Loading..."}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => void loadUpdateStatus(true)}
+          disabled={updateLoading}
+          className="flex items-center gap-2 px-4 py-2 bg-accent text-accent-fg rounded-lg font-medium text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+        >
+          {updateLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+          Check for Updates
+        </button>
+      </div>
+
+      {updateStatus?.updateAvailable && (
+        <div className="p-4 bg-ok/10 border border-ok/30 rounded-lg">
+          <div className="font-medium text-ok mb-1">Update Available!</div>
+          <p className="text-sm text-muted">
+            Version {updateStatus.latestVersion} is ready to install.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Advanced Section ─────────────────────────────────────────────────── */
+
+function AdvancedSection() {
+  const { handleReset } = useApp();
+
+  return (
+    <div className="space-y-6">
+      {/* Export/Import */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <button
+          type="button"
+          className="flex items-center gap-3 p-4 border border-border bg-bg rounded-lg hover:border-accent hover:bg-accent-subtle/50 transition-all text-left group"
+        >
+          <div className="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center group-hover:bg-accent group-hover:text-accent-fg transition-colors">
+            <Download className="w-5 h-5 text-accent group-hover:text-accent-fg" />
+          </div>
+          <div>
+            <div className="font-medium text-sm">Export Agent</div>
+            <div className="text-xs text-muted">Backup all data</div>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          className="flex items-center gap-3 p-4 border border-border bg-bg rounded-lg hover:border-accent hover:bg-accent-subtle/50 transition-all text-left group"
+        >
+          <div className="w-10 h-10 rounded-lg bg-accent-subtle flex items-center justify-center group-hover:bg-accent group-hover:text-accent-fg transition-colors">
+            <Upload className="w-5 h-5 text-accent group-hover:text-accent-fg" />
+          </div>
+          <div>
+            <div className="font-medium text-sm">Import Agent</div>
+            <div className="text-xs text-muted">Restore from backup</div>
+          </div>
+        </button>
+      </div>
+
+      {/* Danger Zone */}
+      <div className="border border-danger/30 rounded-lg overflow-hidden">
+        <div className="bg-danger/5 px-4 py-3 border-b border-danger/30 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-danger" />
+          <span className="font-medium text-sm text-danger">Danger Zone</span>
+        </div>
+        <div className="p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-medium text-sm">Reset Agent</div>
+              <div className="text-xs text-muted">
+                Wipe all data and return to onboarding
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleReset}
+              className="px-4 py-2 border border-danger text-danger rounded-lg text-sm font-medium hover:bg-danger hover:text-danger-foreground transition-colors"
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /* ── SettingsView ─────────────────────────────────────────────────────── */
 
 export function SettingsView() {
+  const [activeSection, setActiveSection] = useState("appearance");
+  const [searchQuery, setSearchQuery] = useState("");
+  const contentRef = useRef<HTMLDivElement>(null);
+
   const {
     // Cloud
     cloudEnabled,
@@ -131,1657 +383,194 @@ export function SettingsView() {
     pluginSaveSuccess,
     // Theme
     currentTheme,
-    // Updates
-    updateStatus,
-    updateLoading,
-    updateChannelSaving: _updateChannelSaving,
-    // Extension
-    extensionStatus,
-    extensionChecking,
-    // Wallet
-    walletExportVisible,
-    walletExportData,
-    // Export/Import
-    exportBusy,
-    exportPassword,
-    exportIncludeLogs,
-    exportError,
-    exportSuccess,
-    importBusy,
-    importPassword,
-    importError,
-    importSuccess,
     // Actions
     loadPlugins,
     handlePluginToggle,
     setTheme,
     setTab,
-    loadUpdateStatus,
-    handleChannelChange,
-    checkExtensionStatus,
+    loadUpdateStatus: _loadUpdateStatus,
     handlePluginConfigSave,
-    handleAgentExport,
-    handleAgentImport,
     handleCloudLogin,
     handleCloudDisconnect,
-    handleReset,
-    handleExportKeys,
-    copyToClipboard,
     setState,
   } = useApp();
 
-  /* ── Model selection state ─────────────────────────────────────────── */
-  const [modelOptions, setModelOptions] = useState<OnboardingOptions["models"] | null>(null);
-  const [piModels, setPiModels] = useState<NonNullable<OnboardingOptions["piModels"]>>([]);
-  const [piDefaultModel, setPiDefaultModel] = useState<string>("");
-
-  const [currentSmallModel, setCurrentSmallModel] = useState("");
-  const [currentLargeModel, setCurrentLargeModel] = useState("");
-  const [modelSaving, setModelSaving] = useState(false);
-  const [modelSaveSuccess, setModelSaveSuccess] = useState(false);
-
-  /* ── pi-ai provider state ─────────────────────────────────────────── */
-  const [piAiEnabled, setPiAiEnabled] = useState(false);
-  const [piAiSmallModel, setPiAiSmallModel] = useState("");
-  const [piAiLargeModel, setPiAiLargeModel] = useState("");
-  const [piAiSaving, setPiAiSaving] = useState(false);
-  const [piAiSaveSuccess, setPiAiSaveSuccess] = useState(false);
-
-  /* ── Subscription OAuth state ───────────────────────────────────── */
-  const [subscriptionStatusByProvider, setSubscriptionStatusByProvider] = useState<
-    Partial<Record<SubscriptionProviderId, SubscriptionStatusProvider>>
-  >({});
-  const [subscriptionStatusLoading, setSubscriptionStatusLoading] = useState(false);
-  const [subscriptionError, setSubscriptionError] = useState<string | null>(null);
-  const [subscriptionSuccess, setSubscriptionSuccess] = useState<string | null>(null);
-  const [subscriptionBusyByProvider, setSubscriptionBusyByProvider] = useState<
-    Partial<Record<SubscriptionProviderId, boolean>>
-  >({});
-  const [openaiOAuthStarted, setOpenaiOAuthStarted] = useState(false);
-  const [openaiCallbackUrl, setOpenaiCallbackUrl] = useState("");
-  const [anthropicOAuthStarted, setAnthropicOAuthStarted] = useState(false);
-  const [anthropicCode, setAnthropicCode] = useState("");
-
   useEffect(() => {
     void loadPlugins();
-    void loadUpdateStatus();
-    void checkExtensionStatus();
-  }, [loadPlugins, loadUpdateStatus, checkExtensionStatus]);
+  }, [loadPlugins]);
 
-  const loadSubscriptionStatus = useCallback(async () => {
-    setSubscriptionStatusLoading(true);
-    try {
-      const response = await client.getSubscriptionStatus();
-      const mapped: Partial<Record<SubscriptionProviderId, SubscriptionStatusProvider>> = {};
-      for (const provider of response.providers) {
-        const id =
-          provider.provider === "openai-codex"
-            ? "openai-subscription"
-            : provider.provider;
-        if (id === "openai-subscription" || id === "anthropic-subscription") {
-          mapped[id] = provider;
-        }
+  // Scroll to section when changed
+  const handleSectionChange = useCallback((sectionId: string) => {
+    setActiveSection(sectionId);
+    if (contentRef.current) {
+      const element = contentRef.current.querySelector(`#${sectionId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth", block: "start" });
       }
-      setSubscriptionStatusByProvider(mapped);
-    } catch (err) {
-      setSubscriptionError(
-        err instanceof Error
-          ? `Failed to load OAuth status: ${err.message}`
-          : "Failed to load OAuth status",
-      );
-    } finally {
-      setSubscriptionStatusLoading(false);
     }
   }, []);
 
+  // Update active section based on scroll position
   useEffect(() => {
-    void loadSubscriptionStatus();
-  }, [loadSubscriptionStatus]);
+    const root = contentRef.current;
+    if (!root) return;
 
-  /* ── Derived ──────────────────────────────────────────────────────── */
+    const handleScroll = () => {
+      const sections = SETTINGS_SECTIONS.map((s) => {
+        const el = root.querySelector(`#${s.id}`) as HTMLElement;
+        return { id: s.id, el };
+      }).filter((s) => s.el !== null);
 
-  const allAiProviders = plugins.filter((p) => p.category === "ai-provider");
-  const enabledAiProviders = allAiProviders.filter((p) => p.enabled);
+      if (sections.length === 0) return;
 
-  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(
-    () => (cloudEnabled ? "__cloud__" : null),
-  );
-
-  const hasManualSelection = useRef(false);
-  useEffect(() => {
-    if (hasManualSelection.current) return;
-
-    if (cloudEnabled) {
-      if (selectedProviderId !== "__cloud__") setSelectedProviderId("__cloud__");
-      return;
-    }
-
-    if (piAiEnabled) {
-      if (selectedProviderId !== "pi-ai") setSelectedProviderId("pi-ai");
-      return;
-    }
-  }, [cloudEnabled, piAiEnabled, selectedProviderId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  /* Resolve the actually-selected provider: accept __cloud__ / pi-ai or fall back */
-  const resolvedSelectedId =
-    selectedProviderId === "__cloud__"
-      ? "__cloud__"
-      : selectedProviderId === "pi-ai"
-        ? "pi-ai"
-        : selectedProviderId && allAiProviders.some((p) => p.id === selectedProviderId)
-          ? selectedProviderId
-          : cloudEnabled
-            ? "__cloud__"
-            : piAiEnabled
-              ? "pi-ai"
-              : enabledAiProviders[0]?.id ?? null;
-
-  const selectedProvider =
-    resolvedSelectedId && resolvedSelectedId !== "__cloud__" && resolvedSelectedId !== "pi-ai"
-      ? allAiProviders.find((p) => p.id === resolvedSelectedId) ?? null
-      : null;
-
-  const handleSwitchProvider = useCallback(
-    async (newId: string) => {
-      hasManualSelection.current = true;
-      setSelectedProviderId(newId);
-      setPiAiEnabled(false);
-      const target = allAiProviders.find((p) => p.id === newId);
-      if (!target) return;
-
-      /* Turn off cloud mode (and pi-ai mode) when switching to a local provider */
-      try {
-        await client.updateConfig({
-          cloud: { enabled: false },
-          env: { vars: { MILAIDY_USE_PI_AI: "" } },
-          agents: { defaults: { model: { primary: null } } },
-        });
-      } catch { /* non-fatal */ }
-      if (!target.enabled) {
-        await handlePluginToggle(newId, true);
+      // If user scrolled to the very bottom, highlight the last section
+      if (
+        root.scrollHeight - Math.ceil(root.scrollTop) <=
+        root.clientHeight + 10
+      ) {
+        setActiveSection(sections[sections.length - 1].id);
+        return;
       }
-      for (const p of enabledAiProviders) {
-        if (p.id !== newId) {
-          await handlePluginToggle(p.id, false);
+
+      const rootRect = root.getBoundingClientRect();
+      let currentSection = sections[0].id;
+
+      for (const { id, el } of sections) {
+        const elRect = el.getBoundingClientRect();
+        // If the section's top is visible or scrolled past (allowing a 150px offset)
+        if (elRect.top - rootRect.top <= 150) {
+          currentSection = id;
         }
       }
-    },
-    [allAiProviders, enabledAiProviders, handlePluginToggle],
-  );
 
-  const handleSelectCloud = useCallback(async () => {
-    hasManualSelection.current = true;
-    setSelectedProviderId("__cloud__");
-    setPiAiEnabled(false);
-    try {
-      await client.updateConfig({
-        cloud: { enabled: true },
-        // Ensure local pi-ai mode is disabled when switching to cloud.
-        env: { vars: { MILAIDY_USE_PI_AI: "" } },
-        agents: { defaults: { model: { primary: null } } },
-        models: {
-          small: currentSmallModel || "moonshotai/kimi-k2-turbo",
-          large: currentLargeModel || "moonshotai/kimi-k2-0905",
-        },
-      });
-      await client.restartAgent();
-    } catch { /* non-fatal */ }
-  }, [currentSmallModel, currentLargeModel]);
+      setActiveSection((prev) =>
+        prev !== currentSection ? currentSection : prev,
+      );
+    };
 
-  const piAiAvailable = piModels.length > 0 || Boolean(piDefaultModel);
+    root.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
 
-  const handleSelectPiAi = useCallback(async () => {
-    hasManualSelection.current = true;
-    setSelectedProviderId("pi-ai");
-    setPiAiEnabled(true);
-
-    setPiAiSaving(true);
-    setPiAiSaveSuccess(false);
-    try {
-      await client.updateConfig({
-        cloud: { enabled: false },
-        env: { vars: { MILAIDY_USE_PI_AI: "1" } },
-        models: {
-          piAiSmall: piAiSmallModel.trim() || null,
-          piAiLarge: piAiLargeModel.trim() || null,
-        },
-        agents: {
-          defaults: {
-            model: {
-              // Keep primary aligned with the pi-ai large model override so
-              // any code that reads MODEL_PROVIDER as a modelSpec still works.
-              primary: piAiLargeModel.trim() || null,
-            },
-          },
-        },
-      });
-      await client.restartAgent();
-      setPiAiSaveSuccess(true);
-      setTimeout(() => setPiAiSaveSuccess(false), 2000);
-    } catch {
-      /* ignore */
-    } finally {
-      setPiAiSaving(false);
-    }
-  }, [piAiSmallModel, piAiLargeModel]);
-
-  const handlePiAiSave = useCallback(async () => {
-    // Save pi-ai small/large overrides; keep pi-ai enabled.
-    setPiAiSaving(true);
-    setPiAiSaveSuccess(false);
-    try {
-      await client.updateConfig({
-        cloud: { enabled: false },
-        env: { vars: { MILAIDY_USE_PI_AI: "1" } },
-        models: {
-          piAiSmall: piAiSmallModel.trim() || null,
-          piAiLarge: piAiLargeModel.trim() || null,
-        },
-        agents: {
-          defaults: {
-            model: {
-              primary: piAiLargeModel.trim() || null,
-            },
-          },
-        },
-      });
-      await client.restartAgent();
-      setPiAiEnabled(true);
-      setPiAiSaveSuccess(true);
-      setTimeout(() => setPiAiSaveSuccess(false), 2000);
-    } catch {
-      /* ignore */
-    } finally {
-      setPiAiSaving(false);
-    }
-  }, [piAiSmallModel, piAiLargeModel]);
-
-  const ext = extensionStatus;
-  const relayOk = ext?.relayReachable === true;
-
-  /* ── Export / Import modal state ─────────────────────────────────── */
-  const [exportModalOpen, setExportModalOpen] = useState(false);
-  const [importModalOpen, setImportModalOpen] = useState(false);
-  const importFileRef = useRef<HTMLInputElement>(null);
-  const [exportEstimateLoading, setExportEstimateLoading] = useState(false);
-  const [exportEstimateError, setExportEstimateError] = useState<string | null>(
-    null,
-  );
-  const [exportEstimate, setExportEstimate] = useState<{
-    estimatedBytes: number;
-    memoriesCount: number;
-    entitiesCount: number;
-    roomsCount: number;
-    worldsCount: number;
-    tasksCount: number;
-  } | null>(null);
-
-  const openExportModal = useCallback(() => {
-    setState("exportPassword", "");
-    setState("exportIncludeLogs", false);
-    setState("exportError", null);
-    setState("exportSuccess", null);
-    setExportEstimate(null);
-    setExportEstimateError(null);
-    setExportEstimateLoading(true);
-    setExportModalOpen(true);
-    void (async () => {
-      try {
-        const estimate = await client.getExportEstimate();
-        setExportEstimate(estimate);
-      } catch (err) {
-        setExportEstimateError(
-          err instanceof Error
-            ? err.message
-            : "Failed to estimate export size.",
-        );
-      } finally {
-        setExportEstimateLoading(false);
-      }
-    })();
-  }, [setState]);
-
-  const openImportModal = useCallback(() => {
-    setState("importPassword", "");
-    setState("importFile", null);
-    setState("importError", null);
-    setState("importSuccess", null);
-    setImportModalOpen(true);
-  }, [setState]);
-
-  /* ── Fetch Models state ────────────────────────────────────────── */
-  const [modelsFetching, setModelsFetching] = useState(false);
-  const [modelsFetchResult, setModelsFetchResult] = useState<string | null>(null);
-
-  const handleFetchModels = useCallback(
-    async (providerId: string) => {
-      setModelsFetching(true);
-      setModelsFetchResult(null);
-      try {
-        const result = await client.fetchModels(providerId, true);
-        const count = Array.isArray(result?.models) ? result.models.length : 0;
-        setModelsFetchResult(`Loaded ${count} models`);
-        // Reload plugins so configUiHints are refreshed with new model options
-        await loadPlugins();
-        setTimeout(() => setModelsFetchResult(null), 3000);
-      } catch (err) {
-        setModelsFetchResult(`Error: ${err instanceof Error ? err.message : "failed"}`);
-        setTimeout(() => setModelsFetchResult(null), 5000);
-      }
-      setModelsFetching(false);
-    },
-    [loadPlugins],
-  );
-
-  /* ── Plugin config local state for collecting field values ──────── */
-  const [pluginFieldValues, setPluginFieldValues] = useState<Record<string, Record<string, string>>>({});
-
-  const handlePluginFieldChange = useCallback(
-    (pluginId: string, key: string, value: string) => {
-      setPluginFieldValues((prev) => ({
-        ...prev,
-        [pluginId]: { ...(prev[pluginId] ?? {}), [key]: value },
-      }));
-    },
-    [],
-  );
-
-  const handlePluginSave = useCallback(
-    (pluginId: string) => {
-      const values = pluginFieldValues[pluginId] ?? {};
-      void handlePluginConfigSave(pluginId, values);
-    },
-    [pluginFieldValues, handlePluginConfigSave],
-  );
-
-  const setSubscriptionBusy = useCallback(
-    (provider: SubscriptionProviderId, busy: boolean) => {
-      setSubscriptionBusyByProvider((prev) => ({ ...prev, [provider]: busy }));
-    },
-    [],
-  );
-
-  const notifySubscriptionSuccess = useCallback((message: string) => {
-    setSubscriptionSuccess(message);
-    setTimeout(() => setSubscriptionSuccess(null), 2500);
+    return () => root.removeEventListener("scroll", handleScroll);
   }, []);
-
-  const handleStartSubscriptionOAuth = useCallback(
-    async (provider: SubscriptionProviderId) => {
-      setSubscriptionError(null);
-      setSubscriptionSuccess(null);
-      setSubscriptionBusy(provider, true);
-      try {
-        if (provider === "openai-subscription") {
-          const res = await client.startOpenAILogin();
-          if (!res.authUrl) throw new Error("OpenAI OAuth URL missing");
-          window.open(res.authUrl, "openai-oauth", "width=500,height=700,top=50,left=200");
-          setOpenaiOAuthStarted(true);
-          setOpenaiCallbackUrl("");
-        } else {
-          const res = await client.startAnthropicLogin();
-          if (!res.authUrl) throw new Error("Anthropic OAuth URL missing");
-          window.open(res.authUrl, "anthropic-oauth", "width=600,height=700,top=50,left=200");
-          setAnthropicOAuthStarted(true);
-          setAnthropicCode("");
-        }
-      } catch (err) {
-        setSubscriptionError(
-          err instanceof Error ? err.message : "Failed to start OAuth flow",
-        );
-      } finally {
-        setSubscriptionBusy(provider, false);
-      }
-    },
-    [setSubscriptionBusy],
-  );
-
-  const handleCompleteOpenAIOAuth = useCallback(async () => {
-    const callback = openaiCallbackUrl.trim();
-    if (!callback) return;
-    setSubscriptionError(null);
-    setSubscriptionSuccess(null);
-    setSubscriptionBusy("openai-subscription", true);
-    try {
-      const result = await client.exchangeOpenAICode(callback);
-      if (!result.success) {
-        throw new Error("OpenAI OAuth exchange failed");
-      }
-      setOpenaiOAuthStarted(false);
-      setOpenaiCallbackUrl("");
-      await loadSubscriptionStatus();
-      await loadPlugins();
-      notifySubscriptionSuccess("OpenAI subscription connected");
-    } catch (err) {
-      setSubscriptionError(
-        err instanceof Error ? err.message : "Failed to complete OpenAI OAuth",
-      );
-    } finally {
-      setSubscriptionBusy("openai-subscription", false);
-    }
-  }, [
-    loadPlugins,
-    loadSubscriptionStatus,
-    notifySubscriptionSuccess,
-    openaiCallbackUrl,
-    setSubscriptionBusy,
-  ]);
-
-  const handleCompleteAnthropicOAuth = useCallback(async () => {
-    const code = anthropicCode.trim();
-    if (!code) return;
-    setSubscriptionError(null);
-    setSubscriptionSuccess(null);
-    setSubscriptionBusy("anthropic-subscription", true);
-    try {
-      const result = await client.exchangeAnthropicCode(code);
-      if (!result.success) {
-        throw new Error("Anthropic OAuth exchange failed");
-      }
-      setAnthropicOAuthStarted(false);
-      setAnthropicCode("");
-      await loadSubscriptionStatus();
-      await loadPlugins();
-      notifySubscriptionSuccess("Anthropic subscription connected");
-    } catch (err) {
-      setSubscriptionError(
-        err instanceof Error ? err.message : "Failed to complete Anthropic OAuth",
-      );
-    } finally {
-      setSubscriptionBusy("anthropic-subscription", false);
-    }
-  }, [
-    anthropicCode,
-    loadPlugins,
-    loadSubscriptionStatus,
-    notifySubscriptionSuccess,
-    setSubscriptionBusy,
-  ]);
-
-  const handleSubscriptionDisconnect = useCallback(
-    async (provider: SubscriptionProviderId) => {
-      setSubscriptionError(null);
-      setSubscriptionSuccess(null);
-      setSubscriptionBusy(provider, true);
-      try {
-        await client.disconnectSubscription(provider);
-        if (provider === "openai-subscription") {
-          setOpenaiOAuthStarted(false);
-          setOpenaiCallbackUrl("");
-        } else {
-          setAnthropicOAuthStarted(false);
-          setAnthropicCode("");
-        }
-        await loadSubscriptionStatus();
-        await loadPlugins();
-        notifySubscriptionSuccess("Subscription disconnected");
-      } catch (err) {
-        setSubscriptionError(
-          err instanceof Error ? err.message : "Failed to disconnect subscription",
-        );
-      } finally {
-        setSubscriptionBusy(provider, false);
-      }
-    },
-    [loadPlugins, loadSubscriptionStatus, notifySubscriptionSuccess, setSubscriptionBusy],
-  );
-
 
   return (
-    <div>
-      <h2 className="text-lg font-bold mb-1">Settings</h2>
-      <p className="text-[13px] text-[var(--muted)] mb-5">
-        Appearance, AI provider, updates, and app preferences.
-      </p>
+    <div className="h-full flex flex-col lg:flex-row overflow-hidden bg-bg">
+      <SettingsSidebar
+        activeSection={activeSection}
+        onSectionChange={handleSectionChange}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+      />
 
-      {/* ═══════════════════════════════════════════════════════════════
-          1. APPEARANCE
-          ═══════════════════════════════════════════════════════════════ */}
-      <div className="p-4 border border-[var(--border)] bg-[var(--card)]">
-        <div className="font-bold text-sm mb-2">Appearance</div>
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
-          {THEMES.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={`theme-btn py-2 px-2 ${currentTheme === t.id ? "active" : ""}`}
-              onClick={() => setTheme(t.id)}
-            >
-              <div className="text-xs font-bold text-[var(--text)] whitespace-nowrap text-center">
-                {t.label}
-              </div>
-              <div className="text-[10px] text-[var(--muted)] mt-0.5 text-center whitespace-nowrap">
-                {t.hint}
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════════
-          2. AI MODEL
-          ═══════════════════════════════════════════════════════════════ */}
-      <div className="mt-6 p-4 border border-[var(--border)] bg-[var(--card)]">
-        <div className="font-bold text-sm mb-4">AI Model</div>
-
-        {(() => {
-          const totalCols = allAiProviders.length + 2; /* +2 for Eliza Cloud + Pi */
-          const isCloudSelected = resolvedSelectedId === "__cloud__";
-          const isPiAiSelected = resolvedSelectedId === "pi-ai";
-
-          if (totalCols === 0) {
-            return (
-              <div className="p-4 border border-[var(--warning,#f39c12)] bg-[var(--card)]">
-                <div className="text-xs text-[var(--warning,#f39c12)]">
-                  No AI providers available. Install a provider plugin from the{" "}
-                  <a
-                    href="#"
-                    className="text-[var(--accent)] underline"
-                    onClick={(e: React.MouseEvent) => {
-                      e.preventDefault();
-                      setTab("plugins");
-                    }}
-                  >
-                    Plugins
-                  </a>{" "}
-                  page.
-                </div>
-              </div>
-            );
-          }
-
-          return (
-            <>
-              <div
-                className="grid gap-1.5"
-                style={{ gridTemplateColumns: `repeat(${totalCols}, 1fr)` }}
-              >
+      <div
+        ref={contentRef}
+        className="flex-1 overflow-y-auto p-4 lg:p-8 scroll-smooth"
+      >
+        <div className="max-w-3xl mx-auto space-y-8 pb-20">
+          {/* APPEARANCE SECTION */}
+          <SectionCard
+            id="appearance"
+            title="Appearance"
+            description="Choose a theme that matches your style. Themes affect colors, fonts, and overall appearance."
+          >
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {THEMES.map((t) => (
                 <button
-                  className={`text-center px-2 py-2 border cursor-pointer transition-colors ${
-                    isCloudSelected
-                      ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]"
-                      : "border-[var(--border)] bg-[var(--card)] hover:border-[var(--accent)]"
+                  key={t.id}
+                  type="button"
+                  className={`p-4 border rounded-xl text-left transition-all duration-200 hover:border-accent hover:shadow-md hover:-translate-y-0.5 ${
+                    currentTheme === t.id
+                      ? "border-accent bg-accent-subtle shadow-md"
+                      : "border-border bg-bg hover:bg-bg-hover"
                   }`}
-                  onClick={() => void handleSelectCloud()}
+                  onClick={() => setTheme(t.id)}
                 >
-                  <div className={`text-xs font-bold whitespace-nowrap ${isCloudSelected ? "" : "text-[var(--text)]"}`}>
-                    Eliza Cloud
+                  <div className="text-sm font-semibold text-txt-strong mb-1">
+                    {t.label}
                   </div>
+                  <div className="text-[11px] text-muted">{t.hint}</div>
                 </button>
-
-                {/* pi-ai (local credentials) */}
-                <button
-                  className={`text-center px-2 py-2 border cursor-pointer transition-colors ${
-                    isPiAiSelected
-                      ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]"
-                      : "border-[var(--border)] bg-[var(--card)] hover:border-[var(--accent)]"
-                  } ${!piAiAvailable && !isPiAiSelected ? "opacity-50 cursor-not-allowed" : ""}`}
-                  onClick={() => {
-                    if (!piAiAvailable && !isPiAiSelected) return;
-                    void handleSelectPiAi();
-                  }}
-                  disabled={!piAiAvailable && !isPiAiSelected}
-                  title={
-                    piAiAvailable
-                      ? "Use local Pi credentials (~/.pi/agent)"
-                      : isPiAiSelected
-                        ? "Using pi-ai (model list still loading)"
-                        : "pi-ai is not available (no models detected)"
-                  }
-                >
-                  <div className={`text-xs font-bold whitespace-nowrap ${isPiAiSelected ? "" : "text-[var(--text)]"}`}>
-                    Pi (pi-ai)
-                  </div>
-                </button>
-
-                {allAiProviders.map((provider) => {
-                  const isSelected = !isCloudSelected && !isPiAiSelected && provider.id === resolvedSelectedId;
-                  return (
-                    <button
-                      key={provider.id}
-                      className={`text-center px-2 py-2 border cursor-pointer transition-colors ${
-                        isSelected
-                          ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]"
-                          : "border-[var(--border)] bg-[var(--card)] hover:border-[var(--accent)]"
-                      }`}
-                      onClick={() => void handleSwitchProvider(provider.id)}
-                    >
-                      <div className={`text-xs font-bold whitespace-nowrap ${isSelected ? "" : "text-[var(--text)]"}`}>
-                        {provider.name}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Eliza Cloud settings */}
-              {isCloudSelected && (
-                <div className="mt-4 pt-4 border-t border-[var(--border)]">
-                  {cloudConnected ? (
-                    <div>
-                      <div className="flex justify-between items-center mb-3">
-                        <div className="flex items-center gap-2">
-                          <span className="inline-block w-2 h-2 rounded-full bg-[var(--ok,#16a34a)]" />
-                          <span className="text-xs font-semibold">Logged into Eliza Cloud</span>
-                        </div>
-                        <button
-                          className="btn text-xs py-[3px] px-3 !mt-0 !bg-transparent !border-[var(--border)] !text-[var(--muted)]"
-                          onClick={() => void handleCloudDisconnect()}
-                          disabled={cloudDisconnecting}
-                        >
-                          {cloudDisconnecting ? "Disconnecting..." : "Disconnect"}
-                        </button>
-                      </div>
-
-                      <div className="text-xs mb-4">
-                        {cloudUserId && (
-                          <span className="text-[var(--muted)] mr-3">
-                            <code className="font-[var(--mono)] text-[11px]">{cloudUserId}</code>
-                          </span>
-                        )}
-                        {cloudCredits !== null && (
-                          <span>
-                            <span className="text-[var(--muted)]">Credits:</span>{" "}
-                            <span
-                              className={
-                                cloudCreditsCritical
-                                  ? "text-[var(--danger,#e74c3c)] font-bold"
-                                  : cloudCreditsLow
-                                    ? "text-[#b8860b] font-bold"
-                                    : ""
-                              }
-                            >
-                              ${cloudCredits.toFixed(2)}
-                            </span>
-                            <a
-                              href={cloudTopUpUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[11px] ml-2 text-[var(--accent)]"
-                            >
-                              Top up
-                            </a>
-                          </span>
-                        )}
-                      </div>
-
-                      {modelOptions && (() => {
-                        const modelSchema = {
-                          type: "object" as const,
-                          properties: {
-                            small: {
-                              type: "string",
-                              enum: modelOptions.small.map((m) => m.id),
-                              description: "Fast model for simple tasks",
-                            },
-                            large: {
-                              type: "string",
-                              enum: modelOptions.large.map((m) => m.id),
-                              description: "Powerful model for complex reasoning",
-                            },
-                          },
-                          required: [] as string[],
-                        };
-                        const modelHints: Record<string, ConfigUiHint> = {
-                          small: { label: "Small Model", width: "half" },
-                          large: { label: "Large Model", width: "half" },
-                        };
-                        const modelValues: Record<string, unknown> = {};
-                        const modelSetKeys = new Set<string>();
-                        if (currentSmallModel) { modelValues.small = currentSmallModel; modelSetKeys.add("small"); }
-                        if (currentLargeModel) { modelValues.large = currentLargeModel; modelSetKeys.add("large"); }
-
-                        return (
-                          <ConfigRenderer
-                            schema={modelSchema as JsonSchemaObject}
-                            hints={modelHints}
-                            values={modelValues}
-                            setKeys={modelSetKeys}
-                            registry={defaultRegistry}
-                            onChange={(key, value) => {
-                              const val = String(value);
-                              if (key === "small") setCurrentSmallModel(val);
-                              if (key === "large") setCurrentLargeModel(val);
-                              const updated = {
-                                small: key === "small" ? val : currentSmallModel,
-                                large: key === "large" ? val : currentLargeModel,
-                              };
-                              void (async () => {
-                                setModelSaving(true);
-                                try {
-                                  await client.updateConfig({ models: updated });
-                                  setModelSaveSuccess(true);
-                                  setTimeout(() => setModelSaveSuccess(false), 2000);
-                                  await client.restartAgent();
-                                } catch { /* ignore */ }
-                                setModelSaving(false);
-                              })();
-                            }}
-                          />
-                        );
-                      })()}
-
-                      <div className="flex items-center justify-end gap-2 mt-3">
-                        {modelSaving && <span className="text-[11px] text-[var(--muted)]">Saving &amp; restarting...</span>}
-                        {modelSaveSuccess && <span className="text-[11px] text-[var(--ok,#16a34a)]">Saved — restarting agent</span>}
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      {cloudLoginBusy ? (
-                        <div className="text-xs text-[var(--muted)]">
-                          Waiting for browser authentication... A new tab should have opened.
-                        </div>
-                      ) : (
-                        <>
-                          {cloudLoginError && (
-                            <div className="text-xs text-[var(--danger,#e74c3c)] mb-2">
-                              {cloudLoginError}
-                            </div>
-                          )}
-                          <button
-                            className="btn text-xs py-[5px] px-3.5 font-bold !mt-0"
-                            onClick={() => void handleCloudLogin()}
-                          >
-                            Log in to Eliza Cloud
-                          </button>
-                          <div className="text-[11px] text-[var(--muted)] mt-1.5">
-                            Opens a browser window to authenticate.
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* ── pi-ai settings (local credentials) ───────────────── */}
-              {!isCloudSelected && isPiAiSelected && (
-                <div className="mt-4 pt-4 border-t border-[var(--border)]">
-                  <div className="flex justify-between items-center mb-2">
-                    <div className="text-xs font-semibold">Pi (pi-ai) Settings</div>
-                    <span
-                      className={`text-[11px] px-2 py-[3px] border ${piAiEnabled ? "" : "opacity-70"}`}
-                      style={{
-                        borderColor: piAiEnabled ? "#2d8a4e" : "var(--warning,#f39c12)",
-                        color: piAiEnabled ? "#2d8a4e" : "var(--warning,#f39c12)",
-                      }}
-                    >
-                      {piAiEnabled ? "Enabled" : "Disabled"}
-                    </span>
-                  </div>
-
-                  <div className="text-[11px] text-[var(--muted)] mb-3">
-                    Uses credentials from <code className="font-[var(--mono)]">~/.pi/agent/auth.json</code>.
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-semibold">Small Model (optional)</label>
-                    <div className="text-[10px] text-[var(--muted)]">
-                      Used for fast tasks. Leave blank to use pi default{piDefaultModel ? ` (${piDefaultModel})` : ""}.
-                    </div>
-                    <input
-                      className="w-full px-2.5 py-[7px] border border-[var(--border)] bg-[var(--card)] text-[13px] font-[var(--mono)] transition-colors focus:border-[var(--accent)] focus:outline-none"
-                      type="text"
-                      value={piAiSmallModel}
-                      onChange={(e) => setPiAiSmallModel(e.target.value)}
-                      placeholder={piDefaultModel ? `e.g. ${piDefaultModel}` : "provider/modelId"}
-                      list="pi-ai-models-config"
-                    />
-                    <datalist id="pi-ai-models-config">
-                      {piModels.slice(0, 400).map((m) => (
-                        <option key={m.id} value={m.id} />
-                      ))}
-                    </datalist>
-                  </div>
-
-                  <div className="flex flex-col gap-1 mt-3">
-                    <label className="text-xs font-semibold">Large Model (optional)</label>
-                    <div className="text-[10px] text-[var(--muted)]">
-                      Used for complex reasoning. Leave blank to use pi default{piDefaultModel ? ` (${piDefaultModel})` : ""}.
-                    </div>
-                    <input
-                      className="w-full px-2.5 py-[7px] border border-[var(--border)] bg-[var(--card)] text-[13px] font-[var(--mono)] transition-colors focus:border-[var(--accent)] focus:outline-none"
-                      type="text"
-                      value={piAiLargeModel}
-                      onChange={(e) => setPiAiLargeModel(e.target.value)}
-                      placeholder={piDefaultModel ? `e.g. ${piDefaultModel}` : "provider/modelId"}
-                      list="pi-ai-models-config-large"
-                    />
-                    <datalist id="pi-ai-models-config-large">
-                      {piModels.slice(0, 400).map((m) => (
-                        <option key={m.id} value={m.id} />
-                      ))}
-                    </datalist>
-                  </div>
-
-                  <div className="flex justify-end mt-3">
-                    <button
-                      className={`btn text-xs py-[5px] px-4 !mt-0 ${piAiSaveSuccess ? "!bg-[var(--ok,#16a34a)] !border-[var(--ok,#16a34a)]" : ""}`}
-                      onClick={() => void handlePiAiSave()}
-                      disabled={piAiSaving}
-                    >
-                      {piAiSaving ? "Saving..." : piAiSaveSuccess ? "Saved" : "Save & Restart"}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* ── Local provider settings ──────────────────────────── */}
-              {!isCloudSelected && selectedProvider && (() => {
-                const isSaving = pluginSaving.has(selectedProvider.id);
-                const saveSuccess = pluginSaveSuccess.has(selectedProvider.id);
-                const params = selectedProvider.parameters;
-                const setCount = params.filter((p: PluginParamDef) => p.isSet).length;
-                const hasPluginParams = params.length > 0;
-                const subscriptionProviderId =
-                  SUBSCRIPTION_PROVIDER_BY_PLUGIN[selectedProvider.id] ?? null;
-                const supportsSubscriptionOAuth = subscriptionProviderId !== null;
-                const providerStatus = subscriptionProviderId
-                  ? (subscriptionStatusByProvider[subscriptionProviderId] ?? null)
-                  : null;
-                const providerBusy = subscriptionProviderId
-                  ? subscriptionBusyByProvider[subscriptionProviderId] === true
-                  : false;
-                const isConfigured = selectedProvider.configured || Boolean(providerStatus?.configured);
-
-                if (!hasPluginParams && !supportsSubscriptionOAuth) return null;
-
-                return (
-                  <div className="mt-4 pt-4 border-t border-[var(--border)]">
-                    <div className="flex justify-between items-center mb-3">
-                      <div className="text-xs font-semibold">
-                        {selectedProvider.name} Settings
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-[var(--muted)]">
-                          {hasPluginParams ? `${setCount}/${params.length} configured` : "OAuth authorization"}
-                        </span>
-                        <span
-                          className="text-[11px] px-2 py-[3px] border"
-                          style={{
-                            borderColor: isConfigured ? "#2d8a4e" : "var(--warning,#f39c12)",
-                            color: isConfigured ? "#2d8a4e" : "var(--warning,#f39c12)",
-                          }}
-                        >
-                          {isConfigured ? "Configured" : "Needs Setup"}
-                        </span>
-                      </div>
-                    </div>
-
-                    {supportsSubscriptionOAuth && subscriptionProviderId && (
-                      <div className="mb-4 p-3 border border-[var(--border)] bg-[var(--card)]">
-                        <div className="flex justify-between items-center mb-2">
-                          <div className="text-xs font-semibold">Subscription OAuth</div>
-                          <span
-                            className={`text-[10px] px-2 py-[2px] border ${
-                              providerStatus?.configured && providerStatus?.valid
-                                ? "text-[var(--ok,#16a34a)] border-[var(--ok,#16a34a)]"
-                                : "text-[var(--warning,#f39c12)] border-[var(--warning,#f39c12)]"
-                            }`}
-                          >
-                            {providerStatus?.configured && providerStatus?.valid
-                              ? "Connected"
-                              : providerStatus?.configured
-                                ? "Expired"
-                                : "Not connected"}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-[var(--muted)] mb-3">
-                          <div>
-                            Expires: {formatSubscriptionExpiry(providerStatus?.expiresAt ?? null)}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 mb-3">
-                          <button
-                            className="btn text-xs py-[5px] px-3 !mt-0 !bg-transparent !border-[var(--border)] !text-[var(--muted)] hover:!text-[var(--text)] hover:!border-[var(--accent)]"
-                            onClick={() => void loadSubscriptionStatus()}
-                            disabled={subscriptionStatusLoading || providerBusy}
-                          >
-                            {subscriptionStatusLoading ? "Refreshing..." : "Refresh Status"}
-                          </button>
-                          {providerStatus?.configured ? (
-                            <button
-                              className="btn text-xs py-[5px] px-3 !mt-0 !bg-transparent !border-[var(--danger,#e74c3c)] !text-[var(--danger,#e74c3c)]"
-                              onClick={() => void handleSubscriptionDisconnect(subscriptionProviderId)}
-                              disabled={providerBusy}
-                            >
-                              {providerBusy ? "Disconnecting..." : "Disconnect"}
-                            </button>
-                          ) : (
-                            <button
-                              className="btn text-xs py-[5px] px-3 !mt-0"
-                              onClick={() => void handleStartSubscriptionOAuth(subscriptionProviderId)}
-                              disabled={providerBusy}
-                            >
-                              {providerBusy ? "Starting..." : "Connect OAuth"}
-                            </button>
-                          )}
-                        </div>
-
-                        {subscriptionProviderId === "openai-subscription" && openaiOAuthStarted && (
-                          <div className="space-y-2">
-                            <div className="text-[11px] text-[var(--muted)]">
-                              Paste the full callback URL from the OpenAI login redirect.
-                            </div>
-                            <input
-                              type="text"
-                              className="w-full px-2.5 py-[7px] border border-[var(--border)] bg-[var(--card)] text-[13px] font-[var(--mono)] transition-colors focus:border-[var(--accent)] focus:outline-none"
-                              placeholder="http://localhost:1455/auth/callback?code=..."
-                              value={openaiCallbackUrl}
-                              onChange={(e) => setOpenaiCallbackUrl(e.target.value)}
-                            />
-                            <div className="flex items-center gap-2">
-                              <button
-                                className="btn text-xs py-[5px] px-3 !mt-0"
-                                onClick={() => void handleCompleteOpenAIOAuth()}
-                                disabled={providerBusy || !openaiCallbackUrl.trim()}
-                              >
-                                {providerBusy ? "Completing..." : "Complete OpenAI Login"}
-                              </button>
-                              <button
-                                className="btn text-xs py-[5px] px-3 !mt-0 !bg-transparent !border-[var(--border)] !text-[var(--muted)] hover:!text-[var(--text)]"
-                                onClick={() => {
-                                  setOpenaiOAuthStarted(false);
-                                  setOpenaiCallbackUrl("");
-                                }}
-                                disabled={providerBusy}
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        {subscriptionProviderId === "anthropic-subscription" && anthropicOAuthStarted && (
-                          <div className="space-y-2">
-                            <div className="text-[11px] text-[var(--muted)]">
-                              Paste the authorization code returned by Anthropic.
-                            </div>
-                            <input
-                              type="text"
-                              className="w-full px-2.5 py-[7px] border border-[var(--border)] bg-[var(--card)] text-[13px] font-[var(--mono)] transition-colors focus:border-[var(--accent)] focus:outline-none"
-                              placeholder="Authorization code..."
-                              value={anthropicCode}
-                              onChange={(e) => setAnthropicCode(e.target.value)}
-                            />
-                            <div className="flex items-center gap-2">
-                              <button
-                                className="btn text-xs py-[5px] px-3 !mt-0"
-                                onClick={() => void handleCompleteAnthropicOAuth()}
-                                disabled={providerBusy || !anthropicCode.trim()}
-                              >
-                                {providerBusy ? "Completing..." : "Complete Anthropic Login"}
-                              </button>
-                              <button
-                                className="btn text-xs py-[5px] px-3 !mt-0 !bg-transparent !border-[var(--border)] !text-[var(--muted)] hover:!text-[var(--text)]"
-                                onClick={() => {
-                                  setAnthropicOAuthStarted(false);
-                                  setAnthropicCode("");
-                                }}
-                                disabled={providerBusy}
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        {subscriptionError && (
-                          <div className="text-[11px] text-[var(--danger,#e74c3c)] mt-2">
-                            {subscriptionError}
-                          </div>
-                        )}
-                        {subscriptionSuccess && (
-                          <div className="text-[11px] text-[var(--ok,#16a34a)] mt-2">
-                            {subscriptionSuccess}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {hasPluginParams && (() => {
-                      const properties: Record<string, Record<string, unknown>> = {};
-                      const required: string[] = [];
-                      const hints: Record<string, ConfigUiHint> = {};
-                      const serverHints = selectedProvider.configUiHints ?? {};
-                      for (const p of params) {
-                        const prop: Record<string, unknown> = {};
-                        if (p.type === "boolean") prop.type = "boolean";
-                        else if (p.type === "number") prop.type = "number";
-                        else prop.type = "string";
-                        if (p.description) prop.description = p.description;
-                        if (p.default != null) prop.default = p.default;
-                        if (p.options?.length) prop.enum = p.options;
-                        const k = p.key.toUpperCase();
-                        if (k.includes("URL") || k.includes("ENDPOINT")) prop.format = "uri";
-                        properties[p.key] = prop;
-                        if (p.required) required.push(p.key);
-                        hints[p.key] = {
-                          label: autoLabel(p.key, selectedProvider.id),
-                          sensitive: p.sensitive ?? false,
-                          ...serverHints[p.key],
-                        };
-                        if (p.description && !hints[p.key].help) hints[p.key].help = p.description;
-                      }
-                      const schema = { type: "object", properties, required } as JsonSchemaObject;
-                      const values: Record<string, unknown> = {};
-                      const setKeys = new Set<string>();
-                      for (const p of params) {
-                        const cv = pluginFieldValues[selectedProvider.id]?.[p.key];
-                        if (cv !== undefined) { values[p.key] = cv; }
-                        else if (p.isSet && !p.sensitive && p.currentValue != null) { values[p.key] = p.currentValue; }
-                        if (p.isSet) setKeys.add(p.key);
-                      }
-                      return (
-                        <ConfigRenderer
-                          schema={schema}
-                          hints={hints}
-                          values={values}
-                          setKeys={setKeys}
-                          registry={defaultRegistry}
-                          pluginId={selectedProvider.id}
-                          onChange={(key, value) => handlePluginFieldChange(selectedProvider.id, key, String(value ?? ""))}
-                        />
-                      );
-                    })()}
-
-                    {hasPluginParams && (
-                      <div className="flex justify-between items-center mt-3">
-                        <div className="flex items-center gap-2">
-                          <button
-                            className="btn text-xs py-[5px] px-3.5 !mt-0 !bg-transparent !border-[var(--border)] !text-[var(--muted)] hover:!text-[var(--text)] hover:!border-[var(--accent)]"
-                            onClick={() => void handleFetchModels(selectedProvider.id)}
-                            disabled={modelsFetching}
-                          >
-                            {modelsFetching ? "Fetching..." : "Fetch Models"}
-                          </button>
-                          {modelsFetchResult && (
-                            <span className={`text-[11px] ${modelsFetchResult.startsWith("Error") ? "text-[var(--danger,#e74c3c)]" : "text-[var(--ok,#16a34a)]"}`}>
-                              {modelsFetchResult}
-                            </span>
-                          )}
-                        </div>
-                        <button
-                          className={`btn text-xs py-[5px] px-4 !mt-0 ${saveSuccess ? "!bg-[var(--ok,#16a34a)] !border-[var(--ok,#16a34a)]" : ""}`}
-                          onClick={() => handlePluginSave(selectedProvider.id)}
-                          disabled={isSaving}
-                        >
-                          {isSaving ? "Saving..." : saveSuccess ? "Saved" : "Save"}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-            </>
-          );
-        })()}
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════════
-          3. WALLET / RPC / SECRETS
-          ═══════════════════════════════════════════════════════════════ */}
-      <div className="mt-6">
-        <ConfigPageView embedded />
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════════
-          3b. GITHUB
-          ═══════════════════════════════════════════════════════════════ */}
-      <div className="mt-6 p-4 border border-[var(--border)] bg-[var(--card)]">
-        <div className="font-bold text-sm mb-4">GitHub</div>
-        <GitHubSettingsSection />
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════════
-          3c. CODING AGENTS
-          ═══════════════════════════════════════════════════════════════ */}
-      <div className="mt-6 p-4 border border-[var(--border)] bg-[var(--card)]">
-        <div className="font-bold text-sm mb-4">Coding Agents</div>
-        <CodingAgentSettingsSection />
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════════
-          4. MEDIA GENERATION
-          ═══════════════════════════════════════════════════════════════ */}
-      <div className="mt-6 p-4 border border-[var(--border)] bg-[var(--card)]">
-        <div className="font-bold text-sm mb-4">Media Generation</div>
-        <MediaSettingsSection />
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════════
-          5. SPEECH (TTS / STT)
-          ═══════════════════════════════════════════════════════════════ */}
-      <div className="mt-6 p-4 border border-[var(--border)] bg-[var(--card)]">
-        <div className="font-bold text-sm mb-4">Speech (TTS / STT)</div>
-        <VoiceConfigView />
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════════
-          6. PERMISSIONS & CAPABILITIES
-          ═══════════════════════════════════════════════════════════════ */}
-      <div className="mt-6 p-4 border border-[var(--border)] bg-[var(--card)]">
-        <div className="font-bold text-sm mb-4">Permissions & Capabilities</div>
-        <PermissionsSection />
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════════
-          7. UPDATES
-          ═══════════════════════════════════════════════════════════════ */}
-      <div className="mt-6 p-4 border border-[var(--border)] bg-[var(--card)]">
-        <div className="flex justify-between items-center mb-3">
-          <div>
-            <div className="font-bold text-sm">Software Updates</div>
-            <div className="text-xs text-[var(--muted)] mt-0.5">
-              {updateStatus ? (
-                <>Version {updateStatus.currentVersion}</>
-              ) : (
-                <>Loading...</>
-              )}
+              ))}
             </div>
-          </div>
-          <button
-            type="button"
-            className="btn whitespace-nowrap !mt-0 text-xs py-1.5 px-3.5"
-            disabled={updateLoading}
-            onClick={() => void loadUpdateStatus(true)}
+          </SectionCard>
+
+          {/* AI MODEL SECTION */}
+          <SectionCard
+            id="ai-model"
+            title="AI Model"
+            description="Configure your AI provider and model settings."
           >
-            {updateLoading ? "Checking..." : "Check Now"}
-          </button>
-        </div>
+            <ProviderSwitcher
+              cloudEnabled={cloudEnabled}
+              cloudConnected={cloudConnected}
+              cloudCredits={cloudCredits}
+              cloudCreditsLow={cloudCreditsLow}
+              cloudCreditsCritical={cloudCreditsCritical}
+              cloudTopUpUrl={cloudTopUpUrl}
+              cloudUserId={cloudUserId}
+              cloudLoginBusy={cloudLoginBusy}
+              cloudLoginError={cloudLoginError}
+              cloudDisconnecting={cloudDisconnecting}
+              plugins={plugins}
+              pluginSaving={pluginSaving}
+              pluginSaveSuccess={pluginSaveSuccess}
+              loadPlugins={loadPlugins}
+              handlePluginToggle={handlePluginToggle}
+              handlePluginConfigSave={handlePluginConfigSave}
+              handleCloudLogin={handleCloudLogin}
+              handleCloudDisconnect={handleCloudDisconnect}
+              setState={setState}
+              setTab={setTab}
+            />
+          </SectionCard>
 
-        {updateStatus ? (
-          <>
-            <div className="mb-4">
-              <ConfigRenderer
-                schema={{
-                  type: "object",
-                  properties: {
-                    channel: {
-                      type: "string",
-                      enum: ["stable", "beta", "nightly"],
-                    },
-                  },
-                }}
-                hints={{
-                  channel: {
-                    label: "Release Channel",
-                    type: "radio",
-                    width: "full",
-                    options: [
-                      {
-                        value: "stable",
-                        label: "Stable",
-                        description: "Recommended — production-ready releases",
-                      },
-                      {
-                        value: "beta",
-                        label: "Beta",
-                        description:
-                          "Preview — early access to upcoming features",
-                      },
-                      {
-                        value: "nightly",
-                        label: "Nightly",
-                        description:
-                          "Bleeding edge — latest development builds",
-                      },
-                    ],
-                  },
-                }}
-                values={{ channel: updateStatus.channel }}
-                registry={defaultRegistry}
-                onChange={(key, value) => {
-                  if (key === "channel")
-                    void handleChannelChange(
-                      value as "stable" | "beta" | "nightly",
-                    );
-                }}
-              />
-            </div>
-
-            {updateStatus.updateAvailable && updateStatus.latestVersion && (
-              <div className="mt-3 py-2.5 px-3 border border-[var(--accent)] bg-[rgba(255,255,255,0.03)] rounded flex justify-between items-center">
-                <div>
-                  <div className="text-[13px] font-bold text-[var(--accent)]">
-                    Update available
-                  </div>
-                  <div className="text-xs text-[var(--muted)]">
-                    {updateStatus.currentVersion} &rarr;{" "}
-                    {updateStatus.latestVersion}
-                  </div>
-                </div>
-                <div className="text-[11px] text-[var(--muted)] text-right">
-                  Run{" "}
-                  <code className="bg-[var(--bg-hover,rgba(255,255,255,0.05))] px-1.5 py-0.5 rounded-sm">
-                    milady update
-                  </code>
-                </div>
-              </div>
-            )}
-
-            {updateStatus.error && (
-              <div className="mt-2 text-[11px] text-[var(--danger,#e74c3c)]">
-                {updateStatus.error}
-              </div>
-            )}
-
-            {updateStatus.lastCheckAt && (
-              <div className="mt-2 text-[11px] text-[var(--muted)]">
-                Last checked:{" "}
-                {new Date(updateStatus.lastCheckAt).toLocaleString()}
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="text-center py-3 text-[var(--muted)] text-xs">
-            {updateLoading
-              ? "Checking for updates..."
-              : "Unable to load update status."}
-          </div>
-        )}
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════════
-          4. CHROME EXTENSION
-          ═══════════════════════════════════════════════════════════════ */}
-      <div className="mt-6 p-4 border border-[var(--border)] bg-[var(--card)]">
-        <div className="flex justify-between items-center mb-3">
-          <div className="font-bold text-sm">Chrome Extension</div>
-          <button
-            type="button"
-            className="btn whitespace-nowrap !mt-0 text-xs py-1.5 px-3.5"
-            onClick={() => void checkExtensionStatus()}
-            disabled={extensionChecking}
+          {/* MEDIA SECTION */}
+          <SectionCard
+            id="media"
+            title="Media Generation"
+            description="Configure providers for image, video, and vision capabilities."
           >
-            {extensionChecking ? "Checking..." : "Check Connection"}
-          </button>
-        </div>
+            <MediaSettingsSection />
+          </SectionCard>
 
-        {ext && (
-          <div className="p-3 border border-[var(--border)] bg-[var(--bg-muted)] mb-3">
-            <div className="flex items-center gap-2 mb-2">
-              <span
-                className="inline-block w-2 h-2 rounded-full"
-                style={{
-                  background: relayOk
-                    ? "var(--ok, #16a34a)"
-                    : "var(--danger, #e74c3c)",
-                }}
-              />
-              <span className="text-[13px] font-bold">
-                Relay Server: {relayOk ? "Connected" : "Not Reachable"}
-              </span>
-            </div>
-            <div className="text-xs text-[var(--muted)] font-[var(--mono)]">
-              ws://127.0.0.1:{ext.relayPort}/extension
-            </div>
-            {!relayOk && (
-              <div className="text-xs text-[var(--danger,#e74c3c)] mt-1.5">
-                The browser relay server is not running. Start the agent with
-                browser control enabled, then check again.
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="mt-3">
-          <div className="font-bold text-[13px] mb-2">
-            Install Chrome Extension
-          </div>
-          <div className="text-xs text-[var(--muted)] leading-relaxed">
-            <ol className="m-0 pl-5">
-              <li className="mb-1.5">
-                Open Chrome and navigate to{" "}
-                <code className="text-[11px] px-1 border border-[var(--border)] bg-[var(--bg-muted)]">
-                  chrome://extensions
-                </code>
-              </li>
-              <li className="mb-1.5">
-                Enable <strong>Developer mode</strong> (toggle in the top-right
-                corner)
-              </li>
-              <li className="mb-1.5">
-                Click <strong>&quot;Load unpacked&quot;</strong> and select the
-                extension folder:
-                {ext?.extensionPath ? (
-                  <>
-                    <br />
-                    <code className="text-[11px] px-1.5 border border-[var(--border)] bg-[var(--bg-muted)] inline-block mt-1 break-all">
-                      {ext.extensionPath}
-                    </code>
-                  </>
-                ) : (
-                  <>
-                    <br />
-                    <code className="text-[11px] px-1.5 border border-[var(--border)] bg-[var(--bg-muted)] inline-block mt-1">
-                      apps/chrome-extension/
-                    </code>
-                    <span className="italic">
-                      {" "}
-                      (relative to milady package root)
-                    </span>
-                  </>
-                )}
-              </li>
-              <li className="mb-1.5">
-                Pin the extension icon in Chrome&apos;s toolbar
-              </li>
-              <li>
-                Click the extension icon on any tab to attach/detach the Milady
-                browser relay
-              </li>
-            </ol>
-          </div>
-        </div>
-
-        {ext?.extensionPath && (
-          <div className="mt-3 py-2 px-3 border border-[var(--border)] bg-[var(--bg-muted)] font-[var(--mono)] text-[11px] break-all">
-            Extension path: {ext.extensionPath}
-          </div>
-        )}
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════════
-          11. EXPORT / IMPORT
-          ═══════════════════════════════════════════════════════════════ */}
-      <div className="mt-6 p-4 border border-[var(--border)] bg-[var(--card)]">
-        <div className="flex justify-between items-center">
-          <div className="font-bold text-sm">Agent Export / Import</div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="btn whitespace-nowrap !mt-0 text-xs py-1.5 px-3.5"
-              onClick={openImportModal}
-            >
-              Import
-            </button>
-            <button
-              type="button"
-              className="btn whitespace-nowrap !mt-0 text-xs py-1.5 px-3.5"
-              onClick={openExportModal}
-            >
-              Export
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════════
-          12. DANGER ZONE
-          ═══════════════════════════════════════════════════════════════ */}
-      <div className="mt-8 pt-6 border-t border-[var(--border)]">
-        <h3 className="text-lg font-bold text-[var(--danger,#e74c3c)]">
-          Danger Zone
-        </h3>
-        <p className="text-[13px] text-[var(--muted)] mb-5">
-          Irreversible actions. Proceed with caution.
-        </p>
-
-        <div className="border border-[var(--danger,#e74c3c)] p-4 mb-3">
-          <div className="flex justify-between items-center">
-            <div>
-              <div className="font-bold text-sm">Export Private Keys</div>
-              <div className="text-xs text-[var(--muted)] mt-0.5">
-                Reveal your EVM and Solana private keys. Never share these with
-                anyone.
-              </div>
-            </div>
-            <button
-              type="button"
-              className="btn whitespace-nowrap !mt-0 text-xs py-1.5 px-4"
-              style={{
-                background: "var(--danger, #e74c3c)",
-                borderColor: "var(--danger, #e74c3c)",
-              }}
-              onClick={() => void handleExportKeys()}
-            >
-              {walletExportVisible ? "Hide Keys" : "Export Keys"}
-            </button>
-          </div>
-          {walletExportVisible && walletExportData && (
-            <div className="mt-3 p-3 border border-[var(--danger,#e74c3c)] bg-[var(--bg-muted)] font-[var(--mono)] text-[11px] break-all leading-relaxed">
-              {walletExportData.evm && (
-                <div className="mb-2">
-                  <strong>EVM Private Key</strong>{" "}
-                  <span className="text-[var(--muted)]">
-                    ({walletExportData.evm.address})
-                  </span>
-                  <br />
-                  <span>{walletExportData.evm.privateKey}</span>
-                  <button
-                    type="button"
-                    className="ml-2 px-1.5 py-0.5 border border-[var(--border)] bg-[var(--bg)] cursor-pointer text-[10px] font-[var(--mono)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
-                    onClick={() =>
-                      void copyToClipboard(walletExportData.evm.privateKey)
-                    }
-                  >
-                    copy
-                  </button>
-                </div>
-              )}
-              {walletExportData.solana && (
-                <div>
-                  <strong>Solana Private Key</strong>{" "}
-                  <span className="text-[var(--muted)]">
-                    ({walletExportData.solana.address})
-                  </span>
-                  <br />
-                  <span>{walletExportData.solana.privateKey}</span>
-                  <button
-                    type="button"
-                    className="ml-2 px-1.5 py-0.5 border border-[var(--border)] bg-[var(--bg)] cursor-pointer text-[10px] font-[var(--mono)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
-                    onClick={() =>
-                      void copyToClipboard(walletExportData.solana.privateKey)
-                    }
-                  >
-                    copy
-                  </button>
-                </div>
-              )}
-              {!walletExportData.evm && !walletExportData.solana && (
-                <div className="text-[var(--muted)]">
-                  No wallet keys configured.
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="border border-[var(--danger,#e74c3c)] p-4 flex justify-between items-center">
-          <div>
-            <div className="font-bold text-sm">Reset Agent</div>
-            <div className="text-xs text-[var(--muted)] mt-0.5">
-              Wipe all config, memory, and data. Returns to the onboarding
-              wizard.
-            </div>
-          </div>
-          <button
-            type="button"
-            className="btn whitespace-nowrap !mt-0 text-xs py-1.5 px-4"
-            style={{
-              background: "var(--danger, #e74c3c)",
-              borderColor: "var(--danger, #e74c3c)",
-            }}
-            onClick={() => void handleReset()}
+          {/* VOICE SECTION */}
+          <SectionCard
+            id="voice"
+            title="Voice Configuration"
+            description="Text-to-speech and speech-to-text settings."
           >
-            Reset Everything
-          </button>
+            <VoiceConfigView />
+          </SectionCard>
+
+          {/* PERMISSIONS SECTION */}
+          <SectionCard
+            id="permissions"
+            title="Permissions & Capabilities"
+            description="Control what your agent can do and access."
+          >
+            <PermissionsSection />
+          </SectionCard>
+
+          {/* UPDATES SECTION */}
+          <SectionCard
+            id="updates"
+            title="Software Updates"
+            description="Keep your agent up to date with the latest features and improvements."
+          >
+            <UpdatesSection />
+          </SectionCard>
+
+          {/* ADVANCED SECTION */}
+          <SectionCard
+            id="advanced"
+            title="Advanced Settings"
+            description="Power user tools and system configuration."
+          >
+            <AdvancedSection />
+          </SectionCard>
         </div>
       </div>
-
-      {/* ── Modals ── */}
-      <Modal
-        open={exportModalOpen}
-        onClose={() => setExportModalOpen(false)}
-        title="Export Agent"
-      >
-        <div className="flex flex-col gap-3">
-          <div className="text-xs text-[var(--muted)]">
-            Your character, memories, chats, secrets, and relationships will be
-            downloaded as a single file. Exports are encrypted and require a
-            password.
-          </div>
-          {exportEstimateLoading && (
-            <div className="text-[11px] text-[var(--muted)]">
-              Estimating export size…
-            </div>
-          )}
-          {!exportEstimateLoading && exportEstimate && (
-            <div className="text-[11px] text-[var(--muted)] border border-[var(--border)] bg-[var(--bg-muted)] px-2.5 py-2">
-              <div>
-                Estimated file size:{" "}
-                {formatByteSize(exportEstimate.estimatedBytes)}
-              </div>
-              <div>
-                Contains {exportEstimate.memoriesCount} memories,{" "}
-                {exportEstimate.entitiesCount} entities,{" "}
-                {exportEstimate.roomsCount} rooms, {exportEstimate.worldsCount}{" "}
-                worlds, {exportEstimate.tasksCount} tasks.
-              </div>
-            </div>
-          )}
-          {!exportEstimateLoading && exportEstimateError && (
-            <div className="text-[11px] text-[var(--danger,#e74c3c)]">
-              Could not estimate export size: {exportEstimateError}
-            </div>
-          )}
-          <div className="flex flex-col gap-1">
-            <label
-              htmlFor="agent-export-password-input"
-              className="font-semibold text-xs"
-            >
-              Encryption Password
-            </label>
-            <input
-              id="agent-export-password-input"
-              type="password"
-              placeholder="Enter password (minimum 4 characters)"
-              value={exportPassword}
-              onChange={(e) => setState("exportPassword", e.target.value)}
-              className="px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-xs font-[var(--mono)] focus:border-[var(--accent)] focus:outline-none"
-            />
-            <div className="text-[11px] text-[var(--muted)]">
-              Password must be at least 4 characters.
-            </div>
-          </div>
-          <label className="flex items-center gap-2 text-xs text-[var(--muted)] cursor-pointer">
-            <input
-              type="checkbox"
-              checked={exportIncludeLogs}
-              onChange={(e) => setState("exportIncludeLogs", e.target.checked)}
-            />
-            Include logs in export
-          </label>
-          {exportError && (
-            <div className="text-[11px] text-[var(--danger,#e74c3c)]">
-              {exportError}
-            </div>
-          )}
-          {exportSuccess && (
-            <div className="text-[11px] text-[var(--ok,#16a34a)]">
-              {exportSuccess}
-            </div>
-          )}
-          <div className="flex justify-end gap-2 mt-1">
-            <button
-              type="button"
-              className="btn text-xs py-1.5 px-4 !mt-0 !bg-transparent !border-[var(--border)] !text-[var(--txt)]"
-              onClick={() => setExportModalOpen(false)}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="btn text-xs py-1.5 px-4 !mt-0"
-              disabled={exportBusy}
-              onClick={() => void handleAgentExport()}
-            >
-              {exportBusy ? "Exporting..." : "Download Export"}
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal
-        open={importModalOpen}
-        onClose={() => setImportModalOpen(false)}
-        title="Import Agent"
-      >
-        <div className="flex flex-col gap-3">
-          <div className="text-xs text-[var(--muted)]">
-            Select an <code className="text-[11px]">.eliza-agent</code> export
-            file and enter the password used during export.
-          </div>
-          <div className="flex flex-col gap-1">
-            <label
-              htmlFor="agent-import-file-input"
-              className="font-semibold text-xs"
-            >
-              Export File
-            </label>
-            <input
-              id="agent-import-file-input"
-              ref={importFileRef}
-              type="file"
-              accept=".eliza-agent"
-              onChange={(e) => {
-                setState("importFile", e.target.files?.[0] ?? null);
-                setState("importError", null);
-                setState("importSuccess", null);
-              }}
-              className="text-xs"
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label
-              htmlFor="agent-import-password-input"
-              className="font-semibold text-xs"
-            >
-              Decryption Password
-            </label>
-            <input
-              id="agent-import-password-input"
-              type="password"
-              placeholder="Enter password (minimum 4 characters)"
-              value={importPassword}
-              onChange={(e) => setState("importPassword", e.target.value)}
-              className="px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-xs font-[var(--mono)] focus:border-[var(--accent)] focus:outline-none"
-            />
-            <div className="text-[11px] text-[var(--muted)]">
-              Password must be at least 4 characters.
-            </div>
-          </div>
-          {importError && (
-            <div className="text-[11px] text-[var(--danger,#e74c3c)]">
-              {importError}
-            </div>
-          )}
-          {importSuccess && (
-            <div className="text-[11px] text-[var(--ok,#16a34a)]">
-              {importSuccess}
-            </div>
-          )}
-          <div className="flex justify-end gap-2 mt-1">
-            <button
-              type="button"
-              className="btn text-xs py-1.5 px-4 !mt-0 !bg-transparent !border-[var(--border)] !text-[var(--txt)]"
-              onClick={() => setImportModalOpen(false)}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="btn text-xs py-1.5 px-4 !mt-0"
-              disabled={importBusy}
-              onClick={() => void handleAgentImport()}
-            >
-              {importBusy ? "Importing..." : "Import Agent"}
-            </button>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 }

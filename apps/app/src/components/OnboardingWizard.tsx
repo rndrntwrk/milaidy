@@ -3,6 +3,15 @@
  */
 
 import {
+  AlertTriangle,
+  CheckCircle,
+  Cloud,
+  Lock,
+  Minus,
+  XCircle,
+  Zap,
+} from "lucide-react";
+import {
   type ChangeEvent,
   useCallback,
   useEffect,
@@ -22,6 +31,7 @@ import {
   type SandboxPlatformStatus,
   type StylePreset,
 } from "../api-client";
+import { resolveApiUrl } from "../asset-url";
 import { getProviderLogo } from "../provider-logos";
 import { AvatarSelector } from "./AvatarSelector";
 import { PermissionsOnboardingSection } from "./PermissionsSection";
@@ -96,6 +106,7 @@ export function OnboardingWizard() {
     onboardingBlooioPhoneNumber,
     onboardingGithubToken,
     onboardingSubscriptionTab,
+    onboardingElizaCloudTab,
     onboardingSelectedChains,
     onboardingRpcSelections,
     onboardingRpcKeys,
@@ -110,6 +121,7 @@ export function OnboardingWizard() {
     setState,
     setTheme,
     handleCloudLogin,
+    mintFromDrop,
   } = useApp();
 
   const [openaiOAuthStarted, setOpenaiOAuthStarted] = useState(false);
@@ -419,7 +431,7 @@ export function OnboardingWizard() {
               </h2>
             </div>
             <div className="flex flex-wrap gap-2 justify-center mx-auto mb-3">
-              {onboardingOptions?.names.slice(0, 5).map((name: string) => (
+              {onboardingOptions?.names.slice(0, 6).map((name: string) => (
                 <button
                   type="button"
                   key={name}
@@ -459,6 +471,7 @@ export function OnboardingWizard() {
                   }}
                   className="border-none bg-transparent text-sm font-bold w-full p-0 outline-none text-txt text-center placeholder:text-muted"
                   placeholder="enter custom name..."
+                  aria-label="Custom agent name"
                 />
               </div>
             </div>
@@ -492,7 +505,7 @@ export function OnboardingWizard() {
                     .then(() => {
                       setState(
                         "customVrmUrl",
-                        `/api/avatar/vrm?t=${Date.now()}`,
+                        resolveApiUrl(`/api/avatar/vrm?t=${Date.now()}`),
                       );
                       requestAnimationFrame(() => URL.revokeObjectURL(url));
                     })
@@ -580,6 +593,43 @@ export function OnboardingWizard() {
           </div>
         );
 
+      case "mint":
+        return (
+          <div className="max-w-[520px] mx-auto mt-10 text-center font-body">
+            <img
+              src="/android-chrome-512x512.png"
+              alt="Avatar"
+              className="w-[140px] h-[140px] rounded-full object-cover border-[3px] border-border mx-auto mb-5 block"
+            />
+            <div className="onboarding-speech bg-card border border-border rounded-xl px-5 py-4 mx-auto mb-6 max-w-[600px] relative text-[15px] text-txt leading-relaxed">
+              <h2 className="text-[28px] font-normal mb-1 text-txt-strong">
+                mint ur drop!
+              </h2>
+              <p className="text-[13px] text-txt mt-1 opacity-70">
+                claim ur character to get started
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 max-w-[460px] mx-auto">
+              <button
+                type="button"
+                className="px-4 py-3 bg-accent text-accent-fg font-bold rounded-lg cursor-pointer"
+                onClick={() => {
+                  mintFromDrop(false).then(() => handleOnboardingNext());
+                }}
+              >
+                Mint Character
+              </button>
+              <button
+                type="button"
+                className="px-4 py-3 bg-card border border-border text-txt font-bold rounded-lg hover:border-accent cursor-pointer"
+                onClick={() => handleOnboardingNext()}
+              >
+                Skip for now
+              </button>
+            </div>
+          </div>
+        );
+
       case "runMode":
         // On mobile (iOS/Android), only cloud is available
         if (isMobilePlatform) {
@@ -605,7 +655,9 @@ export function OnboardingWizard() {
               </div>
               <div className="flex flex-col gap-3 max-w-[460px] mx-auto">
                 <div className="px-4 py-4 border border-accent bg-accent text-accent-fg rounded-lg text-left">
-                  <div className="font-bold text-sm">☁️ cloud</div>
+                  <div className="font-bold text-sm flex items-center gap-1.5">
+                    <Cloud className="w-4 h-4" /> cloud
+                  </div>
                   <div className="text-[12px] mt-1 opacity-80">
                     always on, works from any device, easiest setup
                   </div>
@@ -640,7 +692,9 @@ export function OnboardingWizard() {
                 }`}
                 onClick={() => handleRunModeSelect("cloud")}
               >
-                <div className="font-bold text-sm">☁️ cloud</div>
+                <div className="font-bold text-sm flex items-center gap-1.5">
+                  <Cloud className="w-4 h-4" /> cloud
+                </div>
                 <div className="text-[12px] mt-1 opacity-70">
                   i run on eliza cloud. easiest setup, always on, can still use
                   ur browser &amp; computer if u let me
@@ -655,7 +709,9 @@ export function OnboardingWizard() {
                 }`}
                 onClick={() => handleRunModeSelect("local-sandbox")}
               >
-                <div className="font-bold text-sm">🔒 local (sandbox)</div>
+                <div className="font-bold text-sm flex items-center gap-1.5">
+                  <Lock className="w-4 h-4" /> local (sandbox)
+                </div>
                 <div className="text-[12px] mt-1 opacity-70">
                   i run on ur machine in a secure container. ur api keys stay
                   hidden even from me. needs docker
@@ -670,7 +726,9 @@ export function OnboardingWizard() {
                 }`}
                 onClick={() => handleRunModeSelect("local-rawdog")}
               >
-                <div className="font-bold text-sm">⚡ local (raw)</div>
+                <div className="font-bold text-sm flex items-center gap-1.5">
+                  <Zap className="w-4 h-4" /> local (raw)
+                </div>
                 <div className="text-[12px] mt-1 opacity-70">
                   i run directly on ur machine w full access. fastest &amp;
                   simplest but no sandbox protection
@@ -696,34 +754,27 @@ export function OnboardingWizard() {
                 okay which cloud?
               </h2>
             </div>
-            <div className="flex flex-col gap-2 text-left max-w-[600px] mx-auto">
-              {onboardingOptions?.cloudProviders.map(
-                (provider: CloudProviderOption) => (
-                  <button
-                    type="button"
-                    key={provider.id}
-                    className={`w-full px-4 py-3 border cursor-pointer bg-card transition-colors rounded-lg text-left ${
-                      onboardingCloudProvider === provider.id
-                        ? "border-accent !bg-accent !text-accent-fg"
-                        : "border-border hover:border-accent"
-                    }`}
-                    onClick={() => handleCloudProviderSelect(provider.id)}
-                  >
-                    <div className="font-bold text-sm">{provider.name}</div>
-                    {provider.description && (
-                      <div
-                        className={`text-xs mt-0.5 ${
-                          onboardingCloudProvider === provider.id
-                            ? "text-accent-fg/70"
-                            : "text-muted"
-                        }`}
-                      >
-                        {provider.description}
-                      </div>
-                    )}
-                  </button>
-                ),
-              )}
+            <div className="flex flex-col gap-2 text-left max-w-[600px] mx-auto" role="radiogroup" aria-label="Cloud provider">
+              {onboardingOptions?.cloudProviders.map((provider: CloudProviderOption) => (
+                <button
+                  key={provider.id}
+                  role="radio"
+                  className={`px-4 py-3 border cursor-pointer bg-card transition-colors rounded-lg text-left ${
+                    onboardingCloudProvider === provider.id
+                      ? "border-accent !bg-accent !text-accent-fg"
+                      : "border-border hover:border-accent"
+                  }`}
+                  onClick={() => handleCloudProviderSelect(provider.id)}
+                  aria-checked={onboardingCloudProvider === provider.id}
+                >
+                  <div className="font-bold text-sm">{provider.name}</div>
+                  {provider.description && (
+                    <div className={`text-xs mt-0.5 ${
+                      onboardingCloudProvider === provider.id ? "text-accent-fg/70" : "text-muted"
+                    }`}>{provider.description}</div>
+                  )}
+                </button>
+              ))}
             </div>
             {onboardingCloudProvider === "elizacloud" && (
               <div className="max-w-[600px] mx-auto mt-4">
@@ -781,35 +832,41 @@ export function OnboardingWizard() {
             </div>
             <div className="flex flex-col gap-4 text-left max-w-[600px] mx-auto">
               <div>
-                <span className="text-[13px] font-bold text-txt-strong block mb-2 text-left">
+                <label htmlFor="onboarding-small-model" className="text-[13px] font-bold text-txt-strong block mb-2 text-left">
                   Small Model:
-                </span>
+                </label>
                 <select
+                  id="onboarding-small-model"
                   value={onboardingSmallModel}
                   onChange={handleSmallModelChange}
                   className="w-full px-3 py-2 border border-border bg-card text-sm mt-2 focus:border-accent focus:outline-none"
                 >
-                  {onboardingOptions?.models.small.map((model: ModelOption) => (
-                    <option key={model.id} value={model.id}>
-                      {model.name}
-                    </option>
-                  ))}
+                  {onboardingOptions?.models?.small?.map(
+                    (model: ModelOption) => (
+                      <option key={model.id} value={model.id}>
+                        {model.name}
+                      </option>
+                    ),
+                  )}
                 </select>
               </div>
               <div>
-                <span className="text-[13px] font-bold text-txt-strong block mb-2 text-left">
+                <label htmlFor="onboarding-large-model" className="text-[13px] font-bold text-txt-strong block mb-2 text-left">
                   Large Model:
-                </span>
+                </label>
                 <select
+                  id="onboarding-large-model"
                   value={onboardingLargeModel}
                   onChange={handleLargeModelChange}
                   className="w-full px-3 py-2 border border-border bg-card text-sm mt-2 focus:border-accent focus:outline-none"
                 >
-                  {onboardingOptions?.models.large.map((model: ModelOption) => (
-                    <option key={model.id} value={model.id}>
-                      {model.name}
-                    </option>
-                  ))}
+                  {onboardingOptions?.models?.large?.map(
+                    (model: ModelOption) => (
+                      <option key={model.id} value={model.id}>
+                        {model.name}
+                      </option>
+                    ),
+                  )}
                 </select>
               </div>
             </div>
@@ -1047,51 +1104,111 @@ export function OnboardingWizard() {
               </button>
             </div>
 
-            {/* Eliza Cloud — cloud login */}
+            {/* Eliza Cloud — login or API key */}
             {onboardingProvider === "elizacloud" && (
-              <div className="max-w-[600px] mx-auto">
-                {cloudConnected ? (
-                  <div className="flex items-center gap-2 px-4 py-2.5 border border-green-500/30 bg-green-500/10 text-green-400 text-sm rounded-lg justify-center">
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <title>Connected</title>
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                    connected~
-                  </div>
-                ) : (
+              <div className="max-w-[600px] mx-auto text-left">
+                <div className="flex items-center gap-4 border-b border-border mb-4">
                   <button
                     type="button"
-                    className="w-full px-6 py-2.5 border border-accent bg-accent text-accent-fg text-sm cursor-pointer rounded-full hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed"
-                    onClick={handleCloudLogin}
-                    disabled={cloudLoginBusy}
+                    className={`text-sm pb-2 border-b-2 ${
+                      onboardingElizaCloudTab === "login"
+                        ? "border-accent text-accent"
+                        : "border-transparent text-muted hover:text-txt"
+                    }`}
+                    onClick={() => setState("onboardingElizaCloudTab", "login")}
                   >
-                    {cloudLoginBusy ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <span className="inline-block w-4 h-4 border-2 border-border border-t-accent rounded-full animate-spin" />
-                        connecting...
-                      </span>
-                    ) : (
-                      "connect account"
-                    )}
+                    Login
                   </button>
+                  <button
+                    type="button"
+                    className={`text-sm pb-2 border-b-2 ${
+                      onboardingElizaCloudTab === "apikey"
+                        ? "border-accent text-accent"
+                        : "border-transparent text-muted hover:text-txt"
+                    }`}
+                    onClick={() =>
+                      setState("onboardingElizaCloudTab", "apikey")
+                    }
+                  >
+                    API Key
+                  </button>
+                </div>
+
+                {onboardingElizaCloudTab === "login" ? (
+                  <div className="text-center">
+                    {cloudConnected ? (
+                      <div className="flex items-center gap-2 px-4 py-2.5 border border-green-500/30 bg-green-500/10 text-green-400 text-sm rounded-lg justify-center">
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <title>Connected</title>
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                        connected~
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="w-full px-6 py-2.5 border border-accent bg-accent text-accent-fg text-sm cursor-pointer rounded-full hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed"
+                        onClick={handleCloudLogin}
+                        disabled={cloudLoginBusy}
+                      >
+                        {cloudLoginBusy ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <span className="inline-block w-4 h-4 border-2 border-border border-t-accent rounded-full animate-spin" />
+                            connecting...
+                          </span>
+                        ) : (
+                          "connect account"
+                        )}
+                      </button>
+                    )}
+                    {cloudLoginError && (
+                      <p className="text-danger text-[13px] mt-2">
+                        {cloudLoginError}
+                      </p>
+                    )}
+                    <p className="text-xs text-muted mt-3">
+                      Free credits to start. Opens browser to authenticate.
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <label
+                      htmlFor="elizacloud-apikey"
+                      className="block text-sm text-txt mb-1.5"
+                    >
+                      Eliza Cloud API Key
+                    </label>
+                    <input
+                      id="elizacloud-apikey"
+                      type="password"
+                      placeholder="ec-..."
+                      value={onboardingApiKey}
+                      onChange={handleApiKeyChange}
+                      className="w-full px-3 py-2.5 text-sm border border-border rounded-lg bg-card text-txt focus:outline-none focus:ring-2 focus:ring-accent"
+                    />
+                    <p className="text-xs text-muted mt-2">
+                      Use this if browser login doesn't work. Get your API key
+                      from{" "}
+                      <a
+                        href="https://elizacloud.ai/dashboard/settings"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-accent hover:underline"
+                      >
+                        elizacloud.ai/dashboard
+                      </a>
+                    </p>
+                  </div>
                 )}
-                {cloudLoginError && (
-                  <p className="text-danger text-[13px] mt-2">
-                    {cloudLoginError}
-                  </p>
-                )}
-                <p className="text-xs text-muted mt-3">
-                  Free credits to start. No API key needed.
-                </p>
               </div>
             )}
 
@@ -1407,21 +1524,29 @@ export function OnboardingWizard() {
               onboardingApiKey.trim() &&
               onboardingOptions?.openrouterModels && (
                 <div className="mt-4 text-left">
-                  <span className="text-[13px] font-bold text-txt-strong block mb-2">
+                  <label className="text-[13px] font-bold text-txt-strong block mb-2">
                     Select Model:
-                  </span>
-                  <div className="flex flex-col gap-2">
-                    {onboardingOptions.openrouterModels.map(
+                  </label>
+                  <div
+                    className="flex flex-col gap-2"
+                    role="radiogroup"
+                    aria-label="OpenRouter model"
+                  >
+                    {onboardingOptions?.openrouterModels?.map(
                       (model: OpenRouterModelOption) => (
                         <button
                           type="button"
                           key={model.id}
+                          role="radio"
                           className={`w-full px-4 py-3 border cursor-pointer transition-colors text-left rounded-lg ${
                             onboardingOpenRouterModel === model.id
                               ? "border-accent !bg-accent !text-accent-fg"
                               : "border-border bg-card hover:border-accent/50"
                           }`}
                           onClick={() => handleOpenRouterModelSelect(model.id)}
+                          aria-checked={
+                            onboardingOpenRouterModel === model.id
+                          }
                         >
                           <div className="font-bold text-sm">{model.name}</div>
                           {model.description && (
@@ -1497,7 +1622,7 @@ export function OnboardingWizard() {
                             }
                             className="w-full px-3 py-2 border border-border bg-card text-sm mt-2 focus:border-accent focus:outline-none"
                           >
-                            {provider.rpcProviders.map(
+                            {provider.rpcProviders?.map(
                               (rpc: RpcProviderOption) => (
                                 <option key={rpc.id} value={rpc.id}>
                                   {rpc.name}
@@ -1638,6 +1763,7 @@ export function OnboardingWizard() {
                   }
                   placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
                   className="w-full px-3 py-2 border border-border bg-card text-sm focus:border-accent focus:outline-none rounded"
+                  aria-label="Telegram bot token"
                 />
               </div>
 
@@ -1674,6 +1800,7 @@ export function OnboardingWizard() {
                   }
                   placeholder="Discord bot token"
                   className="w-full px-3 py-2 border border-border bg-card text-sm focus:border-accent focus:outline-none rounded"
+                  aria-label="Discord bot token"
                 />
               </div>
 
@@ -1712,6 +1839,7 @@ export function OnboardingWizard() {
                     }
                     placeholder="Account SID"
                     className="w-full px-3 py-2 border border-border bg-card text-sm focus:border-accent focus:outline-none rounded"
+                    aria-label="Twilio Account SID"
                   />
                   <input
                     type="password"
@@ -1721,6 +1849,7 @@ export function OnboardingWizard() {
                     }
                     placeholder="Auth Token"
                     className="w-full px-3 py-2 border border-border bg-card text-sm focus:border-accent focus:outline-none rounded"
+                    aria-label="Twilio Auth Token"
                   />
                   <input
                     type="tel"
@@ -1730,6 +1859,7 @@ export function OnboardingWizard() {
                     }
                     placeholder="+1234567890 (Twilio phone number)"
                     className="w-full px-3 py-2 border border-border bg-card text-sm focus:border-accent focus:outline-none rounded"
+                    aria-label="Twilio phone number"
                   />
                 </div>
               </div>
@@ -1768,6 +1898,7 @@ export function OnboardingWizard() {
                     }
                     placeholder="Blooio API key"
                     className="w-full px-3 py-2 border border-border bg-card text-sm focus:border-accent focus:outline-none rounded"
+                    aria-label="Blooio API key"
                   />
                   <input
                     type="tel"
@@ -1777,6 +1908,7 @@ export function OnboardingWizard() {
                     }
                     placeholder="+1234567890 (your phone number)"
                     className="w-full px-3 py-2 border border-border bg-card text-sm focus:border-accent focus:outline-none rounded"
+                    aria-label="Blooio phone number"
                   />
                 </div>
               </div>
@@ -1875,11 +2007,13 @@ export function OnboardingWizard() {
         if (onboardingProvider === "openai-subscription") {
           return openaiConnected;
         }
-        if (
-          onboardingProvider === "elizacloud" ||
-          onboardingProvider === "ollama" ||
-          onboardingProvider === "pi-ai"
-        ) {
+        if (onboardingProvider === "elizacloud") {
+          // Allow proceeding if logged in OR if API key is provided
+          return onboardingElizaCloudTab === "login"
+            ? cloudConnected
+            : onboardingApiKey.trim().length > 0;
+        }
+        if (onboardingProvider === "ollama" || onboardingProvider === "pi-ai") {
           return true;
         }
         return onboardingProvider.length > 0 && onboardingApiKey.length > 0;
@@ -2131,7 +2265,13 @@ function DockerSetupStep() {
               : "bg-red-50 border-red-200 text-red-800 dark:bg-red-950 dark:border-red-800 dark:text-red-200"
           }`}
         >
-          <span>{isInstalled ? "✅" : "❌"}</span>
+          <span>
+            {isInstalled ? (
+              <CheckCircle className="w-4 h-4" />
+            ) : (
+              <XCircle className="w-4 h-4" />
+            )}
+          </span>
           <span>Docker {isInstalled ? "installed" : "not found"}</span>
         </div>
 
@@ -2143,7 +2283,13 @@ function DockerSetupStep() {
                 : "bg-yellow-50 border-yellow-200 text-yellow-800 dark:bg-yellow-950 dark:border-yellow-800 dark:text-yellow-200"
             }`}
           >
-            <span>{isRunning ? "✅" : "⚠️"}</span>
+            <span>
+              {isRunning ? (
+                <CheckCircle className="w-4 h-4" />
+              ) : (
+                <AlertTriangle className="w-4 h-4" />
+              )}
+            </span>
             <span>Docker daemon {isRunning ? "running" : "not running"}</span>
           </div>
         )}
@@ -2156,7 +2302,13 @@ function DockerSetupStep() {
                 : "bg-card border-border text-txt opacity-60"
             }`}
           >
-            <span>{hasAppleContainer ? "✅" : "➖"}</span>
+            <span>
+              {hasAppleContainer ? (
+                <CheckCircle className="w-4 h-4" />
+              ) : (
+                <Minus className="w-4 h-4" />
+              )}
+            </span>
             <span>
               Apple Container{" "}
               {hasAppleContainer

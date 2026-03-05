@@ -1,6 +1,11 @@
+---
+title: Contributing Guide
+description: How to set up a development environment, follow code conventions, and submit pull requests to the Milady project.
+---
+
 # Contributing Guide
 
-Welcome to Milaidy! This guide will help you set up your development environment and contribute effectively.
+Welcome to Milady! This guide will help you set up your development environment and contribute effectively.
 
 ## Table of Contents
 
@@ -26,8 +31,8 @@ Welcome to Milaidy! This guide will help you set up your development environment
 
 ```bash
 # Clone the repository
-git clone https://github.com/milady-ai/milaidy.git
-cd milaidy
+git clone https://github.com/milady-ai/milady.git
+cd milady
 
 # Match repository Node version
 nvm use || nvm install
@@ -85,7 +90,7 @@ bun run dev
 ## Project Structure
 
 ```
-milaidy/
+milady/
 ├── apps/
 │   ├── app/                 # Desktop/mobile app (Capacitor + React)
 │   │   ├── electron/        # Electron desktop wrapper
@@ -135,8 +140,8 @@ milaidy/
 | `src/entry.ts` | CLI entry point |
 | `src/index.ts` | Library exports |
 | `src/runtime/eliza.ts` | ElizaOS runtime initialization |
-| `src/runtime/milaidy-plugin.ts` | Main Milaidy plugin |
-| `milaidy.mjs` | npm bin entry |
+| `src/runtime/milady-plugin.ts` | Main Milady plugin |
+| `milady.mjs` | npm bin entry |
 
 ---
 
@@ -168,7 +173,7 @@ bun run build:ios
 bun run dev
 
 # Run CLI directly (via tsx)
-bun run milaidy start
+bun run milady start
 
 # UI development only
 bun run dev:ui
@@ -182,11 +187,13 @@ bun run tui
 
 ### Testing
 
+Coverage thresholds are enforced in `vitest.config.ts`: 25% lines/functions/statements, 15% branches. CI fails when coverage falls below these floors.
+
 ```bash
 # Run all tests (parallel)
 bun run test
 
-# Run with coverage
+# Run with coverage (enforces thresholds)
 bun run test:coverage
 
 # Watch mode
@@ -243,8 +250,8 @@ MILADY_RUNTIME=node bun run milady start
 
 ### Product vs Code Naming
 
-- **Milaidy** — Product name, headings, docs
-- **milaidy** — CLI command, package name, paths, config keys
+- **Milady** — Product name, headings, docs
+- **milady** — CLI command, package name, paths, config keys
 
 ### Formatting
 
@@ -408,7 +415,7 @@ Join the community Discord for help, discussions, and announcements:
 **[discord.gg/ai16z](https://discord.gg/ai16z)**
 
 Channels:
-- `#milaidy` — Milaidy-specific discussion
+- `#milady` — Milady-specific discussion
 - `#dev` — Development help
 - `#showcase` — Share what you've built
 
@@ -426,7 +433,7 @@ When filing an issue:
 2. **Use templates** — Fill out the provided template
 3. **Include reproduction** — Steps to reproduce
 4. **Share logs** — Relevant error output
-5. **Environment** — OS, Node version, Milaidy version
+5. **Environment** — OS, Node version, Milady version
 
 ```markdown
 ## Bug Report
@@ -435,7 +442,7 @@ When filing an issue:
 Brief description
 
 **To reproduce:**
-1. Run `milaidy start`
+1. Run `milady start`
 2. Send message "..."
 3. Error occurs
 
@@ -445,7 +452,7 @@ What should happen
 **Environment:**
 - OS: macOS 14.2
 - Node: 22.12.0
-- Milaidy: 2.0.0-alpha.8
+- Milady: 2.0.0-alpha.8
 
 **Logs:**
 ```
@@ -466,7 +473,7 @@ What should happen
 
 ## Next Steps
 
-- [Plugin Development Guide](./plugin-development.md) — Build plugins
-- [Skills Documentation](./skills.md) — Create skills
-- [Local Plugin Development](./local-plugins.md) — Develop locally
-- Browse the codebase: start with `src/runtime/milaidy-plugin.ts`
+- [Plugin Development Guide](/plugins/development) — Build plugins
+- [Skills Documentation](/plugins/skills) — Create skills
+- [Local Plugin Development](/plugins/local-plugins) — Develop locally
+- Browse the codebase: start with `src/runtime/milady-plugin.ts`

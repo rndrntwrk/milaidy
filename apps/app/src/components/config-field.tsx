@@ -9,6 +9,7 @@
  *  - ConfigField wrapper component (label + renderer + help + errors)
  */
 
+import { ChevronDown, X } from "lucide-react";
 import React, { useCallback, useRef, useState } from "react";
 import type { DynamicValue } from "../types";
 import type { FieldRenderer, FieldRenderProps } from "./config-catalog";
@@ -998,7 +999,7 @@ function ArrayItem({
             disabled={index === total - 1}
             title="Move down"
           >
-            ▼
+            <ChevronDown className="w-3 h-3" />
           </button>
         </div>
       )}
@@ -1017,7 +1018,7 @@ function ArrayItem({
           className="px-2 py-1.5 border border-[var(--border)] bg-[var(--bg-hover)] text-xs text-[var(--muted)] cursor-pointer transition-colors hover:bg-[var(--surface)] hover:text-[var(--destructive)] h-[36px] rounded-sm"
           onClick={onRemove}
         >
-          ✕
+          <X className="w-3 h-3" />
         </button>
       )}
     </div>
@@ -1182,7 +1183,7 @@ function KeyValueFieldInner({ fp: props }: { fp: FieldRenderProps }) {
                 fireAction(props, "click");
               }}
             >
-              ✕
+              <X className="w-3 h-3" />
             </button>
           )}
         </div>

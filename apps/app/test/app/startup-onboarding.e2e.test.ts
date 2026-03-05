@@ -114,6 +114,9 @@ type AppHarnessState = {
 const { mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
 }));
+const { mockUseLifoAutoPopout } = vi.hoisted(() => ({
+  mockUseLifoAutoPopout: vi.fn(),
+}));
 
 vi.mock("../../src/AppContext", async () => {
   const actual = await vi.importActual("../../src/AppContext");
@@ -175,6 +178,9 @@ vi.mock("../../src/components/InventoryView", () => ({
 vi.mock("../../src/components/KnowledgeView", () => ({
   KnowledgeView: () => React.createElement("div", null, "KnowledgeView"),
 }));
+vi.mock("../../src/components/LifoSandboxView", () => ({
+  LifoSandboxView: () => React.createElement("div", null, "LifoSandboxView"),
+}));
 vi.mock("../../src/components/SettingsView", () => ({
   SettingsView: () => React.createElement("div", null, "SettingsView"),
 }));
@@ -186,6 +192,9 @@ vi.mock("../../src/components/ChatView", () => ({
 }));
 vi.mock("../../src/components/LoadingScreen", () => ({
   LoadingScreen: () => React.createElement("div", null, "LoadingScreen"),
+}));
+vi.mock("../../src/hooks/useLifoAutoPopout", () => ({
+  useLifoAutoPopout: (options: unknown) => mockUseLifoAutoPopout(options),
 }));
 vi.mock("../../src/components/TerminalPanel", () => ({
   TerminalPanel: () => React.createElement("div", null, "TerminalPanel"),
@@ -434,6 +443,7 @@ describe("app startup onboarding flow (e2e)", () => {
     };
 
     mockUseApp.mockReset();
+    mockUseLifoAutoPopout.mockReset();
     mockUseApp.mockImplementation(() => ({
       ...state,
       setState: (key: string, value: unknown) => {

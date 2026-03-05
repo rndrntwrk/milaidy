@@ -1747,6 +1747,8 @@ export const ChatView = memo(function ChatView() {
   ]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
     const onQuickLayerRun = (rawEvent: Event) => {
       const event = rawEvent as CustomEvent<{ layerId?: string }>;
       const layerId = event.detail?.layerId;

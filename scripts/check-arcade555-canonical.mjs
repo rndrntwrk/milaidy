@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -8,13 +8,32 @@ const __dirname = path.dirname(__filename);
 const milaidyRoot = path.resolve(__dirname, "..");
 const workspaceRoot = path.resolve(milaidyRoot, "..");
 const arcadeRoot = path.resolve(workspaceRoot, "arcade-plugin");
+const installedArcadeRoot = path.resolve(
+  milaidyRoot,
+  "node_modules",
+  "@rndrntwrk",
+  "plugin-555arcade",
+);
 
 const SOURCE_ROOTS = [
-  path.join(milaidyRoot, "src"),
-  path.join(milaidyRoot, "apps"),
-  path.join(milaidyRoot, "scripts"),
-  path.join(arcadeRoot, "src"),
+  { label: "milaidy", dir: path.join(milaidyRoot, "src"), baseDir: milaidyRoot },
+  { label: "milaidy", dir: path.join(milaidyRoot, "apps"), baseDir: milaidyRoot },
+  { label: "milaidy", dir: path.join(milaidyRoot, "scripts"), baseDir: milaidyRoot },
 ];
+
+if (existsSync(path.join(arcadeRoot, "src"))) {
+  SOURCE_ROOTS.push({
+    label: "arcade-plugin",
+    dir: path.join(arcadeRoot, "src"),
+    baseDir: arcadeRoot,
+  });
+} else if (existsSync(path.join(installedArcadeRoot, "src"))) {
+  SOURCE_ROOTS.push({
+    label: "arcade-plugin",
+    dir: path.join(installedArcadeRoot, "src"),
+    baseDir: installedArcadeRoot,
+  });
+}
 
 const INCLUDE_EXTENSIONS = new Set([
   ".ts",
@@ -86,12 +105,12 @@ const ALLOWLIST = [
   /^arcade-plugin\/src\/types\/index\.ts$/,
 ];
 
-function toRepoRelative(filePath) {
-  return path.relative(workspaceRoot, filePath).split(path.sep).join("/");
+function toRepoRelative(filePath, rootLabel, rootDir) {
+  return `${rootLabel}/${path.relative(rootDir, filePath).split(path.sep).join("/")}`;
 }
 
-function shouldIgnoreFile(filePath) {
-  const relative = toRepoRelative(filePath);
+function shouldIgnoreFile(filePath, rootLabel, rootDir) {
+  const relative = toRepoRelative(filePath, rootLabel, rootDir);
   return IGNORE_FILE_PATTERNS.some((pattern) => pattern.test(relative));
 }
 
@@ -99,18 +118,20 @@ function isAllowed(relativePath) {
   return ALLOWLIST.some((pattern) => pattern.test(relativePath));
 }
 
-function walk(dirPath, out = []) {
+function walk(root, out = []) {
+  const { dir: dirPath, label, baseDir } = root;
+  if (!existsSync(dirPath)) return out;
   for (const entry of readdirSync(dirPath, { withFileTypes: true })) {
     if (IGNORE_DIR_NAMES.has(entry.name)) continue;
     const fullPath = path.join(dirPath, entry.name);
     if (entry.isDirectory()) {
-      walk(fullPath, out);
+      walk({ dir: fullPath, label, baseDir }, out);
       continue;
     }
     if (!entry.isFile()) continue;
     if (!INCLUDE_EXTENSIONS.has(path.extname(entry.name))) continue;
-    if (shouldIgnoreFile(fullPath)) continue;
-    out.push(fullPath);
+    if (shouldIgnoreFile(fullPath, label, baseDir)) continue;
+    out.push({ filePath: fullPath, label, rootDir: baseDir });
   }
   return out;
 }
@@ -149,8 +170,8 @@ if (
 }
 
 for (const root of SOURCE_ROOTS) {
-  for (const filePath of walk(root)) {
-    const relativePath = toRepoRelative(filePath);
+  for (const { filePath, label, rootDir } of walk(root)) {
+    const relativePath = toRepoRelative(filePath, label, rootDir);
     const contents = readFileSync(filePath, "utf8");
     for (const { label, regex } of LEGACY_ARCADE_PATTERNS) {
       regex.lastIndex = 0;

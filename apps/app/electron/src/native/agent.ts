@@ -11,12 +11,66 @@
  *
  * The renderer never needs to know whether the API server is embedded or
  * remote — it simply connects to `http://localhost:{port}`.
+ *
+ * --- Exception handling (DO NOT REMOVE as "excess" or "deslop") ---
+ * Startup uses multiple try/catch and .catch() guards so that:
+ * 1. If eliza.js fails to load (e.g. missing native .node binary), the API
+ *    server stays up and the UI can still connect and show an error state.
+ * 2. If startEliza() throws, we set state to "error" with port preserved so
+ *    the renderer gets a usable status instead of "Failed to fetch".
+ * 3. The outer catch does NOT tear down the API server — only the runtime.
+ * Without these guards, a single missing native module makes the whole app
+ * window unusable (no API, no error message). See docs/electron-startup.md.
  */
 
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { app, type BrowserWindow, ipcMain } from "electron";
 import type { IpcValue } from "./ipc-types";
+
+// Diagnostic logging to file for debugging packaged app startup issues
+let diagnosticLogPath: string | null = null;
+
+function getDiagnosticLogPath(): string | null {
+  if (diagnosticLogPath !== null) return diagnosticLogPath;
+  try {
+    if (app.isPackaged) {
+      diagnosticLogPath = path.join(
+        app.getPath("userData"),
+        "milady-startup.log",
+      );
+    }
+  } catch {
+    // app.getPath may not be available in test environments
+  }
+  return diagnosticLogPath;
+}
+
+function diagnosticLog(message: string): void {
+  const timestamp = new Date().toISOString();
+  const line = `[${timestamp}] ${message}\n`;
+  console.log(message);
+  const logPath = getDiagnosticLogPath();
+  if (logPath) {
+    try {
+      fs.appendFileSync(logPath, line);
+    } catch {
+      // Ignore write errors
+    }
+  }
+}
+
+/** One-line, truncated error string safe for UI (status.error). Full stack still goes to diagnosticLog. */
+function shortError(err: unknown, maxLen = 280): string {
+  const raw =
+    err instanceof Error
+      ? err.message || (err.stack ?? String(err))
+      : String(err);
+  const oneLine = raw.replace(/\s+/g, " ").trim();
+  if (oneLine.length <= maxLen) return oneLine;
+  return `${oneLine.slice(0, maxLen)}…`;
+}
 
 /**
  * Dynamic import that survives TypeScript's CommonJS transformation.
@@ -117,6 +171,13 @@ export class AgentManager {
 
   /** Start the agent runtime + API server. Idempotent. */
   async start(): Promise<AgentStatus> {
+    diagnosticLog(
+      `[Agent] start() called, current state: ${this.status.state}`,
+    );
+    const logPath = getDiagnosticLogPath();
+    if (logPath) {
+      diagnosticLog(`[Agent] Diagnostic log file: ${logPath}`);
+    }
     if (this.status.state === "running" || this.status.state === "starting") {
       return this.status;
     }
@@ -157,7 +218,7 @@ export class AgentManager {
 
     try {
       // Resolve the milady dist.
-      // In dev: __dirname = electron/build/src/native/ → 6 levels up to milady root/dist
+      // In dev: Use milady-dist in electron app dir (same bundle as packaged)
       // In packaged app: dist is unpacked to app.asar.unpacked/milady-dist
       // (asarUnpack in electron-builder.config.json ensures milady-dist is
       // extracted outside the ASAR so ESM import() works normally.)
@@ -166,41 +227,100 @@ export class AgentManager {
             app.getAppPath().replace("app.asar", "app.asar.unpacked"),
             "milady-dist",
           )
-        : path.resolve(__dirname, "../../../../../../dist");
+        : path.resolve(__dirname, "../../../milady-dist");
 
-      console.log(
+      diagnosticLog(
         `[Agent] Resolved milady dist: ${miladyDist} (packaged: ${app.isPackaged})`,
       );
+      // Check if milady-dist exists
+      if (app.isPackaged) {
+        const distExists = fs.existsSync(miladyDist);
+        const serverJsExists = fs.existsSync(
+          path.join(miladyDist, "server.js"),
+        );
+        const elizaJsExists = fs.existsSync(path.join(miladyDist, "eliza.js"));
+        diagnosticLog(
+          `[Agent] milady-dist exists: ${distExists}, server.js: ${serverJsExists}, eliza.js: ${elizaJsExists}`,
+        );
+        if (distExists) {
+          const files = fs.readdirSync(miladyDist);
+          diagnosticLog(`[Agent] milady-dist contents: ${files.join(", ")}`);
+        }
+      }
 
-      // When loading from app.asar.unpacked, Node's module resolution can't
-      // find dependencies inside the ASAR's node_modules (e.g. json5). Add
-      // the ASAR's node_modules to NODE_PATH so ESM imports can resolve them.
+      // NODE_PATH so eliza.js dynamic imports (e.g. @elizaos/plugin-*) resolve.
+      // WHY: Node does not search repo root when the entry is under apps/app/electron/;
+      // without this, import("@elizaos/plugin-coding-agent") fails. Packaged: use ASAR's
+      // node_modules (unpacked deps live there). Dev: walk up from __dirname until we
+      // find node_modules so we don't depend on a fixed ../ depth (tsc-out vs build/).
+      // _initPaths() below: Node caches resolution paths at startup; we set NODE_PATH at
+      // runtime so we must force a re-read before the next import(). See docs/plugin-resolution-and-node-path.md.
+      const existing = process.env.NODE_PATH || "";
       if (app.isPackaged) {
         const asarModules = path.join(app.getAppPath(), "node_modules");
-        const existing = process.env.NODE_PATH || "";
         process.env.NODE_PATH = existing
           ? `${asarModules}${path.delimiter}${existing}`
           : asarModules;
-        // Force Node to re-read NODE_PATH
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        require("node:module").Module._initPaths();
-        console.log(
+        diagnosticLog(
           `[Agent] Added ASAR node_modules to NODE_PATH: ${asarModules}`,
         );
+      } else {
+        let dir = __dirname;
+        let rootModules: string | null = null;
+        while (dir !== path.dirname(dir)) {
+          const candidate = path.join(dir, "node_modules");
+          if (fs.existsSync(candidate)) {
+            rootModules = candidate;
+            break;
+          }
+          dir = path.dirname(dir);
+        }
+        if (rootModules) {
+          process.env.NODE_PATH = existing
+            ? `${rootModules}${path.delimiter}${existing}`
+            : rootModules;
+          diagnosticLog(
+            `[Agent] Added monorepo root node_modules to NODE_PATH: ${rootModules}`,
+          );
+        }
       }
+
+      // Also add milady-dist/node_modules to NODE_PATH for native module platform
+      // binaries (e.g., @img/sharp-darwin-arm64, @node-llama-cpp/mac-arm64-metal).
+      // These are external deps copied by copy-electron-plugins-and-deps.mjs.
+      const miladyDistModules = path.join(miladyDist, "node_modules");
+      if (fs.existsSync(miladyDistModules)) {
+        process.env.NODE_PATH = process.env.NODE_PATH
+          ? `${miladyDistModules}${path.delimiter}${process.env.NODE_PATH}`
+          : miladyDistModules;
+        diagnosticLog(
+          `[Agent] Added milady-dist node_modules to NODE_PATH: ${miladyDistModules}`,
+        );
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require("node:module").Module._initPaths();
 
       // 1. Start API server immediately so the UI can bootstrap while runtime starts.
       //    (or MILADY_PORT if set)
       const apiPort = Number(process.env.MILADY_PORT) || 2138;
+      diagnosticLog(
+        `[Agent] Loading server.js from: ${path.join(miladyDist, "server.js")}`,
+      );
+      // WHY .catch(): Keep API server step independent. If server.js fails we
+      // still try to load eliza.js and set error state; do not let one throw
+      // kill the whole startup (see file-level comment).
       const serverModule = await dynamicImport(
         pathToFileURL(path.join(miladyDist, "server.js")).href,
       ).catch((err: unknown) => {
-        console.warn(
-          "[Agent] Could not load server.js:",
-          err instanceof Error ? err.message : err,
-        );
+        const errMsg =
+          err instanceof Error ? err.stack || err.message : String(err);
+        diagnosticLog(`[Agent] FAILED to load server.js: ${errMsg}`);
         return null;
       });
+      diagnosticLog(
+        `[Agent] server.js loaded: ${serverModule != null}, has startApiServer: ${typeof serverModule?.startApiServer === "function"}`,
+      );
 
       let actualPort: number | null = null;
       let startEliza:
@@ -214,6 +334,7 @@ export class AgentManager {
       let apiUpdateRuntime: ((rt: unknown) => void) | null = null;
 
       if (serverModule?.startApiServer) {
+        diagnosticLog(`[Agent] Starting API server on port ${apiPort}...`);
         const {
           port: resolvedPort,
           close,
@@ -289,8 +410,9 @@ export class AgentManager {
         actualPort = resolvedPort;
         this.apiClose = close;
         apiUpdateRuntime = updateRuntime;
+        diagnosticLog(`[Agent] API server started on port ${actualPort}`);
       } else {
-        console.warn(
+        diagnosticLog(
           "[Agent] Could not find API server module — runtime will start without HTTP API",
         );
       }
@@ -303,27 +425,90 @@ export class AgentManager {
       this.sendToRenderer("agent:status", this.status);
 
       // 2. Resolve runtime bootstrap entry (may be slow on cold boot).
+      // WHY .catch() here: eliza.js can fail (e.g. onnxruntime-node missing
+      // darwin/x64 .node on Intel Mac). Without this guard we throw, outer
+      // catch runs, and we used to close the API server — so the UI got
+      // "Failed to fetch" with no way to show error. Now we return null,
+      // set state "error" with port kept, so renderer can connect and display
+      // the failure. Do not remove as "excess" exception handling.
+      diagnosticLog(
+        `[Agent] Loading eliza.js from: ${path.join(miladyDist, "eliza.js")}`,
+      );
+      let elizaLoadError: string | null = null;
       const elizaModule = await dynamicImport(
         pathToFileURL(path.join(miladyDist, "eliza.js")).href,
-      );
-      const resolvedStartEliza = (elizaModule.startEliza ??
-        (elizaModule.default as Record<string, unknown>)?.startEliza) as
-        | ((opts: {
-            headless: boolean;
-          }) => Promise<Record<string, unknown> | null>)
-        | undefined;
+      ).catch((err: unknown) => {
+        const errMsg =
+          err instanceof Error ? err.stack || err.message : String(err);
+        diagnosticLog(`[Agent] FAILED to load eliza.js: ${errMsg}`);
+        elizaLoadError = shortError(err);
+        return null;
+      });
+
+      if (elizaModule) {
+        diagnosticLog(
+          `[Agent] eliza.js loaded, exports: ${Object.keys(elizaModule).join(", ")}`,
+        );
+      }
+
+      const resolvedStartEliza = elizaModule
+        ? ((elizaModule.startEliza ??
+            (elizaModule.default as Record<string, unknown>)?.startEliza) as
+            | ((opts: {
+                headless: boolean;
+              }) => Promise<Record<string, unknown> | null>)
+            | undefined)
+        : undefined;
 
       if (typeof resolvedStartEliza !== "function") {
-        throw new Error("eliza.js does not export startEliza");
+        const reason = elizaModule
+          ? "eliza.js does not export startEliza"
+          : (elizaLoadError ?? "eliza.js failed to load (see log above)");
+        diagnosticLog(`[Agent] Cannot start runtime: ${reason}`);
+
+        this.status = {
+          state: "error",
+          agentName: null,
+          port: actualPort,
+          startedAt: null,
+          error: reason,
+        };
+        this.sendToRenderer("agent:status", this.status);
+        return this.status;
       }
       startEliza = resolvedStartEliza;
 
       // 3. Start Eliza runtime in headless mode.
-      const runtimeResult = await startEliza({ headless: true });
+      // WHY try/catch: startEliza() can throw (plugin init, native deps).
+      // Catching here lets us set state "error" and keep the API server up
+      // so the UI can show the error; do not let this bubble and tear down
+      // the server (see file-level comment).
+      diagnosticLog(`[Agent] Starting Eliza runtime in headless mode...`);
+      let runtimeResult: Record<string, unknown> | null = null;
+      let runtimeInitError: string | null = null;
+      try {
+        runtimeResult = await startEliza({ headless: true });
+      } catch (runtimeErr) {
+        const errMsg =
+          runtimeErr instanceof Error
+            ? runtimeErr.stack || runtimeErr.message
+            : String(runtimeErr);
+        diagnosticLog(`[Agent] Runtime startup threw: ${errMsg}`);
+        runtimeInitError = shortError(runtimeErr);
+      }
+
       if (!runtimeResult) {
-        throw new Error(
-          "startEliza returned null — runtime failed to initialize",
-        );
+        const reason = runtimeInitError ?? "Runtime failed to initialize";
+        diagnosticLog(`[Agent] ${reason}`);
+        this.status = {
+          state: "error",
+          agentName: null,
+          port: actualPort,
+          startedAt: null,
+          error: reason,
+        };
+        this.sendToRenderer("agent:status", this.status);
+        return this.status;
       }
 
       this.runtime = runtimeResult as Record<string, unknown>;
@@ -344,30 +529,26 @@ export class AgentManager {
 
       this.sendToRenderer("agent:status", this.status);
       if (actualPort) {
-        console.log(
+        diagnosticLog(
           `[Agent] Runtime started — agent: ${agentName}, port: ${actualPort}`,
         );
       } else {
-        console.log(
+        diagnosticLog(
           `[Agent] Runtime started — agent: ${agentName}, API unavailable`,
         );
       }
       return this.status;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (this.apiClose) {
-        try {
-          await this.apiClose();
-        } catch (closeErr) {
-          console.warn(
-            "[Agent] Failed to close API server after startup failure:",
-            closeErr instanceof Error ? closeErr.message : closeErr,
-          );
-        } finally {
-          this.apiClose = null;
-          this.status.port = null;
-        }
-      }
+      // WHY we do NOT call this.apiClose() here: If the failure was loading
+      // eliza.js or startEliza(), the API server is already running. Tearing
+      // it down would make the window show "Failed to fetch" with no error
+      // message. We only clear runtime and set status; port stays so renderer
+      // can connect and display the error. Do not "simplify" by adding
+      // this.apiClose() in this catch.
+      const msg =
+        err instanceof Error
+          ? (err as Error).stack || err.message
+          : String(err);
       if (
         this.runtime &&
         typeof (this.runtime as { stop?: () => Promise<void> }).stop ===
@@ -391,7 +572,7 @@ export class AgentManager {
         error: msg,
       };
       this.sendToRenderer("agent:status", this.status);
-      console.error("[Agent] Failed to start:", msg);
+      diagnosticLog(`[Agent] Failed to start: ${msg}`);
       return this.status;
     }
   }

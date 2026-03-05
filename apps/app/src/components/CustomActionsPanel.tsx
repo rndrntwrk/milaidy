@@ -28,7 +28,7 @@ export function CustomActionsPanel({
   onClose,
   onOpenEditor,
 }: CustomActionsPanelProps) {
-  const { plugins, setActionNotice, setTab } = useApp();
+  const { plugins = [], setActionNotice, setTab } = useApp();
   const [actions, setActions] = useState<CustomActionDef[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -98,6 +98,7 @@ export function CustomActionsPanel({
       setTab("chat");
       setActionNotice(`Running ${layerLabel} from Actions drawer...`, "info", 2200);
       onClose();
+      if (typeof window === "undefined") return;
       window.setTimeout(() => {
         window.dispatchEvent(
           new CustomEvent("milaidy:quick-layer:run", {

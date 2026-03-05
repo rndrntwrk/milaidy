@@ -2,17 +2,19 @@
   "appId": "com.miladyai.milady",
   "productName": "Milady",
   "directories": {
+    "app": ".",
     "buildResources": "resources"
   },
   "files": [
     "assets/**/*",
+    "tsc-out/**/*",
     "build/**/*",
     "capacitor.config.*",
     "app/**/*",
-    "milady-dist/**/*.js",
-    "milady-dist/package.json"
+    "milady-dist/**/*",
+    "*.tar.gz"
   ],
-  "asarUnpack": ["milady-dist/**/*"],
+  "asarUnpack": ["milady-dist/**/*", "node_modules/**/*", "*.tar.gz"],
   "publish": {
     "provider": "github",
     "owner": "milady-ai",
