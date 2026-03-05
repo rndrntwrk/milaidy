@@ -93,9 +93,6 @@ import {
 import { isPiAiEnabledFromEnv, registerPiAiRuntime } from "./pi-ai.js";
 import { createSwapPlugin } from "../plugins/swap/index.js";
 import { createStreamPlugin } from "../plugins/stream/index.js";
-import { createStream555ControlPlugin } from "../plugins/stream555-control/index.js";
-import { createStream555AdsPlugin } from "../plugins/stream555-ads/index.js";
-import { createStream555AuthPlugin } from "../plugins/stream555-auth/index.js";
 import { createFive55GamesPlugin } from "../plugins/five55-games/index.js";
 import { createFive55ScoreCapturePlugin } from "../plugins/five55-score-capture/index.js";
 import { createFive55LeaderboardPlugin } from "../plugins/five55-leaderboard/index.js";
@@ -647,9 +644,6 @@ const OPTIONAL_PLUGIN_MAP: Readonly<Record<string, string>> = {
 const INTERNAL_BUNDLED_PLUGIN_ENTRY_KEYS = new Set<string>([
   "swap",
   "stream",
-  "stream555-control",
-  "stream555-ads",
-  "stream555-auth",
   "five55-games",
   "five55-score-capture",
   "five55-leaderboard",
@@ -664,8 +658,7 @@ const INTERNAL_BUNDLED_PLUGIN_ENTRY_KEYS = new Set<string>([
 const FIVE55_DEFAULT_ENABLED_ENTRY_KEYS = new Set<string>([
   "swap",
   "stream",
-  "stream555-ads",
-  "stream555-auth",
+  "stream555-canonical",
   "five55-games",
   "five55-score-capture",
   "five55-leaderboard",
@@ -1003,17 +996,6 @@ export function applyAliceFullDutyDefaults(config: MilaidyConfig): {
     pluginEntries.stream = { enabled: false };
     changed = true;
     changes.push("plugins.entries.stream.enabled=false");
-  }
-
-  if (pluginEntries["stream555-control"] === undefined) {
-    const stream555ControlDefaultEnabled = !canonicalStreamPluginAvailable;
-    pluginEntries["stream555-control"] = {
-      enabled: stream555ControlDefaultEnabled,
-    };
-    changed = true;
-    changes.push(
-      `plugins.entries.stream555-control.enabled=${stream555ControlDefaultEnabled}`,
-    );
   }
 
   if (!config.env || typeof config.env !== "object") {
@@ -3775,6 +3757,37 @@ export async function startEliza(
   const suppressLegacyArcadePlugins =
     resolveArcade555LegacySuppressionEnabled(config);
 
+  const stream555LegacyFlags = {
+    control: resolveFive55PluginEnabled(
+      config,
+      "STREAM555_CONTROL_PLUGIN_ENABLED",
+      "stream555-control",
+    ),
+    ads: resolveFive55PluginEnabled(
+      config,
+      "STREAM555_ADS_PLUGIN_ENABLED",
+      "stream555-ads",
+    ),
+    auth: resolveStream555AuthPluginEnabled(config),
+  };
+  const stream555LegacyRequested = Object.values(stream555LegacyFlags).some(
+    Boolean,
+  );
+  const stream555CanonicalEnabled =
+    (canonicalStreamPluginRequested || stream555LegacyRequested) &&
+    Boolean(canonicalStreamPlugin);
+
+  if (stream555LegacyRequested) {
+    logger.info(
+      "[milaidy] Legacy stream555 flags detected; routing stream auth/control/ads through canonical @rndrntwrk/plugin-555stream",
+    );
+  }
+  if (stream555LegacyRequested && !canonicalStreamPlugin) {
+    logger.warn(
+      "[milaidy] Legacy stream555 flags are enabled but canonical stream plugin package is unavailable; stream555 legacy runtime plugins are disabled by policy.",
+    );
+  }
+
   const five55PluginFlags = {
     swap: resolveFive55PluginEnabled(config, "SWAP_PLUGIN_ENABLED", "swap"),
     stream: resolveFive55PluginEnabled(
@@ -3782,21 +3795,9 @@ export async function startEliza(
       "STREAM_PLUGIN_ENABLED",
       "stream",
     ),
-    stream555Canonical:
-      canonicalStreamPluginRequested && Boolean(canonicalStreamPlugin),
+    stream555Canonical: stream555CanonicalEnabled,
     arcade555Canonical:
       canonicalArcadePluginRequested && Boolean(canonicalArcadePlugin),
-    stream555Control: resolveFive55PluginEnabled(
-      config,
-      "STREAM555_CONTROL_PLUGIN_ENABLED",
-      "stream555-control",
-    ),
-    stream555Ads: resolveFive55PluginEnabled(
-      config,
-      "STREAM555_ADS_PLUGIN_ENABLED",
-      "stream555-ads",
-    ),
-    stream555Auth: resolveStream555AuthPluginEnabled(config),
     five55Games: resolveFive55PluginEnabled(
       config,
       "FIVE55_GAMES_PLUGIN_ENABLED",
@@ -3840,27 +3841,6 @@ export async function startEliza(
     five55Github: resolveFive55GithubPluginEnabled(config),
   };
 
-  if (five55PluginFlags.stream555Canonical) {
-    if (five55PluginFlags.stream555Control) {
-      five55PluginFlags.stream555Control = false;
-      logger.info(
-        "[milaidy] STREAM555_CONTROL_PLUGIN_ENABLED suppressed because STREAM555_CANONICAL_PLUGIN_ENABLED is active",
-      );
-    }
-    if (five55PluginFlags.stream555Ads) {
-      five55PluginFlags.stream555Ads = false;
-      logger.info(
-        "[milaidy] STREAM555_ADS_PLUGIN_ENABLED suppressed because STREAM555_CANONICAL_PLUGIN_ENABLED is active",
-      );
-    }
-    if (five55PluginFlags.stream555Auth) {
-      five55PluginFlags.stream555Auth = false;
-      logger.info(
-        "[milaidy] STREAM555_AUTH_PLUGIN_ENABLED suppressed because STREAM555_CANONICAL_PLUGIN_ENABLED is active",
-      );
-    }
-  }
-
   if (five55PluginFlags.arcade555Canonical && suppressLegacyArcadePlugins) {
     five55PluginFlags.five55Games = false;
     five55PluginFlags.five55ScoreCapture = false;
@@ -3882,8 +3862,6 @@ export async function startEliza(
 
   const shouldLoadLegacyStreamPlugin =
     five55PluginFlags.stream && !five55PluginFlags.stream555Canonical;
-  const shouldOmitCanonicalOverlapActions =
-    five55PluginFlags.stream555Canonical;
 
   logger.info(
     `[milaidy] Five55 surface plugin plan: ${JSON.stringify(
@@ -3910,15 +3888,6 @@ export async function startEliza(
     ...(five55PluginFlags.arcade555Canonical && canonicalArcadePlugin
       ? [canonicalArcadePlugin]
       : []),
-    ...(five55PluginFlags.stream555Control
-      ? [
-          createStream555ControlPlugin({
-            omitCanonicalOverlapActions: shouldOmitCanonicalOverlapActions,
-          }),
-        ]
-      : []),
-    ...(five55PluginFlags.stream555Ads ? [createStream555AdsPlugin()] : []),
-    ...(five55PluginFlags.stream555Auth ? [createStream555AuthPlugin()] : []),
     ...(five55PluginFlags.five55Games ? [createFive55GamesPlugin()] : []),
     ...(five55PluginFlags.five55ScoreCapture
       ? [createFive55ScoreCapturePlugin()]
@@ -4653,6 +4622,37 @@ export async function startEliza(
           }
           const suppressFreshLegacyArcadePlugins =
             resolveArcade555LegacySuppressionEnabled(freshConfig);
+          const freshStream555LegacyFlags = {
+            control: resolveFive55PluginEnabled(
+              freshConfig,
+              "STREAM555_CONTROL_PLUGIN_ENABLED",
+              "stream555-control",
+            ),
+            ads: resolveFive55PluginEnabled(
+              freshConfig,
+              "STREAM555_ADS_PLUGIN_ENABLED",
+              "stream555-ads",
+            ),
+            auth: resolveStream555AuthPluginEnabled(freshConfig),
+          };
+          const freshStream555LegacyRequested = Object.values(
+            freshStream555LegacyFlags,
+          ).some(Boolean);
+          const freshStream555CanonicalEnabled =
+            (freshCanonicalStreamPluginRequested || freshStream555LegacyRequested) &&
+            Boolean(freshCanonicalStreamPlugin);
+
+          if (freshStream555LegacyRequested) {
+            logger.info(
+              "[milaidy] Hot-reload mapped legacy stream555 flags to canonical @rndrntwrk/plugin-555stream",
+            );
+          }
+          if (freshStream555LegacyRequested && !freshCanonicalStreamPlugin) {
+            logger.warn(
+              "[milaidy] Hot-reload has legacy stream555 flags but canonical stream plugin package is unavailable; legacy stream555 runtime plugins remain disabled.",
+            );
+          }
+
           const freshFive55PluginFlags = {
             swap: resolveFive55PluginEnabled(
               freshConfig,
@@ -4664,23 +4664,10 @@ export async function startEliza(
               "STREAM_PLUGIN_ENABLED",
               "stream",
             ),
-            stream555Canonical:
-              freshCanonicalStreamPluginRequested &&
-              Boolean(freshCanonicalStreamPlugin),
+            stream555Canonical: freshStream555CanonicalEnabled,
             arcade555Canonical:
               freshCanonicalArcadePluginRequested &&
               Boolean(freshCanonicalArcadePlugin),
-            stream555Control: resolveFive55PluginEnabled(
-              freshConfig,
-              "STREAM555_CONTROL_PLUGIN_ENABLED",
-              "stream555-control",
-            ),
-            stream555Ads: resolveFive55PluginEnabled(
-              freshConfig,
-              "STREAM555_ADS_PLUGIN_ENABLED",
-              "stream555-ads",
-            ),
-            stream555Auth: resolveStream555AuthPluginEnabled(freshConfig),
             five55Games: resolveFive55PluginEnabled(
               freshConfig,
               "FIVE55_GAMES_PLUGIN_ENABLED",
@@ -4723,26 +4710,6 @@ export async function startEliza(
             ),
             five55Github: resolveFive55GithubPluginEnabled(freshConfig),
           };
-          if (freshFive55PluginFlags.stream555Canonical) {
-            if (freshFive55PluginFlags.stream555Control) {
-              freshFive55PluginFlags.stream555Control = false;
-              logger.info(
-                "[milaidy] Hot-reload suppressed stream555-control because canonical stream plugin is active",
-              );
-            }
-            if (freshFive55PluginFlags.stream555Ads) {
-              freshFive55PluginFlags.stream555Ads = false;
-              logger.info(
-                "[milaidy] Hot-reload suppressed stream555-ads because canonical stream plugin is active",
-              );
-            }
-            if (freshFive55PluginFlags.stream555Auth) {
-              freshFive55PluginFlags.stream555Auth = false;
-              logger.info(
-                "[milaidy] Hot-reload suppressed stream555-auth because canonical stream plugin is active",
-              );
-            }
-          }
           if (
             freshFive55PluginFlags.arcade555Canonical &&
             suppressFreshLegacyArcadePlugins
@@ -4767,8 +4734,6 @@ export async function startEliza(
           const shouldLoadFreshLegacyStreamPlugin =
             freshFive55PluginFlags.stream &&
             !freshFive55PluginFlags.stream555Canonical;
-          const shouldOmitFreshCanonicalOverlapActions =
-            freshFive55PluginFlags.stream555Canonical;
           logger.info(
             `[milaidy] Hot-reload five55 surface plugin plan: ${JSON.stringify(
               Object.entries(freshFive55PluginFlags).map(([name, enabled]) => ({
@@ -4798,20 +4763,6 @@ export async function startEliza(
             ...(freshFive55PluginFlags.arcade555Canonical &&
             freshCanonicalArcadePlugin
               ? [freshCanonicalArcadePlugin]
-              : []),
-            ...(freshFive55PluginFlags.stream555Control
-              ? [
-                  createStream555ControlPlugin({
-                    omitCanonicalOverlapActions:
-                      shouldOmitFreshCanonicalOverlapActions,
-                  }),
-                ]
-              : []),
-            ...(freshFive55PluginFlags.stream555Ads
-              ? [createStream555AdsPlugin()]
-              : []),
-            ...(freshFive55PluginFlags.stream555Auth
-              ? [createStream555AuthPlugin()]
               : []),
             ...(freshFive55PluginFlags.five55Games
               ? [createFive55GamesPlugin()]
