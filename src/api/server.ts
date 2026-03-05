@@ -1518,6 +1518,34 @@ function maskValue(value: string): string {
   return `${value.slice(0, 4)}...${value.slice(-4)}`;
 }
 
+function shouldMaskPluginValue(key: string, sensitive: boolean): boolean {
+  if (sensitive) return true;
+  const upper = key.trim().toUpperCase();
+  return (
+    upper.includes("_API_KEY") ||
+    upper.includes("_SECRET") ||
+    upper.includes("_TOKEN") ||
+    upper.includes("_PASSWORD") ||
+    upper.includes("_PRIVATE_KEY") ||
+    upper.includes("_STREAM_KEY") ||
+    upper.includes("_COOKIE") ||
+    upper.includes("_SESSION") ||
+    upper.includes("_BEARER") ||
+    upper.includes("_2FA") ||
+    upper.includes("_SALT") ||
+    upper.includes("_MNEMONIC") ||
+    upper.includes("_SEED")
+  );
+}
+
+function redactPluginValue(
+  key: string,
+  value: string,
+  sensitive: boolean,
+): string {
+  return shouldMaskPluginValue(key, sensitive) ? maskValue(value) : value;
+}
+
 function buildParamDefs(
   pluginParams: Record<string, Record<string, unknown>>,
 ): PluginParamDef[] {
@@ -1536,9 +1564,7 @@ function buildParamDefs(
         ? (def.options as string[])
         : undefined,
       currentValue: isSet
-        ? sensitive
-          ? maskValue(envValue ?? "")
-          : (envValue ?? "")
+        ? redactPluginValue(key, envValue ?? "", sensitive)
         : null,
       isSet,
     };
@@ -1621,9 +1647,7 @@ function _inferParamDefs(configKeys: string[]): PluginParamDef[] {
       default: undefined,
       options: undefined,
       currentValue: isSet
-        ? sensitive
-          ? maskValue(envValue ?? "")
-          : (envValue ?? "")
+        ? redactPluginValue(key, envValue ?? "", sensitive)
         : null,
       isSet,
     };
@@ -2236,6 +2260,16 @@ function resolveCanonicalPluginId(pluginId: string): string {
   return pluginId;
 }
 
+function resolveCanonicalServiceType(pluginId: string): string | null {
+  if (isStream555LegacyPluginId(pluginId) || isStream555ControlPluginId(pluginId)) {
+    return "stream555";
+  }
+  if (isArcade555LegacyPluginId(pluginId) || isArcade555ControlPluginId(pluginId)) {
+    return "arcade555";
+  }
+  return null;
+}
+
 function normalizeArcade555PluginId(pluginId: string): string {
   return pluginId
     .trim()
@@ -2458,6 +2492,18 @@ function asObjectRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
+function getRuntimeService(
+  runtime: AgentRuntime | null,
+  serviceType: string,
+): unknown | null {
+  if (!runtime) return null;
+  try {
+    return runtime.getService(serviceType);
+  } catch {
+    return null;
+  }
+}
+
 function readRuntimeBoolean(
   state: Record<string, unknown> | null,
   key: string,
@@ -2539,11 +2585,10 @@ function getRuntimeServiceState(
   runtime: AgentRuntime | null,
   serviceType: string,
 ): Record<string, unknown> | null {
-  if (!runtime) return null;
+  const service = getRuntimeService(runtime, serviceType);
+  const stateGetter = asObjectRecord(service)?.getRuntimeState;
+  if (typeof stateGetter !== "function") return null;
   try {
-    const service = runtime.getService(serviceType);
-    const stateGetter = asObjectRecord(service)?.getRuntimeState;
-    if (typeof stateGetter !== "function") return null;
     return asObjectRecord(stateGetter.call(service));
   } catch {
     return null;
@@ -2564,6 +2609,10 @@ function applyPluginOperationalState(
 
   if (isStream555ControlPluginId(plugin.id)) {
     const runtimeState = getRuntimeServiceState(runtime, "stream555");
+    const loaded =
+      Boolean(plugin.isActive) ||
+      Boolean(getRuntimeService(runtime, "stream555")) ||
+      readRuntimeBoolean(runtimeState, "loaded") === true;
     const channelCounts = countConfiguredStream555Channels(plugin.parameters);
     const authenticated =
       readRuntimeBoolean(runtimeState, "authenticated") ??
@@ -2609,6 +2658,10 @@ function applyPluginOperationalState(
 
   if (isArcade555ControlPluginId(plugin.id)) {
     const runtimeState = getRuntimeServiceState(runtime, "arcade555");
+    const loaded =
+      Boolean(plugin.isActive) ||
+      Boolean(getRuntimeService(runtime, "arcade555")) ||
+      readRuntimeBoolean(runtimeState, "loaded") === true;
     const authenticated =
       readRuntimeBoolean(runtimeState, "authenticated") ??
       Boolean(
@@ -2708,22 +2761,32 @@ function resolveApiPluginEntries(state: ServerState): PluginEntry[] {
   const loadedNames = state.runtime ? state.runtime.plugins.map((plugin) => plugin.name) : [];
 
   for (const plugin of allPlugins) {
+    const serviceType = resolveCanonicalServiceType(plugin.id);
     const suffix = `plugin-${plugin.id}`;
     const packageName = `@elizaos/plugin-${plugin.id}`;
     const isLoaded =
-      loadedNames.length > 0 &&
-      loadedNames.some((name) => {
-        return (
-          name === plugin.id ||
-          name === suffix ||
-          name === packageName ||
-          name.endsWith(`/${suffix}`) ||
-          name.includes(plugin.id)
-        );
-      });
+      Boolean(serviceType && getRuntimeService(state.runtime, serviceType)) ||
+      (loadedNames.length > 0 &&
+        loadedNames.some((name) => {
+          const canonicalLoadedId = resolveCanonicalPluginId(name);
+          return (
+            name === plugin.id ||
+            name === suffix ||
+            name === packageName ||
+            name.endsWith(`/${suffix}`) ||
+            name.includes(plugin.id) ||
+            canonicalLoadedId === resolveCanonicalPluginId(plugin.id)
+          );
+        }));
     plugin.isActive = isLoaded;
 
-    const configEntry = configEntries?.[plugin.id];
+    const configEntry =
+      configEntries?.[plugin.id] ??
+      (isStream555ControlPluginId(plugin.id)
+        ? configEntries?.["555stream"]
+        : isArcade555ControlPluginId(plugin.id)
+          ? configEntries?.["arcade555"] ?? configEntries?.["arcade555-canonical"]
+          : undefined);
     if (configEntry && typeof configEntry.enabled === "boolean") {
       plugin.enabled = configEntry.enabled;
     } else {
@@ -2735,9 +2798,10 @@ function resolveApiPluginEntries(state: ServerState): PluginEntry[] {
       const installs = freshConfig.plugins?.installs as
         | Record<string, unknown>
         | undefined;
-      const packageName = `@elizaos/plugin-${plugin.id}`;
       const hasInstallRecord =
-        installs?.[packageName] || installs?.[plugin.id];
+        installs?.[plugin.npmName ?? ""] ||
+        installs?.[packageName] ||
+        installs?.[plugin.id];
       if (hasInstallRecord) {
         plugin.loadError =
           "Plugin installed but failed to load — check runtime logs for the exact error.";
@@ -2750,9 +2814,7 @@ function resolveApiPluginEntries(state: ServerState): PluginEntry[] {
       const envValue = process.env[param.key];
       param.isSet = Boolean(envValue?.trim());
       param.currentValue = param.isSet
-        ? param.sensitive
-          ? maskValue(envValue ?? "")
-          : (envValue ?? "")
+        ? redactPluginValue(param.key, envValue ?? "", param.sensitive)
         : null;
     }
     const paramInfos: PluginParamInfo[] = plugin.parameters.map((parameter) => ({
@@ -12630,37 +12692,9 @@ async function handleRequest(
         return;
       }
 
-      // Find the plugin in the runtime
-      const allPlugins = state.runtime?.plugins ?? [];
-      const plugin = allPlugins.find(
-        (p: { id?: string; name?: string }) =>
-          p.id === pluginId || p.name === pluginId,
-      );
-
-      if (!plugin) {
-        json(
-          res,
-          {
-            success: false,
-            ok: false,
-            code: "plugin_not_loaded",
-            pluginId,
-            message: "Plugin is enabled but not loaded in the runtime.",
-            error: "Plugin is enabled but not loaded in the runtime.",
-            durationMs: Date.now() - startMs,
-          },
-          409,
-        );
-        return;
-      }
-
-      const serviceType = isStream555ControlPluginId(pluginId)
-        ? "stream555"
-        : isArcade555ControlPluginId(pluginId)
-          ? "arcade555"
-          : null;
+      const serviceType = resolveCanonicalServiceType(pluginId);
       const runtimeService =
-        serviceType && state.runtime ? state.runtime.getService(serviceType) : null;
+        serviceType && state.runtime ? getRuntimeService(state.runtime, serviceType) : null;
       const serviceHealthcheck = asObjectRecord(runtimeService)?.healthcheck;
       if (typeof serviceHealthcheck === "function") {
         const result = await (
@@ -12668,7 +12702,7 @@ async function handleRequest(
             allPassed?: boolean;
             checks?: Record<string, unknown>;
           }>
-        )();
+        ).call(runtimeService);
         const allPassed = result?.allPassed !== false;
         const details = asObjectRecord(result?.checks) ?? {};
         json(
@@ -12689,6 +12723,31 @@ async function handleRequest(
         return;
       }
 
+      // Find the plugin in the runtime
+      const allPlugins = state.runtime?.plugins ?? [];
+      const plugin = allPlugins.find((p: { id?: string; name?: string }) => {
+        const pluginRuntimeId = resolveCanonicalPluginId(p.id ?? "");
+        const pluginRuntimeName = resolveCanonicalPluginId(p.name ?? "");
+        return pluginRuntimeId === pluginId || pluginRuntimeName === pluginId;
+      });
+
+      if (!plugin) {
+        json(
+          res,
+          {
+            success: false,
+            ok: false,
+            code: "plugin_not_loaded",
+            pluginId,
+            message: "Plugin is enabled but not loaded in the runtime.",
+            error: "Plugin is enabled but not loaded in the runtime.",
+            durationMs: Date.now() - startMs,
+          },
+          409,
+        );
+        return;
+      }
+
       // Check if plugin exposes a test/health method
       const testFn =
         (plugin as unknown as Record<string, unknown>).testConnection ??
@@ -12696,7 +12755,7 @@ async function handleRequest(
       if (typeof testFn === "function") {
         const result = await (
           testFn as () => Promise<{ ok: boolean; message?: string }>
-        )();
+        ).call(plugin);
         json(res, {
           success: result.ok !== false,
           ok: result.ok !== false,
