@@ -1806,6 +1806,184 @@ function aggregateSecrets(plugins: PluginEntry[]): SecretEntry[] {
  * Discover user-installed plugins from the Store (not bundled in the manifest).
  * Reads from config.plugins.installs and tries to enrich with package.json metadata.
  */
+type ResolvedPluginPackageMetadata = {
+  name: string;
+  description: string;
+  configKeys: string[];
+  parameters: PluginParamDef[];
+  configUiHints?: Record<string, Record<string, unknown>>;
+};
+
+function resolvePluginPackageMetadata(
+  pkgPath: string,
+  fallbackName: string,
+  fallbackDescription: string,
+): ResolvedPluginPackageMetadata {
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8")) as {
+    name?: string;
+    description?: string;
+    elizaos?: {
+      displayName?: string;
+      configKeys?: string[];
+      configDefaults?: Record<string, string>;
+      pluginParameters?: Record<string, Record<string, unknown>>;
+      configUiHints?: Record<string, Record<string, unknown>>;
+      configSchemaFile?: string;
+    };
+    agentConfig?: {
+      pluginParameters?: Record<string, Record<string, unknown>>;
+    };
+  };
+
+  let name = pkg.name || fallbackName;
+  let description = pkg.description || fallbackDescription;
+  if (pkg.elizaos?.displayName) name = pkg.elizaos.displayName;
+
+  let schemaConfigKeys: string[] | undefined;
+  let schemaPluginParameters:
+    | Record<string, Record<string, unknown>>
+    | undefined;
+  let schemaConfigUiHints:
+    | Record<string, Record<string, unknown>>
+    | undefined;
+
+  if (pkg.elizaos?.configSchemaFile) {
+    const schemaPath = path.resolve(
+      path.dirname(pkgPath),
+      pkg.elizaos.configSchemaFile,
+    );
+    if (fs.existsSync(schemaPath)) {
+      const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as {
+        configKeys?: string[];
+        pluginParameters?: Record<string, Record<string, unknown>>;
+        configUiHints?: Record<string, Record<string, unknown>>;
+      };
+      if (Array.isArray(schema.configKeys)) {
+        schemaConfigKeys = schema.configKeys;
+      }
+      if (
+        schema.pluginParameters &&
+        typeof schema.pluginParameters === "object"
+      ) {
+        schemaPluginParameters = schema.pluginParameters;
+      }
+      if (
+        schema.configUiHints &&
+        typeof schema.configUiHints === "object"
+      ) {
+        schemaConfigUiHints = schema.configUiHints;
+      }
+    }
+  }
+
+  const pluginParamsMeta =
+    schemaPluginParameters ??
+    pkg.elizaos?.pluginParameters ??
+    pkg.agentConfig?.pluginParameters;
+
+  const configKeys = Array.from(
+    new Set([
+      ...(schemaConfigKeys ?? []),
+      ...(pkg.elizaos?.configKeys ?? []),
+      ...Object.keys(pluginParamsMeta ?? {}),
+    ]),
+  );
+
+  const parameters =
+    pluginParamsMeta && Object.keys(pluginParamsMeta).length > 0
+      ? buildParamDefs(pluginParamsMeta)
+      : configKeys.map((key) => ({
+          key,
+          label: key,
+          description: "",
+          required: false,
+          sensitive:
+            key.toLowerCase().includes("key") ||
+            key.toLowerCase().includes("secret"),
+          type: "string" as const,
+          default: pkg.elizaos?.configDefaults?.[key] ?? undefined,
+          isSet: Boolean(process.env[key]?.trim()),
+          currentValue: null,
+        }));
+
+  return {
+    name,
+    description,
+    configKeys,
+    parameters,
+    configUiHints: schemaConfigUiHints ?? pkg.elizaos?.configUiHints,
+  };
+}
+
+function discoverBundledPluginFromPackage(
+  packageRoot: string,
+  packageName: string,
+): PluginEntry | null {
+  const pluginDirName = packageName.split("/").pop()?.replace(/^@/, "");
+  const pkgCandidates = [
+    path.join(packageRoot, "node_modules", ...packageName.split("/"), "package.json"),
+    ...(pluginDirName
+      ? [path.join(packageRoot, "plugins", pluginDirName, "package.json")]
+      : []),
+  ];
+
+  for (const pkgPath of pkgCandidates) {
+    try {
+      if (!fs.existsSync(pkgPath)) continue;
+      const metadata = resolvePluginPackageMetadata(
+        pkgPath,
+        packageName,
+        "Bundled local plugin",
+      );
+      const id = packageName
+        .replace(/^@[^/]+\/plugin-/, "")
+        .replace(/^@[^/]+\//, "")
+        .replace(/^plugin-/, "");
+      const category = categorizePlugin(id);
+      const paramInfos: PluginParamInfo[] = metadata.parameters.map((parameter) => ({
+        key: parameter.key,
+        required: parameter.required,
+        sensitive: parameter.sensitive,
+        type: parameter.type,
+        description: parameter.description,
+        default: parameter.default,
+      }));
+      const validation = validatePluginConfig(
+        id,
+        category,
+        metadata.configKeys[0] ?? null,
+        metadata.configKeys,
+        undefined,
+        paramInfos,
+      );
+
+      return {
+        id,
+        name: metadata.name,
+        description: metadata.description,
+        enabled: false,
+        configured:
+          metadata.configKeys.length === 0 ||
+          metadata.parameters.some((parameter) => parameter.isSet),
+        envKey: metadata.configKeys[0] ?? null,
+        category,
+        source: "bundled",
+        configKeys: metadata.configKeys,
+        parameters: metadata.parameters,
+        validationErrors: validation.errors,
+        validationWarnings: validation.warnings,
+        ...(metadata.configUiHints
+          ? { configUiHints: metadata.configUiHints }
+          : {}),
+      };
+    } catch {
+      // ignore read errors and continue to the next package candidate
+    }
+  }
+
+  return null;
+}
+
 function discoverInstalledPlugins(
   config: MilaidyConfig,
   bundledIds: Set<string>,
@@ -1849,98 +2027,16 @@ function discoverInstalledPlugins(
       for (const pkgPath of candidates) {
         try {
           if (fs.existsSync(pkgPath)) {
-            const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8")) as {
-              name?: string;
-              description?: string;
-              elizaos?: {
-                displayName?: string;
-                configKeys?: string[];
-                configDefaults?: Record<string, string>;
-                pluginParameters?: Record<string, Record<string, unknown>>;
-                configUiHints?: Record<string, Record<string, unknown>>;
-                configSchemaFile?: string;
-              };
-              agentConfig?: {
-                pluginParameters?: Record<string, Record<string, unknown>>;
-              };
-            };
-            if (pkg.name) name = pkg.name;
-            if (pkg.description) description = pkg.description;
-            if (pkg.elizaos?.displayName) name = pkg.elizaos.displayName;
-
-            let schemaConfigKeys: string[] | undefined;
-            let schemaPluginParameters:
-              | Record<string, Record<string, unknown>>
-              | undefined;
-            let schemaConfigUiHints:
-              | Record<string, Record<string, unknown>>
-              | undefined;
-
-            if (pkg.elizaos?.configSchemaFile) {
-              const schemaPath = path.resolve(
-                path.dirname(pkgPath),
-                pkg.elizaos.configSchemaFile,
-              );
-              if (fs.existsSync(schemaPath)) {
-                const schema = JSON.parse(
-                  fs.readFileSync(schemaPath, "utf-8"),
-                ) as {
-                  configKeys?: string[];
-                  pluginParameters?: Record<string, Record<string, unknown>>;
-                  configUiHints?: Record<string, Record<string, unknown>>;
-                };
-                if (Array.isArray(schema.configKeys)) {
-                  schemaConfigKeys = schema.configKeys;
-                }
-                if (
-                  schema.pluginParameters &&
-                  typeof schema.pluginParameters === "object"
-                ) {
-                  schemaPluginParameters = schema.pluginParameters;
-                }
-                if (
-                  schema.configUiHints &&
-                  typeof schema.configUiHints === "object"
-                ) {
-                  schemaConfigUiHints = schema.configUiHints;
-                }
-              }
-            }
-
-            const pluginParamsMeta =
-              schemaPluginParameters ??
-              pkg.elizaos?.pluginParameters ??
-              pkg.agentConfig?.pluginParameters;
-
-            pluginConfigKeys = Array.from(
-              new Set([
-                ...(schemaConfigKeys ?? []),
-                ...(pkg.elizaos?.configKeys ?? []),
-                ...Object.keys(pluginParamsMeta ?? {}),
-              ]),
+            const metadata = resolvePluginPackageMetadata(
+              pkgPath,
+              name,
+              description,
             );
-
-            if (pluginParamsMeta && Object.keys(pluginParamsMeta).length > 0) {
-              pluginParameters = buildParamDefs(pluginParamsMeta);
-            } else if (pluginConfigKeys.length > 0) {
-              const defaults = pkg.elizaos?.configDefaults ?? {};
-              pluginParameters = pluginConfigKeys.map((key) => ({
-                key,
-                label: key,
-                description: "",
-                required: false,
-                sensitive:
-                  key.toLowerCase().includes("key") ||
-                  key.toLowerCase().includes("secret"),
-                type: "string" as const,
-                default: defaults[key] ?? undefined,
-                isSet: Boolean(process.env[key]?.trim()),
-                currentValue: null,
-              }));
-            }
-
-            pluginConfigUiHints =
-              schemaConfigUiHints ?? pkg.elizaos?.configUiHints;
+            name = metadata.name;
+            description = metadata.description;
+            pluginConfigKeys = metadata.configKeys;
+            pluginParameters = metadata.parameters;
+            pluginConfigUiHints = metadata.configUiHints;
             break;
           }
         } catch {
@@ -2349,6 +2445,21 @@ function discoverPluginsFromManifest(): PluginEntry[] {
           };
         })
         .sort((a, b) => a.name.localeCompare(b.name));
+
+      const canonicalStreamEntry = discoverBundledPluginFromPackage(
+        packageRoot,
+        "@rndrntwrk/plugin-555stream",
+      );
+      if (
+        canonicalStreamEntry &&
+        !manifestEntries.some(
+          (entry) =>
+            normalizeStream555PluginId(entry.id) ===
+            normalizeStream555PluginId(canonicalStreamEntry.id),
+        )
+      ) {
+        manifestEntries.push(canonicalStreamEntry);
+      }
 
       const syntheticFive55Entries: PluginEntry[] = [
         {
