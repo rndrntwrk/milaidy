@@ -52,10 +52,10 @@ import {
   registerCustomActionLive,
 } from "../runtime/custom-actions.js";
 import {
-  assertSurface555Capability,
-  createSurface555CapabilityPolicy,
-} from "../runtime/surface555-capability-policy.js";
-import { resolveSurface555CapabilityForRequest } from "../runtime/surface555-capability-routing.js";
+  assertFive55Capability,
+  createFive55CapabilityPolicy,
+} from "../runtime/five55-capability-policy.js";
+import { resolveFive55CapabilityForRequest } from "../runtime/five55-capability-routing.js";
 import {
   canonicalizeMasteryGameId,
   getMasteryContract,
@@ -1155,7 +1155,7 @@ interface ServerState {
   shellEnabled?: boolean;
 }
 
-const FIVE55_HTTP_CAPABILITY_POLICY = createSurface555CapabilityPolicy();
+const FIVE55_HTTP_CAPABILITY_POLICY = createFive55CapabilityPolicy();
 
 interface ShareIngestItem {
   id: string;
@@ -9428,10 +9428,10 @@ async function handleRequest(
     }
     return appPluginManager;
   };
-  const requiredCapability = resolveSurface555CapabilityForRequest(method, pathname);
+  const requiredCapability = resolveFive55CapabilityForRequest(method, pathname);
   if (requiredCapability) {
     try {
-      assertSurface555Capability(FIVE55_HTTP_CAPABILITY_POLICY, requiredCapability);
+      assertFive55Capability(FIVE55_HTTP_CAPABILITY_POLICY, requiredCapability);
     } catch (err) {
       error(
         res,
