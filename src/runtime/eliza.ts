@@ -618,7 +618,7 @@ const INTEGRATION_PLUGIN_MAP: Readonly<Record<string, string>> = {
 const PLUGIN_NAME_ALIASES: Readonly<Record<string, string>> = {
   "@milaidy/plugin-telegram-enhanced": "@elizaos/plugin-telegram",
   "telegram-enhanced": "@elizaos/plugin-telegram",
-  "stream555-canonical": "@elizaos-plugins/plugin-555stream",
+  "stream555-canonical": "@rndrntwrk/plugin-555stream",
   "arcade555-canonical": "@rndrntwrk/plugin-555arcade",
 };
 
@@ -861,8 +861,8 @@ function canResolvePluginPackage(
 }
 
 const CANONICAL_STREAM_PLUGIN_PACKAGE_CANDIDATES = [
-  "@elizaos-plugins/plugin-555stream",
   "@rndrntwrk/plugin-555stream",
+  "@elizaos-plugins/plugin-555stream",
 ] as const;
 
 const CANONICAL_ARCADE_PLUGIN_PACKAGE_CANDIDATES = [
@@ -3840,11 +3840,25 @@ export async function startEliza(
     five55Github: resolveFive55GithubPluginEnabled(config),
   };
 
-  if (five55PluginFlags.stream555Canonical && five55PluginFlags.stream555Control) {
-    five55PluginFlags.stream555Control = false;
-    logger.info(
-      "[milaidy] STREAM555_CONTROL_PLUGIN_ENABLED suppressed because STREAM555_CANONICAL_PLUGIN_ENABLED is active",
-    );
+  if (five55PluginFlags.stream555Canonical) {
+    if (five55PluginFlags.stream555Control) {
+      five55PluginFlags.stream555Control = false;
+      logger.info(
+        "[milaidy] STREAM555_CONTROL_PLUGIN_ENABLED suppressed because STREAM555_CANONICAL_PLUGIN_ENABLED is active",
+      );
+    }
+    if (five55PluginFlags.stream555Ads) {
+      five55PluginFlags.stream555Ads = false;
+      logger.info(
+        "[milaidy] STREAM555_ADS_PLUGIN_ENABLED suppressed because STREAM555_CANONICAL_PLUGIN_ENABLED is active",
+      );
+    }
+    if (five55PluginFlags.stream555Auth) {
+      five55PluginFlags.stream555Auth = false;
+      logger.info(
+        "[milaidy] STREAM555_AUTH_PLUGIN_ENABLED suppressed because STREAM555_CANONICAL_PLUGIN_ENABLED is active",
+      );
+    }
   }
 
   if (five55PluginFlags.arcade555Canonical && suppressLegacyArcadePlugins) {
@@ -4709,14 +4723,25 @@ export async function startEliza(
             ),
             five55Github: resolveFive55GithubPluginEnabled(freshConfig),
           };
-          if (
-            freshFive55PluginFlags.stream555Canonical &&
-            freshFive55PluginFlags.stream555Control
-          ) {
-            freshFive55PluginFlags.stream555Control = false;
-            logger.info(
-              "[milaidy] Hot-reload suppressed stream555-control because canonical stream plugin is active",
-            );
+          if (freshFive55PluginFlags.stream555Canonical) {
+            if (freshFive55PluginFlags.stream555Control) {
+              freshFive55PluginFlags.stream555Control = false;
+              logger.info(
+                "[milaidy] Hot-reload suppressed stream555-control because canonical stream plugin is active",
+              );
+            }
+            if (freshFive55PluginFlags.stream555Ads) {
+              freshFive55PluginFlags.stream555Ads = false;
+              logger.info(
+                "[milaidy] Hot-reload suppressed stream555-ads because canonical stream plugin is active",
+              );
+            }
+            if (freshFive55PluginFlags.stream555Auth) {
+              freshFive55PluginFlags.stream555Auth = false;
+              logger.info(
+                "[milaidy] Hot-reload suppressed stream555-auth because canonical stream plugin is active",
+              );
+            }
           }
           if (
             freshFive55PluginFlags.arcade555Canonical &&
