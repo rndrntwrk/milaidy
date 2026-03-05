@@ -1,4 +1,5 @@
 import type { JsonRecord } from "./types.js";
+import { getMasteryContractOrNull } from "../mastery/index.js";
 
 type NumericBounds = {
   min: number;
@@ -203,6 +204,14 @@ function asRecord(value: unknown): JsonRecord {
 export class GamePolicyRegistry {
   getEntry(gameId: string): PolicyRegistryEntry {
     const normalized = normalizeGameId(gameId);
+    const mastery = getMasteryContractOrNull(normalized);
+    if (mastery) {
+      return {
+        family: mastery.policy.family,
+        defaults: mastery.policy.defaults,
+        bounds: mastery.policy.bounds,
+      };
+    }
     return ENTRIES[normalized] || DEFAULT_ENTRY;
   }
 

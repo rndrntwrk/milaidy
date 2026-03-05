@@ -33,6 +33,15 @@ describe("buildOpenApiSpec", () => {
     expect(paths["/api/agent/identity/history"]).toBeDefined();
     expect(paths["/api/agent/approvals"]).toBeDefined();
     expect(paths["/api/agent/safe-mode"]).toBeDefined();
+    expect(paths["/api/five55/mastery/catalog"]).toBeDefined();
+    expect(paths["/api/five55/mastery/runs"]).toBeDefined();
+    expect(paths["/api/five55/mastery/runs/{runId}"]).toBeDefined();
+    expect(paths["/api/five55/mastery/runs/{runId}/episodes"]).toBeDefined();
+    expect(paths["/api/five55/mastery/runs/{runId}/logs"]).toBeDefined();
+    expect(paths["/api/five55/mastery/runs/{runId}/evidence"]).toBeDefined();
+    expect(paths["/api/five55/mastery/runs/{runId}/episodes/{episodeId}/frames"]).toBeDefined();
+    expect(paths["/api/five55/mastery/runs/{runId}/episodes/{episodeId}/consistency"]).toBeDefined();
+    expect(paths["/api/five55/mastery/games/{gameId}/latest"]).toBeDefined();
     expect(paths["/metrics"]).toBeDefined();
   });
 
@@ -47,6 +56,7 @@ describe("buildOpenApiSpec", () => {
     const tags = spec.tags as Array<{ name: string }>;
     const tagNames = tags.map((t) => t.name);
     expect(tagNames).toContain("Autonomy");
+    expect(tagNames).toContain("Five55");
     expect(tagNames).toContain("Identity");
     expect(tagNames).toContain("Approvals");
     expect(tagNames).toContain("Workflows");

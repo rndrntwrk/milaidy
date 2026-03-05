@@ -5,6 +5,7 @@ import {
   type CanonicalMasteryGameId,
 } from "./aliases.js";
 import type { Five55MasteryContract } from "./types.js";
+import { STRICT_CONTRACT_OVERRIDES } from "./strict-overrides.js";
 import { chesspursuitMasteryContract } from "./contracts/chesspursuit.js";
 import { clawstrikeMasteryContract } from "./contracts/clawstrike.js";
 import { drive555MasteryContract } from "./contracts/drive555.js";
@@ -41,8 +42,58 @@ const CONTRACTS: Five55MasteryContract[] = [
   vedasRunMasteryContract,
 ];
 
+function mergeContract(
+  contract: Five55MasteryContract,
+  override: {
+    objective?: Partial<Five55MasteryContract["objective"]>;
+    passGates?: Five55MasteryContract["passGates"];
+    gateV2?: Partial<Five55MasteryContract["gateV2"]>;
+    notesAppend?: string[];
+  },
+): Five55MasteryContract {
+  const mergedPassGates = override.passGates ?? contract.passGates;
+  const mergedTruthChecks = {
+    ...contract.gateV2.truthChecks,
+    ...(override.gateV2?.truthChecks ?? {}),
+  };
+  const mergedNotes = [
+    ...(Array.isArray(contract.notes) ? contract.notes : []),
+    ...(Array.isArray(override.notesAppend) ? override.notesAppend : []),
+  ];
+
+  return {
+    ...contract,
+    objective: {
+      ...contract.objective,
+      ...(override.objective ?? {}),
+    },
+    passGates: mergedPassGates,
+    gateV2: {
+      ...contract.gateV2,
+      ...(override.gateV2 ?? {}),
+      runtimeGates:
+        override.gateV2?.runtimeGates ??
+        override.passGates ??
+        contract.gateV2.runtimeGates,
+      truthChecks: mergedTruthChecks,
+      disallowedEvidence:
+        override.gateV2?.disallowedEvidence ?? contract.gateV2.disallowedEvidence,
+    },
+    notes: mergedNotes.length > 0 ? mergedNotes : contract.notes,
+  };
+}
+
+function applyStrictOverride(contract: Five55MasteryContract): Five55MasteryContract {
+  const override = STRICT_CONTRACT_OVERRIDES[contract.gameId];
+  if (!override) return contract;
+  return mergeContract(contract, override);
+}
+
 const BY_ID = new Map<string, Five55MasteryContract>(
-  CONTRACTS.map((contract) => [contract.gameId, Object.freeze(contract)]),
+  CONTRACTS.map((contract) => {
+    const merged = applyStrictOverride(contract);
+    return [merged.gameId, Object.freeze(merged)];
+  }),
 );
 
 export function listMasteryContracts(): Five55MasteryContract[] {
@@ -83,7 +134,7 @@ export function getMasteryContractOrNull(gameId: string): Five55MasteryContract 
 
 export function getMasteryContractsById(): Record<string, Five55MasteryContract> {
   const out: Record<string, Five55MasteryContract> = {};
-  for (const contract of CONTRACTS) {
+  for (const contract of BY_ID.values()) {
     out[contract.gameId] = contract;
   }
   return out;

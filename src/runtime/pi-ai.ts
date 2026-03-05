@@ -1,11 +1,10 @@
 import type { IAgentRuntime } from "@elizaos/core";
-import {
-  isPiAiEnabledFromEnv as pluginIsPiAiEnabledFromEnv,
-  registerPiAiRuntime as pluginRegisterPiAiRuntime,
-  type RegisterPiAiRuntimeOptions as PluginRegisterPiAiRuntimeOptions,
-} from "@elizaos/plugin-pi-ai";
-
-export type RegisterPiAiRuntimeOptions = PluginRegisterPiAiRuntimeOptions;
+export interface RegisterPiAiRuntimeOptions {
+  modelSpec?: string;
+  largeModelSpec?: string;
+  smallModelSpec?: string;
+  priority?: number;
+}
 
 export interface PiAiRuntimeRegistration {
   modelSpec: string;
@@ -22,13 +21,29 @@ function parseBool(value: string | undefined): boolean {
 export function isPiAiEnabledFromEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
-  if (pluginIsPiAiEnabledFromEnv(env)) return true;
-  return parseBool(env.PI_AI_ENABLED) || parseBool(env.MILAIDY_PI_AI_ENABLED);
+  return (
+    parseBool(env.PI_AI_ENABLED) ||
+    parseBool(env.MILAIDY_PI_AI_ENABLED) ||
+    parseBool(env.MILAIDY_USE_PI_AI)
+  );
 }
 
 export async function registerPiAiRuntime(
   runtime: IAgentRuntime,
   options: RegisterPiAiRuntimeOptions = {},
 ): Promise<PiAiRuntimeRegistration> {
-  return pluginRegisterPiAiRuntime(runtime, options);
+  try {
+    const plugin = (await import("@elizaos/plugin-pi-ai")) as {
+      registerPiAiRuntime: (
+        rt: IAgentRuntime,
+        opts?: RegisterPiAiRuntimeOptions,
+      ) => Promise<PiAiRuntimeRegistration>;
+    };
+    return plugin.registerPiAiRuntime(runtime, options);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `@elizaos/plugin-pi-ai unavailable (build/link issue): ${message}`,
+    );
+  }
 }

@@ -29,6 +29,9 @@ import JSON5 from "json5";
 
 const API_PORT = 31337;
 const UI_PORT = 2138;
+const DEFAULT_LOCAL_FIVE55_API = (
+  process.env.MILADY_DEV_FIVE55_BASE_URL || "http://127.0.0.1:3100"
+).trim();
 const cwd = process.cwd();
 const uiOnly = process.argv.includes("--ui-only");
 const devLogLevel =
@@ -170,6 +173,12 @@ function coerceBoolean(value) {
   if (["1", "true", "yes", "on"].includes(normalized)) return true;
   if (["0", "false", "no", "off"].includes(normalized)) return false;
   return null;
+}
+
+function resolveFive55ApiUrlForDev() {
+  const explicit = process.env.FIVE55_GAMES_API_URL?.trim();
+  if (explicit) return explicit;
+  return DEFAULT_LOCAL_FIVE55_API;
 }
 
 function resolveMiladyConfigPath() {
@@ -1014,6 +1023,13 @@ if (uiOnly) {
     );
   }
 
+  const five55ApiUrl = resolveFive55ApiUrlForDev();
+  if (!process.env.FIVE55_GAMES_API_URL) {
+    console.log(
+      `  ${green("[milady]")} ${dim(`Using local five55 API default: ${five55ApiUrl}`)}`,
+    );
+  }
+
   const apiCmd = hasBun
     ? [
         "bun",
@@ -1040,6 +1056,7 @@ if (uiOnly) {
       MILADY_PORT: String(API_PORT),
       MILADY_HEADLESS: "1",
       LOG_LEVEL: devLogLevel,
+      FIVE55_GAMES_API_URL: five55ApiUrl,
     },
     stdio: ["inherit", "pipe", "pipe"],
   });

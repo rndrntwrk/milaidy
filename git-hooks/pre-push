@@ -6,6 +6,8 @@
 
 PROTECTED_BRANCHES=("main")
 
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+
 current_branch=$(git symbolic-ref HEAD 2>/dev/null | sed 's|refs/heads/||')
 
 # Read the push info from stdin
@@ -22,5 +24,17 @@ while read local_ref local_sha remote_ref remote_sha; do
     fi
   done
 done
+
+if [ "${MILADY_PREPUSH_FIVE55:-0}" = "1" ]; then
+  echo ""
+  echo "🔎  Running five55 local pipeline gate (MILADY_PREPUSH_FIVE55=1)..."
+  echo ""
+  if [ -x "$repo_root/scripts/five55-local-pipeline.sh" ]; then
+    (cd "$repo_root" && bash scripts/five55-local-pipeline.sh)
+  else
+    echo "[pre-push] scripts/five55-local-pipeline.sh not found or not executable" >&2
+    exit 1
+  fi
+fi
 
 exit 0

@@ -672,6 +672,356 @@ const paths: Record<string, PathItem> = {
     },
   },
 
+  "/api/five55/mastery/catalog": {
+    get: {
+      summary: "Get mastery contract catalog",
+      operationId: "getFive55MasteryCatalog",
+      tags: ["Five55"],
+      responses: {
+        "200": {
+          description: "Mastery contracts",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  contracts: { type: "array", items: { type: "object" } },
+                  total: { type: "integer" },
+                  updatedAt: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+
+  "/api/five55/mastery/runs": {
+    get: {
+      summary: "List mastery certification runs",
+      operationId: "listFive55MasteryRuns",
+      tags: ["Five55"],
+      responses: {
+        "200": {
+          description: "Mastery run page",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  runs: { type: "array", items: { type: "object" } },
+                  limit: { type: "integer" },
+                  cursor: { type: ["string", "null"] },
+                  nextCursor: { type: ["string", "null"] },
+                  total: { type: "integer" },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    post: {
+      summary: "Start a mastery certification run",
+      operationId: "startFive55MasteryRun",
+      tags: ["Five55"],
+      requestBody: {
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              properties: {
+                suiteId: { type: "string" },
+                games: { type: "array", items: { type: "string" } },
+                episodesPerGame: { type: "integer" },
+                seedMode: { type: "string", enum: ["fixed", "mixed", "rolling"] },
+                maxDurationSec: { type: "integer" },
+                strict: { type: "boolean" },
+                evidenceMode: {
+                  type: "string",
+                  enum: ["strict", "basic", "off"],
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        "200": {
+          description: "Mastery run accepted",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean" },
+                  runId: { type: "string" },
+                  run: { type: ["object", "null"] },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+
+  "/api/five55/mastery/runs/{runId}": {
+    get: {
+      summary: "Get mastery run",
+      operationId: "getFive55MasteryRun",
+      tags: ["Five55"],
+      parameters: [
+        {
+          name: "runId",
+          in: "path",
+          required: true,
+          schema: { type: "string" },
+        },
+      ],
+      responses: {
+        "200": {
+          description: "Mastery run detail",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  run: { type: "object" },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+
+  "/api/five55/mastery/runs/{runId}/episodes": {
+    get: {
+      summary: "List mastery run episodes",
+      operationId: "listFive55MasteryEpisodes",
+      tags: ["Five55"],
+      parameters: [
+        {
+          name: "runId",
+          in: "path",
+          required: true,
+          schema: { type: "string" },
+        },
+      ],
+      responses: {
+        "200": {
+          description: "Mastery episodes",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  runId: { type: "string" },
+                  total: { type: "integer" },
+                  episodes: { type: "array", items: { type: "object" } },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+
+  "/api/five55/mastery/runs/{runId}/logs": {
+    get: {
+      summary: "Tail mastery run logs",
+      operationId: "listFive55MasteryLogs",
+      tags: ["Five55"],
+      parameters: [
+        {
+          name: "runId",
+          in: "path",
+          required: true,
+          schema: { type: "string" },
+        },
+        {
+          name: "afterSeq",
+          in: "query",
+          required: false,
+          schema: { type: "integer" },
+        },
+        {
+          name: "limit",
+          in: "query",
+          required: false,
+          schema: { type: "integer" },
+        },
+      ],
+      responses: {
+        "200": {
+          description: "Mastery logs",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  runId: { type: "string" },
+                  logs: { type: "array", items: { type: "object" } },
+                  count: { type: "integer" },
+                  nextAfterSeq: { type: "integer" },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+
+  "/api/five55/mastery/runs/{runId}/evidence": {
+    get: {
+      summary: "Get normalized evidence summary for all episodes in a run",
+      operationId: "getFive55MasteryRunEvidence",
+      tags: ["Five55"],
+      parameters: [
+        {
+          name: "runId",
+          in: "path",
+          required: true,
+          schema: { type: "string" },
+        },
+      ],
+      responses: {
+        "200": {
+          description: "Run evidence summary",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  runId: { type: "string" },
+                  total: { type: "integer" },
+                  evidence: { type: "array", items: { type: "object" } },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+
+  "/api/five55/mastery/runs/{runId}/episodes/{episodeId}/frames": {
+    get: {
+      summary: "Get frame timeline for a specific mastery episode",
+      operationId: "getFive55MasteryEpisodeFrames",
+      tags: ["Five55"],
+      parameters: [
+        {
+          name: "runId",
+          in: "path",
+          required: true,
+          schema: { type: "string" },
+        },
+        {
+          name: "episodeId",
+          in: "path",
+          required: true,
+          schema: { type: "string" },
+        },
+      ],
+      responses: {
+        "200": {
+          description: "Episode frames",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  runId: { type: "string" },
+                  episodeId: { type: "string" },
+                  total: { type: "integer" },
+                  frames: { type: "array", items: { type: "object" } },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+
+  "/api/five55/mastery/runs/{runId}/episodes/{episodeId}/consistency": {
+    get: {
+      summary: "Get consistency verdict for a specific mastery episode",
+      operationId: "getFive55MasteryEpisodeConsistency",
+      tags: ["Five55"],
+      parameters: [
+        {
+          name: "runId",
+          in: "path",
+          required: true,
+          schema: { type: "string" },
+        },
+        {
+          name: "episodeId",
+          in: "path",
+          required: true,
+          schema: { type: "string" },
+        },
+      ],
+      responses: {
+        "200": {
+          description: "Episode consistency verdict",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  runId: { type: "string" },
+                  episodeId: { type: "string" },
+                  consistency: { type: "object" },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+
+  "/api/five55/mastery/games/{gameId}/latest": {
+    get: {
+      summary: "Get latest mastery snapshot for game",
+      operationId: "getFive55MasteryLatestByGame",
+      tags: ["Five55"],
+      parameters: [
+        {
+          name: "gameId",
+          in: "path",
+          required: true,
+          schema: { type: "string" },
+        },
+      ],
+      responses: {
+        "200": {
+          description: "Latest mastery snapshot",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  gameId: { type: "string" },
+                  contract: { type: "object" },
+                  latest: { type: ["object", "null"] },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+
   "/metrics": {
     get: {
       summary: "Prometheus metrics",
@@ -713,6 +1063,7 @@ export function buildOpenApiSpec(): Record<string, unknown> {
     },
     tags: [
       { name: "Autonomy", description: "Kernel lifecycle management" },
+      { name: "Five55", description: "Five55 mastery and game intelligence endpoints" },
       { name: "Identity", description: "Agent identity and preferences" },
       { name: "Approvals", description: "Tool execution approval workflows" },
       { name: "Workflows", description: "Workflow execution and lifecycle" },

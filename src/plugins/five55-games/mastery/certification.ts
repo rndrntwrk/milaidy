@@ -20,7 +20,16 @@ import type {
   Five55MasteryLog,
   Five55MasteryRun,
   MasteryCertificationRequest,
+  MasteryConsistencyVerdict,
+  MasteryEpisodeEvidence,
+  MasteryEpisodeOutcomeV2,
+  MasteryEvidenceFrame,
+  MasteryEvidenceMode,
+  MasteryFrameType,
   MasteryGateResult,
+  MasteryMetricOperator,
+  MasteryPassGate,
+  MasteryRuntimeGate,
   MasteryVerdict,
 } from "./types.js";
 
@@ -43,17 +52,6 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-function parseBoolean(value: unknown, fallback: boolean): boolean {
-  if (typeof value === "boolean") return value;
-  if (typeof value === "string") {
-    const normalized = value.trim().toLowerCase();
-    if (["1", "true", "yes", "on"].includes(normalized)) return true;
-    if (["0", "false", "no", "off"].includes(normalized)) return false;
-  }
-  if (typeof value === "number") return value !== 0;
-  return fallback;
-}
-
 function parsePositiveInt(value: unknown, fallback: number): number {
   const parsed = Number.parseInt(String(value ?? ""), 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
@@ -73,7 +71,16 @@ function parseSeedMode(value: unknown): "fixed" | "mixed" | "rolling" {
   return "mixed";
 }
 
-function parseStrictMode(options: HandlerOptions | undefined): MasteryCertificationRequest {
+function parseEvidenceMode(value: unknown): MasteryEvidenceMode {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "off") return "off";
+  if (normalized === "basic") return "basic";
+  return "strict";
+}
+
+function parseStrictMode(
+  options: HandlerOptions | undefined,
+): MasteryCertificationRequest {
   const params = options?.parameters ?? {};
   const suiteIdRaw = params.suiteId;
   const suiteId =
@@ -84,7 +91,7 @@ function parseStrictMode(options: HandlerOptions | undefined): MasteryCertificat
   const episodesPerGame = parsePositiveInt(params.episodesPerGame, 60);
   const seedMode = parseSeedMode(params.seedMode);
   const maxDurationSec = parsePositiveInt(params.maxDurationSec, 21_600);
-  const strict = parseBoolean(params.strict, false);
+  const evidenceMode = parseEvidenceMode(params.evidenceMode);
 
   return {
     suiteId,
@@ -92,7 +99,8 @@ function parseStrictMode(options: HandlerOptions | undefined): MasteryCertificat
     episodesPerGame,
     seedMode,
     maxDurationSec,
-    strict,
+    strict: true,
+    evidenceMode,
   };
 }
 
@@ -106,49 +114,17 @@ function pickSeed(seedMode: "fixed" | "mixed" | "rolling", offset: number): numb
   return Math.floor(Math.random() * 1_000_000_000);
 }
 
-function evaluateGate(
-  gate: {
-    id: string;
-    metric: string;
-    operator: ">=" | "<=" | "==" | "!=";
-    threshold: number;
-  },
-  observed: number | null,
-  strict: boolean,
-): MasteryGateResult {
-  if (observed == null) {
-    return {
-      gateId: gate.id,
-      metric: gate.metric,
-      operator: gate.operator,
-      threshold: gate.threshold,
-      observed: null,
-      passed: !strict,
-      reason: strict ? "metric_unavailable_strict_fail" : "metric_unavailable_permissive_pass",
-    };
-  }
-
-  let passed = false;
-  if (gate.operator === ">=") passed = observed >= gate.threshold;
-  if (gate.operator === "<=") passed = observed <= gate.threshold;
-  if (gate.operator === "==") passed = observed === gate.threshold;
-  if (gate.operator === "!=") passed = observed !== gate.threshold;
-
-  return {
-    gateId: gate.id,
-    metric: gate.metric,
-    operator: gate.operator,
-    threshold: gate.threshold,
-    observed,
-    passed,
-    reason: passed ? "threshold_met" : "threshold_missed",
-  };
-}
-
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function asRecordArray(value: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => asRecord(entry))
+    .filter((entry) => Object.keys(entry).length > 0);
 }
 
 function parseActionEnvelope(value: unknown): Record<string, unknown> {
@@ -169,17 +145,42 @@ function parseActionEnvelope(value: unknown): Record<string, unknown> {
   }
 }
 
+type ObservedMetricBundle = {
+  numeric: Map<string, number>;
+  syntheticSignals: string[];
+  lifecycle: string[];
+  controlAxes: Set<string>;
+};
+
+function isSyntheticKey(key: string): boolean {
+  const normalized = key.toLowerCase();
+  return (
+    normalized.includes("synthetic") ||
+    normalized.includes("forced") ||
+    normalized.includes("simulated")
+  );
+}
+
 function flattenNumericMetrics(
   input: unknown,
   prefix: string,
   out: Map<string, number>,
+  syntheticSignals: string[],
 ): void {
   if (input == null) return;
   if (typeof input === "number" && Number.isFinite(input)) {
+    if (prefix && isSyntheticKey(prefix)) {
+      syntheticSignals.push(prefix);
+      return;
+    }
     out.set(prefix, input);
     return;
   }
   if (typeof input === "boolean") {
+    if (prefix && isSyntheticKey(prefix)) {
+      syntheticSignals.push(prefix);
+      return;
+    }
     out.set(prefix, input ? 1 : 0);
     return;
   }
@@ -189,18 +190,93 @@ function flattenNumericMetrics(
     const safeKey = key.trim();
     if (!safeKey) continue;
     const childPrefix = prefix ? `${prefix}.${safeKey}` : safeKey;
-    flattenNumericMetrics(value, childPrefix, out);
+    flattenNumericMetrics(value, childPrefix, out, syntheticSignals);
   }
 }
 
-function collectObservedMetrics(playEnvelope: Record<string, unknown>): Map<string, number> {
-  const metrics = new Map<string, number>();
-  flattenNumericMetrics(playEnvelope, "", metrics);
+function collectControlAxes(playEnvelope: Record<string, unknown>): Set<string> {
+  const axes = new Set<string>();
+  const candidates: string[] = [];
   const data = asRecord(playEnvelope.data);
-  flattenNumericMetrics(data, "", metrics);
-  flattenNumericMetrics(asRecord(data.metrics), "", metrics);
-  flattenNumericMetrics(asRecord(data.capture), "", metrics);
-  return metrics;
+  const trace = asRecord(playEnvelope.trace);
+  const controlArrays = [
+    playEnvelope.controlsUsed,
+    data.controlsUsed,
+    data.controlAxes,
+    trace.controlsUsed,
+    trace.actions,
+    playEnvelope.actions,
+  ];
+  for (const list of controlArrays) {
+    if (!Array.isArray(list)) continue;
+    for (const item of list) {
+      if (typeof item === "string") candidates.push(item);
+      else if (item && typeof item === "object") {
+        const record = item as Record<string, unknown>;
+        for (const value of Object.values(record)) {
+          if (typeof value === "string") candidates.push(value);
+        }
+      }
+    }
+  }
+
+  for (const raw of candidates) {
+    const value = raw.toLowerCase();
+    if (
+      value.includes("move") ||
+      value.includes("left") ||
+      value.includes("right") ||
+      value.includes("up") ||
+      value.includes("down") ||
+      value.includes("lane")
+    ) {
+      axes.add("move");
+    }
+    if (value.includes("jump")) axes.add("jump");
+    if (
+      value.includes("attack") ||
+      value.includes("combat") ||
+      value.includes("fire") ||
+      value.includes("shoot") ||
+      value.includes("hit")
+    ) {
+      axes.add("combat");
+      if (value.includes("fire") || value.includes("shoot")) axes.add("fire");
+    }
+    if (value.includes("fly") || value.includes("flight") || value.includes("thrust")) {
+      axes.add("flight");
+    }
+  }
+
+  return axes;
+}
+
+function collectObservedMetrics(playEnvelope: Record<string, unknown>): ObservedMetricBundle {
+  const numeric = new Map<string, number>();
+  const syntheticSignals: string[] = [];
+  flattenNumericMetrics(playEnvelope, "", numeric, syntheticSignals);
+  const data = asRecord(playEnvelope.data);
+  flattenNumericMetrics(data, "", numeric, syntheticSignals);
+  flattenNumericMetrics(asRecord(data.metrics), "", numeric, syntheticSignals);
+  flattenNumericMetrics(asRecord(data.capture), "", numeric, syntheticSignals);
+
+  const lifecycleCandidates = [
+    playEnvelope.status,
+    data.status,
+    asRecord(data.stateSummary).status,
+    asRecord(data.capture).status,
+  ];
+  const lifecycle = lifecycleCandidates
+    .filter((entry): entry is string => typeof entry === "string")
+    .map((entry) => entry.trim().toUpperCase())
+    .filter((entry) => entry.length > 0);
+
+  return {
+    numeric,
+    syntheticSignals: [...new Set(syntheticSignals)],
+    lifecycle,
+    controlAxes: collectControlAxes(playEnvelope),
+  };
 }
 
 function resolveMetricAlias(metric: string): string[] {
@@ -209,7 +285,41 @@ function resolveMetricAlias(metric: string): string[] {
   if (metric.endsWith("Seconds")) aliases.add(metric.replace(/Seconds$/, "Sec"));
   if (metric.endsWith("Rate")) aliases.add(metric.replace(/Rate$/, "Percent"));
   if (metric.endsWith("Percent")) aliases.add(metric.replace(/Percent$/, "Rate"));
-  return [...aliases];
+
+  const withoutDotMax = metric.replace(/\.max$/, "");
+  const withoutDotMin = metric.replace(/\.min$/, "");
+  aliases.add(withoutDotMax);
+  aliases.add(withoutDotMin);
+
+  const lastSegment = metric.split(".").slice(-1)[0];
+  aliases.add(lastSegment);
+
+  return [...aliases].filter((entry) => entry.length > 0);
+}
+
+function getNumericCandidates(
+  observedMetrics: Map<string, number>,
+  metric: string,
+): number[] {
+  const aliases = resolveMetricAlias(metric);
+  const out: number[] = [];
+
+  for (const [key, value] of observedMetrics.entries()) {
+    if (!Number.isFinite(value)) continue;
+    const normalizedKey = key.trim();
+    if (!normalizedKey) continue;
+    const lastSegment = normalizedKey.split(".").slice(-1)[0];
+
+    const aliasHit = aliases.some(
+      (alias) =>
+        normalizedKey === alias ||
+        normalizedKey.endsWith(`.${alias}`) ||
+        lastSegment === alias,
+    );
+    if (aliasHit) out.push(value);
+  }
+
+  return out;
 }
 
 function computeObservedMetric(
@@ -217,53 +327,495 @@ function computeObservedMetric(
   succeeded: boolean,
   observedMetrics: Map<string, number>,
 ): number | null {
-  for (const key of resolveMetricAlias(metric)) {
-    const value = observedMetrics.get(key);
-    if (typeof value === "number" && Number.isFinite(value)) {
-      return value;
-    }
+  const directCandidates = getNumericCandidates(observedMetrics, metric);
+  const hasMax = metric.endsWith(".max");
+  const hasMin = metric.endsWith(".min");
+
+  if (directCandidates.length > 0) {
+    if (hasMax) return Math.max(...directCandidates);
+    if (hasMin) return Math.min(...directCandidates);
+    return directCandidates[0] ?? null;
   }
+
   if (metric === "launch.successRate") return succeeded ? 1 : 0;
   if (metric === "restart.successRate") return succeeded ? 1 : 0;
   if (/\.successRate$/i.test(metric)) return succeeded ? 1 : 0;
+
   return null;
 }
 
+function evaluateGate(
+  gate: {
+    id: string;
+    metric: string;
+    operator: MasteryMetricOperator;
+    threshold: number;
+    source?: "runtime-native" | "synthetic" | "derived";
+  },
+  observed: number | null,
+): MasteryGateResult {
+  if (observed == null) {
+    return {
+      gateId: gate.id,
+      metric: gate.metric,
+      operator: gate.operator,
+      threshold: gate.threshold,
+      observed: null,
+      passed: false,
+      reason: "metric_unavailable_strict_fail",
+      source: gate.source,
+    };
+  }
+
+  let passed = false;
+  if (gate.operator === ">=") passed = observed >= gate.threshold;
+  if (gate.operator === "<=") passed = observed <= gate.threshold;
+  if (gate.operator === "==") passed = observed === gate.threshold;
+  if (gate.operator === "!=") passed = observed !== gate.threshold;
+
+  return {
+    gateId: gate.id,
+    metric: gate.metric,
+    operator: gate.operator,
+    threshold: gate.threshold,
+    observed,
+    passed,
+    reason: passed ? "threshold_met" : "threshold_missed",
+    source: gate.source,
+  };
+}
+
+function buildGateSet(contract: { passGates: MasteryPassGate[]; gateV2: { runtimeGates: MasteryRuntimeGate[] } }): MasteryRuntimeGate[] {
+  const runtimeGates =
+    Array.isArray(contract.gateV2.runtimeGates) && contract.gateV2.runtimeGates.length > 0
+      ? contract.gateV2.runtimeGates
+      : contract.passGates;
+  return runtimeGates.map((gate) => ({
+    ...gate,
+    required:
+      "required" in gate && typeof gate.required === "boolean"
+        ? gate.required
+        : true,
+    source:
+      "source" in gate && typeof gate.source === "string"
+        ? gate.source
+        : "runtime-native",
+  }));
+}
+
+function inferFrameType(raw: string | null, index: number, total: number): MasteryFrameType {
+  const normalized = (raw ?? "").trim().toLowerCase();
+  if (normalized.includes("menu") || normalized.includes("boot") || normalized.includes("title")) {
+    return "boot/menu";
+  }
+  if (normalized.includes("play-start") || normalized.includes("start")) {
+    return "play-start";
+  }
+  if (
+    normalized.includes("terminal") ||
+    normalized.includes("game_over") ||
+    normalized.includes("gameover") ||
+    normalized.includes("win") ||
+    normalized.includes("timeout")
+  ) {
+    return "terminal";
+  }
+  if (normalized.includes("stuck")) {
+    return "stuck-check";
+  }
+  if (normalized.includes("progress") || normalized.includes("checkpoint") || normalized.includes("level") || normalized.includes("sector")) {
+    return "progress";
+  }
+  if (index === 0) return "boot/menu";
+  if (index === 1) return "play-start";
+  if (index === total - 1) return "terminal";
+  return "progress";
+}
+
+function extractEvidenceFrames(input: {
+  runId: string;
+  episodeId: string;
+  playEnvelope: Record<string, unknown>;
+}): MasteryEvidenceFrame[] {
+  const data = asRecord(input.playEnvelope.data);
+  const capture = asRecord(data.capture);
+  const candidateLists: Record<string, unknown>[] = [
+    ...asRecordArray(input.playEnvelope.frames),
+    ...asRecordArray(data.frames),
+    ...asRecordArray(capture.frames),
+    ...asRecordArray(data.screenshots),
+    ...asRecordArray(capture.screenshots),
+  ];
+
+  const unique = new Map<string, Record<string, unknown>>();
+  for (const entry of candidateLists) {
+    const key =
+      (typeof entry.path === "string" && entry.path) ||
+      (typeof entry.url === "string" && entry.url) ||
+      `${entry.ts ?? ""}:${entry.type ?? ""}:${unique.size}`;
+    if (!unique.has(key)) unique.set(key, entry);
+  }
+
+  const values = [...unique.values()];
+  return values.map((entry, index) => {
+    const ts =
+      typeof entry.ts === "string" && entry.ts.trim().length > 0
+        ? entry.ts
+        : nowIso();
+    const path =
+      typeof entry.path === "string" && entry.path.trim().length > 0
+        ? entry.path
+        : typeof entry.url === "string" && entry.url.trim().length > 0
+          ? entry.url
+          : undefined;
+    const frameType = inferFrameType(
+      typeof entry.frameType === "string"
+        ? entry.frameType
+        : typeof entry.type === "string"
+          ? entry.type
+          : null,
+      index,
+      values.length,
+    );
+
+    const ocrLines = Array.isArray(entry.ocr)
+      ? entry.ocr
+          .map((line) => (typeof line === "string" ? line.trim() : ""))
+          .filter((line) => line.length > 0)
+      : [];
+    if (ocrLines.length === 0 && typeof entry.ocr === "string") {
+      const line = entry.ocr.trim();
+      if (line) ocrLines.push(line);
+    }
+
+    const telemetrySnapshot = asRecord(
+      entry.telemetry ?? entry.snapshot ?? entry.state,
+    );
+    const hashSeed = `${path ?? ""}:${ts}:${JSON.stringify(telemetrySnapshot)}`;
+
+    return {
+      runId: input.runId,
+      episodeId: input.episodeId,
+      seq: index + 1,
+      frameType,
+      ts,
+      hash:
+        typeof entry.hash === "string" && entry.hash.trim().length > 0
+          ? entry.hash
+          : crypto.createHash("sha1").update(hashSeed).digest("hex"),
+      ...(path ? { path } : {}),
+      ocr: ocrLines,
+      telemetrySnapshot,
+    };
+  });
+}
+
+function containsProgressMetric(observedMetrics: Map<string, number>): boolean {
+  const progressSignals = [
+    "score",
+    "level",
+    "sector",
+    "segment",
+    "distance",
+    "worldAge",
+    "checkpoint",
+    "floor",
+  ];
+
+  for (const [key, value] of observedMetrics.entries()) {
+    if (!Number.isFinite(value) || value <= 0) continue;
+    const normalized = key.toLowerCase();
+    if (progressSignals.some((signal) => normalized.includes(signal))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function buildConsistencyVerdict(input: {
+  mode: MasteryEvidenceMode;
+  contract: ReturnType<typeof getMasteryContract>;
+  frames: MasteryEvidenceFrame[];
+  observedMetrics: Map<string, number>;
+  syntheticSignals: string[];
+  controlAxes: Set<string>;
+}): MasteryConsistencyVerdict {
+  const reasons: string[] = [];
+  const mismatchDetails: string[] = [];
+  const truthChecks = input.contract.gateV2.truthChecks;
+
+  if (input.mode === "off") {
+    return {
+      status: "insufficient",
+      checkedAt: nowIso(),
+      reasons: ["evidence_mode_off"],
+      mismatchDetails: [],
+    };
+  }
+
+  const requiredTypes = new Set(truthChecks.requireFrameTypes);
+  const presentTypes = new Set(input.frames.map((frame) => frame.frameType));
+  for (const frameType of requiredTypes) {
+    if (!presentTypes.has(frameType)) {
+      reasons.push("missing_required_frame_type");
+      mismatchDetails.push(`frame_type_missing:${frameType}`);
+    }
+  }
+
+  if (input.frames.length === 0) {
+    reasons.push("missing_evidence_frames");
+    mismatchDetails.push("frames:0");
+  }
+
+  if (truthChecks.failOnStaticFramesWithProgress) {
+    const uniqueHashes = new Set(input.frames.map((frame) => frame.hash));
+    if (uniqueHashes.size <= 1 && containsProgressMetric(input.observedMetrics)) {
+      reasons.push("static_frames_with_progress");
+      mismatchDetails.push("hash_variance<=1_with_progress_metrics");
+    }
+  }
+
+  if (truthChecks.failOnMenuAdvance) {
+    const statuses = input.frames
+      .map((frame) => {
+        const status = frame.telemetrySnapshot.status;
+        return typeof status === "string" ? status.trim().toUpperCase() : "";
+      })
+      .filter((entry) => entry.length > 0);
+    const allMenuOrPaused =
+      statuses.length > 0 &&
+      statuses.every((entry) => entry === "MENU" || entry === "PAUSED" || entry === "LOADING");
+    if (allMenuOrPaused && containsProgressMetric(input.observedMetrics)) {
+      reasons.push("menu_or_pause_persisted_during_progress");
+      mismatchDetails.push(`status_sequence:${statuses.join(",")}`);
+    }
+  }
+
+  if (truthChecks.failOnTelemetryFrameMismatch) {
+    const progressFrames = input.frames.filter((frame) => frame.frameType === "progress");
+    if (progressFrames.length === 0 && containsProgressMetric(input.observedMetrics)) {
+      reasons.push("telemetry_progress_without_progress_frames");
+      mismatchDetails.push("no_progress_frames_but_progress_metrics");
+    }
+  }
+
+  const requiredAxes = truthChecks.requiredControlAxes ?? [];
+  for (const axis of requiredAxes) {
+    if (!input.controlAxes.has(axis)) {
+      reasons.push("missing_required_control_axis");
+      mismatchDetails.push(`control_axis_missing:${axis}`);
+    }
+  }
+
+  if (
+    input.contract.gateV2.disallowedEvidence.includes("synthetic") &&
+    input.syntheticSignals.length > 0
+  ) {
+    reasons.push("synthetic_evidence_detected");
+    mismatchDetails.push(...input.syntheticSignals.map((entry) => `synthetic:${entry}`));
+  }
+
+  if (reasons.length === 0) {
+    return {
+      status: "pass",
+      checkedAt: nowIso(),
+      reasons: ["consistency_passed"],
+      mismatchDetails: [],
+    };
+  }
+
+  return {
+    status: "fail",
+    checkedAt: nowIso(),
+    reasons,
+    mismatchDetails,
+  };
+}
+
+function evaluateLevelRequirement(
+  contract: ReturnType<typeof getMasteryContract>,
+  observedMetrics: Map<string, number>,
+): MasteryGateResult | null {
+  const requirement = contract.gateV2.levelRequirement;
+  if (!requirement) return null;
+
+  const observed = computeObservedMetric(requirement.metric, true, observedMetrics);
+  const op: MasteryMetricOperator = requirement.mode === "at_most" ? "<=" : ">=";
+  const threshold = requirement.requiredLevel;
+  const result = evaluateGate(
+    {
+      id: "level_requirement",
+      metric: requirement.metric,
+      operator: op,
+      threshold,
+      source: "runtime-native",
+    },
+    observed,
+  );
+  return result;
+}
+
+function evaluateQualityRequirements(
+  contract: ReturnType<typeof getMasteryContract>,
+  observedMetrics: Map<string, number>,
+): MasteryGateResult[] {
+  const requirement = contract.gateV2.qualityRequirement;
+  if (!requirement) return [];
+  const out: MasteryGateResult[] = [];
+
+  if (
+    requirement.medianClearTimeMetric &&
+    Number.isFinite(requirement.goldenLevelTimeMs) &&
+    Number.isFinite(requirement.maxMedianClearTimeFactor)
+  ) {
+    const threshold =
+      (requirement.goldenLevelTimeMs as number) *
+      (requirement.maxMedianClearTimeFactor as number);
+    out.push(
+      evaluateGate(
+        {
+          id: "quality_median_clear_time",
+          metric: requirement.medianClearTimeMetric,
+          operator: "<=",
+          threshold,
+          source: "runtime-native",
+        },
+        computeObservedMetric(requirement.medianClearTimeMetric, true, observedMetrics),
+      ),
+    );
+  }
+
+  if (
+    requirement.medianScoreMetric &&
+    Number.isFinite(requirement.goldenLevelScore) &&
+    Number.isFinite(requirement.minMedianScoreFactor)
+  ) {
+    const threshold =
+      (requirement.goldenLevelScore as number) *
+      (requirement.minMedianScoreFactor as number);
+    out.push(
+      evaluateGate(
+        {
+          id: "quality_median_score",
+          metric: requirement.medianScoreMetric,
+          operator: ">=",
+          threshold,
+          source: "runtime-native",
+        },
+        computeObservedMetric(requirement.medianScoreMetric, true, observedMetrics),
+      ),
+    );
+  }
+
+  return out;
+}
+
 function buildEpisodeVerdict(input: {
+  evidenceMode: MasteryEvidenceMode;
   strict: boolean;
   succeeded: boolean;
   error: string | null;
   gameId: string;
+  runId: string;
+  episodeId: string;
   playEnvelope: Record<string, unknown>;
-}): MasteryVerdict {
+}): {
+  verdict: MasteryVerdict;
+  evidence: MasteryEpisodeEvidence;
+  observedMetrics: Record<string, number>;
+} {
   const contract = getMasteryContract(input.gameId);
-  const observedMetrics = collectObservedMetrics(input.playEnvelope);
-  const gateResults = contract.passGates.map((gate) =>
-    evaluateGate(
-      gate,
-      computeObservedMetric(gate.metric, input.succeeded, observedMetrics),
-      input.strict,
-    ),
-  );
-  const gatePass = gateResults.every((entry) => entry.passed);
-  const passed = input.succeeded && gatePass;
+  const observedBundle = collectObservedMetrics(input.playEnvelope);
+  const runtimeGates = buildGateSet(contract);
+  const runtimeGateResults = runtimeGates
+    .filter((gate) => gate.required !== false)
+    .map((gate) =>
+      evaluateGate(
+        gate,
+        computeObservedMetric(gate.metric, input.succeeded, observedBundle.numeric),
+      ),
+    );
+
+  const levelResult = evaluateLevelRequirement(contract, observedBundle.numeric);
+  const qualityResults = evaluateQualityRequirements(contract, observedBundle.numeric);
+
+  const frames = extractEvidenceFrames({
+    runId: input.runId,
+    episodeId: input.episodeId,
+    playEnvelope: input.playEnvelope,
+  });
+  const consistency = buildConsistencyVerdict({
+    mode: input.evidenceMode,
+    contract,
+    frames,
+    observedMetrics: observedBundle.numeric,
+    syntheticSignals: observedBundle.syntheticSignals,
+    controlAxes: observedBundle.controlAxes,
+  });
+
+  const gateResults = [
+    ...runtimeGateResults,
+    ...(levelResult ? [levelResult] : []),
+    ...qualityResults,
+  ];
+  const runtimeQualified = input.succeeded && gateResults.every((entry) => entry.passed);
+  const visualQualified = consistency.status === "pass";
+  const outcome: MasteryEpisodeOutcomeV2 = {
+    runtimeQualified,
+    visualQualified,
+    finalQualified: runtimeQualified && visualQualified,
+    failureCode:
+      runtimeQualified && visualQualified
+        ? null
+        : !input.succeeded
+          ? "action_execution_failed"
+          : !runtimeQualified
+            ? "runtime_gate_failed"
+            : "visual_consistency_failed",
+  };
 
   const reasons: string[] = [];
   if (!input.succeeded) reasons.push(input.error ?? "execute_plan_failed");
   for (const gate of gateResults) {
     if (!gate.passed) reasons.push(`gate_failed:${gate.gateId}`);
   }
+  if (!visualQualified) {
+    reasons.push(...consistency.reasons.map((entry) => `consistency:${entry}`));
+  }
   if (reasons.length === 0) reasons.push("all_gates_passed");
 
-  return {
-    passed,
-    confidence: passed ? 0.82 : input.succeeded ? 0.45 : 0.2,
+  const evidence: MasteryEpisodeEvidence = {
+    frames,
+    consistency,
+    syntheticSignals: observedBundle.syntheticSignals,
+  };
+
+  const observedMetrics: Record<string, number> = {};
+  for (const [key, value] of observedBundle.numeric.entries()) {
+    observedMetrics[key] = value;
+  }
+
+  const verdict: MasteryVerdict = {
+    passed: outcome.finalQualified,
+    confidence: outcome.finalQualified ? 0.95 : input.succeeded ? 0.35 : 0.15,
     reasons,
     gateResults,
+    outcome,
+    consistency,
+  };
+
+  return {
+    verdict,
+    evidence,
+    observedMetrics,
   };
 }
 
-async function executePlan(baseUrl: string, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+async function executePlan(
+  baseUrl: string,
+  payload: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
   const response = await fetch(new URL("/api/agent/autonomy/execute-plan", baseUrl), {
     method: "POST",
     headers: {
@@ -301,11 +853,16 @@ class MasteryCertificationOrchestrator {
     return next;
   }
 
-  private async log(runId: string, level: Five55MasteryLog["level"], message: string, ctx?: {
-    stage?: string;
-    gameId?: string;
-    episodeId?: string;
-  }): Promise<void> {
+  private async log(
+    runId: string,
+    level: Five55MasteryLog["level"],
+    message: string,
+    ctx?: {
+      stage?: string;
+      gameId?: string;
+      episodeId?: string;
+    },
+  ): Promise<void> {
     const logEntry: Five55MasteryLog = {
       runId,
       seq: this.nextLogSeq(runId),
@@ -322,13 +879,26 @@ class MasteryCertificationOrchestrator {
   async start(options: HandlerOptions | undefined): Promise<Five55MasteryRun> {
     const request = parseStrictMode(options);
     const orderedGames = resolveMasteryGameOrder(request.games);
-    const totalEpisodes = orderedGames.length * request.episodesPerGame;
+    const deferredGames: string[] = [];
+    const activeGames: string[] = [];
+
+    for (const gameId of orderedGames) {
+      const contract = getMasteryContract(gameId);
+      if (contract.gateV2.status === "DEFERRED_MULTIPLAYER") {
+        deferredGames.push(gameId);
+      } else {
+        activeGames.push(gameId);
+      }
+    }
+
+    const totalEpisodes = activeGames.length * request.episodesPerGame;
 
     const run: Five55MasteryRun = {
       runId: buildRunId(request.suiteId),
       suiteId: request.suiteId,
       status: "queued",
-      strict: request.strict,
+      strict: true,
+      verificationStatus: "verified",
       seedMode: request.seedMode,
       maxDurationSec: request.maxDurationSec,
       episodesPerGame: request.episodesPerGame,
@@ -345,6 +915,9 @@ class MasteryCertificationOrchestrator {
       summary: {
         passedGames: [],
         failedGames: [],
+        deferredGames,
+        evaluatedGames: 0,
+        denominatorGames: activeGames.length,
         gamePassRate: 0,
       },
       error: null,
@@ -355,7 +928,7 @@ class MasteryCertificationOrchestrator {
       stage: "queued",
     });
 
-    void this.execute(run, request).catch(async (err) => {
+    void this.execute(run, request, activeGames, deferredGames).catch(async (err) => {
       const error = err instanceof Error ? err.message : String(err);
       const current = await readMasteryRun(run.runId);
       if (!current) return;
@@ -374,10 +947,23 @@ class MasteryCertificationOrchestrator {
   }
 
   async status(runId: string): Promise<Five55MasteryRun | null> {
-    return readMasteryRun(runId);
+    const run = await readMasteryRun(runId);
+    if (!run) return null;
+    if (run.verificationStatus !== "verified") {
+      return {
+        ...run,
+        verificationStatus: "UNVERIFIED_LEGACY",
+      };
+    }
+    return run;
   }
 
-  private async execute(run: Five55MasteryRun, request: MasteryCertificationRequest): Promise<void> {
+  private async execute(
+    run: Five55MasteryRun,
+    request: MasteryCertificationRequest,
+    activeGames: string[],
+    deferredGames: string[],
+  ): Promise<void> {
     this.activeRuns.add(run.runId);
     const baseUrl = resolveLocalApiBase();
     const startedMs = Date.now();
@@ -387,16 +973,32 @@ class MasteryCertificationOrchestrator {
     await writeMasteryRun(run);
     await this.log(run.runId, "info", "Mastery run started", { stage: "running" });
 
+    for (const deferredGame of deferredGames) {
+      await this.log(
+        run.runId,
+        "info",
+        `Game deferred from strict denominator: ${deferredGame}`,
+        {
+          stage: "deferred",
+          gameId: deferredGame,
+        },
+      );
+    }
+
     const perGamePass = new Map<string, { pass: number; fail: number }>();
-    for (const gameId of run.games) {
+    for (const gameId of activeGames) {
       perGamePass.set(gameId, { pass: 0, fail: 0 });
     }
 
     let globalEpisodeIndex = 0;
-    for (const gameId of run.games) {
+    for (const gameId of activeGames) {
       const canonicalGameId = canonicalizeMasteryGameId(gameId);
       const contract = getMasteryContract(canonicalGameId);
-      for (let episodeIndex = 1; episodeIndex <= run.episodesPerGame; episodeIndex += 1) {
+      for (
+        let episodeIndex = 1;
+        episodeIndex <= run.episodesPerGame;
+        episodeIndex += 1
+      ) {
         globalEpisodeIndex += 1;
 
         const elapsedSec = (Date.now() - startedMs) / 1000;
@@ -430,6 +1032,7 @@ class MasteryCertificationOrchestrator {
                   params: {
                     gameId: canonicalGameId,
                     mode: "agent",
+                    evidenceMode: request.evidenceMode,
                     masteryProfile: {
                       suiteId: run.suiteId,
                       runId: run.runId,
@@ -437,8 +1040,9 @@ class MasteryCertificationOrchestrator {
                       episodeIndex,
                       episodeId,
                       seed,
-                      strict: run.strict,
-                      contractVersion: 1,
+                      strict: true,
+                      evidenceMode: request.evidenceMode,
+                      contractVersion: contract.contractVersion,
                     },
                   },
                 },
@@ -479,13 +1083,17 @@ class MasteryCertificationOrchestrator {
           actionError = err instanceof Error ? err.message : String(err);
         }
 
-        const verdict = buildEpisodeVerdict({
-          strict: run.strict,
+        const assessment = buildEpisodeVerdict({
+          evidenceMode: request.evidenceMode,
+          strict: true,
           succeeded: actionOk,
           error: actionError,
           gameId: canonicalGameId,
+          runId: run.runId,
+          episodeId,
           playEnvelope,
         });
+        const verdict = assessment.verdict;
 
         const episode: Five55MasteryEpisode = {
           runId: run.runId,
@@ -504,9 +1112,11 @@ class MasteryCertificationOrchestrator {
             error: actionError,
           },
           verdict,
+          evidence: assessment.evidence,
           metadata: {
             objective: contract.objective.summary,
             controls: contract.controls,
+            observedMetrics: assessment.observedMetrics,
             playEnvelope,
           },
         };
@@ -541,12 +1151,14 @@ class MasteryCertificationOrchestrator {
           latestEpisodeId: episode.episodeId,
           latestVerdict: verdict,
           latestStatus: episode.status,
+          latestOutcome: verdict.outcome,
+          latestConsistency: verdict.consistency,
           objective: contract.objective,
           controls: contract.controls,
           riskFlags: verdict.reasons,
         });
 
-        await this.recomputeRunSummary(run, perGamePass);
+        await this.recomputeRunSummary(run, perGamePass, deferredGames);
         await writeMasteryRun(run);
 
         if (run.strict && !verdict.passed) {
@@ -559,6 +1171,7 @@ class MasteryCertificationOrchestrator {
           });
           run.finishedAt = nowIso();
           run.durationMs = Date.parse(run.finishedAt) - Date.parse(run.startedAt);
+          await this.recomputeRunSummary(run, perGamePass, deferredGames);
           await writeMasteryRun(run);
           this.activeRuns.delete(run.runId);
           return;
@@ -569,11 +1182,16 @@ class MasteryCertificationOrchestrator {
     run.status = run.progress.failedEpisodes > 0 ? "failed" : "success";
     run.finishedAt = nowIso();
     run.durationMs = Date.parse(run.finishedAt) - Date.parse(run.startedAt);
-    await this.recomputeRunSummary(run, perGamePass);
+    await this.recomputeRunSummary(run, perGamePass, deferredGames);
     await writeMasteryRun(run);
-    await this.log(run.runId, run.status === "success" ? "info" : "warn", `Mastery run ${run.status}`, {
-      stage: "complete",
-    });
+    await this.log(
+      run.runId,
+      run.status === "success" ? "info" : "warn",
+      `Mastery run ${run.status}`,
+      {
+        stage: "complete",
+      },
+    );
 
     this.activeRuns.delete(run.runId);
   }
@@ -581,6 +1199,7 @@ class MasteryCertificationOrchestrator {
   private async recomputeRunSummary(
     run: Five55MasteryRun,
     perGamePass: Map<string, { pass: number; fail: number }>,
+    deferredGames: string[],
   ): Promise<void> {
     const passedGames: string[] = [];
     const failedGames: string[] = [];
@@ -593,12 +1212,17 @@ class MasteryCertificationOrchestrator {
       }
     }
 
+    const denominatorGames = Math.max(0, run.games.length - deferredGames.length);
+
     run.summary = {
       passedGames: passedGames.sort(),
       failedGames: failedGames.sort(),
+      deferredGames: [...deferredGames].sort(),
+      evaluatedGames: passedGames.length + failedGames.length,
+      denominatorGames,
       gamePassRate:
-        run.games.length > 0
-          ? Number((passedGames.length / run.games.length).toFixed(4))
+        denominatorGames > 0
+          ? Number((passedGames.length / denominatorGames).toFixed(4))
           : 0,
     };
   }

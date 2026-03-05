@@ -1,6 +1,7 @@
 import type { JsonRecord } from "../../intelligence/types.js";
 import type {
   Five55MasteryContract,
+  MasteryGateV2,
   MasteryPolicyBounds,
 } from "../types.js";
 
@@ -37,16 +38,61 @@ export const BASE_POLICY_BOUNDS: Record<string, MasteryPolicyBounds> = Object.fr
 });
 
 export function createMasteryContract(
-  contract: Omit<Five55MasteryContract, "policy"> & {
+  contract: Omit<Five55MasteryContract, "policy" | "contractVersion" | "gateV2"> & {
     policy?: {
       family?: string;
       defaults?: JsonRecord;
       bounds?: Record<string, MasteryPolicyBounds>;
     };
+    gateV2?: Partial<MasteryGateV2>;
   },
 ): Five55MasteryContract {
+  const runtimeGates = (contract.gateV2?.runtimeGates ?? contract.passGates).map(
+    (gate) => ({
+      ...gate,
+      required:
+        "required" in gate && typeof gate.required === "boolean"
+          ? gate.required
+          : true,
+      source:
+        "source" in gate && typeof gate.source === "string"
+          ? gate.source
+          : "runtime-native",
+    }),
+  );
   return {
     ...contract,
+    contractVersion: 2,
+    gateV2: {
+      runtimeGates,
+      levelRequirement: contract.gateV2?.levelRequirement ?? null,
+      qualityRequirement: contract.gateV2?.qualityRequirement ?? null,
+      truthChecks: {
+        requireFrameTypes: contract.gateV2?.truthChecks?.requireFrameTypes ?? [
+          "boot/menu",
+          "play-start",
+          "progress",
+          "terminal",
+          "stuck-check",
+        ],
+        stuckCheckIntervalSec:
+          contract.gateV2?.truthChecks?.stuckCheckIntervalSec ?? 5,
+        failOnMenuAdvance:
+          contract.gateV2?.truthChecks?.failOnMenuAdvance ?? true,
+        failOnStaticFramesWithProgress:
+          contract.gateV2?.truthChecks?.failOnStaticFramesWithProgress ?? true,
+        failOnTelemetryFrameMismatch:
+          contract.gateV2?.truthChecks?.failOnTelemetryFrameMismatch ?? true,
+        ...(Array.isArray(contract.gateV2?.truthChecks?.requiredControlAxes)
+          ? {
+              requiredControlAxes:
+                contract.gateV2?.truthChecks?.requiredControlAxes,
+            }
+          : {}),
+      },
+      disallowedEvidence: contract.gateV2?.disallowedEvidence ?? ["synthetic"],
+      status: contract.gateV2?.status ?? "ACTIVE",
+    },
     policy: {
       family: contract.policy?.family ?? "generic_observable",
       defaults: {

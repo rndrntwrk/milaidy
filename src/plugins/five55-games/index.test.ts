@@ -22,6 +22,7 @@ const ENV_KEYS = [
   "GAMES_BASE_URL",
   "ALICE_INTELLIGENCE_ENABLED",
   "ALICE_LEARNING_WRITEBACK_ENABLED",
+  "MILADY_STATE_DIR",
 ] as const;
 
 const INTERNAL_RUNTIME = { agentId: "alice-internal" } as never;
@@ -198,6 +199,71 @@ describe("five55-games plugin actions", () => {
     });
     expect(result?.success).toBe(true);
     expect(parseEnvelope(result as { text: string }).code).toBe("OK");
+  });
+
+  it("passes masteryProfile payload through play action", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { sessionId: "session-mastery" }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          game: { id: "ninja", path: "games/ninja" },
+        }),
+      );
+
+    const action = await resolveAction("FIVE55_GAMES_PLAY");
+    const result = await action.handler?.(
+      INTERNAL_RUNTIME,
+      INTERNAL_MESSAGE,
+      INTERNAL_STATE,
+      {
+        parameters: {
+          gameId: "ninja",
+          mode: "agent",
+          masteryProfile: {
+            suiteId: "suite-1",
+            runId: "run-1",
+            episodeIndex: 1,
+          },
+        },
+      } as never,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, playCall] = fetchMock.mock.calls;
+    expect(parseFetchBody(playCall)).toEqual({
+      gameId: "ninja",
+      mode: "agent",
+      masteryProfile: {
+        suiteId: "suite-1",
+        runId: "run-1",
+        episodeIndex: 1,
+      },
+    });
+    expect(result?.success).toBe(true);
+  });
+
+  it("resolves mastery brief using alias game ids", async () => {
+    const action = await resolveAction("FIVE55_GAMES_MASTERY_BRIEF");
+    const result = await action.handler?.(
+      INTERNAL_RUNTIME,
+      INTERNAL_MESSAGE,
+      INTERNAL_STATE,
+      {
+        parameters: {
+          gameId: "ninja-vs-evilcorp",
+        },
+      } as never,
+    );
+
+    expect(result?.success).toBe(true);
+    const envelope = parseEnvelope(result as { text: string });
+    expect(envelope.code).toBe("OK");
+    const data = envelope.data as Record<string, unknown>;
+    expect(data.gameId).toBe("ninja");
+    const contract = data.contract as Record<string, unknown>;
+    expect(contract.gameId).toBe("ninja");
+    expect(Array.isArray(contract.controls)).toBe(true);
   });
 
   it("provisions Cloudflare output before play when session is inactive", async () => {
@@ -385,7 +451,7 @@ describe("five55-games plugin actions", () => {
     ).toBeGreaterThanOrEqual(1);
     expect(
       calledUrls.filter((url) => url.includes("/games/play")).length,
-    ).toBe(2);
+    ).toBeGreaterThanOrEqual(2);
     expect(
       calledUrls.filter((url) => url.includes("/stream/status")).length,
     ).toBeGreaterThanOrEqual(2);

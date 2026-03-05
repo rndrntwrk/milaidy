@@ -1361,6 +1361,86 @@ export interface Five55MasteryGateResult {
   observed: number | null;
   passed: boolean;
   reason: string;
+  source?: "runtime-native" | "synthetic" | "derived";
+}
+
+export interface Five55MasteryLevelRequirement {
+  metric: string;
+  totalLevels: number;
+  requiredLevel: number;
+  indexBase: 0 | 1;
+  mode: "at_least" | "at_most";
+  clearedLevelsMetric?: string;
+  minimumClearedLevels?: number;
+  temporaryOverride?: boolean;
+  temporaryOverrideReason?: string;
+}
+
+export interface Five55MasteryQualityRequirement {
+  medianClearTimeMetric?: string;
+  goldenLevelTimeMs?: number;
+  maxMedianClearTimeFactor?: number;
+  medianScoreMetric?: string;
+  goldenLevelScore?: number;
+  minMedianScoreFactor?: number;
+}
+
+export interface Five55MasteryGateV2 {
+  runtimeGates: Array<{
+    id: string;
+    metric: string;
+    operator: ">=" | "<=" | "==" | "!=";
+    threshold: number;
+    description: string;
+    required?: boolean;
+    source?: "runtime-native" | "synthetic" | "derived";
+  }>;
+  levelRequirement?: Five55MasteryLevelRequirement | null;
+  qualityRequirement?: Five55MasteryQualityRequirement | null;
+  truthChecks: {
+    requireFrameTypes: Array<
+      "boot/menu" | "play-start" | "progress" | "terminal" | "stuck-check"
+    >;
+    stuckCheckIntervalSec: number;
+    failOnMenuAdvance: boolean;
+    failOnStaticFramesWithProgress: boolean;
+    failOnTelemetryFrameMismatch: boolean;
+    requiredControlAxes?: string[];
+  };
+  disallowedEvidence: string[];
+  status: "ACTIVE" | "DEFERRED_MULTIPLAYER";
+}
+
+export interface Five55MasteryConsistencyVerdict {
+  status: "pass" | "fail" | "insufficient";
+  checkedAt: string;
+  reasons: string[];
+  mismatchDetails: string[];
+}
+
+export interface Five55MasteryEpisodeOutcomeV2 {
+  runtimeQualified: boolean;
+  visualQualified: boolean;
+  finalQualified: boolean;
+  failureCode?: string | null;
+}
+
+export interface Five55MasteryEvidenceFrame {
+  runId: string;
+  episodeId: string;
+  seq: number;
+  frameType: "boot/menu" | "play-start" | "progress" | "terminal" | "stuck-check";
+  ts: string;
+  hash: string;
+  path?: string;
+  ocr: string[];
+  telemetrySnapshot: Record<string, unknown>;
+}
+
+export interface Five55MasteryEpisodeEvidence {
+  frames: Five55MasteryEvidenceFrame[];
+  consistency: Five55MasteryConsistencyVerdict;
+  syntheticSignals: string[];
 }
 
 export interface Five55MasteryVerdict {
@@ -1368,12 +1448,15 @@ export interface Five55MasteryVerdict {
   confidence: number;
   reasons: string[];
   gateResults: Five55MasteryGateResult[];
+  outcome: Five55MasteryEpisodeOutcomeV2;
+  consistency: Five55MasteryConsistencyVerdict;
 }
 
 export interface Five55MasteryContract {
   gameId: string;
   aliases: string[];
   title: string;
+  contractVersion: number;
   objective: {
     summary: string;
     winCondition: string;
@@ -1404,6 +1487,7 @@ export interface Five55MasteryContract {
     threshold: number;
     description: string;
   }>;
+  gateV2: Five55MasteryGateV2;
   recovery: {
     menu: string;
     paused: string;
@@ -1417,6 +1501,7 @@ export interface Five55MasteryRun {
   suiteId: string;
   status: "queued" | "running" | "success" | "failed" | "canceled";
   strict: boolean;
+  verificationStatus: "verified" | "UNVERIFIED_LEGACY";
   seedMode: "fixed" | "mixed" | "rolling";
   maxDurationSec: number;
   episodesPerGame: number;
@@ -1433,6 +1518,9 @@ export interface Five55MasteryRun {
   summary: {
     passedGames: string[];
     failedGames: string[];
+    deferredGames: string[];
+    evaluatedGames: number;
+    denominatorGames: number;
     gamePassRate: number;
   };
   error: string | null;
@@ -1455,6 +1543,7 @@ export interface Five55MasteryEpisode {
     error: string | null;
   };
   verdict: Five55MasteryVerdict;
+  evidence: Five55MasteryEpisodeEvidence;
   metadata: Record<string, unknown>;
 }
 
@@ -1465,6 +1554,8 @@ export interface Five55MasteryGameSnapshot {
   latestEpisodeId: string;
   latestVerdict: Five55MasteryVerdict;
   latestStatus: "queued" | "running" | "success" | "failed" | "canceled";
+  latestOutcome?: Five55MasteryEpisodeOutcomeV2;
+  latestConsistency?: Five55MasteryConsistencyVerdict;
   objective: Five55MasteryContract["objective"];
   controls: Five55MasteryContract["controls"];
   riskFlags: string[];
@@ -3331,12 +3422,16 @@ export class MiladyClient {
   async playFive55Game(input: {
     gameId?: string;
     mode?: "standard" | "ranked" | "spectate";
+    masteryProfile?: Record<string, unknown>;
+    evidenceMode?: "strict" | "basic" | "off";
   }): Promise<Five55GamePlayResponse> {
     return this.fetch("/api/five55/games/play", {
       method: "POST",
       body: JSON.stringify({
         gameId: input.gameId,
         mode: input.mode ?? "spectate",
+        masteryProfile: input.masteryProfile,
+        evidenceMode: input.evidenceMode,
       }),
     });
   }
@@ -3362,6 +3457,7 @@ export class MiladyClient {
     seedMode?: "fixed" | "mixed" | "rolling";
     maxDurationSec?: number;
     strict?: boolean;
+    evidenceMode?: "strict" | "basic" | "off";
   }): Promise<{
     ok: boolean;
     runId: string;
@@ -3371,7 +3467,11 @@ export class MiladyClient {
   }> {
     return this.fetch("/api/five55/mastery/runs", {
       method: "POST",
-      body: JSON.stringify(input),
+      body: JSON.stringify({
+        ...input,
+        strict: input.strict ?? true,
+        evidenceMode: input.evidenceMode ?? "strict",
+      }),
     });
   }
   async listFive55MasteryRuns(input?: {
@@ -3443,6 +3543,48 @@ export class MiladyClient {
   }> {
     return this.fetch(
       `/api/five55/mastery/games/${encodeURIComponent(gameId)}/latest`,
+    );
+  }
+  async getFive55MasteryRunEvidence(runId: string): Promise<{
+    runId: string;
+    total: number;
+    evidence: Array<{
+      runId: string;
+      episodeId: string;
+      gameId: string;
+      status: Five55MasteryEpisode["status"];
+      consistency: Five55MasteryConsistencyVerdict;
+      frameCount: number;
+      syntheticSignals: string[];
+    }>;
+  }> {
+    return this.fetch(
+      `/api/five55/mastery/runs/${encodeURIComponent(runId)}/evidence`,
+    );
+  }
+  async getFive55MasteryEpisodeFrames(
+    runId: string,
+    episodeId: string,
+  ): Promise<{
+    runId: string;
+    episodeId: string;
+    total: number;
+    frames: Five55MasteryEvidenceFrame[];
+  }> {
+    return this.fetch(
+      `/api/five55/mastery/runs/${encodeURIComponent(runId)}/episodes/${encodeURIComponent(episodeId)}/frames`,
+    );
+  }
+  async getFive55MasteryEpisodeConsistency(
+    runId: string,
+    episodeId: string,
+  ): Promise<{
+    runId: string;
+    episodeId: string;
+    consistency: Five55MasteryConsistencyVerdict;
+  }> {
+    return this.fetch(
+      `/api/five55/mastery/runs/${encodeURIComponent(runId)}/episodes/${encodeURIComponent(episodeId)}/consistency`,
     );
   }
   async listHyperscapeEmbeddedAgents(): Promise<HyperscapeEmbeddedAgentsResponse> {

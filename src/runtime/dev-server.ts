@@ -309,7 +309,7 @@ async function main() {
   });
   apiUpdateRuntime = updateRuntime;
   apiUpdateStartup = updateStartup;
-  apiUpdateStartup({
+  apiUpdateStartup?.({
     phase: "api-ready",
     attempt: 0,
     lastError: undefined,

@@ -33,6 +33,16 @@ import {
   type AgentRequest,
   type LaunchPolicyContext,
 } from "./intelligence/index.js";
+import {
+  canonicalizeMasteryGameId,
+  findMasteryEpisodeById,
+  getMasteryCertificationOrchestrator,
+  getMasteryContract,
+  listMasteryContracts,
+  readMasteryEpisodeConsistency,
+  readMasteryEpisodeEvidence,
+  readMasteryRunEvidence,
+} from "./mastery/index.js";
 
 const CAPABILITY_POLICY = createFive55CapabilityPolicy();
 const API_ENV = "FIVE55_GAMES_API_URL";
@@ -123,6 +133,35 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
+}
+
+function readMasteryProfileOption(
+  options: HandlerOptions | undefined,
+): Record<string, unknown> | undefined {
+  const raw = options?.parameters?.masteryProfile;
+  const direct = asRecord(raw);
+  if (direct) return direct;
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    return asRecord(parsed);
+  } catch {
+    return undefined;
+  }
+}
+
+function readEvidenceModeOption(
+  options: HandlerOptions | undefined,
+): "strict" | "basic" | "off" | undefined {
+  const raw = options?.parameters?.evidenceMode;
+  if (typeof raw !== "string") return undefined;
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "strict" || normalized === "basic" || normalized === "off") {
+    return normalized;
+  }
+  return undefined;
 }
 
 function normalizeMode(
@@ -983,7 +1022,9 @@ async function triggerSprintAd(
     };
   }
 
-  const expectedGraphicId = readNonEmptyString(response.data?.graphic?.id);
+  const expectedGraphicId = readNonEmptyString(
+    asRecord(response.data?.graphic)?.id,
+  );
   const timeoutMs = 9_000;
   const pollMs = 600;
   const startedAt = Date.now();
@@ -1064,7 +1105,8 @@ const gamesProvider: Provider = {
       text: [
         "## Five55 Games Surface",
         "",
-        "Actions: FIVE55_GAMES_CATALOG, FIVE55_GAMES_PLAY, FIVE55_GAMES_GO_LIVE_PLAY, FIVE55_GAMES_LIVE_CAPABILITY_SPRINT",
+        "Actions: FIVE55_GAMES_CATALOG, FIVE55_GAMES_PLAY, FIVE55_GAMES_MASTERY_BRIEF, FIVE55_GAMES_MASTERY_CERTIFY, FIVE55_GAMES_MASTERY_STATUS, FIVE55_GAMES_MASTERY_VALIDATE, FIVE55_GAMES_MASTERY_EVIDENCE, FIVE55_GAMES_GO_LIVE_PLAY, FIVE55_GAMES_LIVE_CAPABILITY_SPRINT",
+        `Mastery contracts: ${listMasteryContracts().length}`,
         `API configured: ${configured ? "yes" : "no"} (${dialect === "five55-web" ? API_ENV : dialect === "agent-v1" ? `${STREAM555_BASE_ENV}|${describeAgentAuthSource()}` : `${LOCAL_API_URL_ENV}|${LOCAL_PORT_ENV}`})`,
         `Dialect: ${dialect}`,
         ...(dialect === "agent-v1"
@@ -1216,6 +1258,12 @@ const playAction: Action = {
         readParam(options as HandlerOptions | undefined, "mode"),
         dialect,
       );
+      const masteryProfile = readMasteryProfileOption(
+        options as HandlerOptions | undefined,
+      );
+      const evidenceMode = readEvidenceModeOption(
+        options as HandlerOptions | undefined,
+      );
       const requestedSessionId = readParam(
         options as HandlerOptions | undefined,
         "sessionId",
@@ -1243,6 +1291,8 @@ const playAction: Action = {
           payload: {
             ...(resolvedGameId ? { gameId: resolvedGameId } : {}),
             mode,
+            ...(masteryProfile ? { masteryProfile } : {}),
+            ...(evidenceMode ? { evidenceMode } : {}),
           },
           requestContract: {
             gameId: { required: true, type: "string", nonEmpty: true },
@@ -1251,6 +1301,15 @@ const playAction: Action = {
               type: "string",
               nonEmpty: true,
               oneOf: ["standard", "ranked", "spectate", "solo", "agent"],
+            },
+            masteryProfile: {
+              required: false,
+              type: "object",
+            },
+            evidenceMode: {
+              required: false,
+              type: "string",
+              oneOf: ["strict", "basic", "off"],
             },
           },
           responseContract: {},
@@ -1275,6 +1334,8 @@ const playAction: Action = {
         payload: {
           ...(gameId ? { gameId } : {}),
           mode,
+          ...(masteryProfile ? { masteryProfile } : {}),
+          ...(evidenceMode ? { evidenceMode } : {}),
         },
         requestContract: {
           gameId: { required: false, type: "string", nonEmpty: true },
@@ -1283,6 +1344,15 @@ const playAction: Action = {
             type: "string",
             nonEmpty: true,
             oneOf: ["standard", "ranked", "spectate", "solo", "agent"],
+          },
+          masteryProfile: {
+            required: false,
+            type: "object",
+          },
+          evidenceMode: {
+            required: false,
+            type: "string",
+            oneOf: ["strict", "basic", "off"],
           },
         },
         responseContract: {},
@@ -1316,6 +1386,353 @@ const playAction: Action = {
     {
       name: "sessionId",
       description: "Optional stream session id for agent-v1 dialect",
+      required: false,
+      schema: { type: "string" as const },
+    },
+    {
+      name: "masteryProfile",
+      description:
+        "Optional mastery envelope for deterministic certification episodes",
+      required: false,
+      schema: { type: "object" as const },
+    },
+    {
+      name: "evidenceMode",
+      description: "Optional evidence strictness mode (strict|basic|off).",
+      required: false,
+      schema: { type: "string" as const },
+    },
+  ],
+};
+
+const masteryBriefAction: Action = {
+  name: "FIVE55_GAMES_MASTERY_BRIEF",
+  similes: [
+    "FIVE55_MASTERY_BRIEF",
+    "GAMES_MASTERY_BRIEF",
+    "GET_GAME_MASTERY_BRIEF",
+  ],
+  description:
+    "Returns the canonical per-game mastery contract (objective, controls, progression, gates).",
+  validate: async () => true,
+  handler: async (_runtime, _message, _state, options) => {
+    try {
+      assertFive55Capability(CAPABILITY_POLICY, "games.observe");
+      const requestedGameId = readParam(
+        options as HandlerOptions | undefined,
+        "gameId",
+      );
+      if (!requestedGameId?.trim()) {
+        throw new Error("gameId is required");
+      }
+      const gameId = canonicalizeMasteryGameId(requestedGameId);
+      const contract = getMasteryContract(gameId);
+      return actionSuccessResult(
+        "five55.games",
+        "FIVE55_GAMES_MASTERY_BRIEF",
+        200,
+        "mastery brief resolved",
+        {
+          gameId,
+          contract,
+        },
+      );
+    } catch (err) {
+      return exceptionAction("five55.games", "FIVE55_GAMES_MASTERY_BRIEF", err);
+    }
+  },
+  parameters: [
+    {
+      name: "gameId",
+      description: "Canonical game id (aliases accepted and normalized).",
+      required: true,
+      schema: { type: "string" as const },
+    },
+  ],
+};
+
+const masteryCertifyAction: Action = {
+  name: "FIVE55_GAMES_MASTERY_CERTIFY",
+  similes: [
+    "FIVE55_MASTERY_CERTIFY",
+    "RUN_FIVE55_MASTERY_SUITE",
+    "CERTIFY_FIVE55_GAMES",
+  ],
+  description:
+    "Starts strict-only agentic mastery certification with runtime + visual evidence validation.",
+  validate: async () => true,
+  handler: async (runtime, message, state, options) => {
+    try {
+      assertTrustedAdminForAction(
+        runtime,
+        message,
+        state,
+        "FIVE55_GAMES_MASTERY_CERTIFY",
+      );
+      assertFive55Capability(CAPABILITY_POLICY, "games.play");
+      assertFive55Capability(CAPABILITY_POLICY, "games.observe");
+
+      const orchestrator = getMasteryCertificationOrchestrator();
+      const run = await orchestrator.start(options as HandlerOptions | undefined);
+      return actionSuccessResult(
+        "five55.games",
+        "FIVE55_GAMES_MASTERY_CERTIFY",
+        202,
+        "mastery certification accepted",
+        {
+          runId: run.runId,
+          run,
+        },
+      );
+    } catch (err) {
+      return exceptionAction(
+        "five55.games",
+        "FIVE55_GAMES_MASTERY_CERTIFY",
+        err,
+      );
+    }
+  },
+  parameters: [
+    {
+      name: "suiteId",
+      description: "Certification suite id (default generated).",
+      required: false,
+      schema: { type: "string" as const },
+    },
+    {
+      name: "games",
+      description: "Ordered game list (defaults to canonical 16-game order).",
+      required: false,
+      schema: { type: "array" as const },
+    },
+    {
+      name: "episodesPerGame",
+      description: "Episode count per game.",
+      required: false,
+      schema: { type: "number" as const },
+    },
+    {
+      name: "seedMode",
+      description: "Seed policy: fixed|mixed|rolling.",
+      required: false,
+      schema: { type: "string" as const },
+    },
+    {
+      name: "maxDurationSec",
+      description: "Hard timeout for the certification run.",
+      required: false,
+      schema: { type: "number" as const },
+    },
+    {
+      name: "strict",
+      description: "Ignored: strict mode is always enabled for truth-gated certification.",
+      required: false,
+      schema: { type: "boolean" as const },
+    },
+    {
+      name: "evidenceMode",
+      description: "Evidence mode (strict|basic|off). Defaults to strict.",
+      required: false,
+      schema: { type: "string" as const },
+    },
+  ],
+};
+
+const masteryStatusAction: Action = {
+  name: "FIVE55_GAMES_MASTERY_STATUS",
+  similes: [
+    "FIVE55_MASTERY_STATUS",
+    "GET_FIVE55_MASTERY_STATUS",
+    "CHECK_FIVE55_MASTERY_RUN",
+  ],
+  description: "Fetches persisted status for a mastery certification run.",
+  validate: async () => true,
+  handler: async (_runtime, _message, _state, options) => {
+    try {
+      assertFive55Capability(CAPABILITY_POLICY, "games.observe");
+      const runId = readParam(options as HandlerOptions | undefined, "runId");
+      if (!runId?.trim()) {
+        throw new Error("runId is required");
+      }
+      const orchestrator = getMasteryCertificationOrchestrator();
+      const run = await orchestrator.status(runId.trim());
+      if (!run) {
+        throw new Error(`runId not found: ${runId}`);
+      }
+      return actionSuccessResult(
+        "five55.games",
+        "FIVE55_GAMES_MASTERY_STATUS",
+        200,
+        "mastery run status fetched",
+        {
+          runId: run.runId,
+          run,
+        },
+      );
+    } catch (err) {
+      return exceptionAction("five55.games", "FIVE55_GAMES_MASTERY_STATUS", err);
+    }
+  },
+  parameters: [
+    {
+      name: "runId",
+      description: "Mastery certification run id.",
+      required: true,
+      schema: { type: "string" as const },
+    },
+  ],
+};
+
+const masteryValidateAction: Action = {
+  name: "FIVE55_GAMES_MASTERY_VALIDATE",
+  similes: [
+    "FIVE55_MASTERY_VALIDATE",
+    "VALIDATE_FIVE55_EPISODE",
+    "CHECK_FIVE55_MASTERY_EVIDENCE",
+  ],
+  description:
+    "Validates a specific mastery episode against strict runtime+visual consistency gates.",
+  validate: async () => true,
+  handler: async (_runtime, _message, _state, options) => {
+    try {
+      assertFive55Capability(CAPABILITY_POLICY, "games.observe");
+      const gameIdRaw = readParam(options as HandlerOptions | undefined, "gameId");
+      const episodeId = readParam(options as HandlerOptions | undefined, "episodeId");
+      if (!gameIdRaw?.trim()) throw new Error("gameId is required");
+      if (!episodeId?.trim()) throw new Error("episodeId is required");
+
+      const gameId = canonicalizeMasteryGameId(gameIdRaw.trim());
+      const episode = await findMasteryEpisodeById({
+        episodeId: episodeId.trim(),
+        gameId,
+      });
+      if (!episode) {
+        throw new Error(`episode not found: ${episodeId}`);
+      }
+      const consistency = await readMasteryEpisodeConsistency({
+        runId: episode.runId,
+        episodeId: episode.episodeId,
+      });
+      const evidence = await readMasteryEpisodeEvidence({
+        runId: episode.runId,
+        episodeId: episode.episodeId,
+      });
+
+      return actionSuccessResult(
+        "five55.games",
+        "FIVE55_GAMES_MASTERY_VALIDATE",
+        200,
+        "mastery episode validation resolved",
+        {
+          gameId,
+          runId: episode.runId,
+          episodeId: episode.episodeId,
+          status: episode.status,
+          verdict: episode.verdict,
+          outcome: episode.verdict.outcome,
+          consistency,
+          evidence,
+          qualified: episode.verdict.outcome.finalQualified,
+        },
+      );
+    } catch (err) {
+      return exceptionAction(
+        "five55.games",
+        "FIVE55_GAMES_MASTERY_VALIDATE",
+        err,
+      );
+    }
+  },
+  parameters: [
+    {
+      name: "gameId",
+      description: "Canonical game id (aliases accepted).",
+      required: true,
+      schema: { type: "string" as const },
+    },
+    {
+      name: "episodeId",
+      description: "Mastery episode id to validate.",
+      required: true,
+      schema: { type: "string" as const },
+    },
+  ],
+};
+
+const masteryEvidenceAction: Action = {
+  name: "FIVE55_GAMES_MASTERY_EVIDENCE",
+  similes: [
+    "FIVE55_MASTERY_EVIDENCE",
+    "GET_FIVE55_MASTERY_EVIDENCE",
+    "FIVE55_EPISODE_EVIDENCE",
+  ],
+  description:
+    "Returns evidence timelines and consistency snapshots for a run or specific episode.",
+  validate: async () => true,
+  handler: async (_runtime, _message, _state, options) => {
+    try {
+      assertFive55Capability(CAPABILITY_POLICY, "games.observe");
+      const runId = readParam(options as HandlerOptions | undefined, "runId");
+      const episodeId = readParam(options as HandlerOptions | undefined, "episodeId");
+      if (!runId?.trim()) {
+        throw new Error("runId is required");
+      }
+
+      if (episodeId?.trim()) {
+        const evidence = await readMasteryEpisodeEvidence({
+          runId: runId.trim(),
+          episodeId: episodeId.trim(),
+        });
+        if (!evidence) {
+          throw new Error(`episode not found: ${episodeId}`);
+        }
+        const consistency = await readMasteryEpisodeConsistency({
+          runId: runId.trim(),
+          episodeId: episodeId.trim(),
+        });
+        return actionSuccessResult(
+          "five55.games",
+          "FIVE55_GAMES_MASTERY_EVIDENCE",
+          200,
+          "episode evidence resolved",
+          {
+            runId: runId.trim(),
+            episodeId: episodeId.trim(),
+            evidence,
+            consistency,
+          },
+        );
+      }
+
+      const evidence = await readMasteryRunEvidence(runId.trim());
+      return actionSuccessResult(
+        "five55.games",
+        "FIVE55_GAMES_MASTERY_EVIDENCE",
+        200,
+        "run evidence resolved",
+        {
+          runId: runId.trim(),
+          evidence,
+        },
+      );
+    } catch (err) {
+      return exceptionAction(
+        "five55.games",
+        "FIVE55_GAMES_MASTERY_EVIDENCE",
+        err,
+      );
+    }
+  },
+  parameters: [
+    {
+      name: "runId",
+      description: "Mastery certification run id.",
+      required: true,
+      schema: { type: "string" as const },
+    },
+    {
+      name: "episodeId",
+      description: "Optional episode id to fetch frame-level evidence.",
       required: false,
       schema: { type: "string" as const },
     },
@@ -1694,7 +2111,11 @@ const liveCapabilitySprintAction: Action = {
           }
         }
 
-        let adOutcome = { triggered: false, rendered: false, detail: "ad not attempted" };
+        let adOutcome: { triggered: boolean; rendered: boolean; detail?: string } = {
+          triggered: false,
+          rendered: false,
+          detail: "ad not attempted",
+        };
         if (!dryRun) {
           await waitUntil(startedMs, adOffsetSeconds);
           adOutcome = await triggerSprintAd(
@@ -1880,6 +2301,11 @@ export function createFive55GamesPlugin(): Plugin {
     actions: [
       catalogAction,
       playAction,
+      masteryBriefAction,
+      masteryCertifyAction,
+      masteryStatusAction,
+      masteryValidateAction,
+      masteryEvidenceAction,
       goLivePlayAction,
       liveCapabilitySprintAction,
     ],

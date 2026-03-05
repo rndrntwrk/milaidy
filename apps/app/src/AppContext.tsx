@@ -26,6 +26,7 @@ import {
   client,
   type DropStatus,
   type ExtensionStatus,
+  type Five55MasteryRun,
   type ImageAttachment,
   type LogEntry,
   type McpMarketplaceResult,
@@ -809,6 +810,8 @@ export interface AppState {
   activeGameSandbox: string;
   activeGamePostMessageAuth: boolean;
   activeGamePostMessagePayload: GamePostMessageAuthPayload | null;
+  five55MasteryRuns: Five55MasteryRun[];
+  five55MasteryRunsLoading: boolean;
 
   /** When true, the game iframe persists as a floating overlay across all tabs. */
   gameOverlayEnabled: boolean;
@@ -890,6 +893,15 @@ export interface AppActions {
 
   // Logs
   loadLogs: () => Promise<void>;
+  loadFive55MasteryRuns: () => Promise<void>;
+  startFive55MasteryRun: (input?: {
+    suiteId?: string;
+    games?: string[];
+    episodesPerGame?: number;
+    seedMode?: "fixed" | "mixed" | "rolling";
+    maxDurationSec?: number;
+    strict?: boolean;
+  }) => Promise<string | null>;
 
   // Inventory
   loadInventory: () => Promise<void>;
@@ -1383,6 +1395,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     useState(false);
   const [activeGamePostMessagePayload, setActiveGamePostMessagePayload] =
     useState<GamePostMessageAuthPayload | null>(null);
+  const [five55MasteryRuns, setFive55MasteryRuns] = useState<Five55MasteryRun[]>(
+    [],
+  );
+  const [five55MasteryRunsLoading, setFive55MasteryRunsLoading] =
+    useState(false);
   const [gameOverlayEnabled, setGameOverlayEnabled] = useState(false);
 
   // --- Admin ---
@@ -1567,6 +1584,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error("[loadLogs]", err);
     }
   }, [logTagFilter, logLevelFilter, logSourceFilter]);
+
+  const loadFive55MasteryRuns = useCallback(async () => {
+    setFive55MasteryRunsLoading(true);
+    try {
+      const page = await client.listFive55MasteryRuns({ limit: 20 });
+      setFive55MasteryRuns(page.runs);
+    } catch (err) {
+      console.error("[loadFive55MasteryRuns]", err);
+    } finally {
+      setFive55MasteryRunsLoading(false);
+    }
+  }, []);
+
+  const startFive55MasteryRun = useCallback(
+    async (input?: {
+      suiteId?: string;
+      games?: string[];
+      episodesPerGame?: number;
+      seedMode?: "fixed" | "mixed" | "rolling";
+      maxDurationSec?: number;
+      strict?: boolean;
+    }): Promise<string | null> => {
+      try {
+        const result = await client.startFive55MasteryRun({
+          suiteId: input?.suiteId,
+          games: input?.games,
+          episodesPerGame: input?.episodesPerGame,
+          seedMode: input?.seedMode,
+          maxDurationSec: input?.maxDurationSec,
+          strict: input?.strict,
+        });
+        await loadFive55MasteryRuns();
+        return result.runId;
+      } catch (err) {
+        console.error("[startFive55MasteryRun]", err);
+        return null;
+      }
+    },
+    [loadFive55MasteryRuns],
+  );
 
   const loadTriggerHealth = useCallback(async () => {
     try {
@@ -4459,6 +4516,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         () => pollCloudCredits(),
         60_000,
       );
+      void loadFive55MasteryRuns();
 
       // Load tab from URL — use hash in file:// mode (Electron packaged builds)
       const navPath =
@@ -4522,6 +4580,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     checkExtensionStatus,
     currentTheme,
     loadCharacter,
+    loadFive55MasteryRuns,
     loadInventory,
     loadPlugins,
     loadSkills,
@@ -4616,6 +4675,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     droppedFiles, shareIngestNotice,
     activeGameApp, activeGameDisplayName, activeGameViewerUrl, activeGameSandbox,
     activeGamePostMessageAuth,
+    five55MasteryRuns,
+    five55MasteryRunsLoading,
     gameOverlayEnabled,
     appsSubTab,
     agentSubTab,
@@ -4668,6 +4729,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     uninstallMarketplaceSkill,
     installSkillFromGithubUrl,
     loadLogs,
+    loadFive55MasteryRuns,
+    startFive55MasteryRun,
     loadInventory,
     loadBalances,
     loadNfts,

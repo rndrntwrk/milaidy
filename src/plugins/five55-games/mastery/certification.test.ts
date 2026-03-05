@@ -55,7 +55,49 @@ function buildExecutePlanResponse(actionId: string): Response {
               ok: true,
               trace: { actionId },
               data: {
-                status: "started",
+                status: "PLAYING",
+                metrics: {
+                  score: {
+                    max: 6000,
+                  },
+                },
+                controlsUsed: [
+                  "move_right",
+                  "jump",
+                  "combat_attack",
+                ],
+                frames: [
+                  {
+                    frameType: "boot/menu",
+                    ts: new Date(1).toISOString(),
+                    hash: "f1",
+                    telemetry: { status: "MENU" },
+                  },
+                  {
+                    frameType: "play-start",
+                    ts: new Date(2).toISOString(),
+                    hash: "f2",
+                    telemetry: { status: "PLAYING" },
+                  },
+                  {
+                    frameType: "progress",
+                    ts: new Date(3).toISOString(),
+                    hash: "f3",
+                    telemetry: { status: "PLAYING", score: 5500 },
+                  },
+                  {
+                    frameType: "stuck-check",
+                    ts: new Date(4).toISOString(),
+                    hash: "f4",
+                    telemetry: { status: "PLAYING", score: 5800 },
+                  },
+                  {
+                    frameType: "terminal",
+                    ts: new Date(5).toISOString(),
+                    hash: "f5",
+                    telemetry: { status: "GAME_OVER", score: 6000 },
+                  },
+                ],
               },
             }),
           },
@@ -87,7 +129,7 @@ describe("five55 mastery certification orchestrator", () => {
     }
   });
 
-  it("defaults strict to false and parses nested action envelope text", async () => {
+  it("enforces strict=true and parses nested action envelope text", async () => {
     const orchestrator = getMasteryCertificationOrchestrator();
     const run = await orchestrator.start({
       parameters: {
@@ -101,7 +143,8 @@ describe("five55 mastery certification orchestrator", () => {
 
     const final = await waitForRunTerminal(run.runId);
     expect(final.status).toBe("success");
-    expect(final.strict).toBe(false);
+    expect(final.strict).toBe(true);
+    expect(final.verificationStatus).toBe("verified");
 
     const episodes = await readMasteryEpisodes(run.runId);
     expect(episodes).toHaveLength(1);
@@ -110,6 +153,45 @@ describe("five55 mastery certification orchestrator", () => {
   });
 
   it("fails fast in strict mode when required metrics are unavailable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              ok: true,
+              allSucceeded: true,
+              results: [
+                {
+                  success: true,
+                  result: {
+                    success: true,
+                    text: JSON.stringify({
+                      ok: true,
+                      trace: { actionId: "action-missing" },
+                      data: {
+                        status: "PLAYING",
+                        frames: [
+                          {
+                            frameType: "boot/menu",
+                            ts: new Date(1).toISOString(),
+                            hash: "f1",
+                            telemetry: { status: "MENU" },
+                          },
+                        ],
+                      },
+                    }),
+                  },
+                },
+              ],
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+      ),
+    );
     const orchestrator = getMasteryCertificationOrchestrator();
     const run = await orchestrator.start({
       parameters: {

@@ -10,7 +10,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../AppContext";
-import { client, type LogEntry } from "../api-client";
+import {
+  client,
+  type Five55MasteryContract,
+  type Five55MasteryEvidenceFrame,
+  type Five55MasteryGameSnapshot,
+  type Five55MasteryConsistencyVerdict,
+  type LogEntry,
+} from "../api-client";
 import { useRetakeCapture } from "../hooks/useRetakeCapture";
 import { formatTime } from "./shared/format";
 
@@ -19,6 +26,12 @@ const READY_EVENT_BY_AUTH_TYPE: Record<string, string> = {
   HYPERSCAPE_AUTH: "HYPERSCAPE_READY",
   RS_2004SCAPE_AUTH: "RS_2004SCAPE_READY",
 };
+
+function resolveFive55GameId(activeGameApp: string): string | null {
+  if (!activeGameApp.startsWith("five55:")) return null;
+  const gameId = activeGameApp.slice("five55:".length).trim();
+  return gameId.length > 0 ? gameId : null;
+}
 
 function resolvePostMessageTargetOrigin(viewerUrl: string): string {
   if (viewerUrl.startsWith("/")) return window.location.origin;
@@ -58,6 +71,16 @@ export function GameView() {
   const [chatInput, setChatInput] = useState("");
   const [sendingChat, setSendingChat] = useState(false);
   const [retakeCapture, setRetakeCapture] = useState(false);
+  const [masteryLoading, setMasteryLoading] = useState(false);
+  const [masteryError, setMasteryError] = useState<string | null>(null);
+  const [masteryContract, setMasteryContract] =
+    useState<Five55MasteryContract | null>(null);
+  const [masterySnapshot, setMasterySnapshot] =
+    useState<Five55MasteryGameSnapshot | null>(null);
+  const [masteryFrames, setMasteryFrames] =
+    useState<Five55MasteryEvidenceFrame[]>([]);
+  const [masteryConsistency, setMasteryConsistency] =
+    useState<Five55MasteryConsistencyVerdict | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const authSentRef = useRef(false);
   const viewerSessionRef = useRef<string>("");
@@ -102,6 +125,10 @@ export function GameView() {
   const postMessageTargetOrigin = useMemo(
     () => resolvePostMessageTargetOrigin(activeGameViewerUrl),
     [activeGameViewerUrl],
+  );
+  const activeFive55GameId = useMemo(
+    () => resolveFive55GameId(activeGameApp),
+    [activeGameApp],
   );
   const viewerSessionKey = useMemo(
     () =>
@@ -213,6 +240,66 @@ export function GameView() {
     postMessageTargetOrigin,
     setActionNotice,
   ]);
+
+  useEffect(() => {
+    if (!activeFive55GameId) {
+      setMasteryContract(null);
+      setMasterySnapshot(null);
+      setMasteryFrames([]);
+      setMasteryConsistency(null);
+      setMasteryError(null);
+      setMasteryLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const load = async () => {
+      setMasteryLoading(true);
+      try {
+        const latest = await client.getFive55MasteryLatest(activeFive55GameId);
+        if (cancelled) return;
+        setMasteryContract(latest.contract);
+        setMasterySnapshot(latest.latest);
+        if (latest.latest?.latestRunId && latest.latest?.latestEpisodeId) {
+          const [frames, consistency] = await Promise.all([
+            client.getFive55MasteryEpisodeFrames(
+              latest.latest.latestRunId,
+              latest.latest.latestEpisodeId,
+            ),
+            client.getFive55MasteryEpisodeConsistency(
+              latest.latest.latestRunId,
+              latest.latest.latestEpisodeId,
+            ),
+          ]);
+          if (cancelled) return;
+          setMasteryFrames(frames.frames);
+          setMasteryConsistency(consistency.consistency);
+        } else {
+          setMasteryFrames([]);
+          setMasteryConsistency(null);
+        }
+        setMasteryError(null);
+      } catch (err) {
+        if (cancelled) return;
+        setMasteryError(
+          err instanceof Error ? err.message : "Failed to load mastery data",
+        );
+        setMasteryFrames([]);
+        setMasteryConsistency(null);
+      } finally {
+        if (!cancelled) {
+          setMasteryLoading(false);
+        }
+      }
+    };
+
+    void load();
+    const timer = setInterval(() => void load(), 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [activeFive55GameId]);
 
   const handleOpenInNewTab = useCallback(() => {
     const popup = window.open(
@@ -461,6 +548,111 @@ export function GameView() {
           Back to Apps
         </button>
       </div>
+      {activeFive55GameId && masteryContract ? (
+        <div className="px-4 py-2 border-b border-border bg-bg-hover/40 text-[11px]">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-accent">Mastery</span>
+            <span className="text-muted">{masteryContract.title}</span>
+            <span className="text-muted">stage:</span>
+            <span className="font-semibold">
+              {masterySnapshot?.latestStatus ?? "unknown"}
+            </span>
+            <span className="text-muted">confidence:</span>
+            <span className="font-semibold">
+              {typeof masterySnapshot?.latestVerdict?.confidence === "number"
+                ? masterySnapshot.latestVerdict.confidence.toFixed(2)
+                : "n/a"}
+            </span>
+            <span
+              className={`text-[10px] px-1 py-0.5 border ${
+                masterySnapshot?.latestVerdict?.outcome?.runtimeQualified
+                  ? "border-ok text-ok"
+                  : "border-danger text-danger"
+              }`}
+            >
+              runtime
+            </span>
+            <span
+              className={`text-[10px] px-1 py-0.5 border ${
+                masterySnapshot?.latestVerdict?.outcome?.visualQualified
+                  ? "border-ok text-ok"
+                  : "border-danger text-danger"
+              }`}
+            >
+              visual
+            </span>
+            <span
+              className={`text-[10px] px-1 py-0.5 border ${
+                (masteryConsistency?.status ?? masterySnapshot?.latestVerdict?.consistency?.status) === "pass"
+                  ? "border-ok text-ok"
+                  : "border-danger text-danger"
+              }`}
+            >
+              consistent
+            </span>
+            <span
+              className={`text-[10px] px-1 py-0.5 border ${
+                masterySnapshot?.latestVerdict?.outcome?.finalQualified
+                  ? "border-ok text-ok"
+                  : "border-danger text-danger"
+              }`}
+            >
+              qualified
+            </span>
+            <span className="flex-1" />
+            {masteryLoading ? <span className="text-muted">refreshing...</span> : null}
+            {masteryError ? <span className="text-danger">{masteryError}</span> : null}
+          </div>
+          <div className="mt-1 text-muted">{masteryContract.objective.summary}</div>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {masteryContract.controls.slice(0, 4).map((control) => (
+              <span
+                key={`${control.action}:${control.input}`}
+                className="px-1.5 py-0.5 border border-border bg-card text-txt"
+              >
+                {control.action}: {control.input}
+              </span>
+            ))}
+          </div>
+          {masterySnapshot?.riskFlags?.length ? (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {masterySnapshot.riskFlags.slice(0, 4).map((flag) => (
+                <span
+                  key={flag}
+                  className="px-1.5 py-0.5 border border-danger/40 text-danger bg-card"
+                >
+                  {flag}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          {masteryConsistency?.status === "fail" ? (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {masteryConsistency.mismatchDetails.slice(0, 4).map((detail) => (
+                <span
+                  key={detail}
+                  className="px-1.5 py-0.5 border border-danger/40 text-danger bg-card"
+                >
+                  {detail}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          {masteryFrames.length > 0 ? (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {masteryFrames.slice(0, 5).map((frame) => (
+                <span
+                  key={`${frame.seq}:${frame.hash}`}
+                  className="px-1.5 py-0.5 border border-border bg-card text-txt"
+                  title={`${frame.frameType} • ${frame.ts}`}
+                >
+                  #{frame.seq} {frame.frameType}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       <div className="flex-1 min-h-0 flex">
         <div className="flex-1 min-h-0 relative">
           <iframe

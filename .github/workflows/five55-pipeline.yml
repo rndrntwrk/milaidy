@@ -1,0 +1,121 @@
+name: Five55 Pipeline Gate
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: five55-pipeline-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  five55-local-pipeline:
+    name: Five55 Local Pipeline
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout milaidy
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install milaidy dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run milaidy postinstall patches
+        run: bun run postinstall
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Checkout 555 frontend
+        uses: actions/checkout@v4
+        with:
+          repository: rndrntwrk/555-frontend
+          path: 555-frontend
+
+      - name: Install 555 frontend dependencies
+        working-directory: 555-frontend
+        run: bun install --frozen-lockfile
+
+      - name: Start 555 frontend dev server
+        run: |
+          set -euo pipefail
+          (
+            cd 555-frontend/apps/web
+            bun run dev -- --hostname 127.0.0.1 --port 3100
+          ) >"$RUNNER_TEMP/555-web.log" 2>&1 &
+          echo $! >"$RUNNER_TEMP/555-web.pid"
+
+      - name: Start milaidy API runtime
+        run: |
+          set -euo pipefail
+          (
+            cd "$GITHUB_WORKSPACE"
+            MILADY_HEADLESS=1 \
+            MILADY_PORT=31337 \
+            MILADY_DEV_ONCHAIN=0 \
+            FIVE55_GAMES_API_URL=http://127.0.0.1:3100 \
+            bun src/runtime/dev-server.ts
+          ) >"$RUNNER_TEMP/milaidy-api.log" 2>&1 &
+          echo $! >"$RUNNER_TEMP/milaidy-api.pid"
+
+      - name: Wait for local services
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:3100 >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          for i in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:31337/health/live >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:31337/health/live
+
+      - name: Run five55 local pipeline gate
+        run: |
+          set -euo pipefail
+          FIVE55_BASE_URL=http://127.0.0.1:3100 \
+          MILADY_API_URL=http://127.0.0.1:31337 \
+          FIVE55_SMOKE_OUT_DIR="$RUNNER_TEMP/five55-playwright" \
+          bash scripts/five55-local-pipeline.sh
+
+      - name: Upload pipeline artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: five55-pipeline-artifacts
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/five55-playwright
+            ${{ runner.temp }}/555-web.log
+            ${{ runner.temp }}/milaidy-api.log
+
+      - name: Stop background services
+        if: always()
+        run: |
+          set -euo pipefail
+          for pid_file in "$RUNNER_TEMP/555-web.pid" "$RUNNER_TEMP/milaidy-api.pid"; do
+            if [[ -f "$pid_file" ]]; then
+              pid="$(cat "$pid_file")"
+              if kill -0 "$pid" >/dev/null 2>&1; then
+                kill "$pid" || true
+              fi
+            fi
+          done

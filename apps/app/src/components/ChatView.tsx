@@ -24,6 +24,7 @@ import {
   type AutonomyExecutePlanRequest,
   type ConversationMode,
   type Five55AutonomyMode,
+  type Five55MasteryRun,
   type Five55AutonomyPreviewResponse,
   type VoiceConfig,
 } from "../api-client.js";
@@ -310,10 +311,60 @@ export const ChatView = memo(function ChatView() {
     useState<Five55AutonomyPreviewResponse | null>(null);
   const [autoRunPreviewBusy, setAutoRunPreviewBusy] = useState(false);
   const [autoRunLaunching, setAutoRunLaunching] = useState(false);
+  const [masteryRuns, setMasteryRuns] = useState<Five55MasteryRun[]>([]);
+  const [masteryRunsLoading, setMasteryRunsLoading] = useState(false);
+  const [masteryRunsError, setMasteryRunsError] = useState<string | null>(null);
+  const [masterySuiteStarting, setMasterySuiteStarting] = useState(false);
 
   useEffect(() => {
     setAutoRunPreview(null);
   }, [autoRunMode, autoRunTopic, autoRunDurationMin, autoRunAvatarRuntime]);
+
+  const loadMasteryRuns = useCallback(async () => {
+    setMasteryRunsLoading(true);
+    try {
+      const page = await client.listFive55MasteryRuns({ limit: 8 });
+      setMasteryRuns(page.runs);
+      setMasteryRunsError(null);
+    } catch (err) {
+      setMasteryRunsError(
+        err instanceof Error ? err.message : "Failed to load mastery runs",
+      );
+    } finally {
+      setMasteryRunsLoading(false);
+    }
+  }, []);
+
+  const startMasterySuite = useCallback(async () => {
+    if (masterySuiteStarting) return;
+    setMasterySuiteStarting(true);
+    try {
+      const response = await client.startFive55MasteryRun({
+        suiteId: `alice-16-game-${Date.now()}`,
+        episodesPerGame: 60,
+        seedMode: "mixed",
+        maxDurationSec: 21600,
+        strict: true,
+        evidenceMode: "strict",
+      });
+      setActionNotice(`Mastery run started (${response.runId}).`, "success", 3200);
+      await loadMasteryRuns();
+    } catch (err) {
+      setActionNotice(
+        `Failed to start mastery run: ${err instanceof Error ? err.message : "unknown error"}`,
+        "error",
+        4200,
+      );
+    } finally {
+      setMasterySuiteStarting(false);
+    }
+  }, [loadMasteryRuns, masterySuiteStarting, setActionNotice]);
+
+  useEffect(() => {
+    void loadMasteryRuns();
+    const timer = setInterval(() => void loadMasteryRuns(), 8000);
+    return () => clearInterval(timer);
+  }, [loadMasteryRuns]);
 
   // Load saved voice config on mount so the correct TTS provider is used
   useEffect(() => {
@@ -735,7 +786,7 @@ export const ChatView = memo(function ChatView() {
 
         if (!stream555ControlAvailable && !legacyStreamAvailable) {
           setActionNotice(
-            "Neither stream555-control nor stream is available. Staying in chat until one is enabled.",
+            "Neither 555 Stream nor legacy stream is available. Staying in chat until one is enabled.",
             "info",
             2600,
           );
@@ -775,7 +826,7 @@ export const ChatView = memo(function ChatView() {
 
             if (didGoLiveSucceed && didSegmentBootstrapSucceed) {
               setActionNotice(
-                "Go live executed via stream555-control with segment orchestration.",
+                "Go live executed via 555 Stream with segment orchestration.",
                 "success",
                 2800,
               );
@@ -911,7 +962,7 @@ export const ChatView = memo(function ChatView() {
         !hasPluginRegistration("stream555-control")
       ) {
         setActionNotice(
-          "stream555-control plugin is not registered. Staying in chat until it is enabled.",
+          "555 Stream plugin is not registered. Staying in chat until it is enabled.",
           "info",
           2600,
         );
@@ -1922,6 +1973,86 @@ export const ChatView = memo(function ChatView() {
           )}
         </>
       )}
+
+      <div
+        className="mb-2 rounded border border-border bg-card/70 p-2 text-xs relative"
+        style={{ zIndex: 1 }}
+      >
+        <div className="flex items-center gap-2 pb-2">
+          <span className="text-[10px] uppercase tracking-wide text-muted">
+            Mastery Runs
+          </span>
+          <span className="flex-1" />
+          {masteryRunsLoading ? (
+            <span className="text-[10px] text-muted">refreshing...</span>
+          ) : null}
+          <button
+            className="px-2 py-1 text-[11px] border rounded border-border text-muted bg-card hover:border-accent hover:text-accent disabled:opacity-50"
+            onClick={() => void loadMasteryRuns()}
+            disabled={masteryRunsLoading}
+          >
+            Refresh
+          </button>
+          <button
+            className="px-2 py-1 text-[11px] border rounded border-accent text-accent bg-card hover:bg-accent/10 disabled:opacity-50"
+            onClick={() => void startMasterySuite()}
+            disabled={masterySuiteStarting}
+          >
+            {masterySuiteStarting ? "Starting..." : "Start 16-Game Certification"}
+          </button>
+        </div>
+
+        {masteryRunsError ? (
+          <div className="text-danger text-[11px]">{masteryRunsError}</div>
+        ) : masteryRuns.length === 0 ? (
+          <div className="text-muted text-[11px]">No mastery runs recorded yet.</div>
+        ) : (
+          <div className="space-y-1">
+            {masteryRuns.map((run) => (
+              <div
+                key={run.runId}
+                className="flex flex-wrap items-center gap-2 border border-border/60 bg-card px-2 py-1"
+              >
+                <span className="font-mono text-[10px] text-muted">{run.runId}</span>
+                <span
+                  className={`text-[10px] px-1 py-0.5 border ${
+                    run.status === "success"
+                      ? "border-ok text-ok"
+                      : run.status === "running" || run.status === "queued"
+                        ? "border-warn text-warn"
+                        : "border-danger text-danger"
+                  }`}
+                >
+                  {run.status}
+                </span>
+                <span className="text-[10px] text-muted">
+                  games pass: {run.summary.passedGames.length}/
+                  {run.summary.denominatorGames || run.games.length}
+                </span>
+                <span className="text-[10px] text-muted">
+                  episodes: {run.progress.completedEpisodes}/{run.progress.totalEpisodes}
+                </span>
+                <span className="text-[10px] text-muted">
+                  strict: {run.strict ? "yes" : "no"}
+                </span>
+                <span className="text-[10px] text-muted">
+                  verify: {run.verificationStatus}
+                </span>
+                {run.summary.deferredGames.length > 0 ? (
+                  <span className="text-[10px] text-muted">
+                    deferred: {run.summary.deferredGames.length}
+                  </span>
+                ) : null}
+                {run.error ? (
+                  <span className="text-[10px] text-danger truncate">
+                    error: {run.error}
+                  </span>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div ref={messagesRef} className="flex-1 overflow-y-auto py-2 relative" style={{ zIndex: 1 }}>
         {visibleMsgs.length === 0 && !chatSending ? (

@@ -5,6 +5,7 @@ import type {
   ReflectionDecision,
 } from "./types.js";
 import { GamePolicyRegistry } from "./game-policy-registry.js";
+import { getMasteryContractOrNull } from "../mastery/index.js";
 
 const MAX_FLOAT_STEP = 0.04;
 const MAX_INT_STEP = 3;
@@ -72,6 +73,8 @@ export class OutcomeAnalyzer {
     const next: JsonRecord = { ...current };
     let changed = false;
     const reasons: string[] = [];
+    const masteryContract = getMasteryContractOrNull(gameId);
+    const masteryDefaults = asRecord(masteryContract?.policy.defaults);
 
     const cause = String(latestEpisode.causeOfDeath || "").toUpperCase();
     const hasHazardDeath = Boolean(
@@ -238,6 +241,50 @@ export class OutcomeAnalyzer {
         reasons.push("stable_survival_expand_objectives");
         changed = true;
       }
+    }
+
+    if (masteryContract && hasHazardDeath) {
+      next.riskTolerance = boundedFloatAdjust(
+        readFloat(current, "riskTolerance", readFloat(masteryDefaults, "riskTolerance", 0.45)),
+        readFloat(current, "riskTolerance", readFloat(masteryDefaults, "riskTolerance", 0.45)) - 0.02,
+        0.05,
+        0.95,
+      );
+      next.hazardAvoidanceBias = boundedFloatAdjust(
+        readFloat(
+          current,
+          "hazardAvoidanceBias",
+          readFloat(masteryDefaults, "hazardAvoidanceBias", 0.74),
+        ),
+        readFloat(
+          current,
+          "hazardAvoidanceBias",
+          readFloat(masteryDefaults, "hazardAvoidanceBias", 0.74),
+        ) + 0.03,
+        0.2,
+        0.98,
+      );
+      reasons.push(`${masteryContract.gameId}_hazard_guardrail`);
+      changed = true;
+    }
+
+    if (masteryContract && survivalMs != null && survivalMs >= 120_000 && !hasHazardDeath) {
+      next.collectibleBias = boundedFloatAdjust(
+        readFloat(
+          current,
+          "collectibleBias",
+          readFloat(masteryDefaults, "collectibleBias", 0.68),
+        ),
+        readFloat(
+          current,
+          "collectibleBias",
+          readFloat(masteryDefaults, "collectibleBias", 0.68),
+        ) + 0.01,
+        0.2,
+        0.95,
+      );
+      reasons.push(`${masteryContract.gameId}_stability_reward`);
+      changed = true;
     }
 
     if (!changed) {
