@@ -586,6 +586,7 @@ export interface PluginInfo {
   name: string;
   description: string;
   enabled: boolean;
+  installed?: boolean;
   configured: boolean;
   envKey: string | null;
   category: "ai-provider" | "connector" | "database" | "app" | "feature";
@@ -600,10 +601,56 @@ export interface PluginInfo {
   isActive?: boolean;
   /** Error message when plugin is installed but failed to load. */
   loadError?: string;
+  authenticated?: boolean | null;
+  ready?: boolean | null;
+  degraded?: boolean;
+  statusSummary?: string[];
+  operationalWarnings?: string[];
+  operationalErrors?: string[];
+  operationalCounts?: Record<string, number>;
   /** Server-provided UI hints for plugin configuration fields. */
   configUiHints?: Record<string, ConfigUiHint>;
+  /** Optional plugin-owned UI schema for generic rendering and diagnostics. */
+  pluginUiSchema?: Record<string, unknown>;
   /** Optional icon URL or emoji for the plugin card header. */
   icon?: string | null;
+}
+
+export interface PluginTestResponse {
+  success: boolean;
+  ok?: boolean;
+  code?:
+    | "ok"
+    | "plugin_disabled"
+    | "plugin_not_loaded"
+    | "plugin_not_installed"
+    | "auth_failed"
+    | "session_failed"
+    | "dependency_failed";
+  pluginId: string;
+  message?: string;
+  error?: string;
+  details?: Record<string, unknown>;
+  durationMs: number;
+}
+
+export interface PluginUiState {
+  ok: boolean;
+  code?: string;
+  pluginId: string;
+  displayName?: string;
+  installed: boolean;
+  enabled: boolean;
+  loaded: boolean;
+  authenticated: boolean | null;
+  ready: boolean | null;
+  degraded: boolean;
+  summary: string[];
+  warnings: string[];
+  errors: string[];
+  counts: Record<string, number>;
+  sections: Record<string, unknown> | null;
+  message?: string;
 }
 
 export interface SubscriptionStatusProvider {
@@ -1326,7 +1373,7 @@ export interface AppStopResult {
   message: string;
 }
 
-export interface Five55GameCatalogItem {
+export interface Arcade555GameCatalogItem {
   id: string;
   title: string;
   description: string;
@@ -1338,22 +1385,22 @@ export interface Five55GameCatalogItem {
   hasSave?: boolean;
 }
 
-export interface Five55GamesCatalogResponse {
-  games: Five55GameCatalogItem[];
+export interface Arcade555GamesCatalogResponse {
+  games: Arcade555GameCatalogItem[];
   total: number;
   includeBeta: boolean;
   category: string;
 }
 
-export interface Five55GamePlayResponse {
-  game: Five55GameCatalogItem;
+export interface Arcade555GamePlayResponse {
+  game: Arcade555GameCatalogItem;
   mode: "standard" | "ranked" | "spectate";
   viewer: AppViewerConfig;
   launchUrl: string;
   startedAt: string;
 }
 
-export interface Five55MasteryGateResult {
+export interface Arcade555MasteryGateResult {
   gateId: string;
   metric: string;
   operator: ">=" | "<=" | "==" | "!=";
@@ -1364,7 +1411,7 @@ export interface Five55MasteryGateResult {
   source?: "runtime-native" | "synthetic" | "derived";
 }
 
-export interface Five55MasteryLevelRequirement {
+export interface Arcade555MasteryLevelRequirement {
   metric: string;
   totalLevels: number;
   requiredLevel: number;
@@ -1376,7 +1423,7 @@ export interface Five55MasteryLevelRequirement {
   temporaryOverrideReason?: string;
 }
 
-export interface Five55MasteryQualityRequirement {
+export interface Arcade555MasteryQualityRequirement {
   medianClearTimeMetric?: string;
   goldenLevelTimeMs?: number;
   maxMedianClearTimeFactor?: number;
@@ -1385,7 +1432,7 @@ export interface Five55MasteryQualityRequirement {
   minMedianScoreFactor?: number;
 }
 
-export interface Five55MasteryGateV2 {
+export interface Arcade555MasteryGateV2 {
   runtimeGates: Array<{
     id: string;
     metric: string;
@@ -1395,8 +1442,8 @@ export interface Five55MasteryGateV2 {
     required?: boolean;
     source?: "runtime-native" | "synthetic" | "derived";
   }>;
-  levelRequirement?: Five55MasteryLevelRequirement | null;
-  qualityRequirement?: Five55MasteryQualityRequirement | null;
+  levelRequirement?: Arcade555MasteryLevelRequirement | null;
+  qualityRequirement?: Arcade555MasteryQualityRequirement | null;
   truthChecks: {
     requireFrameTypes: Array<
       "boot/menu" | "play-start" | "progress" | "terminal" | "stuck-check"
@@ -1411,21 +1458,21 @@ export interface Five55MasteryGateV2 {
   status: "ACTIVE" | "DEFERRED_MULTIPLAYER";
 }
 
-export interface Five55MasteryConsistencyVerdict {
+export interface Arcade555MasteryConsistencyVerdict {
   status: "pass" | "fail" | "insufficient";
   checkedAt: string;
   reasons: string[];
   mismatchDetails: string[];
 }
 
-export interface Five55MasteryEpisodeOutcomeV2 {
+export interface Arcade555MasteryEpisodeOutcomeV2 {
   runtimeQualified: boolean;
   visualQualified: boolean;
   finalQualified: boolean;
   failureCode?: string | null;
 }
 
-export interface Five55MasteryEvidenceFrame {
+export interface Arcade555MasteryEvidenceFrame {
   runId: string;
   episodeId: string;
   seq: number;
@@ -1437,22 +1484,22 @@ export interface Five55MasteryEvidenceFrame {
   telemetrySnapshot: Record<string, unknown>;
 }
 
-export interface Five55MasteryEpisodeEvidence {
-  frames: Five55MasteryEvidenceFrame[];
-  consistency: Five55MasteryConsistencyVerdict;
+export interface Arcade555MasteryEpisodeEvidence {
+  frames: Arcade555MasteryEvidenceFrame[];
+  consistency: Arcade555MasteryConsistencyVerdict;
   syntheticSignals: string[];
 }
 
-export interface Five55MasteryVerdict {
+export interface Arcade555MasteryVerdict {
   passed: boolean;
   confidence: number;
   reasons: string[];
-  gateResults: Five55MasteryGateResult[];
-  outcome: Five55MasteryEpisodeOutcomeV2;
-  consistency: Five55MasteryConsistencyVerdict;
+  gateResults: Arcade555MasteryGateResult[];
+  outcome: Arcade555MasteryEpisodeOutcomeV2;
+  consistency: Arcade555MasteryConsistencyVerdict;
 }
 
-export interface Five55MasteryContract {
+export interface Arcade555MasteryContract {
   gameId: string;
   aliases: string[];
   title: string;
@@ -1487,7 +1534,7 @@ export interface Five55MasteryContract {
     threshold: number;
     description: string;
   }>;
-  gateV2: Five55MasteryGateV2;
+  gateV2: Arcade555MasteryGateV2;
   recovery: {
     menu: string;
     paused: string;
@@ -1496,7 +1543,7 @@ export interface Five55MasteryContract {
   };
 }
 
-export interface Five55MasteryRun {
+export interface Arcade555MasteryRun {
   runId: string;
   suiteId: string;
   status: "queued" | "running" | "success" | "failed" | "canceled";
@@ -1526,7 +1573,7 @@ export interface Five55MasteryRun {
   error: string | null;
 }
 
-export interface Five55MasteryEpisode {
+export interface Arcade555MasteryEpisode {
   runId: string;
   episodeId: string;
   gameId: string;
@@ -1542,29 +1589,29 @@ export interface Five55MasteryEpisode {
     requestId: string;
     error: string | null;
   };
-  verdict: Five55MasteryVerdict;
-  evidence: Five55MasteryEpisodeEvidence;
+  verdict: Arcade555MasteryVerdict;
+  evidence: Arcade555MasteryEpisodeEvidence;
   metadata: Record<string, unknown>;
 }
 
-export interface Five55MasteryGameSnapshot {
+export interface Arcade555MasteryGameSnapshot {
   gameId: string;
   updatedAt: string;
   latestRunId: string;
   latestEpisodeId: string;
-  latestVerdict: Five55MasteryVerdict;
+  latestVerdict: Arcade555MasteryVerdict;
   latestStatus: "queued" | "running" | "success" | "failed" | "canceled";
-  latestOutcome?: Five55MasteryEpisodeOutcomeV2;
-  latestConsistency?: Five55MasteryConsistencyVerdict;
-  objective: Five55MasteryContract["objective"];
-  controls: Five55MasteryContract["controls"];
+  latestOutcome?: Arcade555MasteryEpisodeOutcomeV2;
+  latestConsistency?: Arcade555MasteryConsistencyVerdict;
+  objective: Arcade555MasteryContract["objective"];
+  controls: Arcade555MasteryContract["controls"];
   riskFlags: string[];
 }
 
-export type Five55AutonomyMode = "newscast" | "topic" | "games" | "free";
+export type Arcade555AutonomyMode = "newscast" | "topic" | "games" | "free";
 
-export interface Five55AutonomyPreviewRequest {
-  mode: Five55AutonomyMode;
+export interface Arcade555AutonomyPreviewRequest {
+  mode: Arcade555AutonomyMode;
   durationMin: number;
   topic?: string;
   avatarRuntime?: "auto" | "local" | "premium";
@@ -1572,8 +1619,8 @@ export interface Five55AutonomyPreviewRequest {
   avatarMinutes?: number;
 }
 
-export interface Five55AutonomyPreviewResponse {
-  mode: Five55AutonomyMode;
+export interface Arcade555AutonomyPreviewResponse {
+  mode: Arcade555AutonomyMode;
   topic?: string;
   durationMin: number;
   profile: string;
@@ -2123,6 +2170,45 @@ export interface AutonomyExecutePlanRequest {
     stopOnFailure?: boolean;
   };
 }
+
+/** @deprecated Use Arcade555GameCatalogItem. */
+export type Five55GameCatalogItem = Arcade555GameCatalogItem;
+/** @deprecated Use Arcade555GamesCatalogResponse. */
+export type Five55GamesCatalogResponse = Arcade555GamesCatalogResponse;
+/** @deprecated Use Arcade555GamePlayResponse. */
+export type Five55GamePlayResponse = Arcade555GamePlayResponse;
+/** @deprecated Use Arcade555MasteryGateResult. */
+export type Five55MasteryGateResult = Arcade555MasteryGateResult;
+/** @deprecated Use Arcade555MasteryLevelRequirement. */
+export type Five55MasteryLevelRequirement = Arcade555MasteryLevelRequirement;
+/** @deprecated Use Arcade555MasteryQualityRequirement. */
+export type Five55MasteryQualityRequirement = Arcade555MasteryQualityRequirement;
+/** @deprecated Use Arcade555MasteryGateV2. */
+export type Five55MasteryGateV2 = Arcade555MasteryGateV2;
+/** @deprecated Use Arcade555MasteryConsistencyVerdict. */
+export type Five55MasteryConsistencyVerdict = Arcade555MasteryConsistencyVerdict;
+/** @deprecated Use Arcade555MasteryEpisodeOutcomeV2. */
+export type Five55MasteryEpisodeOutcomeV2 = Arcade555MasteryEpisodeOutcomeV2;
+/** @deprecated Use Arcade555MasteryEvidenceFrame. */
+export type Five55MasteryEvidenceFrame = Arcade555MasteryEvidenceFrame;
+/** @deprecated Use Arcade555MasteryEpisodeEvidence. */
+export type Five55MasteryEpisodeEvidence = Arcade555MasteryEpisodeEvidence;
+/** @deprecated Use Arcade555MasteryVerdict. */
+export type Five55MasteryVerdict = Arcade555MasteryVerdict;
+/** @deprecated Use Arcade555MasteryContract. */
+export type Five55MasteryContract = Arcade555MasteryContract;
+/** @deprecated Use Arcade555MasteryRun. */
+export type Five55MasteryRun = Arcade555MasteryRun;
+/** @deprecated Use Arcade555MasteryEpisode. */
+export type Five55MasteryEpisode = Arcade555MasteryEpisode;
+/** @deprecated Use Arcade555MasteryGameSnapshot. */
+export type Five55MasteryGameSnapshot = Arcade555MasteryGameSnapshot;
+/** @deprecated Use Arcade555AutonomyMode. */
+export type Five55AutonomyMode = Arcade555AutonomyMode;
+/** @deprecated Use Arcade555AutonomyPreviewRequest. */
+export type Five55AutonomyPreviewRequest = Arcade555AutonomyPreviewRequest;
+/** @deprecated Use Arcade555AutonomyPreviewResponse. */
+export type Five55AutonomyPreviewResponse = Arcade555AutonomyPreviewResponse;
 
 export interface AutonomyPipelineStepResult {
   requestId?: string;
@@ -2902,16 +2988,27 @@ export class MiladyClient {
     });
   }
 
-  async testPluginConnection(id: string): Promise<{
-    success: boolean;
-    pluginId: string;
-    message?: string;
-    error?: string;
-    durationMs: number;
-  }> {
-    return this.fetch(`/api/plugins/${encodeURIComponent(id)}/test`, {
-      method: "POST",
-    });
+  async testPluginConnection(id: string): Promise<PluginTestResponse> {
+    const res = await this.rawRequest(
+      `/api/plugins/${encodeURIComponent(id)}/test`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      },
+      { allowNonOk: true },
+    );
+    return res.json() as Promise<PluginTestResponse>;
+  }
+
+  async getPluginUiState(id: string): Promise<PluginUiState> {
+    const res = await this.rawRequest(
+      `/api/plugins/${encodeURIComponent(id)}/ui-state`,
+      undefined,
+      { allowNonOk: true },
+    );
+    return res.json() as Promise<PluginUiState>;
   }
 
   async restart(): Promise<{ ok: boolean }> {
@@ -3407,25 +3504,41 @@ export class MiladyClient {
       `/api/apps/plugins/search?q=${encodeURIComponent(query)}`,
     );
   }
+  /** @deprecated Use getArcade555GamesCatalog(). */
   async getFive55GamesCatalog(input?: {
     category?: string;
     includeBeta?: boolean;
   }): Promise<Five55GamesCatalogResponse> {
-    return this.fetch("/api/five55/games/catalog", {
-      method: "POST",
-      body: JSON.stringify({
-        category: input?.category,
-        includeBeta: input?.includeBeta ?? true,
-      }),
-    });
+    return this.getArcade555GamesCatalog(input);
   }
+  /** @deprecated Use playArcade555Game(). */
   async playFive55Game(input: {
     gameId?: string;
     mode?: "standard" | "ranked" | "spectate";
     masteryProfile?: Record<string, unknown>;
     evidenceMode?: "strict" | "basic" | "off";
   }): Promise<Five55GamePlayResponse> {
-    return this.fetch("/api/five55/games/play", {
+    return this.playArcade555Game(input);
+  }
+  async getArcade555GamesCatalog(input?: {
+    category?: string;
+    includeBeta?: boolean;
+  }): Promise<Arcade555GamesCatalogResponse> {
+    const qs = new URLSearchParams();
+    if (input?.category?.trim()) qs.set("category", input.category.trim());
+    if (typeof input?.includeBeta === "boolean") {
+      qs.set("includeBeta", String(input.includeBeta));
+    }
+    const suffix = qs.size > 0 ? `?${qs.toString()}` : "";
+    return this.fetch(`/api/arcade555/games/catalog${suffix}`);
+  }
+  async playArcade555Game(input: {
+    gameId?: string;
+    mode?: "standard" | "ranked" | "spectate";
+    masteryProfile?: Record<string, unknown>;
+    evidenceMode?: "strict" | "basic" | "off";
+  }): Promise<Arcade555GamePlayResponse> {
+    return this.fetch("/api/arcade555/games/play", {
       method: "POST",
       body: JSON.stringify({
         gameId: input.gameId,
@@ -3435,22 +3548,22 @@ export class MiladyClient {
       }),
     });
   }
-  async getFive55AutonomyPreview(
-    input: Five55AutonomyPreviewRequest,
-  ): Promise<Five55AutonomyPreviewResponse> {
+  async getArcade555AutonomyPreview(
+    input: Arcade555AutonomyPreviewRequest,
+  ): Promise<Arcade555AutonomyPreviewResponse> {
     return this.fetch("/api/five55/stream/autonomy/preview", {
       method: "POST",
       body: JSON.stringify(input),
     });
   }
-  async getFive55MasteryCatalog(): Promise<{
-    contracts: Five55MasteryContract[];
+  async getArcade555MasteryCatalog(): Promise<{
+    contracts: Arcade555MasteryContract[];
     total: number;
     updatedAt: string;
   }> {
-    return this.fetch("/api/five55/mastery/catalog");
+    return this.fetch("/api/arcade555/mastery/catalog");
   }
-  async startFive55MasteryRun(input: {
+  async startArcade555MasteryRun(input: {
     suiteId?: string;
     games?: string[];
     episodesPerGame?: number;
@@ -3461,11 +3574,11 @@ export class MiladyClient {
   }): Promise<{
     ok: boolean;
     runId: string;
-    run: Five55MasteryRun | null;
+    run: Arcade555MasteryRun | null;
     executionMode: string;
     durationMs: number;
   }> {
-    return this.fetch("/api/five55/mastery/runs", {
+    return this.fetch("/api/arcade555/mastery/runs", {
       method: "POST",
       body: JSON.stringify({
         ...input,
@@ -3474,12 +3587,12 @@ export class MiladyClient {
       }),
     });
   }
-  async listFive55MasteryRuns(input?: {
+  async listArcade555MasteryRuns(input?: {
     limit?: number;
     cursor?: string;
     status?: "queued" | "running" | "success" | "failed" | "canceled";
   }): Promise<{
-    runs: Five55MasteryRun[];
+    runs: Arcade555MasteryRun[];
     limit: number;
     cursor: string | null;
     nextCursor: string | null;
@@ -3492,21 +3605,23 @@ export class MiladyClient {
     if (input?.cursor) qs.set("cursor", input.cursor);
     if (input?.status) qs.set("status", input.status);
     const suffix = qs.size > 0 ? `?${qs.toString()}` : "";
-    return this.fetch(`/api/five55/mastery/runs${suffix}`);
+    return this.fetch(`/api/arcade555/mastery/runs${suffix}`);
   }
-  async getFive55MasteryRun(runId: string): Promise<{ run: Five55MasteryRun }> {
-    return this.fetch(`/api/five55/mastery/runs/${encodeURIComponent(runId)}`);
+  async getArcade555MasteryRun(
+    runId: string,
+  ): Promise<{ run: Arcade555MasteryRun }> {
+    return this.fetch(`/api/arcade555/mastery/runs/${encodeURIComponent(runId)}`);
   }
-  async getFive55MasteryEpisodes(runId: string): Promise<{
+  async getArcade555MasteryEpisodes(runId: string): Promise<{
     runId: string;
     total: number;
-    episodes: Five55MasteryEpisode[];
+    episodes: Arcade555MasteryEpisode[];
   }> {
     return this.fetch(
-      `/api/five55/mastery/runs/${encodeURIComponent(runId)}/episodes`,
+      `/api/arcade555/mastery/runs/${encodeURIComponent(runId)}/episodes`,
     );
   }
-  async getFive55MasteryLogs(
+  async getArcade555MasteryLogs(
     runId: string,
     input?: { afterSeq?: number; limit?: number },
   ): Promise<{
@@ -3533,18 +3648,148 @@ export class MiladyClient {
     }
     const suffix = qs.size > 0 ? `?${qs.toString()}` : "";
     return this.fetch(
-      `/api/five55/mastery/runs/${encodeURIComponent(runId)}/logs${suffix}`,
+      `/api/arcade555/mastery/runs/${encodeURIComponent(runId)}/logs${suffix}`,
     );
   }
+  async getArcade555MasteryLatest(gameId: string): Promise<{
+    gameId: string;
+    contract: Arcade555MasteryContract;
+    latest: Arcade555MasteryGameSnapshot | null;
+  }> {
+    return this.fetch(
+      `/api/arcade555/mastery/games/${encodeURIComponent(gameId)}/latest`,
+    );
+  }
+  async getArcade555MasteryRunEvidence(runId: string): Promise<{
+    runId: string;
+    total: number;
+    evidence: Array<{
+      runId: string;
+      episodeId: string;
+      gameId: string;
+      status: Arcade555MasteryEpisode["status"];
+      consistency: Arcade555MasteryConsistencyVerdict;
+      frameCount: number;
+      syntheticSignals: string[];
+    }>;
+  }> {
+    return this.fetch(
+      `/api/arcade555/mastery/runs/${encodeURIComponent(runId)}/evidence`,
+    );
+  }
+  async getArcade555MasteryEpisodeFrames(
+    runId: string,
+    episodeId: string,
+  ): Promise<{
+    runId: string;
+    episodeId: string;
+    total: number;
+    frames: Arcade555MasteryEvidenceFrame[];
+  }> {
+    return this.fetch(
+      `/api/arcade555/mastery/runs/${encodeURIComponent(runId)}/episodes/${encodeURIComponent(episodeId)}/frames`,
+    );
+  }
+  async getArcade555MasteryEpisodeConsistency(
+    runId: string,
+    episodeId: string,
+  ): Promise<{
+    runId: string;
+    episodeId: string;
+    consistency: Arcade555MasteryConsistencyVerdict;
+  }> {
+    return this.fetch(
+      `/api/arcade555/mastery/runs/${encodeURIComponent(runId)}/episodes/${encodeURIComponent(episodeId)}/consistency`,
+    );
+  }
+  /** @deprecated Use getArcade555AutonomyPreview(). */
+  async getFive55AutonomyPreview(
+    input: Five55AutonomyPreviewRequest,
+  ): Promise<Five55AutonomyPreviewResponse> {
+    return this.getArcade555AutonomyPreview(input);
+  }
+  /** @deprecated Use getArcade555MasteryCatalog(). */
+  async getFive55MasteryCatalog(): Promise<{
+    contracts: Five55MasteryContract[];
+    total: number;
+    updatedAt: string;
+  }> {
+    return this.getArcade555MasteryCatalog();
+  }
+  /** @deprecated Use startArcade555MasteryRun(). */
+  async startFive55MasteryRun(input: {
+    suiteId?: string;
+    games?: string[];
+    episodesPerGame?: number;
+    seedMode?: "fixed" | "mixed" | "rolling";
+    maxDurationSec?: number;
+    strict?: boolean;
+    evidenceMode?: "strict" | "basic" | "off";
+  }): Promise<{
+    ok: boolean;
+    runId: string;
+    run: Five55MasteryRun | null;
+    executionMode: string;
+    durationMs: number;
+  }> {
+    return this.startArcade555MasteryRun(input);
+  }
+  /** @deprecated Use listArcade555MasteryRuns(). */
+  async listFive55MasteryRuns(input?: {
+    limit?: number;
+    cursor?: string;
+    status?: "queued" | "running" | "success" | "failed" | "canceled";
+  }): Promise<{
+    runs: Five55MasteryRun[];
+    limit: number;
+    cursor: string | null;
+    nextCursor: string | null;
+    total: number;
+  }> {
+    return this.listArcade555MasteryRuns(input);
+  }
+  /** @deprecated Use getArcade555MasteryRun(). */
+  async getFive55MasteryRun(runId: string): Promise<{ run: Five55MasteryRun }> {
+    return this.getArcade555MasteryRun(runId);
+  }
+  /** @deprecated Use getArcade555MasteryEpisodes(). */
+  async getFive55MasteryEpisodes(runId: string): Promise<{
+    runId: string;
+    total: number;
+    episodes: Five55MasteryEpisode[];
+  }> {
+    return this.getArcade555MasteryEpisodes(runId);
+  }
+  /** @deprecated Use getArcade555MasteryLogs(). */
+  async getFive55MasteryLogs(
+    runId: string,
+    input?: { afterSeq?: number; limit?: number },
+  ): Promise<{
+    runId: string;
+    logs: Array<{
+      runId: string;
+      seq: number;
+      ts: string;
+      level: "info" | "warn" | "error";
+      message: string;
+      stage?: string;
+      gameId?: string;
+      episodeId?: string;
+    }>;
+    count: number;
+    nextAfterSeq: number;
+  }> {
+    return this.getArcade555MasteryLogs(runId, input);
+  }
+  /** @deprecated Use getArcade555MasteryLatest(). */
   async getFive55MasteryLatest(gameId: string): Promise<{
     gameId: string;
     contract: Five55MasteryContract;
     latest: Five55MasteryGameSnapshot | null;
   }> {
-    return this.fetch(
-      `/api/five55/mastery/games/${encodeURIComponent(gameId)}/latest`,
-    );
+    return this.getArcade555MasteryLatest(gameId);
   }
+  /** @deprecated Use getArcade555MasteryRunEvidence(). */
   async getFive55MasteryRunEvidence(runId: string): Promise<{
     runId: string;
     total: number;
@@ -3558,10 +3803,9 @@ export class MiladyClient {
       syntheticSignals: string[];
     }>;
   }> {
-    return this.fetch(
-      `/api/five55/mastery/runs/${encodeURIComponent(runId)}/evidence`,
-    );
+    return this.getArcade555MasteryRunEvidence(runId);
   }
+  /** @deprecated Use getArcade555MasteryEpisodeFrames(). */
   async getFive55MasteryEpisodeFrames(
     runId: string,
     episodeId: string,
@@ -3571,10 +3815,9 @@ export class MiladyClient {
     total: number;
     frames: Five55MasteryEvidenceFrame[];
   }> {
-    return this.fetch(
-      `/api/five55/mastery/runs/${encodeURIComponent(runId)}/episodes/${encodeURIComponent(episodeId)}/frames`,
-    );
+    return this.getArcade555MasteryEpisodeFrames(runId, episodeId);
   }
+  /** @deprecated Use getArcade555MasteryEpisodeConsistency(). */
   async getFive55MasteryEpisodeConsistency(
     runId: string,
     episodeId: string,
@@ -3583,9 +3826,7 @@ export class MiladyClient {
     episodeId: string;
     consistency: Five55MasteryConsistencyVerdict;
   }> {
-    return this.fetch(
-      `/api/five55/mastery/runs/${encodeURIComponent(runId)}/episodes/${encodeURIComponent(episodeId)}/consistency`,
-    );
+    return this.getArcade555MasteryEpisodeConsistency(runId, episodeId);
   }
   async listHyperscapeEmbeddedAgents(): Promise<HyperscapeEmbeddedAgentsResponse> {
     return this.fetch("/api/apps/hyperscape/embedded-agents", undefined, {

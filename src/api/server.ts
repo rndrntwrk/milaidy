@@ -52,10 +52,10 @@ import {
   registerCustomActionLive,
 } from "../runtime/custom-actions.js";
 import {
-  assertFive55Capability,
-  createFive55CapabilityPolicy,
-} from "../runtime/five55-capability-policy.js";
-import { resolveFive55CapabilityForRequest } from "../runtime/five55-capability-routing.js";
+  assertSurface555Capability,
+  createSurface555CapabilityPolicy,
+} from "../runtime/surface555-capability-policy.js";
+import { resolveSurface555CapabilityForRequest } from "../runtime/surface555-capability-routing.js";
 import {
   canonicalizeMasteryGameId,
   getMasteryContract,
@@ -68,7 +68,7 @@ import {
   readMasteryLogs,
   readMasteryRun,
   readMasteryRunEvidence,
-} from "../plugins/five55-games/mastery/index.js";
+} from "@rndrntwrk/plugin-555arcade/mastery";
 import { createPiCredentialProvider } from "../runtime/pi-credentials.js";
 import {
   AgentExportError,
@@ -1155,7 +1155,7 @@ interface ServerState {
   shellEnabled?: boolean;
 }
 
-const FIVE55_HTTP_CAPABILITY_POLICY = createFive55CapabilityPolicy();
+const FIVE55_HTTP_CAPABILITY_POLICY = createSurface555CapabilityPolicy();
 
 interface ShareIngestItem {
   id: string;
@@ -1187,6 +1187,7 @@ interface PluginEntry {
   name: string;
   description: string;
   enabled: boolean;
+  installed?: boolean;
   configured: boolean;
   envKey: string | null;
   category: "ai-provider" | "connector" | "database" | "feature";
@@ -1203,8 +1204,18 @@ interface PluginEntry {
   isActive?: boolean;
   /** Error message when plugin is enabled/installed but failed to load. */
   loadError?: string;
+  /** Whether the plugin is loaded and reporting valid auth/session state. */
+  authenticated?: boolean | null;
+  ready?: boolean | null;
+  degraded?: boolean;
+  statusSummary?: string[];
+  operationalWarnings?: string[];
+  operationalErrors?: string[];
+  operationalCounts?: Record<string, number>;
   /** Server-provided UI hints for plugin configuration fields. */
   configUiHints?: Record<string, Record<string, unknown>>;
+  /** Optional plugin-owned UI schema for generic rendering and diagnostics. */
+  pluginUiSchema?: Record<string, unknown>;
 }
 
 interface SkillEntry {
@@ -1449,6 +1460,31 @@ export function findOwnPackageRoot(startDir: string): string {
     dir = parent;
   }
   return startDir;
+}
+
+function resolveSiblingWorkspacePluginPackageRoot(
+  packageRoot: string,
+  packageName: string,
+): string | null {
+  const siblingByPackageName: Record<string, string> = {
+    "@rndrntwrk/plugin-555stream": "stream-plugin",
+    "@rndrntwrk/plugin-555arcade": "arcade-plugin",
+  };
+  const siblingDirName = siblingByPackageName[packageName];
+  if (!siblingDirName) return null;
+
+  const candidate = path.resolve(packageRoot, "..", siblingDirName);
+  const packageJsonPath = path.join(candidate, "package.json");
+  if (!fs.existsSync(packageJsonPath)) return null;
+
+  try {
+    const pkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8")) as {
+      name?: string;
+    };
+    return pkg.name === packageName ? candidate : null;
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1812,6 +1848,7 @@ type ResolvedPluginPackageMetadata = {
   configKeys: string[];
   parameters: PluginParamDef[];
   configUiHints?: Record<string, Record<string, unknown>>;
+  pluginUiSchema?: Record<string, unknown>;
 };
 
 function resolvePluginPackageMetadata(
@@ -1829,6 +1866,7 @@ function resolvePluginPackageMetadata(
       pluginParameters?: Record<string, Record<string, unknown>>;
       configUiHints?: Record<string, Record<string, unknown>>;
       configSchemaFile?: string;
+      pluginUiSchemaFile?: string;
     };
     agentConfig?: {
       pluginParameters?: Record<string, Record<string, unknown>>;
@@ -1846,6 +1884,7 @@ function resolvePluginPackageMetadata(
   let schemaConfigUiHints:
     | Record<string, Record<string, unknown>>
     | undefined;
+  let pluginUiSchema: Record<string, unknown> | undefined;
 
   if (pkg.elizaos?.configSchemaFile) {
     const schemaPath = path.resolve(
@@ -1872,6 +1911,21 @@ function resolvePluginPackageMetadata(
         typeof schema.configUiHints === "object"
       ) {
         schemaConfigUiHints = schema.configUiHints;
+      }
+    }
+  }
+
+  if (pkg.elizaos?.pluginUiSchemaFile) {
+    const uiSchemaPath = path.resolve(
+      path.dirname(pkgPath),
+      pkg.elizaos.pluginUiSchemaFile,
+    );
+    if (fs.existsSync(uiSchemaPath)) {
+      const parsed = JSON.parse(fs.readFileSync(uiSchemaPath, "utf-8")) as
+        | Record<string, unknown>
+        | null;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        pluginUiSchema = parsed;
       }
     }
   }
@@ -1912,6 +1966,7 @@ function resolvePluginPackageMetadata(
     configKeys,
     parameters,
     configUiHints: schemaConfigUiHints ?? pkg.elizaos?.configUiHints,
+    pluginUiSchema,
   };
 }
 
@@ -1920,7 +1975,12 @@ function discoverBundledPluginFromPackage(
   packageName: string,
 ): PluginEntry | null {
   const pluginDirName = packageName.split("/").pop()?.replace(/^@/, "");
+  const siblingRoot = resolveSiblingWorkspacePluginPackageRoot(
+    packageRoot,
+    packageName,
+  );
   const pkgCandidates = [
+    ...(siblingRoot ? [path.join(siblingRoot, "package.json")] : []),
     path.join(packageRoot, "node_modules", ...packageName.split("/"), "package.json"),
     ...(pluginDirName
       ? [path.join(packageRoot, "plugins", pluginDirName, "package.json")]
@@ -1968,12 +2028,16 @@ function discoverBundledPluginFromPackage(
         envKey: metadata.configKeys[0] ?? null,
         category,
         source: "bundled",
+        installed: true,
         configKeys: metadata.configKeys,
         parameters: metadata.parameters,
         validationErrors: validation.errors,
         validationWarnings: validation.warnings,
         ...(metadata.configUiHints
           ? { configUiHints: metadata.configUiHints }
+          : {}),
+        ...(metadata.pluginUiSchema
+          ? { pluginUiSchema: metadata.pluginUiSchema }
           : {}),
       };
     } catch {
@@ -2012,6 +2076,7 @@ function discoverInstalledPlugins(
     let pluginConfigKeys: string[] = [];
     let pluginParameters: PluginParamDef[] = [];
     let pluginConfigUiHints: Record<string, Record<string, unknown>> | undefined;
+    let pluginUiSchema: Record<string, unknown> | undefined;
 
     if (installPath) {
       // Check npm layout first, then direct layout
@@ -2037,6 +2102,7 @@ function discoverInstalledPlugins(
             pluginConfigKeys = metadata.configKeys;
             pluginParameters = metadata.parameters;
             pluginConfigUiHints = metadata.configUiHints;
+            pluginUiSchema = metadata.pluginUiSchema;
             break;
           }
         } catch {
@@ -2055,11 +2121,13 @@ function discoverInstalledPlugins(
       envKey: pluginConfigKeys[0] ?? null,
       category,
       source: "store",
+      installed: true,
       configKeys: pluginConfigKeys,
       parameters: pluginParameters,
       validationErrors: [],
       validationWarnings: [],
       ...(pluginConfigUiHints ? { configUiHints: pluginConfigUiHints } : {}),
+      ...(pluginUiSchema ? { pluginUiSchema } : {}),
     });
   }
 
@@ -2370,6 +2438,371 @@ function applyStream555ChannelAutoEnableConfig(
   return nextConfig;
 }
 
+function parseBooleanLike(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value !== "string") return false;
+  switch (value.trim().toLowerCase()) {
+    case "1":
+    case "true":
+    case "yes":
+    case "on":
+    case "enabled":
+      return true;
+    default:
+      return false;
+  }
+}
+
+function asObjectRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function readRuntimeBoolean(
+  state: Record<string, unknown> | null,
+  key: string,
+): boolean | null {
+  if (!state || !(key in state)) return null;
+  const value = state[key];
+  return typeof value === "boolean" ? value : parseBooleanLike(value);
+}
+
+function readRuntimeNumber(
+  state: Record<string, unknown> | null,
+  key: string,
+): number | null {
+  if (!state || !(key in state)) return null;
+  const value = state[key];
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function readRuntimeString(
+  state: Record<string, unknown> | null,
+  key: string,
+): string | null {
+  if (!state || typeof state[key] !== "string") return null;
+  const value = String(state[key]).trim();
+  return value.length > 0 ? value : null;
+}
+
+function readRuntimeStringArray(
+  state: Record<string, unknown> | null,
+  key: string,
+): string[] {
+  if (!state) return [];
+  const value = state[key];
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter((item) => item.length > 0);
+}
+
+function countConfiguredStream555Channels(
+  parameters: PluginParamDef[],
+): { saved: number; enabled: number; ready: number } {
+  const paramsByKey = new Map(parameters.map((parameter) => [parameter.key, parameter]));
+  let saved = 0;
+  let enabled = 0;
+  let ready = 0;
+
+  for (const spec of STREAM555_CHANNEL_UI_SPECS) {
+    const urlSet = Boolean(paramsByKey.get(spec.urlKey)?.isSet);
+    const streamKeySet = Boolean(paramsByKey.get(spec.streamKeyKey)?.isSet);
+    const channelEnabled = parseBooleanLike(
+      paramsByKey.get(spec.enabledKey)?.currentValue ??
+        paramsByKey.get(spec.enabledKey)?.default,
+    );
+    if (streamKeySet) saved += 1;
+    if (channelEnabled) enabled += 1;
+    if (channelEnabled && urlSet && streamKeySet) ready += 1;
+  }
+
+  return { saved, enabled, ready };
+}
+
+function resolvePluginInstalled(plugin: PluginEntry): boolean {
+  if (typeof plugin.installed === "boolean") return plugin.installed;
+  if (plugin.isActive) return true;
+  if (plugin.loadError) return true;
+  if (isStream555ControlPluginId(plugin.id) || isArcade555ControlPluginId(plugin.id)) {
+    return true;
+  }
+  return plugin.source === "store" || plugin.parameters.length > 0 || plugin.configKeys.length > 0;
+}
+
+function getRuntimeServiceState(
+  runtime: AgentRuntime | null,
+  serviceType: string,
+): Record<string, unknown> | null {
+  if (!runtime) return null;
+  try {
+    const service = runtime.getService(serviceType);
+    const stateGetter = asObjectRecord(service)?.getRuntimeState;
+    if (typeof stateGetter !== "function") return null;
+    return asObjectRecord(stateGetter.call(service));
+  } catch {
+    return null;
+  }
+}
+
+function applyPluginOperationalState(
+  plugin: PluginEntry,
+  runtime: AgentRuntime | null,
+): PluginEntry {
+  const installed = resolvePluginInstalled(plugin);
+  const loaded = Boolean(plugin.isActive);
+  const warnings: string[] = [];
+  const errors: string[] = [];
+  if (plugin.loadError) {
+    errors.push(plugin.loadError);
+  }
+
+  if (isStream555ControlPluginId(plugin.id)) {
+    const runtimeState = getRuntimeServiceState(runtime, "stream555");
+    const channelCounts = countConfiguredStream555Channels(plugin.parameters);
+    const authenticated =
+      readRuntimeBoolean(runtimeState, "authenticated") ??
+      Boolean(
+        process.env.STREAM555_AGENT_API_KEY?.trim() ||
+          process.env.STREAM555_AGENT_TOKEN?.trim() ||
+          process.env.STREAM_API_BEARER_TOKEN?.trim(),
+      );
+    const channelsSaved =
+      readRuntimeNumber(runtimeState, "channelsSaved") ?? channelCounts.saved;
+    const channelsEnabled =
+      readRuntimeNumber(runtimeState, "channelsEnabled") ?? channelCounts.enabled;
+    const channelsReady =
+      readRuntimeNumber(runtimeState, "channelsReady") ?? channelCounts.ready;
+    const ready =
+      loaded &&
+      authenticated &&
+      (channelsEnabled === 0 || channelsReady >= channelsEnabled);
+
+    warnings.push(...readRuntimeStringArray(runtimeState, "warnings"));
+    errors.push(...readRuntimeStringArray(runtimeState, "errors"));
+
+    plugin.installed = installed;
+    plugin.authenticated = authenticated;
+    plugin.ready = ready;
+    plugin.degraded = errors.length > 0 || warnings.length > 0;
+    plugin.operationalWarnings = Array.from(new Set(warnings));
+    plugin.operationalErrors = Array.from(new Set(errors));
+    plugin.operationalCounts = {
+      channelsSaved,
+      channelsEnabled,
+      channelsReady,
+    };
+    plugin.statusSummary = [
+      installed ? "Installed" : "Available",
+      plugin.enabled ? "Enabled" : "Disabled",
+      loaded ? "Loaded" : "Not loaded",
+      authenticated ? "Authenticated" : "Authentication required",
+      ready ? "Ready" : "Setup incomplete",
+    ];
+    return plugin;
+  }
+
+  if (isArcade555ControlPluginId(plugin.id)) {
+    const runtimeState = getRuntimeServiceState(runtime, "arcade555");
+    const authenticated =
+      readRuntimeBoolean(runtimeState, "authenticated") ??
+      Boolean(
+        process.env.ARCADE555_AGENT_API_KEY?.trim() ||
+          process.env.ARCADE555_AGENT_TOKEN?.trim() ||
+          process.env.STREAM555_AGENT_API_KEY?.trim() ||
+          process.env.STREAM555_AGENT_TOKEN?.trim() ||
+          process.env.STREAM_API_BEARER_TOKEN?.trim(),
+      );
+    const sessionBootstrapped =
+      readRuntimeBoolean(runtimeState, "sessionBootstrapped") ?? false;
+    const catalogReachable =
+      readRuntimeBoolean(runtimeState, "catalogReachable") ??
+      Boolean(process.env.ARCADE555_BASE_URL?.trim() || process.env.STREAM555_BASE_URL?.trim());
+    const leaderboardReachable =
+      readRuntimeBoolean(runtimeState, "leaderboardReachable") ??
+      Boolean(
+        process.env.ARCADE555_LEADERBOARD_API_URL?.trim() ||
+          process.env.ARCADE555_BASE_URL?.trim() ||
+          process.env.STREAM555_BASE_URL?.trim(),
+      );
+    const questsReachable =
+      readRuntimeBoolean(runtimeState, "questsReachable") ??
+      Boolean(
+        process.env.ARCADE555_QUESTS_API_URL?.trim() ||
+          process.env.ARCADE555_BASE_URL?.trim() ||
+          process.env.STREAM555_BASE_URL?.trim(),
+      );
+    const scorePipelineReachable =
+      readRuntimeBoolean(runtimeState, "scorePipelineReachable") ??
+      Boolean(
+        process.env.ARCADE555_SCORE_CAPTURE_API_URL?.trim() ||
+          process.env.ARCADE555_BASE_URL?.trim() ||
+          process.env.STREAM555_BASE_URL?.trim(),
+      );
+    const ready = loaded && authenticated && sessionBootstrapped && catalogReachable;
+
+    warnings.push(...readRuntimeStringArray(runtimeState, "warnings"));
+    errors.push(...readRuntimeStringArray(runtimeState, "errors"));
+
+    plugin.installed = installed;
+    plugin.authenticated = authenticated;
+    plugin.ready = ready;
+    plugin.degraded = errors.length > 0 || warnings.length > 0;
+    plugin.operationalWarnings = Array.from(new Set(warnings));
+    plugin.operationalErrors = Array.from(new Set(errors));
+    plugin.operationalCounts = {
+      sessionBootstrapped: sessionBootstrapped ? 1 : 0,
+      catalogReachable: catalogReachable ? 1 : 0,
+      leaderboardReachable: leaderboardReachable ? 1 : 0,
+      questsReachable: questsReachable ? 1 : 0,
+      scorePipelineReachable: scorePipelineReachable ? 1 : 0,
+    };
+    plugin.statusSummary = [
+      installed ? "Installed" : "Available",
+      plugin.enabled ? "Enabled" : "Disabled",
+      loaded ? "Loaded" : "Not loaded",
+      authenticated ? "Authenticated" : "Authentication required",
+      sessionBootstrapped ? "Session ready" : "Session not bootstrapped",
+      ready ? "Ready" : "Setup incomplete",
+    ];
+    return plugin;
+  }
+
+  plugin.installed = installed;
+  plugin.authenticated = loaded ? true : null;
+  plugin.ready = loaded;
+  plugin.degraded = errors.length > 0 || warnings.length > 0;
+  plugin.operationalWarnings = warnings;
+  plugin.operationalErrors = errors;
+  plugin.statusSummary = [
+    installed ? "Installed" : "Available",
+    plugin.enabled ? "Enabled" : "Disabled",
+    loaded ? "Loaded" : "Not loaded",
+  ];
+  return plugin;
+}
+
+function resolveApiPluginEntries(state: ServerState): PluginEntry[] {
+  let freshConfig: MilaidyConfig;
+  try {
+    freshConfig = loadMilaidyConfig();
+  } catch {
+    freshConfig = state.config;
+  }
+
+  const bundledIds = new Set(state.plugins.map((plugin) => plugin.id));
+  const installedEntries = discoverInstalledPlugins(freshConfig, bundledIds);
+  const allPlugins: PluginEntry[] = collapseFive55PluginEntries([
+    ...state.plugins,
+    ...installedEntries,
+  ]);
+
+  const configEntries = (
+    freshConfig.plugins as Record<string, unknown> | undefined
+  )?.entries as Record<string, { enabled?: boolean }> | undefined;
+  const loadedNames = state.runtime ? state.runtime.plugins.map((plugin) => plugin.name) : [];
+
+  for (const plugin of allPlugins) {
+    const suffix = `plugin-${plugin.id}`;
+    const packageName = `@elizaos/plugin-${plugin.id}`;
+    const isLoaded =
+      loadedNames.length > 0 &&
+      loadedNames.some((name) => {
+        return (
+          name === plugin.id ||
+          name === suffix ||
+          name === packageName ||
+          name.endsWith(`/${suffix}`) ||
+          name.includes(plugin.id)
+        );
+      });
+    plugin.isActive = isLoaded;
+
+    const configEntry = configEntries?.[plugin.id];
+    if (configEntry && typeof configEntry.enabled === "boolean") {
+      plugin.enabled = configEntry.enabled;
+    } else {
+      plugin.enabled = isLoaded;
+    }
+
+    plugin.loadError = undefined;
+    if (plugin.enabled && !isLoaded && state.runtime) {
+      const installs = freshConfig.plugins?.installs as
+        | Record<string, unknown>
+        | undefined;
+      const packageName = `@elizaos/plugin-${plugin.id}`;
+      const hasInstallRecord =
+        installs?.[packageName] || installs?.[plugin.id];
+      if (hasInstallRecord) {
+        plugin.loadError =
+          "Plugin installed but failed to load — check runtime logs for the exact error.";
+      }
+    }
+  }
+
+  for (const plugin of allPlugins) {
+    for (const param of plugin.parameters) {
+      const envValue = process.env[param.key];
+      param.isSet = Boolean(envValue?.trim());
+      param.currentValue = param.isSet
+        ? param.sensitive
+          ? maskValue(envValue ?? "")
+          : (envValue ?? "")
+        : null;
+    }
+    const paramInfos: PluginParamInfo[] = plugin.parameters.map((parameter) => ({
+      key: parameter.key,
+      required: parameter.required,
+      sensitive: parameter.sensitive,
+      type: parameter.type,
+      description: parameter.description,
+      default: parameter.default,
+    }));
+    const validation = validatePluginConfig(
+      plugin.id,
+      plugin.category,
+      plugin.envKey,
+      plugin.configKeys,
+      undefined,
+      paramInfos,
+    );
+    plugin.validationErrors = validation.errors;
+    plugin.validationWarnings = validation.warnings;
+  }
+
+  for (const plugin of allPlugins) {
+    const providerModels = readProviderCache(plugin.id)?.models ?? [];
+
+    for (const param of plugin.parameters) {
+      if (!param.key.toUpperCase().includes("MODEL")) continue;
+
+      const expectedCat = paramKeyToCategory(param.key);
+      const filtered = providerModels.filter((model) => model.category === expectedCat);
+
+      if (!plugin.configUiHints) plugin.configUiHints = {};
+      plugin.configUiHints[param.key] = {
+        ...plugin.configUiHints[param.key],
+        type: "select",
+        options: filtered.map((model) => ({
+          value: model.id,
+          label: model.name !== model.id ? `${model.name} (${model.id})` : model.id,
+        })),
+      };
+    }
+  }
+
+  for (const plugin of allPlugins) {
+    applyPluginOperationalState(plugin, state.runtime);
+  }
+
+  return allPlugins;
+}
+
 /**
  * Discover available plugins from the bundled plugins.json manifest.
  * Falls back to filesystem scanning for monorepo development.
@@ -2459,6 +2892,21 @@ function discoverPluginsFromManifest(): PluginEntry[] {
         )
       ) {
         manifestEntries.push(canonicalStreamEntry);
+      }
+
+      const canonicalArcadeEntry = discoverBundledPluginFromPackage(
+        packageRoot,
+        "@rndrntwrk/plugin-555arcade",
+      );
+      if (
+        canonicalArcadeEntry &&
+        !manifestEntries.some(
+          (entry) =>
+            normalizeArcade555PluginId(entry.id) ===
+            normalizeArcade555PluginId(canonicalArcadeEntry.id),
+        )
+      ) {
+        manifestEntries.push(canonicalArcadeEntry);
       }
 
       const syntheticFive55Entries: PluginEntry[] = [
@@ -4209,20 +4657,27 @@ function discoverPluginsFromManifest(): PluginEntry[] {
         },
         {
           id: "five55-games",
-          name: "Five55 Games",
-          description: "Five55 game discovery and play orchestration plugin.",
+          name: "555 Arcade Games (Legacy)",
+          description: "Legacy compatibility wrapper for canonical 555 Arcade game discovery and play orchestration.",
           enabled: false,
           configured: Boolean(
-            process.env.FIVE55_GAMES_API_URL?.trim() ||
+            process.env.ARCADE555_BASE_URL?.trim() ||
+              process.env.FIVE55_GAMES_API_URL?.trim() ||
               (process.env.STREAM555_BASE_URL?.trim() &&
                 (process.env.STREAM555_AGENT_API_KEY?.trim() ||
                   process.env.STREAM555_AGENT_TOKEN?.trim() ||
                   process.env.STREAM_API_BEARER_TOKEN?.trim())),
           ),
-          envKey: "FIVE55_GAMES_API_URL",
+          envKey: "ARCADE555_BASE_URL",
           category: "feature",
           source: "bundled",
           configKeys: [
+            "ARCADE555_BASE_URL",
+            "ARCADE555_AGENT_TOKEN",
+            "ARCADE555_VIEWER_BASE_URL",
+            "ARCADE555_ENABLE_LEGACY_HTTP_ALIASES",
+            "ARCADE555_ENABLE_LEGACY_ACTION_ALIASES",
+            "ARCADE555_SUPPRESS_LEGACY_PLUGINS",
             "FIVE55_GAMES_API_URL",
             "FIVE55_GAMES_API_DIALECT",
             "FIVE55_GAMES_API_BEARER_TOKEN",
@@ -4247,24 +4702,51 @@ function discoverPluginsFromManifest(): PluginEntry[] {
           ],
           parameters: [
             {
-              key: "FIVE55_GAMES_API_URL",
+              key: "ARCADE555_BASE_URL",
               type: "string",
               description:
-                "Five55 games API base URL (expects /api/games/catalog and /api/games/play)",
+                "Canonical 555 Arcade games API base URL (fallback: FIVE55_GAMES_API_URL; expects /api/games/catalog and /api/games/play)",
               required: false,
               sensitive: false,
-              currentValue: process.env.FIVE55_GAMES_API_URL ?? null,
-              isSet: Boolean(process.env.FIVE55_GAMES_API_URL?.trim()),
+              currentValue:
+                process.env.ARCADE555_BASE_URL ??
+                process.env.FIVE55_GAMES_API_URL ??
+                null,
+              isSet: Boolean(
+                process.env.ARCADE555_BASE_URL?.trim() ||
+                  process.env.FIVE55_GAMES_API_URL?.trim(),
+              ),
             },
             {
               key: "FIVE55_GAMES_API_DIALECT",
               type: "string",
               description:
-                "Optional override: 'five55-web' (direct) or 'milaidy-proxy' (via /api/five55/games/*)",
+                "Optional override: 'five55-web' (direct) or 'milaidy-proxy' (legacy /api/five55/games/* compatibility path; canonical route is /api/arcade555/games/*)",
               required: false,
               sensitive: false,
               currentValue: process.env.FIVE55_GAMES_API_DIALECT ?? null,
               isSet: Boolean(process.env.FIVE55_GAMES_API_DIALECT?.trim()),
+            },
+            {
+              key: "ARCADE555_AGENT_TOKEN",
+              type: "string",
+              description:
+                "Canonical arcade bearer token (fallbacks: FIVE55_GAMES_API_BEARER_TOKEN, STREAM555_AGENT_TOKEN)",
+              required: false,
+              sensitive: true,
+              currentValue:
+                process.env.ARCADE555_AGENT_TOKEN
+                  ? maskValue(process.env.ARCADE555_AGENT_TOKEN)
+                  : process.env.FIVE55_GAMES_API_BEARER_TOKEN
+                    ? maskValue(process.env.FIVE55_GAMES_API_BEARER_TOKEN)
+                    : process.env.STREAM555_AGENT_TOKEN
+                      ? maskValue(process.env.STREAM555_AGENT_TOKEN)
+                      : null,
+              isSet: Boolean(
+                process.env.ARCADE555_AGENT_TOKEN?.trim() ||
+                  process.env.FIVE55_GAMES_API_BEARER_TOKEN?.trim() ||
+                  process.env.STREAM555_AGENT_TOKEN?.trim(),
+              ),
             },
             {
               key: "FIVE55_GAMES_API_BEARER_TOKEN",
@@ -4371,14 +4853,22 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               isSet: Boolean(process.env.STREAM_SESSION_ID?.trim()),
             },
             {
-              key: "FIVE55_GAMES_VIEWER_BASE_URL",
+              key: "ARCADE555_VIEWER_BASE_URL",
               type: "string",
               description:
-                "Viewer base URL used to build playable game links (defaults to https://555.rndrntwrk.com)",
+                "Canonical viewer base URL used to build playable game links (fallbacks: FIVE55_GAMES_VIEWER_BASE_URL, GAMES_BASE_URL; defaults to https://555.rndrntwrk.com)",
               required: false,
               sensitive: false,
-              currentValue: process.env.FIVE55_GAMES_VIEWER_BASE_URL ?? null,
-              isSet: Boolean(process.env.FIVE55_GAMES_VIEWER_BASE_URL?.trim()),
+              currentValue:
+                process.env.ARCADE555_VIEWER_BASE_URL ??
+                process.env.FIVE55_GAMES_VIEWER_BASE_URL ??
+                process.env.GAMES_BASE_URL ??
+                null,
+              isSet: Boolean(
+                process.env.ARCADE555_VIEWER_BASE_URL?.trim() ||
+                  process.env.FIVE55_GAMES_VIEWER_BASE_URL?.trim() ||
+                  process.env.GAMES_BASE_URL?.trim(),
+              ),
             },
             {
               key: "GAMES_BASE_URL",
@@ -4482,19 +4972,67 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "FIVE55_GAMES_PLUGIN_ENABLED",
               type: "string",
-              description: "Enable/disable Five55 games plugin (1/0)",
+              description: "Enable/disable legacy 555 Arcade games wrapper (1/0)",
               required: false,
               sensitive: false,
               default: "0",
               currentValue: process.env.FIVE55_GAMES_PLUGIN_ENABLED ?? null,
               isSet: Boolean(process.env.FIVE55_GAMES_PLUGIN_ENABLED?.trim()),
             },
+            {
+              key: "ARCADE555_ENABLE_LEGACY_HTTP_ALIASES",
+              type: "string",
+              description:
+                "Compatibility-only: re-enable deprecated /api/five55/games/* and /api/five55/mastery/* routes (true/false)",
+              required: false,
+              sensitive: false,
+              default: "false",
+              currentValue:
+                process.env.ARCADE555_ENABLE_LEGACY_HTTP_ALIASES ?? null,
+              isSet: Boolean(
+                process.env.ARCADE555_ENABLE_LEGACY_HTTP_ALIASES?.trim(),
+              ),
+            },
+            {
+              key: "ARCADE555_ENABLE_LEGACY_ACTION_ALIASES",
+              type: "string",
+              description:
+                "Compatibility-only: re-enable deprecated FIVE55_* arcade action aliases (true/false)",
+              required: false,
+              sensitive: false,
+              default: "false",
+              currentValue:
+                process.env.ARCADE555_ENABLE_LEGACY_ACTION_ALIASES ?? null,
+              isSet: Boolean(
+                process.env.ARCADE555_ENABLE_LEGACY_ACTION_ALIASES?.trim(),
+              ),
+            },
+            {
+              key: "ARCADE555_SUPPRESS_LEGACY_PLUGINS",
+              type: "string",
+              description:
+                "Release B default: suppress legacy arcade wrapper plugins when canonical arcade is enabled (true/false)",
+              required: false,
+              sensitive: false,
+              default: "true",
+              currentValue:
+                process.env.ARCADE555_SUPPRESS_LEGACY_PLUGINS ?? null,
+              isSet: Boolean(
+                process.env.ARCADE555_SUPPRESS_LEGACY_PLUGINS?.trim(),
+              ),
+            },
           ],
           configUiHints: {
-            FIVE55_GAMES_API_URL: {
-              label: "Games API URL",
+            ARCADE555_BASE_URL: {
+              label: "Arcade Base URL",
               group: "Connection",
               width: "half",
+            },
+            FIVE55_GAMES_API_URL: {
+              label: "Legacy Games API URL",
+              group: "Connection",
+              width: "half",
+              advanced: true,
             },
             FIVE55_GAMES_API_DIALECT: {
               label: "Dialect",
@@ -4508,7 +5046,12 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               ],
             },
             FIVE55_GAMES_API_BEARER_TOKEN: {
-              label: "Games API Token",
+              label: "Legacy Games API Token",
+              group: "Connection",
+              width: "half",
+            },
+            ARCADE555_AGENT_TOKEN: {
+              label: "Arcade Agent Token",
               group: "Connection",
               width: "half",
             },
@@ -4552,10 +5095,16 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               group: "Session",
               width: "half",
             },
-            FIVE55_GAMES_VIEWER_BASE_URL: {
+            ARCADE555_VIEWER_BASE_URL: {
               label: "Viewer Base URL",
               group: "Viewer",
               width: "half",
+            },
+            FIVE55_GAMES_VIEWER_BASE_URL: {
+              label: "Legacy Viewer Base URL",
+              group: "Viewer",
+              width: "half",
+              advanced: true,
             },
             GAMES_BASE_URL: {
               label: "Legacy Viewer Base URL",
@@ -4597,6 +5146,21 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               group: "Alice Pilot",
               width: "half",
             },
+            ARCADE555_ENABLE_LEGACY_HTTP_ALIASES: {
+              label: "Legacy HTTP Aliases",
+              group: "Compatibility",
+              width: "half",
+            },
+            ARCADE555_ENABLE_LEGACY_ACTION_ALIASES: {
+              label: "Legacy Action Aliases",
+              group: "Compatibility",
+              width: "half",
+            },
+            ARCADE555_SUPPRESS_LEGACY_PLUGINS: {
+              label: "Suppress Legacy Wrappers",
+              group: "Compatibility",
+              width: "half",
+            },
             FIVE55_GAMES_PLUGIN_ENABLED: {
               label: "Enabled",
               group: "Runtime",
@@ -4608,8 +5172,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
         },
         {
           id: "five55-score-capture",
-          name: "Five55 Score Capture",
-          description: "Five55 score capture normalization and submit plugin.",
+          name: "555 Arcade Score Capture (Legacy)",
+          description: "Legacy compatibility wrapper for canonical 555 Arcade score capture actions.",
           enabled: false,
           configured: Boolean(process.env.FIVE55_SCORE_CAPTURE_API_URL?.trim()),
           envKey: "FIVE55_SCORE_CAPTURE_API_URL",
@@ -4623,7 +5187,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "FIVE55_SCORE_CAPTURE_API_URL",
               type: "string",
-              description: "Five55 score capture API base URL",
+              description: "555 Arcade score capture API base URL (legacy key: FIVE55_SCORE_CAPTURE_API_URL)",
               required: false,
               sensitive: false,
               currentValue: process.env.FIVE55_SCORE_CAPTURE_API_URL ?? null,
@@ -4632,7 +5196,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
 	            {
 	              key: "FIVE55_SCORE_CAPTURE_PLUGIN_ENABLED",
 	              type: "string",
-	              description: "Enable/disable Five55 score capture plugin (1/0)",
+	              description: "Enable/disable legacy 555 Arcade score capture wrapper (1/0)",
 	              required: false,
 	              sensitive: false,
 	              default: "0",
@@ -4648,8 +5212,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
         },
         {
           id: "five55-leaderboard",
-          name: "Five55 Leaderboard",
-          description: "Five55 leaderboard read/write synchronization plugin.",
+          name: "555 Arcade Leaderboard (Legacy)",
+          description: "Legacy compatibility wrapper for canonical 555 Arcade leaderboard actions.",
           enabled: false,
           configured: Boolean(process.env.FIVE55_LEADERBOARD_API_URL?.trim()),
           envKey: "FIVE55_LEADERBOARD_API_URL",
@@ -4663,7 +5227,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "FIVE55_LEADERBOARD_API_URL",
               type: "string",
-              description: "Five55 leaderboard API base URL",
+              description: "555 Arcade leaderboard API base URL (legacy key: FIVE55_LEADERBOARD_API_URL)",
               required: false,
               sensitive: false,
               currentValue: process.env.FIVE55_LEADERBOARD_API_URL ?? null,
@@ -4672,7 +5236,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
 	            {
 	              key: "FIVE55_LEADERBOARD_PLUGIN_ENABLED",
 	              type: "string",
-	              description: "Enable/disable Five55 leaderboard plugin (1/0)",
+	              description: "Enable/disable legacy 555 Arcade leaderboard wrapper (1/0)",
 	              required: false,
 	              sensitive: false,
 	              default: "0",
@@ -4687,8 +5251,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
         },
         {
           id: "five55-quests",
-          name: "Five55 Quests",
-          description: "Five55 quest and challenge lifecycle plugin.",
+          name: "555 Arcade Quests (Legacy)",
+          description: "Legacy compatibility wrapper for canonical 555 Arcade quest actions.",
           enabled: false,
           configured: Boolean(process.env.FIVE55_QUESTS_API_URL?.trim()),
           envKey: "FIVE55_QUESTS_API_URL",
@@ -4699,7 +5263,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "FIVE55_QUESTS_API_URL",
               type: "string",
-              description: "Five55 quests API base URL",
+              description: "555 Arcade quests API base URL (legacy key: FIVE55_QUESTS_API_URL)",
               required: false,
               sensitive: false,
               currentValue: process.env.FIVE55_QUESTS_API_URL ?? null,
@@ -4708,7 +5272,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
 	            {
 	              key: "FIVE55_QUESTS_PLUGIN_ENABLED",
 	              type: "string",
-	              description: "Enable/disable Five55 quests plugin (1/0)",
+	              description: "Enable/disable legacy 555 Arcade quests wrapper (1/0)",
 	              required: false,
 	              sensitive: false,
 	              default: "0",
@@ -4721,8 +5285,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
         },
         {
           id: "five55-battles",
-          name: "Five55 Battles",
-          description: "Five55 battles challenge + resolution plugin.",
+          name: "555 Arcade Battles (Legacy)",
+          description: "Legacy compatibility wrapper for canonical 555 Arcade battle actions.",
           enabled: false,
           configured: Boolean(process.env.FIVE55_BATTLES_API_URL?.trim()),
           envKey: "FIVE55_BATTLES_API_URL",
@@ -4737,7 +5301,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "FIVE55_BATTLES_API_URL",
               type: "string",
-              description: "Five55 battles API base URL",
+              description: "555 Arcade battles API base URL (legacy key: FIVE55_BATTLES_API_URL)",
               required: false,
               sensitive: false,
               currentValue: process.env.FIVE55_BATTLES_API_URL ?? null,
@@ -4758,7 +5322,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
 	            {
 	              key: "FIVE55_BATTLES_PLUGIN_ENABLED",
 	              type: "string",
-	              description: "Enable/disable Five55 battles plugin (1/0)",
+	              description: "Enable/disable legacy 555 Arcade battles wrapper (1/0)",
 	              required: false,
 	              sensitive: false,
 	              default: "0",
@@ -4771,9 +5335,9 @@ function discoverPluginsFromManifest(): PluginEntry[] {
         },
         {
           id: "five55-admin",
-          name: "Five55 Admin",
+          name: "555 Arcade Admin (Legacy)",
           description:
-            "Five55 admin theme/event/cabinet control plugin with legacy env fallback.",
+            "Legacy compatibility wrapper for canonical 555 Arcade admin actions with legacy env fallback.",
           enabled: false,
           configured: Boolean(
             process.env.FIVE55_ADMIN_API_URL?.trim() ||
@@ -4796,7 +5360,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               key: "FIVE55_ADMIN_API_URL",
               type: "string",
               description:
-                "Primary Five55 admin API base URL (falls back to legacy TWITTER_* base envs)",
+                "Primary 555 Arcade admin API base URL (falls back to legacy TWITTER_* base envs)",
               required: false,
               sensitive: false,
               currentValue: process.env.FIVE55_ADMIN_API_URL ?? null,
@@ -4817,7 +5381,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
 	            {
 	              key: "FIVE55_ADMIN_PLUGIN_ENABLED",
 	              type: "string",
-	              description: "Enable/disable Five55 admin plugin (1/0)",
+	              description: "Enable/disable legacy 555 Arcade admin wrapper (1/0)",
 	              required: false,
 	              sensitive: false,
 	              default: "0",
@@ -4830,8 +5394,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
         },
         {
           id: "five55-social",
-          name: "Five55 Social",
-          description: "Five55 social monitoring and point-assignment plugin.",
+          name: "555 Arcade Social (Legacy)",
+          description: "Legacy compatibility wrapper for canonical 555 Arcade social actions.",
           enabled: false,
           configured: Boolean(process.env.FIVE55_SOCIAL_API_URL?.trim()),
           envKey: "FIVE55_SOCIAL_API_URL",
@@ -4842,7 +5406,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "FIVE55_SOCIAL_API_URL",
               type: "string",
-              description: "Five55 social API base URL",
+              description: "555 Arcade social API base URL (legacy key: FIVE55_SOCIAL_API_URL)",
               required: false,
               sensitive: false,
               currentValue: process.env.FIVE55_SOCIAL_API_URL ?? null,
@@ -4851,7 +5415,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
 	            {
 	              key: "FIVE55_SOCIAL_PLUGIN_ENABLED",
 	              type: "string",
-	              description: "Enable/disable Five55 social plugin (1/0)",
+	              description: "Enable/disable legacy 555 Arcade social wrapper (1/0)",
 	              required: false,
 	              sensitive: false,
 	              default: "0",
@@ -4864,8 +5428,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
         },
         {
           id: "five55-rewards",
-          name: "Five55 Rewards",
-          description: "Five55 rewards projection and settlement plugin.",
+          name: "555 Arcade Rewards (Legacy)",
+          description: "Legacy compatibility wrapper for canonical 555 Arcade reward actions.",
           enabled: false,
           configured: Boolean(process.env.FIVE55_REWARDS_API_URL?.trim()),
           envKey: "FIVE55_REWARDS_API_URL",
@@ -4879,7 +5443,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "FIVE55_REWARDS_API_URL",
               type: "string",
-              description: "Five55 rewards API base URL",
+              description: "555 Arcade rewards API base URL (legacy key: FIVE55_REWARDS_API_URL)",
               required: false,
               sensitive: false,
               currentValue: process.env.FIVE55_REWARDS_API_URL ?? null,
@@ -4888,7 +5452,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
 	            {
 	              key: "FIVE55_REWARDS_PLUGIN_ENABLED",
 	              type: "string",
-	              description: "Enable/disable Five55 rewards plugin (1/0)",
+	              description: "Enable/disable legacy 555 Arcade rewards wrapper (1/0)",
 	              required: false,
 	              sensitive: false,
 	              default: "0",
@@ -4901,7 +5465,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
         },
         {
           id: "five55-github",
-          name: "Five55 GitHub",
+          name: "555 Arcade GitHub (Legacy)",
           description:
             "GitHub repository discovery surface for Alice operator workflows.",
           enabled: false,
@@ -4934,7 +5498,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               key: "ALICE_GH_TOKEN",
               type: "string",
               description:
-                "Legacy GitHub token fallback used by internal Five55 GitHub actions",
+                "Legacy GitHub token fallback used by internal 555 Arcade GitHub compatibility actions",
               required: false,
               sensitive: true,
               currentValue: process.env.ALICE_GH_TOKEN
@@ -4945,7 +5509,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "FIVE55_GITHUB_PLUGIN_ENABLED",
               type: "string",
-              description: "Enable/disable Five55 GitHub plugin (1/0)",
+              description: "Enable/disable legacy 555 Arcade GitHub wrapper (1/0)",
               required: false,
               sensitive: false,
               default: "0",
@@ -8864,10 +9428,10 @@ async function handleRequest(
     }
     return appPluginManager;
   };
-  const requiredCapability = resolveFive55CapabilityForRequest(method, pathname);
+  const requiredCapability = resolveSurface555CapabilityForRequest(method, pathname);
   if (requiredCapability) {
     try {
-      assertFive55Capability(FIVE55_HTTP_CAPABILITY_POLICY, requiredCapability);
+      assertSurface555Capability(FIVE55_HTTP_CAPABILITY_POLICY, requiredCapability);
     } catch (err) {
       error(
         res,
@@ -11567,128 +12131,7 @@ async function handleRequest(
 
   // ── GET /api/plugins ────────────────────────────────────────────────────
   if (method === "GET" && pathname === "/api/plugins") {
-    // Re-read config from disk so we pick up plugins installed since server start.
-    let freshConfig: MilaidyConfig;
-    try {
-      freshConfig = loadMilaidyConfig();
-    } catch {
-      freshConfig = state.config;
-    }
-
-    // Merge user-installed plugins into the list (they don't exist in plugins.json)
-    const bundledIds = new Set(state.plugins.map((p) => p.id));
-    const installedEntries = discoverInstalledPlugins(freshConfig, bundledIds);
-    const allPlugins: PluginEntry[] = collapseFive55PluginEntries([
-      ...state.plugins,
-      ...installedEntries,
-    ]);
-
-    // Resolve enabled state from config and loaded state from runtime.
-    // "enabled" = user wants it active (config). "isActive" = actually loaded.
-    const configEntries = (
-      freshConfig.plugins as Record<string, unknown> | undefined
-    )?.entries as Record<string, { enabled?: boolean }> | undefined;
-    const loadedNames = state.runtime
-      ? state.runtime.plugins.map((p) => p.name)
-      : [];
-    for (const plugin of allPlugins) {
-      const suffix = `plugin-${plugin.id}`;
-      const packageName = `@elizaos/plugin-${plugin.id}`;
-      const isLoaded =
-        loadedNames.length > 0 &&
-        loadedNames.some((name) => {
-          return (
-            name === plugin.id ||
-            name === suffix ||
-            name === packageName ||
-            name.endsWith(`/${suffix}`) ||
-            name.includes(plugin.id)
-          );
-        });
-      plugin.isActive = isLoaded;
-      // Set enabled from config if available, otherwise from runtime
-      const configEntry = configEntries?.[plugin.id];
-      if (configEntry && typeof configEntry.enabled === "boolean") {
-        plugin.enabled = configEntry.enabled;
-      } else {
-        plugin.enabled = isLoaded;
-      }
-      // Detect installed-but-failed-to-load plugins
-      plugin.loadError = undefined;
-      if (plugin.enabled && !isLoaded && state.runtime) {
-        const installs = freshConfig.plugins?.installs as
-          | Record<string, unknown>
-          | undefined;
-        const packageName = `@elizaos/plugin-${plugin.id}`;
-        const hasInstallRecord =
-          installs?.[packageName] || installs?.[plugin.id];
-        if (hasInstallRecord) {
-          plugin.loadError =
-            "Plugin installed but failed to load — check runtime logs for the exact error.";
-        }
-      }
-    }
-
-    // Always refresh current env values and re-validate
-    for (const plugin of allPlugins) {
-      for (const param of plugin.parameters) {
-        const envValue = process.env[param.key];
-        param.isSet = Boolean(envValue?.trim());
-        param.currentValue = param.isSet
-          ? param.sensitive
-            ? maskValue(envValue ?? "")
-            : (envValue ?? "")
-          : null;
-      }
-      const paramInfos: PluginParamInfo[] = plugin.parameters.map((p) => ({
-        key: p.key,
-        required: p.required,
-        sensitive: p.sensitive,
-        type: p.type,
-        description: p.description,
-        default: p.default,
-      }));
-      const validation = validatePluginConfig(
-        plugin.id,
-        plugin.category,
-        plugin.envKey,
-        plugin.configKeys,
-        undefined,
-        paramInfos,
-      );
-      plugin.validationErrors = validation.errors;
-      plugin.validationWarnings = validation.warnings;
-    }
-
-    // Inject per-provider model options into configUiHints for MODEL fields.
-    // Each provider's cache is independent — no cross-population.
-    // Always set type: "select" on MODEL fields so they render as dropdowns,
-    // even when no models are cached yet (empty dropdown prompts user to fetch).
-    for (const plugin of allPlugins) {
-      const providerModels = readProviderCache(plugin.id)?.models ?? [];
-
-      for (const param of plugin.parameters) {
-        if (!param.key.toUpperCase().includes("MODEL")) continue;
-
-        // Filter to the category this field expects (chat, embedding, image, etc.)
-        const expectedCat = paramKeyToCategory(param.key);
-        const filtered = providerModels.filter(
-          (m) => m.category === expectedCat,
-        );
-
-        if (!plugin.configUiHints) plugin.configUiHints = {};
-        plugin.configUiHints[param.key] = {
-          ...plugin.configUiHints[param.key],
-          type: "select",
-          options: filtered.map((m) => ({
-            value: m.id,
-            label: m.name !== m.id ? `${m.name} (${m.id})` : m.id,
-          })),
-        };
-      }
-    }
-
-    json(res, { plugins: allPlugins });
+    json(res, { plugins: resolveApiPluginEntries(state) });
     return;
   }
 
@@ -12077,129 +12520,112 @@ async function handleRequest(
 
   // ── POST /api/plugins/:id/test ────────────────────────────────────────
   // Test a plugin's connection / configuration validity.
+  const pluginUiStateMatch =
+    method === "GET" && pathname.match(/^\/api\/plugins\/([^/]+)\/ui-state$/);
+  if (pluginUiStateMatch) {
+    const pluginId = resolveCanonicalPluginId(
+      decodeURIComponent(pluginUiStateMatch[1]),
+    );
+    const plugin = resolveApiPluginEntries(state).find(
+      (entry) => resolveCanonicalPluginId(entry.id) === pluginId,
+    );
+    if (!plugin) {
+      json(
+        res,
+        {
+          ok: false,
+          code: "plugin_not_installed",
+          pluginId,
+          message: "Plugin is not installed in this Milaidy runtime.",
+        },
+        404,
+      );
+      return;
+    }
+
+    json(res, {
+      ok: true,
+      pluginId: plugin.id,
+      displayName: plugin.name,
+      installed: plugin.installed ?? true,
+      enabled: plugin.enabled,
+      loaded: Boolean(plugin.isActive),
+      authenticated: plugin.authenticated ?? null,
+      ready: plugin.ready ?? null,
+      degraded: plugin.degraded ?? false,
+      summary: plugin.statusSummary ?? [],
+      warnings: plugin.operationalWarnings ?? [],
+      errors: plugin.operationalErrors ?? [],
+      counts: plugin.operationalCounts ?? {},
+      sections: plugin.pluginUiSchema ?? null,
+    });
+    return;
+  }
+
   const pluginTestMatch =
     method === "POST" && pathname.match(/^\/api\/plugins\/([^/]+)\/test$/);
   if (pluginTestMatch) {
-    const pluginId = decodeURIComponent(pluginTestMatch[1]);
+    const pluginId = resolveCanonicalPluginId(
+      decodeURIComponent(pluginTestMatch[1]),
+    );
     const startMs = Date.now();
 
     try {
-      if (isStream555ControlPluginId(pluginId)) {
-        const baseUrl =
-          process.env.STREAM555_BASE_URL?.trim() ||
-          process.env.STREAM555_PUBLIC_BASE_URL?.trim() ||
-          process.env.STREAM555_INTERNAL_BASE_URL?.trim() ||
-          process.env.STREAM_API_URL?.trim() ||
-          "";
-        const bearerToken =
-          process.env.STREAM555_AGENT_TOKEN?.trim() ||
-          process.env.STREAM_API_BEARER_TOKEN?.trim() ||
-          "";
-        const hasApiKey = Boolean(process.env.STREAM555_AGENT_API_KEY?.trim());
-
-        if (!baseUrl) {
-          json(
-            res,
-            {
-              success: false,
-              pluginId,
-              error: "STREAM555 base URL is not configured",
-              durationMs: Date.now() - startMs,
-            },
-            400,
-          );
-          return;
-        }
-
-        const base = new URL(baseUrl);
-        const healthController = new AbortController();
-        const healthTimeout = setTimeout(() => healthController.abort(), 10_000);
-        let healthResponse: Response;
-        try {
-          healthResponse = await fetch(new URL("/healthz", base), {
-            signal: healthController.signal,
-          });
-        } catch (err) {
-          const message =
-            err instanceof Error ? err.message : "failed to reach control plane";
-          json(
-            res,
-            {
-              success: false,
-              pluginId,
-              error: `Control plane unreachable: ${message}`,
-              durationMs: Date.now() - startMs,
-            },
-            502,
-          );
-          return;
-        } finally {
-          clearTimeout(healthTimeout);
-        }
-
-        if (!healthResponse.ok) {
-          json(
-            res,
-            {
-              success: false,
-              pluginId,
-              error: `Control plane health check failed (${healthResponse.status})`,
-              durationMs: Date.now() - startMs,
-            },
-            502,
-          );
-          return;
-        }
-
-        let authStatus = "missing";
-        let authValidated = false;
-        if (bearerToken) {
-          const authController = new AbortController();
-          const authTimeout = setTimeout(() => authController.abort(), 10_000);
-          try {
-            const authResponse = await fetch(
-              new URL("/api/agent/v1/platforms", base),
-              {
-                method: "GET",
-                headers: {
-                  Authorization: `Bearer ${bearerToken}`,
-                },
-                signal: authController.signal,
-              },
-            );
-            authValidated = authResponse.status !== 401 && authResponse.status !== 403;
-            authStatus = authValidated
-              ? `bearer ok (${authResponse.status})`
-              : `bearer rejected (${authResponse.status})`;
-          } catch (err) {
-            authStatus =
-              err instanceof Error
-                ? `bearer check failed (${err.message})`
-                : "bearer check failed";
-          } finally {
-            clearTimeout(authTimeout);
-          }
-        } else if (hasApiKey) {
-          authStatus = "api-key configured (runtime exchange path)";
-          authValidated = true;
-        }
-
+      const pluginEntries = resolveApiPluginEntries(state);
+      const pluginEntry = pluginEntries.find(
+        (entry) => resolveCanonicalPluginId(entry.id) === pluginId,
+      );
+      if (!pluginEntry) {
         json(
           res,
           {
-            success: authValidated || hasApiKey,
+            success: false,
+            ok: false,
+            code: "plugin_not_installed",
             pluginId,
-            message:
-              authValidated || hasApiKey
-                ? `Control plane reachable; auth: ${authStatus}`
-                : "Control plane reachable but stream auth is not configured",
-            details: {
-              baseUrl,
-              authStatus,
-            },
+            message: "Plugin is not installed in this Milaidy runtime.",
+            error: "Plugin is not installed in this Milaidy runtime.",
             durationMs: Date.now() - startMs,
           },
-          authValidated || hasApiKey ? 200 : 400,
+          404,
+        );
+        return;
+      }
+
+      if (!pluginEntry.enabled) {
+        json(
+          res,
+          {
+            success: false,
+            ok: false,
+            code: "plugin_disabled",
+            pluginId,
+            message: "Plugin is installed but disabled. Enable it before testing.",
+            error: "Plugin is installed but disabled. Enable it before testing.",
+            durationMs: Date.now() - startMs,
+          },
+          409,
+        );
+        return;
+      }
+
+      if (!pluginEntry.isActive) {
+        json(
+          res,
+          {
+            success: false,
+            ok: false,
+            code: "plugin_not_loaded",
+            pluginId,
+            message:
+              pluginEntry.loadError ??
+              "Plugin is enabled but not loaded in the runtime. Check runtime logs.",
+            error:
+              pluginEntry.loadError ??
+              "Plugin is enabled but not loaded in the runtime. Check runtime logs.",
+            durationMs: Date.now() - startMs,
+          },
+          409,
         );
         return;
       }
@@ -12216,11 +12642,49 @@ async function handleRequest(
           res,
           {
             success: false,
+            ok: false,
+            code: "plugin_not_loaded",
             pluginId,
-            error: "Plugin not found or not loaded",
+            message: "Plugin is enabled but not loaded in the runtime.",
+            error: "Plugin is enabled but not loaded in the runtime.",
             durationMs: Date.now() - startMs,
           },
-          404,
+          409,
+        );
+        return;
+      }
+
+      const serviceType = isStream555ControlPluginId(pluginId)
+        ? "stream555"
+        : isArcade555ControlPluginId(pluginId)
+          ? "arcade555"
+          : null;
+      const runtimeService =
+        serviceType && state.runtime ? state.runtime.getService(serviceType) : null;
+      const serviceHealthcheck = asObjectRecord(runtimeService)?.healthcheck;
+      if (typeof serviceHealthcheck === "function") {
+        const result = await (
+          serviceHealthcheck as () => Promise<{
+            allPassed?: boolean;
+            checks?: Record<string, unknown>;
+          }>
+        )();
+        const allPassed = result?.allPassed !== false;
+        const details = asObjectRecord(result?.checks) ?? {};
+        json(
+          res,
+          {
+            success: allPassed,
+            ok: allPassed,
+            code: allPassed ? "ok" : "dependency_failed",
+            pluginId,
+            message: allPassed
+              ? "Plugin healthcheck passed."
+              : "Plugin loaded but one or more dependency checks failed.",
+            details,
+            durationMs: Date.now() - startMs,
+          },
+          allPassed ? 200 : 502,
         );
         return;
       }
@@ -12235,6 +12699,8 @@ async function handleRequest(
         )();
         json(res, {
           success: result.ok !== false,
+          ok: result.ok !== false,
+          code: result.ok !== false ? "ok" : "dependency_failed",
           pluginId,
           message:
             result.message ??
@@ -12249,6 +12715,8 @@ async function handleRequest(
       // No test function — return a basic "plugin is loaded" status
       json(res, {
         success: true,
+        ok: true,
+        code: "ok",
         pluginId,
         message: "Plugin is loaded and active (no custom test available)",
         durationMs: Date.now() - startMs,
@@ -12258,7 +12726,10 @@ async function handleRequest(
         res,
         {
           success: false,
+          ok: false,
+          code: "dependency_failed",
           pluginId,
+          message: err instanceof Error ? err.message : String(err),
           error: err instanceof Error ? err.message : String(err),
           durationMs: Date.now() - startMs,
         },
@@ -15920,7 +16391,54 @@ async function handleRequest(
     return;
   }
 
-  // ── Five55 mastery API (/api/five55/mastery/*) ───────────────────────
+  // ── Arcade mastery API (/api/arcade555/mastery/* + opt-in legacy /api/five55/mastery/*) ──
+  const canonicalMasteryBase = "/api/arcade555/mastery";
+  const legacyMasteryBase = "/api/five55/mastery";
+  const canonicalGamesBase = "/api/arcade555/games";
+  const legacyGamesBase = "/api/five55/games";
+  const legacyArcadeHttpAliasesEnabled =
+    parseBooleanFlag(process.env.ARCADE555_ENABLE_LEGACY_HTTP_ALIASES) === true;
+  const legacyArcadeHttpSunset = "Wed, 30 Sep 2026 00:00:00 GMT";
+  const buildCanonicalArcadeSuccessor = (legacyPath: string): string =>
+    `${legacyPath.replace(/^\/api\/five55/, "/api/arcade555")}${url.search}`;
+  const applyLegacyArcadeAliasHeaders = (legacyPath: string): void => {
+    res.setHeader("Deprecation", "true");
+    res.setHeader("Sunset", legacyArcadeHttpSunset);
+    res.setHeader(
+      "Link",
+      `<${buildCanonicalArcadeSuccessor(legacyPath)}>; rel="successor-version"`,
+    );
+  };
+  const rejectDisabledLegacyArcadeAlias = (legacyPath: string): boolean => {
+    if (!legacyPath.startsWith("/api/five55/")) return false;
+    applyLegacyArcadeAliasHeaders(legacyPath);
+    if (legacyArcadeHttpAliasesEnabled) return false;
+    json(
+      res,
+      {
+        error:
+          "Legacy /api/five55/* arcade routes are disabled by default in Release B. Use the canonical /api/arcade555/* routes or set ARCADE555_ENABLE_LEGACY_HTTP_ALIASES=true for compatibility mode.",
+        successor: buildCanonicalArcadeSuccessor(legacyPath),
+      },
+      410,
+    );
+    return true;
+  };
+  if (
+    (pathname === legacyMasteryBase ||
+      pathname.startsWith(`${legacyMasteryBase}/`) ||
+      pathname === legacyGamesBase ||
+      pathname.startsWith(`${legacyGamesBase}/`)) &&
+    rejectDisabledLegacyArcadeAlias(pathname)
+  ) {
+    return;
+  }
+  const masteryBasePath =
+    pathname === canonicalMasteryBase || pathname.startsWith(`${canonicalMasteryBase}/`)
+      ? canonicalMasteryBase
+      : pathname === legacyMasteryBase || pathname.startsWith(`${legacyMasteryBase}/`)
+        ? legacyMasteryBase
+        : null;
   const parseActionTextEnvelope = (value: unknown): Record<string, unknown> => {
     const record =
       value && typeof value === "object" && !Array.isArray(value)
@@ -15938,7 +16456,11 @@ async function handleRequest(
     }
   };
 
-  if (method === "GET" && pathname === "/api/five55/mastery/catalog") {
+  if (
+    method === "GET" &&
+    (pathname === `${canonicalMasteryBase}/catalog` ||
+      pathname === `${legacyMasteryBase}/catalog`)
+  ) {
     try {
       const contracts = listMasteryContracts();
       json(res, {
@@ -15956,7 +16478,11 @@ async function handleRequest(
     return;
   }
 
-  if (method === "POST" && pathname === "/api/five55/mastery/runs") {
+  if (
+    method === "POST" &&
+    (pathname === `${canonicalMasteryBase}/runs` ||
+      pathname === `${legacyMasteryBase}/runs`)
+  ) {
     const body = await readJsonBody<{
       suiteId?: string;
       games?: string[];
@@ -15982,9 +16508,16 @@ async function handleRequest(
       return;
     }
 
+    const masteryCertifyToolName = findRuntimeAction(
+      runtime,
+      "ARCADE555_MASTERY_CERTIFY",
+    )
+      ? "ARCADE555_MASTERY_CERTIFY"
+      : "FIVE55_GAMES_MASTERY_CERTIFY";
+
     const execution = await executeRuntimeActionDirect({
       runtime,
-      toolName: "FIVE55_GAMES_MASTERY_CERTIFY",
+      toolName: masteryCertifyToolName,
       requestId: `mastery-certify-${Date.now()}`,
       parameters: {
         suiteId: body.suiteId,
@@ -16032,7 +16565,11 @@ async function handleRequest(
     return;
   }
 
-  if (method === "GET" && pathname === "/api/five55/mastery/runs") {
+  if (
+    method === "GET" &&
+    (pathname === `${canonicalMasteryBase}/runs` ||
+      pathname === `${legacyMasteryBase}/runs`)
+  ) {
     const limitRaw = url.searchParams.get("limit");
     const status = url.searchParams.get("status") ?? undefined;
     const cursor = url.searchParams.get("cursor");
@@ -16054,8 +16591,8 @@ async function handleRequest(
     return;
   }
 
-  if (method === "GET" && pathname.startsWith("/api/five55/mastery/runs/")) {
-    const suffix = pathname.slice("/api/five55/mastery/runs/".length);
+  if (method === "GET" && masteryBasePath && pathname.startsWith(`${masteryBasePath}/runs/`)) {
+    const suffix = pathname.slice(`${masteryBasePath}/runs/`.length);
     const segments = suffix
       .split("/")
       .map((entry) => decodeURIComponent(entry || "").trim())
@@ -16153,14 +16690,18 @@ async function handleRequest(
     return;
   }
 
-  if (method === "GET" && pathname.startsWith("/api/five55/mastery/games/")) {
-    const match = pathname.match(/^\/api\/five55\/mastery\/games\/([^/]+)\/latest$/);
-    if (!match) {
+  if (method === "GET" && masteryBasePath && pathname.startsWith(`${masteryBasePath}/games/`)) {
+    const suffix = pathname.slice(`${masteryBasePath}/games/`.length);
+    const segments = suffix
+      .split("/")
+      .map((entry) => decodeURIComponent(entry || "").trim())
+      .filter((entry) => entry.length > 0);
+    if (segments.length !== 2 || segments[1] !== "latest") {
       error(res, "Unknown mastery game route", 404);
       return;
     }
     try {
-      const gameId = canonicalizeMasteryGameId(decodeURIComponent(match[1] || ""));
+      const gameId = canonicalizeMasteryGameId(segments[0] || "");
       const contract = getMasteryContract(gameId);
       const latest = await readMasteryGameSnapshot(gameId);
       json(res, {
@@ -16178,7 +16719,7 @@ async function handleRequest(
     return;
   }
 
-  // ── Five55 games bridge (/api/five55/games/*) ────────────────────────
+  // ── Arcade games bridge (/api/arcade555/games/* + opt-in legacy /api/five55/games/*) ──
   const parseGamesJsonText = (raw: string): unknown => {
     try {
       return raw ? (JSON.parse(raw) as unknown) : null;
@@ -16247,11 +16788,21 @@ async function handleRequest(
     }
     return `games/${trimmedPath.replace(/\/+$/, "")}/index.html`;
   };
+  const resolveArcadeViewerBase = (): string =>
+    process.env.ARCADE555_VIEWER_BASE_URL?.trim() ||
+    process.env.FIVE55_GAMES_VIEWER_BASE_URL?.trim() ||
+    process.env.GAMES_BASE_URL?.trim() ||
+    "https://555.rndrntwrk.com";
+  const resolveArcadeGamesApiBase = (): string =>
+    process.env.ARCADE555_BASE_URL?.trim() ||
+    process.env.FIVE55_GAMES_API_URL?.trim() ||
+    "";
+  const resolveArcadeGamesBearer = (): string =>
+    process.env.ARCADE555_AGENT_TOKEN?.trim() ||
+    process.env.FIVE55_GAMES_API_BEARER_TOKEN?.trim() ||
+    "";
   const buildViewerUrl = (gamePath: string, mode: string): string => {
-    const viewerBase =
-      process.env.FIVE55_GAMES_VIEWER_BASE_URL?.trim() ||
-      process.env.GAMES_BASE_URL?.trim() ||
-      "https://555.rndrntwrk.com";
+    const viewerBase = resolveArcadeViewerBase();
     const relativePath = resolveRelativeViewerPath(gamePath);
     const viewerUrl = new URL(relativePath, `${viewerBase.replace(/\/+$/, "")}/`);
     if (mode === "spectate" || mode === "agent") {
@@ -16516,7 +17067,8 @@ async function handleRequest(
 
   if (
     (method === "GET" || method === "POST") &&
-    pathname === "/api/five55/games/catalog"
+    (pathname === `${canonicalGamesBase}/catalog` ||
+      pathname === `${legacyGamesBase}/catalog`)
   ) {
     let body:
       | {
@@ -16555,20 +17107,20 @@ async function handleRequest(
       includeBeta,
     };
 
-    const directBase = process.env.FIVE55_GAMES_API_URL?.trim();
+    const directBase = resolveArcadeGamesApiBase();
     if (directBase) {
       let upstreamUrl: URL;
       try {
         upstreamUrl = new URL("/api/games/catalog", directBase);
       } catch {
-        error(res, "Invalid FIVE55_GAMES_API_URL", 500);
+        error(res, "Invalid ARCADE555_BASE_URL / FIVE55_GAMES_API_URL", 500);
         return;
       }
       const outboundHeaders: Record<string, string> = {
         "Content-Type": "application/json",
         Accept: "application/json",
       };
-      const directBearer = process.env.FIVE55_GAMES_API_BEARER_TOKEN?.trim();
+      const directBearer = resolveArcadeGamesBearer();
       if (directBearer) outboundHeaders.Authorization = `Bearer ${directBearer}`;
 
       try {
@@ -16604,7 +17156,7 @@ async function handleRequest(
     if (!upstreamBase) {
       error(
         res,
-        "FIVE55_GAMES_API_URL is not configured and STREAM555_BASE_URL (or STREAM_API_URL) is unavailable",
+        "ARCADE555_BASE_URL (legacy: FIVE55_GAMES_API_URL) is not configured and STREAM555_BASE_URL (or STREAM_API_URL) is unavailable",
         503,
       );
       return;
@@ -16674,7 +17226,11 @@ async function handleRequest(
     return;
   }
 
-  if (method === "POST" && pathname === "/api/five55/games/play") {
+  if (
+    method === "POST" &&
+    (pathname === `${canonicalGamesBase}/play` ||
+      pathname === `${legacyGamesBase}/play`)
+  ) {
     const body = await readJsonBody<{
       gameId?: string;
       mode?: string;
@@ -16696,13 +17252,13 @@ async function handleRequest(
       typeof body.sessionId === "string" && body.sessionId.trim().length > 0
         ? body.sessionId.trim()
         : undefined;
-    const directBase = process.env.FIVE55_GAMES_API_URL?.trim();
+    const directBase = resolveArcadeGamesApiBase();
     if (directBase) {
       let upstreamUrl: URL;
       try {
         upstreamUrl = new URL("/api/games/play", directBase);
       } catch {
-        error(res, "Invalid FIVE55_GAMES_API_URL", 500);
+        error(res, "Invalid ARCADE555_BASE_URL / FIVE55_GAMES_API_URL", 500);
         return;
       }
 
@@ -16710,7 +17266,7 @@ async function handleRequest(
         "Content-Type": "application/json",
         Accept: "application/json",
       };
-      const directBearer = process.env.FIVE55_GAMES_API_BEARER_TOKEN?.trim();
+      const directBearer = resolveArcadeGamesBearer();
       if (directBearer) outboundHeaders.Authorization = `Bearer ${directBearer}`;
 
       try {
@@ -16753,7 +17309,7 @@ async function handleRequest(
     if (!upstreamBase) {
       error(
         res,
-        "FIVE55_GAMES_API_URL is not configured and STREAM555_BASE_URL (or STREAM_API_URL) is unavailable",
+        "ARCADE555_BASE_URL (legacy: FIVE55_GAMES_API_URL) is not configured and STREAM555_BASE_URL (or STREAM_API_URL) is unavailable",
         503,
       );
       return;

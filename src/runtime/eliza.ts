@@ -761,6 +761,30 @@ function resolveBundledPackageRootFromNodeModules(
   return null;
 }
 
+function resolveSiblingWorkspacePackageRoot(packageName: string): string | null {
+  const runtimeDir = path.dirname(fileURLToPath(import.meta.url));
+  const milaidyRoot = findMilaidyProjectRoot(runtimeDir);
+  const siblingByPackageName: Record<string, string> = {
+    "@rndrntwrk/plugin-555stream": "stream-plugin",
+    "@rndrntwrk/plugin-555arcade": "arcade-plugin",
+  };
+  const siblingDirName = siblingByPackageName[packageName];
+  if (!siblingDirName) return null;
+
+  const candidate = path.resolve(milaidyRoot, "..", siblingDirName);
+  const packageJsonPath = path.join(candidate, "package.json");
+  if (!existsSync(packageJsonPath)) return null;
+
+  try {
+    const pkg = JSON.parse(readFileSync(packageJsonPath, "utf-8")) as {
+      name?: string;
+    };
+    return pkg.name === packageName ? candidate : null;
+  } catch {
+    return null;
+  }
+}
+
 function resolveBundledPluginEntryPath(packageName: string): string | null {
   const req = createRequire(import.meta.url);
   for (const suffix of PLUGIN_ENTRY_RESOLVE_CANDIDATES) {
@@ -849,7 +873,8 @@ function canResolvePluginPackage(
   if (hasInstallRecordForPlugin(config, pluginName)) return true;
   return (
     resolveBundledPluginEntryPath(pluginName) !== null ||
-    resolveBundledPackageRootFromNodeModules(pluginName) !== null
+    resolveBundledPackageRootFromNodeModules(pluginName) !== null ||
+    resolveSiblingWorkspacePackageRoot(pluginName) !== null
   );
 }
 
@@ -862,9 +887,54 @@ const CANONICAL_ARCADE_PLUGIN_PACKAGE_CANDIDATES = [
   "@rndrntwrk/plugin-555arcade",
 ] as const;
 
+function resolveInstalledPackageVersion(packageName: string): string | null {
+  const packageRoot = resolveBundledPackageRootFromNodeModules(packageName);
+  if (!packageRoot) return null;
+
+  try {
+    const packageJson = JSON.parse(
+      readFileSync(path.join(packageRoot, "package.json"), "utf-8"),
+    ) as { version?: unknown };
+    return typeof packageJson.version === "string"
+      && packageJson.version.trim().length > 0
+      ? packageJson.version.trim()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 async function resolveCanonicalStreamPlugin(
   config: MilaidyConfig,
 ): Promise<Plugin | null> {
+  const siblingRoot = resolveSiblingWorkspacePackageRoot(
+    "@rndrntwrk/plugin-555stream",
+  );
+  if (siblingRoot) {
+    for (const candidate of [
+      path.join(siblingRoot, "dist", "index.js"),
+      path.join(siblingRoot, "src", "index.ts"),
+    ]) {
+      if (!existsSync(candidate)) continue;
+      try {
+        const mod = (await import(pathToFileURL(candidate).href)) as PluginModuleShape & {
+          stream555Plugin?: Plugin;
+        };
+        const plugin = mod.default ?? mod.plugin ?? mod.stream555Plugin;
+        if (plugin) {
+          logger.info(
+            `[milaidy] Canonical stream plugin resolved from local workspace ${candidate}`,
+          );
+          return plugin;
+        }
+      } catch (err) {
+        logger.warn(
+          `[milaidy] Failed to load canonical stream plugin from local workspace ${candidate}: ${formatError(err)}`,
+        );
+      }
+    }
+  }
+
   for (const packageName of CANONICAL_STREAM_PLUGIN_PACKAGE_CANDIDATES) {
     if (!canResolvePluginPackage(config, packageName)) continue;
     try {
@@ -888,15 +958,72 @@ async function resolveCanonicalStreamPlugin(
 }
 
 async function resolveCanonicalArcadePlugin(
-  config: MilaidyConfig,
+  _config: MilaidyConfig,
 ): Promise<Plugin | null> {
+  const siblingRoot = resolveSiblingWorkspacePackageRoot(
+    "@rndrntwrk/plugin-555arcade",
+  );
+  if (siblingRoot) {
+    for (const candidate of [
+      path.join(siblingRoot, "dist", "index.js"),
+      path.join(siblingRoot, "src", "index.ts"),
+    ]) {
+      if (!existsSync(candidate)) continue;
+      try {
+        const mod = (await import(pathToFileURL(candidate).href)) as PluginModuleShape & {
+          arcade555Plugin?: Plugin;
+          createArcade555Plugin?: (options?: {
+            stateDirResolver?: () => string;
+            logger?: typeof logger;
+            now?: () => number;
+            fetchImpl?: typeof fetch;
+          }) => Plugin;
+        };
+        const plugin =
+          mod.createArcade555Plugin?.({
+            stateDirResolver: () => resolveStateDir(process.env),
+            logger,
+            now: () => Date.now(),
+            fetchImpl: (...args) => fetch(...args),
+          }) ??
+          mod.default ??
+          mod.plugin ??
+          mod.arcade555Plugin;
+        if (plugin) {
+          logger.info(
+            `[milaidy] Canonical arcade plugin resolved from local workspace ${candidate}`,
+          );
+          return plugin;
+        }
+      } catch (err) {
+        logger.warn(
+          `[milaidy] Failed to load canonical arcade plugin from local workspace ${candidate}: ${formatError(err)}`,
+        );
+      }
+    }
+  }
+
   for (const packageName of CANONICAL_ARCADE_PLUGIN_PACKAGE_CANDIDATES) {
-    if (!canResolvePluginPackage(config, packageName)) continue;
     try {
       const mod = (await import(packageName)) as PluginModuleShape & {
         arcade555Plugin?: Plugin;
+        createArcade555Plugin?: (options?: {
+          stateDirResolver?: () => string;
+          logger?: typeof logger;
+          now?: () => number;
+          fetchImpl?: typeof fetch;
+        }) => Plugin;
       };
-      const plugin = mod.default ?? mod.plugin ?? mod.arcade555Plugin;
+      const plugin =
+        mod.createArcade555Plugin?.({
+          stateDirResolver: () => resolveStateDir(process.env),
+          logger,
+          now: () => Date.now(),
+          fetchImpl: (...args) => fetch(...args),
+        }) ??
+        mod.default ??
+        mod.plugin ??
+        mod.arcade555Plugin;
       if (plugin) {
         logger.info(
           `[milaidy] Canonical arcade plugin resolved from ${packageName}`,
@@ -909,6 +1036,7 @@ async function resolveCanonicalArcadePlugin(
       );
     }
   }
+
   return null;
 }
 
@@ -982,6 +1110,10 @@ export function applyAliceFullDutyDefaults(config: MilaidyConfig): {
     CANONICAL_STREAM_PLUGIN_PACKAGE_CANDIDATES.some((packageName) =>
       canResolvePluginPackage(config, packageName),
     );
+  const canonicalArcadePluginAvailable =
+    CANONICAL_ARCADE_PLUGIN_PACKAGE_CANDIDATES.some((packageName) =>
+      canResolvePluginPackage(config, packageName),
+    );
 
   if (
     canonicalStreamPluginAvailable &&
@@ -990,6 +1122,15 @@ export function applyAliceFullDutyDefaults(config: MilaidyConfig): {
     pluginEntries["stream555-canonical"] = { enabled: true };
     changed = true;
     changes.push("plugins.entries.stream555-canonical.enabled=true");
+  }
+
+  if (
+    canonicalArcadePluginAvailable &&
+    pluginEntries["arcade555-canonical"] === undefined
+  ) {
+    pluginEntries["arcade555-canonical"] = { enabled: true };
+    changed = true;
+    changes.push("plugins.entries.arcade555-canonical.enabled=true");
   }
 
   if (pluginEntries["stream"] === undefined) {
@@ -1159,7 +1300,7 @@ export function resolveArcade555CanonicalPluginEnabled(
 
   if (process.env.ARCADE555_CANONICAL_PLUGIN_ENABLED?.trim()) {
     logger.warn(
-      `[milaidy] Unrecognized ARCADE555_CANONICAL_PLUGIN_ENABLED="${process.env.ARCADE555_CANONICAL_PLUGIN_ENABLED}"; expected true/false. Falling back to config/default false.`,
+      `[milaidy] Unrecognized ARCADE555_CANONICAL_PLUGIN_ENABLED="${process.env.ARCADE555_CANONICAL_PLUGIN_ENABLED}"; expected true/false. Falling back to Release B default true.`,
     );
   }
 
@@ -1170,7 +1311,7 @@ export function resolveArcade555CanonicalPluginEnabled(
     }
   }
 
-  return false;
+  return true;
 }
 
 export function resolveArcade555LegacySuppressionEnabled(
@@ -1183,7 +1324,53 @@ export function resolveArcade555LegacySuppressionEnabled(
 
   if (process.env.ARCADE555_SUPPRESS_LEGACY_PLUGINS?.trim()) {
     logger.warn(
-      `[milaidy] Unrecognized ARCADE555_SUPPRESS_LEGACY_PLUGINS="${process.env.ARCADE555_SUPPRESS_LEGACY_PLUGINS}"; expected true/false. Falling back to compatibility mode (false).`,
+      `[milaidy] Unrecognized ARCADE555_SUPPRESS_LEGACY_PLUGINS="${process.env.ARCADE555_SUPPRESS_LEGACY_PLUGINS}"; expected true/false. Falling back to Release B default true.`,
+    );
+  }
+
+  return true;
+}
+
+export function resolveArcade555KeepLegacyGamesPluginEnabled(): boolean {
+  const parsed = parseBooleanToggle(
+    process.env.ARCADE555_KEEP_LEGACY_GAMES_PLUGIN,
+  );
+  if (parsed !== null) return parsed;
+
+  if (process.env.ARCADE555_KEEP_LEGACY_GAMES_PLUGIN?.trim()) {
+    logger.warn(
+      `[milaidy] Unrecognized ARCADE555_KEEP_LEGACY_GAMES_PLUGIN="${process.env.ARCADE555_KEEP_LEGACY_GAMES_PLUGIN}"; expected true/false. Falling back to safe default false.`,
+    );
+  }
+
+  // The games plugin is now a compatibility wrapper like the rest of the legacy arcade set.
+  return false;
+}
+
+export function resolveArcade555LegacyActionAliasesEnabled(): boolean {
+  const parsed = parseBooleanToggle(
+    process.env.ARCADE555_ENABLE_LEGACY_ACTION_ALIASES,
+  );
+  if (parsed !== null) return parsed;
+
+  if (process.env.ARCADE555_ENABLE_LEGACY_ACTION_ALIASES?.trim()) {
+    logger.warn(
+      `[milaidy] Unrecognized ARCADE555_ENABLE_LEGACY_ACTION_ALIASES="${process.env.ARCADE555_ENABLE_LEGACY_ACTION_ALIASES}"; expected true/false. Falling back to Release B default false.`,
+    );
+  }
+
+  return false;
+}
+
+export function resolveArcade555LegacyHttpAliasesEnabled(): boolean {
+  const parsed = parseBooleanToggle(
+    process.env.ARCADE555_ENABLE_LEGACY_HTTP_ALIASES,
+  );
+  if (parsed !== null) return parsed;
+
+  if (process.env.ARCADE555_ENABLE_LEGACY_HTTP_ALIASES?.trim()) {
+    logger.warn(
+      `[milaidy] Unrecognized ARCADE555_ENABLE_LEGACY_HTTP_ALIASES="${process.env.ARCADE555_ENABLE_LEGACY_HTTP_ALIASES}"; expected true/false. Falling back to Release B default false.`,
     );
   }
 
@@ -2766,7 +2953,7 @@ export function buildCharacterFromConfig(config: MilaidyConfig): Character {
     "Use the same operation standards across all channels (web chat, Discord, Telegram, and direct text).",
     "For theme/event controls, use FIVE55_THEME_SET and FIVE55_EVENT_TRIGGER with explicit operator intent.",
     "For live-stream actions, call STREAM_STATUS before and after STREAM_CONTROL changes.",
-    "For game actions, call FIVE55_GAMES_CATALOG before FIVE55_GAMES_PLAY unless a valid gameId is already known; use FIVE55_GAMES_GO_LIVE_PLAY when gameplay and stream start should be orchestrated together.",
+    "For game actions, prefer ARCADE555_GAMES_CATALOG before ARCADE555_GAMES_PLAY unless a valid gameId is already known; fall back to FIVE55_GAMES_CATALOG/FIVE55_GAMES_PLAY only when canonical arcade actions are unavailable. Use FIVE55_GAMES_GO_LIVE_PLAY when gameplay and stream start should be orchestrated together.",
     "For battle creation, use FIVE55_BATTLES_CREATE before resolution flows.",
     "For wallet and swap actions, perform read checks before write operations and summarize risk before execution.",
     "When a run requests autonomous operation, confirm duration and cost constraints before starting.",
@@ -3750,12 +3937,21 @@ export async function startEliza(
     resolveArcade555CanonicalPluginEnabled(config);
   const canonicalArcadePlugin = await resolveCanonicalArcadePlugin(config);
   if (canonicalArcadePluginRequested && !canonicalArcadePlugin) {
-    logger.warn(
-      "[milaidy] ARCADE555_CANONICAL_PLUGIN_ENABLED requested but canonical arcade plugin package is not installed; continuing with bundled arcade plugins.",
+    throw new Error(
+      "ARCADE555_CANONICAL_PLUGIN_ENABLED is active but @rndrntwrk/plugin-555arcade could not be resolved from installed dependencies. Install the canonical package or disable ARCADE555_CANONICAL_PLUGIN_ENABLED explicitly.",
     );
   }
   const suppressLegacyArcadePlugins =
     resolveArcade555LegacySuppressionEnabled(config);
+  const keepLegacyGamesPluginForMastery =
+    resolveArcade555KeepLegacyGamesPluginEnabled();
+  const legacyArcadeActionAliasesEnabled =
+    resolveArcade555LegacyActionAliasesEnabled();
+  const legacyArcadeHttpAliasesEnabled =
+    resolveArcade555LegacyHttpAliasesEnabled();
+  const canonicalArcadePluginVersion = resolveInstalledPackageVersion(
+    "@rndrntwrk/plugin-555arcade",
+  );
 
   const stream555LegacyFlags = {
     control: resolveFive55PluginEnabled(
@@ -3842,7 +4038,9 @@ export async function startEliza(
   };
 
   if (five55PluginFlags.arcade555Canonical && suppressLegacyArcadePlugins) {
-    five55PluginFlags.five55Games = false;
+    if (!keepLegacyGamesPluginForMastery) {
+      five55PluginFlags.five55Games = false;
+    }
     five55PluginFlags.five55ScoreCapture = false;
     five55PluginFlags.five55Leaderboard = false;
     five55PluginFlags.five55Quests = false;
@@ -3852,7 +4050,9 @@ export async function startEliza(
     five55PluginFlags.five55Rewards = false;
     five55PluginFlags.five55Github = false;
     logger.info(
-      "[milaidy] Bundled five55 arcade plugins suppressed because ARCADE555_CANONICAL_PLUGIN_ENABLED is active",
+      keepLegacyGamesPluginForMastery
+        ? "[milaidy] Bundled five55 arcade plugins suppressed under canonical mode, keeping five55-games wrapper enabled by override"
+        : "[milaidy] Bundled five55 arcade plugins suppressed because ARCADE555_CANONICAL_PLUGIN_ENABLED is active",
     );
   } else if (five55PluginFlags.arcade555Canonical) {
     logger.info(
@@ -3871,6 +4071,18 @@ export async function startEliza(
         tier: resolveAlicePluginTier(normalizeFive55FlagNameToEntryKey(name)),
       })),
     )}`,
+  );
+  logger.info(
+    `[milaidy] 555 Arcade runtime summary: ${JSON.stringify({
+      packageName: "@rndrntwrk/plugin-555arcade",
+      packageVersion: canonicalArcadePluginVersion ?? "unresolved",
+      canonicalPluginEnabled: canonicalArcadePluginRequested,
+      canonicalPluginLoaded: Boolean(canonicalArcadePlugin),
+      suppressLegacyPlugins: suppressLegacyArcadePlugins,
+      keepLegacyGamesPlugin: keepLegacyGamesPluginForMastery,
+      legacyActionAliasesEnabled: legacyArcadeActionAliasesEnabled,
+      legacyHttpAliasesEnabled: legacyArcadeHttpAliasesEnabled,
+    })}`,
   );
 
   if (five55PluginFlags.stream && !shouldLoadLegacyStreamPlugin) {
@@ -4616,12 +4828,20 @@ export async function startEliza(
             freshCanonicalArcadePluginRequested &&
             !freshCanonicalArcadePlugin
           ) {
-            logger.warn(
-              "[milaidy] Hot-reload requested canonical arcade plugin but package is unavailable; continuing with bundled arcade plugins.",
+            throw new Error(
+              "Hot-reload requested canonical arcade mode but @rndrntwrk/plugin-555arcade could not be resolved from installed dependencies.",
             );
           }
           const suppressFreshLegacyArcadePlugins =
             resolveArcade555LegacySuppressionEnabled(freshConfig);
+          const keepFreshLegacyGamesPluginForMastery =
+            resolveArcade555KeepLegacyGamesPluginEnabled();
+          const freshLegacyArcadeActionAliasesEnabled =
+            resolveArcade555LegacyActionAliasesEnabled();
+          const freshLegacyArcadeHttpAliasesEnabled =
+            resolveArcade555LegacyHttpAliasesEnabled();
+          const freshCanonicalArcadePluginVersion =
+            resolveInstalledPackageVersion("@rndrntwrk/plugin-555arcade");
           const freshStream555LegacyFlags = {
             control: resolveFive55PluginEnabled(
               freshConfig,
@@ -4652,6 +4872,18 @@ export async function startEliza(
               "[milaidy] Hot-reload has legacy stream555 flags but canonical stream plugin package is unavailable; legacy stream555 runtime plugins remain disabled.",
             );
           }
+          logger.info(
+            `[milaidy] 555 Arcade hot-reload summary: ${JSON.stringify({
+              packageName: "@rndrntwrk/plugin-555arcade",
+              packageVersion: freshCanonicalArcadePluginVersion ?? "unresolved",
+              canonicalPluginEnabled: freshCanonicalArcadePluginRequested,
+              canonicalPluginLoaded: Boolean(freshCanonicalArcadePlugin),
+              suppressLegacyPlugins: suppressFreshLegacyArcadePlugins,
+              keepLegacyGamesPlugin: keepFreshLegacyGamesPluginForMastery,
+              legacyActionAliasesEnabled: freshLegacyArcadeActionAliasesEnabled,
+              legacyHttpAliasesEnabled: freshLegacyArcadeHttpAliasesEnabled,
+            })}`,
+          );
 
           const freshFive55PluginFlags = {
             swap: resolveFive55PluginEnabled(
@@ -4714,7 +4946,9 @@ export async function startEliza(
             freshFive55PluginFlags.arcade555Canonical &&
             suppressFreshLegacyArcadePlugins
           ) {
-            freshFive55PluginFlags.five55Games = false;
+            if (!keepFreshLegacyGamesPluginForMastery) {
+              freshFive55PluginFlags.five55Games = false;
+            }
             freshFive55PluginFlags.five55ScoreCapture = false;
             freshFive55PluginFlags.five55Leaderboard = false;
             freshFive55PluginFlags.five55Quests = false;
@@ -4724,7 +4958,9 @@ export async function startEliza(
             freshFive55PluginFlags.five55Rewards = false;
             freshFive55PluginFlags.five55Github = false;
             logger.info(
-              "[milaidy] Hot-reload suppressed bundled five55 arcade plugins because canonical arcade plugin is active",
+              keepFreshLegacyGamesPluginForMastery
+                ? "[milaidy] Hot-reload suppressed bundled five55 arcade plugins and kept five55-games wrapper enabled by override"
+                : "[milaidy] Hot-reload suppressed bundled five55 arcade plugins because canonical arcade plugin is active",
             );
           } else if (freshFive55PluginFlags.arcade555Canonical) {
             logger.info(

@@ -236,6 +236,61 @@ describe("Plugin Lifecycle E2E", () => {
     });
   });
 
+  describe("plugin operational state", () => {
+    it("GET /api/plugins exposes canonical arcade and stream entries with operational fields", async () => {
+      const { data } = await http$(server.port, "GET", "/api/plugins");
+      const plugins = data.plugins as Array<Record<string, unknown>>;
+      const streamControl = plugins.find((plugin) => plugin.id === "stream555-control");
+      const arcadeControl = plugins.find((plugin) => plugin.id === "555arcade");
+
+      expect(streamControl).toBeTruthy();
+      expect(arcadeControl).toBeTruthy();
+      expect(typeof streamControl?.installed).toBe("boolean");
+      expect(typeof streamControl?.authenticated === "boolean" || streamControl?.authenticated === null).toBe(true);
+      expect(Array.isArray(streamControl?.statusSummary)).toBe(true);
+      expect(typeof arcadeControl?.installed).toBe("boolean");
+      expect(Array.isArray(arcadeControl?.statusSummary)).toBe(true);
+    });
+
+    it("GET /api/plugins/:id/ui-state returns structured plugin UI state", async () => {
+      const { status, data } = await http$(
+        server.port,
+        "GET",
+        "/api/plugins/stream555-control/ui-state",
+      );
+      expect(status).toBe(200);
+      expect(data.ok).toBe(true);
+      expect(data.pluginId).toBe("stream555-control");
+      expect(typeof data.installed).toBe("boolean");
+      expect(typeof data.enabled).toBe("boolean");
+      expect(typeof data.loaded).toBe("boolean");
+      expect(Array.isArray(data.summary)).toBe(true);
+    });
+
+    it("POST /api/plugins/:id/test returns plugin_disabled when disabled", async () => {
+      const { status, data } = await http$(
+        server.port,
+        "POST",
+        "/api/plugins/stream555-control/test",
+      );
+      expect(status).toBe(409);
+      expect(data.code).toBe("plugin_disabled");
+    });
+
+    it("POST /api/plugins/:id/test returns plugin_not_loaded when enabled but runtime has not loaded it", async () => {
+      await http$(server.port, "PUT", "/api/plugins/stream555-control", {
+        enabled: true,
+      });
+      const { status, data } = await http$(
+        server.port,
+        "POST",
+        "/api/plugins/stream555-control/test",
+      );
+      expect(status).toBe(409);
+      expect(data.code).toBe("plugin_not_loaded");
+    });
+  });
+
   // ===================================================================
   //  2b. Capability toggle persists features flag
   // ===================================================================

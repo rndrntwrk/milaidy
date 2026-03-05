@@ -179,6 +179,32 @@ type Stream555StatusSummary = {
   readyDestinations: number;
 };
 
+type PluginOperationalDisplay = {
+  tone: "ok" | "warn" | "error";
+  primary: string;
+  secondary: string;
+};
+
+type PluginUiActionSchema = {
+  label?: string;
+  variant?: "primary" | "secondary" | "danger";
+  invokes?: string;
+  successLabel?: string;
+};
+
+type PluginUiSchema = {
+  version?: string;
+  nouns?: {
+    collectionLabel?: string;
+  };
+  actions?: Record<string, PluginUiActionSchema>;
+};
+
+type LifecycleStatusToken = {
+  label: string;
+  tone: "ok" | "warn" | "error";
+};
+
 function parseBoolish(value: unknown): boolean {
   if (typeof value === "boolean") return value;
   if (typeof value !== "string") return false;
@@ -190,6 +216,54 @@ function parseBoolish(value: unknown): boolean {
     normalized === "on" ||
     normalized === "enabled"
   );
+}
+
+function asPluginUiSchema(plugin: PluginInfo): PluginUiSchema | null {
+  const schema = plugin.pluginUiSchema;
+  if (!schema || typeof schema !== "object" || Array.isArray(schema)) {
+    return null;
+  }
+  return schema as PluginUiSchema;
+}
+
+function getPluginUiAction(
+  plugin: PluginInfo,
+  actionId: string,
+): PluginUiActionSchema | null {
+  return asPluginUiSchema(plugin)?.actions?.[actionId] ?? null;
+}
+
+function buildLifecycleStatusTokens(plugin: PluginInfo): LifecycleStatusToken[] {
+  const tokens: LifecycleStatusToken[] = [
+    {
+      label: plugin.installed === false ? "Not installed" : "Installed",
+      tone: plugin.installed === false ? "error" : "ok",
+    },
+    {
+      label: plugin.enabled ? "Enabled" : "Disabled",
+      tone: plugin.enabled ? "ok" : "warn",
+    },
+    {
+      label: plugin.isActive ? "Loaded" : "Not loaded",
+      tone: plugin.isActive ? "ok" : plugin.enabled ? "warn" : "error",
+    },
+  ];
+
+  if (plugin.authenticated !== null && plugin.authenticated !== undefined) {
+    tokens.push({
+      label: plugin.authenticated ? "Authenticated" : "Authentication required",
+      tone: plugin.authenticated ? "ok" : "warn",
+    });
+  }
+
+  if (plugin.ready !== null && plugin.ready !== undefined) {
+    tokens.push({
+      label: plugin.ready ? "Ready" : "Setup incomplete",
+      tone: plugin.ready ? "ok" : "warn",
+    });
+  }
+
+  return tokens;
 }
 
 function maskSuffix(maskedValue: unknown): string | null {
@@ -318,6 +392,75 @@ function buildStream555StatusSummary(
   };
 }
 
+function buildPluginOperationalDisplay(
+  plugin: PluginInfo,
+  streamSummary?: Stream555StatusSummary | null,
+): PluginOperationalDisplay {
+  const warnings = plugin.operationalWarnings ?? [];
+  const errors = plugin.operationalErrors ?? [];
+  const tone: "ok" | "warn" | "error" =
+    errors.length > 0
+      ? "error"
+      : plugin.ready
+        ? "ok"
+        : warnings.length > 0 || plugin.enabled
+          ? "warn"
+          : "error";
+
+  if (streamSummary) {
+    const channelsSaved =
+      plugin.operationalCounts?.channelsSaved ?? streamSummary.savedDestinations;
+    const channelsEnabled =
+      plugin.operationalCounts?.channelsEnabled ?? streamSummary.enabledDestinations;
+    const channelsReady =
+      plugin.operationalCounts?.channelsReady ?? streamSummary.readyDestinations;
+    const primary = `${
+      plugin.authenticated === true ? "Authenticated" : "Authentication required"
+    } · ${channelsSaved}/${streamSummary.destinations.length} channel keys saved · ${
+      channelsEnabled > 0
+        ? `${channelsReady}/${channelsEnabled} enabled channels ready`
+        : "No channels enabled"
+    }`;
+    const secondary =
+      plugin.statusSummary?.join(" · ") ??
+      `${plugin.enabled ? "Enabled" : "Disabled"} · ${
+        plugin.isActive ? "Loaded" : "Not loaded"
+      }`;
+    return { tone, primary, secondary };
+  }
+
+  if (isArcade555PrimaryPlugin(plugin.id)) {
+    const counts = plugin.operationalCounts ?? {};
+    const sessionReady =
+      Number(counts.sessionBootstrapped ?? 0) > 0
+        ? "Session bootstrapped"
+        : "Session not bootstrapped";
+    const catalogReady =
+      Number(counts.catalogReachable ?? 0) > 0
+        ? "Catalog reachable"
+        : "Catalog not verified";
+    const primary = `${
+      plugin.authenticated === true ? "Authenticated" : "Authentication required"
+    } · ${sessionReady} · ${catalogReady}`;
+    const secondary =
+      plugin.statusSummary?.join(" · ") ??
+      `${plugin.enabled ? "Enabled" : "Disabled"} · ${
+        plugin.isActive ? "Loaded" : "Not loaded"
+      }`;
+    return { tone, primary, secondary };
+  }
+
+  return {
+    tone,
+    primary:
+      plugin.statusSummary?.[0] ??
+      `${plugin.enabled ? "Enabled" : "Disabled"} · ${
+        plugin.isActive ? "Loaded" : "Not loaded"
+      }`,
+    secondary: plugin.statusSummary?.slice(1).join(" · ") ?? "",
+  };
+}
+
 function toRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
@@ -401,6 +544,12 @@ function Stream555ControlActionsPanel({
     )
       .trim()
       .toLowerCase() || "eth";
+  const uiSchema = asPluginUiSchema(plugin);
+  const collectionLabel = uiSchema?.nouns?.collectionLabel?.trim() || "Channels";
+  const authenticateAction = getPluginUiAction(plugin, "authenticate");
+  const verifyAction = getPluginUiAction(plugin, "verify");
+  const disconnectAction = getPluginUiAction(plugin, "disconnect");
+  const provisionWalletAction = getPluginUiAction(plugin, "provisionWallet");
 
   const executeStreamAction = useCallback(
     async (
@@ -498,7 +647,7 @@ function Stream555ControlActionsPanel({
     if (busyAction) return;
     const provisionResult = await executeStreamAction(
       "wallet-provision",
-      "STREAM555_AUTH_WALLET_PROVISION_LINKED",
+      provisionWalletAction?.invokes ?? "STREAM555_AUTH_WALLET_PROVISION_LINKED",
       { targetChain: provisionTargetChain },
       `Linked wallet provisioned via sw4p (${provisionTargetChain}).`,
       "Linked wallet provisioning failed.",
@@ -545,7 +694,7 @@ function Stream555ControlActionsPanel({
       ? "Authenticating..."
       : isAuthenticated
         ? "Authenticated"
-        : "Authenticate Wallet";
+        : (authenticateAction?.label ?? "Authenticate Wallet");
 
   return (
     <div className="mb-3 border border-border bg-surface px-3 py-2">
@@ -561,7 +710,7 @@ function Stream555ControlActionsPanel({
         <span>Source: {authSource}</span>
         <span className="opacity-60">•</span>
         <span>
-          Channels ready: {summary.readyDestinations}/
+          {collectionLabel} ready: {summary.readyDestinations}/
           {summary.enabledDestinations}
         </span>
       </div>
@@ -585,14 +734,16 @@ function Stream555ControlActionsPanel({
           onClick={() =>
             void executeStreamAction(
               "verify-auth",
-              "STREAM555_AUTH_APIKEY_LIST",
+              verifyAction?.invokes ?? "STREAM555_AUTH_APIKEY_LIST",
               { status: "active" },
               "Authentication verified against control plane.",
               "Authentication verification failed.",
             )
           }
         >
-          {busyAction === "verify-auth" ? "Verifying..." : "Verify Auth"}
+          {busyAction === "verify-auth"
+            ? "Verifying..."
+            : (verifyAction?.label ?? "Verify Auth")}
         </button>
         <button
           type="button"
@@ -601,7 +752,7 @@ function Stream555ControlActionsPanel({
           onClick={() =>
             void executeStreamAction(
               "disconnect-auth",
-              "STREAM555_AUTH_DISCONNECT",
+              disconnectAction?.invokes ?? "STREAM555_AUTH_DISCONNECT",
               {},
               "Disconnected active stream auth from runtime.",
               "Disconnect failed.",
@@ -610,7 +761,7 @@ function Stream555ControlActionsPanel({
         >
           {busyAction === "disconnect-auth"
             ? "Disconnecting..."
-            : "Disconnect Auth"}
+            : (disconnectAction?.label ?? "Disconnect Auth")}
         </button>
       </div>
       <div className="mt-1 text-[10px] text-muted">
@@ -648,7 +799,7 @@ function Stream555ControlActionsPanel({
                 >
                   {busyAction === "wallet-provision"
                     ? "Provisioning..."
-                    : "Provision via sw4p"}
+                    : (provisionWalletAction?.label ?? "Provision via sw4p")}
                 </button>
               )}
               {summary.hasEvmWallet && (
@@ -671,6 +822,161 @@ function Stream555ControlActionsPanel({
               </button>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Arcade555ControlActionsPanel({
+  plugin,
+  onRefresh,
+  setActionNotice,
+}: {
+  plugin: PluginInfo;
+  onRefresh: () => Promise<void>;
+  setActionNotice: (
+    text: string,
+    tone?: "info" | "success" | "error",
+    ttlMs?: number,
+  ) => void;
+}) {
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [lastNotice, setLastNotice] = useState<{
+    tone: "success" | "error";
+    message: string;
+  } | null>(null);
+
+  const executeArcadeAction = useCallback(
+    async (
+      key: string,
+      toolName: string,
+      successFallback: string,
+      errorFallback: string,
+    ) => {
+      if (busyAction) return;
+      setBusyAction(key);
+      setLastNotice(null);
+      try {
+        const response = await client.executeAutonomyPlan({
+          plan: {
+            id: `arcade555-control-${toolName.toLowerCase()}`,
+            steps: [{ id: "1", toolName, params: {} }],
+          },
+          request: { source: "user", sourceTrust: 1 },
+          options: { stopOnFailure: true },
+        });
+        const step = toRecord(response.results?.[0] ?? null);
+        const success = step?.success === true;
+        const message = readAutonomyStepMessage(
+          step,
+          success ? successFallback : errorFallback,
+        );
+        if (success) {
+          setLastNotice({ tone: "success", message });
+          setActionNotice(message, "success", 3200);
+          await onRefresh();
+        } else {
+          setLastNotice({ tone: "error", message });
+          setActionNotice(message, "error", 4200);
+        }
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "action execution failed";
+        setLastNotice({ tone: "error", message });
+        setActionNotice(message, "error", 4200);
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [busyAction, onRefresh, setActionNotice],
+  );
+
+  const statusDotClass =
+    plugin.ready === true
+      ? "bg-ok"
+      : plugin.authenticated
+        ? "bg-warn"
+        : "bg-destructive";
+  const summary = buildPluginOperationalDisplay(plugin);
+  const verifyAction = getPluginUiAction(plugin, "verify");
+  const bootstrapAction = getPluginUiAction(plugin, "bootstrap");
+  const catalogAction = getPluginUiAction(plugin, "catalog");
+
+  return (
+    <div className="mb-3 border border-border bg-surface px-3 py-2">
+      <div className="text-[11px] uppercase tracking-wide text-muted mb-1.5">
+        Operator Controls
+      </div>
+      <div className="flex items-center gap-2 text-[11px] text-muted flex-wrap">
+        <span
+          className={`inline-block w-[7px] h-[7px] rounded-full ${statusDotClass}`}
+        />
+        <span>{summary.primary}</span>
+      </div>
+      {summary.secondary ? (
+        <div className="mt-1 text-[10px] text-muted">{summary.secondary}</div>
+      ) : null}
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          className="px-2.5 py-1 text-[11px] border border-border text-muted bg-transparent hover:border-accent hover:text-accent transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          disabled={Boolean(busyAction) || !plugin.isActive}
+          onClick={() =>
+            void executeArcadeAction(
+              "verify-auth",
+              verifyAction?.invokes ?? "ARCADE555_AUTH_VERIFY",
+              "Arcade authentication verified.",
+              "Arcade authentication verification failed.",
+            )
+          }
+        >
+          {busyAction === "verify-auth"
+            ? "Verifying..."
+            : (verifyAction?.label ?? "Verify Auth")}
+        </button>
+        <button
+          type="button"
+          className="px-2.5 py-1 text-[11px] border border-accent text-accent bg-transparent hover:bg-accent hover:text-accent-fg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          disabled={Boolean(busyAction) || !plugin.isActive}
+          onClick={() =>
+            void executeArcadeAction(
+              "bootstrap-session",
+              bootstrapAction?.invokes ?? "ARCADE555_SESSION_BOOTSTRAP",
+              "Arcade session bootstrapped.",
+              "Arcade session bootstrap failed.",
+            )
+          }
+        >
+          {busyAction === "bootstrap-session"
+            ? "Bootstrapping..."
+            : (bootstrapAction?.label ?? "Bootstrap Session")}
+        </button>
+        <button
+          type="button"
+          className="px-2.5 py-1 text-[11px] border border-border text-muted bg-transparent hover:border-accent hover:text-accent transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          disabled={Boolean(busyAction) || !plugin.isActive}
+          onClick={() =>
+            void executeArcadeAction(
+              "catalog",
+              catalogAction?.invokes ?? "ARCADE555_GAMES_CATALOG",
+              "Arcade catalog fetched.",
+              "Arcade catalog fetch failed.",
+            )
+          }
+        >
+          {busyAction === "catalog"
+            ? "Fetching..."
+            : (catalogAction?.label ?? "Fetch Catalog")}
+        </button>
+      </div>
+      {lastNotice && (
+        <div
+          className={`mt-2 text-[10px] ${
+            lastNotice.tone === "success" ? "text-ok" : "text-destructive"
+          }`}
+        >
+          {lastNotice.message}
         </div>
       )}
     </div>
@@ -2436,9 +2742,14 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
   const renderPluginCard = (p: PluginInfo) => {
     const hasParams = p.parameters && p.parameters.length > 0;
     const isStream555 = isStream555PrimaryPlugin(p.id);
+    const isArcade555 = isArcade555PrimaryPlugin(p.id);
     const streamSummary = isStream555
       ? buildStream555StatusSummary(p.parameters ?? [])
       : null;
+    const operationalDisplay =
+      isStream555 || isArcade555
+        ? buildPluginOperationalDisplay(p, streamSummary)
+        : null;
     const isOpen = pluginSettingsOpen.has(p.id);
     const setCount = hasParams
       ? p.parameters.filter((param: PluginParamDef) => param.isSet).length
@@ -2553,7 +2864,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                 p.loadError || "Plugin is enabled but not loaded in the runtime"
               }
             >
-              {p.loadError ? "load failed" : "not installed"}
+              {p.loadError ? "load failed" : "not loaded"}
             </span>
           )}
           {isToggleBusy && (
@@ -2578,7 +2889,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
 
         {/* Bottom bar: config status + settings button */}
         <div className="flex items-center gap-2 px-3 py-2 border-t border-border mt-auto min-w-0">
-          {hasParams && !isShowcase && !isStream555 ? (
+          {hasParams && !isShowcase && !isStream555 && !isArcade555 ? (
             <>
               <span
                 className={`inline-block w-[7px] h-[7px] rounded-full shrink-0 ${
@@ -2589,45 +2900,29 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                 {setCount}/{totalCount} configured
               </span>
             </>
-          ) : isStream555 && streamSummary ? (
+          ) : operationalDisplay ? (
             <div className="flex items-center gap-2 min-w-0 flex-1">
               <span
                 className={`inline-block w-[7px] h-[7px] rounded-full shrink-0 ${
-                  streamSummary.authState === "connected"
+                  operationalDisplay.tone === "ok"
                     ? "bg-ok"
-                    : streamSummary.authState === "wallet_enabled"
+                    : operationalDisplay.tone === "warn"
                       ? "bg-warn"
                       : "bg-destructive"
                 }`}
               />
               <div
                 className="min-w-0 flex-1"
-                title={`${
-                  streamSummary.authState === "connected"
-                    ? "Auth connected"
-                    : streamSummary.authState === "wallet_enabled"
-                      ? "Wallet auth enabled"
-                      : "Auth required"
-                }${streamSummary.authMode ? ` (${streamSummary.authMode})` : ""} • ${streamSummary.savedDestinations}/${streamSummary.destinations.length} channel keys saved`}
+                title={`${operationalDisplay.primary}${operationalDisplay.secondary ? ` • ${operationalDisplay.secondary}` : ""}`}
               >
                 <div className="text-[10px] text-muted truncate">
-                  {streamSummary.authState === "connected"
-                    ? "Auth connected"
-                    : streamSummary.authState === "wallet_enabled"
-                      ? "Wallet auth enabled"
-                      : "Auth required"}
-                  {streamSummary.authMode ? ` (${streamSummary.authMode})` : ""}
+                  {operationalDisplay.primary}
                 </div>
-                <div
-                  className="text-[10px] text-muted truncate"
-                  title={`${streamSummary.savedDestinations}/${streamSummary.destinations.length} channel keys saved${streamSummary.enabledDestinations > 0 ? ` • ${streamSummary.readyDestinations}/${streamSummary.enabledDestinations} channels ready` : " • no channels enabled"}`}
-                >
-                  {streamSummary.savedDestinations}/
-                  {streamSummary.destinations.length} keys
-                  {streamSummary.enabledDestinations > 0
-                    ? ` • ${streamSummary.readyDestinations}/${streamSummary.enabledDestinations} ready`
-                    : " • no channels enabled"}
-                </div>
+                {operationalDisplay.secondary ? (
+                  <div className="text-[10px] text-muted truncate">
+                    {operationalDisplay.secondary}
+                  </div>
+                ) : null}
               </div>
             </div>
           ) : !hasParams && !isShowcase ? (
@@ -2639,7 +2934,9 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
               23 field demos
             </span>
           )}
-          {(!isStream555 || !streamSummary) && <div className="flex-1" />}
+          {(!operationalDisplay || (!isStream555 && !isArcade555)) && (
+            <div className="flex-1" />
+          )}
           {p.enabled &&
             !p.isActive &&
             p.npmName &&
@@ -2952,23 +3249,28 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                   )}
 
                   <div className="px-5 py-3">
-                    {isStream555PrimaryPlugin(p.id) &&
+                    {(isStream555PrimaryPlugin(p.id) ||
+                      isArcade555PrimaryPlugin(p.id)) &&
                       (() => {
-                        const streamSummary = buildStream555StatusSummary(
-                          p.parameters ?? [],
+                        const streamSummary = isStream555PrimaryPlugin(p.id)
+                          ? buildStream555StatusSummary(p.parameters ?? [])
+                          : null;
+                        const uiSchema = asPluginUiSchema(p);
+                        const lifecycleTokens = buildLifecycleStatusTokens(p);
+                        const collectionLabel =
+                          uiSchema?.nouns?.collectionLabel?.trim() ||
+                          (streamSummary ? "Channels" : "Games");
+                        const operationalDisplay = buildPluginOperationalDisplay(
+                          p,
+                          streamSummary,
                         );
-                        const configuredDestinations =
-                          streamSummary.destinations.filter(
+                        const configuredChannels =
+                          streamSummary?.destinations.filter(
                             (destination) => destination.streamKeySet,
-                          );
-                        const keysSavedSummary = `${streamSummary.savedDestinations}/${streamSummary.destinations.length} channel keys saved`;
-                        const enabledReadySummary =
-                          streamSummary.enabledDestinations > 0
-                            ? `${streamSummary.readyDestinations}/${streamSummary.enabledDestinations} enabled channels fully configured`
-                            : "No channels enabled yet";
-                        const configuredSummary =
-                          configuredDestinations.length > 0
-                            ? configuredDestinations
+                          ) ?? [];
+                        const configuredSummary = streamSummary
+                          ? configuredChannels.length > 0
+                            ? configuredChannels
                                 .map((destination) => {
                                   const suffix =
                                     destination.streamKeySuffix != null
@@ -2977,30 +3279,80 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                                   return `${destination.icon} ${destination.label} ${suffix}`;
                                 })
                                 .join("  ·  ")
-                            : "No channel stream keys saved yet";
-                        const authSummary =
-                          streamSummary.authState === "connected"
-                            ? `Connected (${streamSummary.authMode})`
-                            : streamSummary.authState === "wallet_enabled"
-                              ? `Wallet auth enabled (${streamSummary.authMode})`
-                              : "Authentication required";
+                            : "No channel stream keys saved yet"
+                            : (p.statusSummary ?? []).join(" · ");
                         return (
                           <>
                             <div className="mb-3 px-3 py-2 border border-border bg-surface">
+                              <div className="mb-2 flex flex-wrap gap-1.5">
+                                {lifecycleTokens.map((token) => (
+                                  <span
+                                    key={`${p.id}-${token.label}`}
+                                    className={`text-[10px] px-1.5 py-px border lowercase tracking-wide whitespace-nowrap ${
+                                      token.tone === "ok"
+                                        ? "border-ok bg-[rgba(22,101,52,0.06)] text-ok"
+                                        : token.tone === "warn"
+                                          ? "border-warn bg-[rgba(234,179,8,0.06)] text-warn"
+                                          : "border-destructive bg-[rgba(153,27,27,0.04)] text-destructive"
+                                    }`}
+                                  >
+                                    {token.label}
+                                  </span>
+                                ))}
+                              </div>
                               <div className="text-[11px] text-muted mb-1">
-                                {authSummary} {"  ·  "} {keysSavedSummary}
-                                {"  ·  "} {enabledReadySummary}
+                                {operationalDisplay.primary}
                               </div>
                               <div className="text-[10px] text-muted leading-relaxed">
-                                {configuredSummary}
+                                {streamSummary
+                                  ? configuredSummary
+                                  : operationalDisplay.secondary || configuredSummary}
                               </div>
+                              {streamSummary && configuredChannels.length === 0 ? (
+                                <div className="mt-1 text-[10px] text-muted">
+                                  No{" "}
+                                  {collectionLabel.toLowerCase() === "channels"
+                                    ? "channel"
+                                    : collectionLabel.toLowerCase()}{" "}
+                                  stream keys saved yet
+                                </div>
+                              ) : null}
+                              {(p.operationalWarnings?.length ||
+                                p.operationalErrors?.length) ? (
+                                <div className="mt-2 space-y-1">
+                                  {(p.operationalWarnings ?? []).map((warning) => (
+                                    <div
+                                      key={`warning-${warning}`}
+                                      className="text-[10px] text-warn"
+                                    >
+                                      {warning}
+                                    </div>
+                                  ))}
+                                  {(p.operationalErrors ?? []).map((pluginError) => (
+                                    <div
+                                      key={`error-${pluginError}`}
+                                      className="text-[10px] text-destructive"
+                                    >
+                                      {pluginError}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : null}
                             </div>
-                            <Stream555ControlActionsPanel
-                              plugin={p}
-                              summary={streamSummary}
-                              onRefresh={loadPlugins}
-                              setActionNotice={setActionNotice}
-                            />
+                            {streamSummary ? (
+                              <Stream555ControlActionsPanel
+                                plugin={p}
+                                summary={streamSummary}
+                                onRefresh={loadPlugins}
+                                setActionNotice={setActionNotice}
+                              />
+                            ) : (
+                              <Arcade555ControlActionsPanel
+                                plugin={p}
+                                onRefresh={loadPlugins}
+                                setActionNotice={setActionNotice}
+                              />
+                            )}
                           </>
                         );
                       })()}
@@ -3041,7 +3393,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                         Package broken — missing compiled files
                       </span>
                     )}
-                    {p.isActive && (
+                    {(p.enabled || p.isActive) && (
                       <button
                         type="button"
                         className={`px-3 py-1.5 text-[11px] border rounded-sm transition-colors ${
