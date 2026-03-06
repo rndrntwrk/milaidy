@@ -6,6 +6,20 @@ description: Milady's plugin system provides modular capabilities — model prov
 
 Plugins are the primary extension mechanism for Milady. Every capability beyond the core runtime — from LLM providers to blockchain interactions — is delivered as a plugin.
 
+## First-Party Public Plugins
+
+Milady now treats first-party public plugins as package-owned products with host-owned install and lifecycle plumbing.
+
+Current reference plugins:
+
+- [`555 Stream`](/plugins/first-party-public-standard) — canonical stream/auth/channels/go-live/ads plugin
+- [`555 Arcade`](/plugins/first-party-public-standard) — canonical games/score/leaderboard/quests plugin
+
+Use these supporting pages when working on first-party publication:
+
+- [First-Party Public Plugin Standard](/plugins/first-party-public-standard)
+- [First-Party Release Status](/plugins/first-party-release-status)
+
 ## What is a Plugin?
 
 A plugin is a self-contained module that registers one or more of:
@@ -116,4 +130,6 @@ See [Plugin Eject](/plugins/plugin-eject) for details on customizing ejected plu
 - [Plugin Architecture](/plugins/architecture) — Deep dive into the plugin system
 - [Create a Plugin](/plugins/create-a-plugin) — Step-by-step tutorial
 - [Plugin Development](/plugins/development) — Development guide and API
+- [First-Party Public Plugin Standard](/plugins/first-party-public-standard) — Package/host rules for `555 Stream` and `555 Arcade`
+- [First-Party Release Status](/plugins/first-party-release-status) — Current readiness and remaining public gaps
 - [Plugin Registry](/plugins/registry) — Browse available plugins

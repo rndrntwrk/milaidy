@@ -6,6 +6,15 @@ description: "How to package, version, and publish a Milady plugin to the npm re
 
 This guide covers the full publishing workflow for a Milady plugin — from packaging to npm publication and community registry submission.
 
+## First-Party Plugin Note
+
+If you are publishing a first-party 555 plugin, use these companion pages first:
+
+- [First-Party Public Plugin Standard](/plugins/first-party-public-standard)
+- [First-Party Release Status](/plugins/first-party-release-status)
+
+Those pages define the required package structure, lifecycle vocabulary, host/package ownership boundary, and the currently accepted release gates for `555 Stream` and `555 Arcade`.
+
 ## Naming Conventions
 
 Choose a package name that follows the established convention:
@@ -207,4 +216,6 @@ Community plugins are reviewed for security, functionality, and documentation qu
 
 - [Plugin Schemas](/plugins/schemas) — Full schema reference
 - [Create a Plugin](/plugins/create-a-plugin) — Build a plugin from scratch
+- [First-Party Public Plugin Standard](/plugins/first-party-public-standard) — Rules for first-party public plugin packaging
+- [First-Party Release Status](/plugins/first-party-release-status) — Current readiness and remaining gaps
 - [Plugin Registry](/plugins/registry) — Browse published plugins
