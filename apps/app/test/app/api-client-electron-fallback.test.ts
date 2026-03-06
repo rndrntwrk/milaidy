@@ -41,21 +41,27 @@ describe("MiladyClient Electron API fallback", () => {
     });
   }
 
+  function createStatusResponse(payload: Record<string, unknown>) {
+    return new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   it("does not probe localhost on capacitor-electron protocol before API base is injected", async () => {
     (window as { __MILADY_API_BASE__?: string }).__MILADY_API_BASE__ =
       undefined;
     setProtocol("capacitor-electron:");
 
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({
+    const fetchMock = vi.fn(async () =>
+      createStatusResponse({
         state: "starting",
         agentName: "Milady",
         model: undefined,
         uptime: undefined,
         startedAt: undefined,
       }),
-    }));
+    );
     Object.defineProperty(globalThis, "fetch", {
       value: fetchMock,
       writable: true,
@@ -76,16 +82,15 @@ describe("MiladyClient Electron API fallback", () => {
       "http://localhost:9999";
     setProtocol("capacitor-electron:");
 
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({
+    const fetchMock = vi.fn(async () =>
+      createStatusResponse({
         state: "running",
         agentName: "Milady",
         model: "test",
         uptime: 1,
         startedAt: Date.now(),
       }),
-    }));
+    );
     Object.defineProperty(globalThis, "fetch", {
       value: fetchMock,
       writable: true,
@@ -106,16 +111,15 @@ describe("MiladyClient Electron API fallback", () => {
       undefined;
     setProtocol("capacitor-electron:");
 
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({
+    const fetchMock = vi.fn(async () =>
+      createStatusResponse({
         state: "running",
         agentName: "Milady",
         model: "test",
         uptime: 1,
         startedAt: Date.now(),
       }),
-    }));
+    );
     Object.defineProperty(globalThis, "fetch", {
       value: fetchMock,
       writable: true,

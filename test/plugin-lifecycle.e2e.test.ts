@@ -6,6 +6,7 @@
  * flow end-to-end through HTTP.
  */
 import http from "node:http";
+import type { AgentRuntime } from "@elizaos/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startApiServer } from "../src/api/server";
 
@@ -51,6 +52,23 @@ function http$(
     if (b) req.write(b);
     req.end();
   });
+}
+
+function createRuntimeForCanonicalPluginTests(options?: {
+  plugins?: Array<{ id?: string; name?: string }>;
+  services?: Record<string, unknown>;
+}): AgentRuntime {
+  const runtimeSubset: Pick<
+    AgentRuntime,
+    "agentId" | "character" | "plugins" | "getService"
+  > = {
+    agentId: "plugin-lifecycle-agent",
+    character: { name: "PluginLifecycleAgent" } as AgentRuntime["character"],
+    plugins: (options?.plugins ?? []) as AgentRuntime["plugins"],
+    getService: (serviceType: string) =>
+      (options?.services?.[serviceType] ?? null) as never,
+  };
+  return runtimeSubset as AgentRuntime;
 }
 
 // ---------------------------------------------------------------------------
@@ -288,6 +306,130 @@ describe("Plugin Lifecycle E2E", () => {
       );
       expect(status).toBe(409);
       expect(data.code).toBe("plugin_not_loaded");
+    });
+
+    it("treats canonical stream as loaded when the runtime service is present", async () => {
+      const runtime = createRuntimeForCanonicalPluginTests({
+        services: {
+          stream555: {
+            getRuntimeState() {
+              return {
+                loaded: true,
+                authenticated: true,
+                channelsSaved: 2,
+                channelsEnabled: 2,
+                channelsReady: 2,
+                warnings: [],
+                errors: [],
+              };
+            },
+            async healthcheck() {
+              return {
+                allPassed: true,
+                checks: {
+                  apiReachable: { passed: true },
+                  authValid: { passed: true },
+                  wsConnectable: { passed: true },
+                },
+              };
+            },
+          },
+        },
+      });
+      const runtimeServer = await startApiServer({ port: 0, runtime });
+      try {
+        await http$(runtimeServer.port, "PUT", "/api/plugins/stream555-control", {
+          enabled: true,
+        });
+        const uiState = await http$(
+          runtimeServer.port,
+          "GET",
+          "/api/plugins/stream555-control/ui-state",
+        );
+        expect(uiState.status).toBe(200);
+        expect(uiState.data.loaded).toBe(true);
+        expect(uiState.data.ready).toBe(true);
+
+        const smoke = await http$(
+          runtimeServer.port,
+          "POST",
+          "/api/plugins/stream555-control/test",
+        );
+        expect(smoke.status).toBe(200);
+        expect(smoke.data.code).toBe("ok");
+      } finally {
+        await runtimeServer.close();
+      }
+    });
+
+    it("binds arcade service healthchecks to the runtime service instance", async () => {
+      const runtime = createRuntimeForCanonicalPluginTests({
+        plugins: [{ id: "555arcade", name: "555arcade" }],
+        services: {
+          arcade555: {
+            client: { connected: true },
+            getRuntimeState() {
+              return {
+                loaded: true,
+                authenticated: true,
+                sessionBootstrapped: true,
+                catalogReachable: true,
+                leaderboardReachable: true,
+                questsReachable: true,
+                scorePipelineReachable: true,
+                warnings: [],
+                errors: [],
+              };
+            },
+            async healthcheck(this: { client?: { connected?: boolean } }) {
+              return {
+                allPassed: Boolean(this.client?.connected),
+                checks: {
+                  apiReachable: { passed: true },
+                  authValid: { passed: Boolean(this.client?.connected) },
+                },
+              };
+            },
+          },
+        },
+      });
+      const runtimeServer = await startApiServer({ port: 0, runtime });
+      try {
+        await http$(runtimeServer.port, "PUT", "/api/plugins/555arcade", {
+          enabled: true,
+        });
+        const smoke = await http$(
+          runtimeServer.port,
+          "POST",
+          "/api/plugins/555arcade/test",
+        );
+        expect(smoke.status).toBe(200);
+        expect(smoke.data.code).toBe("ok");
+      } finally {
+        await runtimeServer.close();
+      }
+    });
+
+    it("masks token-like values in /api/plugins even when plugin metadata marks them non-sensitive", async () => {
+      const original = process.env.OPENAI_API_KEY;
+      process.env.OPENAI_API_KEY = "sk-test-redaction-1234567890";
+      try {
+        const { status, data } = await http$(server.port, "GET", "/api/plugins");
+        expect(status).toBe(200);
+        const plugins = data.plugins as Array<Record<string, unknown>>;
+        const browserPlugin = plugins.find((plugin) => plugin.id === "browser");
+        const parameters = (browserPlugin?.parameters ?? []) as Array<Record<string, unknown>>;
+        const openAiParam = parameters.find((parameter) => parameter.key === "OPENAI_API_KEY");
+        expect(openAiParam).toBeTruthy();
+        expect(openAiParam?.currentValue).not.toBe("sk-test-redaction-1234567890");
+        expect(String(openAiParam?.currentValue ?? "")).toContain("...");
+      } finally {
+        if (original === undefined) {
+          delete process.env.OPENAI_API_KEY;
+        } else {
+          process.env.OPENAI_API_KEY = original;
+        }
+      }
     });
   });
 
