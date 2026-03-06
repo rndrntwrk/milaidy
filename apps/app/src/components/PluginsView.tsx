@@ -439,9 +439,14 @@ function buildPluginOperationalDisplay(
       Number(counts.catalogReachable ?? 0) > 0
         ? "Catalog reachable"
         : "Catalog not verified";
+    const progressReadyCount = [
+      counts.leaderboardReachable,
+      counts.questsReachable,
+      counts.scorePipelineReachable,
+    ].filter((value) => Number(value ?? 0) > 0).length;
     const primary = `${
       plugin.authenticated === true ? "Authenticated" : "Authentication required"
-    } · ${sessionReady} · ${catalogReady}`;
+    } · ${sessionReady} · ${catalogReady} · Progress ${progressReadyCount}/3`;
     const secondary =
       plugin.statusSummary?.join(" · ") ??
       `${plugin.enabled ? "Enabled" : "Disabled"} · ${
@@ -846,11 +851,29 @@ function Arcade555ControlActionsPanel({
     tone: "success" | "error";
     message: string;
   } | null>(null);
+  const [gameId, setGameId] = useState("");
+
+  const paramByKey = useMemo(
+    () => new Map((plugin.parameters ?? []).map((param) => [param.key, param])),
+    [plugin.parameters],
+  );
+  const defaultSessionId = String(
+    paramByKey.get("ARCADE555_DEFAULT_SESSION_ID")?.currentValue ??
+      paramByKey.get("ARCADE555_DEFAULT_SESSION_ID")?.default ??
+      "",
+  ).trim();
+  const counts = plugin.operationalCounts ?? {};
+  const sessionBootstrapped = Number(counts.sessionBootstrapped ?? 0) > 0;
+  const catalogReachable = Number(counts.catalogReachable ?? 0) > 0;
+  const leaderboardReachable = Number(counts.leaderboardReachable ?? 0) > 0;
+  const questsReachable = Number(counts.questsReachable ?? 0) > 0;
+  const scorePipelineReachable = Number(counts.scorePipelineReachable ?? 0) > 0;
 
   const executeArcadeAction = useCallback(
     async (
       key: string,
       toolName: string,
+      params: Record<string, unknown>,
       successFallback: string,
       errorFallback: string,
     ) => {
@@ -861,7 +884,7 @@ function Arcade555ControlActionsPanel({
         const response = await client.executeAutonomyPlan({
           plan: {
             id: `arcade555-control-${toolName.toLowerCase()}`,
-            steps: [{ id: "1", toolName, params: {} }],
+            steps: [{ id: "1", toolName, params }],
           },
           request: { source: "user", sourceTrust: 1 },
           options: { stopOnFailure: true },
@@ -902,6 +925,53 @@ function Arcade555ControlActionsPanel({
   const verifyAction = getPluginUiAction(plugin, "verify");
   const bootstrapAction = getPluginUiAction(plugin, "bootstrap");
   const catalogAction = getPluginUiAction(plugin, "catalog");
+  const playAction = getPluginUiAction(plugin, "play");
+  const switchAction = getPluginUiAction(plugin, "switch");
+  const stopAction = getPluginUiAction(plugin, "stop");
+  const leaderboardAction = getPluginUiAction(plugin, "leaderboard");
+  const questsAction = getPluginUiAction(plugin, "quests");
+
+  const requireGameId = useCallback((): string | null => {
+    const value = gameId.trim();
+    if (value.length > 0) return value;
+    const message = "Enter a game ID before using play or switch.";
+    setLastNotice({ tone: "error", message });
+    setActionNotice(message, "error", 3200);
+    return null;
+  }, [gameId, setActionNotice]);
+
+  const progressIndicators = [
+    {
+      label: "Session",
+      ready: sessionBootstrapped,
+      successText: "Bootstrapped",
+      pendingText: "Not bootstrapped",
+    },
+    {
+      label: "Catalog",
+      ready: catalogReachable,
+      successText: "Reachable",
+      pendingText: "Pending",
+    },
+    {
+      label: "Leaderboard",
+      ready: leaderboardReachable,
+      successText: "Connected",
+      pendingText: "Pending",
+    },
+    {
+      label: "Quests",
+      ready: questsReachable,
+      successText: "Connected",
+      pendingText: "Pending",
+    },
+    {
+      label: "Scores",
+      ready: scorePipelineReachable,
+      successText: "Connected",
+      pendingText: "Pending",
+    },
+  ] as const;
 
   return (
     <div className="mb-3 border border-border bg-surface px-3 py-2">
@@ -918,57 +988,205 @@ function Arcade555ControlActionsPanel({
         <div className="mt-1 text-[10px] text-muted">{summary.secondary}</div>
       ) : null}
       <div className="mt-2 flex flex-wrap gap-1.5">
-        <button
-          type="button"
-          className="px-2.5 py-1 text-[11px] border border-border text-muted bg-transparent hover:border-accent hover:text-accent transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-          disabled={Boolean(busyAction) || !plugin.isActive}
-          onClick={() =>
-            void executeArcadeAction(
-              "verify-auth",
-              verifyAction?.invokes ?? "ARCADE555_AUTH_VERIFY",
-              "Arcade authentication verified.",
-              "Arcade authentication verification failed.",
-            )
-          }
+        {progressIndicators.map((indicator) => (
+          <span
+            key={`${plugin.id}-${indicator.label}`}
+            className={`text-[10px] px-1.5 py-px border lowercase tracking-wide whitespace-nowrap ${
+              indicator.ready
+                ? "border-ok bg-[rgba(22,101,52,0.06)] text-ok"
+                : "border-warn bg-[rgba(234,179,8,0.06)] text-warn"
+            }`}
+          >
+            {indicator.label}: {indicator.ready ? indicator.successText : indicator.pendingText}
+          </span>
+        ))}
+      </div>
+      <div className="mt-3 border border-border bg-card px-2.5 py-2">
+        <div className="text-[10px] uppercase tracking-wide text-muted mb-1.5">
+          Session
+        </div>
+        <div className="text-[10px] text-muted mb-2">
+          {defaultSessionId
+            ? `Default session ID: ${defaultSessionId}`
+            : "No default session configured; bootstrap will create or resume automatically."}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            className="px-2.5 py-1 text-[11px] border border-border text-muted bg-transparent hover:border-accent hover:text-accent transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={Boolean(busyAction) || !plugin.isActive}
+            onClick={() =>
+              void executeArcadeAction(
+                "verify-auth",
+                verifyAction?.invokes ?? "ARCADE555_AUTH_VERIFY",
+                {},
+                "Arcade authentication verified.",
+                "Arcade authentication verification failed.",
+              )
+            }
         >
           {busyAction === "verify-auth"
             ? "Verifying..."
             : (verifyAction?.label ?? "Verify Auth")}
         </button>
-        <button
-          type="button"
-          className="px-2.5 py-1 text-[11px] border border-accent text-accent bg-transparent hover:bg-accent hover:text-accent-fg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-          disabled={Boolean(busyAction) || !plugin.isActive}
-          onClick={() =>
-            void executeArcadeAction(
-              "bootstrap-session",
-              bootstrapAction?.invokes ?? "ARCADE555_SESSION_BOOTSTRAP",
-              "Arcade session bootstrapped.",
-              "Arcade session bootstrap failed.",
-            )
-          }
+          <button
+            type="button"
+            className="px-2.5 py-1 text-[11px] border border-accent text-accent bg-transparent hover:bg-accent hover:text-accent-fg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={Boolean(busyAction) || !plugin.isActive}
+            onClick={() =>
+              void executeArcadeAction(
+                "bootstrap-session",
+                bootstrapAction?.invokes ?? "ARCADE555_SESSION_BOOTSTRAP",
+                defaultSessionId ? { sessionId: defaultSessionId } : {},
+                "Arcade session bootstrapped.",
+                "Arcade session bootstrap failed.",
+              )
+            }
         >
           {busyAction === "bootstrap-session"
             ? "Bootstrapping..."
             : (bootstrapAction?.label ?? "Bootstrap Session")}
         </button>
-        <button
-          type="button"
-          className="px-2.5 py-1 text-[11px] border border-border text-muted bg-transparent hover:border-accent hover:text-accent transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-          disabled={Boolean(busyAction) || !plugin.isActive}
-          onClick={() =>
-            void executeArcadeAction(
-              "catalog",
-              catalogAction?.invokes ?? "ARCADE555_GAMES_CATALOG",
-              "Arcade catalog fetched.",
-              "Arcade catalog fetch failed.",
-            )
-          }
+        </div>
+      </div>
+      <div className="mt-3 border border-border bg-card px-2.5 py-2">
+        <div className="text-[10px] uppercase tracking-wide text-muted mb-1.5">
+          Games
+        </div>
+        <div className="mb-2">
+          <label className="block text-[10px] uppercase tracking-wide text-muted mb-1">
+            Game ID
+          </label>
+          <input
+            type="text"
+            className="w-full py-2 px-3 border border-border bg-bg text-[12px] transition-colors duration-150 focus:border-accent focus:outline-none placeholder:text-muted"
+            placeholder="e.g. knighthood"
+            value={gameId}
+            onChange={(event) => setGameId(event.target.value)}
+          />
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            className="px-2.5 py-1 text-[11px] border border-border text-muted bg-transparent hover:border-accent hover:text-accent transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={Boolean(busyAction) || !plugin.isActive}
+            onClick={() =>
+              void executeArcadeAction(
+                "catalog",
+                catalogAction?.invokes ?? "ARCADE555_GAMES_CATALOG",
+                {},
+                "Arcade catalog fetched.",
+                "Arcade catalog fetch failed.",
+              )
+            }
         >
           {busyAction === "catalog"
             ? "Fetching..."
             : (catalogAction?.label ?? "Fetch Catalog")}
         </button>
+          <button
+            type="button"
+            className="px-2.5 py-1 text-[11px] border border-accent text-accent bg-transparent hover:bg-accent hover:text-accent-fg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={Boolean(busyAction) || !plugin.isActive}
+            onClick={() => {
+              const requestedGameId = requireGameId();
+              if (!requestedGameId) return;
+              void executeArcadeAction(
+                "play",
+                playAction?.invokes ?? "ARCADE555_GAMES_PLAY",
+                { gameId: requestedGameId },
+                `Arcade gameplay started for ${requestedGameId}.`,
+                "Arcade game launch failed.",
+              );
+            }}
+          >
+          {busyAction === "play" ? "Starting..." : (playAction?.label ?? "Play")}
+        </button>
+          <button
+            type="button"
+            className="px-2.5 py-1 text-[11px] border border-border text-muted bg-transparent hover:border-accent hover:text-accent transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={Boolean(busyAction) || !plugin.isActive}
+            onClick={() => {
+              const requestedGameId = requireGameId();
+              if (!requestedGameId) return;
+              void executeArcadeAction(
+                "switch",
+                switchAction?.invokes ?? "ARCADE555_GAMES_SWITCH",
+                { gameId: requestedGameId },
+                `Arcade switched to ${requestedGameId}.`,
+                "Arcade game switch failed.",
+              );
+            }}
+          >
+          {busyAction === "switch"
+            ? "Switching..."
+            : (switchAction?.label ?? "Switch")}
+        </button>
+          <button
+            type="button"
+            className="px-2.5 py-1 text-[11px] border border-destructive text-destructive bg-transparent hover:bg-destructive hover:text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={Boolean(busyAction) || !plugin.isActive}
+            onClick={() =>
+              void executeArcadeAction(
+                "stop",
+                stopAction?.invokes ?? "ARCADE555_GAMES_STOP",
+                {},
+                "Arcade gameplay stopped.",
+                "Arcade game stop failed.",
+              )
+            }
+          >
+          {busyAction === "stop" ? "Stopping..." : (stopAction?.label ?? "Stop")}
+        </button>
+        </div>
+      </div>
+      <div className="mt-3 border border-border bg-card px-2.5 py-2">
+        <div className="text-[10px] uppercase tracking-wide text-muted mb-1.5">
+          Progress
+        </div>
+        <div className="text-[10px] text-muted mb-2">
+          Read progression surfaces without leaving the operator panel.
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            className="px-2.5 py-1 text-[11px] border border-border text-muted bg-transparent hover:border-accent hover:text-accent transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={Boolean(busyAction) || !plugin.isActive}
+            onClick={() =>
+              void executeArcadeAction(
+                "leaderboard",
+                leaderboardAction?.invokes ?? "ARCADE555_LEADERBOARD_READ",
+                gameId.trim().length > 0
+                  ? { board: "game", gameId: gameId.trim() }
+                  : { board: "global" },
+                "Arcade leaderboard loaded.",
+                "Arcade leaderboard read failed.",
+              )
+            }
+          >
+          {busyAction === "leaderboard"
+            ? "Loading..."
+            : (leaderboardAction?.label ?? "Read Leaderboard")}
+        </button>
+          <button
+            type="button"
+            className="px-2.5 py-1 text-[11px] border border-border text-muted bg-transparent hover:border-accent hover:text-accent transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={Boolean(busyAction) || !plugin.isActive}
+            onClick={() =>
+              void executeArcadeAction(
+                "quests",
+                questsAction?.invokes ?? "ARCADE555_QUESTS_READ",
+                { status: "active" },
+                "Arcade quests loaded.",
+                "Arcade quest read failed.",
+              )
+            }
+          >
+          {busyAction === "quests"
+            ? "Loading..."
+            : (questsAction?.label ?? "Read Quests")}
+        </button>
+        </div>
       </div>
       {lastNotice && (
         <div

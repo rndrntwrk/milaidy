@@ -55,7 +55,28 @@ function createArcadePlugin() {
       questsReachable: 1,
       scorePipelineReachable: 1,
     },
+    pluginUiSchema: {
+      actions: {
+        verify: { label: "Verify Auth" },
+        bootstrap: { label: "Bootstrap Session" },
+        catalog: { label: "Fetch Catalog" },
+        play: { label: "Play" },
+        switch: { label: "Switch" },
+        stop: { label: "Stop" },
+        leaderboard: { label: "Read Leaderboard" },
+        quests: { label: "Read Quests" },
+      },
+    },
     parameters: [
+      {
+        key: "ARCADE555_DEFAULT_SESSION_ID",
+        type: "string",
+        description: "Preferred default session",
+        currentValue: "alice-session",
+        isSet: true,
+        required: false,
+        sensitive: false,
+      },
       {
         key: "ARCADE555_REQUIRE_APPROVALS",
         type: "boolean",
@@ -132,6 +153,10 @@ describe("Arcade555 operator controls", () => {
     expect(findButtonByText(tree!.root, "Verify Auth")).toBeDefined();
     expect(findButtonByText(tree!.root, "Bootstrap Session")).toBeDefined();
     expect(findButtonByText(tree!.root, "Fetch Catalog")).toBeDefined();
+    expect(findButtonByText(tree!.root, "Play")).toBeDefined();
+    expect(findButtonByText(tree!.root, "Switch")).toBeDefined();
+    expect(findButtonByText(tree!.root, "Read Leaderboard")).toBeDefined();
+    expect(findButtonByText(tree!.root, "Read Quests")).toBeDefined();
     expect(
       tree!.root.findAll(
         (node) =>
@@ -139,6 +164,23 @@ describe("Arcade555 operator controls", () => {
             (child) =>
               typeof child === "string" &&
               child.includes("Session not bootstrapped"),
+          ),
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(
+      tree!.root.findAll(
+        (node) =>
+          typeof node.props?.placeholder === "string" &&
+          node.props.placeholder.includes("knighthood"),
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(
+      tree!.root.findAll(
+        (node) =>
+          node.children.some(
+            (child) =>
+              typeof child === "string" &&
+              child.includes("Default session ID: alice-session"),
           ),
       ).length,
     ).toBeGreaterThan(0);
