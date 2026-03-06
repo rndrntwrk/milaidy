@@ -189,12 +189,54 @@ interface AutonomyServiceLike {
   getRoleHealth?(): import("../autonomy/service.js").AutonomyRoleHealthSnapshot;
 }
 
+interface Stream555ApprovalServiceLike {
+  listPendingApprovals?(): Array<{
+    id: string;
+    actionName: string;
+    actionParams: Record<string, unknown>;
+    createdAt: number;
+    expiresAt: number;
+  }>;
+  resolveApproval?(
+    approvalId: string,
+    decision: "approved" | "denied",
+    decidedBy?: string,
+  ): boolean;
+}
+
 /** Helper to retrieve the AutonomyService from a runtime (may be null). */
 function getAutonomySvc(
   runtime: AgentRuntime | null,
 ): AutonomyServiceLike | null {
   if (!runtime) return null;
   return runtime.getService("AUTONOMY") as AutonomyServiceLike | null;
+}
+
+function getStream555ApprovalSvc(
+  runtime: AgentRuntime | null,
+): Stream555ApprovalServiceLike | null {
+  if (!runtime) return null;
+  return runtime.getService("stream555") as Stream555ApprovalServiceLike | null;
+}
+
+function toPendingStream555Approvals(
+  runtime: AgentRuntime | null,
+): import("../autonomy/approval/types.js").ApprovalRequest[] {
+  const streamSvc = getStream555ApprovalSvc(runtime);
+  const approvals = streamSvc?.listPendingApprovals?.() ?? [];
+
+  return approvals.map((approval) => ({
+    id: approval.id,
+    call: {
+      tool: approval.actionName,
+      params: approval.actionParams,
+      source: "plugin",
+      requestId: approval.id,
+    },
+    riskClass: "reversible",
+    createdAt: approval.createdAt,
+    expiresAt: approval.expiresAt,
+  }));
 }
 
 function describeProxyError(error: unknown): string {
@@ -11481,7 +11523,10 @@ async function handleRequest(
 
       // Return pending approvals from the gate + recent from persistent log
       const gate = autonomySvc?.getApprovalGate?.();
-      const pending = gate?.getPending() ?? [];
+      const pending = [
+        ...(gate?.getPending() ?? []),
+        ...toPendingStream555Approvals(state.runtime),
+      ];
       const approvalLog = autonomySvc?.getApprovalLog?.();
       let recent: unknown[] = [];
       if (approvalLog) {
@@ -11520,18 +11565,25 @@ async function handleRequest(
     try {
       const autonomySvc = getAutonomySvc(state.runtime);
       const gate = autonomySvc?.getApprovalGate?.();
-      if (!gate) {
-        error(res, "Approval gate not available", 503);
-        return;
-      }
+      const resolved =
+        gate?.resolve(
+          approvalId,
+          decision as "approved" | "denied",
+          decidedBy,
+        ) ??
+        false;
+      const streamResolved = getStream555ApprovalSvc(state.runtime)
+        ?.resolveApproval?.(
+          approvalId,
+          decision as "approved" | "denied",
+          decidedBy,
+        ) ?? false;
 
-      const resolved = gate.resolve(
-        approvalId,
-        decision as "approved" | "denied",
-        decidedBy,
-      );
-
-      if (!resolved) {
+      if (!resolved && !streamResolved) {
+        if (!gate && !getStream555ApprovalSvc(state.runtime)?.resolveApproval) {
+          error(res, "Approval gate not available", 503);
+          return;
+        }
         error(res, "Approval not found or already resolved", 404);
         return;
       }
