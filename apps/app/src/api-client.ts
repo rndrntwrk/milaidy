@@ -269,6 +269,40 @@ export function isApiError(value: unknown): value is ApiError {
   return value instanceof ApiError;
 }
 
+function isJsonContentType(contentType: string | null | undefined): boolean {
+  if (!contentType) return false;
+  return /\bapplication\/(.+\+)?json\b/i.test(contentType);
+}
+
+function buildUnexpectedApiResponseMessage(
+  path: string,
+  response: Response,
+  bodyText: string,
+): string {
+  const contentType = response.headers.get("content-type")?.trim() ?? "";
+  const sample = bodyText.trim().slice(0, 160).toLowerCase();
+  const redirectedToCloudflareAccess =
+    response.redirected && /cloudflareaccess\.com/i.test(response.url);
+  const mentionsCloudflareAccess =
+    redirectedToCloudflareAccess ||
+    /cloudflareaccess\.com/i.test(bodyText) ||
+    /cdn-cgi\/access\/login/i.test(bodyText);
+  const isHtmlDocument =
+    /text\/html/i.test(contentType) ||
+    sample.startsWith("<!doctype html") ||
+    sample.startsWith("<html");
+
+  if (mentionsCloudflareAccess) {
+    return `Authentication required for ${path}. The request was redirected to Cloudflare Access; re-authenticate in the browser and retry.`;
+  }
+
+  if (isHtmlDocument) {
+    return `Expected JSON from ${path}, but received HTML. Reload the Milaidy app and verify the web session is authenticated.`;
+  }
+
+  return `Expected JSON from ${path}, but received ${contentType || "a non-JSON response"}.`;
+}
+
 export interface RuntimeOrderItem {
   index: number;
   name: string;
@@ -2387,6 +2421,7 @@ export class MiladyClient {
         return await fetch(`${this.baseUrl}${path}`, {
           ...init,
           signal,
+          credentials: init?.credentials ?? "include",
           headers: {
             "X-Milady-Client-Id": this.clientId,
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -2425,17 +2460,60 @@ export class MiladyClient {
       }
     }
     if (!res.ok && !options?.allowNonOk) {
-      const body = (await res
-        .json()
-        .catch(() => ({ error: res.statusText }))) as Record<string, string>;
+      const responseText = await res.text();
+      let body: Record<string, string> | null = null;
+      if (isJsonContentType(res.headers.get("content-type"))) {
+        try {
+          body = JSON.parse(responseText || "{}") as Record<string, string>;
+        } catch {
+          body = null;
+        }
+      }
       throw new ApiError({
         kind: "http",
         path,
         status: res.status,
-        message: body.error ?? `HTTP ${res.status}`,
+        message:
+          body?.error ??
+          buildUnexpectedApiResponseMessage(path, res, responseText),
       });
     }
     return res;
+  }
+
+  private async parseJsonResponse<T>(path: string, res: Response): Promise<T> {
+    const responseText = await res.text();
+    const contentType = res.headers.get("content-type");
+    const trimmed = responseText.trim();
+
+    if (!trimmed) {
+      return {} as T;
+    }
+
+    if (
+      isJsonContentType(contentType) ||
+      trimmed.startsWith("{") ||
+      trimmed.startsWith("[")
+    ) {
+      try {
+        return JSON.parse(responseText) as T;
+      } catch (error) {
+        throw new ApiError({
+          kind: "http",
+          path,
+          status: res.status,
+          message: `Malformed JSON from ${path}.`,
+          cause: error,
+        });
+      }
+    }
+
+    throw new ApiError({
+      kind: "http",
+      path,
+      status: res.status,
+      message: buildUnexpectedApiResponseMessage(path, res, responseText),
+    });
   }
 
   private async fetch<T>(
@@ -2449,12 +2527,13 @@ export class MiladyClient {
         ...init,
         headers: {
           "Content-Type": "application/json",
+          Accept: "application/json",
           ...init?.headers,
         },
       },
       options,
     );
-    return res.json() as Promise<T>;
+    return this.parseJsonResponse<T>(path, res);
   }
 
   async getStatus(): Promise<AgentStatus> {
@@ -2989,26 +3068,33 @@ export class MiladyClient {
   }
 
   async testPluginConnection(id: string): Promise<PluginTestResponse> {
+    const path = `/api/plugins/${encodeURIComponent(id)}/test`;
     const res = await this.rawRequest(
-      `/api/plugins/${encodeURIComponent(id)}/test`,
+      path,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Accept: "application/json",
         },
       },
       { allowNonOk: true },
     );
-    return res.json() as Promise<PluginTestResponse>;
+    return this.parseJsonResponse<PluginTestResponse>(path, res);
   }
 
   async getPluginUiState(id: string): Promise<PluginUiState> {
+    const path = `/api/plugins/${encodeURIComponent(id)}/ui-state`;
     const res = await this.rawRequest(
-      `/api/plugins/${encodeURIComponent(id)}/ui-state`,
-      undefined,
+      path,
+      {
+        headers: {
+          Accept: "application/json",
+        },
+      },
       { allowNonOk: true },
     );
-    return res.json() as Promise<PluginUiState>;
+    return this.parseJsonResponse<PluginUiState>(path, res);
   }
 
   async restart(): Promise<{ ok: boolean }> {
