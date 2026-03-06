@@ -10,13 +10,22 @@ Plugins are the primary extension mechanism for Milady. Every capability beyond 
 
 Milady now treats first-party public plugins as package-owned products with host-owned install and lifecycle plumbing.
 
-Current reference plugins:
+<CardGroup cols={2}>
 
-- [`555 Stream`](/plugins/first-party-public-standard) — canonical stream/auth/channels/go-live/ads plugin
-- [`555 Arcade`](/plugins/first-party-public-standard) — canonical games/score/leaderboard/quests plugin
+<Card title="555 Stream" icon="tower-broadcast" href="/plugins/555-stream">
+  Canonical stream/auth/channels/go-live/ads plugin.
+</Card>
+
+<Card title="555 Arcade" icon="gamepad-modern" href="/plugins/555-arcade">
+  Canonical games/score/leaderboard/quests plugin.
+</Card>
+
+</CardGroup>
 
 Use these supporting pages when working on first-party publication:
 
+- [555 Stream](/plugins/555-stream)
+- [555 Arcade](/plugins/555-arcade)
 - [First-Party Public Plugin Standard](/plugins/first-party-public-standard)
 - [First-Party Release Status](/plugins/first-party-release-status)
 
@@ -130,6 +139,8 @@ See [Plugin Eject](/plugins/plugin-eject) for details on customizing ejected plu
 - [Plugin Architecture](/plugins/architecture) — Deep dive into the plugin system
 - [Create a Plugin](/plugins/create-a-plugin) — Step-by-step tutorial
 - [Plugin Development](/plugins/development) — Development guide and API
+- [555 Stream](/plugins/555-stream) — Canonical public stream plugin guide
+- [555 Arcade](/plugins/555-arcade) — Canonical public arcade plugin guide
 - [First-Party Public Plugin Standard](/plugins/first-party-public-standard) — Package/host rules for `555 Stream` and `555 Arcade`
 - [First-Party Release Status](/plugins/first-party-release-status) — Current readiness and remaining public gaps
 - [Plugin Registry](/plugins/registry) — Browse available plugins

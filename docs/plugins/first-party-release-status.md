@@ -15,6 +15,11 @@ Current scope:
 
 Use this with [First-Party Public Plugin Standard](/plugins/first-party-public-standard).
 
+Canonical public entry pages:
+
+- [555 Stream](/plugins/555-stream)
+- [555 Arcade](/plugins/555-arcade)
+
 ## Audit Summary
 
 As of March 6, 2026:

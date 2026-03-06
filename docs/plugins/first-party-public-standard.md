@@ -1,3 +1,9 @@
+---
+title: "First-Party Public Plugin Standard"
+sidebarTitle: "Public Standard"
+description: "Host and package rules for first-party public plugins in Milady."
+---
+
 # First-Party Public Plugin Standard
 
 This page defines how Milady should host first-party public plugins, with `555 Stream` and `555 Arcade` as the current reference implementations.
@@ -10,6 +16,8 @@ Current first-party public plugins:
 - `@rndrntwrk/plugin-555arcade`
 
 These plugins are package-owned. Milady is the host application.
+
+The canonical public entry should live in the Milady docs site. Repo-local docs remain reference material for contributors and maintainers.
 
 ## Host and package boundaries
 
