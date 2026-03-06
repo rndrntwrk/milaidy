@@ -152,6 +152,7 @@
               "plugins/create-a-plugin",
               "plugins/development",
               "plugins/local-plugins",
+              "plugins/first-party-public-standard",
               "plugins/plugin-eject",
               "plugins/patterns",
               "plugins/schemas",
