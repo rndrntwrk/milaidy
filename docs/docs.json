@@ -147,15 +147,6 @@
             ]
           },
           {
-            "group": "First-Party Plugins",
-            "pages": [
-              "plugins/555-stream",
-              "plugins/555-arcade",
-              "plugins/first-party-public-standard",
-              "plugins/first-party-release-status"
-            ]
-          },
-          {
             "group": "Development",
             "pages": [
               "plugins/create-a-plugin",
