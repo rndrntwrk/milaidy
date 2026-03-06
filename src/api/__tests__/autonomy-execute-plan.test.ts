@@ -16,6 +16,7 @@ describe("/api/agent/autonomy/execute-plan", () => {
     handler: vi.fn(async (_rt, _msg, _state, options) => ({
       success: true,
       data: (options as { parameters?: Record<string, unknown> })?.parameters,
+      flatFoo: (options as { foo?: string })?.foo,
     })),
   };
 
@@ -176,7 +177,11 @@ describe("/api/agent/autonomy/execute-plan", () => {
     expect(payload.ok).toBe(true);
     expect(payload.results).toHaveLength(1);
     expect(payload.results[0].success).toBe(true);
-    expect(payload.results[0].result).toEqual({ success: true, data: { foo: "bar" } });
+    expect(payload.results[0].result).toEqual({
+      success: true,
+      data: { foo: "bar" },
+      flatFoo: "bar",
+    });
   });
 
   it("falls back to direct runtime execution when autonomy pipeline is unavailable", async () => {
@@ -209,7 +214,11 @@ describe("/api/agent/autonomy/execute-plan", () => {
     expect(payload.results).toHaveLength(1);
     expect(payload.results[0].success).toBe(true);
     expect(payload.results[0].executionMode).toBe("direct-runtime");
-    expect(payload.results[0].result).toEqual({ success: true, data: { fast: true } });
+    expect(payload.results[0].result).toEqual({
+      success: true,
+      data: { fast: true },
+      flatFoo: undefined,
+    });
   });
 
   it("marks direct runtime step as failed when action returns success=false", async () => {
@@ -255,6 +264,59 @@ describe("/api/agent/autonomy/execute-plan", () => {
     expect(payload.results[0].success).toBe(false);
     expect(payload.results[0].executionMode).toBe("direct-runtime");
     expect(payload.results[0].error).toContain("upstream request failed");
+  });
+
+  it("normalizes callback-driven direct runtime failures", async () => {
+    action.handler.mockImplementationOnce(
+      async (_rt, _msg, _state, _options, callback) => {
+        callback?.({
+          text: "bootstrap failed",
+          content: {
+            success: false,
+            error: "session bootstrap failed",
+          },
+        });
+        return false;
+      },
+    );
+
+    const state = createState(null);
+    const { req, emitBody } = createMockReq(
+      "POST",
+      "/api/agent/autonomy/execute-plan",
+      {
+        plan: {
+          id: "quick-layer-direct-callback-failure",
+          steps: [{ id: "1", toolName: "TEST_ACTION", params: { foo: "bar" } }],
+        },
+        request: { source: "system" },
+      },
+    );
+    const res = createMockRes();
+
+    const handlePromise = __testOnlyHandleRequest(req, res, state);
+    emitBody();
+    await handlePromise;
+
+    expect(res.statusCode).toBe(200);
+    const payload = JSON.parse(res.body) as {
+      ok: boolean;
+      allSucceeded: boolean;
+      failedCount: number;
+      stoppedEarly: boolean;
+      failedStepIndex: number | null;
+      executionMode?: string;
+      results: Array<{ success: boolean; error?: string; executionMode?: string }>;
+    };
+    expect(payload.ok).toBe(false);
+    expect(payload.allSucceeded).toBe(false);
+    expect(payload.failedCount).toBe(1);
+    expect(payload.stoppedEarly).toBe(true);
+    expect(payload.failedStepIndex).toBe(0);
+    expect(payload.executionMode).toBe("direct-runtime");
+    expect(payload.results[0].success).toBe(false);
+    expect(payload.results[0].executionMode).toBe("direct-runtime");
+    expect(payload.results[0].error).toContain("session bootstrap failed");
   });
 
   it("rejects missing toolName", async () => {

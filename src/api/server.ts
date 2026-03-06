@@ -16,12 +16,15 @@ import path from "node:path";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { fileURLToPath } from "node:url";
 import {
+  type Action,
   type AgentRuntime,
   ChannelType,
   type Content,
   createMessageMemory,
+  type HandlerCallback,
   logger,
   ModelType,
+  type State,
   stringToUuid,
   type Task,
   type UUID,
@@ -844,18 +847,56 @@ async function fetchWithIpv4Lookup(
 function findRuntimeAction(
   runtime: AgentRuntime,
   toolName: string,
-): { name: string; handler: (runtime: AgentRuntime, message: unknown, state: unknown, options?: Record<string, unknown>) => Promise<unknown>; validate: (runtime: AgentRuntime, message: unknown, state: unknown) => Promise<boolean> } | null {
+): Action | null {
   const normalized = toolName.trim().toUpperCase();
   const actions = runtime.getAllActions?.() ?? runtime.actions ?? [];
   for (const action of actions) {
     const name = action.name?.toUpperCase?.() ?? "";
-    if (name === normalized) return action as never;
+    if (name === normalized) return action as Action;
     const similes = Array.isArray(action.similes) ? action.similes : [];
     if (similes.some((s) => String(s).toUpperCase() === normalized)) {
-      return action as never;
+      return action as Action;
     }
   }
   return null;
+}
+
+type RuntimeActionCallbackPayload = {
+  text?: string;
+  content?: Record<string, unknown>;
+};
+
+function normalizeRuntimeActionResult(
+  rawResult: unknown,
+  callbackPayloads: RuntimeActionCallbackPayload[],
+): unknown {
+  if (rawResult && typeof rawResult === "object") {
+    return rawResult;
+  }
+
+  const latestCallback = callbackPayloads.at(-1);
+  if (latestCallback) {
+    const content = latestCallback.content ?? {};
+    return {
+      ...content,
+      success:
+        rawResult === false
+          ? false
+          : typeof content.success === "boolean"
+            ? content.success
+            : true,
+      ...(typeof latestCallback.text === "string"
+        ? { text: latestCallback.text }
+        : {}),
+      rawResult,
+    };
+  }
+
+  if (typeof rawResult === "boolean") {
+    return { success: rawResult };
+  }
+
+  return rawResult;
 }
 
 async function executeRuntimeAction(params: {
@@ -885,13 +926,15 @@ async function executeRuntimeAction(params: {
     roomId: runtime.agentId,
     content: {
       text: `[autonomy] tool:${toolName} request:${requestId}`,
-      source: "autonomy",
-    },
+      source: "system",
+      channelType: ChannelType.API,
+      ...parameters,
+    } as Content,
   });
 
-  let state: unknown = undefined;
+  let state: State | undefined = undefined;
   try {
-    state = await runtime.composeState(memory);
+    state = (await runtime.composeState(memory)) as State | undefined;
   } catch {
     state = undefined;
   }
@@ -900,10 +943,30 @@ async function executeRuntimeAction(params: {
     throw new Error(`Action "${toolName}" failed validation`);
   }
 
+  const callbackPayloads: RuntimeActionCallbackPayload[] = [];
+  const callback: HandlerCallback = (payload) => {
+    if (payload && typeof payload === "object") {
+      const record = payload as Record<string, unknown>;
+      const normalizedPayload: RuntimeActionCallbackPayload = {};
+      if (typeof record.text === "string") {
+        normalizedPayload.text = record.text;
+      }
+      if (record.content && typeof record.content === "object") {
+        normalizedPayload.content = record.content as Record<string, unknown>;
+      }
+      callbackPayloads.push(normalizedPayload);
+    }
+    return [] as never;
+  };
+
   const start = Date.now();
-  const result = await action.handler(runtime, memory, state, {
-    parameters,
-  });
+  const result = normalizeRuntimeActionResult(
+    await action.handler(runtime, memory, state, {
+      ...parameters,
+      parameters,
+    }, callback),
+    callbackPayloads,
+  );
   return { result, durationMs: Date.now() - start };
 }
 
