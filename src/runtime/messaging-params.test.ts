@@ -19,6 +19,8 @@ describe("inferMessagingParams", () => {
 
     expect(inferred.channel).toBe("telegram");
     expect(inferred.to).toBe("@alicebot");
-    expect(inferred.messageText).toBe("this person on telegram @alicebot saying hi");
+    expect(inferred.messageText).toBe(
+      "this person on telegram @alicebot saying hi",
+    );
   });
 });

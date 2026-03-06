@@ -43,12 +43,14 @@ export function ConfirmDialog({
         </div>
         <div className="flex justify-end gap-2 px-5 py-3 border-t border-border">
           <button
+            type="button"
             className="px-3 py-1.5 text-xs border border-border text-muted hover:text-txt cursor-pointer"
             onClick={onCancel}
           >
             {cancelLabel}
           </button>
           <button
+            type="button"
             className={`px-3 py-1.5 text-xs border border-transparent cursor-pointer ${confirmClass}`}
             onClick={onConfirm}
           >

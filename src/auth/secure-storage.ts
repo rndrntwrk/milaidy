@@ -14,7 +14,6 @@ import {
   createDecipheriv,
   randomBytes,
   scryptSync,
-  timingSafeEqual,
 } from "node:crypto";
 import { logger } from "@elizaos/core";
 import { getCredentialPassphraseCandidates } from "./key-derivation.js";
@@ -209,7 +208,9 @@ export async function getSecureStorage(): Promise<SecureStorageBackend> {
 
   // Fallback to encrypted file
   try {
-    const { EncryptedFileBackend } = await import("./backends/encrypted-file.js");
+    const { EncryptedFileBackend } = await import(
+      "./backends/encrypted-file.js"
+    );
     const encryptedFile = new EncryptedFileBackend();
     if (encryptedFile.available) {
       logger.debug("[secure-storage] Using encrypted file backend");

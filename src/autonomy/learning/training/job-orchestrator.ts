@@ -12,9 +12,9 @@ import {
 } from "./environment.js";
 import { GridSearchTuner, type TuningResult } from "./hyperparam-tuner.js";
 import {
-  StubRLVRLoop,
   type RLVRConfig,
   type RLVRLoop,
+  StubRLVRLoop,
   type TrainingResult,
 } from "./rlvr-loop.js";
 
@@ -69,7 +69,9 @@ export class TrainingJobOrchestrator {
     }
 
     const startedAt = Date.now();
-    const fingerprint = computeTrainingEnvironmentFingerprint(input.environment);
+    const fingerprint = computeTrainingEnvironmentFingerprint(
+      input.environment,
+    );
 
     const tuning = await this.tuner.tune(
       input.environment.hyperparameterSpace,

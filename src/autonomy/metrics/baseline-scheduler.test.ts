@@ -3,9 +3,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-
 import { BaselineScheduler } from "./baseline-scheduler.js";
-import type { BaselineHarness } from "./baseline-harness.js";
 import type { BaselineMetrics } from "./types.js";
 
 // ---------- Mock ----------
@@ -130,7 +128,9 @@ describe("BaselineScheduler", () => {
   it("prevents overlapping runs", async () => {
     const harness = makeMockHarness();
     let resolveBlock: () => void;
-    const blockPromise = new Promise<void>((r) => { resolveBlock = r; });
+    const blockPromise = new Promise<void>((r) => {
+      resolveBlock = r;
+    });
     let callCount = 0;
 
     harness.measure = async () => {
@@ -148,7 +148,7 @@ describe("BaselineScheduler", () => {
     const first = scheduler.runCycle();
     await new Promise((r) => setTimeout(r, 10));
     const second = scheduler.runCycle(); // Should skip (running = true)
-    resolveBlock!();
+    resolveBlock?.();
     await first;
     await second;
 

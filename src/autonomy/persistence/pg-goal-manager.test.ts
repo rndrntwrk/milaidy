@@ -6,16 +6,12 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-
-import type { Goal } from "../goals/manager.js";
-import { PgGoalManager } from "./pg-goal-manager.js";
 import type { AutonomyDbAdapter } from "./db-adapter.js";
+import { PgGoalManager } from "./pg-goal-manager.js";
 
 // ---------- Mock ----------
 
-function makeMockAdapter(
-  execFn?: ReturnType<typeof vi.fn>,
-): AutonomyDbAdapter {
+function makeMockAdapter(execFn?: ReturnType<typeof vi.fn>): AutonomyDbAdapter {
   return {
     executeRaw: execFn ?? vi.fn().mockResolvedValue({ rows: [], columns: [] }),
     agentId: "test-agent",
@@ -27,7 +23,9 @@ function makeMockAdapter(
   } as unknown as AutonomyDbAdapter;
 }
 
-function makeGoalRow(overrides?: Partial<Record<string, unknown>>): Record<string, unknown> {
+function makeGoalRow(
+  overrides?: Partial<Record<string, unknown>>,
+): Record<string, unknown> {
   return {
     id: "goal-uuid-1",
     description: "Test goal",
@@ -112,13 +110,19 @@ describe("PgGoalManager", () => {
 
   describe("updateGoal()", () => {
     it("updates mutable fields and returns updated goal", async () => {
-      const exec = vi.fn()
+      const exec = vi
+        .fn()
         .mockResolvedValueOnce({ rows: [makeGoalRow()], columns: [] }) // getGoalById
-        .mockResolvedValueOnce({ rows: [makeGoalRow({ description: "Updated" })], columns: [] }); // UPDATE
+        .mockResolvedValueOnce({
+          rows: [makeGoalRow({ description: "Updated" })],
+          columns: [],
+        }); // UPDATE
       const adapter = makeMockAdapter(exec);
       const mgr = new PgGoalManager(adapter);
 
-      const updated = await mgr.updateGoal("goal-uuid-1", { description: "Updated" });
+      const updated = await mgr.updateGoal("goal-uuid-1", {
+        description: "Updated",
+      });
 
       expect(updated.description).toBe("Updated");
       const updateSql = exec.mock.calls[1][0] as string;
@@ -157,9 +161,13 @@ describe("PgGoalManager", () => {
     });
 
     it("sets completed_at on terminal status", async () => {
-      const exec = vi.fn()
+      const exec = vi
+        .fn()
         .mockResolvedValueOnce({ rows: [makeGoalRow()], columns: [] })
-        .mockResolvedValueOnce({ rows: [makeGoalRow({ status: "completed" })], columns: [] });
+        .mockResolvedValueOnce({
+          rows: [makeGoalRow({ status: "completed" })],
+          columns: [],
+        });
       const adapter = makeMockAdapter(exec);
       const mgr = new PgGoalManager(adapter);
 
@@ -218,7 +226,7 @@ describe("PgGoalManager", () => {
 
       const goal = await mgr.getGoalById("goal-uuid-1");
       expect(goal).toBeDefined();
-      expect(goal!.id).toBe("goal-uuid-1");
+      expect(goal?.id).toBe("goal-uuid-1");
     });
 
     it("returns undefined when not found", async () => {
@@ -275,18 +283,20 @@ describe("PgGoalManager", () => {
   describe("row conversion", () => {
     it("handles string JSONB fields", async () => {
       const exec = vi.fn().mockResolvedValue({
-        rows: [makeGoalRow({
-          success_criteria: '["a", "b"]',
-          source_trust: "0.75",
-        })],
+        rows: [
+          makeGoalRow({
+            success_criteria: '["a", "b"]',
+            source_trust: "0.75",
+          }),
+        ],
         columns: [],
       });
       const adapter = makeMockAdapter(exec);
       const mgr = new PgGoalManager(adapter);
 
       const goal = await mgr.getGoalById("goal-uuid-1");
-      expect(goal!.successCriteria).toEqual(["a", "b"]);
-      expect(goal!.sourceTrust).toBe(0.75);
+      expect(goal?.successCriteria).toEqual(["a", "b"]);
+      expect(goal?.sourceTrust).toBe(0.75);
     });
   });
 });

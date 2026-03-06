@@ -9,15 +9,15 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MemoryBackend } from "./backends/memory.js";
 import {
   decrypt,
+  type EncryptedPayload,
   encrypt,
   isEncryptedPayload,
   resetSecureStorage,
   setSecureStorageBackend,
-  type EncryptedPayload,
 } from "./secure-storage.js";
-import { MemoryBackend } from "./backends/memory.js";
 
 const mockPassphraseState = vi.hoisted(() => ({
   candidates: ["test-passphrase-legacy"],
@@ -66,7 +66,9 @@ describe("encrypt/decrypt", () => {
 
     expect(encrypted1.iv).not.toBe(encrypted2.iv);
     expect(encrypted1.ciphertext).not.toBe(encrypted2.ciphertext);
-    expect(encrypted1.keyDerivation.salt).not.toBe(encrypted2.keyDerivation.salt);
+    expect(encrypted1.keyDerivation.salt).not.toBe(
+      encrypted2.keyDerivation.salt,
+    );
 
     // But both decrypt to the same value
     expect(decrypt(encrypted1)).toBe(plaintext);

@@ -17,7 +17,6 @@ import {
   resetContainer,
   ServiceContainer,
   setContainer,
-  type ServiceToken,
 } from "./container.js";
 
 // Test service interfaces
@@ -143,7 +142,10 @@ describe("ServiceContainer", () => {
 
   describe("has", () => {
     it("returns true for registered services", () => {
-      container.register(TEST_TOKEN, () => ({ name: "test", getValue: () => 1 }));
+      container.register(TEST_TOKEN, () => ({
+        name: "test",
+        getValue: () => 1,
+      }));
       expect(container.has(TEST_TOKEN)).toBe(true);
     });
 
@@ -154,7 +156,10 @@ describe("ServiceContainer", () => {
 
   describe("child containers (scopes)", () => {
     it("creates child container that inherits from parent", () => {
-      container.register(TEST_TOKEN, () => ({ name: "parent", getValue: () => 1 }));
+      container.register(TEST_TOKEN, () => ({
+        name: "parent",
+        getValue: () => 1,
+      }));
 
       const child = container.createScope();
 
@@ -162,7 +167,10 @@ describe("ServiceContainer", () => {
     });
 
     it("child can override parent registrations", () => {
-      container.register(TEST_TOKEN, () => ({ name: "parent", getValue: () => 1 }));
+      container.register(TEST_TOKEN, () => ({
+        name: "parent",
+        getValue: () => 1,
+      }));
 
       const child = container.createScope();
       child.register(TEST_TOKEN, () => ({ name: "child", getValue: () => 2 }));
@@ -172,7 +180,10 @@ describe("ServiceContainer", () => {
     });
 
     it("child checks parent when service not found locally", () => {
-      container.register(TEST_TOKEN, () => ({ name: "parent", getValue: () => 1 }));
+      container.register(TEST_TOKEN, () => ({
+        name: "parent",
+        getValue: () => 1,
+      }));
       container.registerValue(VALUE_TOKEN, "parent-value");
 
       const child = container.createScope();
@@ -201,9 +212,9 @@ describe("ServiceContainer", () => {
       await container.dispose();
 
       expect(() => container.get(TEST_TOKEN)).toThrow("disposed");
-      expect(() => container.register(TEST_TOKEN, () => ({ name: "", getValue: () => 0 }))).toThrow(
-        "disposed",
-      );
+      expect(() =>
+        container.register(TEST_TOKEN, () => ({ name: "", getValue: () => 0 })),
+      ).toThrow("disposed");
     });
   });
 

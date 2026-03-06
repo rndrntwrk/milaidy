@@ -49,7 +49,9 @@ export const autonomyEventsTable = pgTable(
     /** Epoch-ms timestamp from the in-memory event. */
     timestamp: timestamp("timestamp", { withTimezone: true }).notNull(),
     /** DB insertion time. */
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
     index("idx_autonomy_events_request_id").on(table.requestId),
@@ -81,7 +83,10 @@ export const autonomyGoalsTable = pgTable(
     /** Parent goal ID for hierarchical decomposition. */
     parentGoalId: uuid("parent_goal_id"),
     /** Success criteria (string array stored as JSONB). */
-    successCriteria: jsonb("success_criteria").$type<string[]>().notNull().default([]),
+    successCriteria: jsonb("success_criteria")
+      .$type<string[]>()
+      .notNull()
+      .default([]),
     /** Source: user | system | agent. */
     source: text("source").notNull(),
     /** Trust score of the source at creation time. */
@@ -117,11 +122,11 @@ export const autonomyStateTable = pgTable(
     /** Agent ID owning this state machine. */
     agentId: text("agent_id").notNull(),
     /** When this snapshot was taken. */
-    snapshotAt: timestamp("snapshot_at", { withTimezone: true }).defaultNow().notNull(),
+    snapshotAt: timestamp("snapshot_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
-  (table) => [
-    index("idx_autonomy_state_agent_id").on(table.agentId),
-  ],
+  (table) => [index("idx_autonomy_state_agent_id").on(table.agentId)],
 );
 
 // ---------- autonomy_audit ----------
@@ -143,7 +148,9 @@ export const autonomyAuditTable = pgTable(
     /** When the record was exported (null if not yet exported). */
     exportedAt: timestamp("exported_at", { withTimezone: true }),
     /** DB insertion time. */
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
     index("idx_autonomy_audit_type").on(table.type),
@@ -167,7 +174,9 @@ export const autonomyApprovalsTable = pgTable(
     /** Risk classification of the tool. */
     riskClass: text("risk_class").notNull(),
     /** The proposed tool call (full object). */
-    callPayload: jsonb("call_payload").$type<Record<string, unknown>>().notNull(),
+    callPayload: jsonb("call_payload")
+      .$type<Record<string, unknown>>()
+      .notNull(),
     /** Decision: approved | denied | expired. */
     decision: text("decision"),
     /** Who made the decision. */
@@ -202,11 +211,17 @@ export const autonomyMemoryTable = pgTable(
     provenance: jsonb("provenance").$type<Record<string, unknown>>().notNull(),
     trustScore: real("trust_score").notNull(),
     verified: boolean("verified").notNull().default(false),
-    verifiabilityClass: text("verifiability_class").notNull().default("unverified"),
+    verifiabilityClass: text("verifiability_class")
+      .notNull()
+      .default("unverified"),
     source: text("source"),
     sourceType: text("source_type"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
     index("idx_autonomy_memory_agent").on(table.agentId),
@@ -231,15 +246,21 @@ export const autonomyMemoryQuarantineTable = pgTable(
     provenance: jsonb("provenance").$type<Record<string, unknown>>().notNull(),
     trustScore: real("trust_score").notNull(),
     verified: boolean("verified").notNull().default(false),
-    verifiabilityClass: text("verifiability_class").notNull().default("unverified"),
+    verifiabilityClass: text("verifiability_class")
+      .notNull()
+      .default("unverified"),
     source: text("source"),
     sourceType: text("source_type"),
     decision: text("decision"),
     decisionReason: text("decision_reason"),
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
     index("idx_autonomy_memory_quarantine_agent").on(table.agentId),
@@ -270,10 +291,15 @@ export const autonomyIdentityTable = pgTable(
     /** Whether this is the currently active version. */
     active: boolean("active").notNull().default(true),
     /** When this version was recorded. */
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
-    index("idx_autonomy_identity_agent_version").on(table.agentId, table.version),
+    index("idx_autonomy_identity_agent_version").on(
+      table.agentId,
+      table.version,
+    ),
     index("idx_autonomy_identity_active").on(table.agentId, table.active),
   ],
 );
@@ -299,21 +325,39 @@ export const canonicalEntitiesTable = pgTable(
     /**
      * Platform identity map: { "discord": "enoomian#1234", "web_chat": "<uuid>", "telegram": "@enoomian" }
      */
-    platformIds: jsonb("platform_ids").$type<Record<string, string>>().notNull().default({}),
+    platformIds: jsonb("platform_ids")
+      .$type<Record<string, string>>()
+      .notNull()
+      .default({}),
     /** User preferences extracted from interactions (e.g. communication style). */
-    preferences: jsonb("preferences").$type<Record<string, unknown>>().notNull().default({}),
+    preferences: jsonb("preferences")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
     /** Known facts about this entity, accumulated over sessions. */
     knownFacts: jsonb("known_facts").$type<string[]>().notNull().default([]),
     /** Per-platform last seen timestamps. */
-    lastSeen: jsonb("last_seen").$type<Record<string, number>>().notNull().default({}),
+    lastSeen: jsonb("last_seen")
+      .$type<Record<string, number>>()
+      .notNull()
+      .default({}),
     /** Arbitrary metadata. */
-    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
     /** When this entity was first seen. */
-    firstSeen: timestamp("first_seen", { withTimezone: true }).defaultNow().notNull(),
+    firstSeen: timestamp("first_seen", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
     /** DB insertion time. */
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
     /** Last update time. */
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
     index("idx_canonical_entities_display_name").on(table.displayName),
@@ -358,8 +402,12 @@ export const entityMemoriesTable = pgTable(
     sessionCount: integer("session_count").notNull().default(1),
     /** Whether this memory has been superseded by a newer version. */
     superseded: boolean("superseded").notNull().default(false),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
     index("idx_entity_memories_canonical_entity").on(table.canonicalEntityId),
@@ -367,7 +415,10 @@ export const entityMemoriesTable = pgTable(
     index("idx_entity_memories_type").on(table.memoryType),
     index("idx_entity_memories_expires").on(table.expiresAt),
     index("idx_entity_memories_superseded").on(table.superseded),
-    index("idx_entity_memories_entity_tier").on(table.canonicalEntityId, table.memoryTier),
+    index("idx_entity_memories_entity_tier").on(
+      table.canonicalEntityId,
+      table.memoryTier,
+    ),
   ],
 );
 
@@ -382,8 +433,10 @@ export type AutonomyGoalInsert = typeof autonomyGoalsTable.$inferInsert;
 
 export type AutonomyMemoryRow = typeof autonomyMemoryTable.$inferSelect;
 export type AutonomyMemoryInsert = typeof autonomyMemoryTable.$inferInsert;
-export type AutonomyMemoryQuarantineRow = typeof autonomyMemoryQuarantineTable.$inferSelect;
-export type AutonomyMemoryQuarantineInsert = typeof autonomyMemoryQuarantineTable.$inferInsert;
+export type AutonomyMemoryQuarantineRow =
+  typeof autonomyMemoryQuarantineTable.$inferSelect;
+export type AutonomyMemoryQuarantineInsert =
+  typeof autonomyMemoryQuarantineTable.$inferInsert;
 
 export type AutonomyStateRow = typeof autonomyStateTable.$inferSelect;
 export type AutonomyStateInsert = typeof autonomyStateTable.$inferInsert;

@@ -9,10 +9,13 @@ import { describe, expect, it, vi } from "vitest";
 import { ApprovalGate } from "../approval/approval-gate.js";
 import { KernelStateMachine } from "../state-machine/kernel-state-machine.js";
 import { ToolRegistry } from "../tools/registry.js";
-import { BUILTIN_CONTRACTS, registerBuiltinToolContracts } from "../tools/schemas/index.js";
+import {
+  BUILTIN_CONTRACTS,
+  registerBuiltinToolContracts,
+} from "../tools/schemas/index.js";
 import type { ProposedToolCall, ToolCallSource } from "../tools/types.js";
-import { InvariantChecker } from "../verification/invariants/invariant-checker.js";
 import { registerBuiltinInvariants } from "../verification/invariants/index.js";
+import { InvariantChecker } from "../verification/invariants/invariant-checker.js";
 import { PostConditionVerifier } from "../verification/postcondition-verifier.js";
 import { registerBuiltinPostConditions } from "../verification/postconditions/index.js";
 import { SchemaValidator } from "../verification/schema-validator.js";
@@ -96,28 +99,30 @@ function createPipeline(opts: { autoApproveSources?: ToolCallSource[] } = {}) {
 
 describe("Phase 2 Acceptance Gates", () => {
   it("P2-063: demonstrates >=99.5% success on reversible actions", async () => {
-    const reversibleTools = BUILTIN_CONTRACTS
-      .filter((contract) => contract.riskClass === "reversible")
-      .map((contract) => contract.name);
+    const reversibleTools = BUILTIN_CONTRACTS.filter(
+      (contract) => contract.riskClass === "reversible",
+    ).map((contract) => contract.name);
 
     expect(reversibleTools.length).toBeGreaterThan(0);
 
     const { pipeline } = createPipeline({ autoApproveSources: ["system"] });
-    const handler: ToolActionHandler = vi.fn(async (toolName, _params, requestId) => {
-      if (toolName === "CREATE_TASK") {
-        return {
-          result: {
-            success: true,
-            data: { triggerId: `trigger-${requestId}` },
-          },
-          durationMs: 1,
-        };
-      }
-      if (toolName === "PHETTA_NOTIFY" || toolName === "PHETTA_SEND_EVENT") {
-        return { result: { success: true }, durationMs: 1 };
-      }
-      return { result: { ok: true }, durationMs: 1 };
-    });
+    const handler: ToolActionHandler = vi.fn(
+      async (toolName, _params, requestId) => {
+        if (toolName === "CREATE_TASK") {
+          return {
+            result: {
+              success: true,
+              data: { triggerId: `trigger-${requestId}` },
+            },
+            durationMs: 1,
+          };
+        }
+        if (toolName === "PHETTA_NOTIFY" || toolName === "PHETTA_SEND_EVENT") {
+          return { result: { success: true }, durationMs: 1 };
+        }
+        return { result: { ok: true }, durationMs: 1 };
+      },
+    );
 
     const iterations = 400;
     let successCount = 0;
@@ -137,9 +142,9 @@ describe("Phase 2 Acceptance Gates", () => {
   });
 
   it("P2-064: demonstrates zero unauthorized irreversible actions", async () => {
-    const irreversibleTools = BUILTIN_CONTRACTS
-      .filter((contract) => contract.riskClass === "irreversible")
-      .map((contract) => contract.name);
+    const irreversibleTools = BUILTIN_CONTRACTS.filter(
+      (contract) => contract.riskClass === "irreversible",
+    ).map((contract) => contract.name);
 
     expect(irreversibleTools.length).toBeGreaterThan(0);
 
@@ -159,10 +164,16 @@ describe("Phase 2 Acceptance Gates", () => {
         handler,
       );
 
-      await vi.waitFor(() => {
-        expect(approvalGate.getPending().some((req) => req.call.requestId === requestId))
-          .toBe(true);
-      }, { timeout: 1_000 });
+      await vi.waitFor(
+        () => {
+          expect(
+            approvalGate
+              .getPending()
+              .some((req) => req.call.requestId === requestId),
+          ).toBe(true);
+        },
+        { timeout: 1_000 },
+      );
 
       const pending = approvalGate
         .getPending()
@@ -188,9 +199,10 @@ describe("Phase 2 Acceptance Gates", () => {
   });
 
   it("P2-039: opens unresolved compensation incidents for manual rollback tools", async () => {
-    const { pipeline, eventStore, compensationIncidentManager } = createPipeline({
-      autoApproveSources: ["system"],
-    });
+    const { pipeline, eventStore, compensationIncidentManager } =
+      createPipeline({
+        autoApproveSources: ["system"],
+      });
 
     const requestId = "p2-039-create-task";
     const result = await pipeline.execute(
@@ -212,7 +224,9 @@ describe("Phase 2 Acceptance Gates", () => {
 
     const events = await eventStore.getByRequestId(requestId);
     expect(
-      events.some((event) => event.type === "tool:compensation:incident:opened"),
+      events.some(
+        (event) => event.type === "tool:compensation:incident:opened",
+      ),
     ).toBe(true);
   });
 });

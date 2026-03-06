@@ -57,7 +57,9 @@ describe("role boundary schemas", () => {
           identityVersion: 1,
         },
       }),
-    ).toThrow("Role boundary validation failed for RoleOrchestrator.execute request");
+    ).toThrow(
+      "Role boundary validation failed for RoleOrchestrator.execute request",
+    );
   });
 
   it("rejects malformed executor requests", () => {
@@ -68,7 +70,9 @@ describe("role boundary schemas", () => {
         source: "llm",
         requestId: "req-1",
       }),
-    ).toThrow("Role boundary validation failed for ExecutorRole.execute request");
+    ).toThrow(
+      "Role boundary validation failed for ExecutorRole.execute request",
+    );
   });
 
   it("rejects malformed auditor responses", () => {

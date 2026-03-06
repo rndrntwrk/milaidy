@@ -24,37 +24,33 @@ export {
   stopSubscriptionCredentialRefreshLoop,
   validateOpenAiCodexAccess,
 } from "./credentials.js";
-
-export type { CodexFlow } from "./openai-codex.js";
-// OpenAI Codex (ChatGPT Plus/Pro)
-export { refreshCodexToken, startCodexLogin } from "./openai-codex";
-
-// Secure storage layer
-export {
-  type SecureStorageBackend,
-  type EncryptedPayload,
-  decrypt,
-  encrypt,
-  getSecureStorage,
-  isEncryptedPayload,
-  resetSecureStorage,
-  setSecureStorageBackend,
-} from "./secure-storage.js";
-
-// Migration utilities
-export {
-  getProvidersPendingMigration,
-  migrateCredentials,
-  needsMigration,
-  type MigrationResult,
-} from "./migration.js";
-
 // Key derivation
 export {
   getCredentialPassphraseCandidates,
   getMachineId,
   resetMachineId,
 } from "./key-derivation.js";
+// Migration utilities
+export {
+  getProvidersPendingMigration,
+  type MigrationResult,
+  migrateCredentials,
+  needsMigration,
+} from "./migration.js";
+// OpenAI Codex (ChatGPT Plus/Pro)
+export { refreshCodexToken, startCodexLogin } from "./openai-codex";
+export type { CodexFlow } from "./openai-codex.js";
+// Secure storage layer
+export {
+  decrypt,
+  type EncryptedPayload,
+  encrypt,
+  getSecureStorage,
+  isEncryptedPayload,
+  resetSecureStorage,
+  type SecureStorageBackend,
+  setSecureStorageBackend,
+} from "./secure-storage.js";
 
 // Types
 export type {

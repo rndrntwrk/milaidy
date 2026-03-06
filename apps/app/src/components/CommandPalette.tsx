@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useApp } from "../AppContext.js";
 import { useBugReport } from "../hooks/useBugReport.js";
 import { Dialog } from "./ui/Dialog.js";

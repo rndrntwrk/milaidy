@@ -158,9 +158,13 @@
 }
 
 .wallet-wrapper:hover::after,
-.wallet-wrapper:focus-within::after { display: block; }
+.wallet-wrapper:focus-within::after {
+  display: block;
+}
 .wallet-wrapper:hover .wallet-tooltip,
-.wallet-wrapper:focus-within .wallet-tooltip { display: block !important; }
+.wallet-wrapper:focus-within .wallet-tooltip {
+  display: block;
+}
 
 /* ── Button base classes ───────────────────────────────────────────── */
 

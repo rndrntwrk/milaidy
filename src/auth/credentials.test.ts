@@ -49,6 +49,8 @@ vi.mock("node:fs", () => ({
 }));
 
 describe("applySubscriptionCredentials", () => {
+  const openAiCodexToken =
+    "eyJhbGciOiJSUzI1NiJ9.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdF90ZXN0XzEyMyJ9fQ.sig";
   const savedEnv: Record<string, string | undefined> = {};
 
   beforeEach(() => {
@@ -172,7 +174,7 @@ describe("applySubscriptionCredentials", () => {
     mockCredentials[credPath] = JSON.stringify({
       provider: "openai-codex",
       credentials: {
-        access: "eyJhbGciOiJSUzI1NiJ9.eyJ0ZXN0IjoxfQ.sig",
+        access: openAiCodexToken,
         refresh: "refresh-token",
         expires: Date.now() + 60 * 60 * 1000,
       },
@@ -185,9 +187,7 @@ describe("applySubscriptionCredentials", () => {
 
     await applySubscriptionCredentials();
 
-    expect(process.env.OPENAI_API_KEY).toBe(
-      "eyJhbGciOiJSUzI1NiJ9.eyJ0ZXN0IjoxfQ.sig",
-    );
+    expect(process.env.OPENAI_API_KEY).toBe(openAiCodexToken);
     expect(applyOpenAICodexStealth).toHaveBeenCalledTimes(1);
   });
 });

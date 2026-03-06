@@ -4,7 +4,12 @@
  * @module autonomy/adapters/vector/in-memory-vector-store
  */
 
-import type { VectorStore, VectorDocument, VectorSearchResult, InMemoryVectorConfig } from "./types.js";
+import type {
+  InMemoryVectorConfig,
+  VectorDocument,
+  VectorSearchResult,
+  VectorStore,
+} from "./types.js";
 
 type DistanceFn = (a: number[], b: number[]) => number;
 

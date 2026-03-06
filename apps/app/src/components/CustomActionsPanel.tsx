@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { client, type CustomActionDef } from "../api-client";
 import { useApp } from "../AppContext";
+import { type CustomActionDef, client } from "../api-client";
 import { QUICK_LAYER_DOCK } from "./quickLayerCatalog";
 
 interface CustomActionsPanelProps {
@@ -31,8 +31,8 @@ export function CustomActionsPanel({
   const { plugins = [], setActionNotice, setTab } = useApp();
   const [actions, setActions] = useState<CustomActionDef[]>([]);
   const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState("");
-  const [error, setError] = useState("");
+  const [search, _setSearch] = useState("");
+  const [_error, setError] = useState("");
 
   const loadActions = useCallback(async () => {
     try {
@@ -65,7 +65,8 @@ export function CustomActionsPanel({
       if (!plugin) return "available";
       if (plugin.isActive === true) return "active";
       if (plugin.enabled === false) return "disabled";
-      if (plugin.enabled === true && plugin.isActive === false) return "disabled";
+      if (plugin.enabled === true && plugin.isActive === false)
+        return "disabled";
       return "available";
     },
     [plugins],
@@ -96,7 +97,11 @@ export function CustomActionsPanel({
   const triggerDockedLayer = useCallback(
     (layerId: string, layerLabel: string) => {
       setTab("chat");
-      setActionNotice(`Running ${layerLabel} from Actions drawer...`, "info", 2200);
+      setActionNotice(
+        `Running ${layerLabel} from Actions drawer...`,
+        "info",
+        2200,
+      );
       onClose();
       if (typeof window === "undefined") return;
       window.setTimeout(() => {
@@ -199,30 +204,41 @@ export function CustomActionsPanel({
                 {enabledCount} enabled
               </p>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="text-muted hover:text-txt transition-colors"
-              aria-label="Close panel"
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleCreate}
+                className="px-2 py-1 text-[11px] border border-border rounded bg-card text-txt hover:border-accent hover:text-accent transition-colors"
               >
-                <title>Close panel</title>
-                <path d="M12 4L4 12M4 4l8 8" />
-              </svg>
-            </button>
+                + New Custom Action
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="text-muted hover:text-txt transition-colors"
+                aria-label="Close panel"
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                >
+                  <title>Close panel</title>
+                  <path d="M12 4L4 12M4 4l8 8" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           {/* Default stream/runtime quick actions */}
           <div className="px-3 pt-3 pb-2 border-b border-border">
-            <div className="text-xs font-semibold text-txt">Studio Quick Actions</div>
+            <div className="text-xs font-semibold text-txt">
+              Studio Quick Actions
+            </div>
             <div className="text-[11px] text-muted mt-1">
               Default 555 stream/game controls in the dock.
             </div>
@@ -237,6 +253,7 @@ export function CustomActionsPanel({
                       : "border-border text-muted bg-card";
                 return (
                   <button
+                    type="button"
                     key={layer.id}
                     onClick={() => triggerDockedLayer(layer.id, layer.label)}
                     className={`px-2 py-1 text-[11px] border rounded transition-all ${tone}`}

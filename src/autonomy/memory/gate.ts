@@ -9,15 +9,18 @@
  * @module autonomy/memory/gate
  */
 
-import { logger } from "@elizaos/core";
 import type { Memory } from "@elizaos/core";
-import type { AutonomyMemoryGateConfig, AutonomyTrustConfig } from "../config.js";
+import { logger } from "@elizaos/core";
+import type {
+  AutonomyMemoryGateConfig,
+  AutonomyTrustConfig,
+} from "../config.js";
 import {
   recordMemoryGateDecision,
   recordQuarantineSize,
 } from "../metrics/prometheus-metrics.js";
-import type { TrustScore, TrustSource, MemoryType } from "../types.js";
 import type { TrustScorer } from "../trust/scorer.js";
+import type { MemoryType, TrustScore, TrustSource } from "../types.js";
 import type { MemoryStore } from "./store.js";
 import type { TypedMemoryObject } from "./types.js";
 
@@ -41,7 +44,10 @@ export interface MemoryGate {
   /** Get all quarantined memories pending review. */
   getQuarantined(): Promise<TypedMemoryObject[]>;
   /** Approve or reject a quarantined memory. Returns the memory if approved. */
-  reviewQuarantined(memoryId: string, decision: "approve" | "reject"): Promise<TypedMemoryObject | null>;
+  reviewQuarantined(
+    memoryId: string,
+    decision: "approve" | "reject",
+  ): Promise<TypedMemoryObject | null>;
   /** Get gate statistics. */
   getStats(): MemoryGateStats;
 }
@@ -151,7 +157,10 @@ export class MemoryGateImpl implements MemoryGate {
     }
   }
 
-  async evaluate(memory: Memory, source: TrustSource): Promise<MemoryGateDecision> {
+  async evaluate(
+    memory: Memory,
+    source: TrustSource,
+  ): Promise<MemoryGateDecision> {
     // If gate is disabled, allow but mark as unscored (no fabricated trust)
     if (!this.gateConfig.enabled) {
       recordMemoryGateDecision("accepted");
@@ -173,9 +182,10 @@ export class MemoryGateImpl implements MemoryGate {
     }
 
     // Extract content text
-    const contentText = typeof memory.content === "string"
-      ? memory.content
-      : memory.content?.text ?? JSON.stringify(memory.content);
+    const contentText =
+      typeof memory.content === "string"
+        ? memory.content
+        : (memory.content?.text ?? JSON.stringify(memory.content));
 
     // Input size limit — reject oversized content to prevent OOM/ReDoS
     if (contentText.length > MAX_CONTENT_SIZE) {
@@ -183,7 +193,7 @@ export class MemoryGateImpl implements MemoryGate {
       recordMemoryGateDecision("rejected");
       logger.warn(
         `[memory-gate] REJECT oversized content from ${source.id} ` +
-        `(${contentText.length} bytes > ${MAX_CONTENT_SIZE} limit)`,
+          `(${contentText.length} bytes > ${MAX_CONTENT_SIZE} limit)`,
       );
       return {
         action: "reject",
@@ -195,7 +205,9 @@ export class MemoryGateImpl implements MemoryGate {
             temporalCoherence: 0,
             instructionAlignment: 0,
           },
-          reasoning: [`Content too large: ${contentText.length} bytes exceeds ${MAX_CONTENT_SIZE} limit`],
+          reasoning: [
+            `Content too large: ${contentText.length} bytes exceeds ${MAX_CONTENT_SIZE} limit`,
+          ],
           computedAt: Date.now(),
         },
         reason: `Content size ${contentText.length} exceeds maximum ${MAX_CONTENT_SIZE}`,
@@ -214,7 +226,13 @@ export class MemoryGateImpl implements MemoryGate {
         `[memory-gate] ALLOW memory from ${source.id} (trust=${trustScore.score.toFixed(3)})`,
       );
       const memoryId = memory.id ? String(memory.id) : crypto.randomUUID();
-      const typed = this.createTypedMemory(memory, memoryId, trustScore, source, true);
+      const typed = this.createTypedMemory(
+        memory,
+        memoryId,
+        trustScore,
+        source,
+        true,
+      );
       await this.persistAllowed(typed);
       return {
         action: "allow",
@@ -227,16 +245,25 @@ export class MemoryGateImpl implements MemoryGate {
       // Quarantine: hold for review
       // Always generate a new UUID for quarantine to prevent ID collision replacement attacks
       const memoryId = crypto.randomUUID();
-      const typed = this.createTypedMemory(memory, memoryId, trustScore, source, false);
+      const typed = this.createTypedMemory(
+        memory,
+        memoryId,
+        trustScore,
+        source,
+        false,
+      );
 
       this.addToQuarantine(memoryId, typed);
-      await this.persistQuarantine(typed, Date.now() + this.gateConfig.quarantineReviewMs);
+      await this.persistQuarantine(
+        typed,
+        Date.now() + this.gateConfig.quarantineReviewMs,
+      );
       this.stats.quarantined++;
       recordMemoryGateDecision("quarantined");
 
       logger.info(
         `[memory-gate] QUARANTINE memory ${memoryId} from ${source.id} ` +
-        `(trust=${trustScore.score.toFixed(3)})`,
+          `(trust=${trustScore.score.toFixed(3)})`,
       );
 
       return {
@@ -252,7 +279,7 @@ export class MemoryGateImpl implements MemoryGate {
     recordMemoryGateDecision("rejected");
     logger.warn(
       `[memory-gate] REJECT memory from ${source.id} ` +
-      `(trust=${trustScore.score.toFixed(3)}): ${trustScore.reasoning.join("; ")}`,
+        `(trust=${trustScore.score.toFixed(3)}): ${trustScore.reasoning.join("; ")}`,
     );
 
     return {
@@ -345,16 +372,28 @@ export class MemoryGateImpl implements MemoryGate {
         trustScoreAtWrite: trustScore.score,
       },
       memoryType: this.inferMemoryType(memory),
-      verifiabilityClass:
-        (memory.metadata?.verifiabilityClass as string | undefined) ??
-        "unverified",
+      verifiabilityClass: (() => {
+        const metadata =
+          memory.metadata && typeof memory.metadata === "object"
+            ? (memory.metadata as Record<string, unknown>)
+            : null;
+        const raw = metadata?.verifiabilityClass;
+        return raw === "self_reported" ||
+          raw === "system_verified" ||
+          raw === "external_verified"
+          ? raw
+          : "unverified";
+      })(),
       verified,
     };
   }
 
   private inferMemoryType(memory: Memory): MemoryType {
     // Use metadata.type if available
-    const metaType = memory.metadata?.type;
+    const metaType =
+      memory.metadata && typeof memory.metadata === "object"
+        ? (memory.metadata as Record<string, unknown>).type
+        : undefined;
     if (metaType === "document" || metaType === "fragment") return "document";
     if (metaType === "message") return "message";
     if (metaType === "relationship") return "relationship";
@@ -363,9 +402,10 @@ export class MemoryGateImpl implements MemoryGate {
     if (metaType === "description") return "fact";
 
     // Default heuristic based on content
-    const text = typeof memory.content === "string"
-      ? memory.content
-      : memory.content?.text ?? "";
+    const text =
+      typeof memory.content === "string"
+        ? memory.content
+        : (memory.content?.text ?? "");
 
     if (/\b(task|todo|to-do|follow up|follow-up)\b/i.test(text)) return "task";
     if (/\b(action|execute|performed|ran)\b/i.test(text)) return "action";
@@ -376,7 +416,11 @@ export class MemoryGateImpl implements MemoryGate {
     return "observation";
   }
 
-  private addToQuarantine(memoryId: string, memory: TypedMemoryObject, expiresAt?: number): void {
+  private addToQuarantine(
+    memoryId: string,
+    memory: TypedMemoryObject,
+    expiresAt?: number,
+  ): void {
     // Evict oldest if at capacity
     if (this.quarantineBuffer.size >= this.gateConfig.maxQuarantineSize) {
       this.evictOldestQuarantined();
@@ -387,7 +431,9 @@ export class MemoryGateImpl implements MemoryGate {
     recordQuarantineSize(this.quarantineBuffer.size);
 
     // Set auto-expiry timer
-    const delayMs = expiresAt ? Math.max(0, expiresAt - Date.now()) : this.gateConfig.quarantineReviewMs;
+    const delayMs = expiresAt
+      ? Math.max(0, expiresAt - Date.now())
+      : this.gateConfig.quarantineReviewMs;
     const timer = setTimeout(() => {
       this.handleQuarantineExpiry(memoryId);
     }, delayMs);
@@ -414,7 +460,9 @@ export class MemoryGateImpl implements MemoryGate {
     } else {
       // Default: reject expired quarantined memories
       this.stats.rejected++;
-      logger.info(`[memory-gate] Quarantined memory ${memoryId} expired and rejected`);
+      logger.info(
+        `[memory-gate] Quarantined memory ${memoryId} expired and rejected`,
+      );
     }
     void this.resolveQuarantine(memoryId, "rejected", "expired");
   }
@@ -439,7 +487,9 @@ export class MemoryGateImpl implements MemoryGate {
       this.quarantineBuffer.delete(oldestId);
       this.stats.rejected++;
       recordQuarantineSize(this.quarantineBuffer.size);
-      logger.debug(`[memory-gate] Evicted oldest quarantined memory ${oldestId}`);
+      logger.debug(
+        `[memory-gate] Evicted oldest quarantined memory ${oldestId}`,
+      );
       void this.resolveQuarantine(oldestId, "rejected", "evicted");
     }
   }
@@ -450,10 +500,11 @@ export class MemoryGateImpl implements MemoryGate {
       id: String(memory.id ?? crypto.randomUUID()),
       agentId: memory.agentId ?? "unknown",
       memoryType: memory.memoryType,
-      content: (typeof memory.content === "string"
-        ? { text: memory.content }
-        : (memory.content as Record<string, unknown>)) ?? {},
-      metadata: (memory.metadata as Record<string, unknown> | undefined),
+      content:
+        (typeof memory.content === "string"
+          ? { text: memory.content }
+          : (memory.content as Record<string, unknown>)) ?? {},
+      metadata: memory.metadata as Record<string, unknown> | undefined,
       provenance: memory.provenance,
       trustScore: memory.trustScore,
       verified: memory.verified,
@@ -465,16 +516,20 @@ export class MemoryGateImpl implements MemoryGate {
     });
   }
 
-  private async persistQuarantine(memory: TypedMemoryObject, expiresAt: number): Promise<void> {
+  private async persistQuarantine(
+    memory: TypedMemoryObject,
+    expiresAt: number,
+  ): Promise<void> {
     if (!this.store) return;
     await this.store.saveQuarantine({
       id: String(memory.id ?? crypto.randomUUID()),
       agentId: memory.agentId ?? "unknown",
       memoryType: memory.memoryType,
-      content: (typeof memory.content === "string"
-        ? { text: memory.content }
-        : (memory.content as Record<string, unknown>)) ?? {},
-      metadata: (memory.metadata as Record<string, unknown> | undefined),
+      content:
+        (typeof memory.content === "string"
+          ? { text: memory.content }
+          : (memory.content as Record<string, unknown>)) ?? {},
+      metadata: memory.metadata as Record<string, unknown> | undefined,
       provenance: memory.provenance,
       trustScore: memory.trustScore,
       verified: memory.verified,

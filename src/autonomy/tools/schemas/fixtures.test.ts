@@ -5,7 +5,9 @@ import { BUILTIN_CONTRACTS } from "./index.js";
 describe("BUILTIN_TOOL_FIXTURES", () => {
   it("covers every built-in contract", () => {
     const fixtureNames = Object.keys(BUILTIN_TOOL_FIXTURES).sort();
-    const contractNames = BUILTIN_CONTRACTS.map((contract) => contract.name).sort();
+    const contractNames = BUILTIN_CONTRACTS.map(
+      (contract) => contract.name,
+    ).sort();
     expect(fixtureNames).toEqual(contractNames);
   });
 
@@ -30,4 +32,3 @@ describe("BUILTIN_TOOL_FIXTURES", () => {
     }
   });
 });
-

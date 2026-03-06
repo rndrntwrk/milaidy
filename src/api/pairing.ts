@@ -96,7 +96,10 @@ export interface DeviceVerificationResult {
 // ---------- Session Management ----------
 
 const pairingSessions = new Map<string, PairingSession>();
-const failureTracking = new Map<string, { count: number; lastFailure: number }>();
+const failureTracking = new Map<
+  string,
+  { count: number; lastFailure: number }
+>();
 
 /**
  * Test-only reset for module-level state.
@@ -149,7 +152,7 @@ function generateSessionId(): string {
  * Calculate exponential backoff for failures.
  */
 function calculateBackoff(failureCount: number): number {
-  const backoff = BACKOFF_BASE_MS * Math.pow(2, Math.min(failureCount - 1, 10));
+  const backoff = BACKOFF_BASE_MS * 2 ** Math.min(failureCount - 1, 10);
   return Math.min(backoff, BACKOFF_MAX_MS);
 }
 
@@ -478,7 +481,9 @@ export async function authorizeDevice(
 /**
  * Check if a device is authorized.
  */
-export function isDeviceAuthorized(fingerprint: string): DeviceVerificationResult {
+export function isDeviceAuthorized(
+  fingerprint: string,
+): DeviceVerificationResult {
   const devices = loadAuthorizedDevices();
   const device = devices.get(fingerprint);
 

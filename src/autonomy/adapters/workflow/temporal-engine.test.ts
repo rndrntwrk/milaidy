@@ -8,7 +8,6 @@ function createTemporalMocks() {
   const getHandleMock = vi.fn();
 
   class WorkflowClient {
-    constructor(_opts: { connection: unknown; namespace: string }) {}
     start = startMock;
     getHandle = getHandleMock;
   }
@@ -119,13 +118,11 @@ describe("TemporalWorkflowEngine", () => {
       result: vi.fn(async () => ({ stable: true })),
     };
 
-    mocks.startMock
-      .mockResolvedValueOnce(sharedHandle)
-      .mockRejectedValueOnce(
-        Object.assign(new Error("already started"), {
-          name: "WorkflowExecutionAlreadyStartedError",
-        }),
-      );
+    mocks.startMock.mockResolvedValueOnce(sharedHandle).mockRejectedValueOnce(
+      Object.assign(new Error("already started"), {
+        name: "WorkflowExecutionAlreadyStartedError",
+      }),
+    );
     mocks.getHandleMock.mockReturnValue(sharedHandle);
 
     const def = {

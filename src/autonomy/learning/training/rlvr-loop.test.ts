@@ -3,16 +3,34 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { StubRLVRLoop, ExternalRLVRLoop } from "./rlvr-loop.js";
 import type { RLVRTrainingDataset } from "./dataset.js";
+import { ExternalRLVRLoop, StubRLVRLoop } from "./rlvr-loop.js";
 
 const dataset: RLVRTrainingDataset = {
   id: "ds1",
   label: "test",
   examples: [
-    { id: "e1", toolName: "t1", reward: 0.8, source: "autonomous" as const, scenarioId: "s1" },
-    { id: "e2", toolName: "t2", reward: 0.6, source: "autonomous" as const, scenarioId: "s2" },
-    { id: "e3", toolName: "t3", reward: 0.9, source: "autonomous" as const, scenarioId: "s3" },
+    {
+      id: "e1",
+      toolName: "t1",
+      reward: 0.8,
+      source: "autonomous" as const,
+      scenarioId: "s1",
+    },
+    {
+      id: "e2",
+      toolName: "t2",
+      reward: 0.6,
+      source: "autonomous" as const,
+      scenarioId: "s2",
+    },
+    {
+      id: "e3",
+      toolName: "t3",
+      reward: 0.9,
+      source: "autonomous" as const,
+      scenarioId: "s3",
+    },
   ],
   createdAt: Date.now(),
 };
@@ -25,7 +43,9 @@ describe("StubRLVRLoop", () => {
     expect(result.epochsCompleted).toBe(3);
     expect(result.epochMetrics).toHaveLength(3);
     // Each epoch should show improvement
-    expect(result.epochMetrics[2].averageReward).toBeGreaterThan(result.epochMetrics[0].averageReward);
+    expect(result.epochMetrics[2].averageReward).toBeGreaterThan(
+      result.epochMetrics[0].averageReward,
+    );
   });
 
   it("fails when no examples above threshold", async () => {
@@ -44,7 +64,12 @@ describe("StubRLVRLoop", () => {
 
   it("handles empty dataset evaluation", async () => {
     const loop = new StubRLVRLoop();
-    const { averageReward } = await loop.evaluate({ id: "empty", label: "empty", examples: [], createdAt: Date.now() });
+    const { averageReward } = await loop.evaluate({
+      id: "empty",
+      label: "empty",
+      examples: [],
+      createdAt: Date.now(),
+    });
     expect(averageReward).toBe(0);
   });
 

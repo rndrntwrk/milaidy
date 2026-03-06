@@ -11,7 +11,7 @@ describe("InMemoryVectorStore", () => {
     await store.upsert([{ id: "d1", vector: [1, 0, 0], content: "hello" }]);
     const doc = await store.get("d1");
     expect(doc).toBeDefined();
-    expect(doc!.content).toBe("hello");
+    expect(doc?.content).toBe("hello");
   });
 
   it("returns undefined for missing documents", async () => {
@@ -45,8 +45,8 @@ describe("InMemoryVectorStore", () => {
     await store.upsert([{ id: "d1", vector: [1, 0], content: "v1" }]);
     await store.upsert([{ id: "d1", vector: [0, 1], content: "v2" }]);
     const doc = await store.get("d1");
-    expect(doc!.content).toBe("v2");
-    expect(doc!.vector).toEqual([0, 1]);
+    expect(doc?.content).toBe("v2");
+    expect(doc?.vector).toEqual([0, 1]);
     expect(await store.count()).toBe(1);
   });
 

@@ -7,9 +7,6 @@
  * @module autonomy/persistence/pg-retention-manager
  */
 
-import { logger } from "@elizaos/core";
-
-import type { ExecutionEvent } from "../workflow/types.js";
 import type {
   AuditRetentionManagerInterface,
   ComplianceSummary,
@@ -17,6 +14,7 @@ import type {
   RetentionRecord,
 } from "../domains/governance/retention-manager.js";
 import type { RetentionPolicy } from "../domains/governance/types.js";
+import type { ExecutionEvent } from "../workflow/types.js";
 import type { AutonomyDbAdapter } from "./db-adapter.js";
 
 // ---------- Implementation ----------
@@ -33,8 +31,13 @@ export class PgRetentionManager implements AuditRetentionManagerInterface {
     return this._size;
   }
 
-  async addEvents(events: ExecutionEvent[], policy: RetentionPolicy): Promise<void> {
-    const retainUntil = new Date(Date.now() + policy.eventRetentionMs).toISOString();
+  async addEvents(
+    events: ExecutionEvent[],
+    policy: RetentionPolicy,
+  ): Promise<void> {
+    const retainUntil = new Date(
+      Date.now() + policy.eventRetentionMs,
+    ).toISOString();
     for (const event of events) {
       await this.adapter.executeRaw(
         `INSERT INTO autonomy_audit (type, data, retain_until)
@@ -44,8 +47,13 @@ export class PgRetentionManager implements AuditRetentionManagerInterface {
     }
   }
 
-  async addAuditReport(report: Record<string, unknown>, policy: RetentionPolicy): Promise<void> {
-    const retainUntil = new Date(Date.now() + policy.auditRetentionMs).toISOString();
+  async addAuditReport(
+    report: Record<string, unknown>,
+    policy: RetentionPolicy,
+  ): Promise<void> {
+    const retainUntil = new Date(
+      Date.now() + policy.auditRetentionMs,
+    ).toISOString();
     await this.adapter.executeRaw(
       `INSERT INTO autonomy_audit (type, data, retain_until)
        VALUES ('audit', '${esc(JSON.stringify(report))}'::jsonb, '${retainUntil}'::timestamptz)`,
@@ -139,10 +147,17 @@ function rowToRecord(row: Record<string, unknown>): RetentionRecord {
   };
 }
 
-function parseJsonb(value: unknown, fallback: Record<string, unknown>): Record<string, unknown> {
+function parseJsonb(
+  value: unknown,
+  fallback: Record<string, unknown>,
+): Record<string, unknown> {
   if (value === null || value === undefined) return fallback;
   if (typeof value === "string") {
-    try { return JSON.parse(value); } catch { return fallback; }
+    try {
+      return JSON.parse(value);
+    } catch {
+      return fallback;
+    }
   }
   return value as Record<string, unknown>;
 }

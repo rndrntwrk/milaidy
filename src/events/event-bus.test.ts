@@ -16,7 +16,6 @@ import {
   on,
   resetEventBus,
   TypedEventBus,
-  type MilaidyEvents,
 } from "./event-bus.js";
 
 describe("TypedEventBus", () => {

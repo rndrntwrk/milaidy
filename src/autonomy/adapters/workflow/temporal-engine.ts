@@ -10,8 +10,8 @@
 import { createRequire } from "node:module";
 import type {
   WorkflowDeadLetter,
-  WorkflowEngine,
   WorkflowDefinition,
+  WorkflowEngine,
   WorkflowResult,
 } from "./types.js";
 
@@ -56,7 +56,10 @@ interface TemporalClientModule {
   Connection: {
     connect: (opts: { address?: string }) => Promise<unknown>;
   };
-  WorkflowClient: new (opts: { connection: unknown; namespace: string }) => TemporalClient;
+  WorkflowClient: new (opts: {
+    connection: unknown;
+    namespace: string;
+  }) => TemporalClient;
 }
 
 /**
@@ -72,8 +75,14 @@ export class TemporalWorkflowEngine implements WorkflowEngine {
   private readonly results = new Map<string, WorkflowResult>();
   private readonly deadLetters: WorkflowDeadLetter[] = [];
   private readonly deadLetterMax: number;
-  private readonly handles = new Map<string, { workflowId: string; handle: TemporalHandle }>();
-  private clientPromise?: Promise<{ client: TemporalClient; connection: unknown }>;
+  private readonly handles = new Map<
+    string,
+    { workflowId: string; handle: TemporalHandle }
+  >();
+  private clientPromise?: Promise<{
+    client: TemporalClient;
+    connection: unknown;
+  }>;
   private temporalModule!: TemporalClientModule;
 
   constructor(
@@ -117,7 +126,10 @@ export class TemporalWorkflowEngine implements WorkflowEngine {
     this.workflows.set(definition.id, definition);
   }
 
-  async execute(workflowId: string, input: Record<string, unknown>): Promise<WorkflowResult> {
+  async execute(
+    workflowId: string,
+    input: Record<string, unknown>,
+  ): Promise<WorkflowResult> {
     const workflow = this.workflows.get(workflowId);
     if (!workflow) {
       return {
@@ -133,7 +145,8 @@ export class TemporalWorkflowEngine implements WorkflowEngine {
     const timeoutMs = this.resolveTimeoutMs(input);
     const workflowType = workflow.temporal?.workflowType ?? workflow.id;
     const taskQueue = workflow.temporal?.taskQueue ?? this.config.taskQueue;
-    const temporalWorkflowId = workflow.temporal?.workflowId ?? this.buildWorkflowId(workflow.id);
+    const temporalWorkflowId =
+      workflow.temporal?.workflowId ?? this.buildWorkflowId(workflow.id);
 
     let executionId = `temporal-${Date.now()}`;
     try {
@@ -191,7 +204,9 @@ export class TemporalWorkflowEngine implements WorkflowEngine {
 
       if (outcome.type === "error") {
         const message =
-          outcome.error instanceof Error ? outcome.error.message : String(outcome.error);
+          outcome.error instanceof Error
+            ? outcome.error.message
+            : String(outcome.error);
         const workflowResult: WorkflowResult = {
           executionId,
           workflowId,
@@ -288,7 +303,11 @@ export class TemporalWorkflowEngine implements WorkflowEngine {
     if (this.clientPromise) {
       try {
         const { connection } = await this.clientPromise;
-        if (connection && typeof (connection as { close?: () => Promise<void> }).close === "function") {
+        if (
+          connection &&
+          typeof (connection as { close?: () => Promise<void> }).close ===
+            "function"
+        ) {
           await (connection as { close: () => Promise<void> }).close();
         }
       } catch {
@@ -337,12 +356,20 @@ export class TemporalWorkflowEngine implements WorkflowEngine {
     }
   }
 
-  private async getClient(): Promise<{ client: TemporalClient; connection: unknown }> {
+  private async getClient(): Promise<{
+    client: TemporalClient;
+    connection: unknown;
+  }> {
     if (!this.clientPromise) {
       this.clientPromise = (async () => {
         const { Connection, WorkflowClient } = this.temporalModule;
-        const connection = await Connection.connect({ address: this.config.address });
-        const client = new WorkflowClient({ connection, namespace: this.config.namespace });
+        const connection = await Connection.connect({
+          address: this.config.address,
+        });
+        const client = new WorkflowClient({
+          connection,
+          namespace: this.config.namespace,
+        });
         return { client, connection };
       })();
     }
@@ -353,7 +380,10 @@ export class TemporalWorkflowEngine implements WorkflowEngine {
     return `${this.config.workflowIdPrefix}-${workflowId}-${Date.now()}`;
   }
 
-  private extractExecutionId(handle: TemporalHandle, fallbackWorkflowId: string): string {
+  private extractExecutionId(
+    handle: TemporalHandle,
+    fallbackWorkflowId: string,
+  ): string {
     const h = handle;
     const workflowId = h.workflowId ?? fallbackWorkflowId;
     const runId = h.runId ?? h.firstExecutionRunId ?? h.execution?.runId;

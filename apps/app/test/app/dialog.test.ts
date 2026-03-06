@@ -17,36 +17,48 @@ describe("Dialog", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(Dialog, { open: false, onClose: () => {} },
-          React.createElement("span", null, "hidden")),
+        React.createElement(
+          Dialog,
+          { open: false, onClose: () => {} },
+          React.createElement("span", null, "hidden"),
+        ),
       );
     });
 
-    expect(tree!.toJSON()).toBeNull();
+    expect(tree?.toJSON()).toBeNull();
   });
 
   it("renders children when open=true", async () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(Dialog, { open: true, onClose: () => {} },
-          React.createElement("span", null, "visible")),
+        React.createElement(
+          Dialog,
+          { open: true, onClose: () => {} },
+          React.createElement("span", null, "visible"),
+        ),
       );
     });
 
-    expect(readAllText(tree!)).toContain("visible");
+    if (!tree) {
+      throw new Error("Dialog did not render");
+    }
+    expect(readAllText(tree)).toContain("visible");
   });
 
   it("has role=dialog and aria-modal=true", async () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(Dialog, { open: true, onClose: () => {} },
-          React.createElement("span", null, "content")),
+        React.createElement(
+          Dialog,
+          { open: true, onClose: () => {} },
+          React.createElement("span", null, "content"),
+        ),
       );
     });
 
-    const dialog = tree!.root.findByProps({ role: "dialog" });
+    const dialog = tree?.root.findByProps({ role: "dialog" });
     expect(dialog).toBeDefined();
     expect(String(dialog.props["aria-modal"])).toBe("true");
   });
@@ -55,12 +67,15 @@ describe("Dialog", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(Dialog, { open: true, onClose: () => {}, ariaLabel: "Test dialog" },
-          React.createElement("span", null, "content")),
+        React.createElement(
+          Dialog,
+          { open: true, onClose: () => {}, ariaLabel: "Test dialog" },
+          React.createElement("span", null, "content"),
+        ),
       );
     });
 
-    const dialog = tree!.root.findByProps({ role: "dialog" });
+    const dialog = tree?.root.findByProps({ role: "dialog" });
     expect(dialog.props["aria-label"]).toBe("Test dialog");
   });
 
@@ -68,12 +83,15 @@ describe("Dialog", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(Dialog, { open: true, onClose: () => {}, ariaLabelledBy: "my-title" },
-          React.createElement("span", null, "content")),
+        React.createElement(
+          Dialog,
+          { open: true, onClose: () => {}, ariaLabelledBy: "my-title" },
+          React.createElement("span", null, "content"),
+        ),
       );
     });
 
-    const dialog = tree!.root.findByProps({ role: "dialog" });
+    const dialog = tree?.root.findByProps({ role: "dialog" });
     expect(dialog.props["aria-labelledby"]).toBe("my-title");
   });
 });

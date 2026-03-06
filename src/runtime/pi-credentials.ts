@@ -5,7 +5,10 @@ export interface PiCredentialProvider {
 }
 
 function envKeyForProvider(provider: string): string {
-  const normalized = provider.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_");
+  const normalized = provider
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "_");
   if (normalized === "OPENAI") return "OPENAI_API_KEY";
   if (normalized === "ANTHROPIC") return "ANTHROPIC_API_KEY";
   if (normalized === "GEMINI" || normalized === "GOOGLE") {

@@ -6,9 +6,9 @@ import {
   GIT_OPERATION,
   READ_FILE,
   RUN_TESTS,
+  registerCodingToolContracts,
   SHELL_EXEC,
   WRITE_FILE,
-  registerCodingToolContracts,
 } from "./tool-contracts.js";
 
 // ---------- Tests ----------
@@ -103,9 +103,9 @@ describe("Coding tool contracts", () => {
     expect(
       SHELL_EXEC.paramsSchema.safeParse({ command: "ls -la" }).success,
     ).toBe(true);
-    expect(
-      CODE_ANALYSIS.paramsSchema.safeParse({ path: "/src" }).success,
-    ).toBe(true);
+    expect(CODE_ANALYSIS.paramsSchema.safeParse({ path: "/src" }).success).toBe(
+      true,
+    );
     expect(
       GIT_OPERATION.paramsSchema.safeParse({ subcommand: "status" }).success,
     ).toBe(true);
@@ -114,9 +114,9 @@ describe("Coding tool contracts", () => {
   it("Zod schemas reject invalid params", () => {
     expect(READ_FILE.paramsSchema.safeParse({}).success).toBe(false);
     expect(READ_FILE.paramsSchema.safeParse({ path: "" }).success).toBe(false);
-    expect(
-      WRITE_FILE.paramsSchema.safeParse({ path: "/foo.ts" }).success,
-    ).toBe(false); // missing content
+    expect(WRITE_FILE.paramsSchema.safeParse({ path: "/foo.ts" }).success).toBe(
+      false,
+    ); // missing content
     expect(RUN_TESTS.paramsSchema.safeParse({ command: "" }).success).toBe(
       false,
     );

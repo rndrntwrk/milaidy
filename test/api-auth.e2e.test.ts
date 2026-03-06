@@ -111,16 +111,34 @@ function connectWs(
 // ---------------------------------------------------------------------------
 
 function saveEnv(...keys: string[]): { restore: () => void } {
+  const expanded = Array.from(
+    new Set(
+      keys.flatMap((key) =>
+        key.startsWith("MILADY_")
+          ? [key, key.replace("MILADY_", "MILAIDY_")]
+          : [key],
+      ),
+    ),
+  );
   const saved: Record<string, string | undefined> = {};
-  for (const key of keys) saved[key] = process.env[key];
+  for (const key of expanded) saved[key] = process.env[key];
   return {
     restore() {
-      for (const key of keys) {
+      for (const key of expanded) {
         if (saved[key] === undefined) delete process.env[key];
         else process.env[key] = saved[key];
       }
     },
   };
+}
+
+function deleteEnv(...keys: string[]): void {
+  for (const key of keys) {
+    delete process.env[key];
+    if (key.startsWith("MILADY_")) {
+      delete process.env[key.replace("MILADY_", "MILAIDY_")];
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -134,7 +152,7 @@ describe("Auth bypass (no MILADY_API_TOKEN)", () => {
 
   beforeAll(async () => {
     envBackup = saveEnv("MILADY_API_TOKEN", "MILADY_PAIRING_DISABLED");
-    delete process.env.MILADY_API_TOKEN;
+    deleteEnv("MILADY_API_TOKEN");
     delete process.env.MILADY_PAIRING_DISABLED;
 
     const server = await startApiServer({ port: 0 });
@@ -182,7 +200,7 @@ describe("Non-loopback binding enforces auth without explicit token", () => {
       "MILADY_PAIRING_DISABLED",
       "MILADY_API_BIND",
     );
-    delete process.env.MILADY_API_TOKEN;
+    deleteEnv("MILADY_API_TOKEN");
     delete process.env.MILADY_PAIRING_DISABLED;
     process.env.MILADY_API_BIND = "0.0.0.0";
 
@@ -472,9 +490,11 @@ describe("CORS origin restrictions", () => {
       "MILADY_ALLOWED_ORIGINS",
       "MILADY_ALLOW_NULL_ORIGIN",
     );
-    delete process.env.MILADY_API_TOKEN;
-    delete process.env.MILADY_ALLOWED_ORIGINS;
-    delete process.env.MILADY_ALLOW_NULL_ORIGIN;
+    deleteEnv(
+      "MILADY_API_TOKEN",
+      "MILADY_ALLOWED_ORIGINS",
+      "MILADY_ALLOW_NULL_ORIGIN",
+    );
 
     const server = await startApiServer({ port: 0 });
     port = server.port;
@@ -563,7 +583,7 @@ describe("CORS origin restrictions", () => {
         "https://custom.example.com",
       );
     } finally {
-      delete process.env.MILADY_ALLOWED_ORIGINS;
+      deleteEnv("MILADY_ALLOWED_ORIGINS");
     }
   });
 
@@ -582,7 +602,7 @@ describe("CORS origin restrictions", () => {
       });
       expect(s2).toBe(200);
     } finally {
-      delete process.env.MILADY_ALLOW_NULL_ORIGIN;
+      deleteEnv("MILADY_ALLOW_NULL_ORIGIN");
     }
   });
 

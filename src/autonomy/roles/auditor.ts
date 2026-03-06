@@ -46,7 +46,9 @@ export class DriftAwareAuditor implements AuditorRole {
 
       // Check drift score
       if (driftReport.driftScore > 0.25) {
-        anomalies.push(`High drift score: ${driftReport.driftScore.toFixed(3)}`);
+        anomalies.push(
+          `High drift score: ${driftReport.driftScore.toFixed(3)}`,
+        );
       }
       if (driftReport.driftScore > 0.15) {
         recommendations.push("Review recent outputs for persona drift");
@@ -59,7 +61,10 @@ export class DriftAwareAuditor implements AuditorRole {
             `Tool failure detected in event trail: ${event.payload.error ?? "unknown"}`,
           );
         }
-        if (event.type === "tool:verified" && event.payload.hasCriticalFailure) {
+        if (
+          event.type === "tool:verified" &&
+          event.payload.hasCriticalFailure
+        ) {
           anomalies.push("Verification critical failure in event trail");
         }
       }
@@ -80,7 +85,10 @@ export class DriftAwareAuditor implements AuditorRole {
       await this.persistDriftReport(context, report);
 
       recordRoleLatencyMs("auditor", Date.now() - startedAt);
-      recordRoleExecution("auditor", anomalies.length > 0 ? "failure" : "success");
+      recordRoleExecution(
+        "auditor",
+        anomalies.length > 0 ? "failure" : "success",
+      );
       return report;
     } catch (error) {
       recordRoleLatencyMs("auditor", Date.now() - startedAt);

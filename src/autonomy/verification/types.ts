@@ -89,7 +89,10 @@ export type VerificationStatus = "passed" | "failed" | "partial";
 /**
  * Failure taxonomy for verification outcomes.
  */
-export type VerificationFailureCode = "check_failed" | "check_error" | "timeout";
+export type VerificationFailureCode =
+  | "check_failed"
+  | "check_error"
+  | "timeout";
 
 /**
  * Aggregate verification failure taxonomy counts.

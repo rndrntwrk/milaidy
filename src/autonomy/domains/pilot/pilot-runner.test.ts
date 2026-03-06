@@ -63,9 +63,7 @@ function makeComponents(): KernelComponents {
   };
 }
 
-function makeEvaluator(
-  scoreMap?: Record<string, number>,
-): ScenarioEvaluator {
+function makeEvaluator(scoreMap?: Record<string, number>): ScenarioEvaluator {
   return {
     evaluate: async (scenario: EvaluationScenario): Promise<ScenarioResult> => {
       const score = scoreMap?.[scenario.id] ?? 1.0;
@@ -84,25 +82,17 @@ function makeEvaluator(
 describe("PilotRunner", () => {
   it("throws for unknown domain", async () => {
     const registry = new DomainPackRegistry();
-    const runner = new PilotRunner(
-      registry,
-      makeEvaluator(),
-      makeComponents(),
-    );
+    const runner = new PilotRunner(registry, makeEvaluator(), makeComponents());
 
-    await expect(
-      runner.run({ domainId: "nonexistent" }),
-    ).rejects.toThrow('Domain pack "nonexistent" not found');
+    await expect(runner.run({ domainId: "nonexistent" })).rejects.toThrow(
+      'Domain pack "nonexistent" not found',
+    );
   });
 
   it("produces a report with all benchmarks", async () => {
     const registry = new DomainPackRegistry();
     registry.register(makePack());
-    const runner = new PilotRunner(
-      registry,
-      makeEvaluator(),
-      makeComponents(),
-    );
+    const runner = new PilotRunner(registry, makeEvaluator(), makeComponents());
 
     const report = await runner.run({ domainId: "test-domain" });
 
@@ -164,11 +154,7 @@ describe("PilotRunner", () => {
   it("respects maxScenarios limit", async () => {
     const registry = new DomainPackRegistry();
     registry.register(makePack());
-    const runner = new PilotRunner(
-      registry,
-      makeEvaluator(),
-      makeComponents(),
-    );
+    const runner = new PilotRunner(registry, makeEvaluator(), makeComponents());
 
     const report = await runner.run({
       domainId: "test-domain",
@@ -186,11 +172,7 @@ describe("PilotRunner", () => {
         throw new Error("eval failed");
       },
     };
-    const runner = new PilotRunner(
-      registry,
-      errorEvaluator,
-      makeComponents(),
-    );
+    const runner = new PilotRunner(registry, errorEvaluator, makeComponents());
 
     const report = await runner.run({ domainId: "test-domain" });
 
@@ -207,11 +189,7 @@ describe("PilotRunner", () => {
   it("sets complianceStatus to not_evaluated", async () => {
     const registry = new DomainPackRegistry();
     registry.register(makePack());
-    const runner = new PilotRunner(
-      registry,
-      makeEvaluator(),
-      makeComponents(),
-    );
+    const runner = new PilotRunner(registry, makeEvaluator(), makeComponents());
 
     const report = await runner.run({ domainId: "test-domain" });
     expect(report.complianceStatus).toBe("not_evaluated");
@@ -220,11 +198,7 @@ describe("PilotRunner", () => {
   it("includes timing data in report", async () => {
     const registry = new DomainPackRegistry();
     registry.register(makePack());
-    const runner = new PilotRunner(
-      registry,
-      makeEvaluator(),
-      makeComponents(),
-    );
+    const runner = new PilotRunner(registry, makeEvaluator(), makeComponents());
 
     const report = await runner.run({ domainId: "test-domain" });
 

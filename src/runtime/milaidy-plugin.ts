@@ -34,19 +34,22 @@ import { restartAction } from "../actions/restart.js";
 import { terminalAction } from "../actions/terminal.js";
 import { createDriftWatchEvaluator } from "../autonomy/evaluators/drift-watch.js";
 import { createTrustGateEvaluator } from "../autonomy/evaluators/trust-gate.js";
-import { MilaidyAutonomyService, setAutonomyConfig } from "../autonomy/service.js";
+import {
+  MilaidyAutonomyService,
+  setAutonomyConfig,
+} from "../autonomy/service.js";
 import { EMOTE_CATALOG } from "../emotes/catalog.js";
 import { createAdminTrustProvider } from "../providers/admin-trust.js";
 import {
   createAutonomousStateProvider,
   ensureAutonomousStateTracking,
 } from "../providers/autonomous-state.js";
+import { createPlatformContextProvider } from "../providers/platform-context.js";
 import {
   createSessionKeyProvider,
   resolveSessionKeyFromRoom,
 } from "../providers/session-bridge.js";
 import { createSimpleModeProvider } from "../providers/simple-mode.js";
-import { createPlatformContextProvider } from "../providers/platform-context.js";
 import { createTrustRetrievalProvider } from "../providers/trust-retrieval-provider.js";
 import { DEFAULT_AGENT_WORKSPACE_DIR } from "../providers/workspace.js";
 import { createWorkspaceProvider } from "../providers/workspace-provider.js";

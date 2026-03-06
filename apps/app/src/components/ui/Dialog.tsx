@@ -3,10 +3,14 @@
  * and proper ARIA attributes for all modal/overlay components.
  */
 
-import { useEffect, useRef, useCallback, type ReactNode } from "react";
+import { type ReactNode, useCallback, useEffect, useRef } from "react";
 
 /** Stack-safe scroll lock: only restore scroll when all dialogs have closed. */
 let scrollLockCount = 0;
+
+function hasDom(): boolean {
+  return typeof window !== "undefined" && typeof document !== "undefined";
+}
 
 interface DialogProps {
   open: boolean;
@@ -39,7 +43,7 @@ export function Dialog({
 
   // Save previous focus and lock scroll on open (stack-safe)
   useEffect(() => {
-    if (!open) return;
+    if (!open || !hasDom()) return;
 
     previousFocusRef.current = document.activeElement as HTMLElement | null;
     scrollLockCount++;
@@ -51,17 +55,17 @@ export function Dialog({
         scrollLockCount = 0;
         document.body.style.overflow = "";
       }
-      previousFocusRef.current?.focus();
+      previousFocusRef.current?.focus?.();
     };
   }, [open]);
 
   // Auto-focus the dialog on open
   useEffect(() => {
-    if (!open || !dialogRef.current) return;
+    if (!open || !dialogRef.current || !hasDom()) return;
 
     // Focus the first focusable element, or the dialog itself
     const focusable = dialogRef.current.querySelector<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
     );
     if (focusable) {
       focusable.focus();
@@ -72,7 +76,7 @@ export function Dialog({
 
   // Escape key handler
   useEffect(() => {
-    if (!open) return;
+    if (!open || !hasDom()) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -89,10 +93,17 @@ export function Dialog({
   // Focus trap
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key !== "Tab" || !dialogRef.current) return;
+      if (e.key === "Escape") {
+        e.preventDefault?.();
+        e.stopPropagation?.();
+        onClose();
+        return;
+      }
+
+      if (e.key !== "Tab" || !dialogRef.current || !hasDom()) return;
 
       const focusableElements = dialogRef.current.querySelectorAll<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
       );
       if (focusableElements.length === 0) return;
 
@@ -111,26 +122,26 @@ export function Dialog({
         }
       }
     },
-    []
-  );
-
-  // Backdrop click
-  const handleBackdropClick = useCallback(
-    (e: React.MouseEvent) => {
-      if (!persistent && e.target === e.currentTarget) {
-        onClose();
-      }
-    },
-    [onClose, persistent]
+    [onClose],
   );
 
   if (!open) return null;
 
   return (
-    <div
-      className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 ${backdropClassName}`}
-      onClick={handleBackdropClick}
-    >
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+      {persistent ? (
+        <div
+          aria-hidden="true"
+          className={`absolute inset-0 bg-black/40 ${backdropClassName}`}
+        />
+      ) : (
+        <button
+          type="button"
+          aria-label="Close dialog"
+          className={`absolute inset-0 cursor-default bg-black/40 ${backdropClassName}`}
+          onMouseDown={onClose}
+        />
+      )}
       <div
         ref={dialogRef}
         role="dialog"
@@ -141,6 +152,7 @@ export function Dialog({
         tabIndex={-1}
         onKeyDown={handleKeyDown}
         onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
       >
         {children}
       </div>

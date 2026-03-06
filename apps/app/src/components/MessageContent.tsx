@@ -15,15 +15,15 @@ import { useApp } from "../AppContext";
 import type { ConversationMessage, PluginInfo } from "../api-client";
 import { client } from "../api-client";
 import type { ConfigUiHint } from "../types";
+import {
+  type Arcade555ActionEnvelope,
+  parseArcade555ActionEnvelope,
+} from "./arcade555ActionEnvelope";
 import type { JsonSchemaObject } from "./config-catalog";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer";
 import { paramsToSchema } from "./PluginsView";
 import { UiRenderer } from "./ui-renderer";
 import type { UiSpec } from "./ui-spec";
-import {
-  parseArcade555ActionEnvelope,
-  type Arcade555ActionEnvelope,
-} from "./arcade555ActionEnvelope";
 
 /** Reject prototype-pollution plugin IDs that could slip through the regex. */
 const BLOCKED_IDS = new Set(["__proto__", "constructor", "prototype"]);
@@ -52,7 +52,7 @@ function tryParse(s: string): unknown {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+function _isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
@@ -449,7 +449,11 @@ function UiSpecBlock({ spec, raw }: { spec: UiSpec; raw: string }) {
   );
 }
 
-function ActionEnvelopeBlock({ envelope }: { envelope: Arcade555ActionEnvelope }) {
+function ActionEnvelopeBlock({
+  envelope,
+}: {
+  envelope: Arcade555ActionEnvelope;
+}) {
   const tone = envelope.ok
     ? "border-ok/30 bg-ok/5"
     : "border-danger/35 bg-danger/5";
@@ -516,15 +520,21 @@ export function MessageContent({ message }: MessageContentProps) {
 
   return (
     <div>
-      {segments.map((seg, i) => {
+      {segments.map((seg) => {
+        const key =
+          seg.kind === "text"
+            ? `text:${seg.text}`
+            : seg.kind === "config"
+              ? `config:${seg.pluginId}`
+              : `ui-spec:${seg.raw}`;
         switch (seg.kind) {
           case "text":
-            return <div key={i}>{renderTextOrEnvelope(seg.text)}</div>;
+            return <div key={key}>{renderTextOrEnvelope(seg.text)}</div>;
           case "config":
             if (BLOCKED_IDS.has(seg.pluginId)) return null;
-            return <InlinePluginConfig key={i} pluginId={seg.pluginId} />;
+            return <InlinePluginConfig key={key} pluginId={seg.pluginId} />;
           case "ui-spec":
-            return <UiSpecBlock key={i} spec={seg.spec} raw={seg.raw} />;
+            return <UiSpecBlock key={key} spec={seg.spec} raw={seg.raw} />;
           default:
             return null;
         }

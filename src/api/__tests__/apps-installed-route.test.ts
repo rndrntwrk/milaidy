@@ -5,7 +5,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import { __testOnlyHandleRequest } from "../server.js";
 
-function createState(listInstalled: (pluginManager: unknown) => Promise<unknown>) {
+function createState(
+  listInstalled: (pluginManager: unknown) => Promise<unknown>,
+) {
   const runtime = {
     agentId: "agent-apps-installed",
     character: {

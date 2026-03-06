@@ -6,23 +6,46 @@ import { useCallback, useEffect, useState } from "react";
 import type { AutonomyIdentity } from "../api-client";
 import { client } from "../api-client";
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="mb-4">
-      <div className="text-xs uppercase tracking-wide text-muted mb-2">{title}</div>
+      <div className="text-xs uppercase tracking-wide text-muted mb-2">
+        {title}
+      </div>
       {children}
     </div>
   );
 }
 
-function TagList({ items, onRemove }: { items: string[]; onRemove?: (i: number) => void }) {
+function TagList({
+  items,
+  onRemove,
+}: {
+  items: string[];
+  onRemove?: (i: number) => void;
+}) {
   return (
     <div className="flex flex-wrap gap-1">
       {items.map((item, i) => (
-        <span key={i} className="text-[11px] border border-border bg-bg px-2 py-0.5 inline-flex items-center gap-1">
+        <span
+          key={item}
+          className="text-[11px] border border-border bg-bg px-2 py-0.5 inline-flex items-center gap-1"
+        >
           {item}
           {onRemove && (
-            <button className="text-muted hover:text-danger cursor-pointer" onClick={() => onRemove(i)}>x</button>
+            <button
+              type="button"
+              className="text-muted hover:text-danger cursor-pointer"
+              onClick={() => onRemove(i)}
+            >
+              x
+            </button>
           )}
         </span>
       ))}
@@ -42,15 +65,19 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
-function readSource(record: Record<string, unknown> | null): string | undefined {
+function readSource(
+  record: Record<string, unknown> | null,
+): string | undefined {
   if (!record) return undefined;
   if (typeof record.source === "string" && record.source.trim().length > 0) {
     return record.source.trim();
   }
   const sourceRecord = asRecord(record.source);
   if (sourceRecord) {
-    const type = typeof sourceRecord.type === "string" ? sourceRecord.type : "source";
-    const id = typeof sourceRecord.id === "string" ? sourceRecord.id : "unknown";
+    const type =
+      typeof sourceRecord.type === "string" ? sourceRecord.type : "source";
+    const id =
+      typeof sourceRecord.id === "string" ? sourceRecord.id : "unknown";
     return `${type}:${id}`;
   }
   const provenance = asRecord(record.provenance);
@@ -58,8 +85,13 @@ function readSource(record: Record<string, unknown> | null): string | undefined 
     const provenanceSource = asRecord(provenance.source);
     if (provenanceSource) {
       const type =
-        typeof provenanceSource.type === "string" ? provenanceSource.type : "source";
-      const id = typeof provenanceSource.id === "string" ? provenanceSource.id : "unknown";
+        typeof provenanceSource.type === "string"
+          ? provenanceSource.type
+          : "source";
+      const id =
+        typeof provenanceSource.id === "string"
+          ? provenanceSource.id
+          : "unknown";
       return `${type}:${id}`;
     }
     if (
@@ -84,7 +116,11 @@ function readScope(record: Record<string, unknown> | null): string | undefined {
     return record.preferenceScope.trim();
   }
   const provenance = asRecord(record.provenance);
-  if (provenance && typeof provenance.scope === "string" && provenance.scope.trim().length > 0) {
+  if (
+    provenance &&
+    typeof provenance.scope === "string" &&
+    provenance.scope.trim().length > 0
+  ) {
     return provenance.scope.trim();
   }
   return undefined;
@@ -99,9 +135,7 @@ function extractPreferenceRows(
     .map(([key, raw]) => {
       const record = asRecord(raw);
       const value =
-        record && Object.prototype.hasOwnProperty.call(record, "value")
-          ? record.value
-          : raw;
+        record && Object.hasOwn(record, "value") ? record.value : raw;
       return {
         key,
         value,
@@ -113,7 +147,8 @@ function extractPreferenceRows(
 
 function formatPreferenceValue(value: unknown): string {
   if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (typeof value === "number" || typeof value === "boolean")
+    return String(value);
   if (value === null || value === undefined) return "—";
   try {
     return JSON.stringify(value);
@@ -151,10 +186,14 @@ export function IdentityPanel() {
     try {
       const res = await client.getIdentityHistory();
       setHistory(res.history ?? []);
-    } catch { /* non-critical */ }
+    } catch {
+      /* non-critical */
+    }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -172,7 +211,8 @@ export function IdentityPanel() {
 
   if (loading) return <div className="text-muted p-4">Loading identity...</div>;
   if (error) return <div className="text-danger p-4">{error}</div>;
-  if (!identity) return <div className="text-muted p-4">No identity configured.</div>;
+  if (!identity)
+    return <div className="text-muted p-4">No identity configured.</div>;
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -180,13 +220,18 @@ export function IdentityPanel() {
         <h2 className="text-sm font-semibold">Agent Identity</h2>
         <div className="flex gap-2">
           <button
+            type="button"
             className="text-[11px] border border-border bg-bg px-2 py-1 cursor-pointer hover:border-accent hover:text-accent transition-colors"
-            onClick={() => { setShowHistory(!showHistory); if (!showHistory) void loadHistory(); }}
+            onClick={() => {
+              setShowHistory(!showHistory);
+              if (!showHistory) void loadHistory();
+            }}
           >
             {showHistory ? "Hide History" : "History"}
           </button>
           {!editing ? (
             <button
+              type="button"
               className="text-[11px] border border-accent text-accent px-2 py-1 cursor-pointer hover:bg-accent hover:text-accent-fg transition-colors"
               onClick={() => setEditing(true)}
             >
@@ -195,12 +240,17 @@ export function IdentityPanel() {
           ) : (
             <>
               <button
+                type="button"
                 className="text-[11px] border border-border px-2 py-1 cursor-pointer hover:text-txt transition-colors"
-                onClick={() => { setEditing(false); setDraft(identity); }}
+                onClick={() => {
+                  setEditing(false);
+                  setDraft(identity);
+                }}
               >
                 Cancel
               </button>
               <button
+                type="button"
                 className="text-[11px] border border-accent text-accent px-2 py-1 cursor-pointer hover:bg-accent hover:text-accent-fg transition-colors"
                 onClick={handleSave}
                 disabled={saving}
@@ -216,11 +266,16 @@ export function IdentityPanel() {
         {showHistory && history.length > 0 && (
           <Section title="Version History">
             <div className="space-y-2 mb-4">
-              {history.map((v, i) => (
-                <div key={i} className="border border-border bg-bg p-2 text-[11px]">
+              {history.map((v) => (
+                <div
+                  key={v.identityHash ?? `${v.identityVersion}-${v.name}`}
+                  className="border border-border bg-bg p-2 text-[11px]"
+                >
                   <span className="text-muted">v{v.identityVersion}</span>{" "}
                   <span className="text-txt">{v.name}</span>{" "}
-                  <span className="text-muted">{v.identityHash ? `#${v.identityHash.slice(0, 8)}` : ""}</span>
+                  <span className="text-muted">
+                    {v.identityHash ? `#${v.identityHash.slice(0, 8)}` : ""}
+                  </span>
                 </div>
               ))}
             </div>
@@ -275,31 +330,44 @@ export function IdentityPanel() {
                 <table className="w-full text-[11px]">
                   <thead>
                     <tr className="border-b border-border text-muted uppercase tracking-wide">
-                      <th className="text-left font-medium px-2 py-1">Preference</th>
+                      <th className="text-left font-medium px-2 py-1">
+                        Preference
+                      </th>
                       <th className="text-left font-medium px-2 py-1">Value</th>
-                      <th className="text-left font-medium px-2 py-1">Source</th>
+                      <th className="text-left font-medium px-2 py-1">
+                        Source
+                      </th>
                       <th className="text-left font-medium px-2 py-1">Scope</th>
                     </tr>
                   </thead>
                   <tbody>
                     {preferenceRows.map((row) => (
-                      <tr key={row.key} className="border-b last:border-b-0 border-border">
+                      <tr
+                        key={row.key}
+                        className="border-b last:border-b-0 border-border"
+                      >
                         <td className="px-2 py-1 font-mono text-[10px] text-txt break-all">
                           {row.key}
                         </td>
                         <td className="px-2 py-1 text-txt break-words">
                           {formatPreferenceValue(row.value)}
                         </td>
-                        <td className="px-2 py-1 text-muted break-words">{row.source}</td>
-                        <td className="px-2 py-1 text-muted break-words">{row.scope}</td>
+                        <td className="px-2 py-1 text-muted break-words">
+                          {row.source}
+                        </td>
+                        <td className="px-2 py-1 text-muted break-words">
+                          {row.scope}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
               <div className="text-[10px] text-muted mt-2">
-                Source and scope default to <span className="text-txt">identity-config</span> and{" "}
-                <span className="text-txt">global</span> when preference metadata is not provided.
+                Source and scope default to{" "}
+                <span className="text-txt">identity-config</span> and{" "}
+                <span className="text-txt">global</span> when preference
+                metadata is not provided.
               </div>
             </>
           )}
@@ -309,11 +377,17 @@ export function IdentityPanel() {
           <div className="text-[11px] grid grid-cols-2 gap-2">
             <div>
               <span className="text-muted">Version: </span>
-              <span className="tabular-nums">{identity.identityVersion ?? 0}</span>
+              <span className="tabular-nums">
+                {identity.identityVersion ?? 0}
+              </span>
             </div>
             <div>
               <span className="text-muted">Hash: </span>
-              <span className="font-mono">{identity.identityHash ? identity.identityHash.slice(0, 12) + "..." : "—"}</span>
+              <span className="font-mono">
+                {identity.identityHash
+                  ? `${identity.identityHash.slice(0, 12)}...`
+                  : "—"}
+              </span>
             </div>
           </div>
         </Section>

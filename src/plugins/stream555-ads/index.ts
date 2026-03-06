@@ -431,7 +431,7 @@ async function triggerAdAndAwaitRender(
       };
     }
 
-    const waitMs = Math.max(0, cooldown.retryAfterSeconds * 1000);
+    const waitMs = Math.max(0, (cooldown.retryAfterSeconds ?? 0) * 1000);
     if (waitMs > 0) {
       await new Promise((resolve) => setTimeout(resolve, waitMs));
     }
@@ -447,7 +447,12 @@ async function triggerAdAndAwaitRender(
     };
   }
 
-  const expectedGraphicId = readNonEmptyString(triggerResponse.data?.graphic?.id);
+  const graphic =
+    triggerResponse.data?.graphic &&
+    typeof triggerResponse.data.graphic === "object"
+      ? (triggerResponse.data.graphic as Record<string, unknown>)
+      : null;
+  const expectedGraphicId = readNonEmptyString(graphic?.id);
   const timeoutMs = 9_000;
   const pollMs = 600;
   const startedAt = Date.now();

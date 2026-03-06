@@ -9,13 +9,12 @@
  */
 
 import { logger } from "@elizaos/core";
-
+import { computeEventHash } from "../workflow/event-integrity.js";
 import type {
   EventStoreInterface,
   ExecutionEvent,
   ExecutionEventType,
 } from "../workflow/types.js";
-import { computeEventHash } from "../workflow/event-integrity.js";
 import type { AutonomyDbAdapter } from "./db-adapter.js";
 import type { AutonomyEventRow } from "./schema.js";
 
@@ -155,15 +154,18 @@ export class PgEventStore implements EventStoreInterface {
 
   clear(): void {
     // Fire-and-forget — clear is used in tests mostly
-    this.adapter.executeRaw(
-      `DELETE FROM autonomy_events WHERE agent_id = '${escapeSql(this.adapter.agentId)}'`,
-    ).then(() => {
-      this._size = 0;
-    }).catch((err) => {
-      logger.error(
-        `[autonomy:pg-event-store] clear failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    });
+    this.adapter
+      .executeRaw(
+        `DELETE FROM autonomy_events WHERE agent_id = '${escapeSql(this.adapter.agentId)}'`,
+      )
+      .then(() => {
+        this._size = 0;
+      })
+      .catch((err) => {
+        logger.error(
+          `[autonomy:pg-event-store] clear failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
   }
 
   /**
@@ -234,12 +236,15 @@ function rowToEvent(row: Record<string, unknown>): ExecutionEvent {
     sequenceId: Number(r.id ?? r.ID ?? 0),
     requestId: String(r.request_id ?? r.REQUEST_ID ?? ""),
     type: String(r.type ?? r.TYPE ?? "") as ExecutionEventType,
-    payload: (typeof r.payload === "string" ? JSON.parse(r.payload) : r.payload ?? {}) as Record<string, unknown>,
-    timestamp: r.timestamp instanceof Date
-      ? r.timestamp.getTime()
-      : typeof r.timestamp === "string"
-        ? new Date(r.timestamp).getTime()
-        : Number(r.timestamp ?? 0),
+    payload: (typeof r.payload === "string"
+      ? JSON.parse(r.payload)
+      : (r.payload ?? {})) as Record<string, unknown>,
+    timestamp:
+      r.timestamp instanceof Date
+        ? r.timestamp.getTime()
+        : typeof r.timestamp === "string"
+          ? new Date(r.timestamp).getTime()
+          : Number(r.timestamp ?? 0),
     ...(r.correlation_id ? { correlationId: String(r.correlation_id) } : {}),
     ...(r.prev_hash ? { prevHash: String(r.prev_hash) } : {}),
     ...(r.event_hash ? { eventHash: String(r.event_hash) } : {}),

@@ -4,7 +4,11 @@
  * @module autonomy/memory/store
  */
 
-import type { MemoryProvenance, MemoryType, VerifiabilityClass } from "../types.js";
+import type {
+  MemoryProvenance,
+  MemoryType,
+  VerifiabilityClass,
+} from "../types.js";
 
 export interface PersistedMemoryRecord {
   id: string;
@@ -35,6 +39,10 @@ export interface QuarantineRecord extends PersistedMemoryRecord {
 export interface MemoryStore {
   saveMemory(record: PersistedMemoryRecord): Promise<void>;
   saveQuarantine(record: QuarantineRecord): Promise<void>;
-  resolveQuarantine(id: string, decision: "approved" | "rejected", reason?: string): Promise<void>;
+  resolveQuarantine(
+    id: string,
+    decision: "approved" | "rejected",
+    reason?: string,
+  ): Promise<void>;
   listPendingQuarantine(): Promise<QuarantineRecord[]>;
 }

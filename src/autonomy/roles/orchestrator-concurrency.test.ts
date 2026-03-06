@@ -29,7 +29,7 @@ describe("KernelOrchestrator concurrency consistency", () => {
   it("P3-035: keeps lifecycle state consistent under concurrent executes", async () => {
     let planCounter = 0;
     const planner: PlannerRole = {
-      createPlan: vi.fn(async (request) => {
+      createPlan: vi.fn(async (_request) => {
         planCounter += 1;
         return {
           id: `plan-${planCounter}`,

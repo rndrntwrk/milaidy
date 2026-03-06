@@ -225,7 +225,7 @@ export function formatPlatformContext(caps: PlatformCapabilities): string {
     "- Your knowledge corpus is the same across all platforms — agent-scoped, not platform-scoped.",
     "- Conversation history is room-scoped. Do not claim to remember conversations from other platforms unless explicitly told.",
     '- If a user references a conversation from another platform, say: "I don\'t have access to that conversation history in this session. Can you remind me of the key points?"',
-    "- When referencing actions on another platform, be explicit: \"On Discord, you can...\" or \"If you switch to web chat, you'll be able to...\"",
+    '- When referencing actions on another platform, be explicit: "On Discord, you can..." or "If you switch to web chat, you\'ll be able to..."',
   );
 
   return lines.join("\n");

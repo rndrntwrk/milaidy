@@ -107,7 +107,10 @@ function getValueAtPath(obj: unknown, path: string): unknown {
  * Compute the difference between two objects.
  * Returns an object with only the changed paths (flattened to leaf values).
  */
-function deepDiff(oldObj: unknown, newObj: unknown): Record<string, { oldValue: unknown; newValue: unknown }> {
+function deepDiff(
+  oldObj: unknown,
+  newObj: unknown,
+): Record<string, { oldValue: unknown; newValue: unknown }> {
   const changes: Record<string, { oldValue: unknown; newValue: unknown }> = {};
 
   // Get all leaf paths from both objects
@@ -204,7 +207,9 @@ export class ConfigWatcher {
     // Create debounced handler
     const debouncedHandler = debounce(() => {
       this.handleConfigChange().catch((err) => {
-        logger.error(`[config-watcher] Error handling config change: ${err instanceof Error ? err.message : err}`);
+        logger.error(
+          `[config-watcher] Error handling config change: ${err instanceof Error ? err.message : err}`,
+        );
       });
     }, this.debounceMs);
 
@@ -220,7 +225,9 @@ export class ConfigWatcher {
         logger.error(`[config-watcher] Watch error: ${err.message}`);
       });
     } catch (err) {
-      logger.error(`[config-watcher] Failed to start watching: ${err instanceof Error ? err.message : err}`);
+      logger.error(
+        `[config-watcher] Failed to start watching: ${err instanceof Error ? err.message : err}`,
+      );
     }
   }
 
@@ -266,7 +273,10 @@ export class ConfigWatcher {
    *   - Suffix wildcard: "api.*" matches "api", "api.port", "api.host.name"
    *   - Prefix match: "plugins" matches "plugins.allow"
    */
-  private pathMatches(path: string, pattern: ConfigPath | ConfigPath[]): boolean {
+  private pathMatches(
+    path: string,
+    pattern: ConfigPath | ConfigPath[],
+  ): boolean {
     const patterns = Array.isArray(pattern) ? pattern : [pattern];
 
     return patterns.some((p) => {
@@ -306,7 +316,9 @@ export class ConfigWatcher {
         return;
       }
 
-      logger.info(`[config-watcher] Detected ${changePaths.length} config change(s): ${changePaths.join(", ")}`);
+      logger.info(
+        `[config-watcher] Detected ${changePaths.length} config change(s): ${changePaths.join(", ")}`,
+      );
 
       // Create ConfigChange objects
       const changes: ConfigChange[] = changePaths.map((path) => ({
@@ -317,12 +329,15 @@ export class ConfigWatcher {
       }));
 
       // Group handlers by restart requirement
-      const hotReloadable: Array<{ handler: ConfigChangeHandler; change: ConfigChange }> = [];
+      const hotReloadable: Array<{
+        handler: ConfigChangeHandler;
+        change: ConfigChange;
+      }> = [];
       const requiresRestart: string[] = [];
 
       for (const change of changes) {
         const matchingHandlers = this.handlers.filter((h) =>
-          this.pathMatches(change.path, h.path)
+          this.pathMatches(change.path, h.path),
         );
 
         for (const handler of matchingHandlers) {
@@ -351,7 +366,7 @@ export class ConfigWatcher {
           logger.debug(`[config-watcher] Handler executed for ${change.path}`);
         } catch (err) {
           logger.error(
-            `[config-watcher] Handler failed for ${change.path}: ${err instanceof Error ? err.message : err}`
+            `[config-watcher] Handler failed for ${change.path}: ${err instanceof Error ? err.message : err}`,
           );
         }
       }
@@ -359,7 +374,7 @@ export class ConfigWatcher {
       // Warn about restart-required changes
       if (requiresRestart.length > 0) {
         logger.warn(
-          `[config-watcher] The following changes require restart: ${requiresRestart.join(", ")}`
+          `[config-watcher] The following changes require restart: ${requiresRestart.join(", ")}`,
         );
       }
 
@@ -374,7 +389,9 @@ export class ConfigWatcher {
       // Update current config
       this.currentConfig = newConfig;
     } catch (err) {
-      logger.error(`[config-watcher] Failed to process config change: ${err instanceof Error ? err.message : err}`);
+      logger.error(
+        `[config-watcher] Failed to process config change: ${err instanceof Error ? err.message : err}`,
+      );
     }
   }
 }
@@ -386,7 +403,9 @@ let _configWatcher: ConfigWatcher | null = null;
 /**
  * Get the global config watcher instance.
  */
-export function getConfigWatcher(options?: ConfigWatcherOptions): ConfigWatcher {
+export function getConfigWatcher(
+  options?: ConfigWatcherOptions,
+): ConfigWatcher {
   if (!_configWatcher) {
     _configWatcher = new ConfigWatcher(options);
   }

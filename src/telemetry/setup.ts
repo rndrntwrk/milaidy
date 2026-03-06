@@ -29,6 +29,18 @@ async function optionalImport<T = unknown>(specifier: string): Promise<T> {
   return import(/* @vite-ignore */ specifier) as Promise<T>;
 }
 
+type NodeSdkCtor = new (options: Record<string, unknown>) => TelemetrySDK;
+type ResourceCtor = new (attributes: Record<string, unknown>) => unknown;
+type TraceExporterCtor = new (options: Record<string, unknown>) => unknown;
+type MetricExporterCtor = new (options: Record<string, unknown>) => unknown;
+type BatchSpanProcessorCtor = new (
+  exporter: unknown,
+  options?: Record<string, unknown>,
+) => unknown;
+type PeriodicMetricReaderCtor = new (
+  options: Record<string, unknown>,
+) => unknown;
+
 /**
  * No-op SDK for when telemetry is disabled or dependencies are missing.
  */
@@ -59,14 +71,14 @@ export async function initTelemetry(
   try {
     // Dynamic imports to avoid requiring OTEL when disabled
     const [
-      { NodeSDK },
-      { getNodeAutoInstrumentations },
-      { OTLPTraceExporter },
-      { OTLPMetricExporter },
-      { Resource },
-      { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION },
-      { BatchSpanProcessor },
-      { PeriodicExportingMetricReader },
+      sdkMod,
+      autoInstrMod,
+      traceExporterMod,
+      metricExporterMod,
+      resourceMod,
+      semanticMod,
+      traceBaseMod,
+      metricsMod,
     ] = await Promise.all([
       optionalImport("@opentelemetry/sdk-node"),
       optionalImport("@opentelemetry/auto-instrumentations-node"),
@@ -77,6 +89,29 @@ export async function initTelemetry(
       optionalImport("@opentelemetry/sdk-trace-base"),
       optionalImport("@opentelemetry/sdk-metrics"),
     ]);
+    const { NodeSDK } = sdkMod as { NodeSDK: NodeSdkCtor };
+    const { getNodeAutoInstrumentations } = autoInstrMod as {
+      getNodeAutoInstrumentations: (
+        config?: Record<string, unknown>,
+      ) => unknown;
+    };
+    const { OTLPTraceExporter } = traceExporterMod as {
+      OTLPTraceExporter: TraceExporterCtor;
+    };
+    const { OTLPMetricExporter } = metricExporterMod as {
+      OTLPMetricExporter: MetricExporterCtor;
+    };
+    const { Resource } = resourceMod as { Resource: ResourceCtor };
+    const { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } = semanticMod as {
+      ATTR_SERVICE_NAME: string;
+      ATTR_SERVICE_VERSION: string;
+    };
+    const { BatchSpanProcessor } = traceBaseMod as {
+      BatchSpanProcessor: BatchSpanProcessorCtor;
+    };
+    const { PeriodicExportingMetricReader } = metricsMod as {
+      PeriodicExportingMetricReader: PeriodicMetricReaderCtor;
+    };
 
     const serviceName = otelConfig.serviceName ?? "milaidy";
     const endpoint = otelConfig.endpoint ?? "http://localhost:4318";
@@ -113,7 +148,12 @@ export async function initTelemetry(
         getNodeAutoInstrumentations({
           "@opentelemetry/instrumentation-fs": { enabled: false },
           "@opentelemetry/instrumentation-http": {
-            ignoreIncomingPaths: ["/health", "/health/live", "/health/ready", "/metrics"],
+            ignoreIncomingPaths: [
+              "/health",
+              "/health/live",
+              "/health/ready",
+              "/metrics",
+            ],
           },
         }),
       ],
@@ -134,7 +174,9 @@ export async function initTelemetry(
     process.on("SIGTERM", shutdownHandler);
     process.on("SIGINT", shutdownHandler);
 
-    console.log(`[telemetry] OpenTelemetry initialized, exporting to ${endpoint}`);
+    console.log(
+      `[telemetry] OpenTelemetry initialized, exporting to ${endpoint}`,
+    );
 
     return sdk;
   } catch (err) {

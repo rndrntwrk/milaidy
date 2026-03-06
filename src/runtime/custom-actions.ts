@@ -20,11 +20,12 @@ import type { Action, HandlerOptions, IAgentRuntime } from "@elizaos/core";
 import { createCustomActionContract } from "../autonomy/tools/schemas/custom-action.schema.js";
 import type { ToolRegistryInterface } from "../autonomy/tools/types.js";
 import { customActionPostConditions } from "../autonomy/verification/postconditions/custom-action.postcondition.js";
-import { loadMilaidyConfig } from "../config/config.js";
-import type {
-  CustomActionDef,
-  CustomActionHandler,
-} from "../config/types.milaidy.js";
+import { loadMiladyConfig } from "../config/config.js";
+import type { CustomActionDef, CustomActionHandler } from "../config/types.js";
+import {
+  isBlockedPrivateOrLinkLocalIp,
+  normalizeHostLike,
+} from "../security/network-policy.js";
 import {
   assertSurface555Capability,
   createSurface555CapabilityPolicy,
@@ -38,7 +39,10 @@ const _customPostConditionsRegistered = new Set<string>();
 type AutonomyServiceLike = {
   getToolRegistry?: () => ToolRegistryInterface | null;
   getPostConditionVerifier?: () => {
-    registerConditions: (toolName: string, conditions: typeof customActionPostConditions) => void;
+    registerConditions: (
+      toolName: string,
+      conditions: typeof customActionPostConditions,
+    ) => void;
   } | null;
 };
 
@@ -46,9 +50,9 @@ function syncCustomActionWithAutonomy(def: CustomActionDef): void {
   if (!_runtime) return;
 
   try {
-    const autonomySvc = _runtime.getService?.("AUTONOMY") as
-      | AutonomyServiceLike
-      | null;
+    const autonomySvc = _runtime.getService?.(
+      "AUTONOMY",
+    ) as AutonomyServiceLike | null;
     if (!autonomySvc) return;
 
     const name = def.name.trim();
@@ -640,7 +644,10 @@ function defToAction(def: CustomActionDef): Action {
           def.description,
         );
         if (requiredCapability) {
-          assertSurface555Capability(FIVE55_CAPABILITY_POLICY, requiredCapability);
+          assertSurface555Capability(
+            FIVE55_CAPABILITY_POLICY,
+            requiredCapability,
+          );
         }
 
         const opts = options as HandlerOptions | undefined;

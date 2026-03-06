@@ -19,11 +19,14 @@ vi.mock("../../events/event-bus.js", () => ({
   getEventBus: () => ({ emit: mockEmit }),
 }));
 
-import { createTrustGateEvaluator, _resetEventBusCache } from "./trust-gate.js";
+import { _resetEventBusCache, createTrustGateEvaluator } from "./trust-gate.js";
 
 // ---------- Test Helpers ----------
 
-function createMockMessage(text: string, overrides: Record<string, unknown> = {}) {
+function createMockMessage(
+  text: string,
+  overrides: Record<string, unknown> = {},
+) {
   return {
     id: "msg-1",
     content: { text },
@@ -34,14 +37,16 @@ function createMockMessage(text: string, overrides: Record<string, unknown> = {}
 }
 
 /** Create a mock runtime with optional autonomy service. */
-function createMockRuntime(opts: {
-  scorer?: {
-    score: ReturnType<typeof vi.fn>;
-  };
-  gate?: {
-    evaluate: ReturnType<typeof vi.fn>;
-  };
-} = {}) {
+function createMockRuntime(
+  opts: {
+    scorer?: {
+      score: ReturnType<typeof vi.fn>;
+    };
+    gate?: {
+      evaluate: ReturnType<typeof vi.fn>;
+    };
+  } = {},
+) {
   const svc = opts.scorer
     ? {
         getTrustScorer: () => opts.scorer,

@@ -44,9 +44,14 @@ export interface TrainingResult {
 /** RLVR training loop interface. */
 export interface RLVRLoop {
   /** Run a training loop on the given dataset. */
-  train(dataset: RLVRTrainingDataset, config?: RLVRConfig): Promise<TrainingResult>;
+  train(
+    dataset: RLVRTrainingDataset,
+    config?: RLVRConfig,
+  ): Promise<TrainingResult>;
   /** Evaluate current model on a dataset without training. */
-  evaluate(dataset: RLVRTrainingDataset): Promise<{ averageReward: number; scores: number[] }>;
+  evaluate(
+    dataset: RLVRTrainingDataset,
+  ): Promise<{ averageReward: number; scores: number[] }>;
 }
 
 // ---------- Stub Implementation ----------
@@ -56,7 +61,10 @@ export interface RLVRLoop {
  * Used for testing the training pipeline without an actual ML backend.
  */
 export class StubRLVRLoop implements RLVRLoop {
-  async train(dataset: RLVRTrainingDataset, config?: RLVRConfig): Promise<TrainingResult> {
+  async train(
+    dataset: RLVRTrainingDataset,
+    config?: RLVRConfig,
+  ): Promise<TrainingResult> {
     const start = Date.now();
     const maxEpochs = config?.maxEpochs ?? 3;
     const examples = dataset.examples.filter(
@@ -74,7 +82,8 @@ export class StubRLVRLoop implements RLVRLoop {
       };
     }
 
-    const baseReward = examples.reduce((sum, ex) => sum + (ex.reward ?? 0), 0) / examples.length;
+    const baseReward =
+      examples.reduce((sum, ex) => sum + (ex.reward ?? 0), 0) / examples.length;
     const epochMetrics = [];
 
     for (let epoch = 0; epoch < maxEpochs; epoch++) {
@@ -97,9 +106,12 @@ export class StubRLVRLoop implements RLVRLoop {
     };
   }
 
-  async evaluate(dataset: RLVRTrainingDataset): Promise<{ averageReward: number; scores: number[] }> {
+  async evaluate(
+    dataset: RLVRTrainingDataset,
+  ): Promise<{ averageReward: number; scores: number[] }> {
     const scores = dataset.examples.map((ex) => ex.reward ?? 0);
-    const averageReward = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+    const averageReward =
+      scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
     return { averageReward, scores };
   }
 }
@@ -110,13 +122,18 @@ export class StubRLVRLoop implements RLVRLoop {
 export class ExternalRLVRLoop implements RLVRLoop {
   constructor(private readonly endpoint: string) {}
 
-  async train(_dataset: RLVRTrainingDataset, _config?: RLVRConfig): Promise<TrainingResult> {
+  async train(
+    _dataset: RLVRTrainingDataset,
+    _config?: RLVRConfig,
+  ): Promise<TrainingResult> {
     throw new Error(
       `ExternalRLVRLoop is a stub. Configure a training server at ${this.endpoint}.`,
     );
   }
 
-  async evaluate(_dataset: RLVRTrainingDataset): Promise<{ averageReward: number; scores: number[] }> {
+  async evaluate(
+    _dataset: RLVRTrainingDataset,
+  ): Promise<{ averageReward: number; scores: number[] }> {
     throw new Error(
       `ExternalRLVRLoop.evaluate() is a stub. Configure a training server at ${this.endpoint}.`,
     );

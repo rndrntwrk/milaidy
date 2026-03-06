@@ -21,7 +21,8 @@ vi.mock("../../src/api-client", () => ({
     installRegistryPlugin: vi.fn(),
     testPluginConnection: vi.fn(),
     restartAndWait: vi.fn(),
-    executeAutonomyPlan: (...args: unknown[]) => mockExecuteAutonomyPlan(...args),
+    executeAutonomyPlan: (...args: unknown[]) =>
+      mockExecuteAutonomyPlan(...args),
   },
 }));
 
@@ -129,17 +130,16 @@ describe("Arcade555 operator controls", () => {
       tree = TestRenderer.create(React.createElement(PluginsView));
     });
 
-    expect(findButtonByText(tree!.root, "Verify Auth")).toBeDefined();
-    expect(findButtonByText(tree!.root, "Bootstrap Session")).toBeDefined();
-    expect(findButtonByText(tree!.root, "Fetch Catalog")).toBeDefined();
+    expect(findButtonByText(tree?.root, "Verify Auth")).toBeDefined();
+    expect(findButtonByText(tree?.root, "Bootstrap Session")).toBeDefined();
+    expect(findButtonByText(tree?.root, "Fetch Catalog")).toBeDefined();
     expect(
-      tree!.root.findAll(
-        (node) =>
-          node.children.some(
-            (child) =>
-              typeof child === "string" &&
-              child.includes("Session not bootstrapped"),
-          ),
+      tree?.root.findAll((node) =>
+        node.children.some(
+          (child) =>
+            typeof child === "string" &&
+            child.includes("Session not bootstrapped"),
+        ),
       ).length,
     ).toBeGreaterThan(0);
   });

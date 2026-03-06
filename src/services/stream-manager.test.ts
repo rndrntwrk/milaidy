@@ -93,7 +93,6 @@ async function startWithMock(config: StreamConfig): Promise<string[]> {
   const isTts = config.audioSource === "tts";
   const proc = makeMockProc({ withTtsPipe: isTts });
   (spawn as unknown as ReturnType<typeof vi.fn>).mockReturnValueOnce(
-    // biome-ignore lint/suspicious/noExplicitAny: mock proc shape doesn't fully match ChildProcess
     proc as any,
   );
 
@@ -556,7 +555,6 @@ describe("buildAudioInputArgs() via spawn args", () => {
   it("unknown string source: falls back to anullsrc (silent)", async () => {
     const args = await startWithMock({
       ...BASE_CONFIG,
-      // biome-ignore lint/suspicious/noExplicitAny: intentionally testing unrecognized source
       audioSource: "totally-unknown-source" as any,
     });
 
@@ -700,10 +698,7 @@ describe("autoRestart on unexpected FFmpeg exit", () => {
     await streamManager.stop();
 
     const proc = makeMockProc();
-    (spawn as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
-      // biome-ignore lint/suspicious/noExplicitAny: mock proc
-      proc as any,
-    );
+    (spawn as unknown as ReturnType<typeof vi.fn>).mockReturnValue(proc as any);
 
     vi.useFakeTimers();
     try {
@@ -734,10 +729,7 @@ describe("autoRestart on unexpected FFmpeg exit", () => {
     await streamManager.stop();
 
     const proc = makeMockProc();
-    (spawn as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
-      // biome-ignore lint/suspicious/noExplicitAny: mock proc
-      proc as any,
-    );
+    (spawn as unknown as ReturnType<typeof vi.fn>).mockReturnValue(proc as any);
 
     vi.useFakeTimers();
     try {
@@ -779,10 +771,7 @@ describe("autoRestart on unexpected FFmpeg exit", () => {
     await streamManager.stop();
 
     const proc = makeMockProc();
-    (spawn as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
-      // biome-ignore lint/suspicious/noExplicitAny: mock proc
-      proc as any,
-    );
+    (spawn as unknown as ReturnType<typeof vi.fn>).mockReturnValue(proc as any);
 
     vi.useFakeTimers();
     try {

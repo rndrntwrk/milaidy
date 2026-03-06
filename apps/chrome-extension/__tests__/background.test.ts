@@ -79,7 +79,6 @@ let chromeMock: ChromeMock;
 
 // Provide WebSocket constants on globalThis so background.js can
 // reference WebSocket.OPEN etc.
-// biome-ignore lint/suspicious/noExplicitAny: mocking WebSocket on globalThis requires any
 (globalThis as any).WebSocket = MockWebSocket;
 
 beforeEach(() => {
@@ -88,9 +87,7 @@ beforeEach(() => {
   MockWebSocket._last = null;
 
   // Default fetch: relay reachable
-  // biome-ignore lint/suspicious/noExplicitAny: mocking fetch on globalThis requires any
   (globalThis as any).fetch = vi.fn(async () => ({ ok: true, status: 200 }));
-  // biome-ignore lint/suspicious/noExplicitAny: mocking AbortSignal on globalThis requires any
   (globalThis as any).AbortSignal = { timeout: () => ({}) };
 });
 
@@ -379,7 +376,6 @@ describe("ensureRelayConnection", () => {
 
   it("does preflight fetch", async () => {
     const fetchMock = vi.fn(async () => ({ ok: true }));
-    // biome-ignore lint/suspicious/noExplicitAny: mocking fetch on globalThis requires any
     (globalThis as any).fetch = fetchMock;
     const bg = await importBg();
     const p = bg.ensureRelayConnection();
@@ -390,7 +386,6 @@ describe("ensureRelayConnection", () => {
   });
 
   it("throws when preflight fetch fails", async () => {
-    // biome-ignore lint/suspicious/noExplicitAny: mocking fetch on globalThis requires any
     (globalThis as any).fetch = vi.fn(async () => {
       throw new Error("ECONNREFUSED");
     });
@@ -501,7 +496,6 @@ describe("attachTab", () => {
       JSON.parse(c[0] as string),
     );
     const attachEvent = sent.find(
-      // biome-ignore lint/suspicious/noExplicitAny: parsed JSON has dynamic structure
       (m: any) =>
         m.method === "forwardCDPEvent" &&
         m.params?.method === "Target.attachedToTarget",
@@ -536,7 +530,6 @@ describe("detachTab", () => {
       JSON.parse(c[0] as string),
     );
     const detachEvent = sent.find(
-      // biome-ignore lint/suspicious/noExplicitAny: parsed JSON has dynamic structure
       (m: any) =>
         m.method === "forwardCDPEvent" &&
         m.params?.method === "Target.detachedFromTarget",
@@ -802,7 +795,6 @@ describe("connectOrToggleForActiveTab", () => {
   });
 
   it("handles connection error", async () => {
-    // biome-ignore lint/suspicious/noExplicitAny: mocking fetch on globalThis requires any
     (globalThis as any).fetch = vi.fn(async () => {
       throw new Error("ECONNREFUSED");
     });

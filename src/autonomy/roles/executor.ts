@@ -7,11 +7,11 @@
  * @module autonomy/roles/executor
  */
 
-import type { ProposedToolCall } from "../tools/types.js";
 import {
   recordRoleExecution,
   recordRoleLatencyMs,
 } from "../metrics/prometheus-metrics.js";
+import type { ProposedToolCall } from "../tools/types.js";
 import type {
   PipelineResult,
   ToolActionHandler,
@@ -20,9 +20,7 @@ import type {
 import type { ExecutorRole } from "./types.js";
 
 export class PipelineExecutor implements ExecutorRole {
-  constructor(
-    private readonly pipeline: ToolExecutionPipelineInterface,
-  ) {}
+  constructor(private readonly pipeline: ToolExecutionPipelineInterface) {}
 
   async execute(
     call: ProposedToolCall,

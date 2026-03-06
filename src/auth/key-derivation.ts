@@ -49,9 +49,10 @@ export function getMachineId(): string {
   try {
     // Dynamic import to handle missing optional dependency
     const nmid = require("node-machine-id");
-    _cachedMachineId = nmid.machineIdSync();
+    const machineId = nmid.machineIdSync() as string;
+    _cachedMachineId = machineId;
     logger.debug("[key-derivation] Using node-machine-id");
-    return _cachedMachineId;
+    return machineId;
   } catch {
     // Package not installed, continue to fallbacks
   }
@@ -112,14 +113,8 @@ export function getCredentialPassphraseCandidates(
     "credentials-master",
     normalizedSecret(env.MILAIDY_CREDENTIALS_MASTER_KEY, true),
   );
-  pushCandidate(
-    "secret-salt",
-    normalizedSecret(env.SECRET_SALT, false),
-  );
-  pushCandidate(
-    "api-token",
-    normalizedSecret(env.MILAIDY_API_TOKEN, true),
-  );
+  pushCandidate("secret-salt", normalizedSecret(env.SECRET_SALT, false));
+  pushCandidate("api-token", normalizedSecret(env.MILAIDY_API_TOKEN, true));
 
   const user = env.USER ?? env.USERNAME ?? "default";
   pushCandidate("machine-legacy", `${getMachineId()}:${user}`);

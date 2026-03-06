@@ -3,8 +3,12 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { exampleToJsonlLine, exportDatasetToJsonl, exportToHuggingFace } from "./jsonl-exporter.js";
-import type { TrainingExample, TrainingDataset } from "../types.js";
+import type { TrainingDataset, TrainingExample } from "../types.js";
+import {
+  exampleToJsonlLine,
+  exportDatasetToJsonl,
+  exportToHuggingFace,
+} from "./jsonl-exporter.js";
 
 const example: TrainingExample = {
   id: "ex1",
@@ -37,7 +41,7 @@ describe("exampleToJsonlLine", () => {
     expect(line.messages[1].role).toBe("user");
     expect(line.messages[2].role).toBe("assistant");
     expect(line.messages[2].tool_calls).toHaveLength(1);
-    expect(line.messages[2].tool_calls![0].function.name).toBe("send_message");
+    expect(line.messages[2].tool_calls?.[0].function.name).toBe("send_message");
   });
 
   it("includes reward when metadata enabled", () => {
@@ -56,7 +60,9 @@ describe("exportDatasetToJsonl", () => {
     const jsonl = exportDatasetToJsonl(dataset);
     const lines = jsonl.split("\n");
     expect(lines).toHaveLength(3);
-    lines.forEach((line) => expect(() => JSON.parse(line)).not.toThrow());
+    lines.forEach((line) => {
+      expect(() => JSON.parse(line)).not.toThrow();
+    });
   });
 
   it("filters by minimum reward", () => {

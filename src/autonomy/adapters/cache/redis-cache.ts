@@ -20,7 +20,7 @@ export class RedisCache implements CacheAdapter {
   private readonly prefix: string;
   private readonly defaultTtlMs: number | undefined;
 
-  constructor(private readonly config: RedisCacheConfig) {
+  constructor(readonly config: RedisCacheConfig) {
     this.prefix = config.keyPrefix ?? "autonomy:";
     this.defaultTtlMs = config.defaultTtlMs;
     // Lazy-load ioredis — fail fast if not installed
@@ -39,7 +39,14 @@ export class RedisCache implements CacheAdapter {
     return `${this.prefix}${k}`;
   }
 
-  private redis(): { get: (k: string) => Promise<string | null>; set: (...args: unknown[]) => Promise<unknown>; del: (k: string) => Promise<number>; exists: (k: string) => Promise<number>; flushdb: () => Promise<unknown>; quit: () => Promise<unknown> } {
+  private redis(): {
+    get: (k: string) => Promise<string | null>;
+    set: (...args: unknown[]) => Promise<unknown>;
+    del: (k: string) => Promise<number>;
+    exists: (k: string) => Promise<number>;
+    flushdb: () => Promise<unknown>;
+    quit: () => Promise<unknown>;
+  } {
     return this.client as never;
   }
 

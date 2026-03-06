@@ -4,14 +4,12 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  type EntityMemoryInput,
   InMemoryEntityMemoryStore,
   MID_TERM_TTL_MS,
-  type EntityMemoryInput,
 } from "./entity-memory-store.js";
 
-function makeInput(
-  overrides?: Partial<EntityMemoryInput>,
-): EntityMemoryInput {
+function makeInput(overrides?: Partial<EntityMemoryInput>): EntityMemoryInput {
   return {
     canonicalEntityId: "entity-1",
     tier: "mid-term",
@@ -47,7 +45,12 @@ describe("InMemoryEntityMemoryStore", () => {
       const mem = await store.insert(makeInput({ tier: "mid-term" }));
 
       expect(mem.expiresAt).not.toBeNull();
-      expect(mem.expiresAt!).toBeGreaterThanOrEqual(before + MID_TERM_TTL_MS - 100);
+      if (mem.expiresAt === null) {
+        throw new Error("Expected mid-term memory to have a TTL");
+      }
+      expect(mem.expiresAt).toBeGreaterThanOrEqual(
+        before + MID_TERM_TTL_MS - 100,
+      );
     });
 
     it("sets null expiresAt for long-term memories", async () => {
@@ -59,9 +62,7 @@ describe("InMemoryEntityMemoryStore", () => {
 
     it("respects explicit expiresAt override", async () => {
       const store = new InMemoryEntityMemoryStore();
-      const mem = await store.insert(
-        makeInput({ expiresAt: 1234567890 }),
-      );
+      const mem = await store.insert(makeInput({ expiresAt: 1234567890 }));
 
       expect(mem.expiresAt).toBe(1234567890);
     });
@@ -74,7 +75,7 @@ describe("InMemoryEntityMemoryStore", () => {
       const found = await store.getById(mem.id);
 
       expect(found).not.toBeNull();
-      expect(found!.id).toBe(mem.id);
+      expect(found?.id).toBe(mem.id);
     });
 
     it("returns null for non-existent ID", async () => {
@@ -136,9 +137,7 @@ describe("InMemoryEntityMemoryStore", () => {
 
     it("excludes expired by default", async () => {
       const store = new InMemoryEntityMemoryStore();
-      await store.insert(
-        makeInput({ expiresAt: Date.now() - 1000 }),
-      );
+      await store.insert(makeInput({ expiresAt: Date.now() - 1000 }));
 
       const results = await store.query({ canonicalEntityId: "entity-1" });
       expect(results).toHaveLength(0);
@@ -165,9 +164,9 @@ describe("InMemoryEntityMemoryStore", () => {
 
     it("sorts by createdAt descending", async () => {
       const store = new InMemoryEntityMemoryStore();
-      const m1 = await store.insert(makeInput());
+      const _m1 = await store.insert(makeInput());
       // Small delay to ensure different timestamps
-      const m2 = await store.insert(makeInput());
+      const _m2 = await store.insert(makeInput());
 
       const results = await store.query({ canonicalEntityId: "entity-1" });
       // m2 should be first (newer)
@@ -183,7 +182,7 @@ describe("InMemoryEntityMemoryStore", () => {
 
       await store.bumpSessionCount(mem.id);
       const updated = await store.getById(mem.id);
-      expect(updated!.sessionCount).toBe(2);
+      expect(updated?.sessionCount).toBe(2);
     });
   });
 
@@ -195,7 +194,7 @@ describe("InMemoryEntityMemoryStore", () => {
 
       await store.markSuperseded(mem.id);
       const updated = await store.getById(mem.id);
-      expect(updated!.superseded).toBe(true);
+      expect(updated?.superseded).toBe(true);
     });
   });
 
@@ -269,12 +268,12 @@ describe("InMemoryEntityMemoryStore", () => {
       expect((memories[0].content as { text: string }).text).toBe(
         "User likes TypeScript",
       );
-      expect(
-        (memories[0].metadata as Record<string, unknown>).memoryType,
-      ).toBe("preference");
-      expect(
-        (memories[0].metadata as Record<string, unknown>).memoryTier,
-      ).toBe("mid-term");
+      expect((memories[0].metadata as Record<string, unknown>).memoryType).toBe(
+        "preference",
+      );
+      expect((memories[0].metadata as Record<string, unknown>).memoryTier).toBe(
+        "mid-term",
+      );
     });
   });
 

@@ -53,7 +53,12 @@ describe("deidentifyEpisodes", () => {
         description: "User email bob@example.com",
         steps: [],
         planSteps: 0,
-        totalReward: { total: 0.8, breakdown: {}, dimensions: [], computedAt: 1 },
+        totalReward: {
+          total: 0.8,
+          breakdown: {},
+          dimensions: [],
+          computedAt: 1,
+        },
         driftScore: 0,
         auditAnomalies: ["ip 192.168.1.50"],
         durationMs: 100,

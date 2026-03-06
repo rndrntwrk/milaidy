@@ -37,7 +37,12 @@ export interface ExtractedFact {
   /** Confidence 0.0–1.0 (heuristic-based). */
   confidence: number;
   /** Fact category. */
-  category: "preference" | "biographical" | "intent" | "relationship" | "technical";
+  category:
+    | "preference"
+    | "biographical"
+    | "intent"
+    | "relationship"
+    | "technical";
 }
 
 export interface ConversationSummary {
@@ -89,7 +94,8 @@ const FACT_PATTERNS: Array<{
     pattern: /\bi(?:'m| am) (?:based|located|living) in\s+(.{2,40})/i,
     category: "biographical",
     confidence: 0.7,
-    extract: (m, sender) => `${sender} is based in ${m[1].replace(/[.!?]+$/, "")}`,
+    extract: (m, sender) =>
+      `${sender} is based in ${m[1].replace(/[.!?]+$/, "")}`,
   },
   {
     pattern: /\bi(?:'m| am) from\s+(.{2,40})/i,
@@ -115,7 +121,8 @@ const FACT_PATTERNS: Array<{
     pattern: /\bi work (?:with|for|at)\s+(.{2,60})/i,
     category: "relationship",
     confidence: 0.6,
-    extract: (m, sender) => `${sender} works with/for/at ${m[1].replace(/[.!?]+$/, "")}`,
+    extract: (m, sender) =>
+      `${sender} works with/for/at ${m[1].replace(/[.!?]+$/, "")}`,
   },
   // Technical: "I use X", "My stack is X", "I'm running X"
   {
@@ -129,29 +136,149 @@ const FACT_PATTERNS: Array<{
     pattern: /\bi (?:don'?t like|hate|dislike|avoid)\s+(.{3,80})/i,
     category: "preference",
     confidence: 0.8,
-    extract: (m, sender) => `${sender} dislikes: ${m[1].replace(/[.!?]+$/, "")}`,
+    extract: (m, sender) =>
+      `${sender} dislikes: ${m[1].replace(/[.!?]+$/, "")}`,
   },
 ];
 
 /** Extract topics from a conversation based on keyword frequency. */
 function extractTopics(messages: ConversationMessage[]): string[] {
   const stopWords = new Set([
-    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-    "have", "has", "had", "do", "does", "did", "will", "would", "could",
-    "should", "may", "might", "can", "shall", "i", "you", "he", "she",
-    "it", "we", "they", "me", "him", "her", "us", "them", "my", "your",
-    "his", "its", "our", "their", "this", "that", "these", "those",
-    "what", "which", "who", "whom", "when", "where", "how", "why",
-    "not", "no", "yes", "but", "and", "or", "if", "then", "else",
-    "for", "with", "from", "to", "in", "on", "at", "by", "of", "about",
-    "just", "also", "very", "really", "like", "get", "got", "go",
-    "going", "know", "think", "want", "need", "use", "make", "see",
-    "let", "tell", "say", "said", "okay", "ok", "yeah", "yep", "sure",
-    "thanks", "thank", "please", "sorry", "don't", "doesn't", "didn't",
-    "can't", "won't", "wouldn't", "couldn't", "shouldn't", "haven't",
-    "hasn't", "isn't", "aren't", "wasn't", "weren't", "there", "here",
-    "some", "any", "all", "each", "every", "both", "few", "more", "most",
-    "other", "such", "only", "same", "so", "than", "too", "into",
+    "the",
+    "a",
+    "an",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "being",
+    "have",
+    "has",
+    "had",
+    "do",
+    "does",
+    "did",
+    "will",
+    "would",
+    "could",
+    "should",
+    "may",
+    "might",
+    "can",
+    "shall",
+    "i",
+    "you",
+    "he",
+    "she",
+    "it",
+    "we",
+    "they",
+    "me",
+    "him",
+    "her",
+    "us",
+    "them",
+    "my",
+    "your",
+    "his",
+    "its",
+    "our",
+    "their",
+    "this",
+    "that",
+    "these",
+    "those",
+    "what",
+    "which",
+    "who",
+    "whom",
+    "when",
+    "where",
+    "how",
+    "why",
+    "not",
+    "no",
+    "yes",
+    "but",
+    "and",
+    "or",
+    "if",
+    "then",
+    "else",
+    "for",
+    "with",
+    "from",
+    "to",
+    "in",
+    "on",
+    "at",
+    "by",
+    "of",
+    "about",
+    "just",
+    "also",
+    "very",
+    "really",
+    "like",
+    "get",
+    "got",
+    "go",
+    "going",
+    "know",
+    "think",
+    "want",
+    "need",
+    "use",
+    "make",
+    "see",
+    "let",
+    "tell",
+    "say",
+    "said",
+    "okay",
+    "ok",
+    "yeah",
+    "yep",
+    "sure",
+    "thanks",
+    "thank",
+    "please",
+    "sorry",
+    "don't",
+    "doesn't",
+    "didn't",
+    "can't",
+    "won't",
+    "wouldn't",
+    "couldn't",
+    "shouldn't",
+    "haven't",
+    "hasn't",
+    "isn't",
+    "aren't",
+    "wasn't",
+    "weren't",
+    "there",
+    "here",
+    "some",
+    "any",
+    "all",
+    "each",
+    "every",
+    "both",
+    "few",
+    "more",
+    "most",
+    "other",
+    "such",
+    "only",
+    "same",
+    "so",
+    "than",
+    "too",
+    "into",
   ]);
 
   const wordCounts = new Map<string, number>();
@@ -226,7 +353,9 @@ function buildSummary(messages: ConversationMessage[]): string {
   // Build summary
   const parts: string[] = [];
   parts.push(`Conversation with ${turnCount} turns.`);
-  parts.push(`User opened with: "${opener}${userMessages[0].text.length > 100 ? "..." : ""}".`);
+  parts.push(
+    `User opened with: "${opener}${userMessages[0].text.length > 100 ? "..." : ""}".`,
+  );
 
   if (userMsgCount > 1) {
     const lastUser = userMessages[userMessages.length - 1].text.slice(0, 80);
@@ -307,10 +436,7 @@ export function memoriesToMessages(
       isAgent: m.entityId === agentId,
       text: (m.content as { text: string }).text,
       timestamp: m.createdAt ?? 0,
-      memoryType: (
-        (m.metadata as Record<string, unknown> | undefined)?.memoryType as
-          | MemoryType
-          | undefined
-      ),
+      memoryType: (m.metadata as Record<string, unknown> | undefined)
+        ?.memoryType as MemoryType | undefined,
     }));
 }

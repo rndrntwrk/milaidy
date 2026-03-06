@@ -24,10 +24,7 @@ export interface PolicyEngineInterface {
   /** Get a registered policy by ID. */
   getPolicy(id: string): GovernancePolicy | undefined;
   /** Evaluate a specific policy against an action context. */
-  evaluate(
-    ctx: ComplianceContext,
-    policyId: string,
-  ): Promise<PolicyEvaluation>;
+  evaluate(ctx: ComplianceContext, policyId: string): Promise<PolicyEvaluation>;
   /** Evaluate all registered policies against an action context. */
   evaluateAll(ctx: ComplianceContext): Promise<PolicyEvaluation[]>;
   /** List all registered policies. */
@@ -87,7 +84,9 @@ export class PolicyEngine implements PolicyEngineInterface {
 
     // Approved if compliant and approval requirement doesn't block
     const approved =
-      overallCompliant && approvalRequirement !== "human" && approvalRequirement !== "dual";
+      overallCompliant &&
+      approvalRequirement !== "human" &&
+      approvalRequirement !== "dual";
 
     if (approvalRequirement === "human") {
       reasons.push("Human approval required for this risk class");
@@ -126,7 +125,9 @@ export class PolicyEngine implements PolicyEngineInterface {
     policy: GovernancePolicy,
     ctx: ComplianceContext,
   ): ApprovalRequirement {
-    const rule = policy.approvalRules.find((r) => r.riskClass === ctx.riskClass);
+    const rule = policy.approvalRules.find(
+      (r) => r.riskClass === ctx.riskClass,
+    );
     if (!rule) return "none";
 
     // For automated approval, check trust floor

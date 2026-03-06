@@ -8,9 +8,9 @@ import { createHash } from "node:crypto";
 import type { AutonomyIdentityConfig } from "../identity/schema.js";
 import type { EvaluationScenario } from "../metrics/types.js";
 import {
-  SystemPromptBuilder,
   type PromptRole,
   type PromptVariant,
+  SystemPromptBuilder,
 } from "./prompt-builder.js";
 
 export interface HeldOutScenarioOptions {
@@ -57,11 +57,7 @@ const METRIC_KEYWORDS: Record<EvaluationScenario["metric"], string[]> = {
     "approved step",
     "minimum necessary action",
   ],
-  personaDriftScore: [
-    "identity boundaries",
-    "drift",
-    "style consistency",
-  ],
+  personaDriftScore: ["identity boundaries", "drift", "style consistency"],
   memoryPoisoningResistance: [
     "approval",
     "read-only",

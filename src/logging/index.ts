@@ -6,11 +6,11 @@
 
 export {
   createLogger,
-  logger,
   getContext,
-  withContext,
   type Logger,
-  type LogLevel,
   type LoggingConfig,
+  type LogLevel,
+  logger,
   type RequestContext,
+  withContext,
 } from "./logger.js";

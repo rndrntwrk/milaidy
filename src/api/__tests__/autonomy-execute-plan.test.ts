@@ -1,12 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
-
-import type { AgentRuntime } from "@elizaos/core";
+import type { EventEmitter } from "node:events";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { EventEmitter } from "node:events";
 import { Readable } from "node:stream";
-
-import { __testOnlyHandleRequest } from "../server.js";
+import type { AgentRuntime } from "@elizaos/core";
+import { describe, expect, it, vi } from "vitest";
 import { metrics } from "../../telemetry/setup.js";
+import { __testOnlyHandleRequest } from "../server.js";
 
 describe("/api/agent/autonomy/execute-plan", () => {
   const action = {
@@ -54,11 +52,9 @@ describe("/api/agent/autonomy/execute-plan", () => {
   } as unknown as AgentRuntime;
 
   function createState(
-    pipelineOverride:
-      | {
-          execute: typeof pipeline.execute;
-        }
-      | null = pipeline,
+    pipelineOverride: {
+      execute: typeof pipeline.execute;
+    } | null = pipeline,
   ) {
     const stateRuntime = {
       ...runtime,
@@ -135,10 +131,7 @@ describe("/api/agent/autonomy/execute-plan", () => {
     return res as unknown as ServerResponse & typeof res;
   }
 
-  function readCounter(
-    name: string,
-    tags?: Record<string, string>,
-  ): number {
+  function readCounter(name: string, tags?: Record<string, string>): number {
     const snapshot = metrics.getSnapshot() as {
       counters?: Record<string, number>;
     };
@@ -155,9 +148,7 @@ describe("/api/agent/autonomy/execute-plan", () => {
       {
         plan: {
           id: "plan-1",
-          steps: [
-            { id: "1", toolName: "TEST_ACTION", params: { foo: "bar" } },
-          ],
+          steps: [{ id: "1", toolName: "TEST_ACTION", params: { foo: "bar" } }],
         },
         request: { source: "system" },
       },
@@ -176,7 +167,10 @@ describe("/api/agent/autonomy/execute-plan", () => {
     expect(payload.ok).toBe(true);
     expect(payload.results).toHaveLength(1);
     expect(payload.results[0].success).toBe(true);
-    expect(payload.results[0].result).toEqual({ success: true, data: { foo: "bar" } });
+    expect(payload.results[0].result).toEqual({
+      success: true,
+      data: { foo: "bar" },
+    });
   });
 
   it("falls back to direct runtime execution when autonomy pipeline is unavailable", async () => {
@@ -202,14 +196,21 @@ describe("/api/agent/autonomy/execute-plan", () => {
     const payload = JSON.parse(res.body) as {
       ok: boolean;
       executionMode?: string;
-      results: Array<{ success: boolean; executionMode?: string; result?: unknown }>;
+      results: Array<{
+        success: boolean;
+        executionMode?: string;
+        result?: unknown;
+      }>;
     };
     expect(payload.ok).toBe(true);
     expect(payload.executionMode).toBe("direct-runtime");
     expect(payload.results).toHaveLength(1);
     expect(payload.results[0].success).toBe(true);
     expect(payload.results[0].executionMode).toBe("direct-runtime");
-    expect(payload.results[0].result).toEqual({ success: true, data: { fast: true } });
+    expect(payload.results[0].result).toEqual({
+      success: true,
+      data: { fast: true },
+    });
   });
 
   it("marks direct runtime step as failed when action returns success=false", async () => {
@@ -243,7 +244,11 @@ describe("/api/agent/autonomy/execute-plan", () => {
       stoppedEarly: boolean;
       failedStepIndex: number | null;
       executionMode?: string;
-      results: Array<{ success: boolean; executionMode?: string; error?: string }>;
+      results: Array<{
+        success: boolean;
+        executionMode?: string;
+        error?: string;
+      }>;
     };
     expect(payload.ok).toBe(false);
     expect(payload.allSucceeded).toBe(false);
@@ -342,9 +347,18 @@ describe("/api/agent/autonomy/execute-plan", () => {
   it("records quick-layer dispatch and success counters by action", async () => {
     const state = createState();
     const tags = { action: "TEST_ACTION" };
-    const dispatchBefore = readCounter("milaidy.quick_layer.dispatch_total", tags);
-    const successBefore = readCounter("milaidy.quick_layer.success_total", tags);
-    const failureBefore = readCounter("milaidy.quick_layer.failure_total", tags);
+    const dispatchBefore = readCounter(
+      "milaidy.quick_layer.dispatch_total",
+      tags,
+    );
+    const successBefore = readCounter(
+      "milaidy.quick_layer.success_total",
+      tags,
+    );
+    const failureBefore = readCounter(
+      "milaidy.quick_layer.failure_total",
+      tags,
+    );
 
     const { req, emitBody } = createMockReq(
       "POST",
@@ -352,7 +366,9 @@ describe("/api/agent/autonomy/execute-plan", () => {
       {
         plan: {
           id: "quick-layer-metrics-success",
-          steps: [{ id: "1", toolName: "TEST_ACTION", params: { probe: true } }],
+          steps: [
+            { id: "1", toolName: "TEST_ACTION", params: { probe: true } },
+          ],
         },
         request: { source: "user" },
       },
@@ -391,9 +407,18 @@ describe("/api/agent/autonomy/execute-plan", () => {
       },
     );
     const tags = { action: "TEST_ACTION" };
-    const dispatchBefore = readCounter("milaidy.quick_layer.dispatch_total", tags);
-    const successBefore = readCounter("milaidy.quick_layer.success_total", tags);
-    const failureBefore = readCounter("milaidy.quick_layer.failure_total", tags);
+    const dispatchBefore = readCounter(
+      "milaidy.quick_layer.dispatch_total",
+      tags,
+    );
+    const successBefore = readCounter(
+      "milaidy.quick_layer.success_total",
+      tags,
+    );
+    const failureBefore = readCounter(
+      "milaidy.quick_layer.failure_total",
+      tags,
+    );
 
     const { req, emitBody } = createMockReq(
       "POST",
@@ -401,7 +426,9 @@ describe("/api/agent/autonomy/execute-plan", () => {
       {
         plan: {
           id: "quick-layer-metrics-failure",
-          steps: [{ id: "1", toolName: "TEST_ACTION", params: { probe: true } }],
+          steps: [
+            { id: "1", toolName: "TEST_ACTION", params: { probe: true } },
+          ],
         },
         request: { source: "user" },
       },

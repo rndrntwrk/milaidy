@@ -360,10 +360,11 @@ async function main(): Promise<void> {
   const dedupe = new Set<string>();
 
   for (const doc of docs) {
-    const sourcePath = `${relative(process.cwd(), doc.sourceRoot)}/${doc.relPath}`.replace(
-      /\\/g,
-      "/",
-    );
+    const sourcePath =
+      `${relative(process.cwd(), doc.sourceRoot)}/${doc.relPath}`.replace(
+        /\\/g,
+        "/",
+      );
     const docCitation = `[source: ${sourcePath}]`;
     const summary = buildDocSummary(doc.body);
     if (summary.length > 0) {
@@ -544,4 +545,3 @@ main().catch((err) => {
   console.error(`[knowledge-sft-build] ${message}`);
   process.exitCode = 1;
 });
-

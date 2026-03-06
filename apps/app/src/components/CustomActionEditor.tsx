@@ -708,7 +708,10 @@ export function CustomActionEditor({
       <div className="w-full max-w-2xl border border-border bg-card shadow-lg flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center px-5 py-3 border-b border-border shrink-0">
-          <h2 id="action-editor-title" className="flex-1 text-sm font-medium text-txt">
+          <h2
+            id="action-editor-title"
+            className="flex-1 text-sm font-medium text-txt"
+          >
             {action ? "Edit Custom Action" : "New Custom Action"}
           </h2>
           <button

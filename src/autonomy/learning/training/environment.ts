@@ -84,7 +84,9 @@ export function createTrainingEnvironmentConfig(
       arch: process.arch,
     },
     rlvr: mergeRlvrConfig(input.rlvr),
-    hyperparameterSpace: normalizeHyperparameterSpace(input.hyperparameterSpace),
+    hyperparameterSpace: normalizeHyperparameterSpace(
+      input.hyperparameterSpace,
+    ),
     createdAt: input.createdAt ?? Date.now(),
     metadata: input.metadata,
   };
@@ -97,7 +99,9 @@ function stableStringify(value: unknown): string {
   if (value && typeof value === "object") {
     const entries = Object.entries(value as Record<string, unknown>)
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, child]) => `${JSON.stringify(key)}:${stableStringify(child)}`);
+      .map(
+        ([key, child]) => `${JSON.stringify(key)}:${stableStringify(child)}`,
+      );
     return `{${entries.join(",")}}`;
   }
   return JSON.stringify(value);

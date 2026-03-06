@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ProposedToolCall } from "../tools/types.js";
 import { metrics } from "../../telemetry/setup.js";
+import type { ProposedToolCall } from "../tools/types.js";
 import { ApprovalGate } from "./approval-gate.js";
 
 function makeCall(overrides: Partial<ProposedToolCall> = {}): ProposedToolCall {
@@ -112,18 +112,27 @@ describe("ApprovalGate", () => {
         "irreversible",
       );
       const mid = metrics.getSnapshot();
-      const requestKey = 'autonomy_approval_requests_total:{"risk_class":"irreversible"}';
-      expect((mid.counters[requestKey] ?? 0) - (before.counters[requestKey] ?? 0)).toBe(1);
-      expect(mid.counters["autonomy_approval_queue_size"]).toBe(1);
+      const requestKey =
+        'autonomy_approval_requests_total:{"risk_class":"irreversible"}';
+      expect(
+        (mid.counters[requestKey] ?? 0) - (before.counters[requestKey] ?? 0),
+      ).toBe(1);
+      expect(mid.counters.autonomy_approval_queue_size).toBe(1);
 
       gate.resolve(gate.getPending()[0].id, "approved", "operator");
       await pendingPromise;
 
       const after = metrics.getSnapshot();
-      const decisionKey = 'autonomy_approval_decisions_total:{"decision":"approved"}';
-      expect((after.counters[decisionKey] ?? 0) - (before.counters[decisionKey] ?? 0)).toBe(1);
-      expect(after.histograms["autonomy_approval_turnaround_ms:{}"]).toBeDefined();
-      expect(after.counters["autonomy_approval_queue_size"]).toBe(0);
+      const decisionKey =
+        'autonomy_approval_decisions_total:{"decision":"approved"}';
+      expect(
+        (after.counters[decisionKey] ?? 0) -
+          (before.counters[decisionKey] ?? 0),
+      ).toBe(1);
+      expect(
+        after.histograms["autonomy_approval_turnaround_ms:{}"],
+      ).toBeDefined();
+      expect(after.counters.autonomy_approval_queue_size).toBe(0);
     });
   });
 

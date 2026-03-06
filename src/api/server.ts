@@ -6,14 +6,15 @@
  * dev server proxies /api and /ws here (see scripts/dev-ui.mjs).
  */
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import crypto from "node:crypto";
 import dns from "node:dns";
+import { lookup as dnsLookup } from "node:dns/promises";
 import fs from "node:fs";
 import http from "node:http";
 import https from "node:https";
 import os from "node:os";
 import path from "node:path";
-import { AsyncLocalStorage } from "node:async_hooks";
 import { fileURLToPath } from "node:url";
 import {
   type AgentRuntime,
@@ -27,12 +28,27 @@ import {
   type UUID,
 } from "@elizaos/core";
 import * as piAi from "@mariozechner/pi-ai";
-import { WebSocket as WsClient, type WebSocket, WebSocketServer } from "ws";
+import {
+  canonicalizeMasteryGameId,
+  getMasteryContract,
+  listMasteryContracts,
+  listMasteryRuns as listPersistedMasteryRuns,
+  readMasteryEpisodeConsistency,
+  readMasteryEpisodeFrames,
+  readMasteryEpisodes,
+  readMasteryGameSnapshot,
+  readMasteryLogs,
+  readMasteryRun,
+  readMasteryRunEvidence,
+} from "@rndrntwrk/plugin-555arcade/mastery";
+import { type WebSocket, WebSocketServer, WebSocket as WsClient } from "ws";
 import { CloudManager } from "../cloud/cloud-manager.js";
 import {
   configFileExists,
+  loadMiladyConfig,
   loadMilaidyConfig,
   type MilaidyConfig,
+  saveMiladyConfig,
   saveMilaidyConfig,
 } from "../config/config.js";
 import { resolveModelsCacheDir, resolveStateDir } from "../config/paths.js";
@@ -56,19 +72,6 @@ import {
   createFive55CapabilityPolicy,
 } from "../runtime/five55-capability-policy.js";
 import { resolveFive55CapabilityForRequest } from "../runtime/five55-capability-routing.js";
-import {
-  canonicalizeMasteryGameId,
-  getMasteryContract,
-  listMasteryContracts,
-  listMasteryRuns as listPersistedMasteryRuns,
-  readMasteryEpisodeConsistency,
-  readMasteryEpisodeFrames,
-  readMasteryEpisodes,
-  readMasteryGameSnapshot,
-  readMasteryLogs,
-  readMasteryRun,
-  readMasteryRunEvidence,
-} from "@rndrntwrk/plugin-555arcade/mastery";
 import { createPiCredentialProvider } from "../runtime/pi-credentials.js";
 import {
   AgentExportError,
@@ -76,26 +79,26 @@ import {
   exportAgent,
   importAgent,
 } from "../services/agent-export.js";
-import { AppManager } from "../services/app-manager.js";
 import {
   isManagedAppRemoteProxyHostAllowed,
   resolveManagedAppFallbackUrl,
   resolveManagedAppUpstreamUrl,
 } from "../services/app-catalog.js";
+import { AppManager } from "../services/app-manager.js";
 import {
   HyperscapeAutonomySessionManager,
   logHyperscapeAutonomyEvent,
   resolveDefaultHyperscapeAutonomyAgentId,
   resolveHyperscapeAutonomyEnabled,
 } from "../services/hyperscape-autonomy-session-manager.js";
-import type {
-  InstallProgressLike,
-  PluginManagerLike,
-} from "../services/plugin-manager-types.js";
 import {
   getMcpServerDetails,
   searchMcpMarketplace,
 } from "../services/mcp-marketplace.js";
+import type {
+  InstallProgressLike,
+  PluginManagerLike,
+} from "../services/plugin-manager-types.js";
 import type { SandboxManager } from "../services/sandbox-manager.js";
 import {
   installMarketplaceSkill,
@@ -104,14 +107,24 @@ import {
   uninstallMarketplaceSkill,
 } from "../services/skill-marketplace.js";
 import { TrainingService } from "../services/training-service.js";
+import { metrics } from "../telemetry/setup.js";
 import {
   listTriggerTasks,
   readTriggerConfig,
   taskToTriggerSummary,
 } from "../triggers/runtime.js";
+import {
+  enforceSimpleModeReplyBoundaries,
+  resolveEffectiveChatMode,
+} from "./chat-mode-guard.js";
 import { type CloudRouteState, handleCloudRoute } from "./cloud-routes.js";
 import { handleDatabaseRoute } from "./database.js";
 import { DropService } from "./drop-service.js";
+import {
+  createHealthChecks,
+  createHealthHandler,
+  type HealthCheck,
+} from "./health.js";
 import { handleKnowledgeRoutes } from "./knowledge-routes.js";
 import {
   createRateLimitMiddleware,
@@ -121,15 +134,16 @@ import {
   type PluginParamInfo,
   validatePluginConfig,
 } from "./plugin-validation.js";
+import {
+  applySubscriptionProviderConfig,
+  clearSubscriptionProviderConfig,
+} from "./provider-switch-config.js";
 import { RegistryService } from "./registry-service.js";
 import { handleSandboxRoute } from "./sandbox-routes.js";
+import { resolveTerminalRunLimits } from "./terminal-run-limits.js";
 import { handleTrainingRoutes } from "./training-routes.js";
 import { handleTrajectoryRoute } from "./trajectory-routes.js";
 import { handleTriggerRoutes } from "./trigger-routes.js";
-import {
-  enforceSimpleModeReplyBoundaries,
-  resolveEffectiveChatMode,
-} from "./chat-mode-guard.js";
 import {
   generateVerificationMessage,
   isAddressWhitelisted,
@@ -147,19 +161,13 @@ import {
   getSolanaRpcConfig,
   getWalletAddresses,
   importWallet,
-  validatePrivateKey,
   type SolanaRpcProvider,
+  validatePrivateKey,
   type WalletBalancesResponse,
   type WalletChain,
   type WalletConfigStatus,
   type WalletNftsResponse,
 } from "./wallet.js";
-import {
-  createHealthChecks,
-  createHealthHandler,
-  type HealthCheck,
-} from "./health.js";
-import { initTelemetry, metrics } from "../telemetry/setup.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -172,17 +180,33 @@ interface AutonomyServiceLike {
   isLoopRunning(): boolean;
   getGoalManager?(): import("../autonomy/goals/manager.js").GoalManager | null;
   getMemoryGate?(): import("../autonomy/memory/gate.js").MemoryGate | null;
-  getIdentityConfig?(): import("../autonomy/identity/schema.js").AutonomyIdentityConfig | null;
+  getIdentityConfig?():
+    | import("../autonomy/identity/schema.js").AutonomyIdentityConfig
+    | null;
   updateIdentityConfig?(
-    update: Partial<import("../autonomy/identity/schema.js").AutonomyIdentityConfig>,
+    update: Partial<
+      import("../autonomy/identity/schema.js").AutonomyIdentityConfig
+    >,
     context?: import("../autonomy/identity/update-policy.js").IdentityUpdateContext,
   ): Promise<import("../autonomy/identity/schema.js").AutonomyIdentityConfig>;
-  getApprovalGate?(): import("../autonomy/approval/types.js").ApprovalGateInterface | null;
-  getApprovalLog?(): import("../autonomy/persistence/pg-approval-log.js").ApprovalLogInterface | null;
-  getStateMachine?(): import("../autonomy/state-machine/types.js").KernelStateMachineInterface | null;
-  getExecutionPipeline?(): import("../autonomy/workflow/types.js").ToolExecutionPipelineInterface | null;
-  getWorkflowEngine?(): import("../autonomy/adapters/workflow/types.js").WorkflowEngine | null;
-  getAuditRetentionManager?(): import("../autonomy/domains/governance/retention-manager.js").AuditRetentionManagerInterface | null;
+  getApprovalGate?():
+    | import("../autonomy/approval/types.js").ApprovalGateInterface
+    | null;
+  getApprovalLog?():
+    | import("../autonomy/persistence/pg-approval-log.js").ApprovalLogInterface
+    | null;
+  getStateMachine?():
+    | import("../autonomy/state-machine/types.js").KernelStateMachineInterface
+    | null;
+  getExecutionPipeline?():
+    | import("../autonomy/workflow/types.js").ToolExecutionPipelineInterface
+    | null;
+  getWorkflowEngine?():
+    | import("../autonomy/adapters/workflow/types.js").WorkflowEngine
+    | null;
+  getAuditRetentionManager?():
+    | import("../autonomy/domains/governance/retention-manager.js").AuditRetentionManagerInterface
+    | null;
   getRoleHealth?(): import("../autonomy/service.js").AutonomyRoleHealthSnapshot;
 }
 
@@ -435,19 +459,21 @@ async function probeHyperscapeWsReachability(
 
 function extractFirstJavaScriptAssetUrl(html: string): string | null {
   const scriptSrcPattern = /<script[^>]+src=["']([^"']+)["']/gi;
-  let match: RegExpExecArray | null;
-  while ((match = scriptSrcPattern.exec(html)) !== null) {
+  let match = scriptSrcPattern.exec(html);
+  while (match !== null) {
     const candidate = match[1]?.trim();
-    if (!candidate) continue;
-    const normalized = candidate.toLowerCase();
-    if (
-      normalized.endsWith(".js") ||
-      normalized.includes(".js?") ||
-      normalized.endsWith(".mjs") ||
-      normalized.includes(".mjs?")
-    ) {
-      return candidate;
+    if (candidate) {
+      const normalized = candidate.toLowerCase();
+      if (
+        normalized.endsWith(".js") ||
+        normalized.includes(".js?") ||
+        normalized.endsWith(".mjs") ||
+        normalized.includes(".mjs?")
+      ) {
+        return candidate;
+      }
     }
+    match = scriptSrcPattern.exec(html);
   }
   return null;
 }
@@ -457,7 +483,8 @@ async function probeManagedAppScriptMime(
   timeoutMs = HYPERSCAPE_SCRIPT_MIME_PROBE_TIMEOUT_MS,
 ): Promise<HyperscapeProbeResult> {
   const configuredUrl =
-    resolveManagedAppFallbackUrl(appName) ?? resolveManagedAppUpstreamUrl(appName);
+    resolveManagedAppFallbackUrl(appName) ??
+    resolveManagedAppUpstreamUrl(appName);
   if (!configuredUrl) {
     return {
       healthy: false,
@@ -492,7 +519,10 @@ async function probeManagedAppScriptMime(
       };
     }
 
-    const scriptUrl = new URL(scriptSrc, htmlResponse.url || configuredUrl).toString();
+    const scriptUrl = new URL(
+      scriptSrc,
+      htmlResponse.url || configuredUrl,
+    ).toString();
     const scriptResponse = await fetch(scriptUrl, {
       method: "GET",
       headers: { Accept: "application/javascript,text/javascript,*/*;q=0.1" },
@@ -539,7 +569,9 @@ export async function runHyperscapeOperationalHealthSnapshot(
   ]);
 
   const checks: Record<string, HyperscapeProbeResult> = { api, ws, scriptMime };
-  const unhealthyCount = Object.values(checks).filter((check) => !check.healthy).length;
+  const unhealthyCount = Object.values(checks).filter(
+    (check) => !check.healthy,
+  ).length;
   const status =
     unhealthyCount === 0
       ? "healthy"
@@ -547,7 +579,10 @@ export async function runHyperscapeOperationalHealthSnapshot(
         ? "unhealthy"
         : "degraded";
 
-  metrics.gauge("milaidy.hyperscape.ops_probe_unhealthy_checks", unhealthyCount);
+  metrics.gauge(
+    "milaidy.hyperscape.ops_probe_unhealthy_checks",
+    unhealthyCount,
+  );
   metrics.gauge(
     "milaidy.hyperscape.ops_probe_status",
     status === "healthy" ? 0 : status === "degraded" ? 1 : 2,
@@ -637,7 +672,7 @@ export function rewriteManagedAppProxyJavaScript(
   if (appName !== HYPERSCAPE_APP_NAME) return rewritten;
 
   const proxyBootstrap = [
-    "if (typeof window !== \"undefined\") {",
+    'if (typeof window !== "undefined") {',
     `  window.__CDN_URL = window.__CDN_URL || ${JSON.stringify(localProxyBase)};`,
     `  window.__HYPERSCAPE_PROXY_BASE = ${JSON.stringify(localProxyBase)};`,
     "}",
@@ -712,7 +747,8 @@ export function resolveManagedAppLeakedAssetRedirect(
   refererHeader: string | undefined,
 ): string | null {
   const isRootLeakedAssetPath =
-    pathname.startsWith("/_next/") || MANAGED_APP_LEAKY_ROOT_PATHS.has(pathname);
+    pathname.startsWith("/_next/") ||
+    MANAGED_APP_LEAKY_ROOT_PATHS.has(pathname);
   if (!isRootLeakedAssetPath) return null;
   if (!refererHeader) return null;
 
@@ -763,17 +799,21 @@ function lookupIpv4Only(
 ): void {
   const shouldReturnAll =
     typeof options === "object" && options !== null && options.all === true;
-  dns.lookup(hostname, { family: 4, all: shouldReturnAll }, (error, address, family) => {
-    if (error) {
-      callback(error, shouldReturnAll ? [] : "", family);
-      return;
-    }
-    if (shouldReturnAll) {
-      callback(null, address as dns.LookupAddress[]);
-      return;
-    }
-    callback(null, address as string, family);
-  });
+  dns.lookup(
+    hostname,
+    { family: 4, all: shouldReturnAll },
+    (error, address, family) => {
+      if (error) {
+        callback(error, shouldReturnAll ? [] : "", family);
+        return;
+      }
+      if (shouldReturnAll) {
+        callback(null, address as dns.LookupAddress[]);
+        return;
+      }
+      callback(null, address as string, family);
+    },
+  );
 }
 
 async function fetchWithIpv4Lookup(
@@ -844,7 +884,20 @@ async function fetchWithIpv4Lookup(
 function findRuntimeAction(
   runtime: AgentRuntime,
   toolName: string,
-): { name: string; handler: (runtime: AgentRuntime, message: unknown, state: unknown, options?: Record<string, unknown>) => Promise<unknown>; validate: (runtime: AgentRuntime, message: unknown, state: unknown) => Promise<boolean> } | null {
+): {
+  name: string;
+  handler: (
+    runtime: AgentRuntime,
+    message: unknown,
+    state: unknown,
+    options?: Record<string, unknown>,
+  ) => Promise<unknown>;
+  validate: (
+    runtime: AgentRuntime,
+    message: unknown,
+    state: unknown,
+  ) => Promise<boolean>;
+} | null {
   const normalized = toolName.trim().toUpperCase();
   const actions = runtime.getAllActions?.() ?? runtime.actions ?? [];
   for (const action of actions) {
@@ -889,7 +942,7 @@ async function executeRuntimeAction(params: {
     },
   });
 
-  let state: unknown = undefined;
+  let state: unknown;
   try {
     state = await runtime.composeState(memory);
   } catch {
@@ -927,23 +980,27 @@ async function executeRuntimeActionDirect(params: {
     const { result, durationMs } = await executeRuntimeAction(params);
     let success = true;
     let error: string | undefined;
+    const resultRecord =
+      result && typeof result === "object"
+        ? (result as Record<string, unknown>)
+        : null;
 
     // Some actions encode upstream/API failure as `{ success: false, ... }`
     // without throwing. Surface this as step failure in direct-runtime mode.
-    if (result && typeof result === "object" && "success" in result) {
-      const actionSuccess = (result as { success?: unknown }).success;
+    if (resultRecord && "success" in resultRecord) {
+      const actionSuccess = resultRecord.success;
       if (actionSuccess === false) {
         success = false;
         const directError =
-          typeof (result as { error?: unknown }).error === "string"
-            ? (result as { error: string }).error
+          typeof resultRecord.error === "string"
+            ? resultRecord.error
             : undefined;
         if (directError) {
           error = directError;
         } else {
           const maybeText =
-            typeof (result as { text?: unknown }).text === "string"
-              ? (result as { text: string }).text
+            typeof resultRecord.text === "string"
+              ? resultRecord.text
               : undefined;
           if (maybeText) {
             try {
@@ -1098,6 +1155,37 @@ function buildPermissionStateMap(
   return next;
 }
 
+function applyPermissionDrivenPluginAutoEnable(
+  config: MilaidyConfig,
+  permissions: Record<string, CachedPermissionState>,
+): boolean {
+  const plugins = config.plugins ?? {};
+  config.plugins = plugins;
+  const entries = (plugins.entries ?? {}) as Record<
+    string,
+    { enabled?: boolean }
+  >;
+  plugins.entries = entries;
+
+  const maybeEnable = (pluginId: string): boolean => {
+    const current = entries[pluginId];
+    if (current?.enabled === false) return false;
+    if (current?.enabled === true) return false;
+    entries[pluginId] = { ...(current ?? {}), enabled: true };
+    return true;
+  };
+
+  let changed = false;
+  if (permissions.accessibility?.status === "granted") {
+    changed = maybeEnable("browser") || changed;
+    changed = maybeEnable("computeruse") || changed;
+  }
+  if (permissions["screen-recording"]?.status === "granted") {
+    changed = maybeEnable("vision") || changed;
+  }
+  return changed;
+}
+
 interface ServerState {
   runtime: AgentRuntime | null;
   config: MilaidyConfig;
@@ -1143,6 +1231,8 @@ interface ServerState {
   broadcastStatus: (() => void) | null;
   /** Broadcast an arbitrary JSON message to all WebSocket clients. Set by startApiServer. */
   broadcastWs: ((data: Record<string, unknown>) => void) | null;
+  /** Deferred restart reasons accumulated from restart-required config changes. */
+  pendingRestartReasons: string[];
   /** Currently active conversation ID from the frontend (sent via WS). */
   activeConversationId: string | null;
   /** Transient OAuth flow state for subscription auth. */
@@ -1153,6 +1243,26 @@ interface ServerState {
   permissionStates?: Record<string, CachedPermissionState>;
   /** Whether shell access is enabled (can be toggled in UI). */
   shellEnabled?: boolean;
+  /** Active terminal run counts keyed by normalized client id. */
+  terminalRunCounts: Map<string, number>;
+  /** Prevents concurrent provider switch mutations. */
+  providerSwitchInProgress: boolean;
+  /** Startup diagnostics surfaced to /api/status during bootstrapping. */
+  startup: {
+    phase?: string;
+    attempt?: number;
+    lastError?: string;
+    lastErrorAt?: number;
+    nextRetryAt?: number;
+    state?:
+      | "not_started"
+      | "starting"
+      | "running"
+      | "paused"
+      | "stopped"
+      | "restarting"
+      | "error";
+  };
 }
 
 const FIVE55_HTTP_CAPABILITY_POLICY = createFive55CapabilityPolicy();
@@ -1708,11 +1818,29 @@ const BLOCKED_ENV_KEYS = new Set([
   "PATH",
   "HOME",
   "SHELL",
+  "MILADY_API_TOKEN",
   "MILAIDY_API_TOKEN",
+  "MILADY_WALLET_EXPORT_TOKEN",
   "MILAIDY_WALLET_EXPORT_TOKEN",
   "DATABASE_URL",
   "POSTGRES_URL",
 ]);
+
+function readCompatEnv(primary: string, legacy: string): string | undefined {
+  const primaryValue = process.env[primary]?.trim();
+  if (primaryValue) return primaryValue;
+  const legacyValue = process.env[legacy]?.trim();
+  return legacyValue || undefined;
+}
+
+function compatFlagEnabled(primary: string, legacy: string): boolean {
+  return readCompatEnv(primary, legacy) === "1";
+}
+
+function setCompatEnv(primary: string, legacy: string, value: string): void {
+  process.env[primary] = value;
+  process.env[legacy] = value;
+}
 
 // ---------------------------------------------------------------------------
 // Secrets aggregation — collect all sensitive params across plugins
@@ -1874,16 +2002,14 @@ function resolvePluginPackageMetadata(
   };
 
   let name = pkg.name || fallbackName;
-  let description = pkg.description || fallbackDescription;
+  const description = pkg.description || fallbackDescription;
   if (pkg.elizaos?.displayName) name = pkg.elizaos.displayName;
 
   let schemaConfigKeys: string[] | undefined;
   let schemaPluginParameters:
     | Record<string, Record<string, unknown>>
     | undefined;
-  let schemaConfigUiHints:
-    | Record<string, Record<string, unknown>>
-    | undefined;
+  let schemaConfigUiHints: Record<string, Record<string, unknown>> | undefined;
   let pluginUiSchema: Record<string, unknown> | undefined;
 
   if (pkg.elizaos?.configSchemaFile) {
@@ -1906,10 +2032,7 @@ function resolvePluginPackageMetadata(
       ) {
         schemaPluginParameters = schema.pluginParameters;
       }
-      if (
-        schema.configUiHints &&
-        typeof schema.configUiHints === "object"
-      ) {
+      if (schema.configUiHints && typeof schema.configUiHints === "object") {
         schemaConfigUiHints = schema.configUiHints;
       }
     }
@@ -1921,9 +2044,9 @@ function resolvePluginPackageMetadata(
       pkg.elizaos.pluginUiSchemaFile,
     );
     if (fs.existsSync(uiSchemaPath)) {
-      const parsed = JSON.parse(fs.readFileSync(uiSchemaPath, "utf-8")) as
-        | Record<string, unknown>
-        | null;
+      const parsed = JSON.parse(
+        fs.readFileSync(uiSchemaPath, "utf-8"),
+      ) as Record<string, unknown> | null;
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
         pluginUiSchema = parsed;
       }
@@ -1981,7 +2104,12 @@ function discoverBundledPluginFromPackage(
   );
   const pkgCandidates = [
     ...(siblingRoot ? [path.join(siblingRoot, "package.json")] : []),
-    path.join(packageRoot, "node_modules", ...packageName.split("/"), "package.json"),
+    path.join(
+      packageRoot,
+      "node_modules",
+      ...packageName.split("/"),
+      "package.json",
+    ),
     ...(pluginDirName
       ? [path.join(packageRoot, "plugins", pluginDirName, "package.json")]
       : []),
@@ -2000,14 +2128,16 @@ function discoverBundledPluginFromPackage(
         .replace(/^@[^/]+\//, "")
         .replace(/^plugin-/, "");
       const category = categorizePlugin(id);
-      const paramInfos: PluginParamInfo[] = metadata.parameters.map((parameter) => ({
-        key: parameter.key,
-        required: parameter.required,
-        sensitive: parameter.sensitive,
-        type: parameter.type,
-        description: parameter.description,
-        default: parameter.default,
-      }));
+      const paramInfos: PluginParamInfo[] = metadata.parameters.map(
+        (parameter) => ({
+          key: parameter.key,
+          required: parameter.required,
+          sensitive: parameter.sensitive,
+          type: parameter.type,
+          description: parameter.description,
+          default: parameter.default,
+        }),
+      );
       const validation = validatePluginConfig(
         id,
         category,
@@ -2075,7 +2205,9 @@ function discoverInstalledPlugins(
     let description = `Installed from registry (v${(record as Record<string, string>).version ?? "unknown"})`;
     let pluginConfigKeys: string[] = [];
     let pluginParameters: PluginParamDef[] = [];
-    let pluginConfigUiHints: Record<string, Record<string, unknown>> | undefined;
+    let pluginConfigUiHints:
+      | Record<string, Record<string, unknown>>
+      | undefined;
     let pluginUiSchema: Record<string, unknown> | undefined;
 
     if (installPath) {
@@ -2227,10 +2359,16 @@ function isStream555ControlPluginId(pluginId: string): boolean {
 }
 
 function resolveCanonicalPluginId(pluginId: string): string {
-  if (isStream555LegacyPluginId(pluginId) || isStream555ControlPluginId(pluginId)) {
+  if (
+    isStream555LegacyPluginId(pluginId) ||
+    isStream555ControlPluginId(pluginId)
+  ) {
     return STREAM555_PLUGIN_CONTROL_ID;
   }
-  if (isArcade555LegacyPluginId(pluginId) || isArcade555ControlPluginId(pluginId)) {
+  if (
+    isArcade555LegacyPluginId(pluginId) ||
+    isArcade555ControlPluginId(pluginId)
+  ) {
     return ARCADE555_PLUGIN_CONTROL_ID;
   }
   return pluginId;
@@ -2417,7 +2555,9 @@ function collapseArcade555PluginEntries(entries: PluginEntry[]): PluginEntry[] {
 }
 
 function collapseFive55PluginEntries(entries: PluginEntry[]): PluginEntry[] {
-  return collapseArcade555PluginEntries(collapseStream555PluginEntries(entries));
+  return collapseArcade555PluginEntries(
+    collapseStream555PluginEntries(entries),
+  );
 }
 
 function applyStream555ChannelAutoEnableConfig(
@@ -2481,7 +2621,7 @@ function readRuntimeNumber(
   return null;
 }
 
-function readRuntimeString(
+function _readRuntimeString(
   state: Record<string, unknown> | null,
   key: string,
 ): string | null {
@@ -2502,10 +2642,14 @@ function readRuntimeStringArray(
     .filter((item) => item.length > 0);
 }
 
-function countConfiguredStream555Channels(
-  parameters: PluginParamDef[],
-): { saved: number; enabled: number; ready: number } {
-  const paramsByKey = new Map(parameters.map((parameter) => [parameter.key, parameter]));
+function countConfiguredStream555Channels(parameters: PluginParamDef[]): {
+  saved: number;
+  enabled: number;
+  ready: number;
+} {
+  const paramsByKey = new Map(
+    parameters.map((parameter) => [parameter.key, parameter]),
+  );
   let saved = 0;
   let enabled = 0;
   let ready = 0;
@@ -2529,10 +2673,17 @@ function resolvePluginInstalled(plugin: PluginEntry): boolean {
   if (typeof plugin.installed === "boolean") return plugin.installed;
   if (plugin.isActive) return true;
   if (plugin.loadError) return true;
-  if (isStream555ControlPluginId(plugin.id) || isArcade555ControlPluginId(plugin.id)) {
+  if (
+    isStream555ControlPluginId(plugin.id) ||
+    isArcade555ControlPluginId(plugin.id)
+  ) {
     return true;
   }
-  return plugin.source === "store" || plugin.parameters.length > 0 || plugin.configKeys.length > 0;
+  return (
+    plugin.source === "store" ||
+    plugin.parameters.length > 0 ||
+    plugin.configKeys.length > 0
+  );
 }
 
 function getRuntimeServiceState(
@@ -2575,7 +2726,8 @@ function applyPluginOperationalState(
     const channelsSaved =
       readRuntimeNumber(runtimeState, "channelsSaved") ?? channelCounts.saved;
     const channelsEnabled =
-      readRuntimeNumber(runtimeState, "channelsEnabled") ?? channelCounts.enabled;
+      readRuntimeNumber(runtimeState, "channelsEnabled") ??
+      channelCounts.enabled;
     const channelsReady =
       readRuntimeNumber(runtimeState, "channelsReady") ?? channelCounts.ready;
     const ready =
@@ -2622,7 +2774,10 @@ function applyPluginOperationalState(
       readRuntimeBoolean(runtimeState, "sessionBootstrapped") ?? false;
     const catalogReachable =
       readRuntimeBoolean(runtimeState, "catalogReachable") ??
-      Boolean(process.env.ARCADE555_BASE_URL?.trim() || process.env.STREAM555_BASE_URL?.trim());
+      Boolean(
+        process.env.ARCADE555_BASE_URL?.trim() ||
+          process.env.STREAM555_BASE_URL?.trim(),
+      );
     const leaderboardReachable =
       readRuntimeBoolean(runtimeState, "leaderboardReachable") ??
       Boolean(
@@ -2644,7 +2799,8 @@ function applyPluginOperationalState(
           process.env.ARCADE555_BASE_URL?.trim() ||
           process.env.STREAM555_BASE_URL?.trim(),
       );
-    const ready = loaded && authenticated && sessionBootstrapped && catalogReachable;
+    const ready =
+      loaded && authenticated && sessionBootstrapped && catalogReachable;
 
     warnings.push(...readRuntimeStringArray(runtimeState, "warnings"));
     errors.push(...readRuntimeStringArray(runtimeState, "errors"));
@@ -2690,7 +2846,7 @@ function applyPluginOperationalState(
 function resolveApiPluginEntries(state: ServerState): PluginEntry[] {
   let freshConfig: MilaidyConfig;
   try {
-    freshConfig = loadMilaidyConfig();
+    freshConfig = loadApiConfig();
   } catch {
     freshConfig = state.config;
   }
@@ -2705,7 +2861,9 @@ function resolveApiPluginEntries(state: ServerState): PluginEntry[] {
   const configEntries = (
     freshConfig.plugins as Record<string, unknown> | undefined
   )?.entries as Record<string, { enabled?: boolean }> | undefined;
-  const loadedNames = state.runtime ? state.runtime.plugins.map((plugin) => plugin.name) : [];
+  const loadedNames = state.runtime
+    ? state.runtime.plugins.map((plugin) => plugin.name)
+    : [];
 
   for (const plugin of allPlugins) {
     const suffix = `plugin-${plugin.id}`;
@@ -2736,8 +2894,7 @@ function resolveApiPluginEntries(state: ServerState): PluginEntry[] {
         | Record<string, unknown>
         | undefined;
       const packageName = `@elizaos/plugin-${plugin.id}`;
-      const hasInstallRecord =
-        installs?.[packageName] || installs?.[plugin.id];
+      const hasInstallRecord = installs?.[packageName] || installs?.[plugin.id];
       if (hasInstallRecord) {
         plugin.loadError =
           "Plugin installed but failed to load — check runtime logs for the exact error.";
@@ -2755,14 +2912,16 @@ function resolveApiPluginEntries(state: ServerState): PluginEntry[] {
           : (envValue ?? "")
         : null;
     }
-    const paramInfos: PluginParamInfo[] = plugin.parameters.map((parameter) => ({
-      key: parameter.key,
-      required: parameter.required,
-      sensitive: parameter.sensitive,
-      type: parameter.type,
-      description: parameter.description,
-      default: parameter.default,
-    }));
+    const paramInfos: PluginParamInfo[] = plugin.parameters.map(
+      (parameter) => ({
+        key: parameter.key,
+        required: parameter.required,
+        sensitive: parameter.sensitive,
+        type: parameter.type,
+        description: parameter.description,
+        default: parameter.default,
+      }),
+    );
     const validation = validatePluginConfig(
       plugin.id,
       plugin.category,
@@ -2782,7 +2941,9 @@ function resolveApiPluginEntries(state: ServerState): PluginEntry[] {
       if (!param.key.toUpperCase().includes("MODEL")) continue;
 
       const expectedCat = paramKeyToCategory(param.key);
-      const filtered = providerModels.filter((model) => model.category === expectedCat);
+      const filtered = providerModels.filter(
+        (model) => model.category === expectedCat,
+      );
 
       if (!plugin.configUiHints) plugin.configUiHints = {};
       plugin.configUiHints[param.key] = {
@@ -2790,7 +2951,8 @@ function resolveApiPluginEntries(state: ServerState): PluginEntry[] {
         type: "select",
         options: filtered.map((model) => ({
           value: model.id,
-          label: model.name !== model.id ? `${model.name} (${model.id})` : model.id,
+          label:
+            model.name !== model.id ? `${model.name} (${model.id})` : model.id,
         })),
       };
     }
@@ -3019,7 +3181,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               required: false,
               sensitive: false,
               currentValue:
-                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS ?? null,
+                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS ??
+                null,
               isSet: Boolean(
                 process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS?.trim(),
               ),
@@ -3327,7 +3490,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               required: false,
               sensitive: false,
               currentValue:
-                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS ?? null,
+                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS ??
+                null,
               isSet: Boolean(
                 process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS?.trim(),
               ),
@@ -3555,7 +3719,9 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               currentValue: process.env.STREAM555_DEST_KICK_STREAM_KEY
                 ? maskValue(process.env.STREAM555_DEST_KICK_STREAM_KEY)
                 : null,
-              isSet: Boolean(process.env.STREAM555_DEST_KICK_STREAM_KEY?.trim()),
+              isSet: Boolean(
+                process.env.STREAM555_DEST_KICK_STREAM_KEY?.trim(),
+              ),
             },
             {
               key: "STREAM555_DEST_KICK_ENABLED",
@@ -4023,10 +4189,10 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             "Agent auth/key-management plugin for provisioning and validating 555stream credentials.",
           enabled: false,
           configured: Boolean(
-            (process.env.STREAM555_BASE_URL?.trim() ||
+            process.env.STREAM555_BASE_URL?.trim() ||
               process.env.STREAM_API_URL?.trim() ||
               process.env.STREAM555_PUBLIC_BASE_URL?.trim() ||
-              process.env.STREAM555_INTERNAL_BASE_URL?.trim()),
+              process.env.STREAM555_INTERNAL_BASE_URL?.trim(),
           ),
           envKey: "STREAM555_PUBLIC_BASE_URL",
           category: "feature",
@@ -4167,12 +4333,10 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "STREAM555_AGENT_DEFAULT_USER_ID",
               type: "string",
-              description:
-                "Default userId used when creating agent API keys",
+              description: "Default userId used when creating agent API keys",
               required: false,
               sensitive: false,
-              currentValue:
-                process.env.STREAM555_AGENT_DEFAULT_USER_ID ?? null,
+              currentValue: process.env.STREAM555_AGENT_DEFAULT_USER_ID ?? null,
               isSet: Boolean(
                 process.env.STREAM555_AGENT_DEFAULT_USER_ID?.trim(),
               ),
@@ -4216,8 +4380,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT",
               type: "string",
-              description:
-                "Optional token exchange endpoint path override",
+              description: "Optional token exchange endpoint path override",
               required: false,
               sensitive: false,
               currentValue:
@@ -4234,7 +4397,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               required: false,
               sensitive: false,
               currentValue:
-                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS ?? null,
+                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS ??
+                null,
               isSet: Boolean(
                 process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS?.trim(),
               ),
@@ -4246,8 +4410,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               required: false,
               sensitive: false,
               default: "0",
-              currentValue:
-                process.env.STREAM555_AUTH_PLUGIN_ENABLED ?? null,
+              currentValue: process.env.STREAM555_AUTH_PLUGIN_ENABLED ?? null,
               isSet: Boolean(process.env.STREAM555_AUTH_PLUGIN_ENABLED?.trim()),
             },
           ],
@@ -4297,7 +4460,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
                 {
                   value: "evm",
                   label: "Ethereum fallback",
-                  description: "Use EVM wallet only when Solana is unavailable.",
+                  description:
+                    "Use EVM wallet only when Solana is unavailable.",
                   icon: "◇",
                 },
               ],
@@ -4509,7 +4673,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               required: false,
               sensitive: false,
               currentValue:
-                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS ?? null,
+                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS ??
+                null,
               isSet: Boolean(
                 process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS?.trim(),
               ),
@@ -4541,8 +4706,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               required: false,
               sensitive: false,
               default: "0",
-              currentValue:
-                process.env.STREAM555_ADS_PLUGIN_ENABLED ?? null,
+              currentValue: process.env.STREAM555_ADS_PLUGIN_ENABLED ?? null,
               isSet: Boolean(process.env.STREAM555_ADS_PLUGIN_ENABLED?.trim()),
             },
           ],
@@ -4641,16 +4805,16 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               currentValue: process.env.SWAP_API_URL ?? null,
               isSet: Boolean(process.env.SWAP_API_URL?.trim()),
             },
-	            {
-	              key: "SWAP_PLUGIN_ENABLED",
-	              type: "string",
-	              description: "Enable/disable swap plugin (1/0)",
-	              required: false,
-	              sensitive: false,
-	              default: "0",
-	              currentValue: process.env.SWAP_PLUGIN_ENABLED ?? null,
-	              isSet: Boolean(process.env.SWAP_PLUGIN_ENABLED?.trim()),
-	            },
+            {
+              key: "SWAP_PLUGIN_ENABLED",
+              type: "string",
+              description: "Enable/disable swap plugin (1/0)",
+              required: false,
+              sensitive: false,
+              default: "0",
+              currentValue: process.env.SWAP_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(process.env.SWAP_PLUGIN_ENABLED?.trim()),
+            },
           ],
           validationErrors: [],
           validationWarnings: [],
@@ -4658,7 +4822,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
         {
           id: "five55-games",
           name: "555 Arcade Games (Legacy)",
-          description: "Legacy compatibility wrapper for canonical 555 Arcade game discovery and play orchestration.",
+          description:
+            "Legacy compatibility wrapper for canonical 555 Arcade game discovery and play orchestration.",
           enabled: false,
           configured: Boolean(
             process.env.ARCADE555_BASE_URL?.trim() ||
@@ -4734,14 +4899,13 @@ function discoverPluginsFromManifest(): PluginEntry[] {
                 "Canonical arcade bearer token (fallbacks: FIVE55_GAMES_API_BEARER_TOKEN, STREAM555_AGENT_TOKEN)",
               required: false,
               sensitive: true,
-              currentValue:
-                process.env.ARCADE555_AGENT_TOKEN
-                  ? maskValue(process.env.ARCADE555_AGENT_TOKEN)
-                  : process.env.FIVE55_GAMES_API_BEARER_TOKEN
-                    ? maskValue(process.env.FIVE55_GAMES_API_BEARER_TOKEN)
-                    : process.env.STREAM555_AGENT_TOKEN
-                      ? maskValue(process.env.STREAM555_AGENT_TOKEN)
-                      : null,
+              currentValue: process.env.ARCADE555_AGENT_TOKEN
+                ? maskValue(process.env.ARCADE555_AGENT_TOKEN)
+                : process.env.FIVE55_GAMES_API_BEARER_TOKEN
+                  ? maskValue(process.env.FIVE55_GAMES_API_BEARER_TOKEN)
+                  : process.env.STREAM555_AGENT_TOKEN
+                    ? maskValue(process.env.STREAM555_AGENT_TOKEN)
+                    : null,
               isSet: Boolean(
                 process.env.ARCADE555_AGENT_TOKEN?.trim() ||
                   process.env.FIVE55_GAMES_API_BEARER_TOKEN?.trim() ||
@@ -4827,7 +4991,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               required: false,
               sensitive: false,
               currentValue:
-                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS ?? null,
+                process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS ??
+                null,
               isSet: Boolean(
                 process.env.STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS?.trim(),
               ),
@@ -4900,8 +5065,7 @@ function discoverPluginsFromManifest(): PluginEntry[] {
                 "Cloudflare provisioning poll interval for GO_LIVE_PLAY (ms, default 5000)",
               required: false,
               sensitive: false,
-              currentValue:
-                process.env.FIVE55_GAMES_CF_CONNECT_POLL_MS ?? null,
+              currentValue: process.env.FIVE55_GAMES_CF_CONNECT_POLL_MS ?? null,
               isSet: Boolean(
                 process.env.FIVE55_GAMES_CF_CONNECT_POLL_MS?.trim(),
               ),
@@ -4926,7 +5090,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
                 "Per-slot gameplay duration for live capability sprint action (seconds, default 300)",
               required: false,
               sensitive: false,
-              currentValue: process.env.FIVE55_GAMES_SPRINT_SLOT_SECONDS ?? null,
+              currentValue:
+                process.env.FIVE55_GAMES_SPRINT_SLOT_SECONDS ?? null,
               isSet: Boolean(
                 process.env.FIVE55_GAMES_SPRINT_SLOT_SECONDS?.trim(),
               ),
@@ -4972,7 +5137,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "FIVE55_GAMES_PLUGIN_ENABLED",
               type: "string",
-              description: "Enable/disable legacy 555 Arcade games wrapper (1/0)",
+              description:
+                "Enable/disable legacy 555 Arcade games wrapper (1/0)",
               required: false,
               sensitive: false,
               default: "0",
@@ -5173,7 +5339,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
         {
           id: "five55-score-capture",
           name: "555 Arcade Score Capture (Legacy)",
-          description: "Legacy compatibility wrapper for canonical 555 Arcade score capture actions.",
+          description:
+            "Legacy compatibility wrapper for canonical 555 Arcade score capture actions.",
           enabled: false,
           configured: Boolean(process.env.FIVE55_SCORE_CAPTURE_API_URL?.trim()),
           envKey: "FIVE55_SCORE_CAPTURE_API_URL",
@@ -5187,23 +5354,25 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "FIVE55_SCORE_CAPTURE_API_URL",
               type: "string",
-              description: "555 Arcade score capture API base URL (legacy key: FIVE55_SCORE_CAPTURE_API_URL)",
+              description:
+                "555 Arcade score capture API base URL (legacy key: FIVE55_SCORE_CAPTURE_API_URL)",
               required: false,
               sensitive: false,
               currentValue: process.env.FIVE55_SCORE_CAPTURE_API_URL ?? null,
               isSet: Boolean(process.env.FIVE55_SCORE_CAPTURE_API_URL?.trim()),
             },
-	            {
-	              key: "FIVE55_SCORE_CAPTURE_PLUGIN_ENABLED",
-	              type: "string",
-	              description: "Enable/disable legacy 555 Arcade score capture wrapper (1/0)",
-	              required: false,
-	              sensitive: false,
-	              default: "0",
-	              currentValue:
-	                process.env.FIVE55_SCORE_CAPTURE_PLUGIN_ENABLED ?? null,
-	              isSet: Boolean(
-	                process.env.FIVE55_SCORE_CAPTURE_PLUGIN_ENABLED?.trim(),
+            {
+              key: "FIVE55_SCORE_CAPTURE_PLUGIN_ENABLED",
+              type: "string",
+              description:
+                "Enable/disable legacy 555 Arcade score capture wrapper (1/0)",
+              required: false,
+              sensitive: false,
+              default: "0",
+              currentValue:
+                process.env.FIVE55_SCORE_CAPTURE_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(
+                process.env.FIVE55_SCORE_CAPTURE_PLUGIN_ENABLED?.trim(),
               ),
             },
           ],
@@ -5213,7 +5382,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
         {
           id: "five55-leaderboard",
           name: "555 Arcade Leaderboard (Legacy)",
-          description: "Legacy compatibility wrapper for canonical 555 Arcade leaderboard actions.",
+          description:
+            "Legacy compatibility wrapper for canonical 555 Arcade leaderboard actions.",
           enabled: false,
           configured: Boolean(process.env.FIVE55_LEADERBOARD_API_URL?.trim()),
           envKey: "FIVE55_LEADERBOARD_API_URL",
@@ -5227,22 +5397,25 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "FIVE55_LEADERBOARD_API_URL",
               type: "string",
-              description: "555 Arcade leaderboard API base URL (legacy key: FIVE55_LEADERBOARD_API_URL)",
+              description:
+                "555 Arcade leaderboard API base URL (legacy key: FIVE55_LEADERBOARD_API_URL)",
               required: false,
               sensitive: false,
               currentValue: process.env.FIVE55_LEADERBOARD_API_URL ?? null,
               isSet: Boolean(process.env.FIVE55_LEADERBOARD_API_URL?.trim()),
             },
-	            {
-	              key: "FIVE55_LEADERBOARD_PLUGIN_ENABLED",
-	              type: "string",
-	              description: "Enable/disable legacy 555 Arcade leaderboard wrapper (1/0)",
-	              required: false,
-	              sensitive: false,
-	              default: "0",
-	              currentValue: process.env.FIVE55_LEADERBOARD_PLUGIN_ENABLED ?? null,
-	              isSet: Boolean(
-	                process.env.FIVE55_LEADERBOARD_PLUGIN_ENABLED?.trim(),
+            {
+              key: "FIVE55_LEADERBOARD_PLUGIN_ENABLED",
+              type: "string",
+              description:
+                "Enable/disable legacy 555 Arcade leaderboard wrapper (1/0)",
+              required: false,
+              sensitive: false,
+              default: "0",
+              currentValue:
+                process.env.FIVE55_LEADERBOARD_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(
+                process.env.FIVE55_LEADERBOARD_PLUGIN_ENABLED?.trim(),
               ),
             },
           ],
@@ -5252,7 +5425,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
         {
           id: "five55-quests",
           name: "555 Arcade Quests (Legacy)",
-          description: "Legacy compatibility wrapper for canonical 555 Arcade quest actions.",
+          description:
+            "Legacy compatibility wrapper for canonical 555 Arcade quest actions.",
           enabled: false,
           configured: Boolean(process.env.FIVE55_QUESTS_API_URL?.trim()),
           envKey: "FIVE55_QUESTS_API_URL",
@@ -5263,22 +5437,24 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "FIVE55_QUESTS_API_URL",
               type: "string",
-              description: "555 Arcade quests API base URL (legacy key: FIVE55_QUESTS_API_URL)",
+              description:
+                "555 Arcade quests API base URL (legacy key: FIVE55_QUESTS_API_URL)",
               required: false,
               sensitive: false,
               currentValue: process.env.FIVE55_QUESTS_API_URL ?? null,
               isSet: Boolean(process.env.FIVE55_QUESTS_API_URL?.trim()),
             },
-	            {
-	              key: "FIVE55_QUESTS_PLUGIN_ENABLED",
-	              type: "string",
-	              description: "Enable/disable legacy 555 Arcade quests wrapper (1/0)",
-	              required: false,
-	              sensitive: false,
-	              default: "0",
-	              currentValue: process.env.FIVE55_QUESTS_PLUGIN_ENABLED ?? null,
-	              isSet: Boolean(process.env.FIVE55_QUESTS_PLUGIN_ENABLED?.trim()),
-	            },
+            {
+              key: "FIVE55_QUESTS_PLUGIN_ENABLED",
+              type: "string",
+              description:
+                "Enable/disable legacy 555 Arcade quests wrapper (1/0)",
+              required: false,
+              sensitive: false,
+              default: "0",
+              currentValue: process.env.FIVE55_QUESTS_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(process.env.FIVE55_QUESTS_PLUGIN_ENABLED?.trim()),
+            },
           ],
           validationErrors: [],
           validationWarnings: [],
@@ -5286,7 +5462,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
         {
           id: "five55-battles",
           name: "555 Arcade Battles (Legacy)",
-          description: "Legacy compatibility wrapper for canonical 555 Arcade battle actions.",
+          description:
+            "Legacy compatibility wrapper for canonical 555 Arcade battle actions.",
           enabled: false,
           configured: Boolean(process.env.FIVE55_BATTLES_API_URL?.trim()),
           envKey: "FIVE55_BATTLES_API_URL",
@@ -5301,7 +5478,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "FIVE55_BATTLES_API_URL",
               type: "string",
-              description: "555 Arcade battles API base URL (legacy key: FIVE55_BATTLES_API_URL)",
+              description:
+                "555 Arcade battles API base URL (legacy key: FIVE55_BATTLES_API_URL)",
               required: false,
               sensitive: false,
               currentValue: process.env.FIVE55_BATTLES_API_URL ?? null,
@@ -5319,16 +5497,17 @@ function discoverPluginsFromManifest(): PluginEntry[] {
                 process.env.FIVE55_BATTLES_CREATE_ENDPOINT?.trim(),
               ),
             },
-	            {
-	              key: "FIVE55_BATTLES_PLUGIN_ENABLED",
-	              type: "string",
-	              description: "Enable/disable legacy 555 Arcade battles wrapper (1/0)",
-	              required: false,
-	              sensitive: false,
-	              default: "0",
-	              currentValue: process.env.FIVE55_BATTLES_PLUGIN_ENABLED ?? null,
-	              isSet: Boolean(process.env.FIVE55_BATTLES_PLUGIN_ENABLED?.trim()),
-	            },
+            {
+              key: "FIVE55_BATTLES_PLUGIN_ENABLED",
+              type: "string",
+              description:
+                "Enable/disable legacy 555 Arcade battles wrapper (1/0)",
+              required: false,
+              sensitive: false,
+              default: "0",
+              currentValue: process.env.FIVE55_BATTLES_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(process.env.FIVE55_BATTLES_PLUGIN_ENABLED?.trim()),
+            },
           ],
           validationErrors: [],
           validationWarnings: [],
@@ -5378,16 +5557,17 @@ function discoverPluginsFromManifest(): PluginEntry[] {
                 : null,
               isSet: Boolean(process.env.FIVE55_ADMIN_BEARER_TOKEN?.trim()),
             },
-	            {
-	              key: "FIVE55_ADMIN_PLUGIN_ENABLED",
-	              type: "string",
-	              description: "Enable/disable legacy 555 Arcade admin wrapper (1/0)",
-	              required: false,
-	              sensitive: false,
-	              default: "0",
-	              currentValue: process.env.FIVE55_ADMIN_PLUGIN_ENABLED ?? null,
-	              isSet: Boolean(process.env.FIVE55_ADMIN_PLUGIN_ENABLED?.trim()),
-	            },
+            {
+              key: "FIVE55_ADMIN_PLUGIN_ENABLED",
+              type: "string",
+              description:
+                "Enable/disable legacy 555 Arcade admin wrapper (1/0)",
+              required: false,
+              sensitive: false,
+              default: "0",
+              currentValue: process.env.FIVE55_ADMIN_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(process.env.FIVE55_ADMIN_PLUGIN_ENABLED?.trim()),
+            },
           ],
           validationErrors: [],
           validationWarnings: [],
@@ -5395,7 +5575,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
         {
           id: "five55-social",
           name: "555 Arcade Social (Legacy)",
-          description: "Legacy compatibility wrapper for canonical 555 Arcade social actions.",
+          description:
+            "Legacy compatibility wrapper for canonical 555 Arcade social actions.",
           enabled: false,
           configured: Boolean(process.env.FIVE55_SOCIAL_API_URL?.trim()),
           envKey: "FIVE55_SOCIAL_API_URL",
@@ -5406,22 +5587,24 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "FIVE55_SOCIAL_API_URL",
               type: "string",
-              description: "555 Arcade social API base URL (legacy key: FIVE55_SOCIAL_API_URL)",
+              description:
+                "555 Arcade social API base URL (legacy key: FIVE55_SOCIAL_API_URL)",
               required: false,
               sensitive: false,
               currentValue: process.env.FIVE55_SOCIAL_API_URL ?? null,
               isSet: Boolean(process.env.FIVE55_SOCIAL_API_URL?.trim()),
             },
-	            {
-	              key: "FIVE55_SOCIAL_PLUGIN_ENABLED",
-	              type: "string",
-	              description: "Enable/disable legacy 555 Arcade social wrapper (1/0)",
-	              required: false,
-	              sensitive: false,
-	              default: "0",
-	              currentValue: process.env.FIVE55_SOCIAL_PLUGIN_ENABLED ?? null,
-	              isSet: Boolean(process.env.FIVE55_SOCIAL_PLUGIN_ENABLED?.trim()),
-	            },
+            {
+              key: "FIVE55_SOCIAL_PLUGIN_ENABLED",
+              type: "string",
+              description:
+                "Enable/disable legacy 555 Arcade social wrapper (1/0)",
+              required: false,
+              sensitive: false,
+              default: "0",
+              currentValue: process.env.FIVE55_SOCIAL_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(process.env.FIVE55_SOCIAL_PLUGIN_ENABLED?.trim()),
+            },
           ],
           validationErrors: [],
           validationWarnings: [],
@@ -5429,7 +5612,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
         {
           id: "five55-rewards",
           name: "555 Arcade Rewards (Legacy)",
-          description: "Legacy compatibility wrapper for canonical 555 Arcade reward actions.",
+          description:
+            "Legacy compatibility wrapper for canonical 555 Arcade reward actions.",
           enabled: false,
           configured: Boolean(process.env.FIVE55_REWARDS_API_URL?.trim()),
           envKey: "FIVE55_REWARDS_API_URL",
@@ -5443,22 +5627,24 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "FIVE55_REWARDS_API_URL",
               type: "string",
-              description: "555 Arcade rewards API base URL (legacy key: FIVE55_REWARDS_API_URL)",
+              description:
+                "555 Arcade rewards API base URL (legacy key: FIVE55_REWARDS_API_URL)",
               required: false,
               sensitive: false,
               currentValue: process.env.FIVE55_REWARDS_API_URL ?? null,
               isSet: Boolean(process.env.FIVE55_REWARDS_API_URL?.trim()),
             },
-	            {
-	              key: "FIVE55_REWARDS_PLUGIN_ENABLED",
-	              type: "string",
-	              description: "Enable/disable legacy 555 Arcade rewards wrapper (1/0)",
-	              required: false,
-	              sensitive: false,
-	              default: "0",
-	              currentValue: process.env.FIVE55_REWARDS_PLUGIN_ENABLED ?? null,
-	              isSet: Boolean(process.env.FIVE55_REWARDS_PLUGIN_ENABLED?.trim()),
-	            },
+            {
+              key: "FIVE55_REWARDS_PLUGIN_ENABLED",
+              type: "string",
+              description:
+                "Enable/disable legacy 555 Arcade rewards wrapper (1/0)",
+              required: false,
+              sensitive: false,
+              default: "0",
+              currentValue: process.env.FIVE55_REWARDS_PLUGIN_ENABLED ?? null,
+              isSet: Boolean(process.env.FIVE55_REWARDS_PLUGIN_ENABLED?.trim()),
+            },
           ],
           validationErrors: [],
           validationWarnings: [],
@@ -5509,7 +5695,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
             {
               key: "FIVE55_GITHUB_PLUGIN_ENABLED",
               type: "string",
-              description: "Enable/disable legacy 555 Arcade GitHub wrapper (1/0)",
+              description:
+                "Enable/disable legacy 555 Arcade GitHub wrapper (1/0)",
               required: false,
               sensitive: false,
               default: "0",
@@ -5939,6 +6126,20 @@ async function discoverSkills(
     }
   }
 
+  // Runtime-provided bundled skill dirs (used by embedded/catalog flows in tests
+  // and when skills are mounted outside the default @elizaos/skills package).
+  const runtimeBundledDirs = runtime?.getSetting?.("BUNDLED_SKILLS_DIRS");
+  const bundledDirs = Array.isArray(runtimeBundledDirs)
+    ? runtimeBundledDirs
+    : typeof runtimeBundledDirs === "string"
+      ? [runtimeBundledDirs]
+      : [];
+  for (const dir of bundledDirs) {
+    if (typeof dir === "string" && fs.existsSync(dir)) {
+      skillsDirs.push(dir);
+    }
+  }
+
   const skills: SkillEntry[] = [];
   const seen = new Set<string>();
 
@@ -6234,7 +6435,9 @@ export async function fetchWithTimeoutGuard(
     });
   } catch (error) {
     if (timedOut) {
-      throw createTimeoutError(`Upstream request timed out after ${timeoutMs}ms`);
+      throw createTimeoutError(
+        `Upstream request timed out after ${timeoutMs}ms`,
+      );
     }
     throw error;
   } finally {
@@ -6527,7 +6730,9 @@ function resolveChatModelHint(config: MilaidyConfig, mode: ChatMode): string {
   const piAiLarge =
     typeof modelsCfg.piAiLarge === "string" ? modelsCfg.piAiLarge.trim() : "";
 
-  const defaults = config.agents?.defaults as Record<string, unknown> | undefined;
+  const defaults = config.agents?.defaults as
+    | Record<string, unknown>
+    | undefined;
   const modelCfg =
     defaults?.model && typeof defaults.model === "object"
       ? (defaults.model as Record<string, unknown>)
@@ -6556,11 +6761,12 @@ function withChatModelRouting<T>(
 function patchRuntimeDynamicPromptModelRouting(runtime: AgentRuntime): void {
   const rt = runtime as AgentRuntime & {
     __milaidyChatModelRoutingPatched?: boolean;
-    dynamicPromptExecFromState: (
+    dynamicPromptExecFromState?: (
       args: DynamicPromptExecArgs,
     ) => Promise<DynamicPromptExecResult>;
   };
   if (rt.__milaidyChatModelRoutingPatched) return;
+  if (typeof rt.dynamicPromptExecFromState !== "function") return;
 
   const original = rt.dynamicPromptExecFromState.bind(runtime);
   rt.dynamicPromptExecFromState = async (
@@ -6577,6 +6783,25 @@ function patchRuntimeDynamicPromptModelRouting(runtime: AgentRuntime): void {
     });
   };
   rt.__milaidyChatModelRoutingPatched = true;
+}
+
+async function emitClientMessageReceived(
+  runtime: AgentRuntime,
+  message: ReturnType<typeof createMessageMemory>,
+): Promise<void> {
+  if (typeof runtime.emitEvent !== "function") return;
+  await runtime.emitEvent("MESSAGE_RECEIVED", {
+    source: "client_chat",
+    message,
+  });
+}
+
+async function persistChatMemory(
+  runtime: AgentRuntime,
+  memory: ReturnType<typeof createMessageMemory>,
+): Promise<void> {
+  if (typeof runtime.createMemory !== "function") return;
+  await runtime.createMemory(memory, "messages");
 }
 
 function isInsufficientCreditsMessage(message: string): boolean {
@@ -6686,7 +6911,7 @@ function initSse(res: http.ServerResponse): void {
 
 function writeSse(
   res: http.ServerResponse,
-  payload: Record<string, string | number | boolean | null | undefined>,
+  payload: Record<string, unknown>,
 ): void {
   if (res.writableEnded || res.destroyed) return;
   res.write(`data: ${JSON.stringify(payload)}\n\n`);
@@ -6717,6 +6942,8 @@ async function generateChatResponse(
   let firstTokenMs = 0;
   let responseText = "";
   const streamingActive = !!opts?.onChunk;
+  let sawStreamChunk = false;
+  let preferCallbackText = false;
   const timeoutDuration = getConfiguredChatTimeoutMs();
   const normalizeDelta = (incoming: string | null | undefined): string => {
     if (!incoming) return "";
@@ -6726,6 +6953,13 @@ async function generateChatResponse(
     // Convert cumulative replays into true deltas to avoid duplicated output.
     if (incoming.startsWith(responseText)) {
       return incoming.slice(responseText.length);
+    }
+
+    // Some runtimes emit callback/full-text content before incremental stream
+    // tokens. Those follow-up tokens are already represented in responseText,
+    // so suppress them instead of duplicating the output.
+    if (responseText.startsWith(incoming)) {
+      return "";
     }
 
     return incoming;
@@ -6748,6 +6982,9 @@ async function generateChatResponse(
             throw new Error("client_disconnected");
           }
           if (content?.text) {
+            if (streamingActive && !sawStreamChunk) {
+              preferCallbackText = true;
+            }
             const delta = normalizeDelta(content.text);
             if (!delta) return [];
             if (!firstTokenMs) firstTokenMs = Date.now() - t0;
@@ -6759,13 +6996,15 @@ async function generateChatResponse(
         {
           onStreamChunk: streamingActive
             ? async (chunk: string) => {
-              if (opts?.isAborted?.()) return;
-              const delta = normalizeDelta(chunk);
-              if (!delta) return;
-              if (!firstTokenMs) firstTokenMs = Date.now() - t0;
-              responseText += delta;
-              opts?.onChunk?.(delta);
-            }
+                if (opts?.isAborted?.()) return;
+                if (preferCallbackText) return;
+                sawStreamChunk = true;
+                const delta = normalizeDelta(chunk);
+                if (!delta) return;
+                if (!firstTokenMs) firstTokenMs = Date.now() - t0;
+                responseText += delta;
+                opts?.onChunk?.(delta);
+              }
             : undefined,
           timeoutDuration,
           shouldRespondModel: chatMode === "simple" ? "small" : "large",
@@ -6808,6 +7047,71 @@ async function generateChatResponse(
   };
 }
 
+function extractCompatMessageText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((entry) => {
+      if (typeof entry === "string") return entry;
+      if (!entry || typeof entry !== "object") return "";
+      const asRecord = entry as Record<string, unknown>;
+      if (typeof asRecord.text === "string") return asRecord.text;
+      return typeof asRecord.content === "string" ? asRecord.content : "";
+    })
+    .filter((entry) => entry.trim().length > 0)
+    .join("\n");
+}
+
+function buildCompatPrompt(input: {
+  system?: unknown;
+  messages?: Array<{ role?: unknown; content?: unknown }> | null;
+}): string {
+  const sections: string[] = [];
+
+  if (typeof input.system === "string" && input.system.trim().length > 0) {
+    sections.push(input.system.trim());
+  }
+
+  for (const message of input.messages ?? []) {
+    const content = extractCompatMessageText(message?.content);
+    if (!content.trim()) continue;
+    const role =
+      typeof message?.role === "string" && message.role.trim().length > 0
+        ? message.role.trim()
+        : "user";
+    sections.push(`${role}: ${content.trim()}`);
+  }
+
+  return sections.join("\n\n").trim();
+}
+
+function createCompatMessageMemory(
+  prompt: string,
+): ReturnType<typeof createMessageMemory> {
+  return createMessageMemory({
+    id: crypto.randomUUID() as UUID,
+    entityId: stringToUuid("compat-api-user") as UUID,
+    roomId: stringToUuid("compat-api-room") as UUID,
+    content: {
+      text: prompt,
+      source: "compat_api",
+      channelType: ChannelType.DM,
+    },
+  });
+}
+
+function buildCompatModelList(
+  agentName: string,
+): Array<Record<string, unknown>> {
+  const ids = Array.from(new Set(["milady", agentName].filter(Boolean)));
+  return ids.map((id) => ({
+    id,
+    object: "model",
+    created: 0,
+    owned_by: "milady",
+  }));
+}
+
 function parseBoundedLimit(rawLimit: string | null, fallback = 15): number {
   if (!rawLimit) return fallback;
   const parsed = Number.parseInt(rawLimit, 10);
@@ -6830,7 +7134,9 @@ function parseBooleanFlag(raw: string | undefined): boolean | null {
   return null;
 }
 
-function parseGitHubRepoListIntent(prompt: string): GitHubRepoListIntent | null {
+function parseGitHubRepoListIntent(
+  prompt: string,
+): GitHubRepoListIntent | null {
   const normalized = prompt.trim();
   if (!normalized) return null;
 
@@ -6857,10 +7163,9 @@ function parseGitHubRepoListIntent(prompt: string): GitHubRepoListIntent | null 
   const limit = limitRaw ? Number.parseInt(limitRaw, 10) : null;
 
   const includePrivateRaw =
-    normalized.match(/\bincludePrivate\s*[:=]?\s*(true|false|1|0|yes|no)\b/i)
-      ?.[
-      1
-    ] ??
+    normalized.match(
+      /\bincludePrivate\s*[:=]?\s*(true|false|1|0|yes|no)\b/i,
+    )?.[1] ??
     normalized.match(/\bprivate\s*[:=]?\s*(true|false|1|0|yes|no)\b/i)?.[1] ??
     undefined;
   const includePrivate = parseBooleanFlag(includePrivateRaw);
@@ -6872,7 +7177,9 @@ function parseGitHubRepoListIntent(prompt: string): GitHubRepoListIntent | null 
         ? Math.min(sinceDays, 3650)
         : null,
     limit:
-      limit && Number.isFinite(limit) && limit > 0 ? Math.min(limit, 100) : null,
+      limit && Number.isFinite(limit) && limit > 0
+        ? Math.min(limit, 100)
+        : null,
     includePrivate,
   };
 }
@@ -6997,7 +7304,9 @@ async function tryGitHubRepoListShortcut(params: {
     requestId: crypto.randomUUID(),
     parameters: {
       ...(intent.owner ? { owner: intent.owner } : {}),
-      ...(intent.sinceDays !== null ? { sinceDays: String(intent.sinceDays) } : {}),
+      ...(intent.sinceDays !== null
+        ? { sinceDays: String(intent.sinceDays) }
+        : {}),
       ...(intent.limit !== null ? { limit: String(intent.limit) } : {}),
       ...(intent.includePrivate !== null
         ? { includePrivate: String(intent.includePrivate) }
@@ -7038,13 +7347,25 @@ function hasBlockedObjectKeyDeep(value: unknown): boolean {
   if (typeof value !== "object") return false;
 
   for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-    if (isBlockedObjectKey(key)) return true;
+    if (isBlockedObjectKey(key) || key === "$include") return true;
     if (hasBlockedObjectKeyDeep(child)) return true;
   }
   return false;
 }
 
-function cloneWithoutBlockedObjectKeys<T>(value: T): T {
+function hasPrototypePollutionKeyDeep(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  if (Array.isArray(value)) return value.some(hasPrototypePollutionKeyDeep);
+  if (typeof value !== "object") return false;
+
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    if (isBlockedObjectKey(key)) return true;
+    if (hasPrototypePollutionKeyDeep(child)) return true;
+  }
+  return false;
+}
+
+export function cloneWithoutBlockedObjectKeys<T>(value: T): T {
   if (value === null || value === undefined) return value;
   if (Array.isArray(value)) {
     return value.map((item) => cloneWithoutBlockedObjectKeys(item)) as T;
@@ -7053,11 +7374,66 @@ function cloneWithoutBlockedObjectKeys<T>(value: T): T {
 
   const out: Record<string, unknown> = {};
   for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-    if (isBlockedObjectKey(key)) continue;
+    if (isBlockedObjectKey(key) || key === "$include") continue;
     out[key] = cloneWithoutBlockedObjectKeys(child);
   }
   return out as T;
 }
+
+export const CONFIG_WRITE_ALLOWED_TOP_KEYS = new Set([
+  "meta",
+  "auth",
+  "env",
+  "wizard",
+  "diagnostics",
+  "logging",
+  "update",
+  "browser",
+  "ui",
+  "skills",
+  "plugins",
+  "models",
+  "nodeHost",
+  "agents",
+  "tools",
+  "bindings",
+  "broadcast",
+  "audio",
+  "messages",
+  "commands",
+  "approvals",
+  "session",
+  "web",
+  "connectors",
+  "channels",
+  "cron",
+  "hooks",
+  "discovery",
+  "talk",
+  "gateway",
+  "memory",
+  "database",
+  "cloud",
+  "x402",
+  "mcp",
+  "features",
+]);
+
+export const AGENT_EVENT_ALLOWED_STREAMS = new Set([
+  "chat",
+  "terminal",
+  "game",
+  "autonomy",
+  "stream",
+  "system",
+  "message",
+  "new_viewer",
+  "assistant",
+  "thought",
+  "action",
+  "viewer_stats",
+  "retake",
+]);
 
 /**
  * Replace any non-empty value with "[REDACTED]".  For arrays, each string
@@ -7173,8 +7549,11 @@ function maybeMigrateAliceLegacyStyle(config: MilaidyConfig): boolean {
   const styleAll = Array.isArray(agent.style?.all)
     ? agent.style.all.join("\n").toLowerCase()
     : "";
-  const system = typeof agent.system === "string" ? agent.system.toLowerCase() : "";
-  const bio = Array.isArray(agent.bio) ? agent.bio.join("\n").toLowerCase() : "";
+  const system =
+    typeof agent.system === "string" ? agent.system.toLowerCase() : "";
+  const bio = Array.isArray(agent.bio)
+    ? agent.bio.join("\n").toLowerCase()
+    : "";
   const source = `${styleAll}\n${system}\n${bio}`;
 
   const isLegacyProfile = LEGACY_ALICE_STYLE_MARKERS.some((marker) =>
@@ -7184,7 +7563,10 @@ function maybeMigrateAliceLegacyStyle(config: MilaidyConfig): boolean {
 
   const canonical = getStylePresetByCatchphrase(DEFAULT_STYLE_CATCHPHRASE);
   agent.bio = canonical.bio;
-  agent.system = canonical.system.replace(/\{\{name\}\}/g, agent.name ?? "Alice");
+  agent.system = canonical.system.replace(
+    /\{\{name\}\}/g,
+    agent.name ?? "Alice",
+  );
   agent.style = canonical.style;
   agent.adjectives = canonical.adjectives;
   agent.topics = canonical.topics;
@@ -7327,6 +7709,26 @@ function getProviderOptions(): Array<{
   ];
 }
 
+const PROVIDER_SWITCH_DIRECT_ENV_KEYS: Record<string, string> = {
+  anthropic: "ANTHROPIC_API_KEY",
+  deepseek: "DEEPSEEK_API_KEY",
+  google: "GOOGLE_API_KEY",
+  groq: "GROQ_API_KEY",
+  openai: "OPENAI_API_KEY",
+  openrouter: "OPENROUTER_API_KEY",
+  xai: "XAI_API_KEY",
+};
+
+const PROVIDER_SWITCH_COMPAT_ALIASES: Record<string, string> = {
+  gemini: "google",
+  grok: "xai",
+};
+
+function normalizeProviderSwitchId(rawProvider: string): string {
+  const normalized = rawProvider.trim().toLowerCase();
+  return PROVIDER_SWITCH_COMPAT_ALIASES[normalized] ?? normalized;
+}
+
 type CanonicalSubscriptionProvider = "anthropic-subscription" | "openai-codex";
 const OPENAI_SUBSCRIPTION_PI_SMALL_DEFAULT = "openai-codex/gpt-5.1-codex-mini";
 const OPENAI_SUBSCRIPTION_PI_LARGE_DEFAULT = "openai-codex/gpt-5.3-codex";
@@ -7386,16 +7788,10 @@ function enableOpenAiSubscriptionPiAiMode(config: MilaidyConfig): void {
 
   if (!config.models || typeof config.models !== "object") config.models = {};
   const modelsCfg = config.models as Record<string, unknown>;
-  if (
-    typeof modelsCfg.piAiSmall !== "string" ||
-    !modelsCfg.piAiSmall.trim()
-  ) {
+  if (typeof modelsCfg.piAiSmall !== "string" || !modelsCfg.piAiSmall.trim()) {
     modelsCfg.piAiSmall = OPENAI_SUBSCRIPTION_PI_SMALL_DEFAULT;
   }
-  if (
-    typeof modelsCfg.piAiLarge !== "string" ||
-    !modelsCfg.piAiLarge.trim()
-  ) {
+  if (typeof modelsCfg.piAiLarge !== "string" || !modelsCfg.piAiLarge.trim()) {
     modelsCfg.piAiLarge = OPENAI_SUBSCRIPTION_PI_LARGE_DEFAULT;
   }
 
@@ -7445,7 +7841,9 @@ async function restoreOpenAiSubscriptionPiAiModeFromCredentials(
   try {
     const { getSubscriptionStatus } = await import("../auth/index.js");
     const status = await getSubscriptionStatus();
-    const openAiCodex = status.find((entry) => entry.provider === "openai-codex");
+    const openAiCodex = status.find(
+      (entry) => entry.provider === "openai-codex",
+    );
     if (!(openAiCodex?.configured && openAiCodex.valid)) return false;
     enableOpenAiSubscriptionPiAiMode(config);
     clearInjectedOpenAiSubscriptionApiKey(config);
@@ -7471,7 +7869,9 @@ function clearSubscriptionProviderState(
     clearInjectedOpenAiSubscriptionApiKey(config);
   }
 
-  const defaults = config.agents?.defaults as Record<string, unknown> | undefined;
+  const defaults = config.agents?.defaults as
+    | Record<string, unknown>
+    | undefined;
   if (!defaults) return;
   const selected = defaults.subscriptionProvider;
   if (
@@ -8188,7 +8588,10 @@ function resolveCorsOrigin(origin?: string): string | null {
   if (!trimmed) return null;
 
   // Explicit allowlist via env (comma-separated)
-  const extra = process.env.MILAIDY_ALLOWED_ORIGINS;
+  const extra = readCompatEnv(
+    "MILADY_ALLOWED_ORIGINS",
+    "MILAIDY_ALLOWED_ORIGINS",
+  );
   if (extra) {
     const allow = extra
       .split(",")
@@ -8198,8 +8601,13 @@ function resolveCorsOrigin(origin?: string): string | null {
   }
 
   if (LOCAL_ORIGIN_RE.test(trimmed)) return trimmed;
+  if (/^https?:\/\/\[(::1|0:0:0:0:0:0:0:1)\](:\d+)?$/i.test(trimmed))
+    return trimmed;
   if (APP_ORIGIN_RE.test(trimmed)) return trimmed;
-  if (trimmed === "null" && process.env.MILAIDY_ALLOW_NULL_ORIGIN === "1")
+  if (
+    trimmed === "null" &&
+    compatFlagEnabled("MILADY_ALLOW_NULL_ORIGIN", "MILAIDY_ALLOW_NULL_ORIGIN")
+  )
     return "null";
   return null;
 }
@@ -8242,8 +8650,8 @@ const pairingAttempts = new Map<string, { count: number; resetAt: number }>();
 
 function pairingEnabled(): boolean {
   return (
-    Boolean(process.env.MILAIDY_API_TOKEN?.trim()) &&
-    process.env.MILAIDY_PAIRING_DISABLED !== "1"
+    Boolean(readCompatEnv("MILADY_API_TOKEN", "MILAIDY_API_TOKEN")) &&
+    readCompatEnv("MILADY_PAIRING_DISABLED", "MILAIDY_PAIRING_DISABLED") !== "1"
   );
 }
 
@@ -8289,7 +8697,7 @@ function rateLimitPairing(ip: string | null): boolean {
   return true;
 }
 
-function extractAuthToken(req: http.IncomingMessage): string | null {
+export function extractAuthToken(req: http.IncomingMessage): string | null {
   const auth =
     typeof req.headers.authorization === "string"
       ? req.headers.authorization.trim()
@@ -8299,11 +8707,12 @@ function extractAuthToken(req: http.IncomingMessage): string | null {
     if (match?.[1]) return match[1].trim();
   }
 
-  const header =
-    (typeof req.headers["x-milaidy-token"] === "string" &&
-      req.headers["x-milaidy-token"]) ||
-    (typeof req.headers["x-api-key"] === "string" && req.headers["x-api-key"]);
-  if (typeof header === "string" && header.trim()) return header.trim();
+  const header = readSingleHeaderValue(
+    req.headers["x-milady-token"] ??
+      req.headers["x-milaidy-token"] ??
+      req.headers["x-api-key"],
+  );
+  if (header) return header;
 
   return null;
 }
@@ -8323,6 +8732,27 @@ function readSingleHeaderValue(
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+export function normalizeWsClientId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.length > 128) return null;
+  if (!/^[A-Za-z0-9._-]+$/.test(trimmed)) return null;
+  return trimmed;
+}
+
+export function resolveTerminalRunClientId(
+  req: Pick<http.IncomingMessage, "headers">,
+  body: { clientId?: unknown } | null | undefined,
+): string | null {
+  const headerValue = readSingleHeaderValue(
+    req.headers["x-milady-client-id"] ?? req.headers["x-milaidy-client-id"],
+  );
+  const normalizedHeader = normalizeWsClientId(headerValue);
+  if (normalizedHeader) return normalizedHeader;
+  return normalizeWsClientId(body?.clientId);
+}
+
 function tokenMatches(expected: string, provided: string): boolean {
   const a = Buffer.from(expected, "utf8");
   const b = Buffer.from(provided, "utf8");
@@ -8330,45 +8760,147 @@ function tokenMatches(expected: string, provided: string): boolean {
   return crypto.timingSafeEqual(a, b);
 }
 
-function isLoopbackBindHost(host: string): boolean {
-  const normalized = host
-    .trim()
-    .toLowerCase()
-    .replace(/^\[|\]$/g, "");
+function normalizeHostToken(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+
+  let candidate = trimmed;
+  if (/^https?:\/\//i.test(candidate)) {
+    try {
+      candidate = new URL(candidate).host;
+    } catch {
+      return "";
+    }
+  }
+
+  if (candidate.startsWith("[")) {
+    const closing = candidate.indexOf("]");
+    if (closing === -1) return "";
+    return candidate.slice(1, closing).toLowerCase();
+  }
+
+  const colonCount = (candidate.match(/:/g) ?? []).length;
+  if (colonCount === 1) {
+    return candidate.slice(0, candidate.lastIndexOf(":")).toLowerCase();
+  }
+  if (colonCount > 1) {
+    return candidate.toLowerCase();
+  }
+  return candidate.toLowerCase();
+}
+
+function isLoopbackHostValue(host: string): boolean {
+  const normalized = normalizeHostToken(host);
   if (!normalized) return true;
-  if (
+  return (
     normalized === "localhost" ||
     normalized === "::1" ||
-    normalized === "::ffff:127.0.0.1"
+    normalized === "0:0:0:0:0:0:0:1" ||
+    normalized === "::ffff:127.0.0.1" ||
+    normalized.startsWith("127.")
+  );
+}
+
+export function isAllowedHost(
+  req: Pick<http.IncomingMessage, "headers">,
+): boolean {
+  const hostHeader = readSingleHeaderValue(req.headers.host);
+  if (!hostHeader) return true;
+  if (isLoopbackHostValue(hostHeader)) return true;
+
+  const bindHost = readCompatEnv("MILADY_API_BIND", "MILAIDY_API_BIND");
+  if (
+    bindHost &&
+    normalizeHostToken(bindHost) === normalizeHostToken(hostHeader)
   ) {
     return true;
   }
-  if (normalized.startsWith("127.")) return true;
+
   return false;
 }
 
-function ensureApiTokenForBindHost(host: string): void {
-  const token = process.env.MILAIDY_API_TOKEN?.trim();
+function isLoopbackBindHost(host: string): boolean {
+  return isLoopbackHostValue(host);
+}
+
+export function ensureApiTokenForBindHost(host: string): void {
+  const token = readCompatEnv("MILADY_API_TOKEN", "MILAIDY_API_TOKEN");
   if (token) return;
   if (isLoopbackBindHost(host)) return;
 
   const generated = crypto.randomBytes(32).toString("hex");
-  process.env.MILAIDY_API_TOKEN = generated;
+  setCompatEnv("MILADY_API_TOKEN", "MILAIDY_API_TOKEN", generated);
 
   logger.warn(
-    `[milaidy-api] MILAIDY_API_BIND=${host} is non-loopback and MILAIDY_API_TOKEN is unset.`,
+    `[milady-api] API bind host ${host} is non-loopback and MILADY_API_TOKEN is unset.`,
   );
   logger.warn(
-    `[milaidy-api] Generated temporary MILAIDY_API_TOKEN=${generated}. Set MILAIDY_API_TOKEN explicitly to override.`,
+    "[milady-api] Generated a temporary API token for this session. Set MILADY_API_TOKEN explicitly to override.",
   );
 }
 
-function isAuthorized(req: http.IncomingMessage): boolean {
-  const expected = process.env.MILAIDY_API_TOKEN?.trim();
+export function isAuthorized(req: http.IncomingMessage): boolean {
+  const expected = readCompatEnv("MILADY_API_TOKEN", "MILAIDY_API_TOKEN");
   if (!expected) return true;
   const provided = extractAuthToken(req);
   if (!provided) return false;
   return tokenMatches(expected, provided);
+}
+
+export interface TerminalRunRejection {
+  status: 401 | 403;
+  reason: string;
+}
+
+export function resolveTerminalRunRejection(
+  req: Pick<http.IncomingMessage, "headers">,
+  body: { terminalToken?: unknown } | null | undefined,
+): TerminalRunRejection | null {
+  const apiToken = readCompatEnv("MILADY_API_TOKEN", "MILAIDY_API_TOKEN");
+  const expectedTerminalToken = readCompatEnv(
+    "MILADY_TERMINAL_RUN_TOKEN",
+    "MILAIDY_TERMINAL_RUN_TOKEN",
+  );
+
+  if (!apiToken && !expectedTerminalToken) {
+    return null;
+  }
+
+  if (apiToken && !expectedTerminalToken) {
+    return {
+      status: 403,
+      reason:
+        "Terminal run is disabled for token-authenticated API sessions. Set MILADY_TERMINAL_RUN_TOKEN to enable command execution.",
+    };
+  }
+
+  const bodyTerminalToken =
+    typeof body?.terminalToken === "string" ? body.terminalToken.trim() : "";
+  const providedTerminalToken =
+    readSingleHeaderValue(
+      req.headers["x-milady-terminal-token"] ??
+        req.headers["x-milaidy-terminal-token"],
+    ) ?? bodyTerminalToken;
+
+  if (!providedTerminalToken) {
+    return {
+      status: 401,
+      reason:
+        "Missing terminal token. Provide X-Milady-Terminal-Token header or terminalToken in request body.",
+    };
+  }
+
+  if (
+    !expectedTerminalToken ||
+    !tokenMatches(expectedTerminalToken, providedTerminalToken)
+  ) {
+    return {
+      status: 401,
+      reason: "Invalid terminal token.",
+    };
+  }
+
+  return null;
 }
 
 export interface PluginConfigMutationRejection {
@@ -8429,19 +8961,23 @@ export function resolveWalletExportRejection(
     };
   }
 
-  const expected = process.env.MILAIDY_WALLET_EXPORT_TOKEN?.trim();
+  const expected = readCompatEnv(
+    "MILADY_WALLET_EXPORT_TOKEN",
+    "MILAIDY_WALLET_EXPORT_TOKEN",
+  );
   if (!expected) {
     return {
       status: 403,
       reason:
-        "Wallet export is disabled. Set MILAIDY_WALLET_EXPORT_TOKEN to enable secure exports.",
+        "Wallet export is disabled. Set MILADY_WALLET_EXPORT_TOKEN to enable secure exports.",
     };
   }
 
   const headerToken =
-    typeof req.headers["x-milaidy-export-token"] === "string"
-      ? req.headers["x-milaidy-export-token"].trim()
-      : "";
+    readSingleHeaderValue(
+      req.headers["x-milady-export-token"] ??
+        req.headers["x-milaidy-export-token"],
+    ) ?? "";
   const bodyToken =
     typeof body.exportToken === "string" ? body.exportToken.trim() : "";
   const provided = headerToken || bodyToken;
@@ -8450,7 +8986,7 @@ export function resolveWalletExportRejection(
     return {
       status: 401,
       reason:
-        "Missing export token. Provide X-Milaidy-Export-Token header or exportToken in request body.",
+        "Missing export token. Provide X-Milady-Export-Token header or exportToken in request body.",
     };
   }
 
@@ -8473,12 +9009,20 @@ function isWebSocketAuthorized(
   request: http.IncomingMessage,
   url: URL,
 ): boolean {
-  const expected = process.env.MILAIDY_API_TOKEN?.trim();
+  const expected = readCompatEnv("MILADY_API_TOKEN", "MILAIDY_API_TOKEN");
   if (!expected) return true;
 
   const headerToken = extractAuthToken(request);
   if (headerToken) return tokenMatches(expected, headerToken);
 
+  if (
+    !compatFlagEnabled(
+      "MILADY_ALLOW_WS_QUERY_TOKEN",
+      "MILAIDY_ALLOW_WS_QUERY_TOKEN",
+    )
+  ) {
+    return false;
+  }
   const queryToken = extractWsQueryToken(url);
   if (!queryToken) return false;
   return tokenMatches(expected, queryToken);
@@ -8511,7 +9055,12 @@ export function resolveWebSocketUpgradeRejection(
   return null;
 }
 
-const RESET_STATE_ALLOWED_SEGMENTS = new Set([".milaidy", "milaidy"]);
+const RESET_STATE_ALLOWED_SEGMENTS = new Set([
+  ".milaidy",
+  "milaidy",
+  ".milady",
+  "milady",
+]);
 
 function hasAllowedResetSegment(resolvedState: string): boolean {
   return resolvedState
@@ -8670,6 +9219,436 @@ function parseNullableNumber(value: unknown): number | null {
     const parsed = Number(value);
     if (Number.isFinite(parsed)) return parsed;
   }
+  return null;
+}
+
+interface ChatImageInput {
+  data: string;
+  mimeType: string;
+  name: string;
+}
+
+interface ChatAttachmentShape {
+  id: string;
+  url: string;
+  title: string;
+  source: "client_chat";
+  _data?: string;
+  _mimeType?: string;
+}
+
+const MAX_CHAT_IMAGE_COUNT = 4;
+const MAX_CHAT_IMAGE_BYTES = 5 * 1_048_576;
+const ALLOWED_CHAT_IMAGE_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+]);
+
+const ALLOWED_MCP_STDIO_COMMANDS = new Set([
+  "bun",
+  "bunx",
+  "deno",
+  "docker",
+  "node",
+  "npm",
+  "npx",
+  "npx.cmd",
+  "podman",
+  "python",
+  "python3",
+  "uv",
+]);
+
+export function validateChatImages(images: unknown): string | null {
+  if (!images || !Array.isArray(images) || images.length === 0) return null;
+  if (images.length > MAX_CHAT_IMAGE_COUNT) {
+    return `Too many images. Maximum ${MAX_CHAT_IMAGE_COUNT} images are allowed.`;
+  }
+
+  for (const image of images) {
+    if (!image || typeof image !== "object" || Array.isArray(image)) {
+      return "Each image must be an object.";
+    }
+    const record = image as Record<string, unknown>;
+    const data = record.data;
+    if (typeof data !== "string" || data.trim().length === 0) {
+      return "Each image must include a non-empty data field.";
+    }
+    if (/^data:/i.test(data)) {
+      return "Image data must be raw base64, not a data URL.";
+    }
+    if (data.length > MAX_CHAT_IMAGE_BYTES) {
+      return "Image data is too large (max 5 MB).";
+    }
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(data)) {
+      return "Image data contains invalid base64 characters.";
+    }
+
+    const mimeType = record.mimeType;
+    if (typeof mimeType !== "string" || mimeType.trim().length === 0) {
+      return "Each image must include a mimeType.";
+    }
+    if (!ALLOWED_CHAT_IMAGE_TYPES.has(mimeType.trim().toLowerCase())) {
+      return "Unsupported image type.";
+    }
+
+    const name = record.name;
+    if (typeof name !== "string" || name.trim().length === 0) {
+      return "Each image must include a name.";
+    }
+    if (name.length > 255) {
+      return "Image name is too long.";
+    }
+  }
+
+  return null;
+}
+
+export function buildChatAttachments(images: unknown): {
+  attachments?: ChatAttachmentShape[];
+  compactAttachments?: Array<Omit<ChatAttachmentShape, "_data" | "_mimeType">>;
+} {
+  if (!Array.isArray(images) || images.length === 0) {
+    return { attachments: undefined, compactAttachments: undefined };
+  }
+
+  const attachments = images.map((image, index) => {
+    const record = image as ChatImageInput;
+    return {
+      id: `img-${index}`,
+      url: `attachment:img-${index}`,
+      title: record.name,
+      source: "client_chat" as const,
+      _data: record.data,
+      _mimeType: record.mimeType,
+    };
+  });
+
+  const compactAttachments = attachments.map(
+    ({ _data: _discardData, _mimeType: _discardMimeType, ...attachment }) =>
+      attachment,
+  );
+
+  return { attachments, compactAttachments };
+}
+
+export function buildUserMessages(params: {
+  prompt: string;
+  userId: UUID;
+  roomId: UUID;
+  channelType: ChannelType;
+  images?: unknown;
+}): {
+  userMessage: ReturnType<typeof createMessageMemory>;
+  messageToStore: ReturnType<typeof createMessageMemory>;
+} {
+  const { attachments, compactAttachments } = buildChatAttachments(
+    params.images,
+  );
+  const messageId = crypto.randomUUID() as UUID;
+  const content: Content & { text: string } = {
+    text: params.prompt,
+    source: "client_chat",
+    channelType: params.channelType,
+    ...(attachments ? { attachments } : {}),
+  };
+
+  const userMessage = createMessageMemory({
+    id: messageId,
+    entityId: params.userId,
+    roomId: params.roomId,
+    content,
+  });
+
+  if (!compactAttachments) {
+    return { userMessage, messageToStore: userMessage };
+  }
+
+  const messageToStoreContent: Content & { text: string } = {
+    ...userMessage.content,
+    text: userMessage.content.text ?? params.prompt,
+    attachments: compactAttachments,
+  };
+
+  const messageToStore = createMessageMemory({
+    ...userMessage,
+    content: messageToStoreContent,
+  });
+
+  return { userMessage, messageToStore };
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isBareExecutableName(command: string): boolean {
+  return (
+    command.trim().length > 0 &&
+    !command.includes("/") &&
+    !command.includes("\\")
+  );
+}
+
+function matchesBlockedFlag(arg: string, flag: string): boolean {
+  return (
+    arg === flag ||
+    arg.startsWith(`${flag}=`) ||
+    (arg.startsWith(flag) && flag.length === 2)
+  );
+}
+
+function isBlockedResolvedAddress(address: string): boolean {
+  const normalized = address.trim().toLowerCase();
+  if (!normalized) return true;
+  if (
+    normalized === "0.0.0.0" ||
+    normalized === "::" ||
+    normalized === "::1" ||
+    normalized === "0:0:0:0:0:0:0:1"
+  ) {
+    return true;
+  }
+  if (normalized.startsWith("127.") || normalized.startsWith("10.")) {
+    return true;
+  }
+  if (normalized.startsWith("192.168.")) {
+    return true;
+  }
+  const octets = normalized.split(".");
+  if (octets.length === 4 && octets[0] === "172") {
+    const second = Number(octets[1]);
+    if (Number.isInteger(second) && second >= 16 && second <= 31) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function hasStdioMcpServer(servers: Record<string, unknown>): boolean {
+  return Object.values(servers).some((value) => {
+    const record = asObject(value);
+    return record?.type === "stdio";
+  });
+}
+
+export async function validateMcpServerConfig(
+  config: unknown,
+): Promise<string | null> {
+  if (!isPlainRecord(config)) {
+    return "Invalid config type";
+  }
+
+  if (hasPrototypePollutionKeyDeep(config)) {
+    return "Config contains blocked object keys";
+  }
+
+  const type = typeof config.type === "string" ? config.type.trim() : "";
+  if (type === "stdio") {
+    const command =
+      typeof config.command === "string" ? config.command.trim() : "";
+    if (!command) return "Command is required for stdio servers";
+    if (!isBareExecutableName(command)) {
+      return "Command must be a bare executable name";
+    }
+    if (!ALLOWED_MCP_STDIO_COMMANDS.has(command.toLowerCase())) {
+      return "Command is not allowed; it must be a bare executable name from the stdio allowlist";
+    }
+
+    const args = config.args;
+    if (args !== undefined && !Array.isArray(args)) {
+      return "args must be an array of strings";
+    }
+    if (Array.isArray(args)) {
+      if (args.some((arg) => typeof arg !== "string")) {
+        return "Each arg must be a string";
+      }
+
+      const blockedInterpreterFlags = [
+        "-e",
+        "--eval",
+        "-p",
+        "--print",
+        "-c",
+        "--import",
+        "-r",
+        "--require",
+        "--inspect",
+        "--inspect-brk",
+        "--inspect-wait",
+        "--inspect-port",
+        "--inspect-publish-uid",
+        "--experimental-policy",
+        "--diagnostic-dir",
+      ];
+      const blockedContainerFlags = [
+        "--privileged",
+        "-v",
+        "--volume",
+        "--mount",
+        "--cap-add",
+        "--security-opt",
+        "--pid",
+        "--network",
+        "--device",
+        "--ipc",
+        "--uts",
+        "--userns",
+        "--cgroupns",
+      ];
+      const normalizedArgs = args.map((arg) => arg.trim()).filter(Boolean);
+
+      for (const arg of normalizedArgs) {
+        for (const flag of blockedInterpreterFlags) {
+          if (matchesBlockedFlag(arg, flag)) {
+            return `Flag "${flag}" is not allowed`;
+          }
+        }
+        for (const flag of blockedContainerFlags) {
+          if (matchesBlockedFlag(arg, flag)) {
+            return `Flag "${flag}" is not allowed`;
+          }
+        }
+      }
+
+      const loweredCommand = command.toLowerCase();
+      if (loweredCommand === "deno" && normalizedArgs[0] === "eval") {
+        return 'Subcommand "eval" is not allowed';
+      }
+    }
+
+    const env = config.env;
+    if (env !== undefined && !isPlainRecord(env)) {
+      return "env must be a plain object of string key-value pairs";
+    }
+    if (isPlainRecord(env)) {
+      for (const [key, value] of Object.entries(env)) {
+        if (key === "$include") {
+          return `${key} is blocked for security reasons`;
+        }
+        if (
+          isBlockedObjectKey(key) ||
+          BLOCKED_ENV_KEYS.has(key.toUpperCase())
+        ) {
+          return `${key} is not allowed for security reasons`;
+        }
+        if (typeof value !== "string") {
+          return `env.${key} must be a string`;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  if (type === "http" || type === "streamable-http" || type === "sse") {
+    const urlValue = typeof config.url === "string" ? config.url.trim() : "";
+    if (!urlValue) return "URL is required for remote servers";
+
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(urlValue);
+    } catch {
+      return "URL must use http:// or https://";
+    }
+    if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+      return "URL must use http:// or https://";
+    }
+
+    const normalizedHost = normalizeHostToken(parsedUrl.hostname);
+    if (
+      normalizedHost === "localhost" ||
+      normalizedHost.endsWith(".localhost") ||
+      isBlockedResolvedAddress(normalizedHost)
+    ) {
+      return `URL host "${parsedUrl.hostname}" is blocked`;
+    }
+
+    try {
+      const results = await dnsLookup(parsedUrl.hostname, { all: true });
+      for (const result of results) {
+        if (isBlockedResolvedAddress(result.address)) {
+          return `URL host "${parsedUrl.hostname}" resolves to blocked address ${result.address}`;
+        }
+      }
+    } catch {
+      return `Could not resolve URL host "${parsedUrl.hostname}"`;
+    }
+
+    return null;
+  }
+
+  return "Invalid config type. Must be one of: stdio, http, streamable-http, sse";
+}
+
+export async function resolveMcpServersRejection(
+  servers: unknown,
+): Promise<string | null> {
+  if (!isPlainRecord(servers)) {
+    return "servers must be a JSON object";
+  }
+
+  for (const [name, config] of Object.entries(servers)) {
+    if (name === "$include" || isBlockedObjectKey(name)) {
+      return `Invalid server name: "${name}"`;
+    }
+    if (!isPlainRecord(config)) {
+      return `Server "${name}" config must be a JSON object`;
+    }
+    if (hasPrototypePollutionKeyDeep(config)) {
+      return `Server "${name}" config contains blocked object keys`;
+    }
+    const rejection = await validateMcpServerConfig(config);
+    if (rejection) {
+      return `Server "${name}": ${rejection}`;
+    }
+  }
+
+  return null;
+}
+
+export function resolveMcpTerminalAuthorizationRejection(
+  req: Pick<http.IncomingMessage, "headers">,
+  servers: Record<string, unknown>,
+  body: { terminalToken?: unknown } | null | undefined,
+): { status: 403; reason: string } | null {
+  if (!hasStdioMcpServer(servers)) return null;
+
+  const apiToken = readCompatEnv("MILADY_API_TOKEN", "MILAIDY_API_TOKEN");
+  if (!apiToken) return null;
+
+  const expectedTerminalToken = readCompatEnv(
+    "MILADY_TERMINAL_RUN_TOKEN",
+    "MILAIDY_TERMINAL_RUN_TOKEN",
+  );
+  if (!expectedTerminalToken) {
+    return {
+      status: 403,
+      reason:
+        "Terminal run is disabled. Set MILADY_TERMINAL_RUN_TOKEN to enable stdio MCP server changes.",
+    };
+  }
+
+  const bodyTerminalToken =
+    typeof body?.terminalToken === "string" ? body.terminalToken.trim() : "";
+  const providedTerminalToken =
+    readSingleHeaderValue(
+      req.headers["x-milady-terminal-token"] ??
+        req.headers["x-milaidy-terminal-token"],
+    ) ?? bodyTerminalToken;
+
+  if (
+    !providedTerminalToken ||
+    !tokenMatches(expectedTerminalToken, providedTerminalToken)
+  ) {
+    return {
+      status: 403,
+      reason: "Invalid terminal run token.",
+    };
+  }
+
   return null;
 }
 
@@ -9258,7 +10237,13 @@ function getRateLimiter(): RateLimitMiddleware {
   if (!_rateLimiter) {
     _rateLimiter = createRateLimitMiddleware({
       // Skip rate limiting for health checks
-      skipPaths: ["/api/health", "/api/status", "/health", "/health/live", "/health/ready"],
+      skipPaths: [
+        "/api/health",
+        "/api/status",
+        "/health",
+        "/health/live",
+        "/health/ready",
+      ],
     });
   }
   return _rateLimiter;
@@ -9333,7 +10318,9 @@ function createHyperscapeOperationalChecks(state: ServerState): HealthCheck[] {
 let _healthHandler: ReturnType<typeof createHealthHandler> | null = null;
 let _healthHandlerState: ServerState | null = null;
 
-function getHealthHandler(state: ServerState): ReturnType<typeof createHealthHandler> {
+function getHealthHandler(
+  state: ServerState,
+): ReturnType<typeof createHealthHandler> {
   // Recreate if state changed (e.g., runtime updated)
   if (!_healthHandler || _healthHandlerState !== state) {
     const checks = createHealthChecks({
@@ -9345,10 +10332,15 @@ function getHealthHandler(state: ServerState): ReturnType<typeof createHealthHan
                 .map((p) => ({ name: p.name })),
             getFailedPlugins: () =>
               state.plugins
-                .filter((p) => p.enabled && !p.isActive && p.validationErrors.length > 0)
+                .filter(
+                  (p) =>
+                    p.enabled && !p.isActive && p.validationErrors.length > 0,
+                )
                 .map((p) => ({
                   name: p.name,
-                  error: p.validationErrors.map((e) => e.message).join("; ") || "Failed to load",
+                  error:
+                    p.validationErrors.map((e) => e.message).join("; ") ||
+                    "Failed to load",
                 })),
           }
         : undefined,
@@ -9360,20 +10352,14 @@ function getHealthHandler(state: ServerState): ReturnType<typeof createHealthHan
   return _healthHandler;
 }
 
-type AppRoutePluginManager = Pick<
-  PluginManagerLike,
-  | "refreshRegistry"
-  | "listInstalledPlugins"
-  | "getRegistryPlugin"
-  | "searchRegistry"
-  | "installPlugin"
-  | "uninstallPlugin"
->;
+type AppRoutePluginManager = PluginManagerLike;
 
 function createAppRoutePluginManager(): AppRoutePluginManager {
   return {
     refreshRegistry: async () => {
-      const { refreshRegistry } = await import("../services/registry-client.js");
+      const { refreshRegistry } = await import(
+        "../services/registry-client.js"
+      );
       return refreshRegistry();
     },
     listInstalledPlugins: async () => {
@@ -9388,7 +10374,13 @@ function createAppRoutePluginManager(): AppRoutePluginManager {
     },
     searchRegistry: async (query: string, limit = 15) => {
       const { searchPlugins } = await import("../services/registry-client.js");
-      return searchPlugins(query, limit);
+      const results = await searchPlugins(query, limit);
+      return results.map((result) => ({
+        ...result,
+        version: result.latestVersion ?? null,
+        latestVersion: result.latestVersion ?? null,
+        npmPackage: result.name,
+      }));
     },
     installPlugin: async (
       pluginName: string,
@@ -9402,6 +10394,41 @@ function createAppRoutePluginManager(): AppRoutePluginManager {
         "../services/plugin-installer.js"
       );
       return uninstallPlugin(pluginName);
+    },
+    listEjectedPlugins: async () => {
+      const { listEjectedPlugins } = await import(
+        "../services/plugin-eject.js"
+      );
+      const plugins = await listEjectedPlugins();
+      return plugins.map((plugin) => ({
+        name: plugin.name,
+        version: plugin.version,
+        installedAt: plugin.upstream?.ejectedAt,
+      }));
+    },
+    ejectPlugin: async (pluginName: string) => {
+      const { ejectPlugin } = await import("../services/plugin-eject.js");
+      const result = await ejectPlugin(pluginName);
+      return {
+        ...result,
+        requiresRestart: true,
+      };
+    },
+    syncPlugin: async (pluginName: string) => {
+      const { syncPlugin } = await import("../services/plugin-eject.js");
+      const result = await syncPlugin(pluginName);
+      return {
+        ...result,
+        requiresRestart: true,
+      };
+    },
+    reinjectPlugin: async (pluginName: string) => {
+      const { reinjectPlugin } = await import("../services/plugin-eject.js");
+      const result = await reinjectPlugin(pluginName);
+      return {
+        ...result,
+        requiresRestart: true,
+      };
     },
   };
 }
@@ -9422,13 +10449,29 @@ async function handleRequest(
   }
   const pathname = url.pathname;
   let appPluginManager: AppRoutePluginManager | null = null;
+  let pluginManagementService: AppRoutePluginManager | null = null;
   const getAppPluginManager = (): AppRoutePluginManager => {
     if (!appPluginManager) {
       appPluginManager = createAppRoutePluginManager();
     }
     return appPluginManager;
   };
-  const requiredCapability = resolveFive55CapabilityForRequest(method, pathname);
+  const getPluginManagementService =
+    async (): Promise<AppRoutePluginManager> => {
+      if (pluginManagementService) return pluginManagementService;
+      const runtimeService = state.runtime?.getService?.("plugin_manager");
+      const { isPluginManagerLike } = await import(
+        "../services/plugin-manager-types.js"
+      );
+      pluginManagementService = isPluginManagerLike(runtimeService)
+        ? runtimeService
+        : createAppRoutePluginManager();
+      return pluginManagementService;
+    };
+  const requiredCapability = resolveFive55CapabilityForRequest(
+    method,
+    pathname,
+  );
   if (requiredCapability) {
     try {
       assertFive55Capability(FIVE55_HTTP_CAPABILITY_POLICY, requiredCapability);
@@ -9498,6 +10541,19 @@ async function handleRequest(
       return;
     }
     setTimeout(restart, delayMs);
+  };
+
+  const markPendingRestart = (reason: string): void => {
+    const normalizedReason = reason.trim();
+    if (!normalizedReason) return;
+    if (!state.pendingRestartReasons.includes(normalizedReason)) {
+      state.pendingRestartReasons.push(normalizedReason);
+    }
+    state.broadcastWs?.({
+      type: "restart-required",
+      reasons: [...state.pendingRestartReasons],
+    });
+    state.broadcastStatus?.();
   };
 
   const relayHyperscapeApi = async (
@@ -9592,7 +10648,10 @@ async function handleRequest(
   }
 
   // OpenAPI spec endpoint (before auth for documentation access)
-  if (method === "GET" && (pathname === "/api/docs/openapi.json" || pathname === "/api/docs")) {
+  if (
+    method === "GET" &&
+    (pathname === "/api/docs/openapi.json" || pathname === "/api/docs")
+  ) {
     try {
       const { buildOpenApiSpec } = await import("./openapi/spec.js");
       json(res, buildOpenApiSpec());
@@ -9606,7 +10665,9 @@ async function handleRequest(
   if (method === "GET" && pathname === "/metrics") {
     try {
       const { metrics } = await import("../telemetry/setup.js");
-      const { exportPrometheusText } = await import("../telemetry/prometheus-exporter.js");
+      const { exportPrometheusText } = await import(
+        "../telemetry/prometheus-exporter.js"
+      );
       const text = exportPrometheusText(metrics.getSnapshot());
       res.statusCode = 200;
       res.setHeader("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
@@ -9657,7 +10718,9 @@ async function handleRequest(
 
   // ── GET /api/auth/status ───────────────────────────────────────────────
   if (method === "GET" && pathname === "/api/auth/status") {
-    const required = Boolean(process.env.MILAIDY_API_TOKEN?.trim());
+    const required = Boolean(
+      readCompatEnv("MILADY_API_TOKEN", "MILAIDY_API_TOKEN"),
+    );
     const enabled = pairingEnabled();
     if (enabled) ensurePairingCode();
     json(res, {
@@ -9673,7 +10736,7 @@ async function handleRequest(
     const body = await readJsonBody<{ code?: string }>(req, res);
     if (!body) return;
 
-    const token = process.env.MILAIDY_API_TOKEN?.trim();
+    const token = readCompatEnv("MILADY_API_TOKEN", "MILAIDY_API_TOKEN");
     if (!token) {
       error(res, "Pairing not enabled", 400);
       return;
@@ -9710,6 +10773,23 @@ async function handleRequest(
     pairingCode = null;
     pairingExpiresAt = 0;
     json(res, { token });
+    return;
+  }
+
+  const earlySubscriptionHandled = await (
+    await import("./subscription-routes.js")
+  ).handleSubscriptionRoutes({
+    req,
+    res,
+    method,
+    pathname,
+    state,
+    saveConfig: saveApiConfig,
+    readJsonBody,
+    json,
+    error,
+  });
+  if (earlySubscriptionHandled) {
     return;
   }
 
@@ -9758,12 +10838,9 @@ async function handleRequest(
       return;
     }
     try {
-      const {
-        saveCredentials,
-        applySubscriptionCredentials,
-        deleteCredentials,
-        validateOpenAiCodexAccess,
-      } = await import("../auth/index.js");
+      const { saveCredentials, applySubscriptionCredentials } = await import(
+        "../auth/index.js"
+      );
       const flow = state._anthropicFlow;
       if (!flow) {
         error(res, "No active flow — call /start first", 400);
@@ -9801,7 +10878,7 @@ async function handleRequest(
       if (!state.config.env) state.config.env = {};
       (state.config.env as Record<string, string>).ANTHROPIC_API_KEY =
         body.token.trim();
-      saveMilaidyConfig(state.config);
+      saveApiConfig(state.config);
       json(res, { success: true });
     } catch (err) {
       error(res, `Failed to save setup token: ${err}`, 500);
@@ -9909,7 +10986,7 @@ async function handleRequest(
       if (!openAiAccess.valid) {
         await deleteCredentials("openai-codex");
         clearSubscriptionProviderState("openai-codex", state.config);
-        saveMilaidyConfig(state.config);
+        saveApiConfig(state.config);
         try {
           flow.close();
         } catch (closeErr) {
@@ -9929,7 +11006,7 @@ async function handleRequest(
       }
       enableOpenAiSubscriptionPiAiMode(state.config);
       clearInjectedOpenAiSubscriptionApiKey(state.config);
-      saveMilaidyConfig(state.config);
+      saveApiConfig(state.config);
       await applySubscriptionCredentials();
       flow.close();
       delete state._codexFlow;
@@ -9939,7 +11016,7 @@ async function handleRequest(
       json(res, {
         success: true,
         expiresAt: credentials.expires,
-        accountId: credentials.accountId,
+        accountId: credentials.accountId ?? null,
         provider: "openai-subscription",
         inferenceMode: "pi-ai-codex",
         restarting: true,
@@ -9968,13 +11045,137 @@ async function handleRequest(
       const { deleteCredentials } = await import("../auth/index.js");
       await deleteCredentials(provider);
       clearSubscriptionProviderState(provider, state.config);
-      saveMilaidyConfig(state.config);
+      saveApiConfig(state.config);
       json(res, {
         success: true,
         provider: toUiSubscriptionProvider(provider),
       });
     } catch (err) {
       error(res, `Failed to delete credentials: ${err}`, 500);
+    }
+    return;
+  }
+
+  // ── POST /api/provider/switch ───────────────────────────────────────────
+  // Legacy compatibility surface retained for Release B.
+  if (method === "POST" && pathname === "/api/provider/switch") {
+    if (state.providerSwitchInProgress) {
+      error(res, "Provider switch already in progress", 409);
+      return;
+    }
+
+    const body = await readJsonBody<{ provider?: unknown; apiKey?: unknown }>(
+      req,
+      res,
+    );
+    if (!body) return;
+
+    const providerRaw =
+      typeof body.provider === "string" ? body.provider.trim() : "";
+    if (!providerRaw) {
+      error(res, "missing provider", 400);
+      return;
+    }
+
+    const provider = normalizeProviderSwitchId(providerRaw);
+    const directEnvKey = PROVIDER_SWITCH_DIRECT_ENV_KEYS[provider];
+    const directApiKey =
+      typeof body.apiKey === "string" ? body.apiKey.trim() : "";
+    const supportedProviders = new Set([
+      "anthropic",
+      "anthropic-subscription",
+      "deepseek",
+      "elizacloud",
+      "google",
+      "groq",
+      "openai",
+      "openai-codex",
+      "openai-subscription",
+      "openrouter",
+      "pi-ai",
+      "xai",
+    ]);
+
+    if (!supportedProviders.has(provider)) {
+      error(res, "invalid provider", 400);
+      return;
+    }
+
+    if (directEnvKey && !directApiKey) {
+      error(res, "API key is required", 400);
+      return;
+    }
+
+    state.providerSwitchInProgress = true;
+    try {
+      if (!state.config.env) {
+        state.config.env = {};
+      }
+      const configEnv = state.config.env as typeof state.config.env &
+        Record<string, unknown>;
+      const vars =
+        configEnv.vars &&
+        typeof configEnv.vars === "object" &&
+        !Array.isArray(configEnv.vars)
+          ? (configEnv.vars as Record<string, string>)
+          : {};
+      if (vars !== configEnv.vars) {
+        configEnv.vars = vars;
+      }
+
+      for (const envKey of Object.values(PROVIDER_SWITCH_DIRECT_ENV_KEYS)) {
+        delete process.env[envKey];
+        delete vars[envKey];
+        delete configEnv[envKey];
+      }
+      delete process.env.MILAIDY_USE_PI_AI;
+      delete vars.MILAIDY_USE_PI_AI;
+      delete configEnv.MILAIDY_USE_PI_AI;
+
+      clearSubscriptionProviderConfig(state.config);
+      if (state.config.cloud) {
+        state.config.cloud.enabled = provider === "elizacloud";
+      }
+
+      if (directEnvKey) {
+        process.env[directEnvKey] = directApiKey;
+        vars[directEnvKey] = directApiKey;
+      } else if (provider === "pi-ai") {
+        process.env.MILAIDY_USE_PI_AI = "1";
+        vars.MILAIDY_USE_PI_AI = "1";
+      } else if (
+        provider === "anthropic-subscription" ||
+        provider === "openai-subscription" ||
+        provider === "openai-codex"
+      ) {
+        applySubscriptionProviderConfig(state.config, provider);
+        if (provider === "openai-subscription" || provider === "openai-codex") {
+          process.env.MILAIDY_USE_PI_AI = "1";
+          vars.MILAIDY_USE_PI_AI = "1";
+        }
+      }
+
+      saveApiConfig(state.config);
+
+      if (ctx?.onRestart) {
+        const nextRuntime = await ctx.onRestart();
+        if (nextRuntime) {
+          state.runtime = nextRuntime;
+          state.agentState = "running";
+          state.agentName = nextRuntime.character.name ?? state.agentName;
+          state.startedAt = Date.now();
+        }
+      }
+
+      json(res, { success: true, provider });
+    } catch (err) {
+      error(
+        res,
+        `Provider switch failed: ${err instanceof Error ? err.message : String(err)}`,
+        500,
+      );
+    } finally {
+      state.providerSwitchInProgress = false;
     }
     return;
   }
@@ -10111,8 +11312,13 @@ async function handleRequest(
         requestTimeoutMs,
       );
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to reach ElevenLabs";
-      error(res, message, err instanceof Error && err.name === "TimeoutError" ? 504 : 502);
+      const message =
+        err instanceof Error ? err.message : "Failed to reach ElevenLabs";
+      error(
+        res,
+        message,
+        err instanceof Error && err.name === "TimeoutError" ? 504 : 502,
+      );
       return;
     }
 
@@ -10150,12 +11356,286 @@ async function handleRequest(
       res.end();
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : "Failed to stream ElevenLabs response";
+        err instanceof Error
+          ? err.message
+          : "Failed to stream ElevenLabs response";
       if (!res.writableEnded && !res.headersSent) {
-        error(res, message, err instanceof Error && err.name === "TimeoutError" ? 504 : 502);
+        error(
+          res,
+          message,
+          err instanceof Error && err.name === "TimeoutError" ? 504 : 502,
+        );
       } else {
         res.destroy(err instanceof Error ? err : undefined);
       }
+    }
+    return;
+  }
+
+  // ── GET /v1/models ───────────────────────────────────────────────────────
+  if (method === "GET" && pathname === "/v1/models") {
+    json(res, {
+      object: "list",
+      data: buildCompatModelList(state.agentName || "Milaidy"),
+    });
+    return;
+  }
+
+  // ── GET /v1/models/:id ──────────────────────────────────────────────────
+  if (method === "GET" && /^\/v1\/models\/[^/]+$/.test(pathname)) {
+    const modelId = decodeURIComponent(pathname.split("/")[3] ?? "").trim();
+    if (!modelId) {
+      error(res, "model is required", 400);
+      return;
+    }
+    json(res, {
+      id: modelId,
+      object: "model",
+      created: 0,
+      owned_by: "milady",
+    });
+    return;
+  }
+
+  // ── POST /v1/chat/completions ───────────────────────────────────────────
+  if (method === "POST" && pathname === "/v1/chat/completions") {
+    const body = await readJsonBody<{
+      model?: unknown;
+      stream?: boolean;
+      messages?: Array<{ role?: unknown; content?: unknown }>;
+    }>(req, res);
+    if (!body) return;
+    if (!state.runtime) {
+      error(res, "Agent is not running", 503);
+      return;
+    }
+
+    const prompt = buildCompatPrompt({
+      messages: Array.isArray(body.messages) ? body.messages : [],
+    });
+    if (!prompt) {
+      error(res, "messages are required", 400);
+      return;
+    }
+
+    const model =
+      typeof body.model === "string" && body.model.trim().length > 0
+        ? body.model.trim()
+        : "milady";
+    const agentName = state.runtime.character.name ?? state.agentName;
+    const id = `chatcmpl-${crypto.randomUUID()}`;
+    const created = Math.floor(Date.now() / 1000);
+
+    if (body.stream) {
+      initSse(res);
+      let firstChunk = true;
+      try {
+        await generateChatResponse(
+          state.runtime,
+          createCompatMessageMemory(prompt),
+          agentName,
+          {
+            mode: "power",
+            modelHint: model,
+            onChunk: (chunk) => {
+              writeSse(res, {
+                id,
+                object: "chat.completion.chunk",
+                created,
+                model,
+                choices: [
+                  {
+                    index: 0,
+                    delta: firstChunk
+                      ? { role: "assistant", content: chunk }
+                      : { content: chunk },
+                    finish_reason: null,
+                  },
+                ],
+              });
+              firstChunk = false;
+            },
+          },
+        );
+        writeSse(res, {
+          id,
+          object: "chat.completion.chunk",
+          created,
+          model,
+          choices: [
+            {
+              index: 0,
+              delta: {},
+              finish_reason: "stop",
+            },
+          ],
+        });
+      } catch (err) {
+        writeSse(res, {
+          object: "error",
+          error: {
+            message: getErrorMessage(err),
+          },
+        });
+      } finally {
+        res.end();
+      }
+      return;
+    }
+
+    try {
+      const result = await generateChatResponse(
+        state.runtime,
+        createCompatMessageMemory(prompt),
+        agentName,
+        {
+          mode: "power",
+          modelHint: model,
+        },
+      );
+      json(res, {
+        id,
+        object: "chat.completion",
+        created,
+        model,
+        choices: [
+          {
+            index: 0,
+            message: { role: "assistant", content: result.text },
+            finish_reason: "stop",
+          },
+        ],
+        usage: {
+          prompt_tokens: 0,
+          completion_tokens: 0,
+          total_tokens: 0,
+        },
+      });
+    } catch (err) {
+      error(res, getErrorMessage(err), 500);
+    }
+    return;
+  }
+
+  // ── POST /v1/messages ───────────────────────────────────────────────────
+  if (method === "POST" && pathname === "/v1/messages") {
+    const body = await readJsonBody<{
+      model?: unknown;
+      stream?: boolean;
+      system?: unknown;
+      messages?: Array<{ role?: unknown; content?: unknown }>;
+    }>(req, res);
+    if (!body) return;
+    if (!state.runtime) {
+      error(res, "Agent is not running", 503);
+      return;
+    }
+
+    const prompt = buildCompatPrompt({
+      system: body.system,
+      messages: Array.isArray(body.messages) ? body.messages : [],
+    });
+    if (!prompt) {
+      error(res, "messages are required", 400);
+      return;
+    }
+
+    const model =
+      typeof body.model === "string" && body.model.trim().length > 0
+        ? body.model.trim()
+        : "milady";
+    const agentName = state.runtime.character.name ?? state.agentName;
+    const id = `msg_${crypto.randomUUID().replace(/-/g, "")}`;
+
+    if (body.stream) {
+      initSse(res);
+      writeSse(res, {
+        type: "message_start",
+        message: {
+          id,
+          type: "message",
+          role: "assistant",
+          model,
+          content: [],
+          stop_reason: null,
+          stop_sequence: null,
+          usage: { input_tokens: 0, output_tokens: 0 },
+        },
+      });
+      writeSse(res, {
+        type: "content_block_start",
+        index: 0,
+        content_block: {
+          type: "text",
+          text: "",
+        },
+      });
+
+      try {
+        await generateChatResponse(
+          state.runtime,
+          createCompatMessageMemory(prompt),
+          agentName,
+          {
+            mode: "power",
+            modelHint: model,
+            onChunk: (chunk) => {
+              writeSse(res, {
+                type: "content_block_delta",
+                index: 0,
+                delta: {
+                  type: "text_delta",
+                  text: chunk,
+                },
+              });
+            },
+          },
+        );
+        writeSse(res, { type: "content_block_stop", index: 0 });
+        writeSse(res, {
+          type: "message_delta",
+          delta: {
+            stop_reason: "end_turn",
+            stop_sequence: null,
+          },
+          usage: { output_tokens: 0 },
+        });
+        writeSse(res, { type: "message_stop" });
+      } catch (err) {
+        writeSse(res, {
+          type: "error",
+          error: {
+            message: getErrorMessage(err),
+          },
+        });
+      } finally {
+        res.end();
+      }
+      return;
+    }
+
+    try {
+      const result = await generateChatResponse(
+        state.runtime,
+        createCompatMessageMemory(prompt),
+        agentName,
+        {
+          mode: "power",
+          modelHint: model,
+        },
+      );
+      json(res, {
+        id,
+        type: "message",
+        role: "assistant",
+        model,
+        content: [{ type: "text", text: result.text }],
+        stop_reason: "end_turn",
+        stop_sequence: null,
+        usage: { input_tokens: 0, output_tokens: 0 },
+      });
+    } catch (err) {
+      error(res, getErrorMessage(err), 500);
     }
     return;
   }
@@ -10180,6 +11660,9 @@ async function handleRequest(
       model: cloudProxy ? "cloud" : state.model,
       uptime,
       startedAt: state.startedAt,
+      pendingRestart: state.pendingRestartReasons.length > 0,
+      pendingRestartReasons: [...state.pendingRestartReasons],
+      startup: state.startup,
       runMode,
       cloud: cloudStatus,
     });
@@ -10488,7 +11971,9 @@ async function handleRequest(
     }
 
     const providerFieldProvided = typeof body.provider === "string";
-    const providerId = providerFieldProvided ? String(body.provider).trim() : "";
+    const providerId = providerFieldProvided
+      ? String(body.provider).trim()
+      : "";
 
     // ── Local LLM provider ────────────────────────────────────────────────
     // Also supports pi-ai (reads credentials from ~/.pi/agent/auth.json and
@@ -10521,7 +12006,8 @@ async function handleRequest(
         if (primaryModel) {
           config.agents.defaults.model.primary = primaryModel;
         } else if (providerId === "openai-subscription") {
-          config.agents.defaults.model.primary = OPENAI_SUBSCRIPTION_PI_LARGE_DEFAULT;
+          config.agents.defaults.model.primary =
+            OPENAI_SUBSCRIPTION_PI_LARGE_DEFAULT;
         } else {
           delete config.agents.defaults.model.primary;
           if (
@@ -10532,7 +12018,8 @@ async function handleRequest(
           }
         }
 
-        if (!config.models || typeof config.models !== "object") config.models = {};
+        if (!config.models || typeof config.models !== "object")
+          config.models = {};
         const modelCfg = config.models as Record<string, unknown>;
         if (
           providerId === "openai-subscription" &&
@@ -10591,9 +12078,8 @@ async function handleRequest(
     }
 
     const selectedSubscriptionProvider = toCanonicalSubscriptionProvider(
-      (
-        config.agents?.defaults as Record<string, unknown> | undefined
-      )?.subscriptionProvider as string | undefined,
+      (config.agents?.defaults as Record<string, unknown> | undefined)
+        ?.subscriptionProvider as string | undefined,
     );
     const providerExplicitlyNonPiAi =
       providerFieldProvided &&
@@ -10605,9 +12091,8 @@ async function handleRequest(
       !providerExplicitlyNonPiAi &&
       selectedSubscriptionProvider !== "anthropic-subscription"
     ) {
-      const restored = await restoreOpenAiSubscriptionPiAiModeFromCredentials(
-        config,
-      );
+      const restored =
+        await restoreOpenAiSubscriptionPiAiModeFromCredentials(config);
       if (restored) {
         logger.info(
           "[milaidy-api] Restored OpenAI subscription pi-ai mode from stored credentials",
@@ -10747,7 +12232,7 @@ async function handleRequest(
     state.config = config;
     state.agentName = (body.name as string) ?? state.agentName;
     try {
-      saveMilaidyConfig(config);
+      saveApiConfig(config);
     } catch (err) {
       logger.error(
         `[milaidy-api] Failed to save config after onboarding: ${err}`,
@@ -10930,9 +12415,13 @@ async function handleRequest(
         state.agentState = "running";
         state.agentName = newRuntime.character.name ?? "Milaidy";
         state.startedAt = Date.now();
+        state.pendingRestartReasons = [];
         patchMessageServiceForAutonomy(state);
+        state.broadcastStatus?.();
         json(res, {
           ok: true,
+          pendingRestart: false,
+          pendingRestartReasons: [],
           status: {
             state: state.agentState,
             agentName: state.agentName,
@@ -11180,13 +12669,16 @@ async function handleRequest(
   // ── Autonomy auth guard ──────────────────────────────────────────────
   // Apply auth guard to /api/agent/ autonomy endpoints.
   let autonomyAuthIdentity: string | undefined;
-  if (pathname.startsWith("/api/agent/autonomy") ||
-      pathname.startsWith("/api/agent/identity") ||
-      pathname.startsWith("/api/agent/approvals") ||
-      pathname.startsWith("/api/agent/safe-mode")) {
+  if (
+    pathname.startsWith("/api/agent/autonomy") ||
+    pathname.startsWith("/api/agent/identity") ||
+    pathname.startsWith("/api/agent/approvals") ||
+    pathname.startsWith("/api/agent/safe-mode")
+  ) {
     const { createAuthGuard } = await import("./middleware/auth-guard.js");
     const autonomyCfg = state.runtime?.character?.settings?.autonomy as
-      import("../autonomy/config.js").AutonomyConfig | undefined;
+      | import("../autonomy/config.js").AutonomyConfig
+      | undefined;
     const guard = createAuthGuard({ apiKey: autonomyCfg?.apiKey });
     const authResult = guard(req, res);
     if (!authResult.authenticated) return;
@@ -11194,16 +12686,18 @@ async function handleRequest(
   }
 
   // ── POST /api/agent/autonomy ────────────────────────────────────────────
-  // Autonomy is always enabled; kept for backward compat.
   if (method === "POST" && pathname === "/api/agent/autonomy") {
-    json(res, { ok: true, autonomy: true });
+    const autonomySvc = getAutonomySvc(state.runtime);
+    const thinking = autonomySvc?.isLoopRunning?.() ?? false;
+    json(res, { ok: true, autonomy: Boolean(state.runtime), thinking });
     return;
   }
 
   // ── GET /api/agent/autonomy ─────────────────────────────────────────────
-  // Autonomy is always enabled.
   if (method === "GET" && pathname === "/api/agent/autonomy") {
-    json(res, { enabled: true });
+    const autonomySvc = getAutonomySvc(state.runtime);
+    const thinking = autonomySvc?.isLoopRunning?.() ?? false;
+    json(res, { enabled: Boolean(state.runtime), thinking });
     return;
   }
 
@@ -11231,10 +12725,7 @@ async function handleRequest(
   }
 
   // ── GET /api/agent/autonomy/roles/readiness ──────────────────────────
-  if (
-    method === "GET" &&
-    pathname === "/api/agent/autonomy/roles/readiness"
-  ) {
+  if (method === "GET" && pathname === "/api/agent/autonomy/roles/readiness") {
     try {
       const autonomySvc = getAutonomySvc(state.runtime);
       const roleHealth = autonomySvc?.getRoleHealth?.();
@@ -11287,7 +12778,9 @@ async function handleRequest(
       }
 
       const updated = await autonomySvc.updateIdentityConfig(
-        body as Partial<import("../autonomy/identity/schema.js").AutonomyIdentityConfig>,
+        body as Partial<
+          import("../autonomy/identity/schema.js").AutonomyIdentityConfig
+        >,
         {
           source: "api",
           actor:
@@ -11304,12 +12797,14 @@ async function handleRequest(
 
       // Persist to config file
       try {
-        const currentConfig = loadMilaidyConfig();
+        const currentConfig = loadApiConfig();
         if (!currentConfig.autonomy) currentConfig.autonomy = {};
         currentConfig.autonomy.identity = updated;
-        saveMilaidyConfig(currentConfig);
+        saveApiConfig(currentConfig);
       } catch (persistErr) {
-        logger.warn(`[api] Failed to persist identity to config: ${persistErr instanceof Error ? persistErr.message : persistErr}`);
+        logger.warn(
+          `[api] Failed to persist identity to config: ${persistErr instanceof Error ? persistErr.message : persistErr}`,
+        );
       }
 
       json(res, { identity: updated });
@@ -11361,7 +12856,9 @@ async function handleRequest(
       let recent: unknown[] = [];
       if (approvalLog) {
         const limitParam = url.searchParams.get("limit");
-        const limit = limitParam ? Math.min(Math.max(1, Number(limitParam)), 200) : 50;
+        const limit = limitParam
+          ? Math.min(Math.max(1, Number(limitParam)), 200)
+          : 50;
         recent = await approvalLog.getRecent(limit);
       }
 
@@ -11374,7 +12871,11 @@ async function handleRequest(
   }
 
   // ── POST /api/agent/approvals/:id/resolve ──────────────────────────────
-  if (method === "POST" && pathname.startsWith("/api/agent/approvals/") && pathname.endsWith("/resolve")) {
+  if (
+    method === "POST" &&
+    pathname.startsWith("/api/agent/approvals/") &&
+    pathname.endsWith("/resolve")
+  ) {
     const parts = pathname.split("/");
     const approvalId = parts[4]; // /api/agent/approvals/<id>/resolve
 
@@ -11386,7 +12887,10 @@ async function handleRequest(
     const body = await readJsonBody(req, res);
     if (!body) return;
 
-    const { decision, decidedBy } = body as { decision?: string; decidedBy?: string };
+    const { decision, decidedBy } = body as {
+      decision?: string;
+      decidedBy?: string;
+    };
     if (!decision || !["approved", "denied"].includes(decision)) {
       error(res, "decision must be 'approved' or 'denied'", 400);
       return;
@@ -11620,7 +13124,10 @@ async function handleRequest(
   }
 
   // ── GET /api/agent/autonomy/workflows/dead-letters ─────────────────────
-  if (method === "GET" && pathname === "/api/agent/autonomy/workflows/dead-letters") {
+  if (
+    method === "GET" &&
+    pathname === "/api/agent/autonomy/workflows/dead-letters"
+  ) {
     const runtime = state.runtime;
     if (!runtime) {
       error(res, "Agent runtime not available", 503);
@@ -11645,7 +13152,10 @@ async function handleRequest(
   }
 
   // ── POST /api/agent/autonomy/workflows/dead-letters/clear ──────────────
-  if (method === "POST" && pathname === "/api/agent/autonomy/workflows/dead-letters/clear") {
+  if (
+    method === "POST" &&
+    pathname === "/api/agent/autonomy/workflows/dead-letters/clear"
+  ) {
     const runtime = state.runtime;
     if (!runtime) {
       error(res, "Agent runtime not available", 503);
@@ -11670,7 +13180,10 @@ async function handleRequest(
   }
 
   // ── GET /api/agent/autonomy/workflows/:executionId ─────────────────────
-  if (method === "GET" && pathname.startsWith("/api/agent/autonomy/workflows/")) {
+  if (
+    method === "GET" &&
+    pathname.startsWith("/api/agent/autonomy/workflows/")
+  ) {
     const parts = pathname.split("/");
     const executionId = decodeURIComponent(parts[5] ?? "");
     if (!executionId || executionId === "start") {
@@ -11697,9 +13210,11 @@ async function handleRequest(
   }
 
   // ── POST /api/agent/autonomy/workflows/:executionId/cancel ──────────────
-  if (method === "POST" &&
-      pathname.startsWith("/api/agent/autonomy/workflows/") &&
-      pathname.endsWith("/cancel")) {
+  if (
+    method === "POST" &&
+    pathname.startsWith("/api/agent/autonomy/workflows/") &&
+    pathname.endsWith("/cancel")
+  ) {
     const parts = pathname.split("/");
     const executionId = decodeURIComponent(parts[5] ?? "");
     if (!executionId) {
@@ -11777,7 +13292,10 @@ async function handleRequest(
   }
 
   // ── POST /api/agent/autonomy/audit/export-expired ──────────────────────
-  if (method === "POST" && pathname === "/api/agent/autonomy/audit/export-expired") {
+  if (
+    method === "POST" &&
+    pathname === "/api/agent/autonomy/audit/export-expired"
+  ) {
     const runtime = state.runtime;
     if (!runtime) {
       error(res, "Agent runtime not available", 503);
@@ -12228,7 +13746,7 @@ async function handleRequest(
       // Save config even when only config values changed (no enable toggle)
       if (body.enabled === undefined) {
         try {
-          saveMilaidyConfig(state.config);
+          saveApiConfig(state.config);
         } catch (err) {
           logger.warn(
             `[milaidy-api] Failed to save config: ${err instanceof Error ? err.message : err}`,
@@ -12278,7 +13796,7 @@ async function handleRequest(
       }
       if (pluginId === ARCADE555_PLUGIN_CONTROL_ID) {
         entries["arcade555-canonical"] = { enabled: body.enabled };
-        entries["arcade555"] = { enabled: body.enabled };
+        entries.arcade555 = { enabled: body.enabled };
         entries["555arcade"] = { enabled: body.enabled };
         for (const legacyPluginId of ARCADE555_PLUGIN_LEGACY_IDS) {
           entries[legacyPluginId] = { enabled: body.enabled };
@@ -12305,7 +13823,7 @@ async function handleRequest(
 
       // Save updated config
       try {
-        saveMilaidyConfig(state.config);
+        saveApiConfig(state.config);
       } catch (err) {
         logger.warn(
           `[milaidy-api] Failed to save config: ${err instanceof Error ? err.message : err}`,
@@ -12600,8 +14118,10 @@ async function handleRequest(
             ok: false,
             code: "plugin_disabled",
             pluginId,
-            message: "Plugin is installed but disabled. Enable it before testing.",
-            error: "Plugin is installed but disabled. Enable it before testing.",
+            message:
+              "Plugin is installed but disabled. Enable it before testing.",
+            error:
+              "Plugin is installed but disabled. Enable it before testing.",
             durationMs: Date.now() - startMs,
           },
           409,
@@ -12660,7 +14180,9 @@ async function handleRequest(
           ? "arcade555"
           : null;
       const runtimeService =
-        serviceType && state.runtime ? state.runtime.getService(serviceType) : null;
+        serviceType && state.runtime
+          ? state.runtime.getService(serviceType)
+          : null;
       const serviceHealthcheck = asObjectRecord(runtimeService)?.healthcheck;
       if (typeof serviceHealthcheck === "function") {
         const result = await (
@@ -12761,18 +14283,20 @@ async function handleRequest(
       return;
     }
 
-    const { installPlugin } = await import("../services/plugin-installer.js");
-
     try {
-      const result = await installPlugin(pluginName, (progress) => {
-        logger.info(`[install] ${progress.phase}: ${progress.message}`);
-        state.broadcastWs?.({
-          type: "install-progress",
-          pluginName: progress.pluginName,
-          phase: progress.phase,
-          message: progress.message,
-        });
-      });
+      const pluginManager = await getPluginManagementService();
+      const result = await pluginManager.installPlugin(
+        pluginName,
+        (progress) => {
+          logger.info(`[install] ${progress.phase}: ${progress.message}`);
+          state.broadcastWs?.({
+            type: "install-progress",
+            pluginName: progress.pluginName,
+            phase: progress.phase,
+            message: progress.message,
+          });
+        },
+      );
 
       if (!result.success) {
         json(res, { ok: false, error: result.error }, 422);
@@ -12820,10 +14344,9 @@ async function handleRequest(
       return;
     }
 
-    const { uninstallPlugin } = await import("../services/plugin-installer.js");
-
     try {
-      const result = await uninstallPlugin(pluginName);
+      const pluginManager = await getPluginManagementService();
+      const result = await pluginManager.uninstallPlugin(pluginName);
 
       if (!result.success) {
         json(res, { ok: false, error: result.error }, 422);
@@ -12855,17 +14378,76 @@ async function handleRequest(
   // ── GET /api/plugins/installed ──────────────────────────────────────────
   // List plugins that were installed from the registry at runtime.
   if (method === "GET" && pathname === "/api/plugins/installed") {
-    const { listInstalledPlugins } = await import(
-      "../services/plugin-installer.js"
-    );
-
     try {
-      const installed = await listInstalledPlugins();
+      const pluginManager = await getPluginManagementService();
+      const installed = await pluginManager.listInstalledPlugins();
       json(res, { count: installed.length, plugins: installed });
     } catch (err) {
       error(
         res,
         `Failed to list installed plugins: ${err instanceof Error ? err.message : String(err)}`,
+        500,
+      );
+    }
+    return;
+  }
+
+  if (method === "GET" && pathname === "/api/plugins/ejected") {
+    try {
+      const pluginManager = await getPluginManagementService();
+      const plugins = await pluginManager.listEjectedPlugins();
+      json(res, { count: plugins.length, plugins });
+    } catch (err) {
+      error(
+        res,
+        `Failed to list ejected plugins: ${err instanceof Error ? err.message : String(err)}`,
+        500,
+      );
+    }
+    return;
+  }
+
+  const pluginActionMatch = pathname.match(
+    /^\/api\/plugins\/([^/]+)\/(eject|sync|reinject)$/,
+  );
+  if (method === "POST" && pluginActionMatch) {
+    const pluginName = decodeURIComponent(pluginActionMatch[1] ?? "").trim();
+    const action = pluginActionMatch[2] ?? "";
+    if (!pluginName) {
+      error(res, "plugin id is required", 400);
+      return;
+    }
+
+    try {
+      const pluginManager = await getPluginManagementService();
+      const result =
+        action === "eject"
+          ? await pluginManager.ejectPlugin(pluginName)
+          : action === "sync"
+            ? await pluginManager.syncPlugin(pluginName)
+            : await pluginManager.reinjectPlugin(pluginName);
+
+      if (!result.success) {
+        json(res, { ok: false, error: result.error }, 422);
+        return;
+      }
+
+      if (result.requiresRestart) {
+        scheduleRuntimeRestart(`Plugin ${pluginName} ${action}ed`, 500);
+      }
+
+      json(res, {
+        ok: true,
+        pluginName: result.pluginName,
+        requiresRestart: result.requiresRestart,
+        ...("ejectedPath" in result
+          ? { ejectedPath: result.ejectedPath }
+          : { removedPath: result.removedPath }),
+      });
+    } catch (err) {
+      error(
+        res,
+        `Plugin ${action} failed: ${err instanceof Error ? err.message : String(err)}`,
         500,
       );
     }
@@ -12967,7 +14549,7 @@ async function handleRequest(
     }
 
     try {
-      saveMilaidyConfig(state.config);
+      saveApiConfig(state.config);
     } catch (err) {
       logger.warn(
         `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
@@ -13867,7 +15449,7 @@ async function handleRequest(
     if (!body) return;
 
     if (!body.githubUrl?.trim() && !body.repository?.trim()) {
-      error(res, "Install requires a githubUrl or repository", 400);
+      error(res, "Install requires a slug, githubUrl, or repository", 400);
       return;
     }
 
@@ -13941,7 +15523,7 @@ async function handleRequest(
     process.env.SKILLSMP_API_KEY = apiKey;
     if (!state.config.env) state.config.env = {};
     (state.config.env as Record<string, string>).SKILLSMP_API_KEY = apiKey;
-    saveMilaidyConfig(state.config);
+    saveApiConfig(state.config);
     json(res, { ok: true, keySet: true });
     return;
   }
@@ -14163,7 +15745,10 @@ async function handleRequest(
 
     if (addrs.solanaAddress && solanaRpcConfig) {
       try {
-        const nfts = await fetchSolanaNfts(addrs.solanaAddress, solanaRpcConfig);
+        const nfts = await fetchSolanaNfts(
+          addrs.solanaAddress,
+          solanaRpcConfig,
+        );
         result.solana = { nfts };
       } catch (err) {
         logger.warn(`[wallet] Solana NFT fetch failed: ${err}`);
@@ -14218,7 +15803,7 @@ async function handleRequest(
       process.env[envKey] ?? "";
 
     try {
-      saveMilaidyConfig(state.config);
+      saveApiConfig(state.config);
     } catch (err) {
       logger.warn(
         `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
@@ -14275,7 +15860,7 @@ async function handleRequest(
     }
 
     try {
-      saveMilaidyConfig(state.config);
+      saveApiConfig(state.config);
     } catch (err) {
       logger.warn(
         `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
@@ -14329,16 +15914,20 @@ async function handleRequest(
     }
 
     // Generate SOLANA_RPC_URL based on the provider selection
-    const provider = (body.SOLANA_RPC_PROVIDER || process.env.SOLANA_RPC_PROVIDER || "helius") as SolanaRpcProvider;
+    const provider = (body.SOLANA_RPC_PROVIDER ||
+      process.env.SOLANA_RPC_PROVIDER ||
+      "helius") as SolanaRpcProvider;
     let rpcUrl: string | null = null;
 
     if (provider === "alchemy") {
-      const alchemyKey = body.ALCHEMY_API_KEY?.trim() || process.env.ALCHEMY_API_KEY;
+      const alchemyKey =
+        body.ALCHEMY_API_KEY?.trim() || process.env.ALCHEMY_API_KEY;
       if (alchemyKey) {
         rpcUrl = `https://solana-mainnet.g.alchemy.com/v2/${alchemyKey}`;
       }
     } else if (provider === "helius") {
-      const heliusKey = body.HELIUS_API_KEY?.trim() || process.env.HELIUS_API_KEY;
+      const heliusKey =
+        body.HELIUS_API_KEY?.trim() || process.env.HELIUS_API_KEY;
       if (heliusKey) {
         rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${heliusKey}`;
       }
@@ -14350,12 +15939,14 @@ async function handleRequest(
     }
 
     try {
-      saveMilaidyConfig(state.config);
+      saveApiConfig(state.config);
     } catch (err) {
       logger.warn(
         `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
       );
     }
+
+    markPendingRestart("Wallet configuration updated");
 
     json(res, { ok: true });
     return;
@@ -14674,7 +16265,7 @@ async function handleRequest(
       lastCheckAt: undefined,
       lastCheckVersion: undefined,
     };
-    saveMilaidyConfig(state.config);
+    saveApiConfig(state.config);
     json(res, { channel: ch });
     return;
   }
@@ -14715,7 +16306,7 @@ async function handleRequest(
     if (!state.config.connectors) state.config.connectors = {};
     state.config.connectors[connectorName] = config as ConnectorConfig;
     try {
-      saveMilaidyConfig(state.config);
+      saveApiConfig(state.config);
     } catch {
       /* test envs */
     }
@@ -14745,7 +16336,7 @@ async function handleRequest(
       delete state.config.channels[name];
     }
     try {
-      saveMilaidyConfig(state.config);
+      saveApiConfig(state.config);
     } catch {
       /* test envs */
     }
@@ -14787,44 +16378,6 @@ async function handleRequest(
 
     // Only accept known top-level keys from MilaidyConfig.
     // Unknown or dangerous keys are silently dropped.
-    const ALLOWED_TOP_KEYS = new Set([
-      "meta",
-      "auth",
-      "env",
-      "wizard",
-      "diagnostics",
-      "logging",
-      "update",
-      "browser",
-      "ui",
-      "skills",
-      "plugins",
-      "models",
-      "nodeHost",
-      "agents",
-      "tools",
-      "bindings",
-      "broadcast",
-      "audio",
-      "messages",
-      "commands",
-      "approvals",
-      "session",
-      "web",
-      "channels",
-      "cron",
-      "hooks",
-      "discovery",
-      "talk",
-      "gateway",
-      "memory",
-      "database",
-      "cloud",
-      "x402",
-      "mcp",
-      "features",
-    ]);
-
     // Keys that could enable prototype pollution.
     /**
      * Deep-merge `src` into `target`, only touching keys present in `src`.
@@ -14861,7 +16414,7 @@ async function handleRequest(
     // Filter to allowed top-level keys, then deep-merge.
     const filtered: Record<string, unknown> = {};
     for (const key of Object.keys(body)) {
-      if (ALLOWED_TOP_KEYS.has(key) && !isBlockedObjectKey(key)) {
+      if (CONFIG_WRITE_ALLOWED_TOP_KEYS.has(key) && !isBlockedObjectKey(key)) {
         filtered[key] = body[key];
       }
     }
@@ -14878,14 +16431,19 @@ async function handleRequest(
       // merge, even though BLOCKED_ENV_KEYS also blocks them during process.env
       // sync below. Keeping both guards prevents accidental persistence if one
       // path changes in future refactors.
+      delete envPatch.MILADY_API_TOKEN;
       delete envPatch.MILAIDY_API_TOKEN;
+      delete envPatch.MILADY_WALLET_EXPORT_TOKEN;
       delete envPatch.MILAIDY_WALLET_EXPORT_TOKEN;
       if (
         envPatch.vars &&
         typeof envPatch.vars === "object" &&
         !Array.isArray(envPatch.vars)
       ) {
+        delete (envPatch.vars as Record<string, unknown>).MILADY_API_TOKEN;
         delete (envPatch.vars as Record<string, unknown>).MILAIDY_API_TOKEN;
+        delete (envPatch.vars as Record<string, unknown>)
+          .MILADY_WALLET_EXPORT_TOKEN;
         delete (envPatch.vars as Record<string, unknown>)
           .MILAIDY_WALLET_EXPORT_TOKEN;
       }
@@ -14894,9 +16452,8 @@ async function handleRequest(
     safeMerge(state.config as Record<string, unknown>, filtered);
 
     const selectedSubscriptionProvider = toCanonicalSubscriptionProvider(
-      (
-        state.config.agents?.defaults as Record<string, unknown> | undefined
-      )?.subscriptionProvider as string | undefined,
+      (state.config.agents?.defaults as Record<string, unknown> | undefined)
+        ?.subscriptionProvider as string | undefined,
     );
     if (
       state.config.cloud?.enabled !== true &&
@@ -14906,7 +16463,7 @@ async function handleRequest(
     }
 
     // If the client updated env vars, synchronise them into process.env so
-    // subsequent hot-restarts see the latest values (loadMilaidyConfig()
+    // subsequent hot-restarts see the latest values (loadApiConfig()
     // only fills missing env vars and does not override existing ones).
     if (
       filtered.env &&
@@ -14956,7 +16513,7 @@ async function handleRequest(
     }
 
     try {
-      saveMilaidyConfig(state.config);
+      saveApiConfig(state.config);
     } catch (err) {
       logger.warn(
         `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
@@ -14984,6 +16541,8 @@ async function handleRequest(
       permissions: permStates,
       platform: process.platform,
       shellEnabled,
+      _platform: process.platform,
+      _shellEnabled: shellEnabled,
     });
     return;
   }
@@ -15093,7 +16652,7 @@ async function handleRequest(
       state.config.features = {};
     }
     state.config.features.shellEnabled = enabled;
-    saveMilaidyConfig(state.config);
+    saveApiConfig(state.config);
 
     // If a runtime is active, restart so plugin loading honors the new
     // shellEnabled flag and shell tools are loaded/unloaded consistently.
@@ -15128,6 +16687,14 @@ async function handleRequest(
         state.permissionStates,
         state.shellEnabled ?? true,
       );
+    }
+    if (
+      applyPermissionDrivenPluginAutoEnable(
+        state.config,
+        state.permissionStates,
+      )
+    ) {
+      saveApiConfig(state.config);
     }
     json(res, { updated: true, permissions: state.permissionStates });
     return;
@@ -15383,7 +16950,7 @@ async function handleRequest(
       logger.warn(
         `[conversations] Failed to fetch messages: ${err instanceof Error ? err.message : String(err)}`,
       );
-      json(res, { error: "Failed to fetch messages" }, 500);
+      json(res, { messages: [], error: "Failed to fetch messages" }, 500);
     }
     return;
   }
@@ -15437,7 +17004,7 @@ async function handleRequest(
         for await (const chunk of proxy.handleChatMessageStream(
           prompt,
           conv.roomId,
-          mode,
+          "DM",
         )) {
           fullText += chunk;
           writeSse(res, { type: "token", text: chunk });
@@ -15453,9 +17020,6 @@ async function handleRequest(
           type: "done",
           fullText: resolvedText,
           agentName: proxy.agentName,
-          mode,
-          requestedMode,
-          autoEscalated: modeDecision.autoEscalated,
         });
       } catch (err) {
         const creditReply = getInsufficientCreditsReplyFromError(err);
@@ -15500,8 +17064,8 @@ async function handleRequest(
       aborted = true;
     });
 
+    const runtime = state.runtime;
     try {
-      const runtime = state.runtime;
       const userId = ensureAdminEntityId();
       await ensureConversationRoom(conv);
 
@@ -15517,6 +17081,8 @@ async function handleRequest(
           channelType: ChannelType.DM,
         },
       });
+      await emitClientMessageReceived(runtime, message);
+      await persistChatMemory(runtime, message);
 
       const githubShortcutReply = await tryGitHubRepoListShortcut({
         runtime,
@@ -15525,13 +17091,22 @@ async function handleRequest(
       if (githubShortcutReply) {
         if (!aborted) {
           conv.updatedAt = new Date().toISOString();
+          await persistChatMemory(
+            runtime,
+            createMessageMemory({
+              id: crypto.randomUUID() as UUID,
+              entityId: runtime.agentId,
+              roomId: conv.roomId,
+              content: {
+                text: githubShortcutReply,
+                channelType: ChannelType.DM,
+              },
+            }),
+          );
           writeSse(res, {
             type: "done",
             fullText: githubShortcutReply,
             agentName: state.agentName,
-            mode,
-            requestedMode,
-            autoEscalated: modeDecision.autoEscalated,
           });
         }
         return;
@@ -15556,13 +17131,22 @@ async function handleRequest(
 
       if (!aborted) {
         conv.updatedAt = new Date().toISOString();
+        await persistChatMemory(
+          runtime,
+          createMessageMemory({
+            id: crypto.randomUUID() as UUID,
+            entityId: runtime.agentId,
+            roomId: conv.roomId,
+            content: {
+              text: result.text,
+              channelType: ChannelType.DM,
+            },
+          }),
+        );
         writeSse(res, {
           type: "done",
           fullText: result.text,
           agentName: result.agentName,
-          mode,
-          requestedMode,
-          autoEscalated: modeDecision.autoEscalated,
         });
       }
     } catch (err) {
@@ -15570,6 +17154,18 @@ async function handleRequest(
         const creditReply = getInsufficientCreditsReplyFromError(err);
         if (creditReply) {
           conv.updatedAt = new Date().toISOString();
+          await persistChatMemory(
+            state.runtime,
+            createMessageMemory({
+              id: crypto.randomUUID() as UUID,
+              entityId: state.runtime.agentId,
+              roomId: conv.roomId,
+              content: {
+                text: creditReply,
+                channelType: ChannelType.DM,
+              },
+            }),
+          );
           writeSse(res, {
             type: "done",
             fullText: creditReply,
@@ -15634,9 +17230,12 @@ async function handleRequest(
         const responseText = await proxy.handleChatMessage(
           prompt,
           conv.roomId,
-          mode,
+          "DM",
         );
-        const normalized = normalizeChatResponseText(responseText, state.logBuffer);
+        const normalized = normalizeChatResponseText(
+          responseText,
+          state.logBuffer,
+        );
         const resolvedText =
           mode === "simple"
             ? enforceSimpleModeReplyBoundaries(prompt, normalized)
@@ -15661,8 +17260,8 @@ async function handleRequest(
       return;
     }
 
+    const runtime = state.runtime;
     try {
-      const runtime = state.runtime;
       const userId = ensureAdminEntityId();
       await ensureConversationRoom(conv);
 
@@ -15678,6 +17277,8 @@ async function handleRequest(
           channelType: ChannelType.DM,
         },
       });
+      await emitClientMessageReceived(runtime, message);
+      await persistChatMemory(runtime, message);
 
       const githubShortcutReply = await tryGitHubRepoListShortcut({
         runtime,
@@ -15685,6 +17286,18 @@ async function handleRequest(
       });
       if (githubShortcutReply) {
         conv.updatedAt = new Date().toISOString();
+        await persistChatMemory(
+          runtime,
+          createMessageMemory({
+            id: crypto.randomUUID() as UUID,
+            entityId: runtime.agentId,
+            roomId: conv.roomId,
+            content: {
+              text: githubShortcutReply,
+              channelType: ChannelType.DM,
+            },
+          }),
+        );
         json(res, {
           text: githubShortcutReply,
           agentName: state.agentName,
@@ -15708,6 +17321,18 @@ async function handleRequest(
       );
 
       conv.updatedAt = new Date().toISOString();
+      await persistChatMemory(
+        runtime,
+        createMessageMemory({
+          id: crypto.randomUUID() as UUID,
+          entityId: runtime.agentId,
+          roomId: conv.roomId,
+          content: {
+            text: result.text,
+            channelType: ChannelType.DM,
+          },
+        }),
+      );
       json(res, {
         text: result.text,
         agentName: result.agentName,
@@ -15719,6 +17344,18 @@ async function handleRequest(
       const creditReply = getInsufficientCreditsReplyFromError(err);
       if (creditReply) {
         conv.updatedAt = new Date().toISOString();
+        await persistChatMemory(
+          runtime,
+          createMessageMemory({
+            id: crypto.randomUUID() as UUID,
+            entityId: runtime.agentId,
+            roomId: conv.roomId,
+            content: {
+              text: creditReply,
+              channelType: ChannelType.DM,
+            },
+          }),
+        );
         json(res, {
           text: creditReply,
           agentName: state.agentName,
@@ -15853,7 +17490,7 @@ async function handleRequest(
         for await (const chunk of proxy.handleChatMessageStream(
           prompt,
           "web-chat",
-          mode,
+          "DM",
         )) {
           fullText += chunk;
           writeSse(res, { type: "token", text: chunk });
@@ -15868,9 +17505,6 @@ async function handleRequest(
           type: "done",
           fullText: resolvedText,
           agentName: proxy.agentName,
-          mode,
-          requestedMode,
-          autoEscalated: modeDecision.autoEscalated,
         });
       } catch (err) {
         const creditReply = getInsufficientCreditsReplyFromError(err);
@@ -15935,6 +17569,7 @@ async function handleRequest(
           channelType: ChannelType.DM,
         },
       });
+      await emitClientMessageReceived(runtime, message);
 
       const githubShortcutReply = await tryGitHubRepoListShortcut({
         runtime,
@@ -15946,9 +17581,6 @@ async function handleRequest(
             type: "done",
             fullText: githubShortcutReply,
             agentName: state.agentName,
-            mode,
-            requestedMode,
-            autoEscalated: modeDecision.autoEscalated,
           });
         }
         return;
@@ -15976,9 +17608,6 @@ async function handleRequest(
           type: "done",
           fullText: result.text,
           agentName: result.agentName,
-          mode,
-          requestedMode,
-          autoEscalated: modeDecision.autoEscalated,
         });
       }
     } catch (err) {
@@ -16063,12 +17692,15 @@ async function handleRequest(
           for await (const chunk of proxy.handleChatMessageStream(
             prompt,
             "web-chat",
-            mode,
+            "DM",
           )) {
             fullText += chunk;
             writeSse(res, { type: "token", text: chunk });
           }
-          const normalized = normalizeChatResponseText(fullText, state.logBuffer);
+          const normalized = normalizeChatResponseText(
+            fullText,
+            state.logBuffer,
+          );
           const resolvedText =
             mode === "simple"
               ? enforceSimpleModeReplyBoundaries(prompt, normalized)
@@ -16077,9 +17709,6 @@ async function handleRequest(
             type: "done",
             fullText: resolvedText,
             agentName: proxy.agentName,
-            mode,
-            requestedMode,
-            autoEscalated: modeDecision.autoEscalated,
           });
         } catch (err) {
           const creditReply = getInsufficientCreditsReplyFromError(err);
@@ -16104,9 +17733,12 @@ async function handleRequest(
           const responseText = await proxy.handleChatMessage(
             prompt,
             "web-chat",
-            mode,
+            "DM",
           );
-          const normalized = normalizeChatResponseText(responseText, state.logBuffer);
+          const normalized = normalizeChatResponseText(
+            responseText,
+            state.logBuffer,
+          );
           const resolvedText =
             mode === "simple"
               ? enforceSimpleModeReplyBoundaries(prompt, normalized)
@@ -16178,6 +17810,7 @@ async function handleRequest(
           channelType: ChannelType.DM,
         },
       });
+      await emitClientMessageReceived(runtime, message);
 
       const githubShortcutReply = await tryGitHubRepoListShortcut({
         runtime,
@@ -16240,11 +17873,16 @@ async function handleRequest(
 
   // ── Trajectory management API ──────────────────────────────────────────
   if (pathname.startsWith("/api/trajectories")) {
+    if (!state.runtime) {
+      error(res, "Agent is not running", 503);
+      return;
+    }
     const handled = await handleTrajectoryRoute(
       req,
       res,
       state.runtime,
       pathname,
+      method,
     );
     if (handled) return;
   }
@@ -16256,10 +17894,11 @@ async function handleRequest(
     const rt = state.runtime;
     if (!rt) {
       json(res, {
-        connected: false,
+        connected: cloudEnabled && hasApiKey,
         enabled: cloudEnabled,
         hasApiKey,
-        reason: "runtime_not_started",
+        reason:
+          cloudEnabled && hasApiKey ? "cached_api_key" : "runtime_not_started",
       });
       return;
     }
@@ -16434,9 +18073,11 @@ async function handleRequest(
     return;
   }
   const masteryBasePath =
-    pathname === canonicalMasteryBase || pathname.startsWith(`${canonicalMasteryBase}/`)
+    pathname === canonicalMasteryBase ||
+    pathname.startsWith(`${canonicalMasteryBase}/`)
       ? canonicalMasteryBase
-      : pathname === legacyMasteryBase || pathname.startsWith(`${legacyMasteryBase}/`)
+      : pathname === legacyMasteryBase ||
+          pathname.startsWith(`${legacyMasteryBase}/`)
         ? legacyMasteryBase
         : null;
   const parseActionTextEnvelope = (value: unknown): Record<string, unknown> => {
@@ -16531,11 +18172,7 @@ async function handleRequest(
     });
 
     if (!execution.success) {
-      error(
-        res,
-        execution.error || "Failed to start mastery run",
-        500,
-      );
+      error(res, execution.error || "Failed to start mastery run", 500);
       return;
     }
 
@@ -16591,7 +18228,11 @@ async function handleRequest(
     return;
   }
 
-  if (method === "GET" && masteryBasePath && pathname.startsWith(`${masteryBasePath}/runs/`)) {
+  if (
+    method === "GET" &&
+    masteryBasePath &&
+    pathname.startsWith(`${masteryBasePath}/runs/`)
+  ) {
     const suffix = pathname.slice(`${masteryBasePath}/runs/`.length);
     const segments = suffix
       .split("/")
@@ -16656,9 +18297,9 @@ async function handleRequest(
     }
 
     if (
-      subresource === "episodes"
-      && segments.length === 4
-      && segments[3] === "frames"
+      subresource === "episodes" &&
+      segments.length === 4 &&
+      segments[3] === "frames"
     ) {
       const episodeId = segments[2];
       const frames = await readMasteryEpisodeFrames({ runId, episodeId });
@@ -16672,12 +18313,15 @@ async function handleRequest(
     }
 
     if (
-      subresource === "episodes"
-      && segments.length === 4
-      && segments[3] === "consistency"
+      subresource === "episodes" &&
+      segments.length === 4 &&
+      segments[3] === "consistency"
     ) {
       const episodeId = segments[2];
-      const consistency = await readMasteryEpisodeConsistency({ runId, episodeId });
+      const consistency = await readMasteryEpisodeConsistency({
+        runId,
+        episodeId,
+      });
       json(res, {
         runId,
         episodeId,
@@ -16690,7 +18334,11 @@ async function handleRequest(
     return;
   }
 
-  if (method === "GET" && masteryBasePath && pathname.startsWith(`${masteryBasePath}/games/`)) {
+  if (
+    method === "GET" &&
+    masteryBasePath &&
+    pathname.startsWith(`${masteryBasePath}/games/`)
+  ) {
     const suffix = pathname.slice(`${masteryBasePath}/games/`.length);
     const segments = suffix
       .split("/")
@@ -16784,7 +18432,9 @@ async function handleRequest(
     const trimmedPath = gamePath.trim().replace(/^\/+/, "");
     if (!trimmedPath) return "games/unknown-game/index.html";
     if (/\.html$/i.test(trimmedPath)) {
-      return trimmedPath.startsWith("games/") ? trimmedPath : `games/${trimmedPath}`;
+      return trimmedPath.startsWith("games/")
+        ? trimmedPath
+        : `games/${trimmedPath}`;
     }
     return `games/${trimmedPath.replace(/\/+$/, "")}/index.html`;
   };
@@ -16804,7 +18454,10 @@ async function handleRequest(
   const buildViewerUrl = (gamePath: string, mode: string): string => {
     const viewerBase = resolveArcadeViewerBase();
     const relativePath = resolveRelativeViewerPath(gamePath);
-    const viewerUrl = new URL(relativePath, `${viewerBase.replace(/\/+$/, "")}/`);
+    const viewerUrl = new URL(
+      relativePath,
+      `${viewerBase.replace(/\/+$/, "")}/`,
+    );
     if (mode === "spectate" || mode === "agent") {
       viewerUrl.searchParams.set("bot", "true");
     }
@@ -16837,7 +18490,8 @@ async function handleRequest(
           ? record.name.trim()
           : id;
     const description =
-      typeof record.description === "string" && record.description.trim().length > 0
+      typeof record.description === "string" &&
+      record.description.trim().length > 0
         ? record.description.trim()
         : "Playable app surfaced in Alice.";
     const rawPath =
@@ -16886,13 +18540,16 @@ async function handleRequest(
     const upstreamGame = asRecord(parsedRecord?.game);
     const fallbackGameId = defaults.gameId.trim() || "unknown-game";
     const upstreamGameId =
-      typeof parsedRecord?.gameId === "string" && parsedRecord.gameId.trim().length > 0
+      typeof parsedRecord?.gameId === "string" &&
+      parsedRecord.gameId.trim().length > 0
         ? parsedRecord.gameId.trim()
-        : typeof upstreamGame?.id === "string" && upstreamGame.id.trim().length > 0
+        : typeof upstreamGame?.id === "string" &&
+            upstreamGame.id.trim().length > 0
           ? upstreamGame.id.trim()
           : fallbackGameId;
     const upstreamPath =
-      typeof upstreamGame?.path === "string" && upstreamGame.path.trim().length > 0
+      typeof upstreamGame?.path === "string" &&
+      upstreamGame.path.trim().length > 0
         ? upstreamGame.path.trim()
         : upstreamGameId;
     const useNameAsTitle =
@@ -16929,7 +18586,10 @@ async function handleRequest(
       launchUrl: viewerUrl,
       startedAt: new Date().toISOString(),
     };
-    if (typeof defaults.sessionId === "string" && defaults.sessionId.trim().length > 0) {
+    if (
+      typeof defaults.sessionId === "string" &&
+      defaults.sessionId.trim().length > 0
+    ) {
       responsePayload.sessionId = defaults.sessionId;
     }
     if (typeof parsedRecord?.requestId === "string") {
@@ -16951,8 +18611,9 @@ async function handleRequest(
     const payload = asRecord(parsed) ?? {};
     const games = (Array.isArray(payload.games) ? payload.games : [])
       .map(normalizeCatalogGame)
-      .filter((game): game is NonNullable<ReturnType<typeof normalizeCatalogGame>> =>
-        Boolean(game),
+      .filter(
+        (game): game is NonNullable<ReturnType<typeof normalizeCatalogGame>> =>
+          Boolean(game),
       );
     const total =
       typeof payload.total === "number" && Number.isFinite(payload.total)
@@ -16974,7 +18635,10 @@ async function handleRequest(
       includeBeta,
       category,
     };
-    if (typeof defaults.sessionId === "string" && defaults.sessionId.trim().length > 0) {
+    if (
+      typeof defaults.sessionId === "string" &&
+      defaults.sessionId.trim().length > 0
+    ) {
       response.sessionId = defaults.sessionId;
     }
     if (typeof payload.requestId === "string") {
@@ -16982,7 +18646,9 @@ async function handleRequest(
     }
     return response;
   };
-  const resolveGamesAgentBearer = async (upstreamBase: string): Promise<string> => {
+  const resolveGamesAgentBearer = async (
+    upstreamBase: string,
+  ): Promise<string> => {
     const staticToken =
       process.env.STREAM555_AGENT_TOKEN?.trim() ||
       process.env.STREAM_API_BEARER_TOKEN?.trim();
@@ -17057,7 +18723,8 @@ async function handleRequest(
       !sessionParsed ||
       typeof sessionParsed !== "object" ||
       Array.isArray(sessionParsed) ||
-      typeof (sessionParsed as { sessionId?: unknown }).sessionId !== "string" ||
+      typeof (sessionParsed as { sessionId?: unknown }).sessionId !==
+        "string" ||
       !(sessionParsed as { sessionId: string }).sessionId.trim()
     ) {
       throw new Error("Session bootstrap did not return sessionId");
@@ -17121,7 +18788,8 @@ async function handleRequest(
         Accept: "application/json",
       };
       const directBearer = resolveArcadeGamesBearer();
-      if (directBearer) outboundHeaders.Authorization = `Bearer ${directBearer}`;
+      if (directBearer)
+        outboundHeaders.Authorization = `Bearer ${directBearer}`;
 
       try {
         const upstreamRes = await fetch(upstreamUrl.toString(), {
@@ -17168,7 +18836,9 @@ async function handleRequest(
     } catch (err) {
       error(
         res,
-        err instanceof Error ? err.message : "Failed to resolve games agent bearer",
+        err instanceof Error
+          ? err.message
+          : "Failed to resolve games agent bearer",
         503,
       );
       return;
@@ -17184,7 +18854,9 @@ async function handleRequest(
     } catch (err) {
       error(
         res,
-        err instanceof Error ? err.message : "Failed to bootstrap stream session",
+        err instanceof Error
+          ? err.message
+          : "Failed to bootstrap stream session",
         502,
       );
       return;
@@ -17267,7 +18939,8 @@ async function handleRequest(
         Accept: "application/json",
       };
       const directBearer = resolveArcadeGamesBearer();
-      if (directBearer) outboundHeaders.Authorization = `Bearer ${directBearer}`;
+      if (directBearer)
+        outboundHeaders.Authorization = `Bearer ${directBearer}`;
 
       try {
         const upstreamRes = await fetch(upstreamUrl.toString(), {
@@ -17321,7 +18994,9 @@ async function handleRequest(
     } catch (err) {
       error(
         res,
-        err instanceof Error ? err.message : "Failed to resolve games agent bearer",
+        err instanceof Error
+          ? err.message
+          : "Failed to resolve games agent bearer",
         503,
       );
       return;
@@ -17337,7 +19012,9 @@ async function handleRequest(
     } catch (err) {
       error(
         res,
-        err instanceof Error ? err.message : "Failed to bootstrap stream session",
+        err instanceof Error
+          ? err.message
+          : "Failed to bootstrap stream session",
         502,
       );
       return;
@@ -17366,7 +19043,11 @@ async function handleRequest(
         const catalogRaw = await catalogRes.text();
         const catalogParsed = parseGamesJsonText(catalogRaw);
         if (!catalogRes.ok) {
-          error(res, extractGamesError(catalogParsed, catalogRaw), catalogRes.status);
+          error(
+            res,
+            extractGamesError(catalogParsed, catalogRaw),
+            catalogRes.status,
+          );
           return;
         }
         const catalogPayload = asRecord(catalogParsed);
@@ -17463,7 +19144,8 @@ async function handleRequest(
     }
 
     const parsedDuration =
-      typeof body.durationMin === "number" || typeof body.durationMin === "string"
+      typeof body.durationMin === "number" ||
+      typeof body.durationMin === "string"
         ? Number(body.durationMin)
         : Number.NaN;
     const durationMin = Number.isFinite(parsedDuration)
@@ -17508,14 +19190,16 @@ async function handleRequest(
 
     const speechRatio = speechRatioByMode[mode];
     const speechSecondsInput =
-      typeof body.speechSeconds === "number" || typeof body.speechSeconds === "string"
+      typeof body.speechSeconds === "number" ||
+      typeof body.speechSeconds === "string"
         ? Number(body.speechSeconds)
         : Number.NaN;
     const speechSeconds = Number.isFinite(speechSecondsInput)
       ? Math.max(0, Math.floor(speechSecondsInput))
       : Math.floor(durationMin * 60 * speechRatio);
     const avatarMinutesInput =
-      typeof body.avatarMinutes === "number" || typeof body.avatarMinutes === "string"
+      typeof body.avatarMinutes === "number" ||
+      typeof body.avatarMinutes === "string"
         ? Number(body.avatarMinutes)
         : Number.NaN;
     const avatarMinutes = Number.isFinite(avatarMinutesInput)
@@ -17526,7 +19210,11 @@ async function handleRequest(
       process.env.STREAM555_BASE_URL?.trim() ||
       process.env.STREAM_API_URL?.trim();
     if (!upstreamBase) {
-      error(res, "STREAM555_BASE_URL (or STREAM_API_URL) is not configured", 503);
+      error(
+        res,
+        "STREAM555_BASE_URL (or STREAM_API_URL) is not configured",
+        503,
+      );
       return;
     }
 
@@ -17537,10 +19225,16 @@ async function handleRequest(
         return null;
       }
     };
-    const getUpstreamErrorMessage = (parsed: unknown, fallback: string): string => {
+    const getUpstreamErrorMessage = (
+      parsed: unknown,
+      fallback: string,
+    ): string => {
       if (parsed && typeof parsed === "object" && "error" in parsed) {
         const parsedRecord = parsed as { error?: unknown };
-        if (typeof parsedRecord.error === "string" && parsedRecord.error.trim()) {
+        if (
+          typeof parsedRecord.error === "string" &&
+          parsedRecord.error.trim()
+        ) {
           return parsedRecord.error;
         }
       }
@@ -17760,15 +19454,14 @@ async function handleRequest(
       return;
     }
 
-    const templateSubstitutions = (
-      raw: string,
-    ): string =>
+    const templateSubstitutions = (raw: string): string =>
       raw.replace(/\{([A-Z0-9_]+)\}/g, (_full, key: string) => {
         const value = process.env[key];
         if (value && value.trim().length > 0) return value.trim();
         if (key === "RS_SDK_BOT_NAME") {
           const runtimeBotName = process.env.BOT_NAME?.trim();
-          if (runtimeBotName && runtimeBotName.length > 0) return runtimeBotName;
+          if (runtimeBotName && runtimeBotName.length > 0)
+            return runtimeBotName;
           return "testbot";
         }
         return "";
@@ -17793,7 +19486,10 @@ async function handleRequest(
     }
 
     const normalizeHost = (value: string): string =>
-      value.trim().toLowerCase().replace(/^\[|\]$/g, "");
+      value
+        .trim()
+        .toLowerCase()
+        .replace(/^\[|\]$/g, "");
     const host = normalizeHost(upstreamSource.hostname);
     const isLoopbackHost =
       host === "localhost" ||
@@ -17875,7 +19571,9 @@ async function handleRequest(
       upstreamResponse = await fetch(upstreamUrl.toString(), {
         method,
         headers: forwardHeaders,
-        body: upstreamRequestBody,
+        body: upstreamRequestBody
+          ? new Uint8Array(upstreamRequestBody)
+          : undefined,
         redirect: "manual",
       });
     } catch (err) {
@@ -18018,9 +19716,13 @@ async function handleRequest(
       logger.warn(
         `[managed-app-proxy] JavaScript asset returned HTML (app=${appName}, path=${upstreamPath}, status=${upstreamResponse.status})`,
       );
-      res.statusCode = upstreamResponse.status >= 400 ? upstreamResponse.status : 502;
+      res.statusCode =
+        upstreamResponse.status >= 400 ? upstreamResponse.status : 502;
       res.setHeader("content-type", "application/javascript; charset=utf-8");
-      res.setHeader("x-milaidy-managed-app-proxy-error", "js-asset-returned-html");
+      res.setHeader(
+        "x-milaidy-managed-app-proxy-error",
+        "js-asset-returned-html",
+      );
       res.end(
         `throw new Error(${JSON.stringify(
           `Managed app JS asset returned HTML (${appName} ${upstreamPath}, status ${upstreamResponse.status})`,
@@ -18220,7 +19922,10 @@ async function handleRequest(
     return;
   }
 
-  if (method === "POST" && pathname === "/api/apps/hyperscape/autonomy/sessions") {
+  if (
+    method === "POST" &&
+    pathname === "/api/apps/hyperscape/autonomy/sessions"
+  ) {
     const body = await readJsonBody<{
       agentId?: string;
       goal?: string;
@@ -19030,7 +20735,11 @@ async function handleRequest(
         const stats = gate.getStats();
         json(res, { ok: true, quarantined, stats });
       } catch (err) {
-        error(res, err instanceof Error ? err.message : "Failed to get quarantine", 500);
+        error(
+          res,
+          err instanceof Error ? err.message : "Failed to get quarantine",
+          500,
+        );
       }
     } else {
       json(res, { ok: true, quarantined: [], stats: null });
@@ -19076,7 +20785,9 @@ async function handleRequest(
             decision,
             reviewedBy: "api",
           });
-        } catch { /* event bus not available */ }
+        } catch {
+          /* event bus not available */
+        }
         json(res, { ok: true, memoryId, decision, memory: result });
       } catch (err) {
         error(res, err instanceof Error ? err.message : "Review failed", 400);
@@ -19203,7 +20914,7 @@ async function handleRequest(
   if (method === "POST" && pathname === "/api/mcp/config/server") {
     const body = await readJsonBody<{
       name?: string;
-      config?: Record<string, unknown>;
+      config?: unknown;
     }>(req, res);
     if (!body) return;
 
@@ -19221,8 +20932,8 @@ async function handleRequest(
       return;
     }
 
-    const config = body.config as Record<string, unknown> | undefined;
-    if (!config || typeof config !== "object") {
+    const config = body.config;
+    if (!isPlainRecord(config)) {
       error(res, "Server config object is required", 400);
       return;
     }
@@ -19235,29 +20946,9 @@ async function handleRequest(
       return;
     }
 
-    const configType = config.type as string | undefined;
-    const validTypes = ["stdio", "http", "streamable-http", "sse"];
-    if (!configType || !validTypes.includes(configType)) {
-      error(
-        res,
-        `Invalid config type. Must be one of: ${validTypes.join(", ")}`,
-        400,
-      );
-      return;
-    }
-
-    if (configType === "stdio" && !config.command) {
-      error(res, "Command is required for stdio servers", 400);
-      return;
-    }
-
-    if (
-      (configType === "http" ||
-        configType === "streamable-http" ||
-        configType === "sse") &&
-      !config.url
-    ) {
-      error(res, "URL is required for remote servers", 400);
+    const rejection = await validateMcpServerConfig(config);
+    if (rejection) {
+      error(res, rejection, 400);
       return;
     }
 
@@ -19269,7 +20960,7 @@ async function handleRequest(
     >[string];
 
     try {
-      saveMilaidyConfig(state.config);
+      saveApiConfig(state.config);
     } catch (err) {
       logger.warn(
         `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
@@ -19300,7 +20991,7 @@ async function handleRequest(
     if (state.config.mcp?.servers?.[serverName]) {
       delete state.config.mcp.servers[serverName];
       try {
-        saveMilaidyConfig(state.config);
+        saveApiConfig(state.config);
       } catch (err) {
         logger.warn(
           `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
@@ -19315,18 +21006,15 @@ async function handleRequest(
   // ── PUT /api/mcp/config ──────────────────────────────────────────────
   if (method === "PUT" && pathname === "/api/mcp/config") {
     const body = await readJsonBody<{
-      servers?: Record<string, unknown>;
+      servers?: unknown;
     }>(req, res);
     if (!body) return;
 
     if (!state.config.mcp) state.config.mcp = {};
-    if (body.servers && typeof body.servers === "object") {
-      if (hasBlockedObjectKeyDeep(body.servers)) {
-        error(
-          res,
-          'Invalid servers config: "__proto__", "constructor", and "prototype" are not allowed',
-          400,
-        );
+    if (body.servers !== undefined) {
+      const rejection = await resolveMcpServersRejection(body.servers);
+      if (rejection) {
+        error(res, rejection, 400);
         return;
       }
       const sanitized = cloneWithoutBlockedObjectKeys(body.servers);
@@ -19336,7 +21024,7 @@ async function handleRequest(
     }
 
     try {
-      saveMilaidyConfig(state.config);
+      saveApiConfig(state.config);
     } catch (err) {
       logger.warn(
         `[api] Config save failed: ${err instanceof Error ? err.message : err}`,
@@ -19428,7 +21116,10 @@ async function handleRequest(
       return;
     }
 
-    const body = await readJsonBody<{ command?: string }>(req, res);
+    const body = await readJsonBody<{ command?: string; clientId?: unknown }>(
+      req,
+      res,
+    );
     if (!body) return;
     const command = typeof body.command === "string" ? body.command.trim() : "";
     if (!command) {
@@ -19442,12 +21133,53 @@ async function handleRequest(
       return;
     }
 
+    const hasControlCharacters = Array.from(command).some((char) => {
+      const codePoint = char.codePointAt(0);
+      return (
+        codePoint !== undefined && (codePoint < 0x20 || codePoint === 0x7f)
+      );
+    });
+
+    if (hasControlCharacters) {
+      error(
+        res,
+        "Command must be a single line without control characters",
+        400,
+      );
+      return;
+    }
+
+    const clientId =
+      resolveTerminalRunClientId(req, body) ?? "__anonymous_terminal_client__";
+    const { maxConcurrent, maxDurationMs } = resolveTerminalRunLimits();
+    const activeRuns = state.terminalRunCounts.get(clientId) ?? 0;
+    if (activeRuns >= maxConcurrent) {
+      error(res, `Too many active terminal runs for client ${clientId}`, 429);
+      return;
+    }
+    state.terminalRunCounts.set(clientId, activeRuns + 1);
+
     // Respond immediately — output streams via WebSocket
     json(res, { ok: true });
 
     // Spawn in background and broadcast output
     const { spawn } = await import("node:child_process");
     const runId = `run-${Date.now()}`;
+    let finalized = false;
+    const finalizeRun = () => {
+      if (finalized) return;
+      finalized = true;
+      const current = state.terminalRunCounts.get(clientId) ?? 0;
+      if (current <= 1) state.terminalRunCounts.delete(clientId);
+      else state.terminalRunCounts.set(clientId, current - 1);
+    };
+    const killTimer = setTimeout(() => {
+      try {
+        proc.kill("SIGTERM");
+      } catch {
+        // ignore best-effort cleanup
+      }
+    }, maxDurationMs);
 
     state.broadcastWs?.({
       type: "terminal-output",
@@ -19481,6 +21213,8 @@ async function handleRequest(
     });
 
     proc.on("close", (code: number | null) => {
+      clearTimeout(killTimer);
+      finalizeRun();
       state.broadcastWs?.({
         type: "terminal-output",
         runId,
@@ -19490,6 +21224,8 @@ async function handleRequest(
     });
 
     proc.on("error", (err: Error) => {
+      clearTimeout(killTimer);
+      finalizeRun();
       state.broadcastWs?.({
         type: "terminal-output",
         runId,
@@ -19504,7 +21240,7 @@ async function handleRequest(
   // ── Custom Actions CRUD ──────────────────────────────────────────────
 
   if (method === "GET" && pathname === "/api/custom-actions") {
-    const config = loadMilaidyConfig();
+    const config = loadApiConfig();
     json(res, { actions: config.customActions ?? [] });
     return;
   }
@@ -19577,10 +21313,10 @@ async function handleRequest(
       updatedAt: now,
     };
 
-    const config = loadMilaidyConfig();
+    const config = loadApiConfig();
     if (!config.customActions) config.customActions = [];
     config.customActions.push(actionDef);
-    saveMilaidyConfig(config);
+    saveApiConfig(config);
 
     // Hot-register into the running agent so it's available immediately
     if (actionDef.enabled) {
@@ -19667,7 +21403,7 @@ async function handleRequest(
     );
     if (!body) return;
 
-    const config = loadMilaidyConfig();
+    const config = loadApiConfig();
     const def = (config.customActions ?? []).find((a) => a.id === actionId);
     if (!def) {
       error(res, "Action not found", 404);
@@ -19700,7 +21436,7 @@ async function handleRequest(
     const body = await readJsonBody<Record<string, unknown>>(req, res);
     if (!body) return;
 
-    const config = loadMilaidyConfig();
+    const config = loadApiConfig();
     const actions = config.customActions ?? [];
     const idx = actions.findIndex((a) => a.id === actionId);
     if (idx === -1) {
@@ -19746,7 +21482,7 @@ async function handleRequest(
 
     actions[idx] = updated;
     config.customActions = actions;
-    saveMilaidyConfig(config);
+    saveApiConfig(config);
 
     json(res, { ok: true, action: updated });
     return;
@@ -19755,7 +21491,7 @@ async function handleRequest(
   if (method === "DELETE" && customActionMatch) {
     const actionId = decodeURIComponent(customActionMatch[1]);
 
-    const config = loadMilaidyConfig();
+    const config = loadApiConfig();
     const actions = config.customActions ?? [];
     const idx = actions.findIndex((a) => a.id === actionId);
     if (idx === -1) {
@@ -19765,7 +21501,7 @@ async function handleRequest(
 
     actions.splice(idx, 1);
     config.customActions = actions;
-    saveMilaidyConfig(config);
+    saveApiConfig(config);
 
     json(res, { ok: true });
     return;
@@ -19790,6 +21526,22 @@ async function handleRequest(
 import { captureEarlyLogs, flushEarlyLogs } from "./early-logs";
 export { captureEarlyLogs };
 
+function loadApiConfig(): MilaidyConfig {
+  const loader =
+    typeof loadMiladyConfig === "function"
+      ? loadMiladyConfig
+      : loadMilaidyConfig;
+  return loader();
+}
+
+function saveApiConfig(config: MilaidyConfig): void {
+  const saver =
+    typeof saveMiladyConfig === "function"
+      ? saveMiladyConfig
+      : saveMilaidyConfig;
+  saver(config);
+}
+
 // ---------------------------------------------------------------------------
 // Server start
 // ---------------------------------------------------------------------------
@@ -19809,15 +21561,30 @@ export async function startApiServer(opts?: {
   port: number;
   close: () => Promise<void>;
   updateRuntime: (rt: AgentRuntime) => void;
+  updateStartup: (update: {
+    phase?: string;
+    attempt?: number;
+    lastError?: string;
+    lastErrorAt?: number;
+    nextRetryAt?: number;
+    state?:
+      | "not_started"
+      | "starting"
+      | "running"
+      | "paused"
+      | "stopped"
+      | "restarting"
+      | "error";
+  }) => void;
 }> {
   const port = opts?.port ?? 2138;
   const host =
-    (process.env.MILAIDY_API_BIND ?? "127.0.0.1").trim() || "127.0.0.1";
+    readCompatEnv("MILADY_API_BIND", "MILAIDY_API_BIND") ?? "127.0.0.1";
   ensureApiTokenForBindHost(host);
 
   let config: MilaidyConfig;
   try {
-    config = loadMilaidyConfig();
+    config = loadApiConfig();
   } catch (err) {
     logger.warn(
       `[milaidy-api] Failed to load config, starting with defaults: ${err instanceof Error ? err.message : err}`,
@@ -19828,7 +21595,7 @@ export async function startApiServer(opts?: {
   // One-time migration for Alice instances that still carry legacy "hehe~"/
   // old "lol k" profile fields. Persist immediately so restarts stay canonical.
   if (maybeMigrateAliceLegacyStyle(config)) {
-    saveMilaidyConfig(config);
+    saveApiConfig(config);
     logger.info(
       "[milaidy-api] Migrated Alice legacy style profile to canonical CEO preset.",
     );
@@ -19908,9 +21675,17 @@ export async function startApiServer(opts?: {
     shareIngestQueue: [],
     broadcastStatus: null,
     broadcastWs: null,
+    pendingRestartReasons: [],
     activeConversationId: null,
     permissionStates: {},
     shellEnabled: config.features?.shellEnabled !== false,
+    terminalRunCounts: new Map(),
+    providerSwitchInProgress: false,
+    startup: {
+      phase: initialAgentState === "running" ? "ready" : "idle",
+      attempt: 0,
+      state: initialAgentState,
+    },
   };
   stateRef = state;
 
@@ -19919,7 +21694,7 @@ export async function startApiServer(opts?: {
     getConfig: () => state.config,
     setConfig: (nextConfig: MilaidyConfig) => {
       state.config = nextConfig;
-      saveMilaidyConfig(nextConfig);
+      saveApiConfig(nextConfig);
     },
   });
   // Register immediately so /api/training routes are available without a startup race.
@@ -20161,6 +21936,47 @@ export async function startApiServer(opts?: {
         roomId: event.roomId,
         payload: event.data,
       });
+
+      const payload = event.data as Record<string, unknown> | undefined;
+      const text =
+        payload && typeof payload.text === "string" ? payload.text.trim() : "";
+      const source =
+        payload && typeof payload.source === "string"
+          ? payload.source.trim()
+          : "";
+      const isConversationRoom = Array.from(state.conversations.values()).some(
+        (conversation) => conversation.roomId === event.roomId,
+      );
+
+      if (
+        runtime &&
+        event.stream === "assistant" &&
+        event.roomId &&
+        !isConversationRoom &&
+        text &&
+        source &&
+        source !== "client_chat"
+      ) {
+        void routeAutonomyToUser(
+          state,
+          [
+            createMessageMemory({
+              id: crypto.randomUUID() as UUID,
+              entityId: (event.agentId ?? runtime.agentId) as UUID,
+              roomId: event.roomId as UUID,
+              content: {
+                text,
+                source,
+              },
+            }),
+          ],
+          source,
+        ).catch((err) => {
+          logger.warn(
+            `[autonomy-route] Failed to route proactive AGENT_EVENT output: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        });
+      }
     });
 
     const unsubHeartbeat = svc.subscribeHeartbeat((event) => {
@@ -20184,10 +22000,14 @@ export async function startApiServer(opts?: {
     }
     if (!state.trainingService) return;
     detachTrainingStream = state.trainingService.subscribe((event) => {
+      const payload =
+        event && typeof event === "object"
+          ? (event as object)
+          : { value: event };
       pushEvent({
         type: "training_event",
         ts: Date.now(),
-        payload: event,
+        payload,
       });
     });
   };
@@ -20357,6 +22177,8 @@ export async function startApiServer(opts?: {
           agentName: state.agentName,
           model: state.model,
           startedAt: state.startedAt,
+          pendingRestart: state.pendingRestartReasons.length > 0,
+          pendingRestartReasons: [...state.pendingRestartReasons],
         }),
       );
       const replay = state.eventBuffer.slice(-120);
@@ -20409,6 +22231,8 @@ export async function startApiServer(opts?: {
       agentName: state.agentName,
       model: state.model,
       startedAt: state.startedAt,
+      pendingRestart: state.pendingRestartReasons.length > 0,
+      pendingRestartReasons: [...state.pendingRestartReasons],
     });
   };
 
@@ -20546,6 +22370,47 @@ export async function startApiServer(opts?: {
     patchMessageServiceForAutonomy(state);
   };
 
+  const updateStartup = (_update: {
+    phase?: string;
+    attempt?: number;
+    lastError?: string;
+    lastErrorAt?: number;
+    nextRetryAt?: number;
+    state?:
+      | "not_started"
+      | "starting"
+      | "running"
+      | "paused"
+      | "stopped"
+      | "restarting"
+      | "error";
+  }): void => {
+    state.startup = {
+      ...state.startup,
+      ..._update,
+      state: _update.state ?? state.startup.state ?? state.agentState,
+    };
+
+    if (_update.state) {
+      state.agentState = _update.state;
+      if (
+        ["starting", "running", "restarting", "paused"].includes(
+          _update.state,
+        ) &&
+        !state.startedAt
+      ) {
+        state.startedAt = Date.now();
+      } else if (
+        _update.state === "not_started" ||
+        _update.state === "stopped"
+      ) {
+        state.startedAt = undefined;
+      }
+    }
+
+    state.broadcastStatus?.();
+  };
+
   // Patch the initial runtime (if provided) for autonomy routing
   patchMessageServiceForAutonomy(state);
 
@@ -20582,6 +22447,7 @@ export async function startApiServer(opts?: {
           await new Promise<void>((r) => server.close(() => r()));
         },
         updateRuntime,
+        updateStartup,
       });
     });
   });

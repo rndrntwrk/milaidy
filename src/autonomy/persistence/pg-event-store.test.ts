@@ -6,9 +6,8 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-
-import { PgEventStore } from "./pg-event-store.js";
 import type { AutonomyDbAdapter } from "./db-adapter.js";
+import { PgEventStore } from "./pg-event-store.js";
 
 // ---------- Mock ----------
 
@@ -19,7 +18,9 @@ function makeMockAdapter(
   }>,
 ): AutonomyDbAdapter {
   return {
-    executeRaw: overrides?.executeRaw ?? vi.fn().mockResolvedValue({ rows: [], columns: [] }),
+    executeRaw:
+      overrides?.executeRaw ??
+      vi.fn().mockResolvedValue({ rows: [], columns: [] }),
     agentId: overrides?.agentId ?? "test-agent",
     tables: {} as any,
     raw: {} as any,
@@ -34,13 +35,19 @@ function makeMockAdapter(
 describe("PgEventStore", () => {
   describe("append()", () => {
     it("inserts a row and returns the ID", async () => {
-      const exec = vi.fn()
+      const exec = vi
+        .fn()
         .mockResolvedValueOnce({ rows: [], columns: ["event_hash"] })
         .mockResolvedValueOnce({ rows: [{ id: 42 }], columns: ["id"] });
       const adapter = makeMockAdapter({ executeRaw: exec });
       const store = new PgEventStore(adapter);
 
-      const id = await store.append("req-1", "tool:proposed", { tool: "READ_FILE" }, "corr-1");
+      const id = await store.append(
+        "req-1",
+        "tool:proposed",
+        { tool: "READ_FILE" },
+        "corr-1",
+      );
 
       expect(id).toBe(42);
       expect(store.size).toBe(1);
@@ -56,7 +63,8 @@ describe("PgEventStore", () => {
     });
 
     it("passes NULL for missing correlationId", async () => {
-      const exec = vi.fn()
+      const exec = vi
+        .fn()
         .mockResolvedValueOnce({ rows: [], columns: [] })
         .mockResolvedValueOnce({ rows: [{ id: 1 }], columns: ["id"] });
       const adapter = makeMockAdapter({ executeRaw: exec });
@@ -69,7 +77,8 @@ describe("PgEventStore", () => {
     });
 
     it("escapes single quotes in values", async () => {
-      const exec = vi.fn()
+      const exec = vi
+        .fn()
         .mockResolvedValueOnce({ rows: [], columns: [] })
         .mockResolvedValueOnce({ rows: [{ id: 1 }], columns: ["id"] });
       const adapter = makeMockAdapter({ executeRaw: exec });
@@ -83,13 +92,16 @@ describe("PgEventStore", () => {
     });
 
     it("throws on database error", async () => {
-      const exec = vi.fn()
+      const exec = vi
+        .fn()
         .mockResolvedValueOnce({ rows: [], columns: [] })
         .mockRejectedValueOnce(new Error("db gone"));
       const adapter = makeMockAdapter({ executeRaw: exec });
       const store = new PgEventStore(adapter);
 
-      await expect(store.append("req-1", "tool:proposed", {})).rejects.toThrow("db gone");
+      await expect(store.append("req-1", "tool:proposed", {})).rejects.toThrow(
+        "db gone",
+      );
       expect(store.size).toBe(0);
     });
 
@@ -114,7 +126,8 @@ describe("PgEventStore", () => {
       vi.useFakeTimers();
       try {
         vi.setSystemTime(new Date("2025-01-01T00:00:10.000Z"));
-        const exec = vi.fn()
+        const exec = vi
+          .fn()
           .mockResolvedValueOnce({ rows: [{ id: 9 }], columns: ["id"] }) // retention delete
           .mockResolvedValueOnce({ rows: [], columns: ["event_hash"] }) // hash lookup
           .mockResolvedValueOnce({ rows: [{ id: 10 }], columns: ["id"] }); // insert
@@ -128,7 +141,9 @@ describe("PgEventStore", () => {
         await store.append("req-1", "tool:proposed", {});
 
         expect(exec.mock.calls[0][0]).toContain("DELETE FROM autonomy_events");
-        expect(exec.mock.calls[0][0]).toContain("timestamp < '2025-01-01T00:00:05.000Z'");
+        expect(exec.mock.calls[0][0]).toContain(
+          "timestamp < '2025-01-01T00:00:05.000Z'",
+        );
       } finally {
         vi.useRealTimers();
       }
@@ -159,8 +174,8 @@ describe("PgEventStore", () => {
         await store.append("req-1", "tool:proposed", {});
         await store.append("req-2", "tool:proposed", {});
 
-        const retentionDeletes = exec.mock.calls.filter(
-          ([sql]) => (sql as string).includes("DELETE FROM autonomy_events"),
+        const retentionDeletes = exec.mock.calls.filter(([sql]) =>
+          (sql as string).includes("DELETE FROM autonomy_events"),
         );
         expect(retentionDeletes).toHaveLength(1);
       } finally {
@@ -173,8 +188,22 @@ describe("PgEventStore", () => {
     it("queries by request_id and returns ExecutionEvents", async () => {
       const exec = vi.fn().mockResolvedValue({
         rows: [
-          { id: 1, request_id: "req-1", type: "tool:proposed", payload: { tool: "A" }, correlation_id: null, timestamp: "2025-01-01T00:00:00Z" },
-          { id: 2, request_id: "req-1", type: "tool:executed", payload: { ok: true }, correlation_id: "corr-1", timestamp: "2025-01-01T00:00:01Z" },
+          {
+            id: 1,
+            request_id: "req-1",
+            type: "tool:proposed",
+            payload: { tool: "A" },
+            correlation_id: null,
+            timestamp: "2025-01-01T00:00:00Z",
+          },
+          {
+            id: 2,
+            request_id: "req-1",
+            type: "tool:executed",
+            payload: { ok: true },
+            correlation_id: "corr-1",
+            timestamp: "2025-01-01T00:00:01Z",
+          },
         ],
         columns: [],
       });
@@ -213,7 +242,14 @@ describe("PgEventStore", () => {
     it("queries by correlation_id", async () => {
       const exec = vi.fn().mockResolvedValue({
         rows: [
-          { id: 5, request_id: "req-1", type: "tool:proposed", payload: {}, correlation_id: "corr-X", timestamp: new Date() },
+          {
+            id: 5,
+            request_id: "req-1",
+            type: "tool:proposed",
+            payload: {},
+            correlation_id: "corr-X",
+            timestamp: new Date(),
+          },
         ],
         columns: [],
       });
@@ -233,8 +269,20 @@ describe("PgEventStore", () => {
     it("returns events in ascending order", async () => {
       const exec = vi.fn().mockResolvedValue({
         rows: [
-          { id: 10, request_id: "r1", type: "tool:executed", payload: {}, timestamp: "2025-01-01T01:00:00Z" },
-          { id: 5, request_id: "r1", type: "tool:proposed", payload: {}, timestamp: "2025-01-01T00:00:00Z" },
+          {
+            id: 10,
+            request_id: "r1",
+            type: "tool:executed",
+            payload: {},
+            timestamp: "2025-01-01T01:00:00Z",
+          },
+          {
+            id: 5,
+            request_id: "r1",
+            type: "tool:proposed",
+            payload: {},
+            timestamp: "2025-01-01T00:00:00Z",
+          },
         ],
         columns: [],
       });
@@ -259,7 +307,8 @@ describe("PgEventStore", () => {
 
   describe("syncSize()", () => {
     it("updates internal size from database count", async () => {
-      const exec = vi.fn()
+      const exec = vi
+        .fn()
         .mockResolvedValueOnce({ rows: [], columns: ["event_hash"] }) // latest hash lookup
         .mockResolvedValueOnce({ rows: [{ id: 1 }], columns: ["id"] }) // append
         .mockResolvedValueOnce({ rows: [{ cnt: 42 }], columns: ["cnt"] }); // syncSize
@@ -336,7 +385,10 @@ describe("PgEventStore", () => {
           return { rows: [{ cnt: rows.length }], columns: ["cnt"] };
         }
 
-        if (sql.includes("FROM autonomy_events") && sql.includes("WHERE request_id =")) {
+        if (
+          sql.includes("FROM autonomy_events") &&
+          sql.includes("WHERE request_id =")
+        ) {
           const match = sql.match(/WHERE request_id = '([^']+)'/);
           const requestId = match?.[1] ?? "";
           return {
@@ -371,7 +423,8 @@ describe("PgEventStore", () => {
       const restartedStore = new PgEventStore(adapter);
       expect(restartedStore.size).toBe(0);
 
-      const historyBeforeSync = await restartedStore.getByRequestId("req-restart-1");
+      const historyBeforeSync =
+        await restartedStore.getByRequestId("req-restart-1");
       expect(historyBeforeSync).toHaveLength(2);
       expect(historyBeforeSync[0].type).toBe("tool:proposed");
       expect(historyBeforeSync[1].type).toBe("tool:validated");
@@ -385,7 +438,13 @@ describe("PgEventStore", () => {
     it("handles JSON string payload", async () => {
       const exec = vi.fn().mockResolvedValue({
         rows: [
-          { id: 1, request_id: "r1", type: "tool:proposed", payload: '{"tool":"X"}', timestamp: "2025-01-01T00:00:00Z" },
+          {
+            id: 1,
+            request_id: "r1",
+            type: "tool:proposed",
+            payload: '{"tool":"X"}',
+            timestamp: "2025-01-01T00:00:00Z",
+          },
         ],
         columns: [],
       });
@@ -400,7 +459,13 @@ describe("PgEventStore", () => {
       const date = new Date("2025-06-15T12:00:00Z");
       const exec = vi.fn().mockResolvedValue({
         rows: [
-          { id: 1, request_id: "r1", type: "tool:proposed", payload: {}, timestamp: date },
+          {
+            id: 1,
+            request_id: "r1",
+            type: "tool:proposed",
+            payload: {},
+            timestamp: date,
+          },
         ],
         columns: [],
       });

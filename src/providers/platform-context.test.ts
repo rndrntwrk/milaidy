@@ -8,13 +8,13 @@
  *   - Provider integration with mock runtime
  */
 
-import { describe, expect, it, vi } from "vitest";
 import type { IAgentRuntime, Memory, UUID } from "@elizaos/core";
+import { describe, expect, it, vi } from "vitest";
 import {
+  createPlatformContextProvider,
   detectPlatform,
   formatPlatformContext,
   getPlatformCapabilities,
-  createPlatformContextProvider,
   type PlatformId,
 } from "./platform-context.js";
 
@@ -34,9 +34,7 @@ function makeMessage(overrides?: Partial<Memory>): Memory {
 function createMockRuntime(roomSource?: string): IAgentRuntime {
   return {
     getRoom: vi.fn(async () =>
-      roomSource !== undefined
-        ? { id: "room-1", source: roomSource }
-        : null,
+      roomSource !== undefined ? { id: "room-1", source: roomSource } : null,
     ),
   } as unknown as IAgentRuntime;
 }
@@ -66,9 +64,9 @@ describe("detectPlatform()", () => {
   });
 
   it("prefers metadata.platform over room source", () => {
-    expect(
-      detectPlatform("telegram", null, { platform: "discord" }),
-    ).toBe("discord");
+    expect(detectPlatform("telegram", null, { platform: "discord" })).toBe(
+      "discord",
+    );
   });
 
   it("detects web_chat from room ID pattern", () => {
@@ -92,7 +90,12 @@ describe("detectPlatform()", () => {
 });
 
 describe("getPlatformCapabilities()", () => {
-  const platforms: PlatformId[] = ["discord", "telegram", "web_chat", "unknown"];
+  const platforms: PlatformId[] = [
+    "discord",
+    "telegram",
+    "web_chat",
+    "unknown",
+  ];
 
   for (const platform of platforms) {
     it(`returns capabilities for ${platform}`, () => {
@@ -111,7 +114,9 @@ describe("getPlatformCapabilities()", () => {
   it("discord has thread support but not inline keyboards", () => {
     const caps = getPlatformCapabilities("discord");
     expect(caps.features.some((f) => f.includes("Thread"))).toBe(true);
-    expect(caps.unavailable.some((f) => f.includes("Inline keyboards"))).toBe(true);
+    expect(caps.unavailable.some((f) => f.includes("Inline keyboards"))).toBe(
+      true,
+    );
   });
 
   it("telegram has reply-to but not threads", () => {
@@ -175,7 +180,7 @@ describe("createPlatformContextProvider()", () => {
     const runtime = createMockRuntime("discord");
     const message = makeMessage();
 
-    const result = await provider.get!(runtime, message, {} as any);
+    const result = await provider.get?.(runtime, message, {} as any);
     expect(result.values?.currentPlatform).toBe("discord");
     expect(result.values?.platformDisplayName).toBe("Discord");
     expect(result.text).toContain("## Current Platform: Discord");
@@ -186,7 +191,7 @@ describe("createPlatformContextProvider()", () => {
     const runtime = createMockRuntime("telegram");
     const message = makeMessage();
 
-    const result = await provider.get!(runtime, message, {} as any);
+    const result = await provider.get?.(runtime, message, {} as any);
     expect(result.values?.currentPlatform).toBe("telegram");
   });
 
@@ -195,7 +200,7 @@ describe("createPlatformContextProvider()", () => {
     const runtime = createMockRuntime(undefined); // getRoom returns null
     const message = makeMessage();
 
-    const result = await provider.get!(runtime, message, {} as any);
+    const result = await provider.get?.(runtime, message, {} as any);
     expect(result.values?.currentPlatform).toBe("unknown");
   });
 
@@ -206,7 +211,7 @@ describe("createPlatformContextProvider()", () => {
       metadata: { type: "message", platform: "telegram" } as any,
     });
 
-    const result = await provider.get!(runtime, message, {} as any);
+    const result = await provider.get?.(runtime, message, {} as any);
     expect(result.values?.currentPlatform).toBe("telegram");
   });
 
@@ -220,7 +225,7 @@ describe("createPlatformContextProvider()", () => {
     const message = makeMessage();
 
     // Should not throw
-    const result = await provider.get!(runtime, message, {} as any);
+    const result = await provider.get?.(runtime, message, {} as any);
     expect(result.values?.currentPlatform).toBe("unknown");
   });
 
@@ -229,7 +234,7 @@ describe("createPlatformContextProvider()", () => {
     const runtime = createMockRuntime("discord");
     const message = makeMessage();
 
-    const result = await provider.get!(runtime, message, {} as any);
+    const result = await provider.get?.(runtime, message, {} as any);
     const data = result.data as Record<string, unknown>;
     expect(data.platform).toBe("discord");
     expect(data.displayName).toBe("Discord");

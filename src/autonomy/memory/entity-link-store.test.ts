@@ -1,5 +1,5 @@
-import { describe, expect, it, beforeEach } from "vitest";
-import { InMemoryEntityLinkStore, type CanonicalEntity } from "./entity-link-store.js";
+import { beforeEach, describe, expect, it } from "vitest";
+import { InMemoryEntityLinkStore } from "./entity-link-store.js";
 
 describe("InMemoryEntityLinkStore", () => {
   let store: InMemoryEntityLinkStore;
@@ -108,7 +108,12 @@ describe("InMemoryEntityLinkStore", () => {
       });
 
       // Link telegram to user2, then try to link same telegram to user1
-      const user2 = (await store.getByPlatformId("discord", "user2#5678"))!;
+      const user2 = await store.getByPlatformId("discord", "user2#5678");
+      if (!user2) {
+        throw new Error(
+          "Expected second user to be retrievable by platform ID",
+        );
+      }
       await store.linkPlatform(user2.id, "telegram", "@shared");
 
       await expect(
@@ -135,8 +140,14 @@ describe("InMemoryEntityLinkStore", () => {
 
   describe("listEntities", () => {
     it("lists all entities", async () => {
-      await store.upsertEntity({ displayName: "user1", platformIds: { discord: "u1" } });
-      await store.upsertEntity({ displayName: "user2", platformIds: { discord: "u2" } });
+      await store.upsertEntity({
+        displayName: "user1",
+        platformIds: { discord: "u1" },
+      });
+      await store.upsertEntity({
+        displayName: "user2",
+        platformIds: { discord: "u2" },
+      });
       await store.upsertEntity({
         displayName: "operator",
         isOperator: true,
@@ -148,7 +159,10 @@ describe("InMemoryEntityLinkStore", () => {
     });
 
     it("filters to operators only", async () => {
-      await store.upsertEntity({ displayName: "user1", platformIds: { discord: "u1" } });
+      await store.upsertEntity({
+        displayName: "user1",
+        platformIds: { discord: "u1" },
+      });
       await store.upsertEntity({
         displayName: "operator",
         isOperator: true,
@@ -161,9 +175,18 @@ describe("InMemoryEntityLinkStore", () => {
     });
 
     it("respects limit", async () => {
-      await store.upsertEntity({ displayName: "u1", platformIds: { discord: "d1" } });
-      await store.upsertEntity({ displayName: "u2", platformIds: { discord: "d2" } });
-      await store.upsertEntity({ displayName: "u3", platformIds: { discord: "d3" } });
+      await store.upsertEntity({
+        displayName: "u1",
+        platformIds: { discord: "d1" },
+      });
+      await store.upsertEntity({
+        displayName: "u2",
+        platformIds: { discord: "d2" },
+      });
+      await store.upsertEntity({
+        displayName: "u3",
+        platformIds: { discord: "d3" },
+      });
 
       const limited = await store.listEntities({ limit: 2 });
       expect(limited).toHaveLength(2);
@@ -172,9 +195,18 @@ describe("InMemoryEntityLinkStore", () => {
 
   describe("searchByName", () => {
     it("finds entities by case-insensitive substring", async () => {
-      await store.upsertEntity({ displayName: "enoomian", platformIds: { discord: "e" } });
-      await store.upsertEntity({ displayName: "ENOOMIAN_ALT", platformIds: { discord: "ea" } });
-      await store.upsertEntity({ displayName: "other", platformIds: { discord: "o" } });
+      await store.upsertEntity({
+        displayName: "enoomian",
+        platformIds: { discord: "e" },
+      });
+      await store.upsertEntity({
+        displayName: "ENOOMIAN_ALT",
+        platformIds: { discord: "ea" },
+      });
+      await store.upsertEntity({
+        displayName: "other",
+        platformIds: { discord: "o" },
+      });
 
       const results = await store.searchByName("enoom");
       expect(results).toHaveLength(2);
@@ -221,7 +253,10 @@ describe("InMemoryEntityLinkStore", () => {
         preferences: { style: "concise", format: "markdown" },
       });
 
-      await store.updatePreferences(entity.id, { style: "detailed", theme: "dark" });
+      await store.updatePreferences(entity.id, {
+        style: "detailed",
+        theme: "dark",
+      });
 
       const updated = await store.getById(entity.id);
       expect(updated?.preferences).toEqual({

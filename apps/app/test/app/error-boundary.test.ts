@@ -12,6 +12,15 @@ function readAllText(tree: TestRenderer.ReactTestRenderer): string {
     .join(" ");
 }
 
+function requireTree(
+  tree: TestRenderer.ReactTestRenderer | undefined,
+): TestRenderer.ReactTestRenderer {
+  if (!tree) {
+    throw new Error("Expected rendered tree");
+  }
+  return tree;
+}
+
 /** Component that throws on render */
 function ThrowingChild({ message }: { message: string }): never {
   throw new Error(message);
@@ -34,24 +43,36 @@ describe("ErrorBoundary", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(ErrorBoundary, null,
-          React.createElement(GoodChild)),
+        React.createElement(
+          ErrorBoundary,
+          null,
+          React.createElement(GoodChild),
+        ),
       );
     });
 
-    expect(readAllText(tree!)).toContain("all good");
+    if (!tree) {
+      throw new Error("ErrorBoundary did not render good child");
+    }
+    expect(readAllText(tree)).toContain("all good");
   });
 
   it("catches error and shows default fallback", async () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(ErrorBoundary, null,
-          React.createElement(ThrowingChild, { message: "boom" })),
+        React.createElement(
+          ErrorBoundary,
+          null,
+          React.createElement(ThrowingChild, { message: "boom" }),
+        ),
       );
     });
 
-    const text = readAllText(tree!);
+    if (!tree) {
+      throw new Error("ErrorBoundary did not render fallback");
+    }
+    const text = readAllText(tree);
     expect(text).toContain("Something went wrong");
     expect(consoleErrorSpy).toHaveBeenCalled();
   });
@@ -60,12 +81,18 @@ describe("ErrorBoundary", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(ErrorBoundary, null,
-          React.createElement(ThrowingChild, { message: "kaboom" })),
+        React.createElement(
+          ErrorBoundary,
+          null,
+          React.createElement(ThrowingChild, { message: "kaboom" }),
+        ),
       );
     });
 
-    expect(readAllText(tree!)).toContain("kaboom");
+    if (!tree) {
+      throw new Error("ErrorBoundary did not render thrown error");
+    }
+    expect(readAllText(tree)).toContain("kaboom");
   });
 
   it("renders custom fallback when provided", async () => {
@@ -74,13 +101,19 @@ describe("ErrorBoundary", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(ErrorBoundary, { fallback: customFallback },
-          React.createElement(ThrowingChild, { message: "oops" })),
+        React.createElement(
+          ErrorBoundary,
+          { fallback: customFallback },
+          React.createElement(ThrowingChild, { message: "oops" }),
+        ),
       );
     });
 
-    expect(readAllText(tree!)).toContain("custom error ui");
-    expect(readAllText(tree!)).not.toContain("Something went wrong");
+    if (!tree) {
+      throw new Error("ErrorBoundary did not render custom fallback");
+    }
+    expect(readAllText(tree)).toContain("custom error ui");
+    expect(readAllText(tree)).not.toContain("Something went wrong");
   });
 
   it("resets and renders children after Try Again click", async () => {
@@ -94,20 +127,24 @@ describe("ErrorBoundary", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(ErrorBoundary, null,
-          React.createElement(ConditionalChild)),
+        React.createElement(
+          ErrorBoundary,
+          null,
+          React.createElement(ConditionalChild),
+        ),
       );
     });
 
-    expect(readAllText(tree!)).toContain("Something went wrong");
+    const renderedTree = requireTree(tree);
+    expect(readAllText(renderedTree)).toContain("Something went wrong");
 
     // Stop throwing, then click Try Again
     shouldThrow = false;
-    const tryAgainBtn = tree!.root.findByProps({ type: "button" });
+    const tryAgainBtn = renderedTree.root.findByProps({ type: "button" });
     await act(async () => {
       tryAgainBtn.props.onClick();
     });
 
-    expect(readAllText(tree!)).toContain("recovered");
+    expect(readAllText(renderedTree)).toContain("recovered");
   });
 });

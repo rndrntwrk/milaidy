@@ -30,7 +30,10 @@ function makeEvent(overrides?: Partial<ExecutionEvent>): ExecutionEvent {
 describe("AuditRetentionManager", () => {
   it("addEvents stores events with retainUntil", async () => {
     const manager = new AuditRetentionManager();
-    await manager.addEvents([makeEvent(), makeEvent({ sequenceId: 2 })], makePolicy());
+    await manager.addEvents(
+      [makeEvent(), makeEvent({ sequenceId: 2 })],
+      makePolicy(),
+    );
 
     expect(manager.size).toBe(2);
     const summary = await manager.getComplianceSummary();
@@ -52,7 +55,10 @@ describe("AuditRetentionManager", () => {
     // Use 0ms retention so records expire immediately
     await manager.addEvents([makeEvent()], makePolicy({ eventRetentionMs: 0 }));
     // Use long retention so this one stays
-    await manager.addAuditReport({ keep: true }, makePolicy({ auditRetentionMs: 999999 }));
+    await manager.addAuditReport(
+      { keep: true },
+      makePolicy({ auditRetentionMs: 999999 }),
+    );
 
     const exported = await manager.exportExpired();
     expect(exported.records).toHaveLength(1);
@@ -64,7 +70,10 @@ describe("AuditRetentionManager", () => {
   it("evictExpired removes expired records", async () => {
     const manager = new AuditRetentionManager();
     await manager.addEvents([makeEvent()], makePolicy({ eventRetentionMs: 0 }));
-    await manager.addAuditReport({ keep: true }, makePolicy({ auditRetentionMs: 999999 }));
+    await manager.addAuditReport(
+      { keep: true },
+      makePolicy({ auditRetentionMs: 999999 }),
+    );
 
     const evicted = await manager.evictExpired();
     expect(evicted).toBe(1);
@@ -103,7 +112,9 @@ describe("AuditRetentionManager", () => {
     expect(summary.eventRecords).toBe(3);
     expect(summary.auditRecords).toBe(2);
     expect(summary.oldestRetainUntil).toBeGreaterThan(0);
-    expect(summary.newestRetainUntil).toBeGreaterThanOrEqual(summary.oldestRetainUntil);
+    expect(summary.newestRetainUntil).toBeGreaterThanOrEqual(
+      summary.oldestRetainUntil,
+    );
   });
 
   it("empty manager returns zero summary", async () => {

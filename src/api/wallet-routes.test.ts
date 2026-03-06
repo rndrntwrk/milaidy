@@ -162,7 +162,10 @@ describe("wallet routes", () => {
 
     expect(result.handled).toBe(true);
     expect(deps.fetchEvmBalances).toHaveBeenCalledWith("0xabc", "alchemy");
-    expect(deps.fetchSolanaBalances).toHaveBeenCalledWith("So111", "helius");
+    expect(deps.fetchSolanaBalances).toHaveBeenCalledWith("So111", {
+      provider: "helius",
+      url: "https://mainnet.helius-rpc.com/?api-key=helius",
+    });
     expect(result.payload).toEqual({
       evm: { address: "0xabc", chains: [] },
       solana: {

@@ -419,8 +419,13 @@ export function EmotePicker() {
       </div>
 
       {/* Category tabs */}
-      <div className="flex gap-1 overflow-x-auto border-b border-border px-3 py-2" role="tablist" aria-label="Emote categories">
+      <div
+        className="flex gap-1 overflow-x-auto border-b border-border px-3 py-2"
+        role="tablist"
+        aria-label="Emote categories"
+      >
         <button
+          type="button"
           id="emote-tab-all"
           onClick={() => setActiveCategory(null)}
           role="tab"
@@ -456,7 +461,14 @@ export function EmotePicker() {
       </div>
 
       {/* Emote grid */}
-      <div className="max-h-[400px] overflow-y-auto p-3" role="tabpanel" id="emote-tabpanel" aria-labelledby={activeCategory ? `emote-tab-${activeCategory}` : "emote-tab-all"}>
+      <div
+        className="max-h-[400px] overflow-y-auto p-3"
+        role="tabpanel"
+        id="emote-tabpanel"
+        aria-labelledby={
+          activeCategory ? `emote-tab-${activeCategory}` : "emote-tab-all"
+        }
+      >
         <div className="grid grid-cols-5 gap-2">
           {filteredEmotes.map((emote) => (
             <button

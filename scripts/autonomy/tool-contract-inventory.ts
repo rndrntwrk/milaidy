@@ -10,11 +10,11 @@ import { terminalAction } from "../../src/actions/terminal.js";
 import { createCodingDomainPack } from "../../src/autonomy/domains/coding/pack.js";
 import { loadPluginActionCatalog } from "../../src/autonomy/tools/plugin-action-catalog.js";
 import { ToolRegistry } from "../../src/autonomy/tools/registry.js";
+import { registerRuntimeContracts } from "../../src/autonomy/tools/runtime-contracts.js";
 import {
   BUILTIN_CONTRACTS,
   registerBuiltinToolContracts,
 } from "../../src/autonomy/tools/schemas/index.js";
-import { registerRuntimeContracts } from "../../src/autonomy/tools/runtime-contracts.js";
 import { loadMilaidyConfig } from "../../src/config/config.js";
 import { loadCustomActions } from "../../src/runtime/custom-actions.js";
 import { collectPluginNames } from "../../src/runtime/eliza.js";
@@ -110,9 +110,7 @@ function renderMarkdown(input: {
   lines.push(`- Configured plugins: \`${input.pluginConfiguredCount}\``);
   lines.push(`- Resolved plugins: \`${input.pluginResolvedCount}\``);
   lines.push(`- Plugin action count: \`${input.pluginActionCount}\``);
-  lines.push(
-    `- Plugin load failures: \`${input.pluginLoadFailureCount}\``,
-  );
+  lines.push(`- Plugin load failures: \`${input.pluginLoadFailureCount}\``);
   lines.push(
     `- Explicit custom-action contracts: \`${input.runtimeExplicitContractCount}\``,
   );
@@ -126,7 +124,9 @@ function renderMarkdown(input: {
     `- Auto-loaded domains: \`${input.autoLoadedDomains.join(", ") || "none"}\``,
   );
   lines.push("");
-  lines.push("| Tool | Source | Version | Risk | Approval | Permissions | Tags |");
+  lines.push(
+    "| Tool | Source | Version | Risk | Approval | Permissions | Tags |",
+  );
   lines.push("|---|---|---|---|---|---|---:|");
   for (const contract of input.contracts) {
     lines.push(
@@ -192,7 +192,9 @@ async function main() {
 
   const registry = new ToolRegistry();
   registerBuiltinToolContracts(registry);
-  const builtInNames = new Set(BUILTIN_CONTRACTS.map((contract) => contract.name));
+  const builtInNames = new Set(
+    BUILTIN_CONTRACTS.map((contract) => contract.name),
+  );
 
   const runtimeActions = runtimeActionsForInventory();
   const autonomyRuntimeActionNames = [
@@ -251,12 +253,12 @@ async function main() {
       source: runtimeExplicitNames.has(contract.name)
         ? "custom-action"
         : runtimeGeneratedNames.has(contract.name)
-        ? "runtime-generated"
-        : domainRegisteredNames.has(contract.name)
-          ? "domain"
-          : builtInNames.has(contract.name)
-            ? "built-in"
-            : "registered",
+          ? "runtime-generated"
+          : domainRegisteredNames.has(contract.name)
+            ? "domain"
+            : builtInNames.has(contract.name)
+              ? "built-in"
+              : "registered",
       version: contract.version,
       riskClass: contract.riskClass,
       requiresApproval: contract.requiresApproval,

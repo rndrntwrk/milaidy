@@ -1,9 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type {
-  MemoryGate,
-  MemoryGateDecision,
-  MemoryGateStats,
-} from "../memory/gate.js";
+import type { MemoryGate, MemoryGateDecision } from "../memory/gate.js";
 import { GatedMemoryWriter } from "./memory-writer.js";
 import type { MemoryWriteRequest } from "./types.js";
 

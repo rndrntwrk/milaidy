@@ -16,6 +16,4 @@ export const phettaSuccessCondition: PostCondition = {
   severity: "warning",
 };
 
-export const phettaPostConditions: PostCondition[] = [
-  phettaSuccessCondition,
-];
+export const phettaPostConditions: PostCondition[] = [phettaSuccessCondition];

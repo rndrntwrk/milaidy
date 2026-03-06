@@ -4,19 +4,19 @@
  * @module autonomy/verification
  */
 
-export {
-  InvariantChecker,
-  registerBuiltinInvariants,
-} from "./invariants/index.js";
 export type {
   Invariant,
-  InvariantCheckResult,
   InvariantCheckerInterface,
+  InvariantCheckResult,
   InvariantContext,
   InvariantOwner,
   InvariantResult,
   InvariantSeverity,
   InvariantStatus,
+} from "./invariants/index.js";
+export {
+  InvariantChecker,
+  registerBuiltinInvariants,
 } from "./invariants/index.js";
 export { PostConditionVerifier } from "./postcondition-verifier.js";
 export {

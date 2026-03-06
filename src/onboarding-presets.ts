@@ -1609,9 +1609,7 @@ export const STYLE_CATCHPHRASE_ALIASES: Readonly<Record<string, string>> = {
  * Resolve a user-provided catchphrase to a canonical preset catchphrase.
  * Falls back to DEFAULT_STYLE_CATCHPHRASE when unknown/missing.
  */
-export function resolveStyleCatchphrase(
-  catchphrase?: string | null,
-): string {
+export function resolveStyleCatchphrase(catchphrase?: string | null): string {
   const requested = catchphrase?.trim();
   if (!requested) return DEFAULT_STYLE_CATCHPHRASE;
 

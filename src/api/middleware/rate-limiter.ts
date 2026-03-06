@@ -356,7 +356,9 @@ export function createRateLimitMiddleware(options: RateLimiterOptions = {}) {
     const endpointLimiter = limiters.get(pathname);
     const limiter = endpointLimiter ?? defaultLimiter;
     if (!limiter) {
-      logger.warn("[rate-limit] No default limiter configured; allowing request");
+      logger.warn(
+        "[rate-limit] No default limiter configured; allowing request",
+      );
       return true;
     }
     const clientIp = extractIP(req);

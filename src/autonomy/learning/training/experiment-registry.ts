@@ -236,6 +236,10 @@ export class FileExperimentRegistry extends InMemoryExperimentRegistry {
       runs: this.listRuns().sort((a, b) => a.startedAt - b.startedAt),
     };
     mkdirSync(dirname(this.filePath), { recursive: true });
-    writeFileSync(this.filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+    writeFileSync(
+      this.filePath,
+      `${JSON.stringify(payload, null, 2)}\n`,
+      "utf8",
+    );
   }
 }

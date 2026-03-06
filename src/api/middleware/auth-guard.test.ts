@@ -2,17 +2,16 @@
  * Tests for Auth Guard Middleware.
  */
 
-import { describe, expect, it, vi, afterEach } from "vitest";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createAuthGuard } from "./auth-guard.js";
 
 // ---------- Helpers ----------
 
-function mockReq(options: {
-  url?: string;
-  authorization?: string;
-} = {}): IncomingMessage {
+function mockReq(
+  options: { url?: string; authorization?: string } = {},
+): IncomingMessage {
   return {
     url: options.url ?? "/api/agent/identity",
     headers: {

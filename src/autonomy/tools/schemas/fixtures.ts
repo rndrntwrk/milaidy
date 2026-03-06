@@ -30,7 +30,12 @@ export const BUILTIN_TOOL_FIXTURES: Record<string, ToolContractFixtures> = {
   },
   GENERATE_VIDEO: {
     valid: { prompt: "drone shot over mountains", duration: 8 },
-    invalid: [{ label: "invalid duration type", params: { prompt: "x", duration: "8" } }],
+    invalid: [
+      {
+        label: "invalid duration type",
+        params: { prompt: "x", duration: "8" },
+      },
+    ],
   },
   GENERATE_AUDIO: {
     valid: { prompt: "ambient synthwave with soft pads" },
@@ -65,4 +70,3 @@ export const BUILTIN_TOOL_FIXTURES: Record<string, ToolContractFixtures> = {
     invalid: [{ label: "missing type/message", params: { data: {} } }],
   },
 };
-

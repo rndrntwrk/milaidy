@@ -18,8 +18,14 @@ export interface AutonomyCLIContext {
   apiKey?: string;
 }
 
-async function fetchApi(ctx: AutonomyCLIContext, path: string, options?: RequestInit): Promise<unknown> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+async function fetchApi(
+  ctx: AutonomyCLIContext,
+  path: string,
+  options?: RequestInit,
+): Promise<unknown> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
   if (ctx.apiKey) headers["x-api-key"] = ctx.apiKey;
 
   const response = await fetch(`${ctx.apiUrl}${path}`, { ...options, headers });
@@ -30,15 +36,22 @@ async function fetchApi(ctx: AutonomyCLIContext, path: string, options?: Request
 }
 
 export async function autonomyStatus(ctx: AutonomyCLIContext): Promise<void> {
-  const config = await fetchApi(ctx, "/api/agent/autonomy") as Record<string, unknown>;
+  const config = (await fetchApi(ctx, "/api/agent/autonomy")) as Record<
+    string,
+    unknown
+  >;
   console.log("Autonomy Kernel Status");
   console.log("\u2500".repeat(40));
   console.log(`  Enabled:  ${config.enabled ?? false}`);
-  console.log(`  State:    ${(config as Record<string, unknown>).state ?? "unknown"}`);
+  console.log(
+    `  State:    ${(config as Record<string, unknown>).state ?? "unknown"}`,
+  );
 
   const trust = config.trust as Record<string, unknown> | undefined;
   if (trust) {
-    console.log(`  Trust:    default=${trust.defaultScore}, decay=${trust.decayRate}`);
+    console.log(
+      `  Trust:    default=${trust.defaultScore}, decay=${trust.decayRate}`,
+    );
   }
 
   const safeMode = config.safeMode as Record<string, unknown> | undefined;
@@ -63,8 +76,13 @@ export async function autonomyDisable(ctx: AutonomyCLIContext): Promise<void> {
   console.log("Autonomy kernel disabled.");
 }
 
-export async function autonomySafeModeStatus(ctx: AutonomyCLIContext): Promise<void> {
-  const status = await fetchApi(ctx, "/api/agent/safe-mode") as Record<string, unknown>;
+export async function autonomySafeModeStatus(
+  ctx: AutonomyCLIContext,
+): Promise<void> {
+  const status = (await fetchApi(ctx, "/api/agent/safe-mode")) as Record<
+    string,
+    unknown
+  >;
   console.log("Safe Mode Status");
   console.log("\u2500".repeat(40));
   console.log(`  Active: ${status.active ?? false}`);
@@ -74,15 +92,18 @@ export async function autonomySafeModeStatus(ctx: AutonomyCLIContext): Promise<v
 
 export async function autonomyBaseline(ctx: AutonomyCLIContext): Promise<void> {
   console.log("Running baseline measurement...");
-  const result = await fetchApi(ctx, "/api/agent/autonomy/baseline", {
+  const result = (await fetchApi(ctx, "/api/agent/autonomy/baseline", {
     method: "POST",
-  }) as Record<string, unknown>;
+  })) as Record<string, unknown>;
   console.log("Baseline measurement complete.");
   console.log(JSON.stringify(result, null, 2));
 }
 
 /** Map subcommand names to handler functions. */
-export const AUTONOMY_COMMANDS: Record<string, (ctx: AutonomyCLIContext) => Promise<void>> = {
+export const AUTONOMY_COMMANDS: Record<
+  string,
+  (ctx: AutonomyCLIContext) => Promise<void>
+> = {
   status: autonomyStatus,
   enable: autonomyEnable,
   disable: autonomyDisable,

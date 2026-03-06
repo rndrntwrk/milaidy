@@ -58,12 +58,19 @@ export interface MutationContext {
  */
 export interface GoalManager {
   addGoal(goal: Omit<Goal, "id" | "createdAt" | "updatedAt">): Promise<Goal>;
-  updateGoal(goalId: string, update: Partial<Goal>, caller?: MutationContext): Promise<Goal>;
+  updateGoal(
+    goalId: string,
+    update: Partial<Goal>,
+    caller?: MutationContext,
+  ): Promise<Goal>;
   getActiveGoals(): Promise<Goal[]>;
   getGoalTree(rootGoalId: string): Promise<Goal[]>;
   getGoalById(goalId: string): Promise<Goal | undefined>;
   /** Evaluate whether a goal's success criteria have been met. */
-  evaluateGoal(goalId: string, caller?: MutationContext): Promise<GoalEvaluationResult>;
+  evaluateGoal(
+    goalId: string,
+    caller?: MutationContext,
+  ): Promise<GoalEvaluationResult>;
 }
 
 // ---------- Implementation ----------
@@ -75,9 +82,9 @@ export interface GoalManager {
  * because source identity is caller-supplied and unverified.
  */
 const GOAL_TRUST_FLOORS: Record<Goal["source"], number> = {
-  system: 0.0,  // System goals always accepted
-  user: 0.3,    // Users are the principal, low bar but not zero
-  agent: 0.6,   // Agent-proposed goals need demonstrated trust
+  system: 0.0, // System goals always accepted
+  user: 0.3, // Users are the principal, low bar but not zero
+  agent: 0.6, // Agent-proposed goals need demonstrated trust
 };
 
 /** Priority ordering for sorting. */
@@ -127,17 +134,21 @@ export class InMemoryGoalManager implements GoalManager {
   /**
    * Register a custom criteria evaluator for machine-evaluable success criteria.
    */
-  setCriteriaEvaluator(evaluator: (criterion: string) => Promise<boolean>): void {
+  setCriteriaEvaluator(
+    evaluator: (criterion: string) => Promise<boolean>,
+  ): void {
     this.criteriaEvaluator = evaluator;
   }
 
-  async addGoal(input: Omit<Goal, "id" | "createdAt" | "updatedAt">): Promise<Goal> {
+  async addGoal(
+    input: Omit<Goal, "id" | "createdAt" | "updatedAt">,
+  ): Promise<Goal> {
     // Trust gate: enforce per-source-type minimum trust
     const trustFloor = GOAL_TRUST_FLOORS[input.source] ?? 0.6;
     if (input.sourceTrust < trustFloor) {
       throw new Error(
         `Goal from "${input.source}" rejected: trust ${input.sourceTrust.toFixed(3)} ` +
-        `below floor ${trustFloor}`,
+          `below floor ${trustFloor}`,
       );
     }
 
@@ -148,7 +159,9 @@ export class InMemoryGoalManager implements GoalManager {
         throw new Error(`Parent goal ${input.parentGoalId} not found`);
       }
       if (parent.status === "completed" || parent.status === "failed") {
-        throw new Error(`Cannot add child to ${parent.status} parent goal ${input.parentGoalId}`);
+        throw new Error(
+          `Cannot add child to ${parent.status} parent goal ${input.parentGoalId}`,
+        );
       }
     }
 
@@ -174,13 +187,17 @@ export class InMemoryGoalManager implements GoalManager {
 
     logger.info(
       `[goal-manager] Created goal ${goal.id}: "${goal.description}" ` +
-      `(priority=${goal.priority}, source=${goal.source})`,
+        `(priority=${goal.priority}, source=${goal.source})`,
     );
 
     return deepCloneGoal(goal);
   }
 
-  async updateGoal(goalId: string, update: Partial<Goal>, caller?: MutationContext): Promise<Goal> {
+  async updateGoal(
+    goalId: string,
+    update: Partial<Goal>,
+    caller?: MutationContext,
+  ): Promise<Goal> {
     const goal = this.goals.get(goalId);
     if (!goal) {
       throw new Error(`Goal ${goalId} not found`);
@@ -192,16 +209,19 @@ export class InMemoryGoalManager implements GoalManager {
       if (caller.sourceTrust < trustFloor) {
         throw new Error(
           `Update from "${caller.source}" rejected: trust ${caller.sourceTrust.toFixed(3)} ` +
-          `below floor ${trustFloor}`,
+            `below floor ${trustFloor}`,
         );
       }
       // Terminal transitions require at least the goal creator's trust level.
       // This prevents a low-trust agent from closing a high-trust user's goal.
-      if (update.status && (update.status === "completed" || update.status === "failed")) {
+      if (
+        update.status &&
+        (update.status === "completed" || update.status === "failed")
+      ) {
         if (caller.sourceTrust < goal.sourceTrust) {
           throw new Error(
             `Cannot ${update.status} goal: caller trust ${caller.sourceTrust.toFixed(3)} ` +
-            `below goal creator trust ${goal.sourceTrust.toFixed(3)}`,
+              `below goal creator trust ${goal.sourceTrust.toFixed(3)}`,
           );
         }
       }
@@ -224,7 +244,7 @@ export class InMemoryGoalManager implements GoalManager {
       if (!allowed.includes(update.status)) {
         throw new Error(
           `Invalid status transition: "${goal.status}" -> "${update.status}". ` +
-          `Allowed: [${allowed.join(", ")}]`,
+            `Allowed: [${allowed.join(", ")}]`,
         );
       }
     }
@@ -276,7 +296,10 @@ export class InMemoryGoalManager implements GoalManager {
     const visited = new Set<string>([rootGoalId]); // Cycle protection
 
     while (queue.length > 0) {
-      const parentId = queue.shift()!;
+      const parentId = queue.shift();
+      if (!parentId) {
+        continue;
+      }
       for (const goal of this.goals.values()) {
         if (goal.parentGoalId === parentId && !visited.has(goal.id)) {
           visited.add(goal.id);
@@ -294,7 +317,10 @@ export class InMemoryGoalManager implements GoalManager {
     return goal ? deepCloneGoal(goal) : undefined;
   }
 
-  async evaluateGoal(goalId: string, caller?: MutationContext): Promise<GoalEvaluationResult> {
+  async evaluateGoal(
+    goalId: string,
+    caller?: MutationContext,
+  ): Promise<GoalEvaluationResult> {
     const goal = this.goals.get(goalId);
     if (!goal) {
       throw new Error(`Goal ${goalId} not found`);
@@ -306,7 +332,7 @@ export class InMemoryGoalManager implements GoalManager {
       if (caller.sourceTrust < trustFloor) {
         throw new Error(
           `Evaluate from "${caller.source}" rejected: trust ${caller.sourceTrust.toFixed(3)} ` +
-          `below floor ${trustFloor}`,
+            `below floor ${trustFloor}`,
         );
       }
     }
@@ -387,7 +413,12 @@ export class InMemoryGoalManager implements GoalManager {
     if (this.criteriaEvaluator) {
       try {
         const met = await this.criteriaEvaluator(criterion);
-        return { met, reason: met ? "Custom evaluator: passed" : "Custom evaluator: not met" };
+        return {
+          met,
+          reason: met
+            ? "Custom evaluator: passed"
+            : "Custom evaluator: not met",
+        };
       } catch {
         // Fall through to heuristic evaluation
       }
@@ -404,7 +435,10 @@ export class InMemoryGoalManager implements GoalManager {
     }
 
     // Default: unresolvable without more context
-    return { met: false, reason: "Cannot evaluate — needs human review or custom evaluator" };
+    return {
+      met: false,
+      reason: "Cannot evaluate — needs human review or custom evaluator",
+    };
   }
 
   /**
@@ -427,8 +461,9 @@ export class InMemoryGoalManager implements GoalManager {
     const parent = this.goals.get(parentGoalId);
     if (!parent || parent.status !== "active") return;
 
-    const siblings = Array.from(this.goals.values())
-      .filter((g) => g.parentGoalId === parentGoalId);
+    const siblings = Array.from(this.goals.values()).filter(
+      (g) => g.parentGoalId === parentGoalId,
+    );
 
     const allComplete = siblings.every(
       (g) => g.status === "completed" || g.status === "failed",
@@ -452,7 +487,11 @@ export class InMemoryGoalManager implements GoalManager {
   private pruneCompletedGoals(): void {
     const completed = Array.from(this.goals.entries())
       .filter(([, g]) => g.status === "completed" || g.status === "failed")
-      .sort((a, b) => (a[1].completedAt ?? a[1].updatedAt) - (b[1].completedAt ?? b[1].updatedAt));
+      .sort(
+        (a, b) =>
+          (a[1].completedAt ?? a[1].updatedAt) -
+          (b[1].completedAt ?? b[1].updatedAt),
+      );
 
     // Remove oldest 25% of completed goals
     const toRemove = Math.ceil(completed.length * 0.25);
@@ -471,7 +510,9 @@ export class InMemoryGoalManager implements GoalManager {
           goal.parentGoalId = undefined;
         }
       }
-      logger.debug(`[goal-manager] Pruned ${toRemove} completed goals, fixed orphaned children`);
+      logger.debug(
+        `[goal-manager] Pruned ${toRemove} completed goals, fixed orphaned children`,
+      );
     }
   }
 }

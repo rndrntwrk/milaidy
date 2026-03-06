@@ -5,7 +5,11 @@
  */
 
 import type { Memory } from "@elizaos/core";
-import type { MemoryProvenance, MemoryType, VerifiabilityClass } from "../types.js";
+import type {
+  MemoryProvenance,
+  MemoryType,
+  VerifiabilityClass,
+} from "../types.js";
 
 /**
  * A memory object enriched with trust and provenance metadata.

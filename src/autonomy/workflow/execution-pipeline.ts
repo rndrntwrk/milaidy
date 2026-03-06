@@ -6,6 +6,8 @@
  */
 
 import type { ApprovalGateInterface } from "../approval/types.js";
+import { recordInvariantCheck } from "../metrics/prometheus-metrics.js";
+import { evaluateSafeModeToolRestriction } from "../roles/safe-mode-policy.js";
 import type {
   KernelStateMachineInterface,
   TransitionResult,
@@ -25,14 +27,12 @@ import type {
   PostConditionVerifierInterface,
   VerifierContext,
 } from "../verification/types.js";
-import { recordInvariantCheck } from "../metrics/prometheus-metrics.js";
-import { evaluateSafeModeToolRestriction } from "../roles/safe-mode-policy.js";
 import type {
   CompensationIncidentManagerInterface,
   CompensationIncidentReason,
   CompensationRegistryInterface,
-  ExecutionEventType,
   EventStoreInterface,
+  ExecutionEventType,
   PipelineConfig,
   PipelineResult,
   ToolActionHandler,
@@ -708,11 +708,16 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
       await this.invariantChecker.check(invariantCtx);
     recordInvariantCheck(this.toInvariantMetricResult(invariantResult));
 
-    await this.eventStore.append(requestId, "tool:invariants:checked", {
-      status: invariantResult.status,
-      hasCriticalViolation: invariantResult.hasCriticalViolation,
-      checkCount: invariantResult.checks.length,
-    }, correlationId);
+    await this.eventStore.append(
+      requestId,
+      "tool:invariants:checked",
+      {
+        status: invariantResult.status,
+        hasCriticalViolation: invariantResult.hasCriticalViolation,
+        checkCount: invariantResult.checks.length,
+      },
+      correlationId,
+    );
 
     this.eventBus?.emit("autonomy:invariants:checked", {
       requestId,
@@ -763,7 +768,12 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
       approvalRequired: boolean;
     },
   ): Promise<PipelineResult> {
-    await this.eventStore.append(requestId, "tool:failed", { reason: error }, correlationId);
+    await this.eventStore.append(
+      requestId,
+      "tool:failed",
+      { reason: error },
+      correlationId,
+    );
     await this.appendDecisionLog({
       requestId,
       toolName,
@@ -901,14 +911,8 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
     correlationId: string;
     reason: "critical_verification_failure" | "critical_invariant_violation";
   }): Promise<PipelineResult["compensation"]> {
-    const {
-      requestId,
-      toolName,
-      params,
-      result,
-      correlationId,
-      reason,
-    } = input;
+    const { requestId, toolName, params, result, correlationId, reason } =
+      input;
 
     if (!this.compensationRegistry.has(toolName)) {
       return { attempted: false, success: false };
@@ -958,7 +962,8 @@ export class ToolExecutionPipeline implements ToolExecutionPipelineInterface {
   }): Promise<boolean> {
     if (!this.compensationIncidentManager) return false;
     if (input.riskClass !== "reversible") return false;
-    if (input.compensation?.attempted && input.compensation.success) return false;
+    if (input.compensation?.attempted && input.compensation.success)
+      return false;
 
     const incident = this.compensationIncidentManager.openIncident({
       requestId: input.requestId,

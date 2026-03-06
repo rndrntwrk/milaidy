@@ -1,8 +1,8 @@
 import os from "node:os";
 import path from "node:path";
 
-const STATE_DIRNAME = ".milaidy";
-const CONFIG_FILENAME = "milaidy.json";
+const STATE_DIRNAME = ".milady";
+const CONFIG_FILENAME = "milady.json";
 
 function stateDir(homedir: () => string = os.homedir): string {
   return path.join(homedir(), STATE_DIRNAME);

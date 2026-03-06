@@ -12,12 +12,7 @@
  * @module autonomy/evaluators/drift-watch
  */
 
-import type {
-  Evaluator,
-  IAgentRuntime,
-  Memory,
-  State,
-} from "@elizaos/core";
+import type { Evaluator, IAgentRuntime, Memory, State } from "@elizaos/core";
 import type { AutonomyIdentityConfig } from "../identity/schema.js";
 
 /**
@@ -74,7 +69,9 @@ export function createDriftWatchEvaluator(): Evaluator {
     ): Promise<undefined> => {
       // Resolve the autonomy service
       const svc = runtime.getService("AUTONOMY") as {
-        getDriftMonitor?: () => import("../identity/drift-monitor.js").PersonaDriftMonitor | null;
+        getDriftMonitor?: () =>
+          | import("../identity/drift-monitor.js").PersonaDriftMonitor
+          | null;
       } | null;
 
       const monitor = svc?.getDriftMonitor?.();

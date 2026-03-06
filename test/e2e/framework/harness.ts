@@ -86,6 +86,14 @@ export async function startHarness(config: TestHarnessConfig): Promise<TestHarne
     cwd: projectRoot,
     env: {
       ...globalThis.process.env,
+      ARCADE555_BASE_URL:
+        config.env?.ARCADE555_BASE_URL ?? `http://127.0.0.1:${port}`,
+      ARCADE555_AGENT_TOKEN:
+        config.env?.ARCADE555_AGENT_TOKEN ?? "test-arcade-token",
+      STREAM555_BASE_URL:
+        config.env?.STREAM555_BASE_URL ?? `http://127.0.0.1:${port}`,
+      STREAM555_AGENT_TOKEN:
+        config.env?.STREAM555_AGENT_TOKEN ?? "test-stream-token",
       ...config.env,
       MILAIDY_CONFIG: configPath,
       MILAIDY_PORT: String(port),

@@ -5,9 +5,9 @@ import { describe, expect, it, vi } from "vitest";
 import { createDefaultAutonomyIdentity } from "../../autonomy/identity/schema.js";
 import { __testOnlyHandleRequest } from "../server.js";
 
-function createState(overrides: {
-  autonomySvc?: Record<string, unknown> | null;
-} = {}) {
+function createState(
+  overrides: { autonomySvc?: Record<string, unknown> | null } = {},
+) {
   const runtime = {
     agentId: "agent-identity-memory",
     character: {
@@ -15,7 +15,7 @@ function createState(overrides: {
       settings: { autonomy: { apiKey: "" } },
     },
     getService: (type: string) =>
-      type === "AUTONOMY" ? overrides.autonomySvc ?? null : null,
+      type === "AUTONOMY" ? (overrides.autonomySvc ?? null) : null,
     actions: [],
     getAllActions: () => [],
     getRoomsByWorld: async () => [],
@@ -121,7 +121,9 @@ describe("identity + memory API integration", () => {
       emitBody();
       await p;
       expect(res.statusCode).toBe(200);
-      const payload = JSON.parse(res.body) as { identity: typeof identity | null };
+      const payload = JSON.parse(res.body) as {
+        identity: typeof identity | null;
+      };
       expect(payload.identity?.identityVersion).toBe(1);
     }
 
@@ -154,7 +156,10 @@ describe("identity + memory API integration", () => {
     }
 
     {
-      const { req, emitBody } = createMockReq("GET", "/api/agent/identity/history");
+      const { req, emitBody } = createMockReq(
+        "GET",
+        "/api/agent/identity/history",
+      );
       const res = createMockRes();
       const p = __testOnlyHandleRequest(req, res, state);
       emitBody();
@@ -186,11 +191,13 @@ describe("identity + memory API integration", () => {
         rejected: 0,
         pendingReview: quarantined.length,
       })),
-      reviewQuarantined: vi.fn(async (memoryId: string, decision: "approve" | "reject") => {
-        const found = quarantined.find((m) => m.id === memoryId) ?? null;
-        quarantined = quarantined.filter((m) => m.id !== memoryId);
-        return decision === "approve" ? found : null;
-      }),
+      reviewQuarantined: vi.fn(
+        async (memoryId: string, decision: "approve" | "reject") => {
+          const found = quarantined.find((m) => m.id === memoryId) ?? null;
+          quarantined = quarantined.filter((m) => m.id !== memoryId);
+          return decision === "approve" ? found : null;
+        },
+      ),
     };
 
     const state = createState({
@@ -200,7 +207,10 @@ describe("identity + memory API integration", () => {
     });
 
     {
-      const { req, emitBody } = createMockReq("GET", "/api/workbench/quarantine");
+      const { req, emitBody } = createMockReq(
+        "GET",
+        "/api/workbench/quarantine",
+      );
       const res = createMockRes();
       const p = __testOnlyHandleRequest(req, res, state);
       emitBody();
@@ -238,7 +248,10 @@ describe("identity + memory API integration", () => {
     }
 
     {
-      const { req, emitBody } = createMockReq("GET", "/api/workbench/quarantine");
+      const { req, emitBody } = createMockReq(
+        "GET",
+        "/api/workbench/quarantine",
+      );
       const res = createMockRes();
       const p = __testOnlyHandleRequest(req, res, state);
       emitBody();

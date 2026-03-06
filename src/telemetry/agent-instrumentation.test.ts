@@ -2,7 +2,7 @@
  * Tests for agent instrumentation.
  */
 
-import { describe, test, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, test } from "vitest";
 import { AgentInstrumentation } from "./agent-instrumentation.js";
 import { metrics } from "./setup.js";
 
@@ -25,7 +25,7 @@ describe("AgentInstrumentation", () => {
     const snapshot = metrics.getSnapshot();
     // Verify a counter was incremented
     expect(Object.keys(snapshot.counters).length).toBeGreaterThan(
-      Object.keys(initialSnapshot.counters).length
+      Object.keys(initialSnapshot.counters).length,
     );
   });
 
@@ -40,7 +40,7 @@ describe("AgentInstrumentation", () => {
         durationMs: 500,
         tokens: { input: 50, output: 100, total: 150 },
         model: "gpt-4",
-      }
+      },
     );
 
     const snapshot = metrics.getSnapshot();
@@ -69,13 +69,13 @@ describe("AgentInstrumentation", () => {
         agentId: "test-agent",
         action: "failing-action",
       },
-      "Something went wrong"
+      "Something went wrong",
     );
 
     // Action failed counter should be incremented
     const snapshot = metrics.getSnapshot();
     const failedKey = Object.keys(snapshot.counters).find((k) =>
-      k.includes("failed")
+      k.includes("failed"),
     );
     expect(failedKey).toBeDefined();
   });
@@ -116,7 +116,7 @@ describe("AgentInstrumentation", () => {
       async () => {
         await new Promise((resolve) => setTimeout(resolve, 50));
         return 42;
-      }
+      },
     );
 
     expect(result).toBe(42);
@@ -129,12 +129,12 @@ describe("AgentInstrumentation", () => {
     await expect(
       instrumentation.wrap("test.failing", { type: "test" }, async () => {
         throw new Error("Test error");
-      })
+      }),
     ).rejects.toThrow("Test error");
 
     const snapshot = metrics.getSnapshot();
     const errorKey = Object.keys(snapshot.counters).find((k) =>
-      k.includes("error")
+      k.includes("error"),
     );
     expect(errorKey).toBeDefined();
   });

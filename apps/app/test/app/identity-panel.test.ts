@@ -1,6 +1,6 @@
 import React from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import TestRenderer, { act } from "react-test-renderer";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockClient } = vi.hoisted(() => ({
   mockClient: {
@@ -26,6 +26,15 @@ function readAllText(tree: TestRenderer.ReactTestRenderer): string {
 
 function normalizeText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function requireTree(
+  tree: TestRenderer.ReactTestRenderer | undefined,
+): TestRenderer.ReactTestRenderer {
+  if (!tree) {
+    throw new Error("Expected rendered tree");
+  }
+  return tree;
 }
 
 async function flush(): Promise<void> {
@@ -77,8 +86,9 @@ describe("IdentityPanel preference source/scope visibility", () => {
       tree = TestRenderer.create(React.createElement(IdentityPanel));
     });
     await flush();
+    const renderedTree = requireTree(tree);
 
-    const panelText = normalizeText(readAllText(tree!));
+    const panelText = normalizeText(readAllText(renderedTree));
     expect(panelText).toContain("Soft Preferences");
     expect(panelText).toContain("Preference");
     expect(panelText).toContain("Source");
@@ -119,6 +129,8 @@ describe("IdentityPanel preference source/scope visibility", () => {
     });
     await flush();
 
-    expect(normalizeText(readAllText(tree!))).toContain("No preferences set");
+    expect(normalizeText(readAllText(requireTree(tree)))).toContain(
+      "No preferences set",
+    );
   });
 });

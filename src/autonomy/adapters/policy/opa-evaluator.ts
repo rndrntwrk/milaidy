@@ -6,7 +6,7 @@
  * @module autonomy/adapters/policy/opa-evaluator
  */
 
-import type { PolicyEvaluator, PolicyInput, PolicyDecision } from "./types.js";
+import type { PolicyDecision, PolicyEvaluator, PolicyInput } from "./types.js";
 
 /** Configuration for OPA evaluator. */
 export interface OpaEvaluatorConfig {
@@ -57,7 +57,13 @@ export class OpaEvaluator implements PolicyEvaluator {
         };
       }
 
-      const body = (await response.json()) as { result?: { allow?: boolean; reason?: string; requires_approval?: boolean } };
+      const body = (await response.json()) as {
+        result?: {
+          allow?: boolean;
+          reason?: string;
+          requires_approval?: boolean;
+        };
+      };
       const result = body.result;
 
       return {

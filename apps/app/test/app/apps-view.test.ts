@@ -26,6 +26,13 @@ const { mockClientFns, mockUseApp } = vi.hoisted(() => ({
     listApps: vi.fn(),
     listInstalledApps: vi.fn(),
     launchApp: vi.fn(),
+    onWsEvent: vi.fn(() => () => {}),
+    getHyperscapeAutonomySession: vi.fn(),
+    createHyperscapeAutonomySession: vi.fn(),
+    stopHyperscapeAutonomySession: vi.fn(),
+    recoverHyperscapeAutonomySession: vi.fn(),
+    getHyperscapeWalletProvenance: vi.fn(),
+    getHyperscapeHealth: vi.fn(),
     listHyperscapeEmbeddedAgents: vi.fn(),
     getHyperscapeAgentGoal: vi.fn(),
     getHyperscapeAgentQuickActions: vi.fn(),
@@ -149,6 +156,13 @@ describe("AppsView", () => {
     mockClientFns.listApps.mockReset();
     mockClientFns.listInstalledApps.mockReset();
     mockClientFns.launchApp.mockReset();
+    mockClientFns.onWsEvent.mockReset();
+    mockClientFns.getHyperscapeAutonomySession.mockReset();
+    mockClientFns.createHyperscapeAutonomySession.mockReset();
+    mockClientFns.stopHyperscapeAutonomySession.mockReset();
+    mockClientFns.recoverHyperscapeAutonomySession.mockReset();
+    mockClientFns.getHyperscapeWalletProvenance.mockReset();
+    mockClientFns.getHyperscapeHealth.mockReset();
     mockClientFns.listHyperscapeEmbeddedAgents.mockReset();
     mockClientFns.getHyperscapeAgentGoal.mockReset();
     mockClientFns.getHyperscapeAgentQuickActions.mockReset();
@@ -162,6 +176,64 @@ describe("AppsView", () => {
       success: true,
       agents: [],
       count: 0,
+    });
+    mockClientFns.onWsEvent.mockReturnValue(() => {});
+    mockClientFns.getHyperscapeAutonomySession.mockResolvedValue({
+      session: {
+        sessionId: "session-1",
+        agentId: "alice",
+        characterId: "char-1",
+        state: "created",
+      },
+    });
+    mockClientFns.createHyperscapeAutonomySession.mockResolvedValue({
+      sessionId: "session-1",
+      state: "created",
+      session: {
+        sessionId: "session-1",
+        agentId: "alice",
+        characterId: "char-1",
+        state: "created",
+      },
+      message: "created",
+    });
+    mockClientFns.stopHyperscapeAutonomySession.mockResolvedValue({
+      session: {
+        sessionId: "session-1",
+        agentId: "alice",
+        characterId: "char-1",
+        state: "stopped",
+      },
+      message: "stopped",
+    });
+    mockClientFns.recoverHyperscapeAutonomySession.mockResolvedValue({
+      session: {
+        sessionId: "session-1",
+        agentId: "alice",
+        characterId: "char-1",
+        state: "created",
+      },
+      message: "recovered",
+    });
+    mockClientFns.getHyperscapeWalletProvenance.mockResolvedValue({
+      wallet: null,
+    });
+    mockClientFns.getHyperscapeHealth.mockResolvedValue({
+      status: "healthy",
+      baseUrl: "http://localhost:5175",
+      wsUrl: "ws://localhost:5175/ws",
+      autonomy: {
+        activeSessions: 1,
+        totalSessions: 1,
+        degradedSessions: 0,
+        failedSessions: 0,
+      },
+      checks: {
+        api: { healthy: true, message: null },
+        ws: { healthy: true, message: null },
+        scriptMime: { healthy: true, message: null },
+      },
+      checkedAt: new Date().toISOString(),
     });
     mockClientFns.getHyperscapeAgentGoal.mockResolvedValue({
       success: true,
@@ -236,7 +308,7 @@ describe("AppsView", () => {
     );
     expect(setState).toHaveBeenCalledWith(
       "activeGameViewerUrl",
-      "/api/apps/local/%40elizaos%2Fapp-hyperscape/",
+      "/api/apps/local/%40elizaos%2Fapp-hyperscape/?characterId=char-1&followEntity=char-1&mode=spectator&embedded=true",
     );
     expect(setState).toHaveBeenCalledWith("activeGamePostMessageAuth", true);
     expect(setState).toHaveBeenCalledWith("tab", "apps");
@@ -308,7 +380,10 @@ describe("AppsView", () => {
       await findButtonByText(tree?.root, "Launch").props.onClick();
     });
 
-    expect(setState).toHaveBeenCalledWith("activeGameApp", "@elizaos/app-babylon");
+    expect(setState).toHaveBeenCalledWith(
+      "activeGameApp",
+      "@elizaos/app-babylon",
+    );
     expect(setState).toHaveBeenCalledWith("activeGameDisplayName", "Babylon");
     expect(setState).toHaveBeenCalledWith(
       "activeGameViewerUrl",
@@ -347,11 +422,17 @@ describe("AppsView", () => {
       await findButtonByText(tree?.root, "Launch").props.onClick();
     });
 
-    expect(setState).toHaveBeenCalledWith("activeGameApp", "@elizaos/app-hyperscape");
-    expect(setState).toHaveBeenCalledWith("activeGameDisplayName", "Hyperscape");
+    expect(setState).toHaveBeenCalledWith(
+      "activeGameApp",
+      "@elizaos/app-hyperscape",
+    );
+    expect(setState).toHaveBeenCalledWith(
+      "activeGameDisplayName",
+      "Hyperscape",
+    );
     expect(setState).toHaveBeenCalledWith(
       "activeGameViewerUrl",
-      "/api/apps/local/%40elizaos%2Fapp-hyperscape/play?embedded=true",
+      "/api/apps/local/%40elizaos%2Fapp-hyperscape/play?embedded=true&characterId=char-1&followEntity=char-1&mode=spectator",
     );
     expect(setState).toHaveBeenCalledWith("tab", "apps");
     expect(setState).toHaveBeenCalledWith("appsSubTab", "games");

@@ -24,7 +24,10 @@ describe("PipelineExecutor", () => {
       source: "user" as const,
       requestId: "req-1",
     };
-    const handler = vi.fn(async () => ({ result: { ok: true }, durationMs: 1 }));
+    const handler = vi.fn(async () => ({
+      result: { ok: true },
+      durationMs: 1,
+    }));
 
     const result = await executor.execute(call, handler);
 

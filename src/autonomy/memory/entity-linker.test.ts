@@ -1,6 +1,6 @@
-import { describe, expect, it, beforeEach, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { InMemoryEntityLinkStore } from "./entity-link-store.js";
-import { EntityLinker, type EntityEventEmitter } from "./entity-linker.js";
+import { type EntityEventEmitter, EntityLinker } from "./entity-linker.js";
 
 describe("EntityLinker", () => {
   let store: InMemoryEntityLinkStore;
@@ -35,10 +35,10 @@ describe("EntityLinker", () => {
 
       const entity = await store.getByPlatformId("discord", "enoomian");
       expect(entity).not.toBeNull();
-      expect(entity!.displayName).toBe("enoomian");
-      expect(entity!.isOperator).toBe(true);
-      expect(entity!.trustLevel).toBe(1.0);
-      expect(entity!.platformIds.telegram).toBe("@enoomian");
+      expect(entity?.displayName).toBe("enoomian");
+      expect(entity?.isOperator).toBe(true);
+      expect(entity?.trustLevel).toBe(1.0);
+      expect(entity?.platformIds.telegram).toBe("@enoomian");
     });
 
     it("is idempotent on repeated calls", async () => {
@@ -78,7 +78,7 @@ describe("EntityLinker", () => {
       ]);
 
       const entity = await store.getByPlatformId("discord", "enoomian");
-      expect(entity!.platformIds.telegram).toBe("@enoomian");
+      expect(entity?.platformIds.telegram).toBe("@enoomian");
     });
   });
 
@@ -93,7 +93,7 @@ describe("EntityLinker", () => {
 
       const entity = await linker.resolve("discord", "enoomian#1234");
       expect(entity).not.toBeNull();
-      expect(entity!.displayName).toBe("enoomian");
+      expect(entity?.displayName).toBe("enoomian");
       expect(emittedEvents).toHaveLength(1);
       expect(emittedEvents[0].event).toBe("entity:resolved");
     });
@@ -110,12 +110,14 @@ describe("EntityLinker", () => {
       });
 
       expect(entity).not.toBeNull();
-      expect(entity!.displayName).toBe("New User");
-      expect(entity!.isOperator).toBe(false);
-      expect(entity!.trustLevel).toBe(0.5);
+      expect(entity?.displayName).toBe("New User");
+      expect(entity?.isOperator).toBe(false);
+      expect(entity?.trustLevel).toBe(0.5);
 
       // Should have emitted entity:linked
-      const linkedEvent = emittedEvents.find((e) => e.event === "entity:linked");
+      const linkedEvent = emittedEvents.find(
+        (e) => e.event === "entity:linked",
+      );
       expect(linkedEvent).toBeTruthy();
     });
 
@@ -124,7 +126,7 @@ describe("EntityLinker", () => {
         autoCreate: true,
       });
 
-      expect(entity!.displayName).toBe("discord:anon#0000");
+      expect(entity?.displayName).toBe("discord:anon#0000");
     });
 
     it("updates lastSeen on resolution", async () => {
@@ -134,12 +136,12 @@ describe("EntityLinker", () => {
       });
 
       const before = await store.getByPlatformId("discord", "test");
-      expect(before!.lastSeen.discord).toBeUndefined();
+      expect(before?.lastSeen.discord).toBeUndefined();
 
       await linker.resolve("discord", "test");
 
       const after = await store.getByPlatformId("discord", "test");
-      expect(after!.lastSeen.discord).toBeGreaterThan(0);
+      expect(after?.lastSeen.discord).toBeGreaterThan(0);
     });
   });
 
@@ -156,15 +158,25 @@ describe("EntityLinker", () => {
       expect(resolved?.id).toBe(entity.id);
 
       // Should have emitted entity:linked
-      const linkedEvent = emittedEvents.find((e) => e.event === "entity:linked");
+      const linkedEvent = emittedEvents.find(
+        (e) => e.event === "entity:linked",
+      );
       expect(linkedEvent).toBeTruthy();
     });
   });
 
   describe("listAll", () => {
     it("lists all entities", async () => {
-      await store.upsertEntity({ displayName: "u1", platformIds: { discord: "d1" } });
-      await store.upsertEntity({ displayName: "u2", platformIds: { discord: "d2" }, isOperator: true, trustLevel: 1.0 });
+      await store.upsertEntity({
+        displayName: "u1",
+        platformIds: { discord: "d1" },
+      });
+      await store.upsertEntity({
+        displayName: "u2",
+        platformIds: { discord: "d2" },
+        isOperator: true,
+        trustLevel: 1.0,
+      });
 
       const all = await linker.listAll();
       expect(all).toHaveLength(2);

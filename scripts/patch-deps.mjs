@@ -12,13 +12,21 @@
  *    "default" conditions so Bun resolves via "import" → dist/. WHY: See
  *    docs/plugin-resolution-and-node-path.md "Bun and published package exports".
  */
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { patchBunExports } from "./lib/patch-bun-exports.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
+const require = createRequire(import.meta.url);
 
 /**
  * Find ALL plugin-sql dist files - handles both npm and bun cache structures.
@@ -639,6 +647,725 @@ if (pdfTargets.length === 0) {
       writeFileSync(target, src, "utf8");
       console.log("  - Wrote pdfjs-dist ESM patch.");
     }
+  }
+}
+
+/**
+ * Patch html-encoding-sniffer to avoid its CommonJS require() of
+ * @exodus/bytes/encoding-lite.js, which is currently published as ESM and
+ * crashes Bun/Vitest worker startup when jsdom boots.
+ *
+ * The upstream package only needs BOM detection + a small label normalizer.
+ * For our test/runtime usage, a minimal inlined implementation is sufficient.
+ */
+function findHtmlEncodingSnifferFiles() {
+  const targets = [];
+  const searchRoots = [root];
+  const homeDir = process.env.HOME || process.env.USERPROFILE || "";
+  const homeNodeModules = resolve(homeDir, "node_modules");
+  if (existsSync(homeNodeModules)) {
+    searchRoots.push(resolve(homeNodeModules, ".."));
+  }
+
+  for (const searchRoot of searchRoots) {
+    const directTarget = resolve(
+      searchRoot,
+      "node_modules/html-encoding-sniffer/lib/html-encoding-sniffer.js",
+    );
+    if (existsSync(directTarget) && !targets.includes(directTarget)) {
+      targets.push(directTarget);
+    }
+
+    const bunCacheDir = resolve(searchRoot, "node_modules/.bun");
+    if (existsSync(bunCacheDir)) {
+      try {
+        const entries = readdirSync(bunCacheDir);
+        for (const entry of entries) {
+          if (entry.startsWith("html-encoding-sniffer@")) {
+            const bunTarget = resolve(
+              bunCacheDir,
+              entry,
+              "node_modules/html-encoding-sniffer/lib/html-encoding-sniffer.js",
+            );
+            if (existsSync(bunTarget) && !targets.includes(bunTarget)) {
+              targets.push(bunTarget);
+            }
+          }
+        }
+      } catch {
+        // Ignore cache traversal errors
+      }
+    }
+
+    const nodeModulesDir = resolve(searchRoot, "node_modules");
+    if (existsSync(nodeModulesDir)) {
+      try {
+        const entries = readdirSync(nodeModulesDir);
+        for (const entry of entries) {
+          if (!entry.startsWith(".old_modules-")) continue;
+          const legacyTarget = resolve(
+            nodeModulesDir,
+            entry,
+            "html-encoding-sniffer/lib/html-encoding-sniffer.js",
+          );
+          if (existsSync(legacyTarget) && !targets.includes(legacyTarget)) {
+            targets.push(legacyTarget);
+          }
+        }
+      } catch {
+        // Ignore legacy-module traversal errors
+      }
+    }
+  }
+
+  return targets;
+}
+
+const htmlEncodingBuggyImport = `const { getBOMEncoding, labelToName } = require("@exodus/bytes/encoding-lite.js");`;
+const htmlEncodingPatchedPrelude = `function getBOMEncoding(uint8Array) {
+  if (!uint8Array || uint8Array.byteLength < 2) return null;
+  if (
+    uint8Array.byteLength >= 3 &&
+    uint8Array[0] === 0xEF &&
+    uint8Array[1] === 0xBB &&
+    uint8Array[2] === 0xBF
+  ) {
+    return "UTF-8";
+  }
+  if (uint8Array[0] === 0xFE && uint8Array[1] === 0xFF) {
+    return "UTF-16BE";
+  }
+  if (uint8Array[0] === 0xFF && uint8Array[1] === 0xFE) {
+    return "UTF-16LE";
+  }
+  return null;
+}
+
+const ENCODING_LABELS = new Map([
+  ["utf-8", "UTF-8"],
+  ["utf8", "UTF-8"],
+  ["unicode-1-1-utf-8", "UTF-8"],
+  ["utf-16", "UTF-16LE"],
+  ["utf-16le", "UTF-16LE"],
+  ["utf-16be", "UTF-16BE"],
+  ["windows-1252", "windows-1252"],
+  ["cp1252", "windows-1252"],
+  ["x-user-defined", "x-user-defined"],
+]);
+
+function labelToName(label) {
+  if (label === null || label === undefined) return null;
+  const normalized = String(label).trim().toLowerCase();
+  return ENCODING_LABELS.get(normalized) ?? null;
+}`;
+
+const htmlEncodingTargets = findHtmlEncodingSnifferFiles();
+
+if (htmlEncodingTargets.length === 0) {
+  console.log(
+    "[patch-deps] html-encoding-sniffer not found, skipping compatibility patch.",
+  );
+} else {
+  console.log(
+    `[patch-deps] Found ${htmlEncodingTargets.length} html-encoding-sniffer file(s) to patch.`,
+  );
+  for (const target of htmlEncodingTargets) {
+    console.log(`[patch-deps] Patching html-encoding-sniffer: ${target}`);
+    let src = readFileSync(target, "utf8");
+    if (src.includes("const ENCODING_LABELS = new Map([")) {
+      console.log(
+        "  - html-encoding-sniffer compatibility patch already present.",
+      );
+      continue;
+    }
+    if (!src.includes(htmlEncodingBuggyImport)) {
+      console.log(
+        "  - html-encoding-sniffer import signature changed — patch may need updating.",
+      );
+      continue;
+    }
+    src = src.replace(htmlEncodingBuggyImport, htmlEncodingPatchedPrelude);
+    writeFileSync(target, src, "utf8");
+    console.log("  - Wrote html-encoding-sniffer compatibility patch.");
+  }
+}
+
+/**
+ * Create a local CommonJS @exodus/bytes shim under packages that still use
+ * require("@exodus/bytes/..."). Bun currently installs @exodus/bytes as ESM,
+ * which breaks jsdom/whatwg-url/html-encoding-sniffer worker startup.
+ */
+function findBytesShimHostPackageDirs() {
+  const targets = [];
+  const searchRoots = [root];
+  const homeDir = process.env.HOME || process.env.USERPROFILE || "";
+  const homeNodeModules = resolve(homeDir, "node_modules");
+  if (existsSync(homeNodeModules)) {
+    searchRoots.push(resolve(homeNodeModules, ".."));
+  }
+
+  const packageNames = ["jsdom", "whatwg-url", "html-encoding-sniffer"];
+
+  for (const searchRoot of searchRoots) {
+    for (const packageName of packageNames) {
+      const directTarget = resolve(searchRoot, `node_modules/${packageName}`);
+      if (existsSync(directTarget) && !targets.includes(directTarget)) {
+        targets.push(directTarget);
+      }
+    }
+
+    const bunCacheDir = resolve(searchRoot, "node_modules/.bun");
+    if (existsSync(bunCacheDir)) {
+      try {
+        const entries = readdirSync(bunCacheDir);
+        for (const entry of entries) {
+          for (const packageName of packageNames) {
+            if (!entry.startsWith(`${packageName}@`)) continue;
+            const bunTarget = resolve(
+              bunCacheDir,
+              entry,
+              `node_modules/${packageName}`,
+            );
+            if (existsSync(bunTarget) && !targets.includes(bunTarget)) {
+              targets.push(bunTarget);
+            }
+          }
+        }
+      } catch {
+        // Ignore cache traversal errors
+      }
+    }
+  }
+
+  return targets;
+}
+
+const bytesShimPackageJson = `{
+  "name": "@exodus/bytes",
+  "private": true,
+  "type": "commonjs"
+}
+`;
+
+const bytesEncodingShim = `"use strict";
+
+const NativeTextDecoder = globalThis.TextDecoder;
+const NativeTextEncoder = globalThis.TextEncoder;
+const NativeTextDecoderStream = globalThis.TextDecoderStream;
+const NativeTextEncoderStream = globalThis.TextEncoderStream;
+
+function normalizeEncoding(label) {
+  if (label === null || label === undefined) return null;
+  const normalized = String(label).trim().toLowerCase();
+  if (!normalized) return null;
+  switch (normalized) {
+    case "utf8":
+    case "utf-8":
+    case "unicode-1-1-utf-8":
+      return "UTF-8";
+    case "utf-16":
+    case "utf-16le":
+      return "UTF-16LE";
+    case "utf-16be":
+      return "UTF-16BE";
+    case "windows-1252":
+    case "cp1252":
+    case "latin1":
+    case "iso-8859-1":
+      return "windows-1252";
+    case "x-user-defined":
+      return "x-user-defined";
+    default:
+      return null;
+  }
+}
+
+function labelToName(label) {
+  return normalizeEncoding(label);
+}
+
+function getBOMEncoding(uint8Array) {
+  if (!uint8Array || uint8Array.byteLength < 2) return null;
+  if (
+    uint8Array.byteLength >= 3 &&
+    uint8Array[0] === 0xEF &&
+    uint8Array[1] === 0xBB &&
+    uint8Array[2] === 0xBF
+  ) {
+    return "UTF-8";
+  }
+  if (uint8Array[0] === 0xFE && uint8Array[1] === 0xFF) {
+    return "UTF-16BE";
+  }
+  if (uint8Array[0] === 0xFF && uint8Array[1] === 0xFE) {
+    return "UTF-16LE";
+  }
+  return null;
+}
+
+function decodeUtf16Be(uint8Array) {
+  const bytes = Buffer.from(uint8Array);
+  const swapped = Buffer.allocUnsafe(bytes.length);
+  for (let i = 0; i < bytes.length - 1; i += 2) {
+    swapped[i] = bytes[i + 1];
+    swapped[i + 1] = bytes[i];
+  }
+  if (bytes.length % 2 === 1) {
+    swapped[bytes.length - 1] = bytes[bytes.length - 1];
+  }
+  return new NativeTextDecoder("utf-16le").decode(swapped);
+}
+
+function legacyHookDecode(uint8Array, label = "windows-1252") {
+  const encoding = normalizeEncoding(label) || "windows-1252";
+  if (encoding === "UTF-8") {
+    return new NativeTextDecoder("utf-8").decode(uint8Array);
+  }
+  if (encoding === "UTF-16LE") {
+    return new NativeTextDecoder("utf-16le").decode(uint8Array);
+  }
+  if (encoding === "UTF-16BE") {
+    return decodeUtf16Be(uint8Array);
+  }
+  return Buffer.from(uint8Array).toString("latin1");
+}
+
+module.exports = {
+  TextDecoder: NativeTextDecoder,
+  TextEncoder: NativeTextEncoder,
+  TextDecoderStream: NativeTextDecoderStream,
+  TextEncoderStream: NativeTextEncoderStream,
+  normalizeEncoding,
+  getBOMEncoding,
+  labelToName,
+  legacyHookDecode,
+};
+`;
+
+const bytesBase64Shim = `"use strict";
+
+function toBase64(input) {
+  return Buffer.from(input).toString("base64");
+}
+
+module.exports = { toBase64 };
+`;
+
+const bytesWhatwgShim = `"use strict";
+
+function shouldPercentEncode(byte, percentEncodeSet) {
+  const ch = String.fromCharCode(byte);
+  if (typeof percentEncodeSet === "function") {
+    return Boolean(percentEncodeSet(byte));
+  }
+  if (typeof percentEncodeSet === "string") {
+    return byte < 0x20 || byte > 0x7E || percentEncodeSet.includes(ch);
+  }
+  if (percentEncodeSet && typeof percentEncodeSet.has === "function") {
+    return (
+      byte < 0x20 ||
+      byte > 0x7E ||
+      percentEncodeSet.has(byte) ||
+      percentEncodeSet.has(ch)
+    );
+  }
+  if (Array.isArray(percentEncodeSet)) {
+    return (
+      byte < 0x20 ||
+      byte > 0x7E ||
+      percentEncodeSet.includes(byte) ||
+      percentEncodeSet.includes(ch)
+    );
+  }
+  return byte < 0x20 || byte > 0x7E;
+}
+
+function percentEncodeAfterEncoding(_encoding, input, percentEncodeSet, spaceAsPlus = false) {
+  const bytes = Buffer.from(String(input), "utf8");
+  let output = "";
+  for (const byte of bytes) {
+    const ch = String.fromCharCode(byte);
+    if (spaceAsPlus && ch === " ") {
+      output += "+";
+      continue;
+    }
+    if (shouldPercentEncode(byte, percentEncodeSet)) {
+      output += \`%\${byte.toString(16).toUpperCase().padStart(2, "0")}\`;
+      continue;
+    }
+    output += ch;
+  }
+  return output;
+}
+
+module.exports = { percentEncodeAfterEncoding };
+`;
+
+const bytesShimHosts = findBytesShimHostPackageDirs();
+
+if (bytesShimHosts.length === 0) {
+  console.log(
+    "[patch-deps] No jsdom/whatwg-url/html-encoding-sniffer hosts found for @exodus/bytes shim.",
+  );
+} else {
+  console.log(
+    `[patch-deps] Installing @exodus/bytes CommonJS shims for ${bytesShimHosts.length} host package(s).`,
+  );
+  for (const hostDir of bytesShimHosts) {
+    const shimDir = resolve(hostDir, "node_modules/@exodus/bytes");
+    mkdirSync(shimDir, { recursive: true });
+    writeFileSync(
+      resolve(shimDir, "package.json"),
+      bytesShimPackageJson,
+      "utf8",
+    );
+    writeFileSync(resolve(shimDir, "encoding.js"), bytesEncodingShim, "utf8");
+    writeFileSync(
+      resolve(shimDir, "encoding-lite.js"),
+      bytesEncodingShim,
+      "utf8",
+    );
+    writeFileSync(resolve(shimDir, "whatwg.js"), bytesWhatwgShim, "utf8");
+    writeFileSync(resolve(shimDir, "base64.js"), bytesBase64Shim, "utf8");
+    console.log(`  - Installed shim under ${shimDir}`);
+  }
+}
+
+/**
+ * Create a local CommonJS @asamuzakjp/css-color shim under cssstyle so its
+ * CommonJS parser can bootstrap under Bun/Vitest without requiring the ESM
+ * upstream package. This only implements the small surface cssstyle reads.
+ */
+function findCssColorShimHostPackageDirs() {
+  const targets = [];
+  const searchRoots = [root];
+  const homeDir = process.env.HOME || process.env.USERPROFILE || "";
+  const homeNodeModules = resolve(homeDir, "node_modules");
+  if (existsSync(homeNodeModules)) {
+    searchRoots.push(resolve(homeNodeModules, ".."));
+  }
+
+  for (const searchRoot of searchRoots) {
+    const directTarget = resolve(searchRoot, "node_modules/cssstyle");
+    if (existsSync(directTarget) && !targets.includes(directTarget)) {
+      targets.push(directTarget);
+    }
+
+    const bunCacheDir = resolve(searchRoot, "node_modules/.bun");
+    if (existsSync(bunCacheDir)) {
+      try {
+        const entries = readdirSync(bunCacheDir);
+        for (const entry of entries) {
+          if (!entry.startsWith("cssstyle@")) continue;
+          const bunTarget = resolve(
+            bunCacheDir,
+            entry,
+            "node_modules/cssstyle",
+          );
+          if (existsSync(bunTarget) && !targets.includes(bunTarget)) {
+            targets.push(bunTarget);
+          }
+        }
+      } catch {
+        // Ignore cache traversal errors
+      }
+    }
+  }
+
+  return targets;
+}
+
+const cssColorShimPackageJson = `{
+  "name": "@asamuzakjp/css-color",
+  "private": true,
+  "type": "commonjs",
+  "main": "index.js"
+}
+`;
+
+const cssColorShim = `"use strict";
+
+function prepareValue(value) {
+  if (value === null || value === undefined) return "";
+  return String(value).trim();
+}
+
+function splitTopLevel(input, delimiter = " ") {
+  const source = prepareValue(input);
+  if (!source) return [];
+
+  const parts = [];
+  let current = "";
+  let depthParen = 0;
+  let depthBracket = 0;
+  let depthBrace = 0;
+  let quote = "";
+  let escaped = false;
+  let sawWhitespaceSeparator = false;
+
+  function pushCurrent() {
+    if (delimiter === " ") {
+      const trimmed = current.trim();
+      if (trimmed) parts.push(trimmed);
+    } else {
+      parts.push(current.trim());
+    }
+    current = "";
+  }
+
+  for (let i = 0; i < source.length; i += 1) {
+    const ch = source[i];
+
+    if (escaped) {
+      current += ch;
+      escaped = false;
+      continue;
+    }
+
+    if (quote) {
+      current += ch;
+      if (ch === "\\\\") {
+        escaped = true;
+      } else if (ch === quote) {
+        quote = "";
+      }
+      continue;
+    }
+
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+      current += ch;
+      continue;
+    }
+
+    if (ch === "(") depthParen += 1;
+    else if (ch === ")" && depthParen > 0) depthParen -= 1;
+    else if (ch === "[") depthBracket += 1;
+    else if (ch === "]" && depthBracket > 0) depthBracket -= 1;
+    else if (ch === "{") depthBrace += 1;
+    else if (ch === "}" && depthBrace > 0) depthBrace -= 1;
+
+    const atTopLevel =
+      depthParen === 0 && depthBracket === 0 && depthBrace === 0;
+
+    if (atTopLevel && delimiter === " " && /\\s/.test(ch)) {
+      if (!sawWhitespaceSeparator) {
+        pushCurrent();
+      }
+      sawWhitespaceSeparator = true;
+      continue;
+    }
+
+    if (atTopLevel && delimiter !== " " && source.startsWith(delimiter, i)) {
+      pushCurrent();
+      i += delimiter.length - 1;
+      sawWhitespaceSeparator = false;
+      continue;
+    }
+
+    sawWhitespaceSeparator = false;
+    current += ch;
+  }
+
+  if (current || delimiter !== " ") {
+    pushCurrent();
+  }
+
+  return delimiter === " " ? parts : parts.map((part) => part.trim());
+}
+
+function resolve(value) {
+  const normalized = prepareValue(value);
+  return normalized || undefined;
+}
+
+function cssCalc(value) {
+  return resolve(value);
+}
+
+function resolveGradient(value) {
+  return resolve(value);
+}
+
+function splitValue(value, options = {}) {
+  const delimiter =
+    typeof options?.delimiter === "string" && options.delimiter.length > 0
+      ? options.delimiter
+      : " ";
+  return splitTopLevel(value, delimiter);
+}
+
+module.exports = {
+  resolve,
+  utils: {
+    cssCalc,
+    resolveGradient,
+    splitValue,
+  },
+};
+`;
+
+const cssColorShimHosts = findCssColorShimHostPackageDirs();
+
+if (cssColorShimHosts.length === 0) {
+  console.log(
+    "[patch-deps] No cssstyle hosts found for @asamuzakjp/css-color shim.",
+  );
+} else {
+  console.log(
+    `[patch-deps] Installing @asamuzakjp/css-color CommonJS shims for ${cssColorShimHosts.length} cssstyle host package(s).`,
+  );
+  for (const hostDir of cssColorShimHosts) {
+    const shimDir = resolve(hostDir, "node_modules/@asamuzakjp/css-color");
+    mkdirSync(shimDir, { recursive: true });
+    writeFileSync(
+      resolve(shimDir, "package.json"),
+      cssColorShimPackageJson,
+      "utf8",
+    );
+    writeFileSync(resolve(shimDir, "index.js"), cssColorShim, "utf8");
+    console.log(`  - Installed shim under ${shimDir}`);
+  }
+}
+
+function findFirstExistingPath(candidates) {
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function findEsbuildMainPath() {
+  const candidates = [resolve(root, "node_modules/esbuild/lib/main.js")];
+
+  const bunCacheDir = resolve(root, "node_modules/.bun");
+  if (existsSync(bunCacheDir)) {
+    try {
+      const entries = readdirSync(bunCacheDir)
+        .filter((entry) => entry.startsWith("esbuild@"))
+        .sort()
+        .reverse();
+      for (const entry of entries) {
+        candidates.push(
+          resolve(bunCacheDir, entry, "node_modules/esbuild/lib/main.js"),
+        );
+      }
+    } catch {
+      // Ignore cache traversal errors
+    }
+  }
+
+  return findFirstExistingPath(candidates);
+}
+
+function findParse5EntryPath() {
+  const candidates = [resolve(root, "node_modules/parse5/dist/index.js")];
+
+  const bunCacheDir = resolve(root, "node_modules/.bun");
+  if (existsSync(bunCacheDir)) {
+    try {
+      const entries = readdirSync(bunCacheDir)
+        .filter((entry) => entry.startsWith("parse5@"))
+        .sort()
+        .reverse();
+      for (const entry of entries) {
+        candidates.push(
+          resolve(bunCacheDir, entry, "node_modules/parse5/dist/index.js"),
+        );
+      }
+    } catch {
+      // Ignore cache traversal errors
+    }
+  }
+
+  return findFirstExistingPath(candidates);
+}
+
+function findParse5ShimHostPackageDirs() {
+  const targets = [];
+  const searchRoots = [root];
+  const homeDir = process.env.HOME || process.env.USERPROFILE || "";
+  const homeNodeModules = resolve(homeDir, "node_modules");
+  if (existsSync(homeNodeModules)) {
+    searchRoots.push(resolve(homeNodeModules, ".."));
+  }
+
+  for (const searchRoot of searchRoots) {
+    const directTarget = resolve(searchRoot, "node_modules/jsdom");
+    if (existsSync(directTarget) && !targets.includes(directTarget)) {
+      targets.push(directTarget);
+    }
+
+    const bunCacheDir = resolve(searchRoot, "node_modules/.bun");
+    if (existsSync(bunCacheDir)) {
+      try {
+        const entries = readdirSync(bunCacheDir);
+        for (const entry of entries) {
+          if (!entry.startsWith("jsdom@")) continue;
+          const bunTarget = resolve(bunCacheDir, entry, "node_modules/jsdom");
+          if (existsSync(bunTarget) && !targets.includes(bunTarget)) {
+            targets.push(bunTarget);
+          }
+        }
+      } catch {
+        // Ignore cache traversal errors
+      }
+    }
+  }
+
+  return targets;
+}
+
+const parse5ShimPackageJson = `{
+  "name": "parse5",
+  "private": true,
+  "type": "commonjs",
+  "main": "index.js"
+}
+`;
+
+const parse5ShimIndex = `"use strict";
+
+module.exports = require("./dist/index.cjs");
+`;
+
+const parse5ShimHosts = findParse5ShimHostPackageDirs();
+const esbuildMainPath = findEsbuildMainPath();
+const parse5EntryPath = findParse5EntryPath();
+
+if (parse5ShimHosts.length === 0) {
+  console.log("[patch-deps] No jsdom hosts found for parse5 shim.");
+} else if (!esbuildMainPath || !parse5EntryPath) {
+  console.log(
+    "[patch-deps] Missing esbuild or parse5 entry; skipping parse5 CommonJS shim.",
+  );
+} else {
+  console.log(
+    `[patch-deps] Installing parse5 CommonJS shims for ${parse5ShimHosts.length} jsdom host package(s).`,
+  );
+  const { buildSync } = require(esbuildMainPath);
+  for (const hostDir of parse5ShimHosts) {
+    const shimDir = resolve(hostDir, "node_modules/parse5");
+    const distDir = resolve(shimDir, "dist");
+    mkdirSync(distDir, { recursive: true });
+    writeFileSync(
+      resolve(shimDir, "package.json"),
+      parse5ShimPackageJson,
+      "utf8",
+    );
+    writeFileSync(resolve(shimDir, "index.js"), parse5ShimIndex, "utf8");
+    buildSync({
+      entryPoints: [parse5EntryPath],
+      outfile: resolve(distDir, "index.cjs"),
+      bundle: true,
+      format: "cjs",
+      platform: "node",
+      target: "node22",
+      logLevel: "silent",
+    });
+    console.log(`  - Installed shim under ${shimDir}`);
   }
 }
 

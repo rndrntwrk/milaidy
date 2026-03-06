@@ -8,15 +8,15 @@
  */
 
 import type { Memory } from "@elizaos/core";
-import {
-  recordRoleExecution,
-  recordRoleLatencyMs,
-} from "../metrics/prometheus-metrics.js";
 import type {
   MemoryGate,
   MemoryGateDecision,
   MemoryGateStats,
 } from "../memory/gate.js";
+import {
+  recordRoleExecution,
+  recordRoleLatencyMs,
+} from "../metrics/prometheus-metrics.js";
 import type {
   MemoryWriteReport,
   MemoryWriteRequest,

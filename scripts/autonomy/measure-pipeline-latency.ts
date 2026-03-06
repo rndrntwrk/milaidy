@@ -133,7 +133,9 @@ async function measurePipeline(iterations: number): Promise<LatencyStats> {
       durationMs: 1,
     }));
     if (!result.success) {
-      throw new Error(result.error ?? `pipeline execution failed for ${call.requestId}`);
+      throw new Error(
+        result.error ?? `pipeline execution failed for ${call.requestId}`,
+      );
     }
     samples.push(Date.now() - start);
   }
@@ -159,7 +161,9 @@ function renderMarkdown(input: {
   lines.push(`- Created at: \`${input.createdAt}\``);
   lines.push(`- Iterations: \`${input.iterations}\``);
   lines.push("");
-  lines.push("| Path | Avg (ms) | P50 (ms) | P95 (ms) | P99 (ms) | Min (ms) | Max (ms) |");
+  lines.push(
+    "| Path | Avg (ms) | P50 (ms) | P95 (ms) | P99 (ms) | Min (ms) | Max (ms) |",
+  );
   lines.push("|---|---:|---:|---:|---:|---:|---:|");
   lines.push(
     `| Direct handler | ${input.direct.avg.toFixed(2)} | ${input.direct.p50.toFixed(2)} | ${input.direct.p95.toFixed(2)} | ${input.direct.p99.toFixed(2)} | ${input.direct.min.toFixed(2)} | ${input.direct.max.toFixed(2)} |`,

@@ -30,10 +30,7 @@ import {
   normaliseEndpointUrl,
   parseRegistryEndpointUrl,
 } from "./registry-client-endpoints.js";
-import {
-  applyLocalWorkspaceApps,
-  applyNodeModulePlugins,
-} from "./registry-client-local.js";
+import { applyNodeModulePlugins } from "./registry-client-local.js";
 import { fetchFromNetwork as fetchRegistryFromNetwork } from "./registry-client-network.js";
 import {
   getPluginInfoFromRegistry,
@@ -225,15 +222,21 @@ function ensureFallbackApps(plugins: Map<string, RegistryPluginInfo>): void {
         : undefined);
 
     const fallbackMeta: RegistryAppMeta = {
-      displayName: resolvedMeta?.displayName ?? fallbackAppDisplayName(packageName),
+      displayName:
+        resolvedMeta?.displayName ?? fallbackAppDisplayName(packageName),
       category: resolvedMeta?.category ?? "game",
       launchType:
         resolvedMeta?.launchType ??
         existing?.appMeta?.launchType ??
         entry.launchType,
       launchUrl: resolvedMeta?.launchUrl ?? resolvedLaunchUrl,
+      icon: resolvedMeta?.icon ?? existing?.appMeta?.icon ?? null,
       capabilities:
         resolvedMeta?.capabilities ?? existing?.appMeta?.capabilities ?? [],
+      minPlayers:
+        resolvedMeta?.minPlayers ?? existing?.appMeta?.minPlayers ?? null,
+      maxPlayers:
+        resolvedMeta?.maxPlayers ?? existing?.appMeta?.maxPlayers ?? null,
       viewer: mergeViewer(existing?.appMeta?.viewer, fallbackViewer),
     };
 
@@ -253,7 +256,11 @@ function ensureFallbackApps(plugins: Map<string, RegistryPluginInfo>): void {
         v1Version: null,
         v2Version: null,
       },
-      git: existing?.git ?? { v0Branch: null, v1Branch: null, v2Branch: "main" },
+      git: existing?.git ?? {
+        v0Branch: null,
+        v1Branch: null,
+        v2Branch: "main",
+      },
       supports: existing?.supports ?? { v0: false, v1: false, v2: true },
       kind: "app",
       appMeta: {
@@ -642,6 +649,34 @@ async function fetchFromNetwork(): Promise<Map<string, RegistryPluginInfo>> {
   }
 }
 
+async function buildOfflineFallbackRegistry(
+  cause: unknown,
+): Promise<Map<string, RegistryPluginInfo>> {
+  const plugins = new Map<string, RegistryPluginInfo>();
+
+  try {
+    await applyLocalWorkspaceApps(plugins);
+  } catch (error) {
+    logger.warn(
+      `[registry-client] Local workspace app discovery failed during offline fallback: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
+  try {
+    await applyNodeModulePlugins(plugins);
+  } catch (error) {
+    logger.warn(
+      `[registry-client] node_modules app discovery failed during offline fallback: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
+  ensureFallbackApps(plugins);
+  logger.warn(
+    `[registry-client] Using offline fallback registry (${plugins.size} entries): ${cause instanceof Error ? cause.message : String(cause)}`,
+  );
+  return plugins;
+}
+
 // ---------------------------------------------------------------------------
 // File cache
 // ---------------------------------------------------------------------------
@@ -776,8 +811,13 @@ export async function getRegistryPlugins(): Promise<
   }
 
   logger.info("[registry-client] Fetching plugin registry from next branch...");
-  const plugins = await fetchFromNetwork();
-  await mergeCustomEndpoints(plugins, getConfiguredEndpoints());
+  let plugins: Map<string, RegistryPluginInfo>;
+  try {
+    plugins = await fetchFromNetwork();
+    await mergeCustomEndpoints(plugins, getConfiguredEndpoints());
+  } catch (error) {
+    plugins = await buildOfflineFallbackRegistry(error);
+  }
   logger.info(`[registry-client] Loaded ${plugins.size} plugins`);
 
   ensureFallbackApps(plugins);

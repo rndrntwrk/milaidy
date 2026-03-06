@@ -44,6 +44,19 @@ export type RuntimeContractRegistration = {
   synthesized: string[];
 };
 
+type ZodLiteralValue = string | number | boolean | bigint | null | undefined;
+
+function isZodLiteralValue(value: unknown): value is ZodLiteralValue {
+  return (
+    value === null ||
+    value === undefined ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    typeof value === "bigint"
+  );
+}
+
 function inferRiskClass(actionName: string): RiskClass {
   const upper = actionName.toUpperCase();
   if (
@@ -93,11 +106,16 @@ function schemaFromParameter(param: RuntimeActionParameter): z.ZodTypeAny {
   const rawSchema = param.schema;
   const enumValues = rawSchema?.enum;
   if (Array.isArray(enumValues) && enumValues.length > 0) {
-    const literals = enumValues.map((value) => z.literal(value));
+    const literalValues = enumValues.filter(isZodLiteralValue);
+    const literals = literalValues.map((value) => z.literal(value));
+    if (literals.length === 0) {
+      return z.unknown();
+    }
     if (literals.length === 1) {
       return literals[0];
     }
-    return z.union(literals as [z.ZodLiteral<unknown>, ...z.ZodLiteral<unknown>[]]);
+    const [first, ...rest] = literals;
+    return z.union([first, ...rest]);
   }
 
   switch (rawSchema?.type) {
@@ -125,7 +143,8 @@ function buildParamsSchema(parameters: RuntimeActionParameter[] | undefined) {
 
   const shape: Record<string, z.ZodTypeAny> = {};
   for (const parameter of parameters) {
-    const name = typeof parameter.name === "string" ? parameter.name.trim() : "";
+    const name =
+      typeof parameter.name === "string" ? parameter.name.trim() : "";
     if (!name || shape[name]) continue;
 
     const zodSchema = schemaFromParameter(parameter);
@@ -151,7 +170,8 @@ export function createRuntimeActionContract(
   return {
     name,
     description:
-      typeof action.description === "string" && action.description.trim().length > 0
+      typeof action.description === "string" &&
+      action.description.trim().length > 0
         ? action.description
         : `Runtime action contract for ${name}`,
     version: "1.0.0",

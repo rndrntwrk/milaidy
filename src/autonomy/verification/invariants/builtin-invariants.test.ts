@@ -17,7 +17,9 @@ describe("builtin invariants", () => {
   });
 
   it("catalog mirrors built-in invariant metadata", () => {
-    const idsFromInvariants = builtinInvariants.map((invariant) => invariant.id);
+    const idsFromInvariants = builtinInvariants.map(
+      (invariant) => invariant.id,
+    );
     const idsFromCatalog = builtinInvariantCatalog.map((entry) => entry.id);
 
     expect(idsFromCatalog).toEqual(idsFromInvariants);

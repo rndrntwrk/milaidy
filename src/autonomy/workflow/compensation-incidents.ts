@@ -18,7 +18,8 @@ function cloneIncident(incident: CompensationIncident): CompensationIncident {
 }
 
 export class CompensationIncidentManager
-implements CompensationIncidentManagerInterface {
+  implements CompensationIncidentManagerInterface
+{
   private incidents = new Map<string, CompensationIncident>();
   private nextId = 1;
 
@@ -103,7 +104,9 @@ implements CompensationIncidentManagerInterface {
       .map(cloneIncident);
   }
 
-  private listByStatus(...statuses: CompensationIncident["status"][]): CompensationIncident[] {
+  private listByStatus(
+    ...statuses: CompensationIncident["status"][]
+  ): CompensationIncident[] {
     const allowed = new Set(statuses);
     return Array.from(this.incidents.values())
       .filter((incident) => allowed.has(incident.status))

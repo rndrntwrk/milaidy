@@ -14,12 +14,7 @@
  * @module autonomy/evaluators/trust-gate
  */
 
-import type {
-  Evaluator,
-  IAgentRuntime,
-  Memory,
-  State,
-} from "@elizaos/core";
+import type { Evaluator, IAgentRuntime, Memory, State } from "@elizaos/core";
 import type { TrustContext, TrustSource } from "../types.js";
 
 /**
@@ -54,7 +49,11 @@ export function createTrustGateEvaluator(): Evaluator {
       runtime: IAgentRuntime,
       message: Memory,
       _state?: State,
-    ): Promise<{ blocked: boolean; rewrittenText?: string; reason?: string }> => {
+    ): Promise<{
+      blocked: boolean;
+      rewrittenText?: string;
+      reason?: string;
+    }> => {
       // Resolve the autonomy service from the runtime
       const svc = runtime.getService("AUTONOMY") as {
         getTrustScorer?: () => import("../trust/scorer.js").TrustScorer | null;
@@ -174,7 +173,9 @@ function extractTrustContext(
 /**
  * Cached event bus reference (resolved on first use).
  */
-type SimpleEmitter = { emit: (event: string, payload: Record<string, unknown>) => void };
+type SimpleEmitter = {
+  emit: (event: string, payload: Record<string, unknown>) => void;
+};
 let _eventBus: SimpleEmitter | null | undefined;
 
 /**
@@ -194,7 +195,10 @@ async function resolveEventBus() {
 /**
  * Emit a Milaidy event (best-effort).
  */
-async function emitEvent(event: string, payload: Record<string, unknown>): Promise<void> {
+async function emitEvent(
+  event: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
   const bus = await resolveEventBus();
   bus?.emit(event, payload);
 }

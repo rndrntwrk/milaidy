@@ -64,8 +64,14 @@ function req(
 describe("POST /api/provider/switch", () => {
   let port: number;
   let close: () => Promise<void>;
+  let previousMiladyToken: string | undefined;
+  let previousMilaidyToken: string | undefined;
 
   beforeAll(async () => {
+    previousMiladyToken = process.env.MILADY_API_TOKEN;
+    previousMilaidyToken = process.env.MILAIDY_API_TOKEN;
+    delete process.env.MILADY_API_TOKEN;
+    delete process.env.MILAIDY_API_TOKEN;
     const server = await startApiServer({ port: 0 });
     port = server.port;
     close = server.close;
@@ -73,6 +79,10 @@ describe("POST /api/provider/switch", () => {
 
   afterAll(async () => {
     await close();
+    if (previousMiladyToken === undefined) delete process.env.MILADY_API_TOKEN;
+    else process.env.MILADY_API_TOKEN = previousMiladyToken;
+    if (previousMilaidyToken === undefined) delete process.env.MILAIDY_API_TOKEN;
+    else process.env.MILAIDY_API_TOKEN = previousMilaidyToken;
   });
 
   // -- Validation --

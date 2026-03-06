@@ -22,7 +22,6 @@ vi.mock("node:child_process", async () => {
   // Attach custom promisify so util.promisify(exec) returns { stdout, stderr }
   // matching Node's real child_process.exec behavior.
   // biome-ignore lint/style/noNonNullAssertion: promisify.custom is defined
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
   (execFn as any)[promisify.custom!] = (...args: unknown[]) =>
     new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
       const cb = (err: Error | null, stdout = "", stderr = "") => {
@@ -360,7 +359,6 @@ describe("checkPermission dispatcher", () => {
   });
 
   it("returns not-applicable for unknown", async () => {
-    // biome-ignore lint/suspicious/noExplicitAny: test for unknown input
     const result = await checkPermission("unknown-id" as any);
     expect(result.status).toBe("not-applicable");
   });
@@ -421,7 +419,6 @@ describe("requestPermission dispatcher", () => {
   });
 
   it("returns not-applicable for unknown", async () => {
-    // biome-ignore lint/suspicious/noExplicitAny: test for unknown input
     const result = await requestPermission("unknown-id" as any);
     expect(result.status).toBe("not-applicable");
   });

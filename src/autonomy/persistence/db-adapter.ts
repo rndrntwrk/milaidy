@@ -68,7 +68,9 @@ export class AutonomyDbAdapter {
   private initialized = false;
 
   /** Drizzle `sql` tag function — lazily imported. */
-  private sqlHelper: { raw: (query: string) => { queryChunks: unknown[] } } | null = null;
+  private sqlHelper: {
+    raw: (query: string) => { queryChunks: unknown[] };
+  } | null = null;
 
   constructor(db: DrizzleDb, config?: AutonomyDbAdapterConfig) {
     this.db = db;
@@ -105,7 +107,9 @@ export class AutonomyDbAdapter {
    * Run schema migration: create tables if they don't exist.
    */
   async migrate(): Promise<void> {
-    const { createAutonomyTables } = await import("./migrations/001_autonomy_tables.js");
+    const { createAutonomyTables } = await import(
+      "./migrations/001_autonomy_tables.js"
+    );
     const { addAutonomyEventsHashChain } = await import(
       "./migrations/002_autonomy_events_hash_chain.js"
     );
@@ -155,14 +159,14 @@ export class AutonomyDbAdapter {
     sqlText: string,
   ): Promise<{ rows: Record<string, unknown>[]; columns: string[] }> {
     if (!this.sqlHelper) {
-      throw new Error("[autonomy:db] Adapter not initialized — call initialize() first");
+      throw new Error(
+        "[autonomy:db] Adapter not initialized — call initialize() first",
+      );
     }
 
     const rawQuery = this.sqlHelper.raw(sqlText);
     const result = await this.db.execute(rawQuery);
-    const rows = Array.isArray(result.rows)
-      ? result.rows
-      : [];
+    const rows = Array.isArray(result.rows) ? result.rows : [];
 
     let columns: string[] = [];
     if (result.fields && Array.isArray(result.fields)) {

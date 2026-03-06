@@ -112,7 +112,9 @@ describe("validateAutonomyConfig", () => {
     const issues = validateAutonomyConfig({
       trust: { quarantineThreshold: -0.1 },
     });
-    expect(issues.some((i) => i.path.includes("quarantineThreshold"))).toBe(true);
+    expect(issues.some((i) => i.path.includes("quarantineThreshold"))).toBe(
+      true,
+    );
   });
 
   it("catches quarantineThreshold >= writeThreshold", () => {
@@ -140,7 +142,9 @@ describe("validateAutonomyConfig", () => {
     const issues = validateAutonomyConfig({
       driftMonitor: { analysisWindowSize: 0 },
     });
-    expect(issues.some((i) => i.path.includes("analysisWindowSize"))).toBe(true);
+    expect(issues.some((i) => i.path.includes("analysisWindowSize"))).toBe(
+      true,
+    );
   });
 
   it("catches alertThreshold out of range", () => {
@@ -161,21 +165,29 @@ describe("validateAutonomyConfig", () => {
     const issues = validateAutonomyConfig({
       retrieval: { trustWeight: 0.9 },
     });
-    expect(
-      issues.some((i) => i.message.includes("Guardrail")),
-    ).toBe(true);
+    expect(issues.some((i) => i.message.includes("Guardrail"))).toBe(true);
   });
 
   it("catches retrieval weights that do not sum to ~1.0", () => {
     const issues = validateAutonomyConfig({
-      retrieval: { trustWeight: 0.1, recencyWeight: 0.1, relevanceWeight: 0.1, typeWeight: 0.1 },
+      retrieval: {
+        trustWeight: 0.1,
+        recencyWeight: 0.1,
+        relevanceWeight: 0.1,
+        typeWeight: 0.1,
+      },
     });
     expect(issues.some((i) => i.message.includes("sum to"))).toBe(true);
   });
 
   it("accepts retrieval weights that sum to ~1.0", () => {
     const issues = validateAutonomyConfig({
-      retrieval: { trustWeight: 0.3, recencyWeight: 0.25, relevanceWeight: 0.3, typeWeight: 0.15 },
+      retrieval: {
+        trustWeight: 0.3,
+        recencyWeight: 0.25,
+        relevanceWeight: 0.3,
+        typeWeight: 0.15,
+      },
     });
     expect(issues.filter((i) => i.path.includes("retrieval"))).toHaveLength(0);
   });
@@ -192,7 +204,9 @@ describe("validateAutonomyConfig", () => {
       retrieval: { maxResults: 500 },
     });
     expect(
-      issues.some((i) => i.path.includes("maxResults") && i.message.includes("Guardrail")),
+      issues.some(
+        (i) => i.path.includes("maxResults") && i.message.includes("Guardrail"),
+      ),
     ).toBe(true);
   });
 
@@ -207,16 +221,18 @@ describe("validateAutonomyConfig", () => {
     const issues = validateAutonomyConfig({
       retrieval: { typeBoosts: { observation: 3 } },
     });
-    expect(
-      issues.some((i) => i.path.includes("typeBoosts.observation")),
-    ).toBe(true);
+    expect(issues.some((i) => i.path.includes("typeBoosts.observation"))).toBe(
+      true,
+    );
   });
 
   it("catches negative eventStore retentionMs", () => {
     const issues = validateAutonomyConfig({
       eventStore: { retentionMs: -1 },
     });
-    expect(issues.some((i) => i.path.includes("autonomy.eventStore.retentionMs"))).toBe(true);
+    expect(
+      issues.some((i) => i.path.includes("autonomy.eventStore.retentionMs")),
+    ).toBe(true);
   });
 
   it("validates identity config when present", () => {
@@ -344,13 +360,19 @@ describe("resolveAutonomyConfig — retrieval & identity", () => {
     expect(config.retrieval.trustWeight).toBe(0.5);
     expect(config.retrieval.maxResults).toBe(10);
     // Other fields keep defaults
-    expect(config.retrieval.recencyWeight).toBe(DEFAULT_RETRIEVAL_CONFIG.recencyWeight);
+    expect(config.retrieval.recencyWeight).toBe(
+      DEFAULT_RETRIEVAL_CONFIG.recencyWeight,
+    );
   });
 
   it("passes through identity config", () => {
     const identity = createDefaultAutonomyIdentity();
     const config = resolveAutonomyConfig({ identity });
     expect(config.identity).toBe(identity);
-    expect(config.identity!.coreValues).toEqual(["helpfulness", "honesty", "safety"]);
+    expect(config.identity?.coreValues).toEqual([
+      "helpfulness",
+      "honesty",
+      "safety",
+    ]);
   });
 });

@@ -12,13 +12,16 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MemoryBackend } from "./backends/memory.js";
 import {
   getProvidersPendingMigration,
   migrateCredentials,
   needsMigration,
 } from "./migration.js";
-import { resetSecureStorage, setSecureStorageBackend } from "./secure-storage.js";
-import { MemoryBackend } from "./backends/memory.js";
+import {
+  resetSecureStorage,
+  setSecureStorageBackend,
+} from "./secure-storage.js";
 import type { StoredCredentials } from "./types.js";
 
 // Mock machine ID
@@ -57,7 +60,10 @@ afterEach(() => {
   }
 });
 
-function writeLegacyCredentials(provider: string, credentials: Partial<StoredCredentials>): void {
+function writeLegacyCredentials(
+  provider: string,
+  credentials: Partial<StoredCredentials>,
+): void {
   const data: StoredCredentials = {
     provider: provider as any,
     credentials: {
@@ -138,9 +144,14 @@ describe("migrateCredentials", () => {
     expect(result.skipped).toContain("openai-codex");
 
     // Verify stored in secure backend
-    const stored = await memoryBackend.get("credentials:anthropic-subscription");
+    const stored = await memoryBackend.get(
+      "credentials:anthropic-subscription",
+    );
     expect(stored).not.toBeNull();
-    const parsed = JSON.parse(stored!);
+    if (!stored) {
+      throw new Error("Expected migrated credentials in secure backend");
+    }
+    const parsed = JSON.parse(stored);
     expect(parsed.credentials.access).toBe("my-access-token");
   });
 
@@ -150,9 +161,13 @@ describe("migrateCredentials", () => {
     await migrateCredentials();
 
     // Check backup was created
-    const backupFiles = fs.existsSync(BACKUP_DIR) ? fs.readdirSync(BACKUP_DIR) : [];
+    const backupFiles = fs.existsSync(BACKUP_DIR)
+      ? fs.readdirSync(BACKUP_DIR)
+      : [];
     expect(backupFiles.length).toBeGreaterThan(0);
-    expect(backupFiles.some((f) => f.startsWith("anthropic-subscription-"))).toBe(true);
+    expect(
+      backupFiles.some((f) => f.startsWith("anthropic-subscription-")),
+    ).toBe(true);
   });
 
   it("deletes legacy file after successful migration", async () => {
@@ -184,6 +199,8 @@ describe("migrateCredentials", () => {
 
     const result = await migrateCredentials();
 
-    expect(result.failed.some((f) => f.provider === "anthropic-subscription")).toBe(true);
+    expect(
+      result.failed.some((f) => f.provider === "anthropic-subscription"),
+    ).toBe(true);
   });
 });

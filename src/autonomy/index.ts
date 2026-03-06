@@ -15,118 +15,6 @@ import {
   validateAutonomyConfig,
 } from "./config.js";
 
-// Re-export types and config
-export type { AutonomyConfig } from "./config.js";
-export {
-  resolveAutonomyConfig,
-  validateAutonomyConfig,
-} from "./config.js";
-export type * from "./types.js";
-
-// Re-export service
-export { MilaidyAutonomyService, setAutonomyConfig } from "./service.js";
-
-// Re-export evaluators
-export { createTrustGateEvaluator } from "./evaluators/trust-gate.js";
-export { createDriftWatchEvaluator } from "./evaluators/drift-watch.js";
-
-// Re-export component classes and interfaces
-export { RuleBasedTrustScorer, type TrustScorer } from "./trust/scorer.js";
-export { MemoryGateImpl, type MemoryGate, type MemoryGateDecision, type MemoryGateStats } from "./memory/gate.js";
-export type { MemoryStore } from "./memory/store.js";
-export { RuleBasedDriftMonitor, type PersonaDriftMonitor, type DriftReport } from "./identity/drift-monitor.js";
-export { InMemoryGoalManager, type GoalManager, type Goal, type GoalEvaluationResult, type MutationContext } from "./goals/manager.js";
-
-// Re-export retriever types
-export {
-  TrustAwareRetrieverImpl,
-  type TrustAwareRetriever,
-  type RankedMemory,
-  type RetrievalOptions,
-} from "./memory/retriever.js";
-
-// Re-export identity schema
-export {
-  type AutonomyIdentityConfig,
-  type CommunicationStyle,
-  createDefaultAutonomyIdentity,
-  computeIdentityHash,
-  verifyIdentityIntegrity,
-  validateAutonomyIdentity,
-} from "./identity/schema.js";
-
-// Re-export retrieval config
-export { DEFAULT_RETRIEVAL_CONFIG, type AutonomyRetrievalConfig } from "./config.js";
-
-// Re-export workflow config types
-export type {
-  AutonomyWorkflowConfig,
-  AutonomyWorkflowEngineConfig,
-  AutonomyApprovalConfig,
-  AutonomyEventStoreConfig,
-  AutonomyInvariantsConfig,
-} from "./config.js";
-
-// Re-export state machine
-export {
-  KernelStateMachine,
-  type KernelStateMachineInterface,
-  type StateTrigger,
-  type StateTransition,
-  type TransitionResult,
-  type StateChangeListener,
-} from "./state-machine/index.js";
-
-// Re-export approval gate
-export {
-  ApprovalGate,
-  PersistentApprovalGate,
-  type ApprovalGateInterface,
-  type ApprovalRequest,
-  type ApprovalDecision,
-  type ApprovalResult,
-} from "./approval/index.js";
-
-// Re-export verification invariants
-export {
-  InvariantChecker,
-  registerBuiltinInvariants,
-  type Invariant,
-  type InvariantCheckResult,
-  type InvariantCheckerInterface,
-  type InvariantContext,
-  type InvariantResult,
-  type InvariantSeverity,
-  type InvariantStatus,
-} from "./verification/index.js";
-
-// Re-export workflow engine
-export {
-  InMemoryEventStore,
-  CompensationRegistry,
-  CompensationIncidentManager,
-  BUILTIN_COMPENSATION_ELIGIBILITY,
-  listBuiltinCompensationEligibility,
-  listBuiltinCompensationTools,
-  ToolExecutionPipeline,
-  registerBuiltinCompensations,
-  type CompensationIncident,
-  type CompensationIncidentManagerInterface,
-  type CompensationIncidentReason,
-  type CompensationIncidentStatus,
-  type EventStoreInterface,
-  type CompensationEligibility,
-  type ExecutionEvent,
-  type ExecutionEventType,
-  type PipelineConfig,
-  type PipelineResult,
-  type ToolActionHandler,
-  type ToolExecutionPipelineInterface,
-  type CompensationContext,
-  type CompensationFn,
-  type CompensationRegistryInterface,
-} from "./workflow/index.js";
-
 // Re-export workflow engine adapters
 export {
   LocalWorkflowEngine,
@@ -136,66 +24,180 @@ export {
   type WorkflowEngine,
   type WorkflowResult,
 } from "./adapters/workflow/index.js";
+// Re-export approval gate
+export {
+  type ApprovalDecision,
+  ApprovalGate,
+  type ApprovalGateInterface,
+  type ApprovalRequest,
+  type ApprovalResult,
+  PersistentApprovalGate,
+} from "./approval/index.js";
+// Re-export types and config
+// Re-export workflow config types
+// Re-export role config
+export type {
+  AutonomyApprovalConfig,
+  AutonomyConfig,
+  AutonomyDomainsConfig,
+  AutonomyEventStoreConfig,
+  AutonomyInvariantsConfig,
+  AutonomyLearningConfig,
+  AutonomyRolesConfig,
+  AutonomyWorkflowConfig,
+  AutonomyWorkflowEngineConfig,
+} from "./config.js";
+// Re-export retrieval config
+export {
+  type AutonomyRetrievalConfig,
+  DEFAULT_RETRIEVAL_CONFIG,
+  resolveAutonomyConfig,
+  validateAutonomyConfig,
+} from "./config.js";
+// Re-export domains infrastructure (Phase 5)
+export * from "./domains/index.js";
+export { createDriftWatchEvaluator } from "./evaluators/drift-watch.js";
+// Re-export evaluators
+export { createTrustGateEvaluator } from "./evaluators/trust-gate.js";
+export {
+  type Goal,
+  type GoalEvaluationResult,
+  type GoalManager,
+  InMemoryGoalManager,
+  type MutationContext,
+} from "./goals/manager.js";
+export {
+  type DriftReport,
+  type PersonaDriftMonitor,
+  RuleBasedDriftMonitor,
+} from "./identity/drift-monitor.js";
 
+// Re-export identity schema
+export {
+  type AutonomyIdentityConfig,
+  type CommunicationStyle,
+  computeIdentityHash,
+  createDefaultAutonomyIdentity,
+  validateAutonomyIdentity,
+  verifyIdentityIntegrity,
+} from "./identity/schema.js";
+// Re-export learning infrastructure (Phase 4)
+export * from "./learning/index.js";
+export {
+  type MemoryGate,
+  type MemoryGateDecision,
+  MemoryGateImpl,
+  type MemoryGateStats,
+} from "./memory/gate.js";
+// Re-export retriever types
+export {
+  type RankedMemory,
+  type RetrievalOptions,
+  type TrustAwareRetriever,
+  TrustAwareRetrieverImpl,
+} from "./memory/retriever.js";
+export type { MemoryStore } from "./memory/store.js";
+// Re-export metrics
+export {
+  type BaselineHarness,
+  type BaselineMetrics,
+  BUILTIN_SCENARIOS,
+  type EvaluationScenario,
+  FileBaselineHarness,
+  InMemoryBaselineHarness,
+  type KernelComponents,
+  KernelScenarioEvaluator,
+  type MetricsDelta,
+  SCENARIOS_BY_METRIC,
+  type ScenarioEvaluator,
+  type ScenarioResult,
+  SOW_TARGETS,
+} from "./metrics/index.js";
 // Re-export roles (Phase 3)
 export {
-  GoalDrivenPlanner,
-  PipelineExecutor,
-  UnifiedVerifier,
-  GatedMemoryWriter,
+  type AuditContext,
+  type AuditorRole,
+  type AuditReport,
   DriftAwareAuditor,
-  SafeModeControllerImpl,
+  type ExecutionPlan,
+  type ExecutorRole,
+  GatedMemoryWriter,
+  GoalDrivenPlanner,
   KernelOrchestrator,
+  type MemoryWriteReport,
+  type MemoryWriteRequest,
+  type MemoryWriterRole,
+  type OrchestratedRequest,
+  type OrchestratedResult,
+  PipelineExecutor,
+  type PlannerConfig,
+  type PlannerRole,
   type PlanRequest,
   type PlanStep,
-  type ExecutionPlan,
   type PlanValidation,
-  type PlannerRole,
-  type PlannerConfig,
-  type ExecutorRole,
+  type RoleOrchestrator,
+  type SafeModeConfig,
+  type SafeModeController,
+  SafeModeControllerImpl,
+  type SafeModeExitResult,
+  type SafeModeStatus,
+  UnifiedVerifier,
   type VerificationContext,
   type VerificationReport,
   type VerifierRole,
-  type MemoryWriteRequest,
-  type MemoryWriteReport,
-  type MemoryWriterRole,
-  type AuditContext,
-  type AuditReport,
-  type AuditorRole,
-  type SafeModeStatus,
-  type SafeModeExitResult,
-  type SafeModeController,
-  type SafeModeConfig,
-  type OrchestratedRequest,
-  type OrchestratedResult,
-  type RoleOrchestrator,
 } from "./roles/index.js";
-
-// Re-export role config
-export type { AutonomyRolesConfig, AutonomyLearningConfig, AutonomyDomainsConfig } from "./config.js";
-
-// Re-export learning infrastructure (Phase 4)
-export * from "./learning/index.js";
-
-// Re-export domains infrastructure (Phase 5)
-export * from "./domains/index.js";
-
-// Re-export metrics
+// Re-export service
+export { MilaidyAutonomyService, setAutonomyConfig } from "./service.js";
+// Re-export state machine
 export {
-  InMemoryBaselineHarness,
-  FileBaselineHarness,
-  KernelScenarioEvaluator,
-  BUILTIN_SCENARIOS,
-  SCENARIOS_BY_METRIC,
-  SOW_TARGETS,
-  type BaselineHarness,
-  type BaselineMetrics,
-  type EvaluationScenario,
-  type KernelComponents,
-  type MetricsDelta,
-  type ScenarioEvaluator,
-  type ScenarioResult,
-} from "./metrics/index.js";
+  KernelStateMachine,
+  type KernelStateMachineInterface,
+  type StateChangeListener,
+  type StateTransition,
+  type StateTrigger,
+  type TransitionResult,
+} from "./state-machine/index.js";
+// Re-export component classes and interfaces
+export { RuleBasedTrustScorer, type TrustScorer } from "./trust/scorer.js";
+export type * from "./types.js";
+// Re-export verification invariants
+export {
+  type Invariant,
+  InvariantChecker,
+  type InvariantCheckerInterface,
+  type InvariantCheckResult,
+  type InvariantContext,
+  type InvariantResult,
+  type InvariantSeverity,
+  type InvariantStatus,
+  registerBuiltinInvariants,
+} from "./verification/index.js";
+// Re-export workflow engine
+export {
+  BUILTIN_COMPENSATION_ELIGIBILITY,
+  type CompensationContext,
+  type CompensationEligibility,
+  type CompensationFn,
+  type CompensationIncident,
+  CompensationIncidentManager,
+  type CompensationIncidentManagerInterface,
+  type CompensationIncidentReason,
+  type CompensationIncidentStatus,
+  CompensationRegistry,
+  type CompensationRegistryInterface,
+  type EventStoreInterface,
+  type ExecutionEvent,
+  type ExecutionEventType,
+  InMemoryEventStore,
+  listBuiltinCompensationEligibility,
+  listBuiltinCompensationTools,
+  type PipelineConfig,
+  type PipelineResult,
+  registerBuiltinCompensations,
+  type ToolActionHandler,
+  ToolExecutionPipeline,
+  type ToolExecutionPipelineInterface,
+} from "./workflow/index.js";
 
 // ---------- Kernel State ----------
 
@@ -213,7 +215,9 @@ export function isAutonomyEnabled(): boolean {
  * Get the resolved autonomy configuration.
  * Returns null if the kernel has not been initialized.
  */
-export function getAutonomyConfig(): ReturnType<typeof resolveAutonomyConfig> | null {
+export function getAutonomyConfig(): ReturnType<
+  typeof resolveAutonomyConfig
+> | null {
   return _resolvedConfig;
 }
 
@@ -224,9 +228,10 @@ export function getAutonomyConfig(): ReturnType<typeof resolveAutonomyConfig> | 
  * config has been loaded. If `config.enabled` is false, the kernel
  * remains dormant and all feature gates return early.
  */
-export async function initAutonomyKernel(
-  config?: AutonomyConfig,
-): Promise<{ enabled: boolean; issues: Array<{ path: string; message: string }> }> {
+export async function initAutonomyKernel(config?: AutonomyConfig): Promise<{
+  enabled: boolean;
+  issues: Array<{ path: string; message: string }>;
+}> {
   if (_kernelInitialized) {
     logger.warn("[autonomy] Kernel already initialized, skipping re-init");
     return { enabled: _resolvedConfig?.enabled ?? false, issues: [] };

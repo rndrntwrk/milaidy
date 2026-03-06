@@ -52,83 +52,196 @@ export function createToken<T>(name: string): ServiceToken<T> {
  */
 export const TOKENS = {
   // Configuration
-  Config: createToken<import("../config/types.milaidy.js").MilaidyConfig>("Config"),
-  ConfigWatcher: createToken<import("../config/config-watcher.js").ConfigWatcher>("ConfigWatcher"),
+  Config:
+    createToken<import("../config/types.milaidy.js").MilaidyConfig>("Config"),
+  ConfigWatcher:
+    createToken<import("../config/config-watcher.js").ConfigWatcher>(
+      "ConfigWatcher",
+    ),
 
   // Core services
-  EventBus: createToken<import("../events/event-bus.js").TypedEventBus>("EventBus"),
+  EventBus:
+    createToken<import("../events/event-bus.js").TypedEventBus>("EventBus"),
   Logger: createToken<typeof logger>("Logger"),
 
   // Data layer
   Database: createToken<unknown>("Database"),
   Cache: createToken<unknown>("Cache"),
-  SecureStorage: createToken<import("../auth/secure-storage.js").SecureStorageBackend>("SecureStorage"),
+  SecureStorage:
+    createToken<
+      Promise<import("../auth/secure-storage.js").SecureStorageBackend>
+    >("SecureStorage"),
 
   // Runtime
   AgentRuntime: createToken<unknown>("AgentRuntime"),
   PluginLoader: createToken<unknown>("PluginLoader"),
-  PluginWorkerPool: createToken<import("../plugins/worker-pool.js").PluginWorkerPool>("PluginWorkerPool"),
+  PluginWorkerPool:
+    createToken<import("../plugins/worker-pool.js").PluginWorkerPool>(
+      "PluginWorkerPool",
+    ),
 
   // API
   ApiServer: createToken<unknown>("ApiServer"),
-  RateLimiter: createToken<import("../api/middleware/rate-limiter.js").RateLimitMiddleware>("RateLimiter"),
+  RateLimiter:
+    createToken<
+      import("../api/middleware/rate-limiter.js").RateLimitMiddleware
+    >("RateLimiter"),
 
   // Auth
   AuthService: createToken<unknown>("AuthService"),
 
   // Autonomy Kernel
-  TrustScorer: createToken<import("../autonomy/trust/scorer.js").TrustScorer>("TrustScorer"),
-  MemoryGate: createToken<import("../autonomy/memory/gate.js").MemoryGate>("MemoryGate"),
-  MemoryStore: createToken<import("../autonomy/memory/store.js").MemoryStore>("MemoryStore"),
-  DriftMonitor: createToken<import("../autonomy/identity/drift-monitor.js").PersonaDriftMonitor>("DriftMonitor"),
-  GoalManager: createToken<import("../autonomy/goals/manager.js").GoalManager>("GoalManager"),
-  TrustAwareRetriever: createToken<import("../autonomy/memory/retriever.js").TrustAwareRetriever>("TrustAwareRetriever"),
+  TrustScorer:
+    createToken<import("../autonomy/trust/scorer.js").TrustScorer>(
+      "TrustScorer",
+    ),
+  MemoryGate:
+    createToken<import("../autonomy/memory/gate.js").MemoryGate>("MemoryGate"),
+  MemoryStore:
+    createToken<import("../autonomy/memory/store.js").MemoryStore>(
+      "MemoryStore",
+    ),
+  DriftMonitor:
+    createToken<
+      import("../autonomy/identity/drift-monitor.js").PersonaDriftMonitor
+    >("DriftMonitor"),
+  GoalManager:
+    createToken<import("../autonomy/goals/manager.js").GoalManager>(
+      "GoalManager",
+    ),
+  TrustAwareRetriever: createToken<
+    import("../autonomy/memory/retriever.js").TrustAwareRetriever
+  >("TrustAwareRetriever"),
 
   // Autonomy Tool Contracts & Verification
-  ToolRegistry: createToken<import("../autonomy/tools/types.js").ToolRegistryInterface>("ToolRegistry"),
-  SchemaValidator: createToken<import("../autonomy/verification/schema-validator.js").SchemaValidator>("SchemaValidator"),
-  PostConditionVerifier: createToken<import("../autonomy/verification/postcondition-verifier.js").PostConditionVerifier>("PostConditionVerifier"),
+  ToolRegistry:
+    createToken<import("../autonomy/tools/types.js").ToolRegistryInterface>(
+      "ToolRegistry",
+    ),
+  SchemaValidator:
+    createToken<
+      import("../autonomy/verification/schema-validator.js").SchemaValidator
+    >("SchemaValidator"),
+  PostConditionVerifier: createToken<
+    import("../autonomy/verification/postcondition-verifier.js").PostConditionVerifier
+  >("PostConditionVerifier"),
 
   // Autonomy Workflow Engine
-  WorkflowEngine: createToken<import("../autonomy/adapters/workflow/types.js").WorkflowEngine>("WorkflowEngine"),
-  ExecutionPipeline: createToken<import("../autonomy/workflow/types.js").ToolExecutionPipelineInterface>("ExecutionPipeline"),
-  ApprovalGate: createToken<import("../autonomy/approval/types.js").ApprovalGateInterface>("ApprovalGate"),
-  StateMachine: createToken<import("../autonomy/state-machine/types.js").KernelStateMachineInterface>("StateMachine"),
-  EventStore: createToken<import("../autonomy/workflow/types.js").EventStoreInterface>("EventStore"),
-  CompensationRegistry: createToken<import("../autonomy/workflow/types.js").CompensationRegistryInterface>("CompensationRegistry"),
-  InvariantChecker: createToken<import("../autonomy/verification/invariants/invariant-checker.js").InvariantChecker>("InvariantChecker"),
+  WorkflowEngine:
+    createToken<
+      import("../autonomy/adapters/workflow/types.js").WorkflowEngine
+    >("WorkflowEngine"),
+  ExecutionPipeline:
+    createToken<
+      import("../autonomy/workflow/types.js").ToolExecutionPipelineInterface
+    >("ExecutionPipeline"),
+  ApprovalGate:
+    createToken<import("../autonomy/approval/types.js").ApprovalGateInterface>(
+      "ApprovalGate",
+    ),
+  StateMachine:
+    createToken<
+      import("../autonomy/state-machine/types.js").KernelStateMachineInterface
+    >("StateMachine"),
+  EventStore:
+    createToken<import("../autonomy/workflow/types.js").EventStoreInterface>(
+      "EventStore",
+    ),
+  CompensationRegistry: createToken<
+    import("../autonomy/workflow/types.js").CompensationRegistryInterface
+  >("CompensationRegistry"),
+  InvariantChecker:
+    createToken<
+      import("../autonomy/verification/invariants/invariant-checker.js").InvariantChecker
+    >("InvariantChecker"),
 
   // Autonomy Metrics
-  BaselineHarness: createToken<import("../autonomy/metrics/baseline-harness.js").BaselineHarness>("BaselineHarness"),
+  BaselineHarness:
+    createToken<
+      import("../autonomy/metrics/baseline-harness.js").BaselineHarness
+    >("BaselineHarness"),
 
   // Autonomy Roles (Phase 3)
-  Planner: createToken<import("../autonomy/roles/types.js").PlannerRole>("Planner"),
-  Executor: createToken<import("../autonomy/roles/types.js").ExecutorRole>("Executor"),
-  Verifier: createToken<import("../autonomy/roles/types.js").VerifierRole>("Verifier"),
-  MemoryWriter: createToken<import("../autonomy/roles/types.js").MemoryWriterRole>("MemoryWriter"),
-  Auditor: createToken<import("../autonomy/roles/types.js").AuditorRole>("Auditor"),
-  SafeMode: createToken<import("../autonomy/roles/types.js").SafeModeController>("SafeMode"),
-  Orchestrator: createToken<import("../autonomy/roles/types.js").RoleOrchestrator>("Orchestrator"),
+  Planner:
+    createToken<import("../autonomy/roles/types.js").PlannerRole>("Planner"),
+  Executor:
+    createToken<import("../autonomy/roles/types.js").ExecutorRole>("Executor"),
+  Verifier:
+    createToken<import("../autonomy/roles/types.js").VerifierRole>("Verifier"),
+  MemoryWriter:
+    createToken<import("../autonomy/roles/types.js").MemoryWriterRole>(
+      "MemoryWriter",
+    ),
+  Auditor:
+    createToken<import("../autonomy/roles/types.js").AuditorRole>("Auditor"),
+  SafeMode:
+    createToken<import("../autonomy/roles/types.js").SafeModeController>(
+      "SafeMode",
+    ),
+  Orchestrator:
+    createToken<import("../autonomy/roles/types.js").RoleOrchestrator>(
+      "Orchestrator",
+    ),
 
   // Autonomy Domains & Governance (Phase 5)
-  DomainPackRegistry: createToken<import("../autonomy/domains/registry.js").DomainPackRegistry>("DomainPackRegistry"),
-  PolicyEngine: createToken<import("../autonomy/domains/governance/policy-engine.js").PolicyEngine>("PolicyEngine"),
-  AuditRetentionManager: createToken<import("../autonomy/domains/governance/retention-manager.js").AuditRetentionManager>("AuditRetentionManager"),
-  PilotRunner: createToken<import("../autonomy/domains/pilot/pilot-runner.js").PilotRunner>("PilotRunner"),
+  DomainPackRegistry:
+    createToken<import("../autonomy/domains/registry.js").DomainPackRegistry>(
+      "DomainPackRegistry",
+    ),
+  PolicyEngine:
+    createToken<
+      import("../autonomy/domains/governance/policy-engine.js").PolicyEngine
+    >("PolicyEngine"),
+  AuditRetentionManager: createToken<
+    import("../autonomy/domains/governance/retention-manager.js").AuditRetentionManager
+  >("AuditRetentionManager"),
+  PilotRunner:
+    createToken<
+      import("../autonomy/domains/pilot/pilot-runner.js").PilotRunner
+    >("PilotRunner"),
 
   // Autonomy Persistence
-  AutonomyDbAdapter: createToken<import("../autonomy/persistence/db-adapter.js").AutonomyDbAdapter>("AutonomyDbAdapter"),
-  ApprovalLog: createToken<import("../autonomy/persistence/pg-approval-log.js").ApprovalLogInterface>("ApprovalLog"),
-  IdentityStore: createToken<import("../autonomy/persistence/pg-identity-store.js").IdentityStoreInterface>("IdentityStore"),
+  AutonomyDbAdapter:
+    createToken<
+      import("../autonomy/persistence/db-adapter.js").AutonomyDbAdapter
+    >("AutonomyDbAdapter"),
+  ApprovalLog:
+    createToken<
+      import("../autonomy/persistence/pg-approval-log.js").ApprovalLogInterface
+    >("ApprovalLog"),
+  IdentityStore:
+    createToken<
+      import("../autonomy/persistence/pg-identity-store.js").IdentityStoreInterface
+    >("IdentityStore"),
 
   // Autonomy Learning (Phase 4)
-  TraceCollector: createToken<import("../autonomy/learning/trace-collector.js").TraceCollector>("TraceCollector"),
-  HackDetector: createToken<import("../autonomy/learning/hack-detection.js").HackDetector>("HackDetector"),
-  RolloutCollector: createToken<import("../autonomy/learning/rollout.js").RolloutCollector>("RolloutCollector"),
-  ModelProvider: createToken<import("../autonomy/learning/types.js").ModelProvider>("ModelProvider"),
-  PromptBuilder: createToken<import("../autonomy/learning/prompt-builder.js").SystemPromptBuilder>("PromptBuilder"),
-  CheckpointManager: createToken<import("../autonomy/learning/rollout.js").CheckpointManager>("CheckpointManager"),
-  AdversarialGenerator: createToken<import("../autonomy/learning/adversarial.js").AdversarialScenarioGenerator>("AdversarialGenerator"),
+  TraceCollector:
+    createToken<
+      import("../autonomy/learning/trace-collector.js").TraceCollector
+    >("TraceCollector"),
+  HackDetector:
+    createToken<import("../autonomy/learning/hack-detection.js").HackDetector>(
+      "HackDetector",
+    ),
+  RolloutCollector:
+    createToken<import("../autonomy/learning/rollout.js").RolloutCollector>(
+      "RolloutCollector",
+    ),
+  ModelProvider:
+    createToken<import("../autonomy/learning/types.js").ModelProvider>(
+      "ModelProvider",
+    ),
+  PromptBuilder:
+    createToken<
+      import("../autonomy/learning/prompt-builder.js").SystemPromptBuilder
+    >("PromptBuilder"),
+  CheckpointManager:
+    createToken<import("../autonomy/learning/rollout.js").CheckpointManager>(
+      "CheckpointManager",
+    ),
+  AdversarialGenerator: createToken<
+    import("../autonomy/learning/adversarial.js").AdversarialScenarioGenerator
+  >("AdversarialGenerator"),
 } as const;
 
 // ---------- Service Container ----------
@@ -202,11 +315,16 @@ export class ServiceContainer {
     this.assertNotDisposed();
 
     // Check local registrations first
-    const registration = this.services.get(token) as ServiceRegistration<T> | undefined;
+    const registration = this.services.get(token) as
+      | ServiceRegistration<T>
+      | undefined;
 
     if (registration) {
       // Return existing singleton instance
-      if (registration.scope === "singleton" && registration.instance !== undefined) {
+      if (
+        registration.scope === "singleton" &&
+        registration.instance !== undefined
+      ) {
         return registration.instance;
       }
 
@@ -255,9 +373,15 @@ export class ServiceContainer {
     if (this.disposed) return;
 
     for (const [token, registration] of this.services) {
-      if (registration.instance && typeof (registration.instance as { dispose?: () => Promise<void> }).dispose === "function") {
+      if (
+        registration.instance &&
+        typeof (registration.instance as { dispose?: () => Promise<void> })
+          .dispose === "function"
+      ) {
         try {
-          await (registration.instance as { dispose: () => Promise<void> }).dispose();
+          await (
+            registration.instance as { dispose: () => Promise<void> }
+          ).dispose();
         } catch (err) {
           logger.error(
             `[container] Error disposing ${token.toString()}: ${err instanceof Error ? err.message : err}`,
@@ -415,7 +539,9 @@ export function createMilaidyContainer(
 
   // Register rate limiter
   builder.addService(TOKENS.RateLimiter, () => {
-    const { createRateLimitMiddleware } = require("../api/middleware/rate-limiter.js");
+    const {
+      createRateLimitMiddleware,
+    } = require("../api/middleware/rate-limiter.js");
     return createRateLimitMiddleware();
   });
 

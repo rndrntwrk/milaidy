@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import type { VerifierContext } from "../types.js";
 import { installPluginIndependentLookupCondition } from "./install-plugin.postcondition.js";
 import { triggerIndependentLookupCondition } from "./trigger.postcondition.js";
-import type { VerifierContext } from "../types.js";
 
 function makeCtx(overrides: Partial<VerifierContext> = {}): VerifierContext {
   return {
@@ -71,4 +71,3 @@ describe("independent verification post-conditions", () => {
     expect(triggerPassed).toBe(true);
   });
 });
-

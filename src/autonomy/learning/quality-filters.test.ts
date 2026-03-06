@@ -12,7 +12,12 @@ function makeStep(overrides: Partial<TrainingExample> = {}): TrainingExample {
     input: { params: {}, source: "user" },
     output: { result: { ok: true }, durationMs: 1000 },
     verification: { passed: true, checks: [] },
-    reward: { total: 0.8, breakdown: {}, dimensions: [], computedAt: Date.now() },
+    reward: {
+      total: 0.8,
+      breakdown: {},
+      dimensions: [],
+      computedAt: Date.now(),
+    },
     metadata: { agentId: "agent", requestId: "req", timestamp: Date.now() },
     ...overrides,
   };
@@ -24,7 +29,12 @@ function makeEpisode(overrides: Partial<Episode> = {}): Episode {
     description: "High-quality training episode",
     steps: [makeStep()],
     planSteps: 1,
-    totalReward: { total: 0.8, breakdown: {}, dimensions: [], computedAt: Date.now() },
+    totalReward: {
+      total: 0.8,
+      breakdown: {},
+      dimensions: [],
+      computedAt: Date.now(),
+    },
     driftScore: 0.1,
     auditAnomalies: [],
     durationMs: 1000,
@@ -45,7 +55,12 @@ describe("applyQualityFilters", () => {
   it("drops episodes with weak reward or high drift", () => {
     const weak = makeEpisode({
       id: "weak",
-      totalReward: { total: 0.05, breakdown: {}, dimensions: [], computedAt: Date.now() },
+      totalReward: {
+        total: 0.05,
+        breakdown: {},
+        dimensions: [],
+        computedAt: Date.now(),
+      },
     });
     const drifting = makeEpisode({
       id: "drift",

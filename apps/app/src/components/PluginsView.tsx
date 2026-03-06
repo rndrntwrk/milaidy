@@ -139,10 +139,7 @@ const STREAM555_DESTINATION_SPECS: Stream555DestinationSpec[] = [
   },
 ];
 
-const STREAM555_DESTINATION_KEY_MAP = new Map<
-  string,
-  Stream555DestinationSpec
->(
+const STREAM555_DESTINATION_KEY_MAP = new Map<string, Stream555DestinationSpec>(
   STREAM555_DESTINATION_SPECS.flatMap((spec) => [
     [spec.enabledKey, spec] as const,
     [spec.urlKey, spec] as const,
@@ -233,7 +230,9 @@ function getPluginUiAction(
   return asPluginUiSchema(plugin)?.actions?.[actionId] ?? null;
 }
 
-function buildLifecycleStatusTokens(plugin: PluginInfo): LifecycleStatusToken[] {
+function buildLifecycleStatusTokens(
+  plugin: PluginInfo,
+): LifecycleStatusToken[] {
   const tokens: LifecycleStatusToken[] = [
     {
       label: plugin.installed === false ? "Not installed" : "Installed",
@@ -409,13 +408,18 @@ function buildPluginOperationalDisplay(
 
   if (streamSummary) {
     const channelsSaved =
-      plugin.operationalCounts?.channelsSaved ?? streamSummary.savedDestinations;
+      plugin.operationalCounts?.channelsSaved ??
+      streamSummary.savedDestinations;
     const channelsEnabled =
-      plugin.operationalCounts?.channelsEnabled ?? streamSummary.enabledDestinations;
+      plugin.operationalCounts?.channelsEnabled ??
+      streamSummary.enabledDestinations;
     const channelsReady =
-      plugin.operationalCounts?.channelsReady ?? streamSummary.readyDestinations;
+      plugin.operationalCounts?.channelsReady ??
+      streamSummary.readyDestinations;
     const primary = `${
-      plugin.authenticated === true ? "Authenticated" : "Authentication required"
+      plugin.authenticated === true
+        ? "Authenticated"
+        : "Authentication required"
     } · ${channelsSaved}/${streamSummary.destinations.length} channel keys saved · ${
       channelsEnabled > 0
         ? `${channelsReady}/${channelsEnabled} enabled channels ready`
@@ -440,7 +444,9 @@ function buildPluginOperationalDisplay(
         ? "Catalog reachable"
         : "Catalog not verified";
     const primary = `${
-      plugin.authenticated === true ? "Authenticated" : "Authentication required"
+      plugin.authenticated === true
+        ? "Authenticated"
+        : "Authentication required"
     } · ${sessionReady} · ${catalogReady}`;
     const secondary =
       plugin.statusSummary?.join(" · ") ??
@@ -545,7 +551,8 @@ function Stream555ControlActionsPanel({
       .trim()
       .toLowerCase() || "eth";
   const uiSchema = asPluginUiSchema(plugin);
-  const collectionLabel = uiSchema?.nouns?.collectionLabel?.trim() || "Channels";
+  const collectionLabel =
+    uiSchema?.nouns?.collectionLabel?.trim() || "Channels";
   const authenticateAction = getPluginUiAction(plugin, "authenticate");
   const verifyAction = getPluginUiAction(plugin, "verify");
   const disconnectAction = getPluginUiAction(plugin, "disconnect");
@@ -647,7 +654,8 @@ function Stream555ControlActionsPanel({
     if (busyAction) return;
     const provisionResult = await executeStreamAction(
       "wallet-provision",
-      provisionWalletAction?.invokes ?? "STREAM555_AUTH_WALLET_PROVISION_LINKED",
+      provisionWalletAction?.invokes ??
+        "STREAM555_AUTH_WALLET_PROVISION_LINKED",
       { targetChain: provisionTargetChain },
       `Linked wallet provisioned via sw4p (${provisionTargetChain}).`,
       "Linked wallet provisioning failed.",
@@ -662,6 +670,7 @@ function Stream555ControlActionsPanel({
     executeStreamAction,
     provisionTargetChain,
     runWalletAuthentication,
+    provisionWalletAction?.invokes,
   ]);
 
   const handleFallbackAuthenticate = useCallback(async () => {
@@ -2221,7 +2230,7 @@ const FEATURE_SUBGROUP: Record<string, string> = {
   babylon: "gaming",
   mysticism: "gaming",
   "555arcade": "gaming",
-  "arcade555": "gaming",
+  arcade555: "gaming",
   "arcade555-canonical": "gaming",
   personality: "gaming",
   moltbook: "gaming",
@@ -2518,9 +2527,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
     await handlePluginConfigSave(pluginId, config);
     const shouldSyncChannels =
       isStream555PrimaryPlugin(pluginId) &&
-      Object.keys(config).some((key) =>
-        STREAM555_DESTINATION_KEY_MAP.has(key),
-      );
+      Object.keys(config).some((key) => STREAM555_DESTINATION_KEY_MAP.has(key));
     if (shouldSyncChannels) {
       try {
         await client.executeAutonomyPlan({
@@ -3260,10 +3267,8 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                         const collectionLabel =
                           uiSchema?.nouns?.collectionLabel?.trim() ||
                           (streamSummary ? "Channels" : "Games");
-                        const operationalDisplay = buildPluginOperationalDisplay(
-                          p,
-                          streamSummary,
-                        );
+                        const operationalDisplay =
+                          buildPluginOperationalDisplay(p, streamSummary);
                         const configuredChannels =
                           streamSummary?.destinations.filter(
                             (destination) => destination.streamKeySet,
@@ -3280,7 +3285,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                                 })
                                 .join("  ·  ")
                             : "No channel stream keys saved yet"
-                            : (p.statusSummary ?? []).join(" · ");
+                          : (p.statusSummary ?? []).join(" · ");
                         return (
                           <>
                             <div className="mb-3 px-3 py-2 border border-border bg-surface">
@@ -3306,9 +3311,11 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                               <div className="text-[10px] text-muted leading-relaxed">
                                 {streamSummary
                                   ? configuredSummary
-                                  : operationalDisplay.secondary || configuredSummary}
+                                  : operationalDisplay.secondary ||
+                                    configuredSummary}
                               </div>
-                              {streamSummary && configuredChannels.length === 0 ? (
+                              {streamSummary &&
+                              configuredChannels.length === 0 ? (
                                 <div className="mt-1 text-[10px] text-muted">
                                   No{" "}
                                   {collectionLabel.toLowerCase() === "channels"
@@ -3317,25 +3324,29 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                                   stream keys saved yet
                                 </div>
                               ) : null}
-                              {(p.operationalWarnings?.length ||
-                                p.operationalErrors?.length) ? (
+                              {p.operationalWarnings?.length ||
+                              p.operationalErrors?.length ? (
                                 <div className="mt-2 space-y-1">
-                                  {(p.operationalWarnings ?? []).map((warning) => (
-                                    <div
-                                      key={`warning-${warning}`}
-                                      className="text-[10px] text-warn"
-                                    >
-                                      {warning}
-                                    </div>
-                                  ))}
-                                  {(p.operationalErrors ?? []).map((pluginError) => (
-                                    <div
-                                      key={`error-${pluginError}`}
-                                      className="text-[10px] text-destructive"
-                                    >
-                                      {pluginError}
-                                    </div>
-                                  ))}
+                                  {(p.operationalWarnings ?? []).map(
+                                    (warning) => (
+                                      <div
+                                        key={`warning-${warning}`}
+                                        className="text-[10px] text-warn"
+                                      >
+                                        {warning}
+                                      </div>
+                                    ),
+                                  )}
+                                  {(p.operationalErrors ?? []).map(
+                                    (pluginError) => (
+                                      <div
+                                        key={`error-${pluginError}`}
+                                        className="text-[10px] text-destructive"
+                                      >
+                                        {pluginError}
+                                      </div>
+                                    ),
+                                  )}
                                 </div>
                               ) : null}
                             </div>

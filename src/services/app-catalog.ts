@@ -140,7 +140,10 @@ export function isManagedAppRemoteProxyHostAllowed(
   const allowed = entry.viewer?.remoteProxyHosts;
   if (!Array.isArray(allowed) || allowed.length === 0) return false;
 
-  const normalizedHost = hostname.trim().toLowerCase().replace(/^\[|\]$/g, "");
+  const normalizedHost = hostname
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "");
   if (normalizedHost.length === 0) return false;
   return allowed.some(
     (candidate) => candidate.trim().toLowerCase() === normalizedHost,
@@ -163,7 +166,9 @@ export function normalizeManagedAppConfiguredUrl(
         host === HYPERSCAPE_LEGACY_DOWNLOAD_HOST &&
         path === HYPERSCAPE_LEGACY_DOWNLOAD_PATH
       ) {
-        return ALICE_APP_CATALOG[HYPERSCAPE_PACKAGE].defaultPublicUrl ?? trimmed;
+        return (
+          ALICE_APP_CATALOG[HYPERSCAPE_PACKAGE].defaultPublicUrl ?? trimmed
+        );
       }
     } catch {
       return trimmed;

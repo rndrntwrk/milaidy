@@ -229,7 +229,8 @@ if (typeof globalThis.window === "undefined") {
   ) => {
     const handler = toEventHandler(listener);
     if (!handler) return;
-    const handlers = windowListeners.get(type) ?? new Set<(event: Event) => void>();
+    const handlers =
+      windowListeners.get(type) ?? new Set<(event: Event) => void>();
     handlers.add(handler);
     windowListeners.set(type, handlers);
   };
@@ -265,7 +266,10 @@ if (typeof globalThis.window === "undefined") {
       clearTimeout: (...args: Parameters<typeof globalThis.clearTimeout>) =>
         globalThis.clearTimeout(...args),
       location: { reload: vi.fn() },
-      screenX: 0, screenY: 0, outerWidth: 1920, outerHeight: 1080,
+      screenX: 0,
+      screenY: 0,
+      outerWidth: 1920,
+      outerHeight: 1080,
       addEventListener: vi.fn(addWindowEventListener),
       removeEventListener: vi.fn(removeWindowEventListener),
       dispatchEvent: vi.fn(dispatchWindowEvent),
@@ -331,7 +335,8 @@ if (typeof globalThis.window === "undefined") {
       (type: string, listener: EventListenerOrEventListenerObject | null) => {
         const handler = toEventHandler(listener);
         if (!handler) return;
-        const handlers = listeners.get(type) ?? new Set<(event: Event) => void>();
+        const handlers =
+          listeners.get(type) ?? new Set<(event: Event) => void>();
         handlers.add(handler);
         listeners.set(type, handlers);
       },

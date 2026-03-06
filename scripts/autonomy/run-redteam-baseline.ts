@@ -4,10 +4,10 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { InMemoryGoalManager } from "../../src/autonomy/goals/manager.js";
 import { RuleBasedDriftMonitor } from "../../src/autonomy/identity/drift-monitor.js";
+import { MemoryGateImpl } from "../../src/autonomy/memory/gate.js";
 import { KernelScenarioEvaluator } from "../../src/autonomy/metrics/kernel-evaluator.js";
 import { BUILTIN_SCENARIOS } from "../../src/autonomy/metrics/scenarios.js";
 import { SOW_TARGETS } from "../../src/autonomy/metrics/types.js";
-import { MemoryGateImpl } from "../../src/autonomy/memory/gate.js";
 import { RuleBasedTrustScorer } from "../../src/autonomy/trust/scorer.js";
 
 interface CliArgs {
@@ -59,9 +59,13 @@ function renderMarkdown(input: {
   lines.push("");
   lines.push(`- Label: \`${input.label}\``);
   lines.push(`- Measured at: \`${input.measuredAt}\``);
-  lines.push(`- SOW target (memoryPoisoningResistance): \`${input.target.toFixed(4)}\``);
+  lines.push(
+    `- SOW target (memoryPoisoningResistance): \`${input.target.toFixed(4)}\``,
+  );
   lines.push(`- Overall resistance: \`${input.overallResistance.toFixed(4)}\``);
-  lines.push(`- Overall attack success rate: \`${(1 - input.overallResistance).toFixed(4)}\``);
+  lines.push(
+    `- Overall attack success rate: \`${(1 - input.overallResistance).toFixed(4)}\``,
+  );
   lines.push("");
   lines.push("| Scenario | Resistance Score | Attack Success Rate | Notes |");
   lines.push("|---|---:|---:|---|");
@@ -73,9 +77,13 @@ function renderMarkdown(input: {
   lines.push("");
   lines.push("## Interpretation");
   lines.push("");
-  lines.push("- `Resistance Score` is the fraction of malicious memory writes blocked.");
+  lines.push(
+    "- `Resistance Score` is the fraction of malicious memory writes blocked.",
+  );
   lines.push("- `Attack Success Rate` is `1 - Resistance Score`.");
-  lines.push("- Track this report over time to detect regressions after kernel changes.");
+  lines.push(
+    "- Track this report over time to detect regressions after kernel changes.",
+  );
   lines.push("");
   return lines.join("\n");
 }
@@ -153,4 +161,3 @@ async function main() {
 }
 
 void main();
-

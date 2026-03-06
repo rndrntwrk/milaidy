@@ -5,7 +5,11 @@
  */
 
 import { logger } from "@elizaos/core";
-import type { MemoryStore, PersistedMemoryRecord, QuarantineRecord } from "../memory/store.js";
+import type {
+  MemoryStore,
+  PersistedMemoryRecord,
+  QuarantineRecord,
+} from "../memory/store.js";
 import type { AutonomyDbAdapter } from "./db-adapter.js";
 
 export class PgMemoryStore implements MemoryStore {
@@ -126,7 +130,11 @@ function esc(value: string): string {
 function parseJsonb(value: unknown): Record<string, unknown> {
   if (value === null || value === undefined) return {};
   if (typeof value === "string") {
-    try { return JSON.parse(value); } catch { return {}; }
+    try {
+      return JSON.parse(value);
+    } catch {
+      return {};
+    }
   }
   return value as Record<string, unknown>;
 }
@@ -142,17 +150,27 @@ function rowToQuarantine(row: Record<string, unknown>): QuarantineRecord {
   return {
     id: String(row.id ?? ""),
     agentId: String(row.agent_id ?? ""),
-    memoryType: String(row.memory_type ?? "observation") as QuarantineRecord["memoryType"],
+    memoryType: String(
+      row.memory_type ?? "observation",
+    ) as QuarantineRecord["memoryType"],
     content: parseJsonb(row.content),
     metadata: parseJsonb(row.metadata),
-    provenance: parseJsonb(row.provenance) as QuarantineRecord["provenance"],
+    provenance: parseJsonb(
+      row.provenance,
+    ) as unknown as QuarantineRecord["provenance"],
     trustScore: Number(row.trust_score ?? 0),
     verified: Boolean(row.verified),
-    verifiabilityClass: String(row.verifiability_class ?? "unverified") as QuarantineRecord["verifiabilityClass"],
+    verifiabilityClass: String(
+      row.verifiability_class ?? "unverified",
+    ) as QuarantineRecord["verifiabilityClass"],
     source: row.source ? String(row.source) : undefined,
     sourceType: row.source_type ? String(row.source_type) : undefined,
-    decision: row.decision ? (String(row.decision) as QuarantineRecord["decision"]) : undefined,
-    decisionReason: row.decision_reason ? String(row.decision_reason) : undefined,
+    decision: row.decision
+      ? (String(row.decision) as QuarantineRecord["decision"])
+      : undefined,
+    decisionReason: row.decision_reason
+      ? String(row.decision_reason)
+      : undefined,
     reviewedAt: row.reviewed_at ? toEpochMs(row.reviewed_at) : undefined,
     expiresAt: toEpochMs(row.expires_at),
     createdAt: toEpochMs(row.created_at),

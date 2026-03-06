@@ -5,14 +5,12 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { KernelStateMachine } from "../state-machine/kernel-state-machine.js";
-import { PersistentStateMachine } from "./persistent-state-machine.js";
 import type { AutonomyDbAdapter } from "./db-adapter.js";
+import { PersistentStateMachine } from "./persistent-state-machine.js";
 
 // ---------- Mock ----------
 
-function makeMockAdapter(
-  execFn?: ReturnType<typeof vi.fn>,
-): AutonomyDbAdapter {
+function makeMockAdapter(execFn?: ReturnType<typeof vi.fn>): AutonomyDbAdapter {
   return {
     executeRaw: execFn ?? vi.fn().mockResolvedValue({ rows: [], columns: [] }),
     agentId: "test-agent",
@@ -175,7 +173,11 @@ describe("PersistentStateMachine", () => {
     const unsub = psm.onStateChange(listener);
 
     psm.transition("tool_validated");
-    expect(listener).toHaveBeenCalledWith("idle", "executing", "tool_validated");
+    expect(listener).toHaveBeenCalledWith(
+      "idle",
+      "executing",
+      "tool_validated",
+    );
 
     unsub();
     psm.transition("execution_complete");
@@ -219,7 +221,9 @@ describe("PersistentStateMachine", () => {
         transition(trigger: Parameters<KernelStateMachine["transition"]>[0]) {
           return base.transition(trigger);
         },
-        onStateChange(listener: Parameters<KernelStateMachine["onStateChange"]>[0]) {
+        onStateChange(
+          listener: Parameters<KernelStateMachine["onStateChange"]>[0],
+        ) {
           return base.onStateChange(listener);
         },
         reset() {

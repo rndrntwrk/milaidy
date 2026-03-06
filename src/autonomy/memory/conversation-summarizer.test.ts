@@ -2,13 +2,13 @@
  * Tests for conversation summarizer.
  */
 
+import type { Memory, UUID } from "@elizaos/core";
 import { describe, expect, it } from "vitest";
 import {
-  summarizeConversation,
-  memoriesToMessages,
   type ConversationMessage,
+  memoriesToMessages,
+  summarizeConversation,
 } from "./conversation-summarizer.js";
-import type { Memory, UUID } from "@elizaos/core";
 
 function makeMsg(
   text: string,

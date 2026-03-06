@@ -11,13 +11,13 @@
  *   - Type boosts
  */
 
-import { describe, expect, it, vi } from "vitest";
 import type { IAgentRuntime, Memory, UUID } from "@elizaos/core";
+import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_RETRIEVAL_CONFIG } from "../config.js";
 import {
-  TrustAwareRetrieverImpl,
-  type RetrievalOptions,
   type EntityMemoryProvider,
+  type RetrievalOptions,
+  TrustAwareRetrieverImpl,
 } from "./retriever.js";
 
 // ---------- Helpers ----------
@@ -70,12 +70,20 @@ describe("TrustAwareRetrieverImpl", () => {
       const recent = makeMemory({
         id: "m1",
         createdAt: now - 1000,
-        metadata: { type: "custom", trustScore: 0.9, memoryType: "instruction" } as Memory["metadata"],
+        metadata: {
+          type: "custom",
+          trustScore: 0.9,
+          memoryType: "instruction",
+        } as Memory["metadata"],
       });
       const old = makeMemory({
         id: "m2",
         createdAt: now - 48 * 60 * 60 * 1000, // 48h ago
-        metadata: { type: "custom", trustScore: 0.5, memoryType: "observation" } as Memory["metadata"],
+        metadata: {
+          type: "custom",
+          trustScore: 0.5,
+          memoryType: "observation",
+        } as Memory["metadata"],
       });
 
       const retriever = new TrustAwareRetrieverImpl(DEFAULT_RETRIEVAL_CONFIG);
@@ -265,12 +273,18 @@ describe("TrustAwareRetrieverImpl", () => {
       const instruction = makeMemory({
         id: "m1",
         content: { text: "You must always be polite" },
-        metadata: { type: "custom", memoryType: "instruction" } as Memory["metadata"],
+        metadata: {
+          type: "custom",
+          memoryType: "instruction",
+        } as Memory["metadata"],
       });
       const observation = makeMemory({
         id: "m2",
         content: { text: "User seemed happy" },
-        metadata: { type: "custom", memoryType: "observation" } as Memory["metadata"],
+        metadata: {
+          type: "custom",
+          memoryType: "observation",
+        } as Memory["metadata"],
       });
 
       const retriever = new TrustAwareRetrieverImpl(DEFAULT_RETRIEVAL_CONFIG);
@@ -336,7 +350,10 @@ describe("TrustAwareRetrieverImpl", () => {
     it("returns ~0.5 for 24h-old memories", () => {
       const retriever = new TrustAwareRetrieverImpl(DEFAULT_RETRIEVAL_CONFIG);
       const now = Date.now();
-      const mem = makeMemory({ id: "m1", createdAt: now - 24 * 60 * 60 * 1000 });
+      const mem = makeMemory({
+        id: "m1",
+        createdAt: now - 24 * 60 * 60 * 1000,
+      });
 
       const score = retriever.computeRecencyScore(mem, now);
       expect(score).toBeCloseTo(0.5, 1);
@@ -345,7 +362,10 @@ describe("TrustAwareRetrieverImpl", () => {
     it("returns ~0.25 for 48h-old memories", () => {
       const retriever = new TrustAwareRetrieverImpl(DEFAULT_RETRIEVAL_CONFIG);
       const now = Date.now();
-      const mem = makeMemory({ id: "m1", createdAt: now - 48 * 60 * 60 * 1000 });
+      const mem = makeMemory({
+        id: "m1",
+        createdAt: now - 48 * 60 * 60 * 1000,
+      });
 
       const score = retriever.computeRecencyScore(mem, now);
       expect(score).toBeCloseTo(0.25, 1);
@@ -503,7 +523,10 @@ describe("TrustAwareRetrieverImpl", () => {
       const m2 = makeMemory({
         id: "m2",
         content: { text: "hello" },
-        metadata: { type: "custom", memoryType: "observation" } as Memory["metadata"],
+        metadata: {
+          type: "custom",
+          memoryType: "observation",
+        } as Memory["metadata"],
       });
       expect(retriever.contentHash(m1)).not.toBe(retriever.contentHash(m2));
     });
@@ -511,8 +534,14 @@ describe("TrustAwareRetrieverImpl", () => {
     it("distinguishes long texts that differ only after 200 chars", () => {
       const retriever = new TrustAwareRetrieverImpl(DEFAULT_RETRIEVAL_CONFIG);
       const prefix = "a".repeat(250);
-      const m1 = makeMemory({ id: "m1", content: { text: prefix + " ending one" } });
-      const m2 = makeMemory({ id: "m2", content: { text: prefix + " ending two" } });
+      const m1 = makeMemory({
+        id: "m1",
+        content: { text: `${prefix} ending one` },
+      });
+      const m2 = makeMemory({
+        id: "m2",
+        content: { text: `${prefix} ending two` },
+      });
       expect(retriever.contentHash(m1)).not.toBe(retriever.contentHash(m2));
     });
   });
@@ -531,7 +560,10 @@ describe("TrustAwareRetrieverImpl", () => {
     }
 
     it("includes entity memories when canonicalEntityId is provided", async () => {
-      const roomMem = makeMemory({ id: "room-1", content: { text: "room scoped memory" } });
+      const roomMem = makeMemory({
+        id: "room-1",
+        content: { text: "room scoped memory" },
+      });
       const entityMem = makeMemory({
         id: "entity-1",
         content: { text: "entity scoped memory from discord" },
@@ -567,12 +599,18 @@ describe("TrustAwareRetrieverImpl", () => {
       const roomMem = makeMemory({
         id: "room-1",
         content: { text: sharedText },
-        metadata: { type: "custom", memoryType: "preference" } as Memory["metadata"],
+        metadata: {
+          type: "custom",
+          memoryType: "preference",
+        } as Memory["metadata"],
       });
       const entityMem = makeMemory({
         id: "entity-1",
         content: { text: sharedText },
-        metadata: { type: "custom", memoryType: "preference" } as Memory["metadata"],
+        metadata: {
+          type: "custom",
+          memoryType: "preference",
+        } as Memory["metadata"],
       });
 
       const entityProvider = createMockEntityMemoryProvider([entityMem]);
@@ -650,7 +688,10 @@ describe("TrustAwareRetrieverImpl", () => {
     });
 
     it("does not fetch entity memories when canonicalEntityId is absent", async () => {
-      const entityMem = makeMemory({ id: "entity-1", content: { text: "should not appear" } });
+      const entityMem = makeMemory({
+        id: "entity-1",
+        content: { text: "should not appear" },
+      });
       const entityProvider = createMockEntityMemoryProvider([entityMem]);
       const retriever = new TrustAwareRetrieverImpl(
         DEFAULT_RETRIEVAL_CONFIG,
@@ -685,7 +726,10 @@ describe("TrustAwareRetrieverImpl", () => {
     });
 
     it("gracefully handles entity provider errors", async () => {
-      const roomMem = makeMemory({ id: "room-1", content: { text: "room memory" } });
+      const roomMem = makeMemory({
+        id: "room-1",
+        content: { text: "room memory" },
+      });
       const entityProvider: EntityMemoryProvider = {
         getEntityMemories: vi.fn(async () => {
           throw new Error("database connection lost");
@@ -711,12 +755,18 @@ describe("TrustAwareRetrieverImpl", () => {
     });
 
     it("allows entity memories with null content hash through dedup", async () => {
-      const roomMem = makeMemory({ id: "room-1", content: { text: "room text" } });
+      const roomMem = makeMemory({
+        id: "room-1",
+        content: { text: "room text" },
+      });
       // Entity memory with no text content — hash will be null, should still pass through
       const entityMem = makeMemory({
         id: "entity-1",
         content: { action: "some_action" },
-        metadata: { type: "custom", memoryType: "action" } as Memory["metadata"],
+        metadata: {
+          type: "custom",
+          memoryType: "action",
+        } as Memory["metadata"],
       });
 
       const entityProvider = createMockEntityMemoryProvider([entityMem]);

@@ -3,14 +3,17 @@ import { metrics } from "../../telemetry/setup.js";
 import { ApprovalGate } from "../approval/approval-gate.js";
 import { KernelStateMachine } from "../state-machine/kernel-state-machine.js";
 import type { ProposedToolCall, ToolValidationResult } from "../tools/types.js";
-import type { VerificationResult, VerifierContext } from "../verification/types.js";
-import { CompensationRegistry } from "./compensation-registry.js";
+import type { InvariantCheckerInterface } from "../verification/invariants/types.js";
+import type {
+  VerificationResult,
+  VerifierContext,
+} from "../verification/types.js";
 import { CompensationIncidentManager } from "./compensation-incidents.js";
+import { CompensationRegistry } from "./compensation-registry.js";
 import { registerBuiltinCompensations } from "./compensations/index.js";
 import { InMemoryEventStore } from "./event-store.js";
 import { ToolExecutionPipeline } from "./execution-pipeline.js";
 import type { ToolActionHandler } from "./types.js";
-import type { InvariantCheckerInterface } from "../verification/invariants/types.js";
 
 // ---------- Helpers ----------
 
@@ -160,8 +163,8 @@ describe("ToolExecutionPipeline", () => {
     });
 
     it("passes independent verification query function to post-condition verifier", async () => {
-      const verificationQuery = vi.fn(async ({ query }: { query: string }) =>
-        query === "probe:ok",
+      const verificationQuery = vi.fn(
+        async ({ query }: { query: string }) => query === "probe:ok",
       );
       const verifier = {
         verify: vi.fn(async (ctx: VerifierContext) => {
@@ -230,7 +233,9 @@ describe("ToolExecutionPipeline", () => {
       expect(result.validation.errors).toHaveLength(1);
       expect(handler).not.toHaveBeenCalled();
       const events = await eventStore.getByRequestId("test-req-1");
-      const decision = events.find((event) => event.type === "tool:decision:logged");
+      const decision = events.find(
+        (event) => event.type === "tool:decision:logged",
+      );
       expect(decision?.payload.validation).toEqual({
         outcome: "failed",
         errorCount: 1,
@@ -277,9 +282,10 @@ describe("ToolExecutionPipeline", () => {
         riskClass: "irreversible",
       });
       const handler = createSuccessHandler();
-      const { pipeline, approvalGate, stateMachine, eventStore } = createPipeline({
-        validator,
-      });
+      const { pipeline, approvalGate, stateMachine, eventStore } =
+        createPipeline({
+          validator,
+        });
 
       const resultPromise = pipeline.execute(
         makeCall({ tool: "RUN_IN_TERMINAL" }),
@@ -298,7 +304,9 @@ describe("ToolExecutionPipeline", () => {
       expect(handler).not.toHaveBeenCalled();
       expect(stateMachine.currentState).toBe("idle");
       const events = await eventStore.getByRequestId("test-req-1");
-      const decision = events.find((event) => event.type === "tool:decision:logged");
+      const decision = events.find(
+        (event) => event.type === "tool:decision:logged",
+      );
       expect(decision?.payload.approval).toEqual({
         outcome: "denied",
         required: true,
@@ -393,10 +401,11 @@ describe("ToolExecutionPipeline", () => {
         ],
       });
       const handler = createSuccessHandler({ outputPath: "/tmp/image.png" });
-      const { pipeline, stateMachine, compensationIncidentManager } = createPipeline({
-        validator,
-        verifier,
-      });
+      const { pipeline, stateMachine, compensationIncidentManager } =
+        createPipeline({
+          validator,
+          verifier,
+        });
 
       const result = await pipeline.execute(
         makeCall({ tool: "GENERATE_IMAGE", params: { prompt: "cat" } }),
@@ -445,10 +454,11 @@ describe("ToolExecutionPipeline", () => {
         hasCriticalFailure: true,
       });
       const handler = createSuccessHandler({ taskId: "task-123" });
-      const { pipeline, compensationIncidentManager, eventStore } = createPipeline({
-        validator,
-        verifier,
-      });
+      const { pipeline, compensationIncidentManager, eventStore } =
+        createPipeline({
+          validator,
+          verifier,
+        });
 
       const result = await pipeline.execute(
         makeCall({
@@ -461,7 +471,9 @@ describe("ToolExecutionPipeline", () => {
       expect(result.success).toBe(false);
       expect(result.compensation?.attempted).toBe(true);
       expect(result.compensation?.success).toBe(false);
-      expect(result.compensation?.detail).toContain("Manual compensation required");
+      expect(result.compensation?.detail).toContain(
+        "Manual compensation required",
+      );
       expect(result.compensation?.detail).toContain("task-123");
       const incidents = compensationIncidentManager.listOpenIncidents();
       expect(incidents).toHaveLength(1);
@@ -532,7 +544,9 @@ describe("ToolExecutionPipeline", () => {
         requiresApproval: false,
       });
       const handler = createSuccessHandler();
-      const { pipeline, stateMachine, eventStore } = createPipeline({ validator });
+      const { pipeline, stateMachine, eventStore } = createPipeline({
+        validator,
+      });
       stateMachine.transition("escalate_safe_mode");
 
       const result = await pipeline.execute(
@@ -553,7 +567,9 @@ describe("ToolExecutionPipeline", () => {
             event.payload.reason === "safe_mode_restricted",
         ),
       ).toBe(true);
-      const decision = events.find((event) => event.type === "tool:decision:logged");
+      const decision = events.find(
+        (event) => event.type === "tool:decision:logged",
+      );
       expect(decision?.payload.approval).toEqual({
         outcome: "skipped",
         required: false,
@@ -661,9 +677,13 @@ describe("ToolExecutionPipeline", () => {
       expect(result.compensation?.success).toBe(true);
 
       const events = await eventStore.getByRequestId("test-req-1");
-      const compensationEvent = events.find((event) => event.type === "tool:compensated");
+      const compensationEvent = events.find(
+        (event) => event.type === "tool:compensated",
+      );
       expect(compensationEvent).toBeDefined();
-      expect(compensationEvent?.payload.reason).toBe("critical_invariant_violation");
+      expect(compensationEvent?.payload.reason).toBe(
+        "critical_invariant_violation",
+      );
     });
   });
 
@@ -764,7 +784,14 @@ describe("ToolExecutionPipeline", () => {
       const verifier = createMockVerifier({
         status: "failed",
         hasCriticalFailure: true,
-        checks: [{ conditionId: "pc-timeout", passed: false, severity: "critical", failureCode: "timeout" }],
+        checks: [
+          {
+            conditionId: "pc-timeout",
+            passed: false,
+            severity: "critical",
+            failureCode: "timeout",
+          },
+        ],
         failureTaxonomy: {
           totalFailures: 1,
           criticalFailures: 1,
@@ -780,24 +807,30 @@ describe("ToolExecutionPipeline", () => {
         eventBus: { emit: mockEmit },
       });
 
-      await pipeline.execute(makeCall({ requestId: "evt-tax-1" }), createSuccessHandler());
+      await pipeline.execute(
+        makeCall({ requestId: "evt-tax-1" }),
+        createSuccessHandler(),
+      );
 
-      expect(mockEmit).toHaveBeenCalledWith("autonomy:tool:postcondition:checked", {
-        toolName: "PLAY_EMOTE",
-        status: "failed",
-        criticalFailure: true,
-        checkCount: 1,
-        requestId: "evt-tax-1",
-        failureTaxonomy: {
-          totalFailures: 1,
-          criticalFailures: 1,
-          warningFailures: 0,
-          infoFailures: 0,
-          checkFailures: 0,
-          errorFailures: 0,
-          timeoutFailures: 1,
+      expect(mockEmit).toHaveBeenCalledWith(
+        "autonomy:tool:postcondition:checked",
+        {
+          toolName: "PLAY_EMOTE",
+          status: "failed",
+          criticalFailure: true,
+          checkCount: 1,
+          requestId: "evt-tax-1",
+          failureTaxonomy: {
+            totalFailures: 1,
+            criticalFailures: 1,
+            warningFailures: 0,
+            infoFailures: 0,
+            checkFailures: 0,
+            errorFailures: 0,
+            timeoutFailures: 1,
+          },
         },
-      });
+      );
     });
   });
 });

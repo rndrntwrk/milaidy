@@ -213,7 +213,6 @@ export async function getInstalledVersion(
           code === "ERR_MODULE_NOT_FOUND" ||
           code === "ERR_PACKAGE_PATH_NOT_EXPORTED"
         ) {
-          continue;
         }
       }
     }

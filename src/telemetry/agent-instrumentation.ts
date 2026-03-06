@@ -129,7 +129,11 @@ export class AgentInstrumentation {
   /**
    * Record a session ended.
    */
-  recordSessionEnded(sessionId: string, channel: string, messageCount: number): void {
+  recordSessionEnded(
+    sessionId: string,
+    channel: string,
+    messageCount: number,
+  ): void {
     const startTime = this.activeSessions.get(sessionId);
     this.activeSessions.delete(sessionId);
 

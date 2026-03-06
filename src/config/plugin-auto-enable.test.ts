@@ -14,6 +14,7 @@ import {
   CONNECTOR_PLUGINS,
   INTEGRATION_ENV_PLUGINS,
 } from "./plugin-auto-enable.js";
+import { CONNECTOR_IDS } from "./schema.js";
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -567,8 +568,8 @@ describe("CONNECTOR_PLUGINS", () => {
     expect(CONNECTOR_PLUGINS.discord).toBe("@elizaos/plugin-discord");
   });
 
-  it("contains 17 connector mappings", () => {
-    expect(Object.keys(CONNECTOR_PLUGINS)).toHaveLength(17);
+  it("contains 19 connector mappings", () => {
+    expect(Object.keys(CONNECTOR_PLUGINS)).toHaveLength(19);
   });
 
   it("maps retake to @milady/plugin-retake", () => {

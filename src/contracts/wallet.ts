@@ -86,6 +86,7 @@ export interface WalletConfigStatus {
   evmChains: string[];
   evmAddress: string | null;
   solanaAddress: string | null;
+  solanaRpcProvider?: string | null;
 }
 
 export type WalletChain = "evm" | "solana";

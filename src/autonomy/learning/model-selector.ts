@@ -90,7 +90,10 @@ export class ModelSelector {
 
     evaluations.sort((a, b) => b.score - a.score);
     const bestId = evaluations[0].modelId;
-    const bestCandidate = this.candidates.find((c) => c.id === bestId)!;
+    const bestCandidate = this.candidates.find((c) => c.id === bestId);
+    if (!bestCandidate) {
+      throw new Error(`Selected model candidate not found: ${bestId}`);
+    }
 
     return {
       selectedModelId: bestId,

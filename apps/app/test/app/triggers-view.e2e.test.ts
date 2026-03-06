@@ -449,6 +449,15 @@ function findTextareaByPlaceholder(
   return matches[0];
 }
 
+function requireTree(
+  tree: TestRenderer.ReactTestRenderer | undefined,
+): TestRenderer.ReactTestRenderer {
+  if (!tree) {
+    throw new Error("Expected rendered tree");
+  }
+  return tree;
+}
+
 async function flush(): Promise<void> {
   await act(async () => {
     await Promise.resolve();
@@ -520,88 +529,108 @@ describe("TriggersView UI E2E", () => {
       );
     });
     await flush();
-
-    const root = tree?.root;
-    const displayNameInput = findInputByPlaceholder(
-      root,
-      "e.g. Daily Digest, Heartbeat Check",
-    );
-    const instructionsInput = findTextareaByPlaceholder(
-      root,
-      "What should the agent do when this trigger fires?",
-    );
+    const currentRoot = () => requireTree(tree).root;
+    const displayNameInput = () =>
+      findInputByPlaceholder(
+        currentRoot(),
+        "e.g. Daily Digest, Heartbeat Check",
+      );
+    const instructionsInput = () =>
+      findTextareaByPlaceholder(
+        currentRoot(),
+        "What should the agent do when this trigger fires?",
+      );
 
     await act(async () => {
-      displayNameInput.props.onChange({
+      displayNameInput().props.onChange({
         target: { value: triggerDisplayName },
       });
-      instructionsInput.props.onChange({
+      instructionsInput().props.onChange({
         target: { value: "Execute this UI E2E trigger task" },
       });
     });
 
     await act(async () => {
-      await findButtonByText(root, "Create Trigger").props.onClick();
+      await findButtonByText(currentRoot(), "Create Trigger").props.onClick();
     });
     await flush();
 
-    expect(
-      root.findAll(
-        (node) => node.type === "span" && nodeText(node) === triggerDisplayName,
-      ).length,
-    ).toBe(1);
+    await vi.waitFor(() => {
+      expect(
+        requireTree(tree).root.findAll(
+          (node) =>
+            node.type === "span" && nodeText(node) === triggerDisplayName,
+        ).length,
+      ).toBe(1);
+    });
 
     const renamedTriggerDisplayName = "Trigger UI E2E Updated";
     await act(async () => {
-      await findButtonByText(root, "Edit").props.onClick();
+      await findButtonByText(currentRoot(), "Edit").props.onClick();
     });
     await flush();
+    await vi.waitFor(() => {
+      expect(displayNameInput().props.value).toBe(triggerDisplayName);
+      expect(
+        currentRoot().findAll(
+          (node) => node.type === "button" && nodeText(node) === "Save Changes",
+        ).length,
+      ).toBeGreaterThan(0);
+    });
 
     await act(async () => {
-      displayNameInput.props.onChange({
+      displayNameInput().props.onChange({
         target: { value: renamedTriggerDisplayName },
       });
     });
 
     await act(async () => {
-      await findButtonByText(root, "Save Changes").props.onClick();
+      await findButtonByText(currentRoot(), "Save Changes").props.onClick();
     });
     await flush();
 
-    expect(
-      root.findAll(
-        (node) =>
-          node.type === "span" && nodeText(node) === renamedTriggerDisplayName,
-      ).length,
-    ).toBe(1);
+    await vi.waitFor(() => {
+      expect(
+        requireTree(tree).root.findAll(
+          (node) =>
+            node.type === "span" &&
+            nodeText(node) === renamedTriggerDisplayName,
+        ).length,
+      ).toBe(1);
+    });
 
     await act(async () => {
-      await findButtonByText(root, "Run now").props.onClick();
+      await findButtonByText(currentRoot(), "Run now").props.onClick();
     });
     await flush();
 
     expect(runtimeHarness.injectAutonomousInstruction).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      await findButtonByText(root, "Runs").props.onClick();
+      await findButtonByText(currentRoot(), "Runs").props.onClick();
     });
     await flush();
 
-    const successRows = root.findAll(
-      (node) => node.type === "span" && nodeText(node).includes("success"),
-    );
-    expect(successRows.length).toBeGreaterThan(0);
+    await vi.waitFor(() => {
+      const successRows = requireTree(tree).root.findAll(
+        (node) => node.type === "span" && nodeText(node).includes("success"),
+      );
+      expect(successRows.length).toBeGreaterThan(0);
+    });
 
     await act(async () => {
-      await findButtonByText(root, "Delete").props.onClick();
+      await findButtonByText(currentRoot(), "Delete").props.onClick();
     });
     await flush();
 
-    expect(
-      root.findAll(
-        (node) =>
-          node.type === "span" && nodeText(node) === renamedTriggerDisplayName,
-      ).length,
-    ).toBe(0);
+    await vi.waitFor(() => {
+      expect(
+        requireTree(tree).root.findAll(
+          (node) =>
+            node.type === "span" &&
+            nodeText(node) === renamedTriggerDisplayName,
+        ).length,
+      ).toBe(0);
+    });
   });
 });

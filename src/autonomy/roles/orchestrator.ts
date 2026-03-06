@@ -10,31 +10,18 @@
  * @module autonomy/roles/orchestrator
  */
 
-import type { KernelStateMachineInterface } from "../state-machine/types.js";
+import { LocalWorkflowEngine } from "../adapters/workflow/local-engine.js";
+import type {
+  WorkflowDefinition,
+  WorkflowEngine,
+} from "../adapters/workflow/types.js";
 import {
   recordRoleExecution,
   recordRoleLatencyMs,
 } from "../metrics/prometheus-metrics.js";
-import type {
-  PipelineResult,
-} from "../workflow/types.js";
-import { LocalWorkflowEngine } from "../adapters/workflow/local-engine.js";
-import type { WorkflowDefinition, WorkflowEngine } from "../adapters/workflow/types.js";
+import type { KernelStateMachineInterface } from "../state-machine/types.js";
 import type { ToolCallSource } from "../tools/types.js";
-import type {
-  AuditorRole,
-  ExecutorRole,
-  ExecutionPlan,
-  MemoryWriteRequest,
-  MemoryWriterRole,
-  OrchestratedRequest,
-  OrchestratedResult,
-  PlannerRole,
-  RoleOrchestrator,
-  SafeModeController,
-  VerificationReport,
-  VerifierRole,
-} from "./types.js";
+import type { PipelineResult } from "../workflow/types.js";
 import {
   parseAuditorAuditRequest,
   parseAuditorAuditResponse,
@@ -49,6 +36,22 @@ import {
   parseVerifierVerifyRequest,
   parseVerifierVerifyResponse,
 } from "./schemas.js";
+import type {
+  AuditorRole,
+  AuditReport,
+  ExecutionPlan,
+  ExecutorRole,
+  MemoryWriteReport,
+  MemoryWriteRequest,
+  MemoryWriterRole,
+  OrchestratedRequest,
+  OrchestratedResult,
+  PlannerRole,
+  RoleOrchestrator,
+  SafeModeController,
+  VerificationReport,
+  VerifierRole,
+} from "./types.js";
 
 type RoleCallName =
   | "planner"
@@ -78,12 +81,7 @@ export interface RoleCallAuthzPolicy {
   allowedSources: ToolCallSource[];
 }
 
-const ROLE_CALL_SOURCES: ToolCallSource[] = [
-  "llm",
-  "user",
-  "system",
-  "plugin",
-];
+const ROLE_CALL_SOURCES: ToolCallSource[] = ["llm", "user", "system", "plugin"];
 
 const DEFAULT_ROLE_CALL_AUTHZ_POLICY: RoleCallAuthzPolicy = {
   minSourceTrust: 0,
@@ -121,7 +119,10 @@ export class KernelOrchestrator implements RoleOrchestrator {
       timeoutMs: Math.max(1, mergedPolicy.timeoutMs),
       maxRetries: Math.max(0, mergedPolicy.maxRetries),
       backoffMs: Math.max(0, mergedPolicy.backoffMs),
-      circuitBreakerThreshold: Math.max(1, mergedPolicy.circuitBreakerThreshold),
+      circuitBreakerThreshold: Math.max(
+        1,
+        mergedPolicy.circuitBreakerThreshold,
+      ),
       circuitBreakerResetMs: Math.max(1, mergedPolicy.circuitBreakerResetMs),
     };
 
@@ -159,7 +160,10 @@ export class KernelOrchestrator implements RoleOrchestrator {
     try {
       const result = await this.executeInternal(request);
       recordRoleLatencyMs("orchestrator", Date.now() - startedAt);
-      recordRoleExecution("orchestrator", result.success ? "success" : "failure");
+      recordRoleExecution(
+        "orchestrator",
+        result.success ? "success" : "failure",
+      );
       return result;
     } catch (error) {
       recordRoleLatencyMs("orchestrator", Date.now() - startedAt);
@@ -194,7 +198,7 @@ export class KernelOrchestrator implements RoleOrchestrator {
         source: orchestratedRequest.source,
         sourceTrust: orchestratedRequest.sourceTrust,
       });
-      plan = parsePlannerCreatePlanResponse(
+      const createdPlan = parsePlannerCreatePlanResponse(
         await this.callRoleWithResilience(
           "planner",
           "createPlan",
@@ -205,12 +209,13 @@ export class KernelOrchestrator implements RoleOrchestrator {
           },
         ),
       );
+      plan = createdPlan;
 
       const validation = parsePlannerValidatePlanResponse(
         await this.callRoleWithResilience(
           "planner",
           "validatePlan",
-          () => this.planner.validatePlan(plan),
+          () => this.planner.validatePlan(createdPlan),
           {
             source: orchestratedRequest.source,
             sourceTrust: orchestratedRequest.sourceTrust,
@@ -253,9 +258,7 @@ export class KernelOrchestrator implements RoleOrchestrator {
           );
         }
         if (Array.isArray(workflowResult.output)) {
-          executions.push(
-            ...(workflowResult.output as PipelineResult[]),
-          );
+          executions.push(...(workflowResult.output as PipelineResult[]));
         } else {
           throw new Error("Workflow execution returned unexpected output");
         }
@@ -309,7 +312,7 @@ export class KernelOrchestrator implements RoleOrchestrator {
 
       // Phase 3: Memory Writing (idle → writing_memory → idle)
       const memoryTransition = this.stateMachine.transition("write_memory");
-      let memoryReport;
+      let memoryReport: MemoryWriteReport | undefined;
       if (memoryTransition.accepted) {
         try {
           const memoryRequests: MemoryWriteRequest[] = executions
@@ -346,7 +349,7 @@ export class KernelOrchestrator implements RoleOrchestrator {
             ),
           );
           this.stateMachine.transition("memory_written");
-        } catch (memError) {
+        } catch (_memError) {
           this.stateMachine.transition("memory_write_failed");
           // Recover from error state to continue with audit
           this.stateMachine.transition("recover");
@@ -355,7 +358,7 @@ export class KernelOrchestrator implements RoleOrchestrator {
 
       // Phase 4: Audit (idle → auditing → idle)
       const auditTransition = this.stateMachine.transition("audit_requested");
-      let auditReport;
+      let auditReport: AuditReport | undefined;
       if (auditTransition.accepted) {
         try {
           const auditRequest = parseAuditorAuditRequest({
@@ -377,7 +380,7 @@ export class KernelOrchestrator implements RoleOrchestrator {
             ),
           );
           this.stateMachine.transition("audit_complete");
-        } catch (auditError) {
+        } catch (_auditError) {
           this.stateMachine.transition("audit_failed");
           // Recover from error state
           this.stateMachine.transition("recover");
@@ -535,10 +538,7 @@ export class KernelOrchestrator implements RoleOrchestrator {
                   "executor",
                   "execute",
                   () =>
-                    this.executor.execute(
-                      proposedCall,
-                      request.actionHandler,
-                    ),
+                    this.executor.execute(proposedCall, request.actionHandler),
                   {
                     source: request.source,
                     sourceTrust: request.sourceTrust,
@@ -632,14 +632,26 @@ export class KernelOrchestrator implements RoleOrchestrator {
         `Role call blocked: ${role}.${operation} circuit breaker open until ${new Date(circuitState.openUntil).toISOString()}`,
       );
     }
-    if (circuitState && circuitState.openUntil > 0 && circuitState.openUntil <= now) {
+    if (
+      circuitState &&
+      circuitState.openUntil > 0 &&
+      circuitState.openUntil <= now
+    ) {
       this.resetRoleCircuit(role);
     }
 
     let lastError: unknown;
-    for (let attempt = 0; attempt <= this.roleCallPolicy.maxRetries; attempt++) {
+    for (
+      let attempt = 0;
+      attempt <= this.roleCallPolicy.maxRetries;
+      attempt++
+    ) {
       try {
-        const result = await this.callRoleWithTimeout(role, operation, roleCall);
+        const result = await this.callRoleWithTimeout(
+          role,
+          operation,
+          roleCall,
+        );
         this.resetRoleCircuit(role);
         return result;
       } catch (error) {

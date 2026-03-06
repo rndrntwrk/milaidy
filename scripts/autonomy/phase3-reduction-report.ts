@@ -50,7 +50,10 @@ function parseArgs(argv: string[]): CliArgs {
 }
 
 function loadSnapshots(path: string): Record<string, BaselineMetrics> {
-  return JSON.parse(readFileSync(path, "utf8")) as Record<string, BaselineMetrics>;
+  return JSON.parse(readFileSync(path, "utf8")) as Record<
+    string,
+    BaselineMetrics
+  >;
 }
 
 function pctReduction(baseline: number, current: number): number {
@@ -106,8 +109,10 @@ async function main() {
   const snapshots = loadSnapshots(cli.snapshotsFile);
   const baseline = snapshots[cli.baselineLabel];
   const current = snapshots[cli.currentLabel];
-  if (!baseline) throw new Error(`Baseline snapshot not found: ${cli.baselineLabel}`);
-  if (!current) throw new Error(`Current snapshot not found: ${cli.currentLabel}`);
+  if (!baseline)
+    throw new Error(`Baseline snapshot not found: ${cli.baselineLabel}`);
+  if (!current)
+    throw new Error(`Current snapshot not found: ${cli.currentLabel}`);
 
   const baselineViolation = Math.max(
     0,
@@ -117,13 +122,17 @@ async function main() {
     0,
     current.personaDriftScore - cli.violationThreshold,
   );
-  const psdAbsReduction = baseline.personaDriftScore - current.personaDriftScore;
+  const psdAbsReduction =
+    baseline.personaDriftScore - current.personaDriftScore;
   const violationAbsReduction = baselineViolation - currentViolation;
   const psdPctReduction = pctReduction(
     baseline.personaDriftScore,
     current.personaDriftScore,
   );
-  const violationPctReduction = pctReduction(baselineViolation, currentViolation);
+  const violationPctReduction = pctReduction(
+    baselineViolation,
+    currentViolation,
+  );
 
   const report = {
     baselineLabel: cli.baselineLabel,

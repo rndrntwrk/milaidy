@@ -77,7 +77,9 @@ export class GridSearchTuner {
     };
   }
 
-  private cartesianProduct(space: HyperparamSpace): Array<Record<string, number>> {
+  private cartesianProduct(
+    space: HyperparamSpace,
+  ): Array<Record<string, number>> {
     const keys = Object.keys(space);
     if (keys.length === 0) return [{}];
 

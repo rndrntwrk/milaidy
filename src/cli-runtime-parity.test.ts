@@ -301,7 +301,7 @@ describe("config env propagation parity", () => {
     expect(process.env.ELIZAOS_CLOUD_BASE_URL).toBe("https://cloud.example");
   });
 
-  it("connector env values are never overwritten and cloud env clears when disabled", () => {
+  it("connector env values are never overwritten and cloud routing clears when disabled", () => {
     process.env.TELEGRAM_BOT_TOKEN = "already-set";
     process.env.ELIZAOS_CLOUD_ENABLED = "true";
     process.env.ELIZAOS_CLOUD_API_KEY = "old-key";
@@ -316,9 +316,9 @@ describe("config env propagation parity", () => {
 
     // Connectors respect existing env (set via .env files)
     expect(process.env.TELEGRAM_BOT_TOKEN).toBe("already-set");
-    // Disabled cloud mode clears stale cloud routing state.
+    // Disabled cloud mode clears routing state but preserves the cached key.
     expect(process.env.ELIZAOS_CLOUD_ENABLED).toBeUndefined();
-    expect(process.env.ELIZAOS_CLOUD_API_KEY).toBeUndefined();
+    expect(process.env.ELIZAOS_CLOUD_API_KEY).toBe("new-key");
     expect(process.env.ELIZAOS_CLOUD_BASE_URL).toBeUndefined();
   });
 });

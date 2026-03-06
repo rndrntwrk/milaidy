@@ -26,10 +26,7 @@ export interface PilotEvaluatorInterface {
  * RSP references and recommendations.
  */
 export class PilotEvaluator implements PilotEvaluatorInterface {
-  evaluate(
-    report: PilotReport,
-    policy?: GovernancePolicy,
-  ): ComplianceReport {
+  evaluate(report: PilotReport, policy?: GovernancePolicy): ComplianceReport {
     const evaluatedAt = Date.now();
 
     if (!policy) {
@@ -70,7 +67,9 @@ export class PilotEvaluator implements PilotEvaluatorInterface {
     }
 
     if (overallCompliant && recommendations.length === 0) {
-      recommendations.push("All compliance checks passed — ready for deployment");
+      recommendations.push(
+        "All compliance checks passed — ready for deployment",
+      );
     }
 
     return {

@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { BUILTIN_CONTRACTS } from "../../tools/schemas/index.js";
-import { registerBuiltinPostConditions } from "./index.js";
 import type {
   PostCondition,
   PostConditionVerifierInterface,
   VerificationResult,
   VerifierContext,
 } from "../types.js";
+import { registerBuiltinPostConditions } from "./index.js";
 
 class CaptureVerifier implements PostConditionVerifierInterface {
   readonly registered = new Map<string, PostCondition[]>();

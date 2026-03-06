@@ -159,10 +159,7 @@ async function migrateProvider(
 
   try {
     // Store encrypted
-    await storage.set(
-      `credentials:${provider}`,
-      JSON.stringify(credentials),
-    );
+    await storage.set(`credentials:${provider}`, JSON.stringify(credentials));
 
     // Delete legacy file
     deleteLegacyFile(provider);

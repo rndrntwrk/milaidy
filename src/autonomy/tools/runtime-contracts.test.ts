@@ -4,8 +4,8 @@ import { ToolRegistry } from "./registry.js";
 import {
   createRuntimeActionContract,
   registerConfiguredCustomActionContracts,
-  registerRuntimeContracts,
   registerRuntimeActionContracts,
+  registerRuntimeContracts,
 } from "./runtime-contracts.js";
 import { registerBuiltinToolContracts } from "./schemas/index.js";
 
@@ -19,7 +19,9 @@ describe("runtime action contracts", () => {
         {
           name: "RUN_IN_TERMINAL",
           description: "existing built-in action",
-          parameters: [{ name: "command", required: true, schema: { type: "string" } }],
+          parameters: [
+            { name: "command", required: true, schema: { type: "string" } },
+          ],
         },
         {
           name: "CUSTOM_HTTP",
@@ -166,7 +168,9 @@ describe("runtime action contracts", () => {
           id: "ca-2",
           name: "CUSTOM_HTTP",
           description: "Configured custom HTTP action",
-          parameters: [{ name: "url", description: "endpoint", required: true }],
+          parameters: [
+            { name: "url", description: "endpoint", required: true },
+          ],
           handler: { type: "http", method: "GET", url: "{{url}}" },
           enabled: true,
           createdAt: new Date().toISOString(),

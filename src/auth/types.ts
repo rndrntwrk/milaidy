@@ -6,6 +6,7 @@ export interface OAuthCredentials {
   access: string;
   refresh: string;
   expires: number;
+  accountId?: string | null;
 }
 
 export type SubscriptionProvider = "anthropic-subscription" | "openai-codex";

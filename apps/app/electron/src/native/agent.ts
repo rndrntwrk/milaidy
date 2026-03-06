@@ -29,6 +29,47 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { app, type BrowserWindow, ipcMain } from "electron";
 import type { IpcValue } from "./ipc-types";
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const nativeDynamicImport = require("./dynamic-import-runtime.js") as (
+  specifier: string,
+) => Promise<Record<string, unknown>>;
+
+const ESM_PACKAGE_MARKER = '{\n  "type": "module"\n}\n';
+
+function shouldFallbackToRequire(err: unknown): boolean {
+  const code =
+    typeof err === "object" && err !== null && "code" in err
+      ? String((err as { code?: unknown }).code ?? "")
+      : "";
+  const message = shortError(err, 600);
+  return (
+    code === "ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING" ||
+    message.includes("A dynamic import callback was not specified") ||
+    message.includes("Unexpected token 'export'") ||
+    message.includes("Cannot use import statement outside a module")
+  );
+}
+
+function ensureMiladyDistEsmBoundary(fsPath: string): void {
+  if (!fsPath.includes(`${path.sep}milady-dist${path.sep}`)) return;
+  const packageJsonPath = path.join(path.dirname(fsPath), "package.json");
+  if (fs.existsSync(packageJsonPath)) return;
+  try {
+    fs.writeFileSync(packageJsonPath, ESM_PACKAGE_MARKER, {
+      encoding: "utf8",
+      flag: "wx",
+    });
+    diagnosticLog(
+      `[Agent] Wrote package.json ESM marker for milady-dist: ${packageJsonPath}`,
+    );
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "EEXIST") return;
+    diagnosticLog(
+      `[Agent] Failed to write milady-dist package.json marker: ${shortError(err)}`,
+    );
+  }
+}
+
 // Diagnostic logging to file for debugging packaged app startup issues
 let diagnosticLogPath: string | null = null;
 
@@ -120,12 +161,13 @@ const dynamicImport = async (
       : specifier.startsWith("file://")
         ? specifier
         : pathToFileURL(fsPath).href;
+    ensureMiladyDistEsmBoundary(fsPath);
     console.log(`[Agent] Loading via ESM import(): ${importUrl}`);
-    const importer = new Function("s", "return import(s)") as (
-      s: string,
-    ) => Promise<Record<string, unknown>>;
-    return await importer(importUrl);
+    return await nativeDynamicImport(importUrl);
   } catch (primaryErr) {
+    if (!shouldFallbackToRequire(primaryErr)) {
+      throw primaryErr;
+    }
     // If the primary path failed, try require() with filesystem path
     console.warn(
       "[Agent] ESM dynamic import failed, falling back to require():",

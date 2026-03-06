@@ -197,10 +197,7 @@ export interface CompensationRegistryInterface {
 
 // ---------- Compensation Incident Types ----------
 
-export type CompensationIncidentStatus =
-  | "open"
-  | "acknowledged"
-  | "resolved";
+export type CompensationIncidentStatus = "open" | "acknowledged" | "resolved";
 
 export type CompensationIncidentReason =
   | "critical_verification_failure"

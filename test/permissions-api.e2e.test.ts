@@ -17,8 +17,17 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startApiServer } from "../src/api/server";
 
 function saveEnv(...keys: string[]): { restore: () => void } {
+  const expanded = Array.from(
+    new Set(
+      keys.flatMap((key) =>
+        key.startsWith("MILADY_")
+          ? [key, key.replace("MILADY_", "MILAIDY_")]
+          : [key],
+      ),
+    ),
+  );
   const prev = new Map<string, string | undefined>();
-  for (const key of keys) prev.set(key, process.env[key]);
+  for (const key of expanded) prev.set(key, process.env[key]);
   return {
     restore: () => {
       for (const [key, value] of prev) {
@@ -93,6 +102,8 @@ describe("Permissions API E2E", () => {
 
   beforeAll(async () => {
     // Start server without auth token for simpler testing
+    delete process.env.MILADY_API_TOKEN;
+    delete process.env.MILAIDY_API_TOKEN;
     const result = await startApiServer({ port: 0 });
     port = result.port;
     close = result.close;

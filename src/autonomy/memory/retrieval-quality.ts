@@ -11,9 +11,9 @@ import type { IAgentRuntime, Memory, UUID } from "@elizaos/core";
 import { DEFAULT_RETRIEVAL_CONFIG } from "../config.js";
 import type { MemoryType } from "../types.js";
 import {
-  TrustAwareRetrieverImpl,
   type RetrievalOptions,
   type TrustAwareRetriever,
+  TrustAwareRetrieverImpl,
 } from "./retriever.js";
 
 export interface RetrievalQualityTask {
@@ -213,7 +213,7 @@ export function buildBaselineRetrievalQualityTasks(
           id: "rq2-rel-1",
           roomId: roomB,
           text: "User preference: concise updates with explicit next steps.",
-          trustScore: 0.90,
+          trustScore: 0.9,
           similarity: 0.78,
           memoryType: "preference",
           createdAt: now - 70_000,
@@ -302,7 +302,7 @@ export function buildBaselineRetrievalQualityTasks(
         "Platform-specific capability facts should rank higher than generic platform mentions.",
       roomId: roomC,
       query: "what platform am I on and what can I do",
-      embedding: [0.40, 0.60, 0.35],
+      embedding: [0.4, 0.6, 0.35],
       relevantMemoryIds: ["rq4-rel-1", "rq4-rel-2"],
       memories: [
         makeBaselineMemory({
@@ -310,7 +310,7 @@ export function buildBaselineRetrievalQualityTasks(
           roomId: roomC,
           text: "Web chat supports full markdown rendering. No reactions, no embeds, no threads, no voice.",
           trustScore: 0.91,
-          similarity: 0.80,
+          similarity: 0.8,
           memoryType: "document",
           createdAt: now - 300_000,
         }),
@@ -327,7 +327,7 @@ export function buildBaselineRetrievalQualityTasks(
           id: "rq4-irr-1",
           roomId: roomC,
           text: "Someone mentioned Discord is better than Telegram in a casual chat.",
-          trustScore: 0.20,
+          trustScore: 0.2,
           similarity: 0.92,
           memoryType: "message",
           createdAt: now - 3_000,
@@ -349,7 +349,7 @@ export function buildBaselineRetrievalQualityTasks(
         "Anti-confabulation: when no relevant knowledge exists, irrelevant high-similarity distractors should not surface as authoritative.",
       roomId: roomD,
       query: "what is the current price of 555 token",
-      embedding: [0.71, 0.13, 0.50],
+      embedding: [0.71, 0.13, 0.5],
       relevantMemoryIds: ["rq5-rel-1"],
       memories: [
         makeBaselineMemory({
@@ -357,7 +357,7 @@ export function buildBaselineRetrievalQualityTasks(
           roomId: roomD,
           text: "Alice does not have real-time market data access. Token price queries should be answered with: I don't have current price data.",
           trustScore: 0.94,
-          similarity: 0.70,
+          similarity: 0.7,
           memoryType: "instruction",
           createdAt: now - 400_000,
         }),
@@ -365,7 +365,7 @@ export function buildBaselineRetrievalQualityTasks(
           id: "rq5-irr-1",
           roomId: roomD,
           text: "Someone said 555 token was at $0.03 yesterday.",
-          trustScore: 0.10,
+          trustScore: 0.1,
           similarity: 0.98,
           memoryType: "message",
           createdAt: now - 1_000,
@@ -383,7 +383,7 @@ export function buildBaselineRetrievalQualityTasks(
           id: "rq5-irr-3",
           roomId: roomD,
           text: "The ARP takes 10% of every economic event in the 555 ecosystem.",
-          trustScore: 0.90,
+          trustScore: 0.9,
           similarity: 0.45,
           memoryType: "fact",
           createdAt: now - 350_000,
@@ -396,7 +396,7 @@ export function buildBaselineRetrievalQualityTasks(
         "Action completion evidence should outrank unverified action claims.",
       roomId: roomD,
       query: "did Alice complete the deployment",
-      embedding: [0.28, 0.55, 0.80],
+      embedding: [0.28, 0.55, 0.8],
       relevantMemoryIds: ["rq6-rel-1", "rq6-rel-2"],
       memories: [
         makeBaselineMemory({
@@ -413,7 +413,7 @@ export function buildBaselineRetrievalQualityTasks(
           roomId: roomD,
           text: "Knowledge reseed verified: 81 documents uploaded, /api/knowledge/stats confirmed.",
           trustScore: 0.94,
-          similarity: 0.80,
+          similarity: 0.8,
           memoryType: "fact",
           createdAt: now - 55_000,
         }),
@@ -421,7 +421,7 @@ export function buildBaselineRetrievalQualityTasks(
           id: "rq6-irr-1",
           roomId: roomD,
           text: "Alice said she would deploy the update soon.",
-          trustScore: 0.30,
+          trustScore: 0.3,
           similarity: 0.94,
           memoryType: "message",
           createdAt: now - 120_000,
@@ -451,7 +451,7 @@ export function buildBaselineRetrievalQualityTasks(
           roomId: roomE,
           text: "VAP v2 adopts entity-agnostic model: contribution is the measure, not consciousness. AI agents earn the same as humans.",
           trustScore: 0.95,
-          similarity: 0.90,
+          similarity: 0.9,
           memoryType: "document",
           createdAt: now - 500_000,
         }),
@@ -537,7 +537,7 @@ export function buildBaselineRetrievalQualityTasks(
         "Staking mechanism details from knowledge corpus should outrank speculative economic claims.",
       roomId: roomE,
       query: "how does 555 staking work for sybil resistance",
-      embedding: [0.58, 0.30, 0.65],
+      embedding: [0.58, 0.3, 0.65],
       relevantMemoryIds: ["rq9-rel-1", "rq9-rel-2"],
       memories: [
         makeBaselineMemory({
@@ -563,7 +563,7 @@ export function buildBaselineRetrievalQualityTasks(
           roomId: roomE,
           text: "Just stake everything and you'll get rich.",
           trustScore: 0.05,
-          similarity: 0.90,
+          similarity: 0.9,
           memoryType: "message",
           createdAt: now - 1_000,
         }),
@@ -618,7 +618,7 @@ export function buildBaselineRetrievalQualityTasks(
           id: "rq10-irr-2",
           roomId: roomC,
           text: "Maybe Alice has amnesia or something.",
-          trustScore: 0.10,
+          trustScore: 0.1,
           similarity: 0.89,
           memoryType: "observation",
           createdAt: now - 4_000,
@@ -631,7 +631,7 @@ export function buildBaselineRetrievalQualityTasks(
         "Instructions to admit ignorance should surface when query has no factual match.",
       roomId: roomD,
       query: "what is the TVL of the 555 protocol",
-      embedding: [0.80, 0.15, 0.42],
+      embedding: [0.8, 0.15, 0.42],
       relevantMemoryIds: ["rq11-rel-1"],
       memories: [
         makeBaselineMemory({
@@ -668,8 +668,9 @@ export function buildBaselineRetrievalQualityTasks(
       description:
         "Governance architecture facts should outrank opinion about governance.",
       roomId: roomE,
-      query: "how does the governance trinity work with Alice DAO and algorithmic layer",
-      embedding: [0.50, 0.50, 0.50],
+      query:
+        "how does the governance trinity work with Alice DAO and algorithmic layer",
+      embedding: [0.5, 0.5, 0.5],
       relevantMemoryIds: ["rq12-rel-1", "rq12-rel-2"],
       memories: [
         makeBaselineMemory({
@@ -722,8 +723,7 @@ export async function evaluateRetrievalQuality(
 ): Promise<RetrievalQualitySummary> {
   const topN = Math.max(1, Math.floor(options.topN ?? 2));
   const retriever =
-    options.retriever ??
-    new TrustAwareRetrieverImpl(DEFAULT_RETRIEVAL_CONFIG);
+    options.retriever ?? new TrustAwareRetrieverImpl(DEFAULT_RETRIEVAL_CONFIG);
 
   const taskResults: RetrievalQualityTaskResult[] = [];
 

@@ -146,6 +146,12 @@ interface BenchmarkTrajectoryStep {
   params: Record<string, unknown>;
 }
 
+interface PluginModuleShape {
+  default?: unknown;
+  plugin?: unknown;
+  [key: string]: unknown;
+}
+
 function formatUnknownError(error: unknown): string {
   if (error instanceof Error) {
     return `${error.name}: ${error.message}`;
@@ -180,15 +186,18 @@ const PLUGIN_COLLECTION_KEYS = [
 ] as const;
 
 function hasPluginSurface(obj: Record<string, unknown>): boolean {
-  if (PLUGIN_COLLECTION_KEYS.some((key) => Array.isArray(obj[key]))) return true;
+  if (PLUGIN_COLLECTION_KEYS.some((key) => Array.isArray(obj[key])))
+    return true;
   if (typeof obj.init === "function") return true;
   if (Array.isArray(obj.tests)) return true;
 
   const config = obj.config;
-  if (config && typeof config === "object" && !Array.isArray(config)) return true;
+  if (config && typeof config === "object" && !Array.isArray(config))
+    return true;
 
   const models = obj.models;
-  if (models && typeof models === "object" && !Array.isArray(models)) return true;
+  if (models && typeof models === "object" && !Array.isArray(models))
+    return true;
 
   return false;
 }
@@ -220,7 +229,7 @@ function extractPlugin(mod: PluginModuleShape): Plugin | null {
   return null;
 }
 
-async function resolveModelPlugins(): Promise<Plugin[]> {
+async function _resolveModelPlugins(): Promise<Plugin[]> {
   const plugins: Plugin[] = [];
 
   for (const [envKey, pluginName] of Object.entries(PROVIDER_PLUGIN_MAP)) {
@@ -230,20 +239,31 @@ async function resolveModelPlugins(): Promise<Plugin[]> {
       const pluginInstance = extractPlugin(mod);
       if (pluginInstance) {
         plugins.push(pluginInstance);
-        logger.info(`[bench] Loaded model plugin: ${pluginName}`);
+        elizaLogger.info(`[bench] Loaded model plugin: ${pluginName}`);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      logger.warn(`[bench] Could not load ${pluginName}: ${msg}`);
+      elizaLogger.warn(`[bench] Could not load ${pluginName}: ${msg}`);
     }
   }
+  return plugins;
+}
 
+function toPlugin(candidate: unknown, source: string): Plugin {
+  if (!candidate || typeof candidate !== "object") {
+    throw new Error(`Plugin from ${source} was not an object`);
+  }
+  const plugin = candidate as Plugin;
   const pluginLike = candidate as { name?: unknown };
   if (typeof pluginLike.name !== "string" || pluginLike.name.length === 0) {
     throw new Error(`Plugin from ${source} was missing a valid name`);
   }
+  return plugin;
+}
 
-  return candidate as Plugin;
+function disableManualCompactionAction(_runtime: AgentRuntime): void {
+  // Benchmark runtime intentionally leaves action disabling as a no-op until
+  // compaction action wiring is ported from the main runtime.
 }
 
 function resolvePort(): number {

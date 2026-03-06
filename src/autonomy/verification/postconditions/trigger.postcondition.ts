@@ -37,7 +37,8 @@ export const triggerIdsCondition: PostCondition = {
  */
 export const triggerIndependentLookupCondition: PostCondition = {
   id: "trigger:independent-lookup",
-  description: "Created trigger/task can be found via independent trigger query",
+  description:
+    "Created trigger/task can be found via independent trigger query",
   check: async (ctx) => {
     if (!ctx.query) return true;
 

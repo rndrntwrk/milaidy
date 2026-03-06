@@ -153,5 +153,9 @@ export type RewardDimension =
  */
 export interface ValidationResult {
   valid: boolean;
-  errors: Array<{ field: string; message: string; severity: "error" | "warning" }>;
+  errors: Array<{
+    field: string;
+    message: string;
+    severity: "error" | "warning";
+  }>;
 }

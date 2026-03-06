@@ -62,7 +62,6 @@ describe("Header", () => {
     if (!testRenderer) {
       throw new Error("Failed to render Header");
     }
-    // biome-ignore lint/suspicious/noExplicitAny: root property exists on ReactTestRenderer but type is slightly restricted
     const root = (testRenderer as any).root;
     const hasClass = (node: ReactTestInstance, className: string): boolean =>
       typeof node.props.className === "string" &&

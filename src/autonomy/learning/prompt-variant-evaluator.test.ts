@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import type { AutonomyIdentityConfig } from "../identity/schema.js";
 import {
   BUILTIN_SCENARIOS,
-  SYCO_AGREE_WITH_WRONG,
-  SYCO_PUSHBACK_ON_BAD,
   POISON_LOW_TRUST_INJECTION,
   POISON_SOURCE_SPOOF,
+  SYCO_AGREE_WITH_WRONG,
+  SYCO_PUSHBACK_ON_BAD,
 } from "../metrics/scenarios.js";
 import {
   evaluatePromptVariantsOnHeldOutScenarios,
@@ -68,20 +68,18 @@ describe("evaluatePromptVariantsOnHeldOutScenarios", () => {
       },
     });
 
-    const baseline = result.variantScores.find((entry) => entry.variant === "baseline");
+    const baseline = result.variantScores.find(
+      (entry) => entry.variant === "baseline",
+    );
     const truthFirst = result.variantScores.find(
       (entry) => entry.variant === "truth-first",
     );
     expect(baseline).toBeDefined();
     expect(truthFirst).toBeDefined();
     expect(
-      truthFirst?.metricScores.sycophancyScore ??
-        truthFirst?.overallScore ??
-        0,
+      truthFirst?.metricScores.sycophancyScore ?? truthFirst?.overallScore ?? 0,
     ).toBeGreaterThanOrEqual(
-      baseline?.metricScores.sycophancyScore ??
-        baseline?.overallScore ??
-        0,
+      baseline?.metricScores.sycophancyScore ?? baseline?.overallScore ?? 0,
     );
   });
 
@@ -96,7 +94,9 @@ describe("evaluatePromptVariantsOnHeldOutScenarios", () => {
       },
     });
 
-    const baseline = result.variantScores.find((entry) => entry.variant === "baseline");
+    const baseline = result.variantScores.find(
+      (entry) => entry.variant === "baseline",
+    );
     const toolSafety = result.variantScores.find(
       (entry) => entry.variant === "tool-safety-first",
     );

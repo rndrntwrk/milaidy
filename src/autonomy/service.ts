@@ -16,7 +16,7 @@
  * @module autonomy/service
  */
 
-import { type IAgentRuntime, Service, logger } from "@elizaos/core";
+import { type IAgentRuntime, logger, Service } from "@elizaos/core";
 import {
   type AutonomyConfig,
   resolveAutonomyConfig,
@@ -24,9 +24,7 @@ import {
 } from "./config.js";
 import type { GoalManager } from "./goals/manager.js";
 import type { PersonaDriftMonitor } from "./identity/drift-monitor.js";
-import type {
-  AutonomyIdentityConfig,
-} from "./identity/schema.js";
+import type { AutonomyIdentityConfig } from "./identity/schema.js";
 import type { MemoryGate } from "./memory/gate.js";
 import type { TrustScorer } from "./trust/scorer.js";
 
@@ -125,7 +123,41 @@ let _SystemPromptBuilder: typeof import("./learning/prompt-builder.js").SystemPr
 let _AdversarialScenarioGenerator: typeof import("./learning/adversarial.js").AdversarialScenarioGenerator;
 
 async function loadImplementations() {
-  const [trustMod, memMod, driftMod, goalMod, toolRegMod, schemaValMod, pcvMod, toolSchemasMod, runtimeContractsMod, pcMod, smMod, approvalMod, approvalPersistentMod, esMod, compRegMod, compIncidentMod, pipelineMod, compsMod, localWorkflowMod, temporalWorkflowMod, invMod, invRegMod, harnMod, evalMod, plannerMod, executorMod, verifierMod, memWriterMod, auditorMod, safeModeMod, orchestratorMod, roleModulesMod, roleAdaptersMod] = await Promise.all([
+  const [
+    trustMod,
+    memMod,
+    driftMod,
+    goalMod,
+    toolRegMod,
+    schemaValMod,
+    pcvMod,
+    toolSchemasMod,
+    runtimeContractsMod,
+    pcMod,
+    smMod,
+    approvalMod,
+    approvalPersistentMod,
+    esMod,
+    compRegMod,
+    compIncidentMod,
+    pipelineMod,
+    compsMod,
+    localWorkflowMod,
+    temporalWorkflowMod,
+    invMod,
+    invRegMod,
+    harnMod,
+    evalMod,
+    plannerMod,
+    executorMod,
+    verifierMod,
+    memWriterMod,
+    auditorMod,
+    safeModeMod,
+    orchestratorMod,
+    roleModulesMod,
+    roleAdaptersMod,
+  ] = await Promise.all([
     import("./trust/scorer.js"),
     import("./memory/gate.js"),
     import("./identity/drift-monitor.js"),
@@ -199,7 +231,15 @@ async function loadImplementations() {
   _createInProcessRoleAdapters = roleAdaptersMod.createInProcessRoleAdapters;
 
   // Phase 4 — Learning (lazy, non-blocking)
-  const [rewardMod, traceMod, hackMod, rolloutMod, modelMod, promptMod, advMod] = await Promise.all([
+  const [
+    rewardMod,
+    traceMod,
+    hackMod,
+    rolloutMod,
+    modelMod,
+    promptMod,
+    advMod,
+  ] = await Promise.all([
     import("./learning/reward.js"),
     import("./learning/trace-collector.js"),
     import("./learning/hack-detection.js"),
@@ -221,7 +261,14 @@ async function loadImplementations() {
   _AdversarialScenarioGenerator = advMod.AdversarialScenarioGenerator;
 
   // Phase 5 — Domains & Governance (lazy, non-blocking)
-  const [domRegMod, polEngMod, retMgrMod, pilotMod, codingPackMod, codingGovMod] = await Promise.all([
+  const [
+    domRegMod,
+    polEngMod,
+    retMgrMod,
+    pilotMod,
+    codingPackMod,
+    codingGovMod,
+  ] = await Promise.all([
     import("./domains/registry.js"),
     import("./domains/governance/policy-engine.js"),
     import("./domains/governance/retention-manager.js"),
@@ -237,7 +284,16 @@ async function loadImplementations() {
   _CODING_GOVERNANCE_POLICY = codingGovMod.CODING_GOVERNANCE_POLICY;
 
   // Persistence (lazy — only used when persistence.enabled)
-  const [dbAdapterMod, pgEventMod, pgGoalMod, pgRetentionMod, psmMod, pgApprovalMod, pgIdentityMod, pgMemoryMod] = await Promise.all([
+  const [
+    dbAdapterMod,
+    pgEventMod,
+    pgGoalMod,
+    pgRetentionMod,
+    psmMod,
+    pgApprovalMod,
+    pgIdentityMod,
+    pgMemoryMod,
+  ] = await Promise.all([
     import("./persistence/db-adapter.js"),
     import("./persistence/pg-event-store.js"),
     import("./persistence/pg-goal-manager.js"),
@@ -297,58 +353,118 @@ export const KERNEL_SAFE_MODE_TRANSITION_REQUEST_ID =
 export class MilaidyAutonomyService extends Service {
   static override serviceType = "AUTONOMY" as const;
 
-  capabilityDescription = "Milaidy Autonomy Kernel — trust scoring, memory gating, drift monitoring, and goal management";
+  capabilityDescription =
+    "Milaidy Autonomy Kernel — trust scoring, memory gating, drift monitoring, and goal management";
 
   private trustScorer: TrustScorer | null = null;
   private memoryGate: (MemoryGate & { dispose(): void }) | null = null;
   private memoryStore: import("./memory/store.js").MemoryStore | null = null;
   private driftMonitor: PersonaDriftMonitor | null = null;
   private goalManager: GoalManager | null = null;
-  private toolRegistry: import("./tools/types.js").ToolRegistryInterface | null = null;
-  private schemaValidator: import("./verification/schema-validator.js").SchemaValidator | null = null;
-  private postConditionVerifier: import("./verification/postcondition-verifier.js").PostConditionVerifier | null = null;
-  private stateMachine: import("./state-machine/types.js").KernelStateMachineInterface | null = null;
-  private approvalGate: import("./approval/types.js").ApprovalGateInterface | null = null;
-  private eventStore: import("./workflow/types.js").EventStoreInterface | null = null;
-  private compensationRegistry: import("./workflow/types.js").CompensationRegistryInterface | null = null;
-  private compensationIncidentManager: import("./workflow/types.js").CompensationIncidentManagerInterface | null = null;
-  private executionPipeline: import("./workflow/types.js").ToolExecutionPipelineInterface | null = null;
-  private workflowEngine: import("./adapters/workflow/types.js").WorkflowEngine | null = null;
-  private invariantChecker: import("./verification/invariants/invariant-checker.js").InvariantChecker | null = null;
-  private baselineHarness: import("./metrics/baseline-harness.js").BaselineHarness | null = null;
+  private toolRegistry:
+    | import("./tools/types.js").ToolRegistryInterface
+    | null = null;
+  private schemaValidator:
+    | import("./verification/schema-validator.js").SchemaValidator
+    | null = null;
+  private postConditionVerifier:
+    | import("./verification/postcondition-verifier.js").PostConditionVerifier
+    | null = null;
+  private stateMachine:
+    | import("./state-machine/types.js").KernelStateMachineInterface
+    | null = null;
+  private approvalGate:
+    | import("./approval/types.js").ApprovalGateInterface
+    | null = null;
+  private eventStore: import("./workflow/types.js").EventStoreInterface | null =
+    null;
+  private compensationRegistry:
+    | import("./workflow/types.js").CompensationRegistryInterface
+    | null = null;
+  private compensationIncidentManager:
+    | import("./workflow/types.js").CompensationIncidentManagerInterface
+    | null = null;
+  private executionPipeline:
+    | import("./workflow/types.js").ToolExecutionPipelineInterface
+    | null = null;
+  private workflowEngine:
+    | import("./adapters/workflow/types.js").WorkflowEngine
+    | null = null;
+  private invariantChecker:
+    | import("./verification/invariants/invariant-checker.js").InvariantChecker
+    | null = null;
+  private baselineHarness:
+    | import("./metrics/baseline-harness.js").BaselineHarness
+    | null = null;
   private planner: import("./roles/types.js").PlannerRole | null = null;
   private executorRole: import("./roles/types.js").ExecutorRole | null = null;
   private verifier: import("./roles/types.js").VerifierRole | null = null;
-  private memoryWriterRole: import("./roles/types.js").MemoryWriterRole | null = null;
+  private memoryWriterRole: import("./roles/types.js").MemoryWriterRole | null =
+    null;
   private auditorRole: import("./roles/types.js").AuditorRole | null = null;
-  private safeModeController: import("./roles/types.js").SafeModeController | null = null;
-  private orchestrator: import("./roles/types.js").RoleOrchestrator | null = null;
-  private roleModuleRegistry: import("./roles/modules.js").RoleModuleRegistry | null = null;
+  private safeModeController:
+    | import("./roles/types.js").SafeModeController
+    | null = null;
+  private orchestrator: import("./roles/types.js").RoleOrchestrator | null =
+    null;
+  private roleModuleRegistry:
+    | import("./roles/modules.js").RoleModuleRegistry
+    | null = null;
   private identityConfig: AutonomyIdentityConfig | null = null;
-  private resolvedRetrievalConfig: import("./config.js").AutonomyRetrievalConfig | null = null;
+  private resolvedRetrievalConfig:
+    | import("./config.js").AutonomyRetrievalConfig
+    | null = null;
   private enabled = false;
   private stateTransitionUnsubscribe: (() => void) | null = null;
-  private eventBus: { emit: (event: string, payload: unknown) => void } | null = null;
+  private eventBus: { emit: (event: string, payload: unknown) => void } | null =
+    null;
 
   // Phase 5 — Domains & Governance components
-  private domainPackRegistry: import("./domains/registry.js").DomainPackRegistry | null = null;
-  private policyEngine: import("./domains/governance/policy-engine.js").PolicyEngine | null = null;
-  private auditRetentionManager: import("./domains/governance/retention-manager.js").AuditRetentionManager | null = null;
-  private pilotRunner: import("./domains/pilot/pilot-runner.js").PilotRunner | null = null;
+  private domainPackRegistry:
+    | import("./domains/registry.js").DomainPackRegistry
+    | null = null;
+  private policyEngine:
+    | import("./domains/governance/policy-engine.js").PolicyEngine
+    | null = null;
+  private auditRetentionManager:
+    | import("./domains/governance/retention-manager.js").AuditRetentionManager
+    | null = null;
+  private pilotRunner:
+    | import("./domains/pilot/pilot-runner.js").PilotRunner
+    | null = null;
 
   // Persistence components
-  private dbAdapter: import("./persistence/db-adapter.js").AutonomyDbAdapter | null = null;
-  private approvalLog: import("./persistence/pg-approval-log.js").ApprovalLogInterface | null = null;
-  private identityStore: import("./persistence/pg-identity-store.js").IdentityStoreInterface | null = null;
+  private dbAdapter:
+    | import("./persistence/db-adapter.js").AutonomyDbAdapter
+    | null = null;
+  private approvalLog:
+    | import("./persistence/pg-approval-log.js").ApprovalLogInterface
+    | null = null;
+  private identityStore:
+    | import("./persistence/pg-identity-store.js").IdentityStoreInterface
+    | null = null;
 
   // Phase 4 — Learning components
-  private traceCollector: import("./learning/trace-collector.js").TraceCollector | null = null;
-  private hackDetector: import("./learning/hack-detection.js").HackDetector | null = null;
-  private rolloutCollector: import("./learning/rollout.js").RolloutCollector | null = null;
-  private modelProvider: import("./learning/types.js").ModelProvider | null = null;
-  private promptBuilder: import("./learning/prompt-builder.js").SystemPromptBuilder | null = null;
-  private checkpointManager: import("./learning/rollout.js").CheckpointManager | null = null;
-  private adversarialGenerator: import("./learning/adversarial.js").AdversarialScenarioGenerator | null = null;
+  private traceCollector:
+    | import("./learning/trace-collector.js").TraceCollector
+    | null = null;
+  private hackDetector:
+    | import("./learning/hack-detection.js").HackDetector
+    | null = null;
+  private rolloutCollector:
+    | import("./learning/rollout.js").RolloutCollector
+    | null = null;
+  private modelProvider: import("./learning/types.js").ModelProvider | null =
+    null;
+  private promptBuilder:
+    | import("./learning/prompt-builder.js").SystemPromptBuilder
+    | null = null;
+  private checkpointManager:
+    | import("./learning/rollout.js").CheckpointManager
+    | null = null;
+  private adversarialGenerator:
+    | import("./learning/adversarial.js").AdversarialScenarioGenerator
+    | null = null;
 
   /**
    * ElizaOS calls this static method during plugin initialization.
@@ -365,7 +481,8 @@ export class MilaidyAutonomyService extends Service {
     // 1. Module-level config set by plugin (preferred — no serialization)
     // 2. Runtime setting AUTONOMY_CONFIG (JSON string fallback)
     // 3. Defaults (disabled)
-    const rawConfig = consumePendingConfig() ?? this.readConfigFromSetting(runtime);
+    const rawConfig =
+      consumePendingConfig() ?? this.readConfigFromSetting(runtime);
     const config = resolveAutonomyConfig(rawConfig);
 
     if (!config.enabled) {
@@ -378,7 +495,9 @@ export class MilaidyAutonomyService extends Service {
     const issues = validateAutonomyConfig(config);
     if (issues.length > 0) {
       for (const issue of issues) {
-        logger.warn(`[autonomy-service] Config issue at ${issue.path}: ${issue.message}`);
+        logger.warn(
+          `[autonomy-service] Config issue at ${issue.path}: ${issue.message}`,
+        );
       }
     }
 
@@ -389,26 +508,36 @@ export class MilaidyAutonomyService extends Service {
     await loadImplementations();
 
     // Initialize identity config
-    const { createDefaultAutonomyIdentity } = await import("./identity/schema.js");
+    const { createDefaultAutonomyIdentity } = await import(
+      "./identity/schema.js"
+    );
     this.identityConfig = config.identity ?? createDefaultAutonomyIdentity();
 
     // ---------- Persistence Setup ----------
     const persistenceEnabled = config.persistence?.enabled ?? false;
     if (persistenceEnabled) {
       try {
-        const db = (runtime as unknown as { adapter?: { db?: unknown } }).adapter?.db;
+        const db = (runtime as unknown as { adapter?: { db?: unknown } })
+          .adapter?.db;
         if (db) {
           this.dbAdapter = new _AutonomyDbAdapter(
             db as import("./persistence/db-adapter.js").DrizzleDb,
-            { autoMigrate: config.persistence?.autoMigrate ?? true, agentId: runtime.agentId },
+            {
+              autoMigrate: config.persistence?.autoMigrate ?? true,
+              agentId: runtime.agentId,
+            },
           );
           await this.dbAdapter.initialize();
           logger.info("[autonomy-service] Persistence layer initialized");
         } else {
-          logger.warn("[autonomy-service] persistence.enabled but no database available — falling back to in-memory");
+          logger.warn(
+            "[autonomy-service] persistence.enabled but no database available — falling back to in-memory",
+          );
         }
       } catch (err) {
-        logger.error(`[autonomy-service] Persistence init failed — falling back to in-memory: ${err instanceof Error ? err.message : err}`);
+        logger.error(
+          `[autonomy-service] Persistence init failed — falling back to in-memory: ${err instanceof Error ? err.message : err}`,
+        );
         this.dbAdapter = null;
       }
     }
@@ -424,8 +553,11 @@ export class MilaidyAutonomyService extends Service {
       config.memoryGate,
       this.memoryStore ?? undefined,
     );
-    if (typeof (this.memoryGate as { hydrateQuarantine?: () => Promise<void> }).hydrateQuarantine === "function") {
-      await (this.memoryGate as { hydrateQuarantine: () => Promise<void> }).hydrateQuarantine();
+    const hydrateQuarantine = (
+      this.memoryGate as unknown as { hydrateQuarantine?: () => Promise<void> }
+    ).hydrateQuarantine;
+    if (typeof hydrateQuarantine === "function") {
+      await hydrateQuarantine.call(this.memoryGate);
     }
     this.driftMonitor = new _RuleBasedDriftMonitor(config.driftMonitor);
 
@@ -457,14 +589,12 @@ export class MilaidyAutonomyService extends Service {
     const workflowTimeoutMs = config.workflow?.defaultTimeoutMs ?? 30_000;
     if (workflowEngineProvider === "temporal") {
       try {
-        this.workflowEngine = new _TemporalWorkflowEngine(
-          {
-            ...(config.workflowEngine?.temporal ?? {}),
-            defaultTimeoutMs:
-              config.workflowEngine?.temporal?.defaultTimeoutMs ??
-              workflowTimeoutMs,
-          },
-        );
+        this.workflowEngine = new _TemporalWorkflowEngine({
+          ...(config.workflowEngine?.temporal ?? {}),
+          defaultTimeoutMs:
+            config.workflowEngine?.temporal?.defaultTimeoutMs ??
+            workflowTimeoutMs,
+        });
       } catch (err) {
         logger.warn(
           `[autonomy-service] Temporal workflow engine unavailable — falling back to local: ${
@@ -481,10 +611,14 @@ export class MilaidyAutonomyService extends Service {
       });
     }
 
-    let eventBusRef: { emit: (event: string, payload: unknown) => void } | undefined;
+    let eventBusRef:
+      | { emit: (event: string, payload: unknown) => void }
+      | undefined;
     try {
       const { getEventBus } = await import("../events/event-bus.js");
-      eventBusRef = getEventBus() as unknown as { emit: (event: string, payload: unknown) => void };
+      eventBusRef = getEventBus() as unknown as {
+        emit: (event: string, payload: unknown) => void;
+      };
     } catch {
       // Event bus not available — non-fatal
     }
@@ -552,8 +686,7 @@ export class MilaidyAutonomyService extends Service {
         eventStoreMaxEvents: config.eventStore?.maxEvents ?? 10_000,
       },
       eventBus: eventBusRef,
-      verificationQuery: (input) =>
-        this.runVerificationQuery(runtime, input),
+      verificationQuery: (input) => this.runVerificationQuery(runtime, input),
     });
 
     // Instantiate baseline harness with evaluator and components
@@ -622,11 +755,26 @@ export class MilaidyAutonomyService extends Service {
     this.promptBuilder = new _SystemPromptBuilder();
     const learningConfig = config.learning;
     if (learningConfig?.enabled) {
+      const eventStore = this.eventStore;
+      const orchestrator = this.orchestrator;
+      const baselineHarness = this.baselineHarness;
+      if (!eventStore || !orchestrator || !baselineHarness) {
+        throw new Error(
+          "Autonomy learning infrastructure was not initialized correctly",
+        );
+      }
       const checkpointReward = new _CheckpointReward();
       const episodeReward = new _EpisodeReward(checkpointReward);
-      this.traceCollector = new _TraceCollector(this.eventStore!, checkpointReward, episodeReward);
+      this.traceCollector = new _TraceCollector(
+        eventStore,
+        checkpointReward,
+        episodeReward,
+      );
       this.hackDetector = new _HackDetector(_createHackDetectionInvariants());
-      if (learningConfig.modelProvider?.baseUrl && learningConfig.modelProvider?.model) {
+      if (
+        learningConfig.modelProvider?.baseUrl &&
+        learningConfig.modelProvider?.model
+      ) {
         this.modelProvider = new _HttpModelProvider({
           baseUrl: learningConfig.modelProvider.baseUrl,
           model: learningConfig.modelProvider.model,
@@ -636,12 +784,12 @@ export class MilaidyAutonomyService extends Service {
         this.modelProvider = new _StubModelProvider();
       }
       this.rolloutCollector = new _RolloutCollector(
-        this.orchestrator!,
+        orchestrator,
         this.traceCollector,
         this.hackDetector,
         learningConfig.hackDetection?.threshold ?? 0.5,
       );
-      this.checkpointManager = new _CheckpointManager(this.baselineHarness!);
+      this.checkpointManager = new _CheckpointManager(baselineHarness);
       this.adversarialGenerator = new _AdversarialScenarioGenerator();
     }
 
@@ -651,7 +799,9 @@ export class MilaidyAutonomyService extends Service {
       this.domainPackRegistry = new _DomainPackRegistry();
       this.policyEngine = new _PolicyEngine();
       this.auditRetentionManager = this.dbAdapter
-        ? new _PgRetentionManager(this.dbAdapter) as unknown as import("./domains/governance/retention-manager.js").AuditRetentionManager
+        ? (new _PgRetentionManager(
+            this.dbAdapter,
+          ) as unknown as import("./domains/governance/retention-manager.js").AuditRetentionManager)
         : new _AuditRetentionManager();
 
       // Register coding domain pack
@@ -659,31 +809,52 @@ export class MilaidyAutonomyService extends Service {
       this.domainPackRegistry.register(codingPack);
       this.policyEngine.registerPolicy(_CODING_GOVERNANCE_POLICY);
 
+      const toolRegistry = this.toolRegistry;
+      const invariantChecker = this.invariantChecker;
+      const trustScorer = this.trustScorer;
+      const memoryGate = this.memoryGate;
+      const driftMonitor = this.driftMonitor;
+      const goalManager = this.goalManager;
+      if (
+        !toolRegistry ||
+        !invariantChecker ||
+        !trustScorer ||
+        !memoryGate ||
+        !driftMonitor ||
+        !goalManager
+      ) {
+        throw new Error(
+          "Autonomy domain infrastructure was not initialized correctly",
+        );
+      }
+
       // Auto-load configured domains
       for (const domainId of domainsConfig.autoLoadDomains ?? []) {
         if (this.domainPackRegistry.has(domainId)) {
-          this.domainPackRegistry.load(domainId, this.toolRegistry!, this.invariantChecker!);
+          this.domainPackRegistry.load(
+            domainId,
+            toolRegistry,
+            invariantChecker,
+          );
         }
       }
 
       // Create pilot runner
-      this.pilotRunner = new _PilotRunner(
-        this.domainPackRegistry,
-        evaluator,
-        {
-          trustScorer: this.trustScorer!,
-          memoryGate: this.memoryGate!,
-          driftMonitor: this.driftMonitor!,
-          goalManager: this.goalManager!,
-        },
-      );
+      this.pilotRunner = new _PilotRunner(this.domainPackRegistry, evaluator, {
+        trustScorer,
+        memoryGate,
+        driftMonitor,
+        goalManager,
+      });
     }
 
     this.enabled = true;
 
     // Emit kernel-up metric
     try {
-      const { recordKernelUp } = await import("./metrics/prometheus-metrics.js");
+      const { recordKernelUp } = await import(
+        "./metrics/prometheus-metrics.js"
+      );
       recordKernelUp();
     } catch {
       // Metrics not available — non-fatal
@@ -712,7 +883,9 @@ export class MilaidyAutonomyService extends Service {
   /**
    * Fallback: read autonomy config from runtime settings (JSON string).
    */
-  private readConfigFromSetting(runtime: IAgentRuntime): AutonomyConfig | undefined {
+  private readConfigFromSetting(
+    runtime: IAgentRuntime,
+  ): AutonomyConfig | undefined {
     try {
       const raw = runtime.getSetting("AUTONOMY_CONFIG");
       if (raw && typeof raw === "string") {
@@ -837,59 +1010,124 @@ export class MilaidyAutonomyService extends Service {
     try {
       const { getContainer, TOKENS } = await import("../di/container.js");
       const container = getContainer();
-      if (this.trustScorer) container.registerValue(TOKENS.TrustScorer, this.trustScorer);
-      if (this.memoryGate) container.registerValue(TOKENS.MemoryGate, this.memoryGate);
-      if (this.memoryStore) container.registerValue(TOKENS.MemoryStore, this.memoryStore);
-      if (this.driftMonitor) container.registerValue(TOKENS.DriftMonitor, this.driftMonitor);
-      if (this.goalManager) container.registerValue(TOKENS.GoalManager, this.goalManager);
-      if (this.toolRegistry) container.registerValue(TOKENS.ToolRegistry, this.toolRegistry);
-      if (this.schemaValidator) container.registerValue(TOKENS.SchemaValidator, this.schemaValidator);
-      if (this.postConditionVerifier) container.registerValue(TOKENS.PostConditionVerifier, this.postConditionVerifier);
-      if (this.stateMachine) container.registerValue(TOKENS.StateMachine, this.stateMachine);
-      if (this.workflowEngine) container.registerValue(TOKENS.WorkflowEngine, this.workflowEngine);
-      if (this.approvalGate) container.registerValue(TOKENS.ApprovalGate, this.approvalGate);
-      if (this.eventStore) container.registerValue(TOKENS.EventStore, this.eventStore);
-      if (this.compensationRegistry) container.registerValue(TOKENS.CompensationRegistry, this.compensationRegistry);
-      if (this.executionPipeline) container.registerValue(TOKENS.ExecutionPipeline, this.executionPipeline);
-      if (this.invariantChecker) container.registerValue(TOKENS.InvariantChecker, this.invariantChecker);
-      if (this.baselineHarness) container.registerValue(TOKENS.BaselineHarness, this.baselineHarness);
+      if (this.trustScorer)
+        container.registerValue(TOKENS.TrustScorer, this.trustScorer);
+      if (this.memoryGate)
+        container.registerValue(TOKENS.MemoryGate, this.memoryGate);
+      if (this.memoryStore)
+        container.registerValue(TOKENS.MemoryStore, this.memoryStore);
+      if (this.driftMonitor)
+        container.registerValue(TOKENS.DriftMonitor, this.driftMonitor);
+      if (this.goalManager)
+        container.registerValue(TOKENS.GoalManager, this.goalManager);
+      if (this.toolRegistry)
+        container.registerValue(TOKENS.ToolRegistry, this.toolRegistry);
+      if (this.schemaValidator)
+        container.registerValue(TOKENS.SchemaValidator, this.schemaValidator);
+      if (this.postConditionVerifier)
+        container.registerValue(
+          TOKENS.PostConditionVerifier,
+          this.postConditionVerifier,
+        );
+      if (this.stateMachine)
+        container.registerValue(TOKENS.StateMachine, this.stateMachine);
+      if (this.workflowEngine)
+        container.registerValue(TOKENS.WorkflowEngine, this.workflowEngine);
+      if (this.approvalGate)
+        container.registerValue(TOKENS.ApprovalGate, this.approvalGate);
+      if (this.eventStore)
+        container.registerValue(TOKENS.EventStore, this.eventStore);
+      if (this.compensationRegistry)
+        container.registerValue(
+          TOKENS.CompensationRegistry,
+          this.compensationRegistry,
+        );
+      if (this.executionPipeline)
+        container.registerValue(
+          TOKENS.ExecutionPipeline,
+          this.executionPipeline,
+        );
+      if (this.invariantChecker)
+        container.registerValue(TOKENS.InvariantChecker, this.invariantChecker);
+      if (this.baselineHarness)
+        container.registerValue(TOKENS.BaselineHarness, this.baselineHarness);
       if (this.planner) container.registerValue(TOKENS.Planner, this.planner);
-      if (this.executorRole) container.registerValue(TOKENS.Executor, this.executorRole);
-      if (this.verifier) container.registerValue(TOKENS.Verifier, this.verifier);
-      if (this.memoryWriterRole) container.registerValue(TOKENS.MemoryWriter, this.memoryWriterRole);
-      if (this.auditorRole) container.registerValue(TOKENS.Auditor, this.auditorRole);
-      if (this.safeModeController) container.registerValue(TOKENS.SafeMode, this.safeModeController);
-      if (this.orchestrator) container.registerValue(TOKENS.Orchestrator, this.orchestrator);
+      if (this.executorRole)
+        container.registerValue(TOKENS.Executor, this.executorRole);
+      if (this.verifier)
+        container.registerValue(TOKENS.Verifier, this.verifier);
+      if (this.memoryWriterRole)
+        container.registerValue(TOKENS.MemoryWriter, this.memoryWriterRole);
+      if (this.auditorRole)
+        container.registerValue(TOKENS.Auditor, this.auditorRole);
+      if (this.safeModeController)
+        container.registerValue(TOKENS.SafeMode, this.safeModeController);
+      if (this.orchestrator)
+        container.registerValue(TOKENS.Orchestrator, this.orchestrator);
 
       // Persistence components
-      if (this.dbAdapter) container.registerValue(TOKENS.AutonomyDbAdapter, this.dbAdapter);
-      if (this.approvalLog) container.registerValue(TOKENS.ApprovalLog, this.approvalLog);
-      if (this.identityStore) container.registerValue(TOKENS.IdentityStore, this.identityStore);
+      if (this.dbAdapter)
+        container.registerValue(TOKENS.AutonomyDbAdapter, this.dbAdapter);
+      if (this.approvalLog)
+        container.registerValue(TOKENS.ApprovalLog, this.approvalLog);
+      if (this.identityStore)
+        container.registerValue(TOKENS.IdentityStore, this.identityStore);
 
       // Phase 4 — Learning components
-      if (this.traceCollector) container.registerValue(TOKENS.TraceCollector, this.traceCollector);
-      if (this.hackDetector) container.registerValue(TOKENS.HackDetector, this.hackDetector);
-      if (this.rolloutCollector) container.registerValue(TOKENS.RolloutCollector, this.rolloutCollector);
-      if (this.modelProvider) container.registerValue(TOKENS.ModelProvider, this.modelProvider);
-      if (this.promptBuilder) container.registerValue(TOKENS.PromptBuilder, this.promptBuilder);
-      if (this.checkpointManager) container.registerValue(TOKENS.CheckpointManager, this.checkpointManager);
-      if (this.adversarialGenerator) container.registerValue(TOKENS.AdversarialGenerator, this.adversarialGenerator);
+      if (this.traceCollector)
+        container.registerValue(TOKENS.TraceCollector, this.traceCollector);
+      if (this.hackDetector)
+        container.registerValue(TOKENS.HackDetector, this.hackDetector);
+      if (this.rolloutCollector)
+        container.registerValue(TOKENS.RolloutCollector, this.rolloutCollector);
+      if (this.modelProvider)
+        container.registerValue(TOKENS.ModelProvider, this.modelProvider);
+      if (this.promptBuilder)
+        container.registerValue(TOKENS.PromptBuilder, this.promptBuilder);
+      if (this.checkpointManager)
+        container.registerValue(
+          TOKENS.CheckpointManager,
+          this.checkpointManager,
+        );
+      if (this.adversarialGenerator)
+        container.registerValue(
+          TOKENS.AdversarialGenerator,
+          this.adversarialGenerator,
+        );
 
       // Phase 5 — Domain & Governance components
-      if (this.domainPackRegistry) container.registerValue(TOKENS.DomainPackRegistry, this.domainPackRegistry);
-      if (this.policyEngine) container.registerValue(TOKENS.PolicyEngine, this.policyEngine);
-      if (this.auditRetentionManager) container.registerValue(TOKENS.AuditRetentionManager, this.auditRetentionManager);
-      if (this.pilotRunner) container.registerValue(TOKENS.PilotRunner, this.pilotRunner);
+      if (this.domainPackRegistry)
+        container.registerValue(
+          TOKENS.DomainPackRegistry,
+          this.domainPackRegistry,
+        );
+      if (this.policyEngine)
+        container.registerValue(TOKENS.PolicyEngine, this.policyEngine);
+      if (this.auditRetentionManager)
+        container.registerValue(
+          TOKENS.AuditRetentionManager,
+          this.auditRetentionManager,
+        );
+      if (this.pilotRunner)
+        container.registerValue(TOKENS.PilotRunner, this.pilotRunner);
 
       // Register entity memory provider + trust-aware retriever
       try {
-        const { TrustAwareRetrieverImpl } = await import("./memory/retriever.js");
+        const { TrustAwareRetrieverImpl } = await import(
+          "./memory/retriever.js"
+        );
         const { DEFAULT_RETRIEVAL_CONFIG } = await import("./config.js");
-        const { InMemoryEntityMemoryStore } = await import("./memory/entity-memory-store.js");
-        const { InMemoryEntityLinkStore } = await import("./memory/entity-link-store.js");
+        const { InMemoryEntityMemoryStore } = await import(
+          "./memory/entity-memory-store.js"
+        );
+        const { InMemoryEntityLinkStore } = await import(
+          "./memory/entity-link-store.js"
+        );
         const { EntityLinker } = await import("./memory/entity-linker.js");
         const { TierPromoter } = await import("./memory/tier-promoter.js");
-        const { ActionIntentTracker } = await import("./memory/action-intent-tracker.js");
+        const { ActionIntentTracker } = await import(
+          "./memory/action-intent-tracker.js"
+        );
 
         // Entity memory store (provides cross-platform entity-scoped memories)
         const entityMemoryStore = new InMemoryEntityMemoryStore();
@@ -919,9 +1157,12 @@ export class MilaidyAutonomyService extends Service {
         const actionIntentTracker = new ActionIntentTracker();
 
         // Wire retriever with entity memory provider for cross-room retrieval
-        const retrievalConfig = this.resolvedRetrievalConfig ?? DEFAULT_RETRIEVAL_CONFIG;
+        const retrievalConfig =
+          this.resolvedRetrievalConfig ?? DEFAULT_RETRIEVAL_CONFIG;
         const retriever = new TrustAwareRetrieverImpl(
-          retrievalConfig as Required<import("./config.js").AutonomyRetrievalConfig>,
+          retrievalConfig as Required<
+            import("./config.js").AutonomyRetrievalConfig
+          >,
           this.trustScorer,
           this.eventBus,
           entityMemoryStore,
@@ -930,15 +1171,21 @@ export class MilaidyAutonomyService extends Service {
         container.registerValue(TOKENS.TrustAwareRetriever, retriever);
 
         // Store references for access by other components
-        (this as Record<string, unknown>)._entityMemoryStore = entityMemoryStore;
+        (this as Record<string, unknown>)._entityMemoryStore =
+          entityMemoryStore;
         (this as Record<string, unknown>)._entityLinkStore = entityLinkStore;
         (this as Record<string, unknown>)._entityLinker = entityLinker;
         (this as Record<string, unknown>)._tierPromoter = tierPromoter;
-        (this as Record<string, unknown>)._actionIntentTracker = actionIntentTracker;
+        (this as Record<string, unknown>)._actionIntentTracker =
+          actionIntentTracker;
 
-        logger.info("[autonomy-service] Cross-platform memory components initialized (entity linker, tier promoter, action tracker)");
+        logger.info(
+          "[autonomy-service] Cross-platform memory components initialized (entity linker, tier promoter, action tracker)",
+        );
       } catch (err) {
-        logger.debug(`[autonomy-service] Retriever registration skipped: ${err instanceof Error ? err.message : err}`);
+        logger.debug(
+          `[autonomy-service] Retriever registration skipped: ${err instanceof Error ? err.message : err}`,
+        );
       }
     } catch {
       // DI container not available — non-fatal
@@ -951,10 +1198,14 @@ export class MilaidyAutonomyService extends Service {
     if (this.enabled) return;
     // Re-initialize with enabled override
     await loadImplementations();
-    let eventBusRef: { emit: (event: string, payload: unknown) => void } | undefined;
+    let eventBusRef:
+      | { emit: (event: string, payload: unknown) => void }
+      | undefined;
     try {
       const { getEventBus } = await import("../events/event-bus.js");
-      eventBusRef = getEventBus() as unknown as { emit: (event: string, payload: unknown) => void };
+      eventBusRef = getEventBus() as unknown as {
+        emit: (event: string, payload: unknown) => void;
+      };
     } catch {
       // Event bus not available — non-fatal
     }
@@ -1023,7 +1274,10 @@ export class MilaidyAutonomyService extends Service {
       this.invariantChecker,
     );
     this.memoryWriterRole = new _GatedMemoryWriter(this.memoryGate);
-    this.auditorRole = new _DriftAwareAuditor(this.driftMonitor, this.eventStore);
+    this.auditorRole = new _DriftAwareAuditor(
+      this.driftMonitor,
+      this.eventStore,
+    );
     this.safeModeController = new _SafeModeControllerImpl({
       eventBus: eventBusRef,
     });
@@ -1039,7 +1293,9 @@ export class MilaidyAutonomyService extends Service {
     );
 
     // Initialize identity if not already set
-    const { createDefaultAutonomyIdentity } = await import("./identity/schema.js");
+    const { createDefaultAutonomyIdentity } = await import(
+      "./identity/schema.js"
+    );
     this.identityConfig = createDefaultAutonomyIdentity();
 
     this.enabled = true;
@@ -1115,16 +1371,26 @@ export class MilaidyAutonomyService extends Service {
     update: Partial<AutonomyIdentityConfig>,
     context: import("./identity/update-policy.js").IdentityUpdateContext = {},
   ): Promise<AutonomyIdentityConfig> {
-    const { computeIdentityHash, validateAutonomyIdentity } = await import("./identity/schema.js");
-    const { evaluateIdentityUpdatePolicy } = await import("./identity/update-policy.js");
+    const { computeIdentityHash, validateAutonomyIdentity } = await import(
+      "./identity/schema.js"
+    );
+    const { evaluateIdentityUpdatePolicy } = await import(
+      "./identity/update-policy.js"
+    );
 
     if (!this.identityConfig) {
-      const { createDefaultAutonomyIdentity } = await import("./identity/schema.js");
+      const { createDefaultAutonomyIdentity } = await import(
+        "./identity/schema.js"
+      );
       this.identityConfig = createDefaultAutonomyIdentity();
     }
 
     const previous = this.identityConfig;
-    const policyDecision = evaluateIdentityUpdatePolicy(previous, update, context);
+    const policyDecision = evaluateIdentityUpdatePolicy(
+      previous,
+      update,
+      context,
+    );
     if (!policyDecision.allowed) {
       throw new Error(
         `Identity update rejected by policy: ${policyDecision.violations.join("; ")}`,
@@ -1154,7 +1420,9 @@ export class MilaidyAutonomyService extends Service {
     // Validate
     const issues = validateAutonomyIdentity(updated);
     if (issues.length > 0) {
-      throw new Error(`Identity validation failed: ${issues.map((i) => `${i.field}: ${i.message}`).join("; ")}`);
+      throw new Error(
+        `Identity validation failed: ${issues.map((i) => `${i.field}: ${i.message}`).join("; ")}`,
+      );
     }
 
     this.identityConfig = updated;
@@ -1166,7 +1434,9 @@ export class MilaidyAutonomyService extends Service {
         await this.identityStore.saveVersion(updated);
         persisted = true;
       } catch (err) {
-        logger.warn(`[autonomy-service] Failed to persist identity version: ${err instanceof Error ? err.message : err}`);
+        logger.warn(
+          `[autonomy-service] Failed to persist identity version: ${err instanceof Error ? err.message : err}`,
+        );
       }
     }
 
@@ -1181,7 +1451,8 @@ export class MilaidyAutonomyService extends Service {
     }
 
     this.eventBus?.emit("autonomy:identity:updated", {
-      fromVersion: previous?.identityVersion ?? Math.max(1, updated.identityVersion - 1),
+      fromVersion:
+        previous?.identityVersion ?? Math.max(1, updated.identityVersion - 1),
       toVersion: updated.identityVersion,
       changedFields: policyDecision.changedFields,
       persisted,
@@ -1226,19 +1497,27 @@ export class MilaidyAutonomyService extends Service {
     return this.toolRegistry;
   }
 
-  getPostConditionVerifier(): import("./verification/postcondition-verifier.js").PostConditionVerifier | null {
+  getPostConditionVerifier():
+    | import("./verification/postcondition-verifier.js").PostConditionVerifier
+    | null {
     return this.postConditionVerifier;
   }
 
-  getStateMachine(): import("./state-machine/types.js").KernelStateMachineInterface | null {
+  getStateMachine():
+    | import("./state-machine/types.js").KernelStateMachineInterface
+    | null {
     return this.stateMachine;
   }
 
-  getWorkflowEngine(): import("./adapters/workflow/types.js").WorkflowEngine | null {
+  getWorkflowEngine():
+    | import("./adapters/workflow/types.js").WorkflowEngine
+    | null {
     return this.workflowEngine;
   }
 
-  getApprovalGate(): import("./approval/types.js").ApprovalGateInterface | null {
+  getApprovalGate():
+    | import("./approval/types.js").ApprovalGateInterface
+    | null {
     return this.approvalGate;
   }
 
@@ -1246,19 +1525,27 @@ export class MilaidyAutonomyService extends Service {
     return this.eventStore;
   }
 
-  getCompensationIncidentManager(): import("./workflow/types.js").CompensationIncidentManagerInterface | null {
+  getCompensationIncidentManager():
+    | import("./workflow/types.js").CompensationIncidentManagerInterface
+    | null {
     return this.compensationIncidentManager;
   }
 
-  getExecutionPipeline(): import("./workflow/types.js").ToolExecutionPipelineInterface | null {
+  getExecutionPipeline():
+    | import("./workflow/types.js").ToolExecutionPipelineInterface
+    | null {
     return this.executionPipeline;
   }
 
-  getInvariantChecker(): import("./verification/invariants/invariant-checker.js").InvariantChecker | null {
+  getInvariantChecker():
+    | import("./verification/invariants/invariant-checker.js").InvariantChecker
+    | null {
     return this.invariantChecker;
   }
 
-  getBaselineHarness(): import("./metrics/baseline-harness.js").BaselineHarness | null {
+  getBaselineHarness():
+    | import("./metrics/baseline-harness.js").BaselineHarness
+    | null {
     return this.baselineHarness;
   }
 
@@ -1282,7 +1569,9 @@ export class MilaidyAutonomyService extends Service {
     return this.auditorRole;
   }
 
-  getSafeModeController(): import("./roles/types.js").SafeModeController | null {
+  getSafeModeController():
+    | import("./roles/types.js").SafeModeController
+    | null {
     return this.safeModeController;
   }
 
@@ -1303,9 +1592,7 @@ export class MilaidyAutonomyService extends Service {
           ]),
       executor: moduleSnapshot
         ? this.describeModuleRoleHealth("executor", moduleSnapshot.executor)
-        : this.describeRoleHealth("executor", this.executorRole, [
-            "execute",
-          ]),
+        : this.describeRoleHealth("executor", this.executorRole, ["execute"]),
       verifier: moduleSnapshot
         ? this.describeModuleRoleHealth("verifier", moduleSnapshot.verifier)
         : this.describeRoleHealth("verifier", this.verifier, [
@@ -1372,29 +1659,41 @@ export class MilaidyAutonomyService extends Service {
 
   // ---------- Persistence Accessors ----------
 
-  getDbAdapter(): import("./persistence/db-adapter.js").AutonomyDbAdapter | null {
+  getDbAdapter():
+    | import("./persistence/db-adapter.js").AutonomyDbAdapter
+    | null {
     return this.dbAdapter;
   }
 
-  getApprovalLog(): import("./persistence/pg-approval-log.js").ApprovalLogInterface | null {
+  getApprovalLog():
+    | import("./persistence/pg-approval-log.js").ApprovalLogInterface
+    | null {
     return this.approvalLog;
   }
 
-  getIdentityStore(): import("./persistence/pg-identity-store.js").IdentityStoreInterface | null {
+  getIdentityStore():
+    | import("./persistence/pg-identity-store.js").IdentityStoreInterface
+    | null {
     return this.identityStore;
   }
 
   // ---------- Phase 4 — Learning Accessors ----------
 
-  getTraceCollector(): import("./learning/trace-collector.js").TraceCollector | null {
+  getTraceCollector():
+    | import("./learning/trace-collector.js").TraceCollector
+    | null {
     return this.traceCollector;
   }
 
-  getHackDetector(): import("./learning/hack-detection.js").HackDetector | null {
+  getHackDetector():
+    | import("./learning/hack-detection.js").HackDetector
+    | null {
     return this.hackDetector;
   }
 
-  getRolloutCollector(): import("./learning/rollout.js").RolloutCollector | null {
+  getRolloutCollector():
+    | import("./learning/rollout.js").RolloutCollector
+    | null {
     return this.rolloutCollector;
   }
 
@@ -1402,39 +1701,53 @@ export class MilaidyAutonomyService extends Service {
     return this.modelProvider;
   }
 
-  getPromptBuilder(): import("./learning/prompt-builder.js").SystemPromptBuilder | null {
+  getPromptBuilder():
+    | import("./learning/prompt-builder.js").SystemPromptBuilder
+    | null {
     return this.promptBuilder;
   }
 
-  getCheckpointManager(): import("./learning/rollout.js").CheckpointManager | null {
+  getCheckpointManager():
+    | import("./learning/rollout.js").CheckpointManager
+    | null {
     return this.checkpointManager;
   }
 
-  getAdversarialGenerator(): import("./learning/adversarial.js").AdversarialScenarioGenerator | null {
+  getAdversarialGenerator():
+    | import("./learning/adversarial.js").AdversarialScenarioGenerator
+    | null {
     return this.adversarialGenerator;
   }
 
   // ---------- Phase 5 — Domains & Governance Accessors ----------
 
-  getDomainPackRegistry(): import("./domains/registry.js").DomainPackRegistry | null {
+  getDomainPackRegistry():
+    | import("./domains/registry.js").DomainPackRegistry
+    | null {
     return this.domainPackRegistry;
   }
 
-  getPolicyEngine(): import("./domains/governance/policy-engine.js").PolicyEngine | null {
+  getPolicyEngine():
+    | import("./domains/governance/policy-engine.js").PolicyEngine
+    | null {
     return this.policyEngine;
   }
 
-  getAuditRetentionManager(): import("./domains/governance/retention-manager.js").AuditRetentionManager | null {
+  getAuditRetentionManager():
+    | import("./domains/governance/retention-manager.js").AuditRetentionManager
+    | null {
     return this.auditRetentionManager;
   }
 
-  getPilotRunner(): import("./domains/pilot/pilot-runner.js").PilotRunner | null {
+  getPilotRunner():
+    | import("./domains/pilot/pilot-runner.js").PilotRunner
+    | null {
     return this.pilotRunner;
   }
 
-  private wireStateTransitionPersistence(
-    eventBusRef?: { emit: (event: string, payload: unknown) => void },
-  ): void {
+  private wireStateTransitionPersistence(eventBusRef?: {
+    emit: (event: string, payload: unknown) => void;
+  }): void {
     this.stateTransitionUnsubscribe?.();
     this.stateTransitionUnsubscribe = null;
 

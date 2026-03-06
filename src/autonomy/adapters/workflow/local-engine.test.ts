@@ -12,7 +12,9 @@ describe("LocalWorkflowEngine", () => {
       id: "double",
       name: "Doubler",
       steps: [
-        (input: Record<string, unknown>) => ({ value: (input.value as number) * 2 }),
+        (input: Record<string, unknown>) => ({
+          value: (input.value as number) * 2,
+        }),
       ],
     });
     const result = await engine.execute("double", { value: 5 });
@@ -28,7 +30,11 @@ describe("LocalWorkflowEngine", () => {
       id: "add-one",
       name: "Adder",
       steps: [
-        { execute: async (input: unknown) => ({ value: ((input as Record<string, number>).value) + 1 }) },
+        {
+          execute: async (input: unknown) => ({
+            value: (input as Record<string, number>).value + 1,
+          }),
+        },
       ],
     });
     const result = await engine.execute("add-one", { value: 10 });
@@ -49,7 +55,12 @@ describe("LocalWorkflowEngine", () => {
     });
     const result = await engine.execute("pipeline", { initial: true });
     expect(result.success).toBe(true);
-    expect(result.output).toEqual({ initial: true, step1: true, step2: true, step3: true });
+    expect(result.output).toEqual({
+      initial: true,
+      step1: true,
+      step2: true,
+      step3: true,
+    });
   });
 
   it("returns error for unregistered workflow", async () => {
@@ -65,7 +76,11 @@ describe("LocalWorkflowEngine", () => {
     engine.register({
       id: "fail",
       name: "Failing",
-      steps: [() => { throw new Error("step exploded"); }],
+      steps: [
+        () => {
+          throw new Error("step exploded");
+        },
+      ],
     });
     const result = await engine.execute("fail", {});
     expect(result.success).toBe(false);
@@ -132,7 +147,11 @@ describe("LocalWorkflowEngine", () => {
     engine.register({
       id: "explode",
       name: "Explode",
-      steps: [() => { throw new Error("boom"); }],
+      steps: [
+        () => {
+          throw new Error("boom");
+        },
+      ],
     });
 
     await engine.execute("explode", {});

@@ -9,11 +9,11 @@
 
 import type { IAgentRuntime, Memory, UUID } from "@elizaos/core";
 import {
-  DEFAULT_RETRIEVAL_CONFIG,
   type AutonomyRetrievalConfig,
+  DEFAULT_RETRIEVAL_CONFIG,
 } from "../config.js";
-import type { MemoryType } from "../types.js";
 import type { TrustScorer } from "../trust/scorer.js";
+import type { MemoryType } from "../types.js";
 
 // ---------- Types ----------
 
@@ -78,7 +78,10 @@ export interface RankedMemory {
 
 /** Interface for trust-aware memory retrieval. */
 export interface TrustAwareRetriever {
-  retrieve(runtime: IAgentRuntime, options: RetrievalOptions): Promise<RankedMemory[]>;
+  retrieve(
+    runtime: IAgentRuntime,
+    options: RetrievalOptions,
+  ): Promise<RankedMemory[]>;
 }
 
 export interface TrustOverrideAuditRecord {
@@ -146,7 +149,9 @@ const NON_PERSON_ACTORS = new Set([
 export class TrustAwareRetrieverImpl implements TrustAwareRetriever {
   private readonly config: Required<AutonomyRetrievalConfig>;
   private readonly scorer: TrustScorer | null;
-  private readonly eventBus: { emit: (event: string, payload: unknown) => void } | null;
+  private readonly eventBus: {
+    emit: (event: string, payload: unknown) => void;
+  } | null;
   private readonly entityMemoryProvider: EntityMemoryProvider | null;
 
   constructor(
@@ -383,7 +388,10 @@ export class TrustAwareRetrieverImpl implements TrustAwareRetriever {
           // Semantic search failed — fall back to recency instead of returning empty
           this.eventBus?.emit("autonomy:retrieval:entity-search-fallback", {
             canonicalEntityId,
-            error: semanticErr instanceof Error ? semanticErr.message : String(semanticErr),
+            error:
+              semanticErr instanceof Error
+                ? semanticErr.message
+                : String(semanticErr),
             fallback: "recency",
           });
         }
@@ -492,10 +500,7 @@ export class TrustAwareRetrieverImpl implements TrustAwareRetriever {
       config.maxResults = guardedMaxResults;
     }
 
-    const guardedMinTrust = Math.max(
-      0,
-      Math.min(1, config.minTrustThreshold),
-    );
+    const guardedMinTrust = Math.max(0, Math.min(1, config.minTrustThreshold));
     if (guardedMinTrust !== config.minTrustThreshold) {
       adjustments.push(
         `minTrustThreshold clamped to ${guardedMinTrust.toFixed(3)} (requested ${config.minTrustThreshold})`,
@@ -505,7 +510,7 @@ export class TrustAwareRetrieverImpl implements TrustAwareRetriever {
 
     const normalizedTypeBoosts: Record<string, number> = {};
     for (const [key, value] of Object.entries(config.typeBoosts ?? {})) {
-      if (!Number.isFinite(value)) {
+      if (value === undefined || !Number.isFinite(value)) {
         adjustments.push(`typeBoosts.${key} dropped due to non-finite value`);
         continue;
       }
@@ -611,7 +616,8 @@ export class TrustAwareRetrieverImpl implements TrustAwareRetriever {
 
   /** Compute trust score for a memory. */
   computeTrustScore(memory: Memory, trustOverride?: number): number {
-    if (trustOverride !== undefined) return Math.max(0, Math.min(1, trustOverride));
+    if (trustOverride !== undefined)
+      return Math.max(0, Math.min(1, trustOverride));
 
     // Check metadata for trust score (set by memory gate)
     const meta = memory.metadata as Record<string, unknown> | undefined;
@@ -634,7 +640,7 @@ export class TrustAwareRetrieverImpl implements TrustAwareRetriever {
     if (createdAt <= 0) return 0.5;
 
     const ageMs = Math.max(0, now - createdAt);
-    return Math.pow(0.5, ageMs / RECENCY_HALF_LIFE_MS);
+    return 0.5 ** (ageMs / RECENCY_HALF_LIFE_MS);
   }
 
   /** Compute relevance score from search similarity metadata. */
@@ -671,20 +677,41 @@ export class TrustAwareRetrieverImpl implements TrustAwareRetriever {
     }
 
     // Content-based heuristics
-    const text = (memory.content as { text?: string })?.text?.toLowerCase() ?? "";
-    if (text.includes("task") || text.includes("todo") || text.includes("to-do")) {
+    const text =
+      (memory.content as { text?: string })?.text?.toLowerCase() ?? "";
+    if (
+      text.includes("task") ||
+      text.includes("todo") ||
+      text.includes("to-do")
+    ) {
       return "task";
     }
-    if (text.includes("action") || text.includes("executed") || text.includes("performed")) {
+    if (
+      text.includes("action") ||
+      text.includes("executed") ||
+      text.includes("performed")
+    ) {
       return "action";
     }
-    if (text.includes("always") || text.includes("never") || text.includes("must")) {
+    if (
+      text.includes("always") ||
+      text.includes("never") ||
+      text.includes("must")
+    ) {
       return "instruction";
     }
-    if (text.includes("goal") || text.includes("objective") || text.includes("target")) {
+    if (
+      text.includes("goal") ||
+      text.includes("objective") ||
+      text.includes("target")
+    ) {
       return "goal";
     }
-    if (text.includes("prefer") || text.includes("like") || text.includes("want")) {
+    if (
+      text.includes("prefer") ||
+      text.includes("like") ||
+      text.includes("want")
+    ) {
       return "preference";
     }
 

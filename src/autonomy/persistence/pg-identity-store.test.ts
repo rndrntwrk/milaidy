@@ -3,16 +3,13 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-
-import { PgIdentityStore } from "./pg-identity-store.js";
-import type { AutonomyDbAdapter } from "./db-adapter.js";
 import type { AutonomyIdentityConfig } from "../identity/schema.js";
+import type { AutonomyDbAdapter } from "./db-adapter.js";
+import { PgIdentityStore } from "./pg-identity-store.js";
 
 // ---------- Mock ----------
 
-function makeMockAdapter(
-  execFn?: ReturnType<typeof vi.fn>,
-): AutonomyDbAdapter {
+function makeMockAdapter(execFn?: ReturnType<typeof vi.fn>): AutonomyDbAdapter {
   return {
     executeRaw: execFn ?? vi.fn().mockResolvedValue({ rows: [], columns: [] }),
     agentId: "test-agent",
@@ -40,14 +37,16 @@ describe("PgIdentityStore", () => {
   describe("saveVersion()", () => {
     it("deactivates previous and inserts new version", async () => {
       const exec = vi.fn().mockResolvedValue({
-        rows: [{
-          version: 1,
-          identity: makeIdentity(),
-          hash: "abc123",
-          agent_id: "test-agent",
-          active: true,
-          created_at: "2025-01-01T00:00:00Z",
-        }],
+        rows: [
+          {
+            version: 1,
+            identity: makeIdentity(),
+            hash: "abc123",
+            agent_id: "test-agent",
+            active: true,
+            created_at: "2025-01-01T00:00:00Z",
+          },
+        ],
         columns: [],
       });
       const store = new PgIdentityStore(makeMockAdapter(exec));
@@ -73,14 +72,16 @@ describe("PgIdentityStore", () => {
   describe("getActive()", () => {
     it("returns active identity version", async () => {
       const exec = vi.fn().mockResolvedValue({
-        rows: [{
-          version: 2,
-          identity: makeIdentity(2),
-          hash: "def456",
-          agent_id: "test-agent",
-          active: true,
-          created_at: "2025-01-01T00:00:00Z",
-        }],
+        rows: [
+          {
+            version: 2,
+            identity: makeIdentity(2),
+            hash: "def456",
+            agent_id: "test-agent",
+            active: true,
+            created_at: "2025-01-01T00:00:00Z",
+          },
+        ],
         columns: [],
       });
       const store = new PgIdentityStore(makeMockAdapter(exec));
@@ -88,8 +89,8 @@ describe("PgIdentityStore", () => {
       const entry = await store.getActive();
 
       expect(entry).toBeDefined();
-      expect(entry!.version).toBe(2);
-      expect(entry!.active).toBe(true);
+      expect(entry?.version).toBe(2);
+      expect(entry?.active).toBe(true);
 
       const sql = exec.mock.calls[0][0] as string;
       expect(sql).toContain("active = true");
@@ -107,8 +108,22 @@ describe("PgIdentityStore", () => {
     it("returns version history", async () => {
       const exec = vi.fn().mockResolvedValue({
         rows: [
-          { version: 2, identity: makeIdentity(2), hash: "h2", agent_id: "test-agent", active: true, created_at: "2025-01-02T00:00:00Z" },
-          { version: 1, identity: makeIdentity(1), hash: "h1", agent_id: "test-agent", active: false, created_at: "2025-01-01T00:00:00Z" },
+          {
+            version: 2,
+            identity: makeIdentity(2),
+            hash: "h2",
+            agent_id: "test-agent",
+            active: true,
+            created_at: "2025-01-02T00:00:00Z",
+          },
+          {
+            version: 1,
+            identity: makeIdentity(1),
+            hash: "h1",
+            agent_id: "test-agent",
+            active: false,
+            created_at: "2025-01-01T00:00:00Z",
+          },
         ],
         columns: [],
       });
@@ -129,14 +144,23 @@ describe("PgIdentityStore", () => {
   describe("getVersion()", () => {
     it("returns specific version", async () => {
       const exec = vi.fn().mockResolvedValue({
-        rows: [{ version: 1, identity: makeIdentity(), hash: "abc", agent_id: "test-agent", active: false, created_at: new Date() }],
+        rows: [
+          {
+            version: 1,
+            identity: makeIdentity(),
+            hash: "abc",
+            agent_id: "test-agent",
+            active: false,
+            created_at: new Date(),
+          },
+        ],
         columns: [],
       });
       const store = new PgIdentityStore(makeMockAdapter(exec));
 
       const entry = await store.getVersion(1);
       expect(entry).toBeDefined();
-      expect(entry!.version).toBe(1);
+      expect(entry?.version).toBe(1);
     });
 
     it("returns undefined when version not found", async () => {

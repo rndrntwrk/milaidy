@@ -11,6 +11,38 @@ export {
   MANIPULATION_SEEDS,
   REWARD_GAMING_SEEDS,
 } from "./adversarial.js";
+// Learning trace dataset schema
+export {
+  type LearningTraceDataset,
+  LearningTraceDatasetSchema,
+  type LearningTraceExample,
+  LearningTraceExampleSchema,
+  parseLearningTraceDataset,
+  type TraceLabel,
+  TraceLabelSchema,
+} from "./dataset-schema.js";
+// Dataset splitting pipeline
+export {
+  type AdversarialSplitOptions,
+  type AdversarialSplitResult,
+  buildAdversarialSplit,
+  buildHeldOutValidationSplit,
+  type HeldOutSplitOptions,
+  type HeldOutSplitResult,
+} from "./dataset-splits.js";
+// De-identification pipeline
+export {
+  type DeidentificationOptions,
+  Deidentifier,
+  deidentifyEpisodes,
+  deidentifyExamples,
+} from "./deidentification.js";
+// Learning trace dataset extraction from event logs
+export {
+  type EventLogEntry,
+  type ExtractDatasetOptions,
+  extractLearningTraceDatasetFromEvents,
+} from "./event-log-extractor.js";
 // Hack detection
 export {
   createHackDetectionInvariants,
@@ -22,78 +54,28 @@ export { LLMJudgeEvaluator } from "./llm-judge-evaluator.js";
 export { HttpModelProvider, StubModelProvider } from "./model-provider.js";
 // Prompt builder
 export {
-  SystemPromptBuilder,
   type PromptRole,
   type PromptVariant,
+  SystemPromptBuilder,
 } from "./prompt-builder.js";
 // Prompt variant evaluator
 export {
   evaluatePromptVariantsOnHeldOutScenarios,
-  selectHeldOutScenarios,
+  type HeldOutScenarioOptions,
   type PromptVariantEvaluationOptions,
   type PromptVariantEvaluationResult,
   type PromptVariantScenarioScore,
   type PromptVariantScore,
-  type HeldOutScenarioOptions,
+  selectHeldOutScenarios,
 } from "./prompt-variant-evaluator.js";
-// RLVR training dataset helpers
+// Quality filtering pipeline
 export {
-  parseRLVRTrainingDataset,
-  fromLearningTraceDataset,
-  RLVRTrainingDatasetSchema,
-  RLVRTrainingExampleSchema,
-  type RLVRTrainingDataset,
-  type RLVRTrainingExample,
-} from "./training/dataset.js";
-// RLVR loop + hyperparameter tuning
-export {
-  StubRLVRLoop,
-  ExternalRLVRLoop,
-  type RLVRConfig,
-  type TrainingResult,
-  type RLVRLoop,
-} from "./training/rlvr-loop.js";
-export {
-  GridSearchTuner,
-  type HyperparamSpace,
-  type TrialResult,
-  type TuningResult,
-  type ObjectiveFunction,
-} from "./training/hyperparam-tuner.js";
-// Training environment + orchestration
-export {
-  createTrainingEnvironmentConfig,
-  computeTrainingEnvironmentFingerprint,
-  buildTrainingEnvironmentManifest,
-  DEFAULT_HYPERPARAM_SPACE,
-  DEFAULT_RLVR_CONFIG,
-  type BuildTrainingEnvironmentInput,
-  type TrainingEnvironmentConfig,
-} from "./training/environment.js";
-export {
-  TrainingJobOrchestrator,
-  type TrainingJobResult,
-} from "./training/job-orchestrator.js";
-// Experiment tracking + checkpoint registry
-export {
-  InMemoryExperimentRegistry,
-  FileExperimentRegistry,
-  ExperimentRunSchema,
-  ExperimentArtifactSchema,
-  ExperimentStatusSchema,
-  ArtifactKindSchema,
-  type ExperimentRun,
-  type ExperimentArtifact,
-  type ExperimentStatus,
-  type ArtifactKind,
-} from "./training/experiment-registry.js";
-export {
-  InMemoryCheckpointRegistry,
-  FileCheckpointRegistry,
-  ModelCheckpointSchema,
-  type ModelCheckpoint,
-  type RollbackPlan,
-} from "./training/checkpoint-registry.js";
+  applyQualityFilters,
+  DEFAULT_QUALITY_FILTER_CONFIG,
+  type QualityFilterConfig,
+  type QualityFilterDrop,
+  type QualityFilterResult,
+} from "./quality-filters.js";
 // Reward
 export {
   CheckpointReward,
@@ -105,46 +87,64 @@ export {
 export { CheckpointManager, RolloutCollector } from "./rollout.js";
 // Trace collector & exporter
 export { DatasetExporter, TraceCollector } from "./trace-collector.js";
-// De-identification pipeline
 export {
-  Deidentifier,
-  deidentifyEpisodes,
-  deidentifyExamples,
-  type DeidentificationOptions,
-} from "./deidentification.js";
-// Quality filtering pipeline
+  FileCheckpointRegistry,
+  InMemoryCheckpointRegistry,
+  type ModelCheckpoint,
+  ModelCheckpointSchema,
+  type RollbackPlan,
+} from "./training/checkpoint-registry.js";
+// RLVR training dataset helpers
 export {
-  applyQualityFilters,
-  DEFAULT_QUALITY_FILTER_CONFIG,
-  type QualityFilterConfig,
-  type QualityFilterDrop,
-  type QualityFilterResult,
-} from "./quality-filters.js";
-// Dataset splitting pipeline
+  fromLearningTraceDataset,
+  parseRLVRTrainingDataset,
+  type RLVRTrainingDataset,
+  RLVRTrainingDatasetSchema,
+  type RLVRTrainingExample,
+  RLVRTrainingExampleSchema,
+} from "./training/dataset.js";
+// Training environment + orchestration
 export {
-  buildHeldOutValidationSplit,
-  buildAdversarialSplit,
-  type HeldOutSplitOptions,
-  type HeldOutSplitResult,
-  type AdversarialSplitOptions,
-  type AdversarialSplitResult,
-} from "./dataset-splits.js";
-// Learning trace dataset schema
+  type BuildTrainingEnvironmentInput,
+  buildTrainingEnvironmentManifest,
+  computeTrainingEnvironmentFingerprint,
+  createTrainingEnvironmentConfig,
+  DEFAULT_HYPERPARAM_SPACE,
+  DEFAULT_RLVR_CONFIG,
+  type TrainingEnvironmentConfig,
+} from "./training/environment.js";
+// Experiment tracking + checkpoint registry
 export {
-  parseLearningTraceDataset,
-  LearningTraceDatasetSchema,
-  LearningTraceExampleSchema,
-  TraceLabelSchema,
-  type LearningTraceDataset,
-  type LearningTraceExample,
-  type TraceLabel,
-} from "./dataset-schema.js";
-// Learning trace dataset extraction from event logs
+  type ArtifactKind,
+  ArtifactKindSchema,
+  type ExperimentArtifact,
+  ExperimentArtifactSchema,
+  type ExperimentRun,
+  ExperimentRunSchema,
+  type ExperimentStatus,
+  ExperimentStatusSchema,
+  FileExperimentRegistry,
+  InMemoryExperimentRegistry,
+} from "./training/experiment-registry.js";
 export {
-  extractLearningTraceDatasetFromEvents,
-  type EventLogEntry,
-  type ExtractDatasetOptions,
-} from "./event-log-extractor.js";
+  GridSearchTuner,
+  type HyperparamSpace,
+  type ObjectiveFunction,
+  type TrialResult,
+  type TuningResult,
+} from "./training/hyperparam-tuner.js";
+export {
+  TrainingJobOrchestrator,
+  type TrainingJobResult,
+} from "./training/job-orchestrator.js";
+// RLVR loop + hyperparameter tuning
+export {
+  ExternalRLVRLoop,
+  type RLVRConfig,
+  type RLVRLoop,
+  StubRLVRLoop,
+  type TrainingResult,
+} from "./training/rlvr-loop.js";
 // Types
 export type {
   CollectedEpisode,

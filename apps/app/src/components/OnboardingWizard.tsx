@@ -754,28 +754,44 @@ export function OnboardingWizard() {
                 okay which cloud?
               </h2>
             </div>
-            <div className="flex flex-col gap-2 text-left max-w-[600px] mx-auto" role="radiogroup" aria-label="Cloud provider">
-              {onboardingOptions?.cloudProviders.map((provider: CloudProviderOption) => (
-                <button
-                  key={provider.id}
-                  role="radio"
-                  className={`px-4 py-3 border cursor-pointer bg-card transition-colors rounded-lg text-left ${
-                    onboardingCloudProvider === provider.id
-                      ? "border-accent !bg-accent !text-accent-fg"
-                      : "border-border hover:border-accent"
-                  }`}
-                  onClick={() => handleCloudProviderSelect(provider.id)}
-                  aria-checked={onboardingCloudProvider === provider.id}
-                >
-                  <div className="font-bold text-sm">{provider.name}</div>
-                  {provider.description && (
-                    <div className={`text-xs mt-0.5 ${
-                      onboardingCloudProvider === provider.id ? "text-accent-fg/70" : "text-muted"
-                    }`}>{provider.description}</div>
-                  )}
-                </button>
-              ))}
-            </div>
+            <fieldset
+              className="flex flex-col gap-2 text-left max-w-[600px] mx-auto"
+              aria-label="Cloud provider"
+            >
+              <legend className="sr-only">Cloud provider</legend>
+              {onboardingOptions?.cloudProviders.map(
+                (provider: CloudProviderOption) => (
+                  <label
+                    key={provider.id}
+                    className={`px-4 py-3 border cursor-pointer bg-card transition-colors rounded-lg text-left ${
+                      onboardingCloudProvider === provider.id
+                        ? "border-accent !bg-accent !text-accent-fg"
+                        : "border-border hover:border-accent"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="onboarding-cloud-provider"
+                      className="sr-only"
+                      checked={onboardingCloudProvider === provider.id}
+                      onChange={() => handleCloudProviderSelect(provider.id)}
+                    />
+                    <div className="font-bold text-sm">{provider.name}</div>
+                    {provider.description && (
+                      <div
+                        className={`text-xs mt-0.5 ${
+                          onboardingCloudProvider === provider.id
+                            ? "text-accent-fg/70"
+                            : "text-muted"
+                        }`}
+                      >
+                        {provider.description}
+                      </div>
+                    )}
+                  </label>
+                ),
+              )}
+            </fieldset>
             {onboardingCloudProvider === "elizacloud" && (
               <div className="max-w-[600px] mx-auto mt-4">
                 {cloudConnected ? (
@@ -832,7 +848,10 @@ export function OnboardingWizard() {
             </div>
             <div className="flex flex-col gap-4 text-left max-w-[600px] mx-auto">
               <div>
-                <label htmlFor="onboarding-small-model" className="text-[13px] font-bold text-txt-strong block mb-2 text-left">
+                <label
+                  htmlFor="onboarding-small-model"
+                  className="text-[13px] font-bold text-txt-strong block mb-2 text-left"
+                >
                   Small Model:
                 </label>
                 <select
@@ -851,7 +870,10 @@ export function OnboardingWizard() {
                 </select>
               </div>
               <div>
-                <label htmlFor="onboarding-large-model" className="text-[13px] font-bold text-txt-strong block mb-2 text-left">
+                <label
+                  htmlFor="onboarding-large-model"
+                  className="text-[13px] font-bold text-txt-strong block mb-2 text-left"
+                >
                   Large Model:
                 </label>
                 <select
@@ -1523,42 +1545,41 @@ export function OnboardingWizard() {
             {onboardingProvider === "openrouter" &&
               onboardingApiKey.trim() &&
               onboardingOptions?.openrouterModels && (
-                <div className="mt-4 text-left">
-                  <label className="text-[13px] font-bold text-txt-strong block mb-2">
+                <fieldset className="mt-4 text-left">
+                  <legend className="text-[13px] font-bold text-txt-strong block mb-2">
                     Select Model:
-                  </label>
-                  <div
-                    className="flex flex-col gap-2"
-                    role="radiogroup"
-                    aria-label="OpenRouter model"
-                  >
+                  </legend>
+                  <div className="flex flex-col gap-2">
                     {onboardingOptions?.openrouterModels?.map(
                       (model: OpenRouterModelOption) => (
-                        <button
-                          type="button"
+                        <label
                           key={model.id}
-                          role="radio"
                           className={`w-full px-4 py-3 border cursor-pointer transition-colors text-left rounded-lg ${
                             onboardingOpenRouterModel === model.id
                               ? "border-accent !bg-accent !text-accent-fg"
                               : "border-border bg-card hover:border-accent/50"
                           }`}
-                          onClick={() => handleOpenRouterModelSelect(model.id)}
-                          aria-checked={
-                            onboardingOpenRouterModel === model.id
-                          }
                         >
+                          <input
+                            type="radio"
+                            name="onboarding-openrouter-model"
+                            className="sr-only"
+                            checked={onboardingOpenRouterModel === model.id}
+                            onChange={() =>
+                              handleOpenRouterModelSelect(model.id)
+                            }
+                          />
                           <div className="font-bold text-sm">{model.name}</div>
                           {model.description && (
                             <div className="text-xs text-muted mt-0.5">
                               {model.description}
                             </div>
                           )}
-                        </button>
+                        </label>
                       ),
                     )}
                   </div>
-                </div>
+                </fieldset>
               )}
           </div>
         );

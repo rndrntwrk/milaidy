@@ -4,7 +4,7 @@
  * @module autonomy/adapters/policy/local-evaluator
  */
 
-import type { PolicyEvaluator, PolicyInput, PolicyDecision } from "./types.js";
+import type { PolicyDecision, PolicyEvaluator, PolicyInput } from "./types.js";
 
 /** Rule-based policy definition for the local evaluator. */
 export interface LocalPolicyRule {
@@ -75,8 +75,11 @@ export class LocalPolicyEvaluator implements PolicyEvaluator {
 
   private findMatchingRules(input: PolicyInput): LocalPolicyRule[] {
     return this.rules.filter((rule) => {
-      const actionMatch = rule.actions.some((a) =>
-        a === "*" || a === input.action || (a.endsWith("*") && input.action.startsWith(a.slice(0, -1))),
+      const actionMatch = rule.actions.some(
+        (a) =>
+          a === "*" ||
+          a === input.action ||
+          (a.endsWith("*") && input.action.startsWith(a.slice(0, -1))),
       );
       if (!actionMatch) return false;
       if (rule.riskClasses && rule.riskClasses.length > 0) {

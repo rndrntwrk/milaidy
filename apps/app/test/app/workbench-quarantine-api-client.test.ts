@@ -6,11 +6,15 @@ describe("MilaidyClient workbench quarantine endpoints", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
-      new Response(JSON.stringify({ ok: true, quarantined: [], stats: null }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
+    fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        new Response(
+          JSON.stringify({ ok: true, quarantined: [], stats: null }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
     );
     globalThis.fetch = fetchMock as typeof globalThis.fetch;
   });

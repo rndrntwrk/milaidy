@@ -251,9 +251,7 @@ describe("SchemaValidator", () => {
         : `UNKNOWN_${randomString(rand, 6).toUpperCase()}`;
       const params = randomParams(rand);
 
-      let result:
-        | ReturnType<SchemaValidator["validate"]>
-        | undefined;
+      let result: ReturnType<SchemaValidator["validate"]> | undefined;
       expect(() => {
         result = validator.validate(
           makeCall({
@@ -265,12 +263,12 @@ describe("SchemaValidator", () => {
       }).not.toThrow();
 
       expect(result).toBeDefined();
-      expect(typeof result!.valid).toBe("boolean");
-      expect(Array.isArray(result!.errors)).toBe(true);
-      if (!result!.valid) {
-        expect(result!.validatedParams).toBeUndefined();
+      expect(typeof result?.valid).toBe("boolean");
+      expect(Array.isArray(result?.errors)).toBe(true);
+      if (!result?.valid) {
+        expect(result?.validatedParams).toBeUndefined();
       }
-      for (const err of result!.errors) {
+      for (const err of result?.errors ?? []) {
         expect(allowedCodes.has(err.code)).toBe(true);
         expect(typeof err.field).toBe("string");
         expect(typeof err.message).toBe("string");

@@ -18,9 +18,9 @@ describe("plugin action catalog", () => {
   });
 
   it("resolves local plugin alias for telegram enhanced", () => {
-    expect(resolvePluginImportSpecifier("@milaidy/plugin-telegram-enhanced")).toBe(
-      "../../plugins/telegram-enhanced/index.js",
-    );
+    expect(
+      resolvePluginImportSpecifier("@milaidy/plugin-telegram-enhanced"),
+    ).toBe("../../plugins/telegram-enhanced/index.js");
     expect(resolvePluginImportSpecifier("@elizaos/plugin-shell")).toBe(
       "@elizaos/plugin-shell",
     );

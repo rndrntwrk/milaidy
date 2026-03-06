@@ -52,7 +52,7 @@
   "scripts": {
     "benchmark:server": "node --import tsx src/benchmark/server.ts",
     "build": "tsdown && echo '{\"type\":\"module\"}' > dist/package.json && node -e \"const fs=require('fs');const src='src/plugins/telegram-enhanced/package.json';const dest='dist/plugins/telegram-enhanced/package.json';if(fs.existsSync(src)){fs.mkdirSync('dist/plugins/telegram-enhanced',{recursive:true});fs.copyFileSync(src,dest);}\" && scripts/rt.sh scripts/write-build-info.ts && cd apps/app && ../../scripts/rt.sh run build",
-    "install:build": "bun install --ignore-scripts && node scripts/init-submodules.mjs && node scripts/ensure-skills.mjs && node scripts/link-browser-server.mjs && node scripts/patch-deps.mjs",
+    "install:build": "bun install --ignore-scripts && node scripts/init-submodules.mjs && node scripts/ensure-skills.mjs && node scripts/link-browser-server.mjs && node scripts/patch-deps.mjs && node scripts/hydrate-canonical-plugin-artifacts.mjs",
     "build:node": "tsdown && echo '{\"type\":\"module\"}' > dist/package.json && node --import tsx scripts/write-build-info.ts && cd apps/app && npm run build",
     "build:android": "cd apps/app && ../../scripts/rt.sh run build:android",
     "build:desktop": "cd apps/app && ../../scripts/rt.sh run build:electron",
@@ -77,7 +77,7 @@
     "learn:loop": "scripts/rt.sh scripts/knowledge-loop.mjs",
     "learn:snapshot": "scripts/rt.sh scripts/knowledge-loop.mjs --full",
     "milady": "scripts/rt.sh scripts/run-node.mjs",
-    "postinstall": "node ./scripts/init-submodules.mjs && node ./scripts/ensure-skills.mjs && node ./scripts/link-browser-server.mjs && node ./scripts/patch-deps.mjs",
+    "postinstall": "node ./scripts/init-submodules.mjs && node ./scripts/ensure-skills.mjs && node ./scripts/link-browser-server.mjs && node ./scripts/patch-deps.mjs && node ./scripts/hydrate-canonical-plugin-artifacts.mjs",
     "pre-review:local": "node scripts/pre-review-local.mjs",
     "prepack": "scripts/rt.sh run build",
     "prepare": "node -e \"try{require('child_process').execSync('git config core.hooksPath git-hooks',{stdio:'ignore'})}catch{}\"",

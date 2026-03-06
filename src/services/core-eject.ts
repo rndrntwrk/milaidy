@@ -186,7 +186,6 @@ async function resolveInstalledCoreVersion(): Promise<string> {
           code === "ERR_MODULE_NOT_FOUND" ||
           code === "ERR_PACKAGE_PATH_NOT_EXPORTED"
         ) {
-          continue;
         }
       }
     }
@@ -196,7 +195,10 @@ async function resolveInstalledCoreVersion(): Promise<string> {
       const fsRoot = path.parse(dir).root;
       while (true) {
         try {
-          const raw = await fs.readFile(path.join(dir, "package.json"), "utf-8");
+          const raw = await fs.readFile(
+            path.join(dir, "package.json"),
+            "utf-8",
+          );
           const pkg = JSON.parse(raw) as { name?: string; version?: string };
           if (
             pkg.name === CORE_PACKAGE_NAME &&

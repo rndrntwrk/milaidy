@@ -8,11 +8,15 @@ import { client } from "../api-client";
 
 function RiskBadge({ risk }: { risk: string }) {
   const color =
-    risk === "irreversible" ? "text-danger border-danger/30 bg-danger/10" :
-    risk === "reversible" ? "text-warn border-warn/30 bg-warn/10" :
-    "text-ok border-ok/30 bg-ok/10";
+    risk === "irreversible"
+      ? "text-danger border-danger/30 bg-danger/10"
+      : risk === "reversible"
+        ? "text-warn border-warn/30 bg-warn/10"
+        : "text-ok border-ok/30 bg-ok/10";
   return (
-    <span className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 border ${color}`}>
+    <span
+      className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 border ${color}`}
+    >
       {risk}
     </span>
   );
@@ -49,7 +53,9 @@ export function ApprovalPanel() {
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   // Auto-refresh every 5s
   useEffect(() => {
@@ -69,7 +75,8 @@ export function ApprovalPanel() {
     }
   };
 
-  if (loading && pending.length === 0) return <div className="text-muted p-4">Loading approvals...</div>;
+  if (loading && pending.length === 0)
+    return <div className="text-muted p-4">Loading approvals...</div>;
   if (error) return <div className="text-danger p-4">{error}</div>;
 
   return (
@@ -84,6 +91,7 @@ export function ApprovalPanel() {
           )}
         </h2>
         <button
+          type="button"
           className="text-[11px] border border-border bg-bg px-2 py-1 cursor-pointer hover:border-accent hover:text-accent transition-colors"
           onClick={() => void load()}
         >
@@ -94,7 +102,9 @@ export function ApprovalPanel() {
       <div className="flex-1 min-h-0 overflow-y-auto p-4">
         {pending.length > 0 && (
           <div className="mb-4">
-            <div className="text-xs uppercase tracking-wide text-muted mb-2">Pending</div>
+            <div className="text-xs uppercase tracking-wide text-muted mb-2">
+              Pending
+            </div>
             <div className="space-y-2">
               {pending.map((a) => (
                 <div key={a.id} className="border border-border bg-bg p-3">
@@ -103,11 +113,12 @@ export function ApprovalPanel() {
                     <RiskBadge risk={a.riskClass} />
                   </div>
                   <div className="text-[11px] text-muted mb-2">
-                    <TimeAgo ts={a.createdAt} />
-                    {" "}| Expires: <TimeAgo ts={a.expiresAt} />
+                    <TimeAgo ts={a.createdAt} /> | Expires:{" "}
+                    <TimeAgo ts={a.expiresAt} />
                   </div>
                   <div className="flex gap-2">
                     <button
+                      type="button"
                       className="text-[11px] border border-ok text-ok px-3 py-1 cursor-pointer hover:bg-ok hover:text-white transition-colors"
                       disabled={resolving === a.id}
                       onClick={() => handleResolve(a.id, "approved")}
@@ -115,6 +126,7 @@ export function ApprovalPanel() {
                       Approve
                     </button>
                     <button
+                      type="button"
                       className="text-[11px] border border-danger text-danger px-3 py-1 cursor-pointer hover:bg-danger hover:text-white transition-colors"
                       disabled={resolving === a.id}
                       onClick={() => handleResolve(a.id, "denied")}
@@ -136,19 +148,34 @@ export function ApprovalPanel() {
 
         {recent.length > 0 && (
           <div>
-            <div className="text-xs uppercase tracking-wide text-muted mb-2">Recent Decisions</div>
+            <div className="text-xs uppercase tracking-wide text-muted mb-2">
+              Recent Decisions
+            </div>
             <div className="space-y-1">
               {recent.map((e) => (
-                <div key={e.id} className="border border-border bg-bg px-3 py-2 flex items-center justify-between text-[11px]">
+                <div
+                  key={e.id}
+                  className="border border-border bg-bg px-3 py-2 flex items-center justify-between text-[11px]"
+                >
                   <div>
                     <span className="text-txt">{e.toolName}</span>
                     <RiskBadge risk={e.riskClass} />
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={e.decision === "approved" ? "text-ok" : e.decision === "denied" ? "text-danger" : "text-muted"}>
+                    <span
+                      className={
+                        e.decision === "approved"
+                          ? "text-ok"
+                          : e.decision === "denied"
+                            ? "text-danger"
+                            : "text-muted"
+                      }
+                    >
                       {e.decision}
                     </span>
-                    {e.decidedBy && <span className="text-muted">by {e.decidedBy}</span>}
+                    {e.decidedBy && (
+                      <span className="text-muted">by {e.decidedBy}</span>
+                    )}
                   </div>
                 </div>
               ))}

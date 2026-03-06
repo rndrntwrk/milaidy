@@ -1,6 +1,6 @@
 import React from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TestRenderer, { act } from "react-test-renderer";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 interface PluginStub {
   id: string;
@@ -118,6 +118,15 @@ async function triggerQuickLayer(layerId: string): Promise<void> {
 
 describe("ChatView quick layers", () => {
   beforeEach(() => {
+    const eventTarget = new EventTarget();
+    vi.stubGlobal("window", {
+      addEventListener: eventTarget.addEventListener.bind(eventTarget),
+      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
+      setTimeout,
+      clearTimeout,
+      location: { hostname: "alice.rndrntwrk.com" },
+    });
     vi.useFakeTimers();
     mockUseApp.mockReset();
     mockUseVoiceChat.mockReset();
@@ -154,11 +163,14 @@ describe("ChatView quick layers", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("Go Live primes stream prompt and sends in power mode", async () => {
     const ctx = createContext({
-      plugins: [{ id: "stream", name: "stream", enabled: true, isActive: true }],
+      plugins: [
+        { id: "stream", name: "stream", enabled: true, isActive: true },
+      ],
     });
     mockUseApp.mockReturnValue(ctx);
     mockClient.executeAutonomyPlan.mockResolvedValue({
@@ -172,9 +184,9 @@ describe("ChatView quick layers", () => {
       results: [],
     });
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let _tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
-      tree = TestRenderer.create(React.createElement(ChatView));
+      _tree = TestRenderer.create(React.createElement(ChatView));
     });
     await flush();
 
@@ -195,7 +207,12 @@ describe("ChatView quick layers", () => {
   it("Play Games launches autonomous spectate viewer and nudges chat with active game context", async () => {
     const ctx = createContext({
       plugins: [
-        { id: "five55-games", name: "five55-games", enabled: true, isActive: true },
+        {
+          id: "five55-games",
+          name: "five55-games",
+          enabled: true,
+          isActive: true,
+        },
       ],
     });
     mockUseApp.mockReturnValue(ctx);
@@ -252,9 +269,9 @@ describe("ChatView quick layers", () => {
       ],
     });
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let _tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
-      tree = TestRenderer.create(React.createElement(ChatView));
+      _tree = TestRenderer.create(React.createElement(ChatView));
     });
     await flush();
 
@@ -272,7 +289,10 @@ describe("ChatView quick layers", () => {
     );
     expect(mockClient.playArcade555Game).not.toHaveBeenCalled();
 
-    expect(ctx.setState).toHaveBeenCalledWith("activeGameApp", "five55:ninja-evilcorp");
+    expect(ctx.setState).toHaveBeenCalledWith(
+      "activeGameApp",
+      "five55:ninja-evilcorp",
+    );
     expect(ctx.setState).toHaveBeenCalledWith(
       "activeGameViewerUrl",
       "https://555.example/games/ninja/index.html?bot=true&spectate=1",
@@ -293,7 +313,12 @@ describe("ChatView quick layers", () => {
   it("Play Games falls back to API play launch when tool payload returns localhost", async () => {
     const ctx = createContext({
       plugins: [
-        { id: "five55-games", name: "five55-games", enabled: true, isActive: true },
+        {
+          id: "five55-games",
+          name: "five55-games",
+          enabled: true,
+          isActive: true,
+        },
       ],
     });
     mockUseApp.mockReturnValue(ctx);

@@ -9,11 +9,11 @@ import { restartAction } from "../../src/actions/restart.js";
 import { terminalAction } from "../../src/actions/terminal.js";
 import { createCodingDomainPack } from "../../src/autonomy/domains/coding/pack.js";
 import { ToolRegistry } from "../../src/autonomy/tools/registry.js";
+import { registerRuntimeContracts } from "../../src/autonomy/tools/runtime-contracts.js";
 import {
   BUILTIN_CONTRACTS,
   registerBuiltinToolContracts,
 } from "../../src/autonomy/tools/schemas/index.js";
-import { registerRuntimeContracts } from "../../src/autonomy/tools/runtime-contracts.js";
 import {
   customActionPostConditions,
   registerBuiltinPostConditions,
@@ -106,29 +106,31 @@ function buildCoverageEntries(
     riskClass: string;
   }>,
 ): CoverageEntry[] {
-  return contracts.map((contract) => {
-    const conditions = collector.conditions.get(contract.name) ?? [];
-    const criticalCount = conditions.filter(
-      (condition) => condition.severity === "critical",
-    ).length;
-    const warningCount = conditions.filter(
-      (condition) => condition.severity === "warning",
-    ).length;
-    const infoCount = conditions.filter(
-      (condition) => condition.severity === "info",
-    ).length;
+  return contracts
+    .map((contract) => {
+      const conditions = collector.conditions.get(contract.name) ?? [];
+      const criticalCount = conditions.filter(
+        (condition) => condition.severity === "critical",
+      ).length;
+      const warningCount = conditions.filter(
+        (condition) => condition.severity === "warning",
+      ).length;
+      const infoCount = conditions.filter(
+        (condition) => condition.severity === "info",
+      ).length;
 
-    return {
-      toolName: contract.name,
-      contractVersion: contract.version,
-      riskClass: contract.riskClass,
-      conditionCount: conditions.length,
-      criticalCount,
-      warningCount,
-      infoCount,
-      conditionIds: conditions.map((condition) => condition.id),
-    };
-  }).sort((a, b) => a.toolName.localeCompare(b.toolName));
+      return {
+        toolName: contract.name,
+        contractVersion: contract.version,
+        riskClass: contract.riskClass,
+        conditionCount: conditions.length,
+        criticalCount,
+        warningCount,
+        infoCount,
+        conditionIds: conditions.map((condition) => condition.id),
+      };
+    })
+    .sort((a, b) => a.toolName.localeCompare(b.toolName));
 }
 
 function renderMarkdown(input: {
@@ -184,12 +186,20 @@ function renderMarkdown(input: {
   lines.push("");
   if (input.scope === "built-in") {
     lines.push("- Scope covers autonomy built-in tool contracts only.");
-    lines.push("- Use --include-runtime=true to include runtime/custom-action contracts.");
+    lines.push(
+      "- Use --include-runtime=true to include runtime/custom-action contracts.",
+    );
   } else {
-    lines.push("- Scope includes built-in and discovered runtime/custom-action contracts.");
-    lines.push("- Runtime-generated contracts without explicit post-conditions appear under Missing Coverage.");
+    lines.push(
+      "- Scope includes built-in and discovered runtime/custom-action contracts.",
+    );
+    lines.push(
+      "- Runtime-generated contracts without explicit post-conditions appear under Missing Coverage.",
+    );
   }
-  lines.push("- Use this report with tool inventory output for phase gate evidence.");
+  lines.push(
+    "- Use this report with tool inventory output for phase gate evidence.",
+  );
   lines.push("");
   return lines.join("\n");
 }

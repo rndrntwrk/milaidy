@@ -5,10 +5,7 @@
  * @module autonomy/domains/coding/governance-policy
  */
 
-import type {
-  ComplianceCheck,
-  GovernancePolicy,
-} from "../governance/types.js";
+import type { ComplianceCheck, GovernancePolicy } from "../governance/types.js";
 
 // ---------- Compliance Checks ----------
 
@@ -92,9 +89,5 @@ export const CODING_GOVERNANCE_POLICY: GovernancePolicy = {
     exportBeforeEviction: true,
   },
   complianceChecks: CODING_COMPLIANCE_CHECKS,
-  rspReferences: [
-    "RSP-safe-execution",
-    "RSP-trust-gating",
-    "RSP-audit-trail",
-  ],
+  rspReferences: ["RSP-safe-execution", "RSP-trust-gating", "RSP-audit-trail"],
 };

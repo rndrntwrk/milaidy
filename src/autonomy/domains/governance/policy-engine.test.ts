@@ -32,7 +32,9 @@ function makePolicy(overrides?: Partial<GovernancePolicy>): GovernancePolicy {
   };
 }
 
-function makeContext(overrides?: Partial<ComplianceContext>): ComplianceContext {
+function makeContext(
+  overrides?: Partial<ComplianceContext>,
+): ComplianceContext {
   return {
     toolName: "test_tool",
     riskClass: "read-only",
@@ -144,9 +146,9 @@ describe("PolicyEngine", () => {
   it("evaluate throws for unknown policy", async () => {
     const engine = new PolicyEngine();
 
-    await expect(
-      engine.evaluate(makeContext(), "nonexistent"),
-    ).rejects.toThrow('Governance policy "nonexistent" not found');
+    await expect(engine.evaluate(makeContext(), "nonexistent")).rejects.toThrow(
+      'Governance policy "nonexistent" not found',
+    );
   });
 
   it("evaluateAll runs all registered policies", async () => {

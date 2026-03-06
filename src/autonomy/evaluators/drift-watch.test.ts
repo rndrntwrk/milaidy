@@ -18,7 +18,10 @@ vi.mock("../../events/event-bus.js", () => ({
   getEventBus: () => ({ emit: mockEmit }),
 }));
 
-import { createDriftWatchEvaluator, _resetOutputWindow } from "./drift-watch.js";
+import {
+  _resetOutputWindow,
+  createDriftWatchEvaluator,
+} from "./drift-watch.js";
 
 // ---------- Test Helpers ----------
 
@@ -41,14 +44,14 @@ function createMockResponse(text: string) {
 }
 
 /** Create a mock runtime with optional drift monitor. */
-function createMockRuntime(opts: {
-  monitor?: {
-    analyze: ReturnType<typeof vi.fn>;
-  };
-} = {}) {
-  const svc = opts.monitor
-    ? { getDriftMonitor: () => opts.monitor }
-    : null;
+function createMockRuntime(
+  opts: {
+    monitor?: {
+      analyze: ReturnType<typeof vi.fn>;
+    };
+  } = {},
+) {
+  const svc = opts.monitor ? { getDriftMonitor: () => opts.monitor } : null;
 
   return {
     agentId: "agent-1",
@@ -128,9 +131,14 @@ describe("drift-watch evaluator", () => {
     it("returns undefined when no AUTONOMY service", async () => {
       const runtime = createMockRuntime(); // no monitor
       const message = createMockMessage("hello");
-      const result = await evaluator.handler(runtime, message, undefined, undefined, undefined, [
-        createMockResponse("I can help with that."),
-      ]);
+      const result = await evaluator.handler(
+        runtime,
+        message,
+        undefined,
+        undefined,
+        undefined,
+        [createMockResponse("I can help with that.")],
+      );
 
       expect(result).toBeUndefined();
       expect(mockEmit).not.toHaveBeenCalled();
@@ -143,7 +151,14 @@ describe("drift-watch evaluator", () => {
       const runtime = createMockRuntime({ monitor });
       const message = createMockMessage("hello");
 
-      await evaluator.handler(runtime, message, undefined, undefined, undefined, []);
+      await evaluator.handler(
+        runtime,
+        message,
+        undefined,
+        undefined,
+        undefined,
+        [],
+      );
 
       expect(monitor.analyze).not.toHaveBeenCalled();
     });
@@ -173,10 +188,14 @@ describe("drift-watch evaluator", () => {
         content: {},
       } as unknown as import("@elizaos/core").Memory;
 
-      await evaluator.handler(runtime, message, undefined, undefined, undefined, [
-        emptyResponse,
-        nullTextResponse,
-      ]);
+      await evaluator.handler(
+        runtime,
+        message,
+        undefined,
+        undefined,
+        undefined,
+        [emptyResponse, nullTextResponse],
+      );
 
       expect(monitor.analyze).not.toHaveBeenCalled();
     });
@@ -188,10 +207,17 @@ describe("drift-watch evaluator", () => {
       const runtime = createMockRuntime({ monitor });
       const message = createMockMessage("hello");
 
-      await evaluator.handler(runtime, message, undefined, undefined, undefined, [
-        createMockResponse("Response one"),
-        createMockResponse("Response two"),
-      ]);
+      await evaluator.handler(
+        runtime,
+        message,
+        undefined,
+        undefined,
+        undefined,
+        [
+          createMockResponse("Response one"),
+          createMockResponse("Response two"),
+        ],
+      );
 
       expect(monitor.analyze).toHaveBeenCalledOnce();
       const [outputs, identity] = monitor.analyze.mock.calls[0];
@@ -206,14 +232,24 @@ describe("drift-watch evaluator", () => {
       const message = createMockMessage("hello");
 
       // First call
-      await evaluator.handler(runtime, message, undefined, undefined, undefined, [
-        createMockResponse("First batch"),
-      ]);
+      await evaluator.handler(
+        runtime,
+        message,
+        undefined,
+        undefined,
+        undefined,
+        [createMockResponse("First batch")],
+      );
 
       // Second call
-      await evaluator.handler(runtime, message, undefined, undefined, undefined, [
-        createMockResponse("Second batch"),
-      ]);
+      await evaluator.handler(
+        runtime,
+        message,
+        undefined,
+        undefined,
+        undefined,
+        [createMockResponse("Second batch")],
+      );
 
       expect(monitor.analyze).toHaveBeenCalledTimes(2);
       const secondCallOutputs = monitor.analyze.mock.calls[1][0];
@@ -228,9 +264,14 @@ describe("drift-watch evaluator", () => {
 
       // Push 55 outputs (exceeds MAX_WINDOW of 50)
       for (let i = 0; i < 55; i++) {
-        await evaluator.handler(runtime, message, undefined, undefined, undefined, [
-          createMockResponse(`Output ${i}`),
-        ]);
+        await evaluator.handler(
+          runtime,
+          message,
+          undefined,
+          undefined,
+          undefined,
+          [createMockResponse(`Output ${i}`)],
+        );
       }
 
       const lastCallOutputs = monitor.analyze.mock.calls[54][0];
@@ -249,9 +290,14 @@ describe("drift-watch evaluator", () => {
       const runtime = createMockRuntime({ monitor });
       const message = createMockMessage("hello");
 
-      await evaluator.handler(runtime, message, undefined, undefined, undefined, [
-        createMockResponse("Some drifting response"),
-      ]);
+      await evaluator.handler(
+        runtime,
+        message,
+        undefined,
+        undefined,
+        undefined,
+        [createMockResponse("Some drifting response")],
+      );
 
       expect(mockEmit).toHaveBeenCalledWith(
         "autonomy:identity:drift",
@@ -269,9 +315,14 @@ describe("drift-watch evaluator", () => {
       const runtime = createMockRuntime({ monitor });
       const message = createMockMessage("hello");
 
-      await evaluator.handler(runtime, message, undefined, undefined, undefined, [
-        createMockResponse("Normal response"),
-      ]);
+      await evaluator.handler(
+        runtime,
+        message,
+        undefined,
+        undefined,
+        undefined,
+        [createMockResponse("Normal response")],
+      );
 
       expect(mockEmit).not.toHaveBeenCalled();
     });
@@ -285,9 +336,14 @@ describe("drift-watch evaluator", () => {
       } as unknown as import("@elizaos/core").IAgentRuntime;
       const message = createMockMessage("hello");
 
-      await evaluator.handler(runtime, message, undefined, undefined, undefined, [
-        createMockResponse("Drifty response"),
-      ]);
+      await evaluator.handler(
+        runtime,
+        message,
+        undefined,
+        undefined,
+        undefined,
+        [createMockResponse("Drifty response")],
+      );
 
       expect(mockEmit).toHaveBeenCalledWith(
         "autonomy:identity:drift",
@@ -303,16 +359,26 @@ describe("drift-watch evaluator", () => {
       const message = createMockMessage("hello");
 
       // Accumulate outputs
-      await evaluator.handler(runtime, message, undefined, undefined, undefined, [
-        createMockResponse("Before reset"),
-      ]);
+      await evaluator.handler(
+        runtime,
+        message,
+        undefined,
+        undefined,
+        undefined,
+        [createMockResponse("Before reset")],
+      );
 
       _resetOutputWindow();
 
       // Next call should have fresh window
-      await evaluator.handler(runtime, message, undefined, undefined, undefined, [
-        createMockResponse("After reset"),
-      ]);
+      await evaluator.handler(
+        runtime,
+        message,
+        undefined,
+        undefined,
+        undefined,
+        [createMockResponse("After reset")],
+      );
 
       const secondCallOutputs = monitor.analyze.mock.calls[1][0];
       expect(secondCallOutputs).toEqual(["After reset"]);

@@ -31,7 +31,11 @@ export interface IdentityUpdatePolicyDecision {
 }
 
 const DIRECT_MUTATION_BLOCKLIST = new Set(["identityVersion", "identityHash"]);
-const APPROVAL_REQUIRED_FIELDS = new Set(["name", "coreValues", "hardBoundaries"]);
+const APPROVAL_REQUIRED_FIELDS = new Set([
+  "name",
+  "coreValues",
+  "hardBoundaries",
+]);
 const NON_PERSON_ACTORS = new Set([
   "",
   "anonymous",
@@ -67,8 +71,8 @@ export function identityChangedFields(
   update: Partial<AutonomyIdentityConfig>,
 ): string[] {
   const changed = new Set<string>();
-  const updateRecord = update as Record<string, unknown>;
-  const currentRecord = current as Record<string, unknown>;
+  const updateRecord = update as unknown as Record<string, unknown>;
+  const currentRecord = current as unknown as Record<string, unknown>;
 
   for (const key of Object.keys(updateRecord)) {
     const nextValue = updateRecord[key];
@@ -79,8 +83,9 @@ export function identityChangedFields(
           ? (nextValue as Record<string, unknown>)
           : {};
       const currentStyle =
-        current.communicationStyle && typeof current.communicationStyle === "object"
-          ? (current.communicationStyle as Record<string, unknown>)
+        current.communicationStyle &&
+        typeof current.communicationStyle === "object"
+          ? (current.communicationStyle as unknown as Record<string, unknown>)
           : {};
       for (const styleKey of Object.keys(nextStyle)) {
         if (valuesDiffer(nextStyle[styleKey], currentStyle[styleKey])) {
@@ -131,7 +136,7 @@ export function evaluateIdentityUpdatePolicy(
   const violations: string[] = [];
 
   for (const blockedField of DIRECT_MUTATION_BLOCKLIST) {
-    if (Object.prototype.hasOwnProperty.call(update, blockedField)) {
+    if (Object.hasOwn(update, blockedField)) {
       violations.push(
         `${blockedField} is kernel-managed and cannot be set directly`,
       );
@@ -143,9 +148,7 @@ export function evaluateIdentityUpdatePolicy(
   }
 
   if (source !== "system" && NON_PERSON_ACTORS.has(actor)) {
-    violations.push(
-      "a named actor is required for API/CLI identity updates",
-    );
+    violations.push("a named actor is required for API/CLI identity updates");
   }
 
   const highRisk = changedFields.some((field) =>

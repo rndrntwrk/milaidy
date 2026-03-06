@@ -15,8 +15,7 @@ export interface DeidentificationOptions {
   salt?: string;
 }
 
-const EMAIL_PATTERN =
-  /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
+const EMAIL_PATTERN = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
 const PHONE_PATTERN = /\+?[0-9][0-9().\s-]{7,}[0-9]/g;
 const IPV4_PATTERN = /\b(?:\d{1,3}\.){3}\d{1,3}\b/g;
 const UUID_PATTERN =
@@ -70,8 +69,12 @@ export class Deidentifier {
 
   deidentifyText(text: string): string {
     let out = text;
-    out = out.replace(EMAIL_PATTERN, (match) => this.pseudonymize("EMAIL", match));
-    out = out.replace(UUID_PATTERN, (match) => this.pseudonymize("UUID", match));
+    out = out.replace(EMAIL_PATTERN, (match) =>
+      this.pseudonymize("EMAIL", match),
+    );
+    out = out.replace(UUID_PATTERN, (match) =>
+      this.pseudonymize("UUID", match),
+    );
     out = out.replace(SECRET_TOKEN_PATTERN, (match) =>
       this.pseudonymize("SECRET", match),
     );

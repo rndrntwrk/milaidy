@@ -2,12 +2,15 @@
  * Tests for MemoryGateModel adapters.
  */
 
+import { mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { mkdtemp, writeFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { RuleBasedGateModel, LogisticRegressionGateModel } from "./memory-gate-model.js";
 import type { MemoryFeatures } from "./memory-gate-model.js";
+import {
+  LogisticRegressionGateModel,
+  RuleBasedGateModel,
+} from "./memory-gate-model.js";
 
 const highTrustFeatures: MemoryFeatures = {
   trustScore: 0.9,
@@ -67,7 +70,7 @@ describe("RuleBasedGateModel", () => {
     const model = new RuleBasedGateModel();
     const prediction = await model.predict(highTrustFeatures);
     expect(prediction.featureImportances).toBeDefined();
-    expect(prediction.featureImportances!.trustScore).toBe(0.35);
+    expect(prediction.featureImportances?.trustScore).toBe(0.35);
   });
 
   it("respects custom thresholds", async () => {
@@ -99,14 +102,18 @@ describe("LogisticRegressionGateModel", () => {
     const model = new LogisticRegressionGateModel("/tmp/missing-model.json");
 
     const beforeReject = await model.predict(lowTrustFeatures);
-    await model.update!(lowTrustFeatures, "reject");
+    await model.update?.(lowTrustFeatures, "reject");
     const afterReject = await model.predict(lowTrustFeatures);
-    expect(afterReject.acceptProbability).toBeLessThan(beforeReject.acceptProbability);
+    expect(afterReject.acceptProbability).toBeLessThan(
+      beforeReject.acceptProbability,
+    );
 
     const beforeAllow = await model.predict(highTrustFeatures);
-    await model.update!(highTrustFeatures, "allow");
+    await model.update?.(highTrustFeatures, "allow");
     const afterAllow = await model.predict(highTrustFeatures);
-    expect(afterAllow.acceptProbability).toBeGreaterThanOrEqual(beforeAllow.acceptProbability);
+    expect(afterAllow.acceptProbability).toBeGreaterThanOrEqual(
+      beforeAllow.acceptProbability,
+    );
   });
 
   it("loads model coefficients from JSON file when available", async () => {
@@ -137,7 +144,9 @@ describe("LogisticRegressionGateModel", () => {
 
   it("tracks rule-based decisions on representative baseline samples", async () => {
     const ruleModel = new RuleBasedGateModel();
-    const logisticModel = new LogisticRegressionGateModel("/tmp/missing-model.json");
+    const logisticModel = new LogisticRegressionGateModel(
+      "/tmp/missing-model.json",
+    );
     const samples = [
       highTrustFeatures,
       lowTrustFeatures,

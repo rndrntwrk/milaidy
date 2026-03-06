@@ -12,8 +12,8 @@ import { KernelStateMachine } from "../state-machine/kernel-state-machine.js";
 import { ToolRegistry } from "../tools/registry.js";
 import { registerBuiltinToolContracts } from "../tools/schemas/index.js";
 import type { ProposedToolCall } from "../tools/types.js";
-import { InvariantChecker } from "../verification/invariants/invariant-checker.js";
 import { registerBuiltinInvariants } from "../verification/invariants/index.js";
+import { InvariantChecker } from "../verification/invariants/invariant-checker.js";
 import { PostConditionVerifier } from "../verification/postcondition-verifier.js";
 import { registerBuiltinPostConditions } from "../verification/postconditions/index.js";
 import { SchemaValidator } from "../verification/schema-validator.js";
@@ -39,11 +39,13 @@ function successHandler(result: unknown = { ok: true }): ToolActionHandler {
   return vi.fn().mockResolvedValue({ result, durationMs: 10 });
 }
 
-function createFullPipeline(opts: {
-  approvalTimeoutMs?: number;
-  eventBus?: { emit: (event: string, payload: unknown) => void };
-  withInvariantChecker?: boolean;
-} = {}) {
+function createFullPipeline(
+  opts: {
+    approvalTimeoutMs?: number;
+    eventBus?: { emit: (event: string, payload: unknown) => void };
+    withInvariantChecker?: boolean;
+  } = {},
+) {
   const toolRegistry = new ToolRegistry();
   registerBuiltinToolContracts(toolRegistry);
 
@@ -142,15 +144,25 @@ describe("Integration: Full Pipeline", () => {
     expect(types).toContain("tool:invariants:checked");
 
     // Order check: proposed before validated, validated before executing, etc.
-    expect(types.indexOf("tool:proposed")).toBeLessThan(types.indexOf("tool:validated"));
-    expect(types.indexOf("tool:validated")).toBeLessThan(types.indexOf("tool:executing"));
-    expect(types.indexOf("tool:executing")).toBeLessThan(types.indexOf("tool:executed"));
-    expect(types.indexOf("tool:executed")).toBeLessThan(types.indexOf("tool:verified"));
-    expect(types.indexOf("tool:verified")).toBeLessThan(types.indexOf("tool:invariants:checked"));
+    expect(types.indexOf("tool:proposed")).toBeLessThan(
+      types.indexOf("tool:validated"),
+    );
+    expect(types.indexOf("tool:validated")).toBeLessThan(
+      types.indexOf("tool:executing"),
+    );
+    expect(types.indexOf("tool:executing")).toBeLessThan(
+      types.indexOf("tool:executed"),
+    );
+    expect(types.indexOf("tool:executed")).toBeLessThan(
+      types.indexOf("tool:verified"),
+    );
+    expect(types.indexOf("tool:verified")).toBeLessThan(
+      types.indexOf("tool:invariants:checked"),
+    );
   });
 
   it("validation failure stops execution early", async () => {
-    const { pipeline, eventStore, stateMachine } = createFullPipeline();
+    const { pipeline, eventStore } = createFullPipeline();
     const handler = successHandler();
     // Unknown tool → schema validation fails
     const call = makeCall({ tool: "NONEXISTENT_TOOL" });
@@ -182,9 +194,12 @@ describe("Integration: Full Pipeline", () => {
     // Deny the approval after a short delay
     const executePromise = pipeline.execute(call, handler);
     // Poll for the pending approval
-    await vi.waitFor(() => {
-      expect(approvalGate.getPending().length).toBeGreaterThan(0);
-    }, { timeout: 1000 });
+    await vi.waitFor(
+      () => {
+        expect(approvalGate.getPending().length).toBeGreaterThan(0);
+      },
+      { timeout: 1000 },
+    );
     const pending = approvalGate.getPending();
     approvalGate.resolve(pending[0].id, "denied", "test-user");
 
@@ -198,7 +213,11 @@ describe("Integration: Full Pipeline", () => {
 
   it("approved execution completes successfully", async () => {
     const { pipeline, approvalGate, stateMachine } = createFullPipeline();
-    const handler = successHandler({ success: true, exitCode: 0, output: "total 0\n" });
+    const handler = successHandler({
+      success: true,
+      exitCode: 0,
+      output: "total 0\n",
+    });
     const call = makeCall({
       tool: "RUN_IN_TERMINAL",
       params: { command: "ls" },
@@ -206,9 +225,12 @@ describe("Integration: Full Pipeline", () => {
 
     const executePromise = pipeline.execute(call, handler);
     // Poll for the pending approval
-    await vi.waitFor(() => {
-      expect(approvalGate.getPending().length).toBeGreaterThan(0);
-    }, { timeout: 1000 });
+    await vi.waitFor(
+      () => {
+        expect(approvalGate.getPending().length).toBeGreaterThan(0);
+      },
+      { timeout: 1000 },
+    );
     const pending = approvalGate.getPending();
     approvalGate.resolve(pending[0].id, "approved", "test-user");
 
@@ -235,7 +257,7 @@ describe("Integration: Full Pipeline", () => {
   });
 
   it("handler errors are caught and reported", async () => {
-    const { pipeline, stateMachine } = createFullPipeline();
+    const { pipeline } = createFullPipeline();
     const handler = vi.fn().mockRejectedValue(new Error("boom"));
     const call = makeCall({ tool: "PLAY_EMOTE", params: { emote: "wave" } });
 
@@ -273,7 +295,12 @@ describe("Integration: Full Pipeline", () => {
     const result = await pipeline.execute(call, successHandler());
 
     expect(result.correlationId).toBeDefined();
-    const correlatedEvents = await eventStore.getByCorrelationId(result.correlationId!);
+    if (!result.correlationId) {
+      throw new Error("Expected correlation ID for correlated events");
+    }
+    const correlatedEvents = await eventStore.getByCorrelationId(
+      result.correlationId,
+    );
     expect(correlatedEvents.length).toBeGreaterThanOrEqual(4);
 
     // All events should have the same correlation ID

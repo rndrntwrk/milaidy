@@ -1,8 +1,8 @@
+import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 function readFirstEnv(...keys) {
   for (const key of keys) {
@@ -15,8 +15,11 @@ function readFirstEnv(...keys) {
 }
 
 const DEFAULT_BASE_URL =
-  readFirstEnv("ARCADE555_BASE_URL", "ARCADE555_VIEWER_BASE_URL", "FIVE55_BASE_URL") ||
-  "http://127.0.0.1:3100";
+  readFirstEnv(
+    "ARCADE555_BASE_URL",
+    "ARCADE555_VIEWER_BASE_URL",
+    "FIVE55_BASE_URL",
+  ) || "http://127.0.0.1:3100";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DEFAULT_OUT_DIR = path.resolve(__dirname, "..", "output", "playwright");
@@ -36,7 +39,10 @@ const TARGETS = [
   { canonical: "godai-is-back", catalogId: "godai-is-back" },
   { canonical: "peanball", catalogId: "peanball" },
   { canonical: "eat-my-dust", catalogId: "eat-my-dust" },
-  { canonical: "where-were-going-we-do-need-roads", catalogId: "where-were-going-we-do-need-roads" },
+  {
+    canonical: "where-were-going-we-do-need-roads",
+    catalogId: "where-were-going-we-do-need-roads",
+  },
   { canonical: "vedas-run", catalogId: "vedas-run" },
 ];
 
@@ -51,7 +57,10 @@ const GLOBAL_IGNORED_CONSOLE_ERROR_PATTERNS = [
 
 const GAME_IGNORED_CONSOLE_RULES = {
   playback: [
-    { text: /failed to load resource/i, url: /\/games\/beta\/playback\/build\/out\.js/i },
+    {
+      text: /failed to load resource/i,
+      url: /\/games\/beta\/playback\/build\/out\.js/i,
+    },
   ],
   "godai-is-back": [
     { text: /failed to load resource/i, url: /\/socket\.io\/socket\.io\.js/i },
@@ -59,12 +68,8 @@ const GAME_IGNORED_CONSOLE_RULES = {
 };
 
 const GAME_IGNORED_PAGE_ERROR_RULES = {
-  ninja: [
-    /G\._e\.cO is not a function/i,
-  ],
-  playback: [
-    /number \d+ is not iterable/i,
-  ],
+  ninja: [/G\._e\.cO is not a function/i],
+  playback: [/number \d+ is not iterable/i],
 };
 
 const VISIT_PATH_OVERRIDES = {
@@ -75,7 +80,10 @@ const MASTERED_LABEL = "Mastered";
 const NEEDS_WORK_LABEL = "Needs Work";
 const DEFERRED_LABEL = "Deferred";
 const DEFAULT_EVAL_TIMEOUT_MS = Number(
-  readFirstEnv("ARCADE555_SMOKE_EVAL_TIMEOUT_MS", "FIVE55_SMOKE_EVAL_TIMEOUT_MS") || 1800,
+  readFirstEnv(
+    "ARCADE555_SMOKE_EVAL_TIMEOUT_MS",
+    "FIVE55_SMOKE_EVAL_TIMEOUT_MS",
+  ) || 1800,
 );
 const DEFAULT_SCREENSHOT_TIMEOUT_MS = Number(
   readFirstEnv(
@@ -98,7 +106,8 @@ const DEFAULT_PAGE_CLOSE_TIMEOUT_MS = Number(
 
 const MASTERY_PROFILES = {
   knighthood: {
-    objective: "Reach true mastery score in active combat loops (score > 5000).",
+    objective:
+      "Reach true mastery score in active combat loops (score > 5000).",
     primaryMetric: "score",
     progressStep: 80,
     gameplayDurationMs: 600_000,
@@ -140,7 +149,12 @@ const MASTERY_PROFILES = {
     evaluate: (stats) => [
       checkMetricMax(stats, "sector", 7, "Reached sector >= 7"),
       checkMetricDelta(stats, "score", 400, "Score increased by >= 400"),
-      checkMetricMax(stats, "lives", 1, "Entered live combat state with at least one life"),
+      checkMetricMax(
+        stats,
+        "lives",
+        1,
+        "Entered live combat state with at least one life",
+      ),
     ],
   },
   ninja: {
@@ -167,7 +181,12 @@ const MASTERY_PROFILES = {
     },
     evaluate: (stats) => [
       checkMetricMax(stats, "level", 8, "Reached level >= 8"),
-      checkMetricMax(stats, "score", 3500, "Runtime score reflects level progression"),
+      checkMetricMax(
+        stats,
+        "score",
+        3500,
+        "Runtime score reflects level progression",
+      ),
       checkTravel(stats, 1200, "High traversal distance >= 1200"),
     ],
   },
@@ -215,11 +234,20 @@ const MASTERY_PROFILES = {
       maxNoMovementMs: 50_000,
     },
     evaluate: (stats) => [
-      checkMetricDelta(stats, "score", 120, "Distance score increased by >= 120"),
-      checkAny("drive_level", "Reached checkpoint tier or strong distance gain", [
-        checkMetricMax(stats, "level", 1, "Level index reached >= 1"),
-        checkMetricMax(stats, "score", 200, "Peak score reached >= 200"),
-      ]),
+      checkMetricDelta(
+        stats,
+        "score",
+        120,
+        "Distance score increased by >= 120",
+      ),
+      checkAny(
+        "drive_level",
+        "Reached checkpoint tier or strong distance gain",
+        [
+          checkMetricMax(stats, "level", 1, "Level index reached >= 1"),
+          checkMetricMax(stats, "score", 200, "Peak score reached >= 200"),
+        ],
+      ),
     ],
   },
   chesspursuit: {
@@ -241,7 +269,12 @@ const MASTERY_PROFILES = {
       checkAny("chess_progression", "Board/checkpoint progression observed", [
         checkMetricDelta(stats, "score", 120, "Score increased by >= 120"),
         checkMetricMax(stats, "checkpoint", 2, "Reached checkpoint >= 2"),
-        checkMetricDelta(stats, "progressRow", 25, "Advanced board rows by >= 25"),
+        checkMetricDelta(
+          stats,
+          "progressRow",
+          25,
+          "Advanced board rows by >= 25",
+        ),
       ]),
       checkMetricMax(stats, "checkpoint", 2, "Reached checkpoint >= 2"),
     ],
@@ -284,12 +317,23 @@ const MASTERY_PROFILES = {
     },
     evaluate: (stats) => [
       checkMetricMax(stats, "survivalSec", 60, "Survived >= 60 seconds"),
-      checkMetricMaxLte(stats, "wrongCoinCount", 0, "Wrong coin count stayed at 0"),
-      checkMetricMaxLte(stats, "gameOverCount", 0, "No game-over events during run"),
+      checkMetricMaxLte(
+        stats,
+        "wrongCoinCount",
+        0,
+        "Wrong coin count stayed at 0",
+      ),
+      checkMetricMaxLte(
+        stats,
+        "gameOverCount",
+        0,
+        "No game-over events during run",
+      ),
     ],
   },
   playback: {
-    objective: "Leave blank/start states and progress rooms/time with native telemetry.",
+    objective:
+      "Leave blank/start states and progress rooms/time with native telemetry.",
     primaryMetric: "worldAge",
     progressStep: 80,
     gameplayDurationMs: 240_000,
@@ -305,7 +349,12 @@ const MASTERY_PROFILES = {
       minProgressEvents: 14,
     },
     evaluate: (stats) => [
-      checkMetricDelta(stats, "worldAge", 1800, "World age progressed by >= 1800 ticks"),
+      checkMetricDelta(
+        stats,
+        "worldAge",
+        1800,
+        "World age progressed by >= 1800 ticks",
+      ),
       checkAny("playback_objective", "Progressed room/index/score", [
         checkMetricMax(stats, "localIndex", 35, "Local index reached >= 35"),
         checkMetricMax(stats, "roomTransitions", 2, "Room transitions >= 2"),
@@ -314,7 +363,8 @@ const MASTERY_PROFILES = {
     ],
   },
   "fighter-planes": {
-    objective: "Demonstrate active flight control + aiming + sustained combat survival.",
+    objective:
+      "Demonstrate active flight control + aiming + sustained combat survival.",
     primaryMetric: "score",
     progressStep: 25,
     gameplayDurationMs: 180_000,
@@ -384,14 +434,20 @@ const MASTERY_PROFILES = {
     },
     evaluate: (stats) => [
       checkAny("peanball_progression", "Cleared rings or increased score", [
-        checkMetricDecrease(stats, "ringsRemaining", 1, "Cleared at least one ring"),
+        checkMetricDecrease(
+          stats,
+          "ringsRemaining",
+          1,
+          "Cleared at least one ring",
+        ),
         checkMetricDelta(stats, "score", 40, "Score increased by >= 40"),
       ]),
       checkMetricMax(stats, "boost", 1, "Boost system engaged"),
     ],
   },
   "eat-my-dust": {
-    objective: "Type through phrases with sustained cursor + score progression.",
+    objective:
+      "Type through phrases with sustained cursor + score progression.",
     primaryMetric: "localIndex",
     progressStep: 8,
     gameplayDurationMs: 90_000,
@@ -411,7 +467,8 @@ const MASTERY_PROFILES = {
     ],
   },
   "where-were-going-we-do-need-roads": {
-    objective: "Maintain valid road shaping with no buried/invalid placement states.",
+    objective:
+      "Maintain valid road shaping with no buried/invalid placement states.",
     primaryMetric: "score",
     progressStep: 120,
     gameplayDurationMs: 180_000,
@@ -429,9 +486,19 @@ const MASTERY_PROFILES = {
       checkMetricDelta(stats, "score", 1500, "Distance increased by >= 1500"),
       checkAny("roads_pathing", "Trajectory or distance progression observed", [
         checkTravel(stats, 120, "Player trajectory changed continuously"),
-        checkMetricDelta(stats, "distance", 1500, "Distance metric increased by >= 1500"),
+        checkMetricDelta(
+          stats,
+          "distance",
+          1500,
+          "Distance metric increased by >= 1500",
+        ),
       ]),
-      checkMetricMaxLte(stats, "invalidPlacementCount", 0, "No invalid/buried road placements"),
+      checkMetricMaxLte(
+        stats,
+        "invalidPlacementCount",
+        0,
+        "No invalid/buried road placements",
+      ),
     ],
   },
   "vedas-run": {
@@ -478,17 +545,32 @@ function parseArgs() {
     .filter((entry) => entry.length > 0);
   const config = {
     baseUrl: DEFAULT_BASE_URL,
-    outDir: readFirstEnv("ARCADE555_SMOKE_OUT_DIR", "FIVE55_SMOKE_OUT_DIR") || DEFAULT_OUT_DIR,
-    timeoutMs: Number(readFirstEnv("ARCADE555_SMOKE_TIMEOUT_MS", "FIVE55_SMOKE_TIMEOUT_MS") || 45_000),
-    settleMs: Number(readFirstEnv("ARCADE555_SMOKE_SETTLE_MS", "FIVE55_SMOKE_SETTLE_MS") || 3_500),
+    outDir:
+      readFirstEnv("ARCADE555_SMOKE_OUT_DIR", "FIVE55_SMOKE_OUT_DIR") ||
+      DEFAULT_OUT_DIR,
+    timeoutMs: Number(
+      readFirstEnv("ARCADE555_SMOKE_TIMEOUT_MS", "FIVE55_SMOKE_TIMEOUT_MS") ||
+        45_000,
+    ),
+    settleMs: Number(
+      readFirstEnv("ARCADE555_SMOKE_SETTLE_MS", "FIVE55_SMOKE_SETTLE_MS") ||
+        3_500,
+    ),
     postProbeWaitMs: Number(
-      readFirstEnv("ARCADE555_SMOKE_POST_PROBE_WAIT_MS", "FIVE55_SMOKE_POST_PROBE_WAIT_MS") || 1_200,
+      readFirstEnv(
+        "ARCADE555_SMOKE_POST_PROBE_WAIT_MS",
+        "FIVE55_SMOKE_POST_PROBE_WAIT_MS",
+      ) || 1_200,
     ),
     gameplayDurationMs: Number(
-      readFirstEnv("ARCADE555_SMOKE_GAMEPLAY_MS", "FIVE55_SMOKE_GAMEPLAY_MS") || 12_000,
+      readFirstEnv("ARCADE555_SMOKE_GAMEPLAY_MS", "FIVE55_SMOKE_GAMEPLAY_MS") ||
+        12_000,
     ),
     sampleIntervalMs: Number(
-      readFirstEnv("ARCADE555_SMOKE_SAMPLE_INTERVAL_MS", "FIVE55_SMOKE_SAMPLE_INTERVAL_MS") || 260,
+      readFirstEnv(
+        "ARCADE555_SMOKE_SAMPLE_INTERVAL_MS",
+        "FIVE55_SMOKE_SAMPLE_INTERVAL_MS",
+      ) || 260,
     ),
     forceGameplayDurationMs:
       Number(
@@ -499,21 +581,35 @@ function parseArgs() {
       ) || null,
     evalTimeoutMs: DEFAULT_EVAL_TIMEOUT_MS,
     screenshotTimeoutMs: DEFAULT_SCREENSHOT_TIMEOUT_MS,
-    headless: readFirstEnv("ARCADE555_SMOKE_HEADFUL", "FIVE55_SMOKE_HEADFUL") === "1" ? false : true,
+    headless:
+      readFirstEnv("ARCADE555_SMOKE_HEADFUL", "FIVE55_SMOKE_HEADFUL") !== "1",
     strictErrors:
-      readFirstEnv("ARCADE555_SMOKE_STRICT_ERRORS", "FIVE55_SMOKE_STRICT_ERRORS") === "1",
+      readFirstEnv(
+        "ARCADE555_SMOKE_STRICT_ERRORS",
+        "FIVE55_SMOKE_STRICT_ERRORS",
+      ) === "1",
     maxPageErrors: Number(
-      readFirstEnv("ARCADE555_SMOKE_MAX_PAGE_ERRORS", "FIVE55_SMOKE_MAX_PAGE_ERRORS") || 0,
+      readFirstEnv(
+        "ARCADE555_SMOKE_MAX_PAGE_ERRORS",
+        "FIVE55_SMOKE_MAX_PAGE_ERRORS",
+      ) || 0,
     ),
     maxConsoleErrors: Number(
-      readFirstEnv("ARCADE555_SMOKE_MAX_CONSOLE_ERRORS", "FIVE55_SMOKE_MAX_CONSOLE_ERRORS") || 0,
+      readFirstEnv(
+        "ARCADE555_SMOKE_MAX_CONSOLE_ERRORS",
+        "FIVE55_SMOKE_MAX_CONSOLE_ERRORS",
+      ) || 0,
     ),
     failOnFailure:
-      readFirstEnv("ARCADE555_SMOKE_FAIL_ON_FAILURE", "FIVE55_SMOKE_FAIL_ON_FAILURE") === "0"
-        ? false
-        : true,
+      readFirstEnv(
+        "ARCADE555_SMOKE_FAIL_ON_FAILURE",
+        "FIVE55_SMOKE_FAIL_ON_FAILURE",
+      ) !== "0",
     requireMastery:
-      readFirstEnv("ARCADE555_SMOKE_REQUIRE_MASTERY", "FIVE55_SMOKE_REQUIRE_MASTERY") === "1",
+      readFirstEnv(
+        "ARCADE555_SMOKE_REQUIRE_MASTERY",
+        "FIVE55_SMOKE_REQUIRE_MASTERY",
+      ) === "1",
     games: envGames,
   };
 
@@ -595,7 +691,6 @@ function parseArgs() {
     }
     if (token === "--require-mastery") {
       config.requireMastery = true;
-      continue;
     }
   }
 
@@ -724,7 +819,9 @@ async function fetchCatalog(baseUrl) {
 }
 
 function isIgnoredPageError(canonical, message) {
-  if (GLOBAL_IGNORED_PAGE_ERROR_PATTERNS.some((pattern) => pattern.test(message))) {
+  if (
+    GLOBAL_IGNORED_PAGE_ERROR_PATTERNS.some((pattern) => pattern.test(message))
+  ) {
     return true;
   }
   const rules = GAME_IGNORED_PAGE_ERROR_RULES[canonical] || [];
@@ -734,7 +831,9 @@ function isIgnoredPageError(canonical, message) {
 function isIgnoredConsoleError(canonical, entry) {
   const text = String(entry?.text || "");
   const url = String(entry?.location?.url || "");
-  if (GLOBAL_IGNORED_CONSOLE_ERROR_PATTERNS.some((pattern) => pattern.test(text))) {
+  if (
+    GLOBAL_IGNORED_CONSOLE_ERROR_PATTERNS.some((pattern) => pattern.test(text))
+  ) {
     return true;
   }
   const rules = GAME_IGNORED_CONSOLE_RULES[canonical] || [];
@@ -747,7 +846,9 @@ function isIgnoredConsoleError(canonical, entry) {
 }
 
 function normalizeStatus(value) {
-  const raw = String(value || "").trim().toUpperCase();
+  const raw = String(value || "")
+    .trim()
+    .toUpperCase();
   if (raw === "GAMEOVER") return "GAME_OVER";
   if (raw === "TITLE" || raw === "TITLE_MENU") return "MENU";
   if (raw === "RUNNING") return "PLAYING";
@@ -760,7 +861,7 @@ function toFiniteNumber(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function firstFinite(...values) {
+function _firstFinite(...values) {
   for (const value of values) {
     const parsed = toFiniteNumber(value);
     if (parsed != null) return parsed;
@@ -772,7 +873,11 @@ function copyAsFlatObject(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const out = {};
   for (const [key, entry] of Object.entries(value)) {
-    if (typeof entry === "number" || typeof entry === "string" || typeof entry === "boolean") {
+    if (
+      typeof entry === "number" ||
+      typeof entry === "string" ||
+      typeof entry === "boolean"
+    ) {
       out[key] = entry;
     }
   }
@@ -781,173 +886,218 @@ function copyAsFlatObject(value) {
 
 async function probeFrame(frame, timeoutMs = DEFAULT_EVAL_TIMEOUT_MS) {
   try {
-    return await withTimeout(frame.evaluate(() => {
-      const asNumber = (...values) => {
-        for (const value of values) {
-          const parsed = Number(value);
-          if (Number.isFinite(parsed)) return parsed;
-        }
-        return null;
-      };
-
-      const socket = window.AliceSocket;
-      const getState = () => {
-        try {
-          if (socket && typeof socket.getState === "function") {
-            return socket.getState();
+    return await withTimeout(
+      frame.evaluate(() => {
+        const asNumber = (...values) => {
+          for (const value of values) {
+            const parsed = Number(value);
+            if (Number.isFinite(parsed)) return parsed;
           }
-          if (socket && typeof socket.state === "function") {
-            return socket.state();
-          }
-        } catch {
-          // ignore getState/state runtime faults
-        }
-        return null;
-      };
+          return null;
+        };
 
-      let state = getState();
-      if (!state && window.__sector13State) {
-        const s13 = window.__sector13State;
-        state = {
-          status: s13.gameOver ? "GAME_OVER" : (s13.shipEngaged ? "PLAYING" : "MENU"),
-          score: Number(s13.score || 0),
-          sector: Number(s13.currentSectorNumber || 1),
-          lives: Number(s13.lives || 0),
-          player: {
-            x: Number(s13.playerX || 0),
-            y: Number(s13.playerY || 0),
-            position: {
+        const socket = window.AliceSocket;
+        const getState = () => {
+          try {
+            if (socket && typeof socket.getState === "function") {
+              return socket.getState();
+            }
+            if (socket && typeof socket.state === "function") {
+              return socket.state();
+            }
+          } catch {
+            // ignore getState/state runtime faults
+          }
+          return null;
+        };
+
+        let state = getState();
+        if (!state && window.__sector13State) {
+          const s13 = window.__sector13State;
+          state = {
+            status: s13.gameOver
+              ? "GAME_OVER"
+              : s13.shipEngaged
+                ? "PLAYING"
+                : "MENU",
+            score: Number(s13.score || 0),
+            sector: Number(s13.currentSectorNumber || 1),
+            lives: Number(s13.lives || 0),
+            player: {
               x: Number(s13.playerX || 0),
               y: Number(s13.playerY || 0),
+              position: {
+                x: Number(s13.playerX || 0),
+                y: Number(s13.playerY || 0),
+              },
             },
-          },
-        };
-      }
-      if (!state && typeof window.__level !== "undefined") {
-        state = {
-          status: "PLAYING",
-          score: Number(window.__level || 0),
-          level: Number(window.__level || 0),
-        };
-      }
-      const status = (() => {
-        const raw = String(state?.status || state?.phase || state?.state || "").trim().toUpperCase();
-        if (raw === "GAMEOVER") return "GAME_OVER";
-        if (raw === "TITLE" || raw === "TITLE_MENU") return "MENU";
-        if (raw === "RUNNING") return "PLAYING";
-        return raw || "UNKNOWN";
-      })();
-
-      const playerX = asNumber(
-        state?.player?.x,
-        state?.player?.position?.x,
-        state?.heroX,
-        window.x,
-        window.player?.x,
-        window.G?.player?.x,
-        window.gs?.player?.x,
-      );
-      const playerY = asNumber(
-        state?.player?.y,
-        state?.player?.position?.y,
-        state?.heroY,
-        window.y,
-        window.player?.y,
-        window.G?.player?.y,
-        window.gs?.player?.y,
-      );
-
-      const diagnostics = (() => {
-        try {
-          if (socket && typeof socket.getDiagnostics === "function") {
-            return socket.getDiagnostics();
-          }
-        } catch {
-          // ignore diagnostics faults
+          };
         }
-        return null;
-      })();
+        if (!state && typeof window.__level !== "undefined") {
+          state = {
+            status: "PLAYING",
+            score: Number(window.__level || 0),
+            level: Number(window.__level || 0),
+          };
+        }
+        const status = (() => {
+          const raw = String(
+            state?.status || state?.phase || state?.state || "",
+          )
+            .trim()
+            .toUpperCase();
+          if (raw === "GAMEOVER") return "GAME_OVER";
+          if (raw === "TITLE" || raw === "TITLE_MENU") return "MENU";
+          if (raw === "RUNNING") return "PLAYING";
+          return raw || "UNKNOWN";
+        })();
 
-      return {
-        ts: Date.now(),
-        frameUrl: window.location.href,
-        frameTitle: document.title || "",
-        hasAliceSocket: Boolean(socket),
-        hasCanvas: Boolean(document.querySelector("canvas")),
-        aliceSocketKeys: socket && typeof socket === "object" ? Object.keys(socket).slice(0, 20) : [],
-        bridge: {
-          hasExecute: Boolean(socket && typeof socket.execute === "function"),
-          hasGetState: Boolean(socket && typeof socket.getState === "function"),
-          hasState: Boolean(socket && typeof socket.state === "function"),
-          hasDiagnostics: Boolean(socket && typeof socket.getDiagnostics === "function"),
-        },
-        status,
-        score: asNumber(
-          state?.score,
-          state?.distance,
-          state?.tz,
-          window.score,
-          window.dist,
-          window.distance,
-          window.G?.state?.D,
-          window.G?.g?.ja?.(),
-          window.__sector13State?.score,
-        ),
-        metrics: {
-          level: asNumber(state?.level, state?.levelNum, state?.levelIndex, window.__level, window.G?.runLevelIndex),
-          sector: asNumber(state?.sector, state?.currentSectorNumber, window.__sector13State?.currentSectorNumber),
-          lives: asNumber(state?.lives, window.__sector13State?.lives),
-          ringsRemaining: asNumber(state?.ringsRemaining, window.sc?.length),
-          energy: asNumber(state?.energy, window.G?.state?.E),
-          worldAge: asNumber(state?.worldAge, window.worldAge),
-          localIndex: asNumber(state?.localIndex),
-          checkpoint: asNumber(state?.checkpoint, window.rb),
-          progressRow: asNumber(state?.progressRow, window.xb),
-          wolvesTrapped: asNumber(state?.wolvesTrapped),
-          wrongCoinCount: asNumber(state?.wrongCoinCount),
-          gameOverCount: asNumber(state?.gameOverCount),
-          survivalSec: asNumber(state?.survivalSec),
-          roomTransitions: asNumber(state?.roomTransitions),
-          invalidPlacementCount: asNumber(state?.invalidPlacementCount),
-          segment: asNumber(state?.segment),
-          heroHp: asNumber(state?.heroHp),
-          enemyHp: asNumber(state?.enemyHp),
-          rocketCount: asNumber(Array.isArray(state?.rockets) ? state.rockets.length : null),
-          enemyCount: asNumber(Array.isArray(state?.enemies) ? state.enemies.length : null),
-          distance: asNumber(state?.distance, window.dist, window.distance),
-          tz: asNumber(state?.tz, window.gs?.tz),
-          iy: asNumber(state?.iy, window.gs?.iy),
-          sprites: asNumber(state?.sprites),
-          boost: asNumber(state?.boost, window.Ec),
-        },
-        player: {
-          x: playerX,
-          y: playerY,
-        },
-        stateSummary: state && typeof state === "object" && !Array.isArray(state)
-          ? Object.fromEntries(
-              Object.entries(state)
-                .filter(([, value]) => {
-                  if (value == null) return false;
-                  const type = typeof value;
-                  return type === "number" || type === "string" || type === "boolean";
-                })
-                .slice(0, 20),
-            )
-          : null,
-        diagnosticsSummary: diagnostics && typeof diagnostics === "object" && !Array.isArray(diagnostics)
-          ? Object.fromEntries(
-              Object.entries(diagnostics)
-                .filter(([, value]) => {
-                  if (value == null) return false;
-                  const type = typeof value;
-                  return type === "number" || type === "string" || type === "boolean";
-                })
-                .slice(0, 20),
-            )
-          : null,
-      };
-    }), timeoutMs, "frame.evaluate(probe)");
+        const playerX = asNumber(
+          state?.player?.x,
+          state?.player?.position?.x,
+          state?.heroX,
+          window.x,
+          window.player?.x,
+          window.G?.player?.x,
+          window.gs?.player?.x,
+        );
+        const playerY = asNumber(
+          state?.player?.y,
+          state?.player?.position?.y,
+          state?.heroY,
+          window.y,
+          window.player?.y,
+          window.G?.player?.y,
+          window.gs?.player?.y,
+        );
+
+        const diagnostics = (() => {
+          try {
+            if (socket && typeof socket.getDiagnostics === "function") {
+              return socket.getDiagnostics();
+            }
+          } catch {
+            // ignore diagnostics faults
+          }
+          return null;
+        })();
+
+        return {
+          ts: Date.now(),
+          frameUrl: window.location.href,
+          frameTitle: document.title || "",
+          hasAliceSocket: Boolean(socket),
+          hasCanvas: Boolean(document.querySelector("canvas")),
+          aliceSocketKeys:
+            socket && typeof socket === "object"
+              ? Object.keys(socket).slice(0, 20)
+              : [],
+          bridge: {
+            hasExecute: Boolean(socket && typeof socket.execute === "function"),
+            hasGetState: Boolean(
+              socket && typeof socket.getState === "function",
+            ),
+            hasState: Boolean(socket && typeof socket.state === "function"),
+            hasDiagnostics: Boolean(
+              socket && typeof socket.getDiagnostics === "function",
+            ),
+          },
+          status,
+          score: asNumber(
+            state?.score,
+            state?.distance,
+            state?.tz,
+            window.score,
+            window.dist,
+            window.distance,
+            window.G?.state?.D,
+            window.G?.g?.ja?.(),
+            window.__sector13State?.score,
+          ),
+          metrics: {
+            level: asNumber(
+              state?.level,
+              state?.levelNum,
+              state?.levelIndex,
+              window.__level,
+              window.G?.runLevelIndex,
+            ),
+            sector: asNumber(
+              state?.sector,
+              state?.currentSectorNumber,
+              window.__sector13State?.currentSectorNumber,
+            ),
+            lives: asNumber(state?.lives, window.__sector13State?.lives),
+            ringsRemaining: asNumber(state?.ringsRemaining, window.sc?.length),
+            energy: asNumber(state?.energy, window.G?.state?.E),
+            worldAge: asNumber(state?.worldAge, window.worldAge),
+            localIndex: asNumber(state?.localIndex),
+            checkpoint: asNumber(state?.checkpoint, window.rb),
+            progressRow: asNumber(state?.progressRow, window.xb),
+            wolvesTrapped: asNumber(state?.wolvesTrapped),
+            wrongCoinCount: asNumber(state?.wrongCoinCount),
+            gameOverCount: asNumber(state?.gameOverCount),
+            survivalSec: asNumber(state?.survivalSec),
+            roomTransitions: asNumber(state?.roomTransitions),
+            invalidPlacementCount: asNumber(state?.invalidPlacementCount),
+            segment: asNumber(state?.segment),
+            heroHp: asNumber(state?.heroHp),
+            enemyHp: asNumber(state?.enemyHp),
+            rocketCount: asNumber(
+              Array.isArray(state?.rockets) ? state.rockets.length : null,
+            ),
+            enemyCount: asNumber(
+              Array.isArray(state?.enemies) ? state.enemies.length : null,
+            ),
+            distance: asNumber(state?.distance, window.dist, window.distance),
+            tz: asNumber(state?.tz, window.gs?.tz),
+            iy: asNumber(state?.iy, window.gs?.iy),
+            sprites: asNumber(state?.sprites),
+            boost: asNumber(state?.boost, window.Ec),
+          },
+          player: {
+            x: playerX,
+            y: playerY,
+          },
+          stateSummary:
+            state && typeof state === "object" && !Array.isArray(state)
+              ? Object.fromEntries(
+                  Object.entries(state)
+                    .filter(([, value]) => {
+                      if (value == null) return false;
+                      const type = typeof value;
+                      return (
+                        type === "number" ||
+                        type === "string" ||
+                        type === "boolean"
+                      );
+                    })
+                    .slice(0, 20),
+                )
+              : null,
+          diagnosticsSummary:
+            diagnostics &&
+            typeof diagnostics === "object" &&
+            !Array.isArray(diagnostics)
+              ? Object.fromEntries(
+                  Object.entries(diagnostics)
+                    .filter(([, value]) => {
+                      if (value == null) return false;
+                      const type = typeof value;
+                      return (
+                        type === "number" ||
+                        type === "string" ||
+                        type === "boolean"
+                      );
+                    })
+                    .slice(0, 20),
+                )
+              : null,
+        };
+      }),
+      timeoutMs,
+      "frame.evaluate(probe)",
+    );
   } catch (err) {
     return {
       ts: Date.now(),
@@ -1011,113 +1161,117 @@ async function selectPrimaryFrame(page, visitUrl) {
 
 async function kickStartFrame(frame) {
   try {
-    return await withTimeout(frame.evaluate(() => {
-      const actions = [];
-      const socket = window.AliceSocket;
-      const maybeExecute = (action) => {
-        if (!socket || typeof socket.execute !== "function") return false;
-        try {
-          const result = socket.execute(action);
-          actions.push(`execute:${action}`);
-          return result !== false;
-        } catch {
-          return false;
+    return await withTimeout(
+      frame.evaluate(() => {
+        const actions = [];
+        const socket = window.AliceSocket;
+        const maybeExecute = (action) => {
+          if (!socket || typeof socket.execute !== "function") return false;
+          try {
+            const result = socket.execute(action);
+            actions.push(`execute:${action}`);
+            return result !== false;
+          } catch {
+            return false;
+          }
+        };
+
+        maybeExecute("START");
+        maybeExecute("LAUNCH");
+        maybeExecute("RESTART");
+
+        const clickers = ["start", "btn-start", "play", "restart", "reset"];
+        for (const id of clickers) {
+          const node = document.getElementById(id);
+          if (node && typeof node.click === "function") {
+            node.click();
+            actions.push(`click:#${id}`);
+          }
         }
-      };
 
-      maybeExecute("START");
-      maybeExecute("LAUNCH");
-      maybeExecute("RESTART");
-
-      const clickers = ["start", "btn-start", "play", "restart", "reset"];
-      for (const id of clickers) {
-        const node = document.getElementById(id);
-        if (node && typeof node.click === "function") {
-          node.click();
-          actions.push(`click:#${id}`);
+        if (typeof window.startGame === "function") {
+          try {
+            window.startGame();
+            actions.push("call:startGame()");
+          } catch {
+            // ignore
+          }
         }
-      }
 
-      if (typeof window.startGame === "function") {
-        try {
-          window.startGame();
-          actions.push("call:startGame()");
-        } catch {
-          // ignore
+        if (typeof window.start === "function") {
+          try {
+            window.start();
+            actions.push("call:start()");
+          } catch {
+            // ignore
+          }
         }
-      }
 
-      if (typeof window.start === "function") {
-        try {
-          window.start();
-          actions.push("call:start()");
-        } catch {
-          // ignore
-        }
-      }
-
-      const press = (type, key, code) => {
-        const event = new KeyboardEvent(type, {
-          key,
-          code,
-          bubbles: true,
-          cancelable: true,
-        });
-        window.dispatchEvent(event);
-        document.dispatchEvent(event);
-      };
-
-      press("keydown", " ", "Space");
-      press("keyup", " ", "Space");
-      press("keydown", "Enter", "Enter");
-      press("keyup", "Enter", "Enter");
-      press("keydown", "r", "KeyR");
-      press("keyup", "r", "KeyR");
-      press("keydown", "1", "Digit1");
-      press("keyup", "1", "Digit1");
-      press("keydown", "w", "KeyW");
-      press("keyup", "w", "KeyW");
-
-      const canvas = document.querySelector("canvas");
-      const clickTarget = canvas || document.body;
-      if (clickTarget) {
-        clickTarget.dispatchEvent(
-          new MouseEvent("mousedown", {
+        const press = (type, key, code) => {
+          const event = new KeyboardEvent(type, {
+            key,
+            code,
             bubbles: true,
             cancelable: true,
-            clientX: 140,
-            clientY: 120,
-            button: 0,
-          }),
-        );
-        clickTarget.dispatchEvent(
-          new MouseEvent("mouseup", {
-            bubbles: true,
-            cancelable: true,
-            clientX: 140,
-            clientY: 120,
-            button: 0,
-          }),
-        );
-        clickTarget.dispatchEvent(
-          new MouseEvent("click", {
-            bubbles: true,
-            cancelable: true,
-            clientX: 140,
-            clientY: 120,
-            button: 0,
-          }),
-        );
-        actions.push("mouse:click");
-      }
+          });
+          window.dispatchEvent(event);
+          document.dispatchEvent(event);
+        };
 
-      actions.push("keys:Space+Enter");
+        press("keydown", " ", "Space");
+        press("keyup", " ", "Space");
+        press("keydown", "Enter", "Enter");
+        press("keyup", "Enter", "Enter");
+        press("keydown", "r", "KeyR");
+        press("keyup", "r", "KeyR");
+        press("keydown", "1", "Digit1");
+        press("keyup", "1", "Digit1");
+        press("keydown", "w", "KeyW");
+        press("keyup", "w", "KeyW");
 
-      return {
-        actions,
-        hasAliceSocket: Boolean(window.AliceSocket),
-      };
-    }), DEFAULT_EVAL_TIMEOUT_MS, "frame.evaluate(kickstart)");
+        const canvas = document.querySelector("canvas");
+        const clickTarget = canvas || document.body;
+        if (clickTarget) {
+          clickTarget.dispatchEvent(
+            new MouseEvent("mousedown", {
+              bubbles: true,
+              cancelable: true,
+              clientX: 140,
+              clientY: 120,
+              button: 0,
+            }),
+          );
+          clickTarget.dispatchEvent(
+            new MouseEvent("mouseup", {
+              bubbles: true,
+              cancelable: true,
+              clientX: 140,
+              clientY: 120,
+              button: 0,
+            }),
+          );
+          clickTarget.dispatchEvent(
+            new MouseEvent("click", {
+              bubbles: true,
+              cancelable: true,
+              clientX: 140,
+              clientY: 120,
+              button: 0,
+            }),
+          );
+          actions.push("mouse:click");
+        }
+
+        actions.push("keys:Space+Enter");
+
+        return {
+          actions,
+          hasAliceSocket: Boolean(window.AliceSocket),
+        };
+      }),
+      DEFAULT_EVAL_TIMEOUT_MS,
+      "frame.evaluate(kickstart)",
+    );
   } catch (err) {
     return {
       actions: [],
@@ -1144,9 +1298,9 @@ async function collectGameplayEvidence(page, frame, canonical, config) {
     progressStep: 10,
   };
   const gameplayDurationMs = Number(
-    (config.forceGameplayDurationMs && config.forceGameplayDurationMs > 0)
+    config.forceGameplayDurationMs && config.forceGameplayDurationMs > 0
       ? config.forceGameplayDurationMs
-      : (profile.gameplayDurationMs || config.gameplayDurationMs),
+      : profile.gameplayDurationMs || config.gameplayDurationMs,
   );
 
   const samples = [];
@@ -1194,13 +1348,15 @@ async function collectGameplayEvidence(page, frame, canonical, config) {
     const sample = await probeFrame(frame, config.evalTimeoutMs);
     sample.status = normalizeStatus(sample.status);
     sample.elapsedMs = Date.now() - startedAt;
-    sample.stateSummary = copyAsFlatObject(sample.stateSummary) || sample.stateSummary;
-    sample.diagnosticsSummary = copyAsFlatObject(sample.diagnosticsSummary) || sample.diagnosticsSummary;
+    sample.stateSummary =
+      copyAsFlatObject(sample.stateSummary) || sample.stateSummary;
+    sample.diagnosticsSummary =
+      copyAsFlatObject(sample.diagnosticsSummary) || sample.diagnosticsSummary;
     samples.push(sample);
 
     if (
-      sample?.error
-      && /Target page, context or browser has been closed|Execution context was destroyed|has crashed/i.test(
+      sample?.error &&
+      /Target page, context or browser has been closed|Execution context was destroyed|has crashed/i.test(
         String(sample.error),
       )
     ) {
@@ -1215,10 +1371,10 @@ async function collectGameplayEvidence(page, frame, canonical, config) {
     const primaryValue = derivePrimaryMetric(profile, sample);
     const now = Date.now();
     if (
-      primaryValue != null
-      && primaryValue > bestProgressValue + progressStep
-      && now - lastProgressShotAt > 1400
-      && screenshots.length < 6
+      primaryValue != null &&
+      primaryValue > bestProgressValue + progressStep &&
+      now - lastProgressShotAt > 1400 &&
+      screenshots.length < 6
     ) {
       bestProgressValue = primaryValue;
       lastProgressShotAt = now;
@@ -1226,8 +1382,16 @@ async function collectGameplayEvidence(page, frame, canonical, config) {
     }
 
     if (
-      ["MENU", "LOADING", "UNKNOWN", "PAUSED", "GAME_OVER", "FINISHED", "STORY_PICKER"].includes(sample.status)
-      && now - lastKickAt > 850
+      [
+        "MENU",
+        "LOADING",
+        "UNKNOWN",
+        "PAUSED",
+        "GAME_OVER",
+        "FINISHED",
+        "STORY_PICKER",
+      ].includes(sample.status) &&
+      now - lastKickAt > 850
     ) {
       const kick = await kickStartFrame(frame);
       kicks.push({ at: now - startedAt, ...kick });
@@ -1301,9 +1465,10 @@ function computeTravelDistance(samples) {
 function computeProgressDynamics(samples, profile) {
   const antiStall = profile?.antiStall || {};
   const metric = String(antiStall.metric || profile?.primaryMetric || "score");
-  const direction = String(antiStall.direction || "increase").toLowerCase() === "decrease"
-    ? "decrease"
-    : "increase";
+  const direction =
+    String(antiStall.direction || "increase").toLowerCase() === "decrease"
+      ? "decrease"
+      : "increase";
   const progressStep = Math.max(
     1,
     Number(antiStall.progressStep || profile?.progressStep || 10),
@@ -1336,15 +1501,15 @@ function computeProgressDynamics(samples, profile) {
         lastProgressValue = value;
         lastProgressAt = elapsedMs;
       } else if (
-        (direction === "increase" && value >= lastProgressValue + eventDelta)
-        || (direction === "decrease" && value <= lastProgressValue - eventDelta)
+        (direction === "increase" && value >= lastProgressValue + eventDelta) ||
+        (direction === "decrease" && value <= lastProgressValue - eventDelta)
       ) {
         lastProgressValue = value;
         lastProgressAt = elapsedMs;
         progressEvents += 1;
       } else if (
-        (direction === "increase" && value <= lastProgressValue - eventDelta)
-        || (direction === "decrease" && value >= lastProgressValue + eventDelta)
+        (direction === "increase" && value <= lastProgressValue - eventDelta) ||
+        (direction === "decrease" && value >= lastProgressValue + eventDelta)
       ) {
         // Restart/reset path: accept lower baseline so new progress is still measurable.
         lastProgressValue = value;
@@ -1353,7 +1518,10 @@ function computeProgressDynamics(samples, profile) {
     }
 
     if (lastProgressAt != null) {
-      longestNoProgressMs = Math.max(longestNoProgressMs, elapsedMs - lastProgressAt);
+      longestNoProgressMs = Math.max(
+        longestNoProgressMs,
+        elapsedMs - lastProgressAt,
+      );
     }
 
     const x = toFiniteNumber(sample?.player?.x);
@@ -1364,7 +1532,8 @@ function computeProgressDynamics(samples, profile) {
         lastPosition = { x, y };
         lastMovementAt = elapsedMs;
       } else {
-        const moved = Math.hypot(x - lastPosition.x, y - lastPosition.y) >= movementEpsilon;
+        const moved =
+          Math.hypot(x - lastPosition.x, y - lastPosition.y) >= movementEpsilon;
         if (moved) {
           lastPosition = { x, y };
           lastMovementAt = elapsedMs;
@@ -1373,7 +1542,10 @@ function computeProgressDynamics(samples, profile) {
     }
 
     if (lastMovementAt != null) {
-      longestNoMovementMs = Math.max(longestNoMovementMs, elapsedMs - lastMovementAt);
+      longestNoMovementMs = Math.max(
+        longestNoMovementMs,
+        elapsedMs - lastMovementAt,
+      );
     }
   }
 
@@ -1437,10 +1609,10 @@ function collectStats(samples, profile) {
 
   const totalSamples = Math.max(1, samples.length);
   const menuSamples =
-    (statusCounts.MENU || 0)
-    + (statusCounts.LOADING || 0)
-    + (statusCounts.UNKNOWN || 0)
-    + (statusCounts.STORY_PICKER || 0);
+    (statusCounts.MENU || 0) +
+    (statusCounts.LOADING || 0) +
+    (statusCounts.UNKNOWN || 0) +
+    (statusCounts.STORY_PICKER || 0);
   const socketSeen = samples.some((sample) => Boolean(sample?.hasAliceSocket));
   const canvasSeen = samples.some((sample) => Boolean(sample?.hasCanvas));
 
@@ -1449,7 +1621,9 @@ function collectStats(samples, profile) {
     statusCounts,
     statusesSeen: Object.keys(statusCounts).sort(),
     menuShare: Number((menuSamples / totalSamples).toFixed(4)),
-    playingShare: Number(((statusCounts.PLAYING || 0) / totalSamples).toFixed(4)),
+    playingShare: Number(
+      ((statusCounts.PLAYING || 0) / totalSamples).toFixed(4),
+    ),
     metrics,
     travelDistance: computeTravelDistance(samples),
     progressionDynamics: computeProgressDynamics(samples, profile),
@@ -1484,58 +1658,132 @@ function checkMetricDelta(stats, key, minDelta, message) {
   const range = metricRange(stats, key);
   const observed = range?.delta;
   if (observed == null) {
-    return buildCheck(`metric_delta_${key}`, false, `${message} (missing metric: ${key})`, "n/a", `>= ${minDelta}`);
+    return buildCheck(
+      `metric_delta_${key}`,
+      false,
+      `${message} (missing metric: ${key})`,
+      "n/a",
+      `>= ${minDelta}`,
+    );
   }
-  return buildCheck(`metric_delta_${key}`, observed >= minDelta, message, formatNumber(observed), `>= ${minDelta}`);
+  return buildCheck(
+    `metric_delta_${key}`,
+    observed >= minDelta,
+    message,
+    formatNumber(observed),
+    `>= ${minDelta}`,
+  );
 }
 
 function checkMetricMax(stats, key, minMax, message) {
   const range = metricRange(stats, key);
   const observed = range?.max;
   if (observed == null) {
-    return buildCheck(`metric_max_${key}`, false, `${message} (missing metric: ${key})`, "n/a", `>= ${minMax}`);
+    return buildCheck(
+      `metric_max_${key}`,
+      false,
+      `${message} (missing metric: ${key})`,
+      "n/a",
+      `>= ${minMax}`,
+    );
   }
-  return buildCheck(`metric_max_${key}`, observed >= minMax, message, formatNumber(observed), `>= ${minMax}`);
+  return buildCheck(
+    `metric_max_${key}`,
+    observed >= minMax,
+    message,
+    formatNumber(observed),
+    `>= ${minMax}`,
+  );
 }
 
 function checkMetricMaxLte(stats, key, maxAllowed, message) {
   const range = metricRange(stats, key);
   const observed = range?.max;
   if (observed == null) {
-    return buildCheck(`metric_max_lte_${key}`, false, `${message} (missing metric: ${key})`, "n/a", `<= ${maxAllowed}`);
+    return buildCheck(
+      `metric_max_lte_${key}`,
+      false,
+      `${message} (missing metric: ${key})`,
+      "n/a",
+      `<= ${maxAllowed}`,
+    );
   }
-  return buildCheck(`metric_max_lte_${key}`, observed <= maxAllowed, message, formatNumber(observed), `<= ${maxAllowed}`);
+  return buildCheck(
+    `metric_max_lte_${key}`,
+    observed <= maxAllowed,
+    message,
+    formatNumber(observed),
+    `<= ${maxAllowed}`,
+  );
 }
 
-function checkMetricMin(stats, key, minVal, message) {
+function _checkMetricMin(stats, key, minVal, message) {
   const range = metricRange(stats, key);
   const observed = range?.min;
   if (observed == null) {
-    return buildCheck(`metric_min_${key}`, false, `${message} (missing metric: ${key})`, "n/a", `>= ${minVal}`);
+    return buildCheck(
+      `metric_min_${key}`,
+      false,
+      `${message} (missing metric: ${key})`,
+      "n/a",
+      `>= ${minVal}`,
+    );
   }
-  return buildCheck(`metric_min_${key}`, observed >= minVal, message, formatNumber(observed), `>= ${minVal}`);
+  return buildCheck(
+    `metric_min_${key}`,
+    observed >= minVal,
+    message,
+    formatNumber(observed),
+    `>= ${minVal}`,
+  );
 }
 
 function checkMetricDecrease(stats, key, minDecrease, message) {
   const range = metricRange(stats, key);
   const observed = range?.decrease;
   if (observed == null) {
-    return buildCheck(`metric_decrease_${key}`, false, `${message} (missing metric: ${key})`, "n/a", `>= ${minDecrease}`);
+    return buildCheck(
+      `metric_decrease_${key}`,
+      false,
+      `${message} (missing metric: ${key})`,
+      "n/a",
+      `>= ${minDecrease}`,
+    );
   }
-  return buildCheck(`metric_decrease_${key}`, observed >= minDecrease, message, formatNumber(observed), `>= ${minDecrease}`);
+  return buildCheck(
+    `metric_decrease_${key}`,
+    observed >= minDecrease,
+    message,
+    formatNumber(observed),
+    `>= ${minDecrease}`,
+  );
 }
 
 function checkTravel(stats, minDistance, message) {
   const observed = toFiniteNumber(stats?.travelDistance);
   if (observed == null) {
-    return buildCheck("travel_distance", false, `${message} (missing travel metric)`, "n/a", `>= ${minDistance}`);
+    return buildCheck(
+      "travel_distance",
+      false,
+      `${message} (missing travel metric)`,
+      "n/a",
+      `>= ${minDistance}`,
+    );
   }
-  return buildCheck("travel_distance", observed >= minDistance, message, formatNumber(observed), `>= ${minDistance}`);
+  return buildCheck(
+    "travel_distance",
+    observed >= minDistance,
+    message,
+    formatNumber(observed),
+    `>= ${minDistance}`,
+  );
 }
 
 function checkAny(id, message, checks) {
   const passed = checks.some((check) => check.passed);
-  const observed = checks.map((check) => `${check.id}:${check.passed ? "ok" : "fail"}`).join(", ");
+  const observed = checks
+    .map((check) => `${check.id}:${check.passed ? "ok" : "fail"}`)
+    .join(", ");
   return {
     ...buildCheck(id, passed, message, observed, "any"),
     anyOf: checks,
@@ -1546,8 +1794,14 @@ function resolveLevelGateTarget(levelGate) {
   const overrideTarget = toFiniteNumber(levelGate?.overrideTarget);
   if (overrideTarget != null) return overrideTarget;
 
-  const totalStages = Math.max(1, Math.floor(toFiniteNumber(levelGate?.totalStages) || 1));
-  const minFraction = Math.max(0.01, Math.min(1, toFiniteNumber(levelGate?.minFraction) || 0.5));
+  const totalStages = Math.max(
+    1,
+    Math.floor(toFiniteNumber(levelGate?.totalStages) || 1),
+  );
+  const minFraction = Math.max(
+    0.01,
+    Math.min(1, toFiniteNumber(levelGate?.minFraction) || 0.5),
+  );
   const indexBase = Math.floor(toFiniteNumber(levelGate?.indexBase) || 0);
   const requiredStages = Math.ceil(totalStages * minFraction);
   return indexBase + requiredStages - 1;
@@ -1585,7 +1839,8 @@ function checkLevelGate(stats, levelGate) {
     );
   }
 
-  const passed = direction === "min_lte" ? observed <= target : observed >= target;
+  const passed =
+    direction === "min_lte" ? observed <= target : observed >= target;
   return buildCheck(
     `level_gate_${metric}`,
     passed,
@@ -1598,7 +1853,8 @@ function checkLevelGate(stats, levelGate) {
 function checkHighScoreGate(stats, highScoreGate) {
   const metric = String(highScoreGate?.metric || "score");
   const minMax = toFiniteNumber(highScoreGate?.minMax);
-  const message = highScoreGate?.description || `High-score gate: ${metric} max >= ${minMax}`;
+  const message =
+    highScoreGate?.description || `High-score gate: ${metric} max >= ${minMax}`;
   if (minMax == null) {
     return buildCheck(
       `high_score_${metric}`,
@@ -1618,14 +1874,21 @@ function buildAntiStallChecks(stats, profile) {
   const dynamics = stats?.progressionDynamics || {};
   const checks = [];
   const maxNoProgressMs = Math.max(1, Number(antiStall.maxNoProgressMs || 0));
-  const minProgressEvents = Math.max(1, Number(antiStall.minProgressEvents || 0));
+  const minProgressEvents = Math.max(
+    1,
+    Number(antiStall.minProgressEvents || 0),
+  );
   const maxNoMovementMs = toFiniteNumber(antiStall.maxNoMovementMs);
-  const minMovementSamples = Math.max(1, Number(antiStall.minMovementSamples || 6));
+  const minMovementSamples = Math.max(
+    1,
+    Number(antiStall.minMovementSamples || 6),
+  );
 
   checks.push(
     buildCheck(
       "anti_stall_progress_window",
-      Number(dynamics.longestNoProgressMs ?? Number.POSITIVE_INFINITY) <= maxNoProgressMs,
+      Number(dynamics.longestNoProgressMs ?? Number.POSITIVE_INFINITY) <=
+        maxNoProgressMs,
       `Anti-stall: longest no-progress window <= ${maxNoProgressMs}ms`,
       String(dynamics.longestNoProgressMs ?? "n/a"),
       `<= ${maxNoProgressMs}`,
@@ -1657,7 +1920,8 @@ function buildAntiStallChecks(stats, profile) {
     checks.push(
       buildCheck(
         "anti_stall_motion_window",
-        Number(dynamics.longestNoMovementMs ?? Number.POSITIVE_INFINITY) <= maxNoMovementMs,
+        Number(dynamics.longestNoMovementMs ?? Number.POSITIVE_INFINITY) <=
+          maxNoMovementMs,
         `Anti-stall: longest no-movement window <= ${maxNoMovementMs}ms`,
         String(dynamics.longestNoMovementMs ?? "n/a"),
         `<= ${maxNoMovementMs}`,
@@ -1688,7 +1952,13 @@ function buildMasteryIndicator({
       reason: "Deferred by scope (multiplayer milestone pending).",
       objective: profile.objective,
       checks: [
-        buildCheck("deferred_scope", true, "Game is intentionally deferred from strict denominator", "deferred", "deferred"),
+        buildCheck(
+          "deferred_scope",
+          true,
+          "Game is intentionally deferred from strict denominator",
+          "deferred",
+          "deferred",
+        ),
       ],
       statsSnapshot: {
         statusesSeen: stats.statusesSeen,
@@ -1699,12 +1969,44 @@ function buildMasteryIndicator({
   }
 
   const checks = [];
-  checks.push(buildCheck("navigation", navOk, "Navigation to game page succeeded", navOk ? "ok" : "fail", "ok"));
+  checks.push(
+    buildCheck(
+      "navigation",
+      navOk,
+      "Navigation to game page succeeded",
+      navOk ? "ok" : "fail",
+      "ok",
+    ),
+  );
   const socketPresent = Boolean(probe?.hasAliceSocket || stats?.socketSeen);
   const canvasPresent = Boolean(probe?.hasCanvas || stats?.canvasSeen);
-  checks.push(buildCheck("alice_socket", socketPresent, "AliceSocket bridge is present", socketPresent ? "present" : "missing", "present"));
-  checks.push(buildCheck("canvas", canvasPresent, "Game canvas is present", canvasPresent ? "present" : "missing", "present"));
-  checks.push(buildCheck("strict_errors", strictErrorPass, "Strict error gate passed", strictErrorPass ? "ok" : "fail", "ok"));
+  checks.push(
+    buildCheck(
+      "alice_socket",
+      socketPresent,
+      "AliceSocket bridge is present",
+      socketPresent ? "present" : "missing",
+      "present",
+    ),
+  );
+  checks.push(
+    buildCheck(
+      "canvas",
+      canvasPresent,
+      "Game canvas is present",
+      canvasPresent ? "present" : "missing",
+      "present",
+    ),
+  );
+  checks.push(
+    buildCheck(
+      "strict_errors",
+      strictErrorPass,
+      "Strict error gate passed",
+      strictErrorPass ? "ok" : "fail",
+      "ok",
+    ),
+  );
   checks.push(
     buildCheck(
       "entered_playing",
@@ -1736,7 +2038,7 @@ function buildMasteryIndicator({
   if (canonical === "playback") {
     const maxFrameSize = Math.max(
       0,
-      ...((screenshots || []).map((shot) => Number(shot?.sizeBytes || 0))),
+      ...(screenshots || []).map((shot) => Number(shot?.sizeBytes || 0)),
     );
     checks.push(
       buildCheck(
@@ -1804,14 +2106,16 @@ function escapeHtml(value) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
+    .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
 
 function renderCheck(check) {
   const statusClass = check.passed ? "ok" : "bad";
-  const target = check.target != null ? ` target=${escapeHtml(check.target)}` : "";
-  const observed = check.observed != null ? ` observed=${escapeHtml(check.observed)}` : "";
+  const target =
+    check.target != null ? ` target=${escapeHtml(check.target)}` : "";
+  const observed =
+    check.observed != null ? ` observed=${escapeHtml(check.observed)}` : "";
   let detail = "";
   if (Array.isArray(check.anyOf) && check.anyOf.length > 0) {
     detail = ` (${check.anyOf.map((entry) => `${entry.id}:${entry.passed ? "ok" : "fail"}`).join(", ")})`;
@@ -1837,16 +2141,23 @@ async function writeHtmlReport(summary, outDir) {
         objective: "No objective available",
         checks: [],
       };
-      const statusClass = result.status === "pass" ? "pass" : result.status === "deferred" ? "deferred" : "fail";
-      const masteryClass = mastery.level === "mastered"
-        ? "mastered"
-        : mastery.level === "deferred"
-          ? "deferred"
-          : "needs-work";
+      const statusClass =
+        result.status === "pass"
+          ? "pass"
+          : result.status === "deferred"
+            ? "deferred"
+            : "fail";
+      const masteryClass =
+        mastery.level === "mastered"
+          ? "mastered"
+          : mastery.level === "deferred"
+            ? "deferred"
+            : "needs-work";
       const errorItems = [
         ...(result.pageErrors || []).map((msg) => `page: ${msg}`),
-        ...(result.consoleErrors || []).map((entry) =>
-          `console: ${typeof entry === "string" ? entry : entry?.text || ""}`,
+        ...(result.consoleErrors || []).map(
+          (entry) =>
+            `console: ${typeof entry === "string" ? entry : entry?.text || ""}`,
         ),
       ]
         .slice(0, 5)
@@ -2021,7 +2332,9 @@ async function run() {
 
   const chromium = await loadChromium();
   const catalog = await fetchCatalog(config.baseUrl);
-  const byId = new Map((catalog.games || []).map((game) => [String(game.id), game]));
+  const byId = new Map(
+    (catalog.games || []).map((game) => [String(game.id), game]),
+  );
 
   const browser = await chromium.launch({
     headless: config.headless,
@@ -2032,13 +2345,20 @@ async function run() {
       "--ignore-gpu-blocklist",
     ],
   });
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const context = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+  });
 
   const startedAt = new Date().toISOString();
   const results = [];
-  const selectedTargets = config.games.length > 0
-    ? TARGETS.filter((target) => config.games.includes(target.canonical) || config.games.includes(target.catalogId))
-    : TARGETS;
+  const selectedTargets =
+    config.games.length > 0
+      ? TARGETS.filter(
+          (target) =>
+            config.games.includes(target.canonical) ||
+            config.games.includes(target.catalogId),
+        )
+      : TARGETS;
 
   for (const target of selectedTargets) {
     console.log(`[smoke] game-start ${target.canonical}`);
@@ -2054,7 +2374,15 @@ async function run() {
           label: NEEDS_WORK_LABEL,
           reason: "Game missing from catalog",
           objective: "Catalog entry must exist",
-          checks: [buildCheck("catalog_entry", false, "Catalog entry found", "missing", "present")],
+          checks: [
+            buildCheck(
+              "catalog_entry",
+              false,
+              "Catalog entry found",
+              "missing",
+              "present",
+            ),
+          ],
         },
         screenshots: [],
       });
@@ -2084,135 +2412,149 @@ async function run() {
     });
 
     try {
+      const visitPath =
+        VISIT_PATH_OVERRIDES[target.canonical] || String(game.path || "/");
+      const visitUrl = withAgentQuery(visitPath, config.baseUrl);
+      let navOk = true;
+      let navError = null;
 
-    const visitPath = VISIT_PATH_OVERRIDES[target.canonical] || String(game.path || "/");
-    const visitUrl = withAgentQuery(visitPath, config.baseUrl);
-    let navOk = true;
-    let navError = null;
+      try {
+        await page.goto(visitUrl, {
+          waitUntil: "domcontentloaded",
+          timeout: config.timeoutMs,
+        });
+        await page.waitForTimeout(config.settleMs);
+      } catch (err) {
+        navOk = false;
+        navError = err instanceof Error ? err.message : String(err);
+      }
 
-    try {
-      await page.goto(visitUrl, {
-        waitUntil: "domcontentloaded",
-        timeout: config.timeoutMs,
-      });
-      await page.waitForTimeout(config.settleMs);
-    } catch (err) {
-      navOk = false;
-      navError = err instanceof Error ? err.message : String(err);
-    }
-
-    let probe = {
-      hasAliceSocket: false,
-      hasCanvas: false,
-      aliceSocketKeys: [],
-      title: "",
-      href: visitUrl,
-      status: "UNKNOWN",
-      score: null,
-      frameCount: 0,
-      frameProbes: [],
-      bridge: {
-        hasExecute: false,
-        hasGetState: false,
-        hasState: false,
-        hasDiagnostics: false,
-      },
-    };
-
-    let gameplayEvidence = {
-      samples: [],
-      kicks: [],
-      screenshots: [],
-      elapsedMs: 0,
-    };
-
-    if (navOk) {
-      const selection = await selectPrimaryFrame(page, visitUrl);
-      const { primaryFrame, primaryProbe, frameProbes } = selection;
-      probe = {
-        hasAliceSocket: Boolean(primaryProbe?.hasAliceSocket),
-        hasCanvas: Boolean(primaryProbe?.hasCanvas),
-        aliceSocketKeys: primaryProbe?.aliceSocketKeys || [],
-        title: primaryProbe?.frameTitle || "",
-        href: primaryProbe?.frameUrl || visitUrl,
-        status: normalizeStatus(primaryProbe?.status),
-        score: primaryProbe?.score ?? null,
-        bridge: primaryProbe?.bridge || probe.bridge,
-        frameCount: frameProbes.length,
-        frameProbes,
+      let probe = {
+        hasAliceSocket: false,
+        hasCanvas: false,
+        aliceSocketKeys: [],
+        title: "",
+        href: visitUrl,
+        status: "UNKNOWN",
+        score: null,
+        frameCount: 0,
+        frameProbes: [],
+        bridge: {
+          hasExecute: false,
+          hasGetState: false,
+          hasState: false,
+          hasDiagnostics: false,
+        },
       };
 
-      await page.waitForTimeout(config.postProbeWaitMs);
-      gameplayEvidence = await collectGameplayEvidence(
-        page,
-        primaryFrame,
-        target.canonical,
-        config,
+      let gameplayEvidence = {
+        samples: [],
+        kicks: [],
+        screenshots: [],
+        elapsedMs: 0,
+      };
+
+      if (navOk) {
+        const selection = await selectPrimaryFrame(page, visitUrl);
+        const { primaryFrame, primaryProbe, frameProbes } = selection;
+        probe = {
+          hasAliceSocket: Boolean(primaryProbe?.hasAliceSocket),
+          hasCanvas: Boolean(primaryProbe?.hasCanvas),
+          aliceSocketKeys: primaryProbe?.aliceSocketKeys || [],
+          title: primaryProbe?.frameTitle || "",
+          href: primaryProbe?.frameUrl || visitUrl,
+          status: normalizeStatus(primaryProbe?.status),
+          score: primaryProbe?.score ?? null,
+          bridge: primaryProbe?.bridge || probe.bridge,
+          frameCount: frameProbes.length,
+          frameProbes,
+        };
+
+        await page.waitForTimeout(config.postProbeWaitMs);
+        gameplayEvidence = await collectGameplayEvidence(
+          page,
+          primaryFrame,
+          target.canonical,
+          config,
+        );
+      }
+
+      const ignoredPageErrors = pageErrors.filter((message) =>
+        isIgnoredPageError(target.canonical, message),
       );
-    }
+      const effectivePageErrors = pageErrors.filter(
+        (message) => !isIgnoredPageError(target.canonical, message),
+      );
+      const ignoredConsoleErrors = consoleErrors.filter((entry) =>
+        isIgnoredConsoleError(target.canonical, entry),
+      );
+      const effectiveConsoleErrors = consoleErrors.filter(
+        (entry) => !isIgnoredConsoleError(target.canonical, entry),
+      );
 
-    const ignoredPageErrors = pageErrors.filter((message) => isIgnoredPageError(target.canonical, message));
-    const effectivePageErrors = pageErrors.filter(
-      (message) => !isIgnoredPageError(target.canonical, message),
-    );
-    const ignoredConsoleErrors = consoleErrors.filter((entry) =>
-      isIgnoredConsoleError(target.canonical, entry),
-    );
-    const effectiveConsoleErrors = consoleErrors.filter(
-      (entry) => !isIgnoredConsoleError(target.canonical, entry),
-    );
+      const strictErrorPass =
+        !config.strictErrors ||
+        (effectivePageErrors.length <= config.maxPageErrors &&
+          effectiveConsoleErrors.length <= config.maxConsoleErrors);
 
-    const strictErrorPass =
-      !config.strictErrors ||
-      (effectivePageErrors.length <= config.maxPageErrors
-        && effectiveConsoleErrors.length <= config.maxConsoleErrors);
+      const stats = collectStats(gameplayEvidence.samples, masteryProfile);
 
-    const stats = collectStats(gameplayEvidence.samples, masteryProfile);
+      const masteryIndicator = buildMasteryIndicator({
+        canonical: target.canonical,
+        navOk,
+        probe,
+        strictErrorPass,
+        stats,
+        screenshots: gameplayEvidence.screenshots,
+      });
 
-    const masteryIndicator = buildMasteryIndicator({
-      canonical: target.canonical,
-      navOk,
-      probe,
-      strictErrorPass,
-      stats,
-      screenshots: gameplayEvidence.screenshots,
-    });
-
-    const pass = masteryIndicator.level === "mastered" || masteryIndicator.level === "deferred";
-    results.push({
-      canonical: target.canonical,
-      catalogId: target.catalogId,
-      gameTitle: game.title,
-      visitUrl,
-      status: masteryIndicator.level === "deferred" ? "deferred" : pass ? "pass" : navOk ? "probe_fail" : "nav_fail",
-      navError,
-      probe,
-      strictGate: {
-        enabled: config.strictErrors,
-        passed: strictErrorPass,
-        maxPageErrors: config.maxPageErrors,
-        maxConsoleErrors: config.maxConsoleErrors,
-      },
-      masteryIndicator,
-      stats,
-      sampleCount: gameplayEvidence.samples.length,
-      elapsedMs: gameplayEvidence.elapsedMs,
-      configuredGameplayDurationMs: gameplayEvidence.configuredGameplayDurationMs,
-      kicks: gameplayEvidence.kicks,
-      screenshots: gameplayEvidence.screenshots,
-      samplesTail: gameplayEvidence.samples.slice(-20),
-      consoleErrorCount: effectiveConsoleErrors.length,
-      pageErrorCount: effectivePageErrors.length,
-      ignoredConsoleErrorCount: ignoredConsoleErrors.length,
-      ignoredPageErrorCount: ignoredPageErrors.length,
-      consoleErrors: effectiveConsoleErrors.slice(0, 8),
-      pageErrors: effectivePageErrors.slice(0, 8),
-      ignoredConsoleErrors: ignoredConsoleErrors.slice(0, 8),
-      ignoredPageErrors: ignoredPageErrors.slice(0, 8),
-      screenshotPath: gameplayEvidence.screenshots[0]?.path || null,
-      pageClosedUnexpectedly,
-    });
-    console.log(`[smoke] game-end ${target.canonical} ${masteryIndicator.level}`);
+      const pass =
+        masteryIndicator.level === "mastered" ||
+        masteryIndicator.level === "deferred";
+      results.push({
+        canonical: target.canonical,
+        catalogId: target.catalogId,
+        gameTitle: game.title,
+        visitUrl,
+        status:
+          masteryIndicator.level === "deferred"
+            ? "deferred"
+            : pass
+              ? "pass"
+              : navOk
+                ? "probe_fail"
+                : "nav_fail",
+        navError,
+        probe,
+        strictGate: {
+          enabled: config.strictErrors,
+          passed: strictErrorPass,
+          maxPageErrors: config.maxPageErrors,
+          maxConsoleErrors: config.maxConsoleErrors,
+        },
+        masteryIndicator,
+        stats,
+        sampleCount: gameplayEvidence.samples.length,
+        elapsedMs: gameplayEvidence.elapsedMs,
+        configuredGameplayDurationMs:
+          gameplayEvidence.configuredGameplayDurationMs,
+        kicks: gameplayEvidence.kicks,
+        screenshots: gameplayEvidence.screenshots,
+        samplesTail: gameplayEvidence.samples.slice(-20),
+        consoleErrorCount: effectiveConsoleErrors.length,
+        pageErrorCount: effectivePageErrors.length,
+        ignoredConsoleErrorCount: ignoredConsoleErrors.length,
+        ignoredPageErrorCount: ignoredPageErrors.length,
+        consoleErrors: effectiveConsoleErrors.slice(0, 8),
+        pageErrors: effectivePageErrors.slice(0, 8),
+        ignoredConsoleErrors: ignoredConsoleErrors.slice(0, 8),
+        ignoredPageErrors: ignoredPageErrors.slice(0, 8),
+        screenshotPath: gameplayEvidence.screenshots[0]?.path || null,
+        pageClosedUnexpectedly,
+      });
+      console.log(
+        `[smoke] game-end ${target.canonical} ${masteryIndicator.level}`,
+      );
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       results.push({
@@ -2238,13 +2580,24 @@ async function run() {
           level: "needs-work",
           label: NEEDS_WORK_LABEL,
           reason: `runtime_error: ${errorMessage}`,
-          objective: MASTERY_PROFILES[target.canonical]?.objective || "Demonstrate sustained gameplay progression.",
-          checks: [buildCheck("runtime_error", false, "Runner completed game pass without runtime exception", errorMessage, "no_error")],
+          objective:
+            MASTERY_PROFILES[target.canonical]?.objective ||
+            "Demonstrate sustained gameplay progression.",
+          checks: [
+            buildCheck(
+              "runtime_error",
+              false,
+              "Runner completed game pass without runtime exception",
+              errorMessage,
+              "no_error",
+            ),
+          ],
         },
         stats: collectStats([], masteryProfile),
         sampleCount: 0,
         elapsedMs: 0,
-        configuredGameplayDurationMs: masteryProfile?.gameplayDurationMs || config.gameplayDurationMs,
+        configuredGameplayDurationMs:
+          masteryProfile?.gameplayDurationMs || config.gameplayDurationMs,
         kicks: [],
         screenshots: [],
         samplesTail: [],
@@ -2263,7 +2616,11 @@ async function run() {
     } finally {
       try {
         if (!page.isClosed()) {
-          await withTimeout(page.close(), DEFAULT_PAGE_CLOSE_TIMEOUT_MS, "page.close");
+          await withTimeout(
+            page.close(),
+            DEFAULT_PAGE_CLOSE_TIMEOUT_MS,
+            "page.close",
+          );
         }
       } catch (err) {
         console.warn(
@@ -2274,16 +2631,28 @@ async function run() {
   }
 
   try {
-    await withTimeout(browser.close(), DEFAULT_BROWSER_CLOSE_TIMEOUT_MS, "browser.close");
+    await withTimeout(
+      browser.close(),
+      DEFAULT_BROWSER_CLOSE_TIMEOUT_MS,
+      "browser.close",
+    );
   } catch (err) {
-    console.warn(`[smoke] browser-close-timeout ${String(err?.message || err)}`);
+    console.warn(
+      `[smoke] browser-close-timeout ${String(err?.message || err)}`,
+    );
   }
 
-  const deferredCount = results.filter((r) => r.masteryIndicator?.level === "deferred").length;
+  const deferredCount = results.filter(
+    (r) => r.masteryIndicator?.level === "deferred",
+  ).length;
   const requiredTotal = Math.max(0, results.length - deferredCount);
-  const masteredCount = results.filter((r) => r.masteryIndicator?.level === "mastered").length;
+  const masteredCount = results.filter(
+    (r) => r.masteryIndicator?.level === "mastered",
+  ).length;
   const failedRequiredCount = results.filter(
-    (r) => r.masteryIndicator?.level !== "mastered" && r.masteryIndicator?.level !== "deferred",
+    (r) =>
+      r.masteryIndicator?.level !== "mastered" &&
+      r.masteryIndicator?.level !== "deferred",
   ).length;
 
   const summary = {
@@ -2322,11 +2691,11 @@ async function run() {
         deferred: summary.deferred,
         passed: summary.passed,
         failed: summary.failed,
-    strictErrors: summary.strictErrors,
-    defaultGameplayDurationMs: summary.defaultGameplayDurationMs,
-    perGameDurationOverrides: summary.perGameDurationOverrides,
-    sampleIntervalMs: summary.sampleIntervalMs,
-    requireMastery: config.requireMastery,
+        strictErrors: summary.strictErrors,
+        defaultGameplayDurationMs: summary.defaultGameplayDurationMs,
+        perGameDurationOverrides: summary.perGameDurationOverrides,
+        sampleIntervalMs: summary.sampleIntervalMs,
+        requireMastery: config.requireMastery,
       },
       null,
       2,

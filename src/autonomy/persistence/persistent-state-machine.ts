@@ -12,14 +12,13 @@
  */
 
 import { logger } from "@elizaos/core";
-
-import type { KernelState } from "../types.js";
 import type {
   KernelStateMachineInterface,
   StateChangeListener,
   StateTrigger,
   TransitionResult,
 } from "../state-machine/types.js";
+import type { KernelState } from "../types.js";
 import type { AutonomyDbAdapter } from "./db-adapter.js";
 
 // ---------- Implementation ----------
@@ -69,7 +68,11 @@ export class PersistentStateMachine implements KernelStateMachineInterface {
    * If recovery finds a state, the inner FSM is reset and the
    * recovered state is restored via trigger replay.
    */
-  async recover(): Promise<{ recovered: boolean; state?: KernelState; consecutiveErrors?: number }> {
+  async recover(): Promise<{
+    recovered: boolean;
+    state?: KernelState;
+    consecutiveErrors?: number;
+  }> {
     try {
       const { rows } = await this.adapter.executeRaw(
         `SELECT state, consecutive_errors
@@ -118,13 +121,15 @@ export class PersistentStateMachine implements KernelStateMachineInterface {
       snapshotAt: new Date().toISOString(),
     };
 
-    this.snapshotQueue = this.snapshotQueue.then(async () => {
-      await this.snapshot(captured);
-    }).catch((err) => {
-      logger.error(
-        `[autonomy:persistent-sm] Snapshot failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    });
+    this.snapshotQueue = this.snapshotQueue
+      .then(async () => {
+        await this.snapshot(captured);
+      })
+      .catch((err) => {
+        logger.error(
+          `[autonomy:persistent-sm] Snapshot failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
   }
 
   private async snapshot(input: {

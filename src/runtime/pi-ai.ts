@@ -33,13 +33,15 @@ export async function registerPiAiRuntime(
   options: RegisterPiAiRuntimeOptions = {},
 ): Promise<PiAiRuntimeRegistration> {
   try {
-    const plugin = (await import("@elizaos/plugin-pi-ai")) as {
-      registerPiAiRuntime: (
-        rt: IAgentRuntime,
-        opts?: RegisterPiAiRuntimeOptions,
-      ) => Promise<PiAiRuntimeRegistration>;
-    };
-    return plugin.registerPiAiRuntime(runtime, options);
+    const plugin = (await import("@elizaos/plugin-pi-ai")) as Record<
+      string,
+      unknown
+    >;
+    const register = plugin.registerPiAiRuntime;
+    if (typeof register !== "function") {
+      throw new Error("registerPiAiRuntime export not found");
+    }
+    return await register(runtime, options);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     throw new Error(

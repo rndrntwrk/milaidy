@@ -20,8 +20,7 @@ const MESSAGING_CHANNEL_ALIAS_MAP: Record<string, MessagingChannel> = {
   twitchtv: "twitch",
 };
 
-const MESSAGING_CHANNEL_REGEX =
-  /\b(discord|telegram|slack|whatsapp|twitch)\b/i;
+const MESSAGING_CHANNEL_REGEX = /\b(discord|telegram|slack|whatsapp|twitch)\b/i;
 const MESSAGING_TARGET_ID_REGEX =
   /(?:user(?:\s+id)?|chat(?:\s+id)?|target(?:\s+id)?|id)\s*[:#]?\s*(-?\d{6,})\b/i;
 const GENERIC_NUMERIC_ID_REGEX = /\b-?\d{6,}\b/;
@@ -38,12 +37,13 @@ function inferMessageBody(text: string): string | null {
 }
 
 function inferMessagingChannelToken(token: string): MessagingChannel | null {
-  const normalized = token.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  const normalized = token
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
   if (!normalized) return null;
 
-  if (
-    SUPPORTED_MESSAGING_CHANNELS.includes(normalized as MessagingChannel)
-  ) {
+  if (SUPPORTED_MESSAGING_CHANNELS.includes(normalized as MessagingChannel)) {
     return normalized as MessagingChannel;
   }
 

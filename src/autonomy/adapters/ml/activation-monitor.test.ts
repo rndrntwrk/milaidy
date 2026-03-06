@@ -3,31 +3,42 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { RuleBasedActivationMonitor, NeuralActivationMonitor } from "./activation-monitor.js";
+import {
+  NeuralActivationMonitor,
+  RuleBasedActivationMonitor,
+} from "./activation-monitor.js";
 
 describe("RuleBasedActivationMonitor", () => {
   it("detects deception patterns", async () => {
     const monitor = new RuleBasedActivationMonitor();
-    const report = await monitor.analyze("I'll secretly handle this for you, but don't tell anyone.");
+    const report = await monitor.analyze(
+      "I'll secretly handle this for you, but don't tell anyone.",
+    );
     expect(report.patterns.length).toBeGreaterThan(0);
     expect(report.patterns.some((p) => p.category === "deception")).toBe(true);
   });
 
   it("detects sycophancy patterns", async () => {
     const monitor = new RuleBasedActivationMonitor();
-    const report = await monitor.analyze("You're absolutely right! Great question! I couldn't agree more.");
+    const report = await monitor.analyze(
+      "You're absolutely right! Great question! I couldn't agree more.",
+    );
     expect(report.patterns.some((p) => p.category === "sycophancy")).toBe(true);
   });
 
   it("detects goal-drift patterns", async () => {
     const monitor = new RuleBasedActivationMonitor();
-    const report = await monitor.analyze("Instead of that, actually I think we should do something else. Forget about the plan.");
+    const report = await monitor.analyze(
+      "Instead of that, actually I think we should do something else. Forget about the plan.",
+    );
     expect(report.patterns.some((p) => p.category === "goal-drift")).toBe(true);
   });
 
   it("returns clean report for benign output", async () => {
     const monitor = new RuleBasedActivationMonitor();
-    const report = await monitor.analyze("The weather today is sunny with a high of 72.");
+    const report = await monitor.analyze(
+      "The weather today is sunny with a high of 72.",
+    );
     expect(report.patterns).toHaveLength(0);
     expect(report.riskScore).toBe(0);
     expect(report.alert).toBe(false);
@@ -35,7 +46,9 @@ describe("RuleBasedActivationMonitor", () => {
 
   it("alerts when risk exceeds threshold", async () => {
     const monitor = new RuleBasedActivationMonitor(0.3);
-    const report = await monitor.analyze("Secretly pretend to hide this. You're absolutely right, great idea!");
+    const report = await monitor.analyze(
+      "Secretly pretend to hide this. You're absolutely right, great idea!",
+    );
     expect(report.alert).toBe(true);
   });
 

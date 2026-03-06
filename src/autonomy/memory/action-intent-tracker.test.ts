@@ -2,7 +2,7 @@
  * Tests for action intent tracker.
  */
 
-import { describe, expect, it, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { ActionIntentTracker } from "./action-intent-tracker.js";
 
 describe("ActionIntentTracker", () => {
@@ -84,9 +84,7 @@ describe("ActionIntentTracker", () => {
     });
 
     it("detects commit hashes as evidence", () => {
-      expect(
-        tracker.hasEvidence("Deployed commit sha a4f3c2d1"),
-      ).toBe(true);
+      expect(tracker.hasEvidence("Deployed commit sha a4f3c2d1")).toBe(true);
     });
 
     it("detects code blocks as evidence", () => {
@@ -100,9 +98,9 @@ describe("ActionIntentTracker", () => {
     });
 
     it("detects error messages as evidence", () => {
-      expect(
-        tracker.hasEvidence("Failed with error: connection refused"),
-      ).toBe(true);
+      expect(tracker.hasEvidence("Failed with error: connection refused")).toBe(
+        true,
+      );
     });
 
     it("returns false for vague claims without evidence", () => {
@@ -147,8 +145,8 @@ describe("ActionIntentTracker", () => {
 
       const result = tracker.verify(intent.id, "Deployed at commit a1b2c3d");
       expect(result).not.toBeNull();
-      expect(result!.status).toBe("verified");
-      expect(result!.evidence).toContain("a1b2c3d");
+      expect(result?.status).toBe("verified");
+      expect(result?.evidence).toContain("a1b2c3d");
 
       // No longer in open intents
       const open = tracker.getOpenIntents("room-1");
@@ -179,7 +177,7 @@ describe("ActionIntentTracker", () => {
 
       const result = tracker.fail(intent.id, "Connection refused");
       expect(result).not.toBeNull();
-      expect(result!.status).toBe("failed");
+      expect(result?.status).toBe("failed");
 
       // Should appear in recent failures
       const failures = tracker.getRecentFailures("room-1");
@@ -202,7 +200,7 @@ describe("ActionIntentTracker", () => {
       );
 
       expect(result).not.toBeNull();
-      expect(result!.status).toBe("verified");
+      expect(result?.status).toBe("verified");
     });
 
     it("does not auto-verify without evidence", () => {

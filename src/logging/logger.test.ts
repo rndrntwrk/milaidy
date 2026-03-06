@@ -2,8 +2,8 @@
  * Tests for structured logger.
  */
 
-import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
-import { createLogger, withContext, getContext } from "./logger.js";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { createLogger, getContext, withContext } from "./logger.js";
 
 describe("createLogger", () => {
   let consoleSpy: ReturnType<typeof vi.spyOn>;
@@ -70,7 +70,7 @@ describe("createLogger", () => {
       apiKey: "secret123",
       password: "hunter2",
       token: "abc",
-      config: { nested: { api_key: "nested-secret" } }
+      config: { nested: { api_key: "nested-secret" } },
     });
 
     const output = consoleSpy.mock.calls[0][0];

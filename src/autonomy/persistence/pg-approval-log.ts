@@ -7,9 +7,11 @@
  * @module autonomy/persistence/pg-approval-log
  */
 
-import { logger } from "@elizaos/core";
-
-import type { ApprovalDecision, ApprovalRequest, ApprovalResult } from "../approval/types.js";
+import type {
+  ApprovalDecision,
+  ApprovalRequest,
+  ApprovalResult,
+} from "../approval/types.js";
 import type { AutonomyDbAdapter } from "./db-adapter.js";
 
 // ---------- Types ----------
@@ -99,7 +101,7 @@ function rowToEntry(row: Record<string, unknown>): ApprovalLogEntry {
     toolName: String(row.tool_name ?? ""),
     riskClass: String(row.risk_class ?? ""),
     callPayload: parseJsonb(row.call_payload),
-    decision: row.decision ? String(row.decision) as ApprovalDecision : null,
+    decision: row.decision ? (String(row.decision) as ApprovalDecision) : null,
     decidedBy: row.decided_by ? String(row.decided_by) : null,
     createdAt: toEpochMs(row.created_at),
     expiresAt: toEpochMs(row.expires_at),
@@ -110,7 +112,11 @@ function rowToEntry(row: Record<string, unknown>): ApprovalLogEntry {
 function parseJsonb(value: unknown): Record<string, unknown> {
   if (value === null || value === undefined) return {};
   if (typeof value === "string") {
-    try { return JSON.parse(value); } catch { return {}; }
+    try {
+      return JSON.parse(value);
+    } catch {
+      return {};
+    }
   }
   return value as Record<string, unknown>;
 }

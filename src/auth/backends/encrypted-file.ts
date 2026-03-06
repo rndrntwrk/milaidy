@@ -11,7 +11,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { logger } from "@elizaos/core";
-import type { EncryptedPayload, SecureStorageBackend } from "../secure-storage.js";
+import type { SecureStorageBackend } from "../secure-storage.js";
 import { decrypt, encrypt, isEncryptedPayload } from "../secure-storage.js";
 
 const MILAIDY_HOME =

@@ -7,27 +7,27 @@
  */
 
 import {
-  useRef,
-  useEffect,
-  useCallback,
-  useState,
-  useMemo,
-  memo,
+  type ChangeEvent,
   type KeyboardEvent,
   type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
 } from "react";
 import { getVrmPreviewUrl, useApp } from "../AppContext.js";
-import { ChatAvatar } from "./ChatAvatar.js";
-import { useVoiceChat } from "../hooks/useVoiceChat.js";
 import {
-  client,
-  type AutonomyExecutePlanRequest,
   type Arcade555AutonomyMode,
   type Arcade555AutonomyPreviewResponse,
-  type ConversationMode,
   type Arcade555MasteryRun,
+  type AutonomyExecutePlanRequest,
+  type ConversationMode,
+  client,
   type VoiceConfig,
 } from "../api-client.js";
+import { useVoiceChat } from "../hooks/useVoiceChat.js";
+import { ChatAvatar } from "./ChatAvatar.js";
 import { MessageContent } from "./MessageContent.js";
 import {
   didToolActionSucceed,
@@ -45,9 +45,8 @@ function renderInlineMarkdown(line: string): ReactNode[] {
   const nodes: ReactNode[] = [];
   const tokenRe = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g;
   let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = tokenRe.exec(line)) !== null) {
+  let match = tokenRe.exec(line);
+  while (match !== null) {
     if (match.index > lastIndex) {
       nodes.push(line.slice(lastIndex, match.index));
     }
@@ -60,7 +59,10 @@ function renderInlineMarkdown(line: string): ReactNode[] {
       nodes.push(<em key={key}>{token.slice(1, -1)}</em>);
     } else if (token.startsWith("`") && token.endsWith("`")) {
       nodes.push(
-        <code key={key} className="px-1 py-0.5 rounded bg-bg text-[0.95em] font-mono">
+        <code
+          key={key}
+          className="px-1 py-0.5 rounded bg-bg text-[0.95em] font-mono"
+        >
           {token.slice(1, -1)}
         </code>,
       );
@@ -69,6 +71,7 @@ function renderInlineMarkdown(line: string): ReactNode[] {
     }
 
     lastIndex = tokenRe.lastIndex;
+    match = tokenRe.exec(line);
   }
 
   if (lastIndex < line.length) {
@@ -78,19 +81,25 @@ function renderInlineMarkdown(line: string): ReactNode[] {
   return nodes;
 }
 
-function renderMessageText(text: string): ReactNode {
+function _renderMessageText(text: string): ReactNode {
   const lines = text.split(/\r?\n/);
-  return lines.map((line, i) => (
-    <span key={i}>
-      {renderInlineMarkdown(line)}
-      {i < lines.length - 1 ? <br /> : null}
-    </span>
-  ));
+  let offset = 0;
+  return lines.map((line) => {
+    const key = `${offset}:${line}`;
+    offset += line.length + 1;
+    return (
+      <span key={key}>
+        {renderInlineMarkdown(line)}
+        {offset <= text.length ? <br /> : null}
+      </span>
+    );
+  });
 }
 
-function summarizeStreamState(
-  envelope: ParsedToolEnvelope | null,
-): { live: boolean; label: string } {
+function summarizeStreamState(envelope: ParsedToolEnvelope | null): {
+  live: boolean;
+  label: string;
+} {
   const data = envelope?.data;
   if (!data) return { live: false, label: "unknown" };
 
@@ -218,7 +227,9 @@ function parseProjectedEarningsFromEnvelope(
   let maxPayout = 0;
   for (const entry of evaluated) {
     if (!entry || typeof entry !== "object") continue;
-    const payout = Number((entry as Record<string, unknown>).payoutPerImpression ?? 0);
+    const payout = Number(
+      (entry as Record<string, unknown>).payoutPerImpression ?? 0,
+    );
     if (Number.isFinite(payout) && payout > maxPayout) {
       maxPayout = payout;
     }
@@ -237,7 +248,9 @@ function parseGameLaunchFromEnvelope(
       ? (data.game as Record<string, unknown>)
       : null;
   const viewer =
-    data.viewer && typeof data.viewer === "object" && !Array.isArray(data.viewer)
+    data.viewer &&
+    typeof data.viewer === "object" &&
+    !Array.isArray(data.viewer)
       ? (data.viewer as Record<string, unknown>)
       : null;
 
@@ -269,7 +282,7 @@ function parseGameLaunchFromEnvelope(
   };
 }
 
-export const ChatView = memo(function ChatView() {
+export function ChatView() {
   const {
     agentStatus,
     chatInput,
@@ -286,10 +299,13 @@ export const ChatView = memo(function ChatView() {
     droppedFiles,
     shareIngestNotice,
     selectedVrmIndex,
+    chatPendingImages,
+    setChatPendingImages,
   } = useApp();
 
   const messagesRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   // ── Toggles (persisted in localStorage) ──────────────────────────
   const [avatarVisible, setAvatarVisible] = useState(() => {
@@ -303,9 +319,9 @@ export const ChatView = memo(function ChatView() {
   const [agentVoiceMuted, setAgentVoiceMuted] = useState(() => {
     try {
       const v = localStorage.getItem("milaidy:chat:voiceMuted");
-      return v === null ? true : v === "true"; // muted by default
+      return v === null ? false : v === "true";
     } catch {
-      return true;
+      return false;
     }
   });
   const [chatMode, setChatMode] = useState<ConversationMode>(() => {
@@ -343,7 +359,8 @@ export const ChatView = memo(function ChatView() {
   // ── Voice config (ElevenLabs / browser TTS) ────────────────────────
   const [voiceConfig, setVoiceConfig] = useState<VoiceConfig | null>(null);
   const [autoRunOpen, setAutoRunOpen] = useState(false);
-  const [autoRunMode, setAutoRunMode] = useState<Arcade555AutonomyMode>("newscast");
+  const [autoRunMode, setAutoRunMode] =
+    useState<Arcade555AutonomyMode>("newscast");
   const [autoRunTopic, setAutoRunTopic] = useState("");
   const [autoRunDurationMin, setAutoRunDurationMin] = useState(30);
   const [autoRunAvatarRuntime, setAutoRunAvatarRuntime] = useState<
@@ -360,7 +377,7 @@ export const ChatView = memo(function ChatView() {
 
   useEffect(() => {
     setAutoRunPreview(null);
-  }, [autoRunMode, autoRunTopic, autoRunDurationMin, autoRunAvatarRuntime]);
+  }, []);
 
   const loadMasteryRuns = useCallback(async () => {
     setMasteryRunsLoading(true);
@@ -389,7 +406,11 @@ export const ChatView = memo(function ChatView() {
         strict: true,
         evidenceMode: "strict",
       });
-      setActionNotice(`Mastery run started (${response.runId}).`, "success", 3200);
+      setActionNotice(
+        `Mastery run started (${response.runId}).`,
+        "success",
+        3200,
+      );
       await loadMasteryRuns();
     } catch (err) {
       setActionNotice(
@@ -434,7 +455,10 @@ export const ChatView = memo(function ChatView() {
     [chatMode, chatSending, setState, handleChatSend],
   );
 
-  const voice = useVoiceChat({ onTranscript: handleVoiceTranscript, voiceConfig });
+  const voice = useVoiceChat({
+    onTranscript: handleVoiceTranscript,
+    voiceConfig,
+  });
 
   const agentName = agentStatus?.agentName ?? "Agent";
   const msgs = conversationMessages;
@@ -451,8 +475,14 @@ export const ChatView = memo(function ChatView() {
       ),
     [msgs, chatSending, chatFirstTokenReceived],
   );
-  const agentAvatarSrc = selectedVrmIndex > 0 ? getVrmPreviewUrl(selectedVrmIndex) : null;
+  const agentAvatarSrc =
+    selectedVrmIndex > 0 ? getVrmPreviewUrl(selectedVrmIndex) : null;
   const agentInitial = agentName.trim().charAt(0).toUpperCase() || "A";
+  const pendingImages = Array.isArray(chatPendingImages)
+    ? chatPendingImages
+    : [];
+  const canSendMessage =
+    chatInput.trim().length > 0 || pendingImages.length > 0;
   const DEFAULT_GAME_SANDBOX =
     "allow-scripts allow-same-origin allow-popups allow-forms";
   type LayerStatus = "active" | "disabled" | "available";
@@ -464,19 +494,23 @@ export const ChatView = memo(function ChatView() {
     navigateToApps?: boolean;
   };
 
-  const resolvePluginStatus = useCallback((id: string): LayerStatus => {
-    const needle = id.trim().toLowerCase();
-    const plugin = plugins.find((p) => {
-      const pluginId = p.id.trim().toLowerCase();
-      const pluginName = p.name.trim().toLowerCase();
-      return pluginIdMatchesNeedle(pluginId, pluginName, needle);
-    });
-    if (!plugin) return "available";
-    if (plugin.isActive === true) return "active";
-    if (plugin.enabled === false) return "disabled";
-    if (plugin.enabled === true && plugin.isActive === false) return "disabled";
-    return "available";
-  }, [plugins]);
+  const resolvePluginStatus = useCallback(
+    (id: string): LayerStatus => {
+      const needle = id.trim().toLowerCase();
+      const plugin = plugins.find((p) => {
+        const pluginId = p.id.trim().toLowerCase();
+        const pluginName = p.name.trim().toLowerCase();
+        return pluginIdMatchesNeedle(pluginId, pluginName, needle);
+      });
+      if (!plugin) return "available";
+      if (plugin.isActive === true) return "active";
+      if (plugin.enabled === false) return "disabled";
+      if (plugin.enabled === true && plugin.isActive === false)
+        return "disabled";
+      return "available";
+    },
+    [plugins],
+  );
 
   const hasPluginRegistration = useCallback(
     (id: string): boolean => {
@@ -490,16 +524,20 @@ export const ChatView = memo(function ChatView() {
     [plugins],
   );
 
-  const resolveLayerStatus = useCallback((pluginIds: string[]): LayerStatus => {
-    if (pluginIds.length === 0) return "available";
-    const statuses = pluginIds.map((id) => resolvePluginStatus(id));
-    if (statuses.every((status) => status === "active")) return "active";
-    if (statuses.some((status) => status === "disabled")) return "disabled";
-    return "available";
-  }, [resolvePluginStatus]);
+  const resolveLayerStatus = useCallback(
+    (pluginIds: string[]): LayerStatus => {
+      if (pluginIds.length === 0) return "available";
+      const statuses = pluginIds.map((id) => resolvePluginStatus(id));
+      if (statuses.every((status) => status === "active")) return "active";
+      if (statuses.some((status) => status === "disabled")) return "disabled";
+      return "available";
+    },
+    [resolvePluginStatus],
+  );
 
   const hasActiveGameViewer =
-    typeof activeGameViewerUrl === "string" && activeGameViewerUrl.trim().length > 0;
+    typeof activeGameViewerUrl === "string" &&
+    activeGameViewerUrl.trim().length > 0;
 
   const selectPreferredGameId = useCallback(
     (games: Array<{ id: string; category?: string }>): string | undefined => {
@@ -528,8 +566,7 @@ export const ChatView = memo(function ChatView() {
       gameTitle?: string;
     }): string => {
       const { mode, topic, durationMin, gameTitle } = params;
-      const timingInstruction =
-        `Operate autonomously for ${durationMin} minutes, then wrap up naturally and stop the stream.`;
+      const timingInstruction = `Operate autonomously for ${durationMin} minutes, then wrap up naturally and stop the stream.`;
 
       if (mode === "newscast") {
         return [
@@ -693,99 +730,102 @@ export const ChatView = memo(function ChatView() {
     setActionNotice,
   ]);
 
-  const quickLayers: QuickLayer[] = [
-    {
-      id: "stream",
-      label: "Stream",
-      pluginIds: ["stream"],
-      prompt:
-        "Use STREAM_STATUS and STREAM_CONTROL to report current stream state and execute the next stream action safely.",
-    },
-    {
-      id: "go-live",
-      label: "Go Live",
-      pluginIds: ["stream555-control"],
-      prompt:
-        "Use STREAM555_GO_LIVE then STREAM555_GO_LIVE_SEGMENTS so the stream starts with segment orchestration active, then summarize live state and next production move.",
-    },
-    {
-      id: "autonomous-run",
-      label: "Autonomous",
-      pluginIds: ["stream"],
-      prompt: "",
-    },
-    {
-      id: "screen-share",
-      label: "Screen Share",
-      pluginIds: ["stream555-control"],
-      prompt:
-        "Use STREAM555_SCREEN_SHARE to switch the current live feed to screen-sharing and confirm the stream remains live.",
-    },
-    {
-      id: "ads",
-      label: "Ads",
-      pluginIds: ["stream555-control"],
-      prompt:
-        "Create and trigger an ad break, then summarize ad playback state and expected payout impact.",
-    },
-    {
-      id: "invite-guest",
-      label: "Invite Guest",
-      pluginIds: ["stream555-control"],
-      prompt:
-        "Create a guest invite and report the invite link with host-side instructions.",
-    },
-    {
-      id: "radio",
-      label: "Radio",
-      pluginIds: ["stream555-control"],
-      prompt:
-        "Configure radio mode and summarize current live audio blend decisions.",
-    },
-    {
-      id: "pip",
-      label: "PiP",
-      pluginIds: ["stream555-control"],
-      prompt:
-        "Enable PiP composition and confirm the active scene is updated.",
-    },
-    {
-      id: "reaction-segment",
-      label: "Reaction",
-      pluginIds: ["stream555-control"],
-      prompt:
-        "Ensure segment orchestration is active, queue a reaction segment override, then announce the next reaction topic.",
-    },
-    {
-      id: "earnings",
-      label: "Earnings",
-      pluginIds: ["stream555-control"],
-      prompt:
-        "Evaluate marketplace payouts and report projected earnings opportunities for the next segment.",
-    },
-    {
-      id: "play-games",
-      label: "Play Games",
-      pluginIds: ["555arcade"],
-      navigateToApps: true,
-      prompt:
-        "Prefer ARCADE555_GAMES_CATALOG and ARCADE555_GAMES_PLAY to choose a playable game and launch autonomous spectate mode (bot=true). If canonical arcade actions are unavailable, fallback to FIVE55_GAMES_CATALOG and FIVE55_GAMES_PLAY. Continue live commentary with score/capture updates.",
-    },
-    {
-      id: "swap",
-      label: "Swap",
-      pluginIds: ["swap"],
-      prompt:
-        "Use WALLET_POSITION and SWAP_QUOTE to evaluate wallet state and produce a safe swap recommendation.",
-    },
-    {
-      id: "end-live",
-      label: "End Live",
-      pluginIds: ["stream555-control"],
-      prompt:
-        "Stop the stream and provide a concise post-live summary with next recommended action.",
-    },
-  ];
+  const quickLayers = useMemo<QuickLayer[]>(
+    () => [
+      {
+        id: "stream",
+        label: "Stream",
+        pluginIds: ["stream"],
+        prompt:
+          "Use STREAM_STATUS and STREAM_CONTROL to report current stream state and execute the next stream action safely.",
+      },
+      {
+        id: "go-live",
+        label: "Go Live",
+        pluginIds: ["stream555-control"],
+        prompt:
+          "Use STREAM555_GO_LIVE then STREAM555_GO_LIVE_SEGMENTS so the stream starts with segment orchestration active, then summarize live state and next production move.",
+      },
+      {
+        id: "autonomous-run",
+        label: "Autonomous",
+        pluginIds: ["stream"],
+        prompt: "",
+      },
+      {
+        id: "screen-share",
+        label: "Screen Share",
+        pluginIds: ["stream555-control"],
+        prompt:
+          "Use STREAM555_SCREEN_SHARE to switch the current live feed to screen-sharing and confirm the stream remains live.",
+      },
+      {
+        id: "ads",
+        label: "Ads",
+        pluginIds: ["stream555-control"],
+        prompt:
+          "Create and trigger an ad break, then summarize ad playback state and expected payout impact.",
+      },
+      {
+        id: "invite-guest",
+        label: "Invite Guest",
+        pluginIds: ["stream555-control"],
+        prompt:
+          "Create a guest invite and report the invite link with host-side instructions.",
+      },
+      {
+        id: "radio",
+        label: "Radio",
+        pluginIds: ["stream555-control"],
+        prompt:
+          "Configure radio mode and summarize current live audio blend decisions.",
+      },
+      {
+        id: "pip",
+        label: "PiP",
+        pluginIds: ["stream555-control"],
+        prompt:
+          "Enable PiP composition and confirm the active scene is updated.",
+      },
+      {
+        id: "reaction-segment",
+        label: "Reaction",
+        pluginIds: ["stream555-control"],
+        prompt:
+          "Ensure segment orchestration is active, queue a reaction segment override, then announce the next reaction topic.",
+      },
+      {
+        id: "earnings",
+        label: "Earnings",
+        pluginIds: ["stream555-control"],
+        prompt:
+          "Evaluate marketplace payouts and report projected earnings opportunities for the next segment.",
+      },
+      {
+        id: "play-games",
+        label: "Play Games",
+        pluginIds: ["555arcade"],
+        navigateToApps: true,
+        prompt:
+          "Prefer ARCADE555_GAMES_CATALOG and ARCADE555_GAMES_PLAY to choose a playable game and launch autonomous spectate mode (bot=true). If canonical arcade actions are unavailable, fallback to FIVE55_GAMES_CATALOG and FIVE55_GAMES_PLAY. Continue live commentary with score/capture updates.",
+      },
+      {
+        id: "swap",
+        label: "Swap",
+        pluginIds: ["swap"],
+        prompt:
+          "Use WALLET_POSITION and SWAP_QUOTE to evaluate wallet state and produce a safe swap recommendation.",
+      },
+      {
+        id: "end-live",
+        label: "End Live",
+        pluginIds: ["stream555-control"],
+        prompt:
+          "Stop the stream and provide a concise post-live summary with next recommended action.",
+      },
+    ],
+    [],
+  );
   const quickLayerById = useMemo(
     () => new Map(quickLayers.map((layer) => [layer.id, layer])),
     [quickLayers],
@@ -842,29 +882,35 @@ export const ChatView = memo(function ChatView() {
 
         if (stream555ControlAvailable) {
           try {
-            const goLivePlan = await executePlanWithRetry({
-              plan: {
-                id: "quick-layer-go-live-stream555",
-                steps: [
-                  {
-                    id: "go-live",
-                    toolName: "STREAM555_GO_LIVE",
-                    params: { scene: "default" },
-                  },
-                  {
-                    id: "segment-bootstrap",
-                    toolName: "STREAM555_GO_LIVE_SEGMENTS",
-                    params: {
-                      segmentIntent: "balanced",
+            const goLivePlan = await executePlanWithRetry(
+              {
+                plan: {
+                  id: "quick-layer-go-live-stream555",
+                  steps: [
+                    {
+                      id: "go-live",
+                      toolName: "STREAM555_GO_LIVE",
+                      params: { scene: "default" },
                     },
-                  },
-                ],
+                    {
+                      id: "segment-bootstrap",
+                      toolName: "STREAM555_GO_LIVE_SEGMENTS",
+                      params: {
+                        segmentIntent: "balanced",
+                      },
+                    },
+                  ],
+                },
+                request: { source: "user", sourceTrust: 1 },
+                options: { stopOnFailure: false },
               },
-              request: { source: "user", sourceTrust: 1 },
-              options: { stopOnFailure: false },
-            }, { label: "Go live" });
+              { label: "Go live" },
+            );
 
-            const didGoLiveSucceed = didToolActionSucceed(goLivePlan, "STREAM555_GO_LIVE");
+            const didGoLiveSucceed = didToolActionSucceed(
+              goLivePlan,
+              "STREAM555_GO_LIVE",
+            );
             const didSegmentBootstrapSucceed = didToolActionSucceed(
               goLivePlan,
               "STREAM555_GO_LIVE_SEGMENTS",
@@ -939,30 +985,33 @@ export const ChatView = memo(function ChatView() {
 
         if (!goLiveCompleted && legacyStreamAvailable) {
           try {
-            const plan = await executePlanWithRetry({
-              plan: {
-                id: "quick-layer-go-live-legacy",
-                steps: [
-                  {
-                    id: "status-before",
-                    toolName: "STREAM_STATUS",
-                    params: { scope: "current" },
-                  },
-                  {
-                    id: "start",
-                    toolName: "STREAM_CONTROL",
-                    params: { operation: "start", scene: "default" },
-                  },
-                  {
-                    id: "status-after",
-                    toolName: "STREAM_STATUS",
-                    params: { scope: "current" },
-                  },
-                ],
+            const plan = await executePlanWithRetry(
+              {
+                plan: {
+                  id: "quick-layer-go-live-legacy",
+                  steps: [
+                    {
+                      id: "status-before",
+                      toolName: "STREAM_STATUS",
+                      params: { scope: "current" },
+                    },
+                    {
+                      id: "start",
+                      toolName: "STREAM_CONTROL",
+                      params: { operation: "start", scene: "default" },
+                    },
+                    {
+                      id: "status-after",
+                      toolName: "STREAM_STATUS",
+                      params: { scope: "current" },
+                    },
+                  ],
+                },
+                request: { source: "user", sourceTrust: 1 },
+                options: { stopOnFailure: false },
               },
-              request: { source: "user", sourceTrust: 1 },
-              options: { stopOnFailure: false },
-            }, { label: "Go live fallback" });
+              { label: "Go live fallback" },
+            );
             const statusEnvelope = findLastToolEnvelope(
               plan.results,
               "STREAM_STATUS",
@@ -1017,22 +1066,29 @@ export const ChatView = memo(function ChatView() {
 
       if (layer.id === "screen-share") {
         try {
-          const plan = await executePlanWithRetry({
-            plan: {
-              id: "quick-layer-screen-share",
-              steps: [
-                {
-                  id: "screen-share",
-                  toolName: "STREAM555_SCREEN_SHARE",
-                  params: { sceneId: "active-pip" },
-                },
-              ],
+          const plan = await executePlanWithRetry(
+            {
+              plan: {
+                id: "quick-layer-screen-share",
+                steps: [
+                  {
+                    id: "screen-share",
+                    toolName: "STREAM555_SCREEN_SHARE",
+                    params: { sceneId: "active-pip" },
+                  },
+                ],
+              },
+              request: { source: "user", sourceTrust: 1 },
+              options: { stopOnFailure: false },
             },
-            request: { source: "user", sourceTrust: 1 },
-            options: { stopOnFailure: false },
-          }, { label: "Screen share" });
+            { label: "Screen share" },
+          );
           if (didToolActionSucceed(plan, "STREAM555_SCREEN_SHARE")) {
-            setActionNotice("Screen-share request dispatched.", "success", 2600);
+            setActionNotice(
+              "Screen-share request dispatched.",
+              "success",
+              2600,
+            );
             prompt =
               "Confirm screen-share is active and narrate what viewers should focus on next.";
           } else {
@@ -1041,7 +1097,11 @@ export const ChatView = memo(function ChatView() {
               "STREAM555_SCREEN_SHARE",
               "screen-share action did not succeed",
             );
-            setActionNotice(`Screen-share request failed: ${reason}`, "error", 4200);
+            setActionNotice(
+              `Screen-share request failed: ${reason}`,
+              "error",
+              4200,
+            );
           }
         } catch (err) {
           setActionNotice(
@@ -1054,24 +1114,27 @@ export const ChatView = memo(function ChatView() {
 
       if (layer.id === "ads") {
         try {
-          const createPlan = await executePlanWithRetry({
-            plan: {
-              id: "quick-layer-ad-create",
-              steps: [
-                {
-                  id: "ad-create",
-                  toolName: "STREAM555_AD_CREATE",
-                  params: {
-                    type: "l-bar",
-                    imageUrl: "https://picsum.photos/seed/alice-ad/1280/720",
-                    durationMs: "15000",
+          const createPlan = await executePlanWithRetry(
+            {
+              plan: {
+                id: "quick-layer-ad-create",
+                steps: [
+                  {
+                    id: "ad-create",
+                    toolName: "STREAM555_AD_CREATE",
+                    params: {
+                      type: "l-bar",
+                      imageUrl: "https://picsum.photos/seed/alice-ad/1280/720",
+                      durationMs: "15000",
+                    },
                   },
-                },
-              ],
+                ],
+              },
+              request: { source: "user", sourceTrust: 1 },
+              options: { stopOnFailure: false },
             },
-            request: { source: "user", sourceTrust: 1 },
-            options: { stopOnFailure: false },
-          }, { label: "Ad create" });
+            { label: "Ad create" },
+          );
           if (!didToolActionSucceed(createPlan, "STREAM555_AD_CREATE")) {
             const reason = getToolActionFailureMessage(
               createPlan,
@@ -1087,23 +1150,26 @@ export const ChatView = memo(function ChatView() {
           );
 
           if (createdAdId) {
-            const triggerPlan = await executePlanWithRetry({
-              plan: {
-                id: "quick-layer-ad-trigger",
-                steps: [
-                  {
-                    id: "ad-trigger",
-                    toolName: "STREAM555_AD_TRIGGER",
-                    params: {
-                      adId: createdAdId,
-                      durationMs: "15000",
+            const triggerPlan = await executePlanWithRetry(
+              {
+                plan: {
+                  id: "quick-layer-ad-trigger",
+                  steps: [
+                    {
+                      id: "ad-trigger",
+                      toolName: "STREAM555_AD_TRIGGER",
+                      params: {
+                        adId: createdAdId,
+                        durationMs: "15000",
+                      },
                     },
-                  },
-                ],
+                  ],
+                },
+                request: { source: "user", sourceTrust: 1 },
+                options: { stopOnFailure: false },
               },
-              request: { source: "user", sourceTrust: 1 },
-              options: { stopOnFailure: false },
-            }, { label: "Ad trigger" });
+              { label: "Ad trigger" },
+            );
             if (!didToolActionSucceed(triggerPlan, "STREAM555_AD_TRIGGER")) {
               const reason = getToolActionFailureMessage(
                 triggerPlan,
@@ -1118,8 +1184,7 @@ export const ChatView = memo(function ChatView() {
               "success",
               2800,
             );
-            prompt =
-              `Ad ${createdAdId} was triggered. Briefly summarize monetization impact and what comes next on stream.`;
+            prompt = `Ad ${createdAdId} was triggered. Briefly summarize monetization impact and what comes next on stream.`;
           } else {
             setActionNotice(
               "Ad create request completed, but no adId was returned for trigger.",
@@ -1138,20 +1203,23 @@ export const ChatView = memo(function ChatView() {
 
       if (layer.id === "invite-guest") {
         try {
-          const plan = await executePlanWithRetry({
-            plan: {
-              id: "quick-layer-guest-invite",
-              steps: [
-                {
-                  id: "guest-invite",
-                  toolName: "STREAM555_GUEST_INVITE",
-                  params: { name: "Guest" },
-                },
-              ],
+          const plan = await executePlanWithRetry(
+            {
+              plan: {
+                id: "quick-layer-guest-invite",
+                steps: [
+                  {
+                    id: "guest-invite",
+                    toolName: "STREAM555_GUEST_INVITE",
+                    params: { name: "Guest" },
+                  },
+                ],
+              },
+              request: { source: "user", sourceTrust: 1 },
+              options: { stopOnFailure: false },
             },
-            request: { source: "user", sourceTrust: 1 },
-            options: { stopOnFailure: false },
-          }, { label: "Guest invite" });
+            { label: "Guest invite" },
+          );
           if (didToolActionSucceed(plan, "STREAM555_GUEST_INVITE")) {
             setActionNotice("Guest invite generated.", "success", 2600);
             prompt =
@@ -1175,23 +1243,27 @@ export const ChatView = memo(function ChatView() {
 
       if (layer.id === "radio") {
         try {
-          const plan = await executePlanWithRetry({
-            plan: {
-              id: "quick-layer-radio-control",
-              steps: [
-                {
-                  id: "radio-mode",
-                  toolName: "STREAM555_RADIO_CONTROL",
-                  params: { action: "setAutoDJMode", mode: "MUSIC" },
-                },
-              ],
+          const plan = await executePlanWithRetry(
+            {
+              plan: {
+                id: "quick-layer-radio-control",
+                steps: [
+                  {
+                    id: "radio-mode",
+                    toolName: "STREAM555_RADIO_CONTROL",
+                    params: { action: "setAutoDJMode", mode: "MUSIC" },
+                  },
+                ],
+              },
+              request: { source: "user", sourceTrust: 1 },
+              options: { stopOnFailure: false },
             },
-            request: { source: "user", sourceTrust: 1 },
-            options: { stopOnFailure: false },
-          }, { label: "Radio control" });
+            { label: "Radio control" },
+          );
           if (didToolActionSucceed(plan, "STREAM555_RADIO_CONTROL")) {
             setActionNotice("Radio mode updated.", "success", 2600);
-            prompt = "Summarize current radio/audio mode and how it supports this segment.";
+            prompt =
+              "Summarize current radio/audio mode and how it supports this segment.";
           } else {
             const reason = getToolActionFailureMessage(
               plan,
@@ -1211,20 +1283,23 @@ export const ChatView = memo(function ChatView() {
 
       if (layer.id === "pip") {
         try {
-          const plan = await executePlanWithRetry({
-            plan: {
-              id: "quick-layer-pip-enable",
-              steps: [
-                {
-                  id: "pip-enable",
-                  toolName: "STREAM555_PIP_ENABLE",
-                  params: { sceneId: "active-pip" },
-                },
-              ],
+          const plan = await executePlanWithRetry(
+            {
+              plan: {
+                id: "quick-layer-pip-enable",
+                steps: [
+                  {
+                    id: "pip-enable",
+                    toolName: "STREAM555_PIP_ENABLE",
+                    params: { sceneId: "active-pip" },
+                  },
+                ],
+              },
+              request: { source: "user", sourceTrust: 1 },
+              options: { stopOnFailure: false },
             },
-            request: { source: "user", sourceTrust: 1 },
-            options: { stopOnFailure: false },
-          }, { label: "PiP enable" });
+            { label: "PiP enable" },
+          );
           if (didToolActionSucceed(plan, "STREAM555_PIP_ENABLE")) {
             setActionNotice("PiP scene activated.", "success", 2600);
             prompt =
@@ -1248,36 +1323,39 @@ export const ChatView = memo(function ChatView() {
 
       if (layer.id === "reaction-segment") {
         try {
-          const plan = await executePlanWithRetry({
-            plan: {
-              id: "quick-layer-reaction-segment",
-              steps: [
-                {
-                  id: "segment-state-before",
-                  toolName: "STREAM555_SEGMENT_STATE",
-                  params: {},
-                },
-                {
-                  id: "segment-bootstrap",
-                  toolName: "STREAM555_GO_LIVE_SEGMENTS",
-                  params: {
-                    segmentIntent: "reaction",
-                    segmentTypes: "reaction,analysis",
+          const plan = await executePlanWithRetry(
+            {
+              plan: {
+                id: "quick-layer-reaction-segment",
+                steps: [
+                  {
+                    id: "segment-state-before",
+                    toolName: "STREAM555_SEGMENT_STATE",
+                    params: {},
                   },
-                },
-                {
-                  id: "segment-override-reaction",
-                  toolName: "STREAM555_SEGMENT_OVERRIDE",
-                  params: {
-                    segmentType: "reaction",
-                    reason: "actions-tab reaction segment",
+                  {
+                    id: "segment-bootstrap",
+                    toolName: "STREAM555_GO_LIVE_SEGMENTS",
+                    params: {
+                      segmentIntent: "reaction",
+                      segmentTypes: "reaction,analysis",
+                    },
                   },
-                },
-              ],
+                  {
+                    id: "segment-override-reaction",
+                    toolName: "STREAM555_SEGMENT_OVERRIDE",
+                    params: {
+                      segmentType: "reaction",
+                      reason: "actions-tab reaction segment",
+                    },
+                  },
+                ],
+              },
+              request: { source: "user", sourceTrust: 1 },
+              options: { stopOnFailure: false },
             },
-            request: { source: "user", sourceTrust: 1 },
-            options: { stopOnFailure: false },
-          }, { label: "Reaction segment override" });
+            { label: "Reaction segment override" },
+          );
           if (didToolActionSucceed(plan, "STREAM555_SEGMENT_OVERRIDE")) {
             const bootstrapOk = didToolActionSucceed(
               plan,
@@ -1298,7 +1376,11 @@ export const ChatView = memo(function ChatView() {
               "STREAM555_SEGMENT_OVERRIDE",
               "segment override action did not succeed",
             );
-            setActionNotice(`Reaction segment override failed: ${reason}`, "error", 4200);
+            setActionNotice(
+              `Reaction segment override failed: ${reason}`,
+              "error",
+              4200,
+            );
           }
         } catch (err) {
           setActionNotice(
@@ -1311,31 +1393,40 @@ export const ChatView = memo(function ChatView() {
 
       if (layer.id === "earnings") {
         try {
-          const earningsPlan = await executePlanWithRetry({
-            plan: {
-              id: "quick-layer-earnings-estimate",
-              steps: [
-                {
-                  id: "earnings-estimate",
-                  toolName: "STREAM555_EARNINGS_ESTIMATE",
-                  params: {
-                    categories: "gaming,reaction,news",
-                    limit: "5",
-                    poolSize: "30",
+          const earningsPlan = await executePlanWithRetry(
+            {
+              plan: {
+                id: "quick-layer-earnings-estimate",
+                steps: [
+                  {
+                    id: "earnings-estimate",
+                    toolName: "STREAM555_EARNINGS_ESTIMATE",
+                    params: {
+                      categories: "gaming,reaction,news",
+                      limit: "5",
+                      poolSize: "30",
+                    },
                   },
-                },
-              ],
+                ],
+              },
+              request: { source: "user", sourceTrust: 1 },
+              options: { stopOnFailure: false },
             },
-            request: { source: "user", sourceTrust: 1 },
-            options: { stopOnFailure: false },
-          }, { label: "Earnings estimate" });
-          if (!didToolActionSucceed(earningsPlan, "STREAM555_EARNINGS_ESTIMATE")) {
+            { label: "Earnings estimate" },
+          );
+          if (
+            !didToolActionSucceed(earningsPlan, "STREAM555_EARNINGS_ESTIMATE")
+          ) {
             const reason = getToolActionFailureMessage(
               earningsPlan,
               "STREAM555_EARNINGS_ESTIMATE",
               "earnings estimate action did not succeed",
             );
-            setActionNotice(`Earnings estimate failed: ${reason}`, "error", 4200);
+            setActionNotice(
+              `Earnings estimate failed: ${reason}`,
+              "error",
+              4200,
+            );
             return;
           }
           const envelope = findLastToolEnvelope(
@@ -1363,20 +1454,23 @@ export const ChatView = memo(function ChatView() {
 
       if (layer.id === "end-live") {
         try {
-          const plan = await executePlanWithRetry({
-            plan: {
-              id: "quick-layer-end-live",
-              steps: [
-                {
-                  id: "end-live",
-                  toolName: "STREAM555_END_LIVE",
-                  params: {},
-                },
-              ],
+          const plan = await executePlanWithRetry(
+            {
+              plan: {
+                id: "quick-layer-end-live",
+                steps: [
+                  {
+                    id: "end-live",
+                    toolName: "STREAM555_END_LIVE",
+                    params: {},
+                  },
+                ],
+              },
+              request: { source: "user", sourceTrust: 1 },
+              options: { stopOnFailure: false },
             },
-            request: { source: "user", sourceTrust: 1 },
-            options: { stopOnFailure: false },
-          }, { label: "End live" });
+            { label: "End live" },
+          );
           if (didToolActionSucceed(plan, "STREAM555_END_LIVE")) {
             setActionNotice("End-live request dispatched.", "success", 2600);
             prompt =
@@ -1409,23 +1503,26 @@ export const ChatView = memo(function ChatView() {
             : undefined;
           const playToolName = resolveGamesPlayToolName();
 
-          const playPlan = await executePlanWithRetry({
-            plan: {
-              id: "quick-layer-play-games-autonomous",
-              steps: [
-                {
-                  id: "play-autonomous",
-                  toolName: playToolName,
-                  params: {
-                    ...(selectedGameId ? { gameId: selectedGameId } : {}),
-                    mode: "spectate",
+          const playPlan = await executePlanWithRetry(
+            {
+              plan: {
+                id: "quick-layer-play-games-autonomous",
+                steps: [
+                  {
+                    id: "play-autonomous",
+                    toolName: playToolName,
+                    params: {
+                      ...(selectedGameId ? { gameId: selectedGameId } : {}),
+                      mode: "spectate",
+                    },
                   },
-                },
-              ],
+                ],
+              },
+              request: { source: "user", sourceTrust: 1 },
+              options: { stopOnFailure: true },
             },
-            request: { source: "user", sourceTrust: 1 },
-            options: { stopOnFailure: true },
-          }, { label: "Play games" });
+            { label: "Play games" },
+          );
 
           const launch = await resolveAutonomousGameLaunch(
             playPlan.results,
@@ -1433,7 +1530,8 @@ export const ChatView = memo(function ChatView() {
           );
 
           if (launch?.viewerUrl) {
-            const resolvedGameId = launch.gameId || selectedGameId || "unknown-game";
+            const resolvedGameId =
+              launch.gameId || selectedGameId || "unknown-game";
             const resolvedGameTitle =
               launch.gameTitle || selectedGame?.title || resolvedGameId;
 
@@ -1479,35 +1577,38 @@ export const ChatView = memo(function ChatView() {
         resolveLayerStatus(["stream"]) !== "disabled"
       ) {
         try {
-          const attachPlan = await executePlanWithRetry({
-            plan: {
-              id: "quick-layer-game-stream-attach",
-              steps: [
-                {
-                  id: "status-before",
-                  toolName: "STREAM_STATUS",
-                  params: { scope: "current" },
-                },
-                {
-                  id: "start-game-feed",
-                  toolName: "STREAM_CONTROL",
-                  params: {
-                    operation: "start",
-                    scene: "game",
-                    inputType: "website",
-                    url: viewerUrlForStream,
+          const attachPlan = await executePlanWithRetry(
+            {
+              plan: {
+                id: "quick-layer-game-stream-attach",
+                steps: [
+                  {
+                    id: "status-before",
+                    toolName: "STREAM_STATUS",
+                    params: { scope: "current" },
                   },
-                },
-                {
-                  id: "status-after",
-                  toolName: "STREAM_STATUS",
-                  params: { scope: "current" },
-                },
-              ],
+                  {
+                    id: "start-game-feed",
+                    toolName: "STREAM_CONTROL",
+                    params: {
+                      operation: "start",
+                      scene: "game",
+                      inputType: "website",
+                      url: viewerUrlForStream,
+                    },
+                  },
+                  {
+                    id: "status-after",
+                    toolName: "STREAM_STATUS",
+                    params: { scope: "current" },
+                  },
+                ],
+              },
+              request: { source: "user", sourceTrust: 1 },
+              options: { stopOnFailure: false },
             },
-            request: { source: "user", sourceTrust: 1 },
-            options: { stopOnFailure: false },
-          }, { label: "Game stream attach" });
+            { label: "Game stream attach" },
+          );
           const finalStatus = summarizeStreamState(
             findLastToolEnvelope(attachPlan.results, "STREAM_STATUS"),
           );
@@ -1598,9 +1699,7 @@ export const ChatView = memo(function ChatView() {
 
     setAutoRunLaunching(true);
     try {
-      const preview =
-        autoRunPreview ??
-        (await runAutonomousEstimate());
+      const preview = autoRunPreview ?? (await runAutonomousEstimate());
       if (!preview) return;
       if (!preview.canStart) {
         setActionNotice(
@@ -1619,27 +1718,32 @@ export const ChatView = memo(function ChatView() {
       };
 
       if (autoRunMode === "games") {
-        const catalog = await client.getArcade555GamesCatalog({ includeBeta: true });
+        const catalog = await client.getArcade555GamesCatalog({
+          includeBeta: true,
+        });
         const selectedGameId = selectPreferredGameId(catalog.games);
         const playToolName = resolveGamesPlayToolName();
 
-        const playPlan = await executePlanWithRetry({
-          plan: {
-            id: "autonomous-live-games-launch",
-            steps: [
-              {
-                id: "play",
-                toolName: playToolName,
-                params: {
-                  ...(selectedGameId ? { gameId: selectedGameId } : {}),
-                  mode: "spectate",
+        const playPlan = await executePlanWithRetry(
+          {
+            plan: {
+              id: "autonomous-live-games-launch",
+              steps: [
+                {
+                  id: "play",
+                  toolName: playToolName,
+                  params: {
+                    ...(selectedGameId ? { gameId: selectedGameId } : {}),
+                    mode: "spectate",
+                  },
                 },
-              },
-            ],
+              ],
+            },
+            request: { source: "user", sourceTrust: 1 },
+            options: { stopOnFailure: true },
           },
-          request: { source: "user", sourceTrust: 1 },
-          options: { stopOnFailure: true },
-        }, { label: "Autonomous game launch" });
+          { label: "Autonomous game launch" },
+        );
         const launch = await resolveAutonomousGameLaunch(
           playPlan.results,
           selectedGameId,
@@ -1649,10 +1753,7 @@ export const ChatView = memo(function ChatView() {
         setState("activeGameApp", `five55:${launch.gameId}`);
         setState("activeGameDisplayName", launch.gameTitle);
         setState("activeGameViewerUrl", launch.viewerUrl);
-        setState(
-          "activeGameSandbox",
-          launch.sandbox ?? DEFAULT_GAME_SANDBOX,
-        );
+        setState("activeGameSandbox", launch.sandbox ?? DEFAULT_GAME_SANDBOX);
         setState("activeGamePostMessageAuth", launch.postMessageAuth);
         setState("activeGamePostMessagePayload", null);
         setTab("apps");
@@ -1665,30 +1766,33 @@ export const ChatView = memo(function ChatView() {
         };
       }
 
-      const streamPlan = await executePlanWithRetry({
-        plan: {
-          id: "autonomous-live-stream-start",
-          steps: [
-            {
-              id: "status-before",
-              toolName: "STREAM_STATUS",
-              params: { scope: "current" },
-            },
-            {
-              id: "start",
-              toolName: "STREAM_CONTROL",
-              params: streamStartParams,
-            },
-            {
-              id: "status-after",
-              toolName: "STREAM_STATUS",
-              params: { scope: "current" },
-            },
-          ],
+      const streamPlan = await executePlanWithRetry(
+        {
+          plan: {
+            id: "autonomous-live-stream-start",
+            steps: [
+              {
+                id: "status-before",
+                toolName: "STREAM_STATUS",
+                params: { scope: "current" },
+              },
+              {
+                id: "start",
+                toolName: "STREAM_CONTROL",
+                params: streamStartParams,
+              },
+              {
+                id: "status-after",
+                toolName: "STREAM_STATUS",
+                params: { scope: "current" },
+              },
+            ],
+          },
+          request: { source: "user", sourceTrust: 1 },
+          options: { stopOnFailure: false },
         },
-        request: { source: "user", sourceTrust: 1 },
-        options: { stopOnFailure: false },
-      }, { label: "Autonomous stream start" });
+        { label: "Autonomous stream start" },
+      );
 
       const finalStatus = summarizeStreamState(
         findLastToolEnvelope(streamPlan.results, "STREAM_STATUS"),
@@ -1738,16 +1842,17 @@ export const ChatView = memo(function ChatView() {
     autoRunMode,
     selectPreferredGameId,
     setState,
-    DEFAULT_GAME_SANDBOX,
     buildAutonomousPrompt,
     autoRunTopic,
     autoRunDurationMin,
     handleChatSend,
     executePlanWithRetry,
+    resolveAutonomousGameLaunch,
   ]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    const win = typeof window === "undefined" ? null : window;
+    if (!win) return;
 
     const onQuickLayerRun = (rawEvent: Event) => {
       const event = rawEvent as CustomEvent<{ layerId?: string }>;
@@ -1758,30 +1863,61 @@ export const ChatView = memo(function ChatView() {
       void triggerQuickLayer(layer);
     };
 
-    window.addEventListener("milaidy:quick-layer:run", onQuickLayerRun as EventListener);
+    win.addEventListener(
+      "milaidy:quick-layer:run",
+      onQuickLayerRun as EventListener,
+    );
     return () => {
-      window.removeEventListener("milaidy:quick-layer:run", onQuickLayerRun as EventListener);
+      win.removeEventListener(
+        "milaidy:quick-layer:run",
+        onQuickLayerRun as EventListener,
+      );
     };
   }, [quickLayerById, triggerQuickLayer]);
 
-  const lastSpokenIdRef = useRef<string | null>(null);
+  const lastQueuedSpeechRef = useRef<string | null>(null);
 
   useEffect(() => {
     const lastAssistant = [...msgs]
       .reverse()
       .find((message) => message.role === "assistant" && message.text.trim());
-    if (!lastAssistant || chatSending || agentVoiceMuted) return;
-    if (lastAssistant.id === lastSpokenIdRef.current) return;
-    lastSpokenIdRef.current = lastAssistant.id;
-    voice.speak(lastAssistant.text);
+    if (!lastAssistant || agentVoiceMuted) return;
+    const speechText = lastAssistant.text.trim();
+    if (!speechText) return;
+    const isFinal = !chatSending;
+    const speechKey = `${lastAssistant.id}:${speechText}:${isFinal ? "final" : "partial"}`;
+    if (speechKey === lastQueuedSpeechRef.current) return;
+    lastQueuedSpeechRef.current = speechKey;
+    if (typeof voice.queueAssistantSpeech === "function") {
+      voice.queueAssistantSpeech(lastAssistant.id, speechText, isFinal);
+      return;
+    }
+    if (isFinal) {
+      voice.speak(speechText);
+    }
   }, [msgs, chatSending, agentVoiceMuted, voice]);
+
+  const _scrollSignature = useMemo(
+    () =>
+      visibleMsgs
+        .map((msg) => `${msg.id}:${msg.timestamp}:${msg.text}`)
+        .join("|"),
+    [visibleMsgs],
+  );
 
   // Smooth auto-scroll while streaming and on new messages.
   useEffect(() => {
     const el = messagesRef.current;
     if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [conversationMessages, chatSending]);
+    const targetTop = _scrollSignature.length === 0 ? 0 : el.scrollHeight;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const behavior = distanceFromBottom < 150 ? "instant" : "smooth";
+    if (typeof el.scrollTo === "function") {
+      el.scrollTo({ top: targetTop, behavior });
+      return;
+    }
+    el.scrollTop = targetTop;
+  }, [_scrollSignature]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -1792,7 +1928,7 @@ export const ChatView = memo(function ChatView() {
     const h = Math.min(ta.scrollHeight, 200);
     ta.style.height = `${h}px`;
     ta.style.overflowY = ta.scrollHeight > 200 ? "auto" : "hidden";
-  }, [chatInput]);
+  }, []);
 
   // Keep input focused for fast multi-turn chat.
   useEffect(() => {
@@ -1806,6 +1942,50 @@ export const ChatView = memo(function ChatView() {
       void handleChatSend(chatMode);
     }
   };
+
+  const addImageFiles = useCallback(
+    (files: Iterable<File>) => {
+      for (const file of files) {
+        if (!file || typeof file.type !== "string") continue;
+        if (!file.type.startsWith("image/")) continue;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result;
+          if (typeof result !== "string") return;
+          const commaIndex = result.indexOf(",");
+          const data =
+            commaIndex >= 0 ? result.slice(commaIndex + 1) : result.trim();
+          setChatPendingImages((prev) => [
+            ...prev,
+            { data, mimeType: file.type, name: file.name },
+          ]);
+        };
+        reader.readAsDataURL(file);
+      }
+    },
+    [setChatPendingImages],
+  );
+
+  const handleImageInputChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const files = event.target.files;
+      if (files && files.length > 0) {
+        addImageFiles(Array.from(files));
+      }
+      event.target.value = "";
+    },
+    [addImageFiles],
+  );
+
+  const handleRemovePendingImage = useCallback(
+    (targetName: string) => {
+      setChatPendingImages((prev) =>
+        prev.filter((image) => image.name !== targetName),
+      );
+    },
+    [setChatPendingImages],
+  );
+
   const showQuickLayersInChat = false;
 
   return (
@@ -1825,7 +2005,10 @@ export const ChatView = memo(function ChatView() {
       {(showQuickLayersInChat || autoRunOpen) && (
         <>
           {showQuickLayersInChat && (
-            <div className="flex flex-wrap items-center gap-1.5 pb-2 relative" style={{ zIndex: 1 }}>
+            <div
+              className="flex flex-wrap items-center gap-1.5 pb-2 relative"
+              style={{ zIndex: 1 }}
+            >
               <span className="text-[10px] uppercase tracking-wide text-muted pr-1">
                 Action layers
               </span>
@@ -1839,6 +2022,7 @@ export const ChatView = memo(function ChatView() {
                       : "border-border text-muted bg-card";
                 return (
                   <button
+                    type="button"
                     key={layer.id}
                     className={`px-2 py-1 text-[11px] border rounded transition-all ${tone}`}
                     onClick={() => void triggerQuickLayer(layer)}
@@ -1849,6 +2033,7 @@ export const ChatView = memo(function ChatView() {
                 );
               })}
               <button
+                type="button"
                 className="px-2 py-1 text-[11px] border rounded border-border text-muted bg-card hover:border-accent hover:text-accent"
                 onClick={() => setTab("plugins")}
                 title="Open plugin settings"
@@ -1868,6 +2053,7 @@ export const ChatView = memo(function ChatView() {
                   Autonomous Run Setup
                 </span>
                 <button
+                  type="button"
                   className="px-2 py-1 text-[11px] border rounded border-border text-muted bg-card hover:border-accent hover:text-accent"
                   onClick={() => setAutoRunOpen(false)}
                   disabled={autoRunPreviewBusy || autoRunLaunching}
@@ -1882,7 +2068,9 @@ export const ChatView = memo(function ChatView() {
                   <select
                     className="px-2 py-1 border rounded border-border bg-card text-txt"
                     value={autoRunMode}
-                    onChange={(e) => setAutoRunMode(e.target.value as Arcade555AutonomyMode)}
+                    onChange={(e) =>
+                      setAutoRunMode(e.target.value as Arcade555AutonomyMode)
+                    }
                     disabled={autoRunPreviewBusy || autoRunLaunching}
                   >
                     <option value="newscast">Newscast</option>
@@ -1893,7 +2081,9 @@ export const ChatView = memo(function ChatView() {
                 </label>
 
                 <label className="flex flex-col gap-1">
-                  <span className="text-[11px] text-muted">Duration (minutes)</span>
+                  <span className="text-[11px] text-muted">
+                    Duration (minutes)
+                  </span>
                   <input
                     type="number"
                     min={5}
@@ -1914,7 +2104,8 @@ export const ChatView = memo(function ChatView() {
 
                 <label className="flex flex-col gap-1 md:col-span-2">
                   <span className="text-[11px] text-muted">
-                    Topic {autoRunMode === "topic" ? "(required)" : "(optional)"}
+                    Topic{" "}
+                    {autoRunMode === "topic" ? "(required)" : "(optional)"}
                   </span>
                   <input
                     type="text"
@@ -1940,12 +2131,16 @@ export const ChatView = memo(function ChatView() {
                   >
                     <option value="local">Local (lower cost)</option>
                     <option value="auto">Auto</option>
-                    <option value="premium">Premium (higher quality/cost)</option>
+                    <option value="premium">
+                      Premium (higher quality/cost)
+                    </option>
                   </select>
                 </label>
 
                 <div className="flex flex-col gap-1 justify-end">
-                  <span className="text-[11px] text-muted">Identity Projection</span>
+                  <span className="text-[11px] text-muted">
+                    Identity Projection
+                  </span>
                   <span className="text-[11px] text-muted">
                     Uses current Milaidy character voice/style defaults.
                   </span>
@@ -1956,12 +2151,14 @@ export const ChatView = memo(function ChatView() {
                 <div className="mt-2 rounded border border-border/70 bg-bg-hover/40 px-2 py-2">
                   <div className="flex flex-wrap items-center gap-3 text-[11px]">
                     <span className="text-muted">
-                      Profile: <span className="text-txt">{autoRunPreview.profile}</span>
+                      Profile:{" "}
+                      <span className="text-txt">{autoRunPreview.profile}</span>
                     </span>
                     <span className="text-muted">
                       Stream credits:{" "}
                       <span className="text-txt">
-                        {typeof autoRunPreview.estimate.totalCredits === "number"
+                        {typeof autoRunPreview.estimate.totalCredits ===
+                        "number"
                           ? autoRunPreview.estimate.totalCredits
                           : "n/a"}
                       </span>
@@ -1969,7 +2166,8 @@ export const ChatView = memo(function ChatView() {
                     <span className="text-muted">
                       Runtime credits:{" "}
                       <span className="text-txt">
-                        {typeof autoRunPreview.estimate.runtimeCredits === "number"
+                        {typeof autoRunPreview.estimate.runtimeCredits ===
+                        "number"
                           ? autoRunPreview.estimate.runtimeCredits
                           : "n/a"}
                       </span>
@@ -1977,7 +2175,8 @@ export const ChatView = memo(function ChatView() {
                     <span className="text-muted">
                       Total credits:{" "}
                       <span className="text-txt">
-                        {typeof autoRunPreview.estimate.grandTotalCredits === "number"
+                        {typeof autoRunPreview.estimate.grandTotalCredits ===
+                        "number"
                           ? autoRunPreview.estimate.grandTotalCredits
                           : "n/a"}
                       </span>
@@ -1985,7 +2184,8 @@ export const ChatView = memo(function ChatView() {
                     <span className="text-muted">
                       Balance:{" "}
                       <span className="text-txt">
-                        {typeof autoRunPreview.balance?.creditBalance === "number"
+                        {typeof autoRunPreview.balance?.creditBalance ===
+                        "number"
                           ? autoRunPreview.balance.creditBalance
                           : "n/a"}
                       </span>
@@ -2005,6 +2205,7 @@ export const ChatView = memo(function ChatView() {
 
               <div className="mt-2 flex flex-wrap gap-2">
                 <button
+                  type="button"
                   className="px-2 py-1 text-[11px] border rounded border-border text-muted bg-card hover:border-accent hover:text-accent disabled:opacity-50"
                   onClick={() => void runAutonomousEstimate()}
                   disabled={autoRunPreviewBusy || autoRunLaunching}
@@ -2012,6 +2213,7 @@ export const ChatView = memo(function ChatView() {
                   {autoRunPreviewBusy ? "Estimating..." : "Estimate Cost"}
                 </button>
                 <button
+                  type="button"
                   className="px-2 py-1 text-[11px] border rounded border-accent text-accent bg-card hover:bg-accent/10 disabled:opacity-50"
                   onClick={() => void runAutonomousLaunch()}
                   disabled={autoRunPreviewBusy || autoRunLaunching}
@@ -2037,6 +2239,7 @@ export const ChatView = memo(function ChatView() {
             <span className="text-[10px] text-muted">refreshing...</span>
           ) : null}
           <button
+            type="button"
             className="px-2 py-1 text-[11px] border rounded border-border text-muted bg-card hover:border-accent hover:text-accent disabled:opacity-50"
             onClick={() => void loadMasteryRuns()}
             disabled={masteryRunsLoading}
@@ -2044,18 +2247,23 @@ export const ChatView = memo(function ChatView() {
             Refresh
           </button>
           <button
+            type="button"
             className="px-2 py-1 text-[11px] border rounded border-accent text-accent bg-card hover:bg-accent/10 disabled:opacity-50"
             onClick={() => void startMasterySuite()}
             disabled={masterySuiteStarting}
           >
-            {masterySuiteStarting ? "Starting..." : "Start 16-Game Certification"}
+            {masterySuiteStarting
+              ? "Starting..."
+              : "Start 16-Game Certification"}
           </button>
         </div>
 
         {masteryRunsError ? (
           <div className="text-danger text-[11px]">{masteryRunsError}</div>
         ) : masteryRuns.length === 0 ? (
-          <div className="text-muted text-[11px]">No mastery runs recorded yet.</div>
+          <div className="text-muted text-[11px]">
+            No mastery runs recorded yet.
+          </div>
         ) : (
           <div className="space-y-1">
             {masteryRuns.map((run) => (
@@ -2063,7 +2271,9 @@ export const ChatView = memo(function ChatView() {
                 key={run.runId}
                 className="flex flex-wrap items-center gap-2 border border-border/60 bg-card px-2 py-1"
               >
-                <span className="font-mono text-[10px] text-muted">{run.runId}</span>
+                <span className="font-mono text-[10px] text-muted">
+                  {run.runId}
+                </span>
                 <span
                   className={`text-[10px] px-1 py-0.5 border ${
                     run.status === "success"
@@ -2080,7 +2290,8 @@ export const ChatView = memo(function ChatView() {
                   {run.summary.denominatorGames || run.games.length}
                 </span>
                 <span className="text-[10px] text-muted">
-                  episodes: {run.progress.completedEpisodes}/{run.progress.totalEpisodes}
+                  episodes: {run.progress.completedEpisodes}/
+                  {run.progress.totalEpisodes}
                 </span>
                 <span className="text-[10px] text-muted">
                   strict: {run.strict ? "yes" : "no"}
@@ -2104,7 +2315,12 @@ export const ChatView = memo(function ChatView() {
         )}
       </div>
 
-      <div ref={messagesRef} className="flex-1 overflow-y-auto py-2 relative" style={{ zIndex: 1 }}>
+      <div
+        ref={messagesRef}
+        data-testid="chat-messages-scroll"
+        className="flex-1 overflow-y-auto py-2 pr-3 relative"
+        style={{ zIndex: 1, scrollbarGutter: "stable both-edges" }}
+      >
         {visibleMsgs.length === 0 && !chatSending ? (
           <div className="text-center py-10 text-muted italic">
             Send a message to start chatting.
@@ -2141,9 +2357,7 @@ export const ChatView = memo(function ChatView() {
                         )}
                       </div>
                     ))}
-                  <div
-                    className="max-w-[85%] px-0 py-1 text-sm leading-relaxed whitespace-pre-wrap break-words"
-                  >
+                  <div className="max-w-[85%] px-0 py-1 text-sm leading-relaxed whitespace-pre-wrap break-words">
                     {!grouped && (
                       <div className="font-bold text-[12px] mb-1 text-accent">
                         {isUser ? "You" : agentName}
@@ -2157,7 +2371,9 @@ export const ChatView = memo(function ChatView() {
                           )}
                       </div>
                     )}
-                    <div><MessageContent message={msg} /></div>
+                    <div>
+                      <MessageContent message={msg} />
+                    </div>
                   </div>
                 </div>
               );
@@ -2179,7 +2395,9 @@ export const ChatView = memo(function ChatView() {
                   )}
                 </div>
                 <div className="max-w-[85%] px-0 py-1 text-sm leading-relaxed">
-                  <div className="font-bold text-[12px] mb-1 text-accent">{agentName}</div>
+                  <div className="font-bold text-[12px] mb-1 text-accent">
+                    {agentName}
+                  </div>
                   <div className="flex gap-1 py-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-muted-strong animate-[typing-bounce_1.2s_ease-in-out_infinite]" />
                     <span className="w-1.5 h-1.5 rounded-full bg-muted-strong animate-[typing-bounce_1.2s_ease-in-out_infinite_0.2s]" />
@@ -2194,14 +2412,43 @@ export const ChatView = memo(function ChatView() {
 
       {/* Share ingest notice */}
       {shareIngestNotice && (
-        <div className="text-xs text-ok py-1 relative" style={{ zIndex: 1 }}>{shareIngestNotice}</div>
+        <div className="text-xs text-ok py-1 relative" style={{ zIndex: 1 }}>
+          {shareIngestNotice}
+        </div>
       )}
 
       {/* Dropped files */}
       {droppedFiles.length > 0 && (
-        <div className="text-xs text-muted py-0.5 flex gap-2 relative" style={{ zIndex: 1 }}>
-          {droppedFiles.map((f, i) => (
-            <span key={i}>{f}</span>
+        <div
+          className="text-xs text-muted py-0.5 flex gap-2 relative"
+          style={{ zIndex: 1 }}
+        >
+          {droppedFiles.map((f) => (
+            <span key={f}>{f}</span>
+          ))}
+        </div>
+      )}
+
+      {pendingImages.length > 0 && (
+        <div
+          className="flex flex-wrap gap-2 py-1 relative"
+          style={{ zIndex: 1 }}
+        >
+          {pendingImages.map((image) => (
+            <div
+              key={`${image.name}-${image.data.length}`}
+              className="group flex items-center gap-2 rounded border border-border bg-card px-2 py-1 text-xs text-txt"
+            >
+              <span className="truncate max-w-[180px]">{image.name}</span>
+              <button
+                type="button"
+                aria-label={`Remove image ${image.name}`}
+                className="rounded border border-border px-1.5 py-0.5 text-[11px] text-muted opacity-100 transition-opacity hover:border-danger hover:text-danger sm:opacity-0 sm:group-hover:opacity-100"
+                onClick={() => handleRemovePendingImage(image.name)}
+              >
+                Remove
+              </button>
+            </div>
           ))}
         </div>
       )}
@@ -2216,6 +2463,7 @@ export const ChatView = memo(function ChatView() {
             Mode
           </span>
           <button
+            type="button"
             className={`px-2 py-1 text-xs border rounded cursor-pointer transition-all ${
               chatMode === "simple"
                 ? "border-accent text-accent bg-card"
@@ -2228,6 +2476,7 @@ export const ChatView = memo(function ChatView() {
             Simple
           </button>
           <button
+            type="button"
             className={`px-2 py-1 text-xs border rounded cursor-pointer transition-all ${
               chatMode === "power"
                 ? "border-accent text-accent bg-card"
@@ -2243,19 +2492,31 @@ export const ChatView = memo(function ChatView() {
         <div className="flex gap-1.5">
           {/* Actions tab */}
           <button
+            type="button"
             className="w-7 h-7 flex items-center justify-center border rounded cursor-pointer transition-all bg-card border-border text-muted hover:border-accent hover:text-accent"
             onClick={() => {
               window.dispatchEvent(new Event("toggle-custom-actions-panel"));
             }}
             title="Open Actions drawer"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <title>Open actions drawer</title>
               <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
             </svg>
           </button>
 
           {/* Show / hide avatar */}
           <button
+            type="button"
             className={`w-7 h-7 flex items-center justify-center border rounded cursor-pointer transition-all bg-card ${
               avatarVisible
                 ? "border-accent text-accent"
@@ -2264,7 +2525,17 @@ export const ChatView = memo(function ChatView() {
             onClick={() => setAvatarVisible((v) => !v)}
             title={avatarVisible ? "Hide avatar" : "Show avatar"}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <title>{avatarVisible ? "Hide avatar" : "Show avatar"}</title>
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
               <circle cx="12" cy="7" r="4" />
               {!avatarVisible && <line x1="3" y1="3" x2="21" y2="21" />}
@@ -2273,6 +2544,7 @@ export const ChatView = memo(function ChatView() {
 
           {/* Mute / unmute agent voice */}
           <button
+            type="button"
             className={`w-7 h-7 flex items-center justify-center border rounded cursor-pointer transition-all bg-card ${
               agentVoiceMuted
                 ? "border-border text-muted hover:border-accent hover:text-accent"
@@ -2285,7 +2557,19 @@ export const ChatView = memo(function ChatView() {
             }}
             title={agentVoiceMuted ? "Unmute agent voice" : "Mute agent voice"}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <title>
+                {agentVoiceMuted ? "Unmute agent voice" : "Mute agent voice"}
+              </title>
               <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
               {agentVoiceMuted ? (
                 <line x1="23" y1="9" x2="17" y2="15" />
@@ -2304,11 +2588,46 @@ export const ChatView = memo(function ChatView() {
       {/* ── Input row: mic + textarea + send ───────────────────────── */}
       <div
         className="flex gap-2 items-end border-t border-border pt-3 pb-4 relative"
-        style={{ zIndex: 1, paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+        style={{
+          zIndex: 1,
+          paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
+        }}
       >
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={handleImageInputChange}
+        />
+
+        <button
+          type="button"
+          className="h-[38px] w-[38px] flex-shrink-0 flex items-center justify-center border rounded cursor-pointer transition-all self-end border-border bg-card text-muted hover:border-accent hover:text-accent"
+          onClick={() => imageInputRef.current?.click()}
+          title="Attach image"
+          aria-label="Attach image"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <title>Attach image</title>
+            <path d="M21.44 11.05 12.25 20.24a6 6 0 0 1-8.49-8.49l9.2-9.19a4 4 0 1 1 5.65 5.66l-9.2 9.19a2 2 0 0 1-2.82-2.83l8.48-8.48" />
+          </svg>
+        </button>
+
         {/* Mic button — user voice input */}
         {voice.supported && (
           <button
+            type="button"
             className={`h-[38px] w-[38px] flex-shrink-0 flex items-center justify-center border rounded cursor-pointer transition-all self-end ${
               voice.isListening
                 ? "bg-accent border-accent text-accent-fg shadow-[0_0_10px_rgba(124,58,237,0.4)] animate-pulse"
@@ -2316,8 +2635,22 @@ export const ChatView = memo(function ChatView() {
             }`}
             onClick={voice.toggleListening}
             title={voice.isListening ? "Stop listening" : "Voice input"}
+            aria-label={
+              voice.isListening ? "Stop voice input" : "Start voice input"
+            }
+            aria-pressed={voice.isListening}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill={voice.isListening ? "currentColor" : "none"} stroke="currentColor" strokeWidth={voice.isListening ? "0" : "2"}>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill={voice.isListening ? "currentColor" : "none"}
+              stroke="currentColor"
+              strokeWidth={voice.isListening ? "0" : "2"}
+            >
+              <title>
+                {voice.isListening ? "Stop voice input" : "Start voice input"}
+              </title>
               {voice.isListening ? (
                 <>
                   <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
@@ -2345,7 +2678,10 @@ export const ChatView = memo(function ChatView() {
             ref={textareaRef}
             className="flex-1 px-3 py-2 border border-border bg-card text-txt text-sm font-body leading-relaxed resize-none overflow-y-hidden min-h-[38px] max-h-[200px] focus:border-accent focus:outline-none"
             rows={1}
-            placeholder={voice.isListening ? "Listening..." : "Type a message..."}
+            aria-label="Chat message"
+            placeholder={
+              voice.isListening ? "Listening..." : "Type a message..."
+            }
             value={chatInput}
             onChange={(e) => setState("chatInput", e.target.value)}
             onKeyDown={handleKeyDown}
@@ -2356,6 +2692,7 @@ export const ChatView = memo(function ChatView() {
         {/* Send / Stop */}
         {chatSending ? (
           <button
+            type="button"
             className="h-[38px] px-3 sm:px-4 py-2 border border-danger bg-danger/10 text-danger text-sm cursor-pointer hover:bg-danger/20 self-end"
             onClick={handleChatStop}
             title="Stop generation"
@@ -2364,6 +2701,7 @@ export const ChatView = memo(function ChatView() {
           </button>
         ) : voice.isSpeaking ? (
           <button
+            type="button"
             className="h-[38px] px-3 sm:px-4 py-2 border border-danger bg-danger/10 text-danger text-sm cursor-pointer hover:bg-danger/20 self-end"
             onClick={voice.stopSpeaking}
             title="Stop speaking"
@@ -2372,9 +2710,11 @@ export const ChatView = memo(function ChatView() {
           </button>
         ) : (
           <button
+            type="button"
             className="h-[38px] px-3 sm:px-6 py-2 border border-accent bg-accent text-accent-fg text-sm cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed self-end"
             onClick={() => void handleChatSend(chatMode)}
-            disabled={chatSending}
+            disabled={chatSending || !canSendMessage}
+            title="Send message"
           >
             Send
           </button>
@@ -2382,4 +2722,4 @@ export const ChatView = memo(function ChatView() {
       </div>
     </div>
   );
-});
+}

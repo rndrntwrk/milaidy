@@ -9,7 +9,6 @@
  *   - Device authorization storage
  */
 
-import crypto from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   __resetPairingStateForTests,
@@ -44,7 +43,9 @@ describe("createPairingSession", () => {
     const session = createPairingSession();
 
     expect(session.id).toBeTruthy();
-    expect(session.code).toMatch(/^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$/);
+    expect(session.code).toMatch(
+      /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$/,
+    );
     expect(session.challenge).toBeTruthy();
     expect(session.expiresAt).toBeGreaterThan(Date.now());
     expect(session.attempts).toBe(0);
@@ -113,7 +114,11 @@ describe("verifyPairingSimple", () => {
   it("succeeds with code without dashes", () => {
     const session = createPairingSession();
     const codeWithoutDashes = session.code.replace("-", "");
-    const result = verifyPairingSimple(session.id, codeWithoutDashes, "127.0.0.1");
+    const result = verifyPairingSimple(
+      session.id,
+      codeWithoutDashes,
+      "127.0.0.1",
+    );
 
     expect(result.success).toBe(true);
   });
@@ -136,7 +141,11 @@ describe("verifyPairingSimple", () => {
   });
 
   it("fails for non-existent session", () => {
-    const result = verifyPairingSimple("fake-session", "CODE-1234", "127.0.0.1");
+    const result = verifyPairingSimple(
+      "fake-session",
+      "CODE-1234",
+      "127.0.0.1",
+    );
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("Session not found or expired");
@@ -206,7 +215,7 @@ describe("cleanupExpiredSessions", () => {
     }
 
     // Cleanup
-    const cleaned = cleanupExpiredSessions();
+    const _cleaned = cleanupExpiredSessions();
 
     // Session should be gone
     expect(getPairingSession(sessionId)).toBeNull();

@@ -137,15 +137,22 @@ export class HackDetector {
   analyze(episode: Episode): HackDetectionReport {
     const signals: HackSignal[] = [];
     const details: string[] = [];
+    const enabledInvariantIds = new Set(this.invariants.map((i) => i.id));
 
     // 1. Check for superficial passes
-    this.checkSuperficialPasses(episode, signals, details);
+    if (enabledInvariantIds.has("hack:superficial-pass")) {
+      this.checkSuperficialPasses(episode, signals, details);
+    }
 
     // 2. Check for step inflation
-    this.checkStepInflation(episode, signals, details);
+    if (enabledInvariantIds.has("hack:step-inflation")) {
+      this.checkStepInflation(episode, signals, details);
+    }
 
     // 3. Check for trust gaming
-    this.checkTrustGaming(episode, signals, details);
+    if (enabledInvariantIds.has("hack:trust-gaming")) {
+      this.checkTrustGaming(episode, signals, details);
+    }
 
     // 4. Check for verification-aware gaming
     this.checkVerificationAware(episode, signals, details);

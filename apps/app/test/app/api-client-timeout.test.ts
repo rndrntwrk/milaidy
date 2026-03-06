@@ -179,7 +179,9 @@ describe("MiladyClient request timeout handling", () => {
       .executeAutonomyPlan({
         plan: {
           id: "timeout-check",
-          steps: [{ id: "1", toolName: "STREAM555_AUTH_WALLET_LOGIN", params: {} }],
+          steps: [
+            { id: "1", toolName: "STREAM555_AUTH_WALLET_LOGIN", params: {} },
+          ],
         },
         request: { source: "test", sourceTrust: 1 },
       })

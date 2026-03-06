@@ -69,7 +69,8 @@ function parseArgs(argv: string[]): CliArgs {
 
   return {
     cardinalityFile:
-      args.get("cardinality-file") ?? "docs/ops/autonomy/reports/cardinality.sample.json",
+      args.get("cardinality-file") ??
+      "docs/ops/autonomy/reports/cardinality.sample.json",
     out: args.get("out"),
     scrapeIntervalSeconds: Number(args.get("scrape-interval-seconds") ?? "15"),
     retentionDays: Number(args.get("retention-days") ?? "30"),

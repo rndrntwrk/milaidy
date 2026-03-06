@@ -2,9 +2,8 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import {
-  parseLearningTraceDataset,
-} from "../../src/autonomy/learning/dataset-schema.js";
+import { parseLearningTraceDataset } from "../../src/autonomy/learning/dataset-schema.js";
+import { FileCheckpointRegistry } from "../../src/autonomy/learning/training/checkpoint-registry.js";
 import {
   fromLearningTraceDataset,
   parseRLVRTrainingDataset,
@@ -14,7 +13,6 @@ import {
   buildTrainingEnvironmentManifest,
   createTrainingEnvironmentConfig,
 } from "../../src/autonomy/learning/training/environment.js";
-import { FileCheckpointRegistry } from "../../src/autonomy/learning/training/checkpoint-registry.js";
 import { FileExperimentRegistry } from "../../src/autonomy/learning/training/experiment-registry.js";
 import { TrainingJobOrchestrator } from "../../src/autonomy/learning/training/job-orchestrator.js";
 
@@ -74,7 +72,8 @@ function parseArgs(argv: string[]): CliArgs {
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return undefined;
   return value as Record<string, unknown>;
 }
 
@@ -111,7 +110,9 @@ function renderMarkdown(input: {
   lines.push(`- Dataset examples: \`${input.dataset.examples.length}\``);
   lines.push(`- Job id: \`${input.result.jobId}\``);
   lines.push(`- Checkpoint id: \`${input.checkpointId}\``);
-  lines.push(`- Environment fingerprint: \`${input.result.environmentFingerprint}\``);
+  lines.push(
+    `- Environment fingerprint: \`${input.result.environmentFingerprint}\``,
+  );
   lines.push(`- Training success: \`${input.result.training.success}\``);
   lines.push(
     `- Final average reward: \`${input.result.training.finalAverageReward.toFixed(4)}\``,
@@ -122,7 +123,9 @@ function renderMarkdown(input: {
   lines.push(`- Experiment registry: \`${input.experimentRegistryFile}\``);
   lines.push(`- Checkpoint registry: \`${input.checkpointRegistryFile}\``);
   if (input.rollbackCandidateId) {
-    lines.push(`- Suggested rollback candidate: \`${input.rollbackCandidateId}\``);
+    lines.push(
+      `- Suggested rollback candidate: \`${input.rollbackCandidateId}\``,
+    );
   }
   lines.push("");
   lines.push("## Best Params");

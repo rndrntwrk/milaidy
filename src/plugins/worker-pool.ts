@@ -280,7 +280,7 @@ export class PluginWorker extends EventEmitter {
       this.handleMessage(msg);
     });
 
-    this.worker.on("error", (err) => {
+    this.worker.on("error", (err: Error) => {
       logger.error(
         `[worker-pool] Worker ${this.config.pluginName} error: ${err.message}`,
       );

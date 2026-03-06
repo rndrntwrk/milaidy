@@ -3,8 +3,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
-  extractLearningTraceDatasetFromEvents,
   type EventLogEntry,
+  extractLearningTraceDatasetFromEvents,
 } from "../../src/autonomy/learning/event-log-extractor.js";
 
 interface CliArgs {
@@ -55,7 +55,8 @@ function parseArgs(argv: string[]): CliArgs {
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return undefined;
   return value as Record<string, unknown>;
 }
 
@@ -64,7 +65,9 @@ function asString(value: unknown): string | undefined {
 }
 
 function asNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 function toTimestamp(value: unknown): number | undefined {
@@ -161,8 +164,10 @@ function renderMarkdown(input: {
   const meanReward =
     input.dataset.examples.length === 0
       ? 0
-      : input.dataset.examples.reduce((sum, example) => sum + example.reward, 0) /
-        input.dataset.examples.length;
+      : input.dataset.examples.reduce(
+          (sum, example) => sum + example.reward,
+          0,
+        ) / input.dataset.examples.length;
 
   const lines: string[] = [];
   lines.push("# Learning Dataset Extraction Report");
@@ -174,9 +179,13 @@ function renderMarkdown(input: {
   lines.push(`- Dataset id: \`${input.dataset.id}\``);
   lines.push(`- Extracted examples: \`${input.dataset.examples.length}\``);
   lines.push(`- Mean reward: \`${meanReward.toFixed(4)}\``);
-  lines.push(`- Outcomes: success=\`${successCount}\`, partial=\`${partialCount}\`, fail=\`${failCount}\``);
+  lines.push(
+    `- Outcomes: success=\`${successCount}\`, partial=\`${partialCount}\`, fail=\`${failCount}\``,
+  );
   lines.push("");
-  lines.push("| Example ID | Request ID | Tool | Outcome | Verification | Policy | Safety | Reward |");
+  lines.push(
+    "| Example ID | Request ID | Tool | Outcome | Verification | Policy | Safety | Reward |",
+  );
   lines.push("|---|---|---|---|---|---|---|---:|");
   for (const example of input.dataset.examples) {
     lines.push(

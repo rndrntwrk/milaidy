@@ -85,11 +85,7 @@ export function withContext<T>(ctx: RequestContext, fn: () => T): T {
 /**
  * Redact sensitive values from an object.
  */
-function redact(
-  obj: unknown,
-  paths: string[],
-  seen = new WeakSet(),
-): unknown {
+function redact(obj: unknown, paths: string[], seen = new WeakSet()): unknown {
   if (obj === null || obj === undefined) return obj;
   if (typeof obj !== "object") return obj;
 
@@ -129,13 +125,15 @@ function formatEntry(entry: LogEntry, pretty: boolean): string {
     let line = `${dim}${time}${reset} ${color}${level}${reset} ${entry.msg}`;
 
     // Add extra fields
-    const extra = { ...entry };
-    delete extra.level;
-    delete extra.time;
-    delete extra.msg;
-    delete extra.pid;
-    delete extra.hostname;
-    delete extra.version;
+    const {
+      level: _level,
+      time: _time,
+      msg: _msg,
+      pid: _pid,
+      hostname: _hostname,
+      version: _version,
+      ...extra
+    } = entry;
 
     if (Object.keys(extra).length > 0) {
       line += ` ${dim}${JSON.stringify(extra)}${reset}`;

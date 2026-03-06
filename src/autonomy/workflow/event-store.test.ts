@@ -10,7 +10,9 @@ describe("InMemoryEventStore", () => {
     it("assigns monotonically increasing sequence IDs", async () => {
       const store = new InMemoryEventStore();
       const id1 = await store.append("req-1", "tool:proposed", { tool: "A" });
-      const id2 = await store.append("req-1", "tool:validated", { valid: true });
+      const id2 = await store.append("req-1", "tool:validated", {
+        valid: true,
+      });
       const id3 = await store.append("req-2", "tool:proposed", { tool: "B" });
       expect(id1).toBe(1);
       expect(id2).toBe(2);
@@ -231,7 +233,10 @@ describe("InMemoryEventStore", () => {
       vi.useFakeTimers();
       try {
         vi.setSystemTime(new Date("2025-01-01T00:00:00.000Z"));
-        const store = new InMemoryEventStore({ maxEvents: 10, retentionMs: 1_000 });
+        const store = new InMemoryEventStore({
+          maxEvents: 10,
+          retentionMs: 1_000,
+        });
         await store.append("req-1", "tool:proposed", {});
 
         vi.setSystemTime(new Date("2025-01-01T00:00:00.500Z"));

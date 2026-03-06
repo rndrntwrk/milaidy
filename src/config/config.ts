@@ -8,8 +8,27 @@ import type { MiladyConfig } from "./types";
 
 export * from "./types";
 
-export function loadMiladyConfig(): MiladyConfig {
+const LEGACY_CONFIG_FILENAME = "milaidy.json";
+
+export function resolveReadableConfigPath(): string {
   const configPath = resolveConfigPath();
+  if (fs.existsSync(configPath)) {
+    return configPath;
+  }
+
+  const legacyPath = path.join(
+    path.dirname(configPath),
+    LEGACY_CONFIG_FILENAME,
+  );
+  if (legacyPath !== configPath && fs.existsSync(legacyPath)) {
+    return legacyPath;
+  }
+
+  return configPath;
+}
+
+export function loadMiladyConfig(): MiladyConfig {
+  const configPath = resolveReadableConfigPath();
 
   let raw: string;
   try {
@@ -142,5 +161,5 @@ export function saveMiladyConfig(config: MiladyConfig): void {
 export const saveMilaidyConfig = saveMiladyConfig;
 
 export function configFileExists(): boolean {
-  return fs.existsSync(resolveConfigPath());
+  return fs.existsSync(resolveReadableConfigPath());
 }

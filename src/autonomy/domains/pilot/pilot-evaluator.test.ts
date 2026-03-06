@@ -53,9 +53,7 @@ function makeReport(overrides?: Partial<PilotReport>): PilotReport {
   };
 }
 
-function makePolicy(
-  overrides?: Partial<GovernancePolicy>,
-): GovernancePolicy {
+function makePolicy(overrides?: Partial<GovernancePolicy>): GovernancePolicy {
   return {
     id: "coding-governance",
     name: "Coding Governance",

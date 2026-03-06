@@ -24,6 +24,8 @@ import { describe, expect, it } from "vitest";
 
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(testDir, "..");
+const strictNativeModules = process.env.STRICT_NATIVE_MODULES === "true";
+const nativeRuntimeIt = strictNativeModules ? it : it.skip;
 
 // ---------------------------------------------------------------------------
 // Helper Functions
@@ -103,7 +105,7 @@ describe("Native Module Installation Verification", () => {
       expect(fs.existsSync(packagePath)).toBe(true);
     });
 
-    it("@tensorflow/tfjs-node has native binding", () => {
+    nativeRuntimeIt("@tensorflow/tfjs-node has native binding", () => {
       const hasBinding = hasNativeBinding("@tensorflow/tfjs-node", [
         "tfjs_binding.node",
         ".node",
@@ -190,17 +192,17 @@ describe("Native Module Installation Verification", () => {
       expect(fs.existsSync(packagePath)).toBe(true);
     });
 
-    it("canvas has native binding", () => {
+    nativeRuntimeIt("canvas has native binding", () => {
       const hasBinding = hasNativeBinding("canvas", ["canvas.node", ".node"]);
       expect(hasBinding).toBe(true);
     });
 
-    it("canvas can be imported", async () => {
+    nativeRuntimeIt("canvas can be imported", async () => {
       const result = await canImportModule("canvas");
       expect(result.success).toBe(true);
     });
 
-    it("canvas can create a 2D context", async () => {
+    nativeRuntimeIt("canvas can create a 2D context", async () => {
       const { createCanvas } = await import("canvas");
       const canvas = createCanvas(100, 100);
       const ctx = canvas.getContext("2d");

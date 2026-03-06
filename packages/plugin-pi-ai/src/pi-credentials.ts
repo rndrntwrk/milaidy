@@ -101,6 +101,13 @@ export interface PiCredentialProvider {
   getDefaultModelSpec(): Promise<string | undefined>;
 }
 
+export interface PiAiModelOption {
+  id: string;
+  name: string;
+  provider: string;
+  isDefault: boolean;
+}
+
 /**
  * Best-effort import of pi's provider credentials.
  *
@@ -108,8 +115,10 @@ export interface PiCredentialProvider {
  * - Reads subscription OAuth creds from Milaidy secure storage when available
  * - Reads defaults from: ~/.pi/agent/settings.json
  */
-export async function createPiCredentialProvider(): Promise<PiCredentialProvider> {
-  const agentDir = resolvePiAgentDir();
+export async function createPiCredentialProvider(
+  overrideAgentDir?: string,
+): Promise<PiCredentialProvider> {
+  const agentDir = resolvePiAgentDir(overrideAgentDir);
   const authPath = path.join(agentDir, "auth.json");
   const settingsPath = path.join(agentDir, "settings.json");
   const authModule = await loadMilaidyAuthModule();

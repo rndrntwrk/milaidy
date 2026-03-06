@@ -31,7 +31,9 @@ export interface RequestProjection {
 /**
  * Rebuild a single request-level projection from its events.
  */
-export function rebuildRequestProjection(events: ExecutionEvent[]): RequestProjection {
+export function rebuildRequestProjection(
+  events: ExecutionEvent[],
+): RequestProjection {
   if (events.length === 0) {
     return {
       requestId: "",
@@ -54,9 +56,15 @@ export function rebuildRequestProjection(events: ExecutionEvent[]): RequestProje
   const last = ordered[ordered.length - 1];
 
   const hasFailedEvent = ordered.some((event) => event.type === "tool:failed");
-  const hasVerifiedEvent = ordered.some((event) => event.type === "tool:verified");
-  const hasExecutingEvent = ordered.some((event) => event.type === "tool:executing");
-  const hasCompensation = ordered.some((event) => event.type === "tool:compensated");
+  const hasVerifiedEvent = ordered.some(
+    (event) => event.type === "tool:verified",
+  );
+  const hasExecutingEvent = ordered.some(
+    (event) => event.type === "tool:executing",
+  );
+  const hasCompensation = ordered.some(
+    (event) => event.type === "tool:compensated",
+  );
   const hasUnresolvedCompensationIncident = ordered.some(
     (event) => event.type === "tool:compensation:incident:opened",
   );
@@ -96,7 +104,10 @@ export function rebuildRequestProjection(events: ExecutionEvent[]): RequestProje
     new Set(
       ordered
         .map((event) => event.correlationId)
-        .filter((value): value is string => typeof value === "string" && value.length > 0),
+        .filter(
+          (value): value is string =>
+            typeof value === "string" && value.length > 0,
+        ),
     ),
   );
 

@@ -1,6 +1,6 @@
 import React from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TestRenderer, { act } from "react-test-renderer";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 interface PluginStub {
   id: string;
@@ -74,6 +74,16 @@ async function flush(): Promise<void> {
 describe("CustomActionsPanel default dock actions", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    const eventTarget = new EventTarget();
+    vi.stubGlobal("window", {
+      addEventListener: eventTarget.addEventListener.bind(eventTarget),
+      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
+      setTimeout,
+      clearTimeout,
+      confirm: vi.fn(() => true),
+      location: { hostname: "alice.rndrntwrk.com" },
+    });
     mockUseApp.mockReset();
     mockClient.listCustomActions.mockReset();
     mockClient.updateCustomAction.mockReset();
@@ -84,6 +94,7 @@ describe("CustomActionsPanel default dock actions", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("renders built-in stream quick actions in the drawer", async () => {
@@ -102,10 +113,10 @@ describe("CustomActionsPanel default dock actions", () => {
     });
     await flush();
 
-    expect(findButtonByText(tree!.root, "Go Live")).toBeTruthy();
-    expect(findButtonByText(tree!.root, "Screen Share")).toBeTruthy();
-    expect(findButtonByText(tree!.root, "PiP")).toBeTruthy();
-    expect(findButtonByText(tree!.root, "End Live")).toBeTruthy();
+    expect(findButtonByText(tree?.root, "Go Live")).toBeTruthy();
+    expect(findButtonByText(tree?.root, "Screen Share")).toBeTruthy();
+    expect(findButtonByText(tree?.root, "PiP")).toBeTruthy();
+    expect(findButtonByText(tree?.root, "End Live")).toBeTruthy();
   });
 
   it("dispatches quick-layer event from drawer and closes panel", async () => {
@@ -127,7 +138,7 @@ describe("CustomActionsPanel default dock actions", () => {
     await flush();
 
     await act(async () => {
-      findButtonByText(tree!.root, "Go Live").props.onClick();
+      findButtonByText(tree?.root, "Go Live").props.onClick();
       vi.advanceTimersByTime(130);
     });
 
@@ -172,7 +183,7 @@ describe("CustomActionsPanel default dock actions", () => {
     });
     await flush();
 
-    const goLiveButton = findButtonByText(tree!.root, "Go Live");
+    const goLiveButton = findButtonByText(tree?.root, "Go Live");
     expect(goLiveButton.props.title).toContain("(disabled)");
   });
 });

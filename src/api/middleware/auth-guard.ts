@@ -50,14 +50,16 @@ function defaultExtractToken(req: IncomingMessage): string | null {
  */
 export function createAuthGuard(config?: AuthGuardConfig) {
   const apiKey = config?.apiKey || process.env.AUTONOMY_API_KEY || "";
-  const bypassPaths = new Set(config?.bypassPaths ?? [
-    "/metrics",
-    "/health",
-    "/health/live",
-    "/health/ready",
-    "/api/docs",
-    "/api/docs/openapi.json",
-  ]);
+  const bypassPaths = new Set(
+    config?.bypassPaths ?? [
+      "/metrics",
+      "/health",
+      "/health/live",
+      "/health/ready",
+      "/api/docs",
+      "/api/docs/openapi.json",
+    ],
+  );
   const extractToken = config?.extractToken ?? defaultExtractToken;
 
   /**

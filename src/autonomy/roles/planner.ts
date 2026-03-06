@@ -188,7 +188,7 @@ export class GoalDrivenPlanner implements PlannerRole {
     return this.activePlan;
   }
 
-  async cancelPlan(reason: string): Promise<void> {
+  async cancelPlan(_reason: string): Promise<void> {
     if (this.activePlan) {
       this.activePlan.status = "rejected";
       this.activePlan = null;

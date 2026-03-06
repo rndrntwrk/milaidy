@@ -41,7 +41,9 @@ function parseArgs(argv: string[]): CliArgs {
     file: args.get("file"),
     out: args.get("out"),
     maxSeriesPerMetric: Number(args.get("max-series-per-metric") ?? "200"),
-    maxDistinctValuesPerLabel: Number(args.get("max-distinct-values-per-label") ?? "100"),
+    maxDistinctValuesPerLabel: Number(
+      args.get("max-distinct-values-per-label") ?? "100",
+    ),
   };
 }
 
@@ -63,7 +65,11 @@ function parseLabelPairs(raw: string): Array<[string, string]> {
     const idx = pair.indexOf("=");
     if (idx < 0) return [];
     const key = pair.slice(0, idx).trim();
-    const value = pair.slice(idx + 1).trim().replace(/^"/, "").replace(/"$/, "");
+    const value = pair
+      .slice(idx + 1)
+      .trim()
+      .replace(/^"/, "")
+      .replace(/"$/, "");
     if (!key) return [];
     return [[key, value]];
   });
@@ -165,4 +171,3 @@ async function main() {
 }
 
 void main();
-

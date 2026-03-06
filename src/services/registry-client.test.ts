@@ -351,7 +351,7 @@ describe("registry-client", () => {
       expect(solana?.gitRepo).toBe("elizaos-plugins/plugin-solana");
     });
 
-    it("throws when both generated-registry.json and index.json fail", async () => {
+    it("returns offline fallback apps when both generated-registry.json and index.json fail", async () => {
       const mockFetch = vi.fn().mockImplementation(() => {
         return Promise.resolve({
           ok: false,
@@ -362,7 +362,12 @@ describe("registry-client", () => {
       vi.stubGlobal("fetch", mockFetch);
 
       const { getRegistryPlugins } = await loadModule();
-      await expect(getRegistryPlugins()).rejects.toThrow("index.json");
+      const registry = await getRegistryPlugins();
+      expect(registry.size).toBeGreaterThan(0);
+      expect(registry.get("@elizaos/app-hyperscape")).toMatchObject({
+        name: "@elizaos/app-hyperscape",
+        kind: "app",
+      });
     });
 
     it("uses memory cache on second call", async () => {
@@ -631,9 +636,7 @@ describe("registry-client", () => {
         "prediction-markets",
       ]);
       expect(babylon.stars).toBe(200);
-      expect(babylon.repository).toBe(
-        "https://github.com/elizaos/app-babylon",
-      );
+      expect(babylon.repository).toBe("https://github.com/elizaos/app-babylon");
       expect(babylon.latestVersion).toBe("1.0.0");
       expect(babylon.supports.v2).toBe(true);
       expect(babylon.npm.package).toBe("@elizaos/app-babylon");

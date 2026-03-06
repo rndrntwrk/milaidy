@@ -1,13 +1,14 @@
 import { logger } from "@elizaos/core";
-import type {
-  RegistryAppMeta,
-  RegistryAppViewerMeta,
-} from "./registry-client.js";
 import {
   ALICE_APP_CATALOG,
   LOCAL_APP_DEFAULT_SANDBOX,
   resolveManagedAppUpstreamUrl,
 } from "./app-catalog.js";
+import type {
+  RegistryAppMeta,
+  RegistryAppViewerMeta,
+} from "./registry-client.js";
+
 export { LOCAL_APP_DEFAULT_SANDBOX } from "./app-catalog.js";
 
 const ALLOWED_SANDBOX_TOKENS = new Set([

@@ -8,10 +8,20 @@ import type { ModelProvider, TrainingDataset } from "./types.js";
 
 const mockProvider = (name: string): ModelProvider => ({
   async complete(req) {
-    return { text: `${name}: ${req.userPrompt}`, tokenCount: 5, durationMs: 1, model: name };
+    return {
+      text: `${name}: ${req.userPrompt}`,
+      tokenCount: 5,
+      durationMs: 1,
+      model: name,
+    };
   },
-  async score(req) {
-    return { overallScore: 0.5, dimensionScores: {}, explanation: name, model: name };
+  async score(_req) {
+    return {
+      overallScore: 0.5,
+      dimensionScores: {},
+      explanation: name,
+      model: name,
+    };
   },
 });
 
@@ -30,9 +40,15 @@ describe("ModelSelector", () => {
     selector.addCandidate({ id: "model-c", provider: mockProvider("c") });
 
     const result = await selector.select(dataset, async (_provider, _ds) => {
-      const id = selector.getCandidates().find((c) => c.provider === _provider)?.id;
-      const scores: Record<string, number> = { "model-a": 0.7, "model-b": 0.9, "model-c": 0.6 };
-      return { score: scores[id!] ?? 0, metricScores: {} };
+      const id = selector
+        .getCandidates()
+        .find((c) => c.provider === _provider)?.id;
+      const scores: Record<string, number> = {
+        "model-a": 0.7,
+        "model-b": 0.9,
+        "model-c": 0.6,
+      };
+      return { score: (id ? scores[id] : 0) ?? 0, metricScores: {} };
     });
 
     expect(result.selectedModelId).toBe("model-b");
@@ -41,8 +57,9 @@ describe("ModelSelector", () => {
 
   it("throws when no candidates registered", async () => {
     const selector = new ModelSelector();
-    await expect(selector.select(dataset, async () => ({ score: 0, metricScores: {} })))
-      .rejects.toThrow("No model candidates");
+    await expect(
+      selector.select(dataset, async () => ({ score: 0, metricScores: {} })),
+    ).rejects.toThrow("No model candidates");
   });
 
   it("returns evaluations sorted by score", async () => {
@@ -51,7 +68,9 @@ describe("ModelSelector", () => {
     selector.addCandidate({ id: "high", provider: mockProvider("high") });
 
     const result = await selector.select(dataset, async (_provider) => {
-      const id = selector.getCandidates().find((c) => c.provider === _provider)?.id;
+      const id = selector
+        .getCandidates()
+        .find((c) => c.provider === _provider)?.id;
       return { score: id === "high" ? 0.9 : 0.1, metricScores: {} };
     });
 

@@ -5,18 +5,17 @@
  */
 
 export {
+  ContainerBuilder,
+  createMilaidyContainer,
+  createToken,
+  getContainer,
+  resetContainer,
   // Container
   ServiceContainer,
-  ContainerBuilder,
-  getContainer,
-  setContainer,
-  resetContainer,
-  createMilaidyContainer,
-
-  // Tokens
-  TOKENS,
-  createToken,
-  type ServiceToken,
   type ServiceFactory,
   type ServiceScope,
+  type ServiceToken,
+  setContainer,
+  // Tokens
+  TOKENS,
 } from "./container.js";

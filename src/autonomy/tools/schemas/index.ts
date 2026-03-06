@@ -19,8 +19,8 @@ import { RUN_IN_TERMINAL } from "./terminal.schema.js";
 import { CREATE_TASK } from "./trigger.schema.js";
 
 export { createCustomActionContract } from "./custom-action.schema.js";
-export { BUILTIN_TOOL_FIXTURES } from "./fixtures.js";
 export { PLAY_EMOTE } from "./emote.schema.js";
+export { BUILTIN_TOOL_FIXTURES } from "./fixtures.js";
 export { INSTALL_PLUGIN } from "./install-plugin.schema.js";
 export {
   ANALYZE_IMAGE,

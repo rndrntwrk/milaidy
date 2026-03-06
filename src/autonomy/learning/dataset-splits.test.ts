@@ -12,7 +12,12 @@ function makeStep(overrides: Partial<TrainingExample> = {}): TrainingExample {
     input: { params: {}, source: "user" },
     output: { result: {}, durationMs: 1000 },
     verification: { passed: true, checks: [] },
-    reward: { total: 0.8, breakdown: {}, dimensions: [], computedAt: Date.now() },
+    reward: {
+      total: 0.8,
+      breakdown: {},
+      dimensions: [],
+      computedAt: Date.now(),
+    },
     metadata: { agentId: "agent", requestId: "req", timestamp: Date.now() },
     ...overrides,
   };
@@ -24,7 +29,12 @@ function makeEpisode(id: string, overrides: Partial<Episode> = {}): Episode {
     description: `Episode ${id}`,
     steps: [makeStep()],
     planSteps: 1,
-    totalReward: { total: 0.8, breakdown: {}, dimensions: [], computedAt: Date.now() },
+    totalReward: {
+      total: 0.8,
+      breakdown: {},
+      dimensions: [],
+      computedAt: Date.now(),
+    },
     driftScore: 0.1,
     auditAnomalies: [],
     durationMs: 1000,
@@ -36,7 +46,9 @@ function makeEpisode(id: string, overrides: Partial<Episode> = {}): Episode {
 
 describe("buildHeldOutValidationSplit", () => {
   it("creates deterministic train/validation split", () => {
-    const episodes = Array.from({ length: 10 }, (_, i) => makeEpisode(`ep-${i}`));
+    const episodes = Array.from({ length: 10 }, (_, i) =>
+      makeEpisode(`ep-${i}`),
+    );
     const first = buildHeldOutValidationSplit(episodes, {
       holdoutRatio: 0.2,
       seed: "seed-a",
@@ -84,7 +96,16 @@ describe("buildAdversarialSplit", () => {
     const episodes = [
       makeEpisode("high"),
       makeEpisode("weak", {
-        steps: [makeStep({ reward: { total: 0.1, breakdown: {}, dimensions: [], computedAt: Date.now() } })],
+        steps: [
+          makeStep({
+            reward: {
+              total: 0.1,
+              breakdown: {},
+              dimensions: [],
+              computedAt: Date.now(),
+            },
+          }),
+        ],
       }),
       makeEpisode("other"),
     ];

@@ -8,6 +8,12 @@
  */
 
 import { logger } from "@elizaos/core";
+import {
+  recordApprovalDecision,
+  recordApprovalQueueSize,
+  recordApprovalRequest,
+  recordApprovalTurnaroundMs,
+} from "../metrics/prometheus-metrics.js";
 import type { AutonomyDbAdapter } from "../persistence/db-adapter.js";
 import type { ProposedToolCall, RiskClass } from "../tools/types.js";
 import type {
@@ -16,12 +22,6 @@ import type {
   ApprovalRequest,
   ApprovalResult,
 } from "./types.js";
-import {
-  recordApprovalDecision,
-  recordApprovalQueueSize,
-  recordApprovalRequest,
-  recordApprovalTurnaroundMs,
-} from "../metrics/prometheus-metrics.js";
 
 interface PendingEntry {
   request: ApprovalRequest;
@@ -249,7 +249,11 @@ function esc(value: string): string {
 function parseJsonb(value: unknown): Record<string, unknown> | null {
   if (value === null || value === undefined) return null;
   if (typeof value === "string") {
-    try { return JSON.parse(value); } catch { return null; }
+    try {
+      return JSON.parse(value);
+    } catch {
+      return null;
+    }
   }
   return value as Record<string, unknown>;
 }

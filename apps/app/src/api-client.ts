@@ -550,6 +550,18 @@ export interface SandboxPlatformStatus {
   recommended?: string;
 }
 
+export interface SandboxBrowserEndpoints {
+  cdpEndpoint: string | null;
+  wsEndpoint: string | null;
+  noVncEndpoint: string | null;
+}
+
+export interface SandboxWindowInfo {
+  id: string;
+  title: string;
+  app: string;
+}
+
 export interface SandboxStartResponse {
   success: boolean;
   message: string;
@@ -1476,7 +1488,12 @@ export interface Arcade555MasteryEvidenceFrame {
   runId: string;
   episodeId: string;
   seq: number;
-  frameType: "boot/menu" | "play-start" | "progress" | "terminal" | "stuck-check";
+  frameType:
+    | "boot/menu"
+    | "play-start"
+    | "progress"
+    | "terminal"
+    | "stuck-check";
   ts: string;
   hash: string;
   path?: string;
@@ -2182,11 +2199,13 @@ export type Five55MasteryGateResult = Arcade555MasteryGateResult;
 /** @deprecated Use Arcade555MasteryLevelRequirement. */
 export type Five55MasteryLevelRequirement = Arcade555MasteryLevelRequirement;
 /** @deprecated Use Arcade555MasteryQualityRequirement. */
-export type Five55MasteryQualityRequirement = Arcade555MasteryQualityRequirement;
+export type Five55MasteryQualityRequirement =
+  Arcade555MasteryQualityRequirement;
 /** @deprecated Use Arcade555MasteryGateV2. */
 export type Five55MasteryGateV2 = Arcade555MasteryGateV2;
 /** @deprecated Use Arcade555MasteryConsistencyVerdict. */
-export type Five55MasteryConsistencyVerdict = Arcade555MasteryConsistencyVerdict;
+export type Five55MasteryConsistencyVerdict =
+  Arcade555MasteryConsistencyVerdict;
 /** @deprecated Use Arcade555MasteryEpisodeOutcomeV2. */
 export type Five55MasteryEpisodeOutcomeV2 = Arcade555MasteryEpisodeOutcomeV2;
 /** @deprecated Use Arcade555MasteryEvidenceFrame. */
@@ -2459,6 +2478,43 @@ export class MiladyClient {
 
   async getStatus(): Promise<AgentStatus> {
     return this.fetch("/api/status");
+  }
+
+  async getSandboxPlatform(): Promise<SandboxPlatformStatus> {
+    return this.fetch("/api/sandbox/platform");
+  }
+
+  async startDocker(): Promise<SandboxStartResponse> {
+    return this.fetch("/api/sandbox/docker/start", {
+      method: "POST",
+    });
+  }
+
+  async getSandboxBrowser(): Promise<SandboxBrowserEndpoints> {
+    return this.fetch("/api/sandbox/browser");
+  }
+
+  async getSandboxWindows(): Promise<{ windows: SandboxWindowInfo[] }> {
+    return this.fetch("/api/sandbox/screen/windows");
+  }
+
+  async getSandboxScreenshot(input?: {
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+  }): Promise<{
+    format: string;
+    encoding: string;
+    width: number | null;
+    height: number | null;
+    data: string;
+  }> {
+    const hasRegion = Boolean(input && Object.keys(input).length > 0);
+    return this.fetch("/api/sandbox/screen/screenshot", {
+      method: "POST",
+      body: hasRegion ? JSON.stringify(input) : undefined,
+    });
   }
 
   async getRuntimeSnapshot(opts?: {
@@ -3152,11 +3208,16 @@ export class MiladyClient {
   async getAgentEvents(opts?: {
     afterEventId?: string;
     limit?: number;
+    runId?: string;
+    fromSeq?: number;
   }): Promise<AgentEventsResponse> {
     const params = new URLSearchParams();
     if (opts?.afterEventId) params.set("after", opts.afterEventId);
     if (typeof opts?.limit === "number")
       params.set("limit", String(opts.limit));
+    if (opts?.runId) params.set("runId", opts.runId);
+    if (typeof opts?.fromSeq === "number")
+      params.set("fromSeq", String(opts.fromSeq));
     const qs = params.toString();
     return this.fetch(`/api/agent/events${qs ? `?${qs}` : ""}`);
   }
@@ -3610,7 +3671,9 @@ export class MiladyClient {
   async getArcade555MasteryRun(
     runId: string,
   ): Promise<{ run: Arcade555MasteryRun }> {
-    return this.fetch(`/api/arcade555/mastery/runs/${encodeURIComponent(runId)}`);
+    return this.fetch(
+      `/api/arcade555/mastery/runs/${encodeURIComponent(runId)}`,
+    );
   }
   async getArcade555MasteryEpisodes(runId: string): Promise<{
     runId: string;
@@ -3640,7 +3703,10 @@ export class MiladyClient {
     nextAfterSeq: number;
   }> {
     const qs = new URLSearchParams();
-    if (typeof input?.afterSeq === "number" && Number.isFinite(input.afterSeq)) {
+    if (
+      typeof input?.afterSeq === "number" &&
+      Number.isFinite(input.afterSeq)
+    ) {
       qs.set("afterSeq", String(input.afterSeq));
     }
     if (typeof input?.limit === "number" && Number.isFinite(input.limit)) {
@@ -5248,3 +5314,5 @@ export class MiladyClient {
 
 // Singleton
 export const client = new MiladyClient();
+/** @deprecated Use MiladyClient. */
+export const MilaidyClient = MiladyClient;

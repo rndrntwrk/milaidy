@@ -2,9 +2,7 @@
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import {
-  verifyEventChain,
-} from "../../src/autonomy/workflow/event-integrity.js";
+import { verifyEventChain } from "../../src/autonomy/workflow/event-integrity.js";
 import type { ExecutionEvent } from "../../src/autonomy/workflow/types.js";
 
 function parseArgs(argv: string[]): { eventsFile: string } {
@@ -45,7 +43,9 @@ function parseEvents(raw: string): ExecutionEvent[] {
   ) {
     return (parsed as { events: ExecutionEvent[] }).events;
   }
-  throw new Error("Input must be an event array or an object with an events array");
+  throw new Error(
+    "Input must be an event array or an object with an events array",
+  );
 }
 
 async function main() {

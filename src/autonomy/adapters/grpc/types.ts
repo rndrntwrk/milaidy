@@ -78,7 +78,11 @@ export const ApprovalDecisionProto = {
 } as const;
 
 /** Communication tone options. */
-export type CommunicationTone = "formal" | "casual" | "technical" | "empathetic";
+export type CommunicationTone =
+  | "formal"
+  | "casual"
+  | "technical"
+  | "empathetic";
 
 export const CommunicationToneProto = {
   COMMUNICATION_TONE_UNSPECIFIED: 0,
@@ -217,7 +221,7 @@ export interface MetricTarget {
 
 // --- GetAutonomyStatus ---
 
-export interface GetAutonomyStatusRequest {}
+export type GetAutonomyStatusRequest = Record<string, never>;
 
 export interface GetAutonomyStatusResponse {
   enabled: boolean;
@@ -241,7 +245,7 @@ export interface SetAutonomyStatusResponse {
 
 // --- GetIdentity ---
 
-export interface GetIdentityRequest {}
+export type GetIdentityRequest = Record<string, never>;
 
 export interface GetIdentityResponse {
   identity: Identity;
@@ -276,7 +280,7 @@ export interface GetIdentityHistoryResponse {
 
 // --- ListApprovals ---
 
-export interface ListApprovalsRequest {}
+export type ListApprovalsRequest = Record<string, never>;
 
 export interface ListApprovalsResponse {
   approvals: ApprovalRequest[];
@@ -297,7 +301,7 @@ export interface ResolveApprovalResponse {
 
 // --- GetSafeModeStatus ---
 
-export interface GetSafeModeStatusRequest {}
+export type GetSafeModeStatusRequest = Record<string, never>;
 
 export interface GetSafeModeStatusResponse {
   status: SafeModeStatus;

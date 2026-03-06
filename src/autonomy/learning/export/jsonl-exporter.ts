@@ -4,7 +4,23 @@
  * @module autonomy/learning/export/jsonl-exporter
  */
 
-import type { TrainingExample, TrainingDataset } from "../types.js";
+import type { TrainingDataset, TrainingExample } from "../types.js";
+
+type LegacyTrainingExample = {
+  id: string;
+  toolName: string;
+  userInput?: string;
+  toolInput?: Record<string, unknown>;
+  toolOutput?: unknown;
+  reward?: number;
+  source?: string;
+  scenarioId?: string;
+  systemPrompt?: string;
+};
+
+type LegacyTrainingDataset = {
+  examples?: LegacyTrainingExample[];
+};
 
 /** Options for JSONL export. */
 export interface JsonlExportOptions {
@@ -30,31 +46,84 @@ export interface JsonlToolCallLine {
   reward?: number;
 }
 
+interface NormalizedTrainingExample {
+  id: string;
+  toolName: string;
+  systemPrompt?: string;
+  userContent: string;
+  toolInput: Record<string, unknown>;
+  toolOutput: unknown;
+  reward: number;
+  source?: string;
+  requestId?: string;
+  agentId?: string;
+  timestamp?: number;
+}
+
+function isLegacyTrainingExample(
+  example: TrainingExample | LegacyTrainingExample,
+): example is LegacyTrainingExample {
+  return "userInput" in example || "toolInput" in example;
+}
+
+function normalizeTrainingExample(
+  example: TrainingExample | LegacyTrainingExample,
+): NormalizedTrainingExample {
+  if (isLegacyTrainingExample(example)) {
+    return {
+      id: example.id,
+      toolName: example.toolName,
+      systemPrompt: example.systemPrompt,
+      userContent: example.userInput ?? "",
+      toolInput: example.toolInput ?? {},
+      toolOutput: example.toolOutput ?? {},
+      reward: typeof example.reward === "number" ? example.reward : 0,
+      source: example.source,
+      requestId: example.scenarioId,
+    };
+  }
+
+  return {
+    id: example.id,
+    toolName: example.toolName,
+    userContent: JSON.stringify({
+      source: example.input.source,
+      params: example.input.params,
+    }),
+    toolInput: example.input.params ?? {},
+    toolOutput: example.output.result ?? {},
+    reward: example.reward.total,
+    source: example.input.source,
+    requestId: example.metadata.requestId,
+    agentId: example.metadata.agentId,
+    timestamp: example.metadata.timestamp,
+  };
+}
+
 /**
  * Convert a TrainingExample to a JSONL-compatible chat format line.
  */
 export function exampleToJsonlLine(
-  example: TrainingExample,
+  example: TrainingExample | LegacyTrainingExample,
   includeMetadata = true,
 ): JsonlToolCallLine {
+  const normalized = normalizeTrainingExample(example);
   const messages: JsonlToolCallLine["messages"] = [];
-
-  if (example.systemPrompt) {
-    messages.push({ role: "system", content: example.systemPrompt });
+  if (normalized.systemPrompt) {
+    messages.push({ role: "system", content: normalized.systemPrompt });
   }
-
-  messages.push({ role: "user", content: example.userInput ?? "" });
+  messages.push({ role: "user", content: normalized.userContent });
 
   messages.push({
     role: "assistant",
     content: "",
     tool_calls: [
       {
-        id: `call_${example.id}`,
+        id: `call_${normalized.id}`,
         type: "function",
         function: {
-          name: example.toolName,
-          arguments: JSON.stringify(example.toolInput ?? {}),
+          name: normalized.toolName,
+          arguments: JSON.stringify(normalized.toolInput),
         },
       },
     ],
@@ -62,24 +131,36 @@ export function exampleToJsonlLine(
 
   const line: JsonlToolCallLine = { messages };
 
-  if (includeMetadata && example.reward !== undefined) {
-    line.reward = example.reward;
+  if (includeMetadata) {
+    line.reward = normalized.reward;
   }
 
   return line;
+}
+
+function getExamples(
+  dataset: TrainingDataset | LegacyTrainingDataset,
+): Array<TrainingExample | LegacyTrainingExample> {
+  if ("episodes" in dataset && Array.isArray(dataset.episodes)) {
+    return dataset.episodes.flatMap((episode) => episode.steps);
+  }
+  if ("examples" in dataset && Array.isArray(dataset.examples)) {
+    return dataset.examples;
+  }
+  return [];
 }
 
 /**
  * Export a TrainingDataset to JSONL string (one JSON object per line).
  */
 export function exportDatasetToJsonl(
-  dataset: TrainingDataset,
+  dataset: TrainingDataset | LegacyTrainingDataset,
   options: JsonlExportOptions = {},
 ): string {
   const { minReward = 0, maxExamples, includeMetadata = true } = options;
 
-  let examples = dataset.examples.filter(
-    (ex) => (ex.reward ?? 0) >= minReward,
+  let examples = getExamples(dataset).filter(
+    (ex) => normalizeTrainingExample(ex).reward >= minReward,
   );
 
   if (maxExamples != null && maxExamples > 0) {
@@ -95,13 +176,13 @@ export function exportDatasetToJsonl(
  * Export to HuggingFace dataset format (JSONL with specific field names).
  */
 export function exportToHuggingFace(
-  dataset: TrainingDataset,
+  dataset: TrainingDataset | LegacyTrainingDataset,
   options: JsonlExportOptions = {},
 ): string {
   const { minReward = 0, maxExamples, includeMetadata = true } = options;
 
-  let examples = dataset.examples.filter(
-    (ex) => (ex.reward ?? 0) >= minReward,
+  let examples = getExamples(dataset).filter(
+    (ex) => normalizeTrainingExample(ex).reward >= minReward,
   );
 
   if (maxExamples != null && maxExamples > 0) {
@@ -110,17 +191,20 @@ export function exportToHuggingFace(
 
   return examples
     .map((ex) => {
+      const normalized = normalizeTrainingExample(ex);
       const row: Record<string, unknown> = {
-        id: ex.id,
-        instruction: ex.userInput ?? "",
-        tool_name: ex.toolName,
-        tool_input: ex.toolInput ?? {},
-        tool_output: ex.toolOutput ?? {},
-        reward: ex.reward ?? 0,
+        id: normalized.id,
+        instruction: normalized.userContent,
+        tool_name: normalized.toolName,
+        tool_input: normalized.toolInput,
+        tool_output: normalized.toolOutput,
+        reward: normalized.reward,
       };
       if (includeMetadata) {
-        row.source = ex.source;
-        row.scenario_id = ex.scenarioId;
+        row.source = normalized.source;
+        row.request_id = normalized.requestId;
+        row.agent_id = normalized.agentId;
+        row.timestamp = normalized.timestamp;
       }
       return JSON.stringify(row);
     })

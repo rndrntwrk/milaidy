@@ -12,8 +12,21 @@ function readAllText(tree: TestRenderer.ReactTestRenderer): string {
     .join(" ");
 }
 
-function makeToast(id: string, text: string, tone: ToastItem["tone"] = "info"): ToastItem {
+function makeToast(
+  id: string,
+  text: string,
+  tone: ToastItem["tone"] = "info",
+): ToastItem {
   return { id, text, tone };
+}
+
+function requireTree(
+  tree: TestRenderer.ReactTestRenderer | undefined,
+): TestRenderer.ReactTestRenderer {
+  if (!tree) {
+    throw new Error("Expected rendered tree");
+  }
+  return tree;
 }
 
 describe("ToastContainer", () => {
@@ -21,15 +34,18 @@ describe("ToastContainer", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(ToastContainer, { toasts: [], onDismiss: () => {} }),
+        React.createElement(ToastContainer, {
+          toasts: [],
+          onDismiss: () => {},
+        }),
       );
     });
 
-    const container = tree!.root.findByProps({ role: "status" });
+    const container = tree?.root.findByType("output");
     expect(container).toBeDefined();
     expect(container.props["aria-live"]).toBe("polite");
     // No toast items rendered
-    const buttons = tree!.root.findAllByType("button");
+    const buttons = tree?.root.findAllByType("button");
     expect(buttons).toHaveLength(0);
   });
 
@@ -48,7 +64,8 @@ describe("ToastContainer", () => {
       );
     });
 
-    const text = readAllText(tree!);
+    const renderedTree = requireTree(tree);
+    const text = readAllText(renderedTree);
     expect(text).toContain("First");
     expect(text).toContain("Second");
     expect(text).toContain("Third");
@@ -65,8 +82,11 @@ describe("ToastContainer", () => {
       );
     });
 
-    expect(readAllText(tree!)).toContain("Hello world");
-    const dismissBtn = tree!.root.findByProps({ "aria-label": "Dismiss" });
+    const renderedTree = requireTree(tree);
+    expect(readAllText(renderedTree)).toContain("Hello world");
+    const dismissBtn = renderedTree.root.findByProps({
+      "aria-label": "Dismiss",
+    });
     expect(dismissBtn).toBeDefined();
   });
 
@@ -81,7 +101,7 @@ describe("ToastContainer", () => {
       );
     });
 
-    const dismissBtn = tree!.root.findByProps({ "aria-label": "Dismiss" });
+    const dismissBtn = tree?.root.findByProps({ "aria-label": "Dismiss" });
     await act(async () => {
       dismissBtn.props.onClick();
     });
@@ -93,11 +113,14 @@ describe("ToastContainer", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(ToastContainer, { toasts: [], onDismiss: () => {} }),
+        React.createElement(ToastContainer, {
+          toasts: [],
+          onDismiss: () => {},
+        }),
       );
     });
 
-    const container = tree!.root.findByProps({ role: "status" });
+    const container = tree?.root.findByType("output");
     expect(container.props["aria-live"]).toBe("polite");
   });
 });

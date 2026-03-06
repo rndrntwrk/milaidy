@@ -16,22 +16,22 @@
 import { useState } from "react";
 import { useApp } from "../AppContext";
 import type { Tab } from "../navigation";
+import { ApprovalPanel } from "./ApprovalPanel";
 import { CustomActionsView } from "./CustomActionsView";
 import { DatabasePageView } from "./DatabasePageView";
 import { FineTuningView } from "./FineTuningView";
+import { GovernancePanel } from "./GovernancePanel";
+import { IdentityPanel } from "./IdentityPanel";
 import { LifoSandboxView } from "./LifoSandboxView";
 import { LogsPageView } from "./LogsPageView";
 import { PluginsPageView } from "./PluginsPageView";
 import { RuntimeView } from "./RuntimeView";
+import { SafeModePanel } from "./SafeModePanel";
 import { SecurityAuditPageView } from "./SecurityAuditPageView";
 import { SkillsView } from "./SkillsView";
 import { TrajectoriesView } from "./TrajectoriesView";
 import { TrajectoryDetailView } from "./TrajectoryDetailView";
 import { TriggersView } from "./TriggersView";
-import { IdentityPanel } from "./IdentityPanel";
-import { ApprovalPanel } from "./ApprovalPanel";
-import { SafeModePanel } from "./SafeModePanel";
-import { GovernancePanel } from "./GovernancePanel";
 
 type SubTab =
   | "plugins"
@@ -253,7 +253,11 @@ export function AdvancedPageView() {
     <div className="flex flex-col h-full min-h-0">
       {/* Sub-tab navigation (fixed) */}
       <div className="mb-4 shrink-0">
-        <div className="flex gap-1 border-b border-border overflow-x-auto" role="tablist" aria-label="Advanced settings">
+        <div
+          className="flex gap-1 border-b border-border overflow-x-auto"
+          role="tablist"
+          aria-label="Advanced settings"
+        >
           {SUB_TABS.map((subTab) => {
             const isActive = currentSubTab === subTab.id;
             return (
@@ -280,7 +284,12 @@ export function AdvancedPageView() {
       </div>
 
       {/* Content area (scrolls, header stays fixed) */}
-      <div className="flex-1 min-h-0 overflow-y-auto" role="tabpanel" id="adv-tabpanel" aria-labelledby={`adv-tab-${currentSubTab}`}>
+      <div
+        className="flex-1 min-h-0 overflow-y-auto"
+        role="tabpanel"
+        id="adv-tabpanel"
+        aria-labelledby={`adv-tab-${currentSubTab}`}
+      >
         {renderContent()}
       </div>
     </div>

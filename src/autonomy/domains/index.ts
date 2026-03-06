@@ -4,8 +4,17 @@
  * @module autonomy/domains
  */
 
+// Coding domain
+export * from "./coding/index.js";
+// Governance
+export * from "./governance/index.js";
+// Pilot
+export * from "./pilot/index.js";
 // Domain pack framework
-export { DomainPackRegistry, type DomainPackRegistryInterface } from "./registry.js";
+export {
+  DomainPackRegistry,
+  type DomainPackRegistryInterface,
+} from "./registry.js";
 export type {
   DomainBenchmark,
   DomainId,
@@ -16,12 +25,3 @@ export type {
   DomainTriggerContext,
   DomainTriggerSeverity,
 } from "./types.js";
-
-// Governance
-export * from "./governance/index.js";
-
-// Coding domain
-export * from "./coding/index.js";
-
-// Pilot
-export * from "./pilot/index.js";

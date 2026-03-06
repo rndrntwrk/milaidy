@@ -12,6 +12,9 @@
  */
 
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { ethers } from "ethers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DropService } from "../src/api/drop-service";
@@ -74,21 +77,6 @@ function hasContractArtifacts(): boolean {
 
 const describeAnvil =
   hasAnvilBinary() && hasContractArtifacts() ? describe : describe.skip;
-
-// ---------------------------------------------------------------------------
-// Test Suite
-// ---------------------------------------------------------------------------
-
-const hasAnvil = (() => {
-  try {
-    const result = spawnSync("anvil", ["--version"], { stdio: "ignore" });
-    return result.status === 0;
-  } catch {
-    return false;
-  }
-})();
-
-const describeAnvil = hasAnvil ? describe : describe.skip;
 
 describeAnvil("Anvil Contract E2E Tests", () => {
   let anvil: AnvilInstance;

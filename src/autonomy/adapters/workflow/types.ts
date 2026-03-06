@@ -57,7 +57,10 @@ export interface WorkflowDefinition {
 /** Workflow engine adapter interface. */
 export interface WorkflowEngine {
   /** Execute a workflow with the given input. */
-  execute(workflowId: string, input: Record<string, unknown>): Promise<WorkflowResult>;
+  execute(
+    workflowId: string,
+    input: Record<string, unknown>,
+  ): Promise<WorkflowResult>;
   /** Register a workflow definition. */
   register(definition: WorkflowDefinition): void;
   /** Get the status of a running or completed workflow. */

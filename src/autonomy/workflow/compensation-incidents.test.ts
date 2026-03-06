@@ -78,8 +78,14 @@ describe("CompensationIncidentManager", () => {
     const resolved = manager.resolveIncident(incident.id, "operator");
     expect(resolved?.status).toBe("resolved");
 
-    expect(manager.acknowledgeIncident(incident.id, "operator-2")).toBeUndefined();
-    expect(manager.acknowledgeIncident("does-not-exist", "operator")).toBeUndefined();
-    expect(manager.resolveIncident("does-not-exist", "operator")).toBeUndefined();
+    expect(
+      manager.acknowledgeIncident(incident.id, "operator-2"),
+    ).toBeUndefined();
+    expect(
+      manager.acknowledgeIncident("does-not-exist", "operator"),
+    ).toBeUndefined();
+    expect(
+      manager.resolveIncident("does-not-exist", "operator"),
+    ).toBeUndefined();
   });
 });

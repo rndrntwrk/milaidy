@@ -9,7 +9,11 @@
  * @module autonomy/memory/entity-linker
  */
 
-import type { EntityLinkStore, CanonicalEntity, Platform } from "./entity-link-store.js";
+import type {
+  CanonicalEntity,
+  EntityLinkStore,
+  Platform,
+} from "./entity-link-store.js";
 
 /** Emitted when a new linkage is established. */
 export interface EntityLinkedEvent {
@@ -23,7 +27,10 @@ export interface EntityLinkedEvent {
 /** Optional event emitter interface — integrates with existing event bus. */
 export interface EntityEventEmitter {
   emit(event: "entity:linked", data: EntityLinkedEvent): void;
-  emit(event: "entity:resolved", data: { canonicalEntityId: string; platform: Platform }): void;
+  emit(
+    event: "entity:resolved",
+    data: { canonicalEntityId: string; platform: Platform },
+  ): void;
 }
 
 /**
@@ -69,7 +76,11 @@ export class EntityLinker {
         // Update existing entity with any new platform IDs
         for (const [platform, platformId] of Object.entries(op.platformIds)) {
           if (!existingEntity.platformIds[platform]) {
-            await this.store.linkPlatform(existingEntity.id, platform, platformId);
+            await this.store.linkPlatform(
+              existingEntity.id,
+              platform,
+              platformId,
+            );
           }
         }
       } else {
@@ -80,6 +91,9 @@ export class EntityLinker {
           trustLevel: 1.0,
           platformIds: op.platformIds,
           preferences: op.preferences ?? {},
+          knownFacts: [],
+          lastSeen: {},
+          metadata: {},
         });
       }
     }
@@ -126,6 +140,10 @@ export class EntityLinker {
       platformIds: { [platform]: platformId },
       trustLevel: 0.5,
       isOperator: false,
+      preferences: {},
+      knownFacts: [],
+      lastSeen: {},
+      metadata: {},
     });
 
     this.eventEmitter?.emit("entity:linked", {
@@ -163,12 +181,17 @@ export class EntityLinker {
    * Get the canonical entity for a given platform identity,
    * or null if not linked.
    */
-  async lookup(platform: Platform, platformId: string): Promise<CanonicalEntity | null> {
+  async lookup(
+    platform: Platform,
+    platformId: string,
+  ): Promise<CanonicalEntity | null> {
     return this.store.getByPlatformId(platform, platformId);
   }
 
   /** Get all known entities. */
-  async listAll(opts?: { operatorsOnly?: boolean }): Promise<CanonicalEntity[]> {
+  async listAll(opts?: {
+    operatorsOnly?: boolean;
+  }): Promise<CanonicalEntity[]> {
     return this.store.listEntities(opts);
   }
 

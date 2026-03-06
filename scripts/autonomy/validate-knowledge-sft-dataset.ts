@@ -332,7 +332,11 @@ async function main(): Promise<void> {
     },
     integrityErrors,
   };
-  writeFileSync(jsonReportPath, `${JSON.stringify(jsonReport, null, 2)}\n`, "utf8");
+  writeFileSync(
+    jsonReportPath,
+    `${JSON.stringify(jsonReport, null, 2)}\n`,
+    "utf8",
+  );
 
   const mdLines = [
     "# Knowledge SFT Gate Report",
@@ -391,4 +395,3 @@ main().catch((err) => {
   console.error(`[knowledge-sft-validate] ${message}`);
   process.exitCode = 1;
 });
-

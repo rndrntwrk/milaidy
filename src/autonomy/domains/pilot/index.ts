@@ -5,13 +5,13 @@
  */
 
 export {
-  PilotRunner,
-  type PilotRunnerInterface,
-} from "./pilot-runner.js";
-export {
   PilotEvaluator,
   type PilotEvaluatorInterface,
 } from "./pilot-evaluator.js";
+export {
+  PilotRunner,
+  type PilotRunnerInterface,
+} from "./pilot-runner.js";
 export type {
   ComplianceReport,
   PilotBenchmarkResult,

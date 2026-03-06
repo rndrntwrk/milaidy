@@ -13,17 +13,15 @@
  * @module autonomy/memory/tier-promoter
  */
 
-import type {
-  EntityMemoryStore,
-  EntityMemory,
-  EntityMemoryInput,
-  MemoryTier,
-} from "./entity-memory-store.js";
+import type { MemoryType } from "../types.js";
 import type {
   ConversationSummary,
   ExtractedFact,
 } from "./conversation-summarizer.js";
-import type { MemoryType } from "../types.js";
+import type {
+  EntityMemoryInput,
+  EntityMemoryStore,
+} from "./entity-memory-store.js";
 
 // ---------- Config ----------
 
@@ -73,10 +71,7 @@ export class TierPromoter {
   private readonly store: EntityMemoryStore;
   private readonly config: TierPromotionConfig;
 
-  constructor(
-    store: EntityMemoryStore,
-    config?: Partial<TierPromotionConfig>,
-  ) {
+  constructor(store: EntityMemoryStore, config?: Partial<TierPromotionConfig>) {
     this.store = store;
     this.config = { ...DEFAULT_TIER_PROMOTION_CONFIG, ...config };
   }
@@ -138,9 +133,8 @@ export class TierPromoter {
     }
 
     // 3. Check for mid→long promotions
-    const promotedToLongTerm = await this.promoteMatureMidTermMemories(
-      canonicalEntityId,
-    );
+    const promotedToLongTerm =
+      await this.promoteMatureMidTermMemories(canonicalEntityId);
 
     // 4. Purge expired mid-term memories
     const expired = await this.store.purgeExpired();

@@ -2,10 +2,10 @@
  * Tests for tier promotion engine.
  */
 
-import { describe, expect, it, beforeEach } from "vitest";
-import { InMemoryEntityMemoryStore } from "./entity-memory-store.js";
-import { TierPromoter, DEFAULT_TIER_PROMOTION_CONFIG } from "./tier-promoter.js";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { ConversationSummary } from "./conversation-summarizer.js";
+import { InMemoryEntityMemoryStore } from "./entity-memory-store.js";
+import { TierPromoter } from "./tier-promoter.js";
 
 function makeSummary(
   overrides?: Partial<ConversationSummary>,
@@ -59,7 +59,11 @@ describe("TierPromoter", () => {
     it("filters facts below minimum confidence", async () => {
       const summary = makeSummary({
         facts: [
-          { text: "High confidence fact", confidence: 0.9, category: "preference" },
+          {
+            text: "High confidence fact",
+            confidence: 0.9,
+            category: "preference",
+          },
           { text: "Low confidence fact", confidence: 0.3, category: "intent" },
         ],
       });
@@ -226,8 +230,8 @@ describe("TierPromoter", () => {
       expect(promoted).toBe(1);
 
       const updated = await store.getById(mem.id);
-      expect(updated!.tier).toBe("long-term");
-      expect(updated!.expiresAt).toBeNull();
+      expect(updated?.tier).toBe("long-term");
+      expect(updated?.expiresAt).toBeNull();
     });
 
     it("does not promote below threshold", async () => {

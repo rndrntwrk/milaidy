@@ -1,9 +1,7 @@
 import crypto from "node:crypto";
 import type { IAgentRuntime } from "@elizaos/core";
 import { logger } from "@elizaos/core";
-import { resolveAgentBearer } from "../plugins/five55-shared/agent-auth.js";
 import { deriveEvmAddress, deriveSolanaAddress } from "../api/wallet.js";
-import { metrics } from "../telemetry/setup.js";
 import type {
   CreateHyperscapeAutonomySessionInput,
   CreateHyperscapeAutonomySessionResult,
@@ -13,8 +11,9 @@ import type {
   HyperscapeAutonomySessionResult,
   HyperscapeAutonomySessionState,
   HyperscapeWalletProvenance,
-  HyperscapeWalletType,
 } from "../contracts/hyperscape-autonomy.js";
+import { resolveAgentBearer } from "../plugins/five55-shared/agent-auth.js";
+import { metrics } from "../telemetry/setup.js";
 
 const HYPERSCAPE_AGENT_START_TIMEOUT_MS = 90_000;
 const HYPERSCAPE_POLL_INTERVAL_MS = 2_500;
@@ -169,7 +168,10 @@ export class HyperscapeAutonomySessionManager {
   private readonly now: () => number;
   private onEvent?: (event: HyperscapeAutonomyEvent) => void;
   private readonly sessions = new Map<string, ManagedSession>();
-  private readonly walletProvenance = new Map<string, HyperscapeWalletProvenance>();
+  private readonly walletProvenance = new Map<
+    string,
+    HyperscapeWalletProvenance
+  >();
   private readonly authCache = new Map<string, AuthCacheEntry>();
 
   constructor(options: HyperscapeAutonomySessionManagerOptions) {
@@ -247,9 +249,13 @@ export class HyperscapeAutonomySessionManager {
       stalledChecks: 0,
       lastProgressSignature: null,
     });
-    metrics.counter(`${HYPERSCAPE_SLO_METRIC_PREFIX}.session_created_total`, 1, {
-      agentId: trimmedAgentId,
-    });
+    metrics.counter(
+      `${HYPERSCAPE_SLO_METRIC_PREFIX}.session_created_total`,
+      1,
+      {
+        agentId: trimmedAgentId,
+      },
+    );
     this.updateOperationalGauges();
     this.emitSession(sessionId);
     void this.runSessionLifecycle(sessionId);
@@ -269,7 +275,9 @@ export class HyperscapeAutonomySessionManager {
     return { session: this.cloneSession(managed.session) };
   }
 
-  async stopSession(sessionId: string): Promise<HyperscapeAutonomySessionResult | null> {
+  async stopSession(
+    sessionId: string,
+  ): Promise<HyperscapeAutonomySessionResult | null> {
     const managed = this.sessions.get(sessionId);
     if (!managed) return null;
 
@@ -295,7 +303,9 @@ export class HyperscapeAutonomySessionManager {
     return { session: this.cloneSession(managed.session) };
   }
 
-  async recoverSession(sessionId: string): Promise<HyperscapeAutonomySessionResult | null> {
+  async recoverSession(
+    sessionId: string,
+  ): Promise<HyperscapeAutonomySessionResult | null> {
     const managed = this.sessions.get(sessionId);
     if (!managed) return null;
 
@@ -305,7 +315,10 @@ export class HyperscapeAutonomySessionManager {
     managed.authToken = null;
     managed.session.recoveries += 1;
     this.recordAction(sessionId, "recover", "manual recovery requested");
-    this.updateSessionState(sessionId, { state: "agent_starting", failureReason: null });
+    this.updateSessionState(sessionId, {
+      state: "agent_starting",
+      failureReason: null,
+    });
     void this.runSessionLifecycle(sessionId);
     return { session: this.cloneSession(managed.session) };
   }
@@ -366,7 +379,10 @@ export class HyperscapeAutonomySessionManager {
         try {
           const wallet = this.resolveWalletForAgent(session.agentId);
           this.applyWallet(sessionId, wallet);
-          this.updateSessionState(sessionId, { state: "wallet_ready", failureReason: null });
+          this.updateSessionState(sessionId, {
+            state: "wallet_ready",
+            failureReason: null,
+          });
           if (managed.stopRequested) return;
 
           const auth = await this.ensureHyperscapeAuth(session.agentId, wallet);
@@ -376,10 +392,16 @@ export class HyperscapeAutonomySessionManager {
           this.patchSession(sessionId, (next) => {
             next.characterId = auth.characterId;
           });
-          this.updateSessionState(sessionId, { state: "auth_ready", failureReason: null });
+          this.updateSessionState(sessionId, {
+            state: "auth_ready",
+            failureReason: null,
+          });
           if (managed.stopRequested) return;
 
-          this.updateSessionState(sessionId, { state: "agent_starting", failureReason: null });
+          this.updateSessionState(sessionId, {
+            state: "agent_starting",
+            failureReason: null,
+          });
           const embeddedAgent = await this.ensureEmbeddedAgent(
             sessionId,
             auth.characterId,
@@ -387,8 +409,15 @@ export class HyperscapeAutonomySessionManager {
           );
           if (managed.stopRequested) return;
 
-          await this.startOrResumeEmbeddedAgent(embeddedAgent.characterId, auth.authToken);
-          const inWorldAgent = await this.waitForInWorld(sessionId, embeddedAgent, auth.authToken);
+          await this.startOrResumeEmbeddedAgent(
+            embeddedAgent.characterId,
+            auth.authToken,
+          );
+          const inWorldAgent = await this.waitForInWorld(
+            sessionId,
+            embeddedAgent,
+            auth.authToken,
+          );
           if (managed.stopRequested) return;
 
           this.patchSession(sessionId, (next) => {
@@ -396,14 +425,20 @@ export class HyperscapeAutonomySessionManager {
             next.characterId = inWorldAgent.characterId;
             next.embeddedAgentId = inWorldAgent.agentId;
           });
-          this.updateSessionState(sessionId, { state: "in_world", failureReason: null });
+          this.updateSessionState(sessionId, {
+            state: "in_world",
+            failureReason: null,
+          });
           await this.bootstrapGoal(sessionId, auth.authToken);
           this.startSupervisorLoop(sessionId, auth.authToken);
 
           if (isTruthyEnvValue(process.env[STREAM_AUTOSTART_ENV])) {
             const streamStarted = await this.startStream(sessionId);
             if (streamStarted) {
-              this.updateSessionState(sessionId, { state: "streaming", streamStarted: true });
+              this.updateSessionState(sessionId, {
+                state: "streaming",
+                streamStarted: true,
+              });
             } else {
               this.updateSessionState(sessionId, {
                 state: "degraded",
@@ -422,7 +457,9 @@ export class HyperscapeAutonomySessionManager {
           managed.session.retryCount += 1;
           const canRecover =
             managed.session.retryCount <= HYPERSCAPE_RECOVERY_LIMIT &&
-            /timeout|timed out|websocket|network|status 5\d\d| 5\d\d/i.test(message);
+            /timeout|timed out|websocket|network|status 5\d\d| 5\d\d/i.test(
+              message,
+            );
 
           if (canRecover) {
             managed.session.recoveries += 1;
@@ -467,15 +504,20 @@ export class HyperscapeAutonomySessionManager {
     const nowIso = toIso(this.now());
     const existing = this.walletProvenance.get(normalizedAgentId);
     if (existing) {
-      const next = { ...existing, source: "existing_agent_wallet" as const, lastUsedAt: nowIso };
+      const next = {
+        ...existing,
+        source: "existing_agent_wallet" as const,
+        lastUsedAt: nowIso,
+      };
       this.walletProvenance.set(normalizedAgentId, next);
       return next;
     }
 
     const runtime = this.getRuntime();
     const evmKey =
-      (runtime?.getSetting?.("EVM_PRIVATE_KEY") as string | undefined)?.trim() ||
-      process.env.EVM_PRIVATE_KEY?.trim();
+      (
+        runtime?.getSetting?.("EVM_PRIVATE_KEY") as string | undefined
+      )?.trim() || process.env.EVM_PRIVATE_KEY?.trim();
     if (evmKey) {
       const walletAddress = deriveEvmAddress(evmKey);
       const provenance: HyperscapeWalletProvenance = {
@@ -491,8 +533,9 @@ export class HyperscapeAutonomySessionManager {
     }
 
     const solanaKey =
-      (runtime?.getSetting?.("SOLANA_PRIVATE_KEY") as string | undefined)?.trim() ||
-      process.env.SOLANA_PRIVATE_KEY?.trim();
+      (
+        runtime?.getSetting?.("SOLANA_PRIVATE_KEY") as string | undefined
+      )?.trim() || process.env.SOLANA_PRIVATE_KEY?.trim();
     if (solanaKey) {
       const walletAddress = deriveSolanaAddress(solanaKey);
       const provenance: HyperscapeWalletProvenance = {
@@ -512,7 +555,10 @@ export class HyperscapeAutonomySessionManager {
     );
   }
 
-  private applyWallet(sessionId: string, wallet: HyperscapeWalletProvenance): void {
+  private applyWallet(
+    sessionId: string,
+    wallet: HyperscapeWalletProvenance,
+  ): void {
     this.patchSession(sessionId, (next) => {
       next.walletAddress = wallet.walletAddress;
       next.walletType = wallet.walletType;
@@ -527,7 +573,10 @@ export class HyperscapeAutonomySessionManager {
     const cacheKey = `${agentId}:${wallet.walletAddress}`;
     const now = this.now();
     const cached = this.authCache.get(cacheKey);
-    if (cached && cached.expiresAtMs - HYPERSCAPE_AUTH_REFRESH_WINDOW_MS > now) {
+    if (
+      cached &&
+      cached.expiresAtMs - HYPERSCAPE_AUTH_REFRESH_WINDOW_MS > now
+    ) {
       return { authToken: cached.authToken, characterId: cached.characterId };
     }
 
@@ -538,7 +587,11 @@ export class HyperscapeAutonomySessionManager {
     };
     let lastError = "wallet-auth failed";
 
-    for (let attempt = 1; attempt <= HYPERSCAPE_AUTH_RETRY_ATTEMPTS; attempt += 1) {
+    for (
+      let attempt = 1;
+      attempt <= HYPERSCAPE_AUTH_RETRY_ATTEMPTS;
+      attempt += 1
+    ) {
       try {
         const response = await this.requestJson<HyperscapeWalletAuthPayload>(
           "POST",
@@ -599,7 +652,9 @@ export class HyperscapeAutonomySessionManager {
     if (!session) throw new Error("Session not found");
 
     const listed = await this.listEmbeddedAgents(authToken);
-    const byCharacter = listed.find((item) => item.characterId === expectedCharacterId);
+    const byCharacter = listed.find(
+      (item) => item.characterId === expectedCharacterId,
+    );
     if (byCharacter) {
       this.patchSession(sessionId, (next) => {
         next.embeddedAgentId = byCharacter.agentId;
@@ -609,7 +664,8 @@ export class HyperscapeAutonomySessionManager {
     }
 
     const byName = listed.find(
-      (item) => item.name.trim().toLowerCase() === session.agentId.trim().toLowerCase(),
+      (item) =>
+        item.name.trim().toLowerCase() === session.agentId.trim().toLowerCase(),
     );
     if (byName) {
       this.patchSession(sessionId, (next) => {
@@ -619,25 +675,37 @@ export class HyperscapeAutonomySessionManager {
       return byName;
     }
 
-    const createResponse = await this.requestJson<HyperscapeCreateEmbeddedAgentPayload>(
-      "POST",
-      "/api/embedded-agents",
-      {
-        authToken,
-        body: { characterId: expectedCharacterId, autoStart: false, scriptedRole: "balanced" },
-      },
-    );
+    const createResponse =
+      await this.requestJson<HyperscapeCreateEmbeddedAgentPayload>(
+        "POST",
+        "/api/embedded-agents",
+        {
+          authToken,
+          body: {
+            characterId: expectedCharacterId,
+            autoStart: false,
+            scriptedRole: "balanced",
+          },
+        },
+      );
     if (!createResponse.ok) {
-      throw new Error(`embedded-agent create failed (${createResponse.status})`);
+      throw new Error(
+        `embedded-agent create failed (${createResponse.status})`,
+      );
     }
-    const created = createResponse.data?.agent ?? createResponse.data?.data?.agent ?? null;
+    const created =
+      createResponse.data?.agent ?? createResponse.data?.data?.agent ?? null;
     const characterId = created?.characterId?.trim() || expectedCharacterId;
     const agentId = created?.agentId?.trim() || characterId;
     this.patchSession(sessionId, (next) => {
       next.characterId = characterId;
       next.embeddedAgentId = agentId;
     });
-    this.recordAction(sessionId, "agent.create", `created embedded agent ${agentId}`);
+    this.recordAction(
+      sessionId,
+      "agent.create",
+      `created embedded agent ${agentId}`,
+    );
     return { agentId, characterId };
   }
 
@@ -658,7 +726,9 @@ export class HyperscapeAutonomySessionManager {
       { authToken, retryAttempts: 1 },
     );
     if (!resume.ok) {
-      throw new Error(`embedded-agent start failed (${start.status}/${resume.status})`);
+      throw new Error(
+        `embedded-agent start failed (${start.status}/${resume.status})`,
+      );
     }
   }
 
@@ -671,7 +741,9 @@ export class HyperscapeAutonomySessionManager {
     while (this.now() - started < HYPERSCAPE_AGENT_START_TIMEOUT_MS) {
       const managed = this.sessions.get(sessionId);
       if (!managed || managed.stopRequested) {
-        throw new Error("Session was stopped before world initialization completed");
+        throw new Error(
+          "Session was stopped before world initialization completed",
+        );
       }
 
       const listed = await this.listEmbeddedAgents(authToken);
@@ -693,20 +765,29 @@ export class HyperscapeAutonomySessionManager {
     return typeof agent.lastActivity === "number" && agent.lastActivity > 0;
   }
 
-  private async bootstrapGoal(sessionId: string, authToken: string): Promise<void> {
+  private async bootstrapGoal(
+    sessionId: string,
+    authToken: string,
+  ): Promise<void> {
     const session = this.sessions.get(sessionId)?.session;
     if (!session?.goal || !session.characterId) return;
 
     const goalValue = session.goal.trim();
     if (!goalValue) return;
-    const encodedAgentId = encodeURIComponent(session.embeddedAgentId ?? session.characterId);
+    const encodedAgentId = encodeURIComponent(
+      session.embeddedAgentId ?? session.characterId,
+    );
     const encodedCharacterId = encodeURIComponent(session.characterId);
 
-    await this.requestJson<unknown>("POST", `/api/agents/${encodedAgentId}/goal`, {
-      authToken,
-      body: { goal: goalValue },
-      retryAttempts: 1,
-    }).catch(() => undefined);
+    await this.requestJson<unknown>(
+      "POST",
+      `/api/agents/${encodedAgentId}/goal`,
+      {
+        authToken,
+        body: { goal: goalValue },
+        retryAttempts: 1,
+      },
+    ).catch(() => undefined);
 
     await this.requestJson<unknown>(
       "POST",
@@ -738,7 +819,10 @@ export class HyperscapeAutonomySessionManager {
     }, HYPERSCAPE_SUPERVISOR_INTERVAL_MS);
   }
 
-  private async supervisorTick(sessionId: string, authToken: string): Promise<void> {
+  private async supervisorTick(
+    sessionId: string,
+    authToken: string,
+  ): Promise<void> {
     const managed = this.sessions.get(sessionId);
     if (!managed || managed.stopRequested) return;
     if (!managed.session.characterId) return;
@@ -746,14 +830,15 @@ export class HyperscapeAutonomySessionManager {
     try {
       const listed = await this.listEmbeddedAgents(authToken);
       const target =
-        listed.find((item) => item.characterId === managed.session.characterId) ??
+        listed.find(
+          (item) => item.characterId === managed.session.characterId,
+        ) ??
         listed.find((item) => item.agentId === managed.session.embeddedAgentId);
       if (!target) {
         throw new Error("embedded agent not found in runtime list");
       }
 
-      const progressSignature =
-        `${parsePositionSignature(target.position) ?? "no-pos"}:${target.lastActivity ?? "na"}`;
+      const progressSignature = `${parsePositionSignature(target.position) ?? "no-pos"}:${target.lastActivity ?? "na"}`;
       if (progressSignature !== managed.lastProgressSignature) {
         managed.lastProgressSignature = progressSignature;
         managed.stalledChecks = 0;
@@ -779,13 +864,20 @@ export class HyperscapeAutonomySessionManager {
           retryAttempts: 1,
         },
       );
-      this.recordAction(sessionId, "supervisor.nudge", "Issued idle recovery nudge");
+      this.recordAction(
+        sessionId,
+        "supervisor.nudge",
+        "Issued idle recovery nudge",
+      );
     } catch (error) {
       managed.session.retryCount += 1;
       const message = sanitizeError(error);
       this.recordAction(sessionId, "supervisor.error", message);
 
-      if (managed.session.recoveries < HYPERSCAPE_RECOVERY_LIMIT && managed.session.characterId) {
+      if (
+        managed.session.recoveries < HYPERSCAPE_RECOVERY_LIMIT &&
+        managed.session.characterId
+      ) {
         managed.session.recoveries += 1;
         managed.session.stream = {
           ...(managed.session.stream ?? {
@@ -801,9 +893,10 @@ export class HyperscapeAutonomySessionManager {
           lastError: message,
           lastErrorAt: toIso(this.now()),
         };
-        await this.startOrResumeEmbeddedAgent(managed.session.characterId, authToken).catch(
-          () => undefined,
-        );
+        await this.startOrResumeEmbeddedAgent(
+          managed.session.characterId,
+          authToken,
+        ).catch(() => undefined);
         return;
       }
 
@@ -823,9 +916,14 @@ export class HyperscapeAutonomySessionManager {
     if (!managed) return false;
 
     const upstreamBase =
-      process.env.STREAM555_BASE_URL?.trim() || process.env.STREAM_API_URL?.trim();
+      process.env.STREAM555_BASE_URL?.trim() ||
+      process.env.STREAM_API_URL?.trim();
     if (!upstreamBase) {
-      this.recordAction(sessionId, "stream.skip", "STREAM555_BASE_URL is not configured");
+      this.recordAction(
+        sessionId,
+        "stream.skip",
+        "STREAM555_BASE_URL is not configured",
+      );
       return false;
     }
 
@@ -836,13 +934,9 @@ export class HyperscapeAutonomySessionManager {
         process.env.STREAM555_DEFAULT_SESSION_ID?.trim() ||
         null;
       if (!streamSessionId) {
-        const bootstrap = await this.requestExternalJson<{ sessionId?: string }>(
-          "POST",
-          upstreamBase,
-          "/api/agent/v1/sessions",
-          token,
-          {},
-        );
+        const bootstrap = await this.requestExternalJson<{
+          sessionId?: string;
+        }>("POST", upstreamBase, "/api/agent/v1/sessions", token, {});
         if (!bootstrap.ok || !bootstrap.data?.sessionId?.trim()) {
           this.recordAction(
             sessionId,
@@ -895,7 +989,11 @@ export class HyperscapeAutonomySessionManager {
           lastErrorAt: null,
         };
       });
-      this.recordAction(sessionId, "stream.start", `stream started (${streamSessionId})`);
+      this.recordAction(
+        sessionId,
+        "stream.start",
+        `stream started (${streamSessionId})`,
+      );
       return true;
     } catch (error) {
       this.recordAction(sessionId, "stream.error", sanitizeError(error));
@@ -911,9 +1009,17 @@ export class HyperscapeAutonomySessionManager {
     return typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : null;
   }
 
-  private async listEmbeddedAgents(
-    authToken: string | undefined,
-  ): Promise<Array<{ agentId: string; characterId: string; name: string; position: unknown; lastActivity: number | null; entityId: string | null; state: string }>> {
+  private async listEmbeddedAgents(authToken: string | undefined): Promise<
+    Array<{
+      agentId: string;
+      characterId: string;
+      name: string;
+      position: unknown;
+      lastActivity: number | null;
+      entityId: string | null;
+      state: string;
+    }>
+  > {
     const response = await this.requestJson<HyperscapeEmbeddedAgentsPayload>(
       "GET",
       "/api/embedded-agents",
@@ -960,8 +1066,8 @@ export class HyperscapeAutonomySessionManager {
           path,
           options?.body,
           options?.includeAuth !== false
-            ? normalizeAuthHeader(options?.authToken) ??
-                normalizeAuthHeader(process.env.HYPERSCAPE_AUTH_TOKEN)
+            ? (normalizeAuthHeader(options?.authToken) ??
+                normalizeAuthHeader(process.env.HYPERSCAPE_AUTH_TOKEN))
             : null,
           options?.timeoutMs ?? HYPERSCAPE_REQUEST_TIMEOUT_MS,
           this.getHyperscapeApiBaseUrl(),
@@ -1057,7 +1163,10 @@ export class HyperscapeAutonomySessionManager {
     this.emitSession(sessionId);
   }
 
-  private updateSessionState(sessionId: string, update: SessionStateUpdate): void {
+  private updateSessionState(
+    sessionId: string,
+    update: SessionStateUpdate,
+  ): void {
     const managed = this.sessions.get(sessionId);
     if (!managed) return;
     const next = managed.session;
@@ -1089,11 +1198,11 @@ export class HyperscapeAutonomySessionManager {
       type,
       detail,
     };
-    managed.session.actionHistory = [...managed.session.actionHistory.slice(-59), entry];
-    if (
-      !managed.session.firstActionAt &&
-      this.isAutonomyProgressAction(type)
-    ) {
+    managed.session.actionHistory = [
+      ...managed.session.actionHistory.slice(-59),
+      entry,
+    ];
+    if (!managed.session.firstActionAt && this.isAutonomyProgressAction(type)) {
       const nowIso = toIso(this.now());
       managed.session.firstActionAt = nowIso;
       const createdAtMs = parseIsoMillis(managed.session.createdAt);
@@ -1135,11 +1244,15 @@ export class HyperscapeAutonomySessionManager {
     fromState: HyperscapeAutonomySessionState,
     toState: HyperscapeAutonomySessionState,
   ): void {
-    metrics.counter(`${HYPERSCAPE_SLO_METRIC_PREFIX}.state_transition_total`, 1, {
-      fromState,
-      toState,
-      agentId: session.agentId,
-    });
+    metrics.counter(
+      `${HYPERSCAPE_SLO_METRIC_PREFIX}.state_transition_total`,
+      1,
+      {
+        fromState,
+        toState,
+        agentId: session.agentId,
+      },
+    );
 
     const createdAtMs = parseIsoMillis(session.createdAt);
     const nowMs = this.now();
@@ -1158,9 +1271,13 @@ export class HyperscapeAutonomySessionManager {
     }
 
     if (toState === "streaming") {
-      metrics.counter(`${HYPERSCAPE_SLO_METRIC_PREFIX}.stream_started_total`, 1, {
-        agentId: session.agentId,
-      });
+      metrics.counter(
+        `${HYPERSCAPE_SLO_METRIC_PREFIX}.stream_started_total`,
+        1,
+        {
+          agentId: session.agentId,
+        },
+      );
       if (createdAtMs !== null) {
         metrics.histogram(
           `${HYPERSCAPE_SLO_METRIC_PREFIX}.time_to_stream_ms`,
@@ -1194,9 +1311,18 @@ export class HyperscapeAutonomySessionManager {
 
   private updateOperationalGauges(): void {
     const snapshot = this.getOperationalSnapshot();
-    metrics.gauge(`${HYPERSCAPE_SLO_METRIC_PREFIX}.sessions_total`, snapshot.totalSessions);
-    metrics.gauge(`${HYPERSCAPE_SLO_METRIC_PREFIX}.sessions_active`, snapshot.activeSessions);
-    metrics.gauge(`${HYPERSCAPE_SLO_METRIC_PREFIX}.sessions_failed`, snapshot.failedSessions);
+    metrics.gauge(
+      `${HYPERSCAPE_SLO_METRIC_PREFIX}.sessions_total`,
+      snapshot.totalSessions,
+    );
+    metrics.gauge(
+      `${HYPERSCAPE_SLO_METRIC_PREFIX}.sessions_active`,
+      snapshot.activeSessions,
+    );
+    metrics.gauge(
+      `${HYPERSCAPE_SLO_METRIC_PREFIX}.sessions_failed`,
+      snapshot.failedSessions,
+    );
     metrics.gauge(
       `${HYPERSCAPE_SLO_METRIC_PREFIX}.sessions_degraded`,
       snapshot.degradedSessions,
@@ -1206,12 +1332,16 @@ export class HyperscapeAutonomySessionManager {
     }
   }
 
-  private cloneSession(session: HyperscapeAutonomySession): HyperscapeAutonomySession {
+  private cloneSession(
+    session: HyperscapeAutonomySession,
+  ): HyperscapeAutonomySession {
     return {
       ...session,
       actionHistory: [...session.actionHistory],
       stream: session.stream ? { ...session.stream } : null,
-      streamProfile: session.streamProfile ? { ...session.streamProfile } : null,
+      streamProfile: session.streamProfile
+        ? { ...session.streamProfile }
+        : null,
     };
   }
 }
@@ -1235,7 +1365,9 @@ export function resolveDefaultHyperscapeAutonomyAgentId(
   );
 }
 
-export function logHyperscapeAutonomyEvent(event: HyperscapeAutonomyEvent): void {
+export function logHyperscapeAutonomyEvent(
+  event: HyperscapeAutonomyEvent,
+): void {
   logger.info(
     `[hyperscape-autonomy] ${event.session.sessionId} state=${event.session.state} agent=${event.session.agentId}`,
   );

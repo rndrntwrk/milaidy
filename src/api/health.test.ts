@@ -2,11 +2,11 @@
  * Tests for health check endpoints.
  */
 
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
   createHealthChecks,
-  runHealthChecks,
   type HealthCheck,
+  runHealthChecks,
 } from "./health.js";
 
 describe("createHealthChecks", () => {

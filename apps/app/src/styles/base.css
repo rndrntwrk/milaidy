@@ -599,7 +599,13 @@
    Targets explicit milady theme + default (no data-theme attr). */
 [data-theme="milady"] #root,
 html:not([data-theme]) #root {
-  background: linear-gradient(180deg, #b6d4a8 0%, #d4e8cc 25%, #eaf3e6 55%, #ffffff 100%);
+  background: linear-gradient(
+    180deg,
+    #b6d4a8 0%,
+    #d4e8cc 25%,
+    #eaf3e6 55%,
+    #ffffff 100%
+  );
 }
 
 /* ═══════════════════════════════════════════════════════════════════════

@@ -61,7 +61,8 @@ const COMMITMENT_PATTERNS: Array<{
   extract: (match: RegExpMatchArray) => string;
 }> = [
   {
-    pattern: /\b(?:i'll|i will|let me|i'm going to|i am going to)\s+(.{5,100})/i,
+    pattern:
+      /\b(?:i'll|i will|let me|i'm going to|i am going to)\s+(.{5,100})/i,
     extract: (m) => m[1].replace(/[.!]+$/, "").trim(),
   },
   {
@@ -170,7 +171,7 @@ export class ActionIntentTracker {
     if (!this.roomIndex.has(opts.roomId)) {
       this.roomIndex.set(opts.roomId, new Set());
     }
-    this.roomIndex.get(opts.roomId)!.add(id);
+    this.roomIndex.get(opts.roomId)?.add(id);
 
     return intent;
   }
@@ -213,7 +214,10 @@ export class ActionIntentTracker {
 
     return Array.from(intentIds)
       .map((id) => this.intents.get(id))
-      .filter((i): i is ActionIntent => i !== null && i !== undefined && i.status === "open")
+      .filter(
+        (i): i is ActionIntent =>
+          i !== null && i !== undefined && i.status === "open",
+      )
       .sort((a, b) => b.createdAt - a.createdAt);
   }
 
@@ -277,7 +281,9 @@ export class ActionIntentTracker {
       );
       for (const intent of open.slice(0, 5)) {
         const age = Math.round((Date.now() - intent.createdAt) / 60000);
-        lines.push(`- "${intent.description}" (${age}m ago, ${intent.platform})`);
+        lines.push(
+          `- "${intent.description}" (${age}m ago, ${intent.platform})`,
+        );
       }
       lines.push(
         "",
@@ -361,13 +367,19 @@ export class ActionIntentTracker {
     if (openIntentIds.length > MAX_OPEN_INTENTS_PER_ROOM) {
       openIntentIds
         .sort((a, b) => {
-          const ia = this.intents.get(a)!;
-          const ib = this.intents.get(b)!;
+          const ia = this.intents.get(a);
+          const ib = this.intents.get(b);
+          if (!ia || !ib) {
+            return 0;
+          }
           return ia.createdAt - ib.createdAt;
         })
         .slice(0, openIntentIds.length - MAX_OPEN_INTENTS_PER_ROOM)
         .forEach((id) => {
-          const intent = this.intents.get(id)!;
+          const intent = this.intents.get(id);
+          if (!intent) {
+            return;
+          }
           intent.status = "expired";
           intent.statusChangedAt = now;
         });

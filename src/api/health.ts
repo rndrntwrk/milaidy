@@ -9,9 +9,9 @@
  * @module api/health
  */
 
+import fs from "node:fs/promises";
 import type http from "node:http";
 import os from "node:os";
-import fs from "node:fs/promises";
 import path from "node:path";
 
 // Types
@@ -95,7 +95,7 @@ export function createHealthChecks(deps: {
       check: async () => {
         try {
           const start = Date.now();
-          await deps.db!.query("SELECT 1");
+          await deps.db?.query("SELECT 1");
           return {
             healthy: true,
             details: { latencyMs: Date.now() - start },

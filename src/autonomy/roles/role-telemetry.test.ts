@@ -3,9 +3,9 @@ import { metrics } from "../../telemetry/setup.js";
 import { InMemoryGoalManager } from "../goals/manager.js";
 import { KernelStateMachine } from "../state-machine/kernel-state-machine.js";
 import { ToolRegistry } from "../tools/registry.js";
-import { GoalDrivenPlanner } from "./planner.js";
 import { PipelineExecutor } from "./executor.js";
 import { KernelOrchestrator } from "./orchestrator.js";
+import { GoalDrivenPlanner } from "./planner.js";
 import { SafeModeControllerImpl } from "./safe-mode.js";
 import type {
   AuditorRole,
@@ -16,7 +16,10 @@ import type {
 
 describe("Role telemetry", () => {
   it("records planner role telemetry", async () => {
-    const planner = new GoalDrivenPlanner(new InMemoryGoalManager(), new ToolRegistry());
+    const planner = new GoalDrivenPlanner(
+      new InMemoryGoalManager(),
+      new ToolRegistry(),
+    );
     const before = metrics.getSnapshot();
 
     await planner.createPlan({
@@ -27,10 +30,16 @@ describe("Role telemetry", () => {
     });
 
     const after = metrics.getSnapshot();
-    const counterKey = 'autonomy_role_executions_total:{"role":"planner","outcome":"success"}';
+    const counterKey =
+      'autonomy_role_executions_total:{"role":"planner","outcome":"success"}';
     const histKey = 'autonomy_role_latency_ms:{"role":"planner"}';
-    expect((after.counters[counterKey] ?? 0) - (before.counters[counterKey] ?? 0)).toBe(1);
-    expect((after.histograms[histKey]?.count ?? 0) - (before.histograms[histKey]?.count ?? 0)).toBe(1);
+    expect(
+      (after.counters[counterKey] ?? 0) - (before.counters[counterKey] ?? 0),
+    ).toBe(1);
+    expect(
+      (after.histograms[histKey]?.count ?? 0) -
+        (before.histograms[histKey]?.count ?? 0),
+    ).toBe(1);
   });
 
   it("records executor failure telemetry", async () => {
@@ -57,8 +66,11 @@ describe("Role telemetry", () => {
     );
 
     const after = metrics.getSnapshot();
-    const counterKey = 'autonomy_role_executions_total:{"role":"executor","outcome":"failure"}';
-    expect((after.counters[counterKey] ?? 0) - (before.counters[counterKey] ?? 0)).toBe(1);
+    const counterKey =
+      'autonomy_role_executions_total:{"role":"executor","outcome":"failure"}';
+    expect(
+      (after.counters[counterKey] ?? 0) - (before.counters[counterKey] ?? 0),
+    ).toBe(1);
   });
 
   it("records orchestrator role telemetry", async () => {
@@ -66,7 +78,9 @@ describe("Role telemetry", () => {
       createPlan: vi.fn(async () => ({
         id: "plan-telemetry",
         goals: [],
-        steps: [{ id: "step-1", toolName: "PLAY_EMOTE", params: { emote: "wave" } }],
+        steps: [
+          { id: "step-1", toolName: "PLAY_EMOTE", params: { emote: "wave" } },
+        ],
         createdAt: Date.now(),
         status: "pending" as const,
       })),
@@ -186,7 +200,10 @@ describe("Role telemetry", () => {
     expect(result.success).toBe(true);
     const after = metrics.getSnapshot();
 
-    const counterKey = 'autonomy_role_executions_total:{"role":"orchestrator","outcome":"success"}';
-    expect((after.counters[counterKey] ?? 0) - (before.counters[counterKey] ?? 0)).toBe(1);
+    const counterKey =
+      'autonomy_role_executions_total:{"role":"orchestrator","outcome":"success"}';
+    expect(
+      (after.counters[counterKey] ?? 0) - (before.counters[counterKey] ?? 0),
+    ).toBe(1);
   });
 });

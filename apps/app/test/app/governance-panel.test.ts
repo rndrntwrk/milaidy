@@ -1,6 +1,6 @@
 import React from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import TestRenderer, { act } from "react-test-renderer";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockClient } = vi.hoisted(() => ({
   mockClient: {
@@ -26,6 +26,15 @@ function readAllText(tree: TestRenderer.ReactTestRenderer): string {
 
 function normalizeText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function requireTree(
+  tree: TestRenderer.ReactTestRenderer | undefined,
+): TestRenderer.ReactTestRenderer {
+  if (!tree) {
+    throw new Error("Expected rendered tree");
+  }
+  return tree;
 }
 
 function findButton(
@@ -110,22 +119,23 @@ describe("GovernancePanel quarantine review", () => {
       tree = TestRenderer.create(React.createElement(GovernancePanel));
     });
     await flush();
+    const renderedTree = requireTree(tree);
 
     expect(mockClient.getWorkbenchQuarantine).not.toHaveBeenCalled();
 
     await act(async () => {
-      findButton(tree!, "Quarantine").props.onClick();
+      findButton(renderedTree, "Quarantine").props.onClick();
     });
     await flush();
 
     expect(mockClient.getWorkbenchQuarantine).toHaveBeenCalledTimes(1);
-    const loadedText = normalizeText(readAllText(tree!));
+    const loadedText = normalizeText(readAllText(renderedTree));
     expect(loadedText).toContain("Suspicious memory payload");
     expect(loadedText).toContain("trust 0.125");
     expect(loadedText).toContain("source api:ops-user");
 
     await act(async () => {
-      findButton(tree!, "Approve").props.onClick();
+      findButton(renderedTree, "Approve").props.onClick();
     });
     await flush();
 
@@ -134,7 +144,7 @@ describe("GovernancePanel quarantine review", () => {
       "approve",
     );
     expect(mockClient.getWorkbenchQuarantine).toHaveBeenCalledTimes(2);
-    expect(normalizeText(readAllText(tree!))).toContain(
+    expect(normalizeText(readAllText(renderedTree))).toContain(
       "No quarantined memories pending review.",
     );
   });
@@ -149,13 +159,14 @@ describe("GovernancePanel quarantine review", () => {
       tree = TestRenderer.create(React.createElement(GovernancePanel));
     });
     await flush();
+    const renderedTree = requireTree(tree);
 
     await act(async () => {
-      findButton(tree!, "Quarantine").props.onClick();
+      findButton(renderedTree, "Quarantine").props.onClick();
     });
     await flush();
 
-    expect(normalizeText(readAllText(tree!))).toContain(
+    expect(normalizeText(readAllText(renderedTree))).toContain(
       "quarantine fetch failed",
     );
   });

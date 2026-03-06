@@ -70,7 +70,7 @@ const DEFAULT_CONFIG: ContainerSandboxConfig = {
  */
 export class ContainerSandbox extends EventEmitter {
   private containerId?: string;
-  private docker?: DockerClient;
+  private docker: DockerClient | null = null;
   private config: ContainerSandboxConfig;
   private pluginName: string;
   private ready = false;
@@ -102,7 +102,7 @@ export class ContainerSandbox extends EventEmitter {
     this.containerId = container.id;
 
     // Start container
-    await container.start();
+    await this.docker.startContainer(this.containerId);
 
     // Wait for ready signal
     await this.waitForReady();
@@ -361,7 +361,12 @@ async function getDockerClient(): Promise<DockerClient | null> {
             reject(new Error("Exec timeout"));
           }, options?.timeout ?? 30000);
 
-          exec.start({ hijack: true, stdin: true }, (err, stream) => {
+          exec.start(
+            { hijack: true, stdin: true },
+            (
+              err: Error | null,
+              stream?: NodeJS.ReadableStream & NodeJS.WritableStream,
+            ) => {
             if (err) {
               clearTimeout(timeout);
               reject(err);
@@ -379,7 +384,8 @@ async function getDockerClient(): Promise<DockerClient | null> {
 
             stream?.write(input);
             stream?.end();
-          });
+            },
+          );
         });
       },
     };

@@ -92,8 +92,8 @@ describe("RewardAggregator", () => {
 
     // (1.0 * 0.6 + 0.5 * 0.4) / 1.0 = 0.8
     expect(signal.total).toBeCloseTo(0.8, 2);
-    expect(signal.breakdown["a"]).toBe(1.0);
-    expect(signal.breakdown["b"]).toBe(0.5);
+    expect(signal.breakdown.a).toBe(1.0);
+    expect(signal.breakdown.b).toBe(0.5);
     expect(signal.dimensions).toContain("task_completion");
   });
 
@@ -129,8 +129,8 @@ describe("RewardAggregator", () => {
     };
     const agg = new RewardAggregator([throwing, makeCondition("ok", 1, 1.0)]);
     const signal = await agg.aggregate({} as VerifierContext);
-    expect(signal.breakdown["bad"]).toBe(0);
-    expect(signal.breakdown["ok"]).toBe(1.0);
+    expect(signal.breakdown.bad).toBe(0);
+    expect(signal.breakdown.ok).toBe(1.0);
     expect(signal.total).toBeCloseTo(0.5, 2);
   });
 });
@@ -143,9 +143,9 @@ describe("CheckpointReward", () => {
     const signal = cr.compute(makePipelineResult());
 
     expect(signal.total).toBeGreaterThan(0.8);
-    expect(signal.breakdown["completion"]).toBe(1.0);
-    expect(signal.breakdown["validation"]).toBe(1.0);
-    expect(signal.breakdown["verification"]).toBe(1.0);
+    expect(signal.breakdown.completion).toBe(1.0);
+    expect(signal.breakdown.validation).toBe(1.0);
+    expect(signal.breakdown.verification).toBe(1.0);
     expect(signal.dimensions).toContain("task_completion");
     expect(signal.dimensions).toContain("safety");
     expect(signal.dimensions).toContain("efficiency");
@@ -160,8 +160,8 @@ describe("CheckpointReward", () => {
       }),
     );
 
-    expect(signal.breakdown["validation"]).toBe(0.0);
-    expect(signal.breakdown["completion"]).toBe(0.0);
+    expect(signal.breakdown.validation).toBe(0.0);
+    expect(signal.breakdown.completion).toBe(0.0);
     expect(signal.total).toBeLessThan(0.5);
   });
 
@@ -173,7 +173,7 @@ describe("CheckpointReward", () => {
       }),
     );
 
-    expect(signal.breakdown["verification"]).toBe(0.0);
+    expect(signal.breakdown.verification).toBe(0.0);
   });
 
   it("includes efficiency dimension from durationMs", () => {
@@ -181,13 +181,11 @@ describe("CheckpointReward", () => {
 
     // Fast execution → high efficiency
     const fast = cr.compute(makePipelineResult({ durationMs: 500 }));
-    expect(fast.breakdown["efficiency"]).toBeGreaterThan(0.7);
+    expect(fast.breakdown.efficiency).toBeGreaterThan(0.7);
 
     // Slow execution → lower efficiency
     const slow = cr.compute(makePipelineResult({ durationMs: 5000 }));
-    expect(slow.breakdown["efficiency"]).toBeLessThan(
-      fast.breakdown["efficiency"],
-    );
+    expect(slow.breakdown.efficiency).toBeLessThan(fast.breakdown.efficiency);
   });
 
   it("clamps total to 0-1 range", () => {
@@ -208,7 +206,7 @@ describe("EpisodeReward", () => {
     const signal = er.compute(makeOrchestratedResult());
 
     expect(signal.total).toBeGreaterThan(0.5);
-    expect(signal.breakdown["step_reward"]).toBeDefined();
+    expect(signal.breakdown.step_reward).toBeDefined();
     expect(signal.dimensions).toContain("task_completion");
   });
 
@@ -241,8 +239,8 @@ describe("EpisodeReward", () => {
     );
 
     expect(highDrift.total).toBeLessThan(lowDrift.total);
-    expect(highDrift.breakdown["drift_penalty"]).toBeLessThan(
-      lowDrift.breakdown["drift_penalty"],
+    expect(highDrift.breakdown.drift_penalty).toBeLessThan(
+      lowDrift.breakdown.drift_penalty,
     );
   });
 
@@ -281,7 +279,7 @@ describe("EpisodeReward", () => {
     const er = new EpisodeReward(cr);
     const signal = er.compute(makeOrchestratedResult({ executions: [] }));
 
-    expect(signal.breakdown["step_reward"]).toBe(0);
+    expect(signal.breakdown.step_reward).toBe(0);
     expect(signal.total).toBeDefined();
   });
 
@@ -291,8 +289,8 @@ describe("EpisodeReward", () => {
     const succeeded = er.compute(makeOrchestratedResult({ success: true }));
     const failed = er.compute(makeOrchestratedResult({ success: false }));
 
-    expect(succeeded.breakdown["success_bonus"]).toBe(1.0);
-    expect(failed.breakdown["success_bonus"]).toBe(0.0);
+    expect(succeeded.breakdown.success_bonus).toBe(1.0);
+    expect(failed.breakdown.success_bonus).toBe(0.0);
     expect(succeeded.total).toBeGreaterThan(failed.total);
   });
 });

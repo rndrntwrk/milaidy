@@ -8,7 +8,10 @@
  */
 
 import type { IAgentRuntime, Memory, Provider, State } from "@elizaos/core";
-import type { TrustAwareRetriever, RankedMemory } from "../autonomy/memory/retriever.js";
+import type {
+  RankedMemory,
+  TrustAwareRetriever,
+} from "../autonomy/memory/retriever.js";
 
 /**
  * Create a trust-aware retrieval context provider.
@@ -20,11 +23,7 @@ export function createTrustRetrievalProvider(): Provider {
     dynamic: true,
     position: 15,
 
-    async get(
-      runtime: IAgentRuntime,
-      message: Memory,
-      _state: State,
-    ) {
+    async get(runtime: IAgentRuntime, message: Memory, _state: State) {
       let retriever: TrustAwareRetriever | null = null;
 
       // Resolve retriever from DI container

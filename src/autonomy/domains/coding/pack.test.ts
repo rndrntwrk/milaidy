@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { DomainTriggerContext } from "../types.js";
+import { CODING_DOMAIN_PACK, createCodingDomainPack } from "./pack.js";
 import {
   CODING_SAFE_MODE_TRIGGERS,
   pathViolationTrigger,
   repeatedTestFailureTrigger,
   shellTimeoutTrigger,
 } from "./safe-mode-triggers.js";
-import { CODING_DOMAIN_PACK, createCodingDomainPack } from "./pack.js";
 
 // ---------- Helpers ----------
 
@@ -87,14 +87,10 @@ describe("Coding safe-mode triggers", () => {
 
   it("shellTimeoutTrigger fires for long shell commands", async () => {
     expect(
-      await shellTimeoutTrigger.check(
-        makeTriggerCtx({ durationMs: 200_000 }),
-      ),
+      await shellTimeoutTrigger.check(makeTriggerCtx({ durationMs: 200_000 })),
     ).toBe(true);
     expect(
-      await shellTimeoutTrigger.check(
-        makeTriggerCtx({ durationMs: 5_000 }),
-      ),
+      await shellTimeoutTrigger.check(makeTriggerCtx({ durationMs: 5_000 })),
     ).toBe(false);
   });
 

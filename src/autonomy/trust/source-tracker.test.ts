@@ -8,10 +8,13 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
-import { SourceTracker } from "./source-tracker.js";
 import type { TrustSource } from "../types.js";
+import { SourceTracker } from "./source-tracker.js";
 
-function makeSource(id: string, overrides: Partial<TrustSource> = {}): TrustSource {
+function makeSource(
+  id: string,
+  overrides: Partial<TrustSource> = {},
+): TrustSource {
   return {
     id,
     type: "user",
@@ -33,28 +36,31 @@ describe("SourceTracker", () => {
 
       const record = tracker.get("user-1");
       expect(record).toBeDefined();
-      expect(record!.positive).toBe(1);
-      expect(record!.negative).toBe(0);
-      expect(record!.type).toBe("user");
+      expect(record?.positive).toBe(1);
+      expect(record?.negative).toBe(0);
+      expect(record?.type).toBe("user");
     });
 
     it("increments positive count", () => {
       tracker.record(makeSource("user-1"), "positive");
       tracker.record(makeSource("user-1"), "positive");
 
-      expect(tracker.get("user-1")!.positive).toBe(2);
+      expect(tracker.get("user-1")?.positive).toBe(2);
     });
 
     it("increments negative count", () => {
       tracker.record(makeSource("user-1"), "negative");
-      expect(tracker.get("user-1")!.negative).toBe(1);
+      expect(tracker.get("user-1")?.negative).toBe(1);
     });
 
     it("handles neutral feedback without changing counts", () => {
       tracker.record(makeSource("user-1"), "positive");
       tracker.record(makeSource("user-1"), "neutral");
 
-      const record = tracker.get("user-1")!;
+      const record = tracker.get("user-1");
+      if (!record) {
+        throw new Error("Expected source record to exist");
+      }
       expect(record.positive).toBe(1);
       expect(record.negative).toBe(0);
     });
@@ -70,11 +76,11 @@ describe("SourceTracker", () => {
 
     it("updates lastSeen timestamp", () => {
       tracker.record(makeSource("user-1"), "positive");
-      const first = tracker.get("user-1")!.lastSeen;
+      const first = tracker.get("user-1")?.lastSeen;
 
       // Small delay to ensure different timestamps
       tracker.record(makeSource("user-1"), "positive");
-      const second = tracker.get("user-1")!.lastSeen;
+      const second = tracker.get("user-1")?.lastSeen;
 
       expect(second).toBeGreaterThanOrEqual(first);
     });

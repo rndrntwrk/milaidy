@@ -31,7 +31,6 @@ import {
 import { createMiladyPlugin } from "../runtime/milady-plugin";
 import {
   createEnvSandbox,
-  extractPlugin,
   isOptionalImportError,
   isWorkspaceDependency,
   tryOptionalDynamicImport,
@@ -1066,9 +1065,13 @@ function looksLikePlugin(value: unknown): boolean {
   const hasInit = typeof obj.init === "function";
   const hasTests = Array.isArray(obj.tests);
   const hasConfig =
-    !!obj.config && typeof obj.config === "object" && !Array.isArray(obj.config);
+    !!obj.config &&
+    typeof obj.config === "object" &&
+    !Array.isArray(obj.config);
   const hasModels =
-    !!obj.models && typeof obj.models === "object" && !Array.isArray(obj.models);
+    !!obj.models &&
+    typeof obj.models === "object" &&
+    !Array.isArray(obj.models);
   const hasPluginSurface =
     hasCollections || hasInit || hasTests || hasConfig || hasModels;
   return (

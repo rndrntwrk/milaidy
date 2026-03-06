@@ -24,19 +24,21 @@ const mockAutonomySvc = {
   getGoalManager: vi.fn(() => null),
   getMemoryGate: vi.fn(() => null),
   getIdentityConfig: vi.fn(() => ({ ...mockIdentity })),
-  updateIdentityConfig: vi.fn(async (update: Partial<AutonomyIdentityConfig>) => {
-    const updated = {
-      ...mockIdentity,
-      ...update,
-      communicationStyle: {
-        ...mockIdentity.communicationStyle,
-        ...(update.communicationStyle ?? {}),
-      },
-      identityVersion: mockIdentity.identityVersion + 1,
-      identityHash: "updated-hash",
-    };
-    return updated;
-  }),
+  updateIdentityConfig: vi.fn(
+    async (update: Partial<AutonomyIdentityConfig>) => {
+      const updated = {
+        ...mockIdentity,
+        ...update,
+        communicationStyle: {
+          ...mockIdentity.communicationStyle,
+          ...(update.communicationStyle ?? {}),
+        },
+        identityVersion: mockIdentity.identityVersion + 1,
+        identityHash: "updated-hash",
+      };
+      return updated;
+    },
+  ),
 };
 
 const mockRuntime = {
@@ -57,12 +59,18 @@ describe("Identity service contract", () => {
 
   describe("getIdentityConfig()", () => {
     it("returns identity when available", () => {
-      mockAutonomySvc.getIdentityConfig.mockReturnValueOnce({ ...mockIdentity });
+      mockAutonomySvc.getIdentityConfig.mockReturnValueOnce({
+        ...mockIdentity,
+      });
 
       const identity = mockAutonomySvc.getIdentityConfig();
       expect(identity).not.toBeNull();
-      expect(identity!.coreValues).toEqual(["helpfulness", "honesty", "safety"]);
-      expect(identity!.identityVersion).toBe(1);
+      expect(identity?.coreValues).toEqual([
+        "helpfulness",
+        "honesty",
+        "safety",
+      ]);
+      expect(identity?.identityVersion).toBe(1);
     });
 
     it("returns null when service has no identity", () => {
@@ -75,7 +83,9 @@ describe("Identity service contract", () => {
 
   describe("updateIdentityConfig()", () => {
     it("updates identity with valid data", async () => {
-      const update = { coreValues: ["helpfulness", "honesty", "safety", "transparency"] };
+      const update = {
+        coreValues: ["helpfulness", "honesty", "safety", "transparency"],
+      };
       const result = await mockAutonomySvc.updateIdentityConfig(update);
 
       expect(result.identityVersion).toBe(mockIdentity.identityVersion + 1);
@@ -85,7 +95,9 @@ describe("Identity service contract", () => {
 
     it("rejects invalid updates", async () => {
       mockAutonomySvc.updateIdentityConfig.mockRejectedValueOnce(
-        new Error("Identity validation failed: coreValues: Must have at least one core value"),
+        new Error(
+          "Identity validation failed: coreValues: Must have at least one core value",
+        ),
       );
 
       await expect(
@@ -99,7 +111,9 @@ describe("Identity service contract", () => {
 
       expect(result.communicationStyle.tone).toBe("formal");
       // Other fields preserved
-      expect(result.communicationStyle.verbosity).toBe(mockIdentity.communicationStyle.verbosity);
+      expect(result.communicationStyle.verbosity).toBe(
+        mockIdentity.communicationStyle.verbosity,
+      );
     });
   });
 
@@ -109,12 +123,12 @@ describe("Identity service contract", () => {
       expect(identity).not.toBeNull();
 
       const historyResponse = {
-        version: identity!.identityVersion,
-        hash: identity!.identityHash ?? null,
+        version: identity?.identityVersion,
+        hash: identity?.identityHash ?? null,
         history: [
           {
-            version: identity!.identityVersion,
-            hash: identity!.identityHash ?? null,
+            version: identity?.identityVersion,
+            hash: identity?.identityHash ?? null,
             timestamp: Date.now(),
           },
         ],
@@ -130,7 +144,11 @@ describe("Identity service contract", () => {
 
       const identity = mockAutonomySvc.getIdentityConfig();
       const historyResponse = identity
-        ? { version: identity.identityVersion, hash: identity.identityHash, history: [] }
+        ? {
+            version: identity.identityVersion,
+            hash: identity.identityHash,
+            history: [],
+          }
         : { version: 0, hash: null, history: [] };
 
       expect(historyResponse.version).toBe(0);

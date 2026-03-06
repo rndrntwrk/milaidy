@@ -367,16 +367,17 @@ export const DEFAULT_AUTONOMY_CONFIG: {
 /**
  * Resolve an autonomy config by merging user values with defaults.
  */
-export function resolveAutonomyConfig(
-  userConfig?: AutonomyConfig,
-) {
+export function resolveAutonomyConfig(userConfig?: AutonomyConfig) {
   const cfg = userConfig ?? {};
 
   return {
     enabled: cfg.enabled ?? DEFAULT_AUTONOMY_CONFIG.enabled,
     trust: { ...DEFAULT_AUTONOMY_CONFIG.trust, ...cfg.trust },
     memoryGate: { ...DEFAULT_AUTONOMY_CONFIG.memoryGate, ...cfg.memoryGate },
-    driftMonitor: { ...DEFAULT_AUTONOMY_CONFIG.driftMonitor, ...cfg.driftMonitor },
+    driftMonitor: {
+      ...DEFAULT_AUTONOMY_CONFIG.driftMonitor,
+      ...cfg.driftMonitor,
+    },
     metrics: { ...DEFAULT_AUTONOMY_CONFIG.metrics, ...cfg.metrics },
     identity: cfg.identity ?? DEFAULT_AUTONOMY_CONFIG.identity,
     retrieval: { ...DEFAULT_RETRIEVAL_CONFIG, ...cfg.retrieval },
@@ -392,7 +393,8 @@ export function resolveAutonomyConfig(
         address: cfg.workflowEngine?.temporal?.address ?? "localhost:7233",
         namespace: cfg.workflowEngine?.temporal?.namespace ?? "default",
         taskQueue: cfg.workflowEngine?.temporal?.taskQueue ?? "autonomy-tasks",
-        workflowIdPrefix: cfg.workflowEngine?.temporal?.workflowIdPrefix ?? "autonomy",
+        workflowIdPrefix:
+          cfg.workflowEngine?.temporal?.workflowIdPrefix ?? "autonomy",
         defaultTimeoutMs:
           cfg.workflowEngine?.temporal?.defaultTimeoutMs ??
           cfg.workflow?.defaultTimeoutMs ??
@@ -419,7 +421,8 @@ export function resolveAutonomyConfig(
       enabled: cfg.roles?.enabled ?? true,
       planner: {
         maxPlanSteps: cfg.roles?.planner?.maxPlanSteps ?? 20,
-        autoApproveSimplePlans: cfg.roles?.planner?.autoApproveSimplePlans ?? false,
+        autoApproveSimplePlans:
+          cfg.roles?.planner?.autoApproveSimplePlans ?? false,
       },
       safeMode: {
         errorThreshold: cfg.roles?.safeMode?.errorThreshold ?? 3,
@@ -468,8 +471,10 @@ export function resolveAutonomyConfig(
       coding: cfg.domains?.coding,
       governance: {
         enabled: cfg.domains?.governance?.enabled ?? true,
-        defaultEventRetentionMs: cfg.domains?.governance?.defaultEventRetentionMs ?? 604_800_000,
-        defaultAuditRetentionMs: cfg.domains?.governance?.defaultAuditRetentionMs ?? 2_592_000_000,
+        defaultEventRetentionMs:
+          cfg.domains?.governance?.defaultEventRetentionMs ?? 604_800_000,
+        defaultAuditRetentionMs:
+          cfg.domains?.governance?.defaultAuditRetentionMs ?? 2_592_000_000,
       },
       pilot: {
         scenarioTimeoutMs: cfg.domains?.pilot?.scenarioTimeoutMs ?? 30_000,
@@ -493,13 +498,22 @@ export function validateAutonomyConfig(
 
   if (config.trust?.writeThreshold !== undefined) {
     if (config.trust.writeThreshold < 0 || config.trust.writeThreshold > 1) {
-      issues.push({ path: "autonomy.trust.writeThreshold", message: "Must be between 0 and 1" });
+      issues.push({
+        path: "autonomy.trust.writeThreshold",
+        message: "Must be between 0 and 1",
+      });
     }
   }
 
   if (config.trust?.quarantineThreshold !== undefined) {
-    if (config.trust.quarantineThreshold < 0 || config.trust.quarantineThreshold > 1) {
-      issues.push({ path: "autonomy.trust.quarantineThreshold", message: "Must be between 0 and 1" });
+    if (
+      config.trust.quarantineThreshold < 0 ||
+      config.trust.quarantineThreshold > 1
+    ) {
+      issues.push({
+        path: "autonomy.trust.quarantineThreshold",
+        message: "Must be between 0 and 1",
+      });
     }
   }
 
@@ -514,34 +528,65 @@ export function validateAutonomyConfig(
     });
   }
 
-  if (config.trust?.historyWindow !== undefined && config.trust.historyWindow < 1) {
-    issues.push({ path: "autonomy.trust.historyWindow", message: "Must be at least 1" });
+  if (
+    config.trust?.historyWindow !== undefined &&
+    config.trust.historyWindow < 1
+  ) {
+    issues.push({
+      path: "autonomy.trust.historyWindow",
+      message: "Must be at least 1",
+    });
   }
 
-  if (config.memoryGate?.maxQuarantineSize !== undefined && config.memoryGate.maxQuarantineSize < 1) {
-    issues.push({ path: "autonomy.memoryGate.maxQuarantineSize", message: "Must be at least 1" });
+  if (
+    config.memoryGate?.maxQuarantineSize !== undefined &&
+    config.memoryGate.maxQuarantineSize < 1
+  ) {
+    issues.push({
+      path: "autonomy.memoryGate.maxQuarantineSize",
+      message: "Must be at least 1",
+    });
   }
 
-  if (config.driftMonitor?.analysisWindowSize !== undefined && config.driftMonitor.analysisWindowSize < 1) {
-    issues.push({ path: "autonomy.driftMonitor.analysisWindowSize", message: "Must be at least 1" });
+  if (
+    config.driftMonitor?.analysisWindowSize !== undefined &&
+    config.driftMonitor.analysisWindowSize < 1
+  ) {
+    issues.push({
+      path: "autonomy.driftMonitor.analysisWindowSize",
+      message: "Must be at least 1",
+    });
   }
 
   if (config.driftMonitor?.alertThreshold !== undefined) {
-    if (config.driftMonitor.alertThreshold < 0 || config.driftMonitor.alertThreshold > 1) {
-      issues.push({ path: "autonomy.driftMonitor.alertThreshold", message: "Must be between 0 and 1" });
+    if (
+      config.driftMonitor.alertThreshold < 0 ||
+      config.driftMonitor.alertThreshold > 1
+    ) {
+      issues.push({
+        path: "autonomy.driftMonitor.alertThreshold",
+        message: "Must be between 0 and 1",
+      });
     }
   }
 
   if (config.driftMonitor?.correctionThreshold !== undefined) {
-    if (config.driftMonitor.correctionThreshold < 0 || config.driftMonitor.correctionThreshold > 1) {
-      issues.push({ path: "autonomy.driftMonitor.correctionThreshold", message: "Must be between 0 and 1" });
+    if (
+      config.driftMonitor.correctionThreshold < 0 ||
+      config.driftMonitor.correctionThreshold > 1
+    ) {
+      issues.push({
+        path: "autonomy.driftMonitor.correctionThreshold",
+        message: "Must be between 0 and 1",
+      });
     }
   }
 
   if (
     config.driftMonitor?.alertThreshold !== undefined &&
     config.driftMonitor?.correctionThreshold !== undefined &&
-    config.driftMonitor.alertThreshold >= config.driftMonitor.correctionThreshold
+    config.driftMonitor.alertThreshold >=
+      config.driftMonitor.correctionThreshold
   ) {
     issues.push({
       path: "autonomy.driftMonitor",
@@ -552,14 +597,20 @@ export function validateAutonomyConfig(
   // Validate retrieval weights
   if (config.retrieval) {
     const r = config.retrieval;
-    const weightFields = ["trustWeight", "recencyWeight", "relevanceWeight", "typeWeight"] as const;
+    const weightFields = [
+      "trustWeight",
+      "recencyWeight",
+      "relevanceWeight",
+      "typeWeight",
+    ] as const;
     for (const field of weightFields) {
-      if (r[field] !== undefined && (r[field]! < 0 || r[field]! > 1)) {
-        issues.push({ path: `autonomy.retrieval.${field}`, message: "Must be between 0 and 1" });
-      } else if (
-        r[field] !== undefined &&
-        (r[field]! < 0.05 || r[field]! > 0.8)
-      ) {
+      const weight = r[field];
+      if (weight !== undefined && (weight < 0 || weight > 1)) {
+        issues.push({
+          path: `autonomy.retrieval.${field}`,
+          message: "Must be between 0 and 1",
+        });
+      } else if (weight !== undefined && (weight < 0.05 || weight > 0.8)) {
         issues.push({
           path: `autonomy.retrieval.${field}`,
           message: "Guardrail: must be between 0.05 and 0.8",
@@ -580,7 +631,10 @@ export function validateAutonomyConfig(
     }
 
     if (r.maxResults !== undefined && r.maxResults < 1) {
-      issues.push({ path: "autonomy.retrieval.maxResults", message: "Must be at least 1" });
+      issues.push({
+        path: "autonomy.retrieval.maxResults",
+        message: "Must be at least 1",
+      });
     } else if (r.maxResults !== undefined && r.maxResults > 200) {
       issues.push({
         path: "autonomy.retrieval.maxResults",
@@ -588,13 +642,24 @@ export function validateAutonomyConfig(
       });
     }
 
-    if (r.minTrustThreshold !== undefined && (r.minTrustThreshold < 0 || r.minTrustThreshold > 1)) {
-      issues.push({ path: "autonomy.retrieval.minTrustThreshold", message: "Must be between 0 and 1" });
+    if (
+      r.minTrustThreshold !== undefined &&
+      (r.minTrustThreshold < 0 || r.minTrustThreshold > 1)
+    ) {
+      issues.push({
+        path: "autonomy.retrieval.minTrustThreshold",
+        message: "Must be between 0 and 1",
+      });
     }
 
     if (r.typeBoosts !== undefined) {
       for (const [key, value] of Object.entries(r.typeBoosts)) {
-        if (!Number.isFinite(value) || value < 0 || value > 2) {
+        if (
+          value === undefined ||
+          !Number.isFinite(value) ||
+          value < 0 ||
+          value > 2
+        ) {
           issues.push({
             path: `autonomy.retrieval.typeBoosts.${key}`,
             message: "Guardrail: must be between 0 and 2",
@@ -605,74 +670,182 @@ export function validateAutonomyConfig(
   }
 
   // Validate workflow config
-  if (config.workflow?.maxConcurrent !== undefined && config.workflow.maxConcurrent < 1) {
-    issues.push({ path: "autonomy.workflow.maxConcurrent", message: "Must be at least 1" });
+  if (
+    config.workflow?.maxConcurrent !== undefined &&
+    config.workflow.maxConcurrent < 1
+  ) {
+    issues.push({
+      path: "autonomy.workflow.maxConcurrent",
+      message: "Must be at least 1",
+    });
   }
-  if (config.workflow?.defaultTimeoutMs !== undefined && config.workflow.defaultTimeoutMs < 1000) {
-    issues.push({ path: "autonomy.workflow.defaultTimeoutMs", message: "Must be at least 1000" });
+  if (
+    config.workflow?.defaultTimeoutMs !== undefined &&
+    config.workflow.defaultTimeoutMs < 1000
+  ) {
+    issues.push({
+      path: "autonomy.workflow.defaultTimeoutMs",
+      message: "Must be at least 1000",
+    });
   }
 
   // Validate workflow engine config
-  if (config.workflowEngine?.provider && !["local", "temporal"].includes(config.workflowEngine.provider)) {
-    issues.push({ path: "autonomy.workflowEngine.provider", message: "Must be 'local' or 'temporal'" });
+  if (
+    config.workflowEngine?.provider &&
+    !["local", "temporal"].includes(config.workflowEngine.provider)
+  ) {
+    issues.push({
+      path: "autonomy.workflowEngine.provider",
+      message: "Must be 'local' or 'temporal'",
+    });
   }
   if (config.workflowEngine?.provider === "temporal") {
     const temporalCfg = config.workflowEngine.temporal;
-    if (temporalCfg?.address !== undefined && temporalCfg.address.trim().length === 0) {
-      issues.push({ path: "autonomy.workflowEngine.temporal.address", message: "Must be a non-empty string" });
+    if (
+      temporalCfg?.address !== undefined &&
+      temporalCfg.address.trim().length === 0
+    ) {
+      issues.push({
+        path: "autonomy.workflowEngine.temporal.address",
+        message: "Must be a non-empty string",
+      });
     }
-    if (temporalCfg?.namespace !== undefined && temporalCfg.namespace.trim().length === 0) {
-      issues.push({ path: "autonomy.workflowEngine.temporal.namespace", message: "Must be a non-empty string" });
+    if (
+      temporalCfg?.namespace !== undefined &&
+      temporalCfg.namespace.trim().length === 0
+    ) {
+      issues.push({
+        path: "autonomy.workflowEngine.temporal.namespace",
+        message: "Must be a non-empty string",
+      });
     }
-    if (temporalCfg?.taskQueue !== undefined && temporalCfg.taskQueue.trim().length === 0) {
-      issues.push({ path: "autonomy.workflowEngine.temporal.taskQueue", message: "Must be a non-empty string" });
+    if (
+      temporalCfg?.taskQueue !== undefined &&
+      temporalCfg.taskQueue.trim().length === 0
+    ) {
+      issues.push({
+        path: "autonomy.workflowEngine.temporal.taskQueue",
+        message: "Must be a non-empty string",
+      });
     }
-    if (temporalCfg?.defaultTimeoutMs !== undefined && temporalCfg.defaultTimeoutMs < 1000) {
-      issues.push({ path: "autonomy.workflowEngine.temporal.defaultTimeoutMs", message: "Must be at least 1000" });
+    if (
+      temporalCfg?.defaultTimeoutMs !== undefined &&
+      temporalCfg.defaultTimeoutMs < 1000
+    ) {
+      issues.push({
+        path: "autonomy.workflowEngine.temporal.defaultTimeoutMs",
+        message: "Must be at least 1000",
+      });
     }
-    if (temporalCfg?.deadLetterMax !== undefined && temporalCfg.deadLetterMax < 1) {
-      issues.push({ path: "autonomy.workflowEngine.temporal.deadLetterMax", message: "Must be at least 1" });
+    if (
+      temporalCfg?.deadLetterMax !== undefined &&
+      temporalCfg.deadLetterMax < 1
+    ) {
+      issues.push({
+        path: "autonomy.workflowEngine.temporal.deadLetterMax",
+        message: "Must be at least 1",
+      });
     }
   }
 
   // Validate approval config
-  if (config.approval?.timeoutMs !== undefined && config.approval.timeoutMs < 5000) {
-    issues.push({ path: "autonomy.approval.timeoutMs", message: "Must be at least 5000" });
+  if (
+    config.approval?.timeoutMs !== undefined &&
+    config.approval.timeoutMs < 5000
+  ) {
+    issues.push({
+      path: "autonomy.approval.timeoutMs",
+      message: "Must be at least 5000",
+    });
   }
 
   // Validate event store config
-  if (config.eventStore?.maxEvents !== undefined && config.eventStore.maxEvents < 100) {
-    issues.push({ path: "autonomy.eventStore.maxEvents", message: "Must be at least 100" });
+  if (
+    config.eventStore?.maxEvents !== undefined &&
+    config.eventStore.maxEvents < 100
+  ) {
+    issues.push({
+      path: "autonomy.eventStore.maxEvents",
+      message: "Must be at least 100",
+    });
   }
-  if (config.eventStore?.retentionMs !== undefined && config.eventStore.retentionMs < 0) {
-    issues.push({ path: "autonomy.eventStore.retentionMs", message: "Must be at least 0" });
+  if (
+    config.eventStore?.retentionMs !== undefined &&
+    config.eventStore.retentionMs < 0
+  ) {
+    issues.push({
+      path: "autonomy.eventStore.retentionMs",
+      message: "Must be at least 0",
+    });
   }
 
   // Validate invariants config
-  if (config.invariants?.checkTimeoutMs !== undefined && config.invariants.checkTimeoutMs < 100) {
-    issues.push({ path: "autonomy.invariants.checkTimeoutMs", message: "Must be at least 100" });
+  if (
+    config.invariants?.checkTimeoutMs !== undefined &&
+    config.invariants.checkTimeoutMs < 100
+  ) {
+    issues.push({
+      path: "autonomy.invariants.checkTimeoutMs",
+      message: "Must be at least 100",
+    });
   }
 
   // Validate roles config
-  if (config.roles?.planner?.maxPlanSteps !== undefined && config.roles.planner.maxPlanSteps < 1) {
-    issues.push({ path: "autonomy.roles.planner.maxPlanSteps", message: "Must be at least 1" });
+  if (
+    config.roles?.planner?.maxPlanSteps !== undefined &&
+    config.roles.planner.maxPlanSteps < 1
+  ) {
+    issues.push({
+      path: "autonomy.roles.planner.maxPlanSteps",
+      message: "Must be at least 1",
+    });
   }
-  if (config.roles?.safeMode?.errorThreshold !== undefined && config.roles.safeMode.errorThreshold < 1) {
-    issues.push({ path: "autonomy.roles.safeMode.errorThreshold", message: "Must be at least 1" });
+  if (
+    config.roles?.safeMode?.errorThreshold !== undefined &&
+    config.roles.safeMode.errorThreshold < 1
+  ) {
+    issues.push({
+      path: "autonomy.roles.safeMode.errorThreshold",
+      message: "Must be at least 1",
+    });
   }
   if (config.roles?.safeMode?.exitTrustFloor !== undefined) {
-    if (config.roles.safeMode.exitTrustFloor < 0 || config.roles.safeMode.exitTrustFloor > 1) {
-      issues.push({ path: "autonomy.roles.safeMode.exitTrustFloor", message: "Must be between 0 and 1" });
+    if (
+      config.roles.safeMode.exitTrustFloor < 0 ||
+      config.roles.safeMode.exitTrustFloor > 1
+    ) {
+      issues.push({
+        path: "autonomy.roles.safeMode.exitTrustFloor",
+        message: "Must be between 0 and 1",
+      });
     }
   }
-  if (config.roles?.orchestrator?.timeoutMs !== undefined && config.roles.orchestrator.timeoutMs < 1) {
-    issues.push({ path: "autonomy.roles.orchestrator.timeoutMs", message: "Must be at least 1" });
+  if (
+    config.roles?.orchestrator?.timeoutMs !== undefined &&
+    config.roles.orchestrator.timeoutMs < 1
+  ) {
+    issues.push({
+      path: "autonomy.roles.orchestrator.timeoutMs",
+      message: "Must be at least 1",
+    });
   }
-  if (config.roles?.orchestrator?.maxRetries !== undefined && config.roles.orchestrator.maxRetries < 0) {
-    issues.push({ path: "autonomy.roles.orchestrator.maxRetries", message: "Must be at least 0" });
+  if (
+    config.roles?.orchestrator?.maxRetries !== undefined &&
+    config.roles.orchestrator.maxRetries < 0
+  ) {
+    issues.push({
+      path: "autonomy.roles.orchestrator.maxRetries",
+      message: "Must be at least 0",
+    });
   }
-  if (config.roles?.orchestrator?.backoffMs !== undefined && config.roles.orchestrator.backoffMs < 0) {
-    issues.push({ path: "autonomy.roles.orchestrator.backoffMs", message: "Must be at least 0" });
+  if (
+    config.roles?.orchestrator?.backoffMs !== undefined &&
+    config.roles.orchestrator.backoffMs < 0
+  ) {
+    issues.push({
+      path: "autonomy.roles.orchestrator.backoffMs",
+      message: "Must be at least 0",
+    });
   }
   if (
     config.roles?.orchestrator?.circuitBreakerThreshold !== undefined &&
@@ -717,32 +890,65 @@ export function validateAutonomyConfig(
 
   // Validate learning config
   if (config.learning?.hackDetection?.threshold !== undefined) {
-    if (config.learning.hackDetection.threshold < 0 || config.learning.hackDetection.threshold > 1) {
-      issues.push({ path: "autonomy.learning.hackDetection.threshold", message: "Must be between 0 and 1" });
+    if (
+      config.learning.hackDetection.threshold < 0 ||
+      config.learning.hackDetection.threshold > 1
+    ) {
+      issues.push({
+        path: "autonomy.learning.hackDetection.threshold",
+        message: "Must be between 0 and 1",
+      });
     }
   }
   if (config.learning?.adversarial?.injectionRate !== undefined) {
-    if (config.learning.adversarial.injectionRate < 0 || config.learning.adversarial.injectionRate > 1) {
-      issues.push({ path: "autonomy.learning.adversarial.injectionRate", message: "Must be between 0 and 1" });
+    if (
+      config.learning.adversarial.injectionRate < 0 ||
+      config.learning.adversarial.injectionRate > 1
+    ) {
+      issues.push({
+        path: "autonomy.learning.adversarial.injectionRate",
+        message: "Must be between 0 and 1",
+      });
     }
   }
 
   // Validate domains config
-  if (config.domains?.governance?.defaultEventRetentionMs !== undefined && config.domains.governance.defaultEventRetentionMs < 0) {
-    issues.push({ path: "autonomy.domains.governance.defaultEventRetentionMs", message: "Must be non-negative" });
+  if (
+    config.domains?.governance?.defaultEventRetentionMs !== undefined &&
+    config.domains.governance.defaultEventRetentionMs < 0
+  ) {
+    issues.push({
+      path: "autonomy.domains.governance.defaultEventRetentionMs",
+      message: "Must be non-negative",
+    });
   }
-  if (config.domains?.governance?.defaultAuditRetentionMs !== undefined && config.domains.governance.defaultAuditRetentionMs < 0) {
-    issues.push({ path: "autonomy.domains.governance.defaultAuditRetentionMs", message: "Must be non-negative" });
+  if (
+    config.domains?.governance?.defaultAuditRetentionMs !== undefined &&
+    config.domains.governance.defaultAuditRetentionMs < 0
+  ) {
+    issues.push({
+      path: "autonomy.domains.governance.defaultAuditRetentionMs",
+      message: "Must be non-negative",
+    });
   }
-  if (config.domains?.pilot?.scenarioTimeoutMs !== undefined && config.domains.pilot.scenarioTimeoutMs < 1000) {
-    issues.push({ path: "autonomy.domains.pilot.scenarioTimeoutMs", message: "Must be at least 1000" });
+  if (
+    config.domains?.pilot?.scenarioTimeoutMs !== undefined &&
+    config.domains.pilot.scenarioTimeoutMs < 1000
+  ) {
+    issues.push({
+      path: "autonomy.domains.pilot.scenarioTimeoutMs",
+      message: "Must be at least 1000",
+    });
   }
 
   // Validate identity config if present (delegates to canonical validator)
   if (config.identity) {
     const identityIssues = validateAutonomyIdentity(config.identity);
     for (const issue of identityIssues) {
-      issues.push({ path: `autonomy.identity.${issue.field}`, message: issue.message });
+      issues.push({
+        path: `autonomy.identity.${issue.field}`,
+        message: issue.message,
+      });
     }
   }
 

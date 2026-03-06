@@ -40,9 +40,13 @@ export type PluginModuleImporter = (
 function looksLikePlugin(value: unknown): value is PluginLike {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Record<string, unknown>;
-  const hasCollections = ["actions", "providers", "services", "evaluators", "routes"].some((key) =>
-    Array.isArray(candidate[key]),
-  );
+  const hasCollections = [
+    "actions",
+    "providers",
+    "services",
+    "evaluators",
+    "routes",
+  ].some((key) => Array.isArray(candidate[key]));
   const hasInit = typeof candidate.init === "function";
   const hasTests = Array.isArray(candidate.tests);
   const hasConfig =
@@ -86,13 +90,14 @@ function toActionNames(actions: unknown): string[] {
       actions
         .map((action) => {
           if (!action || typeof action !== "object") return "";
-          const name =
-            typeof (action as Record<string, unknown>).name === "string"
-              ? (action as Record<string, unknown>).name
-              : "";
+          const actionRecord = action as Record<string, unknown>;
+          const rawName = actionRecord.name;
+          const name = typeof rawName === "string" ? rawName : "";
           return name.trim();
         })
-        .filter((name) => name.length > 0),
+        .filter(
+          (name): name is string => typeof name === "string" && name.length > 0,
+        ),
     ),
   ).sort((a, b) => a.localeCompare(b));
 }

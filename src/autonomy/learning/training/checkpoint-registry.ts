@@ -177,6 +177,10 @@ export class FileCheckpointRegistry extends InMemoryCheckpointRegistry {
       checkpoints: this.list().sort((a, b) => a.createdAt - b.createdAt),
     };
     mkdirSync(dirname(this.filePath), { recursive: true });
-    writeFileSync(this.filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+    writeFileSync(
+      this.filePath,
+      `${JSON.stringify(payload, null, 2)}\n`,
+      "utf8",
+    );
   }
 }

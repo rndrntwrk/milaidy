@@ -103,7 +103,11 @@ function inferDomain(relPath: string, frontmatter: Frontmatter): string {
   return DOMAIN_BY_DIRECTORY[first] ?? "knowledge";
 }
 
-function inferTitle(body: string, relPath: string, frontmatter: Frontmatter): string {
+function inferTitle(
+  body: string,
+  relPath: string,
+  frontmatter: Frontmatter,
+): string {
   const existing = frontmatter.title;
   if (typeof existing === "string" && existing.trim().length > 0) {
     return existing.trim();
@@ -231,7 +235,12 @@ function normalizeBody(body: string): string {
   return trimmedLeading.endsWith("\n") ? trimmedLeading : `${trimmedLeading}\n`;
 }
 
-function analyzeFrontmatter(relPath: string, frontmatter: Frontmatter, hasFrontmatter: boolean, parseError: string | null): FileAnalysis {
+function analyzeFrontmatter(
+  relPath: string,
+  frontmatter: Frontmatter,
+  hasFrontmatter: boolean,
+  parseError: string | null,
+): FileAnalysis {
   const missingKeys: string[] = [];
   const invalidKeys: string[] = [];
 
@@ -246,7 +255,11 @@ function analyzeFrontmatter(relPath: string, frontmatter: Frontmatter, hasFrontm
   const freshness = frontmatter.freshness_sla_days;
   if (
     freshness !== undefined &&
-    !(typeof freshness === "number" && Number.isFinite(freshness) && freshness > 0) &&
+    !(
+      typeof freshness === "number" &&
+      Number.isFinite(freshness) &&
+      freshness > 0
+    ) &&
     !(typeof freshness === "string" && Number.parseInt(freshness, 10) > 0)
   ) {
     invalidKeys.push("freshness_sla_days");
@@ -352,7 +365,9 @@ async function main(): Promise<void> {
           ? parsed.value.owner.trim()
           : "enoomian",
       status: normalizeStatus(parsed.value),
-      updated_at: isIsoDate(parsed.value.updated_at) ? parsed.value.updated_at : nowIso,
+      updated_at: isIsoDate(parsed.value.updated_at)
+        ? parsed.value.updated_at
+        : nowIso,
       freshness_sla_days: normalizeFreshness(parsed.value, domain),
       audience: normalizeAudience(parsed.value, domain),
       confidentiality: normalizeConfidentiality(parsed.value),
@@ -366,7 +381,9 @@ async function main(): Promise<void> {
     const optionalSet = new Set(OPTIONAL_KEY_ORDER);
     const remainingKeys = Object.keys(parsed.value)
       .filter((key) => !requiredSet.has(key as (typeof REQUIRED_KEYS)[number]))
-      .filter((key) => !optionalSet.has(key as (typeof OPTIONAL_KEY_ORDER)[number]))
+      .filter(
+        (key) => !optionalSet.has(key as (typeof OPTIONAL_KEY_ORDER)[number]),
+      )
       .sort((a, b) => a.localeCompare(b));
     for (const key of remainingKeys) {
       normalized[key] = parsed.value[key];
@@ -404,8 +421,10 @@ async function main(): Promise<void> {
       const reasons: string[] = [];
       if (!item.hasFrontmatter) reasons.push("missing_frontmatter");
       if (item.parseError) reasons.push(`parse_error:${item.parseError}`);
-      if (item.missingKeys.length) reasons.push(`missing_keys:${item.missingKeys.join(",")}`);
-      if (item.invalidKeys.length) reasons.push(`invalid_keys:${item.invalidKeys.join(",")}`);
+      if (item.missingKeys.length)
+        reasons.push(`missing_keys:${item.missingKeys.join(",")}`);
+      if (item.invalidKeys.length)
+        reasons.push(`invalid_keys:${item.invalidKeys.join(",")}`);
       if (reasons.length) failingFiles.push({ relPath: item.relPath, reasons });
     }
 
@@ -443,16 +462,24 @@ async function main(): Promise<void> {
   reportLines.push("## Scope");
   reportLines.push("");
   reportLines.push(`- Knowledge root: \`${knowledgeRoot}\``);
-  reportLines.push(`- Markdown documents analyzed: **${markdownFiles.length}**`);
-  reportLines.push(`- Run mode: **${write ? "write (auto-fix applied)" : "read-only"}**`);
+  reportLines.push(
+    `- Markdown documents analyzed: **${markdownFiles.length}**`,
+  );
+  reportLines.push(
+    `- Run mode: **${write ? "write (auto-fix applied)" : "read-only"}**`,
+  );
   reportLines.push("");
   reportLines.push("## Pre-Fix Compliance");
   reportLines.push("");
   reportLines.push(`- Pass: **${preSummary.passCount}/${preSummary.total}**`);
   reportLines.push(`- Missing frontmatter: **${preSummary.noFrontmatter}**`);
   reportLines.push(`- Parse errors: **${preSummary.parseErrors}**`);
-  reportLines.push(`- Missing required keys (per-file): **${preSummary.missingKeys}**`);
-  reportLines.push(`- Invalid key values (per-file): **${preSummary.invalidKeys}**`);
+  reportLines.push(
+    `- Missing required keys (per-file): **${preSummary.missingKeys}**`,
+  );
+  reportLines.push(
+    `- Invalid key values (per-file): **${preSummary.invalidKeys}**`,
+  );
   reportLines.push("- Status distribution:");
   for (const [status, count] of Object.entries(preSummary.statusCounts)) {
     reportLines.push(`  - \`${status}\`: ${count}`);
@@ -463,8 +490,12 @@ async function main(): Promise<void> {
   reportLines.push(`- Pass: **${postSummary.passCount}/${postSummary.total}**`);
   reportLines.push(`- Missing frontmatter: **${postSummary.noFrontmatter}**`);
   reportLines.push(`- Parse errors: **${postSummary.parseErrors}**`);
-  reportLines.push(`- Missing required keys (per-file): **${postSummary.missingKeys}**`);
-  reportLines.push(`- Invalid key values (per-file): **${postSummary.invalidKeys}**`);
+  reportLines.push(
+    `- Missing required keys (per-file): **${postSummary.missingKeys}**`,
+  );
+  reportLines.push(
+    `- Invalid key values (per-file): **${postSummary.invalidKeys}**`,
+  );
   reportLines.push("- Status distribution:");
   for (const [status, count] of Object.entries(postSummary.statusCounts)) {
     reportLines.push(`  - \`${status}\`: ${count}`);
@@ -483,11 +514,17 @@ async function main(): Promise<void> {
   reportLines.push("## Strict Seed-Readiness Verdict");
   reportLines.push("");
   if (postSummary.passCount === postSummary.total) {
-    reportLines.push("- **PASS**: all knowledge markdown files satisfy required seed metadata fields.");
+    reportLines.push(
+      "- **PASS**: all knowledge markdown files satisfy required seed metadata fields.",
+    );
   } else {
-    reportLines.push("- **FAIL**: unresolved metadata compliance issues remain.");
+    reportLines.push(
+      "- **FAIL**: unresolved metadata compliance issues remain.",
+    );
     for (const item of postSummary.failingFiles) {
-      reportLines.push(`  - \`${item.relPath}\` -> ${item.reasons.join(" | ")}`);
+      reportLines.push(
+        `  - \`${item.relPath}\` -> ${item.reasons.join(" | ")}`,
+      );
     }
   }
   reportLines.push("");

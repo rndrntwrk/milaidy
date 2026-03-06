@@ -9,8 +9,8 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { logger, type Plugin } from "@elizaos/core";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Plugin } from "@elizaos/core";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { findPluginExport } from "../cli/plugins-cli";
 import type { MiladyConfig } from "../config/config";
 import { CONNECTOR_PLUGINS } from "../config/plugin-auto-enable";
@@ -25,21 +25,24 @@ import {
   applyAliceFullDutyDefaults,
   applyCloudConfigToEnv,
   applyConnectorSecretsToEnv,
-  applyRuntimeSecretAliases,
   applyDatabaseConfigToEnv,
+  applyRuntimeSecretAliases,
   applyX402ConfigToEnv,
-  autoResolveDiscordAppId,
   buildCharacterFromConfig,
   CHANNEL_PLUGIN_MAP,
   CORE_PLUGINS,
   CUSTOM_PLUGINS_DIRNAME,
   collectPluginNames,
-  resolveFive55GithubPluginEnabled,
-  resolveFive55PluginEnabled,
-  isRecoverableRuntimeError,
+  deduplicatePluginActions,
+  findRuntimePluginExport,
+  isEnvKeyAllowedForForwarding,
   isPluginEntryEnabled,
+  isRecoverablePgliteInitError,
+  isRecoverableRuntimeError,
   mergeDropInPlugins,
   repairBrokenInstallRecord,
+  resolveFive55GithubPluginEnabled,
+  resolveFive55PluginEnabled,
   resolvePackageEntry,
   resolvePrimaryModel,
   scanDropInPlugins,
@@ -325,9 +328,9 @@ describe("collectPluginNames", () => {
       },
     } as unknown as MilaidyConfig;
     const names = collectPluginNames(config);
-    expect(
-      names.has("@elizaos/plugin-definitely-missing-plugin-zzzzzz"),
-    ).toBe(false);
+    expect(names.has("@elizaos/plugin-definitely-missing-plugin-zzzzzz")).toBe(
+      false,
+    );
   });
 
   it("maps plugins.entries.coding-agent to @milaidy/plugin-coding-agent", () => {
@@ -391,7 +394,8 @@ describe("collectPluginNames", () => {
 
       const envVars = (config.env?.vars ?? {}) as Record<string, string>;
       for (const [packageName, appEntry] of Object.entries(ALICE_APP_CATALOG)) {
-        const defaultUrl = appEntry.defaultPublicUrl ?? appEntry.defaultUpstreamUrl;
+        const defaultUrl =
+          appEntry.defaultPublicUrl ?? appEntry.defaultUpstreamUrl;
         const streamKey = resolveAppStreamEnvKey(packageName);
         const upstreamKey = resolveAppUpstreamEnvKey(packageName);
         const fallbackKey = resolveAppFallbackEnvKey(packageName);
@@ -444,7 +448,9 @@ describe("collectPluginNames", () => {
   });
 
   it("does not add ElizaCloud plugin when cloud is disabled in config", () => {
-    const config = { cloud: { enabled: false, apiKey: "ck-test" } } as MilaidyConfig;
+    const config = {
+      cloud: { enabled: false, apiKey: "ck-test" },
+    } as MilaidyConfig;
     const names = collectPluginNames(config);
     expect(names.has("@elizaos/plugin-elizacloud")).toBe(false);
   });
@@ -936,14 +942,16 @@ describe("applyCloudConfigToEnv", () => {
     expect(process.env.ELIZAOS_CLOUD_BASE_URL).toBe("https://cloud.test");
   });
 
-  it("clears stale cloud env values when cloud mode is disabled", () => {
+  it("keeps the cached cloud API key while disabling cloud routing", () => {
     process.env.ELIZAOS_CLOUD_ENABLED = "true";
     process.env.ELIZAOS_CLOUD_API_KEY = "old-key";
     process.env.ELIZAOS_CLOUD_BASE_URL = "https://old-cloud.test";
-    const config = { cloud: { enabled: false, apiKey: "new-key" } } as MilaidyConfig;
+    const config = {
+      cloud: { enabled: false, apiKey: "new-key" },
+    } as MilaidyConfig;
     applyCloudConfigToEnv(config);
     expect(process.env.ELIZAOS_CLOUD_ENABLED).toBeUndefined();
-    expect(process.env.ELIZAOS_CLOUD_API_KEY).toBeUndefined();
+    expect(process.env.ELIZAOS_CLOUD_API_KEY).toBe("new-key");
     expect(process.env.ELIZAOS_CLOUD_BASE_URL).toBeUndefined();
   });
 
@@ -1502,7 +1510,9 @@ describe("isRecoverableRuntimeError", () => {
 
   it("does not match generic coding errors", () => {
     expect(
-      isRecoverableRuntimeError(new Error("Cannot read properties of undefined")),
+      isRecoverableRuntimeError(
+        new Error("Cannot read properties of undefined"),
+      ),
     ).toBe(false);
   });
 });

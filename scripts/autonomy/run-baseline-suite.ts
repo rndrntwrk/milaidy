@@ -4,15 +4,15 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { InMemoryGoalManager } from "../../src/autonomy/goals/manager.js";
 import { RuleBasedDriftMonitor } from "../../src/autonomy/identity/drift-monitor.js";
+import { MemoryGateImpl } from "../../src/autonomy/memory/gate.js";
 import { FileBaselineHarness } from "../../src/autonomy/metrics/file-harness.js";
 import { KernelScenarioEvaluator } from "../../src/autonomy/metrics/kernel-evaluator.js";
 import { BUILTIN_SCENARIOS } from "../../src/autonomy/metrics/scenarios.js";
 import {
-  SOW_TARGETS,
   type BaselineMetrics,
   type MetricsDelta,
+  SOW_TARGETS,
 } from "../../src/autonomy/metrics/types.js";
-import { MemoryGateImpl } from "../../src/autonomy/memory/gate.js";
 import { RuleBasedTrustScorer } from "../../src/autonomy/trust/scorer.js";
 
 interface CliArgs {
@@ -47,7 +47,9 @@ function parseArgs(argv: string[]): CliArgs {
   const now = new Date().toISOString().replace(/[:.]/g, "-");
   return {
     outDir: resolve(args.get("out-dir") ?? "docs/ops/autonomy/reports"),
-    storeDir: resolve(args.get("store-dir") ?? "docs/ops/autonomy/reports/state"),
+    storeDir: resolve(
+      args.get("store-dir") ?? "docs/ops/autonomy/reports/state",
+    ),
     label: args.get("label") ?? `baseline-${now}`,
     agentId: args.get("agent-id") ?? "autonomy-baseline-agent",
     compareLabel: args.get("compare"),
@@ -69,7 +71,9 @@ function evaluateTargets(metrics: BaselineMetrics): Array<{
     met: boolean;
   }> = [];
 
-  for (const metric of Object.keys(SOW_TARGETS) as Array<keyof typeof SOW_TARGETS>) {
+  for (const metric of Object.keys(SOW_TARGETS) as Array<
+    keyof typeof SOW_TARGETS
+  >) {
     const target = SOW_TARGETS[metric];
     const value = metrics[metric];
     const met =
@@ -99,7 +103,9 @@ function renderReportMarkdown(input: {
   lines.push("");
   lines.push(`- Label: \`${input.label}\``);
   lines.push(`- Agent ID: \`${input.agentId}\``);
-  lines.push(`- Measured at: \`${new Date(input.metrics.measuredAt).toISOString()}\``);
+  lines.push(
+    `- Measured at: \`${new Date(input.metrics.measuredAt).toISOString()}\``,
+  );
   lines.push(`- Scenario count: \`${BUILTIN_SCENARIOS.length}\``);
   lines.push(`- Turn count: \`${input.metrics.turnCount}\``);
   lines.push("");
@@ -118,9 +124,13 @@ function renderReportMarkdown(input: {
     lines.push("## Baseline Delta");
     lines.push("");
     lines.push(`- Compared against: \`${input.compare.baselineLabel}\``);
-    lines.push(`- Overall improvement score: \`${input.compare.overallImprovement.toFixed(4)}\``);
+    lines.push(
+      `- Overall improvement score: \`${input.compare.overallImprovement.toFixed(4)}\``,
+    );
     lines.push("");
-    lines.push("| Metric | Baseline | Current | Delta | Direction | Target Met |");
+    lines.push(
+      "| Metric | Baseline | Current | Delta | Direction | Target Met |",
+    );
     lines.push("|---|---:|---:|---:|---|---|");
     for (const delta of input.compare.deltas) {
       lines.push(
@@ -132,9 +142,15 @@ function renderReportMarkdown(input: {
   lines.push("");
   lines.push("## Notes");
   lines.push("");
-  lines.push("- This report is generated from kernel component evaluations without LLM calls.");
-  lines.push("- Use repeated runs over a fixed window for stable baseline comparisons.");
-  lines.push("- Mark SOW tasks done only after attaching this artifact plus dashboard and alert evidence.");
+  lines.push(
+    "- This report is generated from kernel component evaluations without LLM calls.",
+  );
+  lines.push(
+    "- Use repeated runs over a fixed window for stable baseline comparisons.",
+  );
+  lines.push(
+    "- Mark SOW tasks done only after attaching this artifact plus dashboard and alert evidence.",
+  );
   lines.push("");
   return lines.join("\n");
 }

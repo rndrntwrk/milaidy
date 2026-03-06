@@ -78,14 +78,14 @@ vi.mock("../di/container.js", () => ({
   },
 }));
 
+import { metrics } from "../telemetry/setup.js";
+import { AUDITOR_DRIFT_REPORT_EVENT_TYPE } from "./roles/auditor.js";
 import {
   KERNEL_SAFE_MODE_TRANSITION_REQUEST_ID,
   KERNEL_STATE_TRANSITION_REQUEST_ID,
   MilaidyAutonomyService,
   setAutonomyConfig,
 } from "./service.js";
-import { AUDITOR_DRIFT_REPORT_EVENT_TYPE } from "./roles/auditor.js";
-import { metrics } from "../telemetry/setup.js";
 
 /** Minimal mock runtime for testing. */
 function createMockRuntime(
@@ -117,7 +117,9 @@ describe("MilaidyAutonomyService", () => {
     it("reads config set by setAutonomyConfig() (preferred path)", async () => {
       setAutonomyConfig({ enabled: true });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       expect(svc.isLoopRunning()).toBe(true);
       expect(svc.getTrustScorer()).not.toBeNull();
@@ -130,7 +132,9 @@ describe("MilaidyAutonomyService", () => {
       await MilaidyAutonomyService.start(runtime);
 
       // Second start without setAutonomyConfig — falls to defaults (disabled)
-      const svc2 = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc2 = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
       expect(svc2.isLoopRunning()).toBe(false);
     });
 
@@ -140,7 +144,9 @@ describe("MilaidyAutonomyService", () => {
         trust: { writeThreshold: 0.9 },
       });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       expect(svc.isLoopRunning()).toBe(true);
       // The scorer was created — we can't inspect its config directly,
@@ -154,7 +160,9 @@ describe("MilaidyAutonomyService", () => {
       const runtime = createMockRuntime({
         AUTONOMY_CONFIG: JSON.stringify({ enabled: false }),
       });
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       // Should use the preferred path (enabled)
       expect(svc.isLoopRunning()).toBe(true);
@@ -167,7 +175,9 @@ describe("MilaidyAutonomyService", () => {
       const runtime = createMockRuntime({
         AUTONOMY_CONFIG: JSON.stringify({ enabled: true }),
       });
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       expect(svc.isLoopRunning()).toBe(true);
     });
@@ -176,7 +186,9 @@ describe("MilaidyAutonomyService", () => {
       const runtime = createMockRuntime({
         AUTONOMY_CONFIG: "not-json{{{",
       });
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
       expect(svc.isLoopRunning()).toBe(false);
     });
   });
@@ -186,7 +198,9 @@ describe("MilaidyAutonomyService", () => {
   describe("start() — disabled", () => {
     it("returns a service with no components when autonomy is disabled", async () => {
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       expect(svc.isLoopRunning()).toBe(false);
       expect(svc.getTrustScorer()).toBeNull();
@@ -217,7 +231,9 @@ describe("MilaidyAutonomyService", () => {
     it("instantiates all components when enabled", async () => {
       setAutonomyConfig({ enabled: true });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       expect(svc.isLoopRunning()).toBe(true);
       expect(svc.getTrustScorer()).not.toBeNull();
@@ -249,27 +265,32 @@ describe("MilaidyAutonomyService", () => {
       const call = mockEmit.mock.calls.find(
         (c: unknown[]) => c[0] === "autonomy:kernel:initialized",
       );
-      expect(call![1].configIssues).toBeGreaterThan(0);
+      expect(call?.[1].configIssues).toBeGreaterThan(0);
     });
 
     it("registers synthesized contracts for runtime-only actions", async () => {
       setAutonomyConfig({ enabled: true });
-      const runtime = createMockRuntime({}, {
-        actions: [
-          {
-            name: "READ_RUNTIME_STATUS",
-            description: "Read runtime-only status",
-            parameters: [
-              {
-                name: "target",
-                required: true,
-                schema: { type: "string" },
-              },
-            ],
-          },
-        ],
-      });
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const runtime = createMockRuntime(
+        {},
+        {
+          actions: [
+            {
+              name: "READ_RUNTIME_STATUS",
+              description: "Read runtime-only status",
+              parameters: [
+                {
+                  name: "target",
+                  required: true,
+                  schema: { type: "string" },
+                },
+              ],
+            },
+          ],
+        },
+      );
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
       const pipeline = svc.getExecutionPipeline();
       if (!pipeline) {
         throw new Error("Expected execution pipeline");
@@ -316,13 +337,17 @@ describe("MilaidyAutonomyService", () => {
     it("registers all components in the DI container when enabled", async () => {
       setAutonomyConfig({ enabled: true });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       // 4 core + 3 tool contracts + 6 workflow + InvariantChecker + BaselineHarness + TrustAwareRetriever + 7 roles + PromptBuilder = 24
       expect(mockRegisterValue).toHaveBeenCalledTimes(24);
 
       // Verify the registered values are the same instances as the service's
-      const registeredTokens = mockRegisterValue.mock.calls.map((c: unknown[]) => c[0]);
+      const registeredTokens = mockRegisterValue.mock.calls.map(
+        (c: unknown[]) => c[0],
+      );
       expect(registeredTokens).toContain(Symbol.for("TrustScorer"));
       expect(registeredTokens).toContain(Symbol.for("MemoryGate"));
       expect(registeredTokens).toContain(Symbol.for("DriftMonitor"));
@@ -353,7 +378,7 @@ describe("MilaidyAutonomyService", () => {
       const goalManagerCall = mockRegisterValue.mock.calls.find(
         (c: unknown[]) => c[0] === Symbol.for("GoalManager"),
       );
-      expect(goalManagerCall![1]).toBe(svc.getGoalManager());
+      expect(goalManagerCall?.[1]).toBe(svc.getGoalManager());
     });
 
     it("registers learning components when learning is enabled", async () => {
@@ -363,7 +388,9 @@ describe("MilaidyAutonomyService", () => {
 
       // 24 (base) + 6 (learning: TraceCollector, HackDetector, RolloutCollector, ModelProvider, CheckpointManager, AdversarialGenerator) = 30
       expect(mockRegisterValue).toHaveBeenCalledTimes(30);
-      const registeredTokens = mockRegisterValue.mock.calls.map((c: unknown[]) => c[0]);
+      const registeredTokens = mockRegisterValue.mock.calls.map(
+        (c: unknown[]) => c[0],
+      );
       expect(registeredTokens).toContain(Symbol.for("TraceCollector"));
       expect(registeredTokens).toContain(Symbol.for("HackDetector"));
       expect(registeredTokens).toContain(Symbol.for("RolloutCollector"));
@@ -378,7 +405,9 @@ describe("MilaidyAutonomyService", () => {
   describe("AutonomyServiceLike interface", () => {
     it("enableAutonomy() creates components and sets running", async () => {
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       expect(svc.isLoopRunning()).toBe(false);
       await svc.enableAutonomy();
@@ -388,20 +417,28 @@ describe("MilaidyAutonomyService", () => {
 
     it("enableAutonomy() initializes identity config", async () => {
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       expect(svc.getIdentityConfig()).toBeNull();
       await svc.enableAutonomy();
       const identity = svc.getIdentityConfig();
       expect(identity).not.toBeNull();
-      expect(identity!.coreValues).toEqual(["helpfulness", "honesty", "safety"]);
-      expect(identity!.identityVersion).toBe(1);
+      expect(identity?.coreValues).toEqual([
+        "helpfulness",
+        "honesty",
+        "safety",
+      ]);
+      expect(identity?.identityVersion).toBe(1);
     });
 
     it("enableAutonomy() is idempotent", async () => {
       setAutonomyConfig({ enabled: true });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
       const gm = svc.getGoalManager();
 
       await svc.enableAutonomy();
@@ -411,7 +448,9 @@ describe("MilaidyAutonomyService", () => {
     it("disableAutonomy() tears down components", async () => {
       setAutonomyConfig({ enabled: true });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       await svc.disableAutonomy();
       expect(svc.isLoopRunning()).toBe(false);
@@ -421,7 +460,9 @@ describe("MilaidyAutonomyService", () => {
 
     it("disableAutonomy() is safe when already disabled", async () => {
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       await expect(svc.disableAutonomy()).resolves.toBeUndefined();
     });
@@ -433,7 +474,9 @@ describe("MilaidyAutonomyService", () => {
     it("disposes components and emits shutdown event", async () => {
       setAutonomyConfig({ enabled: true });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
       mockEmit.mockClear();
 
       await svc.stop();
@@ -450,7 +493,9 @@ describe("MilaidyAutonomyService", () => {
 
     it("is safe to call when not enabled", async () => {
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       await expect(svc.stop()).resolves.toBeUndefined();
     });
@@ -462,41 +507,55 @@ describe("MilaidyAutonomyService", () => {
     it("initializes default identity when enabled", async () => {
       setAutonomyConfig({ enabled: true });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       const identity = svc.getIdentityConfig();
       expect(identity).not.toBeNull();
-      expect(identity!.coreValues).toEqual(["helpfulness", "honesty", "safety"]);
-      expect(identity!.identityVersion).toBe(1);
-      expect(identity!.identityHash).toBeDefined();
+      expect(identity?.coreValues).toEqual([
+        "helpfulness",
+        "honesty",
+        "safety",
+      ]);
+      expect(identity?.identityVersion).toBe(1);
+      expect(identity?.identityHash).toBeDefined();
     });
 
     it("returns null identity when disabled", async () => {
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       expect(svc.getIdentityConfig()).toBeNull();
     });
 
     it("uses config-provided identity", async () => {
-      const { createDefaultAutonomyIdentity } = await import("./identity/schema.js");
+      const { createDefaultAutonomyIdentity } = await import(
+        "./identity/schema.js"
+      );
       const identity = createDefaultAutonomyIdentity();
       identity.coreValues = ["custom-value"];
       identity.identityVersion = 5;
 
       setAutonomyConfig({ enabled: true, identity });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       const result = svc.getIdentityConfig();
-      expect(result!.coreValues).toEqual(["custom-value"]);
-      expect(result!.identityVersion).toBe(5);
+      expect(result?.coreValues).toEqual(["custom-value"]);
+      expect(result?.identityVersion).toBe(5);
     });
 
     it("getIdentityConfig returns a copy", async () => {
       setAutonomyConfig({ enabled: true });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       const a = svc.getIdentityConfig();
       const b = svc.getIdentityConfig();
@@ -507,9 +566,14 @@ describe("MilaidyAutonomyService", () => {
     it("updateIdentityConfig increments version and recomputes hash", async () => {
       setAutonomyConfig({ enabled: true });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
-      const original = svc.getIdentityConfig()!;
+      const original = svc.getIdentityConfig();
+      if (!original) {
+        throw new Error("Expected identity config");
+      }
       const updated = await svc.updateIdentityConfig({
         coreValues: ["helpfulness", "honesty", "safety", "transparency"],
       });
@@ -522,7 +586,9 @@ describe("MilaidyAutonomyService", () => {
     it("updateIdentityConfig emits identity mutation audit event and telemetry", async () => {
       setAutonomyConfig({ enabled: true });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
       mockEmit.mockClear();
       const before = metrics.getSnapshot();
 
@@ -539,15 +605,21 @@ describe("MilaidyAutonomyService", () => {
       );
 
       const after = metrics.getSnapshot();
-      const sumCounter = (snapshot: ReturnType<typeof metrics.getSnapshot>, name: string) =>
+      const sumCounter = (
+        snapshot: ReturnType<typeof metrics.getSnapshot>,
+        name: string,
+      ) =>
         Object.entries(snapshot.counters)
           .filter(([key]) => key === name || key.startsWith(`${name}:{`))
-          .reduce((acc, [, value]) => acc + (typeof value === "number" ? value : 0), 0);
+          .reduce(
+            (acc, [, value]) => acc + (typeof value === "number" ? value : 0),
+            0,
+          );
       expect(
         sumCounter(after, "autonomy_identity_updates_total") -
           sumCounter(before, "autonomy_identity_updates_total"),
       ).toBe(1);
-      expect(after.counters["autonomy_identity_version"]).toBe(
+      expect(after.counters.autonomy_identity_version).toBe(
         updated.identityVersion,
       );
     });
@@ -555,9 +627,14 @@ describe("MilaidyAutonomyService", () => {
     it("updateIdentityConfig merges communicationStyle partially", async () => {
       setAutonomyConfig({ enabled: true });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
-      const original = svc.getIdentityConfig()!;
+      const original = svc.getIdentityConfig();
+      if (!original) {
+        throw new Error("Expected identity config");
+      }
       const updated = await svc.updateIdentityConfig({
         communicationStyle: { tone: "formal" } as any,
       });
@@ -565,14 +642,20 @@ describe("MilaidyAutonomyService", () => {
       // Tone changed
       expect(updated.communicationStyle.tone).toBe("formal");
       // Verbosity and personaVoice preserved from original
-      expect(updated.communicationStyle.verbosity).toBe(original.communicationStyle.verbosity);
-      expect(updated.communicationStyle.personaVoice).toBe(original.communicationStyle.personaVoice);
+      expect(updated.communicationStyle.verbosity).toBe(
+        original.communicationStyle.verbosity,
+      );
+      expect(updated.communicationStyle.personaVoice).toBe(
+        original.communicationStyle.personaVoice,
+      );
     });
 
     it("updateIdentityConfig validates and rejects invalid updates", async () => {
       setAutonomyConfig({ enabled: true });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       await expect(
         svc.updateIdentityConfig({ coreValues: [] }),
@@ -582,7 +665,9 @@ describe("MilaidyAutonomyService", () => {
     it("updateIdentityConfig enforces approval policy for high-risk api updates", async () => {
       setAutonomyConfig({ enabled: true });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       await expect(
         svc.updateIdentityConfig(
@@ -598,7 +683,9 @@ describe("MilaidyAutonomyService", () => {
     it("updateIdentityConfig accepts high-risk api updates with approval metadata", async () => {
       setAutonomyConfig({ enabled: true });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
       mockEmit.mockClear();
 
       const updated = await svc.updateIdentityConfig(
@@ -630,7 +717,9 @@ describe("MilaidyAutonomyService", () => {
     it("updateIdentityConfig rejects direct identityVersion mutation attempts", async () => {
       setAutonomyConfig({ enabled: true });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       await expect(
         svc.updateIdentityConfig({ identityVersion: 99 } as any),
@@ -639,7 +728,9 @@ describe("MilaidyAutonomyService", () => {
 
     it("updateIdentityConfig creates default identity if none exists", async () => {
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       // Service is disabled, identity is null
       const updated = await svc.updateIdentityConfig({
@@ -653,7 +744,9 @@ describe("MilaidyAutonomyService", () => {
     it("nulls out identity on stop", async () => {
       setAutonomyConfig({ enabled: true });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       expect(svc.getIdentityConfig()).not.toBeNull();
       await svc.stop();
@@ -663,7 +756,9 @@ describe("MilaidyAutonomyService", () => {
     it("nulls out identity on disableAutonomy", async () => {
       setAutonomyConfig({ enabled: true });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       expect(svc.getIdentityConfig()).not.toBeNull();
       await svc.disableAutonomy();
@@ -677,28 +772,34 @@ describe("MilaidyAutonomyService", () => {
     it("returns real TrustScorer when enabled", async () => {
       setAutonomyConfig({ enabled: true });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
       const scorer = svc.getTrustScorer();
 
       expect(scorer).toBeDefined();
-      expect(typeof scorer!.score).toBe("function");
+      expect(typeof scorer?.score).toBe("function");
     });
 
     it("returns real GoalManager when enabled", async () => {
       setAutonomyConfig({ enabled: true });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
       const gm = svc.getGoalManager();
 
       expect(gm).toBeDefined();
-      expect(typeof gm!.addGoal).toBe("function");
-      expect(typeof gm!.updateGoal).toBe("function");
+      expect(typeof gm?.addGoal).toBe("function");
+      expect(typeof gm?.updateGoal).toBe("function");
     });
 
     it("returns role accessors when enabled", async () => {
       setAutonomyConfig({ enabled: true });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       expect(svc.getPlanner()).not.toBeNull();
       expect(svc.getExecutor()).not.toBeNull();
@@ -711,7 +812,9 @@ describe("MilaidyAutonomyService", () => {
 
     it("returns null role accessors when disabled", async () => {
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       expect(svc.getPlanner()).toBeNull();
       expect(svc.getExecutor()).toBeNull();
@@ -725,7 +828,9 @@ describe("MilaidyAutonomyService", () => {
     it("reports all role health checks as ready when enabled", async () => {
       setAutonomyConfig({ enabled: true });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       const snapshot = svc.getRoleHealth();
       expect(snapshot.summary.ready).toBe(true);
@@ -739,7 +844,9 @@ describe("MilaidyAutonomyService", () => {
 
     it("reports role readiness as false when autonomy is disabled", async () => {
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       const snapshot = svc.getRoleHealth();
       expect(snapshot.summary.ready).toBe(false);
@@ -752,7 +859,9 @@ describe("MilaidyAutonomyService", () => {
     it("persists kernel state and safe-mode transitions to the event store", async () => {
       setAutonomyConfig({ enabled: true });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
       const stateMachine = svc.getStateMachine();
       const eventStore = svc.getEventStore();
       if (!stateMachine || !eventStore) {
@@ -805,7 +914,9 @@ describe("MilaidyAutonomyService", () => {
     it("persists drift reports generated by the auditor", async () => {
       setAutonomyConfig({ enabled: true });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
       const auditor = svc.getAuditor();
       const eventStore = svc.getEventStore();
       const identity = svc.getIdentityConfig();
@@ -838,7 +949,9 @@ describe("MilaidyAutonomyService", () => {
     it("returns learning accessors when learning enabled", async () => {
       setAutonomyConfig({ enabled: true, learning: { enabled: true } });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       expect(svc.getTraceCollector()).not.toBeNull();
       expect(svc.getHackDetector()).not.toBeNull();
@@ -852,7 +965,9 @@ describe("MilaidyAutonomyService", () => {
     it("returns null learning accessors when learning disabled", async () => {
       setAutonomyConfig({ enabled: true });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       expect(svc.getTraceCollector()).toBeNull();
       expect(svc.getHackDetector()).toBeNull();
@@ -867,7 +982,9 @@ describe("MilaidyAutonomyService", () => {
     it("returns domain accessors when domains enabled", async () => {
       setAutonomyConfig({ enabled: true, domains: { enabled: true } });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       expect(svc.getDomainPackRegistry()).not.toBeNull();
       expect(svc.getPolicyEngine()).not.toBeNull();
@@ -878,7 +995,9 @@ describe("MilaidyAutonomyService", () => {
     it("returns null domain accessors when domains disabled", async () => {
       setAutonomyConfig({ enabled: true });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
 
       expect(svc.getDomainPackRegistry()).toBeNull();
       expect(svc.getPolicyEngine()).toBeNull();
@@ -889,8 +1008,13 @@ describe("MilaidyAutonomyService", () => {
     it("GoalManager can create and retrieve goals", async () => {
       setAutonomyConfig({ enabled: true });
       const runtime = createMockRuntime();
-      const svc = (await MilaidyAutonomyService.start(runtime)) as MilaidyAutonomyService;
-      const gm = svc.getGoalManager()!;
+      const svc = (await MilaidyAutonomyService.start(
+        runtime,
+      )) as MilaidyAutonomyService;
+      const gm = svc.getGoalManager();
+      if (!gm) {
+        throw new Error("Expected goal manager");
+      }
 
       const goal = await gm.addGoal({
         description: "Test goal",

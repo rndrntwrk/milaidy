@@ -69,7 +69,10 @@ function parseKey(key: string): { name: string; labels: string } {
  * Escape a Prometheus label value.
  */
 function escapeLabel(value: string): string {
-  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n");
 }
 
 /**
@@ -107,13 +110,19 @@ export function exportPrometheusText(
     }
 
     const labelSuffix = labels
-      ? labels.slice(0, -1) + "," // Remove closing }, add comma
+      ? `${labels.slice(0, -1)},` // Remove closing }, add comma
       : "{";
     const closeBrace = "}";
 
-    lines.push(`${fullName}${labelSuffix}quantile="0.5"${closeBrace} ${stats.p50}`);
-    lines.push(`${fullName}${labelSuffix}quantile="0.95"${closeBrace} ${stats.p95}`);
-    lines.push(`${fullName}${labelSuffix}quantile="0.99"${closeBrace} ${stats.p99}`);
+    lines.push(
+      `${fullName}${labelSuffix}quantile="0.5"${closeBrace} ${stats.p50}`,
+    );
+    lines.push(
+      `${fullName}${labelSuffix}quantile="0.95"${closeBrace} ${stats.p95}`,
+    );
+    lines.push(
+      `${fullName}${labelSuffix}quantile="0.99"${closeBrace} ${stats.p99}`,
+    );
     lines.push(`${fullName}_count${labels} ${stats.count}`);
     lines.push(`${fullName}_min${labels} ${stats.min}`);
     lines.push(`${fullName}_max${labels} ${stats.max}`);

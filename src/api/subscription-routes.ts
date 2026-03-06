@@ -77,7 +77,7 @@ export async function handleSubscriptionRoutes(
       // Submit the code and wait for credentials
       flow.submitCode(body.code);
       const credentials = await flow.credentials;
-      saveCredentials("anthropic-subscription", credentials);
+      await saveCredentials("anthropic-subscription", credentials);
       await applySubscriptionCredentials(state.config);
       delete state._anthropicFlow;
       json(res, { success: true, expiresAt: credentials.expires });
@@ -217,7 +217,7 @@ export async function handleSubscriptionRoutes(
         error(res, "OpenAI exchange failed", 500);
         return true;
       }
-      saveCredentials("openai-codex", credentials);
+      await saveCredentials("openai-codex", credentials);
       await applySubscriptionCredentials(state.config);
       flow.close();
       delete state._codexFlow;
@@ -243,7 +243,7 @@ export async function handleSubscriptionRoutes(
     if (provider === "anthropic-subscription" || provider === "openai-codex") {
       try {
         const { deleteCredentials } = await import("../auth/index");
-        deleteCredentials(provider);
+        await deleteCredentials(provider);
         json(res, { success: true });
       } catch (err) {
         logger.error(

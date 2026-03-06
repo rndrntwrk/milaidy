@@ -24,9 +24,13 @@ describe("buildOpenApiSpec", () => {
     expect(paths["/api/agent/autonomy/roles/readiness"]).toBeDefined();
     expect(paths["/api/agent/autonomy/workflows/start"]).toBeDefined();
     expect(paths["/api/agent/autonomy/workflows/dead-letters"]).toBeDefined();
-    expect(paths["/api/agent/autonomy/workflows/dead-letters/clear"]).toBeDefined();
+    expect(
+      paths["/api/agent/autonomy/workflows/dead-letters/clear"],
+    ).toBeDefined();
     expect(paths["/api/agent/autonomy/workflows/{executionId}"]).toBeDefined();
-    expect(paths["/api/agent/autonomy/workflows/{executionId}/cancel"]).toBeDefined();
+    expect(
+      paths["/api/agent/autonomy/workflows/{executionId}/cancel"],
+    ).toBeDefined();
     expect(paths["/api/agent/autonomy/audit/summary"]).toBeDefined();
     expect(paths["/api/agent/autonomy/audit/export"]).toBeDefined();
     expect(paths["/api/agent/autonomy/audit/export-expired"]).toBeDefined();
@@ -40,8 +44,14 @@ describe("buildOpenApiSpec", () => {
     expect(paths["/api/arcade555/mastery/runs/{runId}/episodes"]).toBeDefined();
     expect(paths["/api/arcade555/mastery/runs/{runId}/logs"]).toBeDefined();
     expect(paths["/api/arcade555/mastery/runs/{runId}/evidence"]).toBeDefined();
-    expect(paths["/api/arcade555/mastery/runs/{runId}/episodes/{episodeId}/frames"]).toBeDefined();
-    expect(paths["/api/arcade555/mastery/runs/{runId}/episodes/{episodeId}/consistency"]).toBeDefined();
+    expect(
+      paths["/api/arcade555/mastery/runs/{runId}/episodes/{episodeId}/frames"],
+    ).toBeDefined();
+    expect(
+      paths[
+        "/api/arcade555/mastery/runs/{runId}/episodes/{episodeId}/consistency"
+      ],
+    ).toBeDefined();
     expect(paths["/api/arcade555/mastery/games/{gameId}/latest"]).toBeDefined();
     expect(paths["/api/five55/mastery/catalog"]).toBeUndefined();
     expect(paths["/metrics"]).toBeDefined();
@@ -50,7 +60,10 @@ describe("buildOpenApiSpec", () => {
   it("includes deprecated legacy arcade mastery aliases when compatibility mode is enabled", () => {
     process.env.ARCADE555_ENABLE_LEGACY_HTTP_ALIASES = "true";
     const spec = buildOpenApiSpec();
-    const paths = spec.paths as Record<string, Record<string, { deprecated?: boolean }>>;
+    const paths = spec.paths as Record<
+      string,
+      Record<string, { deprecated?: boolean }>
+    >;
     expect(paths["/api/five55/mastery/catalog"]).toBeDefined();
     expect(paths["/api/five55/mastery/catalog"]?.get?.deprecated).toBe(true);
     delete process.env.ARCADE555_ENABLE_LEGACY_HTTP_ALIASES;
@@ -58,7 +71,10 @@ describe("buildOpenApiSpec", () => {
 
   it("includes component schemas", () => {
     const spec = buildOpenApiSpec();
-    const components = spec.components as Record<string, Record<string, unknown>>;
+    const components = spec.components as Record<
+      string,
+      Record<string, unknown>
+    >;
     expect(components.schemas.Identity).toBeDefined();
     expect(components.schemas.ApprovalRequest).toBeDefined();
     expect(components.schemas.Error).toBeDefined();
@@ -79,7 +95,10 @@ describe("buildOpenApiSpec", () => {
 
   it("identity schema has required fields", () => {
     const spec = buildOpenApiSpec();
-    const components = spec.components as Record<string, Record<string, Record<string, unknown>>>;
+    const components = spec.components as Record<
+      string,
+      Record<string, Record<string, unknown>>
+    >;
     const identity = components.schemas.Identity;
     const props = identity.properties as Record<string, unknown>;
     expect(props.name).toBeDefined();

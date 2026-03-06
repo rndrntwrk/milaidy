@@ -226,7 +226,7 @@ describe("DriftAwareAuditor", () => {
       ]);
       const auditor = new DriftAwareAuditor(dm, es);
 
-      const events = await auditor.queryEvents("req-42");
+      const _events = await auditor.queryEvents("req-42");
       expect(es.getByRequestId).toHaveBeenCalledWith("req-42");
     });
   });

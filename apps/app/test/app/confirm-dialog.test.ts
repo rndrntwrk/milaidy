@@ -28,7 +28,7 @@ describe("ConfirmDialog", () => {
       );
     });
 
-    expect(tree!.toJSON()).toBeNull();
+    expect(tree?.toJSON()).toBeNull();
   });
 
   it("renders title and message when open", async () => {
@@ -39,7 +39,10 @@ describe("ConfirmDialog", () => {
       );
     });
 
-    const text = readAllText(tree!);
+    if (!tree) {
+      throw new Error("ConfirmDialog did not render");
+    }
+    const text = readAllText(tree);
     expect(text).toContain("Delete item?");
     expect(text).toContain("This cannot be undone.");
   });
@@ -49,19 +52,25 @@ describe("ConfirmDialog", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(ConfirmDialog, { ...baseProps, open: true, onConfirm }),
+        React.createElement(ConfirmDialog, {
+          ...baseProps,
+          open: true,
+          onConfirm,
+        }),
       );
     });
 
     // Find the Confirm button (second button in footer)
-    const buttons = tree!.root.findAllByType("button");
+    const buttons = tree?.root.findAllByType("button");
     const confirmBtn = buttons.find((b) =>
-      (b.children as string[]).some((c) => typeof c === "string" && c === "Confirm"),
+      (b.children as string[]).some(
+        (c) => typeof c === "string" && c === "Confirm",
+      ),
     );
     expect(confirmBtn).toBeDefined();
 
     await act(async () => {
-      confirmBtn!.props.onClick();
+      confirmBtn?.props.onClick();
     });
 
     expect(onConfirm).toHaveBeenCalledOnce();
@@ -72,18 +81,24 @@ describe("ConfirmDialog", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(ConfirmDialog, { ...baseProps, open: true, onCancel }),
+        React.createElement(ConfirmDialog, {
+          ...baseProps,
+          open: true,
+          onCancel,
+        }),
       );
     });
 
-    const buttons = tree!.root.findAllByType("button");
+    const buttons = tree?.root.findAllByType("button");
     const cancelBtn = buttons.find((b) =>
-      (b.children as string[]).some((c) => typeof c === "string" && c === "Cancel"),
+      (b.children as string[]).some(
+        (c) => typeof c === "string" && c === "Cancel",
+      ),
     );
     expect(cancelBtn).toBeDefined();
 
     await act(async () => {
-      cancelBtn!.props.onClick();
+      cancelBtn?.props.onClick();
     });
 
     expect(onCancel).toHaveBeenCalledOnce();
@@ -93,15 +108,21 @@ describe("ConfirmDialog", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(ConfirmDialog, { ...baseProps, open: true, tone: "danger" }),
+        React.createElement(ConfirmDialog, {
+          ...baseProps,
+          open: true,
+          tone: "danger",
+        }),
       );
     });
 
-    const buttons = tree!.root.findAllByType("button");
+    const buttons = tree?.root.findAllByType("button");
     const confirmBtn = buttons.find((b) =>
-      (b.children as string[]).some((c) => typeof c === "string" && c === "Confirm"),
+      (b.children as string[]).some(
+        (c) => typeof c === "string" && c === "Confirm",
+      ),
     );
-    expect(confirmBtn!.props.className).toContain("bg-danger");
+    expect(confirmBtn?.props.className).toContain("bg-danger");
   });
 
   it("title has unique id from useId (not hardcoded)", async () => {
@@ -112,12 +133,12 @@ describe("ConfirmDialog", () => {
       );
     });
 
-    const heading = tree!.root.findByType("h2");
+    const heading = tree?.root.findByType("h2");
     expect(heading.props.id).toBeDefined();
     expect(heading.props.id).not.toBe("confirm-dialog-title");
 
     // The dialog's aria-labelledby should match the heading id
-    const dialog = tree!.root.findByProps({ role: "dialog" });
+    const dialog = tree?.root.findByProps({ role: "dialog" });
     expect(dialog.props["aria-labelledby"]).toBe(heading.props.id);
   });
 });

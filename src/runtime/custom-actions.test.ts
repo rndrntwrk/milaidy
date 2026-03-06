@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import { ToolRegistry } from "../autonomy/tools/registry.js";
 import { customActionPostConditions } from "../autonomy/verification/postconditions/custom-action.postcondition.js";
 import type { CustomActionDef } from "../config/types.milaidy.js";
-import { registerCustomActionLive, setCustomActionsRuntime } from "./custom-actions.js";
+import {
+  registerCustomActionLive,
+  setCustomActionsRuntime,
+} from "./custom-actions.js";
 
 function makeDef(overrides: Partial<CustomActionDef> = {}): CustomActionDef {
   return {
@@ -94,4 +97,3 @@ describe("registerCustomActionLive", () => {
     expect(runtime.registerAction).toHaveBeenCalledTimes(1);
   });
 });
-

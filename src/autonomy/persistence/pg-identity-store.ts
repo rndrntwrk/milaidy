@@ -44,7 +44,9 @@ export class PgIdentityStore implements IdentityStoreInterface {
     this.adapter = adapter;
   }
 
-  async saveVersion(identity: AutonomyIdentityConfig): Promise<IdentityVersionEntry> {
+  async saveVersion(
+    identity: AutonomyIdentityConfig,
+  ): Promise<IdentityVersionEntry> {
     const agentId = this.adapter.agentId;
     const hash = computeIdentityHash(identity);
     const version = identity.identityVersion;
@@ -63,7 +65,9 @@ export class PgIdentityStore implements IdentityStoreInterface {
     );
 
     const entry = rowToEntry(rows[0]);
-    logger.info(`[autonomy:identity-store] Saved identity v${version} for ${agentId}`);
+    logger.info(
+      `[autonomy:identity-store] Saved identity v${version} for ${agentId}`,
+    );
     return entry;
   }
 
@@ -106,7 +110,7 @@ function esc(value: string): string {
 function rowToEntry(row: Record<string, unknown>): IdentityVersionEntry {
   return {
     version: Number(row.version ?? 0),
-    identity: parseJsonb(row.identity) as AutonomyIdentityConfig,
+    identity: parseJsonb(row.identity) as unknown as AutonomyIdentityConfig,
     hash: String(row.hash ?? ""),
     agentId: String(row.agent_id ?? ""),
     active: Boolean(row.active),
@@ -117,7 +121,11 @@ function rowToEntry(row: Record<string, unknown>): IdentityVersionEntry {
 function parseJsonb(value: unknown): Record<string, unknown> {
   if (value === null || value === undefined) return {};
   if (typeof value === "string") {
-    try { return JSON.parse(value); } catch { return {}; }
+    try {
+      return JSON.parse(value);
+    } catch {
+      return {};
+    }
   }
   return value as Record<string, unknown>;
 }

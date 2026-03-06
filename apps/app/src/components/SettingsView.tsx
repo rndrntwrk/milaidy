@@ -100,6 +100,7 @@ export function Modal({
   title: string;
   children: React.ReactNode;
 }) {
+  if (!open) return null;
   const titleId = `modal-${title.toLowerCase().replace(/\s+/g, "-")}`;
   return (
     <div
@@ -118,7 +119,9 @@ export function Modal({
     >
       <div className="w-full max-w-md border border-border bg-card p-5 shadow-2xl rounded-lg">
         <div className="flex items-center justify-between mb-4">
-          <div id={titleId} className="font-bold text-sm">{title}</div>
+          <div id={titleId} className="font-bold text-sm">
+            {title}
+          </div>
           <button
             type="button"
             className="text-muted hover:text-txt text-lg leading-none px-2 py-1 rounded-md hover:bg-bg-hover transition-colors"

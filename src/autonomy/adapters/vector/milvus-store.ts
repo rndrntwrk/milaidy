@@ -6,7 +6,12 @@
  * @module autonomy/adapters/vector/milvus-store
  */
 
-import type { VectorStore, VectorDocument, VectorSearchResult, MilvusConfig } from "./types.js";
+import type {
+  MilvusConfig,
+  VectorDocument,
+  VectorSearchResult,
+  VectorStore,
+} from "./types.js";
 
 /**
  * Milvus-backed vector store stub.
@@ -16,8 +21,8 @@ import type { VectorStore, VectorDocument, VectorSearchResult, MilvusConfig } fr
  * and a running Milvus server.
  */
 export class MilvusVectorStore implements VectorStore {
-  private client: unknown;
   private readonly config: MilvusConfig;
+  private client: unknown;
 
   constructor(config: MilvusConfig) {
     this.config = config;
@@ -38,27 +43,42 @@ export class MilvusVectorStore implements VectorStore {
     //   collection_name: this.config.collection,
     //   data: documents.map(d => ({ id: d.id, vector: d.vector, ...d.metadata })),
     // });
-    throw new Error("MilvusVectorStore.upsert() is a stub. Configure a running Milvus server.");
+    throw new Error(
+      `MilvusVectorStore.upsert() is a stub for collection "${this.config.collection}". Configure a running Milvus server.`,
+    );
   }
 
-  async search(_vector: number[], _topK: number): Promise<VectorSearchResult[]> {
-    throw new Error("MilvusVectorStore.search() is a stub. Configure a running Milvus server.");
+  async search(
+    _vector: number[],
+    _topK: number,
+  ): Promise<VectorSearchResult[]> {
+    throw new Error(
+      "MilvusVectorStore.search() is a stub. Configure a running Milvus server.",
+    );
   }
 
   async delete(_ids: string[]): Promise<void> {
-    throw new Error("MilvusVectorStore.delete() is a stub. Configure a running Milvus server.");
+    throw new Error(
+      "MilvusVectorStore.delete() is a stub. Configure a running Milvus server.",
+    );
   }
 
   async get(_id: string): Promise<VectorDocument | undefined> {
-    throw new Error("MilvusVectorStore.get() is a stub. Configure a running Milvus server.");
+    throw new Error(
+      "MilvusVectorStore.get() is a stub. Configure a running Milvus server.",
+    );
   }
 
   async count(): Promise<number> {
-    throw new Error("MilvusVectorStore.count() is a stub. Configure a running Milvus server.");
+    throw new Error(
+      "MilvusVectorStore.count() is a stub. Configure a running Milvus server.",
+    );
   }
 
   async close(): Promise<void> {
     // Release client resources if connected
-    this.client = null;
+    if (this.client) {
+      this.client = null;
+    }
   }
 }

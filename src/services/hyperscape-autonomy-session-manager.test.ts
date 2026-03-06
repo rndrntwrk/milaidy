@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { IAgentRuntime } from "@elizaos/core";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   HyperscapeAutonomySessionManager,
-  resolveHyperscapeAutonomyEnabled,
   resolveDefaultHyperscapeAutonomyAgentId,
+  resolveHyperscapeAutonomyEnabled,
 } from "./hyperscape-autonomy-session-manager.js";
 
 const HYPERSCAPE_BASE_URL = "https://hyperscape.example";
@@ -57,62 +57,66 @@ describe("HyperscapeAutonomySessionManager", () => {
     const events: string[] = [];
     let listCalls = 0;
 
-    global.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-      const target = new URL(String(input), HYPERSCAPE_BASE_URL);
-      const method =
-        init?.method?.toUpperCase() ||
-        (input instanceof Request ? input.method.toUpperCase() : "GET");
-      if (target.pathname === "/api/agents/wallet-auth") {
-        return jsonResponse({
-          success: true,
-          authToken: "auth-token-1",
-          characterId: "char-1",
-          data: { expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() },
-        });
-      }
-      if (target.pathname === "/api/embedded-agents" && method === "GET") {
-        listCalls += 1;
-        if (listCalls === 1) {
-          return jsonResponse({ success: true, agents: [] });
+    global.fetch = vi.fn(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const target = new URL(String(input), HYPERSCAPE_BASE_URL);
+        const method =
+          init?.method?.toUpperCase() ||
+          (input instanceof Request ? input.method.toUpperCase() : "GET");
+        if (target.pathname === "/api/agents/wallet-auth") {
+          return jsonResponse({
+            success: true,
+            authToken: "auth-token-1",
+            characterId: "char-1",
+            data: {
+              expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+            },
+          });
         }
-        return jsonResponse({
-          success: true,
-          agents: [
-            {
+        if (target.pathname === "/api/embedded-agents" && method === "GET") {
+          listCalls += 1;
+          if (listCalls === 1) {
+            return jsonResponse({ success: true, agents: [] });
+          }
+          return jsonResponse({
+            success: true,
+            agents: [
+              {
+                agentId: "embedded-1",
+                characterId: "char-1",
+                name: "alice",
+                state: "running",
+                entityId: "entity-1",
+                position: { x: 5, y: 0, z: 2 },
+                lastActivity: Date.now(),
+              },
+            ],
+          });
+        }
+        if (target.pathname === "/api/embedded-agents" && method === "POST") {
+          return jsonResponse({
+            success: true,
+            agent: {
               agentId: "embedded-1",
               characterId: "char-1",
               name: "alice",
-              state: "running",
-              entityId: "entity-1",
-              position: { x: 5, y: 0, z: 2 },
-              lastActivity: Date.now(),
+              state: "idle",
             },
-          ],
-        });
-      }
-      if (target.pathname === "/api/embedded-agents" && method === "POST") {
-        return jsonResponse({
-          success: true,
-          agent: {
-            agentId: "embedded-1",
-            characterId: "char-1",
-            name: "alice",
-            state: "idle",
-          },
-        });
-      }
-      if (target.pathname.endsWith("/start")) {
-        return jsonResponse({ success: true });
-      }
-      if (target.pathname.endsWith("/goal")) {
-        return jsonResponse({ success: true });
-      }
-      if (target.pathname.endsWith("/command")) {
-        return jsonResponse({ success: true });
-      }
+          });
+        }
+        if (target.pathname.endsWith("/start")) {
+          return jsonResponse({ success: true });
+        }
+        if (target.pathname.endsWith("/goal")) {
+          return jsonResponse({ success: true });
+        }
+        if (target.pathname.endsWith("/command")) {
+          return jsonResponse({ success: true });
+        }
 
-      return jsonResponse({ success: true });
-    }) as typeof global.fetch;
+        return jsonResponse({ success: true });
+      },
+    ) as typeof global.fetch;
 
     const manager = new HyperscapeAutonomySessionManager({
       getRuntime: () => null,
@@ -155,57 +159,61 @@ describe("HyperscapeAutonomySessionManager", () => {
   it("reuses cached wallet auth token during recover", async () => {
     let walletAuthCalls = 0;
 
-    global.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-      const target = new URL(String(input), HYPERSCAPE_BASE_URL);
-      const method =
-        init?.method?.toUpperCase() ||
-        (input instanceof Request ? input.method.toUpperCase() : "GET");
-      if (target.pathname === "/api/agents/wallet-auth") {
-        walletAuthCalls += 1;
-        return jsonResponse({
-          success: true,
-          authToken: "auth-token-cache",
-          characterId: "char-cache",
-          data: { expiresAt: new Date(Date.now() + 30 * 60_000).toISOString() },
-        });
-      }
-      if (target.pathname === "/api/embedded-agents" && method === "GET") {
-        return jsonResponse({
-          success: true,
-          agents: [
-            {
+    global.fetch = vi.fn(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const target = new URL(String(input), HYPERSCAPE_BASE_URL);
+        const method =
+          init?.method?.toUpperCase() ||
+          (input instanceof Request ? input.method.toUpperCase() : "GET");
+        if (target.pathname === "/api/agents/wallet-auth") {
+          walletAuthCalls += 1;
+          return jsonResponse({
+            success: true,
+            authToken: "auth-token-cache",
+            characterId: "char-cache",
+            data: {
+              expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+            },
+          });
+        }
+        if (target.pathname === "/api/embedded-agents" && method === "GET") {
+          return jsonResponse({
+            success: true,
+            agents: [
+              {
+                agentId: "embedded-cache",
+                characterId: "char-cache",
+                name: "alice",
+                state: "running",
+                entityId: "entity-cache",
+                position: { x: 7, y: 0, z: 3 },
+                lastActivity: Date.now(),
+              },
+            ],
+          });
+        }
+        if (target.pathname.endsWith("/start")) {
+          return jsonResponse({ success: true });
+        }
+        if (target.pathname.endsWith("/goal")) {
+          return jsonResponse({ success: true });
+        }
+        if (target.pathname.endsWith("/command")) {
+          return jsonResponse({ success: true });
+        }
+        if (target.pathname === "/api/embedded-agents" && method === "POST") {
+          return jsonResponse({
+            success: true,
+            agent: {
               agentId: "embedded-cache",
               characterId: "char-cache",
               name: "alice",
-              state: "running",
-              entityId: "entity-cache",
-              position: { x: 7, y: 0, z: 3 },
-              lastActivity: Date.now(),
             },
-          ],
-        });
-      }
-      if (target.pathname.endsWith("/start")) {
+          });
+        }
         return jsonResponse({ success: true });
-      }
-      if (target.pathname.endsWith("/goal")) {
-        return jsonResponse({ success: true });
-      }
-      if (target.pathname.endsWith("/command")) {
-        return jsonResponse({ success: true });
-      }
-      if (target.pathname === "/api/embedded-agents" && method === "POST") {
-        return jsonResponse({
-          success: true,
-          agent: {
-            agentId: "embedded-cache",
-            characterId: "char-cache",
-            name: "alice",
-          },
-        });
-      }
-      return jsonResponse({ success: true });
-    }) as typeof global.fetch;
+      },
+    ) as typeof global.fetch;
 
     const manager = new HyperscapeAutonomySessionManager({
       getRuntime: () => null,
@@ -213,7 +221,9 @@ describe("HyperscapeAutonomySessionManager", () => {
     });
 
     const created = await manager.createSession({ agentId: "alice" });
-    await waitFor(() => manager.getSession(created.sessionId)?.session.state === "in_world");
+    await waitFor(
+      () => manager.getSession(created.sessionId)?.session.state === "in_world",
+    );
 
     await manager.recoverSession(created.sessionId);
     await waitFor(() => {
@@ -232,15 +242,21 @@ describe("HyperscapeAutonomySessionManager", () => {
   });
 
   it("resolves autonomy defaults from env/runtime", () => {
-    expect(resolveHyperscapeAutonomyEnabled({ HYPERSCAPE_AUTONOMY_ENABLED: "1" })).toBe(true);
-    expect(resolveHyperscapeAutonomyEnabled({ HYPERSCAPE_AUTONOMY_ENABLED: "false" })).toBe(
-      false,
-    );
+    expect(
+      resolveHyperscapeAutonomyEnabled({ HYPERSCAPE_AUTONOMY_ENABLED: "1" }),
+    ).toBe(true);
+    expect(
+      resolveHyperscapeAutonomyEnabled({
+        HYPERSCAPE_AUTONOMY_ENABLED: "false",
+      }),
+    ).toBe(false);
 
     const runtime = {
       character: { name: "alice-runtime" },
       getSetting: vi.fn(),
     } as unknown as IAgentRuntime;
-    expect(resolveDefaultHyperscapeAutonomyAgentId(runtime)).toBe("alice-runtime");
+    expect(resolveDefaultHyperscapeAutonomyAgentId(runtime)).toBe(
+      "alice-runtime",
+    );
   });
 });

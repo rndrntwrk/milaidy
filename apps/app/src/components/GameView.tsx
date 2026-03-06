@@ -11,11 +11,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../AppContext";
 import {
-  client,
+  type Arcade555MasteryConsistencyVerdict,
   type Arcade555MasteryContract,
   type Arcade555MasteryEvidenceFrame,
   type Arcade555MasteryGameSnapshot,
-  type Arcade555MasteryConsistencyVerdict,
+  client,
   type LogEntry,
 } from "../api-client";
 import { useRetakeCapture } from "../hooks/useRetakeCapture";
@@ -77,8 +77,9 @@ export function GameView() {
     useState<Arcade555MasteryContract | null>(null);
   const [masterySnapshot, setMasterySnapshot] =
     useState<Arcade555MasteryGameSnapshot | null>(null);
-  const [masteryFrames, setMasteryFrames] =
-    useState<Arcade555MasteryEvidenceFrame[]>([]);
+  const [masteryFrames, setMasteryFrames] = useState<
+    Arcade555MasteryEvidenceFrame[]
+  >([]);
   const [masteryConsistency, setMasteryConsistency] =
     useState<Arcade555MasteryConsistencyVerdict | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -256,7 +257,9 @@ export function GameView() {
     const load = async () => {
       setMasteryLoading(true);
       try {
-        const latest = await client.getArcade555MasteryLatest(activeArcade555GameId);
+        const latest = await client.getArcade555MasteryLatest(
+          activeArcade555GameId,
+        );
         if (cancelled) return;
         setMasteryContract(latest.contract);
         setMasterySnapshot(latest.latest);
@@ -583,7 +586,10 @@ export function GameView() {
             </span>
             <span
               className={`text-[10px] px-1 py-0.5 border ${
-                (masteryConsistency?.status ?? masterySnapshot?.latestVerdict?.consistency?.status) === "pass"
+                (
+                  masteryConsistency?.status ??
+                    masterySnapshot?.latestVerdict?.consistency?.status
+                ) === "pass"
                   ? "border-ok text-ok"
                   : "border-danger text-danger"
               }`}
@@ -600,10 +606,16 @@ export function GameView() {
               qualified
             </span>
             <span className="flex-1" />
-            {masteryLoading ? <span className="text-muted">refreshing...</span> : null}
-            {masteryError ? <span className="text-danger">{masteryError}</span> : null}
+            {masteryLoading ? (
+              <span className="text-muted">refreshing...</span>
+            ) : null}
+            {masteryError ? (
+              <span className="text-danger">{masteryError}</span>
+            ) : null}
           </div>
-          <div className="mt-1 text-muted">{masteryContract.objective.summary}</div>
+          <div className="mt-1 text-muted">
+            {masteryContract.objective.summary}
+          </div>
           <div className="mt-1 flex flex-wrap gap-1">
             {masteryContract.controls.slice(0, 4).map((control) => (
               <span

@@ -63,10 +63,16 @@ describe("quickLayerPlan helpers", () => {
 
   it("falls back to allSucceeded when envelope is unavailable", () => {
     expect(
-      didToolActionSucceed({ allSucceeded: true, results: [] }, "STREAM555_RADIO_CONTROL"),
+      didToolActionSucceed(
+        { allSucceeded: true, results: [] },
+        "STREAM555_RADIO_CONTROL",
+      ),
     ).toBe(true);
     expect(
-      didToolActionSucceed({ allSucceeded: false, results: [] }, "STREAM555_RADIO_CONTROL"),
+      didToolActionSucceed(
+        { allSucceeded: false, results: [] },
+        "STREAM555_RADIO_CONTROL",
+      ),
     ).toBe(false);
   });
 

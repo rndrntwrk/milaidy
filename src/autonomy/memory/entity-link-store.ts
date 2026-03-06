@@ -62,19 +62,29 @@ export interface EntityLinkStore {
    * Resolve a platform-specific user ID to a canonical entity.
    * This is the primary cross-platform lookup path.
    */
-  getByPlatformId(platform: Platform, platformId: string): Promise<CanonicalEntity | null>;
+  getByPlatformId(
+    platform: Platform,
+    platformId: string,
+  ): Promise<CanonicalEntity | null>;
 
   /**
    * Link a platform identity to an existing canonical entity.
    * Throws if the platform+platformId is already linked to a different entity.
    */
-  linkPlatform(canonicalId: string, platform: Platform, platformId: string): Promise<void>;
+  linkPlatform(
+    canonicalId: string,
+    platform: Platform,
+    platformId: string,
+  ): Promise<void>;
 
   /** Unlink a platform identity from a canonical entity. */
   unlinkPlatform(canonicalId: string, platform: Platform): Promise<void>;
 
   /** List all canonical entities, optionally filtered. */
-  listEntities(opts?: { operatorsOnly?: boolean; limit?: number }): Promise<CanonicalEntity[]>;
+  listEntities(opts?: {
+    operatorsOnly?: boolean;
+    limit?: number;
+  }): Promise<CanonicalEntity[]>;
 
   /** Search entities by display name (case-insensitive substring match). */
   searchByName(query: string): Promise<CanonicalEntity[]>;
@@ -86,7 +96,10 @@ export interface EntityLinkStore {
   addKnownFact(canonicalId: string, fact: string): Promise<void>;
 
   /** Update entity preferences (shallow merge). */
-  updatePreferences(canonicalId: string, prefs: Record<string, unknown>): Promise<void>;
+  updatePreferences(
+    canonicalId: string,
+    prefs: Record<string, unknown>,
+  ): Promise<void>;
 }
 
 // ---------- In-Memory Implementation ----------
@@ -167,13 +180,22 @@ export class InMemoryEntityLinkStore implements EntityLinkStore {
     return this.entities.get(id) ?? null;
   }
 
-  async getByPlatformId(platform: Platform, platformId: string): Promise<CanonicalEntity | null> {
-    const canonicalId = this.platformIndex.get(this.platformKey(platform, platformId));
+  async getByPlatformId(
+    platform: Platform,
+    platformId: string,
+  ): Promise<CanonicalEntity | null> {
+    const canonicalId = this.platformIndex.get(
+      this.platformKey(platform, platformId),
+    );
     if (!canonicalId) return null;
     return this.entities.get(canonicalId) ?? null;
   }
 
-  async linkPlatform(canonicalId: string, platform: Platform, platformId: string): Promise<void> {
+  async linkPlatform(
+    canonicalId: string,
+    platform: Platform,
+    platformId: string,
+  ): Promise<void> {
     const entity = this.entities.get(canonicalId);
     if (!entity) {
       throw new Error(`Entity ${canonicalId} not found`);
@@ -210,7 +232,10 @@ export class InMemoryEntityLinkStore implements EntityLinkStore {
     }
   }
 
-  async listEntities(opts?: { operatorsOnly?: boolean; limit?: number }): Promise<CanonicalEntity[]> {
+  async listEntities(opts?: {
+    operatorsOnly?: boolean;
+    limit?: number;
+  }): Promise<CanonicalEntity[]> {
     let result = Array.from(this.entities.values());
     if (opts?.operatorsOnly) {
       result = result.filter((e) => e.isOperator);
@@ -244,7 +269,10 @@ export class InMemoryEntityLinkStore implements EntityLinkStore {
     }
   }
 
-  async updatePreferences(canonicalId: string, prefs: Record<string, unknown>): Promise<void> {
+  async updatePreferences(
+    canonicalId: string,
+    prefs: Record<string, unknown>,
+  ): Promise<void> {
     const entity = this.entities.get(canonicalId);
     if (!entity) return;
     entity.preferences = { ...entity.preferences, ...prefs };

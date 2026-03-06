@@ -12,8 +12,8 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 import { metrics } from "../../telemetry/setup.js";
-import { InMemoryGoalManager } from "./manager.js";
 import type { Goal, MutationContext } from "./manager.js";
+import { InMemoryGoalManager } from "./manager.js";
 
 type GoalInput = Omit<Goal, "id" | "createdAt" | "updatedAt">;
 
@@ -38,9 +38,11 @@ describe("InMemoryGoalManager", () => {
 
   describe("addGoal", () => {
     it("creates a goal with auto-generated id and timestamps", async () => {
-      const goal = await manager.addGoal(makeGoalInput({
-        description: "Write documentation",
-      }));
+      const goal = await manager.addGoal(
+        makeGoalInput({
+          description: "Write documentation",
+        }),
+      );
 
       expect(goal.id).toBeDefined();
       expect(goal.id.length).toBeGreaterThan(0);
@@ -51,57 +53,71 @@ describe("InMemoryGoalManager", () => {
 
     it("rejects low-trust agent-proposed goals", async () => {
       await expect(
-        manager.addGoal(makeGoalInput({
-          source: "agent",
-          sourceTrust: 0.3, // Below 0.6 floor
-        })),
+        manager.addGoal(
+          makeGoalInput({
+            source: "agent",
+            sourceTrust: 0.3, // Below 0.6 floor
+          }),
+        ),
       ).rejects.toThrow("below floor");
     });
 
     it("allows high-trust agent-proposed goals", async () => {
-      const goal = await manager.addGoal(makeGoalInput({
-        source: "agent",
-        sourceTrust: 0.8,
-      }));
+      const goal = await manager.addGoal(
+        makeGoalInput({
+          source: "agent",
+          sourceTrust: 0.8,
+        }),
+      );
 
       expect(goal.source).toBe("agent");
     });
 
     it("allows user goals above trust floor", async () => {
-      const goal = await manager.addGoal(makeGoalInput({
-        source: "user",
-        sourceTrust: 0.5,
-      }));
+      const goal = await manager.addGoal(
+        makeGoalInput({
+          source: "user",
+          sourceTrust: 0.5,
+        }),
+      );
 
       expect(goal.source).toBe("user");
     });
 
     it("rejects user goals below trust floor", async () => {
       await expect(
-        manager.addGoal(makeGoalInput({
-          source: "user",
-          sourceTrust: 0.1, // Below 0.3 floor
-        })),
+        manager.addGoal(
+          makeGoalInput({
+            source: "user",
+            sourceTrust: 0.1, // Below 0.3 floor
+          }),
+        ),
       ).rejects.toThrow("below floor");
     });
 
     it("validates parent goal exists", async () => {
       await expect(
-        manager.addGoal(makeGoalInput({
-          parentGoalId: "non-existent",
-        })),
+        manager.addGoal(
+          makeGoalInput({
+            parentGoalId: "non-existent",
+          }),
+        ),
       ).rejects.toThrow("not found");
     });
 
     it("accepts valid parent goal reference", async () => {
-      const parent = await manager.addGoal(makeGoalInput({
-        description: "Parent goal",
-      }));
+      const parent = await manager.addGoal(
+        makeGoalInput({
+          description: "Parent goal",
+        }),
+      );
 
-      const child = await manager.addGoal(makeGoalInput({
-        description: "Child goal",
-        parentGoalId: parent.id,
-      }));
+      const child = await manager.addGoal(
+        makeGoalInput({
+          description: "Child goal",
+          parentGoalId: parent.id,
+        }),
+      );
 
       expect(child.parentGoalId).toBe(parent.id);
     });
@@ -142,21 +158,35 @@ describe("InMemoryGoalManager", () => {
       const afterCreate = metrics.getSnapshot();
 
       const activeKey = 'autonomy_goal_transitions_total:{"status":"active"}';
-      expect((afterCreate.counters[activeKey] ?? 0) - (before.counters[activeKey] ?? 0)).toBe(1);
+      expect(
+        (afterCreate.counters[activeKey] ?? 0) -
+          (before.counters[activeKey] ?? 0),
+      ).toBe(1);
 
       await manager.updateGoal(goal.id, { status: "paused" });
       const afterPause = metrics.getSnapshot();
       const pausedKey = 'autonomy_goal_transitions_total:{"status":"paused"}';
-      expect((afterPause.counters[pausedKey] ?? 0) - (afterCreate.counters[pausedKey] ?? 0)).toBe(1);
+      expect(
+        (afterPause.counters[pausedKey] ?? 0) -
+          (afterCreate.counters[pausedKey] ?? 0),
+      ).toBe(1);
     });
   });
 
   describe("getActiveGoals", () => {
     it("returns only active goals sorted by priority", async () => {
-      await manager.addGoal(makeGoalInput({ priority: "low", status: "active" }));
-      await manager.addGoal(makeGoalInput({ priority: "critical", status: "active" }));
-      await manager.addGoal(makeGoalInput({ priority: "high", status: "completed" }));
-      await manager.addGoal(makeGoalInput({ priority: "medium", status: "active" }));
+      await manager.addGoal(
+        makeGoalInput({ priority: "low", status: "active" }),
+      );
+      await manager.addGoal(
+        makeGoalInput({ priority: "critical", status: "active" }),
+      );
+      await manager.addGoal(
+        makeGoalInput({ priority: "high", status: "completed" }),
+      );
+      await manager.addGoal(
+        makeGoalInput({ priority: "medium", status: "active" }),
+      );
 
       const active = await manager.getActiveGoals();
 
@@ -175,21 +205,29 @@ describe("InMemoryGoalManager", () => {
 
   describe("getGoalTree", () => {
     it("returns full goal hierarchy", async () => {
-      const root = await manager.addGoal(makeGoalInput({
-        description: "Root",
-      }));
-      const child1 = await manager.addGoal(makeGoalInput({
-        description: "Child 1",
-        parentGoalId: root.id,
-      }));
-      await manager.addGoal(makeGoalInput({
-        description: "Child 2",
-        parentGoalId: root.id,
-      }));
-      await manager.addGoal(makeGoalInput({
-        description: "Grandchild",
-        parentGoalId: child1.id,
-      }));
+      const root = await manager.addGoal(
+        makeGoalInput({
+          description: "Root",
+        }),
+      );
+      const child1 = await manager.addGoal(
+        makeGoalInput({
+          description: "Child 1",
+          parentGoalId: root.id,
+        }),
+      );
+      await manager.addGoal(
+        makeGoalInput({
+          description: "Child 2",
+          parentGoalId: root.id,
+        }),
+      );
+      await manager.addGoal(
+        makeGoalInput({
+          description: "Grandchild",
+          parentGoalId: child1.id,
+        }),
+      );
 
       const tree = await manager.getGoalTree(root.id);
 
@@ -205,13 +243,15 @@ describe("InMemoryGoalManager", () => {
 
   describe("getGoalById", () => {
     it("returns the goal if found", async () => {
-      const created = await manager.addGoal(makeGoalInput({
-        description: "Find me",
-      }));
+      const created = await manager.addGoal(
+        makeGoalInput({
+          description: "Find me",
+        }),
+      );
 
       const found = await manager.getGoalById(created.id);
       expect(found).toBeDefined();
-      expect(found!.description).toBe("Find me");
+      expect(found?.description).toBe("Find me");
     });
 
     it("returns undefined for non-existent id", async () => {
@@ -222,18 +262,23 @@ describe("InMemoryGoalManager", () => {
     it("returns a copy (not a reference)", async () => {
       const created = await manager.addGoal(makeGoalInput());
       const found = await manager.getGoalById(created.id);
+      if (!found) {
+        throw new Error("Expected created goal to be retrievable");
+      }
 
-      found!.description = "mutated";
+      found.description = "mutated";
       const refetched = await manager.getGoalById(created.id);
-      expect(refetched!.description).not.toBe("mutated");
+      expect(refetched?.description).not.toBe("mutated");
     });
   });
 
   describe("evaluateGoal", () => {
     it("evaluates criteria with 'done' keyword as met", async () => {
-      const goal = await manager.addGoal(makeGoalInput({
-        successCriteria: ["Task is done", "Feature verified"],
-      }));
+      const goal = await manager.addGoal(
+        makeGoalInput({
+          successCriteria: ["Task is done", "Feature verified"],
+        }),
+      );
 
       const result = await manager.evaluateGoal(goal.id);
 
@@ -242,9 +287,11 @@ describe("InMemoryGoalManager", () => {
     });
 
     it("evaluates criteria with 'TODO' as not met", async () => {
-      const goal = await manager.addGoal(makeGoalInput({
-        successCriteria: ["TODO: implement feature"],
-      }));
+      const goal = await manager.addGoal(
+        makeGoalInput({
+          successCriteria: ["TODO: implement feature"],
+        }),
+      );
 
       const result = await manager.evaluateGoal(goal.id);
 
@@ -254,31 +301,41 @@ describe("InMemoryGoalManager", () => {
 
     it("auto-completes goal when all criteria met", async () => {
       const before = metrics.getSnapshot();
-      const goal = await manager.addGoal(makeGoalInput({
-        successCriteria: ["Task is done", "Feature is complete"],
-      }));
+      const goal = await manager.addGoal(
+        makeGoalInput({
+          successCriteria: ["Task is done", "Feature is complete"],
+        }),
+      );
 
       await manager.evaluateGoal(goal.id);
 
       const updated = await manager.getGoalById(goal.id);
-      expect(updated!.status).toBe("completed");
-      expect(updated!.completedAt).toBeDefined();
+      expect(updated?.status).toBe("completed");
+      expect(updated?.completedAt).toBeDefined();
       const after = metrics.getSnapshot();
-      const completedKey = 'autonomy_goal_transitions_total:{"status":"completed"}';
-      expect((after.counters[completedKey] ?? 0) - (before.counters[completedKey] ?? 0)).toBeGreaterThanOrEqual(1);
+      const completedKey =
+        'autonomy_goal_transitions_total:{"status":"completed"}';
+      expect(
+        (after.counters[completedKey] ?? 0) -
+          (before.counters[completedKey] ?? 0),
+      ).toBeGreaterThanOrEqual(1);
     });
 
     it("returns false for goals with no criteria", async () => {
-      const goal = await manager.addGoal(makeGoalInput({
-        successCriteria: [],
-      }));
+      const goal = await manager.addGoal(
+        makeGoalInput({
+          successCriteria: [],
+        }),
+      );
 
       const result = await manager.evaluateGoal(goal.id);
       expect(result.met).toBe(false);
     });
 
     it("throws for non-existent goal", async () => {
-      await expect(manager.evaluateGoal("non-existent")).rejects.toThrow("not found");
+      await expect(manager.evaluateGoal("non-existent")).rejects.toThrow(
+        "not found",
+      );
     });
 
     it("uses custom criteria evaluator when set", async () => {
@@ -286,14 +343,20 @@ describe("InMemoryGoalManager", () => {
         return criterion.includes("pass");
       });
 
-      const goal = await manager.addGoal(makeGoalInput({
-        successCriteria: ["This should pass", "This should fail"],
-      }));
+      const goal = await manager.addGoal(
+        makeGoalInput({
+          successCriteria: ["This should pass", "This should fail"],
+        }),
+      );
 
       const result = await manager.evaluateGoal(goal.id);
       expect(result.met).toBe(false); // One fails
-      expect(result.evidence.filter((e) => e.startsWith("PASS"))).toHaveLength(1);
-      expect(result.evidence.filter((e) => e.startsWith("FAIL"))).toHaveLength(1);
+      expect(result.evidence.filter((e) => e.startsWith("PASS"))).toHaveLength(
+        1,
+      );
+      expect(result.evidence.filter((e) => e.startsWith("FAIL"))).toHaveLength(
+        1,
+      );
     });
   });
 
@@ -345,7 +408,11 @@ describe("InMemoryGoalManager", () => {
     it("allows update from high-trust caller", async () => {
       const goal = await manager.addGoal(makeGoalInput());
       const caller: MutationContext = { source: "user", sourceTrust: 0.9 };
-      const updated = await manager.updateGoal(goal.id, { status: "paused" }, caller);
+      const updated = await manager.updateGoal(
+        goal.id,
+        { status: "paused" },
+        caller,
+      );
       expect(updated.status).toBe("paused");
     });
 
@@ -370,7 +437,11 @@ describe("InMemoryGoalManager", () => {
     it("allows terminal transition when caller trust meets creator trust", async () => {
       const goal = await manager.addGoal(makeGoalInput({ sourceTrust: 0.9 }));
       const caller: MutationContext = { source: "user", sourceTrust: 0.9 };
-      const completed = await manager.updateGoal(goal.id, { status: "completed" }, caller);
+      const completed = await manager.updateGoal(
+        goal.id,
+        { status: "completed" },
+        caller,
+      );
       expect(completed.status).toBe("completed");
     });
 
@@ -380,45 +451,57 @@ describe("InMemoryGoalManager", () => {
       // Caller has trust 0.5 — above user floor (0.3) but below creator (0.9)
       const caller: MutationContext = { source: "user", sourceTrust: 0.5 };
       // Pausing is not terminal, so creator-trust check doesn't apply
-      const paused = await manager.updateGoal(goal.id, { status: "paused" }, caller);
+      const paused = await manager.updateGoal(
+        goal.id,
+        { status: "paused" },
+        caller,
+      );
       expect(paused.status).toBe("paused");
     });
   });
 
   describe("evaluateGoal caller trust gate", () => {
     it("allows evaluation with no caller (system operation)", async () => {
-      const goal = await manager.addGoal(makeGoalInput({
-        successCriteria: ["Task is done"],
-      }));
+      const goal = await manager.addGoal(
+        makeGoalInput({
+          successCriteria: ["Task is done"],
+        }),
+      );
       const result = await manager.evaluateGoal(goal.id);
       expect(result.met).toBe(true);
     });
 
     it("allows evaluation from high-trust caller", async () => {
-      const goal = await manager.addGoal(makeGoalInput({
-        successCriteria: ["Task is done"],
-      }));
+      const goal = await manager.addGoal(
+        makeGoalInput({
+          successCriteria: ["Task is done"],
+        }),
+      );
       const caller: MutationContext = { source: "user", sourceTrust: 0.9 };
       const result = await manager.evaluateGoal(goal.id, caller);
       expect(result.met).toBe(true);
     });
 
     it("rejects evaluation from low-trust agent caller", async () => {
-      const goal = await manager.addGoal(makeGoalInput({
-        successCriteria: ["Task is done"],
-      }));
+      const goal = await manager.addGoal(
+        makeGoalInput({
+          successCriteria: ["Task is done"],
+        }),
+      );
       const caller: MutationContext = { source: "agent", sourceTrust: 0.3 };
-      await expect(
-        manager.evaluateGoal(goal.id, caller),
-      ).rejects.toThrow("below floor");
+      await expect(manager.evaluateGoal(goal.id, caller)).rejects.toThrow(
+        "below floor",
+      );
     });
 
     it("auto-completion uses system context (no caller) internally", async () => {
       // Goal created by high-trust user (0.9)
-      const goal = await manager.addGoal(makeGoalInput({
-        sourceTrust: 0.9,
-        successCriteria: ["Task is done", "Feature is complete"],
-      }));
+      const goal = await manager.addGoal(
+        makeGoalInput({
+          sourceTrust: 0.9,
+          successCriteria: ["Task is done", "Feature is complete"],
+        }),
+      );
 
       // Evaluate with a lower-trust caller — evaluation itself should be allowed
       // (0.5 is above user floor 0.3), and auto-completion is internal (system)
@@ -428,7 +511,7 @@ describe("InMemoryGoalManager", () => {
 
       // Goal should be auto-completed because internal updateGoal has no caller
       const updated = await manager.getGoalById(goal.id);
-      expect(updated!.status).toBe("completed");
+      expect(updated?.status).toBe("completed");
     });
   });
 

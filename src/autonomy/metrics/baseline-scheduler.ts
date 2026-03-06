@@ -82,14 +82,25 @@ export class BaselineScheduler {
 
     try {
       const scenarios = this.config.scenarios ?? [];
-      const result = await this.harness.measure(
-        this.config.agentId,
-        scenarios,
-      );
+      const result = await this.harness.measure(this.config.agentId, scenarios);
       const label = `auto-${new Date().toISOString()}`;
       await this.harness.snapshot(result, label);
+      const compatibilityResult = result as {
+        preferenceFollowingAccuracy?: number;
+        trustAccuracy?: number;
+        personaDriftScore?: number;
+        driftScore?: number;
+      };
+      const preference =
+        compatibilityResult.preferenceFollowingAccuracy ??
+        compatibilityResult.trustAccuracy ??
+        0;
+      const drift =
+        compatibilityResult.personaDriftScore ??
+        compatibilityResult.driftScore ??
+        0;
       logger.debug(
-        `[autonomy:baseline-scheduler] Snapshot "${label}" — trust=${result.trustAccuracy.toFixed(3)}, drift=${result.driftScore.toFixed(3)}`,
+        `[autonomy:baseline-scheduler] Snapshot "${label}" — preference=${preference.toFixed(3)}, drift=${drift.toFixed(3)}`,
       );
     } catch (err) {
       logger.error(

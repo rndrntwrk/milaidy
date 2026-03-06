@@ -16,9 +16,21 @@ const installedArcadeRoot = path.resolve(
 );
 
 const SOURCE_ROOTS = [
-  { label: "milaidy", dir: path.join(milaidyRoot, "src"), baseDir: milaidyRoot },
-  { label: "milaidy", dir: path.join(milaidyRoot, "apps"), baseDir: milaidyRoot },
-  { label: "milaidy", dir: path.join(milaidyRoot, "scripts"), baseDir: milaidyRoot },
+  {
+    label: "milaidy",
+    dir: path.join(milaidyRoot, "src"),
+    baseDir: milaidyRoot,
+  },
+  {
+    label: "milaidy",
+    dir: path.join(milaidyRoot, "apps"),
+    baseDir: milaidyRoot,
+  },
+  {
+    label: "milaidy",
+    dir: path.join(milaidyRoot, "scripts"),
+    baseDir: milaidyRoot,
+  },
 ];
 
 if (existsSync(path.join(arcadeRoot, "src"))) {
@@ -144,7 +156,11 @@ function recordFinding(file, label, sample) {
 
 const milaidyPackageJsonPath = path.join(milaidyRoot, "package.json");
 const milaidyPackageText = readFileSync(milaidyPackageJsonPath, "utf8");
-if (/"@rndrntwrk\/plugin-555arcade"\s*:\s*"file:\.\.\/arcade-plugin"/.test(milaidyPackageText)) {
+if (
+  /"@rndrntwrk\/plugin-555arcade"\s*:\s*"file:\.\.\/arcade-plugin"/.test(
+    milaidyPackageText,
+  )
+) {
   recordFinding(
     "milaidy/package.json",
     "non-immutable arcade package dependency",
@@ -185,7 +201,9 @@ for (const root of SOURCE_ROOTS) {
 }
 
 if (findings.length > 0) {
-  console.error("[arcade555-guard] found legacy arcade references outside approved compatibility surfaces:");
+  console.error(
+    "[arcade555-guard] found legacy arcade references outside approved compatibility surfaces:",
+  );
   for (const finding of findings) {
     console.error(`- ${finding.file}: ${finding.label} (${finding.sample})`);
   }

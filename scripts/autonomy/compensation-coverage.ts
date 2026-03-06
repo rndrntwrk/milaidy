@@ -114,8 +114,9 @@ async function main() {
     eligibility.map((entry) => [entry.toolName, entry]),
   );
   const registered = new Set(listBuiltinCompensationTools());
-  const reversibleTools = BUILTIN_CONTRACTS
-    .filter((contract) => contract.riskClass === "reversible")
+  const reversibleTools = BUILTIN_CONTRACTS.filter(
+    (contract) => contract.riskClass === "reversible",
+  )
     .map((contract) => contract.name)
     .sort((a, b) => a.localeCompare(b));
 
@@ -169,7 +170,10 @@ async function main() {
   console.log(`[compensations] wrote ${jsonPath}`);
   console.log(`[compensations] wrote ${mdPath}`);
 
-  if (cli.failOnMissing && (missingTools.length > 0 || missingEligibility.length > 0)) {
+  if (
+    cli.failOnMissing &&
+    (missingTools.length > 0 || missingEligibility.length > 0)
+  ) {
     if (missingEligibility.length > 0) {
       console.error(
         `[compensations] missing eligibility for ${missingEligibility.length} reversible tool(s): ${missingEligibility.join(", ")}`,

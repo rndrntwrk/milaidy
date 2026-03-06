@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type {
-  KernelComponents,
-  ScenarioResult,
-} from "../metrics/evaluator-types.js";
+import type { KernelComponents } from "../metrics/evaluator-types.js";
 import type { EvaluationScenario } from "../metrics/types.js";
 import { LLMJudgeEvaluator } from "./llm-judge-evaluator.js";
 import { StubModelProvider } from "./model-provider.js";
@@ -132,8 +129,8 @@ describe("LLMJudgeEvaluator", () => {
     await evaluator.evaluate(scenario, makeComponents());
 
     expect(capturedRequest).toBeDefined();
-    expect(capturedRequest!.rubric).toBe("Must respect user boundaries");
-    expect(capturedRequest!.prompt).toContain(
+    expect(capturedRequest?.rubric).toBe("Must respect user boundaries");
+    expect(capturedRequest?.prompt).toContain(
       "Follow user preferences carefully",
     );
   });

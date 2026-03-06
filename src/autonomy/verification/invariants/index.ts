@@ -8,8 +8,8 @@ import { builtinInvariants } from "./builtin-invariants.js";
 import type { InvariantCheckerInterface } from "./types.js";
 
 export {
-  builtinInvariants,
   builtinInvariantCatalog,
+  builtinInvariants,
   eventStoreIntegrityInvariant,
   noOrphanedApprovalsInvariant,
   stateMachineConsistencyInvariant,

@@ -53,11 +53,13 @@ function parseTrace(value: unknown): Arcade555ActionTrace | undefined {
   if (typeof value.sessionId === "string") trace.sessionId = value.sessionId;
   if (typeof value.segmentId === "string") trace.segmentId = value.segmentId;
   if (typeof value.actionId === "string") trace.actionId = value.actionId;
-  if (typeof value.idempotencyKey === "string") trace.idempotencyKey = value.idempotencyKey;
+  if (typeof value.idempotencyKey === "string")
+    trace.idempotencyKey = value.idempotencyKey;
   if (typeof value.stage === "string") trace.stage = value.stage;
   if (typeof value.attempt === "number") trace.attempt = value.attempt;
   if (typeof value.startedAt === "string") trace.startedAt = value.startedAt;
-  if (typeof value.completedAt === "string") trace.completedAt = value.completedAt;
+  if (typeof value.completedAt === "string")
+    trace.completedAt = value.completedAt;
   if (typeof value.durationMs === "number") trace.durationMs = value.durationMs;
   return Object.keys(trace).length > 0 ? trace : undefined;
 }

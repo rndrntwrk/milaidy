@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { AppManager } from "./app-manager";
 import type {
   PluginManagerLike,
   RegistryPluginInfo,
 } from "./plugin-manager-types";
 import type { RegistryAppInfo } from "./registry-client";
-import { AppManager } from "./app-manager";
 
 const mockRegistryGetAppInfo = vi.hoisted(() => vi.fn());
 const mockRegistryGetPluginInfo = vi.hoisted(() => vi.fn());
@@ -121,7 +121,9 @@ describe("AppManager metadata fallback", () => {
       refreshRegistry: vi.fn(async () => new Map<string, RegistryPluginInfo>()),
     });
     mockRegistryGetPlugins.mockResolvedValue(
-      new Map<string, RegistryPluginInfo>([[BASE_APP_PLUGIN.name, BASE_APP_PLUGIN]]),
+      new Map<string, RegistryPluginInfo>([
+        [BASE_APP_PLUGIN.name, BASE_APP_PLUGIN],
+      ]),
     );
 
     const apps = await appManager.listAvailable(pluginManager);

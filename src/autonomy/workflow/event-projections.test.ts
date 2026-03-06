@@ -52,7 +52,11 @@ describe("event projections", () => {
 
   it("marks projection with critical invariant violation", () => {
     const projection = rebuildRequestProjection([
-      makeEvent({ sequenceId: 1, type: "tool:proposed", correlationId: "corr-1" }),
+      makeEvent({
+        sequenceId: 1,
+        type: "tool:proposed",
+        correlationId: "corr-1",
+      }),
       makeEvent({
         sequenceId: 2,
         type: "tool:invariants:checked",
@@ -74,7 +78,11 @@ describe("event projections", () => {
 
   it("marks projection when unresolved compensation incident is opened", () => {
     const projection = rebuildRequestProjection([
-      makeEvent({ sequenceId: 1, type: "tool:proposed", correlationId: "corr-2" }),
+      makeEvent({
+        sequenceId: 1,
+        type: "tool:proposed",
+        correlationId: "corr-2",
+      }),
       makeEvent({
         sequenceId: 2,
         type: "tool:compensated",

@@ -6,13 +6,13 @@
 
 export {
   createRateLimitMiddleware,
-  extractIP,
   ENDPOINT_LIMITS,
-  TokenBucket,
-  SlidingWindowRateLimiter,
+  extractIP,
   type RateLimitConfig,
-  type RateLimitResult,
   type RateLimiterOptions,
   type RateLimitMiddleware,
+  type RateLimitResult,
+  SlidingWindowRateLimiter,
+  TokenBucket,
   type TokenBucketConfig,
 } from "./rate-limiter.js";

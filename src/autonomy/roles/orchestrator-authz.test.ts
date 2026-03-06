@@ -3,8 +3,8 @@ import { ApprovalGate } from "../approval/approval-gate.js";
 import { KernelStateMachine } from "../state-machine/kernel-state-machine.js";
 import { ToolRegistry } from "../tools/registry.js";
 import { registerBuiltinToolContracts } from "../tools/schemas/index.js";
-import { InvariantChecker } from "../verification/invariants/invariant-checker.js";
 import { registerBuiltinInvariants } from "../verification/invariants/index.js";
+import { InvariantChecker } from "../verification/invariants/invariant-checker.js";
 import { PostConditionVerifier } from "../verification/postcondition-verifier.js";
 import { registerBuiltinPostConditions } from "../verification/postconditions/index.js";
 import { SchemaValidator } from "../verification/schema-validator.js";
@@ -238,9 +238,12 @@ describe("KernelOrchestrator contract/authz enforcement", () => {
 
     const run = orchestrator.execute(createRequest(actionHandler));
 
-    await vi.waitFor(() => {
-      expect(approvalGate.getPending().length).toBeGreaterThan(0);
-    }, { timeout: 1_000 });
+    await vi.waitFor(
+      () => {
+        expect(approvalGate.getPending().length).toBeGreaterThan(0);
+      },
+      { timeout: 1_000 },
+    );
     const pending = approvalGate.getPending()[0];
     approvalGate.resolve(pending.id, "denied", "authz-test");
 

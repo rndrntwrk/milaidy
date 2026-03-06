@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { client, type CustomActionDef } from "../api-client";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApp } from "../AppContext";
-import { CustomActionEditor } from "./CustomActionEditor";
+import { type CustomActionDef, client } from "../api-client";
 import { collectArcade555ActionTimeline } from "./arcade555ActionEnvelope";
+import { CustomActionEditor } from "./CustomActionEditor";
 import { QUICK_LAYER_DOCK } from "./quickLayerCatalog";
 
 export function CustomActionsView() {
@@ -35,7 +35,8 @@ export function CustomActionsView() {
       if (!plugin) return "available";
       if (plugin.isActive === true) return "active";
       if (plugin.enabled === false) return "disabled";
-      if (plugin.enabled === true && plugin.isActive === false) return "disabled";
+      if (plugin.enabled === true && plugin.isActive === false)
+        return "disabled";
       return "available";
     },
     [plugins],
@@ -55,7 +56,11 @@ export function CustomActionsView() {
   const triggerDockedLayer = useCallback(
     (layerId: string, layerLabel: string) => {
       setTab("chat");
-      setActionNotice(`Running ${layerLabel} from Actions tab...`, "info", 2200);
+      setActionNotice(
+        `Running ${layerLabel} from Actions tab...`,
+        "info",
+        2200,
+      );
       window.setTimeout(() => {
         window.dispatchEvent(
           new CustomEvent("milaidy:quick-layer:run", {
@@ -216,10 +221,12 @@ export function CustomActionsView() {
           <div>
             <h2 className="text-sm font-bold text-txt">Studio Action Layers</h2>
             <p className="text-xs text-muted">
-              Moved from Chat. Runs through the same quick-layer execution engine.
+              Moved from Chat. Runs through the same quick-layer execution
+              engine.
             </p>
           </div>
           <button
+            type="button"
             onClick={() => setTab("plugins")}
             className="px-3 py-1.5 text-xs border border-border bg-surface text-muted rounded hover:bg-card transition-colors"
             title="Open plugin settings"
@@ -238,6 +245,7 @@ export function CustomActionsView() {
                   : "border-border text-muted bg-card";
             return (
               <button
+                type="button"
                 key={layer.id}
                 className={`px-2 py-1 text-xs border rounded transition-all ${tone}`}
                 onClick={() => triggerDockedLayer(layer.id, layer.label)}
@@ -253,16 +261,21 @@ export function CustomActionsView() {
       <div className="border border-border bg-card rounded p-3 space-y-2">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 className="text-sm font-bold text-txt">Recent Action Timeline</h2>
+            <h2 className="text-sm font-bold text-txt">
+              Recent Action Timeline
+            </h2>
             <p className="text-xs text-muted">
               Live execution envelopes captured from chat.
             </p>
           </div>
-          <span className="text-xs text-muted">{actionTimeline.length} total</span>
+          <span className="text-xs text-muted">
+            {actionTimeline.length} total
+          </span>
         </div>
         {recentActionTimeline.length === 0 ? (
           <div className="text-xs text-muted">
-            No action envelopes detected yet. Run a tool action in chat to populate this timeline.
+            No action envelopes detected yet. Run a tool action in chat to
+            populate this timeline.
           </div>
         ) : (
           <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
@@ -271,12 +284,15 @@ export function CustomActionsView() {
               const stage =
                 envelope.trace?.stage ?? (envelope.ok ? "succeeded" : "failed");
               const stageTone = envelope.ok ? "text-ok" : "text-danger";
-              const timestamp = new Date(entry.timestamp).toLocaleTimeString([], {
-                hour12: false,
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-              });
+              const timestamp = new Date(entry.timestamp).toLocaleTimeString(
+                [],
+                {
+                  hour12: false,
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  second: "2-digit",
+                },
+              );
               return (
                 <div
                   key={`${entry.messageId}-${envelope.action}-${envelope.trace?.actionId ?? entry.timestamp}`}
@@ -329,14 +345,17 @@ export function CustomActionsView() {
                       )}
                     </div>
                   )}
-                  {(envelope.data !== undefined || envelope.details !== undefined) && (
+                  {(envelope.data !== undefined ||
+                    envelope.details !== undefined) && (
                     <details className="mt-1.5">
                       <summary className="text-[11px] text-muted cursor-pointer">
                         payload
                       </summary>
                       <pre className="mt-1 text-[10px] text-muted bg-card border border-border rounded p-2 whitespace-pre-wrap break-words m-0">
                         {JSON.stringify(
-                          envelope.data !== undefined ? envelope.data : envelope.details,
+                          envelope.data !== undefined
+                            ? envelope.data
+                            : envelope.details,
                           null,
                           2,
                         )}

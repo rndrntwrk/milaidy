@@ -52,7 +52,10 @@ export function buildHeldOutValidationSplit(
 
   const ratio = clamp(options.holdoutRatio ?? 0.2, 0.05, 0.5);
   const seed = options.seed ?? "phase4-heldout";
-  const minValidationRequested = Math.max(0, options.minValidationEpisodes ?? 1);
+  const minValidationRequested = Math.max(
+    0,
+    options.minValidationEpisodes ?? 1,
+  );
   const maxValidation = Math.max(0, episodes.length - 1);
   const minValidation = Math.min(minValidationRequested, maxValidation);
   const byScore = [...episodes].sort((a, b) => {
@@ -73,7 +76,9 @@ export function buildHeldOutValidationSplit(
 
 function adversarialRiskScore(
   episode: Episode,
-  options: Required<Pick<AdversarialSplitOptions, "driftThreshold" | "minStepReward">>,
+  options: Required<
+    Pick<AdversarialSplitOptions, "driftThreshold" | "minStepReward">
+  >,
 ): number {
   let score = 0;
 

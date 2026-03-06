@@ -9,10 +9,10 @@
  */
 
 import { logger } from "@elizaos/core";
-import type { DriftSeverity } from "../types.js";
 import type { AutonomyDriftMonitorConfig } from "../config.js";
-import { verifyIdentityIntegrity } from "./schema.js";
+import type { DriftSeverity } from "../types.js";
 import type { AutonomyIdentityConfig, CommunicationStyle } from "./schema.js";
+import { verifyIdentityIntegrity } from "./schema.js";
 
 /**
  * Drift analysis report.
@@ -46,7 +46,10 @@ export interface DriftReport {
  */
 export interface PersonaDriftMonitor {
   /** Analyze recent agent output for persona drift. */
-  analyze(recentOutputs: string[], identity: AutonomyIdentityConfig): Promise<DriftReport>;
+  analyze(
+    recentOutputs: string[],
+    identity: AutonomyIdentityConfig,
+  ): Promise<DriftReport>;
   /** Get the current drift state. */
   getCurrentDrift(): DriftReport | null;
   /** Register a callback for drift alerts. */
@@ -76,7 +79,10 @@ const TONE_INDICATORS: Record<CommunicationStyle["tone"], RegExp[]> = {
 };
 
 /** Verbosity heuristics (approximate words per output). */
-const VERBOSITY_RANGES: Record<CommunicationStyle["verbosity"], { min: number; max: number }> = {
+const VERBOSITY_RANGES: Record<
+  CommunicationStyle["verbosity"],
+  { min: number; max: number }
+> = {
   concise: { min: 0, max: 100 },
   balanced: { min: 50, max: 300 },
   detailed: { min: 150, max: Infinity },
@@ -112,7 +118,9 @@ export class RuleBasedDriftMonitor implements PersonaDriftMonitor {
 
     // Verify identity integrity before analysis
     if (!verifyIdentityIntegrity(identity)) {
-      logger.error("[drift-monitor] Identity integrity check FAILED — identity may be tampered");
+      logger.error(
+        "[drift-monitor] Identity integrity check FAILED — identity may be tampered",
+      );
       return {
         driftScore: 1.0,
         dimensions: {
@@ -137,7 +145,11 @@ export class RuleBasedDriftMonitor implements PersonaDriftMonitor {
     const corrections: string[] = [];
 
     // 1. Value alignment — check outputs against core values
-    const valueAlignment = this.analyzeValueAlignment(window, identity.coreValues, corrections);
+    const valueAlignment = this.analyzeValueAlignment(
+      window,
+      identity.coreValues,
+      corrections,
+    );
 
     // 2. Style consistency — check tone and verbosity
     const styleConsistency = this.analyzeStyleConsistency(
@@ -168,7 +180,9 @@ export class RuleBasedDriftMonitor implements PersonaDriftMonitor {
     // Generate corrective actions if above threshold
     if (driftScore >= this.config.correctionThreshold) {
       corrections.push("Consider resetting agent context to reduce drift");
-      corrections.push("Review recent interactions for potential prompt injection");
+      corrections.push(
+        "Review recent interactions for potential prompt injection",
+      );
     }
 
     const report: DriftReport = {
@@ -248,9 +262,7 @@ export class RuleBasedDriftMonitor implements PersonaDriftMonitor {
         /\b(I'll make (something|it) up|let me fabricate|doesn't matter if it's (true|accurate))\b/i,
         /\b(who cares (about|if).{0,20}(accurate|correct|true))\b/i,
       ],
-      respect: [
-        /\b(stupid|idiot|dumb|pathetic)\b/i,
-      ],
+      respect: [/\b(stupid|idiot|dumb|pathetic)\b/i],
     };
 
     let violations = 0;
@@ -288,7 +300,9 @@ export class RuleBasedDriftMonitor implements PersonaDriftMonitor {
 
     // Check tone consistency
     const expectedPatterns = TONE_INDICATORS[style.tone] ?? [];
-    const otherTones = Object.entries(TONE_INDICATORS).filter(([tone]) => tone !== style.tone);
+    const otherTones = Object.entries(TONE_INDICATORS).filter(
+      ([tone]) => tone !== style.tone,
+    );
 
     let expectedMatches = 0;
     let unexpectedMatches = 0;
@@ -310,7 +324,7 @@ export class RuleBasedDriftMonitor implements PersonaDriftMonitor {
       score -= toneDeviation * 0.5;
       corrections.push(
         `Communication tone drifting from "${style.tone}" ` +
-        `(${unexpectedMatches} off-tone vs ${expectedMatches} on-tone signals)`,
+          `(${unexpectedMatches} off-tone vs ${expectedMatches} on-tone signals)`,
       );
     }
 
@@ -331,7 +345,7 @@ export class RuleBasedDriftMonitor implements PersonaDriftMonitor {
         score -= verbosityDeviation * 0.3;
         corrections.push(
           `Verbosity inconsistency: ${outOfRangeCount}/${outputs.length} outputs ` +
-          `outside "${style.verbosity}" range`,
+            `outside "${style.verbosity}" range`,
         );
       }
     }
@@ -364,7 +378,10 @@ export class RuleBasedDriftMonitor implements PersonaDriftMonitor {
         // Extract meaningful keywords from the boundary definition
         const keywords = boundary
           .toLowerCase()
-          .replace(/\b(never|don't|do not|must not|shall not|avoid|always|ensure)\b/gi, "")
+          .replace(
+            /\b(never|don't|do not|must not|shall not|avoid|always|ensure)\b/gi,
+            "",
+          )
           .trim()
           .split(/\s+/)
           .filter((word) => word.length > 3);
@@ -372,7 +389,10 @@ export class RuleBasedDriftMonitor implements PersonaDriftMonitor {
         let boundaryMentioned = false;
         for (const keyword of keywords) {
           // Use word-boundary matching instead of substring includes
-          const wordBoundaryPattern = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+          const wordBoundaryPattern = new RegExp(
+            `\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
+            "i",
+          );
           if (wordBoundaryPattern.test(outputLower)) {
             boundaryMentioned = true;
             break;
@@ -396,21 +416,28 @@ export class RuleBasedDriftMonitor implements PersonaDriftMonitor {
     }
 
     const maxViolations = outputs.length * hardBoundaries.length;
-    return maxViolations > 0 ? Math.max(0, 1 - violations / maxViolations) : 1.0;
+    return maxViolations > 0
+      ? Math.max(0, 1 - violations / maxViolations)
+      : 1.0;
   }
 
   private analyzeTopicFocus(outputs: string[], corrections: string[]): number {
     if (outputs.length < 3) return 1.0; // Too few outputs to judge
 
     // Extract simple topic signatures (top 5 non-stopword tokens)
-    const signatures = outputs.map((output) => this.extractTopicSignature(output));
+    const signatures = outputs.map((output) =>
+      this.extractTopicSignature(output),
+    );
 
     // Compute pairwise similarity between consecutive signatures
     let totalSimilarity = 0;
     let pairs = 0;
 
     for (let i = 1; i < signatures.length; i++) {
-      totalSimilarity += this.jaccardSimilarity(signatures[i - 1], signatures[i]);
+      totalSimilarity += this.jaccardSimilarity(
+        signatures[i - 1],
+        signatures[i],
+      );
       pairs++;
     }
 
@@ -454,19 +481,112 @@ export class RuleBasedDriftMonitor implements PersonaDriftMonitor {
 
   private extractTopicSignature(text: string): Set<string> {
     const stopwords = new Set([
-      "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-      "have", "has", "had", "do", "does", "did", "will", "would", "could",
-      "should", "may", "might", "shall", "can", "need", "dare", "ought",
-      "used", "to", "of", "in", "for", "on", "with", "at", "by", "from",
-      "as", "into", "through", "during", "before", "after", "above",
-      "below", "between", "out", "off", "over", "under", "again",
-      "further", "then", "once", "and", "but", "or", "nor", "not",
-      "so", "yet", "both", "either", "neither", "each", "every",
-      "all", "any", "few", "more", "most", "other", "some", "such",
-      "no", "only", "own", "same", "than", "too", "very", "just",
-      "because", "if", "when", "while", "that", "this", "these",
-      "those", "it", "its", "i", "me", "my", "we", "our", "you",
-      "your", "he", "she", "they", "them", "his", "her", "their",
+      "the",
+      "a",
+      "an",
+      "is",
+      "are",
+      "was",
+      "were",
+      "be",
+      "been",
+      "being",
+      "have",
+      "has",
+      "had",
+      "do",
+      "does",
+      "did",
+      "will",
+      "would",
+      "could",
+      "should",
+      "may",
+      "might",
+      "shall",
+      "can",
+      "need",
+      "dare",
+      "ought",
+      "used",
+      "to",
+      "of",
+      "in",
+      "for",
+      "on",
+      "with",
+      "at",
+      "by",
+      "from",
+      "as",
+      "into",
+      "through",
+      "during",
+      "before",
+      "after",
+      "above",
+      "below",
+      "between",
+      "out",
+      "off",
+      "over",
+      "under",
+      "again",
+      "further",
+      "then",
+      "once",
+      "and",
+      "but",
+      "or",
+      "nor",
+      "not",
+      "so",
+      "yet",
+      "both",
+      "either",
+      "neither",
+      "each",
+      "every",
+      "all",
+      "any",
+      "few",
+      "more",
+      "most",
+      "other",
+      "some",
+      "such",
+      "no",
+      "only",
+      "own",
+      "same",
+      "than",
+      "too",
+      "very",
+      "just",
+      "because",
+      "if",
+      "when",
+      "while",
+      "that",
+      "this",
+      "these",
+      "those",
+      "it",
+      "its",
+      "i",
+      "me",
+      "my",
+      "we",
+      "our",
+      "you",
+      "your",
+      "he",
+      "she",
+      "they",
+      "them",
+      "his",
+      "her",
+      "their",
     ]);
 
     const words = text

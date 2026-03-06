@@ -1,5 +1,5 @@
-import { EventEmitter } from "node:events";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { PassThrough } from "node:stream";
 import type { AgentRuntime } from "@elizaos/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -58,7 +58,7 @@ function createMockReq(
   body?: unknown,
   headers: Record<string, string> = {},
 ) {
-  const req = new EventEmitter() as IncomingMessage & EventEmitter;
+  const req = new PassThrough() as IncomingMessage & PassThrough;
   req.method = method;
   req.url = url;
   req.headers = { "content-type": "application/json", ...headers };
@@ -69,8 +69,8 @@ function createMockReq(
   const payload = body ? JSON.stringify(body) : "";
   const emitBody = () => {
     setTimeout(() => {
-      if (payload) req.emit("data", Buffer.from(payload));
-      req.emit("end");
+      if (payload) req.write(Buffer.from(payload));
+      req.end();
     }, 0);
   };
 
@@ -119,14 +119,12 @@ describe("POST /api/tts/elevenlabs", () => {
 
   it("proxies ElevenLabs audio requests", async () => {
     process.env.MILAIDY_API_TOKEN = "tts-token";
-    const fetchSpy = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(
-        new Response(Uint8Array.from([1, 2, 3, 4]), {
-          status: 200,
-          headers: { "content-type": "audio/mpeg" },
-        }),
-      );
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(Uint8Array.from([1, 2, 3, 4]), {
+        status: 200,
+        headers: { "content-type": "audio/mpeg" },
+      }),
+    );
 
     const state = createState({
       messages: {

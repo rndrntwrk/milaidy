@@ -100,7 +100,9 @@ export function applyQualityFilters(
     const droppedStepIds: string[] = [];
     const acceptedEpisodeSteps: TrainingExample[] = [];
 
-    if ((episode.description ?? "").trim().length < config.minDescriptionLength) {
+    if (
+      (episode.description ?? "").trim().length < config.minDescriptionLength
+    ) {
       reasons.push(
         `description shorter than ${config.minDescriptionLength} characters`,
       );
@@ -152,7 +154,10 @@ export function applyQualityFilters(
     });
   }
 
-  const inputSteps = episodes.reduce((sum, episode) => sum + episode.steps.length, 0);
+  const inputSteps = episodes.reduce(
+    (sum, episode) => sum + episode.steps.length,
+    0,
+  );
   return {
     accepted,
     dropped,

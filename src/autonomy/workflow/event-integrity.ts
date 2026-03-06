@@ -66,7 +66,9 @@ export function computeEventHash(input: EventHashInput): string {
  * value (e.g. when older events are truncated), but each subsequent event must
  * chain to the prior event hash.
  */
-export function verifyEventChain(events: ExecutionEvent[]): EventChainVerification {
+export function verifyEventChain(
+  events: ExecutionEvent[],
+): EventChainVerification {
   if (events.length === 0) {
     return { valid: true, checkedEvents: 0 };
   }

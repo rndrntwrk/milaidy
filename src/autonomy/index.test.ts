@@ -46,10 +46,10 @@ describe("Autonomy Kernel", () => {
 
       const config = getAutonomyConfig();
       expect(config).not.toBeNull();
-      expect(config!.trust.writeThreshold).toBe(0.8);
+      expect(config?.trust.writeThreshold).toBe(0.8);
       // Other trust fields should have defaults
-      expect(config!.trust.quarantineThreshold).toBe(0.3);
-      expect(config!.trust.llmAnalysis).toBe(false);
+      expect(config?.trust.quarantineThreshold).toBe(0.3);
+      expect(config?.trust.llmAnalysis).toBe(false);
     });
 
     it("reports validation issues without blocking", async () => {
@@ -100,9 +100,9 @@ describe("Autonomy Kernel", () => {
       const config = getAutonomyConfig();
 
       expect(config).not.toBeNull();
-      expect(config!.enabled).toBe(true);
-      expect(config!.memoryGate).toBeDefined();
-      expect(config!.driftMonitor).toBeDefined();
+      expect(config?.enabled).toBe(true);
+      expect(config?.memoryGate).toBeDefined();
+      expect(config?.driftMonitor).toBeDefined();
     });
   });
 

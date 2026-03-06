@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { computeEventHash } from "../../workflow/event-integrity.js";
-import { addAutonomyEventsHashChain } from "./002_autonomy_events_hash_chain.js";
 import type { AutonomyDbAdapter } from "../db-adapter.js";
+import { addAutonomyEventsHashChain } from "./002_autonomy_events_hash_chain.js";
 
 type RawResult = { rows: Record<string, unknown>[]; columns: string[] };
 
@@ -27,7 +27,9 @@ describe("addAutonomyEventsHashChain", () => {
     await addAutonomyEventsHashChain(makeAdapter(exec));
 
     expect(exec).toHaveBeenCalledTimes(3);
-    expect(exec.mock.calls[0][0]).toContain("ADD COLUMN IF NOT EXISTS prev_hash");
+    expect(exec.mock.calls[0][0]).toContain(
+      "ADD COLUMN IF NOT EXISTS prev_hash",
+    );
     expect(exec.mock.calls[1][0]).toContain("AS missing_hash");
     expect(exec.mock.calls[2][0]).toContain("CREATE UNIQUE INDEX");
     expect(
@@ -60,7 +62,7 @@ describe("addAutonomyEventsHashChain", () => {
               id: 2,
               request_id: "r1",
               type: "tool:validated",
-              payload: "{\"b\":2,\"a\":1}",
+              payload: '{"b":2,"a":1}',
               correlation_id: "c-1",
               agent_id: "agent-a",
               timestamp: "2025-01-01T00:00:01.000Z",

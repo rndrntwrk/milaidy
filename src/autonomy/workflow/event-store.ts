@@ -8,12 +8,12 @@
  * @module autonomy/workflow/event-store
  */
 
+import { computeEventHash } from "./event-integrity.js";
 import type {
   EventStoreInterface,
   ExecutionEvent,
   ExecutionEventType,
 } from "./types.js";
-import { computeEventHash } from "./event-integrity.js";
 
 /** Default maximum number of events to retain. */
 const DEFAULT_MAX_EVENTS = 10_000;
@@ -142,10 +142,7 @@ export class InMemoryEventStore implements EventStoreInterface {
   private evict(now: number): void {
     if (this.retentionMs > 0) {
       const cutoff = now - this.retentionMs;
-      while (
-        this.events.length > 0 &&
-        this.events[0].timestamp < cutoff
-      ) {
+      while (this.events.length > 0 && this.events[0].timestamp < cutoff) {
         this.removeOldest();
       }
     }

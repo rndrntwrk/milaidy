@@ -9,7 +9,7 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   createRateLimitMiddleware,
   extractIP,
@@ -143,7 +143,9 @@ describe("SlidingWindowRateLimiter", () => {
 });
 
 describe("extractIP", () => {
-  function mockRequest(headers: Record<string, string | string[] | undefined>): IncomingMessage {
+  function mockRequest(
+    headers: Record<string, string | string[] | undefined>,
+  ): IncomingMessage {
     return {
       headers,
       socket: { remoteAddress: "192.168.1.100" },
@@ -186,7 +188,10 @@ describe("extractIP", () => {
 });
 
 describe("createRateLimitMiddleware", () => {
-  function mockRequest(url: string, headers: Record<string, string> = {}): IncomingMessage {
+  function mockRequest(
+    url: string,
+    headers: Record<string, string> = {},
+  ): IncomingMessage {
     return {
       url,
       headers,
@@ -194,7 +199,11 @@ describe("createRateLimitMiddleware", () => {
     } as unknown as IncomingMessage;
   }
 
-  function mockResponse(): ServerResponse & { _statusCode: number; _headers: Record<string, string>; _body: string } {
+  function mockResponse(): ServerResponse & {
+    _statusCode: number;
+    _headers: Record<string, string>;
+    _body: string;
+  } {
     const res = {
       _statusCode: 200,
       _headers: {} as Record<string, string>,

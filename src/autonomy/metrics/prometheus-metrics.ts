@@ -82,7 +82,9 @@ export function recordGoalCount(status: string, count: number): void {
  * Record an approval request.
  */
 export function recordApprovalRequest(riskClass: string): void {
-  metrics.counter("autonomy_approval_requests_total", 1, { risk_class: riskClass });
+  metrics.counter("autonomy_approval_requests_total", 1, {
+    risk_class: riskClass,
+  });
 }
 
 /**
@@ -165,10 +167,7 @@ export function recordRoleExecution(
 /**
  * Record role execution latency in milliseconds.
  */
-export function recordRoleLatencyMs(
-  role: AutonomyRoleName,
-  ms: number,
-): void {
+export function recordRoleLatencyMs(role: AutonomyRoleName, ms: number): void {
   metrics.histogram("autonomy_role_latency_ms", ms, { role });
 }
 

@@ -71,6 +71,28 @@ function toStringArray(val: unknown): string[] {
     : [];
 }
 
+function saveEnv(...keys: string[]): { restore: () => void } {
+  const expanded = Array.from(
+    new Set(
+      keys.flatMap((key) =>
+        key.startsWith("MILADY_")
+          ? [key, key.replace("MILADY_", "MILAIDY_")]
+          : [key],
+      ),
+    ),
+  );
+  const previous = new Map<string, string | undefined>();
+  for (const key of expanded) previous.set(key, process.env[key]);
+  return {
+    restore: () => {
+      for (const [key, value] of previous) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // WebSocket helpers
 // ---------------------------------------------------------------------------
@@ -130,8 +152,12 @@ function waitForWsMessage(
 describe("Deferred restart E2E", () => {
   let port: number;
   let close: () => Promise<void>;
+  let envBackup: { restore: () => void };
 
   beforeAll(async () => {
+    envBackup = saveEnv("MILADY_API_TOKEN");
+    delete process.env.MILADY_API_TOKEN;
+    delete process.env.MILAIDY_API_TOKEN;
     const server = await startApiServer({ port: 0 });
     port = server.port;
     close = server.close;
@@ -139,6 +165,7 @@ describe("Deferred restart E2E", () => {
 
   afterAll(async () => {
     await close();
+    envBackup.restore();
   });
 
   // -- Initial state --

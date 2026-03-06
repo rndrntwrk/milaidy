@@ -51,7 +51,10 @@ function makeDomainPack(overrides?: Partial<DomainPack>): DomainPack {
     name: "Test Domain",
     version: "1.0.0",
     description: "A test domain pack",
-    toolContracts: [makeToolContract("TEST_TOOL_A"), makeToolContract("TEST_TOOL_B")],
+    toolContracts: [
+      makeToolContract("TEST_TOOL_A"),
+      makeToolContract("TEST_TOOL_B"),
+    ],
     invariants: [
       {
         id: "test:invariant",

@@ -6,9 +6,9 @@
 
 import { createHash } from "node:crypto";
 import {
-  parseLearningTraceDataset,
   type LearningTraceDataset,
   type LearningTraceExample,
+  parseLearningTraceDataset,
   type TraceLabel,
 } from "./dataset-schema.js";
 
@@ -28,7 +28,8 @@ export interface ExtractDatasetOptions {
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return undefined;
   return value as Record<string, unknown>;
 }
 
@@ -37,7 +38,9 @@ function asString(value: unknown): string | undefined {
 }
 
 function asNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 function derivePolicyCompliance(
@@ -50,7 +53,8 @@ function derivePolicyCompliance(
   const approvalOutcome = asString(approval?.outcome);
 
   if (validationOutcome === "failed") return "non_compliant";
-  if (approvalRequired && approvalOutcome !== "approved") return "non_compliant";
+  if (approvalRequired && approvalOutcome !== "approved")
+    return "non_compliant";
   if (validationOutcome === "passed") return "compliant";
   return "uncertain";
 }
@@ -69,7 +73,10 @@ function deriveVerificationPassed(
   return true;
 }
 
-function deriveTaskOutcome(success: boolean, verificationPassed: boolean): TraceLabel["taskOutcome"] {
+function deriveTaskOutcome(
+  success: boolean,
+  verificationPassed: boolean,
+): TraceLabel["taskOutcome"] {
   if (!success) return "fail";
   return verificationPassed ? "success" : "partial";
 }
@@ -142,7 +149,9 @@ function buildTraceExample(
   const executed = sorted.find((entry) => entry.type === "tool:executed");
   const failed = sorted.find((entry) => entry.type === "tool:failed");
   const verified = sorted.find((entry) => entry.type === "tool:verified");
-  const decision = sorted.find((entry) => entry.type === "tool:decision:logged");
+  const decision = sorted.find(
+    (entry) => entry.type === "tool:decision:logged",
+  );
 
   const proposedPayload = asRecord(proposed?.payload);
   const executedPayload = asRecord(executed?.payload);
@@ -158,7 +167,9 @@ function buildTraceExample(
 
   const source = asString(proposedPayload?.source) ?? "unknown";
   const toolInput =
-    asRecord(proposedPayload?.params) ?? asRecord(decisionPayload?.params) ?? {};
+    asRecord(proposedPayload?.params) ??
+    asRecord(decisionPayload?.params) ??
+    {};
   const startTimestamp = asNumber(proposed?.timestamp);
   const endTimestamp =
     asNumber(executed?.timestamp) ??
@@ -184,14 +195,23 @@ function buildTraceExample(
   const taskOutcome = deriveTaskOutcome(success, verificationPassed);
   const labels: TraceLabel = {
     taskOutcome,
-    verificationAlignment: deriveVerificationAlignment(success, verificationPassed),
+    verificationAlignment: deriveVerificationAlignment(
+      success,
+      verificationPassed,
+    ),
     policyCompliance,
-    safetyRisk: deriveSafetyRisk(decisionPayload, taskOutcome, policyCompliance),
+    safetyRisk: deriveSafetyRisk(
+      decisionPayload,
+      taskOutcome,
+      policyCompliance,
+    ),
     rewardHackingSignal: deriveRewardHackingSignal(
       decisionPayload,
       policyCompliance,
     ),
-    ...(asString(decisionPayload?.error) ? { notes: asString(decisionPayload?.error) } : {}),
+    ...(asString(decisionPayload?.error)
+      ? { notes: asString(decisionPayload?.error) }
+      : {}),
   };
 
   return {
@@ -205,9 +225,7 @@ function buildTraceExample(
     source,
     toolInput,
     toolOutput:
-      executedPayload?.result ??
-      failedPayload?.reason ??
-      failedPayload?.error,
+      executedPayload?.result ?? failedPayload?.reason ?? failedPayload?.error,
     durationMs,
     reward: computeReward(labels),
     verificationPassed,
@@ -236,7 +254,10 @@ export function extractLearningTraceDatasetFromEvents(
   for (const [requestId, entries] of grouped) {
     const example = buildTraceExample(requestId, entries);
     if (!example) continue;
-    if (options.includeFailed === false && example.labels.taskOutcome === "fail") {
+    if (
+      options.includeFailed === false &&
+      example.labels.taskOutcome === "fail"
+    ) {
       continue;
     }
     examples.push(example);

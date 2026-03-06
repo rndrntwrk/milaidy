@@ -3,16 +3,13 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-
-import { PgRetentionManager } from "./pg-retention-manager.js";
-import type { AutonomyDbAdapter } from "./db-adapter.js";
 import type { ExecutionEvent } from "../workflow/types.js";
+import type { AutonomyDbAdapter } from "./db-adapter.js";
+import { PgRetentionManager } from "./pg-retention-manager.js";
 
 // ---------- Mock ----------
 
-function makeMockAdapter(
-  execFn?: ReturnType<typeof vi.fn>,
-): AutonomyDbAdapter {
+function makeMockAdapter(execFn?: ReturnType<typeof vi.fn>): AutonomyDbAdapter {
   return {
     executeRaw: execFn ?? vi.fn().mockResolvedValue({ rows: [], columns: [] }),
     agentId: "test-agent",
@@ -30,7 +27,11 @@ function makeEvent(overrides?: Partial<ExecutionEvent>): ExecutionEvent {
   } as ExecutionEvent;
 }
 
-const policy = { eventRetentionMs: 60_000, auditRetentionMs: 120_000, exportBeforeEviction: true };
+const policy = {
+  eventRetentionMs: 60_000,
+  auditRetentionMs: 120_000,
+  exportBeforeEviction: true,
+};
 
 // ---------- Tests ----------
 
@@ -57,7 +58,10 @@ describe("PgRetentionManager", () => {
       const adapter = makeMockAdapter(exec);
       const mgr = new PgRetentionManager(adapter);
 
-      await mgr.addAuditReport({ policyId: "coding-governance", passed: true }, policy);
+      await mgr.addAuditReport(
+        { policyId: "coding-governance", passed: true },
+        policy,
+      );
 
       expect(exec).toHaveBeenCalledOnce();
       expect(mgr.size).toBe(1);
@@ -70,7 +74,12 @@ describe("PgRetentionManager", () => {
     it("returns exported records", async () => {
       const exec = vi.fn().mockResolvedValue({
         rows: [
-          { type: "event", data: { tool: "A" }, retain_until: "2025-01-01T00:00:00Z", exported_at: "2025-01-02T00:00:00Z" },
+          {
+            type: "event",
+            data: { tool: "A" },
+            retain_until: "2025-01-01T00:00:00Z",
+            exported_at: "2025-01-02T00:00:00Z",
+          },
         ],
         columns: [],
       });
@@ -108,8 +117,16 @@ describe("PgRetentionManager", () => {
     it("returns JSONL string", async () => {
       const exec = vi.fn().mockResolvedValue({
         rows: [
-          { type: "event", data: { a: 1 }, retain_until: "2025-01-01T00:00:00Z" },
-          { type: "audit", data: { b: 2 }, retain_until: "2025-02-01T00:00:00Z" },
+          {
+            type: "event",
+            data: { a: 1 },
+            retain_until: "2025-01-01T00:00:00Z",
+          },
+          {
+            type: "audit",
+            data: { b: 2 },
+            retain_until: "2025-02-01T00:00:00Z",
+          },
         ],
         columns: [],
       });
@@ -129,13 +146,15 @@ describe("PgRetentionManager", () => {
   describe("getComplianceSummary()", () => {
     it("returns aggregate summary", async () => {
       const exec = vi.fn().mockResolvedValue({
-        rows: [{
-          total_records: 5,
-          event_records: 3,
-          audit_records: 2,
-          oldest_retain_until: 1700000000000,
-          newest_retain_until: 1800000000000,
-        }],
+        rows: [
+          {
+            total_records: 5,
+            event_records: 3,
+            audit_records: 2,
+            oldest_retain_until: 1700000000000,
+            newest_retain_until: 1800000000000,
+          },
+        ],
         columns: [],
       });
       const adapter = makeMockAdapter(exec);

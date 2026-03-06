@@ -1,8 +1,7 @@
-import { describe, expect, it } from "vitest";
-
-import type { AgentRuntime } from "@elizaos/core";
-import type { IncomingMessage, ServerResponse } from "node:http";
 import { EventEmitter } from "node:events";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import type { AgentRuntime } from "@elizaos/core";
+import { describe, expect, it } from "vitest";
 
 import { __testOnlyHandleRequest } from "../server.js";
 

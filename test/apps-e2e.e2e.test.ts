@@ -254,8 +254,14 @@ function parseHttpTarget(rawUrl: string): HttpTarget | null {
 describe("Apps E2E", () => {
   let server: { port: number; close: () => Promise<void> };
   let pluginManagerAvailable = true;
+  let previousMiladyToken: string | undefined;
+  let previousMilaidyToken: string | undefined;
 
   beforeAll(async () => {
+    previousMiladyToken = process.env.MILADY_API_TOKEN;
+    previousMilaidyToken = process.env.MILAIDY_API_TOKEN;
+    delete process.env.MILADY_API_TOKEN;
+    delete process.env.MILAIDY_API_TOKEN;
     server = await startApiServer({ port: 0 });
     const probe = await api(server.port, "GET", "/api/apps");
     pluginManagerAvailable = !isPluginManagerUnavailable(probe);
@@ -263,6 +269,10 @@ describe("Apps E2E", () => {
 
   afterAll(async () => {
     if (server) await server.close();
+    if (previousMiladyToken === undefined) delete process.env.MILADY_API_TOKEN;
+    else process.env.MILADY_API_TOKEN = previousMiladyToken;
+    if (previousMilaidyToken === undefined) delete process.env.MILAIDY_API_TOKEN;
+    else process.env.MILAIDY_API_TOKEN = previousMilaidyToken;
   });
 
   // ===================================================================

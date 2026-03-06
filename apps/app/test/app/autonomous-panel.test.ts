@@ -111,10 +111,9 @@ describe("AutonomousPanel", () => {
 
     const markup = renderToStaticMarkup(React.createElement(AutonomousPanel));
 
-    const panel = tree!.root.findByProps({ "data-testid": "autonomous-panel" });
-    expect(panel).toBeDefined();
-    expect(String(panel.props.className)).toContain("hidden lg:flex");
-    expect(readAllText(tree!)).toContain("Agent not running");
+    expect(markup).toContain('data-testid="autonomous-panel"');
+    expect(markup).toContain("hidden lg:flex");
+    expect(readAllText(markup)).toContain("Agent not running");
   });
 
   it("updates current thought/action and stream count as events arrive", async () => {

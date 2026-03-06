@@ -8,10 +8,10 @@ export { PipelineExecutor } from "./executor.js";
 export { GatedMemoryWriter } from "./memory-writer.js";
 export {
   createRoleModuleRegistry,
-  RoleModuleRegistry,
   type RoleModuleHealth,
   type RoleModuleInstances,
   type RoleModuleName,
+  RoleModuleRegistry,
   type RoleModuleRegistrySnapshot,
 } from "./modules.js";
 export { KernelOrchestrator } from "./orchestrator.js";

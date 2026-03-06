@@ -42,7 +42,11 @@ vi.mock("node:child_process", () => {
       // Deterministic install: create a minimal node_modules package.json so the
       // installer can read the installed version and resolve an entry point.
       if (cmd === "npm" && args[0] === "install") {
-        const spec = String(args[1] ?? "");
+        const spec = String(
+          args.find(
+            (arg, index) => index > 0 && !String(arg).startsWith("--"),
+          ) ?? "",
+        );
         const prefixIndex = args.indexOf("--prefix");
         const targetDir =
           prefixIndex === -1 ? "" : String(args[prefixIndex + 1] ?? "");
@@ -66,6 +70,12 @@ vi.mock("node:child_process", () => {
                 null,
                 2,
               ),
+            ),
+          )
+          .then(() =>
+            fsPromises.writeFile(
+              pathMod.join(pkgDir, "index"),
+              "export default { name: 'plugin-test' };",
             ),
           )
           .then(() => cb(null, "", ""))

@@ -3,8 +3,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
-  rebuildAllRequestProjections,
   type RequestProjection,
+  rebuildAllRequestProjections,
 } from "../../src/autonomy/workflow/event-projections.js";
 import type { ExecutionEvent } from "../../src/autonomy/workflow/types.js";
 
@@ -60,7 +60,9 @@ function parseEvents(raw: string): ExecutionEvent[] {
   ) {
     return (parsed as { events: ExecutionEvent[] }).events;
   }
-  throw new Error("Input must be an event array or an object with an events array");
+  throw new Error(
+    "Input must be an event array or an object with an events array",
+  );
 }
 
 function renderMarkdown(input: {
@@ -79,7 +81,9 @@ function renderMarkdown(input: {
   lines.push(`- Event count: \`${input.eventCount}\``);
   lines.push(`- Request projections: \`${input.projections.length}\``);
   lines.push("");
-  lines.push("| Request ID | Status | Events | Seq Range | Critical Invariant | Compensation | Unresolved Compensation Incident | Last Error |");
+  lines.push(
+    "| Request ID | Status | Events | Seq Range | Critical Invariant | Compensation | Unresolved Compensation Incident | Last Error |",
+  );
   lines.push("|---|---|---:|---|---|---|---|---|");
   for (const projection of input.projections) {
     lines.push(

@@ -183,8 +183,7 @@ export async function createAutonomyTables(
 ): Promise<void> {
   // Split by statement and execute each one individually
   // (PGLite doesn't support multi-statement execute in all cases)
-  const statements = MIGRATION_SQL
-    .split(";")
+  const statements = MIGRATION_SQL.split(";")
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
 

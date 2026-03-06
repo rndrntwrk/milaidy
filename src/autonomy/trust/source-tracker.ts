@@ -44,7 +44,10 @@ export class SourceTracker {
    * Source type is frozen at first registration to prevent type escalation attacks
    * (e.g., an "external" source claiming to be "system" in later interactions).
    */
-  record(source: TrustSource, feedback: "positive" | "negative" | "neutral"): void {
+  record(
+    source: TrustSource,
+    feedback: "positive" | "negative" | "neutral",
+  ): void {
     const now = Date.now();
     let record = this.sources.get(source.id);
 

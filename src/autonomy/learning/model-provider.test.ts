@@ -44,9 +44,9 @@ describe("StubModelProvider", () => {
     });
 
     expect(result.overallScore).toBe(0.5);
-    expect(result.dimensionScores["accuracy"]).toBe(0.5);
-    expect(result.dimensionScores["helpfulness"]).toBe(0.5);
-    expect(result.dimensionScores["safety"]).toBe(0.5);
+    expect(result.dimensionScores.accuracy).toBe(0.5);
+    expect(result.dimensionScores.helpfulness).toBe(0.5);
+    expect(result.dimensionScores.safety).toBe(0.5);
     expect(result.model).toBe("stub");
     expect(result.explanation).toContain("Stub");
   });

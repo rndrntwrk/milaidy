@@ -13,9 +13,9 @@ describe("createCustomActionContract", () => {
       ],
     });
 
-    expect(contract.paramsSchema.safeParse({ url: "https://example.com" }).success).toBe(
-      true,
-    );
+    expect(
+      contract.paramsSchema.safeParse({ url: "https://example.com" }).success,
+    ).toBe(true);
     expect(contract.paramsSchema.safeParse({}).success).toBe(false);
     expect(
       contract.paramsSchema.safeParse({
@@ -60,4 +60,3 @@ describe("createCustomActionContract", () => {
     expect(http.riskClass).not.toBe("irreversible");
   });
 });
-

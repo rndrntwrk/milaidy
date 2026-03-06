@@ -8,6 +8,12 @@
  * @module autonomy/approval/approval-gate
  */
 
+import {
+  recordApprovalDecision,
+  recordApprovalQueueSize,
+  recordApprovalRequest,
+  recordApprovalTurnaroundMs,
+} from "../metrics/prometheus-metrics.js";
 import type { ProposedToolCall, RiskClass } from "../tools/types.js";
 import type {
   ApprovalDecision,
@@ -15,12 +21,6 @@ import type {
   ApprovalRequest,
   ApprovalResult,
 } from "./types.js";
-import {
-  recordApprovalDecision,
-  recordApprovalQueueSize,
-  recordApprovalRequest,
-  recordApprovalTurnaroundMs,
-} from "../metrics/prometheus-metrics.js";
 
 /** Default approval timeout: 5 minutes. */
 const DEFAULT_TIMEOUT_MS = 300_000;

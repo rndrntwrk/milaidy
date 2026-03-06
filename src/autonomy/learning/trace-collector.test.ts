@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
 import { writeFileSync } from "node:fs";
+import { describe, expect, it, vi } from "vitest";
 import type {
   OrchestratedRequest,
   OrchestratedResult,
@@ -170,7 +170,10 @@ describe("TraceCollector", () => {
   it("collectEpisode includes drift from audit report", async () => {
     const store = createMockEventStore();
     const tc = new TraceCollector(store, cr, er);
-    const episode = await tc.collectEpisode(makeOrchestratedResult(), makeRequest());
+    const episode = await tc.collectEpisode(
+      makeOrchestratedResult(),
+      makeRequest(),
+    );
 
     expect(episode.driftScore).toBe(0.05);
     expect(episode.auditAnomalies).toEqual([]);
@@ -186,7 +189,7 @@ describe("TraceCollector", () => {
     const episode = await tc.collectEpisode(result, makeRequest());
 
     expect(episode.success).toBe(false);
-    expect(episode.steps[0].reward.breakdown["completion"]).toBe(0);
+    expect(episode.steps[0].reward.breakdown.completion).toBe(0);
   });
 });
 
@@ -231,10 +234,7 @@ describe("DatasetExporter", () => {
       deidentification: { salt: "test-redaction" },
     });
 
-    const lastCall = vi
-      .mocked(writeFileSync)
-      .mock
-      .calls.at(-1);
+    const lastCall = vi.mocked(writeFileSync).mock.calls.at(-1);
     const payload = String(lastCall?.[1] ?? "");
     expect(payload).toContain("<EMAIL_");
     expect(payload).toContain("<SECRET_");
@@ -287,13 +287,10 @@ describe("DatasetExporter", () => {
       },
     });
 
-    const lastCall = vi
-      .mocked(writeFileSync)
-      .mock
-      .calls.at(-1);
+    const lastCall = vi.mocked(writeFileSync).mock.calls.at(-1);
     const payload = String(lastCall?.[1] ?? "");
-    expect(payload).toContain("\"id\":\"ep-good\"");
-    expect(payload).not.toContain("\"id\":\"ep-bad\"");
+    expect(payload).toContain('"id":"ep-good"');
+    expect(payload).not.toContain('"id":"ep-bad"');
   });
 
   it("toJSONL produces valid JSON", () => {
@@ -330,7 +327,10 @@ describe("DatasetExporter", () => {
   it("round-trip: Episode → JSONL → parseable", async () => {
     const store = createMockEventStore();
     const tc = new TraceCollector(store, cr, er);
-    const episode = await tc.collectEpisode(makeOrchestratedResult(), makeRequest());
+    const episode = await tc.collectEpisode(
+      makeOrchestratedResult(),
+      makeRequest(),
+    );
 
     const exporter = new DatasetExporter();
     const line = exporter.toJSONL(episode);

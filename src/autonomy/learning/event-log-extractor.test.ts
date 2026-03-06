@@ -72,7 +72,11 @@ describe("extractLearningTraceDatasetFromEvents", () => {
         requestId: "req-fail",
         type: "tool:proposed",
         timestamp: 200,
-        payload: { toolName: "WRITE_FILE", source: "user", params: { path: "/tmp/x" } },
+        payload: {
+          toolName: "WRITE_FILE",
+          source: "user",
+          params: { path: "/tmp/x" },
+        },
       },
       {
         requestId: "req-fail",
@@ -119,7 +123,11 @@ describe("extractLearningTraceDatasetFromEvents", () => {
           requestId: "req-risk",
           type: "tool:proposed",
           timestamp: 1_000,
-          payload: { toolName: "TRANSFER", source: "system", params: { amount: 100 } },
+          payload: {
+            toolName: "TRANSFER",
+            source: "system",
+            params: { amount: 100 },
+          },
         },
         {
           requestId: "req-risk",

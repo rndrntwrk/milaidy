@@ -69,7 +69,9 @@ describe("InvariantChecker", () => {
     expect(result.status).toBe("passed");
     expect(result.checks).toHaveLength(2);
     expect(result.checks.every((c) => c.passed)).toBe(true);
-    expect(result.checks.every((c) => c.owner === "test:invariants")).toBe(true);
+    expect(result.checks.every((c) => c.owner === "test:invariants")).toBe(
+      true,
+    );
     expect(result.hasCriticalViolation).toBe(false);
   });
 

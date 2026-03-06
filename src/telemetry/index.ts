@@ -4,6 +4,10 @@
  * @module telemetry
  */
 
-export { initTelemetry, createMetricsClient, metrics } from "./setup.js";
 export { AgentInstrumentation } from "./agent-instrumentation.js";
-export { exportPrometheusText, createMetricsHandler, type MetricsSnapshot } from "./prometheus-exporter.js";
+export {
+  createMetricsHandler,
+  exportPrometheusText,
+  type MetricsSnapshot,
+} from "./prometheus-exporter.js";
+export { createMetricsClient, initTelemetry, metrics } from "./setup.js";

@@ -21,9 +21,7 @@ describe("resolveManagedAppLeakedAssetRedirect", () => {
       "https://alice.rndrntwrk.com/api/apps/local/%40elizaos%2Fapp-babylon/play",
     );
 
-    expect(location).toBe(
-      "/api/apps/local/%40elizaos%2Fapp-babylon/script.js",
-    );
+    expect(location).toBe("/api/apps/local/%40elizaos%2Fapp-babylon/script.js");
   });
 
   it("returns null when the request path is not a known leaked asset path", () => {

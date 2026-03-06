@@ -7,14 +7,12 @@
 import type { CompensationFn } from "../types.js";
 
 function asObject(value: unknown): Record<string, unknown> | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return undefined;
   return value as Record<string, unknown>;
 }
 
-function manualFallback(
-  toolName: string,
-  detail: string,
-): CompensationFn {
+function manualFallback(toolName: string, detail: string): CompensationFn {
   return async (ctx) => ({
     success: false,
     detail: `[${toolName}] Manual compensation required: ${detail} (requestId: ${ctx.requestId})`,

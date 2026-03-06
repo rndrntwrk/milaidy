@@ -27,7 +27,7 @@ function formatRelativeTime(dateString: string): string {
 }
 
 export function ConversationsSidebar({
-  mobile = false,
+  mobile: _mobile = false,
   onClose,
 }: ConversationsSidebarProps) {
   const {
@@ -104,7 +104,11 @@ export function ConversationsSidebar({
   };
 
   return (
-    <aside className="hidden md:flex w-60 min-w-60 border-r border-border bg-bg flex-col overflow-y-auto text-[13px]" data-testid="conversations-sidebar" role="complementary" aria-label="Conversations">
+    <aside
+      className="hidden md:flex w-60 min-w-60 border-r border-border bg-bg flex-col overflow-y-auto text-[13px]"
+      data-testid="conversations-sidebar"
+      aria-label="Conversations"
+    >
       <div className="p-3 border-b border-border">
         <button
           type="button"
@@ -118,7 +122,10 @@ export function ConversationsSidebar({
         </button>
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-1" aria-label="Conversation list">
+      <nav
+        className="flex-1 overflow-y-auto py-1"
+        aria-label="Conversation list"
+      >
         {sortedConversations.length === 0 ? (
           <div className="px-3 py-6 text-center text-muted text-xs">
             No conversations yet
@@ -134,7 +141,9 @@ export function ConversationsSidebar({
                 data-testid="conv-item"
                 data-active={isActive || undefined}
                 className={`flex items-center px-3 py-2 gap-2 transition-colors border-l-[3px] ${
-                  isActive ? "bg-bg-hover border-l-accent" : "border-l-transparent hover:bg-bg-hover"
+                  isActive
+                    ? "bg-bg-hover border-l-accent"
+                    : "border-l-transparent hover:bg-bg-hover"
                 } group`}
               >
                 {isEditing ? (
@@ -150,6 +159,7 @@ export function ConversationsSidebar({
                 ) : (
                   <>
                     <button
+                      type="button"
                       className="flex items-center gap-2 flex-1 min-w-0 bg-transparent border-none cursor-pointer text-left p-0"
                       onClick={() => void handleSelectConversation(conv.id)}
                       onDoubleClick={() => handleDoubleClick(conv)}
@@ -157,35 +167,24 @@ export function ConversationsSidebar({
                       aria-label={`${conv.title}${unreadConversations.has(conv.id) ? " (unread)" : ""}`}
                     >
                       {unreadConversations.has(conv.id) && (
-                        <span className="w-2 h-2 rounded-full bg-accent shrink-0" aria-hidden="true" />
+                        <span
+                          className="w-2 h-2 rounded-full bg-accent shrink-0"
+                          aria-hidden="true"
+                        />
                       )}
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate text-txt">{conv.title}</div>
-                        <div className="text-[11px] text-muted mt-0.5">{formatRelativeTime(conv.updatedAt)}</div>
-                      </div>
-                    </button>
-                    <button
-                      data-testid="conv-delete"
-                      className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity border-none bg-transparent text-muted hover:text-danger hover:bg-destructive-subtle cursor-pointer text-sm px-1 py-0.5 rounded flex-shrink-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void handleDeleteConversation(conv.id);
-                      }}
-                      aria-label={`Delete ${conv.title}`}
-                    >
-                      {unreadConversations.has(conv.id) && (
-                        <span className="w-2 h-2 rounded-full bg-accent shrink-0" aria-hidden="true" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate text-txt">{conv.title}</div>
-                        <div className="text-[11px] text-muted mt-0.5">{formatRelativeTime(conv.updatedAt)}</div>
+                        <div className="font-medium truncate text-txt">
+                          {conv.title}
+                        </div>
+                        <div className="text-[11px] text-muted mt-0.5">
+                          {formatRelativeTime(conv.updatedAt)}
+                        </div>
                       </div>
                     </button>
                     <button
                       type="button"
                       className="flex items-center gap-2 flex-1 min-w-0 bg-transparent border-0 p-0 m-0 text-left cursor-pointer"
                       onClick={() => {
-                        setConfirmDeleteId(null);
                         void handleSelectConversation(conv.id);
                         onClose?.();
                       }}

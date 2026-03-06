@@ -1,11 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { KernelStateMachine } from "../state-machine/kernel-state-machine.js";
-import type {
-  PipelineResult,
-  ToolActionHandler,
-} from "../workflow/types.js";
 import { LocalWorkflowEngine } from "../adapters/workflow/local-engine.js";
 import type { WorkflowEngine } from "../adapters/workflow/types.js";
+import { KernelStateMachine } from "../state-machine/kernel-state-machine.js";
+import type { ToolActionHandler } from "../workflow/types.js";
 import {
   KernelOrchestrator,
   type RoleCallAuthzPolicy,
@@ -14,9 +11,8 @@ import {
 import { SafeModeControllerImpl } from "./safe-mode.js";
 import type {
   AuditorRole,
-  AuditReport,
-  ExecutorRole,
   ExecutionPlan,
+  ExecutorRole,
   MemoryWriterRole,
   OrchestratedRequest,
   PlannerRole,
@@ -250,7 +246,9 @@ describe("KernelOrchestrator", () => {
         },
       });
 
-      const result = await orchestrator.execute(createRequest({ sourceTrust: 0.9 }));
+      const result = await orchestrator.execute(
+        createRequest({ sourceTrust: 0.9 }),
+      );
 
       expect(result.success).toBe(false);
       expect(result.auditReport.anomalies[0]).toContain(
@@ -268,7 +266,9 @@ describe("KernelOrchestrator", () => {
         },
       });
 
-      const result = await orchestrator.execute(createRequest({ source: "user" }));
+      const result = await orchestrator.execute(
+        createRequest({ source: "user" }),
+      );
 
       expect(result.success).toBe(false);
       expect(result.auditReport.anomalies[0]).toContain(
@@ -482,7 +482,9 @@ describe("KernelOrchestrator", () => {
     });
 
     it("retries transient role failures and succeeds", async () => {
-      const planner = createMockPlanner(createMockPlan([{ toolName: "TOOL_A" }]));
+      const planner = createMockPlanner(
+        createMockPlan([{ toolName: "TOOL_A" }]),
+      );
       let attempts = 0;
       const pipeline: ExecutorRole = {
         execute: vi.fn(async (call) => {
@@ -611,7 +613,7 @@ describe("KernelOrchestrator", () => {
         safeModeCtrl,
       );
 
-      const result = await orchestrator.execute(createRequest());
+      const _result = await orchestrator.execute(createRequest());
 
       expect(safeModeCtrl.getStatus().active).toBe(true);
     });

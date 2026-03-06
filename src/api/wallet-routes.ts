@@ -9,6 +9,7 @@ import {
   fetchSolanaBalances,
   fetchSolanaNfts,
   generateWalletForChain,
+  getSolanaRpcConfig,
   getWalletAddresses,
   importWallet,
   validatePrivateKey,
@@ -92,7 +93,7 @@ export async function handleWalletRoutes(
   if (method === "GET" && pathname === "/api/wallet/balances") {
     const addresses = deps.getWalletAddresses();
     const alchemyKey = process.env.ALCHEMY_API_KEY;
-    const heliusKey = process.env.HELIUS_API_KEY;
+    const solanaRpc = getSolanaRpcConfig();
 
     const result: WalletBalancesResponse = { evm: null, solana: null };
 
@@ -114,7 +115,7 @@ export async function handleWalletRoutes(
       }
     }
 
-    if (addresses.solanaAddress && heliusKey) {
+    if (addresses.solanaAddress && solanaRpc) {
       const solanaBalancesSpan = createIntegrationTelemetrySpan({
         boundary: "wallet",
         operation: "fetch_solana_balances",
@@ -122,7 +123,7 @@ export async function handleWalletRoutes(
       try {
         const solanaData = await deps.fetchSolanaBalances(
           addresses.solanaAddress,
-          heliusKey,
+          solanaRpc,
         );
         result.solana = { address: addresses.solanaAddress, ...solanaData };
         solanaBalancesSpan.success();
@@ -140,7 +141,7 @@ export async function handleWalletRoutes(
   if (method === "GET" && pathname === "/api/wallet/nfts") {
     const addresses = deps.getWalletAddresses();
     const alchemyKey = process.env.ALCHEMY_API_KEY;
-    const heliusKey = process.env.HELIUS_API_KEY;
+    const solanaRpc = getSolanaRpcConfig();
 
     const result: WalletNftsResponse = { evm: [], solana: null };
 
@@ -158,7 +159,7 @@ export async function handleWalletRoutes(
       }
     }
 
-    if (addresses.solanaAddress && heliusKey) {
+    if (addresses.solanaAddress && solanaRpc) {
       const solanaNftsSpan = createIntegrationTelemetrySpan({
         boundary: "wallet",
         operation: "fetch_solana_nfts",
@@ -166,7 +167,7 @@ export async function handleWalletRoutes(
       try {
         const nfts = await deps.fetchSolanaNfts(
           addresses.solanaAddress,
-          heliusKey,
+          solanaRpc,
         );
         result.solana = { nfts };
         solanaNftsSpan.success();
@@ -298,6 +299,7 @@ export async function handleWalletRoutes(
       evmChains: ["Ethereum", "Base", "Arbitrum", "Optimism", "Polygon"],
       evmAddress: addresses.evmAddress,
       solanaAddress: addresses.solanaAddress,
+      solanaRpcProvider: getSolanaRpcConfig()?.provider ?? null,
     };
     json(res, configStatus);
     return true;

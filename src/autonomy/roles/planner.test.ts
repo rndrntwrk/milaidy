@@ -194,7 +194,7 @@ describe("GoalDrivenPlanner", () => {
         description: "Second",
       });
 
-      expect(planner.getActivePlan()!.id).toBe(plan2.id);
+      expect(planner.getActivePlan()?.id).toBe(plan2.id);
       expect(plan1.id).not.toBe(plan2.id);
     });
   });

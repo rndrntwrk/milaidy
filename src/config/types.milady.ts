@@ -1,5 +1,11 @@
 import type { SessionConfig, SessionSendPolicyConfig } from "@elizaos/core";
 import type { AutonomyConfig } from "../autonomy/config.js";
+import type {
+  CustomActionDef,
+  DatabaseProviderType,
+  MediaConfig,
+  ReleaseChannel,
+} from "../contracts/config.js";
 import type { AgentBinding, AgentsConfig } from "./types.agents.js";
 import type {
   DiscoveryConfig,
@@ -765,3 +771,5 @@ export type ConfigFileSnapshot = {
   issues: ConfigValidationIssue[];
   warnings: ConfigValidationIssue[];
 };
+
+export type MilaidyConfig = MiladyConfig;

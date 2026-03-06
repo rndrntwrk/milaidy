@@ -43,11 +43,15 @@ export class PgGoalManager implements GoalManager {
     this.adapter = adapter;
   }
 
-  setCriteriaEvaluator(evaluator: (criterion: string) => Promise<boolean>): void {
+  setCriteriaEvaluator(
+    evaluator: (criterion: string) => Promise<boolean>,
+  ): void {
     this.criteriaEvaluator = evaluator;
   }
 
-  async addGoal(input: Omit<Goal, "id" | "createdAt" | "updatedAt">): Promise<Goal> {
+  async addGoal(
+    input: Omit<Goal, "id" | "createdAt" | "updatedAt">,
+  ): Promise<Goal> {
     // Trust gate
     const trustFloor = GOAL_TRUST_FLOORS[input.source] ?? 0.6;
     if (input.sourceTrust < trustFloor) {
@@ -59,9 +63,12 @@ export class PgGoalManager implements GoalManager {
     // Validate parent
     if (input.parentGoalId) {
       const parent = await this.getGoalById(input.parentGoalId);
-      if (!parent) throw new Error(`Parent goal ${input.parentGoalId} not found`);
+      if (!parent)
+        throw new Error(`Parent goal ${input.parentGoalId} not found`);
       if (parent.status === "completed" || parent.status === "failed") {
-        throw new Error(`Cannot add child to ${parent.status} parent goal ${input.parentGoalId}`);
+        throw new Error(
+          `Cannot add child to ${parent.status} parent goal ${input.parentGoalId}`,
+        );
       }
     }
 
@@ -73,11 +80,17 @@ export class PgGoalManager implements GoalManager {
     );
 
     const goal = rowToGoal(rows[0]);
-    logger.info(`[goal-manager:pg] Created goal ${goal.id}: "${goal.description}"`);
+    logger.info(
+      `[goal-manager:pg] Created goal ${goal.id}: "${goal.description}"`,
+    );
     return goal;
   }
 
-  async updateGoal(goalId: string, update: Partial<Goal>, caller?: MutationContext): Promise<Goal> {
+  async updateGoal(
+    goalId: string,
+    update: Partial<Goal>,
+    caller?: MutationContext,
+  ): Promise<Goal> {
     const goal = await this.getGoalById(goalId);
     if (!goal) throw new Error(`Goal ${goalId} not found`);
 
@@ -89,7 +102,10 @@ export class PgGoalManager implements GoalManager {
           `Update from "${caller.source}" rejected: trust ${caller.sourceTrust.toFixed(3)} below floor ${trustFloor}`,
         );
       }
-      if (update.status && (update.status === "completed" || update.status === "failed")) {
+      if (
+        update.status &&
+        (update.status === "completed" || update.status === "failed")
+      ) {
         if (caller.sourceTrust < goal.sourceTrust) {
           throw new Error(
             `Cannot ${update.status} goal: caller trust ${caller.sourceTrust.toFixed(3)} below goal creator trust ${goal.sourceTrust.toFixed(3)}`,
@@ -113,11 +129,16 @@ export class PgGoalManager implements GoalManager {
     const now = new Date().toISOString();
     sets.push(`updated_at = '${now}'::timestamptz`);
 
-    if (update.description !== undefined) sets.push(`description = '${esc(update.description)}'`);
-    if (update.priority !== undefined) sets.push(`priority = '${esc(update.priority)}'`);
-    if (update.status !== undefined) sets.push(`status = '${esc(update.status)}'`);
+    if (update.description !== undefined)
+      sets.push(`description = '${esc(update.description)}'`);
+    if (update.priority !== undefined)
+      sets.push(`priority = '${esc(update.priority)}'`);
+    if (update.status !== undefined)
+      sets.push(`status = '${esc(update.status)}'`);
     if (update.successCriteria !== undefined) {
-      sets.push(`success_criteria = '${esc(JSON.stringify(update.successCriteria))}'::jsonb`);
+      sets.push(
+        `success_criteria = '${esc(JSON.stringify(update.successCriteria))}'::jsonb`,
+      );
     }
 
     // Terminal status → set completed_at
@@ -164,7 +185,10 @@ export class PgGoalManager implements GoalManager {
     return rowToGoal(rows[0]);
   }
 
-  async evaluateGoal(goalId: string, caller?: MutationContext): Promise<GoalEvaluationResult> {
+  async evaluateGoal(
+    goalId: string,
+    caller?: MutationContext,
+  ): Promise<GoalEvaluationResult> {
     const goal = await this.getGoalById(goalId);
     if (!goal) throw new Error(`Goal ${goalId} not found`);
 
@@ -204,11 +228,18 @@ export class PgGoalManager implements GoalManager {
     return { met: allMet, evidence };
   }
 
-  private async evaluateCriterion(criterion: string): Promise<{ met: boolean; reason: string }> {
+  private async evaluateCriterion(
+    criterion: string,
+  ): Promise<{ met: boolean; reason: string }> {
     if (this.criteriaEvaluator) {
       try {
         const met = await this.criteriaEvaluator(criterion);
-        return { met, reason: met ? "Custom evaluator: passed" : "Custom evaluator: not met" };
+        return {
+          met,
+          reason: met
+            ? "Custom evaluator: passed"
+            : "Custom evaluator: not met",
+        };
       } catch {
         // Fall through
       }
@@ -220,7 +251,10 @@ export class PgGoalManager implements GoalManager {
     if (/\b(done|complete|finished|achieved|verified)\b/i.test(criterion)) {
       return { met: true, reason: "Criterion appears complete" };
     }
-    return { met: false, reason: "Cannot evaluate — needs human review or custom evaluator" };
+    return {
+      met: false,
+      reason: "Cannot evaluate — needs human review or custom evaluator",
+    };
   }
 }
 
@@ -249,7 +283,11 @@ function rowToGoal(row: Record<string, unknown>): Goal {
 function parseJsonb<T>(value: unknown, fallback: T): T {
   if (value === null || value === undefined) return fallback;
   if (typeof value === "string") {
-    try { return JSON.parse(value) as T; } catch { return fallback; }
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return fallback;
+    }
   }
   return value as T;
 }

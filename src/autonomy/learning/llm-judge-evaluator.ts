@@ -14,7 +14,7 @@ import type {
 } from "../metrics/evaluator-types.js";
 import { KernelScenarioEvaluator } from "../metrics/kernel-evaluator.js";
 import type { EvaluationScenario } from "../metrics/types.js";
-import { SystemPromptBuilder } from "./prompt-builder.js";
+import type { SystemPromptBuilder } from "./prompt-builder.js";
 import type { ModelProvider } from "./types.js";
 
 // ---------- LLM-Judge Evaluator ----------
@@ -30,15 +30,13 @@ import type { ModelProvider } from "./types.js";
 export class LLMJudgeEvaluator implements ScenarioEvaluator {
   private readonly modelProvider: ModelProvider;
   private readonly kernelEvaluator: KernelScenarioEvaluator;
-  private readonly promptBuilder: SystemPromptBuilder;
 
   constructor(
     modelProvider: ModelProvider,
-    promptBuilder?: SystemPromptBuilder,
+    _promptBuilder?: SystemPromptBuilder,
   ) {
     this.modelProvider = modelProvider;
     this.kernelEvaluator = new KernelScenarioEvaluator();
-    this.promptBuilder = promptBuilder ?? new SystemPromptBuilder();
   }
 
   async evaluate(

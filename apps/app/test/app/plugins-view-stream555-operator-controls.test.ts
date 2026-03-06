@@ -21,7 +21,8 @@ vi.mock("../../src/api-client", () => ({
     installRegistryPlugin: vi.fn(),
     testPluginConnection: vi.fn(),
     restartAndWait: vi.fn(),
-    executeAutonomyPlan: (...args: unknown[]) => mockExecuteAutonomyPlan(...args),
+    executeAutonomyPlan: (...args: unknown[]) =>
+      mockExecuteAutonomyPlan(...args),
   },
 }));
 
@@ -145,18 +146,17 @@ describe("Stream555 operator controls", () => {
       tree = TestRenderer.create(React.createElement(PluginsView));
     });
 
-    const authenticatedButton = findButtonByText(tree!.root, "Authenticated");
-    const disconnectButton = findButtonByText(tree!.root, "Disconnect Auth");
+    const authenticatedButton = findButtonByText(tree?.root, "Authenticated");
+    const disconnectButton = findButtonByText(tree?.root, "Disconnect Auth");
 
     expect(authenticatedButton.props.disabled).toBe(true);
     expect(disconnectButton.props.disabled).toBe(false);
     expect(
-      tree!.root.findAll(
-        (node) =>
-          node.children.some(
-            (child) =>
-              typeof child === "string" && child.includes("Control Plane URL"),
-          ),
+      tree?.root.findAll((node) =>
+        node.children.some(
+          (child) =>
+            typeof child === "string" && child.includes("Control Plane URL"),
+        ),
       ).length,
     ).toBe(0);
   });
@@ -191,19 +191,18 @@ describe("Stream555 operator controls", () => {
       tree = TestRenderer.create(React.createElement(PluginsView));
     });
 
-    const authButton = findButtonByText(tree!.root, "Authenticate Wallet");
+    const authButton = findButtonByText(tree?.root, "Authenticate Wallet");
     await act(async () => {
       authButton.props.onClick();
     });
 
     expect(
-      tree!.root.findAll(
-        (node) =>
-          node.children.some(
-            (child) =>
-              typeof child === "string" &&
-              child.includes("Solana wallet required"),
-          ),
+      tree?.root.findAll((node) =>
+        node.children.some(
+          (child) =>
+            typeof child === "string" &&
+            child.includes("Solana wallet required"),
+        ),
       ).length,
     ).toBeGreaterThan(0);
     expect(mockExecuteAutonomyPlan).not.toHaveBeenCalled();
@@ -232,7 +231,7 @@ describe("Stream555 operator controls", () => {
       tree = TestRenderer.create(React.createElement(PluginsView));
     });
 
-    const input = tree!.root.find(
+    const input = tree?.root.find(
       (node) =>
         node.type === "input" &&
         node.props["data-config-key"] === "STREAM555_DEST_X_RTMP_URL",
@@ -242,7 +241,7 @@ describe("Stream555 operator controls", () => {
       input.props.onChange({ target: { value: "rtmps://example/x" } });
     });
 
-    const saveButton = findButtonByText(tree!.root, "Save Settings");
+    const saveButton = findButtonByText(tree?.root, "Save Settings");
     await act(async () => {
       await saveButton.props.onClick();
     });
@@ -285,7 +284,7 @@ describe("Stream555 operator controls", () => {
     });
 
     expect(
-      tree!.root.findAll(
+      tree?.root.findAll(
         (node) =>
           node.type === "input" &&
           node.props["data-config-key"] === "STREAM555_DEST_KICK_RTMP_URL",
@@ -324,7 +323,7 @@ describe("Stream555 operator controls", () => {
     });
 
     expect(
-      tree!.root.findAll(
+      tree?.root.findAll(
         (node) =>
           node.type === "input" &&
           node.props["data-config-key"] === "STREAM555_DEST_TWITCH_RTMP_URL",
@@ -335,13 +334,48 @@ describe("Stream555 operator controls", () => {
   it("shows all destination toggles inside collapsible Destinations group", async () => {
     mockUseApp.mockReturnValue(
       createContext([
-        { key: "STREAM555_DEST_PUMPFUN_ENABLED", type: "string", currentValue: "true", isSet: true },
-        { key: "STREAM555_DEST_X_ENABLED", type: "string", currentValue: "false", isSet: true },
-        { key: "STREAM555_DEST_TWITCH_ENABLED", type: "string", currentValue: "true", isSet: true },
-        { key: "STREAM555_DEST_KICK_ENABLED", type: "string", currentValue: "true", isSet: true },
-        { key: "STREAM555_DEST_YOUTUBE_ENABLED", type: "string", currentValue: "false", isSet: true },
-        { key: "STREAM555_DEST_FACEBOOK_ENABLED", type: "string", currentValue: "false", isSet: true },
-        { key: "STREAM555_DEST_CUSTOM_ENABLED", type: "string", currentValue: "false", isSet: true },
+        {
+          key: "STREAM555_DEST_PUMPFUN_ENABLED",
+          type: "string",
+          currentValue: "true",
+          isSet: true,
+        },
+        {
+          key: "STREAM555_DEST_X_ENABLED",
+          type: "string",
+          currentValue: "false",
+          isSet: true,
+        },
+        {
+          key: "STREAM555_DEST_TWITCH_ENABLED",
+          type: "string",
+          currentValue: "true",
+          isSet: true,
+        },
+        {
+          key: "STREAM555_DEST_KICK_ENABLED",
+          type: "string",
+          currentValue: "true",
+          isSet: true,
+        },
+        {
+          key: "STREAM555_DEST_YOUTUBE_ENABLED",
+          type: "string",
+          currentValue: "false",
+          isSet: true,
+        },
+        {
+          key: "STREAM555_DEST_FACEBOOK_ENABLED",
+          type: "string",
+          currentValue: "false",
+          isSet: true,
+        },
+        {
+          key: "STREAM555_DEST_CUSTOM_ENABLED",
+          type: "string",
+          currentValue: "false",
+          isSet: true,
+        },
       ]),
     );
 
@@ -362,23 +396,19 @@ describe("Stream555 operator controls", () => {
 
     for (const key of destinationsToggleKeys) {
       expect(
-        tree!.root.findAll(
+        tree?.root.findAll(
           (node) =>
             node.type === "button" && node.props["data-config-key"] === key,
         ).length,
       ).toBe(1);
     }
 
-    const destinationsHeader = tree!.root.find(
-      (node) =>
-        node.type === "button" && node.props["aria-expanded"] === true,
+    const destinationsHeader = tree?.root.find(
+      (node) => node.type === "button" && node.props["aria-expanded"] === true,
     );
     expect(
-      tree!.root.findAll(
-        (node) =>
-          node.children.some(
-            (child) => child === 7 || child === "7",
-          ),
+      tree?.root.findAll((node) =>
+        node.children.some((child) => child === 7 || child === "7"),
       ).length,
     ).toBeGreaterThan(0);
 
@@ -386,13 +416,12 @@ describe("Stream555 operator controls", () => {
       destinationsHeader.props.onClick();
     });
 
-    const collapsedDestinationsHeader = tree!.root.find(
-      (node) =>
-        node.type === "button" && node.props["aria-expanded"] === false,
+    const collapsedDestinationsHeader = tree?.root.find(
+      (node) => node.type === "button" && node.props["aria-expanded"] === false,
     );
     expect(collapsedDestinationsHeader.props["aria-expanded"]).toBe(false);
     expect(
-      tree!.root.findAll(
+      tree?.root.findAll(
         (node) =>
           node.type === "button" &&
           node.props["data-config-key"] === "STREAM555_DEST_X_ENABLED",

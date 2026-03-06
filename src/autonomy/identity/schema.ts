@@ -53,7 +53,10 @@ export function computeIdentityHash(identity: AutonomyIdentityConfig): string {
     hardBoundaries: [...identity.hardBoundaries].sort(),
     communicationStyle: identity.communicationStyle,
     // Include softPreferences — changes should be tracked via identityVersion
-    softPreferences: JSON.stringify(identity.softPreferences, Object.keys(identity.softPreferences).sort()),
+    softPreferences: JSON.stringify(
+      identity.softPreferences,
+      Object.keys(identity.softPreferences).sort(),
+    ),
   };
   return createHash("sha256")
     .update(JSON.stringify(protectedFields))
@@ -67,7 +70,9 @@ export function computeIdentityHash(identity: AutonomyIdentityConfig): string {
  * SECURITY: A missing hash is treated as a FAILURE, not a pass.
  * Uninitialized identities must be explicitly initialized with computeIdentityHash.
  */
-export function verifyIdentityIntegrity(identity: AutonomyIdentityConfig): boolean {
+export function verifyIdentityIntegrity(
+  identity: AutonomyIdentityConfig,
+): boolean {
   if (!identity.identityHash) {
     // Missing hash = unverifiable = fail-closed
     return false;
@@ -106,19 +111,31 @@ export function validateAutonomyIdentity(
   const issues: Array<{ field: string; message: string }> = [];
 
   if (!identity.coreValues || identity.coreValues.length === 0) {
-    issues.push({ field: "coreValues", message: "Must have at least one core value" });
+    issues.push({
+      field: "coreValues",
+      message: "Must have at least one core value",
+    });
   }
 
   if (!identity.communicationStyle) {
-    issues.push({ field: "communicationStyle", message: "Communication style is required" });
+    issues.push({
+      field: "communicationStyle",
+      message: "Communication style is required",
+    });
   } else {
     const validTones = ["formal", "casual", "technical", "empathetic"];
     if (!validTones.includes(identity.communicationStyle.tone)) {
-      issues.push({ field: "communicationStyle.tone", message: `Must be one of: ${validTones.join(", ")}` });
+      issues.push({
+        field: "communicationStyle.tone",
+        message: `Must be one of: ${validTones.join(", ")}`,
+      });
     }
     const validVerbosity = ["concise", "balanced", "detailed"];
     if (!validVerbosity.includes(identity.communicationStyle.verbosity)) {
-      issues.push({ field: "communicationStyle.verbosity", message: `Must be one of: ${validVerbosity.join(", ")}` });
+      issues.push({
+        field: "communicationStyle.verbosity",
+        message: `Must be one of: ${validVerbosity.join(", ")}`,
+      });
     }
   }
 

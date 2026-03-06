@@ -8,7 +8,11 @@ import path from "node:path";
 type PackFile = { path: string };
 type PackResult = { files?: PackFile[] };
 
-const requiredPaths = ["dist/index.js", "dist/entry.js", "dist/build-info.json"];
+const requiredPaths = [
+  "dist/index.js",
+  "dist/entry.js",
+  "dist/build-info.json",
+];
 const forbiddenPrefixes = ["dist/Milady.app/"];
 
 function ensureBuildArtifacts(): void {

@@ -7,9 +7,16 @@
  * @module auth/credentials
  */
 
-import { logger } from "@elizaos/core";
 import crypto from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { logger } from "@elizaos/core";
 import { refreshAnthropicToken } from "./anthropic.js";
+import {
+  applyClaudeCodeStealth,
+  applyOpenAICodexStealth,
+} from "./apply-stealth.js";
 import { migrateCredentials, needsMigration } from "./migration.js";
 import { refreshCodexToken } from "./openai-codex.js";
 import { getSecureStorage } from "./secure-storage.js";
@@ -28,12 +35,16 @@ const DEFAULT_REFRESH_LOOP_MS = 2 * 60 * 1000;
 let _migrationAttempted = false;
 let _refreshInterval: ReturnType<typeof setInterval> | null = null;
 let _refreshInFlight: Promise<void> | null = null;
-let _openAiCodexProbeCache:
-  | { tokenHash: string; checkedAt: number; valid: boolean; reason?: string }
-  | null = null;
+let _openAiCodexProbeCache: {
+  tokenHash: string;
+  checkedAt: number;
+  valid: boolean;
+  reason?: string;
+} | null = null;
 
 const OPENAI_AUTH_JWT_CLAIM_PATH = "https://api.openai.com/auth";
-const OPENAI_CODEX_RESPONSES_URL = "https://chatgpt.com/backend-api/codex/responses";
+const OPENAI_CODEX_RESPONSES_URL =
+  "https://chatgpt.com/backend-api/codex/responses";
 
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
   const parts = token.split(".");
@@ -97,8 +108,8 @@ function toCodexProbeReason(
   const message =
     typeof payload?.error === "string"
       ? payload.error
-      : typeof (payload?.error as { message?: unknown } | undefined)?.message ===
-          "string"
+      : typeof (payload?.error as { message?: unknown } | undefined)
+            ?.message === "string"
         ? ((payload?.error as { message?: string }).message ?? "")
         : "";
   return message || fallbackText || `HTTP ${status}`;
@@ -133,7 +144,8 @@ async function probeOpenAiCodexToken(
     return { valid: false, reason: "OAuth token missing chatgpt_account_id" };
   }
 
-  const model = process.env.MILAIDY_OPENAI_CODEX_CHECK_MODEL?.trim() || "gpt-5.1";
+  const model =
+    process.env.MILAIDY_OPENAI_CODEX_CHECK_MODEL?.trim() || "gpt-5.1";
   let result: { valid: boolean; reason?: string } = { valid: true };
 
   try {
@@ -216,9 +228,7 @@ async function ensureMigrated(): Promise<void> {
     const result = await migrateCredentials();
 
     if (result.migrated.length > 0) {
-      logger.info(
-        `[auth] Migration complete: ${result.migrated.join(", ")}`,
-      );
+      logger.info(`[auth] Migration complete: ${result.migrated.join(", ")}`);
     }
   }
 }
@@ -228,6 +238,48 @@ async function ensureMigrated(): Promise<void> {
  */
 function storageKey(provider: SubscriptionProvider): string {
   return `credentials:${provider}`;
+}
+
+function getLegacyAuthDirs(): string[] {
+  const roots = [
+    process.env.MILADY_HOME,
+    process.env.MILAIDY_HOME,
+    path.join(os.homedir(), ".milady"),
+    path.join(os.homedir(), ".milaidy"),
+  ]
+    .filter(
+      (value): value is string =>
+        typeof value === "string" && value.trim().length > 0,
+    )
+    .map((value) => path.join(value, "auth"));
+
+  return [...new Set(roots)];
+}
+
+function readLegacyCredentials(
+  provider: SubscriptionProvider,
+): StoredCredentials | null {
+  for (const authDir of getLegacyAuthDirs()) {
+    const legacyPath = path.join(authDir, `${provider}.json`);
+    try {
+      if (!fs.existsSync(legacyPath)) continue;
+      const raw = fs.readFileSync(legacyPath, "utf8");
+      const parsed = JSON.parse(raw) as StoredCredentials;
+      if (
+        parsed.provider === provider &&
+        parsed.credentials &&
+        typeof parsed.credentials.access === "string"
+      ) {
+        return parsed;
+      }
+    } catch (err) {
+      logger.warn(
+        `[auth] Failed to read legacy credentials for ${provider}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -263,7 +315,9 @@ export async function loadCredentials(
   const storage = await getSecureStorage();
   const data = await storage.get(storageKey(provider));
 
-  if (!data) return null;
+  if (!data) {
+    return readLegacyCredentials(provider);
+  }
 
   try {
     return JSON.parse(data) as StoredCredentials;
@@ -369,7 +423,8 @@ export async function getSubscriptionStatus(): Promise<
 
       const token = await getAccessToken(provider);
       const latest = await loadCredentials(provider);
-      const expiresAt = latest?.credentials.expires ?? stored.credentials.expires;
+      const expiresAt =
+        latest?.credentials.expires ?? stored.credentials.expires;
       return {
         provider,
         configured: true,
@@ -401,14 +456,59 @@ export async function validateOpenAiCodexAccess(): Promise<{
  * credentials, `model.primary` is auto-set so the user doesn't need to
  * configure it manually.
  */
-export async function applySubscriptionCredentials(): Promise<void> {
+function ensureModelPrimaryFromSubscriptionProvider(
+  config: Record<string, unknown> | undefined,
+): void {
+  const defaults =
+    config?.agents &&
+    typeof config.agents === "object" &&
+    (config.agents as Record<string, unknown>).defaults &&
+    typeof (config.agents as Record<string, unknown>).defaults === "object"
+      ? ((config.agents as Record<string, unknown>).defaults as Record<
+          string,
+          unknown
+        >)
+      : null;
+  if (!defaults) return;
+
+  const provider =
+    typeof defaults.subscriptionProvider === "string"
+      ? defaults.subscriptionProvider
+      : null;
+  if (!provider) return;
+
+  const model =
+    defaults.model && typeof defaults.model === "object"
+      ? (defaults.model as Record<string, unknown>)
+      : {};
+  if (typeof model.primary === "string" && model.primary.trim().length > 0) {
+    defaults.model = model;
+    return;
+  }
+
+  if (provider === "anthropic-subscription") {
+    model.primary = "anthropic";
+  } else if (provider === "openai-codex") {
+    model.primary = "openai";
+  } else {
+    return;
+  }
+
+  defaults.model = model;
+}
+
+export async function applySubscriptionCredentials(
+  config?: Record<string, unknown>,
+): Promise<void> {
   // Ensure migration has happened
   await ensureMigrated();
+  ensureModelPrimaryFromSubscriptionProvider(config);
 
   // Anthropic subscription → set ANTHROPIC_API_KEY
   const anthropicToken = await getAccessToken("anthropic-subscription");
   if (anthropicToken) {
     process.env.ANTHROPIC_API_KEY = anthropicToken;
+    applyClaudeCodeStealth();
     logger.info(
       "[auth] Applied Anthropic subscription credentials to environment",
     );
@@ -416,15 +516,18 @@ export async function applySubscriptionCredentials(): Promise<void> {
     clearSubscriptionEnv("anthropic-subscription");
   }
 
-  // OpenAI Codex subscription is consumed by pi-ai directly.
-  // Keep OPENAI_API_KEY strictly for real OpenAI API keys.
   clearSubscriptionEnv("openai-codex");
   const codexToken = await getAccessToken("openai-codex");
   if (codexToken) {
     const validation = await probeOpenAiCodexToken(codexToken);
     if (validation.valid) {
+      // Release B compatibility: expose the validated Codex OAuth token
+      // through OPENAI_API_KEY so existing runtime and stealth hooks keep
+      // working until the direct-env bridge is fully retired.
+      process.env.OPENAI_API_KEY = codexToken;
+      await applyOpenAICodexStealth();
       logger.info(
-        "[auth] OpenAI Codex subscription credentials are ready for pi-ai runtime",
+        "[auth] Applied OpenAI Codex subscription credentials to environment",
       );
     } else {
       clearSubscriptionEnv("openai-codex");
@@ -495,7 +598,7 @@ export function stopSubscriptionCredentialRefreshLoop(): void {
 
 /** @deprecated Use async loadCredentials instead. */
 export function loadCredentialsSync(
-  provider: SubscriptionProvider,
+  _provider: SubscriptionProvider,
 ): StoredCredentials | null {
   logger.warn(
     "[auth] loadCredentialsSync is deprecated, use async loadCredentials",

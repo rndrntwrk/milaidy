@@ -67,7 +67,10 @@ describe("createHackDetectionInvariants", () => {
 
 describe("superficialPassInvariant", () => {
   const invariants = createHackDetectionInvariants();
-  const invariant = invariants.find((i) => i.id === "hack:superficial-pass")!;
+  const invariant = invariants.find((i) => i.id === "hack:superficial-pass");
+  if (!invariant) {
+    throw new Error("Missing superficial-pass invariant");
+  }
 
   it("flags empty/null tool output with success=true", async () => {
     const result = await invariant.check({
@@ -126,7 +129,10 @@ describe("superficialPassInvariant", () => {
 
 describe("stepInflationInvariant", () => {
   const invariants = createHackDetectionInvariants();
-  const invariant = invariants.find((i) => i.id === "hack:step-inflation")!;
+  const invariant = invariants.find((i) => i.id === "hack:step-inflation");
+  if (!invariant) {
+    throw new Error("Missing step-inflation invariant");
+  }
 
   it("flags plans with excessive steps", async () => {
     const result = await invariant.check({
@@ -265,7 +271,7 @@ describe("HackDetector", () => {
       (s) => s.type === "superficial_pass",
     );
     expect(superficial).toBeDefined();
-    expect(superficial!.severity).toBe("high");
+    expect(superficial?.severity).toBe("high");
   });
 
   it("aggregates multiple signals correctly", () => {

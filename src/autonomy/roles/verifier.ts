@@ -7,14 +7,14 @@
  * @module autonomy/roles/verifier
  */
 
-import type {
-  ProposedToolCall,
-  SchemaValidatorInterface,
-} from "../tools/types.js";
 import {
   recordRoleExecution,
   recordRoleLatencyMs,
 } from "../metrics/prometheus-metrics.js";
+import type {
+  ProposedToolCall,
+  SchemaValidatorInterface,
+} from "../tools/types.js";
 import type {
   InvariantCheckerInterface,
   InvariantContext,
@@ -58,7 +58,8 @@ export class UnifiedVerifier implements VerifierRole {
         agentId: context.agentId,
         requestId: context.requestId,
       };
-      const postCondResult = await this.postConditionVerifier.verify(verifierCtx);
+      const postCondResult =
+        await this.postConditionVerifier.verify(verifierCtx);
 
       // 3. Invariant check (optional)
       let invariantsResult:

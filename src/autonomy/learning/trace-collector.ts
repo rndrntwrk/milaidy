@@ -14,17 +14,16 @@ import type {
   OrchestratedResult,
 } from "../roles/types.js";
 import type { EventStoreInterface, PipelineResult } from "../workflow/types.js";
-import type { CheckpointReward, EpisodeReward } from "./reward.js";
-import type {
-  DatasetStatistics,
-  Episode,
-  TrainingExample,
-} from "./types.js";
-import { Deidentifier, type DeidentificationOptions } from "./deidentification.js";
+import {
+  type DeidentificationOptions,
+  Deidentifier,
+} from "./deidentification.js";
 import {
   applyQualityFilters,
   type QualityFilterConfig,
 } from "./quality-filters.js";
+import type { CheckpointReward, EpisodeReward } from "./reward.js";
+import type { DatasetStatistics, Episode, TrainingExample } from "./types.js";
 
 // ---------- Trace Collector ----------
 
@@ -89,16 +88,18 @@ export class TraceCollector {
     agentId: string = "unknown",
   ): Promise<TrainingExample> {
     // Try to enrich from event store
-    const events = await this.eventStore.getByRequestId(pipelineResult.requestId);
+    const events = await this.eventStore.getByRequestId(
+      pipelineResult.requestId,
+    );
 
     // Extract source from tool:proposed event
     const proposedEvent = events.find((e) => e.type === "tool:proposed");
-    const source = (proposedEvent?.payload?.["source"] as string) ?? "unknown";
+    const source = (proposedEvent?.payload?.source as string) ?? "unknown";
 
     // Extract verification checks
     const verifiedEvent = events.find((e) => e.type === "tool:verified");
     const checks = (
-      (verifiedEvent?.payload?.["checks"] as Array<{
+      (verifiedEvent?.payload?.checks as Array<{
         conditionId: string;
         passed: boolean;
         severity: string;
@@ -120,7 +121,7 @@ export class TraceCollector {
       toolName: pipelineResult.toolName,
       input: {
         params:
-          (proposedEvent?.payload?.["params"] as Record<string, unknown>) ?? {},
+          (proposedEvent?.payload?.params as Record<string, unknown>) ?? {},
         source: source as import("../tools/types.js").ToolCallSource,
       },
       output: {
@@ -176,7 +177,7 @@ export class DatasetExporter {
         )
       : qualityFilteredEpisodes;
     const lines = normalizedEpisodes.map((ep) => this.toJSONL(ep)).join("\n");
-    writeFileSync(outputPath, lines + "\n", "utf-8");
+    writeFileSync(outputPath, `${lines}\n`, "utf-8");
   }
 
   /**

@@ -5,18 +5,17 @@
  */
 
 export {
-  // Event bus
-  TypedEventBus,
-  getEventBus,
-  resetEventBus,
+  type AgentState,
+  type EventEnvelope,
+  type EventHandler,
+  type EventName,
   emit,
-  on,
-  type TypedEventBusOptions,
-
+  getEventBus,
   // Event types
   type MilaidyEvents,
-  type EventName,
-  type EventHandler,
-  type EventEnvelope,
-  type AgentState,
+  on,
+  resetEventBus,
+  // Event bus
+  TypedEventBus,
+  type TypedEventBusOptions,
 } from "./event-bus.js";

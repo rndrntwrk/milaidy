@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { resolveHyperscapeApiBaseUrl, resolveHyperscapeWsProbeUrl } from "./server";
+import {
+  resolveHyperscapeApiBaseUrl,
+  resolveHyperscapeWsProbeUrl,
+} from "./server";
 
 describe("resolveHyperscapeApiBaseUrl", () => {
   it("uses HYPERSCAPE_API_URL when configured", () => {

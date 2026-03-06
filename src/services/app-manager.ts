@@ -10,9 +10,9 @@
  */
 
 import * as fs from "node:fs";
+import { createConnection } from "node:net";
 import * as path from "node:path";
 import type { IAgentRuntime } from "@elizaos/core";
-import { createConnection } from "node:net";
 import { logger } from "@elizaos/core";
 import { deriveEvmAddress, deriveSolanaAddress } from "../api/wallet.js";
 import type {
@@ -21,6 +21,11 @@ import type {
   AppViewerAuthMessage,
   InstalledAppInfo,
 } from "../contracts/apps.js";
+import {
+  ALICE_APP_CATALOG,
+  resolveManagedAppFallbackUrl,
+} from "./app-catalog.js";
+import { listInstalledPlugins } from "./plugin-installer.js";
 import type {
   InstalledPluginInfo,
   InstallProgressLike,
@@ -28,16 +33,11 @@ import type {
   RegistryPluginInfo,
   RegistrySearchResult,
 } from "./plugin-manager-types.js";
-import { listInstalledPlugins } from "./plugin-installer.js";
-import {
-  ALICE_APP_CATALOG,
-  resolveManagedAppFallbackUrl,
-} from "./app-catalog.js";
 import {
   type RegistryAppInfo,
   getAppInfo as registryGetAppInfo,
-  getRegistryPlugins as registryGetPlugins,
   getPluginInfo as registryGetPluginInfo,
+  getRegistryPlugins as registryGetPlugins,
 } from "./registry-client.js";
 
 const LOCAL_PLUGINS_DIR = "plugins";
@@ -57,8 +57,13 @@ type AppViewerConfig = NonNullable<AppLaunchResult["viewer"]>;
 const LOCAL_APP_DEFAULT_FALLBACK_URLS: Readonly<Record<string, string>> =
   Object.fromEntries(
     Object.entries(ALICE_APP_CATALOG)
-      .map(([packageName]) => [packageName, resolveManagedAppFallbackUrl(packageName)])
-      .filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+      .map(([packageName]) => [
+        packageName,
+        resolveManagedAppFallbackUrl(packageName),
+      ])
+      .filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string",
+      ),
   );
 
 export type {
@@ -93,7 +98,7 @@ interface ActiveAppSession {
   startedAt: string;
 }
 
-function resolvePluginPackageName(appInfo: RegistryPluginInfo): string {
+function _resolvePluginPackageName(appInfo: RegistryPluginInfo): string {
   const npmPackage = appInfo.npm.package.trim();
   return npmPackage && npmPackage.length > 0 ? npmPackage : appInfo.name;
 }
@@ -129,10 +134,16 @@ function mergeRegistryAppFallback(
   if (!appInfo.description || appInfo.description.trim().length === 0) {
     appInfo.description = fallback.description;
   }
-  if ((!appInfo.gitRepo || appInfo.gitRepo.trim().length === 0) && fallback.repository) {
+  if (
+    (!appInfo.gitRepo || appInfo.gitRepo.trim().length === 0) &&
+    fallback.repository
+  ) {
     appInfo.gitRepo = fallback.repository;
   }
-  if ((!appInfo.gitUrl || appInfo.gitUrl.trim().length === 0) && fallback.repository) {
+  if (
+    (!appInfo.gitUrl || appInfo.gitUrl.trim().length === 0) &&
+    fallback.repository
+  ) {
     appInfo.gitUrl = fallback.repository;
   }
   if (!Array.isArray(appInfo.topics)) {
@@ -248,12 +259,10 @@ function shouldValidateLocalAppUpstream(): boolean {
   return true;
 }
 
-function resolveLocalUpstreamCandidate(
-  appInfo: {
-    viewer?: { url: string };
-    launchUrl?: string | null;
-  },
-): string | null {
+function resolveLocalUpstreamCandidate(appInfo: {
+  viewer?: { url: string };
+  launchUrl?: string | null;
+}): string | null {
   const candidates = [appInfo.viewer?.url, appInfo.launchUrl]
     .map((value) =>
       typeof value === "string" && value.trim().length > 0
@@ -268,9 +277,7 @@ function resolveLocalUpstreamCandidate(
       if (!/^https?:$/i.test(parsed.protocol)) continue;
       if (!isLoopbackHostname(parsed.hostname)) continue;
       return parsed.toString();
-    } catch {
-      continue;
-    }
+    } catch {}
   }
   return null;
 }
@@ -479,11 +486,8 @@ function buildViewerConfig(
     }
 
     return {
-      url: buildViewerUrl(
-        appInfo.viewer.url,
-        appInfo.viewer.embedParams,
-      ),
-      embedParams: appInfo.viewer.embedParams,
+      url: buildViewerUrl(viewerInfo.url, viewerInfo.embedParams),
+      embedParams: viewerInfo.embedParams,
       postMessageAuth,
       sandbox: viewerInfo.sandbox ?? DEFAULT_VIEWER_SANDBOX,
       authMessage,
@@ -526,8 +530,9 @@ function getWalletAddressesFromRuntime(
   }
 
   const solanaKey =
-    (runtime?.getSetting?.("SOLANA_PRIVATE_KEY") as string | undefined)?.trim() ||
-    process.env.SOLANA_PRIVATE_KEY?.trim();
+    (
+      runtime?.getSetting?.("SOLANA_PRIVATE_KEY") as string | undefined
+    )?.trim() || process.env.SOLANA_PRIVATE_KEY?.trim();
   if (solanaKey) {
     try {
       solanaAddress = deriveSolanaAddress(solanaKey);
@@ -569,7 +574,8 @@ async function autoProvisionHyperscapeAgent(
   }
 
   const walletAddresses = getWalletAddressesFromRuntime(runtime);
-  const walletAddress = walletAddresses.evmAddress || walletAddresses.solanaAddress;
+  const walletAddress =
+    walletAddresses.evmAddress || walletAddresses.solanaAddress;
   if (!walletAddress) {
     logger.warn(
       "[app-manager] Hyperscape auto-provision skipped: no EVM or Solana private key available.",
@@ -611,7 +617,11 @@ async function autoProvisionHyperscapeAgent(
     }
   };
 
-  const walletAuthBody = JSON.stringify({ walletAddress, walletType, agentName });
+  const walletAuthBody = JSON.stringify({
+    walletAddress,
+    walletType,
+    agentName,
+  });
 
   for (
     let attempt = 1;
@@ -686,7 +696,9 @@ async function autoProvisionHyperscapeAgent(
 
     process.env.HYPERSCAPE_CHARACTER_ID = characterId;
     process.env.HYPERSCAPE_AUTH_TOKEN = authToken;
-    logger.info(`[app-manager] Auto-provisioned hyperscape agent: ${characterId}`);
+    logger.info(
+      `[app-manager] Auto-provisioned hyperscape agent: ${characterId}`,
+    );
     return {
       characterId,
       authToken,
@@ -711,7 +723,10 @@ async function autoProvisionHyperscapeAgent(
       );
       if (fallbackAttempt < HYPERSCAPE_EMBEDDED_FALLBACK_MAX_ATTEMPTS) {
         await new Promise((resolve) =>
-          setTimeout(resolve, HYPERSCAPE_WALLET_AUTH_BACKOFF_MS * fallbackAttempt),
+          setTimeout(
+            resolve,
+            HYPERSCAPE_WALLET_AUTH_BACKOFF_MS * fallbackAttempt,
+          ),
         );
       }
       continue;
@@ -727,7 +742,10 @@ async function autoProvisionHyperscapeAgent(
         [408, 429, 500, 502, 503, 504].includes(fallbackResponse.status);
       if (shouldRetry) {
         await new Promise((resolve) =>
-          setTimeout(resolve, HYPERSCAPE_WALLET_AUTH_BACKOFF_MS * fallbackAttempt),
+          setTimeout(
+            resolve,
+            HYPERSCAPE_WALLET_AUTH_BACKOFF_MS * fallbackAttempt,
+          ),
         );
         continue;
       }
@@ -757,7 +775,10 @@ async function autoProvisionHyperscapeAgent(
       );
       if (fallbackAttempt < HYPERSCAPE_EMBEDDED_FALLBACK_MAX_ATTEMPTS) {
         await new Promise((resolve) =>
-          setTimeout(resolve, HYPERSCAPE_WALLET_AUTH_BACKOFF_MS * fallbackAttempt),
+          setTimeout(
+            resolve,
+            HYPERSCAPE_WALLET_AUTH_BACKOFF_MS * fallbackAttempt,
+          ),
         );
         continue;
       }
@@ -771,7 +792,9 @@ async function autoProvisionHyperscapeAgent(
     return { characterId: fallbackCharacterId };
   }
 
-  logger.warn("[app-manager] Hyperscape auto-provision exhausted all fallback attempts.");
+  logger.warn(
+    "[app-manager] Hyperscape auto-provision exhausted all fallback attempts.",
+  );
   return null;
 }
 
@@ -958,7 +981,10 @@ export class AppManager {
     onProgress?: (progress: InstallProgressLike) => void,
     runtime?: IAgentRuntime | null,
   ): Promise<AppLaunchResult> {
-    const appInfo = (await this.getInfo(pluginManager, name)) as RegistryAppPlugin | null;
+    const appInfo = (await this.getInfo(
+      pluginManager,
+      name,
+    )) as RegistryAppPlugin | null;
     if (!appInfo) {
       throw new Error(`App "${name}" not found in the registry.`);
     }
@@ -1021,7 +1047,7 @@ export class AppManager {
       this.activeSessions.set(name, {
         appName: name,
         pluginName,
-        launchType: appInfo.launchType,
+        launchType: appInfo.launchType ?? "url",
         launchUrl,
         viewerUrl: viewer?.url ?? null,
         startedAt: new Date().toISOString(),
@@ -1030,8 +1056,8 @@ export class AppManager {
       return {
         pluginInstalled: false,
         needsRestart: false,
-        displayName: appInfo.displayName,
-        launchType: appInfo.launchType,
+        displayName: appInfo.displayName ?? name,
+        launchType: appInfo.launchType ?? "url",
         launchUrl,
         viewer,
       };
@@ -1045,7 +1071,7 @@ export class AppManager {
       this.activeSessions.set(name, {
         appName: name,
         pluginName,
-        launchType: appInfo.launchType,
+        launchType: appInfo.launchType ?? "url",
         launchUrl,
         viewerUrl: viewer?.url ?? null,
         startedAt: new Date().toISOString(),
@@ -1053,8 +1079,8 @@ export class AppManager {
       return {
         pluginInstalled: false,
         needsRestart: false,
-        displayName: appInfo.displayName,
-        launchType: appInfo.launchType,
+        displayName: appInfo.displayName ?? name,
+        launchType: appInfo.launchType ?? "url",
         launchUrl,
         viewer,
       };

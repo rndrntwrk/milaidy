@@ -60,16 +60,22 @@ describe("app-catalog managed URLs", () => {
 
   it("normalizes legacy stream env values at read time", () => {
     process.env[streamKey] = "https://hyperscapeai.github.io/hyperscape";
-    expect(resolveManagedAppStreamUrl(HYPERSCAPE_APP)).toBe(HYPERSCAPE_LIVE_URL);
+    expect(resolveManagedAppStreamUrl(HYPERSCAPE_APP)).toBe(
+      HYPERSCAPE_LIVE_URL,
+    );
   });
 
   it("defaults hyperscape fallback URL to the live game URL", () => {
-    expect(resolveManagedAppFallbackUrl(HYPERSCAPE_APP)).toBe(HYPERSCAPE_LIVE_URL);
+    expect(resolveManagedAppFallbackUrl(HYPERSCAPE_APP)).toBe(
+      HYPERSCAPE_LIVE_URL,
+    );
   });
 
   it("normalizes legacy upstream env values at read time", () => {
     process.env[upstreamKey] = "https://hyperscapeai.github.io/hyperscape/";
-    expect(resolveManagedAppUpstreamUrl(HYPERSCAPE_APP)).toBe(HYPERSCAPE_LIVE_URL);
+    expect(resolveManagedAppUpstreamUrl(HYPERSCAPE_APP)).toBe(
+      HYPERSCAPE_LIVE_URL,
+    );
   });
 
   it("allows known hyperscape remote hosts for embedded proxying", () => {
@@ -100,8 +106,8 @@ describe("app-catalog managed URLs", () => {
     expect(
       isManagedAppRemoteProxyHostAllowed(BABYLON_APP, "www.babylon.market"),
     ).toBe(true);
-    expect(
-      isManagedAppRemoteProxyHostAllowed(BABYLON_APP, "example.com"),
-    ).toBe(false);
+    expect(isManagedAppRemoteProxyHostAllowed(BABYLON_APP, "example.com")).toBe(
+      false,
+    );
   });
 });

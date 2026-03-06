@@ -24,8 +24,14 @@ const IdentitySchema: SchemaObject = {
     communicationStyle: {
       type: "object",
       properties: {
-        tone: { type: "string", enum: ["formal", "casual", "technical", "empathetic"] },
-        verbosity: { type: "string", enum: ["concise", "balanced", "detailed"] },
+        tone: {
+          type: "string",
+          enum: ["formal", "casual", "technical", "empathetic"],
+        },
+        verbosity: {
+          type: "string",
+          enum: ["concise", "balanced", "detailed"],
+        },
         personaVoice: { type: "string" },
       },
     },
@@ -41,9 +47,16 @@ const ApprovalRequestSchema: SchemaObject = {
   properties: {
     id: { type: "string" },
     toolName: { type: "string" },
-    riskClass: { type: "string", enum: ["read-only", "reversible", "irreversible"] },
+    riskClass: {
+      type: "string",
+      enum: ["read-only", "reversible", "irreversible"],
+    },
     callPayload: { type: "object", additionalProperties: true },
-    decision: { type: "string", enum: ["approved", "denied", "expired"], nullable: true },
+    decision: {
+      type: "string",
+      enum: ["approved", "denied", "expired"],
+      nullable: true,
+    },
     decidedBy: { type: "string", nullable: true },
     createdAt: { type: "integer", description: "Epoch ms" },
     expiresAt: { type: "integer", description: "Epoch ms" },
@@ -70,7 +83,14 @@ const paths: Record<string, PathItem> = {
       responses: {
         "200": {
           description: "Autonomy status",
-          content: { "application/json": { schema: { type: "object", properties: { enabled: { type: "boolean" } } } } },
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: { enabled: { type: "boolean" } },
+              },
+            },
+          },
         },
       },
     },
@@ -79,10 +99,30 @@ const paths: Record<string, PathItem> = {
       operationId: "setAutonomyStatus",
       tags: ["Autonomy"],
       requestBody: {
-        content: { "application/json": { schema: { type: "object", properties: { enabled: { type: "boolean" } } } } },
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              properties: { enabled: { type: "boolean" } },
+            },
+          },
+        },
       },
       responses: {
-        "200": { description: "Status updated", content: { "application/json": { schema: { type: "object", properties: { ok: { type: "boolean" }, autonomy: { type: "boolean" } } } } } },
+        "200": {
+          description: "Status updated",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean" },
+                  autonomy: { type: "boolean" },
+                },
+              },
+            },
+          },
+        },
       },
     },
   },
@@ -110,7 +150,10 @@ const paths: Record<string, PathItem> = {
                         properties: {
                           id: { type: ["string", "number"] },
                           toolName: { type: "string" },
-                          params: { type: "object", additionalProperties: true },
+                          params: {
+                            type: "object",
+                            additionalProperties: true,
+                          },
                         },
                         required: ["toolName"],
                       },
@@ -191,7 +234,10 @@ const paths: Record<string, PathItem> = {
                       totalRoles: { type: "number" },
                       readyRoles: { type: "number" },
                       healthyRoles: { type: "number" },
-                      unavailableRoles: { type: "array", items: { type: "string" } },
+                      unavailableRoles: {
+                        type: "array",
+                        items: { type: "string" },
+                      },
                     },
                   },
                   roles: {
@@ -203,8 +249,14 @@ const paths: Record<string, PathItem> = {
                         available: { type: "boolean" },
                         ready: { type: "boolean" },
                         healthy: { type: "boolean" },
-                        requiredMethods: { type: "array", items: { type: "string" } },
-                        missingMethods: { type: "array", items: { type: "string" } },
+                        requiredMethods: {
+                          type: "array",
+                          items: { type: "string" },
+                        },
+                        missingMethods: {
+                          type: "array",
+                          items: { type: "string" },
+                        },
                       },
                     },
                   },
@@ -242,7 +294,10 @@ const paths: Record<string, PathItem> = {
                       totalRoles: { type: "number" },
                       readyRoles: { type: "number" },
                       healthyRoles: { type: "number" },
-                      unavailableRoles: { type: "array", items: { type: "string" } },
+                      unavailableRoles: {
+                        type: "array",
+                        items: { type: "string" },
+                      },
                     },
                   },
                 },
@@ -518,8 +573,27 @@ const paths: Record<string, PathItem> = {
       operationId: "getIdentity",
       tags: ["Identity"],
       responses: {
-        "200": { description: "Current identity config", content: { "application/json": { schema: { type: "object", properties: { identity: { $ref: "#/components/schemas/Identity" } } } } } },
-        "500": { description: "Server error", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+        "200": {
+          description: "Current identity config",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  identity: { $ref: "#/components/schemas/Identity" },
+                },
+              },
+            },
+          },
+        },
+        "500": {
+          description: "Server error",
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/Error" },
+            },
+          },
+        },
       },
     },
     put: {
@@ -554,11 +628,34 @@ const paths: Record<string, PathItem> = {
       ],
       requestBody: {
         required: true,
-        content: { "application/json": { schema: { $ref: "#/components/schemas/Identity" } } },
+        content: {
+          "application/json": {
+            schema: { $ref: "#/components/schemas/Identity" },
+          },
+        },
       },
       responses: {
-        "200": { description: "Updated identity", content: { "application/json": { schema: { type: "object", properties: { identity: { $ref: "#/components/schemas/Identity" } } } } } },
-        "400": { description: "Validation error", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+        "200": {
+          description: "Updated identity",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  identity: { $ref: "#/components/schemas/Identity" },
+                },
+              },
+            },
+          },
+        },
+        "400": {
+          description: "Validation error",
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/Error" },
+            },
+          },
+        },
         "503": { description: "Service unavailable" },
       },
     },
@@ -579,7 +676,10 @@ const paths: Record<string, PathItem> = {
                 properties: {
                   version: { type: "integer" },
                   hash: { type: "string", nullable: true },
-                  history: { type: "array", items: { $ref: "#/components/schemas/Identity" } },
+                  history: {
+                    type: "array",
+                    items: { $ref: "#/components/schemas/Identity" },
+                  },
                 },
               },
             },
@@ -595,12 +695,29 @@ const paths: Record<string, PathItem> = {
       operationId: "listApprovals",
       tags: ["Approvals"],
       parameters: [
-        { name: "limit", in: "query", schema: { type: "integer", default: 50 }, description: "Max records to return" },
+        {
+          name: "limit",
+          in: "query",
+          schema: { type: "integer", default: 50 },
+          description: "Max records to return",
+        },
       ],
       responses: {
         "200": {
           description: "Approval records",
-          content: { "application/json": { schema: { type: "object", properties: { approvals: { type: "array", items: { $ref: "#/components/schemas/ApprovalRequest" } } } } } },
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  approvals: {
+                    type: "array",
+                    items: { $ref: "#/components/schemas/ApprovalRequest" },
+                  },
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -737,7 +854,10 @@ const paths: Record<string, PathItem> = {
                 suiteId: { type: "string" },
                 games: { type: "array", items: { type: "string" } },
                 episodesPerGame: { type: "integer" },
-                seedMode: { type: "string", enum: ["fixed", "mixed", "rolling"] },
+                seedMode: {
+                  type: "string",
+                  enum: ["fixed", "mixed", "rolling"],
+                },
                 maxDurationSec: { type: "integer" },
                 strict: { type: "boolean" },
                 evidenceMode: {
@@ -1043,9 +1163,18 @@ const ARCADE555_MASTERY_PATH_ALIASES = [
   ["/api/five55/mastery/catalog", "/api/arcade555/mastery/catalog"],
   ["/api/five55/mastery/runs", "/api/arcade555/mastery/runs"],
   ["/api/five55/mastery/runs/{runId}", "/api/arcade555/mastery/runs/{runId}"],
-  ["/api/five55/mastery/runs/{runId}/episodes", "/api/arcade555/mastery/runs/{runId}/episodes"],
-  ["/api/five55/mastery/runs/{runId}/logs", "/api/arcade555/mastery/runs/{runId}/logs"],
-  ["/api/five55/mastery/runs/{runId}/evidence", "/api/arcade555/mastery/runs/{runId}/evidence"],
+  [
+    "/api/five55/mastery/runs/{runId}/episodes",
+    "/api/arcade555/mastery/runs/{runId}/episodes",
+  ],
+  [
+    "/api/five55/mastery/runs/{runId}/logs",
+    "/api/arcade555/mastery/runs/{runId}/logs",
+  ],
+  [
+    "/api/five55/mastery/runs/{runId}/evidence",
+    "/api/arcade555/mastery/runs/{runId}/evidence",
+  ],
   [
     "/api/five55/mastery/runs/{runId}/episodes/{episodeId}/frames",
     "/api/arcade555/mastery/runs/{runId}/episodes/{episodeId}/frames",
@@ -1054,11 +1183,15 @@ const ARCADE555_MASTERY_PATH_ALIASES = [
     "/api/five55/mastery/runs/{runId}/episodes/{episodeId}/consistency",
     "/api/arcade555/mastery/runs/{runId}/episodes/{episodeId}/consistency",
   ],
-  ["/api/five55/mastery/games/{gameId}/latest", "/api/arcade555/mastery/games/{gameId}/latest"],
+  [
+    "/api/five55/mastery/games/{gameId}/latest",
+    "/api/arcade555/mastery/games/{gameId}/latest",
+  ],
 ] as const;
 
 function includeLegacyArcade555HttpAliases(): boolean {
-  const raw = process.env.ARCADE555_ENABLE_LEGACY_HTTP_ALIASES?.trim().toLowerCase();
+  const raw =
+    process.env.ARCADE555_ENABLE_LEGACY_HTTP_ALIASES?.trim().toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
 }
 
@@ -1072,7 +1205,9 @@ function canonicalizeArcade555OperationItem(
 ): Record<string, unknown> {
   const cloned = deepClone(item);
   if (Array.isArray(cloned.tags)) {
-    cloned.tags = cloned.tags.map((tag) => (tag === "Five55" ? "Arcade555" : tag));
+    cloned.tags = cloned.tags.map((tag) =>
+      tag === "Five55" ? "Arcade555" : tag,
+    );
   }
 
   if (typeof cloned.operationId === "string") {
@@ -1135,7 +1270,8 @@ export function buildOpenApiSpec(): Record<string, unknown> {
     openapi: "3.1.0",
     info: {
       title: "Milaidy Autonomy Kernel API",
-      description: "REST API for the Milaidy Autonomy Kernel — identity management, approval workflows, safe mode, monitoring, and more.",
+      description:
+        "REST API for the Milaidy Autonomy Kernel — identity management, approval workflows, safe mode, monitoring, and more.",
       version: "1.0.0",
     },
     servers: [

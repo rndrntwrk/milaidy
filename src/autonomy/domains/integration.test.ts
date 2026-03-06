@@ -12,11 +12,11 @@ import type {
 import type { EvaluationScenario } from "../metrics/types.js";
 import { ToolRegistry } from "../tools/registry.js";
 import { InvariantChecker } from "../verification/invariants/invariant-checker.js";
-import type { ComplianceContext } from "./governance/types.js";
 import { CODING_GOVERNANCE_POLICY } from "./coding/governance-policy.js";
 import { CODING_DOMAIN_PACK } from "./coding/pack.js";
 import { PolicyEngine } from "./governance/policy-engine.js";
 import { AuditRetentionManager } from "./governance/retention-manager.js";
+import type { ComplianceContext } from "./governance/types.js";
 import { PilotEvaluator } from "./pilot/pilot-evaluator.js";
 import { PilotRunner } from "./pilot/pilot-runner.js";
 import { DomainPackRegistry } from "./registry.js";
@@ -34,7 +34,9 @@ function makeComponents(): KernelComponents {
 
 function makeEvaluator(score = 1.0): ScenarioEvaluator {
   return {
-    evaluate: async (scenario: EvaluationScenario): Promise<ScenarioResult> => ({
+    evaluate: async (
+      scenario: EvaluationScenario,
+    ): Promise<ScenarioResult> => ({
       scenarioId: scenario.id,
       metric: scenario.metric,
       score,
@@ -95,7 +97,12 @@ describe("Phase 5 integration", () => {
 
     // reversible with high trust — auto-approved
     const revResult = await engine.evaluate(
-      { ...baseCtx, riskClass: "reversible", toolName: "WRITE_FILE", sourceTrust: 0.9 },
+      {
+        ...baseCtx,
+        riskClass: "reversible",
+        toolName: "WRITE_FILE",
+        sourceTrust: 0.9,
+      },
       "coding-governance",
     );
     expect(revResult.approved).toBe(true);
@@ -114,13 +121,27 @@ describe("Phase 5 integration", () => {
 
     await manager.addEvents(
       [
-        { sequenceId: 1, requestId: "r1", type: "tool:executed", payload: { tool: "READ_FILE" }, timestamp: Date.now() } as any,
+        {
+          sequenceId: 1,
+          requestId: "r1",
+          type: "tool:executed",
+          payload: { tool: "READ_FILE" },
+          timestamp: Date.now(),
+        } as any,
       ],
-      { eventRetentionMs: 60_000, auditRetentionMs: 120_000, exportBeforeEviction: true },
+      {
+        eventRetentionMs: 60_000,
+        auditRetentionMs: 120_000,
+        exportBeforeEviction: true,
+      },
     );
     await manager.addAuditReport(
       { policyId: "coding-governance", passed: true },
-      { eventRetentionMs: 60_000, auditRetentionMs: 120_000, exportBeforeEviction: true },
+      {
+        eventRetentionMs: 60_000,
+        auditRetentionMs: 120_000,
+        exportBeforeEviction: true,
+      },
     );
 
     expect(manager.size).toBe(2);
@@ -164,12 +185,16 @@ describe("Phase 5 integration", () => {
     expect(report.benchmarkResults).toHaveLength(2);
 
     // Safety benchmark: 4 scenarios
-    const safety = report.benchmarkResults.find((b) => b.benchmarkId === "coding:safety");
+    const safety = report.benchmarkResults.find(
+      (b) => b.benchmarkId === "coding:safety",
+    );
     expect(safety?.scenarios).toHaveLength(4);
     expect(safety?.passed).toBe(true);
 
     // Quality benchmark: 2 scenarios
-    const quality = report.benchmarkResults.find((b) => b.benchmarkId === "coding:quality");
+    const quality = report.benchmarkResults.find(
+      (b) => b.benchmarkId === "coding:quality",
+    );
     expect(quality?.scenarios).toHaveLength(2);
     expect(quality?.passed).toBe(true);
   });
@@ -233,7 +258,10 @@ describe("Phase 5 integration", () => {
 
     // Evaluate compliance
     const pilotEvaluator = new PilotEvaluator();
-    const compliance = pilotEvaluator.evaluate(report, CODING_GOVERNANCE_POLICY);
+    const compliance = pilotEvaluator.evaluate(
+      report,
+      CODING_GOVERNANCE_POLICY,
+    );
 
     // Everything should pass
     expect(report.overallPassed).toBe(true);

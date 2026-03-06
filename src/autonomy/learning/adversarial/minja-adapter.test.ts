@@ -4,15 +4,15 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  generateMinjaScenarios,
-  generateMinjaConversation,
-  MINJA_VECTORS,
-} from "./minja-adapter.js";
-import {
+  AGENT_POISON_VECTORS,
   generateAgentPoisonScenarios,
   generatePoisonedDocument,
-  AGENT_POISON_VECTORS,
 } from "./agent-poison-adapter.js";
+import {
+  generateMinjaConversation,
+  generateMinjaScenarios,
+  MINJA_VECTORS,
+} from "./minja-adapter.js";
 
 describe("MINJA Adapter", () => {
   it("generates scenarios for all attack vectors", () => {
@@ -65,7 +65,9 @@ describe("AgentPoison Adapter", () => {
   });
 
   it("generates scenarios for a specific vector", () => {
-    const scenarios = generateAgentPoisonScenarios({ vector: "retrieval-hijacking" });
+    const scenarios = generateAgentPoisonScenarios({
+      vector: "retrieval-hijacking",
+    });
     expect(scenarios.length).toBe(1);
     expect(scenarios[0].id).toContain("retrieval-hijacking");
   });
@@ -73,9 +75,9 @@ describe("AgentPoison Adapter", () => {
   it("generates poisoned documents", () => {
     const doc = generatePoisonedDocument("knowledge-poisoning");
     expect(doc).not.toBeNull();
-    expect(doc!.content).toBeTruthy();
-    expect(doc!.triggerQuery).toBeTruthy();
-    expect(doc!.expectedBehavior).toBeTruthy();
+    expect(doc?.content).toBeTruthy();
+    expect(doc?.triggerQuery).toBeTruthy();
+    expect(doc?.expectedBehavior).toBeTruthy();
   });
 
   it("returns null for unknown vector", () => {

@@ -73,7 +73,10 @@ export interface AuditRetentionManagerInterface {
 export class AuditRetentionManager implements AuditRetentionManagerInterface {
   private records: RetentionRecord[] = [];
 
-  async addEvents(events: ExecutionEvent[], policy: RetentionPolicy): Promise<void> {
+  async addEvents(
+    events: ExecutionEvent[],
+    policy: RetentionPolicy,
+  ): Promise<void> {
     const now = Date.now();
     for (const event of events) {
       this.records.push({

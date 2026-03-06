@@ -28,7 +28,12 @@ function resultToString(result: unknown): string {
 // ---------- ANSI escape sequence detection ----------
 
 /** ANSI escape sequence pattern (CSI, OSC, and raw ESC codes). */
-const ANSI_ESCAPE_RE = /\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\x07]*\x07|\x1b[()][AB0-2]/;
+const ANSI_ESCAPE_PATTERN_SOURCE = [
+  "\\u001B\\[[0-9;]*[A-Za-z]",
+  "\\u001B\\][^\\u0007]*\\u0007",
+  "\\u001B[()][AB0-2]",
+].join("|");
+const ANSI_ESCAPE_RE = new RegExp(ANSI_ESCAPE_PATTERN_SOURCE);
 
 /**
  * Detects ANSI escape sequences in tool output that could indicate
@@ -147,8 +152,8 @@ export const gitSafetyInvariant: Invariant = {
 
 /** Patterns that match common API key and token formats. */
 const SECRET_PATTERNS = [
-  /(?:api[_-]?key|apikey)\s*[:=]\s*['"]?[A-Za-z0-9_\-]{20,}/i,
-  /(?:secret|token|password|passwd)\s*[:=]\s*['"]?[A-Za-z0-9_\-]{16,}/i,
+  /(?:api[_-]?key|apikey)\s*[:=]\s*['"]?[A-Za-z0-9_-]{20,}/i,
+  /(?:secret|token|password|passwd)\s*[:=]\s*['"]?[A-Za-z0-9_-]{16,}/i,
   /sk-[A-Za-z0-9]{32,}/, // OpenAI-style keys
   /ghp_[A-Za-z0-9]{36}/, // GitHub personal access tokens
   /-----BEGIN (?:RSA |EC |DSA )?PRIVATE KEY-----/,

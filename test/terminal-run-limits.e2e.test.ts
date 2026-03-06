@@ -77,7 +77,10 @@ describe("Terminal run validation and limit guards", () => {
       "MILADY_TERMINAL_MAX_DURATION_MS",
       "MILAIDY_TERMINAL_MAX_CONCURRENT",
       "MILAIDY_TERMINAL_MAX_DURATION_MS",
+      "MILADY_API_TOKEN",
     );
+    delete process.env.MILADY_API_TOKEN;
+    delete process.env.MILAIDY_API_TOKEN;
     const result = await startApiServer({ port: 0 });
     port = result.port;
     close = result.close;

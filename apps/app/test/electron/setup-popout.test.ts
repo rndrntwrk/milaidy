@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 // Mock electron-is-dev before importing setup.ts — it throws outside Electron.
 vi.mock("electron-is-dev", () => ({ default: false }));
 
-import { hasPopoutParam } from "../../electron/src/setup";
+import { hasPopoutParam } from "../../electron/src/popout-url";
 
 describe("hasPopoutParam", () => {
   it("returns true for standard ?popout query param", () => {

@@ -144,7 +144,6 @@ beforeEach(async () => {
   process.chdir(repoDir);
 
   const { getPluginInfo } = await import("./registry-client");
-  // biome-ignore lint/suspicious/noExplicitAny: mocking
   (getPluginInfo as any).mockResolvedValue({
     name: "@elizaos/core",
     npm: {

@@ -7,11 +7,7 @@ import {
 
 describe("computeRecallAtN", () => {
   it("computes recall over relevant set for top-N ids", () => {
-    const recall = computeRecallAtN(
-      ["a", "b", "c"],
-      ["b", "d"],
-      2,
-    );
+    const recall = computeRecallAtN(["a", "b", "c"], ["b", "d"], 2);
     expect(recall).toBe(0.5);
   });
 

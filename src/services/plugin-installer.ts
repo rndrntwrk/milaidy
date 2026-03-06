@@ -82,7 +82,7 @@ function parsePluginSpec(rawSpec: string): ParsedPluginSpec {
   return { packageName: spec };
 }
 
-function assertValidPackageName(name: string): void {
+export function assertValidPackageName(name: string): void {
   if (!VALID_PACKAGE_NAME.test(name)) {
     throw new Error(`Invalid package name: "${name}"`);
   }
@@ -250,7 +250,15 @@ async function _installPlugin(
 
   // Determine the canonical package name and version to install
   const canonicalName = info.name;
-  const npmVersion = explicitVersion || info.npm.v2Version || info.npm.v1Version || "next";
+  const npmVersion =
+    requestedVersion ||
+    explicitVersion ||
+    info.npm.v2Version ||
+    info.npm.v1Version ||
+    "next";
+  if (requestedVersion) {
+    assertValidVersion(requestedVersion);
+  }
   if (explicitVersion) {
     assertValidVersion(explicitVersion);
   }
@@ -545,7 +553,7 @@ async function runPackageInstall(
 }
 
 async function runLocalPathInstall(
-  pm: "bun" | "npm",
+  _pm: "bun" | "npm",
   packageName: string,
   sourcePath: string,
   targetDir: string,
@@ -554,8 +562,8 @@ async function runLocalPathInstall(
   const resolvedSourcePath = path.resolve(sourcePath);
   const packageJsonPath = path.join(resolvedSourcePath, "package.json");
   await fs.access(packageJsonPath);
-  const spec = `file:${resolvedSourcePath}`;
-  await installSpecWithFallback(pm, spec, targetDir);
+  await fs.rm(targetDir, { recursive: true, force: true });
+  await fs.cp(resolvedSourcePath, targetDir, { recursive: true });
 }
 
 async function installSpecWithFallback(

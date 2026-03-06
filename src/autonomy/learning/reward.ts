@@ -126,7 +126,7 @@ export class CheckpointReward {
 
     // Validation dimension → safety
     const validationReward = result.validation.valid ? 1.0 : 0.0;
-    breakdown["validation"] = validationReward;
+    breakdown.validation = validationReward;
     dimensions.push("safety");
 
     // Verification dimension → task_completion
@@ -134,7 +134,7 @@ export class CheckpointReward {
     if (result.verification) {
       verificationReward = result.verification.hasCriticalFailure ? 0.0 : 1.0;
     }
-    breakdown["verification"] = verificationReward;
+    breakdown.verification = verificationReward;
     dimensions.push("task_completion");
 
     // Efficiency dimension (inverse of duration ratio, clamped 0-1)
@@ -143,12 +143,12 @@ export class CheckpointReward {
       0,
       Math.min(1, 1 - (durationRatio - 1) * 0.5),
     );
-    breakdown["efficiency"] = efficiencyReward;
+    breakdown.efficiency = efficiencyReward;
     dimensions.push("efficiency");
 
     // Completion dimension → task_completion
     const completionReward = result.success ? 1.0 : 0.0;
-    breakdown["completion"] = completionReward;
+    breakdown.completion = completionReward;
 
     // Weighted total
     const totalWeight =
@@ -228,21 +228,21 @@ export class EpisodeReward {
       meanStepReward =
         stepRewards.reduce((a, b) => a + b, 0) / stepRewards.length;
     }
-    breakdown["step_reward"] = meanStepReward;
+    breakdown.step_reward = meanStepReward;
 
     // Drift penalty (based on audit report drift score)
     const driftScore = result.auditReport?.driftReport?.driftScore ?? 0;
     const driftPenalty = Math.min(1, driftScore * 2); // 0.5 drift → full penalty
-    breakdown["drift_penalty"] = 1 - driftPenalty;
+    breakdown.drift_penalty = 1 - driftPenalty;
 
     // Anomaly penalty
     const anomalyCount = result.auditReport?.anomalies?.length ?? 0;
     const anomalyPenalty = Math.min(1, anomalyCount * 0.25); // 4 anomalies → full penalty
-    breakdown["anomaly_penalty"] = 1 - anomalyPenalty;
+    breakdown.anomaly_penalty = 1 - anomalyPenalty;
 
     // Success bonus
     const successBonus = result.success ? 1.0 : 0.0;
-    breakdown["success_bonus"] = successBonus;
+    breakdown.success_bonus = successBonus;
 
     // Weighted total
     const totalWeight =

@@ -138,13 +138,11 @@ export class InMemoryEntityMemoryStore implements EntityMemoryStore {
     );
 
     if (q.tiers && q.tiers.length > 0) {
-      results = results.filter((m) => q.tiers!.includes(m.tier));
+      results = results.filter((m) => q.tiers?.includes(m.tier));
     }
 
     if (q.memoryTypes && q.memoryTypes.length > 0) {
-      results = results.filter((m) =>
-        q.memoryTypes!.includes(m.memoryType),
-      );
+      results = results.filter((m) => q.memoryTypes?.includes(m.memoryType));
     }
 
     if (!q.includeSuperseded) {
@@ -255,11 +253,18 @@ export class InMemoryEntityMemoryStore implements EntityMemoryStore {
 
     const threshold = opts?.matchThreshold ?? 0.3;
     const withScores = all
-      .filter((m) => m.embedding && m.embedding.length === embedding.length)
-      .map((m) => ({
-        memory: m,
-        similarity: cosineSimilarity(embedding, m.embedding!),
-      }))
+      .flatMap((m) => {
+        const storedEmbedding = m.embedding;
+        if (!storedEmbedding || storedEmbedding.length !== embedding.length) {
+          return [];
+        }
+        return [
+          {
+            memory: m,
+            similarity: cosineSimilarity(embedding, storedEmbedding),
+          },
+        ];
+      })
       .filter((s) => s.similarity >= threshold)
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, opts?.limit ?? 20);

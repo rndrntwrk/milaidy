@@ -9,10 +9,7 @@
 
 import { z } from "zod";
 import type { ProposedToolCall } from "../tools/types.js";
-import type {
-  PipelineResult,
-  ToolActionHandler,
-} from "../workflow/types.js";
+import type { PipelineResult, ToolActionHandler } from "../workflow/types.js";
 import type {
   AuditContext,
   AuditReport,
@@ -239,9 +236,7 @@ function parseBoundary<T>(
   );
 }
 
-export function parseOrchestratedRequest(
-  value: unknown,
-): OrchestratedRequest {
+export function parseOrchestratedRequest(value: unknown): OrchestratedRequest {
   return parseBoundary(
     OrchestratedRequestSchema,
     value,
@@ -272,7 +267,9 @@ export function parsePlannerCreatePlanResponse(value: unknown): ExecutionPlan {
   ) as ExecutionPlan;
 }
 
-export function parsePlannerValidatePlanResponse(value: unknown): PlanValidation {
+export function parsePlannerValidatePlanResponse(
+  value: unknown,
+): PlanValidation {
   return parseBoundary(
     PlanValidationSchema,
     value,
@@ -296,7 +293,9 @@ export function parseExecutorExecuteResponse(value: unknown): PipelineResult {
   ) as PipelineResult;
 }
 
-export function parseVerifierVerifyRequest(value: unknown): VerificationContext {
+export function parseVerifierVerifyRequest(
+  value: unknown,
+): VerificationContext {
   return parseBoundary(
     VerificationContextSchema,
     value,
@@ -304,12 +303,14 @@ export function parseVerifierVerifyRequest(value: unknown): VerificationContext 
   ) as VerificationContext;
 }
 
-export function parseVerifierVerifyResponse(value: unknown): VerificationReport {
+export function parseVerifierVerifyResponse(
+  value: unknown,
+): VerificationReport {
   return parseBoundary(
     VerificationReportSchema,
     value,
     "VerifierRole.verify response",
-  ) as VerificationReport;
+  ) as unknown as VerificationReport;
 }
 
 export function parseMemoryWriteBatchRequest(value: unknown): Array<{

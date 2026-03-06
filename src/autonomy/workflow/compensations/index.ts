@@ -8,19 +8,19 @@ import type {
   CompensationRegistryInterface,
 } from "../types.js";
 import {
-  generateAudioCompensation,
-  generateImageCompensation,
-  generateVideoCompensation,
-} from "./media.compensation.js";
+  BUILTIN_COMPENSATION_ELIGIBILITY,
+  listBuiltinCompensationEligibility,
+} from "./eligibility.js";
 import {
   createTaskCompensation,
   phettaNotifyCompensation,
   phettaSendEventCompensation,
 } from "./integration.compensation.js";
 import {
-  BUILTIN_COMPENSATION_ELIGIBILITY,
-  listBuiltinCompensationEligibility,
-} from "./eligibility.js";
+  generateAudioCompensation,
+  generateImageCompensation,
+  generateVideoCompensation,
+} from "./media.compensation.js";
 
 const BUILTIN_COMPENSATIONS: Record<string, CompensationFn> = {
   CREATE_TASK: createTaskCompensation,
@@ -37,18 +37,15 @@ const BUILTIN_COMPENSATIONS: Record<string, CompensationFn> = {
 export function registerBuiltinCompensations(
   registry: CompensationRegistryInterface,
 ): void {
-  for (const [toolName, compensation] of Object.entries(BUILTIN_COMPENSATIONS)) {
+  for (const [toolName, compensation] of Object.entries(
+    BUILTIN_COMPENSATIONS,
+  )) {
     registry.register(toolName, compensation);
   }
 }
 
 export function listBuiltinCompensationTools(): string[] {
-  return Object.keys(BUILTIN_COMPENSATIONS).sort((a, b) =>
-    a.localeCompare(b),
-  );
+  return Object.keys(BUILTIN_COMPENSATIONS).sort((a, b) => a.localeCompare(b));
 }
 
-export {
-  BUILTIN_COMPENSATION_ELIGIBILITY,
-  listBuiltinCompensationEligibility,
-};
+export { BUILTIN_COMPENSATION_ELIGIBILITY, listBuiltinCompensationEligibility };

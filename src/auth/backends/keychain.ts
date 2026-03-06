@@ -22,9 +22,15 @@ const SERVICE_NAME = "milaidy";
 // keytar types for dynamic import
 interface KeytarModule {
   getPassword(service: string, account: string): Promise<string | null>;
-  setPassword(service: string, account: string, password: string): Promise<void>;
+  setPassword(
+    service: string,
+    account: string,
+    password: string,
+  ): Promise<void>;
   deletePassword(service: string, account: string): Promise<boolean>;
-  findCredentials(service: string): Promise<Array<{ account: string; password: string }>>;
+  findCredentials(
+    service: string,
+  ): Promise<Array<{ account: string; password: string }>>;
 }
 
 export class KeychainBackend implements SecureStorageBackend {

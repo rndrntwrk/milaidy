@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { AppManager } from "./app-manager";
 import type {
   PluginManagerLike,
   RegistryPluginInfo,
 } from "./plugin-manager-types";
 import type { RegistryAppInfo } from "./registry-client";
-import { AppManager } from "./app-manager";
 
 const mockRegistryGetAppInfo = vi.hoisted(() => vi.fn());
 const mockRegistryGetPluginInfo = vi.hoisted(() => vi.fn());
@@ -143,7 +143,9 @@ describe("AppManager hyperscape auto-provisioning resilience", () => {
     mockRegistryGetAppInfo.mockResolvedValue(APP_INFO);
     mockRegistryGetPluginInfo.mockResolvedValue(null);
     mockRegistryGetPlugins.mockResolvedValue(
-      new Map<string, RegistryPluginInfo>([[HYPERSCAPE_APP_NAME, BASE_APP_PLUGIN]]),
+      new Map<string, RegistryPluginInfo>([
+        [HYPERSCAPE_APP_NAME, BASE_APP_PLUGIN],
+      ]),
     );
   });
 

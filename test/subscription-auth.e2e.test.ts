@@ -20,6 +20,7 @@ const startCodexLogin = vi.fn();
 const saveCredentials = vi.fn();
 const applySubscriptionCredentials = vi.fn(async () => undefined);
 const deleteCredentials = vi.fn();
+const validateOpenAiCodexAccess = vi.fn(async () => ({ valid: true }));
 
 vi.mock("../src/auth/index", () => ({
   getSubscriptionStatus,
@@ -28,6 +29,7 @@ vi.mock("../src/auth/index", () => ({
   saveCredentials,
   applySubscriptionCredentials,
   deleteCredentials,
+  validateOpenAiCodexAccess,
 }));
 
 interface ReqResponse {
@@ -77,13 +79,22 @@ function req(
 }
 
 function saveEnv(...keys: string[]): { restore: () => void } {
+  const expanded = Array.from(
+    new Set(
+      keys.flatMap((key) =>
+        key.startsWith("MILADY_")
+          ? [key, key.replace("MILADY_", "MILAIDY_")]
+          : [key],
+      ),
+    ),
+  );
   const saved: Record<string, string | undefined> = {};
-  for (const key of keys) {
+  for (const key of expanded) {
     saved[key] = process.env[key];
   }
   return {
     restore() {
-      for (const key of keys) {
+      for (const key of expanded) {
         if (saved[key] === undefined) delete process.env[key];
         else process.env[key] = saved[key];
       }
@@ -118,6 +129,7 @@ describe("subscription auth routes (e2e contract)", () => {
     process.env.MILADY_STATE_DIR = stateDir;
     delete process.env.MILADY_CONFIG_PATH;
     delete process.env.MILADY_API_TOKEN;
+    delete process.env.MILAIDY_API_TOKEN;
     delete process.env.MILADY_PAIRING_DISABLED;
     delete process.env.ANTHROPIC_API_KEY;
 
@@ -141,6 +153,7 @@ describe("subscription auth routes (e2e contract)", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    validateOpenAiCodexAccess.mockResolvedValue({ valid: true });
     delete process.env.ANTHROPIC_API_KEY;
   });
 

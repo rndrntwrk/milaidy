@@ -36,7 +36,10 @@ export interface ActivationReport {
 /** Activation monitor interface. */
 export interface ActivationMonitor {
   /** Analyze agent output for latent activation patterns. */
-  analyze(agentOutput: string, context?: Record<string, unknown>): Promise<ActivationReport>;
+  analyze(
+    agentOutput: string,
+    context?: Record<string, unknown>,
+  ): Promise<ActivationReport>;
   /** Get the alert threshold. */
   getAlertThreshold(): number;
   /** Set the alert threshold. */
@@ -73,7 +76,10 @@ export class RuleBasedActivationMonitor implements ActivationMonitor {
     this.alertThreshold = alertThreshold;
   }
 
-  async analyze(agentOutput: string, _context?: Record<string, unknown>): Promise<ActivationReport> {
+  async analyze(
+    agentOutput: string,
+    _context?: Record<string, unknown>,
+  ): Promise<ActivationReport> {
     const start = Date.now();
     const patterns: ActivationPattern[] = [];
 
@@ -100,9 +106,14 @@ export class RuleBasedActivationMonitor implements ActivationMonitor {
       }
     }
 
-    const riskScore = patterns.length > 0
-      ? Math.min(1, patterns.reduce((sum, p) => sum + p.confidence, 0) / patterns.length)
-      : 0;
+    const riskScore =
+      patterns.length > 0
+        ? Math.min(
+            1,
+            patterns.reduce((sum, p) => sum + p.confidence, 0) /
+              patterns.length,
+          )
+        : 0;
 
     return {
       patterns,
@@ -139,7 +150,10 @@ export class NeuralActivationMonitor implements ActivationMonitor {
     this.alertThreshold = alertThreshold;
   }
 
-  async analyze(_agentOutput: string, _context?: Record<string, unknown>): Promise<ActivationReport> {
+  async analyze(
+    _agentOutput: string,
+    _context?: Record<string, unknown>,
+  ): Promise<ActivationReport> {
     throw new Error(
       `NeuralActivationMonitor is a stub. Configure an inference server at ${this.endpoint} with SAE probes.`,
     );

@@ -2,34 +2,34 @@
  * Tests for Autonomy Kernel Prometheus metrics.
  */
 
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { metrics } from "../../telemetry/setup.js";
 import {
-  recordTrustScore,
-  recordMemoryGateDecision,
-  recordDriftScore,
-  recordGoalStatusChange,
-  recordApprovalRequest,
-  recordApprovalQueueSize,
   recordApprovalDecision,
+  recordApprovalQueueSize,
+  recordApprovalRequest,
   recordApprovalTurnaroundMs,
-  recordEventStoreSize,
-  recordPipelineLatencyMs,
-  recordPipelineOutcome,
-  recordStateTransition,
-  recordCurrentState,
   recordConsecutiveErrors,
+  recordCurrentState,
+  recordDriftAlert,
+  recordDriftScore,
+  recordEventAppended,
+  recordEventStoreSize,
+  recordGoalCount,
+  recordGoalStatusChange,
   recordIdentityVersionUpdate,
-  recordSafeModeEvent,
   recordInvariantCheck,
   recordKernelUp,
+  recordMemoryGateDecision,
+  recordPipelineLatencyMs,
+  recordPipelineOutcome,
   recordQuarantineSize,
   recordRoleExecution,
   recordRoleLatencyMs,
-  recordDriftAlert,
-  recordGoalCount,
-  recordEventAppended,
+  recordSafeModeEvent,
+  recordStateTransition,
+  recordTrustScore,
   recordTrustSourceRegistered,
 } from "./prometheus-metrics.js";
 
@@ -60,7 +60,7 @@ describe("Autonomy Prometheus Metrics", () => {
   it("recordDriftScore records histogram", () => {
     recordDriftScore(0.12);
     const snap = metrics.getSnapshot();
-    expect(snap.histograms['autonomy_drift_score:{}']).toBeDefined();
+    expect(snap.histograms["autonomy_drift_score:{}"]).toBeDefined();
   });
 
   it("recordGoalStatusChange increments counter", () => {
@@ -73,7 +73,8 @@ describe("Autonomy Prometheus Metrics", () => {
   it("recordApprovalRequest increments counter by risk class", () => {
     recordApprovalRequest("irreversible");
     const snap = metrics.getSnapshot();
-    const key = 'autonomy_approval_requests_total:{"risk_class":"irreversible"}';
+    const key =
+      'autonomy_approval_requests_total:{"risk_class":"irreversible"}';
     expect(snap.counters[key]).toBeGreaterThan(0);
   });
 
@@ -87,19 +88,19 @@ describe("Autonomy Prometheus Metrics", () => {
   it("recordApprovalQueueSize sets gauge", () => {
     recordApprovalQueueSize(4);
     const snap = metrics.getSnapshot();
-    expect(snap.counters["autonomy_approval_queue_size"]).toBe(4);
+    expect(snap.counters.autonomy_approval_queue_size).toBe(4);
   });
 
   it("recordApprovalTurnaroundMs records histogram", () => {
     recordApprovalTurnaroundMs(500);
     const snap = metrics.getSnapshot();
-    expect(snap.histograms['autonomy_approval_turnaround_ms:{}']).toBeDefined();
+    expect(snap.histograms["autonomy_approval_turnaround_ms:{}"]).toBeDefined();
   });
 
   it("recordEventStoreSize sets gauge", () => {
     recordEventStoreSize(42);
     const snap = metrics.getSnapshot();
-    expect(snap.counters["autonomy_event_store_size"]).toBe(42);
+    expect(snap.counters.autonomy_event_store_size).toBe(42);
   });
 
   it("recordPipelineLatencyMs records histogram with outcome", () => {
@@ -119,26 +120,28 @@ describe("Autonomy Prometheus Metrics", () => {
   it("recordStateTransition increments counter", () => {
     recordStateTransition("idle", "executing");
     const snap = metrics.getSnapshot();
-    const key = 'autonomy_state_transitions_total:{"from":"idle","to":"executing"}';
+    const key =
+      'autonomy_state_transitions_total:{"from":"idle","to":"executing"}';
     expect(snap.counters[key]).toBeGreaterThan(0);
   });
 
   it("recordCurrentState sets gauge", () => {
     recordCurrentState("idle");
     const snap = metrics.getSnapshot();
-    expect(snap.counters['autonomy_current_state:{"state":"idle"}']).toBeUndefined;
+    expect(snap.counters['autonomy_current_state:{"state":"idle"}'])
+      .toBeUndefined;
   });
 
   it("recordConsecutiveErrors sets gauge", () => {
     recordConsecutiveErrors(3);
     const snap = metrics.getSnapshot();
-    expect(snap.counters["autonomy_consecutive_errors"]).toBe(3);
+    expect(snap.counters.autonomy_consecutive_errors).toBe(3);
   });
 
   it("recordIdentityVersionUpdate increments counter and sets version", () => {
     recordIdentityVersionUpdate(5);
     const snap = metrics.getSnapshot();
-    expect(snap.counters["autonomy_identity_version"]).toBe(5);
+    expect(snap.counters.autonomy_identity_version).toBe(5);
   });
 
   it("recordSafeModeEvent increments counter", () => {
@@ -158,13 +161,13 @@ describe("Autonomy Prometheus Metrics", () => {
   it("recordKernelUp sets gauge to 1", () => {
     recordKernelUp();
     const snap = metrics.getSnapshot();
-    expect(snap.counters["autonomy_kernel_up"]).toBe(1);
+    expect(snap.counters.autonomy_kernel_up).toBe(1);
   });
 
   it("recordQuarantineSize sets gauge", () => {
     recordQuarantineSize(10);
     const snap = metrics.getSnapshot();
-    expect(snap.counters["autonomy_quarantine_size"]).toBe(10);
+    expect(snap.counters.autonomy_quarantine_size).toBe(10);
   });
 
   it("recordDriftAlert increments counter", () => {
@@ -178,7 +181,7 @@ describe("Autonomy Prometheus Metrics", () => {
     recordGoalCount("active", 3);
     const snap = metrics.getSnapshot();
     // gauges are stored in counters map by the metrics client
-    expect(snap.counters["autonomy_goals_count"]).toBeDefined();
+    expect(snap.counters.autonomy_goals_count).toBeDefined();
   });
 
   it("recordEventAppended increments counter by type", () => {
@@ -198,7 +201,8 @@ describe("Autonomy Prometheus Metrics", () => {
   it("recordRoleExecution increments role counter", () => {
     recordRoleExecution("planner", "success");
     const snap = metrics.getSnapshot();
-    const key = 'autonomy_role_executions_total:{"role":"planner","outcome":"success"}';
+    const key =
+      'autonomy_role_executions_total:{"role":"planner","outcome":"success"}';
     expect(snap.counters[key]).toBeGreaterThan(0);
   });
 

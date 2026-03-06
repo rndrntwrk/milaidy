@@ -442,16 +442,28 @@ describe("Fresh Install Simulation", () => {
   });
 
   it("CLI boots and prints help without errors", async () => {
-    const outPath = path.join(os.tmpdir(), `milady-cli-out-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`);
+    const outPath = path.join(
+      os.tmpdir(),
+      `milady-cli-out-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`,
+    );
+    let output = "";
     try {
-      await execFileAsync("sh", ["-c", `node ${cliEntryPath} --help > ${outPath} 2>&1`], { timeout: 30_000 });
-    } catch {
-      // ignore Commander throwing if it throws
+      const result = await execFileAsync("node", [cliEntryPath, "--help"], {
+        timeout: 30_000,
+      });
+      output = `${result.stdout}${result.stderr}`;
+    } catch (error) {
+      const maybeProcessError = error as {
+        stdout?: string;
+        stderr?: string;
+      };
+      output = `${maybeProcessError.stdout ?? ""}${maybeProcessError.stderr ?? ""}`;
     }
-    const output = fs.existsSync(outPath) ? fs.readFileSync(outPath, "utf-8") : "";
-    if (fs.existsSync(outPath)) fs.unlinkSync(outPath);
+    fs.writeFileSync(outPath, output, "utf-8");
+    const captured = fs.readFileSync(outPath, "utf-8");
+    fs.unlinkSync(outPath);
 
-    expect(output).toContain("milady");
+    expect(captured).toContain("milady");
   }, 45_000);
 
   it("API server starts and serves status endpoint", async () => {

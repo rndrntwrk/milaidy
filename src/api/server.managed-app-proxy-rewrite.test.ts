@@ -85,8 +85,11 @@ describe("managed app proxy path rewriting", () => {
   });
 
   it("does not treat HTML responses as JavaScript for chunk paths", () => {
-    expect(isJavaScriptLikeResponse("text/html; charset=utf-8", "/_next/static/chunks/main.js")).toBe(
-      false,
-    );
+    expect(
+      isJavaScriptLikeResponse(
+        "text/html; charset=utf-8",
+        "/_next/static/chunks/main.js",
+      ),
+    ).toBe(false);
   });
 });

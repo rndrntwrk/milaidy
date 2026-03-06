@@ -474,7 +474,9 @@ export class TypedEventBus {
    */
   emit<K extends EventName>(event: K, payload: MilaidyEvents[K]): void {
     if (this.debug) {
-      logger.debug(`[event-bus] Emitting: ${event}`, { payload });
+      logger.debug(
+        `[event-bus] Emitting: ${event} ${JSON.stringify({ payload })}`,
+      );
     }
 
     this.emitter.emit(event, payload);
@@ -488,7 +490,9 @@ export class TypedEventBus {
     payload: MilaidyEvents[K],
   ): Promise<void> {
     if (this.debug) {
-      logger.debug(`[event-bus] Emitting async: ${event}`, { payload });
+      logger.debug(
+        `[event-bus] Emitting async: ${event} ${JSON.stringify({ payload })}`,
+      );
     }
 
     const handlers = this.subscriptions.get(event);
@@ -527,12 +531,16 @@ export class TypedEventBus {
     if (!this.subscriptions.has(event)) {
       this.subscriptions.set(event, new Set());
     }
-    this.subscriptions.get(event)!.add(wrappedHandler as EventHandler<EventName>);
+    this.subscriptions
+      .get(event)
+      ?.add(wrappedHandler as EventHandler<EventName>);
 
     // Return unsubscribe function
     return () => {
       this.emitter.off(event, wrappedHandler);
-      this.subscriptions.get(event)?.delete(wrappedHandler as EventHandler<EventName>);
+      this.subscriptions
+        .get(event)
+        ?.delete(wrappedHandler as EventHandler<EventName>);
     };
   }
 

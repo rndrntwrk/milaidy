@@ -15,11 +15,10 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TypedEventBus } from "../events/event-bus.js";
 import {
+  type ConfigChangeHandler,
   ConfigWatcher,
   getConfigWatcher,
   resetConfigWatcher,
-  type ConfigChange,
-  type ConfigChangeHandler,
 } from "./config-watcher.js";
 
 // Mock the config loading
@@ -168,7 +167,9 @@ describe("ConfigWatcher", () => {
         handler,
       });
 
-      mockLoadConfig.mockReturnValue({ database: { url: "postgres://..." } } as never);
+      mockLoadConfig.mockReturnValue({
+        database: { url: "postgres://..." },
+      } as never);
       await watcher.reload();
 
       expect(handler).not.toHaveBeenCalled();
@@ -182,7 +183,9 @@ describe("ConfigWatcher", () => {
         handler,
       });
 
-      mockLoadConfig.mockReturnValue({ any: { nested: { path: "value" } } } as never);
+      mockLoadConfig.mockReturnValue({
+        any: { nested: { path: "value" } },
+      } as never);
       await watcher.reload();
 
       expect(handler).toHaveBeenCalledWith(
@@ -247,13 +250,17 @@ describe("ConfigWatcher", () => {
     });
 
     it("detects nested changes", async () => {
-      mockLoadConfig.mockReturnValue({ deep: { nested: { value: 1 } } } as never);
+      mockLoadConfig.mockReturnValue({
+        deep: { nested: { value: 1 } },
+      } as never);
       watcher = new ConfigWatcher({ eventBus, debounceMs: 10 });
 
       const handler = vi.fn();
       watcher.onConfigChange({ path: "deep.*", handler });
 
-      mockLoadConfig.mockReturnValue({ deep: { nested: { value: 2 } } } as never);
+      mockLoadConfig.mockReturnValue({
+        deep: { nested: { value: 2 } },
+      } as never);
       await watcher.reload();
 
       expect(handler).toHaveBeenCalledWith(
@@ -371,7 +378,9 @@ describe("ConfigWatcher", () => {
 
   describe("handler errors", () => {
     it("continues processing other handlers when one throws", async () => {
-      const failingHandler = vi.fn().mockRejectedValue(new Error("Handler failed"));
+      const failingHandler = vi
+        .fn()
+        .mockRejectedValue(new Error("Handler failed"));
       const successHandler = vi.fn();
 
       watcher.onConfigChange({

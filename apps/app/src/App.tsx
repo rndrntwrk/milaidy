@@ -45,7 +45,7 @@ import {
   pathForTab,
 } from "./navigation";
 
-const advancedTabs = new Set(
+const _advancedTabs = new Set(
   ALL_TAB_GROUPS.find((group) => group.label === "Advanced")?.tabs ?? [],
 );
 const CHAT_MOBILE_BREAKPOINT_PX = 1024;
@@ -99,8 +99,10 @@ function ViewRouter() {
     case "logs":
     case "security":
       return <AdvancedPageView />;
-    case "settings": return <SettingsView />;
-    default: return <ChatView />;
+    case "settings":
+      return <SettingsView />;
+    default:
+      return <ChatView />;
   }
 }
 
@@ -257,7 +259,8 @@ export function App() {
   useEffect(() => {
     const handler = () => setCustomActionsPanelOpen((v) => !v);
     window.addEventListener("toggle-custom-actions-panel", handler);
-    return () => window.removeEventListener("toggle-custom-actions-panel", handler);
+    return () =>
+      window.removeEventListener("toggle-custom-actions-panel", handler);
   }, []);
 
   const handleEditorSave = useCallback(() => {
@@ -343,7 +346,12 @@ export function App() {
   }
 
   if (authRequired) return <PairingView />;
-  if (!onboardingComplete) return <ErrorBoundary><OnboardingWizard /></ErrorBoundary>;
+  if (!onboardingComplete)
+    return (
+      <ErrorBoundary>
+        <OnboardingWizard />
+      </ErrorBoundary>
+    );
 
   if (lifoPopoutMode) {
     return (

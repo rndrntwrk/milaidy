@@ -1,21 +1,21 @@
+import type { EventEmitter } from "node:events";
 import fs from "node:fs/promises";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import os from "node:os";
 import path from "node:path";
-import { EventEmitter } from "node:events";
-import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { __testOnlyHandleRequest } from "../server.js";
-import {
-  appendMasteryEpisode,
-  appendMasteryLog,
-  writeMasteryRun,
-} from "@rndrntwrk/plugin-555arcade/mastery";
 import type {
   Arcade555MasteryEpisode,
   Arcade555MasteryLog,
   Arcade555MasteryRun,
 } from "@rndrntwrk/plugin-555arcade/mastery";
+import {
+  appendMasteryEpisode,
+  appendMasteryLog,
+  writeMasteryRun,
+} from "@rndrntwrk/plugin-555arcade/mastery";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { __testOnlyHandleRequest } from "../server.js";
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -200,7 +200,9 @@ describe("arcade mastery routes", () => {
   const legacyBase = "/api/five55/mastery";
 
   beforeEach(async () => {
-    stateDir = await fs.mkdtemp(path.join(os.tmpdir(), "milaidy-mastery-routes-"));
+    stateDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "milaidy-mastery-routes-"),
+    );
     process.env.MILAIDY_STATE_DIR = stateDir;
   });
 
@@ -220,7 +222,10 @@ describe("arcade mastery routes", () => {
     await pending;
 
     expect(res.statusCode).toBe(200);
-    const payload = JSON.parse(res.body) as { total: number; contracts: unknown[] };
+    const payload = JSON.parse(res.body) as {
+      total: number;
+      contracts: unknown[];
+    };
     expect(payload.total).toBeGreaterThanOrEqual(16);
     expect(payload.contracts.length).toBe(payload.total);
   });
@@ -235,13 +240,18 @@ describe("arcade mastery routes", () => {
     const state = createState();
 
     {
-      const { req, emitBody } = createMockReq("GET", `${canonicalBase}/runs?limit=5`);
+      const { req, emitBody } = createMockReq(
+        "GET",
+        `${canonicalBase}/runs?limit=5`,
+      );
       const res = createMockRes();
       const pending = __testOnlyHandleRequest(req, res, state);
       emitBody();
       await pending;
       expect(res.statusCode).toBe(200);
-      const payload = JSON.parse(res.body) as { runs: Array<{ runId: string }> };
+      const payload = JSON.parse(res.body) as {
+        runs: Array<{ runId: string }>;
+      };
       expect(payload.runs[0]?.runId).toBe(runId);
     }
 
@@ -359,8 +369,13 @@ describe("arcade mastery routes", () => {
     expect(res.statusCode).toBe(410);
     expect(res.headers.Deprecation).toBe("true");
     expect(res.headers.Sunset).toBe("Wed, 30 Sep 2026 00:00:00 GMT");
-    expect(res.headers.Link).toContain("</api/arcade555/mastery/catalog>; rel=\"successor-version\"");
-    const payload = JSON.parse(res.body) as { error: string; successor: string };
+    expect(res.headers.Link).toContain(
+      '</api/arcade555/mastery/catalog>; rel="successor-version"',
+    );
+    const payload = JSON.parse(res.body) as {
+      error: string;
+      successor: string;
+    };
     expect(payload.error).toContain("disabled by default");
     expect(payload.successor).toBe("/api/arcade555/mastery/catalog");
   });
@@ -377,7 +392,9 @@ describe("arcade mastery routes", () => {
     expect(res.statusCode).toBe(200);
     expect(res.headers.Deprecation).toBe("true");
     expect(res.headers.Sunset).toBe("Wed, 30 Sep 2026 00:00:00 GMT");
-    expect(res.headers.Link).toContain("</api/arcade555/mastery/catalog>; rel=\"successor-version\"");
+    expect(res.headers.Link).toContain(
+      '</api/arcade555/mastery/catalog>; rel="successor-version"',
+    );
     const payload = JSON.parse(res.body) as { total: number };
     expect(payload.total).toBeGreaterThanOrEqual(16);
   });

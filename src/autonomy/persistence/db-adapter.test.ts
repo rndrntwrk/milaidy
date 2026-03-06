@@ -78,7 +78,9 @@ describe("AutonomyDbAdapter", () => {
     const adapter = new AutonomyDbAdapter(db, { autoMigrate: false });
     await adapter.initialize();
 
-    const result = await adapter.executeRaw("SELECT count(*) FROM autonomy_events");
+    const result = await adapter.executeRaw(
+      "SELECT count(*) FROM autonomy_events",
+    );
     expect(result.rows).toHaveLength(1);
     expect(result.columns).toContain("count");
     expect(db.execute).toHaveBeenCalled();

@@ -68,16 +68,18 @@ export class RuleBasedGateModel implements MemoryGateModel {
     let score = 0;
     score += features.trustScore * 0.35;
     score += (features.sourceVerified ? 1 : 0) * 0.15;
-    score += Math.min(1, features.sourceAgeDays / 365) * 0.10;
-    score += Math.min(1, features.priorInteractions / 100) * 0.10;
-    score += (features.semanticSimilarity ?? 0.5) * 0.10;
-    score += (features.hasExternalLinks ? 0 : 1) * 0.10;
-    score += (features.touchesCoreValues ? 0 : 1) * 0.10;
+    score += Math.min(1, features.sourceAgeDays / 365) * 0.1;
+    score += Math.min(1, features.priorInteractions / 100) * 0.1;
+    score += (features.semanticSimilarity ?? 0.5) * 0.1;
+    score += (features.hasExternalLinks ? 0 : 1) * 0.1;
+    score += (features.touchesCoreValues ? 0 : 1) * 0.1;
 
     const action: "allow" | "quarantine" | "reject" =
-      score >= this.quarantineThreshold ? "allow" :
-      score >= this.rejectThreshold ? "quarantine" :
-      "reject";
+      score >= this.quarantineThreshold
+        ? "allow"
+        : score >= this.rejectThreshold
+          ? "quarantine"
+          : "reject";
 
     return {
       acceptProbability: score,
@@ -86,11 +88,11 @@ export class RuleBasedGateModel implements MemoryGateModel {
       featureImportances: {
         trustScore: 0.35,
         sourceVerified: 0.15,
-        sourceAgeDays: 0.10,
-        priorInteractions: 0.10,
-        semanticSimilarity: 0.10,
-        hasExternalLinks: 0.10,
-        touchesCoreValues: 0.10,
+        sourceAgeDays: 0.1,
+        priorInteractions: 0.1,
+        semanticSimilarity: 0.1,
+        hasExternalLinks: 0.1,
+        touchesCoreValues: 0.1,
       },
     };
   }
@@ -239,20 +241,27 @@ export class LogisticRegressionGateModel implements MemoryGateModel {
     }
   }
 
-  private featureVector(features: MemoryFeatures): Record<LogisticFeatureKey, number> {
+  private featureVector(
+    features: MemoryFeatures,
+  ): Record<LogisticFeatureKey, number> {
     return {
       trustScore: clamp01(features.trustScore),
       contentLengthNorm: normalizeContentLength(features.contentLength),
       sourceVerified: features.sourceVerified ? 1 : 0,
       sourceAgeNorm: normalizeDayWindow(features.sourceAgeDays, 365),
-      priorInteractionsNorm: normalizeDayWindow(features.priorInteractions, 100),
+      priorInteractionsNorm: normalizeDayWindow(
+        features.priorInteractions,
+        100,
+      ),
       semanticSimilarity: clamp01(features.semanticSimilarity ?? 0.5),
       hasExternalLinks: features.hasExternalLinks ? 1 : 0,
       touchesCoreValues: features.touchesCoreValues ? 1 : 0,
     };
   }
 
-  private predictProbability(vector: Record<LogisticFeatureKey, number>): number {
+  private predictProbability(
+    vector: Record<LogisticFeatureKey, number>,
+  ): number {
     let linear = this.modelState.bias;
     for (const key of LOGISTIC_FEATURE_KEYS) {
       linear += this.modelState.weights[key] * vector[key];
@@ -278,7 +287,9 @@ export class LogisticRegressionGateModel implements MemoryGateModel {
     );
   }
 
-  private actionFromProbability(probability: number): "allow" | "quarantine" | "reject" {
+  private actionFromProbability(
+    probability: number,
+  ): "allow" | "quarantine" | "reject" {
     if (probability >= this.quarantineThreshold) return "allow";
     if (probability >= this.rejectThreshold) return "quarantine";
     return "reject";
@@ -304,7 +315,10 @@ export class LogisticRegressionGateModel implements MemoryGateModel {
     };
   }
 
-  async update(features: MemoryFeatures, label: "allow" | "reject"): Promise<void> {
+  async update(
+    features: MemoryFeatures,
+    label: "allow" | "reject",
+  ): Promise<void> {
     await this.ensureLoaded();
     const vector = this.featureVector(features);
     const target = label === "allow" ? 1 : 0;

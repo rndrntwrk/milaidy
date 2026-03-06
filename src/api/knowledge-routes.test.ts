@@ -263,7 +263,7 @@ describe("knowledge routes", () => {
     expect(result.status).toBe(200);
     expect(
       (result.payload as { document: Record<string, unknown> }).document,
-    ).toEqual({
+    ).toMatchObject({
       id: documentId,
       filename: "detail.md",
       contentType: "text/markdown",

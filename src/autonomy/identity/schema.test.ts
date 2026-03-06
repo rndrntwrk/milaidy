@@ -119,15 +119,20 @@ describe("AutonomyIdentitySchema", () => {
       (identity.communicationStyle as { tone: string }).tone = "invalid";
 
       const issues = validateAutonomyIdentity(identity);
-      expect(issues.some((i) => i.field === "communicationStyle.tone")).toBe(true);
+      expect(issues.some((i) => i.field === "communicationStyle.tone")).toBe(
+        true,
+      );
     });
 
     it("reports invalid verbosity", () => {
       const identity = createDefaultAutonomyIdentity();
-      (identity.communicationStyle as { verbosity: string }).verbosity = "extreme";
+      (identity.communicationStyle as { verbosity: string }).verbosity =
+        "extreme";
 
       const issues = validateAutonomyIdentity(identity);
-      expect(issues.some((i) => i.field === "communicationStyle.verbosity")).toBe(true);
+      expect(
+        issues.some((i) => i.field === "communicationStyle.verbosity"),
+      ).toBe(true);
     });
 
     it("reports invalid identity version", () => {

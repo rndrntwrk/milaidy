@@ -17,6 +17,7 @@ import {
   type AgentStartupDiagnostics,
   type AgentStatus,
   type AppViewerAuthMessage,
+  type Arcade555MasteryRun,
   type CatalogSkill,
   type CharacterData,
   type Conversation,
@@ -26,7 +27,6 @@ import {
   client,
   type DropStatus,
   type ExtensionStatus,
-  type Arcade555MasteryRun,
   type ImageAttachment,
   type LogEntry,
   type McpMarketplaceResult,
@@ -44,7 +44,6 @@ import {
   type SkillScanReportSummary,
   type StreamEventEnvelope,
   type StylePreset,
-  type SystemPermissionId,
   type TriggerHealthSnapshot,
   type TriggerRunRecord,
   type TriggerSummary,
@@ -58,13 +57,19 @@ import {
   type WhitelistStatus,
   type WorkbenchOverview,
 } from "./api-client";
-import { tabFromPath, pathForTab, type Tab } from "./navigation";
 import { resolveAppAssetUrl } from "./asset-url";
+import {
+  type AutonomyEventStore,
+  type AutonomyRunHealthMap,
+  buildAutonomyGapReplayRequests,
+  mergeAutonomyEvents,
+} from "./autonomy-events";
+import type { ToastItem } from "./components/ui/Toast";
+import { pathForTab, type Tab, tabFromPath } from "./navigation";
 import {
   getMissingOnboardingPermissions,
   ONBOARDING_PERMISSION_LABELS,
 } from "./onboarding-permissions";
-import type { ToastItem } from "./components/ui/Toast";
 
 // ── VRM helpers ─────────────────────────────────────────────────────────
 
@@ -231,19 +236,25 @@ function resolveOnboardingStyleCatchphrase(
   const trimmed = requested.trim();
   const aliases = options.styleAliases ?? {};
   const canonical = (aliases[trimmed] ?? trimmed).trim();
-  if (canonical && options.styles.some((preset) => preset.catchphrase === canonical)) {
+  if (
+    canonical &&
+    options.styles.some((preset) => preset.catchphrase === canonical)
+  ) {
     return canonical;
   }
   const preferred = (
     options.defaultStyleCatchphrase ?? FALLBACK_ONBOARDING_STYLE_CATCHPHRASE
   ).trim();
-  if (preferred && options.styles.some((preset) => preset.catchphrase === preferred)) {
+  if (
+    preferred &&
+    options.styles.some((preset) => preset.catchphrase === preferred)
+  ) {
     return preferred;
   }
   return options.styles[0]?.catchphrase ?? "";
 }
 
-function resolveOnboardingStylePreset(
+function _resolveOnboardingStylePreset(
   options: OnboardingOptions | null | undefined,
   requested: string,
 ): StylePreset | undefined {
@@ -590,6 +601,7 @@ export interface AppState {
   conversationMessages: ConversationMessage[];
   autonomousEvents: StreamEventEnvelope[];
   autonomousLatestEventId: string | null;
+  autonomousRunHealthByRunId: AutonomyRunHealthMap;
   /** Conversation IDs with unread proactive messages from the agent. */
   unreadConversations: Set<string>;
 
@@ -962,7 +974,11 @@ export interface AppActions {
   handleAgentImport: () => Promise<void>;
 
   // Action notice / toasts
-  setActionNotice: (text: string, tone?: "info" | "success" | "error", ttlMs?: number) => void;
+  setActionNotice: (
+    text: string,
+    tone?: "info" | "success" | "error",
+    ttlMs?: number,
+  ) => void;
   dismissToast: (id: string) => void;
 
   // Generic state setter
@@ -998,23 +1014,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [onboardingLoading, setOnboardingLoading] = useState(true);
   const [startupPhase, setStartupPhase] =
     useState<StartupPhase>("starting-backend");
-  const [startupError, setStartupError] = useState<StartupErrorState | null>(
+  const [_startupError, setStartupError] = useState<StartupErrorState | null>(
     null,
   );
   const [startupRetryNonce, setStartupRetryNonce] = useState(0);
   const [authRequired, setAuthRequired] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const actionNotice: ActionNotice | null = toasts.length > 0 ? { tone: toasts[0].tone, text: toasts[0].text } : null;
+  const actionNotice: ActionNotice | null =
+    toasts.length > 0 ? { tone: toasts[0].tone, text: toasts[0].text } : null;
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [lifecycleAction, setLifecycleAction] =
     useState<LifecycleAction | null>(null);
 
   // --- Deferred restart ---
-  const [pendingRestart, setPendingRestart] = useState(false);
-  const [pendingRestartReasons, setPendingRestartReasons] = useState<string[]>(
+  const [_pendingRestart, setPendingRestart] = useState(false);
+  const [_pendingRestartReasons, setPendingRestartReasons] = useState<string[]>(
     [],
   );
-  const [restartBannerDismissed, setRestartBannerDismissed] = useState(false);
+  const [_restartBannerDismissed, setRestartBannerDismissed] = useState(false);
 
   // --- Pairing ---
   const [pairingEnabled, setPairingEnabled] = useState(false);
@@ -1032,7 +1049,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
   const [chatAgentVoiceMuted, setChatAgentVoiceMuted] =
     useState(loadChatVoiceMuted);
-  const [chatAvatarSpeaking, setChatAvatarSpeaking] = useState(false);
+  const [_chatAvatarSpeaking, setChatAvatarSpeaking] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<
     string | null
@@ -1046,15 +1063,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [autonomousLatestEventId, setAutonomousLatestEventId] = useState<
     string | null
   >(null);
+  const [autonomousRunHealthByRunId, setAutonomousRunHealthByRunId] =
+    useState<AutonomyRunHealthMap>({});
   const [unreadConversations, setUnreadConversations] = useState<Set<string>>(
     new Set(),
   );
   const activeConversationIdRef = useRef<string | null>(null);
   const conversationsRef = useRef<Conversation[]>([]);
+  const autonomousEventsRef = useRef<StreamEventEnvelope[]>([]);
+  const autonomousRunHealthRef = useRef<AutonomyRunHealthMap>({});
+  const autonomyEventStoreRef = useRef<AutonomyEventStore | null>(null);
+  const autonomyReplayInFlightRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     conversationsRef.current = conversations;
   }, [conversations]);
+
+  useEffect(() => {
+    autonomousEventsRef.current = autonomousEvents;
+  }, [autonomousEvents]);
+
+  useEffect(() => {
+    autonomousRunHealthRef.current = autonomousRunHealthByRunId;
+  }, [autonomousRunHealthByRunId]);
 
   useEffect(() => {
     saveChatAvatarVisible(chatAvatarVisible);
@@ -1340,7 +1371,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!onboardingOptions) return;
     setOnboardingStyle((current) => {
-      const resolved = resolveOnboardingStyleCatchphrase(onboardingOptions, current);
+      const resolved = resolveOnboardingStyleCatchphrase(
+        onboardingOptions,
+        current,
+      );
       return current === resolved ? current : resolved;
     });
   }, [onboardingOptions]);
@@ -1395,9 +1429,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     useState(false);
   const [activeGamePostMessagePayload, setActiveGamePostMessagePayload] =
     useState<GamePostMessageAuthPayload | null>(null);
-  const [arcade555MasteryRuns, setArcade555MasteryRuns] = useState<Arcade555MasteryRun[]>(
-    [],
-  );
+  const [arcade555MasteryRuns, setArcade555MasteryRuns] = useState<
+    Arcade555MasteryRun[]
+  >([]);
   const [arcade555MasteryRunsLoading, setArcade555MasteryRunsLoading] =
     useState(false);
   const [gameOverlayEnabled, setGameOverlayEnabled] = useState(false);
@@ -1434,8 +1468,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /** Synchronous lock so same-tick chat submits cannot double-send. */
   const chatSendBusyRef = useRef(false);
   /** Batches streaming tokens so we update state once per animation frame. */
-  const pendingTokensRef = useRef("");
-  const tokenRafIdRef = useRef(0);
+  const _pendingTokensRef = useRef("");
+  const _tokenRafIdRef = useRef(0);
   /** Synchronous lock for export action to prevent duplicate clicks in the same tick. */
   const exportBusyRef = useRef(false);
   /** Synchronous lock for import action to prevent duplicate clicks in the same tick. */
@@ -1456,22 +1490,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Clean up all toast timers on unmount
   useEffect(() => {
     const timers = toastTimers.current;
-    return () => { timers.forEach((t) => window.clearTimeout(t)); timers.clear(); };
+    return () => {
+      timers.forEach((t) => {
+        window.clearTimeout(t);
+      });
+      timers.clear();
+    };
   }, []);
 
   const dismissToast = useCallback((id: string) => {
     const handle = toastTimers.current.get(id);
-    if (handle != null) { window.clearTimeout(handle); toastTimers.current.delete(id); }
-    setToasts((prev: ToastItem[]) => prev.filter((t: ToastItem) => t.id !== id));
+    if (handle != null) {
+      window.clearTimeout(handle);
+      toastTimers.current.delete(id);
+    }
+    setToasts((prev: ToastItem[]) =>
+      prev.filter((t: ToastItem) => t.id !== id),
+    );
   }, []);
 
   const setActionNotice = useCallback(
-    (text: string, tone: "info" | "success" | "error" = "info", ttlMs = 2800) => {
+    (
+      text: string,
+      tone: "info" | "success" | "error" = "info",
+      ttlMs = 2800,
+    ) => {
       const id = `toast-${++toastIdCounter.current}`;
       setToasts((prev: ToastItem[]) => [...prev.slice(-2), { id, text, tone }]);
       const handle = window.setTimeout(() => {
         toastTimers.current.delete(id);
-        setToasts((prev: ToastItem[]) => prev.filter((t: ToastItem) => t.id !== id));
+        setToasts((prev: ToastItem[]) =>
+          prev.filter((t: ToastItem) => t.id !== id),
+        );
       }, ttlMs);
       toastTimers.current.set(id, handle);
     },
@@ -1588,6 +1638,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const loadArcade555MasteryRuns = useCallback(async () => {
     setArcade555MasteryRunsLoading(true);
     try {
+      if (typeof client.listArcade555MasteryRuns !== "function") {
+        setArcade555MasteryRuns([]);
+        return;
+      }
       const page = await client.listArcade555MasteryRuns({ limit: 20 });
       setArcade555MasteryRuns(page.runs);
     } catch (err) {
@@ -1790,19 +1844,90 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [loadTriggerHealth, loadTriggerRuns, loadTriggers, sortTriggersByNextRun],
   );
 
-  const appendAutonomousEvent = useCallback((event: StreamEventEnvelope) => {
-    setAutonomousEvents((prev) => {
-      if (prev.some((entry) => entry.eventId === event.eventId)) {
-        return prev;
+  const commitAutonomyMerge = useCallback(
+    (
+      incomingEvents: StreamEventEnvelope[],
+      options?: {
+        replay?: boolean;
+      },
+    ) => {
+      const result = mergeAutonomyEvents({
+        store: autonomyEventStoreRef.current ?? undefined,
+        existingEvents:
+          autonomyEventStoreRef.current === null
+            ? autonomousEventsRef.current
+            : undefined,
+        incomingEvents,
+        runHealthByRunId: autonomousRunHealthRef.current,
+        replay: options?.replay === true,
+      });
+
+      autonomyEventStoreRef.current = result.store;
+      autonomousEventsRef.current = result.events;
+      autonomousRunHealthRef.current = result.runHealthByRunId;
+      setAutonomousEvents(result.events);
+      setAutonomousLatestEventId(result.latestEventId);
+      setAutonomousRunHealthByRunId(result.runHealthByRunId);
+
+      return result;
+    },
+    [],
+  );
+
+  const replayAutonomyGaps = useCallback(async () => {
+    const store = autonomyEventStoreRef.current;
+    if (!store) return;
+
+    const requests = buildAutonomyGapReplayRequests(
+      autonomousRunHealthRef.current,
+      store,
+    ).filter((request) => {
+      const key = `${request.runId}:${request.fromSeq}`;
+      if (autonomyReplayInFlightRef.current.has(key)) {
+        return false;
       }
-      const merged = [...prev, event];
-      if (merged.length > 1200) {
-        return merged.slice(merged.length - 1200);
-      }
-      return merged;
+      autonomyReplayInFlightRef.current.add(key);
+      return true;
     });
-    setAutonomousLatestEventId(event.eventId);
-  }, []);
+
+    if (requests.length === 0) return;
+
+    try {
+      for (const request of requests) {
+        try {
+          const replay = await client.getAgentEvents({
+            runId: request.runId,
+            fromSeq: request.fromSeq,
+          });
+          commitAutonomyMerge(replay.events, { replay: true });
+        } catch (err) {
+          console.warn("[milady] Failed to replay autonomy gap", err);
+        } finally {
+          autonomyReplayInFlightRef.current.delete(
+            `${request.runId}:${request.fromSeq}`,
+          );
+        }
+      }
+    } finally {
+      const remaining = buildAutonomyGapReplayRequests(
+        autonomousRunHealthRef.current,
+        autonomyEventStoreRef.current ?? store,
+      );
+      if (remaining.length > 0) {
+        commitAutonomyMerge([], { replay: true });
+      }
+    }
+  }, [commitAutonomyMerge]);
+
+  const appendAutonomousEvent = useCallback(
+    (event: StreamEventEnvelope) => {
+      const result = commitAutonomyMerge([event]);
+      if (result.hasUnresolvedGaps) {
+        void replayAutonomyGaps();
+      }
+    },
+    [commitAutonomyMerge, replayAutonomyGaps],
+  );
 
   const loadConversations = useCallback(async (): Promise<
     Conversation[] | null
@@ -3644,7 +3769,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setOnboardingStep("connectors");
         break;
     }
-  }, [onboardingStep, onboardingOptions, onboardingRunMode]);
+  }, [
+    onboardingStep,
+    onboardingRunMode,
+    dropStatus?.mintedOut,
+    dropStatus?.userHasMinted,
+    dropStatus?.dropEnabled,
+  ]);
 
   // ── Cloud ──────────────────────────────────────────────────────────
 
@@ -4400,8 +4531,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const replay = await client.getAgentEvents({ limit: 300 });
         if (replay.events.length > 0) {
-          setAutonomousEvents(replay.events);
-          setAutonomousLatestEventId(replay.latestEventId);
+          const result = commitAutonomyMerge(replay.events);
+          if (result.hasUnresolvedGaps) {
+            void replayAutonomyGaps();
+          }
         }
       } catch (err) {
         console.warn("[milady] Failed to fetch autonomous event replay", err);
@@ -4452,7 +4585,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           // Bump conversation to top of list
           setConversations((prev) => {
             const updated = prev.map((c) =>
-              c.id === convId ? { ...c, updatedAt: new Date().toISOString() } : c,
+              c.id === convId
+                ? { ...c, updatedAt: new Date().toISOString() }
+                : c,
             );
             return updated.sort(
               (a, b) =>
@@ -4588,8 +4723,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadWalletConfig,
     loadWorkbench, // Cloud polling
     pollCloudCredits,
+    replayAutonomyGaps,
     setSelectedVrmIndex,
     startupRetryNonce,
+    commitAutonomyMerge,
   ]);
 
   // When agent transitions to "running", send a greeting if conversation is empty
@@ -4627,53 +4764,202 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value: AppContextValue = {
     // State
-    tab, currentTheme, connected, agentStatus, onboardingComplete, onboardingLoading,
-    startupPhase, authRequired, actionNotice, toasts, lifecycleBusy, lifecycleAction,
-    pairingEnabled, pairingExpiresAt, pairingCodeInput, pairingError, pairingBusy,
-    chatInput, chatSending, chatFirstTokenReceived, conversations, activeConversationId, conversationMessages,
-    autonomousEvents, autonomousLatestEventId, unreadConversations,
-    triggers, triggersLoading, triggersSaving, triggerRunsById, triggerHealth, triggerError,
-    plugins, pluginFilter, pluginStatusFilter, pluginSearch, pluginSettingsOpen,
-    pluginAdvancedOpen, pluginSaving, pluginSaveSuccess,
-    skills, skillsSubTab, skillCreateFormOpen, skillCreateName, skillCreateDescription,
-    skillCreating, skillReviewReport, skillReviewId, skillReviewLoading, skillToggleAction,
-    skillsMarketplaceQuery, skillsMarketplaceResults, skillsMarketplaceError,
-    skillsMarketplaceLoading, skillsMarketplaceAction, skillsMarketplaceManualGithubUrl,
-    logs, logSources, logTags, logTagFilter, logLevelFilter, logSourceFilter,
-    walletAddresses, walletConfig, walletBalances, walletNfts, walletLoading,
-    walletNftsLoading, inventoryView, walletExportData, walletExportVisible,
-    walletApiKeySaving, inventorySort, walletError,
-    registryStatus, registryLoading, registryRegistering, registryError,
-    dropStatus, dropLoading, mintInProgress, mintResult, mintError, mintShiny,
-    whitelistStatus, whitelistLoading, twitterVerifyMessage, twitterVerifyUrl, twitterVerifying,
-    characterData, characterLoading, characterSaving, characterSaveSuccess,
-    characterSaveError, characterDraft, selectedVrmIndex, customVrmUrl,
-    cloudEnabled, cloudConnected, cloudCredits, cloudCreditsLow, cloudCreditsCritical,
-    cloudTopUpUrl, cloudUserId, cloudLoginBusy, cloudLoginError, cloudDisconnecting,
-    updateStatus, updateLoading, updateChannelSaving,
-    extensionStatus, extensionChecking,
-    storePlugins, storeSearch, storeFilter, storeLoading, storeInstalling,
-    storeUninstalling, storeError, storeDetailPlugin, storeSubTab,
-    catalogSkills, catalogTotal, catalogPage, catalogTotalPages, catalogSort,
-    catalogSearch, catalogLoading, catalogError, catalogDetailSkill,
-    catalogInstalling, catalogUninstalling,
-    workbenchLoading, workbench, workbenchTasksAvailable, workbenchTriggersAvailable, workbenchTodosAvailable,
-    exportBusy, exportPassword, exportIncludeLogs, exportError, exportSuccess,
-    importBusy, importPassword, importFile, importError, importSuccess,
-    onboardingStep, onboardingOptions, onboardingName, onboardingStyle, onboardingTheme,
-    onboardingRunMode, onboardingCloudProvider, onboardingSmallModel, onboardingLargeModel,
-    onboardingProvider, onboardingApiKey, onboardingOpenRouterModel, onboardingPrimaryModel,
-    onboardingTelegramToken, onboardingDiscordToken, onboardingWhatsAppSessionPath,
-    onboardingTwilioAccountSid, onboardingTwilioAuthToken, onboardingTwilioPhoneNumber,
-    onboardingBlooioApiKey, onboardingBlooioPhoneNumber, onboardingSubscriptionTab,
-    onboardingSelectedChains, onboardingRpcSelections, onboardingRpcKeys,
-    onboardingAvatar, onboardingRestarting,
-    commandPaletteOpen, commandQuery, commandActiveIndex, emotePickerOpen,
-    mcpConfiguredServers, mcpServerStatuses, mcpMarketplaceQuery, mcpMarketplaceResults,
-    mcpMarketplaceLoading, mcpAction, mcpAddingServer, mcpAddingResult,
-    mcpEnvInputs, mcpHeaderInputs,
-    droppedFiles, shareIngestNotice,
-    activeGameApp, activeGameDisplayName, activeGameViewerUrl, activeGameSandbox,
+    tab,
+    currentTheme,
+    connected,
+    agentStatus,
+    onboardingComplete,
+    onboardingLoading,
+    startupPhase,
+    startupError: _startupError,
+    authRequired,
+    actionNotice,
+    toasts,
+    lifecycleBusy,
+    lifecycleAction,
+    pairingEnabled,
+    pairingExpiresAt,
+    pairingCodeInput,
+    pairingError,
+    pairingBusy,
+    chatInput,
+    chatSending,
+    chatFirstTokenReceived,
+    conversations,
+    activeConversationId,
+    conversationMessages,
+    autonomousEvents,
+    autonomousLatestEventId,
+    autonomousRunHealthByRunId,
+    unreadConversations,
+    triggers,
+    triggersLoading,
+    triggersSaving,
+    triggerRunsById,
+    triggerHealth,
+    triggerError,
+    plugins,
+    pluginFilter,
+    pluginStatusFilter,
+    pluginSearch,
+    pluginSettingsOpen,
+    pluginAdvancedOpen,
+    pluginSaving,
+    pluginSaveSuccess,
+    skills,
+    skillsSubTab,
+    skillCreateFormOpen,
+    skillCreateName,
+    skillCreateDescription,
+    skillCreating,
+    skillReviewReport,
+    skillReviewId,
+    skillReviewLoading,
+    skillToggleAction,
+    skillsMarketplaceQuery,
+    skillsMarketplaceResults,
+    skillsMarketplaceError,
+    skillsMarketplaceLoading,
+    skillsMarketplaceAction,
+    skillsMarketplaceManualGithubUrl,
+    logs,
+    logSources,
+    logTags,
+    logTagFilter,
+    logLevelFilter,
+    logSourceFilter,
+    walletAddresses,
+    walletConfig,
+    walletBalances,
+    walletNfts,
+    walletLoading,
+    walletNftsLoading,
+    inventoryView,
+    walletExportData,
+    walletExportVisible,
+    walletApiKeySaving,
+    inventorySort,
+    walletError,
+    registryStatus,
+    registryLoading,
+    registryRegistering,
+    registryError,
+    dropStatus,
+    dropLoading,
+    mintInProgress,
+    mintResult,
+    mintError,
+    mintShiny,
+    whitelistStatus,
+    whitelistLoading,
+    twitterVerifyMessage,
+    twitterVerifyUrl,
+    twitterVerifying,
+    characterData,
+    characterLoading,
+    characterSaving,
+    characterSaveSuccess,
+    characterSaveError,
+    characterDraft,
+    selectedVrmIndex,
+    customVrmUrl,
+    cloudEnabled,
+    cloudConnected,
+    cloudCredits,
+    cloudCreditsLow,
+    cloudCreditsCritical,
+    cloudTopUpUrl,
+    cloudUserId,
+    cloudLoginBusy,
+    cloudLoginError,
+    cloudDisconnecting,
+    updateStatus,
+    updateLoading,
+    updateChannelSaving,
+    extensionStatus,
+    extensionChecking,
+    storePlugins,
+    storeSearch,
+    storeFilter,
+    storeLoading,
+    storeInstalling,
+    storeUninstalling,
+    storeError,
+    storeDetailPlugin,
+    storeSubTab,
+    catalogSkills,
+    catalogTotal,
+    catalogPage,
+    catalogTotalPages,
+    catalogSort,
+    catalogSearch,
+    catalogLoading,
+    catalogError,
+    catalogDetailSkill,
+    catalogInstalling,
+    catalogUninstalling,
+    workbenchLoading,
+    workbench,
+    workbenchTasksAvailable,
+    workbenchTriggersAvailable,
+    workbenchTodosAvailable,
+    exportBusy,
+    exportPassword,
+    exportIncludeLogs,
+    exportError,
+    exportSuccess,
+    importBusy,
+    importPassword,
+    importFile,
+    importError,
+    importSuccess,
+    onboardingStep,
+    onboardingOptions,
+    onboardingName,
+    onboardingStyle,
+    onboardingTheme,
+    onboardingRunMode,
+    onboardingCloudProvider,
+    onboardingSmallModel,
+    onboardingLargeModel,
+    onboardingProvider,
+    onboardingApiKey,
+    onboardingOpenRouterModel,
+    onboardingPrimaryModel,
+    onboardingTelegramToken,
+    onboardingDiscordToken,
+    onboardingWhatsAppSessionPath,
+    onboardingTwilioAccountSid,
+    onboardingTwilioAuthToken,
+    onboardingTwilioPhoneNumber,
+    onboardingBlooioApiKey,
+    onboardingBlooioPhoneNumber,
+    onboardingSubscriptionTab,
+    onboardingSelectedChains,
+    onboardingRpcSelections,
+    onboardingRpcKeys,
+    onboardingAvatar,
+    onboardingRestarting,
+    commandPaletteOpen,
+    commandQuery,
+    commandActiveIndex,
+    emotePickerOpen,
+    mcpConfiguredServers,
+    mcpServerStatuses,
+    mcpMarketplaceQuery,
+    mcpMarketplaceResults,
+    mcpMarketplaceLoading,
+    mcpAction,
+    mcpAddingServer,
+    mcpAddingResult,
+    mcpEnvInputs,
+    mcpHeaderInputs,
+    droppedFiles,
+    shareIngestNotice,
+    activeGameApp,
+    activeGameDisplayName,
+    activeGameViewerUrl,
+    activeGameSandbox,
     activeGamePostMessageAuth,
     arcade555MasteryRuns,
     arcade555MasteryRunsLoading,

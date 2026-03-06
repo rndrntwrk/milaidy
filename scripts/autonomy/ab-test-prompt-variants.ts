@@ -3,10 +3,8 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { createDefaultAutonomyIdentity } from "../../src/autonomy/identity/schema.js";
+import { evaluatePromptVariantsOnHeldOutScenarios } from "../../src/autonomy/learning/prompt-variant-evaluator.js";
 import { BUILTIN_SCENARIOS } from "../../src/autonomy/metrics/scenarios.js";
-import {
-  evaluatePromptVariantsOnHeldOutScenarios,
-} from "../../src/autonomy/learning/prompt-variant-evaluator.js";
 
 interface CliArgs {
   outDir: string;

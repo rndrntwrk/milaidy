@@ -3,8 +3,8 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { GridSearchTuner } from "./hyperparam-tuner.js";
 import type { RLVRTrainingDataset } from "./dataset.js";
+import { GridSearchTuner } from "./hyperparam-tuner.js";
 
 const dataset: RLVRTrainingDataset = {
   id: "ds1",
@@ -21,7 +21,9 @@ describe("GridSearchTuner", () => {
       dataset,
       async (params) => {
         // Simulate: lr=0.01, batchSize=32 is best
-        return params.learningRate === 0.01 && params.batchSize === 32 ? 0.95 : 0.5;
+        return params.learningRate === 0.01 && params.batchSize === 32
+          ? 0.95
+          : 0.5;
       },
     );
     expect(result.bestParams.learningRate).toBe(0.01);
@@ -59,11 +61,7 @@ describe("GridSearchTuner", () => {
 
   it("records trial durations", async () => {
     const tuner = new GridSearchTuner();
-    const result = await tuner.tune(
-      { x: [1, 2] },
-      dataset,
-      async () => 0.5,
-    );
+    const result = await tuner.tune({ x: [1, 2] }, dataset, async () => 0.5);
     expect(result.trials.every((t) => t.durationMs >= 0)).toBe(true);
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
   });

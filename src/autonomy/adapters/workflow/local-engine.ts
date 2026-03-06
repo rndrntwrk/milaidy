@@ -6,8 +6,8 @@
 
 import type {
   WorkflowDeadLetter,
-  WorkflowEngine,
   WorkflowDefinition,
+  WorkflowEngine,
   WorkflowResult,
 } from "./types.js";
 
@@ -42,7 +42,10 @@ export class LocalWorkflowEngine implements WorkflowEngine {
     this.workflows.set(definition.id, definition);
   }
 
-  async execute(workflowId: string, input: Record<string, unknown>): Promise<WorkflowResult> {
+  async execute(
+    workflowId: string,
+    input: Record<string, unknown>,
+  ): Promise<WorkflowResult> {
     const workflow = this.workflows.get(workflowId);
     if (!workflow) {
       const result: WorkflowResult = {
@@ -90,7 +93,9 @@ export class LocalWorkflowEngine implements WorkflowEngine {
 
     if (outcome.type === "error") {
       const message =
-        outcome.error instanceof Error ? outcome.error.message : String(outcome.error);
+        outcome.error instanceof Error
+          ? outcome.error.message
+          : String(outcome.error);
       const result: WorkflowResult = {
         executionId,
         workflowId,

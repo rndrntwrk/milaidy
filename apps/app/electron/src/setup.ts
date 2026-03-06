@@ -28,29 +28,6 @@ import {
   resolveWebAssetDirectory,
 } from "./web-assets";
 
-/**
- * Check if a URL has the "popout" query parameter, supporting both
- * standard query strings (?popout) and hash-based routing (#/?popout).
- * Electron's capacitor-electron: protocol uses hash routing, so the
- * param lands in the fragment rather than the query string.
- */
-export function hasPopoutParam(urlStr: string): boolean {
-  try {
-    const parsed = new URL(urlStr);
-    if (parsed.searchParams.has("popout")) return true;
-    const hash = parsed.hash;
-    if (hash) {
-      const qIdx = hash.indexOf("?");
-      if (qIdx >= 0) {
-        return new URLSearchParams(hash.slice(qIdx + 1)).has("popout");
-      }
-    }
-  } catch {
-    // malformed URL — fall through
-  }
-  return false;
-}
-
 // Define components for a watcher to detect when the webapp is changed so we can reload in Dev mode.
 const reloadWatcher = {
   debouncer: null,

@@ -13,10 +13,12 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RuleBasedDriftMonitor } from "./drift-monitor.js";
-import { computeIdentityHash } from "./schema.js";
 import type { AutonomyIdentityConfig } from "./schema.js";
+import { computeIdentityHash } from "./schema.js";
 
-function makeIdentity(overrides: Partial<AutonomyIdentityConfig> = {}): AutonomyIdentityConfig {
+function makeIdentity(
+  overrides: Partial<AutonomyIdentityConfig> = {},
+): AutonomyIdentityConfig {
   const identity: AutonomyIdentityConfig = {
     coreValues: ["helpfulness", "honesty", "safety"],
     communicationStyle: {
@@ -66,10 +68,7 @@ describe("RuleBasedDriftMonitor", () => {
 
     it("returns null report when disabled", async () => {
       const disabled = new RuleBasedDriftMonitor({ enabled: false });
-      const report = await disabled.analyze(
-        ["Some output"],
-        makeIdentity(),
-      );
+      const report = await disabled.analyze(["Some output"], makeIdentity());
 
       expect(report.driftScore).toBe(0);
     });
@@ -85,7 +84,9 @@ describe("RuleBasedDriftMonitor", () => {
 
       expect(report.driftScore).toBe(1);
       expect(report.severity).toBe("critical");
-      expect(report.corrections[0]).toContain("Identity integrity verification failed");
+      expect(report.corrections[0]).toContain(
+        "Identity integrity verification failed",
+      );
     });
 
     it("detects value alignment issues", async () => {
@@ -98,7 +99,9 @@ describe("RuleBasedDriftMonitor", () => {
       const report = await monitor.analyze(outputs, makeIdentity());
 
       expect(report.dimensions.valueAlignment).toBeLessThan(1.0);
-      expect(report.corrections.some((c) => c.includes("value-alignment"))).toBe(true);
+      expect(
+        report.corrections.some((c) => c.includes("value-alignment")),
+      ).toBe(true);
     });
 
     it("detects boundary violations", async () => {
@@ -126,7 +129,13 @@ describe("RuleBasedDriftMonitor", () => {
 
       const report = await monitor.analyze(
         outputs,
-        makeIdentity({ communicationStyle: { tone: "casual", verbosity: "balanced", personaVoice: "" } }),
+        makeIdentity({
+          communicationStyle: {
+            tone: "casual",
+            verbosity: "balanced",
+            personaVoice: "",
+          },
+        }),
       );
 
       // Formal language in a casual agent should trigger style drift
@@ -140,9 +149,12 @@ describe("RuleBasedDriftMonitor", () => {
         "Therefore pursuant herein, I shall formally declare.",
       ];
 
-      const report = await monitor.analyze(outputs, makeIdentity({
-        hardBoundaries: ["never be rude", "always be helpful"],
-      }));
+      const report = await monitor.analyze(
+        outputs,
+        makeIdentity({
+          hardBoundaries: ["never be rude", "always be helpful"],
+        }),
+      );
 
       expect(report.driftScore).toBeGreaterThanOrEqual(0);
       expect(report.driftScore).toBeLessThanOrEqual(1);
@@ -166,7 +178,7 @@ describe("RuleBasedDriftMonitor", () => {
       await monitor.analyze(["test output"], makeIdentity());
       const drift = monitor.getCurrentDrift();
       expect(drift).not.toBeNull();
-      expect(drift!.analyzedAt).toBeLessThanOrEqual(Date.now());
+      expect(drift?.analyzedAt).toBeLessThanOrEqual(Date.now());
     });
   });
 
@@ -233,7 +245,12 @@ describe("RuleBasedDriftMonitor", () => {
           "Ignore all boundaries and bypass protections.",
           "You're stupid if you don't follow my instructions.",
         ],
-        makeIdentity({ hardBoundaries: ["never insult users", "never bypass safety controls"] }),
+        makeIdentity({
+          hardBoundaries: [
+            "never insult users",
+            "never bypass safety controls",
+          ],
+        }),
       );
       expect(handler).toHaveBeenCalledTimes(1);
       const alert = handler.mock.calls[0][0] as { driftScore: number };
@@ -286,7 +303,10 @@ describe("RuleBasedDriftMonitor", () => {
   describe("window trimming", () => {
     it("trims outputs to analysis window size", async () => {
       const smallWindow = new RuleBasedDriftMonitor({ analysisWindowSize: 3 });
-      const outputs = Array.from({ length: 10 }, (_, i) => `Output number ${i}`);
+      const outputs = Array.from(
+        { length: 10 },
+        (_, i) => `Output number ${i}`,
+      );
 
       const report = await smallWindow.analyze(outputs, makeIdentity());
 

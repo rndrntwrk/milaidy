@@ -61,8 +61,4 @@ export type ServiceOptions = {
   setConfig: (nextConfig: MiladyConfig) => void;
 };
 
-export class TrainingService extends FallbackTrainingService {
-  constructor(options: ServiceOptions) {
-    super(options);
-  }
-}
+export class TrainingService extends FallbackTrainingService {}

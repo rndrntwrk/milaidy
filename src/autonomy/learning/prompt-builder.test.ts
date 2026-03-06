@@ -143,7 +143,11 @@ describe("SystemPromptBuilder", () => {
       expect(template.systemPrompt).toContain("Planner Context");
       expect(template.systemPrompt).toContain("ordered plan steps");
       expect(template.userTemplate).toContain("{{objective}}");
-      expect(template.variables).toEqual(["objective", "constraints", "context"]);
+      expect(template.variables).toEqual([
+        "objective",
+        "constraints",
+        "context",
+      ]);
     });
 
     it("builds executor and verifier templates with different user templates", () => {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ApprovalGate } from "../approval/approval-gate.js";
 import { RuleBasedDriftMonitor } from "../identity/drift-monitor.js";
 import { computeIdentityHash } from "../identity/schema.js";
 import { MemoryGateImpl } from "../memory/gate.js";
@@ -6,12 +7,11 @@ import { KernelStateMachine } from "../state-machine/kernel-state-machine.js";
 import { ToolRegistry } from "../tools/registry.js";
 import { registerBuiltinToolContracts } from "../tools/schemas/index.js";
 import { RuleBasedTrustScorer } from "../trust/scorer.js";
-import { InvariantChecker } from "../verification/invariants/invariant-checker.js";
 import { registerBuiltinInvariants } from "../verification/invariants/index.js";
+import { InvariantChecker } from "../verification/invariants/invariant-checker.js";
 import { PostConditionVerifier } from "../verification/postcondition-verifier.js";
 import { registerBuiltinPostConditions } from "../verification/postconditions/index.js";
 import { SchemaValidator } from "../verification/schema-validator.js";
-import { ApprovalGate } from "../approval/approval-gate.js";
 import { CompensationRegistry } from "../workflow/compensation-registry.js";
 import { registerBuiltinCompensations } from "../workflow/compensations/index.js";
 import { InMemoryEventStore } from "../workflow/event-store.js";
@@ -103,10 +103,7 @@ function createStack(opts: { safeModeErrorThreshold?: number } = {}) {
 
   const planner = createPlanner();
   const executor = new PipelineExecutor(pipeline);
-  const verifier = new UnifiedVerifier(
-    schemaValidator,
-    postConditionVerifier,
-  );
+  const verifier = new UnifiedVerifier(schemaValidator, postConditionVerifier);
   const memoryWriter = new GatedMemoryWriter(memoryGate);
   const auditor = new DriftAwareAuditor(driftMonitor, eventStore);
   const safeMode = new SafeModeControllerImpl({
@@ -156,7 +153,9 @@ describe("KernelOrchestrator lifecycle integration", () => {
     expect(result.executions).toHaveLength(2);
     expect(result.executions.every((step) => step.success)).toBe(true);
     expect(result.verificationReports?.length).toBe(2);
-    expect(result.verificationReports?.every((report) => report.overallPassed)).toBe(true);
+    expect(
+      result.verificationReports?.every((report) => report.overallPassed),
+    ).toBe(true);
     expect(result.memoryReport?.allowed).toBe(2);
     expect(result.auditReport).toBeDefined();
   });
@@ -166,11 +165,14 @@ describe("KernelOrchestrator lifecycle integration", () => {
     let callCount = 0;
 
     const result = await orchestrator.execute(
-      makeRequest(async () => {
-        callCount += 1;
-        if (callCount === 2) throw new Error("step-2 boom");
-        return { result: { ok: true }, durationMs: 5 };
-      }, { constraints: ["PLAY_EMOTE", "PLAY_EMOTE"] }),
+      makeRequest(
+        async () => {
+          callCount += 1;
+          if (callCount === 2) throw new Error("step-2 boom");
+          return { result: { ok: true }, durationMs: 5 };
+        },
+        { constraints: ["PLAY_EMOTE", "PLAY_EMOTE"] },
+      ),
     );
 
     expect(result.success).toBe(false);
@@ -182,7 +184,9 @@ describe("KernelOrchestrator lifecycle integration", () => {
   });
 
   it("P3-033: triggers safe mode on repeated execution errors", async () => {
-    const { orchestrator, safeMode } = createStack({ safeModeErrorThreshold: 1 });
+    const { orchestrator, safeMode } = createStack({
+      safeModeErrorThreshold: 1,
+    });
 
     const result = await orchestrator.execute(
       makeRequest(async () => {
