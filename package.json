@@ -189,7 +189,7 @@
     "@mariozechner/pi-tui": "0.54.0",
     "@milaidy/plugin-claude-code-workbench": "workspace:*",
     "@milaidy/plugin-coding-agent": "workspace:*",
-    "@rndrntwrk/plugin-555arcade": "git+ssh://git@github.com/rndrntwrk/555-arcade-plugin.git#9c85eed1641f442bc5e5dad99bdf581a2b30c1bf",
+    "@rndrntwrk/plugin-555arcade": "git+ssh://git@github.com/rndrntwrk/555-arcade-plugin.git#bbfb2fc722ea8e5d2dd73d03ccec77d766ad4603",
     "@rndrntwrk/plugin-555stream": "git+ssh://git@github.com/rndrntwrk/stream-plugin.git#ed02f82cf9f3e6f9018656af7c0b8da68ed590f1",
     "@noble/curves": "^2.0.1",
     "adze": "^2.2.5",
