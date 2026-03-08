@@ -112,10 +112,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        if: matrix.platform.os != 'macos' || matrix.platform.artifact-name != 'macos-x64'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup Node.js (macOS Intel via Rosetta)
+        if: matrix.platform.os == 'macos' && matrix.platform.artifact-name == 'macos-x64'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          architecture: "x64"
+
       - name: Setup Bun
+        if: matrix.platform.os != 'macos' || matrix.platform.artifact-name != 'macos-x64'
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+
+      - name: Setup Bun (macOS Intel via Rosetta)
+        if: matrix.platform.os == 'macos' && matrix.platform.artifact-name == 'macos-x64'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+          bun-download-url: https://github.com/oven-sh/bun/releases/latest/download/bun-darwin-x64.zip
 
 
       - name: Cache Bun install
