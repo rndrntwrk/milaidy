@@ -33,6 +33,7 @@ import { BugReportProvider, useBugReportState } from "./hooks/useBugReport.js";
 import { TerminalPanel } from "./components/TerminalPanel.js";
 import { ToastContainer } from "./components/ui/Toast.js";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary.js";
+import { MiladyOsDashboard } from "./components/MiladyOsDashboard.js";
 
 const advancedTabs = new Set(TAB_GROUPS.find(g => g.label === "Advanced")?.tabs ?? []);
 const CHAT_MOBILE_BREAKPOINT_PX = 1024;
@@ -75,6 +76,7 @@ export function App() {
     onboardingComplete,
     retryStartup,
     tab,
+    currentTheme,
     agentStatus,
     unreadConversations,
     activeGameViewerUrl,
@@ -104,8 +106,8 @@ export function App() {
     agentStatus?.state === "running"
       ? "bg-ok shadow-[0_0_8px_color-mix(in_srgb,var(--ok)_60%,transparent)]"
       : agentStatus?.state === "paused" ||
-          agentStatus?.state === "starting" ||
-          agentStatus?.state === "restarting"
+        agentStatus?.state === "starting" ||
+        agentStatus?.state === "restarting"
         ? "bg-warn"
         : agentStatus?.state === "error"
           ? "bg-danger"
@@ -114,11 +116,10 @@ export function App() {
     <div className="flex items-center gap-2 w-max">
       <button
         type="button"
-        className={`inline-flex items-center gap-2 px-3 py-2 border rounded-md text-[12px] font-semibold transition-all cursor-pointer ${
-          mobileConversationsOpen
-            ? "border-accent bg-accent-subtle text-accent"
-            : "border-border bg-card text-txt hover:border-accent hover:text-accent"
-        }`}
+        className={`inline-flex items-center gap-2 px-3 py-2 border rounded-md text-[12px] font-semibold transition-all cursor-pointer ${mobileConversationsOpen
+          ? "border-accent bg-accent-subtle text-accent"
+          : "border-border bg-card text-txt hover:border-accent hover:text-accent"
+          }`}
         onClick={() => {
           setMobileAutonomousOpen(false);
           setMobileConversationsOpen(true);
@@ -148,11 +149,10 @@ export function App() {
       </button>
       <button
         type="button"
-        className={`inline-flex items-center gap-2 px-3 py-2 border rounded-md text-[12px] font-semibold transition-all cursor-pointer ${
-          mobileAutonomousOpen
-            ? "border-accent bg-accent-subtle text-accent"
-            : "border-border bg-card text-txt hover:border-accent hover:text-accent"
-        }`}
+        className={`inline-flex items-center gap-2 px-3 py-2 border rounded-md text-[12px] font-semibold transition-all cursor-pointer ${mobileAutonomousOpen
+          ? "border-accent bg-accent-subtle text-accent"
+          : "border-border bg-card text-txt hover:border-accent hover:text-accent"
+          }`}
         onClick={() => {
           setMobileConversationsOpen(false);
           setMobileAutonomousOpen(true);
@@ -244,26 +244,30 @@ export function App() {
         Skip to content
       </a>
       {isChat ? (
-        <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
-          <Header />
-          <Nav mobileLeft={mobileChatControls} />
-          <div className="flex flex-1 min-h-0 relative">
-            <ConversationsSidebar />
-            <main id="main-content" className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden pt-2 px-3 sm:pt-3 sm:px-5">
-              <ErrorBoundary><ChatView /></ErrorBoundary>
-            </main>
-            <AutonomousPanel />
-            <CustomActionsPanel
-              open={customActionsPanelOpen}
-              onClose={() => setCustomActionsPanelOpen(false)}
-              onOpenEditor={(action) => {
-                setEditingAction(action ?? null);
-                setCustomActionsEditorOpen(true);
-              }}
-            />
+        currentTheme === "milady-os" ? (
+          <ErrorBoundary><MiladyOsDashboard /></ErrorBoundary>
+        ) : (
+          <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
+            <Header />
+            <Nav mobileLeft={mobileChatControls} />
+            <div className="flex flex-1 min-h-0 relative">
+              <ConversationsSidebar />
+              <main id="main-content" className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden pt-2 px-3 sm:pt-3 sm:px-5">
+                <ErrorBoundary><ChatView /></ErrorBoundary>
+              </main>
+              <AutonomousPanel />
+              <CustomActionsPanel
+                open={customActionsPanelOpen}
+                onClose={() => setCustomActionsPanelOpen(false)}
+                onOpenEditor={(action) => {
+                  setEditingAction(action ?? null);
+                  setCustomActionsEditorOpen(true);
+                }}
+              />
+            </div>
+            <TerminalPanel />
           </div>
-          <TerminalPanel />
-        </div>
+        )
       ) : (
         <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
           <Header />
