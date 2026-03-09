@@ -1890,6 +1890,51 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+function createRunId() {
+  return `alice-smoke-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+}
+
+async function writeFreshnessManifest(summary, outDir) {
+  const manifestPath = path.join(outDir, "alice-game-smoke-report.latest.json");
+  const textPath = path.join(outDir, "alice-game-smoke-report.latest.txt");
+  const manifest = {
+    runId: summary.runId,
+    generatedAt: summary.finishedAt,
+    startedAt: summary.startedAt,
+    outputDir: summary.outputDir,
+    reportPath: summary.reportPath,
+    htmlReportPath: summary.htmlReportPath,
+    scriptPath: summary.scriptPath,
+    baseUrl: summary.baseUrl,
+    selectedGames: summary.selectedGames,
+    total: summary.total,
+    requiredTotal: summary.requiredTotal,
+    mastered: summary.mastered,
+    deferred: summary.deferred,
+    passed: summary.passed,
+    failed: summary.failed,
+  };
+  const text = [
+    `runId=${manifest.runId}`,
+    `generatedAt=${manifest.generatedAt}`,
+    `startedAt=${manifest.startedAt}`,
+    `outputDir=${manifest.outputDir}`,
+    `reportPath=${manifest.reportPath}`,
+    `htmlReportPath=${manifest.htmlReportPath}`,
+    `scriptPath=${manifest.scriptPath}`,
+    `baseUrl=${manifest.baseUrl}`,
+    `total=${manifest.total}`,
+    `requiredTotal=${manifest.requiredTotal}`,
+    `mastered=${manifest.mastered}`,
+    `deferred=${manifest.deferred}`,
+    `passed=${manifest.passed}`,
+    `failed=${manifest.failed}`,
+  ].join("\n");
+  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), "utf8");
+  await fs.writeFile(textPath, `${text}\n`, "utf8");
+  return { manifestPath, textPath };
+}
+
 function renderCheck(check) {
   const statusClass = check.passed ? "ok" : "bad";
   const target = check.target != null ? ` target=${escapeHtml(check.target)}` : "";
@@ -2086,6 +2131,7 @@ async function writeHtmlReport(summary, outDir) {
     <h1>Alice Five55 Mastery Spectate Gallery</h1>
     <div class="summary">
       Generated: <b>${escapeHtml(summary.finishedAt)}</b> |
+      Run ID: <b>${escapeHtml(summary.runId)}</b> |
       Total: <b>${summary.total}</b> |
       Mastered: <b>${summary.mastered}</b> |
       Deferred: <b>${summary.deferred || 0}</b> |
@@ -2094,6 +2140,13 @@ async function writeHtmlReport(summary, outDir) {
       Strict Errors: <b>${summary.strictErrors ? "on" : "off"}</b> |
       Default Gameplay Window: <b>${escapeHtml(String(summary.defaultGameplayDurationMs))}ms</b> |
       Per-game Overrides: <b>${summary.perGameDurationOverrides ? "on" : "off"}</b>
+    </div>
+    <div class="summary">
+      Output Dir: <b>${escapeHtml(summary.outputDir)}</b><br/>
+      JSON: <b>${escapeHtml(summary.reportPath)}</b><br/>
+      HTML: <b>${escapeHtml(summary.htmlReportPath || htmlPath)}</b><br/>
+      Manifest: <b>${escapeHtml(summary.manifestPath || "")}</b><br/>
+      Script: <b>${escapeHtml(summary.scriptPath)}</b>
     </div>
     <section class="grid">
       ${cards}
@@ -2109,6 +2162,9 @@ async function writeHtmlReport(summary, outDir) {
 async function run() {
   const config = parseArgs();
   await fs.mkdir(config.outDir, { recursive: true });
+  const runId = createRunId();
+  console.log(`[smoke] run-id ${runId}`);
+  console.log(`[smoke] output-dir ${config.outDir}`);
 
   const chromium = await loadChromium();
   const catalog = await fetchCatalog(config.baseUrl);
@@ -2407,8 +2463,12 @@ async function run() {
   ).length;
 
   const summary = {
+    runId,
     startedAt,
     finishedAt: new Date().toISOString(),
+    outputDir: config.outDir,
+    scriptPath: __filename,
+    baseUrl: config.baseUrl,
     strictErrors: config.strictErrors,
     requireMastery: config.requireMastery,
     maxPageErrors: config.maxPageErrors,
@@ -2427,14 +2487,26 @@ async function run() {
   };
 
   const reportPath = path.join(config.outDir, "alice-game-smoke-report.json");
+  summary.reportPath = reportPath;
   await fs.writeFile(reportPath, JSON.stringify(summary, null, 2), "utf8");
   const htmlReportPath = await writeHtmlReport(summary, config.outDir);
+  summary.htmlReportPath = htmlReportPath;
+  const freshness = await writeFreshnessManifest(summary, config.outDir);
+  summary.manifestPath = freshness.manifestPath;
+  summary.manifestTextPath = freshness.textPath;
+  await fs.writeFile(reportPath, JSON.stringify(summary, null, 2), "utf8");
+  await writeHtmlReport(summary, config.outDir);
 
   console.log(
     JSON.stringify(
       {
+        runId: summary.runId,
         reportPath,
         htmlReportPath,
+        manifestPath: freshness.manifestPath,
+        manifestTextPath: freshness.textPath,
+        outputDir: summary.outputDir,
+        scriptPath: summary.scriptPath,
         baseUrl: config.baseUrl,
         total: summary.total,
         requiredTotal: summary.requiredTotal,
