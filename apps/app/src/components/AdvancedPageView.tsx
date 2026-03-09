@@ -30,7 +30,6 @@ import { IdentityPanel } from "./IdentityPanel";
 import { ApprovalPanel } from "./ApprovalPanel";
 import { SafeModePanel } from "./SafeModePanel";
 import { GovernancePanel } from "./GovernancePanel";
-import type { Tab } from "../navigation";
 
 type SubTab =
   | "plugins"
@@ -206,11 +205,10 @@ export function AdvancedPageView() {
                 role="tab"
                 aria-selected={isActive}
                 aria-controls="adv-tabpanel"
-                className={`px-4 py-2 text-xs font-medium border-b-2 -mb-px transition-colors shrink-0 ${
-                  isActive
+                className={`px-4 py-2 text-xs font-medium border-b-2 -mb-px transition-colors shrink-0 ${isActive
                     ? "border-accent text-accent"
                     : "border-transparent text-muted hover:text-txt hover:border-border"
-                }`}
+                  }`}
                 onClick={() => handleSubTabChange(subTab.id)}
                 title={subTab.description}
               >

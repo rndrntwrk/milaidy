@@ -243,31 +243,29 @@ export function App() {
       <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[10001] focus:px-4 focus:py-2 focus:bg-accent focus:text-accent-fg focus:rounded">
         Skip to content
       </a>
-      {isChat ? (
-        currentTheme === "milady-os" ? (
-          <ErrorBoundary><MiladyOsDashboard /></ErrorBoundary>
-        ) : (
-          <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
-            <Header />
-            <Nav mobileLeft={mobileChatControls} />
-            <div className="flex flex-1 min-h-0 relative">
-              <ConversationsSidebar />
-              <main id="main-content" className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden pt-2 px-3 sm:pt-3 sm:px-5">
-                <ErrorBoundary><ChatView /></ErrorBoundary>
-              </main>
-              <AutonomousPanel />
-              <CustomActionsPanel
-                open={customActionsPanelOpen}
-                onClose={() => setCustomActionsPanelOpen(false)}
-                onOpenEditor={(action) => {
-                  setEditingAction(action ?? null);
-                  setCustomActionsEditorOpen(true);
-                }}
-              />
-            </div>
-            <TerminalPanel />
+      {currentTheme === "milady-os" ? (
+        <ErrorBoundary><MiladyOsDashboard /></ErrorBoundary>
+      ) : isChat ? (
+        <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
+          <Header />
+          <Nav mobileLeft={mobileChatControls} />
+          <div className="flex flex-1 min-h-0 relative">
+            <ConversationsSidebar />
+            <main id="main-content" className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden pt-2 px-3 sm:pt-3 sm:px-5">
+              <ErrorBoundary><ChatView /></ErrorBoundary>
+            </main>
+            <AutonomousPanel />
+            <CustomActionsPanel
+              open={customActionsPanelOpen}
+              onClose={() => setCustomActionsPanelOpen(false)}
+              onOpenEditor={(action) => {
+                setEditingAction(action ?? null);
+                setCustomActionsEditorOpen(true);
+              }}
+            />
           </div>
-        )
+          <TerminalPanel />
+        </div>
       ) : (
         <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
           <Header />

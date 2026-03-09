@@ -4,7 +4,13 @@ import { GlowingText } from './ui/GlowingText.js';
 import { NeonButton } from './ui/NeonButton.js';
 
 export function ControlStackModal({ open, onClose }: { open: boolean, onClose: () => void }) {
+    const { setTab } = useApp();
     if (!open) return null;
+
+    const handleOpen = (tab: any) => {
+        onClose(); // Close the menu stack
+        setTab(tab); // Trigger the wrapper modal
+    };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80 backdrop-blur-sm">
@@ -19,27 +25,27 @@ export function ControlStackModal({ open, onClose }: { open: boolean, onClose: (
                     <div className="space-y-2">
                         <h3 className="text-accent font-mono text-sm border-b border-accent/20 pb-1">ROOT PREFERENCES</h3>
                         <div className="grid grid-cols-2 gap-4 pt-2">
-                            <button className="text-left p-3 border border-border rounded hover:border-accent hover:bg-accent/10 transition-colors">
-                                <div className="text-txt font-bold">Theme / Appearance</div>
-                                <div className="text-xs text-muted">Holographic HUD config</div>
+                            <button onClick={() => handleOpen('settings')} className="text-left p-3 border border-[var(--border)] rounded hover:border-[var(--accent)] hover:bg-[var(--accent)]/10 transition-colors text-[var(--txt)] hover:text-[var(--accent)] cursor-pointer">
+                                <div className="font-bold">Theme / Appearance</div>
+                                <div className="text-xs opacity-70">Holographic HUD config</div>
                             </button>
-                            <button className="text-left p-3 border border-border rounded hover:border-accent hover:bg-accent/10 transition-colors">
-                                <div className="text-txt font-bold">Identity Engine</div>
-                                <div className="text-xs text-muted">Agent traits and Voice</div>
+                            <button onClick={() => handleOpen('identity')} className="text-left p-3 border border-[var(--border)] rounded hover:border-[var(--accent)] hover:bg-[var(--accent)]/10 transition-colors text-[var(--txt)] hover:text-[var(--accent)] cursor-pointer">
+                                <div className="font-bold">Identity Engine</div>
+                                <div className="text-xs opacity-70">Agent traits and Voice</div>
                             </button>
                         </div>
                     </div>
 
                     <div className="space-y-2">
-                        <h3 className="text-warn font-mono text-sm border-b border-warn/20 pb-1">ADVANCED PROTOCOLS</h3>
+                        <h3 className="text-[var(--warn)] font-mono text-sm border-b border-[var(--warn)]/20 pb-1">ADVANCED PROTOCOLS</h3>
                         <div className="grid grid-cols-2 gap-4 pt-2">
-                            <button className="text-left p-3 border border-border rounded hover:border-warn hover:bg-warn/10 transition-colors">
-                                <div className="text-txt font-bold">Plugins & Connectors</div>
-                                <div className="text-xs text-muted">Manage external integrations</div>
+                            <button onClick={() => handleOpen('plugins')} className="text-left p-3 border border-[var(--border)] rounded hover:border-[var(--warn)] hover:bg-[var(--warn)]/10 transition-colors text-[var(--txt)] hover:text-[var(--warn)] cursor-pointer">
+                                <div className="font-bold">Plugins & Connectors</div>
+                                <div className="text-xs opacity-70">Manage external integrations</div>
                             </button>
-                            <button className="text-left p-3 border border-border rounded hover:border-warn hover:bg-warn/10 transition-colors">
-                                <div className="text-txt font-bold">Database & Memory</div>
-                                <div className="text-xs text-muted">Inspect local SQLite and Vector store</div>
+                            <button onClick={() => handleOpen('database')} className="text-left p-3 border border-[var(--border)] rounded hover:border-[var(--warn)] hover:bg-[var(--warn)]/10 transition-colors text-[var(--txt)] hover:text-[var(--warn)] cursor-pointer">
+                                <div className="font-bold">Database & Memory</div>
+                                <div className="text-xs opacity-70">Inspect local SQLite and Vector store</div>
                             </button>
                         </div>
                     </div>

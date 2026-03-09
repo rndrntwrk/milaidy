@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { SciFiPanel } from './ui/SciFiPanel.js';
 import { GlowingText } from './ui/GlowingText.js';
 import { StatusIndicator } from './ui/StatusIndicator.js';
 import { useApp } from '../AppContext.js';
 
 export function RuntimeHealthPanel() {
-    const { connected, agentStatus } = useApp();
+    const { connected, agentStatus, cloudCredits, plugins } = useApp();
+
+    const activePluginsCount = useMemo(() => plugins.filter((p) => p.enabled).length, [plugins]);
 
     return (
         <SciFiPanel variant="glass" className="h-64 flex flex-col">
@@ -20,12 +22,16 @@ export function RuntimeHealthPanel() {
                     <GlowingText className="text-xs uppercase" glowColor="var(--ok)">{agentStatus?.state || "UNKNOWN"}</GlowingText>
                 </div>
                 <div className="flex justify-between items-center bg-bg/50 p-2 rounded border border-border">
-                    <span className="text-xs font-mono text-muted">MEMORY USAGE</span>
-                    <span className="text-xs font-mono text-accent">45%</span>
+                    <span className="text-xs font-mono text-muted">CLOUD CREDITS</span>
+                    <span className="text-xs font-mono text-accent">{cloudCredits !== null ? `$${cloudCredits.toFixed(2)}` : 'N/A'}</span>
                 </div>
                 <div className="flex justify-between items-center bg-bg/50 p-2 rounded border border-border">
-                    <span className="text-xs font-mono text-muted">ACTIVE SESSIONS</span>
-                    <span className="text-xs font-mono text-primary">12</span>
+                    <span className="text-xs font-mono text-muted">ACTIVE MODEL</span>
+                    <span className="text-xs font-mono text-primary truncate max-w-[120px] text-right" title={agentStatus?.model || "unknown"}>{agentStatus?.model || "unknown"}</span>
+                </div>
+                <div className="flex justify-between items-center bg-bg/50 p-2 rounded border border-border">
+                    <span className="text-xs font-mono text-muted">PLUGINS LOADED</span>
+                    <span className="text-xs font-mono text-primary">{activePluginsCount}</span>
                 </div>
             </div>
         </SciFiPanel>

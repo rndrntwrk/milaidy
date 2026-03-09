@@ -90,15 +90,20 @@ export function LoadingScreen({
   );
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen bg-bg gap-8">
+    <div className="flex flex-col items-center justify-center h-screen bg-bg gap-8 relative overflow-hidden">
+      {/* HUD Scanlines */}
+      <div className="absolute inset-0 pointer-events-none opacity-[0.02] bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(0,10,0,0.06),rgba(0,10,0,0.02),rgba(0,10,0,0.06))] bg-[length:100%_4px,3px_100%] z-0" />
+
       <div
+        className="relative z-10"
         aria-live="polite"
         style={{
           fontFamily: "var(--mono)",
           fontSize: "clamp(7px, 1.4vw, 14px)",
           lineHeight: 1.35,
-          color: "var(--text)",
+          color: "var(--accent)",
           userSelect: "none",
+          textShadow: "0 0 5px var(--accent)",
         }}
       >
         {grid.map((line) => (
@@ -130,10 +135,10 @@ export function LoadingScreen({
         ))}
       </div>
       <div
-        className="text-muted text-xs tracking-widest uppercase"
+        className="relative z-10 text-accent/70 text-xs tracking-widest uppercase"
         style={{ fontFamily: "var(--mono)" }}
       >
-        {PHASE_LABELS[phase]} ({displayedElapsedSeconds}s)
+        [{PHASE_LABELS[phase]} ... {displayedElapsedSeconds}s]
       </div>
     </div>
   );
