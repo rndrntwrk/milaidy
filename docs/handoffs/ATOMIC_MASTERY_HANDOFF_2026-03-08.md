@@ -60,6 +60,6 @@
 
 - Effective branch remains `alice`; no additional gameplay commits were mixed into this handoff batch.
 - Review branch created locally: `codex/pr-atomic-mastery-handoff-milaidy-20260308`
-- Push status at memo creation: pending
+- Push status: pushed to `origin/codex/pr-atomic-mastery-handoff-milaidy-20260308`
 - PR target: `origin/alice`
-- PR creation status at memo creation: pending
+- PR creation status: open at `https://github.com/rndrntwrk/milaidy/pull/1`
