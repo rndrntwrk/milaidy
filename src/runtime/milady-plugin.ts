@@ -1,5 +1,5 @@
 /**
- * Milady plugin for ElizaOS — workspace context, session keys, and agent
+ * Milady plugin for elizaOS — workspace context, session keys, and agent
  * lifecycle actions (restart).
  *
  * Compaction is handled by core auto-compaction in the recent-messages provider.
@@ -12,11 +12,14 @@ import type {
   Plugin,
   Provider,
   ProviderResult,
+  ServiceClass,
   State,
 } from "@elizaos/core";
+import { AgentEventService } from "@elizaos/core";
 import { emoteAction } from "../actions/emote";
 import { restartAction } from "../actions/restart";
 import { sendMessageAction } from "../actions/send-message";
+import { switchStreamSourceAction } from "../actions/switch-stream-source";
 import { terminalAction } from "../actions/terminal";
 import { EMOTE_CATALOG } from "../emotes/catalog";
 import { adminTrustProvider } from "../providers/admin-trust";
@@ -35,6 +38,8 @@ import { DEFAULT_AGENT_WORKSPACE_DIR } from "../providers/workspace";
 import { createWorkspaceProvider } from "../providers/workspace-provider";
 import { createTriggerTaskAction } from "../triggers/action";
 import { registerTriggerTaskWorker } from "../triggers/runtime";
+import { hydrateRuns, setWorkflowRuntime } from "../workflows/runtime";
+import { loadWorkflows } from "../workflows/storage";
 import { loadCustomActions, setCustomActionsRuntime } from "./custom-actions";
 
 export type MiladyPluginConfig = {
@@ -43,6 +48,10 @@ export type MiladyPluginConfig = {
   sessionStorePath?: string;
   agentId?: string;
 };
+
+function sanitizePromptField(value: string): string {
+  return JSON.stringify(value.replace(/\s+/g, " ").trim());
+}
 
 export function createMiladyPlugin(config?: MiladyPluginConfig): Plugin {
   const workspaceDir = config?.workspaceDir ?? DEFAULT_AGENT_WORKSPACE_DIR;
@@ -131,15 +140,54 @@ export function createMiladyPlugin(config?: MiladyPluginConfig): Plugin {
     },
   };
 
+  // Workflows provider — tells the LLM about available workflows.
+  const workflowsProvider: Provider = {
+    name: "workflows",
+    description: "Visual workflow automations",
+
+    async get(): Promise<ProviderResult> {
+      const workflows = loadWorkflows().filter((w) => w.enabled);
+      if (workflows.length === 0) {
+        return { text: "" };
+      }
+
+      const lines = workflows.map((w) => {
+        const nodeCount = w.nodes.length;
+        const trigger = w.nodes.find((n) => n.type === "trigger");
+        const triggerType = trigger?.config?.triggerType ?? "manual";
+        return [
+          "-",
+          `name=${sanitizePromptField(w.name)}`,
+          `description=${sanitizePromptField(w.description || "No description")}`,
+          `nodes=${nodeCount}`,
+          `trigger=${sanitizePromptField(String(triggerType))}`,
+        ].join(" ");
+      });
+
+      return {
+        text: [
+          "## Workflows",
+          "",
+          "The following visual workflows are configured. Workflows with manual triggers can be started from the Workflows page in the dashboard.",
+          ...lines,
+        ].join("\n"),
+      };
+    },
+  };
+
   return {
     name: "milady",
     description:
       "Milady workspace context, session keys, and lifecycle actions",
 
+    services: [AgentEventService as unknown as ServiceClass],
+
     init: async (_pluginConfig, runtime) => {
       registerTriggerTaskWorker(runtime);
       ensureAutonomousStateTracking(runtime);
       setCustomActionsRuntime(runtime);
+      setWorkflowRuntime(runtime);
+      hydrateRuns();
     },
 
     providers: [
@@ -148,6 +196,7 @@ export function createMiladyPlugin(config?: MiladyPluginConfig): Plugin {
       uiCatalogProvider,
       emoteProvider,
       customActionsProvider,
+      workflowsProvider,
     ],
 
     actions: [
@@ -156,6 +205,7 @@ export function createMiladyPlugin(config?: MiladyPluginConfig): Plugin {
       terminalAction,
       createTriggerTaskAction,
       emoteAction,
+      switchStreamSourceAction,
       ...loadCustomActions(),
     ],
   };

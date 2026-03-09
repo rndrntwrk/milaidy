@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../AppContext";
 import { type CharacterData, client, type VoiceConfig } from "../api-client";
 import { resolveApiUrl } from "../asset-url";
+import { dispatchWindowEvent, VOICE_CONFIG_UPDATED_EVENT } from "../events";
 import type { ConfigUiHint } from "../types";
 import { AvatarSelector } from "./AvatarSelector";
 import type { JsonSchemaObject } from "./config-catalog";
@@ -275,7 +276,7 @@ function parseImportedMessageExamples(
 
 /* ── CharacterView ──────────────────────────────────────────────────── */
 
-export function CharacterView() {
+export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
   const {
     characterData,
     characterDraft,
@@ -703,11 +704,7 @@ export function CharacterView() {
           tts: normalizedVoiceConfig,
         },
       });
-      window.dispatchEvent(
-        new CustomEvent("milady:voice-config-updated", {
-          detail: normalizedVoiceConfig,
-        }),
-      );
+      dispatchWindowEvent(VOICE_CONFIG_UPDATED_EVENT, normalizedVoiceConfig);
       setVoiceSaveSuccess(true);
       setTimeout(() => setVoiceSaveSuccess(false), 2500);
     } catch (err) {
@@ -837,7 +834,9 @@ export function CharacterView() {
   }, [handleFieldEdit]);
 
   /* ── Helpers ────────────────────────────────────────────────────── */
-  const sectionCls = "mt-4 p-4 border border-[var(--border)] bg-[var(--card)]";
+  const sectionCls = inModal
+    ? "mt-4 p-4 border border-[var(--border)] bg-[rgba(255,255,255,0.04)] backdrop-blur-sm rounded-xl"
+    : "mt-4 p-4 border border-[var(--border)] bg-[var(--card)]";
   const inputCls =
     "px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-xs focus:border-[var(--accent)] focus:outline-none";
   const textareaCls = `${inputCls} font-inherit resize-y leading-relaxed`;
@@ -876,7 +875,7 @@ export function CharacterView() {
   const userMinted = dropStatus?.userHasMinted === true;
 
   return (
-    <div>
+    <div className={inModal ? "pb-8" : ""}>
       {fileInput}
 
       {/* ═══ ON-CHAIN IDENTITY ═══ */}

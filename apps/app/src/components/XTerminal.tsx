@@ -3,17 +3,35 @@ import { useEffect, useRef } from "react";
 import { client } from "../api-client";
 
 /**
+ * Regex to strip the "clear scrollback" ANSI escape (`\e[3J`) from terminal
+ * output. Agents emit this to clear history, but we want to preserve it in
+ * the UI so users can scroll back.
+ */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape sequence stripping requires control chars
+export const CLEAR_SCROLLBACK_RE = /\x1b\[3J/g;
+
+/**
  * Embedded xterm.js terminal pane for a PTY session.
  *
  * Lifecycle:
  * 1. Mount → create Terminal + FitAddon, open in container
- * 2. Subscribe to live PTY output via WS
- * 3. Hydrate with buffered output via REST
+ * 2. Hydrate with buffered output via REST (full history)
+ * 3. Subscribe to live PTY output via WS (after hydrate to avoid duplicates)
  * 4. Forward keyboard input to PTY
  * 5. Resize on container resize
  * 6. Unmount → unsubscribe, dispose
+ *
+ * When `active` is false the component stays mounted but hidden (height:0).
+ * The terminal keeps receiving WS data in the background. When re-activated,
+ * a fit + scrollToBottom is triggered so the display is immediately correct.
  */
-export function XTerminal({ sessionId }: { sessionId: string }) {
+export function XTerminal({
+  sessionId,
+  active = true,
+}: {
+  sessionId: string;
+  active?: boolean;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<import("@xterm/xterm").Terminal | null>(null);
   const fitRef = useRef<import("@xterm/addon-fit").FitAddon | null>(null);
@@ -49,6 +67,9 @@ export function XTerminal({ sessionId }: { sessionId: string }) {
       });
       const fitAddon = new FitAddon();
       terminal.loadAddon(fitAddon);
+
+      // Hide until hydration completes to prevent scroll-from-top flash
+      container.style.visibility = "hidden";
       terminal.open(container);
 
       termRef.current = terminal;
@@ -61,7 +82,24 @@ export function XTerminal({ sessionId }: { sessionId: string }) {
         // Container may not be visible yet
       }
 
-      // 1. Subscribe to live output BEFORE hydrating so no data is missed
+      // 1. Hydrate with buffered output (full history).
+      //    Strip \e[3J (clear scrollback) to preserve scroll history.
+      //    Container stays hidden until write completes to prevent flash.
+      const buffered = await client.getPtyBufferedOutput(sessionId);
+      if (disposed) return;
+      if (buffered) {
+        terminal.write(buffered.replace(CLEAR_SCROLLBACK_RE, ""), () => {
+          if (!disposed) {
+            terminal.scrollToBottom();
+            container.style.visibility = "";
+          }
+        });
+      } else {
+        container.style.visibility = "";
+      }
+
+      // 2. THEN subscribe to live output — avoids duplicate data from the
+      //    overlap window between subscribe and hydration completing.
       client.subscribePtyOutput(sessionId);
       wsUnsub = client.onWsEvent("pty-output", (msg) => {
         if (
@@ -69,15 +107,9 @@ export function XTerminal({ sessionId }: { sessionId: string }) {
           typeof msg.data === "string" &&
           !disposed
         ) {
-          terminal.write(msg.data);
+          terminal.write(msg.data.replace(CLEAR_SCROLLBACK_RE, ""));
         }
       });
-
-      // 2. Hydrate with buffered output
-      const buffered = await client.getPtyBufferedOutput(sessionId);
-      if (!disposed && buffered) {
-        terminal.write(buffered);
-      }
 
       // 3. Forward keyboard input
       terminal.onData((data) => {
@@ -86,9 +118,11 @@ export function XTerminal({ sessionId }: { sessionId: string }) {
         }
       });
 
-      // 4. Resize handling
+      // 4. Resize handling — skip fit when container is collapsed (height < 10)
+      //    to avoid sending bad dimensions to the server PTY.
       resizeObserver = new ResizeObserver(() => {
         if (disposed) return;
+        if (container.clientHeight < 10) return;
         try {
           fitAddon.fit();
           client.resizePty(sessionId, terminal.cols, terminal.rows);
@@ -109,6 +143,26 @@ export function XTerminal({ sessionId }: { sessionId: string }) {
       fitRef.current = null;
     };
   }, [sessionId]);
+
+  // Re-fit and scroll to bottom when the terminal becomes visible again.
+  // The container transitions from height:0 → height:300; we need rAF
+  // so the layout has settled before FitAddon measures dimensions.
+  useEffect(() => {
+    if (!active) return;
+    const term = termRef.current;
+    const fit = fitRef.current;
+    if (!term || !fit) return;
+
+    const frameId = requestAnimationFrame(() => {
+      try {
+        fit.fit();
+        term.scrollToBottom();
+      } catch {
+        // Container may not have layout yet
+      }
+    });
+    return () => cancelAnimationFrame(frameId);
+  }, [active]);
 
   return (
     <div

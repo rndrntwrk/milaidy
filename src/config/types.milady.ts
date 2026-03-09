@@ -4,6 +4,7 @@ import type {
   DatabaseProviderType,
   MediaConfig,
   ReleaseChannel,
+  WorkflowDef,
 } from "../contracts/config";
 import type { AgentBinding, AgentsConfig } from "./types.agents";
 import type {
@@ -49,6 +50,12 @@ export type {
   VisionOpenaiConfig,
   VisionProvider,
   VisionXaiConfig,
+  WorkflowConditionOperator,
+  WorkflowDef,
+  WorkflowEdge,
+  WorkflowNode,
+  WorkflowNodePosition,
+  WorkflowNodeType,
 } from "../contracts/config";
 
 // --- Auth types (merged from types.auth.ts) ---
@@ -519,6 +526,19 @@ export type CloudContainerDefaults = {
   defaultPort?: number;
 };
 
+export type CloudServiceToggles = {
+  /** Use ElizaCloud for model inference. Default: true. */
+  inference?: boolean;
+  /** Use ElizaCloud for blockchain RPC. Default: true. */
+  rpc?: boolean;
+  /** Use ElizaCloud for media generation (image/video/audio/vision). Default: true. */
+  media?: boolean;
+  /** Use ElizaCloud for TTS (text-to-speech). Default: true. */
+  tts?: boolean;
+  /** Use ElizaCloud for embeddings. Default: true. */
+  embeddings?: boolean;
+};
+
 export type CloudConfig = {
   /** Enable ElizaCloud integration. Default: false. */
   enabled?: boolean;
@@ -530,6 +550,8 @@ export type CloudConfig = {
   apiKey?: string;
   /** Inference mode: cloud (proxied), byok (user keys), local (no cloud). */
   inferenceMode?: CloudInferenceMode;
+  /** Granular service toggles — pick which cloud services to use. */
+  services?: CloudServiceToggles;
   /** Auto-deploy agents to cloud on creation. Default: false. */
   autoProvision?: boolean;
   /** Bridge settings for WebSocket communication with cloud agents. */
@@ -750,6 +772,8 @@ export type MiladyConfig = {
   >;
   /** User-defined custom actions for the agent. */
   customActions?: CustomActionDef[];
+  /** Visual workflow definitions (node graph builder). */
+  workflows?: WorkflowDef[];
 };
 
 export type ConfigValidationIssue = {

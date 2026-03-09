@@ -7,33 +7,15 @@ import {
   Pause,
   Play,
   RotateCcw,
+  Search,
   Wallet,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../AppContext";
+import { COMMAND_PALETTE_EVENT, dispatchMiladyEvent } from "../events";
 import { useBugReport } from "../hooks/useBugReport";
-
-// Tooltip component for icon buttons
-function IconButtonTooltip({
-  children,
-  label,
-  shortcut,
-}: {
-  children: React.ReactNode;
-  label: string;
-  shortcut?: string;
-}) {
-  return (
-    <div className="relative group">
-      {children}
-      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-bg-elevated border border-border text-[11px] text-txt-strong rounded-md whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 shadow-lg">
-        <div className="font-medium">{label}</div>
-        {shortcut && <div className="text-muted mt-0.5">{shortcut}</div>}
-        <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-bg-elevated" />
-      </div>
-    </div>
-  );
-}
+import { createTranslator } from "../i18n";
+import { IconTooltip as IconButtonTooltip } from "./shared/tooltips";
 
 // Status indicator with icon
 function StatusIndicator({ state }: { state: string }) {
@@ -103,14 +85,19 @@ export function Header() {
     lifecycleAction,
     handlePauseResume,
     handleRestart,
+    handleStart,
     copyToClipboard,
     setTab,
     dropStatus,
     loadDropStatus,
     registryStatus,
+    uiShellMode,
+    setUiShellMode,
+    uiLanguage,
   } = useApp();
 
   const [copied, setCopied] = useState<string | null>(null);
+  const t = useMemo(() => createTranslator(uiLanguage), [uiLanguage]);
 
   useEffect(() => {
     void loadDropStatus();
@@ -156,6 +143,25 @@ export function Header() {
     setCopied(type);
   };
 
+  // Shell mode toggle (companion vs native)
+  const shellMode = uiShellMode ?? "companion";
+  const isNativeShell = shellMode === "native";
+  const shellToggleStateLabel = isNativeShell
+    ? t("header.nativeMode")
+    : t("header.companionMode");
+  const shellToggleActionLabel = isNativeShell
+    ? t("header.switchToCompanion")
+    : t("header.switchToNative");
+  const shellToggleClass = isNativeShell
+    ? "border-[#22c55e] text-[#22c55e] bg-[rgba(34,197,94,0.12)] hover:bg-[rgba(34,197,94,0.2)] shadow-[0_0_0_1px_rgba(34,197,94,0.35),0_0_16px_rgba(34,197,94,0.22)]"
+    : "border-[var(--accent)] text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] hover:bg-[color-mix(in_srgb,var(--accent)_24%,transparent)] shadow-[0_0_0_1px_rgba(212,175,55,0.35),0_0_16px_rgba(212,175,55,0.2)]";
+
+  const handleShellToggle = () => {
+    const nextMode = shellMode === "companion" ? "native" : "companion";
+    setUiShellMode(nextMode);
+    setTab(nextMode === "companion" ? "companion" : "chat");
+  };
+
   return (
     <header className="border-b border-border bg-bg py-2 px-3 sm:py-3 sm:px-4">
       <div className="flex items-center gap-3 min-w-0">
@@ -172,7 +178,7 @@ export function Header() {
               {name}
             </span>
             <span className="text-[10px] text-muted hidden sm:block">
-              AI Agent
+              {t("header.aiAgent")}
             </span>
           </div>
         </div>
@@ -195,7 +201,9 @@ export function Header() {
                     className="inline-block w-2 h-2 rounded-full bg-accent animate-ping"
                     style={{ animationDuration: "1.5s" }}
                   />
-                  <span className="hidden sm:inline">Free Mint Live!</span>
+                  <span className="hidden sm:inline">
+                    {t("header.freeMintLive")}
+                  </span>
                   <span className="sm:hidden">Mint</span>
                 </button>
               )}
@@ -212,33 +220,67 @@ export function Header() {
                 >
                   <CircleDollarSign className="w-3.5 h-3.5" />
                   {cloudCredits === null
-                    ? "Cloud"
+                    ? t("header.cloudConnected")
                     : `$${cloudCredits.toFixed(2)}`}
                 </a>
               ) : (
                 <span className="inline-flex shrink-0 items-center gap-1 px-2.5 py-1.5 h-9 border border-danger text-danger bg-danger/10 rounded-md font-mono text-[11px] sm:text-xs">
                   <AlertTriangle className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Cloud disconnected</span>
+                  <span className="hidden sm:inline">
+                    {t("header.cloudDisconnected")}
+                  </span>
                   <span className="sm:hidden">Cloud</span>
                 </span>
               ))}
+
+            {/* Shell Mode Toggle */}
+            <button
+              type="button"
+              onClick={handleShellToggle}
+              className={`inline-flex shrink-0 items-center gap-2 h-9 px-3 border rounded-md font-mono cursor-pointer transition-all ${shellToggleClass}`}
+              title={shellToggleActionLabel}
+              data-testid="ui-shell-toggle"
+            >
+              <span className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-current/50 text-[10px] leading-none">
+                &#x21C4;
+              </span>
+              <span className="hidden sm:flex flex-col items-start leading-[1.02]">
+                <span className="text-[9px] uppercase tracking-[0.08em] opacity-80">
+                  {shellToggleStateLabel}
+                </span>
+                <span className="text-[11px] font-semibold">
+                  {shellToggleActionLabel}
+                </span>
+              </span>
+            </button>
 
             {/* Status & Controls Group */}
             <div className="flex items-center gap-2 shrink-0 bg-bg-accent/50 rounded-lg p-1">
               <StatusIndicator state={state} />
 
               {/* Pause/Resume Button */}
-              {state === "restarting" ||
-              state === "starting" ||
-              state === "not_started" ||
-              state === "stopped" ? (
+              {state === "restarting" || state === "starting" ? (
                 <span className="inline-flex items-center justify-center w-11 h-11 text-sm leading-none opacity-60">
                   <Loader2 className="w-5 h-5 animate-spin" />
                 </span>
+              ) : state === "not_started" || state === "stopped" ? (
+                <IconButtonTooltip label={t("header.startAgent")}>
+                  <button
+                    type="button"
+                    onClick={() => void handleStart()}
+                    aria-label={t("header.startAgent")}
+                    className={`${iconBtnBase} disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100`}
+                    disabled={lifecycleBusy}
+                  >
+                    <Play className="w-5 h-5" />
+                  </button>
+                </IconButtonTooltip>
               ) : (
                 <IconButtonTooltip
                   label={
-                    state === "paused" ? "Resume autonomy" : "Pause autonomy"
+                    state === "paused"
+                      ? t("header.resumeAutonomy")
+                      : t("header.pauseAutonomy")
                   }
                   shortcut="Space"
                 >
@@ -246,7 +288,9 @@ export function Header() {
                     type="button"
                     onClick={handlePauseResume}
                     aria-label={
-                      state === "paused" ? "Resume autonomy" : "Pause autonomy"
+                      state === "paused"
+                        ? t("header.resumeAutonomy")
+                        : t("header.pauseAutonomy")
                     }
                     className={`${iconBtnBase} disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100`}
                     disabled={pauseResumeDisabled}
@@ -263,35 +307,59 @@ export function Header() {
               )}
 
               {/* Restart Button */}
-              <IconButtonTooltip label="Restart agent" shortcut="Ctrl+R">
+              <IconButtonTooltip
+                label={t("header.restartAgent")}
+                shortcut="Ctrl+R"
+              >
                 <button
                   type="button"
                   onClick={handleRestart}
-                  aria-label="Restart agent"
+                  aria-label={t("header.restartAgent")}
                   disabled={lifecycleBusy || state === "restarting"}
                   className="inline-flex items-center justify-center h-9 px-3 border border-border bg-bg text-[11px] sm:text-xs font-mono cursor-pointer hover:border-accent hover:text-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed rounded-md"
                 >
                   {restartBusy || state === "restarting" ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin sm:hidden" />
-                      <span className="hidden sm:inline">Restarting...</span>
+                      <span className="hidden sm:inline">
+                        {t("header.restarting")}
+                      </span>
                     </>
                   ) : (
                     <>
                       <RotateCcw className="w-4 h-4 sm:hidden" />
-                      <span className="hidden sm:inline">Restart</span>
+                      <span className="hidden sm:inline">
+                        {t("header.restart")}
+                      </span>
                     </>
                   )}
                 </button>
               </IconButtonTooltip>
             </div>
 
+            {/* Command Palette */}
+            <IconButtonTooltip
+              label="Command Palette"
+              shortcut={
+                navigator.platform?.includes("Mac") ? "\u2318K" : "Ctrl+K"
+              }
+            >
+              <button
+                type="button"
+                onClick={() => dispatchMiladyEvent(COMMAND_PALETTE_EVENT)}
+                aria-label="Open command palette"
+                className={iconBtnBase}
+              >
+                <Search className="w-5 h-5" />
+              </button>
+            </IconButtonTooltip>
+
             {/* Bug Report */}
-            <IconButtonTooltip label="Report a bug" shortcut="Shift+?">
+            <IconButtonTooltip label={t("header.reportBug")} shortcut="Shift+?">
               <button
                 type="button"
                 onClick={openBugReport}
-                aria-label="Report a bug"
+                aria-label={t("header.reportBug")}
                 className={iconBtnBase}
               >
                 <Bug className="w-5 h-5" />
@@ -301,11 +369,11 @@ export function Header() {
             {/* Wallet Dropdown */}
             {(evmShort || solShort) && (
               <div className="wallet-wrapper relative inline-flex shrink-0 group">
-                <IconButtonTooltip label="View wallets">
+                <IconButtonTooltip label={t("header.viewWallets")}>
                   <button
                     type="button"
                     onClick={() => setTab("wallets")}
-                    aria-label="Open wallets"
+                    aria-label={t("header.viewWallets")}
                     className={iconBtnBase}
                   >
                     <Wallet className="w-5 h-5" />
@@ -315,7 +383,7 @@ export function Header() {
                 {/* Wallet Dropdown */}
                 <div className="wallet-tooltip hidden group-hover:block group-focus-within:block absolute top-full right-0 mt-2 p-3 border border-border bg-bg-elevated z-50 min-w-[300px] shadow-xl rounded-lg">
                   <div className="text-[11px] text-muted uppercase tracking-wide mb-2 px-1">
-                    Wallet Addresses
+                    {t("header.walletAddresses")}
                   </div>
 
                   {evmShort && (
@@ -338,9 +406,9 @@ export function Header() {
                         className="px-2 py-1.5 border border-border bg-bg text-[10px] font-mono cursor-pointer hover:border-accent hover:text-accent rounded transition-colors min-w-[60px]"
                       >
                         {copied === "evm" ? (
-                          <span className="text-ok">Copied!</span>
+                          <span className="text-ok">{t("header.copied")}</span>
                         ) : (
-                          "Copy"
+                          t("header.copy")
                         )}
                       </button>
                     </div>
@@ -366,16 +434,16 @@ export function Header() {
                         className="px-2 py-1.5 border border-border bg-bg text-[10px] font-mono cursor-pointer hover:border-accent hover:text-accent rounded transition-colors min-w-[60px]"
                       >
                         {copied === "sol" ? (
-                          <span className="text-ok">Copied!</span>
+                          <span className="text-ok">{t("header.copied")}</span>
                         ) : (
-                          "Copy"
+                          t("header.copy")
                         )}
                       </button>
                     </div>
                   )}
 
                   <div className="mt-2 pt-2 border-t border-border text-[10px] text-muted text-center">
-                    Click to manage wallets
+                    {t("header.manageWallets")}
                   </div>
                 </div>
               </div>
