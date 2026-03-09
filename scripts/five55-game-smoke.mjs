@@ -2,12 +2,31 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_URL = process.env.FIVE55_BASE_URL || "http://127.0.0.1:3100";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DEFAULT_OUT_DIR = path.resolve(__dirname, "..", "output", "playwright");
+const LOCAL_GAMES_CONFIG_PATH = path.resolve(
+  __dirname,
+  "..",
+  "..",
+  "555-mono",
+  "apps",
+  "web",
+  "lib",
+  "games-config.ts",
+);
+const LOCAL_ARCADE_MASTERY_REGISTRY_PATH = path.resolve(
+  __dirname,
+  "..",
+  "..",
+  "arcade-plugin",
+  "dist",
+  "mastery",
+  "registry.js",
+);
 
 const TARGETS = [
   { canonical: "knighthood", catalogId: "knighthood" },
@@ -438,6 +457,55 @@ const MASTERY_PROFILES = {
 };
 
 const execFileAsync = promisify(execFile);
+let masteryRegistryModulePromise = null;
+
+async function loadMasteryRegistryModule() {
+  if (!masteryRegistryModulePromise) {
+    masteryRegistryModulePromise = import(
+      pathToFileURL(LOCAL_ARCADE_MASTERY_REGISTRY_PATH).href
+    ).catch(() => null);
+  }
+  return masteryRegistryModulePromise;
+}
+
+function summarizeAtomicMetricCoverage(atomicAudit) {
+  const metricSourceMap = Array.isArray(atomicAudit?.metricSourceMap)
+    ? atomicAudit.metricSourceMap
+    : [];
+  if (metricSourceMap.length === 0) return "missing";
+  const coverages = metricSourceMap.map((entry) => String(entry?.coverage || ""));
+  const coveredCount = coverages.filter((value) => value && value !== "missing").length;
+  if (coveredCount === 0) return "missing";
+  if (coveredCount === metricSourceMap.length) return "complete";
+  return "partial";
+}
+
+async function readAtomicAuditMeta(canonical) {
+  const module = await loadMasteryRegistryModule();
+  if (!module || typeof module.getMasteryContractOrNull !== "function") {
+    return {
+      auditComplete: false,
+      auditStatus: "pending",
+      blockingSubsystem: null,
+      controllerMode: null,
+      nativeMetricCoverage: "missing",
+      currentFailureReason: null,
+      boundedGate: null,
+    };
+  }
+  const contract = module.getMasteryContractOrNull(canonical);
+  const atomicAudit = contract?.atomicAudit || null;
+  const auditStatus = String(atomicAudit?.auditStatus || "pending");
+  return {
+    auditComplete: ["audited", "closed", "regression-only", "deferred"].includes(auditStatus),
+    auditStatus,
+    blockingSubsystem: atomicAudit?.controllerDesign?.currentBlockingSubsystem || null,
+    controllerMode: atomicAudit?.controllerDesign?.mode || null,
+    nativeMetricCoverage: summarizeAtomicMetricCoverage(atomicAudit),
+    currentFailureReason: atomicAudit?.objectiveModel?.currentFailureReason || null,
+    boundedGate: atomicAudit?.controllerDesign?.boundedGate || null,
+  };
+}
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -626,6 +694,30 @@ function withAgentQuery(rawPath, baseUrl) {
 async function fetchCatalog(baseUrl) {
   const endpoint = new URL("/api/games/catalog", baseUrl).toString();
 
+  async function loadLocalCatalogFallback() {
+    const source = await fs.readFile(LOCAL_GAMES_CONFIG_PATH, "utf8");
+    const games = [];
+    const objectPattern = /\{[\s\S]*?id:\s*'([^']+)'[\s\S]*?path:\s*'([^']+)'[\s\S]*?\}/g;
+    let match;
+    while ((match = objectPattern.exec(source))) {
+      games.push({
+        id: match[1],
+        path: match[2],
+      });
+    }
+    if (games.length === 0) {
+      throw new Error(`local catalog fallback produced 0 games from ${LOCAL_GAMES_CONFIG_PATH}`);
+    }
+    return { games };
+  }
+
+  function shouldUseLocalCatalogFallback(errOrStatus) {
+    const text = String(errOrStatus?.message || errOrStatus || "");
+    return /catalog failed (404|405|501)\b/i.test(text)
+      || /unsupported method/i.test(text)
+      || /not found/i.test(text);
+  }
+
   async function fetchCatalogViaCurl() {
     let lastError = null;
     for (let attempt = 1; attempt <= 20; attempt += 1) {
@@ -662,11 +754,22 @@ async function fetchCatalog(baseUrl) {
     );
   } catch (err) {
     if (!isTransientNetworkError(err)) throw err;
-    return fetchCatalogViaCurl();
+    try {
+      return await fetchCatalogViaCurl();
+    } catch (curlErr) {
+      if (!shouldUseLocalCatalogFallback(curlErr)) throw curlErr;
+      console.warn(`[smoke] catalog local-fallback ${LOCAL_GAMES_CONFIG_PATH}`);
+      return loadLocalCatalogFallback();
+    }
   }
   if (!res.ok) {
     const raw = await res.text();
-    throw new Error(`catalog failed ${res.status}: ${raw}`);
+    const failure = new Error(`catalog failed ${res.status}: ${raw}`);
+    if (shouldUseLocalCatalogFallback(failure)) {
+      console.warn(`[smoke] catalog local-fallback ${LOCAL_GAMES_CONFIG_PATH}`);
+      return loadLocalCatalogFallback();
+    }
+    throw failure;
   }
   return res.json();
 }
@@ -1623,6 +1726,7 @@ function buildMasteryIndicator({
   strictErrorPass,
   stats,
   screenshots = [],
+  atomicAuditMeta = null,
 }) {
   const profile = MASTERY_PROFILES[canonical] || {
     objective: "Demonstrate sustained gameplay progression.",
@@ -1697,6 +1801,30 @@ function buildMasteryIndicator({
     );
   }
 
+  const auditStatus = String(atomicAuditMeta?.auditStatus || "pending");
+  if (atomicAuditMeta) {
+    checks.push(
+      buildCheck(
+        "atomic_audit_present",
+        Boolean(atomicAuditMeta.auditComplete),
+        "Canonical atomic audit is present",
+        auditStatus,
+        "audited|closed|regression-only|deferred",
+      ),
+    );
+    if (auditStatus === "audited" && atomicAuditMeta.blockingSubsystem) {
+      checks.push(
+        buildCheck(
+          "atomic_audit_blocker",
+          false,
+          "Atomic audit still marks an unresolved controller blocker",
+          atomicAuditMeta.blockingSubsystem,
+          "closed",
+        ),
+      );
+    }
+  }
+
   if (profile.levelGate) {
     checks.push(checkLevelGate(stats, profile.levelGate));
   }
@@ -1721,6 +1849,12 @@ function buildMasteryIndicator({
     label: passed ? MASTERED_LABEL : NEEDS_WORK_LABEL,
     reason,
     objective: profile.objective,
+    auditStatus,
+    blockingSubsystem: atomicAuditMeta?.blockingSubsystem || null,
+    controllerMode: atomicAuditMeta?.controllerMode || null,
+    nativeMetricCoverage: atomicAuditMeta?.nativeMetricCoverage || "missing",
+    currentFailureReason: atomicAuditMeta?.currentFailureReason || null,
+    boundedGate: atomicAuditMeta?.boundedGate || null,
     checks,
     statsSnapshot: {
       statusesSeen: stats.statusesSeen,
@@ -1754,6 +1888,51 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;")
     .replace(/\"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function createRunId() {
+  return `alice-smoke-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+}
+
+async function writeFreshnessManifest(summary, outDir) {
+  const manifestPath = path.join(outDir, "alice-game-smoke-report.latest.json");
+  const textPath = path.join(outDir, "alice-game-smoke-report.latest.txt");
+  const manifest = {
+    runId: summary.runId,
+    generatedAt: summary.finishedAt,
+    startedAt: summary.startedAt,
+    outputDir: summary.outputDir,
+    reportPath: summary.reportPath,
+    htmlReportPath: summary.htmlReportPath,
+    scriptPath: summary.scriptPath,
+    baseUrl: summary.baseUrl,
+    selectedGames: summary.selectedGames,
+    total: summary.total,
+    requiredTotal: summary.requiredTotal,
+    mastered: summary.mastered,
+    deferred: summary.deferred,
+    passed: summary.passed,
+    failed: summary.failed,
+  };
+  const text = [
+    `runId=${manifest.runId}`,
+    `generatedAt=${manifest.generatedAt}`,
+    `startedAt=${manifest.startedAt}`,
+    `outputDir=${manifest.outputDir}`,
+    `reportPath=${manifest.reportPath}`,
+    `htmlReportPath=${manifest.htmlReportPath}`,
+    `scriptPath=${manifest.scriptPath}`,
+    `baseUrl=${manifest.baseUrl}`,
+    `total=${manifest.total}`,
+    `requiredTotal=${manifest.requiredTotal}`,
+    `mastered=${manifest.mastered}`,
+    `deferred=${manifest.deferred}`,
+    `passed=${manifest.passed}`,
+    `failed=${manifest.failed}`,
+  ].join("\n");
+  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), "utf8");
+  await fs.writeFile(textPath, `${text}\n`, "utf8");
+  return { manifestPath, textPath };
 }
 
 function renderCheck(check) {
@@ -1803,6 +1982,13 @@ async function writeHtmlReport(summary, outDir) {
 
       const checks = (mastery.checks || []).map(renderCheck).join("\n");
       const shots = (result.screenshots || []).map(renderShot).join("\n");
+      const auditInfo = [
+        mastery.auditStatus ? `<div><b>Audit:</b> ${escapeHtml(mastery.auditStatus)}</div>` : "",
+        mastery.controllerMode ? `<div><b>Controller Mode:</b> ${escapeHtml(mastery.controllerMode)}</div>` : "",
+        mastery.blockingSubsystem ? `<div><b>Blocking Subsystem:</b> ${escapeHtml(mastery.blockingSubsystem)}</div>` : "",
+        mastery.nativeMetricCoverage ? `<div><b>Metric Coverage:</b> ${escapeHtml(mastery.nativeMetricCoverage)}</div>` : "",
+        mastery.currentFailureReason ? `<div><b>Audit Failure:</b> ${escapeHtml(mastery.currentFailureReason)}</div>` : "",
+      ].filter(Boolean).join("");
 
       return `
       <article class="card">
@@ -1816,6 +2002,7 @@ async function writeHtmlReport(summary, outDir) {
         <div class="meta">${escapeHtml(result.gameTitle || "")}</div>
         <div class="objective"><b>Objective:</b> ${escapeHtml(mastery.objective || "")}</div>
         <div class="reason">${escapeHtml(mastery.reason)}</div>
+        ${auditInfo ? `<div class="audit">${auditInfo}</div>` : ""}
         <div class="stats">
           <span>AliceSocket: ${result.probe?.hasAliceSocket ? "yes" : "no"}</span>
           <span>Canvas: ${result.probe?.hasCanvas ? "yes" : "no"}</span>
@@ -1867,6 +2054,7 @@ async function writeHtmlReport(summary, outDir) {
     .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
     .objective { margin-top: 8px; font-size: 12px; color: #d5e0f7; }
     .reason { color: #cdd8ee; font-size: 12px; margin: 8px 0; }
+    .audit { margin: 8px 0; font-size: 12px; color: #b9c8e6; display: grid; gap: 4px; }
     .badges { display: flex; gap: 8px; flex-wrap: wrap; }
     .badge {
       border-radius: 999px;
@@ -1943,6 +2131,7 @@ async function writeHtmlReport(summary, outDir) {
     <h1>Alice Five55 Mastery Spectate Gallery</h1>
     <div class="summary">
       Generated: <b>${escapeHtml(summary.finishedAt)}</b> |
+      Run ID: <b>${escapeHtml(summary.runId)}</b> |
       Total: <b>${summary.total}</b> |
       Mastered: <b>${summary.mastered}</b> |
       Deferred: <b>${summary.deferred || 0}</b> |
@@ -1951,6 +2140,13 @@ async function writeHtmlReport(summary, outDir) {
       Strict Errors: <b>${summary.strictErrors ? "on" : "off"}</b> |
       Default Gameplay Window: <b>${escapeHtml(String(summary.defaultGameplayDurationMs))}ms</b> |
       Per-game Overrides: <b>${summary.perGameDurationOverrides ? "on" : "off"}</b>
+    </div>
+    <div class="summary">
+      Output Dir: <b>${escapeHtml(summary.outputDir)}</b><br/>
+      JSON: <b>${escapeHtml(summary.reportPath)}</b><br/>
+      HTML: <b>${escapeHtml(summary.htmlReportPath || htmlPath)}</b><br/>
+      Manifest: <b>${escapeHtml(summary.manifestPath || "")}</b><br/>
+      Script: <b>${escapeHtml(summary.scriptPath)}</b>
     </div>
     <section class="grid">
       ${cards}
@@ -1966,6 +2162,9 @@ async function writeHtmlReport(summary, outDir) {
 async function run() {
   const config = parseArgs();
   await fs.mkdir(config.outDir, { recursive: true });
+  const runId = createRunId();
+  console.log(`[smoke] run-id ${runId}`);
+  console.log(`[smoke] output-dir ${config.outDir}`);
 
   const chromium = await loadChromium();
   const catalog = await fetchCatalog(config.baseUrl);
@@ -1992,6 +2191,7 @@ async function run() {
     console.log(`[smoke] game-start ${target.canonical}`);
     const game = byId.get(target.catalogId);
     const masteryProfile = MASTERY_PROFILES[target.canonical] || null;
+    const atomicAuditMeta = await readAtomicAuditMeta(target.canonical);
     if (!game) {
       results.push({
         canonical: target.canonical,
@@ -2002,8 +2202,19 @@ async function run() {
           label: NEEDS_WORK_LABEL,
           reason: "Game missing from catalog",
           objective: "Catalog entry must exist",
+          auditStatus: atomicAuditMeta.auditStatus,
+          blockingSubsystem: atomicAuditMeta.blockingSubsystem,
+          controllerMode: atomicAuditMeta.controllerMode,
+          nativeMetricCoverage: atomicAuditMeta.nativeMetricCoverage,
+          currentFailureReason: atomicAuditMeta.currentFailureReason,
+          boundedGate: atomicAuditMeta.boundedGate,
           checks: [buildCheck("catalog_entry", false, "Catalog entry found", "missing", "present")],
         },
+        auditComplete: atomicAuditMeta.auditComplete,
+        auditStatus: atomicAuditMeta.auditStatus,
+        blockingSubsystem: atomicAuditMeta.blockingSubsystem,
+        controllerMode: atomicAuditMeta.controllerMode,
+        nativeMetricCoverage: atomicAuditMeta.nativeMetricCoverage,
         screenshots: [],
       });
       console.log(`[smoke] game-end ${target.canonical} missing_catalog`);
@@ -2124,6 +2335,7 @@ async function run() {
       strictErrorPass,
       stats,
       screenshots: gameplayEvidence.screenshots,
+      atomicAuditMeta,
     });
 
     const pass = masteryIndicator.level === "mastered" || masteryIndicator.level === "deferred";
@@ -2142,6 +2354,11 @@ async function run() {
         maxConsoleErrors: config.maxConsoleErrors,
       },
       masteryIndicator,
+      auditComplete: atomicAuditMeta.auditComplete,
+      auditStatus: atomicAuditMeta.auditStatus,
+      blockingSubsystem: atomicAuditMeta.blockingSubsystem,
+      controllerMode: atomicAuditMeta.controllerMode,
+      nativeMetricCoverage: atomicAuditMeta.nativeMetricCoverage,
       stats,
       sampleCount: gameplayEvidence.samples.length,
       elapsedMs: gameplayEvidence.elapsedMs,
@@ -2187,8 +2404,19 @@ async function run() {
           label: NEEDS_WORK_LABEL,
           reason: `runtime_error: ${errorMessage}`,
           objective: MASTERY_PROFILES[target.canonical]?.objective || "Demonstrate sustained gameplay progression.",
+          auditStatus: atomicAuditMeta.auditStatus,
+          blockingSubsystem: atomicAuditMeta.blockingSubsystem,
+          controllerMode: atomicAuditMeta.controllerMode,
+          nativeMetricCoverage: atomicAuditMeta.nativeMetricCoverage,
+          currentFailureReason: atomicAuditMeta.currentFailureReason,
+          boundedGate: atomicAuditMeta.boundedGate,
           checks: [buildCheck("runtime_error", false, "Runner completed game pass without runtime exception", errorMessage, "no_error")],
         },
+        auditComplete: atomicAuditMeta.auditComplete,
+        auditStatus: atomicAuditMeta.auditStatus,
+        blockingSubsystem: atomicAuditMeta.blockingSubsystem,
+        controllerMode: atomicAuditMeta.controllerMode,
+        nativeMetricCoverage: atomicAuditMeta.nativeMetricCoverage,
         stats: collectStats([], masteryProfile),
         sampleCount: 0,
         elapsedMs: 0,
@@ -2235,8 +2463,12 @@ async function run() {
   ).length;
 
   const summary = {
+    runId,
     startedAt,
     finishedAt: new Date().toISOString(),
+    outputDir: config.outDir,
+    scriptPath: __filename,
+    baseUrl: config.baseUrl,
     strictErrors: config.strictErrors,
     requireMastery: config.requireMastery,
     maxPageErrors: config.maxPageErrors,
@@ -2255,14 +2487,26 @@ async function run() {
   };
 
   const reportPath = path.join(config.outDir, "alice-game-smoke-report.json");
+  summary.reportPath = reportPath;
   await fs.writeFile(reportPath, JSON.stringify(summary, null, 2), "utf8");
   const htmlReportPath = await writeHtmlReport(summary, config.outDir);
+  summary.htmlReportPath = htmlReportPath;
+  const freshness = await writeFreshnessManifest(summary, config.outDir);
+  summary.manifestPath = freshness.manifestPath;
+  summary.manifestTextPath = freshness.textPath;
+  await fs.writeFile(reportPath, JSON.stringify(summary, null, 2), "utf8");
+  await writeHtmlReport(summary, config.outDir);
 
   console.log(
     JSON.stringify(
       {
+        runId: summary.runId,
         reportPath,
         htmlReportPath,
+        manifestPath: freshness.manifestPath,
+        manifestTextPath: freshness.textPath,
+        outputDir: summary.outputDir,
+        scriptPath: summary.scriptPath,
         baseUrl: config.baseUrl,
         total: summary.total,
         requiredTotal: summary.requiredTotal,
