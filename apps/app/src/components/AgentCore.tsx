@@ -133,11 +133,11 @@ export function AgentCore() {
         </div>
       </div>
 
-      <div className="absolute inset-x-0 bottom-[13.25rem] top-[9rem] z-10 sm:bottom-[12.75rem] sm:top-[7.5rem] lg:bottom-[11.75rem] lg:top-[5.5rem]">
+      <div className="absolute inset-x-0 bottom-[16.25rem] top-[9rem] z-10 sm:bottom-[15.25rem] sm:top-[7.5rem] lg:bottom-[13.75rem] lg:top-[5.5rem]">
         <ScrollArea ref={timelineScrollRef} className="h-full w-full px-3 sm:px-6 lg:px-10">
           <div
             data-conversation-timeline
-            className="mx-auto flex min-h-full w-full max-w-[1320px] flex-col justify-end pb-4"
+            className="mx-auto flex min-h-full w-full max-w-[1320px] flex-col justify-end pb-8"
           >
             <div className="space-y-3">
               {timelineEntries.length === 0 ? (

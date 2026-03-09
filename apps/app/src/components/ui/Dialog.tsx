@@ -1,4 +1,5 @@
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { cn } from "./utils.js";
 
 export function Dialog({
@@ -18,6 +19,12 @@ export function Dialog({
 }) {
   const panelRef = React.useRef<HTMLDivElement>(null);
   const restoreFocusRef = React.useRef<HTMLElement | null>(null);
+  const [portalRoot, setPortalRoot] = React.useState<HTMLElement | null>(null);
+
+  React.useEffect(() => {
+    if (typeof document === "undefined") return;
+    setPortalRoot(document.body);
+  }, []);
 
   React.useEffect(() => {
     if (!open || typeof window === "undefined") return undefined;
@@ -39,10 +46,11 @@ export function Dialog({
     };
   }, [open, onClose]);
 
-  if (!open) return null;
-  return (
+  if (!open || !portalRoot) return null;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/82 p-4 backdrop-blur-xl"
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/82 p-4 backdrop-blur-xl"
       onClick={onClose}
       role="presentation"
     >
@@ -61,6 +69,7 @@ export function Dialog({
       >
         {children}
       </div>
-    </div>
+    </div>,
+    portalRoot,
   );
 }
