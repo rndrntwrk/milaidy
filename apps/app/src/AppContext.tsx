@@ -130,7 +130,7 @@ function loadTheme(): ThemeName {
   } catch {
     /* ignore */
   }
-  return "milady";
+  return "milady-os";
 }
 
 function applyTheme(name: ThemeName) {

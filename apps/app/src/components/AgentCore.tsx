@@ -1,13 +1,11 @@
 import React from 'react';
 import { useApp } from '../AppContext.js';
 import { SciFiPanel } from './ui/SciFiPanel.js';
+import { ChatAvatar } from './ChatAvatar.js';
 
 export function AgentCore() {
     const {
-        chatAvatarVisible,
-        chatAgentVoiceMuted,
         chatAvatarSpeaking,
-        agentStatus,
         activeConversationId
     } = useApp();
 
@@ -19,12 +17,11 @@ export function AgentCore() {
             </div>
 
             <div className="flex-1 overflow-y-auto relative z-10 flex flex-col items-center justify-center p-8">
-                {/* Placeholder for real Agent Core components */}
-                <img
-                    src={chatAvatarVisible ? "/avatars/avatar-hologram.png" : "https://miladymaker.net/milady.png"}
-                    alt="Agent Core"
-                    className="w-48 h-48 md:w-64 md:h-64 object-cover rounded-full border-4 border-accent shadow-[0_0_50px_var(--accent)]"
-                />
+                {/* Real VRM Avatar */}
+                <div className="w-[300px] h-[400px] md:w-[400px] md:h-[500px] relative">
+                    <ChatAvatar isSpeaking={chatAvatarSpeaking} />
+                </div>
+
                 <div className="mt-8 text-center bg-card/80 backdrop-blur border border-accent/50 p-4 rounded-md">
                     <h2 className="text-xl font-display text-accent mb-2">LOCAL NEURAL CORE ACTIVE</h2>
                     <p className="text-sm font-mono text-muted">Awaiting sync block {activeConversationId}</p>

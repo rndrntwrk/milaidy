@@ -17,6 +17,8 @@ import { ChannelsFeedsPanel } from './ChannelsFeedsPanel.js';
 import { ThreadsDrawer } from './ThreadsDrawer.js';
 import { AssetVaultDrawer } from './AssetVaultDrawer.js';
 import { ControlStackModal } from './ControlStackModal.js';
+import { SettingsModalWrapper } from './SettingsModalWrapper.js';
+import { AdvancedModalWrapper } from './AdvancedModalWrapper.js';
 import { useState } from 'react';
 
 export function MiladyOsDashboard() {
@@ -69,6 +71,8 @@ export function MiladyOsDashboard() {
             <ThreadsDrawer open={threadsOpen} onClose={() => setThreadsOpen(false)} />
             <AssetVaultDrawer open={vaultOpen} onClose={() => setVaultOpen(false)} />
             <ControlStackModal open={controlStackOpen} onClose={() => setControlStackOpen(false)} />
+            <SettingsModalWrapper />
+            <AdvancedModalWrapper />
         </div>
     );
 }
