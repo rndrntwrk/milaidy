@@ -26,7 +26,8 @@ export type Tab =
   | "identity"
   | "approvals"
   | "safe-mode"
-  | "governance";
+  | "governance"
+  | "security";
 
 const ALL_TAB_GROUPS = [
   { label: "Chat", tabs: ["chat"] as Tab[] },
@@ -84,6 +85,7 @@ const TAB_PATHS: Record<Tab, string> = {
   approvals: "/approvals",
   "safe-mode": "/safe-mode",
   governance: "/governance",
+  security: "/security",
 };
 
 /** Legacy path redirects — old paths that now map to new tabs. */
@@ -163,6 +165,7 @@ export function titleForTab(tab: Tab): string {
     case "approvals": return "Approvals";
     case "safe-mode": return "Safe Mode";
     case "governance": return "Governance";
+    case "security": return "Security";
     default: return "Milaidy";
   }
 }
