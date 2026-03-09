@@ -39,6 +39,12 @@ const requiredWorkflowSnippets = [
   "wrapper-diagnostics.json",
   "Stage Windows setup executables",
   "apps/app/electrobun/artifacts/*.exe",
+  "name: Collect public release files",
+  '-name "*Setup*.zip" -o \\',
+  '-name "*Setup*.tar.gz" \\',
+  "name: Collect update channel files",
+  '-name "*.tar.zst" -o \\',
+  '-name "*-update.json" \\',
   "DMG attach attempt $attempt/5 failed",
   "https://api.github.com/repos/blackboardsh/electrobun/releases/tags/v$version",
   "$asset = @($release.assets) | Where-Object { $_.name -eq $assetName } | Select-Object -First 1",
@@ -46,6 +52,7 @@ const requiredWorkflowSnippets = [
   "$actualHash = (Get-FileHash -Path $tarPath -Algorithm SHA256).Hash.ToLowerInvariant()",
   "electrobun CLI checksum mismatch",
 ];
+const forbiddenWorkflowSnippets = [' -name "*.exe" -o \\'];
 const requiredElectrobunConfigSnippets = [
   'postBuild: "scripts/postwrap-sign-runtime-macos.ts"',
   'postWrap: "scripts/postwrap-diagnostics.ts"',
@@ -74,6 +81,20 @@ function assertReleaseWorkflowHasNotaryWrapper() {
       "release-check: release workflow is missing notary wrapper wiring:",
     );
     for (const snippet of missing) {
+      console.error(`  - ${snippet}`);
+    }
+    process.exit(1);
+  }
+
+  const forbidden = forbiddenWorkflowSnippets.filter((snippet) =>
+    workflow.includes(snippet),
+  );
+
+  if (forbidden.length > 0) {
+    console.error(
+      "release-check: release workflow still exposes raw bootstrap artifacts on the public GitHub release:",
+    );
+    for (const snippet of forbidden) {
       console.error(`  - ${snippet}`);
     }
     process.exit(1);

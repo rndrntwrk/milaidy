@@ -110,8 +110,9 @@ describe("Electrobun release workflow drift", () => {
 
     expect(workflow).toContain("name: Collect public release files");
     expect(workflow).toContain(' -name "*.dmg" -o \\');
-    expect(workflow).toContain(' -name "*.exe" -o \\');
+    expect(workflow).toContain(' -name "*Setup*.zip" -o \\');
     expect(workflow).toContain(' -name "*Setup*.tar.gz" \\');
+    expect(workflow).not.toContain(' -name "*.exe" -o \\');
 
     expect(workflow).toContain("name: Collect update channel files");
     expect(workflow).toContain(' -name "*.tar.zst" -o \\');

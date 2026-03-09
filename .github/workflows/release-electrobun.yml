@@ -764,9 +764,11 @@ jobs:
       - name: Collect public release files
         run: |
           mkdir -p release-files
+          # Public GitHub releases should expose end-user installables, not the
+          # updater transport files or the bare Windows bootstrap wrapper.
           find release-artifacts -type f \( \
             -name "*.dmg" -o \
-            -name "*.exe" -o \
+            -name "*Setup*.zip" -o \
             -name "*Setup*.tar.gz" \
           \) -exec cp {} release-files/ \; 2>/dev/null || true
           echo "=== Public release files ==="
