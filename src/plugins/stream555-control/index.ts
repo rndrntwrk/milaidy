@@ -135,6 +135,22 @@ function readParamValue(
   return value?.trim() ? value.trim() : undefined;
 }
 
+function readJsonParamValue(
+  options: HandlerOptions | undefined,
+  key: string,
+): JsonObject | undefined {
+  const value = readParamValue(options, key);
+  if (!value) return undefined;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as JsonObject)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function assertStreamReadAccess(): void {
   assertFive55Capability(CAPABILITY_POLICY, "stream.read");
 }
@@ -748,6 +764,10 @@ const goLiveAction: Action = {
       const inputType =
         readParam(options as HandlerOptions | undefined, "inputType") || "website";
       const inputUrl = readParam(options as HandlerOptions | undefined, "inputUrl");
+      const avatarIdentity = readJsonParamValue(
+        options as HandlerOptions | undefined,
+        "avatarIdentity",
+      );
       const scene = readParam(options as HandlerOptions | undefined, "scene") || "default";
       const applyDestinations = parseBooleanFlag(
         readParam(options as HandlerOptions | undefined, "applyDestinations"),
@@ -785,7 +805,10 @@ const goLiveAction: Action = {
             type: inputType,
             ...(inputUrl ? { url: inputUrl } : {}),
           },
-          options: { scene },
+          options: {
+            scene,
+            ...(avatarIdentity ? { avatarIdentity } : {}),
+          },
         },
         requestContract: {
           input: { required: true, type: "object" },
@@ -804,6 +827,7 @@ const goLiveAction: Action = {
     { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
     { name: "inputType", description: "camera|screen|website|avatar|radio|...", required: false, schema: { type: "string" as const } },
     { name: "inputUrl", description: "Optional source url for website/rtmp/file", required: false, schema: { type: "string" as const } },
+    { name: "avatarIdentity", description: "Optional JSON-encoded canonical avatar identity for upstream-owned avatar systems", required: false, schema: { type: "string" as const } },
     { name: "scene", description: "Initial scene id", required: false, schema: { type: "string" as const } },
     { name: "applyDestinations", description: "Apply configured RTMP destinations before go-live (default true)", required: false, schema: { type: "string" as const } },
     { name: "destinationPlatforms", description: "Comma-separated subset of destinations to apply before go-live", required: false, schema: { type: "string" as const } },
