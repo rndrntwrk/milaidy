@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { client, type VoiceConfig } from "../api-client.js";
 import { useApp } from "../AppContext.js";
+import { useVoiceChat } from "../hooks/useVoiceChat.js";
 import { ChatAvatar } from "./ChatAvatar.js";
 import { Badge } from "./ui/Badge.js";
 import { Button } from "./ui/Button.js";
@@ -9,6 +11,7 @@ import { resolveAgentDisplayName } from "./shared/agentDisplayName.js";
 import { buildPublicActionEntries } from "./shared/publicActionEntries.js";
 import {
   AgentIcon,
+  MicIcon,
   OperatorIcon,
   SendIcon,
   StopIcon,
@@ -27,8 +30,6 @@ function formatTurnState(
 export function AgentCore() {
   const {
     chatAvatarSpeaking,
-    chatAgentVoiceMuted,
-    activeConversationId,
     conversationMessages,
     chatInput,
     chatSending,
@@ -41,6 +42,7 @@ export function AgentCore() {
     handleChatStop,
   } = useApp();
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
+  const [voiceConfig, setVoiceConfig] = useState<VoiceConfig | null>(null);
 
   const agentName = resolveAgentDisplayName(agentStatus?.agentName);
   const turnState = formatTurnState(
@@ -75,16 +77,34 @@ export function AgentCore() {
       .slice(-14);
   }, [autonomousEvents, conversationMessages]);
 
-  const liveStateLabel = useMemo(() => {
-    if (chatSending) return "Reply in progress";
-    if (conversationMessages.length > 0) return "Latest reply ready";
-    return "Ready for the next exchange";
-  }, [chatSending, conversationMessages.length]);
-  const threadLabel = useMemo(() => {
-    if (!activeConversationId) return "live thread";
-    if (activeConversationId.length <= 18) return `thread ${activeConversationId}`;
-    return `thread ${activeConversationId.slice(0, 8)}…${activeConversationId.slice(-4)}`;
-  }, [activeConversationId]);
+  useEffect(() => {
+    void (async () => {
+      try {
+        const cfg = await client.getConfig();
+        const messages = cfg.messages as
+          | Record<string, Record<string, string>>
+          | undefined;
+        const tts = messages?.tts as VoiceConfig | undefined;
+        if (tts) setVoiceConfig(tts);
+      } catch {
+        // Browser voice fallback is acceptable here.
+      }
+    })();
+  }, []);
+
+  const handleVoiceTranscript = useCallback(
+    (text: string) => {
+      if (chatSending) return;
+      setState("chatInput", text);
+      setTimeout(() => void handleChatSend(), 50);
+    },
+    [chatSending, handleChatSend, setState],
+  );
+
+  const voice = useVoiceChat({
+    onTranscript: handleVoiceTranscript,
+    voiceConfig,
+  });
 
   useEffect(() => {
     const node = timelineScrollRef.current;
@@ -107,17 +127,17 @@ export function AgentCore() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_24%,rgba(255,255,255,0.045),transparent_34%),linear-gradient(180deg,rgba(0,0,0,0.08),rgba(0,0,0,0.42)_72%,rgba(0,0,0,0.74)_100%)]" />
       </div>
 
-      <div className="absolute inset-x-[18%] bottom-[10.75rem] top-[10rem] z-[1] sm:inset-x-[16%] sm:bottom-[10rem] sm:top-[8.25rem] lg:inset-x-[20%] lg:bottom-[8.75rem] lg:top-[6rem] xl:inset-x-[22%]">
+      <div className="absolute inset-x-[18%] bottom-[12.25rem] top-[10rem] z-[1] sm:inset-x-[16%] sm:bottom-[11.75rem] sm:top-[8.25rem] lg:inset-x-[20%] lg:bottom-[10.5rem] lg:top-[6rem] xl:inset-x-[22%]">
         <div className="absolute inset-0">
           <ChatAvatar isSpeaking={chatAvatarSpeaking} />
         </div>
       </div>
 
-      <div className="absolute inset-x-0 bottom-[8.75rem] top-[9rem] z-10 sm:bottom-[8.25rem] sm:top-[7.5rem] lg:bottom-[7.5rem] lg:top-[5.5rem]">
+      <div className="absolute inset-x-0 bottom-[13.25rem] top-[9rem] z-10 sm:bottom-[12.75rem] sm:top-[7.5rem] lg:bottom-[11.75rem] lg:top-[5.5rem]">
         <ScrollArea ref={timelineScrollRef} className="h-full w-full px-3 sm:px-6 lg:px-10">
           <div
             data-conversation-timeline
-            className="mx-auto flex min-h-full w-full max-w-[1320px] flex-col justify-end pb-5"
+            className="mx-auto flex min-h-full w-full max-w-[1320px] flex-col justify-end pb-4"
           >
             <div className="space-y-3">
               {timelineEntries.length === 0 ? (
@@ -195,7 +215,7 @@ export function AgentCore() {
       </div>
 
       <form
-        className="absolute bottom-4 left-4 right-4 z-10"
+        className="pro-streamer-composer-shell absolute bottom-4 left-4 right-4 z-10"
         onSubmit={(event) => {
           event.preventDefault();
           if (chatSending) {
@@ -206,21 +226,8 @@ export function AgentCore() {
           void handleChatSend();
         }}
       >
-        <div className="mx-auto w-full max-w-[1180px] rounded-[24px] border border-white/10 bg-black/48 p-3 backdrop-blur-2xl">
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-3 text-[11px] uppercase tracking-[0.24em] text-white/45">
-            <span>Operator reply</span>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="hidden sm:inline">{threadLabel}</span>
-              <span>{liveStateLabel}</span>
-              <span className="hidden sm:inline">{chatAgentVoiceMuted ? "voice muted" : "voice live"}</span>
-              {chatPendingImages.length > 0 ? (
-                <Badge variant="outline" className="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em]">
-                  {chatPendingImages.length} queued
-                </Badge>
-              ) : null}
-            </div>
-          </div>
-          <div className="flex items-end gap-3">
+        <div className="pro-streamer-composer-panel mx-auto w-full max-w-[1160px]">
+          <div className="pro-streamer-composer-panel__body">
             <Textarea
               value={chatInput}
               onChange={(event) => setState("chatInput", event.target.value)}
@@ -236,18 +243,42 @@ export function AgentCore() {
                 }
               }}
               aria-label="Operator conversation input"
-              placeholder={`Reply to ${agentName}...`}
-              className="min-h-[76px] flex-1 resize-none bg-black/34"
+              placeholder={voice.isListening ? "Listening..." : `Reply to ${agentName}...`}
+              className="pro-streamer-composer-panel__textarea"
             />
+          </div>
+
+          <div className="pro-streamer-composer-panel__footer">
+            <div className="flex min-h-10 items-center gap-2">
+              {chatPendingImages.length > 0 ? (
+                <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px] text-white/68">
+                  {chatPendingImages.length} queued
+                </Badge>
+              ) : null}
+            </div>
+
+            <div className="pro-streamer-composer-panel__actions">
+            <Button
+              type="button"
+              variant={voice.isListening ? "secondary" : "outline"}
+              size="icon"
+              className={`h-11 w-11 shrink-0 rounded-full ${voice.isListening ? "border-white/18 bg-white/[0.12] text-white" : "border-white/12 bg-white/[0.04] text-white/82"}`}
+              aria-label={voice.isListening ? "Stop voice input" : "Start voice input"}
+              title={voice.isListening ? "Stop voice input" : "Start voice input"}
+              onClick={voice.toggleListening}
+            >
+              <MicIcon className={`h-4 w-4 ${voice.isListening ? "fill-current" : ""}`} />
+            </Button>
             <Button
               type="submit"
               variant={chatSending ? "outline" : "default"}
-              className={`shrink-0 rounded-[20px] ${chatSending ? "border-danger/30 bg-danger/10 text-danger hover:bg-danger/14" : "bg-white/92 text-black hover:bg-white"}`}
+              className={`h-11 shrink-0 rounded-full px-5 ${chatSending ? "border-danger/30 bg-danger/10 text-danger hover:bg-danger/14" : "bg-white/92 text-black hover:bg-white"}`}
               aria-label={chatSending ? "Stop execution" : "Send reply"}
             >
               {chatSending ? <StopIcon className="h-4 w-4" /> : <SendIcon className="h-4 w-4" />}
               <span>{chatSending ? "Stop" : "Send"}</span>
             </Button>
+            </div>
           </div>
         </div>
       </form>

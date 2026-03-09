@@ -2,33 +2,11 @@ import { useEffect, useMemo } from "react";
 import { useApp } from "../AppContext.js";
 import { Badge } from "./ui/Badge.js";
 import { Button } from "./ui/Button.js";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/Card.js";
+import { SectionEmptyState } from "./SectionStates.js";
+import { SectionShell } from "./SectionShell.js";
 
 export function ChannelsFeedsPanel() {
   const { logs, loadLogs, plugins, mcpServerStatuses, extensionStatus, setTab } = useApp();
-
-  const channelStates = useMemo(
-    () =>
-      [
-        ["Discord", "discord"],
-        ["Telegram", "telegram"],
-        ["Twitter", "twitter"],
-        ["Direct", "direct"],
-      ].map(([label, match]) => {
-        const plugin = plugins.find(
-          (entry) =>
-            entry.id.toLowerCase().includes(match) ||
-            entry.name.toLowerCase().includes(match),
-        );
-        const enabled = Boolean(plugin?.enabled);
-        const active = Boolean(plugin?.enabled && plugin?.isActive);
-        return {
-          label,
-          state: active ? "live" : enabled ? "standby" : "offline",
-        };
-      }),
-    [plugins],
-  );
 
   const telemetry = useMemo(() => {
     const errorCount = logs.filter((entry) => entry.level === "error").length;
@@ -70,89 +48,56 @@ export function ChannelsFeedsPanel() {
   );
 
   return (
-    <Card className="flex min-h-[16rem] flex-1 flex-col border-white/10 bg-black/32 shadow-none">
-      <CardHeader className="border-b border-white/8 pb-3">
-        <div className="flex items-center justify-between gap-3">
-          <CardTitle className="text-sm uppercase tracking-[0.22em] text-white/90">
-            Channels & notices
-          </CardTitle>
-          <Badge variant="outline" className="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em]">
+    <SectionShell
+      title="Notices"
+      description="Recent connector and runtime notices."
+      toolbar={
+        telemetry.errorCount > 0 || telemetry.warnCount > 0 ? (
+          <Badge variant="outline" className="rounded-full px-3 py-1 text-[10px]">
             {telemetry.errorCount} errors / {telemetry.warnCount} warnings
           </Badge>
-        </div>
-      </CardHeader>
-
-      <CardContent className="flex flex-1 flex-col gap-3 pt-4">
-        <div className="grid grid-cols-2 gap-2">
-          {channelStates.map((channel) => (
-            <div
-              key={channel.label}
-              className="rounded-2xl border border-white/8 bg-black/14 px-3 py-2"
-            >
-              <div className="text-[10px] uppercase tracking-[0.22em] text-white/45">
-                {channel.label}
+        ) : (
+          <Badge variant="outline" className="rounded-full px-3 py-1 text-[10px]">
+            Relay {telemetry.secureRelay}
+          </Badge>
+        )
+      }
+      contentClassName="gap-3"
+    >
+      <div className="space-y-2">
+        {recentNotices.length === 0 ? (
+          <SectionEmptyState
+            title="No notices"
+            description="Connector events and runtime notices will appear here when attention is needed."
+            className="border-none bg-transparent shadow-none"
+          />
+        ) : null}
+        {recentNotices.map((notice) => (
+          <div
+            key={notice.id}
+            className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-3"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-white/55">
+                {notice.source}
               </div>
-              <div
-                className={`mt-1 text-xs font-semibold uppercase ${
-                  channel.state === "live"
-                    ? "text-ok"
-                    : channel.state === "standby"
-                      ? "text-accent"
-                      : "text-white/45"
-                }`}
-              >
-                {channel.state}
-              </div>
+              <Badge variant={notice.variant}>{notice.label}</Badge>
             </div>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 text-[10px] uppercase tracking-[0.2em]">
-          <div className="rounded-2xl border border-white/8 bg-black/14 p-3 text-white/45">
-            <div>Security relay</div>
-            <div className={`mt-1 text-sm ${telemetry.secureRelay === "reachable" ? "text-ok" : "text-warn"}`}>
-              {telemetry.secureRelay}
+            <div className="mt-2 line-clamp-2 text-sm text-white/68">
+              {notice.message}
             </div>
           </div>
-          <div className="rounded-2xl border border-white/8 bg-black/14 p-3 text-white/45">
-            <div>MCP links</div>
-            <div className="mt-1 text-sm text-white/85">{telemetry.mcpLive} connected</div>
-          </div>
-        </div>
+        ))}
+      </div>
 
-        <div className="flex-1 space-y-2 overflow-y-auto">
-          {recentNotices.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-white/10 bg-black/10 px-3 py-4 text-center text-sm text-white/40">
-              No operational notices right now.
-            </div>
-          ) : null}
-          {recentNotices.map((notice) => (
-            <div
-              key={notice.id}
-              className="rounded-2xl border border-white/8 bg-black/10 px-3 py-3"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-[11px] uppercase tracking-[0.18em] text-white/55">
-                  {notice.source}
-                </div>
-                <Badge variant={notice.variant}>{notice.label}</Badge>
-              </div>
-              <div className="mt-2 line-clamp-2 text-xs text-white/65">
-                {notice.message}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant="secondary" className="justify-start rounded-2xl" onClick={() => setTab("logs")}>
-            Open logs
-          </Button>
-          <Button variant="outline" className="justify-start rounded-2xl" onClick={() => setTab("security")}>
-            Security
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+      <div className="grid grid-cols-2 gap-2">
+        <Button variant="secondary" className="justify-start rounded-2xl" onClick={() => setTab("logs")}>
+          Open logs
+        </Button>
+        <Button variant="outline" className="justify-start rounded-2xl" onClick={() => setTab("security")}>
+          Security
+        </Button>
+      </div>
+    </SectionShell>
   );
 }

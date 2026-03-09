@@ -5,6 +5,11 @@
 import { type ComponentType, type SVGProps, useMemo, useState } from "react";
 import { useApp } from "../AppContext";
 import type { EvmChainBalance } from "../api-client";
+import { SectionEmptyState, SectionErrorState, SectionSkeleton } from "./SectionStates.js";
+import { SectionShell } from "./SectionShell.js";
+import { SectionToolbar } from "./SectionToolbar.js";
+import { SummaryStatRow } from "./SummaryStatRow.js";
+import { Button } from "./ui/Button.js";
 import {
   ArbitrumIcon,
   BaseChainIcon,
@@ -15,15 +20,9 @@ import {
   StackIcon,
 } from "./ui/Icons";
 
-/* ── Chain icon helper ─────────────────────────────────────────────── */
-
-function chainIcon(chain: string): {
-  Icon: ComponentType<SVGProps<SVGSVGElement>>;
-  cls: string;
-} {
+function chainIcon(chain: string): { Icon: ComponentType<SVGProps<SVGSVGElement>>; cls: string } {
   const c = chain.toLowerCase();
-  if (c === "ethereum" || c === "mainnet")
-    return { Icon: EthereumIcon, cls: "bg-chain-eth" };
+  if (c === "ethereum" || c === "mainnet") return { Icon: EthereumIcon, cls: "bg-chain-eth" };
   if (c === "base") return { Icon: BaseChainIcon, cls: "bg-chain-base" };
   if (c === "arbitrum") return { Icon: ArbitrumIcon, cls: "bg-chain-arb" };
   if (c === "optimism") return { Icon: OptimismIcon, cls: "bg-chain-op" };
@@ -31,8 +30,6 @@ function chainIcon(chain: string): {
   if (c === "solana") return { Icon: SolanaIcon, cls: "bg-chain-sol" };
   return { Icon: StackIcon, cls: "bg-bg-muted" };
 }
-
-/* ── Balance formatter ────────────────────────────────────────────── */
 
 function formatBalance(balance: string): string {
   const num = Number.parseFloat(balance);
@@ -43,8 +40,6 @@ function formatBalance(balance: string): string {
   if (num < 1000) return num.toFixed(4);
   return num.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
-
-/* ── Row types ───────────────────────────────────────────────────────── */
 
 interface TokenRow {
   chain: string;
@@ -62,44 +57,20 @@ interface NftItem {
   collectionName: string;
 }
 
-/* ── Copyable address (inline, for section headers) ──────────────────── */
-
-function CopyableAddress({
-  address,
-  onCopy,
-}: {
-  address: string;
-  onCopy: (text: string) => Promise<void>;
-}) {
+function CopyableAddress({ address, onCopy }: { address: string; onCopy: (text: string) => Promise<void> }) {
   const [copied, setCopied] = useState(false);
   const short = `${address.slice(0, 6)}...${address.slice(-4)}`;
-
   const handleCopy = async () => {
     await onCopy(address);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
-
   return (
-    <div className="ml-auto flex items-center gap-2">
-      <code
-        className="font-mono text-xs text-muted truncate select-all"
-        title={address}
-      >
-        {short}
-      </code>
-      <button
-        type="button"
-        onClick={handleCopy}
-        className="px-2 py-0.5 border border-border bg-bg text-[10px] font-mono cursor-pointer hover:border-accent hover:text-accent transition-colors shrink-0"
-      >
-        {copied ? "copied" : "copy"}
-      </button>
-    </div>
+    <Button type="button" variant="outline" size="sm" onClick={handleCopy} className="rounded-full px-3">
+      {copied ? "Copied" : short}
+    </Button>
   );
 }
-
-/* ── Component ───────────────────────────────────────────────────────── */
 
 export function InventoryView() {
   const {
@@ -120,511 +91,259 @@ export function InventoryView() {
     copyToClipboard,
   } = useApp();
 
-  // ── Setup detection ──────────────────────────────────────────────────
-  // If connected to Eliza Cloud, RPCs are managed — no local keys needed.
-
   const cfg = walletConfig;
-  const needsSetup =
-    !cloudConnected && (!cfg || (!cfg.alchemyKeySet && !cfg.heliusKeySet));
-
-  // ── Flatten & sort token rows (skip errored chains) ────────────────
+  const needsSetup = !cloudConnected && (!cfg || (!cfg.alchemyKeySet && !cfg.heliusKeySet));
 
   const tokenRows = useMemo((): TokenRow[] => {
     if (!walletBalances) return [];
     const rows: TokenRow[] = [];
-
     if (walletBalances.evm) {
       for (const chain of walletBalances.evm.chains) {
-        if (chain.error) continue; // errored chains shown separately below
-        rows.push({
-          chain: chain.chain,
-          symbol: chain.nativeSymbol,
-          name: `${chain.chain} native`,
-          balance: chain.nativeBalance,
-          valueUsd: Number.parseFloat(chain.nativeValueUsd) || 0,
-          balanceRaw: Number.parseFloat(chain.nativeBalance) || 0,
-        });
+        if (chain.error) continue;
+        rows.push({ chain: chain.chain, symbol: chain.nativeSymbol, name: `${chain.chain} native`, balance: chain.nativeBalance, valueUsd: Number.parseFloat(chain.nativeValueUsd) || 0, balanceRaw: Number.parseFloat(chain.nativeBalance) || 0 });
         for (const t of chain.tokens) {
-          rows.push({
-            chain: chain.chain,
-            symbol: t.symbol,
-            name: t.name,
-            balance: t.balance,
-            valueUsd: Number.parseFloat(t.valueUsd) || 0,
-            balanceRaw: Number.parseFloat(t.balance) || 0,
-          });
+          rows.push({ chain: chain.chain, symbol: t.symbol, name: t.name, balance: t.balance, valueUsd: Number.parseFloat(t.valueUsd) || 0, balanceRaw: Number.parseFloat(t.balance) || 0 });
         }
       }
     }
-
     if (walletBalances.solana) {
-      rows.push({
-        chain: "Solana",
-        symbol: "SOL",
-        name: "Solana native",
-        balance: walletBalances.solana.solBalance,
-        valueUsd: Number.parseFloat(walletBalances.solana.solValueUsd) || 0,
-        balanceRaw: Number.parseFloat(walletBalances.solana.solBalance) || 0,
-      });
+      rows.push({ chain: "Solana", symbol: "SOL", name: "Solana native", balance: walletBalances.solana.solBalance, valueUsd: Number.parseFloat(walletBalances.solana.solValueUsd) || 0, balanceRaw: Number.parseFloat(walletBalances.solana.solBalance) || 0 });
       for (const t of walletBalances.solana.tokens) {
-        rows.push({
-          chain: "Solana",
-          symbol: t.symbol,
-          name: t.name,
-          balance: t.balance,
-          valueUsd: Number.parseFloat(t.valueUsd) || 0,
-          balanceRaw: Number.parseFloat(t.balance) || 0,
-        });
+        rows.push({ chain: "Solana", symbol: t.symbol, name: t.name, balance: t.balance, valueUsd: Number.parseFloat(t.valueUsd) || 0, balanceRaw: Number.parseFloat(t.balance) || 0 });
       }
     }
-
     return rows;
   }, [walletBalances]);
 
   const sortedRows = useMemo(() => {
     const sorted = [...tokenRows];
-    if (inventorySort === "value") {
-      sorted.sort(
-        (a, b) => b.valueUsd - a.valueUsd || b.balanceRaw - a.balanceRaw,
-      );
-    } else if (inventorySort === "chain") {
-      sorted.sort(
-        (a, b) =>
-          a.chain.localeCompare(b.chain) || a.symbol.localeCompare(b.symbol),
-      );
-    } else if (inventorySort === "symbol") {
-      sorted.sort(
-        (a, b) =>
-          a.symbol.localeCompare(b.symbol) || a.chain.localeCompare(b.chain),
-      );
-    }
+    if (inventorySort === "value") sorted.sort((a, b) => b.valueUsd - a.valueUsd || b.balanceRaw - a.balanceRaw);
+    else if (inventorySort === "chain") sorted.sort((a, b) => a.chain.localeCompare(b.chain) || a.symbol.localeCompare(b.symbol));
+    else if (inventorySort === "symbol") sorted.sort((a, b) => a.symbol.localeCompare(b.symbol) || a.chain.localeCompare(b.chain));
     return sorted;
   }, [tokenRows, inventorySort]);
 
-  // ── Chain errors ─────────────────────────────────────────────────────
-
-  const chainErrors = useMemo(
-    () =>
-      (walletBalances?.evm?.chains ?? []).filter(
-        (c: EvmChainBalance) => c.error,
-      ),
-    [walletBalances],
-  );
-
-  // ── Flatten all NFTs into a single list ──────────────────────────────
+  const chainErrors = useMemo(() => (walletBalances?.evm?.chains ?? []).filter((c: EvmChainBalance) => c.error), [walletBalances]);
 
   const allNfts = useMemo((): NftItem[] => {
     if (!walletNfts) return [];
     const items: NftItem[] = [];
-
     for (const chainData of walletNfts.evm) {
       for (const nft of chainData.nfts) {
-        items.push({
-          chain: chainData.chain,
-          name: nft.name,
-          imageUrl: nft.imageUrl,
-          collectionName: nft.collectionName || nft.tokenType,
-        });
+        items.push({ chain: chainData.chain, name: nft.name, imageUrl: nft.imageUrl, collectionName: nft.collectionName || nft.tokenType });
       }
     }
     if (walletNfts.solana) {
       for (const nft of walletNfts.solana.nfts) {
-        items.push({
-          chain: "Solana",
-          name: nft.name,
-          imageUrl: nft.imageUrl,
-          collectionName: nft.collectionName,
-        });
+        items.push({ chain: "Solana", name: nft.name, imageUrl: nft.imageUrl, collectionName: nft.collectionName });
       }
     }
-
     return items;
   }, [walletNfts]);
 
-  // ════════════════════════════════════════════════════════════════════════
-  // Render
-  // ════════════════════════════════════════════════════════════════════════
+  const totalUsd = useMemo(() => sortedRows.reduce((sum, row) => sum + row.valueUsd, 0), [sortedRows]);
+  const walletCount = [walletAddresses?.evmAddress, walletAddresses?.solanaAddress].filter(Boolean).length;
+
+  if (needsSetup) {
+    return (
+      <SectionEmptyState
+        title="Wallets need setup"
+        description="Connect RPC providers or enable Eliza Cloud before browsing balances and NFTs."
+        actionLabel="Open settings"
+        onAction={() => setTab("settings")}
+      />
+    );
+  }
+
+  const summaryItems = [
+    { label: "Wallets", value: `${walletCount}`, hint: walletCount === 1 ? "linked wallet" : "linked wallets" },
+    { label: "Portfolio", value: totalUsd > 0 ? `$${totalUsd.toFixed(2)}` : "Unavailable" },
+    { label: "Assets", value: `${sortedRows.length}`, hint: "tracked tokens" },
+    { label: "Collectibles", value: `${allNfts.length}`, hint: "NFTs" },
+  ];
 
   return (
-    <div>
-      {/* Top-level error (always shown) */}
-      {walletError && (
-        <div className="mt-3 px-3.5 py-2.5 border border-danger bg-[rgba(231,76,60,0.06)] text-xs text-danger">
-          {walletError}
-        </div>
-      )}
+    <div className="space-y-4">
+      {walletError ? (
+        <SectionErrorState
+          title="Wallet data unavailable"
+          description="Balances or addresses could not be loaded right now."
+          actionLabel="Retry"
+          onAction={() => { void loadBalances(); void loadNfts(); }}
+          details={walletError}
+        />
+      ) : null}
 
-      {needsSetup ? renderSetup() : renderContent()}
+      <SectionShell
+        title="Wallets"
+        description="Balances, addresses, and collectibles across connected chains."
+        toolbar={
+          <SectionToolbar>
+            <Button
+              type="button"
+              variant={inventoryView === "tokens" ? "secondary" : "outline"}
+              onClick={() => { setState("inventoryView", "tokens"); if (!walletBalances) void loadBalances(); }}
+            >
+              Tokens
+            </Button>
+            <Button
+              type="button"
+              variant={inventoryView === "nfts" ? "secondary" : "outline"}
+              onClick={() => { setState("inventoryView", "nfts"); if (!walletNfts) void loadNfts(); }}
+            >
+              NFTs
+            </Button>
+            <Button type="button" variant="outline" onClick={() => inventoryView === "tokens" ? loadBalances() : loadNfts()}>
+              Refresh
+            </Button>
+          </SectionToolbar>
+        }
+      >
+        <SummaryStatRow items={summaryItems} />
+      </SectionShell>
+
+      {inventoryView === "tokens" ? renderTokensView() : renderNftsView()}
+
+      {chainErrors.length > 0 ? (
+        <SectionErrorState
+          title="Some networks are unavailable"
+          description="One or more chain providers returned errors while loading balances."
+          details={chainErrors.map((c: EvmChainBalance) => `${c.chain}: ${c.error}`).join("\n")}
+        />
+      ) : null}
     </div>
   );
 
-  /* ── Setup view ──────────────────────────────────────────────────── */
-
-  function renderSetup() {
-    return (
-      <div className="mt-6 border border-border bg-card p-6 text-center">
-        <div className="text-sm font-bold mb-2">Wallet keys not configured</div>
-        <p className="text-xs text-muted mb-4 leading-relaxed max-w-md mx-auto">
-          To view balances and NFTs you need RPC provider keys (Alchemy, Helius,
-          etc.) or an Eliza Cloud connection. Head to <strong>Settings</strong>{" "}
-          to set them up.
-        </p>
-        <button
-          type="button"
-          className="px-4 py-1.5 border border-accent bg-accent text-accent-fg cursor-pointer text-xs font-mono hover:bg-accent-hover hover:border-accent-hover"
-          onClick={() => setTab("settings")}
-        >
-          Open Settings
-        </button>
-      </div>
-    );
-  }
-
-  /* ── Content view ────────────────────────────────────────────────── */
-
-  function renderContent() {
-    return (
-      <>
-        {/* Toolbar: tabs + sort buttons + refresh — all in one row */}
-        <div className="flex items-center gap-2 mt-3 flex-wrap">
-          <button
-            type="button"
-            className={`inline-block px-4 py-1 cursor-pointer border border-border bg-bg text-[13px] font-mono hover:border-accent hover:text-accent ${
-              inventoryView === "tokens"
-                ? "border-accent text-accent font-bold"
-                : ""
-            }`}
-            onClick={() => {
-              setState("inventoryView", "tokens");
-              if (!walletBalances) void loadBalances();
-            }}
-          >
-            Tokens
-          </button>
-          <button
-            type="button"
-            className={`inline-block px-4 py-1 cursor-pointer border border-border bg-bg text-[13px] font-mono hover:border-accent hover:text-accent ${
-              inventoryView === "nfts"
-                ? "border-accent text-accent font-bold"
-                : ""
-            }`}
-            onClick={() => {
-              setState("inventoryView", "nfts");
-              if (!walletNfts) void loadNfts();
-            }}
-          >
-            NFTs
-          </button>
-
-          {/* Right side: sort buttons (tokens only) + refresh */}
-          <div className="ml-auto flex items-center gap-1.5">
-            {inventoryView === "tokens" && (
-              <>
-                <span
-                  className="text-[10px] text-muted uppercase"
-                  style={{ letterSpacing: "0.05em" }}
-                >
-                  Sort:
-                </span>
-                <button
-                  type="button"
-                  className={`px-2.5 py-0.5 border border-border bg-bg cursor-pointer text-[11px] font-mono hover:border-accent hover:text-accent ${
-                    inventorySort === "value" ? "border-accent text-accent" : ""
-                  }`}
-                  onClick={() => setState("inventorySort", "value")}
-                >
-                  Value
-                </button>
-                <button
-                  type="button"
-                  className={`px-2.5 py-0.5 border border-border bg-bg cursor-pointer text-[11px] font-mono hover:border-accent hover:text-accent ${
-                    inventorySort === "chain" ? "border-accent text-accent" : ""
-                  }`}
-                  onClick={() => setState("inventorySort", "chain")}
-                >
-                  Chain
-                </button>
-                <button
-                  type="button"
-                  className={`px-2.5 py-0.5 border border-border bg-bg cursor-pointer text-[11px] font-mono hover:border-accent hover:text-accent ${
-                    inventorySort === "symbol"
-                      ? "border-accent text-accent"
-                      : ""
-                  }`}
-                  onClick={() => setState("inventorySort", "symbol")}
-                >
-                  Name
-                </button>
-              </>
-            )}
-            <button
-              type="button"
-              className="px-2.5 py-0.5 border border-accent bg-accent text-accent-fg cursor-pointer text-[11px] font-mono hover:bg-accent-hover hover:border-accent-hover"
-              onClick={() =>
-                inventoryView === "tokens" ? loadBalances() : loadNfts()
-              }
-            >
-              Refresh
-            </button>
-          </div>
-        </div>
-
-        {inventoryView === "tokens" ? renderTokensView() : renderNftsView()}
-      </>
-    );
-  }
-
-  /* ── Tokens view (section per chain) ─────────────────────────────── */
-
   function renderTokensView() {
-    if (walletLoading) {
-      return (
-        <div className="text-center py-10 text-muted italic mt-6">
-          Loading balances...
-        </div>
-      );
-    }
+    if (walletLoading) return <SectionSkeleton lines={4} />;
 
     const evmAddr = walletAddresses?.evmAddress ?? walletConfig?.evmAddress;
-    const solAddr =
-      walletAddresses?.solanaAddress ?? walletConfig?.solanaAddress;
+    const solAddr = walletAddresses?.solanaAddress ?? walletConfig?.solanaAddress;
 
     if (!evmAddr && !solAddr) {
       return (
-        <div className="text-center py-10 text-muted italic mt-6">
-          No wallets connected. Configure wallets in{" "}
-          <a
-            href="/settings"
-            onClick={(e) => {
-              e.preventDefault();
-              setTab("settings");
-            }}
-            className="text-accent"
-          >
-            Settings
-          </a>
-          .
-        </div>
+        <SectionEmptyState
+          title="No wallets linked"
+          description="Link an EVM or Solana wallet in settings to browse balances here."
+          actionLabel="Open settings"
+          onAction={() => setTab("settings")}
+        />
       );
     }
 
-    const evmRows = sortedRows.filter(
-      (r) => r.chain.toLowerCase() !== "solana",
-    );
-    const solanaRows = sortedRows.filter(
-      (r) => r.chain.toLowerCase() === "solana",
-    );
+    const evmRows = sortedRows.filter((r) => r.chain.toLowerCase() !== "solana");
+    const solanaRows = sortedRows.filter((r) => r.chain.toLowerCase() === "solana");
 
     return (
-      <div className="mt-3 space-y-3">
-        {evmAddr &&
-          renderChainSection(
-            "Ethereum",
-            "ethereum",
-            evmAddr,
-            evmRows,
-            true,
-          )}
-        {solAddr &&
-          renderChainSection(
-            "Solana",
-            "solana",
-            solAddr,
-            solanaRows,
-            false,
-          )}
-
-        {/* Per-chain RPC errors */}
-        {chainErrors.length > 0 && (
-          <div className="text-[11px] text-muted">
-            {chainErrors.map((c: EvmChainBalance) => {
-              const icon = chainIcon(c.chain);
-              return (
-                <div key={c.chain} className="py-0.5">
-                  <span
-                    className={`inline-flex h-3 w-3 items-center justify-center rounded-full text-white align-middle ${icon.cls}`}
-                  >
-                    <icon.Icon className="h-2 w-2" />
-                  </span>{" "}
-                  {c.chain}:{" "}
-                  {c.error?.includes("not enabled") ? (
-                    <>
-                      Not enabled in Alchemy &mdash;{" "}
-                      <a
-                        href="https://dashboard.alchemy.com/"
-                        target="_blank"
-                        rel="noopener"
-                        className="text-accent"
-                      >
-                        enable it
-                      </a>
-                    </>
-                  ) : (
-                    c.error
-                  )}
-                </div>
-              );
-            })}
+      <div className="space-y-4">
+        <SectionToolbar className="justify-between">
+          <div className="flex items-center gap-2 text-sm text-white/58">
+            <span>Sort</span>
+            <Button type="button" variant={inventorySort === "value" ? "secondary" : "outline"} size="sm" onClick={() => setState("inventorySort", "value")}>Value</Button>
+            <Button type="button" variant={inventorySort === "chain" ? "secondary" : "outline"} size="sm" onClick={() => setState("inventorySort", "chain")}>Chain</Button>
+            <Button type="button" variant={inventorySort === "symbol" ? "secondary" : "outline"} size="sm" onClick={() => setState("inventorySort", "symbol")}>Name</Button>
           </div>
-        )}
+        </SectionToolbar>
+        {evmAddr ? renderChainSection("Ethereum", "ethereum", evmAddr, evmRows, true) : null}
+        {solAddr ? renderChainSection("Solana", "solana", solAddr, solanaRows, false) : null}
       </div>
     );
   }
 
-  /* ── Single chain section ───────────────────────────────────────── */
-
-  function renderChainSection(
-    chainName: string,
-    chainKey: string,
-    address: string,
-    rows: TokenRow[],
-    showSubChain: boolean,
-  ) {
+  function renderChainSection(chainName: string, chainKey: string, address: string, rows: TokenRow[], showSubChain: boolean) {
     const icon = chainIcon(chainKey);
     return (
-      <div className="border border-border bg-card">
-        {/* Section header: icon + chain name | address + copy */}
-        <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-border bg-bg">
-          <span
-            className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-white shrink-0 ${icon.cls}`}
-          >
-            <icon.Icon className="h-3.5 w-3.5" />
-          </span>
-          <span className="text-sm font-bold">{chainName}</span>
-          <CopyableAddress address={address} onCopy={copyToClipboard} />
-        </div>
-
-        {/* Token rows or empty state */}
-        {!walletBalances ? (
-          <div className="px-4 py-6 text-center text-xs text-muted italic">
-            No data yet. Click Refresh.
-          </div>
-        ) : rows.length === 0 ? (
-          <div className="px-4 py-6 text-center text-xs text-muted italic">
-            No wallet assets
-          </div>
+      <SectionShell
+        title={chainName}
+        description="Address and token balances."
+        toolbar={<CopyableAddress address={address} onCopy={copyToClipboard} />}
+      >
+        {rows.length === 0 ? (
+          <SectionEmptyState title="No assets found" description="This wallet has no detected token balances on the selected network." />
         ) : (
-          <table className="w-full border-collapse text-xs">
-            <tbody>
-              {rows.map((row, idx) => {
-                const subIcon = showSubChain ? chainIcon(row.chain) : null;
-                return (
-                  <tr
-                    key={`${row.chain}-${row.symbol}-${idx}`}
-                    className="border-b border-border last:border-b-0"
-                  >
-                    {showSubChain && (
-                      <td
-                        className="pl-4 pr-1 py-[7px] align-middle"
-                        style={{ width: 28 }}
-                      >
-                        <span
-                          className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-white ${subIcon?.cls ?? "bg-bg-muted"}`}
-                          title={row.chain}
-                        >
-                          {subIcon ? <subIcon.Icon className="h-2.5 w-2.5" /> : "?"}
-                        </span>
-                      </td>
-                    )}
-                    <td
-                      className={`${showSubChain ? "pl-1" : "pl-4"} pr-3 py-[7px] align-middle`}
-                    >
-                      <span className="font-bold font-mono">{row.symbol}</span>
-                      <span className="text-muted overflow-hidden text-ellipsis whitespace-nowrap max-w-[160px] inline-block align-bottom ml-2">
-                        {row.name}
-                      </span>
-                      {showSubChain &&
-                        row.chain.toLowerCase() !== "ethereum" &&
-                        row.chain.toLowerCase() !== "mainnet" && (
-                          <span className="ml-1.5 px-1.5 py-0 border border-border text-[9px] text-muted font-mono align-middle">
-                            {row.chain}
+          <div className="pro-streamer-data-table-wrap">
+            <table className="pro-streamer-data-table">
+              <thead>
+                <tr>
+                  {showSubChain ? <th>Chain</th> : null}
+                  <th>Asset</th>
+                  <th className="text-right">Balance</th>
+                  <th className="text-right">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, idx) => {
+                  const subIcon = showSubChain ? chainIcon(row.chain) : null;
+                  return (
+                    <tr key={`${row.chain}-${row.symbol}-${idx}`}>
+                      {showSubChain ? (
+                        <td>
+                          <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-white ${subIcon?.cls ?? "bg-bg-muted"}`}>
+                            {subIcon ? <subIcon.Icon className="h-2.5 w-2.5" /> : null}
                           </span>
-                        )}
-                    </td>
-                    <td className="px-3 py-[7px] align-middle font-mono text-right whitespace-nowrap">
-                      {formatBalance(row.balance)}
-                    </td>
-                    <td className="px-4 py-[7px] align-middle font-mono text-right text-muted whitespace-nowrap">
-                      {row.valueUsd > 0
-                        ? `$${row.valueUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                        : ""}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                        </td>
+                      ) : null}
+                      <td>
+                        <div className="flex flex-col">
+                          <span className="font-medium text-white/88">{row.symbol}</span>
+                          <span className="text-xs text-white/48">{row.name}</span>
+                        </div>
+                      </td>
+                      <td className="text-right font-mono">{formatBalance(row.balance)}</td>
+                      <td className="text-right font-mono">{row.valueUsd > 0 ? `$${row.valueUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
-      </div>
+      </SectionShell>
     );
   }
 
-  /* ── NFTs grid ───────────────────────────────────────────────────── */
-
   function renderNftsView() {
-    if (walletNftsLoading) {
-      return (
-        <div className="text-center py-10 text-muted italic mt-6">
-          Loading NFTs...
-        </div>
-      );
-    }
+    if (walletNftsLoading) return <SectionSkeleton lines={4} />;
     if (!walletNfts) {
       return (
-        <div className="text-center py-10 text-muted italic mt-6">
-          No NFT data yet. Click Refresh.
-        </div>
+        <SectionEmptyState
+          title="NFTs unavailable"
+          description="Refresh collectibles to load the latest NFT inventory."
+          actionLabel="Refresh"
+          onAction={() => void loadNfts()}
+        />
       );
     }
     if (allNfts.length === 0) {
-      return (
-        <div className="text-center py-10 text-muted italic mt-6">
-          No NFTs found across your wallets.
-        </div>
-      );
+      return <SectionEmptyState title="No NFTs found" description="No collectibles were detected across linked wallets." />;
     }
-
     return (
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2.5 mt-3 max-h-[60vh] overflow-y-auto">
-        {allNfts.map((nft, idx) => {
-          const icon = chainIcon(nft.chain);
-          return (
-            <div
-              key={`${nft.chain}-${nft.name}-${idx}`}
-              className="border border-border bg-card overflow-hidden"
-            >
-              {nft.imageUrl ? (
-                <img
-                  src={nft.imageUrl}
-                  alt={nft.name}
-                  loading="lazy"
-                  className="w-full h-[150px] object-cover block bg-bg-muted"
-                />
-              ) : (
-                <div className="w-full h-[150px] bg-bg-muted flex items-center justify-center text-[11px] text-muted">
-                  No image
-                </div>
-              )}
-              <div className="px-2 py-1.5">
-                <div className="text-[11px] font-bold overflow-hidden text-ellipsis whitespace-nowrap">
-                  {nft.name}
-                </div>
-                <div className="text-[10px] text-muted overflow-hidden text-ellipsis whitespace-nowrap">
-                  {nft.collectionName}
-                </div>
-                <div className="inline-flex items-center gap-1 text-[10px] text-muted mt-0.5">
-                  <span
-                    className={`inline-flex h-3 w-3 items-center justify-center rounded-full text-white ${icon.cls}`}
-                  >
-                    <icon.Icon className="h-2 w-2" />
-                  </span>
-                  {nft.chain}
+      <SectionShell title="Collectibles" description="NFTs grouped across linked wallets.">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3">
+          {allNfts.map((nft, idx) => {
+            const icon = chainIcon(nft.chain);
+            return (
+              <div key={`${nft.chain}-${nft.name}-${idx}`} className="pro-streamer-media-card">
+                {nft.imageUrl ? (
+                  <img src={nft.imageUrl} alt={nft.name} loading="lazy" className="pro-streamer-media-card__image" />
+                ) : (
+                  <div className="pro-streamer-media-card__placeholder">No image</div>
+                )}
+                <div className="pro-streamer-media-card__body">
+                  <div className="pro-streamer-media-card__title">{nft.name}</div>
+                  <div className="pro-streamer-media-card__meta">{nft.collectionName}</div>
+                  <div className="inline-flex items-center gap-1 text-[10px] text-white/48">
+                    <span className={`inline-flex h-3 w-3 items-center justify-center rounded-full text-white ${icon.cls}`}>
+                      <icon.Icon className="h-2 w-2" />
+                    </span>
+                    {nft.chain}
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      </SectionShell>
     );
   }
 }

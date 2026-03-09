@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { CharacterView } from "./CharacterView.js";
 import { DrawerShell } from "./DrawerShell.js";
-import { InventoryView } from "./InventoryView.js";
-import { IdentityPanel } from "./IdentityPanel.js";
 import { useApp } from "../AppContext.js";
+import { AvatarSelector } from "./AvatarSelector.js";
 import { resolveAgentDisplayName } from "./shared/agentDisplayName.js";
-import { Badge } from "./ui/Badge.js";
+import { SectionShell } from "./SectionShell.js";
 import { Button } from "./ui/Button.js";
-import { Card } from "./ui/Card.js";
+import { SummaryStatRow } from "./SummaryStatRow.js";
 import { VaultIcon } from "./ui/Icons.js";
 import { Sheet } from "./ui/Sheet.js";
 
@@ -43,6 +41,8 @@ export function AssetVaultDrawer({
     walletAddresses,
     walletBalances,
     agentStatus,
+    setState,
+    setTab,
   } = useApp();
   const [activeSection, setActiveSection] = useState<AssetVaultSection>(section);
   const agentName = resolveAgentDisplayName(characterData?.name, agentStatus?.agentName);
@@ -79,53 +79,30 @@ export function AssetVaultDrawer({
     return chains.length > 0 ? chains.join(" + ") : "Not linked";
   }, [walletAddresses?.evmAddress, walletAddresses?.solanaAddress]);
 
-  const evmShort = walletAddresses?.evmAddress
-    ? `${walletAddresses.evmAddress.slice(0, 6)}...${walletAddresses.evmAddress.slice(-4)}`
-    : "Not linked";
-  const solShort = walletAddresses?.solanaAddress
-    ? `${walletAddresses.solanaAddress.slice(0, 4)}...${walletAddresses.solanaAddress.slice(-4)}`
-    : "Not linked";
+  const hasIdentityProfile = Boolean(characterData && Object.keys(characterData).length > 0);
+  const hasAvatar = selectedVrmIndex !== null && selectedVrmIndex !== undefined;
+  const hasWallets = Boolean(walletAddresses?.evmAddress || walletAddresses?.solanaAddress);
 
   const summaryRows = useMemo(
     () => [
+      { label: "Agent", value: agentName },
       {
-        label: "Avatar",
-        value: selectedVrmIndex === 0 ? "custom vrm" : `vrm ${selectedVrmIndex}`,
+        label: "Portfolio",
+        value: walletAddresses?.evmAddress || walletAddresses?.solanaAddress
+          ? walletTotalUsd > 0
+            ? `$${walletTotalUsd.toFixed(2)}`
+            : "Linked"
+          : "Not linked",
       },
-      {
-        label: "Identity",
-        value: agentName,
-      },
-      {
-        label: "EVM",
-        value: evmShort,
-      },
-      {
-        label: "Solana",
-        value: solShort,
-      },
-      {
-        label: "Chains",
-        value: linkedChains,
-      },
-      {
-        label: "Balance",
-        value: walletTotalUsd > 0 ? `$${walletTotalUsd.toFixed(2)}` : "Unavailable",
-      },
+      { label: "Networks", value: linkedChains },
     ],
-    [agentName, evmShort, linkedChains, selectedVrmIndex, solShort, walletTotalUsd],
+    [agentName, linkedChains, walletAddresses?.evmAddress, walletAddresses?.solanaAddress, walletTotalUsd],
   );
 
   const sectionLabels: Record<AssetVaultSection, string> = {
     identity: "Identity",
     character: "Avatar",
     wallets: "Wallets",
-  };
-
-  const sectionCopy: Record<AssetVaultSection, string> = {
-    identity: "Public-facing profile, persona, and identity controls.",
-    character: "Avatar selection and stage presence for stream.",
-    wallets: "Balances, addresses, and linked wallet surfaces.",
   };
 
   if (!open) return null;
@@ -135,12 +112,7 @@ export function AssetVaultDrawer({
       <DrawerShell
         icon={<VaultIcon width="18" height="18" />}
         title="Asset Vault"
-        description="Identity, avatar, and linked wallets."
-        badge={
-          <Badge variant="outline" className="rounded-full px-3 py-1">
-            Stream-facing
-          </Badge>
-        }
+        description="Identity, avatar, and wallets."
         onClose={onClose}
         toolbar={
           <div className="grid grid-cols-3 gap-2">
@@ -163,28 +135,138 @@ export function AssetVaultDrawer({
           </div>
         }
         summary={
-          <div className="space-y-3">
-            <div className="text-[11px] uppercase tracking-[0.22em] text-white/48">
-              {sectionCopy[activeSection]}
-            </div>
-            <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-6">
-              {summaryRows.map((row) => (
-                <Card key={row.label} className="rounded-2xl px-3 py-3">
-                  <div className="text-[10px] uppercase tracking-[0.22em] text-white/45">
-                    {row.label}
-                  </div>
-                  <div className="mt-1 truncate text-sm text-white/88" title={row.value}>
-                    {row.value}
-                  </div>
-                </Card>
-              ))}
-            </div>
-          </div>
+          <SummaryStatRow items={summaryRows} className="pro-streamer-drawer-summary-row" />
         }
       >
-          {activeSection === "character" ? <CharacterView /> : null}
-          {activeSection === "wallets" ? <InventoryView /> : null}
-          {activeSection === "identity" ? <IdentityPanel /> : null}
+        {activeSection === "identity" ? (
+          <SectionShell
+            title="Identity"
+            description="Public-facing profile and persona."
+            contentClassName="gap-3"
+          >
+            <div className="pro-streamer-status-grid">
+              <div className="pro-streamer-status-card">
+                <div className="pro-streamer-status-card__label">Agent</div>
+                <div className="pro-streamer-status-card__value">{agentName}</div>
+                <div className="pro-streamer-status-card__meta">Active display name</div>
+              </div>
+              <div className="pro-streamer-status-card">
+                <div className="pro-streamer-status-card__label">Profile</div>
+                <div className="pro-streamer-status-card__value">
+                  {hasIdentityProfile ? "Configured" : "Not configured"}
+                </div>
+                <div className="pro-streamer-status-card__meta">
+                  {hasIdentityProfile ? "Ready for stream" : "Import or create a profile"}
+                </div>
+              </div>
+              <div className="pro-streamer-status-card">
+                <div className="pro-streamer-status-card__label">Networks</div>
+                <div className="pro-streamer-status-card__value">{linkedChains}</div>
+                <div className="pro-streamer-status-card__meta">Linked identities</div>
+              </div>
+            </div>
+            {!hasIdentityProfile ? (
+              <div className="pro-streamer-inline-state">
+                <div>
+                  <div className="pro-streamer-inline-state__title">No identity profile yet</div>
+                  <div className="pro-streamer-inline-state__copy">
+                    Open identity controls to configure persona, profile, and public metadata.
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="rounded-xl"
+                  onClick={() => {
+                    setTab("identity");
+                    onClose();
+                  }}
+                >
+                  Open identity controls
+                </Button>
+              </div>
+            ) : null}
+          </SectionShell>
+        ) : null}
+
+        {activeSection === "character" ? (
+          <SectionShell
+            title="Avatar"
+            description="Choose the model used on stage."
+            contentClassName="gap-3"
+          >
+            <div className="pro-streamer-status-grid">
+              <div className="pro-streamer-status-card">
+                <div className="pro-streamer-status-card__label">Active avatar</div>
+                <div className="pro-streamer-status-card__value">
+                  {typeof selectedVrmIndex === "number" ? `Model ${selectedVrmIndex}` : "Not linked"}
+                </div>
+                <div className="pro-streamer-status-card__meta">
+                  {hasAvatar ? "Ready for stage" : "Choose a model below"}
+                </div>
+              </div>
+            </div>
+            <AvatarSelector
+              fullWidth
+              showUpload={false}
+              selected={typeof selectedVrmIndex === "number" ? selectedVrmIndex : 1}
+              onSelect={(index) => setState("selectedVrmIndex", index)}
+            />
+          </SectionShell>
+        ) : null}
+
+        {activeSection === "wallets" ? (
+          <SectionShell
+            title="Wallets"
+            description="Addresses, balances, and linked chains."
+            contentClassName="gap-3"
+          >
+            <div className="pro-streamer-status-grid">
+              <div className="pro-streamer-status-card">
+                <div className="pro-streamer-status-card__label">Portfolio</div>
+                <div className="pro-streamer-status-card__value">
+                  {walletTotalUsd > 0 ? `$${walletTotalUsd.toFixed(2)}` : hasWallets ? "Linked" : "Not linked"}
+                </div>
+                <div className="pro-streamer-status-card__meta">Estimated total</div>
+              </div>
+              <div className="pro-streamer-status-card">
+                <div className="pro-streamer-status-card__label">EVM</div>
+                <div className="pro-streamer-status-card__value break-all">
+                  {walletAddresses?.evmAddress ?? "Not linked"}
+                </div>
+                <div className="pro-streamer-status-card__meta">Primary address</div>
+              </div>
+              <div className="pro-streamer-status-card">
+                <div className="pro-streamer-status-card__label">Solana</div>
+                <div className="pro-streamer-status-card__value break-all">
+                  {walletAddresses?.solanaAddress ?? "Not linked"}
+                </div>
+                <div className="pro-streamer-status-card__meta">Primary address</div>
+              </div>
+            </div>
+            {!hasWallets ? (
+              <div className="pro-streamer-inline-state">
+                <div>
+                  <div className="pro-streamer-inline-state__title">No wallets linked</div>
+                  <div className="pro-streamer-inline-state__copy">
+                    Connect a wallet to surface balances, addresses, and network state.
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="rounded-xl"
+                  onClick={() => {
+                    setTab("wallets");
+                    onClose();
+                  }}
+                >
+                  Open wallet tools
+                </Button>
+              </div>
+            ) : null}
+          </SectionShell>
+        ) : null}
       </DrawerShell>
     </Sheet>
   );

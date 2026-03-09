@@ -1,5 +1,5 @@
 /**
- * Loading screen — ASCII Pro Streamer logo with per-character dither fade.
+ * Loading screen — original Milady-style ASCII boot logo with per-character dither fade.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -7,17 +7,11 @@ import type { StartupPhase } from "../AppContext";
 import { MiladyBootShell } from "./MiladyBootShell.js";
 
 const BOOT_ART = [
-  "PPPPP   RRRRR    OOOOO",
-  "P   PP  R   RR  OO   OO",
-  "PPPPP   RRRRR   OO   OO",
-  "P       R  RR   OO   OO",
-  "P       R   RR   OOOOO ",
-  "",
-  " SSSSS TTTTT RRRRR  EEEEE   AAA   MM   MM EEEEE RRRRR ",
-  "SS       T   R   RR E      A   A  MMM MMM E     R   RR",
-  " SSSS    T   RRRRR  EEEE   AAAAA  MM M MM EEEE  RRRRR ",
-  "    SS   T   R  RR  E      A   A  MM   MM E     R  RR ",
-  "SSSSS    T   R   RR EEEEE  A   A  MM   MM EEEEE R   RR",
+  "MM   MM III L      AAA   DDDD   Y   Y",
+  "MMM MMM  I  L     A   A  D   D   Y Y ",
+  "MM M MM  I  L     AAAAA  D   D    Y  ",
+  "MM   MM  I  L     A   A  D   D    Y  ",
+  "MM   MM III LLLLL A   A  DDDD     Y  ",
 ];
 
 interface CharCell {

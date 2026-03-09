@@ -3475,7 +3475,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     );
     if (!confirmed) return;
     const exportToken = window.prompt(
-      "Enter your Pro Streamer wallet export token (MILADY_WALLET_EXPORT_TOKEN):",
+      "Enter your wallet export token (MILADY_WALLET_EXPORT_TOKEN):",
       "",
     );
     if (exportToken === null) return;

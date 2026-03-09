@@ -15,7 +15,11 @@ import {
   type TableInfo,
   type TableRowsResponse,
 } from "../api-client";
-import { ChevronLeftIcon, ChevronRightIcon, CloseIcon } from "./ui/Icons";
+import { SectionEmptyState, SectionErrorState, SectionLoadingState } from "./SectionStates.js";
+import { SectionShell } from "./SectionShell.js";
+import { Button } from "./ui/Button.js";
+import { CloseIcon } from "./ui/Icons";
+import { Input } from "./ui/Input.js";
 
 type DbView = "tables" | "query";
 type SortDir = "asc" | "desc" | null;
@@ -109,14 +113,16 @@ function CellPopover({
         <span className="text-[10px] text-[var(--muted)] uppercase font-bold">
           Cell Value
         </span>
-        <button
+        <Button
           type="button"
-          className="text-[var(--muted)] hover:text-[var(--txt)] bg-transparent border-0 cursor-pointer text-sm"
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 rounded-full text-[var(--muted)] hover:text-[var(--txt)]"
           onClick={onClose}
           aria-label="Close cell value"
         >
           <CloseIcon className="h-3.5 w-3.5" />
-        </button>
+        </Button>
       </div>
       <pre className="text-xs text-[var(--txt)] font-mono whitespace-pre-wrap break-all m-0">
         {value}
@@ -269,22 +275,26 @@ function PaginationBar({
         {total > 0 && ` · showing ${start}-${end}`}
       </span>
       <div className="flex items-center gap-1">
-        <button
+        <Button
           type="button"
-          className="px-2 py-1 border border-[var(--border)] bg-[var(--card)] text-[var(--txt)] text-[11px] cursor-pointer disabled:opacity-30 disabled:cursor-default hover:bg-[var(--border)]/30"
+          variant="outline"
+          size="sm"
+          className="rounded-full px-3 text-[11px]"
           disabled={!hasPrev}
           onClick={onPrev}
         >
           Prev
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="px-2 py-1 border border-[var(--border)] bg-[var(--card)] text-[var(--txt)] text-[11px] cursor-pointer disabled:opacity-30 disabled:cursor-default hover:bg-[var(--border)]/30"
+          variant="outline"
+          size="sm"
+          className="rounded-full px-3 text-[11px]"
           disabled={!hasNext}
           onClick={onNext}
         >
           Next
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -467,195 +477,169 @@ export function DatabaseView() {
       t.name.toLowerCase().includes(sidebarSearch.toLowerCase()),
   );
 
-  return (
-    <div className="flex flex-col h-full">
-      {/* Top bar */}
-      <div className="flex items-center gap-2 mb-3">
-        <div className="flex items-center gap-1.5 text-[11px] text-[var(--muted)]">
-          {dbStatus ? (
-            <>
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${dbStatus.connected ? "bg-green-400" : "bg-red-400"}`}
-              />
-              <span>{dbStatus.provider}</span>
-              <span className="opacity-40">·</span>
-              <span>{dbStatus.tableCount} tables</span>
-            </>
-          ) : (
-            <span>Connecting...</span>
-          )}
-        </div>
-
-        <div className="flex-1" />
-
-        {/* View toggle */}
-        <div className="flex border border-[var(--border)] rounded-sm overflow-hidden">
-          <button
-            type="button"
-            className={`px-3 py-1 text-[11px] cursor-pointer border-0 transition-colors ${
-              view === "tables"
-                ? "bg-[var(--accent)] text-[var(--accent-foreground)]"
-                : "bg-[var(--card)] text-[var(--muted)] hover:text-[var(--txt)]"
-            }`}
-            onClick={() => setView("tables")}
-          >
-            Table Editor
-          </button>
-          <button
-            type="button"
-            className={`px-3 py-1 text-[11px] cursor-pointer border-0 border-l border-[var(--border)] transition-colors ${
-              view === "query"
-                ? "bg-[var(--accent)] text-[var(--accent-foreground)]"
-                : "bg-[var(--card)] text-[var(--muted)] hover:text-[var(--txt)]"
-            }`}
-            onClick={() => setView("query")}
-          >
-            SQL Editor
-          </button>
-        </div>
-
-        <button
+  const toolbar = (
+    <div className="flex flex-wrap items-center gap-2">
+      <Button
+        type="button"
+        variant={view === "tables" ? "secondary" : "outline"}
+        onClick={() => setView("tables")}
+      >
+        Tables
+      </Button>
+      <Button
+        type="button"
+        variant={view === "query" ? "secondary" : "outline"}
+        onClick={() => setView("query")}
+      >
+        SQL
+      </Button>
+      {view === "tables" ? (
+        <Button
           type="button"
-          className="px-2.5 py-1 text-[11px] border border-[var(--border)] bg-[var(--card)] text-[var(--muted)] cursor-pointer hover:text-[var(--txt)] hover:bg-[var(--border)]/30"
-          onClick={async () => {
-            const status = await loadStatus();
-            if (status?.connected) {
-              await loadTables();
-            }
-          }}
+          variant="outline"
+          onClick={() => setSidebarCollapsed((current) => !current)}
         >
-          Refresh
-        </button>
-      </div>
+          {sidebarCollapsed ? "Show list" : "Hide list"}
+        </Button>
+      ) : null}
+      <Button
+        type="button"
+        variant="outline"
+        onClick={async () => {
+          const status = await loadStatus();
+          if (status?.connected) {
+            await loadTables();
+          }
+        }}
+      >
+        Refresh
+      </Button>
+    </div>
+  );
+
+  return (
+    <SectionShell
+      title={view === "tables" ? "Database" : "SQL editor"}
+      description={
+        dbStatus?.connected
+          ? `${dbStatus.provider} · ${dbStatus.tableCount} tables indexed`
+          : "Browse local tables and query results."
+      }
+      toolbar={toolbar}
+      className="h-full"
+      contentClassName="flex min-h-0 flex-1 flex-col gap-4"
+    >
 
       {dbStatus && !dbStatus.connected && (
-        <div className="p-3 border border-[var(--border)] bg-[var(--card)] text-[var(--muted)] text-xs mb-3">
-          <p className="m-0 mb-1 font-medium text-[var(--txt)]">
-            Database not available
-          </p>
-          <p className="m-0">
-            The database viewer requires a local agent with a database
-            connection. If you're running in cloud mode, the database is managed
-            remotely.
-          </p>
-        </div>
+        <SectionEmptyState
+          className="mb-3"
+          title="Database not available"
+          description="This browser needs a local agent with an attached database connection. In cloud mode the data layer is managed remotely."
+          actionLabel="Refresh"
+          onAction={() => {
+            void loadStatus();
+          }}
+        />
       )}
 
       {errorMessage && (
-        <div className="p-2.5 border border-[var(--danger)] text-[var(--danger)] text-xs mb-3 flex items-center justify-between">
-          <span>{errorMessage}</span>
-          <button
-            type="button"
-            className="text-[var(--danger)] opacity-60 hover:opacity-100 bg-transparent border-0 cursor-pointer text-sm"
-            onClick={() => setErrorMessage("")}
-            aria-label="Dismiss database error"
-          >
-            <CloseIcon className="h-3.5 w-3.5" />
-          </button>
-        </div>
+        <SectionErrorState
+          className="mb-3"
+          title="Database action failed"
+          description="The last database request did not complete successfully."
+          actionLabel="Dismiss"
+          onAction={() => setErrorMessage("")}
+          details={errorMessage}
+        />
       )}
 
       {view === "tables" ? (
-        /* ── Table Editor ──────────────────────────────────────── */
-        <div className="flex flex-1 min-h-0 gap-0">
-          {/* Sidebar */}
-          <div
-            className={`flex-shrink-0 border-r border-[var(--border)] bg-[var(--bg)] transition-all overflow-hidden ${sidebarCollapsed ? "w-0 border-r-0" : "w-[200px]"}`}
+        <div className="grid flex-1 min-h-0 gap-4 xl:grid-cols-[19rem_minmax(0,1fr)]">
+          <SectionShell
+            title="Table list"
+            description="Choose a table to inspect."
+            className={sidebarCollapsed ? "hidden xl:block xl:min-w-0 xl:opacity-0" : ""}
+            contentClassName="gap-3"
           >
-            <div className="p-2">
-              <div className="flex items-center gap-1 mb-2">
-                <input
+              <div className="flex items-center gap-1">
+                <Input
                   type="text"
                   placeholder="Filter tables..."
                   value={sidebarSearch}
                   onChange={(e) => setSidebarSearch(e.target.value)}
-                  className="flex-1 px-2 py-1 border border-[var(--border)] bg-[var(--card)] text-[var(--txt)] text-[11px] min-w-0"
+                  className="flex-1 min-w-0 text-[11px]"
                 />
               </div>
-              <div className="text-[9px] text-[var(--muted)] uppercase font-bold tracking-wider mb-1 px-1">
-                Tables ({filteredTables.length})
-              </div>
               {loading && tables.length === 0 ? (
-                <div className="text-[11px] text-[var(--muted)] px-1">
-                  Loading...
-                </div>
+                <SectionLoadingState
+                  title="Loading tables"
+                  description="Pulling the latest schema and row counts."
+                  className="border-none bg-transparent shadow-none"
+                />
               ) : (
-                <div className="flex flex-col gap-px max-h-[calc(100vh-280px)] overflow-auto">
+                <div className="flex flex-col gap-2 max-h-[calc(100vh-24rem)] overflow-auto">
                   {filteredTables.map((t) => (
                     <button
                       type="button"
                       key={t.name}
                       onClick={() => handleSelectTable(t.name)}
-                      className={`flex items-center justify-between px-2 py-1.5 text-[11px] text-left border-0 cursor-pointer transition-colors rounded-sm w-full ${
+                      className={`flex w-full items-center justify-between rounded-2xl border px-3 py-2.5 text-left text-sm transition-colors ${
                         selectedTable === t.name
-                          ? "bg-[var(--accent)]/15 text-[var(--accent)] font-medium"
-                          : "bg-transparent text-[var(--txt)] hover:bg-[var(--border)]/30"
+                          ? "border-white/18 bg-white/[0.1] text-white"
+                          : "border-white/8 bg-white/[0.02] text-[var(--txt)] hover:border-white/14 hover:bg-white/[0.05]"
                       }`}
                     >
                       <span className="truncate">{t.name}</span>
-                      <span className="text-[9px] text-[var(--muted)] tabular-nums flex-shrink-0 ml-1">
+                      <span className="ml-2 flex-shrink-0 text-[11px] tabular-nums text-[var(--muted)]">
                         {t.rowCount}
                       </span>
                     </button>
                   ))}
                 </div>
               )}
-            </div>
-          </div>
+          </SectionShell>
 
-          {/* Toggle sidebar */}
-          <button
-            type="button"
-            className="flex-shrink-0 w-4 flex items-center justify-center bg-transparent border-0 cursor-pointer text-[var(--muted)] hover:text-[var(--txt)] hover:bg-[var(--border)]/20"
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
-            aria-label={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+          <SectionShell
+            title={selectedTable || "Table data"}
+            description={
+              selectedTable
+                ? "Browse rows, sort columns, and inspect values."
+                : "Select a table to browse rows."
+            }
+            toolbar={
+              selectedTable && columnMeta.size > 0 ? (
+                <span className="text-sm text-white/55">{columnMeta.size} columns</span>
+              ) : undefined
+            }
+            className="min-h-0"
+            contentClassName="flex min-h-0 flex-1 flex-col gap-4"
           >
-            {sidebarCollapsed ? (
-              <ChevronRightIcon className="h-3.5 w-3.5" />
-            ) : (
-              <ChevronLeftIcon className="h-3.5 w-3.5" />
-            )}
-          </button>
-
-          {/* Main grid area */}
-          <div className="flex-1 min-w-0 flex flex-col">
             {!selectedTable ? (
               <div className="flex-1 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="text-[var(--muted)] text-sm mb-1">
-                    Select a table
-                  </div>
-                  <div className="text-[var(--muted)] text-[11px] opacity-60">
-                    Choose a table from the sidebar to browse its data
-                  </div>
-                </div>
+                <SectionEmptyState
+                  title="Select a table"
+                  description="Pick a table from the list to inspect rows, columns, and values."
+                  className="max-w-md border-none bg-transparent shadow-none"
+                />
               </div>
             ) : loading && !tableData ? (
-              <div className="flex-1 flex items-center justify-center text-[var(--muted)] text-sm italic">
-                Loading...
+              <div className="flex-1 flex items-center justify-center">
+                <SectionLoadingState
+                  title="Loading table"
+                  description="Fetching rows and schema for the selected table."
+                  className="max-w-md border-none bg-transparent shadow-none"
+                />
               </div>
             ) : tableData ? (
               <>
-                {/* Table header bar */}
-                <div className="flex items-center gap-2 px-1 py-1.5 text-[11px]">
-                  <span className="text-[var(--txt)] font-semibold">
-                    {selectedTable}
-                  </span>
-                  {columnMeta.size > 0 && (
-                    <span className="text-[var(--muted)]">
-                      ({columnMeta.size} columns)
-                    </span>
-                  )}
-                </div>
-
-                {/* Data grid */}
                 <div className="flex-1 min-h-0">
                   {tableData.rows.length === 0 ? (
-                    <div className="flex items-center justify-center h-full border border-[var(--border)] bg-[var(--card)]">
-                      <div className="text-[var(--muted)] text-sm">
-                        Table is empty
-                      </div>
+                    <div className="flex items-center justify-center h-full">
+                      <SectionEmptyState
+                        title="Table is empty"
+                        description="This table has no rows yet."
+                        className="max-w-md border-none bg-transparent shadow-none"
+                      />
                     </div>
                   ) : (
                     <ResultsGrid
@@ -680,11 +664,15 @@ export function DatabaseView() {
                 />
               </>
             ) : null}
-          </div>
+          </SectionShell>
         </div>
       ) : (
-        /* ── SQL Editor ────────────────────────────────────────── */
-        <div className="flex flex-col flex-1 min-h-0 gap-3">
+        <SectionShell
+          title="Query editor"
+          description="Run ad hoc SQL and inspect results."
+          className="flex-1"
+          contentClassName="flex min-h-0 flex-1 flex-col gap-4"
+        >
           {/* Editor area */}
           <div className="flex flex-col">
             <div className="relative">
@@ -699,19 +687,19 @@ export function DatabaseView() {
                 }}
                 placeholder="SELECT * FROM memories LIMIT 50;"
                 rows={6}
-                className="w-full px-3 py-2.5 border border-[var(--border)] bg-[var(--card)] text-[var(--txt)] text-[12px] font-mono resize-y leading-relaxed"
+                className="min-h-[10rem] w-full resize-y rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-[13px] font-mono leading-relaxed text-[var(--txt)]"
                 spellCheck={false}
               />
             </div>
             <div className="flex items-center gap-2 mt-2">
-              <button
+              <Button
                 type="button"
-                className="px-4 py-1.5 text-[11px] font-medium bg-[var(--accent)] text-[var(--accent-foreground)] border border-[var(--accent)] cursor-pointer hover:opacity-80 disabled:opacity-30 disabled:cursor-default transition-opacity"
+                variant="secondary"
                 disabled={queryLoading || !queryText.trim()}
                 onClick={runQuery}
               >
                 {queryLoading ? "Running..." : "Run"}
-              </button>
+              </Button>
               <span className="text-[10px] text-[var(--muted)]">
                 {navigator.platform.includes("Mac") ? "⌘" : "Ctrl"}+Enter
               </span>
@@ -727,15 +715,15 @@ export function DatabaseView() {
 
           {/* Query history dropdown */}
           {queryHistory.length > 0 && !queryResult && (
-            <div className="border border-[var(--border)] bg-[var(--card)]">
-              <div className="px-3 py-1.5 text-[9px] text-[var(--muted)] uppercase font-bold tracking-wider border-b border-[var(--border)]">
+            <div className="overflow-hidden rounded-2xl border border-white/8 bg-white/[0.03]">
+              <div className="px-3 py-2 text-[11px] text-[var(--muted)] border-b border-white/8">
                 Recent queries
               </div>
               {queryHistory.slice(0, 5).map((q) => (
                 <button
                   type="button"
                   key={q}
-                  className="w-full px-3 py-1.5 text-[11px] font-mono text-[var(--txt)] text-left bg-transparent border-0 border-b border-[var(--border)] cursor-pointer hover:bg-[var(--accent)]/5 truncate"
+                  className="w-full px-3 py-2 text-[11px] font-mono text-[var(--txt)] text-left bg-transparent border-0 border-b border-white/8 cursor-pointer hover:bg-[var(--accent)]/5 truncate"
                   onClick={() => setQueryText(q)}
                 >
                   {q}
@@ -756,17 +744,18 @@ export function DatabaseView() {
           )}
 
           {queryResult && queryResult.rows.length === 0 && (
-            <div className="flex items-center justify-center py-8 border border-[var(--border)] bg-[var(--card)] text-[var(--muted)] text-sm">
-              Query returned no rows
-            </div>
+            <SectionEmptyState
+              title="Query returned no rows"
+              description="Run another query or broaden the result set."
+            />
           )}
-        </div>
+        </SectionShell>
       )}
 
       {/* Cell inspect overlay */}
       {cellInspect !== null && (
         <CellPopover value={cellInspect} onClose={() => setCellInspect(null)} />
       )}
-    </div>
+    </SectionShell>
   );
 }

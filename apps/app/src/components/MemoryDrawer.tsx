@@ -15,8 +15,7 @@ export function MemoryDrawer({
       <DrawerShell
         icon={<MemoryIcon width="14" height="14" />}
         title="Memory"
-        description="Search memory, review ingest state, and open deeper knowledge tools without leaving the stage."
-        badge="Knowledge"
+        description="Search memory and ingest state."
         onClose={onClose}
       >
           <MemoryConsolePanel />

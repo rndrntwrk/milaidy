@@ -18,10 +18,11 @@ import {
   miladyControlSectionForTab,
 } from "./ControlStackModal.js";
 import { MiladyRailBubble } from "./MiladyRailBubble.js";
+import { SectionEmptyState } from "./SectionStates.js";
 import { Sheet } from "./ui/Sheet.js";
 import { Button } from "./ui/Button.js";
 import { Badge } from "./ui/Badge.js";
-import { ActivityIcon, MissionIcon } from "./ui/Icons.js";
+import { ActivityIcon, CloseIcon, MissionIcon } from "./ui/Icons.js";
 
 type ViewportMode = "mobile" | "tablet" | "desktop";
 
@@ -128,7 +129,7 @@ export function MiladyOsDashboard() {
   }, [collapseRailsSafe, dockSurface, hudSurface]);
 
   const renderDesktop = () => (
-    <div className="relative flex-1 overflow-hidden px-5 pb-24 pt-4">
+    <div className="relative flex-1 overflow-visible px-5 pb-24 pt-4">
       <div className="pro-streamer-stage relative h-full overflow-visible rounded-[34px] border border-white/8 bg-[#05070b] shadow-[0_22px_64px_rgba(0,0,0,0.34)]">
         <div className="absolute inset-0 rounded-[34px] bg-[radial-gradient(860px_420px_at_50%_18%,rgba(255,255,255,0.03),transparent_58%),linear-gradient(180deg,rgba(0,0,0,0.74),rgba(0,0,0,0.96))]" />
         <MiladyStatusStrip />
@@ -137,7 +138,7 @@ export function MiladyOsDashboard() {
         </div>
       </div>
 
-      <div className="absolute left-0 top-1/2 z-30 hidden -translate-x-1/2 -translate-y-1/2 xl:block">
+      <div className="absolute left-4 top-1/2 z-30 hidden -translate-y-1/2 xl:block">
         <MiladyRailBubble
           title="Action Log"
           icon={<ActivityIcon width="16" height="16" />}
@@ -153,7 +154,7 @@ export function MiladyOsDashboard() {
         />
       </div>
 
-      <div className="absolute right-0 top-1/2 z-30 hidden translate-x-1/2 -translate-y-1/2 xl:block">
+      <div className="absolute right-4 top-1/2 z-30 hidden -translate-y-1/2 xl:block">
         <MiladyRailBubble
           title="Mission Stack"
           icon={<MissionIcon width="16" height="16" />}
@@ -283,45 +284,73 @@ export function MiladyOsDashboard() {
 
       <Sheet
         open={leftRailState === "expanded"}
-        side={viewportMode === "mobile" ? "right" : "left"}
+        side={viewportMode === "desktop" ? "left" : "bottom"}
         onClose={collapseRails}
-        className="w-[min(24rem,92vw)]"
+        compact={viewportMode === "desktop"}
+        className={viewportMode === "desktop" ? "w-[min(18rem,92vw)]" : "h-[min(24rem,78vh)]"}
       >
-        <div className="flex h-full flex-col">
-          <div className="flex items-start justify-between gap-3 border-b border-white/8 px-4 py-4">
-            <div>
-              <div className="text-[11px] uppercase tracking-[0.2em] text-white/55">Action Log</div>
-              <div className="mt-1 text-sm text-white/85">{actionSummary}</div>
-            </div>
-            <Button variant="ghost" size="sm" className="rounded-full px-3" onClick={collapseRails}>
-              Close
+        <div className={`pro-streamer-summary-sheet flex min-h-0 flex-col ${viewportMode === "desktop" ? "max-h-[15rem]" : "h-full"}`}>
+          <div className="flex items-center justify-between gap-3 border-b border-white/8 px-4 py-3">
+            <div className="text-sm font-medium text-white/90">Action Log</div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full"
+              onClick={collapseRails}
+              aria-label="Close action log"
+            >
+              <CloseIcon className="h-4 w-4" />
             </Button>
           </div>
-          <div className="min-h-0 flex-1 overflow-hidden [&>*]:h-full [&>*]:rounded-none [&>*]:border-0 [&>*]:bg-transparent [&>*]:shadow-none">
-            <CognitiveTracePanel />
-          </div>
+          {safeAutonomousEvents.length === 0 ? (
+            <div className="px-4 pb-4 pt-4">
+              <SectionEmptyState
+                title="No public actions yet"
+                description="Public-safe activity summaries will appear here once the agent starts working."
+                className="pro-streamer-empty-compact border-none bg-transparent shadow-none"
+              />
+            </div>
+          ) : (
+            <div className={`min-h-0 ${viewportMode === "desktop" ? "overflow-y-auto" : "flex-1 overflow-hidden"}`}>
+              <CognitiveTracePanel embedded />
+            </div>
+          )}
         </div>
       </Sheet>
 
       <Sheet
         open={rightRailState === "expanded"}
-        side="right"
+        side={viewportMode === "desktop" ? "right" : "bottom"}
         onClose={collapseRails}
-        className="w-[min(24rem,92vw)]"
+        compact={viewportMode === "desktop"}
+        className={viewportMode === "desktop" ? "w-[min(18rem,92vw)]" : "h-[min(24rem,78vh)]"}
       >
-        <div className="flex h-full flex-col">
-          <div className="flex items-start justify-between gap-3 border-b border-white/8 px-4 py-4">
-            <div>
-              <div className="text-[11px] uppercase tracking-[0.2em] text-white/55">Mission Stack</div>
-              <div className="mt-1 text-sm text-white/85">{missionSummary}</div>
-            </div>
-            <Button variant="ghost" size="sm" className="rounded-full px-3" onClick={collapseRails}>
-              Close
+        <div className={`pro-streamer-summary-sheet flex min-h-0 flex-col ${viewportMode === "desktop" ? "max-h-[15rem]" : "h-full"}`}>
+          <div className="flex items-center justify-between gap-3 border-b border-white/8 px-4 py-3">
+            <div className="text-sm font-medium text-white/90">Mission Stack</div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full"
+              onClick={collapseRails}
+              aria-label="Close mission stack"
+            >
+              <CloseIcon className="h-4 w-4" />
             </Button>
           </div>
-          <div className="min-h-0 flex-1 overflow-hidden [&>*]:h-full [&>*]:rounded-none [&>*]:border-0 [&>*]:bg-transparent [&>*]:shadow-none">
-            <MissionQueuePanel />
-          </div>
+          {safeTriggers.length === 0 && !awaitingApproval ? (
+            <div className="px-4 pb-4 pt-4">
+              <SectionEmptyState
+                title="No queued interventions"
+                description="Approvals and scheduled routines will appear here when operator input is needed."
+                className="pro-streamer-empty-compact border-none bg-transparent shadow-none"
+              />
+            </div>
+          ) : (
+            <div className={`min-h-0 ${viewportMode === "desktop" ? "overflow-y-auto" : "flex-1 overflow-hidden"}`}>
+              <MissionQueuePanel embedded />
+            </div>
+          )}
         </div>
       </Sheet>
     </div>

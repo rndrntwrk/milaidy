@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useApp } from "../AppContext.js";
 import { Badge } from "./ui/Badge.js";
-import { BroadcastIcon, ConnectionIcon } from "./ui/Icons.js";
+import { ConnectionIcon } from "./ui/Icons.js";
 
 function normalizeMode(raw: string | null | undefined): string {
   const value = (raw ?? "").toLowerCase();
@@ -50,28 +50,23 @@ export function MiladyStatusStrip() {
   const mode = normalizeMode(agentStatus?.runMode ?? agentStatus?.mode ?? agentStatus?.autonomyMode);
   const missionState = normalizeMissionState(agentStatus?.state, chatSending);
   const model = agentStatus?.model || "unknown";
+  const liveChannels = channelBadges.filter((badge) => badge.state === "live");
+  const showMode = mode !== "chat";
+  const showMissionState = missionState !== "idle";
+  const showModel = model && model !== "unknown";
 
   return (
-    <div className="pointer-events-none absolute left-3 right-3 top-3 z-30 flex flex-col gap-2 sm:left-4 sm:right-4 sm:top-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
-      <div className="pointer-events-auto inline-flex max-w-full items-center gap-2 overflow-x-auto rounded-full border border-white/10 bg-black/52 px-2.5 py-2 shadow-[0_10px_30px_rgba(0,0,0,0.24)] backdrop-blur-2xl sm:flex-wrap sm:px-3">
-        <Badge variant="accent">Pro Streamer</Badge>
-        <Badge variant={connected ? "success" : "danger"}>{connected ? "connected" : "offline"}</Badge>
-        <Badge variant="outline" className="hidden sm:inline-flex">
-          <BroadcastIcon className="h-3.5 w-3.5" />
-          broadcast
-        </Badge>
-      </div>
-
+    <div className="pointer-events-none absolute right-3 top-3 z-30 flex max-w-[calc(100%-1.5rem)] justify-end sm:right-4 sm:top-4">
       <div className="pointer-events-auto inline-flex max-w-full items-center gap-2 overflow-x-auto rounded-full border border-white/10 bg-black/52 px-2.5 py-2 shadow-[0_10px_30px_rgba(0,0,0,0.24)] backdrop-blur-2xl sm:flex-wrap sm:justify-end sm:px-3">
         <Badge variant={connected ? "success" : "danger"}>
           <ConnectionIcon className="h-3.5 w-3.5" />
           {connected ? "live" : "offline"}
         </Badge>
-        <Badge variant="outline" className="hidden md:inline-flex">{model}</Badge>
-        <Badge variant="outline">{mode}</Badge>
-        <Badge variant="outline">{missionState}</Badge>
-        {channelBadges.map((badge) => (
-          <Badge key={badge.label} variant={badge.variant} title={`${badge.label} ${badge.state}`} className="hidden lg:inline-flex">
+        {showModel ? <Badge variant="outline" className="hidden 2xl:inline-flex">{model}</Badge> : null}
+        {showMode ? <Badge variant="outline" className="hidden lg:inline-flex">{mode}</Badge> : null}
+        {showMissionState ? <Badge variant="outline">{missionState}</Badge> : null}
+        {liveChannels.slice(0, 2).map((badge) => (
+          <Badge key={badge.label} variant={badge.variant} title={`${badge.label} ${badge.state}`} className="hidden xl:inline-flex">
             {badge.label}
           </Badge>
         ))}

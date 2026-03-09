@@ -74,7 +74,7 @@ export function MiladyBootShell({
             <h2 className="text-white/85">Boot diagnostics</h2>
             <div className="mt-2 space-y-1">
               <div>Agent: {identityLabel}</div>
-              <div>Shell: Pro Streamer broadcast HUD</div>
+              <div>Shell: broadcast conversation HUD</div>
               <div>Status: {status ?? "standby"}</div>
             </div>
           </Card>

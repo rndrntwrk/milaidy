@@ -22,10 +22,10 @@ const variantClasses: Record<ButtonVariant, string> = {
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: "h-9 rounded-full px-3 text-[11px] uppercase tracking-[0.22em]",
-  md: "h-10 rounded-full px-4 text-[11px] uppercase tracking-[0.22em]",
-  lg: "h-11 rounded-full px-5 text-[12px] uppercase tracking-[0.24em]",
-  icon: "h-10 w-10 rounded-full p-0",
+  sm: "h-9 rounded-xl px-3 text-sm",
+  md: "h-10 rounded-xl px-4 text-sm",
+  lg: "h-11 rounded-xl px-5 text-sm",
+  icon: "h-10 w-10 rounded-xl p-0",
 };
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
