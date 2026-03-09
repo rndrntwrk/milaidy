@@ -16,7 +16,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import { getVrmPreviewUrl, useApp } from "../AppContext.js";
+import { getVrmPreviewUrl, getVrmUrl, useApp } from "../AppContext.js";
 import { ChatAvatar } from "./ChatAvatar.js";
 import { useVoiceChat } from "../hooks/useVoiceChat.js";
 import {
@@ -244,6 +244,7 @@ export const ChatView = memo(function ChatView() {
     droppedFiles,
     shareIngestNotice,
     selectedVrmIndex,
+    customVrmUrl,
   } = useApp();
 
   const messagesRef = useRef<HTMLDivElement>(null);
@@ -796,6 +797,26 @@ export const ChatView = memo(function ChatView() {
 
         if (stream555ControlAvailable) {
           try {
+            const normalizedCustomVrmUrl = customVrmUrl?.trim();
+            const canonicalAvatarRef = normalizedCustomVrmUrl
+              ? normalizedCustomVrmUrl
+              : selectedVrmIndex > 0
+                ? getVrmUrl(selectedVrmIndex)
+                : undefined;
+            // Milaidy owns avatar identity; stream only gets an explicit VRM handoff here
+            // so it does not silently substitute a stream-native fallback when one exists.
+            const avatarIdentity = canonicalAvatarRef
+              ? {
+                  sourceType: "upstream",
+                  sourceSystem: "milaidy",
+                  assetType: "vrm",
+                  assetRef: canonicalAvatarRef,
+                  voiceRef: null,
+                  rendererStrategy: "direct_vrm",
+                  fallbackAllowed: true,
+                  resolvedFallbackUsed: false,
+                }
+              : undefined;
             const goLivePlan = await executePlanWithRetry({
               plan: {
                 id: "quick-layer-go-live-stream555",
@@ -803,7 +824,13 @@ export const ChatView = memo(function ChatView() {
                   {
                     id: "go-live",
                     toolName: "STREAM555_GO_LIVE",
-                    params: { scene: "default" },
+                    params: {
+                      scene: "default",
+                      inputType: "avatar",
+                      ...(avatarIdentity
+                        ? { avatarIdentity: JSON.stringify(avatarIdentity) }
+                        : {}),
+                    },
                   },
                   {
                     id: "segment-bootstrap",
