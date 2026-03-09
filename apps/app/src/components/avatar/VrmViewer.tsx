@@ -19,10 +19,18 @@ export type VrmViewerProps = {
   isSpeaking?: boolean;
   onEngineState?: (state: VrmEngineState) => void;
   onEngineReady?: (engine: VrmEngine) => void;
+  onViewerError?: (error: Error) => void;
 };
 
 export function VrmViewer(props: VrmViewerProps) {
-  const { mouthOpen, isSpeaking, onEngineReady, onEngineState, vrmPath } =
+  const {
+    mouthOpen,
+    isSpeaking,
+    onEngineReady,
+    onEngineState,
+    onViewerError,
+    vrmPath,
+  } =
     props;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<VrmEngine | null>(null);
@@ -48,17 +56,31 @@ export function VrmViewer(props: VrmViewerProps) {
       engineRef.current = engine;
     }
 
-    engine.setup(canvas, () => {
-      engine.setMouthOpen(mouthOpenRef.current);
-      engine.setSpeaking(isSpeakingRef.current);
-      if (onEngineState && mountedRef.current) {
-        const now = performance.now();
-        if (now - lastStateEmitMsRef.current >= 250) {
-          lastStateEmitMsRef.current = now;
-          onEngineState(engine.getState());
+    try {
+      engine.setup(canvas, () => {
+        engine.setMouthOpen(mouthOpenRef.current);
+        engine.setSpeaking(isSpeakingRef.current);
+        if (onEngineState && mountedRef.current) {
+          const now = performance.now();
+          if (now - lastStateEmitMsRef.current >= 250) {
+            lastStateEmitMsRef.current = now;
+            onEngineState(engine.getState());
+          }
         }
+      });
+    } catch (err) {
+      const error =
+        err instanceof Error
+          ? err
+          : new Error("Failed to initialize avatar viewer");
+      console.warn("Failed to initialize VRM viewer:", error);
+      engine.dispose();
+      if (engineRef.current === engine) {
+        engineRef.current = null;
       }
-    });
+      onViewerError?.(error);
+      return;
+    }
 
     onEngineReady?.(engine);
 
@@ -85,7 +107,7 @@ export function VrmViewer(props: VrmViewerProps) {
         }
       }, 100);
     };
-  }, [onEngineReady, onEngineState]);
+  }, [onEngineReady, onEngineState, onViewerError]);
 
   // Load VRM when path changes
   useEffect(() => {

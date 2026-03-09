@@ -18,6 +18,11 @@ import React, {
   useState,
 } from "react";
 import { getByPath, setByPath } from "./config-catalog";
+import { Button } from "./ui/Button";
+import { Card } from "./ui/Card";
+import { Dialog } from "./ui/Dialog";
+import { Sheet } from "./ui/Sheet";
+import { ChevronRightIcon, CloseIcon } from "./ui/Icons";
 import type {
   AuthState,
   CondExpr,
@@ -1351,12 +1356,10 @@ const AccordionComponent: ComponentFn = (props) => {
             className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold cursor-pointer hover:bg-[var(--bg-hover)]"
             onClick={() => toggle(i)}
           >
-            <span
-              className="text-[10px] transition-transform"
+            <ChevronRightIcon
+              className="h-3.5 w-3.5 transition-transform"
               style={{ transform: openSet.has(i) ? "rotate(90deg)" : "none" }}
-            >
-              &#9654;
-            </span>
+            />
             {item.title}
           </button>
           {openSet.has(i) && (
@@ -1376,43 +1379,38 @@ const DialogComponent: ComponentFn = (props, children, ctx) => {
     if (openPath) ctx.setState(openPath, false);
   };
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) close();
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          close();
-        }
-      }}
-      role="dialog"
-      aria-modal="true"
+    <Dialog
+      open={isOpen}
+      onClose={close}
+      className="max-w-md bg-[#07090e]/96"
+      ariaLabelledBy={
+        props.title ? `ui-renderer-dialog-${String(props.title)}` : undefined
+      }
     >
-      <div className="w-full max-w-md border border-[var(--border)] bg-[var(--card)] p-5 shadow-lg">
-        <div className="flex items-center justify-between mb-3">
+      <Card className="w-full max-w-md border-white/12 bg-[#07090e]/96 p-5 shadow-[0_24px_72px_rgba(0,0,0,0.36)]" role="dialog" aria-modal="true">
+        <div className="mb-3 flex items-center justify-between">
           <div>
             {props.title ? (
-              <div className="font-bold text-sm">{String(props.title)}</div>
+              <div
+                id={`ui-renderer-dialog-${String(props.title)}`}
+                className="text-sm font-bold text-white"
+              >
+                {String(props.title)}
+              </div>
             ) : null}
             {props.description ? (
-              <div className="text-xs text-[var(--muted)] mt-0.5">
+              <div className="mt-0.5 text-xs text-white/58">
                 {String(props.description)}
               </div>
             ) : null}
           </div>
-          <button
-            type="button"
-            className="text-[var(--muted)] hover:text-[var(--text)] text-lg leading-none px-1 cursor-pointer"
-            onClick={close}
-          >
-            &times;
-          </button>
+          <Button type="button" variant="ghost" size="icon" className="rounded-full" onClick={close} aria-label={props.title ? `Close ${String(props.title)}` : "Close dialog"}>
+            <CloseIcon className="h-4 w-4" />
+          </Button>
         </div>
         {children}
-      </div>
-    </div>
+      </Card>
+    </Dialog>
   );
 };
 
@@ -1424,33 +1422,15 @@ const DrawerComponent: ComponentFn = (props, children, ctx) => {
     if (openPath) ctx.setState(openPath, false);
   };
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end bg-black/50"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) close();
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          close();
-        }
-      }}
-      role="dialog"
-      aria-modal="true"
+    <Sheet
+      open={true}
+      onClose={close}
+      side="bottom"
+      title={props.title ? String(props.title) : undefined}
+      description={props.description ? String(props.description) : undefined}
     >
-      <div className="w-full max-h-[80vh] border-t border-[var(--border)] bg-[var(--card)] p-5 shadow-lg overflow-y-auto animate-[slide-up_200ms_ease]">
-        <div className="w-10 h-1 bg-[var(--border)] mx-auto mb-3 rounded-full" />
-        {props.title ? (
-          <div className="font-bold text-sm">{String(props.title)}</div>
-        ) : null}
-        {props.description ? (
-          <div className="text-xs text-[var(--muted)] mt-0.5 mb-3">
-            {String(props.description)}
-          </div>
-        ) : null}
-        {children}
-      </div>
-    </div>
+      {children}
+    </Sheet>
   );
 };
 

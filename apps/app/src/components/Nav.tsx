@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { useApp } from "../AppContext";
 import { TAB_GROUPS } from "../navigation";
+import { CloseIcon, MenuIcon } from "./ui/Icons.js";
 
 interface NavProps {
   mobileLeft?: ReactNode;
@@ -34,22 +35,7 @@ export function Nav({ mobileLeft }: NavProps) {
             onClick={() => setMobileMenuOpen(true)}
             aria-label="Open navigation menu"
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
-            >
-              <title>Menu</title>
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <line x1="3" y1="12" x2="21" y2="12" />
-              <line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
+            <MenuIcon width="16" height="16" />
           </button>
         </div>
       </div>
@@ -90,7 +76,7 @@ export function Nav({ mobileLeft }: NavProps) {
               onClick={() => setMobileMenuOpen(false)}
               aria-label="Close navigation menu"
             >
-              &times;
+              <CloseIcon width="16" height="16" />
             </button>
           </div>
           <div className="p-3 overflow-y-auto">

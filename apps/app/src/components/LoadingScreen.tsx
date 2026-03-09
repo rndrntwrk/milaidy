@@ -1,46 +1,30 @@
 /**
- * Loading screen — ASCII "milady" logo with per-character dither fade.
- *
- * Each letter independently cycles through quantised opacity steps on its
- * own random schedule, producing a constantly shifting dither pattern that
- * resolves into the logo and dissolves again.
+ * Loading screen — ASCII Pro Streamer logo with per-character dither fade.
  */
 
 import { useEffect, useMemo, useState } from "react";
 import type { StartupPhase } from "../AppContext";
+import { MiladyBootShell } from "./MiladyBootShell.js";
 
-/* ── ASCII source ──────────────────────────────────────────────────── */
-
-const ASCII_LINES = [
-  "        miladym                        iladym      ",
-  "    iladymil                                ady    ",
-  "    mil                                         ad   ",
-  "ymi                                   ladymila     ",
-  "dym                                    ila dymila    ",
-  "dy       miladymil                     ady   milady   ",
-  "    miladymilad                     ymila dymilady  ",
-  "    mi    ladymila                   dymiladymil     ",
-  "adymiladymiladymi                  l  adymila d    ",
-  "ym   iladymiladymil                 ad ymilad  y    ",
-  "m  il  adymiladym  i                  l   ad   y     ",
-  "    mi  ladymila  dy                    mi           ",
-  "    la          dy                         mil      ",
-  "        ad      ym                                   ",
-  "        iladym",
+const BOOT_ART = [
+  "PPPPP   RRRRR    OOOOO",
+  "P   PP  R   RR  OO   OO",
+  "PPPPP   RRRRR   OO   OO",
+  "P       R  RR   OO   OO",
+  "P       R   RR   OOOOO ",
+  "",
+  " SSSSS TTTTT RRRRR  EEEEE   AAA   MM   MM EEEEE RRRRR ",
+  "SS       T   R   RR E      A   A  MMM MMM E     R   RR",
+  " SSSS    T   RRRRR  EEEE   AAAAA  MM M MM EEEE  RRRRR ",
+  "    SS   T   R  RR  E      A   A  MM   MM E     R  RR ",
+  "SSSSS    T   R   RR EEEEE  A   A  MM   MM EEEEE R   RR",
 ];
-
-/* ── Types ─────────────────────────────────────────────────────────── */
 
 interface CharCell {
   char: string;
-  isLetter: boolean;
-  /** Random animation-delay in seconds */
   delay: number;
-  /** Random animation-duration in seconds */
   duration: number;
 }
-
-/* ── Component ─────────────────────────────────────────────────────── */
 
 const PHASE_LABELS: Record<StartupPhase, string> = {
   "starting-backend": "starting backend",
@@ -74,72 +58,60 @@ export function LoadingScreen({
       ? Math.max(0, Math.floor(elapsedSeconds))
       : runtimeElapsedSeconds;
 
-  /* Build the character grid once — each non-space character gets its
-     own random timing so the dither pattern is never uniform. */
-  const grid = useMemo<CharCell[][]>(
+  const artGrid = useMemo<CharCell[][]>(
     () =>
-      ASCII_LINES.map((line) =>
+      BOOT_ART.map((line) =>
         [...line].map((char) => ({
           char,
-          isLetter: char !== " ",
-          delay: Math.random() * 5,
-          duration: 1.4 + Math.random() * 3,
+          delay: Math.random() * 1.6,
+          duration: 1.4 + Math.random() * 1.4,
         })),
       ),
     [],
   );
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen bg-bg gap-8 relative overflow-hidden">
-      {/* HUD Scanlines */}
-      <div className="absolute inset-0 pointer-events-none opacity-[0.02] bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(0,10,0,0.06),rgba(0,10,0,0.02),rgba(0,10,0,0.06))] bg-[length:100%_4px,3px_100%] z-0" />
-
-      <div
-        className="relative z-10"
-        aria-live="polite"
-        style={{
-          fontFamily: "var(--mono)",
-          fontSize: "clamp(7px, 1.4vw, 14px)",
-          lineHeight: 1.35,
-          color: "var(--accent)",
-          userSelect: "none",
-          textShadow: "0 0 5px var(--accent)",
-        }}
-      >
-        {grid.map((line) => (
-          <div
-            key={line.map((c) => c.char).join("")}
-            style={{ whiteSpace: "pre" }}
-          >
-            {line.map((c) =>
-              c.isLetter ? (
+    <MiladyBootShell
+      title="PRO STREAMER"
+      subtitle="Broadcast shell online"
+      status={`${PHASE_LABELS[phase]} (${displayedElapsedSeconds}s)`}
+      identityLabel="rasp"
+      panelClassName="overflow-hidden"
+    >
+      <div className="flex flex-col items-center justify-center gap-6 px-4 py-10 sm:px-8 sm:py-14">
+        <pre
+          className="m-0 overflow-x-auto text-center"
+          aria-live="polite"
+          style={{
+            fontFamily: "var(--mono)",
+            fontSize: "clamp(14px, 2.1vw, 26px)",
+            lineHeight: 1.08,
+            color: "var(--accent)",
+            userSelect: "none",
+          }}
+        >
+          {artGrid.map((line, lineIndex) => (
+            <div key={`boot-line-${lineIndex}`}>
+              {line.map((cell, charIndex) => (
                 <span
-                  key={`${c.char}-${c.delay.toFixed(3)}-${c.duration.toFixed(3)}`}
-                  className="dither-char"
+                  key={`boot-char-${lineIndex}-${charIndex}`}
+                  className={cell.char === " " ? "inline-block" : "dither-char inline-block"}
                   style={{
-                    animationDelay: `${c.delay.toFixed(2)}s`,
-                    animationDuration: `${c.duration.toFixed(2)}s`,
+                    animationDelay: `${(charIndex * 0.03 + lineIndex * 0.12).toFixed(2)}s`,
+                    animationDuration: `${cell.duration.toFixed(2)}s`,
+                    width: cell.char === " " ? "0.6ch" : undefined,
                   }}
                 >
-                  {c.char}
+                  {cell.char}
                 </span>
-              ) : (
-                <span
-                  key={`${c.char}-${c.delay.toFixed(3)}-${c.duration.toFixed(3)}`}
-                >
-                  {c.char}
-                </span>
-              ),
-            )}
-          </div>
-        ))}
+              ))}
+            </div>
+          ))}
+        </pre>
+        <div className="rounded-full border border-accent/30 bg-accent/10 px-4 py-2 font-mono text-xs uppercase tracking-[0.28em] text-accent/80">
+          [{PHASE_LABELS[phase]} ({displayedElapsedSeconds}s)]
+        </div>
       </div>
-      <div
-        className="relative z-10 text-accent/70 text-xs tracking-widest uppercase"
-        style={{ fontFamily: "var(--mono)" }}
-      >
-        [{PHASE_LABELS[phase]} ... {displayedElapsedSeconds}s]
-      </div>
-    </div>
+    </MiladyBootShell>
   );
 }

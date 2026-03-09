@@ -1,31 +1,43 @@
-import React from 'react';
-import { SettingsView } from './SettingsView.js';
-import { useApp } from '../AppContext.js';
-import { SciFiPanel } from './ui/SciFiPanel.js';
-import { GlowingText } from './ui/GlowingText.js';
+import React from "react";
+import { SettingsView } from "./SettingsView.js";
+import { useApp } from "../AppContext.js";
+import { Dialog } from "./ui/Dialog.js";
+import { CloseIcon, SettingsIcon } from "./ui/Icons.js";
 
 export function SettingsModalWrapper() {
-    const { tab, setTab } = useApp();
-    if (tab !== 'settings') return null;
+  const { tab, setTab } = useApp();
+  if (tab !== "settings") return null;
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/90 backdrop-blur-sm font-body text-txt">
-            {/* Background click overlay */}
-            <div className="absolute inset-0 cursor-pointer" onClick={() => setTab('chat')} />
-
-            <SciFiPanel className="relative w-full max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden shadow-[0_0_50px_var(--accent-subtle)] bg-card border-[var(--accent)] z-10" glowColor="var(--accent)">
-                <div className="p-4 border-b border-accent/30 flex justify-between items-center bg-accent/5 shrink-0 relative z-20">
-                    <GlowingText className="text-xl tracking-widest text-accent font-bold uppercase">SYSTEM PREFERENCES</GlowingText>
-                    <button onClick={() => setTab('chat')} className="text-muted hover:text-accent transition-colors p-1" aria-label="Close settings">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
-                    </button>
-                </div>
-                <div className="flex-1 overflow-y-auto relative z-10 bg-bg">
-                    <div className="p-6">
-                        <SettingsView />
-                    </div>
-                </div>
-            </SciFiPanel>
+  return (
+    <Dialog open={tab === "settings"} onClose={() => setTab("chat")} ariaLabelledBy="settings-modal-title">
+      <div className="w-[min(72rem,96vw)] max-h-[90vh] overflow-hidden rounded-[28px] border border-white/10 bg-[rgba(10,10,12,0.94)] text-white shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-white/80">
+              <SettingsIcon width="18" height="18" />
+            </div>
+            <div>
+              <div id="settings-modal-title" className="text-sm font-semibold uppercase tracking-[0.22em] text-white/88">
+                System Preferences
+              </div>
+              <div className="mt-1 text-xs text-white/48">
+                Unified settings surface for the conversation workspace.
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setTab("chat")}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/58 transition-colors hover:border-white/18 hover:bg-white/[0.08] hover:text-white"
+            aria-label="Close settings"
+          >
+            <CloseIcon width="16" height="16" />
+          </button>
         </div>
-    );
+        <div className="max-h-[calc(90vh-4.5rem)] overflow-y-auto px-5 py-5">
+          <SettingsView />
+        </div>
+      </div>
+    </Dialog>
+  );
 }

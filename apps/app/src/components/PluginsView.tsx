@@ -12,6 +12,50 @@ import type { ConfigUiHint } from "../types";
 import type { JsonSchemaObject } from "./config-catalog";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer";
 import { autoLabel } from "./shared/labels";
+import { Badge } from "./ui/Badge.js";
+import { Button } from "./ui/Button.js";
+import { Card } from "./ui/Card.js";
+import { Dialog } from "./ui/Dialog.js";
+import { Input } from "./ui/Input.js";
+import { ScrollArea } from "./ui/ScrollArea.js";
+import {
+  ActivityIcon,
+  AgentIcon,
+  AudioIcon,
+  BrainIcon,
+  BroadcastIcon,
+  BrowserIcon,
+  CloudIcon,
+  CodeIcon,
+  ConnectionIcon,
+  CreditIcon,
+  DatabaseIcon,
+  DocumentIcon,
+  EyeIcon,
+  FacebookIcon,
+  GripVerticalIcon,
+  KickIcon,
+  MemoryIcon,
+  MicIcon,
+  MissionIcon,
+  MonitorIcon,
+  PlayIcon,
+  PumpFunIcon,
+  SettingsIcon,
+  SparkIcon,
+  StackIcon,
+  TerminalIcon,
+  TwitchIcon,
+  VaultIcon,
+  WalletIcon,
+  LightningIcon,
+  LockIcon,
+  XBrandIcon,
+  ChevronRightIcon,
+  CloseIcon,
+  PlusIcon,
+  SearchIcon,
+} from "./ui/Icons";
 import { WhatsAppQrOverlay } from "./WhatsAppQrOverlay";
 
 const STREAM555_PRIMARY_PLUGIN_IDS = new Set([
@@ -74,7 +118,6 @@ function isArcade555LegacyPlugin(pluginId: string): boolean {
 type Stream555DestinationSpec = {
   id: string;
   label: string;
-  icon: string;
   urlKey: string;
   streamKeyKey: string;
   enabledKey: string;
@@ -84,7 +127,6 @@ const STREAM555_DESTINATION_SPECS: Stream555DestinationSpec[] = [
   {
     id: "pumpfun",
     label: "Pump.fun",
-    icon: "🟠",
     urlKey: "STREAM555_DEST_PUMPFUN_RTMP_URL",
     streamKeyKey: "STREAM555_DEST_PUMPFUN_STREAM_KEY",
     enabledKey: "STREAM555_DEST_PUMPFUN_ENABLED",
@@ -92,7 +134,6 @@ const STREAM555_DESTINATION_SPECS: Stream555DestinationSpec[] = [
   {
     id: "x",
     label: "X",
-    icon: "✖️",
     urlKey: "STREAM555_DEST_X_RTMP_URL",
     streamKeyKey: "STREAM555_DEST_X_STREAM_KEY",
     enabledKey: "STREAM555_DEST_X_ENABLED",
@@ -100,7 +141,6 @@ const STREAM555_DESTINATION_SPECS: Stream555DestinationSpec[] = [
   {
     id: "twitch",
     label: "Twitch",
-    icon: "🟣",
     urlKey: "STREAM555_DEST_TWITCH_RTMP_URL",
     streamKeyKey: "STREAM555_DEST_TWITCH_STREAM_KEY",
     enabledKey: "STREAM555_DEST_TWITCH_ENABLED",
@@ -108,7 +148,6 @@ const STREAM555_DESTINATION_SPECS: Stream555DestinationSpec[] = [
   {
     id: "kick",
     label: "Kick",
-    icon: "🟢",
     urlKey: "STREAM555_DEST_KICK_RTMP_URL",
     streamKeyKey: "STREAM555_DEST_KICK_STREAM_KEY",
     enabledKey: "STREAM555_DEST_KICK_ENABLED",
@@ -116,7 +155,6 @@ const STREAM555_DESTINATION_SPECS: Stream555DestinationSpec[] = [
   {
     id: "youtube",
     label: "YouTube",
-    icon: "🔴",
     urlKey: "STREAM555_DEST_YOUTUBE_RTMP_URL",
     streamKeyKey: "STREAM555_DEST_YOUTUBE_STREAM_KEY",
     enabledKey: "STREAM555_DEST_YOUTUBE_ENABLED",
@@ -124,7 +162,6 @@ const STREAM555_DESTINATION_SPECS: Stream555DestinationSpec[] = [
   {
     id: "facebook",
     label: "Facebook",
-    icon: "🔵",
     urlKey: "STREAM555_DEST_FACEBOOK_RTMP_URL",
     streamKeyKey: "STREAM555_DEST_FACEBOOK_STREAM_KEY",
     enabledKey: "STREAM555_DEST_FACEBOOK_ENABLED",
@@ -132,7 +169,6 @@ const STREAM555_DESTINATION_SPECS: Stream555DestinationSpec[] = [
   {
     id: "custom",
     label: "Custom",
-    icon: "🧩",
     urlKey: "STREAM555_DEST_CUSTOM_RTMP_URL",
     streamKeyKey: "STREAM555_DEST_CUSTOM_STREAM_KEY",
     enabledKey: "STREAM555_DEST_CUSTOM_ENABLED",
@@ -157,7 +193,6 @@ const STREAM555_DESTINATION_ORDER_MAP = new Map<string, number>(
 type Stream555DestinationStatus = {
   id: string;
   label: string;
-  icon: string;
   enabled: boolean;
   streamKeySet: boolean;
   streamKeySuffix: string | null;
@@ -216,6 +251,25 @@ function parseBoolish(value: unknown): boolean {
     normalized === "on" ||
     normalized === "enabled"
   );
+}
+
+function stream555DestinationIcon(specId: string) {
+  switch (specId) {
+    case "pumpfun":
+      return PumpFunIcon;
+    case "x":
+      return XBrandIcon;
+    case "twitch":
+      return TwitchIcon;
+    case "kick":
+      return KickIcon;
+    case "youtube":
+      return PlayIcon;
+    case "facebook":
+      return FacebookIcon;
+    default:
+      return StackIcon;
+  }
 }
 
 function asPluginUiSchema(plugin: PluginInfo): PluginUiSchema | null {
@@ -358,7 +412,6 @@ function buildStream555StatusSummary(
     return {
       id: spec.id,
       label: spec.label,
-      icon: spec.icon,
       enabled,
       streamKeySet,
       streamKeySuffix: maskSuffix(streamKeyParam?.currentValue),
@@ -702,39 +755,49 @@ function Stream555ControlActionsPanel({
         : (authenticateAction?.label ?? "Authenticate Wallet");
 
   return (
-    <div className="mb-3 border border-border bg-surface px-3 py-2">
-      <div className="text-[11px] uppercase tracking-wide text-muted mb-1.5">
+    <Card className="pro-streamer-provider-card mb-3 space-y-3 p-4">
+      <div className="pro-streamer-provider-header">
+        <div>
+          <div className="text-[11px] uppercase tracking-wide text-white/48">
         Operator Controls
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-white/64">
+            <span
+              className={`inline-block h-[7px] w-[7px] rounded-full ${authIndicatorClass}`}
+            />
+            <span>{authLabel}</span>
+            <span className="opacity-40">•</span>
+            <span>Source: {authSource}</span>
+            <span className="opacity-40">•</span>
+            <span>
+              {collectionLabel} ready: {summary.readyDestinations}/
+              {summary.enabledDestinations}
+            </span>
+          </div>
+        </div>
+        <Badge
+          variant={isAuthenticated ? "success" : "outline"}
+          className="rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.18em]"
+        >
+          {isAuthenticated ? "Connected" : "Awaiting auth"}
+        </Badge>
       </div>
-      <div className="flex items-center gap-2 text-[11px] text-muted flex-wrap">
-        <span
-          className={`inline-block w-[7px] h-[7px] rounded-full ${authIndicatorClass}`}
-        />
-        <span>{authLabel}</span>
-        <span className="opacity-60">•</span>
-        <span>Source: {authSource}</span>
-        <span className="opacity-60">•</span>
-        <span>
-          {collectionLabel} ready: {summary.readyDestinations}/
-          {summary.enabledDestinations}
-        </span>
-      </div>
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        <button
+      <div className="pro-streamer-provider-actions">
+        <Button
           type="button"
-          className={`px-2.5 py-1 text-[11px] border transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
-            isAuthenticated
-              ? "border-ok text-ok bg-transparent"
-              : "border-accent text-accent bg-transparent hover:bg-accent hover:text-accent-fg"
-          }`}
+          variant={isAuthenticated ? "secondary" : "default"}
+          size="sm"
+          className="rounded-xl"
           disabled={Boolean(busyAction) || isAuthenticated}
           onClick={() => void handleAuthenticateClick()}
         >
           {authButtonLabel}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="px-2.5 py-1 text-[11px] border border-border text-muted bg-transparent hover:border-accent hover:text-accent transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          variant="outline"
+          size="sm"
+          className="rounded-xl"
           disabled={Boolean(busyAction)}
           onClick={() =>
             void executeStreamAction(
@@ -749,10 +812,12 @@ function Stream555ControlActionsPanel({
           {busyAction === "verify-auth"
             ? "Verifying..."
             : (verifyAction?.label ?? "Verify Auth")}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="px-2.5 py-1 text-[11px] border border-destructive text-destructive bg-transparent hover:bg-destructive hover:text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          variant="outline"
+          size="sm"
+          className="rounded-xl border-danger/30 text-danger hover:border-danger/60 hover:bg-danger/12"
           disabled={Boolean(busyAction) || !isAuthenticated}
           onClick={() =>
             void executeStreamAction(
@@ -767,12 +832,14 @@ function Stream555ControlActionsPanel({
           {busyAction === "disconnect-auth"
             ? "Disconnecting..."
             : (disconnectAction?.label ?? "Disconnect Auth")}
-        </button>
+        </Button>
       </div>
-      <div className="mt-1 text-[10px] text-muted">
+      <div className="text-[10px] text-white/50">
         Agent action:{" "}
-        <span className="font-mono">STREAM555_AUTH_WALLET_LOGIN</span>. Use the
-        button for operator-driven authentication.
+        <span className="font-mono text-white/70">
+          STREAM555_AUTH_WALLET_LOGIN
+        </span>
+        . Use the operator action when a live wallet re-auth is required.
       </div>
       {lastNotice && (
         <div
@@ -784,52 +851,80 @@ function Stream555ControlActionsPanel({
         </div>
       )}
       {walletModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4">
-          <div className="w-full max-w-lg border border-border bg-card p-4 shadow-lg">
-            <div className="text-sm font-semibold text-txt mb-2">
-              Solana wallet required
+        <Dialog
+          open={walletModalOpen}
+          onClose={() => setWalletModalOpen(false)}
+          className="max-w-lg bg-[#07090e]/96"
+          ariaLabelledBy={`stream555-wallet-dialog-${plugin.id}`}
+        >
+          <Card className="pro-streamer-provider-modal w-full max-w-lg space-y-4 p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div
+                  id={`stream555-wallet-dialog-${plugin.id}`}
+                  className="text-sm font-semibold text-white"
+                >
+                  Solana wallet required
+                </div>
+                <div className="mt-1 text-xs leading-relaxed text-white/62">
+                  No Solana runtime wallet was detected for this agent. Provision
+                  a linked wallet via sw4p or authenticate using fallback if
+                  available.
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="rounded-full"
+                onClick={() => setWalletModalOpen(false)}
+                aria-label="Close wallet provisioning dialog"
+              >
+                <CloseIcon className="h-4 w-4" />
+              </Button>
             </div>
-            <div className="text-xs text-muted leading-relaxed">
-              No Solana runtime wallet was detected for this agent. Provision a
-              linked wallet via sw4p or authenticate using fallback if
-              available.
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2">
               {summary.walletProvisionAllowed && (
-                <button
+                <Button
                   type="button"
-                  className="px-2.5 py-1 text-[11px] border border-accent text-accent bg-transparent hover:bg-accent hover:text-accent-fg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  variant="default"
+                  size="sm"
+                  className="rounded-xl"
                   disabled={Boolean(busyAction)}
                   onClick={() => void handleProvisionAndAuthenticate()}
                 >
                   {busyAction === "wallet-provision"
                     ? "Provisioning..."
                     : (provisionWalletAction?.label ?? "Provision via sw4p")}
-                </button>
+                </Button>
               )}
               {summary.hasEvmWallet && (
-                <button
+                <Button
                   type="button"
-                  className="px-2.5 py-1 text-[11px] border border-border text-muted bg-transparent hover:border-accent hover:text-accent transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-xl"
                   disabled={Boolean(busyAction)}
                   onClick={() => void handleFallbackAuthenticate()}
                 >
                   Authenticate fallback wallet
-                </button>
+                </Button>
               )}
-              <button
+              <Button
                 type="button"
-                className="px-2.5 py-1 text-[11px] border border-border text-muted bg-transparent hover:bg-bg-hover transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                variant="ghost"
+                size="sm"
+                className="rounded-xl"
                 disabled={Boolean(busyAction)}
                 onClick={() => setWalletModalOpen(false)}
               >
                 Close
-              </button>
+              </Button>
             </div>
-          </div>
-        </div>
+          </Card>
+        </Dialog>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -974,46 +1069,47 @@ function Arcade555ControlActionsPanel({
   ] as const;
 
   return (
-    <div className="mb-3 border border-border bg-surface px-3 py-2">
-      <div className="text-[11px] uppercase tracking-wide text-muted mb-1.5">
+    <Card className="pro-streamer-provider-card mb-3 space-y-3 p-4">
+      <div className="text-[11px] uppercase tracking-wide text-white/48">
         Operator Controls
       </div>
-      <div className="flex items-center gap-2 text-[11px] text-muted flex-wrap">
+      <div className="flex items-center gap-2 text-[11px] text-white/64 flex-wrap">
         <span
           className={`inline-block w-[7px] h-[7px] rounded-full ${statusDotClass}`}
         />
         <span>{summary.primary}</span>
       </div>
       {summary.secondary ? (
-        <div className="mt-1 text-[10px] text-muted">{summary.secondary}</div>
+        <div className="text-[10px] text-white/52">{summary.secondary}</div>
       ) : null}
-      <div className="mt-2 flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-1.5">
         {progressIndicators.map((indicator) => (
-          <span
+          <Badge
             key={`${plugin.id}-${indicator.label}`}
-            className={`text-[10px] px-1.5 py-px border lowercase tracking-wide whitespace-nowrap ${
-              indicator.ready
-                ? "border-ok bg-[rgba(22,101,52,0.06)] text-ok"
-                : "border-warn bg-[rgba(234,179,8,0.06)] text-warn"
+            variant={indicator.ready ? "success" : "outline"}
+            className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] ${
+              indicator.ready ? "" : "border-warn/30 text-warn"
             }`}
           >
             {indicator.label}: {indicator.ready ? indicator.successText : indicator.pendingText}
-          </span>
+          </Badge>
         ))}
       </div>
-      <div className="mt-3 border border-border bg-card px-2.5 py-2">
-        <div className="text-[10px] uppercase tracking-wide text-muted mb-1.5">
+      <Card className="space-y-3 border-white/8 bg-white/[0.03] p-4">
+        <div className="text-[10px] uppercase tracking-wide text-white/48">
           Session
         </div>
-        <div className="text-[10px] text-muted mb-2">
+        <div className="text-[10px] text-white/52">
           {defaultSessionId
             ? `Default session ID: ${defaultSessionId}`
             : "No default session configured; bootstrap will create or resume automatically."}
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          <button
+        <div className="pro-streamer-provider-actions">
+          <Button
             type="button"
-            className="px-2.5 py-1 text-[11px] border border-border text-muted bg-transparent hover:border-accent hover:text-accent transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            variant="outline"
+            size="sm"
+            className="rounded-xl"
             disabled={Boolean(busyAction) || !plugin.isActive}
             onClick={() =>
               void executeArcadeAction(
@@ -1028,10 +1124,12 @@ function Arcade555ControlActionsPanel({
           {busyAction === "verify-auth"
             ? "Verifying..."
             : (verifyAction?.label ?? "Verify Auth")}
-        </button>
-          <button
+        </Button>
+          <Button
             type="button"
-            className="px-2.5 py-1 text-[11px] border border-accent text-accent bg-transparent hover:bg-accent hover:text-accent-fg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            variant="default"
+            size="sm"
+            className="rounded-xl"
             disabled={Boolean(busyAction) || !plugin.isActive}
             onClick={() =>
               void executeArcadeAction(
@@ -1046,29 +1144,31 @@ function Arcade555ControlActionsPanel({
           {busyAction === "bootstrap-session"
             ? "Bootstrapping..."
             : (bootstrapAction?.label ?? "Bootstrap Session")}
-        </button>
+        </Button>
         </div>
-      </div>
-      <div className="mt-3 border border-border bg-card px-2.5 py-2">
-        <div className="text-[10px] uppercase tracking-wide text-muted mb-1.5">
+      </Card>
+      <Card className="space-y-3 border-white/8 bg-white/[0.03] p-4">
+        <div className="text-[10px] uppercase tracking-wide text-white/48">
           Games
         </div>
-        <div className="mb-2">
-          <label className="block text-[10px] uppercase tracking-wide text-muted mb-1">
+        <div className="space-y-2">
+          <label className="block text-[10px] uppercase tracking-wide text-white/48">
             Game ID
           </label>
-          <input
+          <Input
             type="text"
-            className="w-full py-2 px-3 border border-border bg-bg text-[12px] transition-colors duration-150 focus:border-accent focus:outline-none placeholder:text-muted"
+            className="rounded-2xl"
             placeholder="e.g. knighthood"
             value={gameId}
             onChange={(event) => setGameId(event.target.value)}
           />
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          <button
+        <div className="pro-streamer-provider-actions">
+          <Button
             type="button"
-            className="px-2.5 py-1 text-[11px] border border-border text-muted bg-transparent hover:border-accent hover:text-accent transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            variant="outline"
+            size="sm"
+            className="rounded-xl"
             disabled={Boolean(busyAction) || !plugin.isActive}
             onClick={() =>
               void executeArcadeAction(
@@ -1083,10 +1183,12 @@ function Arcade555ControlActionsPanel({
           {busyAction === "catalog"
             ? "Fetching..."
             : (catalogAction?.label ?? "Fetch Catalog")}
-        </button>
-          <button
+        </Button>
+          <Button
             type="button"
-            className="px-2.5 py-1 text-[11px] border border-accent text-accent bg-transparent hover:bg-accent hover:text-accent-fg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            variant="default"
+            size="sm"
+            className="rounded-xl"
             disabled={Boolean(busyAction) || !plugin.isActive}
             onClick={() => {
               const requestedGameId = requireGameId();
@@ -1101,10 +1203,12 @@ function Arcade555ControlActionsPanel({
             }}
           >
           {busyAction === "play" ? "Starting..." : (playAction?.label ?? "Play")}
-        </button>
-          <button
+        </Button>
+          <Button
             type="button"
-            className="px-2.5 py-1 text-[11px] border border-border text-muted bg-transparent hover:border-accent hover:text-accent transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            variant="outline"
+            size="sm"
+            className="rounded-xl"
             disabled={Boolean(busyAction) || !plugin.isActive}
             onClick={() => {
               const requestedGameId = requireGameId();
@@ -1121,10 +1225,12 @@ function Arcade555ControlActionsPanel({
           {busyAction === "switch"
             ? "Switching..."
             : (switchAction?.label ?? "Switch")}
-        </button>
-          <button
+        </Button>
+          <Button
             type="button"
-            className="px-2.5 py-1 text-[11px] border border-destructive text-destructive bg-transparent hover:bg-destructive hover:text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            variant="outline"
+            size="sm"
+            className="rounded-xl border-danger/30 text-danger hover:border-danger/60 hover:bg-danger/12"
             disabled={Boolean(busyAction) || !plugin.isActive}
             onClick={() =>
               void executeArcadeAction(
@@ -1137,20 +1243,22 @@ function Arcade555ControlActionsPanel({
             }
           >
           {busyAction === "stop" ? "Stopping..." : (stopAction?.label ?? "Stop")}
-        </button>
+        </Button>
         </div>
-      </div>
-      <div className="mt-3 border border-border bg-card px-2.5 py-2">
-        <div className="text-[10px] uppercase tracking-wide text-muted mb-1.5">
+      </Card>
+      <Card className="space-y-3 border-white/8 bg-white/[0.03] p-4">
+        <div className="text-[10px] uppercase tracking-wide text-white/48">
           Progress
         </div>
-        <div className="text-[10px] text-muted mb-2">
+        <div className="text-[10px] text-white/52">
           Read progression surfaces without leaving the operator panel.
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          <button
+        <div className="pro-streamer-provider-actions">
+          <Button
             type="button"
-            className="px-2.5 py-1 text-[11px] border border-border text-muted bg-transparent hover:border-accent hover:text-accent transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            variant="outline"
+            size="sm"
+            className="rounded-xl"
             disabled={Boolean(busyAction) || !plugin.isActive}
             onClick={() =>
               void executeArcadeAction(
@@ -1167,10 +1275,12 @@ function Arcade555ControlActionsPanel({
           {busyAction === "leaderboard"
             ? "Loading..."
             : (leaderboardAction?.label ?? "Read Leaderboard")}
-        </button>
-          <button
+        </Button>
+          <Button
             type="button"
-            className="px-2.5 py-1 text-[11px] border border-border text-muted bg-transparent hover:border-accent hover:text-accent transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            variant="outline"
+            size="sm"
+            className="rounded-xl"
             disabled={Boolean(busyAction) || !plugin.isActive}
             onClick={() =>
               void executeArcadeAction(
@@ -1185,9 +1295,9 @@ function Arcade555ControlActionsPanel({
           {busyAction === "quests"
             ? "Loading..."
             : (questsAction?.label ?? "Read Quests")}
-        </button>
+        </Button>
         </div>
-      </div>
+      </Card>
       {lastNotice && (
         <div
           className={`mt-2 text-[10px] ${
@@ -1197,7 +1307,7 @@ function Arcade555ControlActionsPanel({
           {lastNotice.message}
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -1220,7 +1330,7 @@ const SHOWCASE_PLUGIN: PluginInfo = {
   validationErrors: [],
   validationWarnings: [],
   version: "1.0.0",
-  icon: "🧩",
+  icon: "",
   parameters: [
     // 1. text
     {
@@ -1630,7 +1740,7 @@ const SHOWCASE_PLUGIN: PluginInfo = {
       group: "File Paths",
       width: "full",
       type: "custom",
-      help: "Renderer: custom — placeholder for plugin-provided React components",
+      help: "Renderer: custom — plugin-provided React component surface",
       advanced: true,
     },
     RELEASE_NOTES: {
@@ -2078,7 +2188,7 @@ export function paramsToSchema(
 
       if (p.key === streamChannelSpec.enabledKey) {
         hint.type = "boolean";
-        hint.label = `${streamChannelSpec.icon} ${streamChannelSpec.label}`;
+        hint.label = `Destination · ${streamChannelSpec.label}`;
         hint.order = baseOrder;
         hint.help = `Enable simulcast to ${streamChannelSpec.label}.`;
       } else if (p.key === streamChannelSpec.urlKey) {
@@ -2258,117 +2368,147 @@ function PluginConfigForm({
 
 /* ── Default Icons ─────────────────────────────────────────────────── */
 
-const DEFAULT_ICONS: Record<string, string> = {
+type PluginIconComponent = typeof AgentIcon;
+
+const DEFAULT_ICONS: Record<string, PluginIconComponent> = {
   // AI Providers
-  anthropic: "🧠",
-  "google-genai": "✦",
-  groq: "⚡",
-  "local-ai": "🖥️",
-  ollama: "🦙",
-  openai: "◐",
-  openrouter: "🔀",
-  "vercel-ai-gateway": "▲",
-  xai: "𝕏",
+  anthropic: BrainIcon,
+  "google-genai": SparkIcon,
+  groq: LightningIcon,
+  "local-ai": MonitorIcon,
+  ollama: AgentIcon,
+  openai: AgentIcon,
+  openrouter: ConnectionIcon,
+  "vercel-ai-gateway": ConnectionIcon,
+  xai: SparkIcon,
   // Connectors — chat & social
-  discord: "💬",
-  telegram: "✈️",
-  slack: "💼",
-  twitter: "🐦",
-  whatsapp: "📱",
-  signal: "🔒",
-  imessage: "💭",
-  bluebubbles: "🫧",
-  bluesky: "🦋",
-  farcaster: "🟣",
-  instagram: "📸",
-  nostr: "🔑",
-  twitch: "🎮",
-  matrix: "🔗",
-  mattermost: "💠",
-  msteams: "🟦",
-  "google-chat": "💚",
-  feishu: "🪶",
-  line: "🟢",
-  "nextcloud-talk": "☁️",
-  tlon: "🌀",
-  zalo: "💙",
-  zalouser: "💙",
+  discord: BroadcastIcon,
+  telegram: BroadcastIcon,
+  slack: ConnectionIcon,
+  twitter: BroadcastIcon,
+  whatsapp: ConnectionIcon,
+  signal: LockIcon,
+  imessage: ConnectionIcon,
+  bluebubbles: ConnectionIcon,
+  bluesky: BroadcastIcon,
+  farcaster: BroadcastIcon,
+  instagram: EyeIcon,
+  nostr: LockIcon,
+  twitch: BroadcastIcon,
+  matrix: ConnectionIcon,
+  mattermost: ConnectionIcon,
+  msteams: ConnectionIcon,
+  "google-chat": ConnectionIcon,
+  feishu: ConnectionIcon,
+  line: ConnectionIcon,
+  "nextcloud-talk": CloudIcon,
+  tlon: BroadcastIcon,
+  zalo: ConnectionIcon,
+  zalouser: ConnectionIcon,
   // Features — voice & audio
-  "edge-tts": "🗣️",
-  elevenlabs: "🎙️",
-  tts: "🔊",
-  "simple-voice": "🎤",
-  "robot-voice": "🤖",
+  "edge-tts": AudioIcon,
+  elevenlabs: MicIcon,
+  tts: AudioIcon,
+  "simple-voice": MicIcon,
+  "robot-voice": AudioIcon,
   // Features — blockchain & finance
-  evm: "⛓️",
-  solana: "◎",
-  "auto-trader": "📈",
-  "lp-manager": "💹",
-  "social-alpha": "📊",
-  polymarket: "🎲",
-  x402: "💳",
-  trust: "🤝",
-  iq: "🧩",
+  evm: WalletIcon,
+  solana: WalletIcon,
+  "auto-trader": CreditIcon,
+  "lp-manager": CreditIcon,
+  "social-alpha": ActivityIcon,
+  polymarket: CreditIcon,
+  x402: CreditIcon,
+  trust: LockIcon,
+  iq: StackIcon,
   // Features — dev tools & infra
-  cli: "⌨️",
-  code: "💻",
-  shell: "🐚",
-  github: "🐙",
-  linear: "◻️",
-  mcp: "🔌",
-  browser: "🌐",
-  computeruse: "🖱️",
-  n8n: "⚙️",
-  webhooks: "🪝",
+  cli: TerminalIcon,
+  code: CodeIcon,
+  shell: TerminalIcon,
+  github: CodeIcon,
+  linear: StackIcon,
+  mcp: ConnectionIcon,
+  browser: BrowserIcon,
+  computeruse: MonitorIcon,
+  n8n: SettingsIcon,
+  webhooks: ConnectionIcon,
   // Features — knowledge & memory
-  knowledge: "📚",
-  memory: "🧬",
-  "local-embedding": "📐",
-  pdf: "📄",
-  "secrets-manager": "🔐",
-  scratchpad: "📝",
-  rlm: "🔄",
+  knowledge: MemoryIcon,
+  memory: MemoryIcon,
+  "local-embedding": MemoryIcon,
+  pdf: DocumentIcon,
+  "secrets-manager": VaultIcon,
+  scratchpad: DocumentIcon,
+  rlm: ActivityIcon,
   // Features — agents & orchestration
-  "agent-orchestrator": "🎯",
-  "agent-skills": "🛠️",
-  "plugin-manager": "📦",
-  "copilot-proxy": "🤝",
-  directives: "📋",
-  goals: "🎯",
-  "eliza-classic": "👩",
+  "agent-orchestrator": MissionIcon,
+  "agent-skills": AgentIcon,
+  "plugin-manager": StackIcon,
+  "copilot-proxy": ConnectionIcon,
+  directives: DocumentIcon,
+  goals: MissionIcon,
+  "eliza-classic": AgentIcon,
   // Features — media & content
-  vision: "👁️",
-  rss: "📡",
-  "gmail-watch": "📧",
-  prose: "✍️",
-  form: "📝",
+  vision: EyeIcon,
+  rss: BroadcastIcon,
+  "gmail-watch": ConnectionIcon,
+  prose: DocumentIcon,
+  form: DocumentIcon,
   // Features — scheduling & automation
-  cron: "⏰",
-  scheduling: "📅",
-  todo: "✅",
-  commands: "⌘",
+  cron: ActivityIcon,
+  scheduling: ActivityIcon,
+  todo: MissionIcon,
+  commands: TerminalIcon,
   // Features — storage & logging
-  "s3-storage": "🗄️",
-  "trajectory-logger": "📉",
-  experience: "🌟",
+  "s3-storage": DatabaseIcon,
+  "trajectory-logger": ActivityIcon,
+  experience: SparkIcon,
   // Features — gaming & misc
-  minecraft: "⛏️",
-  roblox: "🧱",
-  babylon: "🎮",
-  mysticism: "🔮",
-  personality: "🎭",
-  moltbook: "📖",
-  tee: "🔏",
-  blooio: "🟠",
-  acp: "🏗️",
-  elizacloud: "☁️",
-  twilio: "📞",
+  minecraft: BroadcastIcon,
+  roblox: BroadcastIcon,
+  babylon: BroadcastIcon,
+  mysticism: SparkIcon,
+  personality: AgentIcon,
+  moltbook: DocumentIcon,
+  tee: LockIcon,
+  blooio: ConnectionIcon,
+  acp: StackIcon,
+  elizacloud: CloudIcon,
+  twilio: ConnectionIcon,
 };
 
-/** Resolve display icon: explicit plugin.icon, fallback to default map, or null. */
-function resolveIcon(p: PluginInfo): string | null {
-  if (p.icon) return p.icon;
-  return DEFAULT_ICONS[p.id] ?? null;
+type ResolvedPluginIcon =
+  | { kind: "image"; src: string }
+  | { kind: "component"; Component: PluginIconComponent };
+
+function isImageIcon(value: string): boolean {
+  return /^(https?:|data:image|\/)/.test(value);
+}
+
+/** Resolve display icon: explicit remote/local image, semantic SVG fallback, or null. */
+function resolveIcon(p: PluginInfo): ResolvedPluginIcon | null {
+  if (p.icon && isImageIcon(p.icon)) {
+    return { kind: "image", src: p.icon };
+  }
+  const Component = (p.icon && DEFAULT_ICONS[p.icon]) || DEFAULT_ICONS[p.id];
+  return Component ? { kind: "component", Component } : null;
+}
+
+function renderPluginIcon(p: PluginInfo, className = "h-4 w-4 text-white/72") {
+  const icon = resolveIcon(p);
+  if (!icon) return null;
+  if (icon.kind === "image") {
+    return (
+      <img
+        src={icon.src}
+        alt=""
+        className="h-4 w-4 rounded-sm object-cover"
+        loading="lazy"
+      />
+    );
+  }
+  const Component = icon.Component;
+  return <Component className={className} />;
 }
 
 /* ── Sub-group Classification ──────────────────────────────────────── */
@@ -3003,7 +3143,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
         onDragOver={(e) => handleDragOver(e, p.id)}
         onDrop={(e) => handleDrop(e, p.id)}
         onDragEnd={handleDragEnd}
-        className={`border border-border bg-card transition-colors duration-150 flex flex-col ${enabledBorder} ${
+        className={`flex flex-col border border-white/10 bg-white/[0.03] transition-colors duration-150 ${enabledBorder} ${
           isOpen ? "ring-1 ring-accent" : "hover:border-accent/40"
         } ${isDragging ? "opacity-30" : ""} ${isDragOver ? "ring-2 ring-accent/60" : ""}`}
         data-plugin-id={p.id}
@@ -3011,26 +3151,14 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
         {/* Top: drag handle + icon + name + toggle */}
         <div className="flex items-center gap-2 px-3 pt-3 pb-1">
           <span
-            className="text-[10px] text-muted opacity-30 hover:opacity-70 cursor-grab active:cursor-grabbing shrink-0 select-none leading-none"
+            className="inline-flex h-7 w-7 shrink-0 select-none items-center justify-center rounded-full border border-white/8 bg-white/[0.03] text-white/56"
             title="Drag to reorder"
+            aria-hidden="true"
           >
-            &#x2807;
+            <GripVerticalIcon className="h-3 w-3" />
           </span>
           <span className="font-bold text-sm flex items-center gap-1.5 min-w-0 truncate flex-1">
-            {(() => {
-              const icon = resolveIcon(p);
-              if (!icon) return null;
-              return icon.startsWith("http") ? (
-                <img
-                  src={icon}
-                  alt=""
-                  className="w-4 h-4 rounded-sm object-cover"
-                  loading="lazy"
-                />
-              ) : (
-                <span className="text-sm">{icon}</span>
-              );
-            })()}
+            {renderPluginIcon(p)}
             {p.name}
           </span>
           {isShowcase ? (
@@ -3038,18 +3166,12 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
               DEMO
             </span>
           ) : (
-            <button
+            <Button
               type="button"
               data-plugin-toggle={p.id}
-              className={`text-[10px] font-bold tracking-wider px-2.5 py-[2px] border transition-colors duration-150 shrink-0 ${
-                p.enabled
-                  ? "bg-accent text-accent-fg border-accent"
-                  : "bg-transparent text-muted border-border hover:text-txt"
-              } ${
-                toggleDisabled
-                  ? "opacity-60 cursor-not-allowed"
-                  : "cursor-pointer"
-              }`}
+              variant={p.enabled ? "default" : "outline"}
+              size="sm"
+              className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] ${toggleDisabled ? "opacity-60" : ""}`}
               onClick={(e) => {
                 e.stopPropagation();
                 void handleTogglePlugin(p.id, !p.enabled);
@@ -3057,17 +3179,17 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
               disabled={toggleDisabled}
             >
               {isToggleBusy ? "APPLYING" : p.enabled ? "ON" : "OFF"}
-            </button>
+            </Button>
           )}
         </div>
 
         {/* Badges: category + version + loaded status */}
         <div className="flex items-center gap-1.5 px-3 pb-1.5">
-          <span className="text-[10px] px-1.5 py-px border border-border bg-surface text-muted lowercase tracking-wide whitespace-nowrap">
+          <span className="rounded-full border border-white/8 bg-white/[0.03] px-2 py-0.5 text-[10px] lowercase tracking-wide text-white/56 whitespace-nowrap">
             {categoryLabel}
           </span>
           {p.version && (
-            <span className="text-[10px] font-mono text-muted opacity-70">
+            <span className="text-[10px] font-mono text-white/42">
               v{p.version}
             </span>
           )}
@@ -3094,7 +3216,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
 
         {/* Description — clamped to 3 lines */}
         <p
-          className="text-xs text-muted px-3 pb-2 flex-1"
+          className="px-3 pb-2 flex-1 text-xs text-white/58"
           style={{
             display: "-webkit-box",
             WebkitLineClamp: 3,
@@ -3106,7 +3228,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
         </p>
 
         {/* Bottom bar: config status + settings button */}
-        <div className="flex items-center gap-2 px-3 py-2 border-t border-border mt-auto min-w-0">
+        <div className="mt-auto flex min-w-0 items-center gap-2 border-t border-white/10 px-3 py-2">
           {hasParams && !isShowcase && !isStream555 && !isArcade555 ? (
             <>
               <span
@@ -3114,7 +3236,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                   allParamsSet ? "bg-ok" : "bg-destructive"
                 }`}
               />
-              <span className="text-[10px] text-muted">
+              <span className="text-[10px] text-white/52">
                 {setCount}/{totalCount} configured
               </span>
             </>
@@ -3133,22 +3255,22 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                 className="min-w-0 flex-1"
                 title={`${operationalDisplay.primary}${operationalDisplay.secondary ? ` • ${operationalDisplay.secondary}` : ""}`}
               >
-                <div className="text-[10px] text-muted truncate">
+                <div className="text-[10px] truncate text-white/56">
                   {operationalDisplay.primary}
                 </div>
                 {operationalDisplay.secondary ? (
-                  <div className="text-[10px] text-muted truncate">
+                  <div className="text-[10px] truncate text-white/42">
                     {operationalDisplay.secondary}
                   </div>
                 ) : null}
               </div>
             </div>
           ) : !hasParams && !isShowcase ? (
-            <span className="text-[10px] text-muted opacity-50">
+            <span className="text-[10px] text-white/38">
               No config needed
             </span>
           ) : (
-            <span className="text-[10px] text-muted opacity-50">
+            <span className="text-[10px] text-white/38">
               23 field demos
             </span>
           )}
@@ -3160,9 +3282,11 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
             p.npmName &&
             !isShowcase &&
             !p.loadError && (
-              <button
+              <Button
                 type="button"
-                className="text-[10px] px-2 py-[2px] border border-accent text-accent bg-transparent hover:bg-accent hover:text-accent-fg cursor-pointer transition-colors max-w-[180px] truncate"
+                variant="outline"
+                size="sm"
+                className="max-w-[180px] rounded-xl border-white/12 px-2.5 py-1 text-[10px] text-white/72"
                 disabled={installingPlugins.has(p.id)}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -3173,24 +3297,23 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                   ? installProgress.get(p.npmName ?? "")?.message ||
                     "Installing..."
                   : "Install"}
-              </button>
+              </Button>
             )}
           {hasParams && (
-            <button
+            <Button
               type="button"
-              className={`text-[10px] text-muted hover:text-accent cursor-pointer transition-colors flex items-center gap-1 shrink-0 ${
-                isOpen ? "text-accent" : ""
-              }`}
+              variant={isOpen ? "secondary" : "ghost"}
+              size="sm"
+              className="rounded-xl px-2"
               onClick={() => toggleSettings(p.id)}
               title="Settings"
+              aria-label={`Open settings for ${p.name}`}
             >
-              <span className="text-[11px]">&#9881;</span>
-              <span
-                className={`inline-block text-[8px] transition-transform duration-150 ${isOpen ? "rotate-90" : ""}`}
-              >
-                &#9654;
-              </span>
-            </button>
+              <SettingsIcon className="h-3.5 w-3.5" />
+              <ChevronRightIcon
+                className={`h-3 w-3 transition-transform duration-150 ${isOpen ? "rotate-90" : ""}`}
+              />
+            </Button>
           )}
         </div>
 
@@ -3251,94 +3374,104 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
   // ── Main render ────────────────────────────────────────────────────
 
   return (
-    <div>
+    <div className="pro-streamer-plugin-surface space-y-4">
       {/* Toolbar: search + status toggle */}
       <div className="flex items-center gap-2 mb-3.5 flex-wrap">
         {/* Search */}
         <div className="relative flex-1 min-w-[180px]">
-          <input
+          <Input
             type="text"
-            className="w-full py-[5px] px-3 pr-8 border border-border bg-card text-[13px] transition-colors duration-150 focus:border-accent focus:outline-none placeholder:text-muted placeholder:italic"
             placeholder={`Search ${label.toLowerCase()}...`}
             value={pluginSearch}
             onChange={(e) => setState("pluginSearch", e.target.value)}
+            className="pr-10"
           />
+          <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/28" />
           {pluginSearch && (
-            <button
+            <Button
               type="button"
-              className="absolute right-2 top-1/2 -translate-y-1/2 bg-transparent border-none text-muted cursor-pointer text-sm px-1.5 py-px leading-none hover:text-txt"
+              variant="ghost"
+              size="icon"
+              className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 rounded-full"
               onClick={() => setState("pluginSearch", "")}
               title="Clear search"
+              aria-label="Clear plugin search"
             >
-              &times;
-            </button>
+              <CloseIcon className="h-4 w-4" />
+            </Button>
           )}
         </div>
 
         {/* Status toggle: All / Enabled */}
         <div className="flex gap-1 shrink-0">
           {(["all", "enabled"] as const).map((s) => (
-            <button
+            <Button
               key={s}
               type="button"
-              className={`px-2.5 py-[3px] border text-[11px] cursor-pointer transition-colors duration-150 ${
+              size="sm"
+              variant={
                 pluginStatusFilter === s
-                  ? "bg-accent text-accent-fg border-accent"
-                  : "bg-surface text-txt border-border hover:bg-bg-hover"
-              }`}
+                  ? "secondary"
+                  : "outline"
+              }
               onClick={() => setState("pluginStatusFilter", s as StatusFilter)}
+              className="rounded-xl"
             >
               {s === "all"
                 ? `All (${categoryPlugins.length})`
                 : `Enabled (${enabledCount})`}
-            </button>
+            </Button>
           ))}
         </div>
 
         {/* Reset order (only visible when custom order is set) */}
         {pluginOrder.length > 0 && (
-          <button
+          <Button
             type="button"
-            className="px-2.5 py-[3px] border border-border bg-surface text-muted text-[11px] cursor-pointer shrink-0 hover:text-txt hover:bg-bg-hover"
+            variant="outline"
+            size="sm"
             onClick={handleResetOrder}
             title="Reset to default sort order"
+            aria-label="Reset plugin order to default"
+            className="rounded-xl"
           >
             Reset Order
-          </button>
+          </Button>
         )}
 
         {/* Add plugin button */}
-        <button
+        <Button
           type="button"
-          className="px-2.5 py-[3px] border border-accent bg-accent text-accent-fg text-[11px] cursor-pointer shrink-0 hover:bg-accent-hover hover:border-accent-hover"
+          variant="default"
+          size="sm"
           onClick={() => setAddDirOpen(true)}
+          className="rounded-xl"
         >
-          + Add Plugin
-        </button>
+          <PlusIcon className="h-4 w-4" />
+          Add Plugin
+        </Button>
       </div>
 
       {hasPluginToggleInFlight && (
-        <div className="mb-3 px-3 py-2 border border-accent bg-accent-subtle text-[11px] text-accent">
+        <Card className="mb-3 rounded-2xl border-accent/25 bg-accent/10 px-3 py-2 text-[11px] text-accent">
           Applying plugin change and waiting for agent restart...
-        </div>
+        </Card>
       )}
 
       {/* Tag filters */}
       {showSubgroupFilters && (
         <div className="flex items-center gap-1.5 mb-3.5 flex-wrap">
           {subgroupTags.map((tag) => (
-            <button
+            <Button
               key={tag.id}
               type="button"
-              className={`px-2.5 py-[3px] border text-[11px] cursor-pointer transition-colors duration-150 ${
-                subgroupFilter === tag.id
-                  ? "bg-accent text-accent-fg border-accent"
-                  : "bg-surface text-txt border-border hover:bg-bg-hover"
-              }`}
+              size="sm"
+              variant={subgroupFilter === tag.id ? "secondary" : "outline"}
               onClick={() => setSubgroupFilter(tag.id)}
+              className="rounded-xl"
             >
               {tag.label} ({tag.count})
-            </button>
+            </Button>
           ))}
         </div>
       )}
@@ -3346,17 +3479,17 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
       {/* Plugin grid */}
       <div className="overflow-y-auto">
         {sorted.length === 0 ? (
-          <div className="text-center py-10 px-5 text-muted border border-dashed border-border">
+          <Card className="rounded-2xl border border-dashed border-white/12 px-5 py-10 text-center text-sm text-white/48">
             {pluginSearch
               ? `No ${label.toLowerCase()} match your search.`
               : `No ${label.toLowerCase()} available.`}
-          </div>
+          </Card>
         ) : visiblePlugins.length === 0 ? (
-          <div className="text-center py-10 px-5 text-muted border border-dashed border-border">
+          <Card className="rounded-2xl border border-dashed border-white/12 px-5 py-10 text-center text-sm text-white/48">
             {showSubgroupFilters
               ? "No plugins match this tag filter."
               : `No ${label.toLowerCase()} match your filters.`}
-          </div>
+          </Card>
         ) : (
           renderPluginGrid(visiblePlugins)
         )}
@@ -3375,88 +3508,70 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
               ? "ai provider"
               : p.category;
           return (
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-              onClick={(e) => {
-                if (e.target === e.currentTarget) toggleSettings(p.id);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  toggleSettings(p.id);
-                }
-              }}
-              role="dialog"
-              aria-modal="true"
+            <Dialog
+              open={true}
+              onClose={() => toggleSettings(p.id)}
+              className="max-w-4xl bg-[#07090e]/96"
+              ariaLabelledBy={`plugin-settings-${p.id}`}
             >
-              <div className="w-full max-w-2xl max-h-[85vh] border border-border bg-card shadow-lg flex flex-col overflow-hidden">
+              <Card className="flex max-h-[min(88vh,58rem)] w-full max-w-4xl flex-col overflow-hidden rounded-[28px] border-white/12 bg-[#07090e]/96 shadow-[0_24px_72px_rgba(0,0,0,0.36)]">
                 {/* Dialog header */}
-                <div className="flex items-center gap-3 px-5 py-3 border-b border-border shrink-0">
-                  <span className="font-bold text-sm flex items-center gap-1.5 flex-1 min-w-0">
-                    {(() => {
-                      const icon = resolveIcon(p);
-                      if (!icon) return null;
-                      return icon.startsWith("http") ? (
-                        <img
-                          src={icon}
-                          alt=""
-                          className="w-4 h-4 rounded-sm object-cover"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <span className="text-sm">{icon}</span>
-                      );
-                    })()}
+                <div className="flex shrink-0 items-center gap-3 border-b border-white/10 px-5 py-3">
+                  <span id={`plugin-settings-${p.id}`} className="font-bold text-sm flex items-center gap-1.5 flex-1 min-w-0">
+                    {renderPluginIcon(p)}
                     {p.name}
                   </span>
-                  <span className="text-[10px] px-1.5 py-px border border-border bg-surface text-muted lowercase tracking-wide">
+                  <Badge variant="outline" className="rounded-full lowercase tracking-wide">
                     {categoryLabel}
-                  </span>
+                  </Badge>
                   {p.version && (
-                    <span className="text-[10px] font-mono text-muted opacity-70">
+                    <span className="text-[10px] font-mono text-white/42">
                       v{p.version}
                     </span>
                   )}
                   {isShowcase && (
-                    <span className="text-[10px] font-bold tracking-wider px-2.5 py-[2px] border border-accent text-accent bg-accent-subtle">
+                    <Badge variant="accent" className="rounded-full">
                       DEMO
-                    </span>
+                    </Badge>
                   )}
-                  <button
+                  <Button
                     type="button"
-                    className="text-muted hover:text-txt text-lg leading-none px-1 cursor-pointer"
+                    variant="ghost"
+                    size="icon"
+                    className="rounded-full"
                     onClick={() => toggleSettings(p.id)}
+                    aria-label={`Close settings for ${p.name}`}
                   >
-                    &times;
-                  </button>
+                    <CloseIcon className="h-4 w-4" />
+                  </Button>
                 </div>
 
                 {/* Dialog body — scrollable */}
-                <div className="overflow-y-auto flex-1">
+                <ScrollArea className="flex-1 overscroll-contain">
                   {/* Plugin details */}
-                  <div className="px-5 pt-4 pb-1 flex items-center gap-3 flex-wrap text-xs text-muted">
+                  <div className="pro-streamer-plugin-meta px-5 pt-4 pb-1">
                     {p.description && (
-                      <span className="text-[12px] text-muted leading-relaxed">
+                      <span className="text-[12px] leading-relaxed text-white/66">
                         {p.description}
                       </span>
                     )}
                   </div>
                   {(p.npmName || (p.pluginDeps && p.pluginDeps.length > 0)) && (
-                    <div className="px-5 pb-2 flex items-center gap-3 flex-wrap">
+                    <div className="pro-streamer-plugin-meta px-5 pb-2">
                       {p.npmName && (
-                        <span className="font-mono text-[10px] text-muted opacity-50">
+                        <span className="font-mono text-[10px] text-white/42">
                           {p.npmName}
                         </span>
                       )}
                       {p.pluginDeps && p.pluginDeps.length > 0 && (
                         <span className="flex items-center gap-1 flex-wrap">
-                          <span className="text-[10px] text-muted opacity-60">
+                          <span className="text-[10px] text-white/42">
                             depends on:
                           </span>
                           {p.pluginDeps.map((dep: string) => (
                             <span
                               key={dep}
-                              className="text-[10px] px-1.5 py-px border border-border bg-accent-subtle text-muted rounded-sm"
+                              className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-white/64"
                             >
                               {dep}
                             </span>
@@ -3494,40 +3609,46 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                                     destination.streamKeySuffix != null
                                       ? `••••${destination.streamKeySuffix}`
                                       : "saved";
-                                  return `${destination.icon} ${destination.label} ${suffix}`;
+                                  return `${destination.label} ${suffix}`;
                                 })
                                 .join("  ·  ")
                             : "No channel stream keys saved yet"
                             : (p.statusSummary ?? []).join(" · ");
                         return (
                           <>
-                            <div className="mb-3 px-3 py-2 border border-border bg-surface">
-                              <div className="mb-2 flex flex-wrap gap-1.5">
+                            <Card className="mb-3 space-y-3 border-white/10 bg-white/[0.03] p-4">
+                              <div className="flex flex-wrap gap-1.5">
                                 {lifecycleTokens.map((token) => (
-                                  <span
+                                  <Badge
                                     key={`${p.id}-${token.label}`}
-                                    className={`text-[10px] px-1.5 py-px border lowercase tracking-wide whitespace-nowrap ${
+                                    variant="outline"
+                                    className={`rounded-full px-2 py-0.5 text-[10px] lowercase tracking-wide whitespace-nowrap ${
                                       token.tone === "ok"
-                                        ? "border-ok bg-[rgba(22,101,52,0.06)] text-ok"
+                                        ? "border-ok/30 bg-[rgba(22,101,52,0.06)] text-ok"
                                         : token.tone === "warn"
-                                          ? "border-warn bg-[rgba(234,179,8,0.06)] text-warn"
-                                          : "border-destructive bg-[rgba(153,27,27,0.04)] text-destructive"
+                                          ? "border-warn/30 bg-[rgba(234,179,8,0.06)] text-warn"
+                                          : "border-destructive/30 bg-[rgba(153,27,27,0.04)] text-destructive"
                                     }`}
                                   >
                                     {token.label}
-                                  </span>
+                                  </Badge>
                                 ))}
                               </div>
-                              <div className="text-[11px] text-muted mb-1">
-                                {operationalDisplay.primary}
+                              <div className="space-y-1">
+                                <div className="text-[11px] uppercase tracking-[0.18em] text-white/42">
+                                  Provider summary
+                                </div>
+                                <div className="text-[12px] text-white/74">
+                                  {operationalDisplay.primary}
+                                </div>
                               </div>
-                              <div className="text-[10px] text-muted leading-relaxed">
+                              <div className="text-[11px] leading-relaxed text-white/54">
                                 {streamSummary
                                   ? configuredSummary
                                   : operationalDisplay.secondary || configuredSummary}
                               </div>
                               {streamSummary && configuredChannels.length === 0 ? (
-                                <div className="mt-1 text-[10px] text-muted">
+                                <div className="text-[10px] text-white/42">
                                   No{" "}
                                   {collectionLabel.toLowerCase() === "channels"
                                     ? "channel"
@@ -3537,7 +3658,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                               ) : null}
                               {(p.operationalWarnings?.length ||
                                 p.operationalErrors?.length) ? (
-                                <div className="mt-2 space-y-1">
+                                <div className="space-y-1 rounded-2xl border border-white/8 bg-black/20 p-3">
                                   {(p.operationalWarnings ?? []).map((warning) => (
                                     <div
                                       key={`warning-${warning}`}
@@ -3556,7 +3677,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                                   ))}
                                 </div>
                               ) : null}
-                            </div>
+                            </Card>
                             {streamSummary ? (
                               <Stream555ControlActionsPanel
                                 plugin={p}
@@ -3583,15 +3704,17 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                       <WhatsAppQrOverlay accountId="default" />
                     )}
                   </div>
-                </div>
+                </ScrollArea>
 
                 {/* Dialog footer — actions (hidden for showcase) */}
                 {!isShowcase && (
-                  <div className="flex justify-end gap-2.5 px-5 py-3 border-t border-border shrink-0">
+                  <div className="flex shrink-0 justify-end gap-2.5 border-t border-white/10 px-5 py-3">
                     {p.enabled && !p.isActive && p.npmName && !p.loadError && (
-                      <button
+                      <Button
                         type="button"
-                        className="px-3 py-1.5 text-[11px] border border-accent text-accent bg-transparent hover:bg-accent hover:text-accent-fg cursor-pointer rounded-sm transition-colors max-w-[260px] truncate"
+                        variant="secondary"
+                        size="sm"
+                        className="max-w-[260px] truncate rounded-xl"
                         disabled={installingPlugins.has(p.id)}
                         onClick={() =>
                           handleInstallPlugin(p.id, p.npmName ?? "")
@@ -3601,7 +3724,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                           ? installProgress.get(p.npmName ?? "")?.message ||
                             "Installing..."
                           : "Install Plugin"}
-                      </button>
+                      </Button>
                     )}
                     {p.loadError && (
                       <span
@@ -3612,131 +3735,138 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                       </span>
                     )}
                     {(p.enabled || p.isActive) && (
-                      <button
+                      <Button
                         type="button"
-                        className={`px-3 py-1.5 text-[11px] border rounded-sm transition-colors ${
+                        size="sm"
+                        variant={
                           testResults.get(p.id)?.loading
-                            ? "border-[var(--border)] text-[var(--muted)] cursor-wait"
+                            ? "ghost"
                             : testResults.get(p.id)?.success
-                              ? "border-[var(--ok)] text-[var(--ok)] bg-[color-mix(in_srgb,var(--ok)_5%,transparent)]"
+                              ? "secondary"
                               : testResults.get(p.id)?.error
-                                ? "border-[var(--destructive)] text-[var(--destructive)]"
-                                : "border-[var(--border)] text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--accent)] cursor-pointer"
-                        }`}
+                                ? "ghost"
+                                : "outline"
+                        }
                         disabled={testResults.get(p.id)?.loading}
                         onClick={() => handleTestConnection(p.id)}
+                        className="rounded-xl"
                       >
                         {testResults.get(p.id)?.loading
                           ? "Testing..."
                           : testResults.get(p.id)?.success
                             ? `\u2713 OK (${testResults.get(p.id)?.durationMs}ms)`
-                            : testResults.get(p.id)?.error
+                          : testResults.get(p.id)?.error
                               ? `\u2715 ${testResults.get(p.id)?.error}`
                               : "Test Connection"}
-                      </button>
+                      </Button>
                     )}
-                    <button
+                    <Button
                       type="button"
-                      className="bg-transparent border border-border text-muted cursor-pointer text-[12px] px-4 py-1.5 rounded-sm hover:text-txt hover:bg-bg-hover transition-colors"
+                      variant="outline"
+                      size="sm"
+                      className="rounded-xl"
                       onClick={() => handleConfigReset(p.id)}
                     >
                       Reset
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
-                      className={`text-[12px] px-5 py-1.5 cursor-pointer border rounded-sm transition-all duration-200 font-medium ${
+                      size="sm"
+                      variant={
                         saveSuccess
-                          ? "!bg-ok !text-white !border-ok"
-                          : "bg-accent text-accent-fg border-accent hover:bg-accent-hover hover:shadow-sm"
-                      }`}
+                          ? "secondary"
+                          : "default"
+                      }
                       onClick={() => handleConfigSave(p.id)}
                       disabled={isSaving}
+                      className="rounded-xl"
                     >
                       {isSaving
                         ? "Saving..."
                         : saveSuccess
                           ? "\u2713 Saved"
                           : "Save Settings"}
-                    </button>
+                    </Button>
                   </div>
                 )}
-              </div>
-            </div>
+              </Card>
+            </Dialog>
           );
         })()}
 
       {/* Add from directory modal */}
       {addDirOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setAddDirOpen(false);
-              setAddDirPath("");
-            }
+        <Dialog
+          open={true}
+          onClose={() => {
+            setAddDirOpen(false);
+            setAddDirPath("");
           }}
-          onKeyDown={(e) => {
-            if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              setAddDirOpen(false);
-              setAddDirPath("");
-            }
-          }}
-          role="dialog"
-          aria-modal="true"
+          className="max-w-md bg-[#07090e]/96"
+          ariaLabelledBy="add-plugin-dialog-title"
         >
-          <div className="w-full max-w-md border border-border bg-card p-5 shadow-lg">
+          <Card className="w-full max-w-md rounded-[28px] border-white/12 bg-[#07090e]/96 p-5 shadow-[0_24px_72px_rgba(0,0,0,0.36)]">
             <div className="flex items-center justify-between mb-4">
-              <div className="font-bold text-sm">Add Plugin</div>
-              <button
+              <div id="add-plugin-dialog-title" className="flex items-center gap-2 text-sm font-bold text-white/88">
+                <PlusIcon className="h-4 w-4" />
+                Add Plugin
+              </div>
+              <Button
                 type="button"
-                className="text-muted hover:text-txt text-lg leading-none px-1"
+                variant="ghost"
+                size="icon"
+                className="rounded-full"
                 onClick={() => {
                   setAddDirOpen(false);
                   setAddDirPath("");
                 }}
+                aria-label="Close add plugin dialog"
               >
-                &times;
-              </button>
+                <CloseIcon className="h-4 w-4" />
+              </Button>
             </div>
 
-            <p className="text-xs text-muted mb-3">
+            <p className="mb-3 text-xs text-white/52">
               Enter the path to a local plugin directory or package name.
             </p>
 
-            <input
+            <Input
               type="text"
-              className="w-full py-2 px-3 border border-border bg-bg text-[13px] font-mono transition-colors duration-150 focus:border-accent focus:outline-none placeholder:text-muted placeholder:font-body placeholder:italic"
               placeholder="/path/to/plugin or package-name"
               value={addDirPath}
               onChange={(e) => setAddDirPath(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") void handleAddFromDirectory();
               }}
+              className="rounded-2xl font-mono"
             />
 
             <div className="flex justify-end gap-2 mt-4">
-              <button
+              <Button
                 type="button"
-                className="px-4 py-[5px] border border-border bg-transparent text-muted text-xs cursor-pointer hover:text-txt hover:bg-bg-hover"
+                variant="outline"
+                size="sm"
+                className="rounded-xl"
                 onClick={() => {
                   setAddDirOpen(false);
                   setAddDirPath("");
                 }}
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="px-4 py-[5px] border border-accent bg-accent text-accent-fg text-xs cursor-pointer hover:bg-accent-hover hover:border-accent-hover disabled:opacity-40 disabled:cursor-not-allowed"
+                variant="default"
+                size="sm"
+                className="rounded-xl"
                 onClick={handleAddFromDirectory}
                 disabled={addDirLoading || !addDirPath.trim()}
               >
                 {addDirLoading ? "Adding..." : "Add"}
-              </button>
+              </Button>
             </div>
-          </div>
-        </div>
+          </Card>
+        </Dialog>
       )}
     </div>
   );

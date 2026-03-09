@@ -4686,7 +4686,7 @@ export class MiladyClient {
     const resolvedText = this.normalizeAssistantText(doneText ?? fullText);
     return {
       text: resolvedText,
-      agentName: doneAgentName ?? "Milady",
+      agentName: doneAgentName ?? "rasp",
     };
   }
 

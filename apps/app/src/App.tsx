@@ -34,6 +34,8 @@ import { TerminalPanel } from "./components/TerminalPanel.js";
 import { ToastContainer } from "./components/ui/Toast.js";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary.js";
 import { MiladyOsDashboard } from "./components/MiladyOsDashboard.js";
+import { MiladyBootShell } from "./components/MiladyBootShell.js";
+import { ActivityIcon, ThreadsIcon } from "./components/ui/Icons.js";
 
 const advancedTabs = new Set(TAB_GROUPS.find(g => g.label === "Advanced")?.tabs ?? []);
 const CHAT_MOBILE_BREAKPOINT_PX = 1024;
@@ -126,20 +128,7 @@ export function App() {
         }}
         aria-label="Open chats panel"
       >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden
-        >
-          <title>Chats</title>
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-        </svg>
+        <ThreadsIcon width="14" height="14" aria-hidden />
         Chats
         {unreadCount > 0 && (
           <span className="inline-flex min-w-[18px] h-[18px] items-center justify-center rounded-full bg-accent text-accent-fg text-[10px] font-bold px-1">
@@ -159,21 +148,7 @@ export function App() {
         }}
         aria-label="Open status panel"
       >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden
-        >
-          <title>Status</title>
-          <path d="M3 3v18h18" />
-          <path d="m7 14 4-4 3 3 5-6" />
-        </svg>
+        <ActivityIcon width="14" height="14" aria-hidden />
         Status
         <span
           className={`w-2 h-2 rounded-full ${statusIndicatorClass}`}
@@ -236,7 +211,25 @@ export function App() {
   }
 
   if (authRequired) return <PairingView />;
-  if (!onboardingComplete) return <ErrorBoundary><OnboardingWizard /></ErrorBoundary>;
+  if (!onboardingComplete) {
+    return currentTheme === "milady-os" ? (
+      <MiladyBootShell
+        title="PRO STREAMER SETUP"
+        subtitle="Calibrate the node before the broadcast stage unlocks"
+        status="system calibration"
+        identityLabel="rasp"
+        panelClassName="mx-auto max-w-6xl"
+      >
+        <ErrorBoundary>
+          <div className="max-h-[85vh] overflow-y-auto p-4 sm:p-6">
+            <OnboardingWizard />
+          </div>
+        </ErrorBoundary>
+      </MiladyBootShell>
+    ) : (
+      <ErrorBoundary><OnboardingWizard /></ErrorBoundary>
+    );
+  }
 
   return (
     <BugReportProvider value={bugReport}>

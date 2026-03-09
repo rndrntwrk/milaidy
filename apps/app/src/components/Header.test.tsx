@@ -21,7 +21,7 @@ describe("Header", () => {
   it("renders wallet overlay with correct hover classes", async () => {
     // Mock the useApp hook return value
     const mockUseApp = {
-      agentStatus: { state: "running", agentName: "Milady" },
+      agentStatus: { state: "running", agentName: "rasp" },
       cloudEnabled: false,
       cloudConnected: false,
       cloudCredits: null,

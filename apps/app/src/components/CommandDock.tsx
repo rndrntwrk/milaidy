@@ -1,23 +1,52 @@
-import React from 'react';
-import { NeonButton } from './ui/NeonButton.js';
+import { Button } from "./ui/Button.js";
+import { MemoryIcon, OpsIcon, StackIcon, ThreadsIcon, VaultIcon } from "./ui/Icons.js";
 
 interface CommandDockProps {
-    onOpenThreads?: () => void;
-    onOpenVault?: () => void;
-    onOpenControlStack?: () => void;
+  activeSurface?: "none" | "threads" | "memory" | "ops" | "vault" | "control-stack";
+  onOpenThreads?: () => void;
+  onOpenMemory?: () => void;
+  onOpenOps?: () => void;
+  onOpenVault?: () => void;
+  onOpenControlStack?: () => void;
 }
 
-export function CommandDock({ onOpenThreads, onOpenVault, onOpenControlStack }: CommandDockProps) {
-    return (
-        <div className="flex items-center gap-2 sm:gap-4 bg-card/80 backdrop-blur-md px-2 sm:px-6 py-2 rounded-t-xl border border-accent shadow-[0_-10px_30px_var(--accent-subtle)] overflow-x-auto max-w-full">
-            <NeonButton variant="outline" size="sm" onClick={onOpenThreads}>THREADS</NeonButton>
-            <NeonButton variant="outline" size="sm">ASK</NeonButton>
-            <NeonButton variant="primary" size="lg" className="mx-2 sm:mx-4 font-bold tracking-widest" onClick={onOpenControlStack}>
-                CORE A.I.
-            </NeonButton>
-            <NeonButton variant="outline" size="sm">MEMORY</NeonButton>
-            <NeonButton variant="outline" size="sm">ACTIONS</NeonButton>
-            <NeonButton variant="outline" size="sm" onClick={onOpenVault}>VAULT</NeonButton>
-        </div>
-    );
+function variantFor(active: boolean): "outline" | "secondary" {
+  return active ? "secondary" : "outline";
+}
+
+export function CommandDock({
+  activeSurface = "none",
+  onOpenThreads,
+  onOpenMemory,
+  onOpenOps,
+  onOpenVault,
+  onOpenControlStack,
+}: CommandDockProps) {
+  const mobileLabelClass = "hidden sm:inline";
+
+  return (
+    <div className="flex max-w-full items-center gap-1.5 overflow-x-auto rounded-full border border-white/10 bg-black/62 px-1.5 py-1.5 shadow-[0_16px_48px_rgba(0,0,0,0.34)] backdrop-blur-2xl sm:gap-3 sm:px-3 sm:py-2">
+      <Button variant={variantFor(activeSurface === "threads")} size="sm" onClick={onOpenThreads} aria-label="Open threads">
+        <ThreadsIcon className="h-4 w-4" />
+        <span className={mobileLabelClass}>Threads</span>
+      </Button>
+      <Button variant={variantFor(activeSurface === "memory")} size="sm" onClick={onOpenMemory} aria-label="Open memory">
+        <MemoryIcon className="h-4 w-4" />
+        <span className={mobileLabelClass}>Memory</span>
+      </Button>
+      <Button variant={variantFor(activeSurface === "ops")} size="sm" onClick={onOpenOps} aria-label="Open operations">
+        <OpsIcon className="h-4 w-4" />
+        <span className={mobileLabelClass}>Ops</span>
+      </Button>
+      <Button variant={variantFor(activeSurface === "vault")} size="sm" onClick={onOpenVault} aria-label="Open vault">
+        <VaultIcon className="h-4 w-4" />
+        <span className={mobileLabelClass}>Vault</span>
+      </Button>
+      <div className="hidden h-6 w-px bg-white/10 sm:block" />
+      <Button variant={activeSurface === "control-stack" ? "default" : "secondary"} size="sm" onClick={onOpenControlStack} aria-label="Open control stack">
+        <StackIcon className="h-4 w-4" />
+        <span className={mobileLabelClass}>Control Stack</span>
+      </Button>
+    </div>
+  );
 }

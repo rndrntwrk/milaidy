@@ -1,59 +1,263 @@
-import React from 'react';
-import { useApp } from '../AppContext.js';
-import { GlowingText } from './ui/GlowingText.js';
-import { NeonButton } from './ui/NeonButton.js';
+import { useMemo } from "react";
+import { useApp } from "../AppContext.js";
+import { SettingsView } from "./SettingsView.js";
+import { AdvancedPageView } from "./AdvancedPageView.js";
+import { AppsPageView } from "./AppsPageView.js";
+import { ConnectorsPageView } from "./ConnectorsPageView.js";
+import type { Tab } from "../navigation.js";
+import { Badge } from "./ui/Badge.js";
+import { Button } from "./ui/Button.js";
+import { CloseIcon, StackIcon } from "./ui/Icons.js";
+import { resolveThemeDisplayName } from "./shared/themeDisplayName.js";
 
-export function ControlStackModal({ open, onClose }: { open: boolean, onClose: () => void }) {
-    const { setTab } = useApp();
-    if (!open) return null;
+export type ControlStackSection =
+  | "settings"
+  | "apps"
+  | "advanced"
+  | "plugins-connectors"
+  | "custom-actions"
+  | "triggers"
+  | "identity"
+  | "approvals"
+  | "safe-mode"
+  | "governance"
+  | "fine-tuning"
+  | "trajectories"
+  | "runtime"
+  | "database"
+  | "logs"
+  | "security";
 
-    const handleOpen = (tab: any) => {
-        onClose(); // Close the menu stack
-        setTab(tab); // Trigger the wrapper modal
-    };
+const SECTION_DEFAULT_TAB: Record<ControlStackSection, Tab> = {
+  settings: "settings",
+  apps: "apps",
+  advanced: "advanced",
+  "plugins-connectors": "plugins",
+  "custom-actions": "actions",
+  triggers: "triggers",
+  identity: "identity",
+  approvals: "approvals",
+  "safe-mode": "safe-mode",
+  governance: "governance",
+  "fine-tuning": "fine-tuning",
+  trajectories: "trajectories",
+  runtime: "runtime",
+  database: "database",
+  logs: "logs",
+  security: "security",
+};
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80 backdrop-blur-sm">
-            <div className="relative w-full max-w-2xl bg-card border-2 border-accent rounded-lg shadow-[0_0_50px_var(--accent-subtle)] overflow-hidden flex flex-col max-h-[90vh]">
-                <div className="p-4 border-b border-accent/30 flex justify-between items-center bg-accent/5">
-                    <GlowingText className="text-xl tracking-widest text-accent font-bold">CONTROL STACK</GlowingText>
-                    <button onClick={onClose} className="text-muted hover:text-accent transition-colors">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
-                    </button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                    <div className="space-y-2">
-                        <h3 className="text-accent font-mono text-sm border-b border-accent/20 pb-1">ROOT PREFERENCES</h3>
-                        <div className="grid grid-cols-2 gap-4 pt-2">
-                            <button onClick={() => handleOpen('settings')} className="text-left p-3 border border-[var(--border)] rounded hover:border-[var(--accent)] hover:bg-[var(--accent)]/10 transition-colors text-[var(--txt)] hover:text-[var(--accent)] cursor-pointer">
-                                <div className="font-bold">Theme / Appearance</div>
-                                <div className="text-xs opacity-70">Holographic HUD config</div>
-                            </button>
-                            <button onClick={() => handleOpen('identity')} className="text-left p-3 border border-[var(--border)] rounded hover:border-[var(--accent)] hover:bg-[var(--accent)]/10 transition-colors text-[var(--txt)] hover:text-[var(--accent)] cursor-pointer">
-                                <div className="font-bold">Identity Engine</div>
-                                <div className="text-xs opacity-70">Agent traits and Voice</div>
-                            </button>
-                        </div>
-                    </div>
+const SECTION_LABELS: Record<ControlStackSection, string> = {
+  settings: "Settings",
+  apps: "Apps",
+  advanced: "Advanced",
+  "plugins-connectors": "Plugins & Connectors",
+  "custom-actions": "Custom Actions",
+  triggers: "Triggers",
+  identity: "Identity",
+  approvals: "Approvals",
+  "safe-mode": "Safe Mode",
+  governance: "Governance",
+  "fine-tuning": "Fine-Tuning",
+  trajectories: "Trajectories",
+  runtime: "Runtime",
+  database: "Database",
+  logs: "Logs",
+  security: "Security",
+};
 
-                    <div className="space-y-2">
-                        <h3 className="text-[var(--warn)] font-mono text-sm border-b border-[var(--warn)]/20 pb-1">ADVANCED PROTOCOLS</h3>
-                        <div className="grid grid-cols-2 gap-4 pt-2">
-                            <button onClick={() => handleOpen('plugins')} className="text-left p-3 border border-[var(--border)] rounded hover:border-[var(--warn)] hover:bg-[var(--warn)]/10 transition-colors text-[var(--txt)] hover:text-[var(--warn)] cursor-pointer">
-                                <div className="font-bold">Plugins & Connectors</div>
-                                <div className="text-xs opacity-70">Manage external integrations</div>
-                            </button>
-                            <button onClick={() => handleOpen('database')} className="text-left p-3 border border-[var(--border)] rounded hover:border-[var(--warn)] hover:bg-[var(--warn)]/10 transition-colors text-[var(--txt)] hover:text-[var(--warn)] cursor-pointer">
-                                <div className="font-bold">Database & Memory</div>
-                                <div className="text-xs opacity-70">Inspect local SQLite and Vector store</div>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <div className="p-4 border-t border-accent/30 bg-bg flex justify-end">
-                    <NeonButton variant="outline" onClick={onClose}>CLOSE PROTOCOL</NeonButton>
-                </div>
+const SECTION_COPY: Record<ControlStackSection, string> = {
+  settings: "Master preferences, model defaults, and runtime-wide behavior.",
+  apps: "Launch and inspect installed surfaces without leaving the dashboard.",
+  advanced: "Deep operator controls routed into one route-less overlay.",
+  "plugins-connectors": "Connector state, plugin health, and external service wiring.",
+  "custom-actions": "Curated quick actions and automations that can be triggered from the HUD.",
+  triggers: "Schedules, recurring workflows, and trigger execution controls.",
+  identity: "Persona, identity, and profile configuration.",
+  approvals: "Human-in-the-loop requests and mission review.",
+  "safe-mode": "Safety posture, guardrails, and constrained execution settings.",
+  governance: "Policies, governance controls, and operational rules.",
+  "fine-tuning": "Advanced tuning surfaces for behavior and model calibration.",
+  trajectories: "Trajectory inspection and cognitive trace analysis.",
+  runtime: "Runtime health, process state, and execution diagnostics.",
+  database: "Database browser, vector memory, and document stores.",
+  logs: "Structured logs, telemetry, and stream diagnostics.",
+  security: "Security audit stream and channel trust state.",
+};
+
+const SECTION_ORDER: ControlStackSection[] = [
+  "settings",
+  "apps",
+  "advanced",
+  "plugins-connectors",
+  "custom-actions",
+  "triggers",
+  "identity",
+  "approvals",
+  "safe-mode",
+  "governance",
+  "fine-tuning",
+  "trajectories",
+  "runtime",
+  "database",
+  "logs",
+  "security",
+];
+
+export function miladyControlSectionForTab(
+  tab: string,
+): ControlStackSection | null {
+  switch (tab) {
+    case "settings":
+      return "settings";
+    case "apps":
+      return "apps";
+    case "advanced":
+      return "advanced";
+    case "connectors":
+    case "plugins":
+    case "skills":
+      return "plugins-connectors";
+    case "actions":
+      return "custom-actions";
+    case "triggers":
+      return "triggers";
+    case "identity":
+      return "identity";
+    case "approvals":
+      return "approvals";
+    case "safe-mode":
+      return "safe-mode";
+    case "governance":
+      return "governance";
+    case "fine-tuning":
+      return "fine-tuning";
+    case "trajectories":
+      return "trajectories";
+    case "runtime":
+      return "runtime";
+    case "database":
+      return "database";
+    case "logs":
+      return "logs";
+    case "security":
+      return "security";
+    default:
+      return null;
+  }
+}
+
+function renderSectionContent(resolvedSection: ControlStackSection, activeTab: Tab) {
+  if (resolvedSection === "settings") return <SettingsView />;
+  if (resolvedSection === "apps") return <AppsPageView />;
+  if (resolvedSection === "plugins-connectors" && activeTab === "connectors") {
+    return <ConnectorsPageView />;
+  }
+  return <AdvancedPageView />;
+}
+
+export function ControlStackModal({
+  open,
+  section,
+  onClose,
+}: {
+  open: boolean;
+  section?: ControlStackSection | null;
+  onClose: () => void;
+}) {
+  const { tab, setTab } = useApp();
+  const themeName = resolveThemeDisplayName();
+
+  const resolvedSection = section ?? miladyControlSectionForTab(tab) ?? "settings";
+  const activeTab = useMemo(() => {
+    if (resolvedSection === "plugins-connectors") {
+      return tab === "connectors" || tab === "skills" ? tab : "plugins";
+    }
+    if (resolvedSection === "advanced") {
+      return tab === "advanced" ? "advanced" : SECTION_DEFAULT_TAB.advanced;
+    }
+    return tab === SECTION_DEFAULT_TAB[resolvedSection]
+      ? tab
+      : SECTION_DEFAULT_TAB[resolvedSection];
+  }, [resolvedSection, tab]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 backdrop-blur-md lg:p-4">
+      <div className="relative flex h-[96vh] w-full max-w-[96vw] flex-col overflow-hidden rounded-[30px] border border-white/14 bg-white/[0.08] shadow-[0_24px_80px_rgba(0,0,0,0.48)] backdrop-blur-2xl">
+        <div className="flex items-center justify-between gap-4 border-b border-white/10 bg-black/18 px-4 py-4 lg:px-6">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-base font-semibold uppercase tracking-[0.28em] text-white/92">
+              <StackIcon className="h-4 w-4" />
+              {themeName} Control Stack
             </div>
+            <div className="mt-1 text-[11px] uppercase tracking-[0.22em] text-white/45">
+              {SECTION_COPY[resolvedSection]}
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Badge variant="outline" className="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em]">
+              Route-less
+            </Badge>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              aria-label="Close control stack"
+              className="rounded-full border border-white/10 text-white/65 hover:border-white/20 hover:text-white"
+            >
+              <CloseIcon className="h-5 w-5" />
+            </Button>
+          </div>
         </div>
-    );
+
+        <div className="border-b border-white/10 bg-white/[0.03] px-3 py-3 lg:px-4">
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {SECTION_ORDER.map((entry) => (
+              <Button
+                key={entry}
+                variant={resolvedSection === entry ? "secondary" : "ghost"}
+                className={`h-auto shrink-0 rounded-full border px-3 py-2 text-[11px] uppercase tracking-[0.22em] ${
+                  resolvedSection === entry
+                    ? "border-white/18 bg-white/[0.14] text-white"
+                    : "border-white/8 bg-transparent text-white/55 hover:border-white/16 hover:bg-white/[0.06] hover:text-white"
+                }`}
+                onClick={() => setTab(SECTION_DEFAULT_TAB[entry])}
+              >
+                {SECTION_LABELS[entry]}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex min-h-0 flex-1 flex-col bg-black/10">
+          {resolvedSection === "plugins-connectors" ? (
+            <div className="flex gap-2 border-b border-white/10 px-4 py-3">
+              {(["connectors", "plugins", "skills"] as Tab[]).map((entry) => (
+                <Button
+                  key={entry}
+                  variant={activeTab === entry ? "secondary" : "ghost"}
+                  className={`rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.22em] ${
+                    activeTab === entry
+                      ? "border-white/18 bg-white/[0.14] text-white"
+                      : "border-white/8 text-white/55 hover:border-white/16 hover:bg-white/[0.06] hover:text-white"
+                  }`}
+                  onClick={() => setTab(entry)}
+                >
+                  {entry}
+                </Button>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 lg:p-5">
+            <div className="milady-control-stack-scope min-h-full rounded-[24px] border border-white/10 bg-white/[0.04] p-4 backdrop-blur-xl lg:p-5">
+              {renderSectionContent(resolvedSection, activeTab)}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }

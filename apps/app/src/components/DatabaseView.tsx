@@ -15,6 +15,7 @@ import {
   type TableInfo,
   type TableRowsResponse,
 } from "../api-client";
+import { ChevronLeftIcon, ChevronRightIcon, CloseIcon } from "./ui/Icons";
 
 type DbView = "tables" | "query";
 type SortDir = "asc" | "desc" | null;
@@ -112,8 +113,9 @@ function CellPopover({
           type="button"
           className="text-[var(--muted)] hover:text-[var(--txt)] bg-transparent border-0 cursor-pointer text-sm"
           onClick={onClose}
+          aria-label="Close cell value"
         >
-          ×
+          <CloseIcon className="h-3.5 w-3.5" />
         </button>
       </div>
       <pre className="text-xs text-[var(--txt)] font-mono whitespace-pre-wrap break-all m-0">
@@ -546,8 +548,9 @@ export function DatabaseView() {
             type="button"
             className="text-[var(--danger)] opacity-60 hover:opacity-100 bg-transparent border-0 cursor-pointer text-sm"
             onClick={() => setErrorMessage("")}
+            aria-label="Dismiss database error"
           >
-            ×
+            <CloseIcon className="h-3.5 w-3.5" />
           </button>
         </div>
       )}
@@ -606,8 +609,13 @@ export function DatabaseView() {
             className="flex-shrink-0 w-4 flex items-center justify-center bg-transparent border-0 cursor-pointer text-[var(--muted)] hover:text-[var(--txt)] hover:bg-[var(--border)]/20"
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
             title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+            aria-label={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
           >
-            <span className="text-[10px]">{sidebarCollapsed ? "▶" : "◀"}</span>
+            {sidebarCollapsed ? (
+              <ChevronRightIcon className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronLeftIcon className="h-3.5 w-3.5" />
+            )}
           </button>
 
           {/* Main grid area */}

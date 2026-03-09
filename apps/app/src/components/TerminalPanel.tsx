@@ -14,6 +14,9 @@ import {
   useState,
 } from "react";
 import { client } from "../api-client";
+import { Button } from "./ui/Button.js";
+import { Card } from "./ui/Card.js";
+import { CloseIcon, TerminalIcon } from "./ui/Icons.js";
 
 export interface TerminalPanelHandle {
   /** Programmatically run a command via the API. */
@@ -103,39 +106,29 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle>(
     if (!open) return null;
 
     return (
-      <div
-        className="border-t border-border bg-[#1a1a1a] flex flex-col"
-        style={{ height: 220 }}
-      >
+      <Card className="flex h-[220px] flex-col overflow-hidden rounded-none border-x-0 border-b-0 border-t border-white/10 bg-[#07090e]/94 shadow-none">
         {/* Header bar */}
-        <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border bg-[#111] shrink-0">
-          <span className="text-[11px] font-mono text-muted tracking-wide">
+        <div className="flex shrink-0 items-center gap-2 border-b border-white/10 bg-black/30 px-3 py-2">
+          <TerminalIcon className="h-4 w-4 text-white/56" />
+          <span className="text-[11px] font-mono tracking-[0.18em] text-white/52">
             TERMINAL
           </span>
           <div className="flex-1" />
-          <button
-            type="button"
-            className="text-[10px] text-muted hover:text-txt px-1.5 py-0.5 cursor-pointer"
-            onClick={handleClear}
-          >
+          <Button type="button" variant="ghost" size="sm" className="rounded-xl px-2 text-[10px]" onClick={handleClear}>
             Clear
-          </button>
-          <button
-            type="button"
-            className="text-muted hover:text-txt text-sm leading-none px-1 cursor-pointer"
-            onClick={() => setOpen(false)}
-          >
-            &times;
-          </button>
+          </Button>
+          <Button type="button" variant="ghost" size="icon" className="rounded-full" onClick={() => setOpen(false)} aria-label="Close terminal">
+            <CloseIcon className="h-4 w-4" />
+          </Button>
         </div>
 
         {/* Output area */}
         <div
           ref={scrollRef}
-          className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-2 font-mono text-[12px] leading-[1.6] whitespace-pre-wrap break-all"
+          className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-2 font-mono text-[12px] leading-[1.6] whitespace-pre-wrap break-all"
         >
           {lines.length === 0 ? (
-            <span className="text-muted italic text-[11px]">
+            <span className="text-[11px] italic text-white/42">
               Terminal output will appear here when the agent runs commands.
             </span>
           ) : (
@@ -148,8 +141,8 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle>(
                     : line.type === "stderr" || line.type === "error"
                       ? "text-destructive"
                       : line.type === "exit"
-                        ? "text-muted"
-                        : "text-[#ccc]"
+                        ? "text-white/40"
+                        : "text-white/78"
                 }
               >
                 {line.text}
@@ -157,7 +150,7 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle>(
             ))
           )}
         </div>
-      </div>
+      </Card>
     );
   },
 );

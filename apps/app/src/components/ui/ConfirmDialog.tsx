@@ -4,6 +4,8 @@
 
 import { useId } from "react";
 import { Dialog } from "./Dialog.js";
+import { Button } from "./Button.js";
+import { Card } from "./Card.js";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -27,35 +29,25 @@ export function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps) {
   const titleId = useId();
-  const confirmClass =
-    tone === "danger"
-      ? "bg-danger text-destructive-fg hover:opacity-90"
-      : "bg-accent text-accent-fg hover:opacity-90";
 
   return (
     <Dialog open={open} onClose={onCancel} ariaLabelledBy={titleId}>
-      <div className="w-full max-w-sm border border-border bg-card shadow-lg flex flex-col overflow-hidden">
+      <Card className="flex w-full max-w-sm flex-col overflow-hidden rounded-[28px] border-white/12 bg-[#07090e]/96 shadow-[0_24px_72px_rgba(0,0,0,0.36)]">
         <div className="px-5 py-4">
-          <h2 id={titleId} className="text-sm font-bold text-txt mb-2">
+          <h2 id={titleId} className="mb-2 text-sm font-bold text-white">
             {title}
           </h2>
-          <p className="text-[13px] text-muted">{message}</p>
+          <p className="text-[13px] leading-relaxed text-white/62">{message}</p>
         </div>
-        <div className="flex justify-end gap-2 px-5 py-3 border-t border-border">
-          <button
-            className="px-3 py-1.5 text-xs border border-border text-muted hover:text-txt cursor-pointer"
-            onClick={onCancel}
-          >
+        <div className="flex justify-end gap-2 border-t border-white/10 px-5 py-3">
+          <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={onCancel}>
             {cancelLabel}
-          </button>
-          <button
-            className={`px-3 py-1.5 text-xs border border-transparent cursor-pointer ${confirmClass}`}
-            onClick={onConfirm}
-          >
+          </Button>
+          <Button type="button" variant={tone === "danger" ? "destructive" : "default"} size="sm" className="rounded-xl" onClick={onConfirm}>
             {confirmLabel}
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
     </Dialog>
   );
 }

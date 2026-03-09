@@ -9,8 +9,27 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { SecretInfo } from "../api-client";
 import { client } from "../api-client";
-
-/* ── Constants ──────────────────────────────────────────────────────── */
+import { Badge } from "./ui/Badge";
+import { Button } from "./ui/Button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "./ui/Card";
+import { Dialog } from "./ui/Dialog";
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  CloseIcon,
+  EyeIcon,
+  EyeOffIcon,
+  LockIcon,
+  PlusIcon,
+  SearchIcon,
+  TrashIcon,
+} from "./ui/Icons";
 
 const STORAGE_KEY = "milady:secrets-vault-keys";
 
@@ -56,14 +75,12 @@ function groupSecretsByCategory(secrets: SecretInfo[]): GroupedSecrets[] {
   );
 }
 
-/* ── Persistence ────────────────────────────────────────────────────── */
-
 function loadPinnedKeys(): Set<string> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return new Set(JSON.parse(raw) as string[]);
   } catch {
-    /* ignore */
+    // ignore
   }
   return new Set();
 }
@@ -72,11 +89,9 @@ function savePinnedKeys(keys: Set<string>) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify([...keys]));
   } catch {
-    /* ignore */
+    // ignore
   }
 }
-
-/* ── Component ──────────────────────────────────────────────────────── */
 
 export function SecretsView() {
   const [allSecrets, setAllSecrets] = useState<SecretInfo[]>([]);
@@ -108,15 +123,13 @@ export function SecretsView() {
   }, []);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
-  // Vault secrets = pinned by user OR already set in env
   const vaultSecrets = useMemo(() => {
     return allSecrets.filter((s) => pinnedKeys.has(s.key) || s.isSet);
   }, [allSecrets, pinnedKeys]);
 
-  // Available secrets not in the vault (for the picker)
   const availableSecrets = useMemo(() => {
     const vaultKeys = new Set(vaultSecrets.map((s) => s.key));
     const available = allSecrets.filter((s) => !vaultKeys.has(s.key));
@@ -130,7 +143,6 @@ export function SecretsView() {
     );
   }, [allSecrets, vaultSecrets, pickerSearch]);
 
-  // Group vault secrets by category
   const grouped = useMemo(() => {
     return groupSecretsByCategory(vaultSecrets);
   }, [vaultSecrets]);
@@ -206,7 +218,7 @@ export function SecretsView() {
 
   if (loading) {
     return (
-      <div className="text-[var(--muted)] text-[13px] italic py-8 text-center">
+      <div className="py-8 text-center text-[13px] italic text-white/45">
         Loading secrets...
       </div>
     );
@@ -214,39 +226,35 @@ export function SecretsView() {
 
   if (error) {
     return (
-      <div className="text-center py-8">
-        <p className="text-[var(--danger)] text-[13px] mb-2">{error}</p>
-        <button
-          type="button"
-          className="text-[13px] text-[var(--accent)] bg-transparent border-0 cursor-pointer underline"
-          onClick={load}
-        >
-          Retry
-        </button>
-      </div>
+      <Card className="border-danger/25 bg-danger/10">
+        <CardContent className="space-y-3 py-8 text-center">
+          <p className="text-[13px] text-danger">{error}</p>
+          <Button variant="ghost" size="sm" onClick={() => void load()}>
+            Retry
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-5">
-        <p className="text-[13px] text-[var(--muted)] m-0">
-          Manage API keys and credentials. Add secrets from your plugins, set
-          them once.
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-3">
+        <p className="m-0 text-[13px] text-white/46">
+          Manage API keys and credentials. Add only the secrets you want in the active vault.
         </p>
-        <button
-          type="button"
-          className="px-3 py-1.5 text-[13px] bg-[var(--accent)] text-white border-0 cursor-pointer hover:opacity-90 flex-shrink-0"
+        <Button
+          size="sm"
           onClick={() => {
             setPickerOpen(true);
             setPickerSearch("");
           }}
         >
-          + Add Secret
-        </button>
+          <PlusIcon className="h-4 w-4" />
+          Add Secret
+        </Button>
       </div>
 
-      {/* Picker modal */}
       {pickerOpen && (
         <SecretPicker
           available={availableSecrets}
@@ -259,42 +267,32 @@ export function SecretsView() {
         />
       )}
 
-      {/* Empty state */}
       {vaultSecrets.length === 0 && (
-        <div className="text-[var(--muted)] text-[13px] italic py-8 text-center border border-dashed border-[var(--border)]">
-          Your vault is empty. Click "Add Secret" to choose which API keys to
-          manage here.
-        </div>
+        <Card className="border-dashed border-white/10 bg-white/[0.03]">
+          <CardContent className="py-10 text-center text-[13px] text-white/45">
+            Your vault is empty. Add secrets to choose which credentials are managed here.
+          </CardContent>
+        </Card>
       )}
 
-      {/* Vault secrets grouped by category */}
       {grouped.map(({ category, label, secrets: catSecrets }) => (
-        <div key={category} className="mb-6">
+        <div key={category} className="space-y-3">
           <button
             type="button"
-            className="flex items-center gap-2 w-full bg-transparent border-0 cursor-pointer text-left mb-3"
+            className="flex w-full items-center gap-2 bg-transparent text-left"
             onClick={() => toggleCollapse(category)}
           >
-            <span
-              className="text-[11px] text-[var(--muted)] select-none transition-transform"
-              style={{
-                transform: collapsed.has(category)
-                  ? "rotate(-90deg)"
-                  : "rotate(0deg)",
-              }}
-            >
-              ▼
-            </span>
-            <span className="text-[14px] font-semibold text-[var(--txt)]">
-              {label}
-            </span>
-            <span className="text-[12px] text-[var(--muted)]">
-              ({catSecrets.length})
-            </span>
+            {collapsed.has(category) ? (
+              <ChevronRightIcon className="h-4 w-4 text-white/42" />
+            ) : (
+              <ChevronDownIcon className="h-4 w-4 text-white/42" />
+            )}
+            <span className="text-[14px] font-semibold text-white/84">{label}</span>
+            <span className="text-[12px] text-white/40">({catSecrets.length})</span>
           </button>
 
           {!collapsed.has(category) && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               {catSecrets.map((secret) => (
                 <SecretCard
                   key={secret.key}
@@ -314,27 +312,18 @@ export function SecretsView() {
         </div>
       ))}
 
-      {/* Save bar */}
       {vaultSecrets.length > 0 && (
-        <div className="flex items-center gap-3 mt-4 pt-4 border-t border-[var(--border)]">
-          <button
-            type="button"
-            className={`px-4 py-2 text-[13px] font-medium border-0 cursor-pointer transition-colors ${
-              dirtyKeys.length > 0
-                ? "bg-[var(--accent)] text-white"
-                : "bg-[var(--bg-card)] text-[var(--muted)] cursor-not-allowed"
-            }`}
+        <div className="flex items-center gap-3 border-t border-white/10 pt-4">
+          <Button
             disabled={dirtyKeys.length === 0 || saving}
             onClick={handleSave}
           >
             {saving
               ? "Saving..."
               : `Save${dirtyKeys.length > 0 ? ` (${dirtyKeys.length})` : ""}`}
-          </button>
+          </Button>
           {saveResult && (
-            <span
-              className={`text-[13px] ${saveResult.ok ? "text-[var(--ok)]" : "text-[var(--danger)]"}`}
-            >
+            <span className={`text-[13px] ${saveResult.ok ? "text-ok" : "text-danger"}`}>
               {saveResult.message}
             </span>
           )}
@@ -343,8 +332,6 @@ export function SecretsView() {
     </div>
   );
 }
-
-/* ── Secret Picker ──────────────────────────────────────────────────── */
 
 function SecretPicker({
   available,
@@ -359,57 +346,44 @@ function SecretPicker({
   onAdd: (key: string) => void;
   onClose: () => void;
 }) {
-  // Group available by category
   const grouped = useMemo(() => {
     return groupSecretsByCategory(available);
   }, [available]);
 
   return (
-    <div
-      className="fixed inset-0 bg-black/40 z-[9999] flex items-start justify-center pt-20"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") {
-          e.preventDefault();
-          onClose();
-        }
-      }}
-      role="dialog"
-      aria-modal="true"
-    >
-      <div className="bg-[var(--bg)] border border-[var(--border)] w-[560px] max-h-[480px] flex flex-col shadow-2xl">
-        <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
-          <span className="text-[14px] font-semibold text-[var(--txt)]">
+    <Dialog open={true} onClose={onClose} className="max-w-[560px] bg-[#080808]/95">
+      <Card className="flex max-h-[480px] w-full flex-col border-white/10 bg-[#080808]/95 shadow-[0_30px_80px_rgba(0,0,0,0.5)]">
+        <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+          <span className="text-[14px] font-semibold text-white/86">
             Add Secrets to Vault
           </span>
-          <button
-            type="button"
-            className="text-[var(--muted)] bg-transparent border-0 cursor-pointer text-[16px] hover:text-[var(--txt)]"
-            onClick={onClose}
-          >
-            x
-          </button>
+          <Button size="icon" variant="ghost" onClick={onClose} aria-label="Close secret picker">
+            <CloseIcon className="h-4 w-4" />
+          </Button>
         </div>
-        <input
-          type="text"
-          className="w-full px-4 py-2.5 border-b border-[var(--border)] bg-transparent text-[13px] text-[var(--txt)] outline-none font-body"
-          placeholder="Search by key, description, or plugin name..."
-          value={search}
-          onChange={(e) => onSearchChange(e.target.value)}
-        />
+        <div className="border-b border-white/10 px-4 py-3">
+          <label className="relative block">
+            <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" />
+            <input
+              type="text"
+              className="h-11 w-full rounded-full border border-white/10 bg-black/30 pl-10 pr-4 text-[13px] text-white outline-none placeholder:text-white/25 focus:border-white/20"
+              placeholder="Search by key, description, or plugin name..."
+              value={search}
+              onChange={(e) => onSearchChange(e.target.value)}
+            />
+          </label>
+        </div>
         <div className="flex-1 overflow-y-auto p-3">
           {available.length === 0 ? (
-            <div className="py-6 text-center text-[var(--muted)] text-[13px]">
+            <div className="py-6 text-center text-[13px] text-white/45">
               {search
                 ? "No matching secrets found."
                 : "All available secrets are already in your vault."}
             </div>
           ) : (
             grouped.map(({ category, label, secrets }) => (
-              <div key={category} className="mb-4">
-                <div className="text-[11px] font-semibold text-[var(--muted)] uppercase tracking-wide mb-2">
+              <div key={category} className="mb-4 space-y-2">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/40">
                   {label}
                 </div>
                 {secrets.map((s) => {
@@ -418,49 +392,44 @@ function SecretPicker({
                     .map((u) => u.pluginName || u.pluginId)
                     .join(", ");
                   return (
-                    <div
+                    <Card
                       key={s.key}
-                      className="flex items-center justify-between py-2 px-2 hover:bg-[var(--bg-hover)] gap-3"
+                      className="border-white/8 bg-white/[0.03]"
                     >
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[13px] font-mono text-[var(--txt)]">
-                          {s.key}
+                      <CardContent className="flex items-center justify-between gap-3 p-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-mono text-[13px] text-white/86">
+                            {s.key}
+                          </div>
+                          <div
+                            className="truncate text-[11px] text-white/46"
+                            title={pluginList}
+                          >
+                            {s.description}
+                            {s.usedBy.length > 0 && (
+                              <span className="ml-1">
+                                — {enabledPlugins.length > 0
+                                  ? `${enabledPlugins.length} active plugin${enabledPlugins.length !== 1 ? "s" : ""}`
+                                  : `${s.usedBy.length} plugin${s.usedBy.length !== 1 ? "s" : ""} (none active)`}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <div
-                          className="text-[11px] text-[var(--muted)] truncate"
-                          title={pluginList}
-                        >
-                          {s.description}
-                          {s.usedBy.length > 0 && (
-                            <span className="ml-1">
-                              —{" "}
-                              {enabledPlugins.length > 0
-                                ? `${enabledPlugins.length} active plugin${enabledPlugins.length !== 1 ? "s" : ""}`
-                                : `${s.usedBy.length} plugin${s.usedBy.length !== 1 ? "s" : ""} (none active)`}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        className="px-2.5 py-1 text-[12px] bg-[var(--accent)] text-white border-0 cursor-pointer hover:opacity-90 flex-shrink-0"
-                        onClick={() => onAdd(s.key)}
-                      >
-                        Add
-                      </button>
-                    </div>
+                        <Button size="sm" onClick={() => onAdd(s.key)}>
+                          Add
+                        </Button>
+                      </CardContent>
+                    </Card>
                   );
                 })}
               </div>
             ))
           )}
         </div>
-      </div>
-    </div>
+      </Card>
+    </Dialog>
   );
 }
-
-/* ── Secret Card ────────────────────────────────────────────────────── */
 
 function SecretCard({
   secret,
@@ -484,84 +453,79 @@ function SecretCard({
     .map((u) => u.pluginName || u.pluginId)
     .join(", ");
   const hasDraft = draftValue.trim() !== "";
-
-  // Only show "Required" if an enabled plugin actually requires it
   const showRequired = secret.required && enabledPlugins.length > 0;
 
   return (
-    <div className="border border-[var(--border)] bg-[var(--bg-card)] p-4 flex flex-col gap-2">
-      {/* Header row */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span
-              className="w-2 h-2 rounded-full flex-shrink-0"
-              style={{
-                backgroundColor: secret.isSet ? "var(--ok)" : "var(--muted)",
-              }}
-            />
-            <span className="text-[13px] font-mono font-medium text-[var(--txt)] truncate">
-              {secret.key}
-            </span>
+    <Card className="border-white/10 bg-white/[0.04]">
+      <CardContent className="flex flex-col gap-3 p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span
+                className="h-2 w-2 flex-shrink-0 rounded-full"
+                style={{
+                  backgroundColor: secret.isSet ? "var(--ok)" : "rgba(255,255,255,0.28)",
+                }}
+              />
+              <span className="truncate font-mono text-[13px] font-medium text-white/86">
+                {secret.key}
+              </span>
+            </div>
+            <p className="mt-1 text-[12px] leading-snug text-white/48">
+              {secret.description}
+            </p>
           </div>
-          <p className="text-[12px] text-[var(--muted)] mt-1 leading-snug">
-            {secret.description}
-          </p>
+          <div className="flex items-center gap-1.5">
+            {showRequired && <Badge variant="danger">Required</Badge>}
+            {isPinned && !secret.isSet && (
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={onRemove}
+                title="Remove from vault"
+                aria-label="Remove from vault"
+              >
+                <TrashIcon className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          {showRequired && (
-            <span className="text-[10px] text-[var(--danger)] font-medium px-1.5 py-0.5 border border-[var(--danger)] rounded">
-              Required
-            </span>
-          )}
-          {/* Remove from vault — only if not set (set secrets always show) or if explicitly pinned */}
-          {isPinned && !secret.isSet && (
-            <button
-              type="button"
-              className="text-[11px] text-[var(--muted)] bg-transparent border-0 cursor-pointer hover:text-[var(--danger)]"
-              onClick={onRemove}
-              title="Remove from vault"
-            >
-              x
-            </button>
-          )}
+
+        <div className="text-[11px] text-white/46" title={pluginList}>
+          {enabledPlugins.length > 0
+            ? `Used by ${enabledPlugins.length} active plugin${enabledPlugins.length !== 1 ? "s" : ""}: ${enabledPlugins.map((u) => u.pluginName || u.pluginId).join(", ")}`
+            : `Available for: ${pluginList}`}
         </div>
-      </div>
 
-      {/* Used by */}
-      <div className="text-[11px] text-[var(--muted)]" title={pluginList}>
-        {enabledPlugins.length > 0
-          ? `Used by ${enabledPlugins.length} active plugin${enabledPlugins.length !== 1 ? "s" : ""}: ${enabledPlugins.map((u) => u.pluginName || u.pluginId).join(", ")}`
-          : `Available for: ${pluginList}`}
-      </div>
+        {secret.isSet && !hasDraft && (
+          <div className="rounded-2xl border border-white/10 bg-black/30 px-3 py-2 font-mono text-[12px] text-white/48">
+            {secret.maskedValue}
+          </div>
+        )}
 
-      {/* Current value */}
-      {secret.isSet && !hasDraft && (
-        <div className="text-[12px] font-mono text-[var(--muted)] bg-[var(--bg)] px-2 py-1 rounded">
-          {secret.maskedValue}
+        <div className="flex items-center gap-2">
+          <input
+            type={isVisible ? "text" : "password"}
+            className="h-11 flex-1 rounded-full border border-white/10 bg-black/30 px-4 text-[13px] font-mono text-white outline-none placeholder:text-white/28 focus:border-white/20"
+            placeholder={secret.isSet ? "Enter new value to update" : "Enter value"}
+            value={draftValue}
+            onChange={(e) => onDraftChange(e.target.value)}
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onToggleVisible}
+            title={isVisible ? "Hide secret" : "Show secret"}
+          >
+            {isVisible ? (
+              <EyeOffIcon className="h-4 w-4" />
+            ) : (
+              <EyeIcon className="h-4 w-4" />
+            )}
+            {isVisible ? "Hide" : "Show"}
+          </Button>
         </div>
-      )}
-
-      {/* Input */}
-      <div className="flex gap-1.5 items-center">
-        <input
-          type={isVisible ? "text" : "password"}
-          className="flex-1 px-2.5 py-1.5 text-[13px] font-mono bg-[var(--bg)] border border-[var(--border)] text-[var(--txt)] outline-none focus:border-[var(--accent)]"
-          placeholder={
-            secret.isSet ? "Enter new value to update" : "Enter value"
-          }
-          value={draftValue}
-          onChange={(e) => onDraftChange(e.target.value)}
-        />
-        <button
-          type="button"
-          className="px-2 py-1.5 text-[12px] bg-[var(--bg)] border border-[var(--border)] text-[var(--muted)] cursor-pointer hover:text-[var(--txt)]"
-          onClick={onToggleVisible}
-          title={isVisible ? "Hide" : "Show"}
-        >
-          {isVisible ? "Hide" : "Show"}
-        </button>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }

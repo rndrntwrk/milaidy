@@ -20,6 +20,20 @@ import {
   type HyperscapeWalletProvenance,
   type RegistryAppInfo,
 } from "../api-client";
+import { Badge } from "./ui/Badge.js";
+import { Button } from "./ui/Button.js";
+import { Card } from "./ui/Card.js";
+import { Input } from "./ui/Input.js";
+import { Select } from "./ui/Select.js";
+import { Switch } from "./ui/Switch.js";
+import { Textarea } from "./ui/Textarea.js";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  RestartIcon,
+  SparkIcon,
+  VaultIcon,
+} from "./ui/Icons.js";
 
 const DEFAULT_VIEWER_SANDBOX = "allow-scripts allow-same-origin allow-popups";
 const HYPERSCAPE_APP_NAME = "@elizaos/app-hyperscape";
@@ -1049,15 +1063,17 @@ export function AppsView() {
 
   const renderHyperscapeControls = () => (
     <div className="flex flex-col gap-3">
-      <button
+      <Button
         type="button"
         onClick={handleToggleHyperscapePanel}
-        className="px-3 py-1 text-xs bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover self-start"
+        variant="outline"
+        size="sm"
+        className="self-start rounded-xl"
       >
         {hyperscapePanelOpen
           ? "Hide Hyperscape Controls"
           : "Show Hyperscape Controls"}
-      </button>
+      </Button>
       {hyperscapePanelOpen ? (
         <div className="flex flex-col gap-3">
           {hyperscapeError ? (
@@ -1076,20 +1092,40 @@ export function AppsView() {
             </div>
           ) : null}
 
-          <div className="border border-border p-2 flex flex-col gap-2">
-            <div className="font-bold text-xs">Operational Health</div>
-            <div className="text-[11px] text-muted">
+          <Card className="space-y-3 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/86">
+                  Operational Health
+                </div>
+                <div className="mt-1 text-[11px] text-white/48">
+                  Runtime and transport readiness for the live world.
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={hyperscapeHealthLoading}
+                onClick={() => void refreshHyperscapeHealth()}
+                className="rounded-xl"
+              >
+                <RestartIcon className="h-4 w-4" />
+                {hyperscapeHealthLoading ? "Refreshing" : "Refresh"}
+              </Button>
+            </div>
+            <div className="text-[11px] text-white/62">
               Status: {formatHyperscapeHealthLabel(hyperscapeHealth?.status)}
             </div>
             {hyperscapeHealth ? (
               <>
-                <div className="text-[11px] text-muted break-all">
+                <div className="text-[11px] text-white/56 break-all">
                   API: {hyperscapeHealth.baseUrl}
                 </div>
-                <div className="text-[11px] text-muted break-all">
+                <div className="text-[11px] text-white/56 break-all">
                   WS: {hyperscapeHealth.wsUrl}
                 </div>
-                <div className="text-[11px] text-muted">
+                <div className="text-[11px] text-white/56">
                   Sessions: active {hyperscapeHealth.autonomy.activeSessions} /
                   total {hyperscapeHealth.autonomy.totalSessions} • degraded{" "}
                   {hyperscapeHealth.autonomy.degradedSessions} • failed{" "}
@@ -1100,7 +1136,7 @@ export function AppsView() {
                     ([key, check]) => (
                       <div
                         key={key}
-                        className={`text-[11px] ${check.healthy ? "text-muted" : "text-danger"}`}
+                        className={`text-[11px] ${check.healthy ? "text-white/56" : "text-danger"}`}
                       >
                         {formatHyperscapeHealthCheckName(key)}:{" "}
                         {check.healthy ? "ok" : (check.message ?? "unhealthy")}
@@ -1110,7 +1146,7 @@ export function AppsView() {
                 </div>
               </>
             ) : (
-              <div className="text-[11px] text-muted">
+              <div className="text-[11px] text-white/48">
                 Health diagnostics not loaded yet.
               </div>
             )}
@@ -1122,28 +1158,32 @@ export function AppsView() {
                   .join(", ")}
               </div>
             ) : null}
-            <button
-              type="button"
-              className="px-3 py-1 text-xs bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover disabled:opacity-40 self-start"
-              disabled={hyperscapeHealthLoading}
-              onClick={() => void refreshHyperscapeHealth()}
-            >
-              {hyperscapeHealthLoading ? "Refreshing..." : "Refresh Health"}
-            </button>
-          </div>
+          </Card>
 
-          <div className="border border-border p-2 flex flex-col gap-2">
-            <div className="font-bold text-xs">Autonomous Session</div>
-            <div className="text-[11px] text-muted">
+          <Card className="space-y-3 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/86">
+                  Autonomous Session
+                </div>
+                <div className="mt-1 text-[11px] text-white/48">
+                  Live autonomy orchestration for the active Hyperscape agent.
+                </div>
+              </div>
+              <Badge variant="accent" className="rounded-full">
+                {hyperscapeAutonomyPhaseLabel}
+              </Badge>
+            </div>
+            <div className="text-[11px] text-white/56">
               Phase: {hyperscapeAutonomyPhaseLabel}
               {hyperscapeAutonomySession?.state
                 ? ` (${hyperscapeAutonomySession.state})`
                 : ""}
             </div>
-            <div className="text-[11px] text-muted break-all">
+            <div className="text-[11px] text-white/56 break-all">
               Session: {hyperscapeAutonomySession?.sessionId ?? "none"}
             </div>
-            <div className="text-[11px] text-muted break-all">
+            <div className="text-[11px] text-white/56 break-all">
               Agent: {hyperscapeAutonomySession?.agentId ?? "alice"}
               {hyperscapeAutonomySession?.characterId
                 ? ` • Character: ${hyperscapeAutonomySession.characterId}`
@@ -1155,30 +1195,34 @@ export function AppsView() {
               </div>
             ) : null}
 
-            <textarea
+            <Textarea
               rows={2}
               value={hyperscapeAutonomyGoalInput}
               onChange={(event) =>
                 setHyperscapeAutonomyGoalInput(event.target.value)
               }
               placeholder="Primary objective for Alice"
-              className="px-3 py-2 border border-border rounded-md bg-card text-txt text-xs focus:border-accent focus:outline-none resize-y"
+              className="min-h-[92px] rounded-2xl"
             />
 
             <div className="flex flex-wrap gap-2">
-              <button
+              <Button
                 type="button"
-                className="px-3 py-1 text-xs bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover disabled:opacity-40"
+                variant="default"
+                size="sm"
                 disabled={hyperscapeAutonomyBusyAction === "start"}
                 onClick={() => void startHyperscapeAutonomySession()}
+                className="rounded-xl"
               >
+                <SparkIcon className="h-4 w-4" />
                 {hyperscapeAutonomyBusyAction === "start"
                   ? "Starting..."
                   : "Start / Restart Alice"}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="px-3 py-1 text-xs bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover disabled:opacity-40"
+                variant="outline"
+                size="sm"
                 disabled={
                   !hyperscapeAutonomySessionId ||
                   hyperscapeAutonomyBusyAction === "refresh"
@@ -1190,93 +1234,105 @@ export function AppsView() {
                       )
                     : Promise.resolve(null))
                 }
+                className="rounded-xl"
               >
                 {hyperscapeAutonomyBusyAction === "refresh"
                   ? "Refreshing..."
                   : "Refresh Session"}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="px-3 py-1 text-xs bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover disabled:opacity-40"
+                variant="outline"
+                size="sm"
                 disabled={
                   !hyperscapeAutonomySessionId ||
                   hyperscapeAutonomyBusyAction === "recover"
                 }
                 onClick={() => void recoverHyperscapeAutonomySession()}
+                className="rounded-xl"
               >
                 {hyperscapeAutonomyBusyAction === "recover"
                   ? "Recovering..."
                   : "Recover"}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="px-3 py-1 text-xs bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover disabled:opacity-40"
+                variant="outline"
+                size="sm"
                 disabled={
                   !hyperscapeAutonomySessionId ||
                   hyperscapeAutonomyBusyAction === "stop"
                 }
                 onClick={() => void stopHyperscapeAutonomySession()}
+                className="rounded-xl"
               >
                 {hyperscapeAutonomyBusyAction === "stop"
                   ? "Stopping..."
                   : "Stop"}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="px-3 py-1 text-xs bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover"
+                variant="outline"
+                size="sm"
                 onClick={() =>
                   void loadHyperscapeWalletProvenance(undefined, {
                     quiet: false,
                   })
                 }
+                className="rounded-xl"
               >
+                <VaultIcon className="h-4 w-4" />
                 Refresh Wallet Provenance
-              </button>
+              </Button>
             </div>
 
             {hyperscapeWalletProvenance ? (
-              <div className="text-[11px] text-muted break-all">
+              <div className="text-[11px] text-white/56 break-all">
                 Wallet: {hyperscapeWalletProvenance.walletAddress} • Source:{" "}
                 {hyperscapeWalletProvenance.source}
               </div>
             ) : null}
-          </div>
+          </Card>
 
           <div className="flex flex-wrap gap-2">
-            <button
+            <Button
               type="button"
-              className="px-3 py-1 text-xs bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover disabled:opacity-40"
+              variant="outline"
+              size="sm"
               disabled={hyperscapeAgentsLoading}
               onClick={() => void loadHyperscapeAgents()}
+              className="rounded-xl"
             >
               {hyperscapeAgentsLoading ? "Refreshing..." : "Refresh Agents"}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="px-3 py-1 text-xs bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover disabled:opacity-40"
+              variant="outline"
+              size="sm"
               disabled={
                 hyperscapeTelemetryLoading || !hyperscapeSelectedAgentId
               }
               onClick={() =>
                 void refreshHyperscapeTelemetry(hyperscapeSelectedAgentId)
               }
+              className="rounded-xl"
             >
               {hyperscapeTelemetryLoading
                 ? "Loading telemetry..."
                 : "Refresh Goal + Quick Actions"}
-            </button>
+            </Button>
           </div>
 
           <div className="flex flex-col gap-1">
-            <span className="text-[11px] text-muted">
+            <span className="text-[11px] text-white/46">
               Embedded agents ({hyperscapeAgents.length})
             </span>
-            <select
+            <Select
               value={hyperscapeSelectedAgentId}
               onChange={(event) =>
                 setHyperscapeSelectedAgentId(event.target.value)
               }
-              className="px-3 py-2 border border-border rounded-md bg-card text-txt text-xs focus:border-accent focus:outline-none"
+              className="rounded-2xl"
             >
               <option value="">Select embedded agent</option>
               {hyperscapeAgents.map((agent) => (
@@ -1284,9 +1340,9 @@ export function AppsView() {
                   {agent.name} ({agent.state}) [{agent.agentId}]
                 </option>
               ))}
-            </select>
+            </Select>
             {selectedHyperscapeAgent ? (
-              <div className="text-[11px] text-muted">
+              <div className="text-[11px] text-white/56">
                 Character: {selectedHyperscapeAgent.characterId} | Health:{" "}
                 {selectedHyperscapeAgent.health ?? "n/a"}
                 {" / "}
@@ -1298,43 +1354,47 @@ export function AppsView() {
 
           <div className="flex flex-wrap gap-2">
             {(["start", "pause", "resume", "stop"] as const).map((action) => (
-              <button
+              <Button
                 type="button"
                 key={action}
-                className="px-3 py-1 text-xs bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover disabled:opacity-40"
+                variant={action === "start" ? "default" : "outline"}
+                size="sm"
                 disabled={
                   !selectedHyperscapeAgent ||
                   hyperscapeBusyAction === `control:${action}`
                 }
                 onClick={() => void handleControlHyperscapeAgent(action)}
+                className="rounded-xl"
               >
                 {hyperscapeBusyAction === `control:${action}`
                   ? `${action}...`
                   : action.charAt(0).toUpperCase() + action.slice(1)}
-              </button>
+              </Button>
             ))}
           </div>
 
-          <div className="border border-border p-2 flex flex-col gap-2">
-            <div className="font-bold text-xs">Create Embedded Agent</div>
-            <input
+          <Card className="space-y-3 p-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/86">
+              Create Embedded Agent
+            </div>
+            <Input
               type="text"
               value={hyperscapeCharacterIdInput}
               onChange={(event) =>
                 setHyperscapeCharacterIdInput(event.target.value)
               }
               placeholder="Character ID"
-              className="px-3 py-2 border border-border rounded-md bg-card text-txt text-xs focus:border-accent focus:outline-none"
+              className="rounded-2xl"
             />
             <div className="flex flex-wrap gap-2 items-center">
-              <select
+              <Select
                 value={hyperscapeScriptedRole}
                 onChange={(event) =>
                   setHyperscapeScriptedRole(
                     event.target.value as "" | HyperscapeScriptedRole,
                   )
                 }
-                className="px-3 py-2 border border-border rounded-md bg-card text-txt text-xs focus:border-accent focus:outline-none"
+                className="min-w-[12rem] rounded-2xl"
               >
                 <option value="">No scripted role</option>
                 {HYPERSCAPE_SCRIPTED_ROLE_OPTIONS.map((role) => (
@@ -1342,56 +1402,62 @@ export function AppsView() {
                     {role.label}
                   </option>
                 ))}
-              </select>
-              <span className="text-xs text-muted flex items-center gap-1">
-                <input
-                  type="checkbox"
+              </Select>
+              <span className="text-xs text-white/58 flex items-center gap-2">
+                <Switch
                   checked={hyperscapeAutoStart}
-                  onChange={(event) =>
-                    setHyperscapeAutoStart(event.target.checked)
-                  }
+                  onCheckedChange={setHyperscapeAutoStart}
+                  aria-label="Auto start embedded agent"
                 />
                 Auto start
               </span>
-              <button
+              <Button
                 type="button"
-                className="px-3 py-1 text-xs bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover disabled:opacity-40"
+                variant="default"
+                size="sm"
                 disabled={hyperscapeBusyAction === "create"}
                 onClick={() => void handleCreateHyperscapeAgent()}
+                className="rounded-xl"
               >
                 {hyperscapeBusyAction === "create"
                   ? "Creating..."
                   : "Create Agent"}
-              </button>
+              </Button>
             </div>
-          </div>
+          </Card>
 
-          <div className="border border-border p-2 flex flex-col gap-2">
-            <div className="font-bold text-xs">Send Message</div>
-            <textarea
+          <Card className="space-y-3 p-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/86">
+              Send Message
+            </div>
+            <Textarea
               rows={2}
               value={hyperscapeMessageInput}
               onChange={(event) =>
                 setHyperscapeMessageInput(event.target.value)
               }
               placeholder="Say something to selected agent..."
-              className="px-3 py-2 border border-border rounded-md bg-card text-txt text-xs focus:border-accent focus:outline-none resize-y"
+              className="min-h-[92px] rounded-2xl"
             />
-            <button
+            <Button
               type="button"
-              className="px-3 py-1 text-xs bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover disabled:opacity-40 self-start"
+              variant="default"
+              size="sm"
+              className="self-start rounded-xl"
               disabled={hyperscapeBusyAction === "message"}
               onClick={() => void handleSendHyperscapeMessage()}
             >
               {hyperscapeBusyAction === "message"
                 ? "Sending..."
                 : "Send Message"}
-            </button>
-          </div>
+            </Button>
+          </Card>
 
-          <div className="border border-border p-2 flex flex-col gap-2">
-            <div className="font-bold text-xs">Send Command</div>
-            <select
+          <Card className="space-y-3 p-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/86">
+              Send Command
+            </div>
+            <Select
               value={hyperscapeCommand}
               onChange={(event) =>
                 setHyperscapeCommand(
@@ -1399,38 +1465,47 @@ export function AppsView() {
                     .value as (typeof HYPERSCAPE_COMMAND_OPTIONS)[number],
                 )
               }
-              className="px-3 py-2 border border-border rounded-md bg-card text-txt text-xs focus:border-accent focus:outline-none"
+              className="rounded-2xl"
             >
               {HYPERSCAPE_COMMAND_OPTIONS.map((command) => (
                 <option key={command} value={command}>
                   {command}
                 </option>
               ))}
-            </select>
-            <textarea
+            </Select>
+            <Textarea
               rows={2}
               value={hyperscapeCommandDataInput}
               onChange={(event) =>
                 setHyperscapeCommandDataInput(event.target.value)
               }
               placeholder='{"target":[0,0,0]}'
-              className="px-3 py-2 border border-border rounded-md bg-card text-txt text-xs focus:border-accent focus:outline-none resize-y"
+              className="min-h-[92px] rounded-2xl"
             />
-            <button
+            <Button
               type="button"
-              className="px-3 py-1 text-xs bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover disabled:opacity-40 self-start"
+              variant="default"
+              size="sm"
+              className="self-start rounded-xl"
               disabled={hyperscapeBusyAction === "command"}
               onClick={() => void handleSendHyperscapeCommand()}
             >
               {hyperscapeBusyAction === "command"
                 ? "Sending..."
                 : "Send Command"}
-            </button>
-          </div>
+            </Button>
+          </Card>
 
-          <div className="border border-border p-2 flex flex-col gap-2">
-            <div className="font-bold text-xs">Goal + Quick Actions</div>
-            <div className="text-xs text-muted">
+          <Card className="space-y-3 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-white/86">
+                Goal + Quick Actions
+              </div>
+              <Badge variant="outline" className="rounded-full">
+                Live agent tools
+              </Badge>
+            </div>
+            <div className="text-xs text-white/58">
               {hyperscapeGoalResponse?.goal ? (
                 <>
                   Goal: {hyperscapeGoalResponse.goal.description ?? "unknown"}
@@ -1450,13 +1525,14 @@ export function AppsView() {
                 {hyperscapeGoalResponse.availableGoals
                   .slice(0, 8)
                   .map((goal) => (
-                    <span
+                    <Badge
                       key={goal.id}
-                      className="text-[10px] px-1.5 py-0.5 border border-border text-muted"
+                      variant="outline"
+                      className="rounded-full"
                       title={goal.description}
                     >
                       {goal.type}
-                    </span>
+                    </Badge>
                   ))}
               </div>
             ) : null}
@@ -1464,10 +1540,12 @@ export function AppsView() {
             {hyperscapeQuickActionsResponse?.quickCommands?.length ? (
               <div className="flex flex-wrap gap-1">
                 {hyperscapeQuickActionsResponse.quickCommands.map((command) => (
-                  <button
+                  <Button
                     type="button"
                     key={command.id}
-                    className="text-[10px] px-2 py-1 border border-border bg-card text-txt cursor-pointer hover:bg-accent hover:text-accent-fg disabled:opacity-40"
+                    variant={command.available ? "outline" : "ghost"}
+                    size="sm"
+                    className="rounded-xl"
                     disabled={
                       !command.available || hyperscapeBusyAction === "message"
                     }
@@ -1477,13 +1555,13 @@ export function AppsView() {
                     title={command.reason ?? command.command}
                   >
                     {command.label}
-                  </button>
+                  </Button>
                 ))}
               </div>
             ) : null}
 
             {hyperscapeQuickActionsResponse?.nearbyLocations?.length ? (
-              <div className="text-[11px] text-muted">
+              <div className="text-[11px] text-white/56">
                 Nearby:{" "}
                 {hyperscapeQuickActionsResponse.nearbyLocations
                   .slice(0, 4)
@@ -1491,7 +1569,7 @@ export function AppsView() {
                   .join(", ")}
               </div>
             ) : null}
-          </div>
+          </Card>
         </div>
       ) : null}
     </div>
@@ -1501,49 +1579,38 @@ export function AppsView() {
     if (!hasCurrentGame) return null;
 
     return (
-      <div className="mb-4 border border-border bg-card p-3 flex flex-col gap-2">
-        <div className="font-bold text-xs">Active Game Session</div>
-        <div className="text-sm">
+      <Card className="mb-4 flex flex-col gap-2 p-4">
+        <div className="text-xs font-semibold uppercase tracking-[0.2em] text-white/82">Active Game Session</div>
+        <div className="text-sm text-white/90">
           {activeGameDisplayName || activeGameApp || "Current game"}
         </div>
-        <div className="text-[11px] text-muted">
+        <div className="text-[11px] text-white/48">
           Resume in full-screen or open the viewer in a new tab.
         </div>
-        <div className="text-[11px] text-muted break-all">
+        <div className="break-all text-[11px] text-white/42">
           {currentGameViewerUrl}
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={handleOpenCurrentGame}
-            className="px-3 py-1 text-xs bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover"
-          >
+          <Button type="button" variant="default" size="sm" onClick={handleOpenCurrentGame} className="rounded-xl">
             Resume Fullscreen
-          </button>
-          <button
-            type="button"
-            onClick={handleOpenCurrentGameInNewTab}
-            className="px-3 py-1 text-xs bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover"
-          >
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={handleOpenCurrentGameInNewTab} className="rounded-xl">
             Open in New Tab
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
     );
   };
 
   if (selectedApp) {
     return (
       <div>
-        <div className="flex items-center gap-2 mb-4">
-          <button
-            type="button"
-            onClick={() => setSelectedAppName(null)}
-            className="px-3 py-1 text-xs bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover"
-          >
+        <div className="mb-4 flex items-center gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={() => setSelectedAppName(null)} className="rounded-xl">
+            <ChevronLeftIcon className="h-4 w-4" />
             Back
-          </button>
-          <div className="text-[11px] text-muted break-all">
+          </Button>
+          <div className="break-all text-[11px] text-white/48">
             {selectedApp.name}
           </div>
         </div>
@@ -1551,88 +1618,75 @@ export function AppsView() {
         {renderActiveSessionCard()}
 
         {error ? (
-          <div className="p-3 border border-danger text-danger text-xs mb-3">
+          <div className="mb-3 rounded-2xl border border-danger/25 bg-danger/10 p-3 text-xs text-danger">
             {error}
           </div>
         ) : null}
 
-        <div className="border border-border p-4 bg-card flex flex-col gap-3">
+        <Card className="flex flex-col gap-3 p-4">
           <div className="flex items-start gap-2">
             <div>
-              <div className="font-bold text-sm">
+              <div className="text-sm font-semibold text-white/92">
                 {selectedApp.displayName ?? selectedApp.name}
               </div>
-              <div className="text-xs text-muted">
+              <div className="text-xs text-white/52">
                 {selectedApp.description ?? "No description"}
               </div>
             </div>
             <span className="flex-1" />
             {selectedAppIsActive ? (
-              <span className="text-[10px] px-1.5 py-0.5 border border-ok text-ok">
+              <Badge variant="success" className="rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.18em]">
                 Active
-              </span>
+              </Badge>
             ) : (
-              <span className="text-[10px] px-1.5 py-0.5 border border-border text-muted">
+              <Badge variant="outline" className="rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.18em]">
                 Inactive
-              </span>
+              </Badge>
             )}
             {selectedApp.category ? (
-              <span className="text-[10px] px-1.5 py-0.5 border border-border text-muted">
+              <Badge variant="outline" className="rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.18em]">
                 {CATEGORY_LABELS[selectedApp.category] ?? selectedApp.category}
-              </span>
+              </Badge>
             ) : null}
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="text-xs px-3.5 py-1.5 bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed"
-              disabled={busyApp === selectedApp.name}
-              onClick={() => void handleLaunch(selectedApp)}
-            >
+            <Button type="button" variant="default" size="sm" className="rounded-xl" disabled={busyApp === selectedApp.name} onClick={() => void handleLaunch(selectedApp)}>
               {busyApp === selectedApp.name ? "Launching..." : "Launch"}
-            </button>
+            </Button>
             {selectedAppHasActiveViewer ? (
-              <button
-                type="button"
-                className="text-xs px-3.5 py-1.5 bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover"
-                onClick={handleOpenCurrentGame}
-              >
+              <Button type="button" variant="secondary" size="sm" className="rounded-xl" onClick={handleOpenCurrentGame}>
                 View Active Session
-              </button>
+              </Button>
             ) : null}
             {selectedAppHasActiveViewer ? (
-              <button
-                type="button"
-                className="text-xs px-3.5 py-1.5 bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover"
-                onClick={handleOpenCurrentGameInNewTab}
-              >
+              <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={handleOpenCurrentGameInNewTab}>
                 Open Viewer in New Tab
-              </button>
+              </Button>
             ) : null}
           </div>
 
-          <div className="border border-border p-2 flex flex-col gap-1 text-[11px]">
+          <Card className="space-y-2 border-white/8 bg-white/[0.03] p-4 text-[11px] text-white/72">
             <div>
-              <span className="text-muted">Launch type:</span>{" "}
+              <span className="text-white/45">Launch type:</span>{" "}
               {selectedApp.launchType || "n/a"}
             </div>
             <div>
-              <span className="text-muted">Latest version:</span>{" "}
+              <span className="text-white/45">Latest version:</span>{" "}
               {selectedApp.latestVersion ?? "n/a"}
             </div>
             <div>
-              <span className="text-muted">Launch URL:</span>{" "}
+              <span className="text-white/45">Launch URL:</span>{" "}
               {selectedApp.launchUrl ?? "n/a"}
             </div>
             <div className="break-all">
-              <span className="text-muted">Repository:</span>{" "}
+              <span className="text-white/45">Repository:</span>{" "}
               {selectedApp.repository ? (
                 <a
                   href={selectedApp.repository}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-accent hover:underline"
+                  className="text-white hover:underline"
                 >
                   {selectedApp.repository}
                 </a>
@@ -1640,100 +1694,97 @@ export function AppsView() {
                 "n/a"
               )}
             </div>
-          </div>
+          </Card>
 
           {selectedApp.capabilities?.length ? (
-            <div className="border border-border p-2 flex flex-col gap-1">
-              <div className="font-bold text-xs">Capabilities</div>
+            <Card className="space-y-2 border-white/8 bg-white/[0.03] p-4">
+              <div className="mb-1 text-xs font-semibold text-white/82">Capabilities</div>
               <div className="flex flex-wrap gap-1">
                 {selectedApp.capabilities.map((capability) => (
-                  <span
-                    key={capability}
-                    className="text-[10px] px-1.5 py-0.5 border border-border text-muted"
-                  >
+                  <Badge key={capability} variant="outline" className="rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.16em]">
                     {capability}
-                  </span>
+                  </Badge>
                 ))}
               </div>
-            </div>
+            </Card>
           ) : null}
 
           {selectedApp.viewer ? (
-            <div className="border border-border p-2 flex flex-col gap-1 text-[11px]">
-              <div className="font-bold text-xs">Viewer Config</div>
+            <Card className="space-y-2 border-white/8 bg-white/[0.03] p-4 text-[11px] text-white/72">
+              <div className="mb-1 text-xs font-semibold text-white/82">Viewer Config</div>
               <div className="break-all">
-                <span className="text-muted">URL:</span>{" "}
+                <span className="text-white/45">URL:</span>{" "}
                 {selectedApp.viewer.url}
               </div>
               <div>
-                <span className="text-muted">postMessage auth:</span>{" "}
+                <span className="text-white/45">postMessage auth:</span>{" "}
                 {selectedApp.viewer.postMessageAuth ? "enabled" : "disabled"}
               </div>
               <div>
-                <span className="text-muted">Sandbox:</span>{" "}
+                <span className="text-white/45">Sandbox:</span>{" "}
                 {selectedApp.viewer.sandbox ?? DEFAULT_VIEWER_SANDBOX}
               </div>
-            </div>
+            </Card>
           ) : null}
 
           {selectedApp.name === HYPERSCAPE_APP_NAME ? (
-            <div className="border border-border p-2 flex flex-col gap-2">
-              <div className="font-bold text-xs">Hyperscape Controls</div>
-              <div className="text-[11px] text-muted">
+            <Card className="space-y-2 border-white/8 bg-white/[0.03] p-4">
+              <div className="text-xs font-semibold text-white/82">Hyperscape Controls</div>
+              <div className="mb-2 text-[11px] text-white/48">
                 Embedded agents, commands, and telemetry.
               </div>
               {renderHyperscapeControls()}
-            </div>
+            </Card>
           ) : null}
-        </div>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div>
-      <div className="flex gap-2 mb-2">
-        <input
-          type="text"
-          placeholder="Search apps..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="flex-1 px-3 py-2 border border-border rounded-md bg-card text-txt text-sm focus:border-accent focus:outline-none"
-        />
-        <button
-          type="button"
-          onClick={() => void loadApps()}
-          className="px-3 py-1 text-xs bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover"
-        >
+      <div className="pro-streamer-apps-surface space-y-4">
+        <div className="flex gap-2">
+          <Input
+            type="text"
+            placeholder="Search apps..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            aria-label="Search apps"
+            className="flex-1"
+          />
+        <Button type="button" variant="default" onClick={() => void loadApps()} className="rounded-[20px]">
+          <RestartIcon className="h-4 w-4" />
           Refresh
-        </button>
+        </Button>
       </div>
 
-      <div className="flex items-center gap-2 mb-4 text-[11px] text-muted">
-        <button
+      <div className="flex items-center gap-2 text-[11px] text-white/48">
+        <Button
           type="button"
+          variant={showActiveOnly ? "secondary" : "outline"}
+          size="sm"
           onClick={() => setShowActiveOnly((current) => !current)}
-          className="px-2.5 py-1 text-[11px] bg-card border border-border cursor-pointer hover:border-accent"
+          className="rounded-xl"
         >
           {showActiveOnly ? "Showing Active" : "Active Only"}
-        </button>
+        </Button>
         <span>{activeAppNames.size} active</span>
       </div>
 
       {renderActiveSessionCard()}
 
       {error && (
-        <div className="p-3 border border-danger text-danger text-xs mb-3">
+        <div className="rounded-2xl border border-danger/25 bg-danger/10 p-3 text-xs text-danger">
           {error}
         </div>
       )}
 
       {loading ? (
-        <div className="text-center py-10 text-muted italic">
+        <div className="py-10 text-center italic text-white/48">
           Loading apps...
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-10 text-muted italic">
+        <div className="py-10 text-center italic text-white/48">
           {showActiveOnly
             ? "No active apps found."
             : searchQuery
@@ -1745,50 +1796,54 @@ export function AppsView() {
           {filtered.map((app) => {
             const isActive = activeAppNames.has(app.name);
             return (
-              <div
+              <Card
                 key={app.name}
-                className="border border-border p-4 bg-card flex flex-col gap-2"
+                className="flex flex-col gap-3 p-4"
               >
                 <div className="flex justify-between items-start gap-2">
-                  <div className="font-bold text-sm">
+                  <div className="text-sm font-semibold text-white/92">
                     {app.displayName ?? app.name}
                   </div>
-                  <button
+                  <Button
                     type="button"
-                    className="text-xs px-2 py-0.5 bg-card border border-border cursor-pointer hover:border-accent"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl"
                     onClick={() => setSelectedAppName(app.name)}
                     title={`Open ${app.displayName ?? app.name}`}
                   >
-                    {">"}
-                  </button>
+                    <ChevronRightIcon className="h-4 w-4" />
+                  </Button>
                 </div>
 
                 <div className="flex flex-wrap gap-1">
                   {app.category ? (
-                    <span className="text-[10px] px-1.5 py-0.5 border border-border text-muted">
+                    <Badge variant="outline" className="rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.16em]">
                       {CATEGORY_LABELS[app.category] ?? app.category}
-                    </span>
+                    </Badge>
                   ) : null}
                   {isActive ? (
-                    <span className="text-[10px] px-1.5 py-0.5 border border-ok text-ok">
+                    <Badge variant="success" className="rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.16em]">
                       Active
-                    </span>
+                    </Badge>
                   ) : null}
                 </div>
 
-                <div className="text-xs text-muted flex-1">
+                <div className="flex-1 text-xs text-white/52">
                   {app.description ?? "No description"}
                 </div>
 
-                <button
+                <Button
                   type="button"
-                  className="text-xs px-3.5 py-1.5 bg-accent text-accent-fg border border-accent cursor-pointer hover:bg-accent-hover self-start disabled:opacity-40 disabled:cursor-not-allowed"
+                  variant="default"
+                  size="sm"
+                  className="self-start rounded-xl"
                   disabled={busyApp === app.name}
                   onClick={() => void handleLaunch(app)}
                 >
                   {busyApp === app.name ? "Launching..." : "Launch"}
-                </button>
-              </div>
+                </Button>
+              </Card>
             );
           })}
         </div>

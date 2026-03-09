@@ -106,6 +106,37 @@ export type ThemeName =
   | "psycho"
   | "milady-os";
 
+export type DockSurface = "none" | "threads" | "memory" | "ops" | "vault";
+export type HudSurface = "none" | "control-stack" | "threads" | "asset-vault";
+export type RailBubbleState = "collapsed" | "peek" | "expanded";
+export type ActiveBubble = "none" | "action-log" | "mission-stack";
+export type HudControlSection =
+  | "settings"
+  | "apps"
+  | "advanced"
+  | "plugins-connectors"
+  | "custom-actions"
+  | "triggers"
+  | "identity"
+  | "approvals"
+  | "safe-mode"
+  | "governance"
+  | "fine-tuning"
+  | "trajectories"
+  | "runtime"
+  | "database"
+  | "logs"
+  | "security";
+export type HudAssetSection = "character" | "wallets" | "identity";
+export type HudFocusCard =
+  | "agent-core"
+  | "runtime"
+  | "trace"
+  | "memory"
+  | "actions"
+  | "mission"
+  | "feeds";
+
 export const THEMES: ReadonlyArray<{
   id: ThemeName;
   label: string;
@@ -117,11 +148,146 @@ export const THEMES: ReadonlyArray<{
     { id: "programmer", label: "programmer", hint: "vscode dark" },
     { id: "haxor", label: "haxor", hint: "terminal green" },
     { id: "psycho", label: "psycho", hint: "pure chaos" },
-    { id: "milady-os", label: "milady os v3", hint: "glowing sci-fi HUD" },
+    { id: "milady-os", label: "Pro Streamer", hint: "broadcast conversation stage" },
   ];
 
 const VALID_THEMES = new Set<string>(THEMES.map((t) => t.id));
 const AGENT_TRANSFER_MIN_PASSWORD_LENGTH = 4;
+
+function replaceMiladyLocationWithRoot() {
+  if (typeof window === "undefined") return;
+  if (window.location.protocol === "file:") {
+    const next = `${window.location.pathname}${window.location.search}#/`;
+    window.history.replaceState(null, "", next);
+    return;
+  }
+  if (window.location.pathname !== "/" || window.location.search || window.location.hash) {
+    window.history.replaceState(null, "", "/");
+  }
+}
+
+function miladyControlSectionForTab(tab: Tab): HudControlSection | null {
+  switch (tab) {
+    case "settings":
+      return "settings";
+    case "apps":
+      return "apps";
+    case "advanced":
+      return "advanced";
+    case "connectors":
+    case "plugins":
+    case "skills":
+      return "plugins-connectors";
+    case "actions":
+      return "custom-actions";
+    case "triggers":
+      return "triggers";
+    case "identity":
+      return "identity";
+    case "approvals":
+      return "approvals";
+    case "safe-mode":
+      return "safe-mode";
+    case "governance":
+      return "governance";
+    case "fine-tuning":
+      return "fine-tuning";
+    case "trajectories":
+      return "trajectories";
+    case "runtime":
+      return "runtime";
+    case "database":
+      return "database";
+    case "logs":
+      return "logs";
+    case "security":
+      return "security";
+    default:
+      return null;
+  }
+}
+
+function miladyAssetSectionForTab(tab: Tab): HudAssetSection | null {
+  switch (tab) {
+    case "character":
+      return "character";
+    case "wallets":
+      return "wallets";
+    case "identity":
+      return "identity";
+    default:
+      return null;
+  }
+}
+
+function miladyFocusCardForTab(tab: Tab): HudFocusCard {
+  switch (tab) {
+    case "knowledge":
+      return "memory";
+    case "runtime":
+      return "runtime";
+    case "logs":
+    case "security":
+      return "feeds";
+    case "triggers":
+    case "approvals":
+      return "mission";
+    case "plugins":
+    case "skills":
+    case "actions":
+    case "connectors":
+    case "apps":
+      return "actions";
+    case "advanced":
+    case "fine-tuning":
+    case "trajectories":
+    case "database":
+    case "governance":
+    case "safe-mode":
+      return "trace";
+    default:
+      return "agent-core";
+  }
+}
+
+function defaultMiladyTabForControlSection(section: HudControlSection): Tab {
+  switch (section) {
+    case "settings":
+      return "settings";
+    case "apps":
+      return "apps";
+    case "advanced":
+      return "advanced";
+    case "plugins-connectors":
+      return "plugins";
+    case "custom-actions":
+      return "actions";
+    case "triggers":
+      return "triggers";
+    case "identity":
+      return "identity";
+    case "approvals":
+      return "approvals";
+    case "safe-mode":
+      return "safe-mode";
+    case "governance":
+      return "governance";
+    case "fine-tuning":
+      return "fine-tuning";
+    case "trajectories":
+      return "trajectories";
+    case "runtime":
+      return "runtime";
+    case "database":
+      return "database";
+    case "logs":
+      return "logs";
+    case "security":
+      return "security";
+    default:
+      return "settings";
+  }
+}
 
 function loadTheme(): ThemeName {
   try {
@@ -556,6 +722,15 @@ export interface AppState {
   // Core
   tab: Tab;
   currentTheme: ThemeName;
+  dockSurface: DockSurface;
+  streamViewMode: "broadcast" | "operator";
+  leftRailState: RailBubbleState;
+  rightRailState: RailBubbleState;
+  activeBubble: ActiveBubble;
+  hudSurface: HudSurface;
+  hudControlSection: HudControlSection | null;
+  hudAssetSection: HudAssetSection | null;
+  hudFocusCard: HudFocusCard;
   connected: boolean;
   agentStatus: AgentStatus | null;
   onboardingComplete: boolean;
@@ -833,6 +1008,19 @@ export interface AppActions {
   // Navigation
   setTab: (tab: Tab) => void;
   setTheme: (theme: ThemeName) => void;
+  openDockSurface: (surface: Exclude<DockSurface, "none">) => void;
+  closeDockSurface: () => void;
+  setStreamViewMode: (mode: "broadcast" | "operator") => void;
+  openHudThreads: () => void;
+  openHudControlStack: (section?: HudControlSection, tabOverride?: Tab) => void;
+  openHudAssetVault: (section?: HudAssetSection, tabOverride?: Tab) => void;
+  closeHudSurface: () => void;
+  focusHudCard: (card: HudFocusCard, tabOverride?: Tab) => void;
+  setRailDisplay: (
+    bubble: Exclude<ActiveBubble, "none">,
+    state: RailBubbleState,
+  ) => void;
+  collapseRails: () => void;
 
   // Lifecycle
   handleStart: () => Promise<void>;
@@ -994,6 +1182,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // --- Core state ---
   const [tab, setTabRaw] = useState<Tab>("chat");
   const [currentTheme, setCurrentTheme] = useState<ThemeName>(loadTheme);
+  const [dockSurface, setDockSurface] = useState<DockSurface>("none");
+  const [streamViewMode, setStreamViewMode] =
+    useState<"broadcast" | "operator">("broadcast");
+  const [leftRailState, setLeftRailState] =
+    useState<RailBubbleState>("collapsed");
+  const [rightRailState, setRightRailState] =
+    useState<RailBubbleState>("collapsed");
+  const [activeBubble, setActiveBubble] = useState<ActiveBubble>("none");
+  const [hudSurface, setHudSurface] = useState<HudSurface>("none");
+  const [hudControlSection, setHudControlSection] =
+    useState<HudControlSection | null>(null);
+  const [hudAssetSection, setHudAssetSection] =
+    useState<HudAssetSection | null>(null);
+  const [hudFocusCard, setHudFocusCard] = useState<HudFocusCard>("agent-core");
   const [connected, setConnected] = useState(false);
   const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
@@ -1499,19 +1701,210 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ── Theme ──────────────────────────────────────────────────────────
 
+  const lastLegacyTabRef = useRef<Tab>("chat");
+
+  const collapseRails = useCallback(() => {
+    setLeftRailState("collapsed");
+    setRightRailState("collapsed");
+    setActiveBubble("none");
+  }, []);
+
+  const setRailDisplay = useCallback(
+    (bubble: Exclude<ActiveBubble, "none">, state: RailBubbleState) => {
+      if (bubble === "action-log") {
+        setLeftRailState(state);
+        setRightRailState("collapsed");
+        setActiveBubble(state === "collapsed" ? "none" : "action-log");
+        return;
+      }
+      setRightRailState(state);
+      setLeftRailState("collapsed");
+      setActiveBubble(state === "collapsed" ? "none" : "mission-stack");
+    },
+    [],
+  );
+
+  const closeHudSurface = useCallback(() => {
+    collapseRails();
+    setDockSurface("none");
+    setHudSurface("none");
+    setHudControlSection(null);
+    setHudAssetSection(null);
+  }, [collapseRails]);
+
+  const closeDockSurface = useCallback(() => {
+    setDockSurface("none");
+  }, []);
+
+  const openDockSurface = useCallback(
+    (surface: Exclude<DockSurface, "none">) => {
+      collapseRails();
+      setDockSurface(surface);
+      setHudSurface("none");
+      setHudControlSection(null);
+
+      if (surface === "threads") {
+        setHudAssetSection(null);
+        setHudFocusCard("agent-core");
+        return;
+      }
+
+      if (surface === "memory") {
+        setHudAssetSection(null);
+        setHudFocusCard("memory");
+        setTabRaw("knowledge");
+        return;
+      }
+
+      if (surface === "ops") {
+        setHudAssetSection(null);
+        setHudFocusCard("actions");
+        setTabRaw("plugins");
+        return;
+      }
+
+      setHudAssetSection((current) => current ?? "identity");
+      setHudFocusCard("agent-core");
+    },
+    [collapseRails],
+  );
+
+  const openHudThreads = useCallback(() => {
+    collapseRails();
+    setDockSurface("threads");
+    setHudSurface("none");
+    setHudControlSection(null);
+    setHudAssetSection(null);
+  }, [collapseRails]);
+
+  const focusHudCard = useCallback((card: HudFocusCard, tabOverride?: Tab) => {
+    setHudFocusCard(card);
+    if (tabOverride) {
+      setTabRaw(tabOverride);
+    }
+    if (card === "agent-core") {
+      collapseRails();
+      setDockSurface("none");
+      setHudSurface("none");
+      setHudControlSection(null);
+      setHudAssetSection(null);
+    }
+  }, [collapseRails]);
+
+  const openHudControlStack = useCallback(
+    (section: HudControlSection = "settings", tabOverride?: Tab) => {
+      const targetTab = tabOverride ?? defaultMiladyTabForControlSection(section);
+      collapseRails();
+      setDockSurface("none");
+      setHudSurface("control-stack");
+      setHudControlSection(section);
+      setHudAssetSection(null);
+      setHudFocusCard(miladyFocusCardForTab(targetTab));
+      setTabRaw(targetTab);
+    },
+    [collapseRails],
+  );
+
+  const openHudAssetVault = useCallback(
+    (section: HudAssetSection = "identity", tabOverride?: Tab) => {
+      collapseRails();
+      setDockSurface("vault");
+      setHudSurface("none");
+      setHudAssetSection(section);
+      setHudControlSection(null);
+      setHudFocusCard("agent-core");
+      setTabRaw(tabOverride ?? section);
+    },
+    [collapseRails],
+  );
+
+  const applyMiladyTabIntent = useCallback(
+    (newTab: Tab) => {
+      setTabRaw(newTab);
+      const controlSection = miladyControlSectionForTab(newTab);
+      const assetSection = miladyAssetSectionForTab(newTab);
+      if (controlSection) {
+        collapseRails();
+        setDockSurface("none");
+        setHudSurface("control-stack");
+        setHudControlSection(controlSection);
+        setHudAssetSection(null);
+        setHudFocusCard(miladyFocusCardForTab(newTab));
+        return;
+      }
+      if (assetSection) {
+        collapseRails();
+        setDockSurface("vault");
+        setHudSurface("none");
+        setHudAssetSection(assetSection);
+        setHudControlSection(null);
+        setHudFocusCard("agent-core");
+        return;
+      }
+      if (newTab === "knowledge") {
+        collapseRails();
+        setDockSurface("memory");
+        setHudSurface("none");
+        setHudControlSection(null);
+        setHudAssetSection(null);
+        setHudFocusCard("memory");
+        return;
+      }
+      collapseRails();
+      setDockSurface("none");
+      setHudSurface("none");
+      setHudControlSection(null);
+      setHudAssetSection(null);
+      setHudFocusCard(miladyFocusCardForTab(newTab));
+    },
+    [collapseRails],
+  );
+
   const setTheme = useCallback((name: ThemeName) => {
+    const switchingToMilady = name === "milady-os" && currentTheme !== "milady-os";
+    const switchingFromMilady = name !== "milady-os" && currentTheme === "milady-os";
+
     setCurrentTheme(name);
     applyTheme(name);
-  }, []);
+
+    if (switchingToMilady) {
+      collapseRails();
+      applyMiladyTabIntent(tab);
+      replaceMiladyLocationWithRoot();
+      return;
+    }
+
+    if (switchingFromMilady) {
+      collapseRails();
+      setDockSurface("none");
+      setHudSurface("none");
+      setHudControlSection(null);
+      setHudAssetSection(null);
+      setHudFocusCard("agent-core");
+      const restoreTab = lastLegacyTabRef.current || "chat";
+      setTabRaw(restoreTab);
+      const path = pathForTab(restoreTab);
+      if (window.location.protocol === "file:") {
+        window.location.hash = path;
+      } else {
+        window.history.replaceState(null, "", path);
+      }
+    }
+  }, [applyMiladyTabIntent, currentTheme, tab]);
 
   // ── Navigation ─────────────────────────────────────────────────────
 
   const setTab = useCallback(
     (newTab: Tab) => {
-      setTabRaw(newTab);
       if (newTab === "apps") {
         setAppsSubTab(activeGameViewerUrl.trim() ? "games" : "browse");
       }
+      if (currentTheme === "milady-os") {
+        applyMiladyTabIntent(newTab);
+        return;
+      }
+      setTabRaw(newTab);
+      lastLegacyTabRef.current = newTab;
       const path = pathForTab(newTab);
       // In Electron packaged builds (file:// URLs), use hash routing to avoid
       // "Not allowed to load local resource: file:///..." errors.
@@ -1521,7 +1914,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         window.history.pushState(null, "", path);
       }
     },
-    [activeGameViewerUrl],
+    [activeGameViewerUrl, applyMiladyTabIntent, currentTheme],
   );
 
   const sortTriggersByNextRun = useCallback(
@@ -2123,7 +2516,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       setAgentStatus({
         ...(agentStatus ?? {
-          agentName: "Milady",
+          agentName: "rasp",
           model: undefined,
           uptime: undefined,
           startedAt: undefined,
@@ -3082,7 +3475,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     );
     if (!confirmed) return;
     const exportToken = window.prompt(
-      "Enter your wallet export token (MILADY_WALLET_EXPORT_TOKEN):",
+      "Enter your Pro Streamer wallet export token (MILADY_WALLET_EXPORT_TOKEN):",
       "",
     );
     if (exportToken === null) return;
@@ -4521,7 +4914,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
           : window.location.pathname;
       const urlTab = tabFromPath(navPath);
       if (urlTab) {
-        setTabRaw(urlTab);
+        if (currentTheme === "milady-os") {
+          applyMiladyTabIntent(urlTab);
+          replaceMiladyLocationWithRoot();
+        } else {
+          setTabRaw(urlTab);
+          lastLegacyTabRef.current = urlTab;
+        }
         if (urlTab === "plugins" || urlTab === "connectors") {
           void loadPlugins();
           if (urlTab === "plugins") {
@@ -4553,7 +4952,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ? window.location.hash.replace(/^#/, "") || "/"
         : window.location.pathname;
       const t = tabFromPath(navPath);
-      if (t) setTabRaw(t);
+      if (!t) return;
+      if (currentTheme === "milady-os") {
+        applyMiladyTabIntent(t);
+        replaceMiladyLocationWithRoot();
+        return;
+      }
+      setTabRaw(t);
+      lastLegacyTabRef.current = t;
     };
     const navEvent = isFileProtocol ? "hashchange" : "popstate";
     window.addEventListener(navEvent, handleNavChange);
@@ -4573,6 +4979,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     appendAutonomousEvent,
+    applyMiladyTabIntent,
     checkExtensionStatus,
     currentTheme,
     loadCharacter,
@@ -4623,7 +5030,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value: AppContextValue = {
     // State
-    tab, currentTheme, connected, agentStatus, onboardingComplete, onboardingLoading,
+    tab, currentTheme, dockSurface, streamViewMode, leftRailState, rightRailState, activeBubble, hudSurface, hudControlSection, hudAssetSection, hudFocusCard, connected, agentStatus, onboardingComplete, onboardingLoading,
     startupPhase, startupError, authRequired, actionNotice, toasts, lifecycleBusy, lifecycleAction,
     pendingRestart, pendingRestartReasons, restartBannerDismissed,
     pairingEnabled, pairingExpiresAt, pairingCodeInput, pairingError, pairingBusy,
@@ -4686,6 +5093,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Actions
     setTab,
     setTheme,
+    openDockSurface,
+    closeDockSurface,
+    setStreamViewMode,
+    openHudThreads,
+    openHudControlStack,
+    openHudAssetVault,
+    closeHudSurface,
+    focusHudCard,
+    setRailDisplay,
+    collapseRails,
     handleStart,
     handleStop,
     handlePauseResume,

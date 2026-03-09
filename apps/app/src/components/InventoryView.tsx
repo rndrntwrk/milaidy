@@ -2,22 +2,34 @@
  * Inventory view — wallet balances and NFTs.
  */
 
-import { useMemo, useState } from "react";
+import { type ComponentType, type SVGProps, useMemo, useState } from "react";
 import { useApp } from "../AppContext";
 import type { EvmChainBalance } from "../api-client";
+import {
+  ArbitrumIcon,
+  BaseChainIcon,
+  EthereumIcon,
+  OptimismIcon,
+  PolygonIcon,
+  SolanaIcon,
+  StackIcon,
+} from "./ui/Icons";
 
 /* ── Chain icon helper ─────────────────────────────────────────────── */
 
-function chainIcon(chain: string): { code: string; cls: string } {
+function chainIcon(chain: string): {
+  Icon: ComponentType<SVGProps<SVGSVGElement>>;
+  cls: string;
+} {
   const c = chain.toLowerCase();
   if (c === "ethereum" || c === "mainnet")
-    return { code: "E", cls: "bg-chain-eth" };
-  if (c === "base") return { code: "B", cls: "bg-chain-base" };
-  if (c === "arbitrum") return { code: "A", cls: "bg-chain-arb" };
-  if (c === "optimism") return { code: "O", cls: "bg-chain-op" };
-  if (c === "polygon") return { code: "P", cls: "bg-chain-pol" };
-  if (c === "solana") return { code: "S", cls: "bg-chain-sol" };
-  return { code: chain.charAt(0).toUpperCase(), cls: "bg-bg-muted" };
+    return { Icon: EthereumIcon, cls: "bg-chain-eth" };
+  if (c === "base") return { Icon: BaseChainIcon, cls: "bg-chain-base" };
+  if (c === "arbitrum") return { Icon: ArbitrumIcon, cls: "bg-chain-arb" };
+  if (c === "optimism") return { Icon: OptimismIcon, cls: "bg-chain-op" };
+  if (c === "polygon") return { Icon: PolygonIcon, cls: "bg-chain-pol" };
+  if (c === "solana") return { Icon: SolanaIcon, cls: "bg-chain-sol" };
+  return { Icon: StackIcon, cls: "bg-bg-muted" };
 }
 
 /* ── Balance formatter ────────────────────────────────────────────── */
@@ -408,8 +420,7 @@ export function InventoryView() {
         {evmAddr &&
           renderChainSection(
             "Ethereum",
-            "E",
-            "bg-chain-eth",
+            "ethereum",
             evmAddr,
             evmRows,
             true,
@@ -417,8 +428,7 @@ export function InventoryView() {
         {solAddr &&
           renderChainSection(
             "Solana",
-            "S",
-            "bg-chain-sol",
+            "solana",
             solAddr,
             solanaRows,
             false,
@@ -432,9 +442,9 @@ export function InventoryView() {
               return (
                 <div key={c.chain} className="py-0.5">
                   <span
-                    className={`inline-block w-3 h-3 rounded-full text-center leading-3 text-[7px] font-bold font-mono text-white align-middle ${icon.cls}`}
+                    className={`inline-flex h-3 w-3 items-center justify-center rounded-full text-white align-middle ${icon.cls}`}
                   >
-                    {icon.code}
+                    <icon.Icon className="h-2 w-2" />
                   </span>{" "}
                   {c.chain}:{" "}
                   {c.error?.includes("not enabled") ? (
@@ -465,20 +475,20 @@ export function InventoryView() {
 
   function renderChainSection(
     chainName: string,
-    iconCode: string,
-    iconCls: string,
+    chainKey: string,
     address: string,
     rows: TokenRow[],
     showSubChain: boolean,
   ) {
+    const icon = chainIcon(chainKey);
     return (
       <div className="border border-border bg-card">
         {/* Section header: icon + chain name | address + copy */}
         <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-border bg-bg">
           <span
-            className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-bold font-mono text-white shrink-0 ${iconCls}`}
+            className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-white shrink-0 ${icon.cls}`}
           >
-            {iconCode}
+            <icon.Icon className="h-3.5 w-3.5" />
           </span>
           <span className="text-sm font-bold">{chainName}</span>
           <CopyableAddress address={address} onCopy={copyToClipboard} />
@@ -509,10 +519,10 @@ export function InventoryView() {
                         style={{ width: 28 }}
                       >
                         <span
-                          className={`inline-block w-4 h-4 rounded-full text-center leading-4 text-[9px] font-bold font-mono text-white ${subIcon?.cls ?? "bg-bg-muted"}`}
+                          className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-white ${subIcon?.cls ?? "bg-bg-muted"}`}
                           title={row.chain}
                         >
-                          {subIcon?.code ?? "?"}
+                          {subIcon ? <subIcon.Icon className="h-2.5 w-2.5" /> : "?"}
                         </span>
                       </td>
                     )}
@@ -604,9 +614,9 @@ export function InventoryView() {
                 </div>
                 <div className="inline-flex items-center gap-1 text-[10px] text-muted mt-0.5">
                   <span
-                    className={`inline-block w-3 h-3 rounded-full text-center leading-3 text-[7px] font-bold font-mono text-white ${icon.cls}`}
+                    className={`inline-flex h-3 w-3 items-center justify-center rounded-full text-white ${icon.cls}`}
                   >
-                    {icon.code}
+                    <icon.Icon className="h-2 w-2" />
                   </span>
                   {nft.chain}
                 </div>

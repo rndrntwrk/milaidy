@@ -38,6 +38,7 @@ export function ChatAvatar({
   const [engineReady, setEngineReady] = useState(false);
   const [vrmLoaded, setVrmLoaded] = useState(false);
   const [showFallback, setShowFallback] = useState(false);
+  const [viewerFailed, setViewerFailed] = useState(false);
 
   const avatarVisible = engineReady || vrmLoaded || showFallback;
 
@@ -53,15 +54,24 @@ export function ChatAvatar({
     }
   }, []);
 
+  const handleViewerError = useCallback(() => {
+    setEngineReady(false);
+    setVrmLoaded(false);
+    setViewerFailed(true);
+    setShowFallback(true);
+  }, []);
+
   // If a VRM fails to load, show the selected static preview in the sidebar.
   useEffect(() => {
+    setEngineReady(false);
     setVrmLoaded(false);
     setShowFallback(false);
+    setViewerFailed(false);
     const timer = window.setTimeout(() => {
       setShowFallback(true);
-    }, 4000);
+    }, 1200);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [vrmPath]);
 
   // Subscribe to WebSocket emote events and trigger avatar animations.
   useEffect(() => {
@@ -100,7 +110,7 @@ export function ChatAvatar({
           <div
             className="absolute inset-0"
             style={{
-              opacity: vrmLoaded ? 1 : 0,
+              opacity: vrmLoaded && !viewerFailed ? 1 : 0,
               transition: "opacity 0.45s ease",
               transform: "scale(1.22) translateY(-8%)",
               transformOrigin: "50% 28%",
@@ -112,14 +122,15 @@ export function ChatAvatar({
               isSpeaking={isSpeaking}
               onEngineReady={handleEngineReady}
               onEngineState={handleEngineState}
+              onViewerError={handleViewerError}
             />
           </div>
 
-          {showFallback && !vrmLoaded && (
+          {showFallback && (!vrmLoaded || viewerFailed) && (
             <img
               src={fallbackPreviewUrl}
               alt="avatar preview"
-              className="absolute left-1/2 -translate-x-1/2 bottom-[-2%] h-[122%] object-contain opacity-90"
+              className="absolute left-1/2 top-1/2 h-[104%] -translate-x-1/2 -translate-y-[46%] object-contain opacity-95 sm:h-[112%] lg:h-[118%] xl:h-[122%]"
             />
           )}
         </div>

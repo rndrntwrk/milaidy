@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { client } from "../api-client";
 import { useBugReport } from "../hooks/useBugReport";
+import { Button } from "./ui/Button";
+import { Card } from "./ui/Card";
+import { Dialog } from "./ui/Dialog";
+import { ChevronRightIcon, CloseIcon } from "./ui/Icons";
 
 const ENV_OPTIONS = ["macOS", "Windows", "Linux", "Other"] as const;
 const GITHUB_NEW_ISSUE_URL =
@@ -178,39 +182,21 @@ export function BugReportModal() {
   const canSubmit =
     form.description.trim() && form.stepsToReproduce.trim() && !submitting;
 
-  const backdropProps = {
-    className:
-      "fixed inset-0 z-50 flex items-center justify-center bg-black/50",
-    onClick: (e: React.MouseEvent) => {
-      if (e.target === e.currentTarget) close();
-    },
-    onKeyDown: (e: React.KeyboardEvent) => {
-      if (e.key === "Escape") close();
-    },
-    role: "dialog" as const,
-    "aria-modal": true as const,
-    tabIndex: -1,
-  };
-
   // Success state
   if (resultUrl) {
     return (
-      <div {...backdropProps}>
-        <div className="w-full max-w-md border border-border bg-card shadow-lg flex flex-col">
-          <div className="flex items-center px-5 py-3 border-b border-border">
+      <Dialog open={isOpen} onClose={close} className="max-w-md">
+        <Card className="flex flex-col overflow-hidden rounded-[28px] border-white/12 bg-[#07090e]/96 shadow-[0_24px_72px_rgba(0,0,0,0.36)]">
+          <div className="flex items-center border-b border-white/10 px-5 py-3">
             <span className="font-bold text-sm flex-1">
               Bug Report Submitted
             </span>
-            <button
-              type="button"
-              className="text-muted hover:text-txt text-lg leading-none px-1 cursor-pointer"
-              onClick={close}
-            >
-              &times;
-            </button>
+            <Button type="button" variant="ghost" size="icon" className="rounded-full" onClick={close} aria-label="Close bug report dialog">
+              <CloseIcon className="h-4 w-4" />
+            </Button>
           </div>
           <div className="px-5 py-6 text-center">
-            <p className="text-sm text-txt mb-3">
+            <p className="mb-3 text-sm text-white/82">
               Your bug report has been submitted successfully.
             </p>
             <a
@@ -222,33 +208,25 @@ export function BugReportModal() {
               {resultUrl}
             </a>
           </div>
-          <div className="flex justify-end px-5 py-3 border-t border-border">
-            <button
-              type="button"
-              onClick={close}
-              className="px-4 py-1.5 border border-border text-sm text-muted hover:text-txt cursor-pointer"
-            >
+          <div className="flex justify-end border-t border-white/10 px-5 py-3">
+            <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={close}>
               Close
-            </button>
+            </Button>
           </div>
-        </div>
-      </div>
+        </Card>
+      </Dialog>
     );
   }
 
   return (
-    <div {...backdropProps}>
-      <div className="w-full max-w-lg border border-border bg-card shadow-lg flex flex-col max-h-[85vh]">
+    <Dialog open={isOpen} onClose={close} className="max-w-lg">
+      <Card className="flex max-h-[85vh] flex-col overflow-hidden rounded-[28px] border-white/12 bg-[#07090e]/96 shadow-[0_24px_72px_rgba(0,0,0,0.36)]">
         {/* Header */}
-        <div className="flex items-center px-5 py-3 border-b border-border shrink-0">
+        <div className="flex shrink-0 items-center border-b border-white/10 px-5 py-3">
           <span className="font-bold text-sm flex-1">Report a Bug</span>
-          <button
-            type="button"
-            className="text-muted hover:text-txt text-lg leading-none px-1 cursor-pointer"
-            onClick={close}
-          >
-            &times;
-          </button>
+          <Button type="button" variant="ghost" size="icon" className="rounded-full" onClick={close} aria-label="Close bug report dialog">
+            <CloseIcon className="h-4 w-4" />
+          </Button>
         </div>
 
         {/* Body */}
@@ -345,19 +323,19 @@ export function BugReportModal() {
 
           {/* Collapsible Logs */}
           <div>
-            <button
+            <Button
               type="button"
-              className="text-[11px] font-bold text-muted hover:text-txt cursor-pointer flex items-center gap-1"
+              variant="ghost"
+              size="sm"
+              className="h-auto px-0 py-0 text-[11px] font-bold text-white/54 hover:text-white/82"
               onClick={() => setShowLogs(!showLogs)}
             >
-              <span
-                className="inline-block transition-transform"
+              <ChevronRightIcon
+                className="h-3.5 w-3.5 transition-transform"
                 style={{ transform: showLogs ? "rotate(90deg)" : "none" }}
-              >
-                ▶
-              </span>
+              />
               Logs
-            </button>
+            </Button>
             {showLogs && (
               <textarea
                 className={`${textareaClass} mt-1 font-mono text-xs`}
@@ -371,34 +349,20 @@ export function BugReportModal() {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-border shrink-0">
-          <button
-            type="button"
-            onClick={close}
-            className="px-3 py-1.5 border border-border text-sm text-muted hover:text-txt cursor-pointer"
-          >
+        <div className="flex shrink-0 items-center justify-between gap-2 border-t border-white/10 px-5 py-3">
+          <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={close}>
             Cancel
-          </button>
+          </Button>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleCopyAndOpen}
-              disabled={!canSubmit}
-              className="px-3 py-1.5 border border-border text-sm text-muted hover:text-txt cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-            >
+            <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={handleCopyAndOpen} disabled={!canSubmit}>
               {copied ? "Copied!" : "Copy & Open GitHub"}
-            </button>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={!canSubmit}
-              className="px-3 py-1.5 border border-accent bg-accent text-white text-sm cursor-pointer hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
+            </Button>
+            <Button type="button" variant="default" size="sm" className="rounded-xl" onClick={handleSubmit} disabled={!canSubmit}>
               {submitting ? "Submitting..." : "Submit"}
-            </button>
+            </Button>
           </div>
         </div>
-      </div>
-    </div>
+      </Card>
+    </Dialog>
   );
 }

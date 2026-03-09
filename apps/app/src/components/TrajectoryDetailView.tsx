@@ -11,6 +11,7 @@ import {
   type TrajectoryDetailResult,
   type TrajectoryLlmCall,
 } from "../api-client";
+import { ChevronDownIcon, ChevronRightIcon } from "./ui/Icons";
 import {
   formatTrajectoryDuration,
   formatTrajectoryTimestamp,
@@ -167,7 +168,12 @@ function LlmCallCard({
             className="w-full text-left px-3 py-1.5 text-[10px] text-muted hover:bg-muted/5"
             onClick={() => setShowSystem(!showSystem)}
           >
-            {showSystem ? "▼" : "▶"} System prompt (
+            {showSystem ? (
+              <ChevronDownIcon className="mr-1 inline h-3.5 w-3.5 align-[-2px]" />
+            ) : (
+              <ChevronRightIcon className="mr-1 inline h-3.5 w-3.5 align-[-2px]" />
+            )}{" "}
+            System prompt (
             {call.systemPrompt.length.toLocaleString()} chars)
           </button>
           {showSystem && (
