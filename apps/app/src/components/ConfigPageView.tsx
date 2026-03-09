@@ -12,6 +12,8 @@ import type { ConfigUiHint } from "../types";
 import type { JsonSchemaObject } from "./config-catalog";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer";
 import { SecretsView } from "./SecretsView";
+import { SelectablePillGrid } from "./SelectablePillGrid";
+import { SectionShell } from "./SectionShell";
 import { Button } from "./ui/Button";
 import {
   Card,
@@ -200,10 +202,7 @@ function RpcConfigSection<T extends string>({
   );
 
   return (
-    <div>
-      <div className="mb-1 text-xs font-bold uppercase tracking-[0.18em] text-white/82">{title}</div>
-      <div className="mb-2 text-[11px] text-white/46">{description}</div>
-
+    <SectionShell title={title} description={description} contentClassName="gap-4">
       {renderRpcProviderButtons(
         options,
         selectedProvider,
@@ -211,7 +210,7 @@ function RpcConfigSection<T extends string>({
         containerClassName,
       )}
 
-      <div className="mt-3">
+      <div>
         {selectedProvider === "eliza-cloud" ? (
           <CloudRpcStatus
             connected={cloud.connected}
@@ -233,7 +232,7 @@ function RpcConfigSection<T extends string>({
           />
         ) : null}
       </div>
-    </div>
+    </SectionShell>
   );
 }
 
@@ -244,29 +243,15 @@ function renderRpcProviderButtons<T extends string>(
   containerClassName: string,
 ) {
   return (
-    <div className={containerClassName}>
-      {options.map((provider) => {
-        const active = selectedProvider === provider.id;
-        return (
-          <Button
-            type="button"
-            key={provider.id}
-            size="sm"
-            variant={active ? "secondary" : "outline"}
-            className="justify-center rounded-2xl px-2 py-2"
-            onClick={() => onSelect(provider.id)}
-          >
-            <div
-              className={`text-center text-xs font-bold whitespace-nowrap ${
-                active ? "" : "text-white/72"
-              }`}
-            >
-              {provider.label}
-            </div>
-          </Button>
-        );
-      })}
-    </div>
+    <SelectablePillGrid
+      className={containerClassName}
+      value={selectedProvider}
+      onChange={onSelect}
+      options={options.map((provider) => ({
+        value: provider.id,
+        label: provider.label,
+      }))}
+    />
   );
 }
 

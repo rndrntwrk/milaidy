@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import { useApp } from "../AppContext.js";
 import { DrawerShell } from "./DrawerShell.js";
+import { ListItemCard } from "./ListItemCard.js";
+import { SectionEmptyState } from "./SectionStates.js";
 import { Button } from "./ui/Button.js";
 import { Card } from "./ui/Card.js";
 import { Sheet } from "./ui/Sheet.js";
@@ -55,77 +57,86 @@ export function ThreadsDrawer({
       <DrawerShell
         icon={<ThreadsIcon className="h-4 w-4" />}
         title="Threads"
-        description="Full transcript, switching, and thread management stay here instead of on the stage."
-        badge={`${sortedConversations.length} threads`}
+        description="Conversation history."
         onClose={onClose}
-        toolbar={
-          <Button
-            type="button"
-            variant="secondary"
-            className="w-full justify-center rounded-2xl"
-            onClick={() => {
-              void handleNewConversation();
-              onClose();
-            }}
-          >
-            <PlusIcon className="h-4 w-4" />
-            New Thread
-          </Button>
-        }
-        summary={
-          <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-white/48">
-            <span>Recent first</span>
-            <span>{unreadConversations.size} unread</span>
-          </div>
-        }
-        contentClassName="space-y-3"
+        contentClassName="space-y-4"
       >
         {sortedConversations.length === 0 ? (
-          <Card className="rounded-2xl px-4 py-4 text-center text-sm text-white/56">
-            No conversations yet.
-          </Card>
+          <SectionEmptyState
+            title="No threads yet"
+            description="Start a conversation and it will appear here for quick switching."
+            className="border-none bg-transparent shadow-none"
+          />
         ) : (
-          sortedConversations.map((conversation) => {
-            const isActive = conversation.id === activeConversationId;
-            const unread = unreadConversations.has(conversation.id);
-            return (
-              <Card
-                key={conversation.id}
-                className={`rounded-2xl p-3 ${isActive ? "border-white/18 bg-white/[0.08]" : "border-white/10 bg-white/[0.04]"}`}
+          <Card className="w-full overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03]">
+            <div className="flex items-start justify-between gap-4 border-b border-white/8 px-5 py-5">
+              <div className="min-w-0 space-y-1">
+                <h3 className="text-xl font-semibold tracking-[-0.01em] text-white">Recent threads</h3>
+                <p className="text-sm text-white/58">Jump back into a conversation or start a new one.</p>
+              </div>
+              <div className="shrink-0 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-sm text-white/56">
+                {sortedConversations.length} total
+                {unreadConversations.size > 0 ? ` • ${unreadConversations.size} unread` : ""}
+              </div>
+            </div>
+
+            <div className="border-b border-white/8 px-5 py-5">
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-11 w-full justify-start rounded-2xl px-4 text-sm"
+                onClick={() => {
+                  void handleNewConversation();
+                  onClose();
+                }}
               >
-                <div className="flex items-start gap-3">
-                  <button
-                    type="button"
-                    className="flex min-w-0 flex-1 items-start gap-3 bg-transparent text-left"
+                <PlusIcon className="h-4 w-4" />
+                New Thread
+              </Button>
+            </div>
+
+            <div className="space-y-3 px-5 py-5">
+              <div className="flex items-center justify-between text-sm text-white/46">
+                <span>Most recent first</span>
+                <span>{unreadConversations.size > 0 ? `${unreadConversations.size} unread` : "All caught up"}</span>
+              </div>
+              {sortedConversations.map((conversation) => {
+                const isActive = conversation.id === activeConversationId;
+                const unread = unreadConversations.has(conversation.id);
+                return (
+                  <ListItemCard
+                    key={conversation.id}
+                    title={conversation.title}
+                    meta={formatRelativeTime(conversation.updatedAt)}
+                    active={isActive}
+                    unread={unread}
                     onClick={() => {
                       void handleSelectConversation(conversation.id);
                       onClose();
                     }}
-                  >
-                    <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${unread ? "bg-accent" : "bg-white/18"}`} />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-semibold text-white/88">
-                        {conversation.title}
-                      </div>
-                      <div className="mt-1 text-xs text-white/48">
-                        {formatRelativeTime(conversation.updatedAt)}
-                      </div>
-                    </div>
-                  </button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-9 w-9 rounded-2xl text-white/55 hover:text-danger"
-                    onClick={() => void handleDeleteConversation(conversation.id)}
-                    title="Delete thread"
-                  >
-                    <TrashIcon className="h-4 w-4" />
-                  </Button>
-                </div>
-              </Card>
-            );
-          })
+                    trailing={
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Delete ${conversation.title}`}
+                        className="h-10 w-10 rounded-full text-white/56 hover:text-white"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (window.confirm(`Delete thread "${conversation.title}"?`)) {
+                            void handleDeleteConversation(conversation.id);
+                          }
+                        }}
+                        title="Delete thread"
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                      </Button>
+                    }
+                  />
+                );
+              })}
+            </div>
+          </Card>
         )}
       </DrawerShell>
     </Sheet>

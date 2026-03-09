@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { client, type AutonomyApproval } from "../api-client.js";
 import { useApp } from "../AppContext.js";
+import { SectionEmptyState } from "./SectionStates.js";
 import { Badge } from "./ui/Badge.js";
 import { Button } from "./ui/Button.js";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/Card.js";
 
-export function MissionQueuePanel() {
+export function MissionQueuePanel({ embedded = false }: { embedded?: boolean }) {
   const { triggers, loadTriggers, runTriggerNow, setTab } = useApp();
   const [approvals, setApprovals] = useState<AutonomyApproval[]>([]);
 
@@ -32,22 +33,19 @@ export function MissionQueuePanel() {
 
   const nextTrigger = triggers.find((trigger) => trigger.enabled);
 
-  return (
-    <Card className="h-full border-white/10 bg-black/32 shadow-none">
-      <CardHeader className="border-b border-white/8 pb-3">
-        <div className="flex items-center justify-between gap-3">
-          <CardTitle>Mission Stack</CardTitle>
-          <Badge variant="outline">
-            {approvals.length > 0
-              ? "awaiting approval"
-              : nextTrigger
-                ? "queued"
-                : "idle"}
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3 p-4">
-        <div className="grid grid-cols-3 gap-2 text-[10px] uppercase tracking-[0.2em]">
+  if (embedded && approvals.length === 0 && triggers.length === 0) {
+    return (
+      <SectionEmptyState
+        title="No queued interventions"
+        description="Approvals and scheduled routines will appear here when operator input is needed."
+        className="pro-streamer-empty-compact border-dashed bg-transparent shadow-none"
+      />
+    );
+  }
+
+  const body = (
+      <CardContent className={`space-y-3 ${embedded ? "px-0 pb-0 pt-3" : "p-4"}`}>
+        <div className="grid grid-cols-3 gap-2 text-[10px] uppercase tracking-[0.18em]">
           <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3 text-white/55">
             <div>Active</div>
             <div className="mt-1 text-sm text-white/86">
@@ -105,14 +103,29 @@ export function MissionQueuePanel() {
               </div>
             </div>
           ))}
-
-          {approvals.length === 0 && triggers.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-white/10 bg-black/10 px-3 py-4 text-center text-sm text-white/42">
-              No queued interventions.
-            </div>
-          ) : null}
         </div>
       </CardContent>
+  );
+
+  if (embedded) {
+    return <div className="pt-3">{body}</div>;
+  }
+
+  return (
+    <Card className="h-full border-white/10 bg-black/32 shadow-none">
+      <CardHeader className="border-b border-white/8 pb-3">
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle>Mission Stack</CardTitle>
+          <Badge variant="outline">
+            {approvals.length > 0
+              ? "awaiting approval"
+              : nextTrigger
+                ? "queued"
+                : "idle"}
+          </Badge>
+        </div>
+      </CardHeader>
+      {body}
     </Card>
   );
 }

@@ -98,7 +98,7 @@ export function PairingView() {
           <p>Next steps:</p>
           <ol className="list-decimal space-y-1 pl-5">
             <li>Ask the server owner for an API token.</li>
-            <li>Enable pairing on the server and restart Pro Streamer.</li>
+            <li>Enable pairing on the server and restart the app.</li>
           </ol>
           <a
             href={PAIRING_DOCS_URL}

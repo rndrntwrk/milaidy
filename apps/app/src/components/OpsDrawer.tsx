@@ -1,10 +1,10 @@
 import { useMemo } from "react";
 import { useApp } from "../AppContext.js";
-import { ActionDeckPanel } from "./ActionDeckPanel.js";
-import { ChannelsFeedsPanel } from "./ChannelsFeedsPanel.js";
 import { DrawerShell } from "./DrawerShell.js";
-import { Badge } from "./ui/Badge.js";
-import { Card } from "./ui/Card.js";
+import { SectionEmptyState } from "./SectionStates.js";
+import { SectionShell } from "./SectionShell.js";
+import { SummaryStatRow } from "./SummaryStatRow.js";
+import { Button } from "./ui/Button.js";
 import { Sheet } from "./ui/Sheet.js";
 import { OpsIcon } from "./ui/Icons.js";
 
@@ -23,6 +23,7 @@ export function OpsDrawer({
     extensionStatus,
     mcpServerStatuses,
     plugins,
+    setTab,
   } = useApp();
 
   const summaryCards = useMemo(() => {
@@ -30,6 +31,7 @@ export function OpsDrawer({
       (plugin) => plugin.category === "connector" && plugin.enabled && plugin.isActive,
     ).length;
     const liveMcp = mcpServerStatuses.filter((server) => server.connected).length;
+    const relayLive = Boolean(extensionStatus?.relayReachable);
     return [
       {
         label: "Cloud",
@@ -39,68 +41,121 @@ export function OpsDrawer({
             : cloudConnected
               ? "connected"
               : "offline",
-        tone: cloudCreditsCritical
-          ? "text-danger"
-          : cloudCreditsLow
-            ? "text-warn"
-            : cloudConnected
-              ? "text-ok"
-              : "text-white/45",
+        tone: cloudCreditsCritical ? "danger" : cloudCreditsLow ? "warning" : cloudConnected ? "positive" : "default",
       },
       {
         label: "Relay",
-        value: extensionStatus?.relayReachable ? "reachable" : "offline",
-        tone: extensionStatus?.relayReachable ? "text-ok" : "text-warn",
+        value: relayLive ? "online" : "offline",
+        tone: relayLive ? "positive" : "default",
       },
       {
         label: "MCP",
         value: `${liveMcp} live`,
-        tone: liveMcp > 0 ? "text-white/88" : "text-white/45",
+        tone: liveMcp > 0 ? "positive" : "default",
       },
       {
         label: "Channels",
         value: `${liveChannels} live`,
-        tone: liveChannels > 0 ? "text-white/88" : "text-white/45",
+        tone: liveChannels > 0 ? "positive" : "default",
       },
     ];
-  }, [
-    cloudConnected,
-    cloudCredits,
-    cloudCreditsCritical,
-    cloudCreditsLow,
-    extensionStatus?.relayReachable,
-    mcpServerStatuses,
-    plugins,
-  ]);
+  }, [cloudConnected, cloudCredits, cloudCreditsCritical, cloudCreditsLow, extensionStatus?.relayReachable, mcpServerStatuses, plugins]);
+
+  const liveChannels = useMemo(
+    () =>
+      [
+        ["discord", "Discord"],
+        ["telegram", "Telegram"],
+        ["twitter", "Twitter"],
+        ["direct", "Direct"],
+      ].map(([match, label]) => {
+        const plugin = plugins.find(
+          (entry) =>
+            entry.category === "connector" &&
+            (entry.id.toLowerCase().includes(match) || entry.name.toLowerCase().includes(match)),
+        );
+        return {
+          label,
+          active: Boolean(plugin?.enabled && plugin?.isActive),
+          enabled: Boolean(plugin?.enabled),
+        };
+      }),
+    [plugins],
+  );
+
+  const mcpLive = mcpServerStatuses.filter((server) => server.connected).length;
+  const relayLive = Boolean(extensionStatus?.relayReachable);
+  const quickLinks = [
+    { label: "Connectors", tab: "connectors" },
+    { label: "Plugins", tab: "plugins" },
+    { label: "Actions", tab: "actions" },
+    { label: "Apps", tab: "apps" },
+  ] as const;
 
   return (
     <Sheet open={open} onClose={onClose} side="right" className="w-[min(38rem,100vw)]">
       <DrawerShell
         icon={<OpsIcon width="14" height="14" />}
         title="Ops"
-        description="Connector state, operator shortcuts, channels, and runtime notices live here instead of on the broadcast stage."
-        badge={
-          <Badge variant="outline" className="rounded-full px-3 py-1">
-            Live ops
-          </Badge>
-        }
+        description="Connections, channels, and quick operator actions."
         onClose={onClose}
-        summary={
-          <div className="grid gap-2 sm:grid-cols-4">
-            {summaryCards.map((card) => (
-              <Card key={card.label} className="rounded-2xl px-3 py-3">
-                <div className="text-[10px] uppercase tracking-[0.22em] text-white/45">
-                  {card.label}
-                </div>
-                <div className={`mt-1 text-sm ${card.tone}`}>{card.value}</div>
-              </Card>
-            ))}
-          </div>
-        }
+        summary={<SummaryStatRow items={summaryCards} className="pro-streamer-drawer-summary-row" />}
         contentClassName="space-y-4"
       >
-          <ActionDeckPanel />
-          <ChannelsFeedsPanel />
+        <SectionShell
+          title="Quick actions"
+          description="Jump straight into the operator surfaces that matter most."
+          contentClassName="gap-3"
+        >
+          <div className="pro-streamer-quick-grid">
+            {quickLinks.map((link) => (
+              <Button
+                key={link.tab}
+                type="button"
+                variant="secondary"
+                className="justify-start rounded-xl"
+                onClick={() => {
+                  setTab(link.tab);
+                  onClose();
+                }}
+              >
+                {link.label}
+              </Button>
+            ))}
+          </div>
+        </SectionShell>
+
+        <SectionShell
+          title="Channels"
+          description="Broadcast-facing connectors and their current state."
+          contentClassName="gap-3"
+        >
+          <div className="pro-streamer-status-grid">
+            {liveChannels.map((channel) => (
+              <div key={channel.label} className="pro-streamer-status-card">
+                <div className="pro-streamer-status-card__label">{channel.label}</div>
+                <div className={`pro-streamer-status-card__value ${channel.active ? "is-live" : ""}`}>
+                  {channel.active ? "Live" : channel.enabled ? "Standby" : "Offline"}
+                </div>
+                <div className="pro-streamer-status-card__meta">
+                  {channel.enabled ? "Installed" : "Not configured"}
+                </div>
+              </div>
+            ))}
+          </div>
+          {liveChannels.every((channel) => !channel.enabled) ? (
+            <SectionEmptyState
+              title="No connectors configured"
+              description="Configure channels in Connectors before putting them on stage."
+              actionLabel="Open connectors"
+              onAction={() => {
+                setTab("connectors");
+                onClose();
+              }}
+              className="border-none bg-transparent shadow-none"
+            />
+          ) : null}
+        </SectionShell>
       </DrawerShell>
     </Sheet>
   );

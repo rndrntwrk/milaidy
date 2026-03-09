@@ -2,33 +2,16 @@
  * Identity panel — view and edit agent identity configuration.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AutonomyIdentity } from "../api-client";
 import { client } from "../api-client";
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="mb-4">
-      <div className="text-xs uppercase tracking-wide text-muted mb-2">{title}</div>
-      {children}
-    </div>
-  );
-}
-
-function TagList({ items, onRemove }: { items: string[]; onRemove?: (i: number) => void }) {
-  return (
-    <div className="flex flex-wrap gap-1">
-      {items.map((item, i) => (
-        <span key={i} className="text-[11px] border border-border bg-bg px-2 py-0.5 inline-flex items-center gap-1">
-          {item}
-          {onRemove && (
-            <button className="text-muted hover:text-danger cursor-pointer" onClick={() => onRemove(i)}>x</button>
-          )}
-        </span>
-      ))}
-    </div>
-  );
-}
+import { FormFieldStack } from "./FormFieldStack.js";
+import { SectionEmptyState, SectionErrorState, SectionLoadingState } from "./SectionStates.js";
+import { SectionShell } from "./SectionShell.js";
+import { SummaryStatRow } from "./SummaryStatRow.js";
+import { Badge } from "./ui/Badge.js";
+import { Button } from "./ui/Button.js";
+import { Input } from "./ui/Input.js";
 
 interface PreferenceViewRow {
   key: string;
@@ -59,7 +42,8 @@ function readSource(record: Record<string, unknown> | null): string | undefined 
     if (provenanceSource) {
       const type =
         typeof provenanceSource.type === "string" ? provenanceSource.type : "source";
-      const id = typeof provenanceSource.id === "string" ? provenanceSource.id : "unknown";
+      const id =
+        typeof provenanceSource.id === "string" ? provenanceSource.id : "unknown";
       return `${type}:${id}`;
     }
     if (
@@ -84,7 +68,11 @@ function readScope(record: Record<string, unknown> | null): string | undefined {
     return record.preferenceScope.trim();
   }
   const provenance = asRecord(record.provenance);
-  if (provenance && typeof provenance.scope === "string" && provenance.scope.trim().length > 0) {
+  if (
+    provenance &&
+    typeof provenance.scope === "string" &&
+    provenance.scope.trim().length > 0
+  ) {
     return provenance.scope.trim();
   }
   return undefined;
@@ -122,6 +110,40 @@ function formatPreferenceValue(value: unknown): string {
   }
 }
 
+function TagGroup({
+  title,
+  items,
+  emptyLabel,
+}: {
+  title: string;
+  items: string[];
+  emptyLabel: string;
+}) {
+  return (
+    <SectionShell title={title} className="border-white/6 bg-white/[0.02]">
+      {items.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {items.map((item) => (
+            <Badge
+              key={item}
+              variant="outline"
+              className="rounded-full px-3 py-1.5 text-xs text-white/72"
+            >
+              {item}
+            </Badge>
+          ))}
+        </div>
+      ) : (
+        <SectionEmptyState
+          title={emptyLabel}
+          description="No entries are configured for this identity surface."
+          className="border-none bg-transparent shadow-none"
+        />
+      )}
+    </SectionShell>
+  );
+}
+
 export function IdentityPanel() {
   const [identity, setIdentity] = useState<AutonomyIdentity | null>(null);
   const [history, setHistory] = useState<AutonomyIdentity[]>([]);
@@ -131,6 +153,7 @@ export function IdentityPanel() {
   const [draft, setDraft] = useState<AutonomyIdentity>({});
   const [saving, setSaving] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+
   const preferenceRows = extractPreferenceRows(identity?.softPreferences);
 
   const load = useCallback(async () => {
@@ -151,10 +174,14 @@ export function IdentityPanel() {
     try {
       const res = await client.getIdentityHistory();
       setHistory(res.history ?? []);
-    } catch { /* non-critical */ }
+    } catch {
+      /* non-critical */
+    }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -170,154 +197,243 @@ export function IdentityPanel() {
     }
   };
 
-  if (loading) return <div className="text-muted p-4">Loading identity...</div>;
-  if (error) return <div className="text-danger p-4">{error}</div>;
-  if (!identity) return <div className="text-muted p-4">No identity configured.</div>;
+  const communicationStats = useMemo(
+    () => [
+      {
+        label: "Tone",
+        value: identity?.communicationStyle?.tone ?? "Unset",
+      },
+      {
+        label: "Verbosity",
+        value: identity?.communicationStyle?.verbosity ?? "Unset",
+      },
+      {
+        label: "Voice",
+        value: identity?.communicationStyle?.personaVoice ?? "Unset",
+      },
+    ],
+    [identity?.communicationStyle?.personaVoice, identity?.communicationStyle?.tone, identity?.communicationStyle?.verbosity],
+  );
+
+  const integrityStats = useMemo(
+    () => [
+      {
+        label: "Version",
+        value: String(identity?.identityVersion ?? 0),
+      },
+      {
+        label: "Hash",
+        value: identity?.identityHash ? `${identity.identityHash.slice(0, 12)}…` : "Unavailable",
+      },
+    ],
+    [identity?.identityHash, identity?.identityVersion],
+  );
+
+  if (loading) {
+    return (
+      <SectionLoadingState
+        title="Loading identity"
+        description="Pulling the current public profile and persona settings."
+      />
+    );
+  }
+
+  if (error) {
+    return (
+      <SectionErrorState
+        title="Identity unavailable"
+        description="The identity surface could not load right now."
+        actionLabel="Retry"
+        onAction={() => void load()}
+        details={error}
+      />
+    );
+  }
+
+  if (!identity) {
+    return (
+      <SectionEmptyState
+        title="No identity configured"
+        description="Create or import an identity profile to drive the public-facing persona."
+        actionLabel="Refresh"
+        onAction={() => void load()}
+      />
+    );
+  }
 
   return (
-    <div className="flex flex-col h-full min-h-0">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-        <h2 className="text-sm font-semibold">Agent Identity</h2>
-        <div className="flex gap-2">
-          <button
-            className="text-[11px] border border-border bg-bg px-2 py-1 cursor-pointer hover:border-accent hover:text-accent transition-colors"
-            onClick={() => { setShowHistory(!showHistory); if (!showHistory) void loadHistory(); }}
-          >
-            {showHistory ? "Hide History" : "History"}
-          </button>
-          {!editing ? (
-            <button
-              className="text-[11px] border border-accent text-accent px-2 py-1 cursor-pointer hover:bg-accent hover:text-accent-fg transition-colors"
-              onClick={() => setEditing(true)}
+    <div className="flex flex-col gap-4">
+      <SectionShell
+        title="Profile"
+        description="Public-facing name and integrity for the active identity."
+        toolbar={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="rounded-full"
+              onClick={() => {
+                setShowHistory((current) => {
+                  const next = !current;
+                  if (next) void loadHistory();
+                  return next;
+                });
+              }}
             >
-              Edit
-            </button>
-          ) : (
-            <>
-              <button
-                className="text-[11px] border border-border px-2 py-1 cursor-pointer hover:text-txt transition-colors"
-                onClick={() => { setEditing(false); setDraft(identity); }}
+              {showHistory ? "Hide history" : "History"}
+            </Button>
+            {!editing ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="rounded-full"
+                onClick={() => setEditing(true)}
               >
-                Cancel
-              </button>
-              <button
-                className="text-[11px] border border-accent text-accent px-2 py-1 cursor-pointer hover:bg-accent hover:text-accent-fg transition-colors"
-                onClick={handleSave}
-                disabled={saving}
-              >
-                {saving ? "Saving..." : "Save"}
-              </button>
-            </>
-          )}
+                Edit
+              </Button>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full"
+                  onClick={() => {
+                    setEditing(false);
+                    setDraft(identity);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="rounded-full"
+                  onClick={handleSave}
+                  disabled={saving}
+                >
+                  {saving ? "Saving..." : "Save"}
+                </Button>
+              </>
+            )}
+          </div>
+        }
+      >
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(16rem,0.8fr)]">
+          <FormFieldStack
+            label="Display name"
+            help="This is the visible identity used when the agent speaks or appears in public-facing surfaces."
+          >
+            {editing ? (
+              <Input
+                id="identity-name"
+                aria-label="Agent name"
+                value={draft.name ?? ""}
+                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+              />
+            ) : (
+              <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-white/88">
+                {identity.name ?? "unnamed"}
+              </div>
+            )}
+          </FormFieldStack>
+          <SummaryStatRow items={integrityStats} />
         </div>
-      </div>
+      </SectionShell>
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-4">
-        {showHistory && history.length > 0 && (
-          <Section title="Version History">
-            <div className="space-y-2 mb-4">
-              {history.map((v, i) => (
-                <div key={i} className="border border-border bg-bg p-2 text-[11px]">
-                  <span className="text-muted">v{v.identityVersion}</span>{" "}
-                  <span className="text-txt">{v.name}</span>{" "}
-                  <span className="text-muted">{v.identityHash ? `#${v.identityHash.slice(0, 8)}` : ""}</span>
+      {showHistory ? (
+        <SectionShell
+          title="Version history"
+          description="Recent identity revisions currently stored for this profile."
+        >
+          {history.length > 0 ? (
+            <div className="space-y-2">
+              {history.map((version) => (
+                <div
+                  key={`${version.identityVersion}-${version.identityHash ?? "draft"}`}
+                  className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3"
+                >
+                  <div className="flex flex-wrap items-center gap-2 text-sm text-white/86">
+                    <span className="font-medium">{version.name ?? "Unnamed identity"}</span>
+                    <Badge variant="outline" className="rounded-full px-2.5 py-1 text-[10px]">
+                      v{version.identityVersion ?? 0}
+                    </Badge>
+                    {version.identityHash ? (
+                      <Badge variant="outline" className="rounded-full px-2.5 py-1 text-[10px] text-white/60">
+                        {version.identityHash.slice(0, 10)}…
+                      </Badge>
+                    ) : null}
+                  </div>
                 </div>
               ))}
             </div>
-          </Section>
-        )}
-
-        <Section title="Name">
-          {editing ? (
-            <input
-              id="identity-name"
-              aria-label="Agent name"
-              className="border border-border bg-bg px-2 py-1 text-sm w-full"
-              value={draft.name ?? ""}
-              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+          ) : (
+            <SectionEmptyState
+              title="No history yet"
+              description="Identity revisions will appear here after more changes are saved."
+              className="border-none bg-transparent shadow-none"
             />
-          ) : (
-            <div className="text-sm">{identity.name ?? "unnamed"}</div>
           )}
-        </Section>
+        </SectionShell>
+      ) : null}
 
-        <Section title="Core Values">
-          <TagList items={identity.coreValues ?? []} />
-        </Section>
+      <SectionShell
+        title="Communication style"
+        description="Tone, verbosity, and persona voice used for the public-facing agent."
+      >
+        <SummaryStatRow items={communicationStats} />
+      </SectionShell>
 
-        <Section title="Communication Style">
-          <div className="grid grid-cols-3 gap-2 text-[11px]">
-            <div>
-              <span className="text-muted">Tone: </span>
-              <span>{identity.communicationStyle?.tone ?? "—"}</span>
-            </div>
-            <div>
-              <span className="text-muted">Verbosity: </span>
-              <span>{identity.communicationStyle?.verbosity ?? "—"}</span>
-            </div>
-            <div>
-              <span className="text-muted">Voice: </span>
-              <span>{identity.communicationStyle?.personaVoice ?? "—"}</span>
-            </div>
-          </div>
-        </Section>
-
-        <Section title="Hard Boundaries">
-          <TagList items={identity.hardBoundaries ?? []} />
-        </Section>
-
-        <Section title="Soft Preferences">
-          {preferenceRows.length === 0 ? (
-            <div className="text-[11px] text-muted">No preferences set</div>
-          ) : (
-            <>
-              <div className="border border-border bg-bg overflow-x-auto">
-                <table className="w-full text-[11px]">
-                  <thead>
-                    <tr className="border-b border-border text-muted uppercase tracking-wide">
-                      <th className="text-left font-medium px-2 py-1">Preference</th>
-                      <th className="text-left font-medium px-2 py-1">Value</th>
-                      <th className="text-left font-medium px-2 py-1">Source</th>
-                      <th className="text-left font-medium px-2 py-1">Scope</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preferenceRows.map((row) => (
-                      <tr key={row.key} className="border-b last:border-b-0 border-border">
-                        <td className="px-2 py-1 font-mono text-[10px] text-txt break-all">
-                          {row.key}
-                        </td>
-                        <td className="px-2 py-1 text-txt break-words">
-                          {formatPreferenceValue(row.value)}
-                        </td>
-                        <td className="px-2 py-1 text-muted break-words">{row.source}</td>
-                        <td className="px-2 py-1 text-muted break-words">{row.scope}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="text-[10px] text-muted mt-2">
-                Source and scope default to <span className="text-txt">identity-config</span> and{" "}
-                <span className="text-txt">global</span> when preference metadata is not provided.
-              </div>
-            </>
-          )}
-        </Section>
-
-        <Section title="Integrity">
-          <div className="text-[11px] grid grid-cols-2 gap-2">
-            <div>
-              <span className="text-muted">Version: </span>
-              <span className="tabular-nums">{identity.identityVersion ?? 0}</span>
-            </div>
-            <div>
-              <span className="text-muted">Hash: </span>
-              <span className="font-mono">{identity.identityHash ? identity.identityHash.slice(0, 12) + "..." : "—"}</span>
-            </div>
-          </div>
-        </Section>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <TagGroup
+          title="Core values"
+          items={identity.coreValues ?? []}
+          emptyLabel="No core values configured"
+        />
+        <TagGroup
+          title="Boundaries"
+          items={identity.hardBoundaries ?? []}
+          emptyLabel="No boundaries configured"
+        />
       </div>
+
+      <SectionShell
+        title="Preference sources"
+        description="Resolved preference values and where they came from."
+      >
+        {preferenceRows.length === 0 ? (
+          <SectionEmptyState
+            title="No soft preferences configured"
+            description="Preference metadata will appear here when identity-level overrides exist."
+            className="border-none bg-transparent shadow-none"
+          />
+        ) : (
+          <div className="overflow-hidden rounded-2xl border border-white/8 bg-white/[0.03]">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-white/8 text-left text-[11px] uppercase tracking-[0.14em] text-white/44">
+                  <th className="px-4 py-3 font-medium">Preference</th>
+                  <th className="px-4 py-3 font-medium">Value</th>
+                  <th className="px-4 py-3 font-medium">Source</th>
+                  <th className="px-4 py-3 font-medium">Scope</th>
+                </tr>
+              </thead>
+              <tbody>
+                {preferenceRows.map((row) => (
+                  <tr key={row.key} className="border-b border-white/6 last:border-b-0">
+                    <td className="px-4 py-3 font-mono text-xs text-white/76">{row.key}</td>
+                    <td className="px-4 py-3 text-white/86">{formatPreferenceValue(row.value)}</td>
+                    <td className="px-4 py-3 text-white/56">{row.source}</td>
+                    <td className="px-4 py-3 text-white/56">{row.scope}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </SectionShell>
     </div>
   );
 }

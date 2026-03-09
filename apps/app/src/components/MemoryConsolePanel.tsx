@@ -5,8 +5,10 @@ import {
   type KnowledgeStats,
 } from "../api-client.js";
 import { useApp } from "../AppContext.js";
+import { SectionEmptyState, SectionErrorState, SectionSkeleton } from "./SectionStates.js";
+import { SectionShell } from "./SectionShell.js";
+import { SummaryStatRow } from "./SummaryStatRow.js";
 import { Button } from "./ui/Button.js";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/Card.js";
 import { Input } from "./ui/Input.js";
 import { ScrollArea } from "./ui/ScrollArea.js";
 
@@ -18,9 +20,19 @@ export function MemoryConsolePanel() {
   const [stats, setStats] = useState<KnowledgeStats | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
 
+  const loadStats = async () => {
+    try {
+      const nextStats = await client.getKnowledgeStats();
+      setStats(nextStats);
+      setStatsError(null);
+    } catch (error) {
+      setStatsError(error instanceof Error ? error.message : "Stats unavailable");
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
-    const loadStats = async () => {
+    const loadStatsSafe = async () => {
       try {
         const nextStats = await client.getKnowledgeStats();
         if (!cancelled) {
@@ -33,7 +45,7 @@ export function MemoryConsolePanel() {
         }
       }
     };
-    void loadStats();
+    void loadStatsSafe();
     return () => {
       cancelled = true;
     };
@@ -73,73 +85,90 @@ export function MemoryConsolePanel() {
     if (stats) {
       return `${stats.documentCount} docs indexed`;
     }
-    if (statsError) {
-      return statsError;
-    }
-    return "Memory is idle";
-  }, [droppedFiles.length, shareIngestNotice, stats, statsError]);
+    return "Ready to search indexed memory";
+  }, [droppedFiles.length, shareIngestNotice, stats]);
+
+  const summaryItems = useMemo(
+    () => [
+      {
+        label: "Documents",
+        value: stats?.documentCount !== undefined ? String(stats.documentCount) : "—",
+      },
+      {
+        label: "Fragments",
+        value: stats?.fragmentCount !== undefined ? String(stats.fragmentCount) : "—",
+      },
+      {
+        label: "Ingest",
+        value: droppedFiles.length > 0 ? "Active" : shareIngestNotice ? "Syncing" : "Idle",
+        tone: droppedFiles.length > 0 ? "warning" : "default",
+      },
+    ],
+    [droppedFiles.length, shareIngestNotice, stats?.documentCount, stats?.fragmentCount],
+  );
 
   return (
-    <Card className="flex min-h-[16rem] flex-1 flex-col border-white/10 bg-black/32 shadow-none">
-      <CardHeader className="border-b border-white/8 pb-3">
-        <div className="flex items-center justify-between gap-3">
-          <CardTitle>Memory</CardTitle>
-          <span className="font-mono text-xs text-white/62">
+    <div className="flex flex-col gap-4">
+      <SectionShell
+        title="Indexed memory"
+        description="Search indexed memory and check ingest status."
+        toolbar={
+          <span className="font-mono text-xs text-white/54">
             {searching
               ? "searching"
               : query.trim()
                 ? `${results.length} hit${results.length === 1 ? "" : "s"}`
                 : "ready"}
           </span>
-        </div>
-      </CardHeader>
+        }
+      >
+        {!stats && !statsError ? (
+          <SectionSkeleton lines={1} className="border-none bg-transparent shadow-none" />
+        ) : (
+          <SummaryStatRow items={summaryItems} />
+        )}
+        {statsError && !stats ? (
+          <SectionErrorState
+            title="Memory summary unavailable"
+            description="Search still works, but the indexed memory summary could not be refreshed."
+            actionLabel="Retry"
+            onAction={() => {
+              void loadStats();
+            }}
+            details={statsError}
+            className="border-none bg-transparent shadow-none"
+          />
+        ) : (
+          <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-white/62">
+            {ingestLabel}
+          </div>
+        )}
+      </SectionShell>
 
-      <CardContent className="flex min-h-0 flex-1 flex-col p-4">
-        <div className="mb-3 grid grid-cols-3 gap-2 text-[10px] uppercase tracking-[0.2em]">
-          <div className="rounded-xl border border-border bg-bg/50 p-2 text-muted">
-            <div>Documents</div>
-            <div className="mt-1 text-sm text-txt">{stats?.documentCount ?? "--"}</div>
-          </div>
-          <div className="rounded-xl border border-border bg-bg/50 p-2 text-muted">
-            <div>Fragments</div>
-            <div className="mt-1 text-sm text-txt">{stats?.fragmentCount ?? "--"}</div>
-          </div>
-          <div className="rounded-xl border border-border bg-bg/50 p-2 text-muted">
-            <div>Ingest</div>
-            <div className="mt-1 truncate text-sm text-txt" title={ingestLabel}>
-              {droppedFiles.length > 0 ? "active" : shareIngestNotice ? "sync" : "idle"}
-            </div>
-          </div>
-        </div>
-
-        <div className="mb-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-white/58">
-          {ingestLabel}
-        </div>
-
-        <div className="flex flex-1 flex-col gap-4 overflow-hidden">
-          <div className="shrink-0 space-y-2">
-            <Input
-              placeholder="Search memory"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="text-sm"
-            />
-            <div className="text-[10px] uppercase tracking-[0.22em] text-muted">
-              {query.trim()
-                ? "Recent fragment hits"
-                : "Search indexed memory or jump into deeper knowledge tools"}
-            </div>
-          </div>
-          <ScrollArea className="flex-1 space-y-2">
+      <SectionShell
+        title="Search"
+        description="Search indexed memory or open deeper knowledge tools."
+        contentClassName="gap-4"
+      >
+        <Input
+          placeholder="Search memory"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="text-sm"
+        />
+        <ScrollArea className="max-h-[18rem]">
+          <div className="space-y-2">
             {results.length === 0 && query.trim() && !searching ? (
-              <div className="mt-4 text-center text-xs text-muted">
-                No matches found.
-              </div>
+              <SectionEmptyState
+                title="No memory matches"
+                description="Try a broader query or open the deeper memory tools."
+                className="border-none bg-transparent shadow-none"
+              />
             ) : null}
             {results.map((result, index) => (
               <div
                 key={`${result.id}-${index}`}
-                className="group rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-white/66 transition-colors hover:border-white/18 hover:bg-white/[0.05]"
+                className="group rounded-2xl border border-white/8 bg-white/[0.03] p-3 text-sm text-white/68 transition-colors hover:border-white/18 hover:bg-white/[0.05]"
               >
                 <div className="mb-1 flex justify-between gap-2">
                   <span className="truncate pr-2 text-white/88">
@@ -154,10 +183,9 @@ export function MemoryConsolePanel() {
                 </div>
               </div>
             ))}
-          </ScrollArea>
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-2">
+          </div>
+        </ScrollArea>
+        <div className="grid grid-cols-2 gap-2">
           <Button
             onClick={() => setTab("knowledge")}
             variant="secondary"
@@ -173,7 +201,7 @@ export function MemoryConsolePanel() {
             Vector store
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      </SectionShell>
+    </div>
   );
 }

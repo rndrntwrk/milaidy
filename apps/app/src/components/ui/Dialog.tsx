@@ -42,14 +42,14 @@ export function Dialog({
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-md"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/82 p-4 backdrop-blur-xl"
       onClick={onClose}
       role="presentation"
     >
       <div
         ref={panelRef}
         className={cn(
-          "w-full max-w-3xl rounded-[28px] border border-white/12 bg-white/[0.08] shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-2xl",
+          "w-full max-w-3xl rounded-[28px] border border-white/12 bg-[#090d14]/98 shadow-[0_24px_80px_rgba(0,0,0,0.62)] backdrop-blur-2xl",
           className,
         )}
         role="dialog"

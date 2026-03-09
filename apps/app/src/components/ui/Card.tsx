@@ -30,7 +30,7 @@ export const CardTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <h3
     ref={ref}
-    className={cn("text-sm font-semibold uppercase tracking-[0.22em] text-white/88", className)}
+    className={cn("text-lg font-semibold text-white/92", className)}
     {...props}
   />
 ));
@@ -40,7 +40,7 @@ export const CardDescription = React.forwardRef<
   HTMLParagraphElement,
   React.HTMLAttributes<HTMLParagraphElement>
 >(({ className, ...props }, ref) => (
-  <p ref={ref} className={cn("text-xs text-white/52", className)} {...props} />
+  <p ref={ref} className={cn("text-sm leading-6 text-white/58", className)} {...props} />
 ));
 CardDescription.displayName = "CardDescription";
 

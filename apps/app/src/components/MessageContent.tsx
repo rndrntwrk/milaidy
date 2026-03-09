@@ -429,7 +429,7 @@ function UiSpecBlock({ spec, raw }: { spec: UiSpec; raw: string }) {
   const handleAction = useCallback(
     (_action: string, _params?: Record<string, unknown>) => {
       setInteractionNotice(
-        "Interactive preview only. Run actions from the main Pro Streamer controls.",
+        "Interactive preview only. Run actions from the main agent controls.",
       );
     },
     [],
