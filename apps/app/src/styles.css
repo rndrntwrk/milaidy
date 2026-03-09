@@ -681,8 +681,8 @@
   max-width: min(100%, 78rem);
   margin-inline: auto;
   padding-inline: clamp(1rem, 5vw, 5.5rem);
-  padding-bottom: clamp(0.75rem, 1.4vw, 1.15rem);
-  scroll-padding-bottom: 8rem;
+  padding-bottom: clamp(2.5rem, 3.2vw, 3.5rem);
+  scroll-padding-bottom: 12rem;
 }
 
 .milady-drawer-scope .pro-streamer-summary-grid {
@@ -699,6 +699,7 @@
   .pro-streamer-stage [data-conversation-timeline] {
     max-width: min(100%, 64rem);
     padding-inline: clamp(0.875rem, 3.25vw, 1.75rem);
+    padding-bottom: 2.5rem;
   }
 
   [data-sheet-side="left"],
@@ -728,6 +729,7 @@
   .pro-streamer-stage [data-conversation-timeline] {
     max-width: 100%;
     padding-inline: clamp(0.75rem, 2vw, 1rem);
+    padding-bottom: 2.25rem;
   }
 }
 
@@ -749,8 +751,8 @@
 
   .pro-streamer-stage [data-conversation-timeline] {
     padding-inline: 0.375rem;
-    padding-bottom: 0.75rem;
-    scroll-padding-bottom: 9rem;
+    padding-bottom: 2rem;
+    scroll-padding-bottom: 11rem;
   }
 }
 .pro-streamer-section-shell {
@@ -835,7 +837,7 @@
 .pro-streamer-composer-panel {
   border-radius: 1.75rem;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(7, 9, 14, 0.72);
+  background: rgba(255, 255, 255, 0.035);
   backdrop-filter: blur(22px);
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.28);
   padding: 1rem 1rem 0.9rem;
@@ -843,6 +845,10 @@
 
 .pro-streamer-composer-panel__body {
   min-height: 7rem;
+  border-radius: 1.35rem;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 1rem 1.1rem 0.95rem;
 }
 
 .pro-streamer-composer-panel__textarea {
@@ -856,10 +862,11 @@
   font-size: 1.18rem;
   line-height: 1.5;
   color: rgba(255, 255, 255, 0.94);
+  display: block;
 }
 
 .pro-streamer-composer-panel__textarea::placeholder {
-  color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.34);
 }
 
 .pro-streamer-composer-panel__textarea:focus {
