@@ -15,6 +15,10 @@ import {
   type RuntimeServiceOrderItem,
 } from "../api-client";
 import { formatDateTime } from "./shared/format";
+import { Badge } from "./ui/Badge";
+import { Button } from "./ui/Button";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/Card";
+import { Input } from "./ui/Input";
 
 type RuntimeSectionKey =
   | "runtime"
@@ -166,49 +170,53 @@ function TreeNode(props: {
 function OrderCard(props: { title: string; entries: RuntimeOrderItem[] }) {
   const { title, entries } = props;
   return (
-    <div className="border border-[var(--border)] bg-[var(--card)] rounded-md p-3 min-h-[150px]">
-      <div className="text-xs font-semibold mb-2">
+    <Card className="min-h-[170px] rounded-[24px]">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-[11px]">
         {title} ({entries.length})
-      </div>
-      <div className="max-h-[180px] overflow-auto text-[11px] font-mono leading-5">
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="max-h-[190px] overflow-auto pt-0 text-[11px] font-mono leading-5 text-white/74">
         {entries.length === 0 ? (
-          <div className="text-[var(--muted)]">none</div>
+          <div className="text-white/36">none</div>
         ) : (
           entries.map((entry) => (
-            <div key={`${title}-${entry.index}`} className="text-[var(--txt)]">
+            <div key={`${title}-${entry.index}`} className="text-white/82">
               {orderItemLabel(entry)}
             </div>
           ))
         )}
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 
 function ServicesOrderCard(props: { entries: RuntimeServiceOrderItem[] }) {
   const { entries } = props;
   return (
-    <div className="border border-[var(--border)] bg-[var(--card)] rounded-md p-3 min-h-[150px]">
-      <div className="text-xs font-semibold mb-2">
+    <Card className="min-h-[170px] rounded-[24px]">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-[11px]">
         Services ({entries.length} types)
-      </div>
-      <div className="max-h-[180px] overflow-auto text-[11px] font-mono leading-5">
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="max-h-[190px] overflow-auto pt-0 text-[11px] font-mono leading-5 text-white/74">
         {entries.length === 0 ? (
-          <div className="text-[var(--muted)]">none</div>
+          <div className="text-white/36">none</div>
         ) : (
           entries.map((serviceGroup) => (
             <div
               key={`${serviceGroup.serviceType}-${serviceGroup.index}`}
               className="mb-2"
             >
-              <div className="text-[var(--txt)]">
+              <div className="text-white/82">
                 [{serviceGroup.index}] {serviceGroup.serviceType} (
                 {serviceGroup.count})
               </div>
               {serviceGroup.instances.map((instance) => (
                 <div
                   key={`${serviceGroup.serviceType}-${instance.index}`}
-                  className="text-[var(--muted)] pl-4"
+                  className="pl-4 text-white/46"
                 >
                   {orderItemLabel(instance)}
                 </div>
@@ -216,8 +224,8 @@ function ServicesOrderCard(props: { entries: RuntimeServiceOrderItem[] }) {
             </div>
           ))
         )}
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -274,11 +282,19 @@ export function RuntimeView() {
 
   return (
     <div className="flex flex-col gap-4 h-full">
-      <div className="flex flex-wrap items-end gap-3 border border-[var(--border)] bg-[var(--card)] rounded-md p-3">
-        <div className="text-[13px] font-semibold mr-2">Runtime Debug</div>
-        <label className="text-[11px] text-[var(--muted)] flex items-center gap-1">
-          depth
-          <input
+      <Card className="rounded-[28px]">
+        <CardContent className="flex flex-wrap items-end gap-3 p-4">
+          <div className="mr-2">
+            <div className="text-[11px] uppercase tracking-[0.22em] text-white/42">
+              Runtime
+            </div>
+            <div className="text-sm font-semibold text-white/88">
+              Snapshot controls
+            </div>
+          </div>
+          <label className="flex min-w-[7rem] items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/42">
+            <span>Depth</span>
+            <Input
             type="number"
             min={1}
             max={24}
@@ -286,12 +302,12 @@ export function RuntimeView() {
             onChange={(e) =>
               setDepth(Math.max(1, Math.min(24, Number(e.target.value) || 1)))
             }
-            className="w-16 px-1.5 py-0.5 border border-[var(--border)] bg-[var(--bg)] text-[var(--txt)] rounded-sm"
+            className="h-10 w-20 rounded-2xl px-3 text-sm"
           />
         </label>
-        <label className="text-[11px] text-[var(--muted)] flex items-center gap-1">
-          array cap
-          <input
+          <label className="flex min-w-[8.5rem] items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/42">
+            <span>Array cap</span>
+            <Input
             type="number"
             min={1}
             max={5000}
@@ -301,12 +317,12 @@ export function RuntimeView() {
                 Math.max(1, Math.min(5000, Number(e.target.value) || 1)),
               )
             }
-            className="w-20 px-1.5 py-0.5 border border-[var(--border)] bg-[var(--bg)] text-[var(--txt)] rounded-sm"
+            className="h-10 w-24 rounded-2xl px-3 text-sm"
           />
         </label>
-        <label className="text-[11px] text-[var(--muted)] flex items-center gap-1">
-          object cap
-          <input
+          <label className="flex min-w-[8.5rem] items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/42">
+            <span>Object cap</span>
+            <Input
             type="number"
             min={1}
             max={5000}
@@ -316,39 +332,35 @@ export function RuntimeView() {
                 Math.max(1, Math.min(5000, Number(e.target.value) || 1)),
               )
             }
-            className="w-20 px-1.5 py-0.5 border border-[var(--border)] bg-[var(--bg)] text-[var(--txt)] rounded-sm"
+            className="h-10 w-24 rounded-2xl px-3 text-sm"
           />
         </label>
-        <button
-          type="button"
-          onClick={() => void loadSnapshot()}
-          disabled={loading}
-          className="px-3 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--bg)] hover:bg-[var(--bg-hover)] disabled:opacity-60"
-        >
+          <Button onClick={() => void loadSnapshot()} disabled={loading} variant="outline" size="sm">
           {loading ? "Refreshing..." : "Refresh"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setExpandedPaths(new Set([rootPath]))}
-          className="px-3 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--bg)] hover:bg-[var(--bg-hover)]"
-        >
+          </Button>
+          <Button
+            onClick={() => setExpandedPaths(new Set([rootPath]))}
+            variant="ghost"
+            size="sm"
+          >
           Collapse
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            setExpandedPaths(buildInitialExpanded(rootPath, sectionData))
-          }
-          className="px-3 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--bg)] hover:bg-[var(--bg-hover)]"
-        >
+          </Button>
+          <Button
+            onClick={() =>
+              setExpandedPaths(buildInitialExpanded(rootPath, sectionData))
+            }
+            variant="ghost"
+            size="sm"
+          >
           Expand Top
-        </button>
-        <div className="text-[11px] text-[var(--muted)] ml-auto">
+          </Button>
+          <div className="ml-auto text-[11px] text-white/42">
           {snapshot
             ? `Last updated: ${formatDateTime(snapshot.generatedAt, { fallback: "n/a" })}`
             : "No snapshot loaded"}
-        </div>
-      </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {snapshot && (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -357,56 +369,68 @@ export function RuntimeView() {
           <OrderCard title="Providers" entries={snapshot.order.providers} />
           <OrderCard title="Evaluators" entries={snapshot.order.evaluators} />
           <ServicesOrderCard entries={snapshot.order.services} />
-          <div className="border border-[var(--border)] bg-[var(--card)] rounded-md p-3">
-            <div className="text-xs font-semibold mb-2">Summary</div>
-            <div className="text-[11px] font-mono leading-5">
-              <div>
-                runtime: {snapshot.runtimeAvailable ? "available" : "offline"}
+          <Card className="rounded-[24px]">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-[11px]">Summary</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 pt-0 text-[11px] text-white/68">
+              <div className="flex items-center justify-between">
+                <span>Runtime</span>
+                <Badge variant={snapshot.runtimeAvailable ? "success" : "warning"}>
+                  {snapshot.runtimeAvailable ? "available" : "offline"}
+                </Badge>
               </div>
-              <div>agent: {snapshot.meta.agentName}</div>
-              <div>state: {snapshot.meta.agentState}</div>
-              <div>model: {snapshot.meta.model ?? "n/a"}</div>
-              <div>plugins: {snapshot.meta.pluginCount}</div>
-              <div>actions: {snapshot.meta.actionCount}</div>
-              <div>providers: {snapshot.meta.providerCount}</div>
-              <div>evaluators: {snapshot.meta.evaluatorCount}</div>
-              <div>services: {snapshot.meta.serviceCount}</div>
-            </div>
-          </div>
+              <div className="flex items-center justify-between gap-3">
+                <span>Agent</span>
+                <span className="truncate font-mono text-white/84">{snapshot.meta.agentName}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span>State</span>
+                <span className="truncate font-mono text-white/84">{snapshot.meta.agentState}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span>Model</span>
+                <span className="truncate font-mono text-white/84">{snapshot.meta.model ?? "n/a"}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <Badge variant="outline">Plugins {snapshot.meta.pluginCount}</Badge>
+                <Badge variant="outline">Actions {snapshot.meta.actionCount}</Badge>
+                <Badge variant="outline">Providers {snapshot.meta.providerCount}</Badge>
+                <Badge variant="outline">Services {snapshot.meta.serviceCount}</Badge>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
 
-      <div className="flex gap-1 border-b border-[var(--border)]">
+      <div className="flex flex-wrap gap-2">
         {SECTION_TABS.map((tab) => {
           const active = tab.key === activeSection;
           return (
-            <button
+            <Button
               key={tab.key}
-              type="button"
               onClick={() => setActiveSection(tab.key)}
-              className={`px-3 py-2 text-xs font-medium border-b-2 -mb-px ${
-                active
-                  ? "border-accent text-accent"
-                  : "border-transparent text-muted hover:text-txt hover:border-border"
-              }`}
+              variant={active ? "secondary" : "ghost"}
+              size="sm"
             >
               {tab.label}
-            </button>
+            </Button>
           );
         })}
       </div>
 
-      <div className="flex-1 min-h-0 border border-[var(--border)] bg-[var(--card)] rounded-md overflow-auto p-2">
+      <Card className="flex-1 min-h-0 overflow-auto rounded-[28px]">
+        <CardContent className="p-3">
         {error ? (
-          <div className="text-xs text-danger p-3">{error}</div>
+          <div className="p-3 text-xs text-danger">{error}</div>
         ) : !snapshot ? (
-          <div className="text-xs text-[var(--muted)] p-3">
+          <div className="p-3 text-xs text-white/42">
             {loading
               ? "Loading runtime snapshot..."
               : "No runtime snapshot available."}
           </div>
         ) : !snapshot.runtimeAvailable ? (
-          <div className="text-xs text-[var(--muted)] p-3">
+          <div className="p-3 text-xs text-white/42">
             Agent runtime is not running. Start the runtime and refresh.
           </div>
         ) : (
@@ -419,7 +443,8 @@ export function RuntimeView() {
             onToggle={handleTogglePath}
           />
         )}
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

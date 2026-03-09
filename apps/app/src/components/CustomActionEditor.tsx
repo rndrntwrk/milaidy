@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { client, type CustomActionDef, type CustomActionHandler } from "../api-client";
 import { Dialog } from "./ui/Dialog.js";
+import { ChevronDownIcon, ChevronRightIcon, CloseIcon } from "./ui/Icons.js";
 
 interface CustomActionEditorProps {
   open: boolean;
@@ -1001,8 +1002,9 @@ export function CustomActionEditor({
                   type="button"
                   onClick={() => removeParameter(i)}
                   className="px-2 text-muted hover:text-txt cursor-pointer"
+                  aria-label={`Remove parameter ${param.name || i + 1}`}
                 >
-                  &times;
+                  <CloseIcon className="h-3.5 w-3.5" />
                 </button>
               </div>
             ))}
@@ -1016,7 +1018,11 @@ export function CustomActionEditor({
               className="flex items-center justify-between text-xs text-muted hover:text-txt cursor-pointer"
             >
               <span>Test Action</span>
-              <span>{testExpanded ? "▼" : "▶"}</span>
+              {testExpanded ? (
+                <ChevronDownIcon className="h-3.5 w-3.5" />
+              ) : (
+                <ChevronRightIcon className="h-3.5 w-3.5" />
+              )}
             </button>
             {testExpanded && (
               <div className="flex flex-col gap-2 pl-2 border-l-2 border-border">

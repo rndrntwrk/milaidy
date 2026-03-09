@@ -13,6 +13,7 @@ import React, { useCallback, useRef, useState } from "react";
 import type { DynamicValue } from "../types";
 import type { FieldRenderer, FieldRenderProps } from "./config-catalog";
 import { resolveDynamic } from "./config-catalog";
+import { ChevronDownIcon, ChevronUpIcon, CloseIcon } from "./ui/Icons";
 
 // ── Action binding helper ──────────────────────────────────────────────
 
@@ -798,8 +799,9 @@ function MultiselectFieldInner({ fp: props }: { fp: FieldRenderProps }) {
                   type="button"
                   className="inline-flex items-center justify-center w-3.5 h-3.5 text-[10px] rounded-full hover:bg-[var(--accent)] hover:text-white transition-colors cursor-pointer"
                   onClick={() => remove(opt.value)}
+                  aria-label={`Remove ${opt.label}`}
                 >
-                  ×
+                  <CloseIcon className="h-3 w-3" />
                 </button>
               )}
             </span>
@@ -988,8 +990,9 @@ function ArrayItem({
             onClick={onMoveUp}
             disabled={index === 0}
             title="Move up"
+            aria-label="Move up"
           >
-            ▲
+            <ChevronUpIcon className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
@@ -997,8 +1000,9 @@ function ArrayItem({
             onClick={onMoveDown}
             disabled={index === total - 1}
             title="Move down"
+            aria-label="Move down"
           >
-            ▼
+            <ChevronDownIcon className="h-3.5 w-3.5" />
           </button>
         </div>
       )}

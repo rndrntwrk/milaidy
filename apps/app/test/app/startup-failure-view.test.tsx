@@ -28,15 +28,16 @@ describe("StartupFailureView", () => {
     if (!tree) throw new Error("failed to render StartupFailureView");
 
     const heading = tree.root.findByType("h1").children.join("");
-    const paragraphs = tree.root.findAllByType("p");
-    const body = paragraphs[0]?.children.join("") ?? "";
-    const hint = paragraphs[1]?.children.join("") ?? "";
-    expect(body).toContain("Backend unavailable");
-    expect(hint).toContain("This origin does not host the agent backend.");
+    const allText = tree.root
+      .findAll((node) => typeof node.type === "string")
+      .map((node) => node.children.join(""))
+      .join(" ");
     expect(heading).toContain("Backend Unreachable");
+    expect(allText).toContain("Backend unavailable");
+    expect(allText).toContain("This origin does not host the agent backend.");
     const openAppLink = tree.root.findByType("a");
     expect(openAppLink.props.href).toBe("https://app.milady.ai");
-    expect(openAppLink.children.join("")).toContain("Open App");
+    expect(openAppLink.children.join("")).toContain("OPEN_APP");
 
     const retryButton = tree.root.findByType("button");
     await act(async () => {

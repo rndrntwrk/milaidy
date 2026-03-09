@@ -1,33 +1,133 @@
-import React from 'react';
-import { useApp } from '../AppContext.js';
-import { GlowingText } from './ui/GlowingText.js';
+import { useMemo } from "react";
+import { useApp } from "../AppContext.js";
+import { DrawerShell } from "./DrawerShell.js";
+import { Button } from "./ui/Button.js";
+import { Card } from "./ui/Card.js";
+import { Sheet } from "./ui/Sheet.js";
+import {
+  PlusIcon,
+  ThreadsIcon,
+  TrashIcon,
+} from "./ui/Icons.js";
 
-export function ThreadsDrawer({ open, onClose }: { open: boolean, onClose: () => void }) {
-    if (!open) return null;
+function formatRelativeTime(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
 
-    return (
-        <div className="fixed inset-y-0 left-0 w-80 bg-surface/90 backdrop-blur-xl border-r border-accent shadow-[10px_0_30px_var(--accent-subtle)] z-40 flex flex-col transform transition-transform duration-300">
-            <div className="p-4 border-b border-accent/20 flex justify-between items-center">
-                <GlowingText className="text-lg tracking-widest text-accent">COMM_THREADS</GlowingText>
-                <button onClick={onClose} className="text-muted hover:text-accent">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 19l-7-7 7-7" /></svg>
-                </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                {/* Fake threads for layout mapping */}
-                <div className="p-3 border border-accent bg-accent/10 rounded cursor-pointer">
-                    <div className="text-txt font-bold truncate">Project JARVIS implementation</div>
-                    <div className="text-xs text-muted mt-1">Active session - Just now</div>
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
+}
+
+export function ThreadsDrawer({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  const {
+    conversations,
+    activeConversationId,
+    unreadConversations,
+    handleNewConversation,
+    handleSelectConversation,
+    handleDeleteConversation,
+  } = useApp();
+
+  const sortedConversations = useMemo(
+    () =>
+      [...conversations].sort(
+        (a, b) =>
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+      ),
+    [conversations],
+  );
+
+  return (
+    <Sheet open={open} onClose={onClose} side="left" className="w-[min(32rem,100vw)]">
+      <DrawerShell
+        icon={<ThreadsIcon className="h-4 w-4" />}
+        title="Threads"
+        description="Full transcript, switching, and thread management stay here instead of on the stage."
+        badge={`${sortedConversations.length} threads`}
+        onClose={onClose}
+        toolbar={
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full justify-center rounded-2xl"
+            onClick={() => {
+              void handleNewConversation();
+              onClose();
+            }}
+          >
+            <PlusIcon className="h-4 w-4" />
+            New Thread
+          </Button>
+        }
+        summary={
+          <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.2em] text-white/48">
+            <span>Recent first</span>
+            <span>{unreadConversations.size} unread</span>
+          </div>
+        }
+        contentClassName="space-y-3"
+      >
+        {sortedConversations.length === 0 ? (
+          <Card className="rounded-2xl px-4 py-4 text-center text-sm text-white/56">
+            No conversations yet.
+          </Card>
+        ) : (
+          sortedConversations.map((conversation) => {
+            const isActive = conversation.id === activeConversationId;
+            const unread = unreadConversations.has(conversation.id);
+            return (
+              <Card
+                key={conversation.id}
+                className={`rounded-2xl p-3 ${isActive ? "border-white/18 bg-white/[0.08]" : "border-white/10 bg-white/[0.04]"}`}
+              >
+                <div className="flex items-start gap-3">
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 items-start gap-3 bg-transparent text-left"
+                    onClick={() => {
+                      void handleSelectConversation(conversation.id);
+                      onClose();
+                    }}
+                  >
+                    <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${unread ? "bg-accent" : "bg-white/18"}`} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold text-white/88">
+                        {conversation.title}
+                      </div>
+                      <div className="mt-1 text-xs text-white/48">
+                        {formatRelativeTime(conversation.updatedAt)}
+                      </div>
+                    </div>
+                  </button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 rounded-2xl text-white/55 hover:text-danger"
+                    onClick={() => void handleDeleteConversation(conversation.id)}
+                    title="Delete thread"
+                  >
+                    <TrashIcon className="h-4 w-4" />
+                  </Button>
                 </div>
-                <div className="p-3 border border-border hover:border-accent/50 rounded cursor-pointer opacity-70">
-                    <div className="text-txt font-bold truncate">Web search integration</div>
-                    <div className="text-xs text-muted mt-1">Archived - 2 hrs ago</div>
-                </div>
-                <div className="p-3 border border-border hover:border-accent/50 rounded cursor-pointer opacity-70">
-                    <div className="text-txt font-bold truncate">Crypto wallet config</div>
-                    <div className="text-xs text-muted mt-1">Archived - Yesterday</div>
-                </div>
-            </div>
-        </div>
-    );
+              </Card>
+            );
+          })
+        )}
+      </DrawerShell>
+    </Sheet>
+  );
 }

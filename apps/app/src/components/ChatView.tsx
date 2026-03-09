@@ -18,6 +18,13 @@ import {
 } from "react";
 import { getVrmPreviewUrl, useApp } from "../AppContext.js";
 import { ChatAvatar } from "./ChatAvatar.js";
+import { resolveAgentDisplayName } from "./shared/agentDisplayName.js";
+import {
+  AgentIcon,
+  AudioIcon,
+  MicIcon,
+  OpsIcon,
+} from "./ui/Icons.js";
 import { useVoiceChat } from "../hooks/useVoiceChat.js";
 import {
   client,
@@ -394,7 +401,7 @@ export const ChatView = memo(function ChatView() {
 
   const voice = useVoiceChat({ onTranscript: handleVoiceTranscript, voiceConfig });
 
-  const agentName = agentStatus?.agentName ?? "Agent";
+  const agentName = resolveAgentDisplayName(agentStatus?.agentName);
   const msgs = conversationMessages;
   const visibleMsgs = useMemo(
     () =>
@@ -2096,7 +2103,7 @@ export const ChatView = memo(function ChatView() {
                   >
                     {!grouped && (
                       <div className="font-bold text-[12px] mb-1 text-accent">
-                        {isUser ? "You" : agentName}
+                        {isUser ? "Operator" : agentName}
                         {!isUser &&
                           typeof msg.source === "string" &&
                           msg.source &&
@@ -2199,9 +2206,7 @@ export const ChatView = memo(function ChatView() {
             }}
             title="Open Actions drawer"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-            </svg>
+            <OpsIcon width="14" height="14" />
           </button>
 
           {/* Show / hide avatar */}
@@ -2214,11 +2219,7 @@ export const ChatView = memo(function ChatView() {
             onClick={() => setAvatarVisible((v) => !v)}
             title={avatarVisible ? "Hide avatar" : "Show avatar"}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-              <circle cx="12" cy="7" r="4" />
-              {!avatarVisible && <line x1="3" y1="3" x2="21" y2="21" />}
-            </svg>
+            <AgentIcon width="14" height="14" className={!avatarVisible ? "opacity-55" : undefined} />
           </button>
 
           {/* Mute / unmute agent voice */}
@@ -2235,18 +2236,7 @@ export const ChatView = memo(function ChatView() {
             }}
             title={agentVoiceMuted ? "Unmute agent voice" : "Mute agent voice"}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-              {agentVoiceMuted ? (
-                <line x1="23" y1="9" x2="17" y2="15" />
-              ) : (
-                <>
-                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                </>
-              )}
-              {agentVoiceMuted && <line x1="17" y1="9" x2="23" y2="15" />}
-            </svg>
+            <AudioIcon width="14" height="14" muted={agentVoiceMuted} />
           </button>
         </div>
       </div>
@@ -2267,21 +2257,7 @@ export const ChatView = memo(function ChatView() {
             onClick={voice.toggleListening}
             title={voice.isListening ? "Stop listening" : "Voice input"}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill={voice.isListening ? "currentColor" : "none"} stroke="currentColor" strokeWidth={voice.isListening ? "0" : "2"}>
-              {voice.isListening ? (
-                <>
-                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-                  <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-                </>
-              ) : (
-                <>
-                  <path d="M12 1a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                  <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
-                  <line x1="12" y1="19" x2="12" y2="23" />
-                  <line x1="8" y1="23" x2="16" y2="23" />
-                </>
-              )}
-            </svg>
+            <MicIcon width="16" height="16" className={voice.isListening ? "fill-current" : undefined} />
           </button>
         )}
 
@@ -2295,7 +2271,7 @@ export const ChatView = memo(function ChatView() {
             ref={textareaRef}
             className="flex-1 px-3 py-2 border border-border bg-card text-txt text-sm font-body leading-relaxed resize-none overflow-y-hidden min-h-[38px] max-h-[200px] focus:border-accent focus:outline-none"
             rows={1}
-            placeholder={voice.isListening ? "Listening..." : "Type a message..."}
+            placeholder={voice.isListening ? "Listening..." : "Continue the conversation..."}
             value={chatInput}
             onChange={(e) => setState("chatInput", e.target.value)}
             onKeyDown={handleKeyDown}

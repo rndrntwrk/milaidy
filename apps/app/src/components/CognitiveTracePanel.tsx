@@ -1,36 +1,40 @@
-import React, { useMemo } from 'react';
-import { SciFiPanel } from './ui/SciFiPanel.js';
-import { GlowingText } from './ui/GlowingText.js';
-import { useApp } from '../AppContext.js';
+import { useMemo } from "react";
+import { useApp } from "../AppContext.js";
+import { Badge } from "./ui/Badge.js";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/Card.js";
+import { buildPublicActionEntries } from "./shared/publicActionEntries.js";
 
 export function CognitiveTracePanel() {
-    const { conversationMessages } = useApp();
+  const { autonomousEvents } = useApp();
 
-    // Get the last 5 messages to show as traces
-    const traces = useMemo(() => {
-        return conversationMessages.slice(-5).reverse();
-    }, [conversationMessages]);
+  const traces = useMemo(
+    () =>
+      buildPublicActionEntries(autonomousEvents)
+        .slice(-8)
+        .reverse(),
+    [autonomousEvents],
+  );
 
-    return (
-        <SciFiPanel variant="glass" className="h-64 flex flex-col">
-            <div className="border-b border-accent/20 pb-2 mb-4">
-                <GlowingText className="text-sm tracking-widest text-accent">COGNITIVE TRACE</GlowingText>
+  return (
+    <Card className="h-full border-white/10 bg-black/48 shadow-[0_14px_44px_rgba(0,0,0,0.28)]">
+      <CardHeader className="border-b border-white/8 pb-3">
+        <CardTitle>Action Log</CardTitle>
+      </CardHeader>
+      <CardContent className="flex h-[calc(100%-72px)] flex-col-reverse gap-2 overflow-y-auto p-4">
+        {traces.length === 0 ? (
+          <div className="text-xs text-white/50">Waiting for the next public action...</div>
+        ) : (
+          traces.map((event) => (
+            <div key={event.id} className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <Badge variant={event.variant}>{event.title}</Badge>
+                <span className="text-[10px] uppercase tracking-[0.2em] text-white/38">{event.timestamp}</span>
+              </div>
+              <div className="text-xs leading-relaxed text-white/76">{event.detail}</div>
             </div>
-
-            <div className="flex-1 overflow-y-auto font-mono text-xs space-y-2 text-txt flex flex-col-reverse">
-                {traces.length === 0 && <div className="animate-pulse text-muted">Monitoring internal thought process...</div>}
-                {traces.map((msg) => {
-                    const isAssistant = msg.role === 'assistant';
-                    const colorClass = isAssistant ? "border-accent bg-accent/5 text-accent" : "border-primary bg-primary/5 text-primary";
-                    const label = isAssistant ? "[THOUGHT]" : "[INPUT]";
-                    return (
-                        <div key={msg.id} className={`p-2 border-l-2 ${colorClass}`}>
-                            <span className="font-bold mr-2">{label}</span>
-                            <span className="text-txt line-clamp-2">{msg.text || '...'}</span>
-                        </div>
-                    );
-                })}
-            </div>
-        </SciFiPanel>
-    );
+          ))
+        )}
+      </CardContent>
+    </Card>
+  );
 }

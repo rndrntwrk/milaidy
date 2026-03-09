@@ -10,6 +10,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { client, type QueryResult, type TableInfo } from "../api-client";
+import { Button } from "./ui/Button";
+import { Card } from "./ui/Card";
+import { Dialog } from "./ui/Dialog";
+import { ScrollArea } from "./ui/ScrollArea";
+import { CloseIcon } from "./ui/Icons";
 
 const PAGE_SIZE = 25;
 
@@ -859,37 +864,20 @@ function MemoryDetailModal({
   onClose: () => void;
 }) {
   return (
-    <div
-      className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-8"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onClose();
-        }
-      }}
-      role="dialog"
-      aria-modal="true"
-    >
-      <div className="bg-[var(--card)] border border-[var(--border)] max-w-[700px] w-full max-h-[90vh] overflow-auto">
+    <Dialog open={true} onClose={onClose} className="max-w-[700px] bg-[#07090e]/96">
+      <Card className="flex max-h-[90vh] w-full flex-col overflow-hidden border-white/10 bg-[#07090e]/96">
         {/* Header */}
-        <div className="flex items-center justify-between p-3 border-b border-[var(--border)]">
-          <div className="text-xs font-medium text-[var(--txt)]">
+        <div className="flex items-center justify-between border-b border-white/10 p-3">
+          <div className="text-xs font-medium text-white/88">
             Memory Detail
           </div>
-          <button
-            type="button"
-            className="text-[var(--muted)] hover:text-[var(--txt)] bg-transparent border-0 cursor-pointer text-lg px-2"
-            onClick={onClose}
-          >
-            ×
-          </button>
+          <Button type="button" variant="ghost" size="icon" className="rounded-full" onClick={onClose} aria-label="Close vector memory detail">
+            <CloseIcon className="h-4 w-4" />
+          </Button>
         </div>
 
         {/* Content */}
-        <div className="p-4">
+        <ScrollArea className="p-4">
           <div className="text-[11px] text-[var(--muted)] mb-1 uppercase font-bold">
             Content
           </div>
@@ -945,9 +933,9 @@ function MemoryDetailModal({
               {JSON.stringify(memory.raw, null, 2)}
             </div>
           </details>
-        </div>
-      </div>
-    </div>
+        </ScrollArea>
+      </Card>
+    </Dialog>
   );
 }
 

@@ -52,7 +52,7 @@ describe("PairingView", () => {
       .map((li) => li.children.join(""));
     expect(listItems).toContain("Ask the server owner for an API token.");
     expect(listItems).toContain(
-      "Enable pairing on the server and restart Milady.",
+      "Enable pairing on the server and restart Pro Streamer.",
     );
 
     const docsLink = tree.root.findByType("a");

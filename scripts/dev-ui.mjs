@@ -181,6 +181,20 @@ function resolveFive55ApiUrlForDev() {
   return DEFAULT_LOCAL_FIVE55_API;
 }
 
+function hasArcade555AuthForDev() {
+  const candidates = [
+    process.env.ARCADE555_AGENT_API_KEY,
+    process.env.ARCADE555_AGENT_TOKEN,
+    process.env.STREAM555_AGENT_API_KEY,
+    process.env.STREAM555_AGENT_TOKEN,
+    process.env.STREAM_API_BEARER_TOKEN,
+  ];
+
+  return candidates.some(
+    (value) => typeof value === "string" && value.trim().length > 0,
+  );
+}
+
 function resolveMiladyConfigPath() {
   const explicitConfigPath = process.env.MILADY_CONFIG_PATH?.trim();
   if (explicitConfigPath) {
@@ -1030,6 +1044,17 @@ if (uiOnly) {
     );
   }
 
+  const shouldDisableArcade555CanonicalForDev =
+    process.env.ARCADE555_CANONICAL_PLUGIN_ENABLED === undefined &&
+    process.env.MILADY_DEV_ENABLE_ARCADE555_CANONICAL !== "1" &&
+    !hasArcade555AuthForDev();
+
+  if (shouldDisableArcade555CanonicalForDev) {
+    console.log(
+      `  ${green("[milady]")} ${dim("Disabling arcade555 canonical plugin for local dev (missing arcade auth; set MILADY_DEV_ENABLE_ARCADE555_CANONICAL=1 to opt in)")}`,
+    );
+  }
+
   const apiCmd = hasBun
     ? [
         "bun",
@@ -1057,6 +1082,9 @@ if (uiOnly) {
       MILADY_HEADLESS: "1",
       LOG_LEVEL: devLogLevel,
       FIVE55_GAMES_API_URL: five55ApiUrl,
+      ...(shouldDisableArcade555CanonicalForDev
+        ? { ARCADE555_CANONICAL_PLUGIN_ENABLED: "false" }
+        : {}),
     },
     stdio: ["inherit", "pipe", "pipe"],
   });

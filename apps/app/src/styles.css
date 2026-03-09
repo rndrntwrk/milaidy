@@ -228,3 +228,458 @@
   animation: dither-fade infinite;
   animation-timing-function: steps(4);
 }
+
+/* ── Milady control stack scope ───────────────────────────────────── */
+
+.milady-control-stack-scope,
+.milady-drawer-scope {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.milady-control-stack-scope h1,
+.milady-control-stack-scope h2,
+.milady-control-stack-scope h3,
+.milady-control-stack-scope h4,
+.milady-drawer-scope h1,
+.milady-drawer-scope h2,
+.milady-drawer-scope h3,
+.milady-drawer-scope h4 {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.milady-control-stack-scope p,
+.milady-control-stack-scope label,
+.milady-control-stack-scope span,
+.milady-control-stack-scope li,
+.milady-control-stack-scope small,
+.milady-drawer-scope p,
+.milady-drawer-scope label,
+.milady-drawer-scope span,
+.milady-drawer-scope li,
+.milady-drawer-scope small {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.milady-control-stack-scope :is(.btn, .theme-btn, button, input, textarea, select) {
+  border-color: rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  box-shadow: none;
+}
+
+.milady-control-stack-scope :is(.btn, .theme-btn, button),
+.milady-drawer-scope :is(.btn, .theme-btn, button) {
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.milady-control-stack-scope :is(input, textarea, select),
+.milady-drawer-scope :is(input, textarea, select) {
+  background: rgba(0, 0, 0, 0.28);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.milady-control-stack-scope :is(code, pre),
+.milady-drawer-scope :is(code, pre) {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+}
+
+.milady-control-stack-scope :is(table, .table),
+.milady-drawer-scope :is(table, .table) {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.milady-control-stack-scope a,
+.milady-drawer-scope a {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.milady-control-stack-scope .text-accent,
+.milady-drawer-scope .text-accent {
+  color: rgba(255, 255, 255, 0.88) !important;
+}
+
+.milady-control-stack-scope .border-accent,
+.milady-drawer-scope .border-accent {
+  border-color: rgba(255, 255, 255, 0.14) !important;
+}
+
+.milady-control-stack-scope .bg-accent,
+.milady-drawer-scope .bg-accent {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: rgba(255, 255, 255, 0.92) !important;
+}
+
+.pro-streamer-stage {
+  isolation: isolate;
+  padding-inline: clamp(1rem, 3vw, 2.25rem);
+  padding-top: clamp(0.5rem, 1.5vw, 1.25rem);
+  padding-bottom: max(7.5rem, calc(env(safe-area-inset-bottom) + 6rem));
+}
+
+.pro-streamer-rail-launcher {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 999px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  touch-action: manipulation;
+}
+
+.pro-streamer-rail-launcher:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.18),
+    0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+.milady-control-stack-scope input[type="text"],
+.milady-control-stack-scope input[type="search"],
+.milady-control-stack-scope input[type="number"],
+.milady-control-stack-scope input[type="url"],
+.milady-control-stack-scope input[type="password"],
+.milady-control-stack-scope input[type="email"],
+.milady-control-stack-scope textarea,
+.milady-control-stack-scope select,
+.milady-drawer-scope input[type="text"],
+.milady-drawer-scope input[type="search"],
+.milady-drawer-scope input[type="number"],
+.milady-drawer-scope input[type="url"],
+.milady-drawer-scope input[type="password"],
+.milady-drawer-scope input[type="email"],
+.milady-drawer-scope textarea,
+.milady-drawer-scope select {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.22);
+  color: rgba(255, 255, 255, 0.92);
+  border-radius: 18px;
+  min-height: 44px;
+}
+
+.milady-control-stack-scope input::placeholder,
+.milady-control-stack-scope textarea::placeholder,
+.milady-drawer-scope input::placeholder,
+.milady-drawer-scope textarea::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.milady-control-stack-scope table,
+.milady-drawer-scope table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.milady-control-stack-scope th,
+.milady-control-stack-scope td,
+.milady-drawer-scope th,
+.milady-drawer-scope td {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.milady-control-stack-scope pre,
+.milady-control-stack-scope code,
+.milady-drawer-scope pre,
+.milady-drawer-scope code {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.milady-control-stack-scope :where(
+  button,
+  .btn,
+  [role="button"],
+  [role="tab"],
+  a.inline-flex
+),
+.milady-drawer-scope :where(
+  button,
+  .btn,
+  [role="button"],
+  [role="tab"],
+  a.inline-flex
+) {
+  border-radius: 18px;
+  min-height: 40px;
+  box-shadow: none;
+}
+
+.milady-control-stack-scope :where(button, .btn, [role="button"], [role="tab"]):focus-visible,
+.milady-control-stack-scope :where(input, textarea, select, button, [role="tab"]):focus-visible,
+.milady-drawer-scope :where(button, .btn, [role="button"], [role="tab"]):focus-visible,
+.milady-drawer-scope :where(input, textarea, select, button, [role="tab"]):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.18);
+}
+
+.milady-control-stack-scope :where(
+  .bg-card,
+  .bg-surface,
+  .bg-surface\/95,
+  [class*="bg-zinc-"],
+  [class*="bg-neutral-"],
+  [class*="bg-stone-"],
+  [class*="bg-slate-"],
+  [class*="bg-amber-"],
+  [class*="bg-yellow-"]
+) ,
+.milady-drawer-scope :where(
+  .bg-card,
+  .bg-surface,
+  .bg-surface\/95,
+  [class*="bg-zinc-"],
+  [class*="bg-neutral-"],
+  [class*="bg-stone-"],
+  [class*="bg-slate-"],
+  [class*="bg-amber-"],
+  [class*="bg-yellow-"]
+) {
+  background: rgba(255, 255, 255, 0.04) !important;
+  backdrop-filter: blur(18px);
+}
+
+.milady-control-stack-scope :where(
+  .border-border,
+  .border-border\/60,
+  [class*="border-zinc-"],
+  [class*="border-neutral-"],
+  [class*="border-stone-"],
+  [class*="border-slate-"],
+  [class*="border-amber-"],
+  [class*="border-yellow-"]
+) ,
+.milady-drawer-scope :where(
+  .border-border,
+  .border-border\/60,
+  [class*="border-zinc-"],
+  [class*="border-neutral-"],
+  [class*="border-stone-"],
+  [class*="border-slate-"],
+  [class*="border-amber-"],
+  [class*="border-yellow-"]
+) {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.milady-control-stack-scope :where(
+  [class*="text-amber-"],
+  [class*="text-yellow-"]
+) ,
+.milady-drawer-scope :where(
+  [class*="text-amber-"],
+  [class*="text-yellow-"]
+) {
+  color: rgba(255, 255, 255, 0.86) !important;
+}
+
+.milady-control-stack-scope :where(
+  [class*="text-zinc-"],
+  [class*="text-neutral-"],
+  [class*="text-stone-"],
+  [class*="text-slate-"],
+  [class*="text-gray-"]
+) ,
+.milady-drawer-scope :where(
+  [class*="text-zinc-"],
+  [class*="text-neutral-"],
+  [class*="text-stone-"],
+  [class*="text-slate-"],
+  [class*="text-gray-"]
+) {
+  color: rgba(255, 255, 255, 0.68) !important;
+}
+
+.milady-control-stack-scope :where(
+  [class*="shadow-amber"],
+  [class*="shadow-yellow"],
+  [class*="shadow-orange"],
+  [class*="shadow-black/"]
+) ,
+.milady-drawer-scope :where(
+  [class*="shadow-amber"],
+  [class*="shadow-yellow"],
+  [class*="shadow-orange"],
+  [class*="shadow-black/"]
+) {
+  box-shadow: none !important;
+}
+
+.milady-control-stack-scope :where(hr, [class*="divide-"]),
+.milady-drawer-scope :where(hr, [class*="divide-"]) {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.milady-control-stack-scope :where(thead),
+.milady-drawer-scope :where(thead) {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.milady-control-stack-scope :where(tr:hover),
+.milady-drawer-scope :where(tr:hover) {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.milady-control-stack-scope :where(button.btn, .btn),
+.milady-drawer-scope :where(button.btn, .btn) {
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: rgba(255, 255, 255, 0.88) !important;
+}
+
+.milady-control-stack-scope :where(button.btn:hover, .btn:hover),
+.milady-drawer-scope :where(button.btn:hover, .btn:hover) {
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+.pro-streamer-plugin-surface input:not([type="checkbox"]):not([type="radio"]),
+.pro-streamer-plugin-surface select,
+.pro-streamer-plugin-surface textarea,
+.pro-streamer-apps-surface input:not([type="checkbox"]):not([type="radio"]),
+.pro-streamer-apps-surface select,
+.pro-streamer-apps-surface textarea {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.92);
+  border-radius: 20px;
+}
+
+.pro-streamer-plugin-surface .milady-control-stack-scope,
+.pro-streamer-apps-surface .milady-control-stack-scope {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.pro-streamer-plugin-surface button,
+.pro-streamer-apps-surface button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pro-streamer-provider-card {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.pro-streamer-provider-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.pro-streamer-provider-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.pro-streamer-plugin-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.pro-streamer-provider-modal {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(11, 14, 20, 0.96), rgba(8, 10, 14, 0.94));
+}
+
+[data-sheet-side="left"],
+[data-sheet-side="right"] {
+  overscroll-behavior: contain;
+  width: min(26rem, calc(100vw - 1.5rem));
+  max-width: min(26rem, calc(100vw - 1.5rem));
+  z-index: 46;
+}
+
+[data-sheet-side="left"] .sheet-panel,
+[data-sheet-side="right"] .sheet-panel,
+[data-sheet-side="bottom"] .sheet-panel,
+[data-sheet-side="full"] .sheet-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.drawer-shell__body,
+.sheet-panel__body {
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+.pro-streamer-stage [data-conversation-timeline] {
+  max-width: min(100%, 78rem);
+  margin-inline: auto;
+  padding-inline: clamp(1rem, 5vw, 5.5rem);
+  padding-bottom: clamp(0.75rem, 1.4vw, 1.15rem);
+  scroll-padding-bottom: 8rem;
+}
+
+.milady-drawer-scope .pro-streamer-summary-grid {
+  display: grid;
+  gap: 0.5rem;
+}
+
+@media (max-width: 1279px) {
+  .pro-streamer-plugin-surface,
+  .pro-streamer-apps-surface {
+    padding-bottom: 0.25rem;
+  }
+
+  .pro-streamer-stage [data-conversation-timeline] {
+    max-width: min(100%, 64rem);
+    padding-inline: clamp(0.875rem, 3.25vw, 1.75rem);
+  }
+
+  [data-sheet-side="left"],
+  [data-sheet-side="right"] {
+    width: min(22rem, calc(100vw - 1rem));
+    max-width: min(22rem, calc(100vw - 1rem));
+  }
+}
+
+@media (max-width: 960px) {
+  .pro-streamer-stage {
+    padding-inline: 0.75rem;
+    padding-bottom: max(8.5rem, calc(env(safe-area-inset-bottom) + 7rem));
+  }
+
+  .pro-streamer-rail-launcher {
+    width: 2.9rem;
+    height: 2.9rem;
+  }
+
+  [data-sheet-side="left"],
+  [data-sheet-side="right"] {
+    width: calc(100vw - 0.75rem);
+    max-width: calc(100vw - 0.75rem);
+  }
+
+  .pro-streamer-stage [data-conversation-timeline] {
+    max-width: 100%;
+    padding-inline: clamp(0.75rem, 2vw, 1rem);
+  }
+}
+
+@media (max-width: 768px) {
+  .pro-streamer-rail-launcher {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  [data-sheet-side="left"],
+  [data-sheet-side="right"],
+  [data-sheet-side="bottom"],
+  [data-sheet-side="full"] {
+    inset: auto 0 0 0;
+    width: 100vw;
+    max-width: 100vw;
+    height: min(100dvh, 100vh);
+  }
+
+  .pro-streamer-stage [data-conversation-timeline] {
+    padding-inline: 0.375rem;
+    padding-bottom: 0.75rem;
+    scroll-padding-bottom: 9rem;
+  }
+}

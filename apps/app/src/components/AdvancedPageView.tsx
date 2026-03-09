@@ -30,6 +30,10 @@ import { IdentityPanel } from "./IdentityPanel";
 import { ApprovalPanel } from "./ApprovalPanel";
 import { SafeModePanel } from "./SafeModePanel";
 import { GovernancePanel } from "./GovernancePanel";
+import { Button } from "./ui/Button.js";
+import { Badge } from "./ui/Badge.js";
+import { Card } from "./ui/Card.js";
+import { ControlStackSectionFrame } from "./ControlStackSectionFrame.js";
 
 type SubTab =
   | "plugins"
@@ -94,6 +98,8 @@ export function AdvancedPageView() {
   >(null);
 
   const currentSubTab = mapTabToSubTab(tab);
+  const currentMeta =
+    SUB_TABS.find((subTab) => subTab.id === currentSubTab) ?? SUB_TABS[0];
 
   const handleSubTabChange = (subTab: SubTab) => {
     setSelectedTrajectoryId(null);
@@ -162,7 +168,15 @@ export function AdvancedPageView() {
       case "safe-mode":
         return <SafeModePanel />;
       case "governance":
-        return <GovernancePanel />;
+        return (
+          <ControlStackSectionFrame
+            title="Governance"
+            description="Policies, retention, quarantine, and compliance posture for the current operator environment."
+            badge="Policy"
+          >
+            <GovernancePanel />
+          </ControlStackSectionFrame>
+        );
       case "fine-tuning":
         return <FineTuningView />;
       case "trajectories":
@@ -175,10 +189,24 @@ export function AdvancedPageView() {
           );
         }
         return (
-          <TrajectoriesView onSelectTrajectory={setSelectedTrajectoryId} />
+          <ControlStackSectionFrame
+            title="Trajectories"
+            description="Captured LLM call history, token and latency analysis, and drill-down into structured execution records."
+            badge="Trace"
+          >
+            <TrajectoriesView onSelectTrajectory={setSelectedTrajectoryId} />
+          </ControlStackSectionFrame>
         );
       case "runtime":
-        return <RuntimeView />;
+        return (
+          <ControlStackSectionFrame
+            title="Runtime"
+            description="Deep runtime inspection, load ordering, and execution diagnostics for the active agent process."
+            badge="Deep debug"
+          >
+            <RuntimeView />
+          </ControlStackSectionFrame>
+        );
       case "database":
         return <DatabasePageView />;
       case "logs":
@@ -191,36 +219,58 @@ export function AdvancedPageView() {
   };
 
   return (
-    <div className="flex flex-col h-full min-h-0">
-      {/* Sub-tab navigation (fixed) */}
-      <div className="mb-4 shrink-0">
-        <div className="flex gap-1 border-b border-border overflow-x-auto" role="tablist" aria-label="Advanced settings">
+    <div className="flex h-full min-h-0 flex-col gap-4">
+      <Card className="rounded-[22px] border-white/10 bg-white/[0.04] shadow-none">
+        <div className="flex flex-wrap items-start justify-between gap-3 px-4 py-4">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.24em] text-white/45">
+              Control Stack Section
+            </div>
+            <div className="mt-1 text-base font-semibold text-white/92">
+              {currentMeta.label}
+            </div>
+            <div className="mt-1 max-w-3xl text-sm text-white/68">
+              {currentMeta.description}
+            </div>
+          </div>
+          <Badge variant="outline" className="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em]">
+            Deep tools
+          </Badge>
+        </div>
+      </Card>
+
+      <div className="shrink-0">
+        <div className="flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Advanced settings">
           {SUB_TABS.map((subTab) => {
             const isActive = currentSubTab === subTab.id;
             return (
-              <button
-                type="button"
+              <Button
                 key={subTab.id}
                 id={`adv-tab-${subTab.id}`}
                 role="tab"
                 aria-selected={isActive}
                 aria-controls="adv-tabpanel"
-                className={`px-4 py-2 text-xs font-medium border-b-2 -mb-px transition-colors shrink-0 ${isActive
-                    ? "border-accent text-accent"
-                    : "border-transparent text-muted hover:text-txt hover:border-border"
+                variant={isActive ? "secondary" : "ghost"}
+                className={`shrink-0 rounded-full border ${isActive
+                    ? "border-white/18 bg-white/[0.14] text-white"
+                    : "border-white/8 text-white/55 hover:border-white/16 hover:bg-white/[0.06] hover:text-white"
                   }`}
                 onClick={() => handleSubTabChange(subTab.id)}
                 title={subTab.description}
               >
                 {subTab.label}
-              </button>
+              </Button>
             );
           })}
         </div>
       </div>
 
-      {/* Content area (scrolls, header stays fixed) */}
-      <div className="flex-1 min-h-0 overflow-y-auto" role="tabpanel" id="adv-tabpanel" aria-labelledby={`adv-tab-${currentSubTab}`}>
+      <div
+        className="flex-1 min-h-0 overflow-y-auto"
+        role="tabpanel"
+        id="adv-tabpanel"
+        aria-labelledby={`adv-tab-${currentSubTab}`}
+      >
         {renderContent()}
       </div>
     </div>

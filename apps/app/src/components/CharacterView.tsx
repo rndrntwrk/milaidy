@@ -912,12 +912,12 @@ export function CharacterView() {
                   MINT IS LIVE
                 </span>
                 <span className="text-[11px] text-[var(--muted)]">
-                  MiladyMaker #{(dropStatus?.currentSupply ?? 0) + 1} of{" "}
+                  rasp #{(dropStatus?.currentSupply ?? 0) + 1} of{" "}
                   {dropStatus?.maxSupply ?? 2138}
                 </span>
               </div>
               <div className="text-[12px] text-[var(--muted)]">
-                Claim your limited-edition Milady Agent NFT.{" "}
+                Claim your limited-edition rasp Agent NFT.{" "}
                 {dropStatus?.maxSupply ?? 2138} total.{" "}
                 {(dropStatus?.maxSupply ?? 2138) -
                   (dropStatus?.currentSupply ?? 0)}{" "}
@@ -950,7 +950,7 @@ export function CharacterView() {
               )}
               {mintResult && (
                 <div className="text-xs text-[var(--ok,#16a34a)]">
-                  Minted! Token #{mintResult.agentId} | MiladyMaker #
+                  Minted! Token #{mintResult.agentId} | rasp #
                   {mintResult.mintNumber}
                   {mintResult.isShiny && " (shiny)"}{" "}
                   <a

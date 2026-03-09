@@ -1,40 +1,256 @@
-import React from 'react';
-import { useApp } from '../AppContext.js';
-import { SciFiPanel } from './ui/SciFiPanel.js';
-import { ChatAvatar } from './ChatAvatar.js';
+import { useEffect, useMemo, useRef } from "react";
+import { useApp } from "../AppContext.js";
+import { ChatAvatar } from "./ChatAvatar.js";
+import { Badge } from "./ui/Badge.js";
+import { Button } from "./ui/Button.js";
+import { ScrollArea } from "./ui/ScrollArea.js";
+import { Textarea } from "./ui/Textarea.js";
+import { resolveAgentDisplayName } from "./shared/agentDisplayName.js";
+import { buildPublicActionEntries } from "./shared/publicActionEntries.js";
+import {
+  AgentIcon,
+  OperatorIcon,
+  SendIcon,
+  StopIcon,
+  SystemIcon,
+} from "./ui/Icons.js";
+
+function formatTurnState(
+  chatSending: boolean,
+  chatFirstTokenReceived: boolean,
+  agentStatusState: string | undefined,
+): string {
+  if (chatSending) return chatFirstTokenReceived ? "streaming" : "thinking";
+  return agentStatusState ?? "idle";
+}
 
 export function AgentCore() {
-    const {
-        chatAvatarSpeaking,
-        activeConversationId
-    } = useApp();
+  const {
+    chatAvatarSpeaking,
+    chatAgentVoiceMuted,
+    activeConversationId,
+    conversationMessages,
+    chatInput,
+    chatSending,
+    chatFirstTokenReceived,
+    agentStatus,
+    chatPendingImages,
+    autonomousEvents,
+    setState,
+    handleChatSend,
+    handleChatStop,
+  } = useApp();
+  const timelineScrollRef = useRef<HTMLDivElement | null>(null);
 
-    return (
-        <div className="flex flex-col h-full w-full relative">
-            {/* Absolute center avatar */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden opacity-20">
-                <div className="w-[300px] h-[300px] sm:w-[500px] sm:h-[500px] bg-accent/10 rounded-full blur-[50px] animate-pulse" />
-            </div>
+  const agentName = resolveAgentDisplayName(agentStatus?.agentName);
+  const turnState = formatTurnState(
+    chatSending,
+    chatFirstTokenReceived,
+    agentStatus?.state,
+  );
 
-            <div className="flex-1 overflow-y-auto relative z-10 flex flex-col items-center justify-center p-8">
-                {/* Real VRM Avatar */}
-                <div className="w-[300px] h-[400px] md:w-[400px] md:h-[500px] relative">
-                    <ChatAvatar isSpeaking={chatAvatarSpeaking} />
-                </div>
+  const timelineEntries = useMemo(() => {
+    const messageEntries = conversationMessages.slice(-12).map((message) => ({
+      id: message.id,
+      type: "message" as const,
+      timestampMs: message.timestamp,
+      role: message.role,
+      text: message.text?.trim() || "...",
+    }));
 
-                <div className="mt-8 text-center bg-card/80 backdrop-blur border border-accent/50 p-4 rounded-md">
-                    <h2 className="text-xl font-display text-accent mb-2">LOCAL NEURAL CORE ACTIVE</h2>
-                    <p className="text-sm font-mono text-muted">Awaiting sync block {activeConversationId}</p>
-                </div>
-            </div>
+    const actionEntries = buildPublicActionEntries(autonomousEvents)
+      .slice(-6)
+      .map((entry) => ({
+        id: entry.id,
+        type: "system" as const,
+        timestampMs: entry.timestampMs,
+        title: entry.title,
+        detail: entry.detail,
+        variant: entry.variant,
+        timestamp: entry.timestamp,
+      }));
 
-            <div className="p-4 border-t border-accent/20 bg-card/60 backdrop-blur z-10">
-                {/* Chat composer placeholder */}
-                <div className="flex items-center w-full border border-accent/50 bg-bg p-2 rounded justify-between px-4">
-                    <span className="text-muted font-mono animate-pulse">SYSTEM AWAITING COMMAND...</span>
-                    <div className="w-2 h-4 bg-accent animate-ping" />
-                </div>
-            </div>
+    return [...messageEntries, ...actionEntries]
+      .sort((a, b) => a.timestampMs - b.timestampMs)
+      .slice(-14);
+  }, [autonomousEvents, conversationMessages]);
+
+  const liveStateLabel = useMemo(() => {
+    if (chatSending) return "Reply in progress";
+    if (conversationMessages.length > 0) return "Latest reply ready";
+    return "Ready for the next exchange";
+  }, [chatSending, conversationMessages.length]);
+  const threadLabel = useMemo(() => {
+    if (!activeConversationId) return "live thread";
+    if (activeConversationId.length <= 18) return `thread ${activeConversationId}`;
+    return `thread ${activeConversationId.slice(0, 8)}…${activeConversationId.slice(-4)}`;
+  }, [activeConversationId]);
+
+  useEffect(() => {
+    const node = timelineScrollRef.current;
+    if (!node) return;
+    const frame = window.requestAnimationFrame(() => {
+      node.scrollTop = node.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [
+    chatFirstTokenReceived,
+    chatSending,
+    timelineEntries.length,
+    timelineEntries[timelineEntries.length - 1]?.id,
+  ]);
+
+  return (
+    <div className="relative h-full w-full overflow-hidden">
+      <div className="absolute inset-0">
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.012)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.012)_1px,transparent_1px)] bg-[size:34px_34px] opacity-15" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_24%,rgba(255,255,255,0.045),transparent_34%),linear-gradient(180deg,rgba(0,0,0,0.08),rgba(0,0,0,0.42)_72%,rgba(0,0,0,0.74)_100%)]" />
+      </div>
+
+      <div className="absolute inset-x-[18%] bottom-[10.75rem] top-[10rem] z-[1] sm:inset-x-[16%] sm:bottom-[10rem] sm:top-[8.25rem] lg:inset-x-[20%] lg:bottom-[8.75rem] lg:top-[6rem] xl:inset-x-[22%]">
+        <div className="absolute inset-0">
+          <ChatAvatar isSpeaking={chatAvatarSpeaking} />
         </div>
-    );
+      </div>
+
+      <div className="absolute inset-x-0 bottom-[8.75rem] top-[9rem] z-10 sm:bottom-[8.25rem] sm:top-[7.5rem] lg:bottom-[7.5rem] lg:top-[5.5rem]">
+        <ScrollArea ref={timelineScrollRef} className="h-full w-full px-3 sm:px-6 lg:px-10">
+          <div
+            data-conversation-timeline
+            className="mx-auto flex min-h-full w-full max-w-[1320px] flex-col justify-end pb-5"
+          >
+            <div className="space-y-3">
+              {timelineEntries.length === 0 ? (
+                <div className="flex w-full justify-center">
+                  <div className="rounded-full border border-white/10 bg-black/34 px-5 py-3 text-center text-[11px] uppercase tracking-[0.24em] text-white/58 backdrop-blur-xl">
+                    Start the conversation. {agentName} replies on the left, operator messages land on the right.
+                  </div>
+                </div>
+              ) : (
+                timelineEntries.map((entry, index) => {
+                  const visibilityClass =
+                    index < timelineEntries.length - 4
+                      ? "hidden lg:flex"
+                      : index < timelineEntries.length - 2
+                        ? "hidden md:flex"
+                        : "flex";
+                  if (entry.type === "system") {
+                    return (
+                      <div key={entry.id} className={`${visibilityClass} w-full justify-center`}>
+                        <div className="max-w-[min(44rem,88vw)] rounded-full border border-white/10 bg-black/36 px-4 py-2.5 text-center backdrop-blur-xl">
+                          <div className="inline-flex items-center gap-2 text-[10px] uppercase tracking-[0.22em] text-white/54">
+                            <SystemIcon className="h-4 w-4" />
+                            <span>{entry.title}</span>
+                            <Badge variant={entry.variant}>{entry.timestamp}</Badge>
+                          </div>
+                          <div className="mt-1 text-sm leading-relaxed text-white/70">
+                            {entry.detail}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  const isOperator = entry.role === "user";
+                  return (
+                    <div
+                      key={entry.id}
+                      className={`${visibilityClass} w-full ${isOperator ? "justify-end" : "justify-start"}`}
+                    >
+                      <div
+                        className={`w-fit max-w-[82%] rounded-[26px] border px-4 py-3 backdrop-blur-xl sm:max-w-[64%] lg:max-w-[38%] xl:max-w-[32%] ${
+                          isOperator
+                            ? "border-white/14 bg-white/[0.08] text-white"
+                            : "border-white/10 bg-black/40 text-white/88"
+                        }`}
+                      >
+                        <div
+                          className={`mb-2 flex items-center gap-2 text-[10px] uppercase tracking-[0.22em] text-white/48 ${
+                            isOperator ? "justify-end" : "justify-start"
+                          }`}
+                        >
+                          {isOperator ? (
+                            <>
+                              <span>Operator</span>
+                              <OperatorIcon className="h-4 w-4" />
+                            </>
+                          ) : (
+                            <>
+                              <AgentIcon className="h-4 w-4" />
+                              <span>{agentName}</span>
+                            </>
+                          )}
+                        </div>
+                        <div className="whitespace-pre-wrap text-[15px] leading-relaxed">
+                          {entry.text}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </ScrollArea>
+      </div>
+
+      <form
+        className="absolute bottom-4 left-4 right-4 z-10"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (chatSending) {
+            void handleChatStop();
+            return;
+          }
+          if (!chatInput.trim()) return;
+          void handleChatSend();
+        }}
+      >
+        <div className="mx-auto w-full max-w-[1180px] rounded-[24px] border border-white/10 bg-black/48 p-3 backdrop-blur-2xl">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-3 text-[11px] uppercase tracking-[0.24em] text-white/45">
+            <span>Operator reply</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="hidden sm:inline">{threadLabel}</span>
+              <span>{liveStateLabel}</span>
+              <span className="hidden sm:inline">{chatAgentVoiceMuted ? "voice muted" : "voice live"}</span>
+              {chatPendingImages.length > 0 ? (
+                <Badge variant="outline" className="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em]">
+                  {chatPendingImages.length} queued
+                </Badge>
+              ) : null}
+            </div>
+          </div>
+          <div className="flex items-end gap-3">
+            <Textarea
+              value={chatInput}
+              onChange={(event) => setState("chatInput", event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  if (chatSending) {
+                    void handleChatStop();
+                    return;
+                  }
+                  if (!chatInput.trim()) return;
+                  void handleChatSend();
+                }
+              }}
+              aria-label="Operator conversation input"
+              placeholder={`Reply to ${agentName}...`}
+              className="min-h-[76px] flex-1 resize-none bg-black/34"
+            />
+            <Button
+              type="submit"
+              variant={chatSending ? "outline" : "default"}
+              className={`shrink-0 rounded-[20px] ${chatSending ? "border-danger/30 bg-danger/10 text-danger hover:bg-danger/14" : "bg-white/92 text-black hover:bg-white"}`}
+              aria-label={chatSending ? "Stop execution" : "Send reply"}
+            >
+              {chatSending ? <StopIcon className="h-4 w-4" /> : <SendIcon className="h-4 w-4" />}
+              <span>{chatSending ? "Stop" : "Send"}</span>
+            </Button>
+          </div>
+        </div>
+      </form>
+    </div>
+  );
 }

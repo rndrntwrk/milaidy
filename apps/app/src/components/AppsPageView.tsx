@@ -5,6 +5,7 @@
 import { useEffect } from "react";
 import { useApp } from "../AppContext";
 import { AppsView } from "./AppsView";
+import { ControlStackSectionFrame } from "./ControlStackSectionFrame.js";
 import { GameView } from "./GameView";
 
 export function AppsPageView() {
@@ -23,5 +24,13 @@ export function AppsPageView() {
     return <GameView />;
   }
 
-  return <AppsView />;
+  return (
+    <ControlStackSectionFrame
+      title="Apps"
+      description="Launchable app surfaces, operator tools, and game/browser entry points without leaving the dashboard shell."
+      badge="Surfaces"
+    >
+      <AppsView />
+    </ControlStackSectionFrame>
+  );
 }

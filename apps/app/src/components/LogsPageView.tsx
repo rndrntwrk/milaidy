@@ -1,15 +1,21 @@
 import { LogsView } from "./LogsView";
+import { ControlStackSectionFrame } from "./ControlStackSectionFrame.js";
 
 export function LogsPageView() {
   return (
-    <div className="flex flex-col h-full">
-      <h2 className="text-lg font-bold mb-1">Logs</h2>
-      <p className="text-[13px] text-[var(--muted)] mb-4">
-        Agent runtime logs with filtering.
-      </p>
-      <div className="flex-1 min-h-0">
-        <LogsView />
+    <ControlStackSectionFrame
+      title="Logs"
+      description="Structured runtime logs, operational notices, and filtered debugging output for the current stream node."
+      badge="Diagnostics"
+    >
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="mb-3 text-[11px] uppercase tracking-[0.22em] text-white/45">
+          Runtime log stream
+        </div>
+        <div className="min-h-0 flex-1">
+          <LogsView />
+        </div>
       </div>
-    </div>
+    </ControlStackSectionFrame>
   );
 }

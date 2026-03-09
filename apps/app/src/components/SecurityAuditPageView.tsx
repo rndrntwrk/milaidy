@@ -1,15 +1,21 @@
 import { SecurityAuditView } from "./SecurityAuditView";
+import { ControlStackSectionFrame } from "./ControlStackSectionFrame.js";
 
 export function SecurityAuditPageView() {
   return (
-    <div className="flex flex-col h-full">
-      <h2 className="text-lg font-bold mb-1">Security</h2>
-      <p className="text-[13px] text-[var(--muted)] mb-4">
-        Sandbox, policy, and signing audit events with real-time streaming.
-      </p>
-      <div className="flex-1 min-h-0">
-        <SecurityAuditView />
+    <ControlStackSectionFrame
+      title="Security"
+      description="Sandbox, policy, signing, and trust-state audit events with a calmer operational shell."
+      badge="Audit"
+    >
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="mb-3 text-[11px] uppercase tracking-[0.22em] text-white/45">
+          Security event stream
+        </div>
+        <div className="min-h-0 flex-1">
+          <SecurityAuditView />
+        </div>
       </div>
-    </div>
+    </ControlStackSectionFrame>
   );
 }

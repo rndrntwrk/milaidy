@@ -8,6 +8,7 @@ import type {
 } from "../api-client";
 import { formatDateTime, formatDurationMs } from "./shared/format";
 import { StatCard, StatusBadge, StatusDot } from "./shared/ui-badges";
+import { CalendarIcon } from "./ui/Icons.js";
 
 type TriggerType = "interval" | "once" | "cron";
 type TriggerWakeMode = "inject_now" | "next_autonomy_cycle";
@@ -429,7 +430,9 @@ export function TriggersView() {
 
         {triggers.length === 0 && !triggersLoading ? (
           <div className="py-8 text-center">
-            <div className="text-2xl mb-2">⏰</div>
+            <div className="mb-2 inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/68">
+              <CalendarIcon className="h-5 w-5" />
+            </div>
             <div className="text-sm text-muted">No triggers configured yet</div>
             <div className="text-xs text-muted mt-1">
               Create one above to schedule autonomous agent tasks

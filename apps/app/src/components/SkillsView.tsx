@@ -17,6 +17,10 @@ import { client } from "../api-client";
 import { ConfirmDeleteControl } from "./shared/confirm-delete-control";
 import { StatusBadge } from "./shared/ui-badges";
 import { Switch } from "./shared/ui-switch";
+import { Button } from "./ui/Button";
+import { Card } from "./ui/Card";
+import { Dialog } from "./ui/Dialog";
+import { CloseIcon } from "./ui/Icons";
 
 /* ── Shared style constants ─────────────────────────────────────────── */
 
@@ -344,38 +348,21 @@ function InstallModal({
   const [tab, setTab] = useState<InstallTab>("search");
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onClose();
-        }
-      }}
-      role="dialog"
-      aria-modal="true"
-    >
-      <div className="w-full max-w-2xl max-h-[80vh] flex flex-col border border-[var(--border)] bg-[var(--bg)] overflow-hidden mx-4">
+    <Dialog open={true} onClose={onClose} className="max-w-2xl bg-[#07090e]/96">
+      <Card className="mx-4 flex max-h-[80vh] w-full flex-col overflow-hidden border-white/10 bg-[#07090e]/96">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
+        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
           <div>
-            <div className="text-sm font-semibold text-[var(--txt)]">
+            <div className="text-sm font-semibold text-white/88">
               Install Skill
             </div>
-            <div className="text-[11px] text-[var(--muted)] mt-0.5">
+            <div className="mt-0.5 text-[11px] text-white/52">
               Add skills from the marketplace or a GitHub repository.
             </div>
           </div>
-          <button
-            type="button"
-            className="text-[var(--muted)] hover:text-[var(--txt)] bg-transparent border-0 cursor-pointer text-lg px-2 transition-colors"
-            onClick={onClose}
-          >
-            ×
-          </button>
+          <Button type="button" variant="ghost" size="icon" className="rounded-full" onClick={onClose} aria-label="Close install skill dialog">
+            <CloseIcon className="h-4 w-4" />
+          </Button>
         </div>
 
         {/* Tabs */}
@@ -507,8 +494,8 @@ function InstallModal({
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </Card>
+    </Dialog>
   );
 }
 
@@ -660,23 +647,10 @@ function EditSkillModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onClose();
-        }
-      }}
-      role="dialog"
-      aria-modal="true"
-    >
-      <div className="w-full max-w-4xl h-[85vh] flex flex-col border border-[var(--border)] bg-[var(--bg)] overflow-hidden mx-4">
+    <Dialog open={true} onClose={onClose} className="max-w-4xl bg-[#07090e]/96">
+      <Card className="mx-4 flex h-[85vh] w-full flex-col overflow-hidden border-white/10 bg-[#07090e]/96">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--border)] shrink-0">
+        <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-5 py-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className="font-semibold text-sm text-[var(--txt)] truncate">
               {skillName}
@@ -694,13 +668,9 @@ function EditSkillModal({
             <span className="text-[10px] text-[var(--muted)]">
               {navigator.platform.includes("Mac") ? "⌘S" : "Ctrl+S"} to save
             </span>
-            <button
-              type="button"
-              className="text-[var(--muted)] hover:text-[var(--txt)] bg-transparent border-0 cursor-pointer text-lg px-2 transition-colors"
-              onClick={onClose}
-            >
-              ×
-            </button>
+            <Button type="button" variant="ghost" size="icon" className="rounded-full" onClick={onClose} aria-label="Close skill editor">
+              <CloseIcon className="h-4 w-4" />
+            </Button>
           </div>
         </div>
 
@@ -754,8 +724,8 @@ function EditSkillModal({
             </button>
           </div>
         </div>
-      </div>
-    </div>
+      </Card>
+    </Dialog>
   );
 }
 

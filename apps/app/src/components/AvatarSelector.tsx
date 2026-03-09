@@ -7,6 +7,7 @@
 
 import { useRef } from "react";
 import { getVrmPreviewUrl, VRM_COUNT } from "../AppContext";
+import { PlusIcon } from "./ui/Icons";
 
 export interface AvatarSelectorProps {
   /** Currently selected index (1-8 for built-in, 0 for custom) */
@@ -97,20 +98,7 @@ export function AvatarSelector({
               title="Upload custom .vrm"
               type="button"
             >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-label="Add new persona"
-              >
-                <title>Add new persona</title>
-                <path d="M12 5v14m-7-7h14" />
-              </svg>
+              <PlusIcon className="h-5 w-5" aria-label="Add new persona" />
             </button>
           </>
         )}

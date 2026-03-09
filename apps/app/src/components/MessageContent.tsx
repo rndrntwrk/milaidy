@@ -20,6 +20,9 @@ import { ConfigRenderer, defaultRegistry } from "./config-renderer";
 import { paramsToSchema } from "./PluginsView";
 import { UiRenderer } from "./ui-renderer";
 import type { UiSpec } from "./ui-spec";
+import { Button } from "./ui/Button.js";
+import { Card } from "./ui/Card.js";
+import { Badge } from "./ui/Badge.js";
 import {
   parseFive55ActionEnvelope,
   type Five55ActionEnvelope,
@@ -302,34 +305,34 @@ function InlinePluginConfig({ pluginId }: { pluginId: string }) {
 
   if (dismissed) {
     return (
-      <div className="my-2 px-3 py-2 border border-ok/30 bg-ok/5 text-xs text-ok">
+      <Card className="my-2 border-ok/30 bg-ok/5 px-3 py-2 text-xs text-ok">
         {plugin?.name ?? pluginId} — enabled
-      </div>
+      </Card>
     );
   }
 
   if (loading) {
     return (
-      <div className="my-2 px-3 py-2 border border-border bg-card text-xs text-muted italic">
+      <Card className="my-2 border-white/10 bg-white/[0.03] px-3 py-2 text-xs italic text-white/42">
         Loading {pluginId} configuration...
-      </div>
+      </Card>
     );
   }
 
   if (!plugin) {
     return (
-      <div className="my-2 px-3 py-2 border border-border bg-card text-xs text-muted italic">
+      <Card className="my-2 border-white/10 bg-white/[0.03] px-3 py-2 text-xs italic text-white/42">
         Plugin "{pluginId}" not found.
-      </div>
+      </Card>
     );
   }
 
   const isEnabled = plugin.enabled;
 
   return (
-    <div className="my-2 border border-border bg-card overflow-hidden">
+    <Card className="my-2 overflow-hidden border-white/10 bg-white/[0.03]">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 bg-bg-hover border-b border-border">
+      <div className="flex items-center justify-between border-b border-white/10 bg-black/20 px-3 py-2">
         <div className="flex items-center gap-2 text-xs font-bold text-txt">
           {plugin.icon ? (
             <span className="text-[13px]">{plugin.icon}</span>
@@ -340,10 +343,10 @@ function InlinePluginConfig({ pluginId }: { pluginId: string }) {
         </div>
         <div className="flex items-center gap-2">
           {plugin.configured && (
-            <span className="text-[10px] text-ok font-medium">Configured</span>
+            <Badge variant="success" className="rounded-full px-2 py-0.5 text-[10px]">Configured</Badge>
           )}
           <span
-            className={`text-[10px] font-medium ${isEnabled ? "text-ok" : "text-muted"}`}
+            className={`text-[10px] font-medium ${isEnabled ? "text-ok" : "text-white/42"}`}
           >
             {isEnabled ? "Active" : "Inactive"}
           </span>
@@ -364,48 +367,54 @@ function InlinePluginConfig({ pluginId }: { pluginId: string }) {
           />
         </div>
       ) : (
-        <div className="px-3 py-2 text-xs text-muted italic">
+        <div className="px-3 py-2 text-xs italic text-white/42">
           No configurable parameters.
         </div>
       )}
 
       {/* Footer */}
-      <div className="flex items-center gap-2 px-3 py-2 border-t border-border flex-wrap">
+      <div className="flex flex-wrap items-center gap-2 border-t border-white/10 px-3 py-2">
         {schema && plugin.parameters.length > 0 && (
-          <button
+          <Button
             type="button"
-            className="px-4 py-1.5 text-xs border border-accent bg-accent text-accent-fg cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed"
+            variant="default"
+            size="sm"
+            className="rounded-xl"
             onClick={handleSave}
             disabled={saving || enabling || Object.keys(values).length === 0}
           >
             {saving ? "Saving..." : "Save"}
-          </button>
+          </Button>
         )}
 
         {!isEnabled ? (
-          <button
+          <Button
             type="button"
-            className="px-4 py-1.5 text-xs border border-ok bg-ok/10 text-ok cursor-pointer hover:bg-ok/20 disabled:opacity-40 disabled:cursor-not-allowed"
+            variant="outline"
+            size="sm"
+            className="rounded-xl border-ok/30 text-ok hover:border-ok/60 hover:bg-ok/12"
             onClick={() => void handleToggle(true)}
             disabled={enabling || saving}
           >
             {enabling ? "Enabling..." : "Enable Plugin"}
-          </button>
+          </Button>
         ) : (
-          <button
+          <Button
             type="button"
-            className="px-4 py-1.5 text-xs border border-border text-muted cursor-pointer hover:border-danger hover:text-danger disabled:opacity-40 disabled:cursor-not-allowed"
+            variant="outline"
+            size="sm"
+            className="rounded-xl border-white/12 text-white/52 hover:border-danger/40 hover:text-danger"
             onClick={() => void handleToggle(false)}
             disabled={enabling || saving}
           >
             {enabling ? "Disabling..." : "Disable"}
-          </button>
+          </Button>
         )}
 
         {saved && <span className="text-xs text-ok">Saved</span>}
         {error && <span className="text-xs text-danger">{error}</span>}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -413,39 +422,45 @@ function InlinePluginConfig({ pluginId }: { pluginId: string }) {
 
 function UiSpecBlock({ spec, raw }: { spec: UiSpec; raw: string }) {
   const [showRaw, setShowRaw] = useState(false);
+  const [interactionNotice, setInteractionNotice] = useState<string | null>(
+    null,
+  );
 
-  // Actions from UiSpec elements — currently a no-op.
-  // TODO(#35): Wire to chat API for server-round-trip actions.
   const handleAction = useCallback(
-    (_action: string, _params?: Record<string, unknown>) => {},
+    (_action: string, _params?: Record<string, unknown>) => {
+      setInteractionNotice(
+        "Interactive preview only. Run actions from the main Pro Streamer controls.",
+      );
+    },
     [],
   );
 
   return (
-    <div className="my-2 border border-border overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-bg-hover border-b border-border">
-        <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">
+    <Card className="my-2 overflow-hidden border-white/10 bg-white/[0.03]">
+      <div className="flex items-center justify-between border-b border-white/10 bg-black/20 px-3 py-1.5">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-white/44">
           Interactive UI
         </span>
-        <button
-          type="button"
-          className="text-[10px] text-accent cursor-pointer hover:underline"
-          onClick={() => setShowRaw((v) => !v)}
-        >
+        <Button type="button" variant="ghost" size="sm" className="rounded-xl px-2 text-[10px]" onClick={() => setShowRaw((v) => !v)}>
           {showRaw ? "Hide JSON" : "View JSON"}
-        </button>
+        </Button>
       </div>
       {showRaw && (
-        <div className="px-3 py-2 bg-card border-b border-border overflow-x-auto">
-          <pre className="text-[10px] text-muted font-mono whitespace-pre-wrap break-words m-0">
+        <div className="overflow-x-auto border-b border-white/10 bg-black/20 px-3 py-2">
+          <pre className="m-0 whitespace-pre-wrap break-words font-mono text-[10px] text-white/42">
             {raw}
           </pre>
         </div>
       )}
       <div className="p-3">
+        {interactionNotice ? (
+          <div className="mb-3 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-[11px] text-white/64">
+            {interactionNotice}
+          </div>
+        ) : null}
         <UiRenderer spec={spec} onAction={handleAction} />
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -456,35 +471,37 @@ function ActionEnvelopeBlock({ envelope }: { envelope: Five55ActionEnvelope }) {
   const stage = envelope.trace?.stage ?? (envelope.ok ? "succeeded" : "failed");
 
   return (
-    <div className={`my-1 border rounded-sm overflow-hidden ${tone}`}>
-      <div className="px-3 py-1 border-b border-border bg-bg-hover text-[10px] uppercase tracking-wide text-muted font-semibold">
+    <Card className={`my-1 overflow-hidden rounded-2xl ${tone}`}>
+      <div className="border-b border-white/10 bg-black/20 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-white/44">
         {envelope.module} · {envelope.action}
       </div>
       <div className="px-3 py-2 flex items-start justify-between gap-3">
-        <div className="text-[11px] font-mono text-muted">
+        <div className="text-[11px] font-mono text-white/46">
           {envelope.code} · {stage} · status {envelope.status}
           {envelope.retryable ? " · retryable" : ""}
           <div className="text-[12px] text-txt whitespace-pre-wrap mt-1">
             {envelope.message}
           </div>
           {envelope.trace?.actionId && (
-            <div className="mt-1 text-[10px] text-muted">
+            <div className="mt-1 text-[10px] text-white/42">
               actionId: {envelope.trace.actionId}
             </div>
           )}
         </div>
-        <button
+        <Button
           type="button"
-          className="px-2 py-1 text-[10px] border border-border rounded bg-card text-muted hover:border-accent hover:text-accent shrink-0"
+          variant="outline"
+          size="sm"
+          className="shrink-0 rounded-xl px-2 text-[10px]"
           onClick={() => {
             window.dispatchEvent(new Event("toggle-custom-actions-panel"));
           }}
           title="Open Actions drawer"
         >
           Open Actions
-        </button>
+        </Button>
       </div>
-    </div>
+    </Card>
   );
 }
 

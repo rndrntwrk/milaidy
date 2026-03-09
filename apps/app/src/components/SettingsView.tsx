@@ -27,6 +27,7 @@ import { MediaSettingsSection } from "./MediaSettingsSection";
 import { PermissionsSection } from "./PermissionsSection";
 import { VoiceConfigView } from "./VoiceConfigView";
 import { Dialog } from "./ui/Dialog.js";
+import { CloseIcon } from "./ui/Icons.js";
 import type { ConfigUiHint } from "../types";
 import type { JsonSchemaObject } from "./config-catalog";
 
@@ -54,7 +55,7 @@ export function Modal({
             onClick={onClose}
             aria-label="Close"
           >
-            &times;
+            <CloseIcon width="16" height="16" />
           </button>
         </div>
         {children}
@@ -1355,7 +1356,7 @@ export function SettingsView() {
                 <div className="text-[11px] text-[var(--muted)] text-right">
                   Run{" "}
                   <code className="bg-[var(--bg-hover,rgba(255,255,255,0.05))] px-1.5 py-0.5 rounded-sm">
-                    milady update
+                    Pro Streamer update
                   </code>
                 </div>
               </div>
@@ -1460,7 +1461,7 @@ export function SettingsView() {
                     </code>
                     <span className="italic">
                       {" "}
-                      (relative to milady package root)
+                      (relative to the app package root)
                     </span>
                   </>
                 )}
@@ -1469,7 +1470,7 @@ export function SettingsView() {
                 Pin the extension icon in Chrome&apos;s toolbar
               </li>
               <li>
-                Click the extension icon on any tab to attach/detach the Milady
+                Click the extension icon on any tab to attach/detach the agent
                 browser relay
               </li>
             </ol>

@@ -25,6 +25,15 @@ import {
 import { getProviderLogo } from "../provider-logos";
 import { AvatarSelector } from "./AvatarSelector";
 import { PermissionsOnboardingSection } from "./PermissionsSection";
+import {
+  AlertIcon,
+  CheckIcon,
+  CloseIcon,
+  CloudIcon,
+  LightningIcon,
+  LockIcon,
+  MinusIcon,
+} from "./ui/Icons";
 
 const SANDBOX_POLL_INTERVAL_MS = 3000;
 const SANDBOX_START_MAX_ATTEMPTS = 20;
@@ -325,7 +334,7 @@ export function OnboardingWizard() {
               ohhh uhhhh hey there!
             </h1>
             <h1 className="text-[28px] font-normal mb-1 text-txt-strong">
-              welcome to milady!
+              welcome to pro streamer!
             </h1>
 
             {!showImport ? (
@@ -605,7 +614,10 @@ export function OnboardingWizard() {
               </div>
               <div className="flex flex-col gap-3 max-w-[460px] mx-auto">
                 <div className="px-4 py-4 border border-accent bg-accent text-accent-fg rounded-lg text-left">
-                  <div className="font-bold text-sm">☁️ cloud</div>
+                  <div className="flex items-center gap-2 font-bold text-sm">
+                    <CloudIcon className="h-4 w-4" />
+                    <span>cloud</span>
+                  </div>
                   <div className="text-[12px] mt-1 opacity-80">
                     always on, works from any device, easiest setup
                   </div>
@@ -640,7 +652,10 @@ export function OnboardingWizard() {
                 }`}
                 onClick={() => handleRunModeSelect("cloud")}
               >
-                <div className="font-bold text-sm">☁️ cloud</div>
+                <div className="flex items-center gap-2 font-bold text-sm">
+                  <CloudIcon className="h-4 w-4" />
+                  <span>cloud</span>
+                </div>
                 <div className="text-[12px] mt-1 opacity-70">
                   i run on eliza cloud. easiest setup, always on, can still use
                   ur browser &amp; computer if u let me
@@ -655,7 +670,10 @@ export function OnboardingWizard() {
                 }`}
                 onClick={() => handleRunModeSelect("local-sandbox")}
               >
-                <div className="font-bold text-sm">🔒 local (sandbox)</div>
+                <div className="flex items-center gap-2 font-bold text-sm">
+                  <LockIcon className="h-4 w-4" />
+                  <span>local (sandbox)</span>
+                </div>
                 <div className="text-[12px] mt-1 opacity-70">
                   i run on ur machine in a secure container. ur api keys stay
                   hidden even from me. needs docker
@@ -670,7 +688,10 @@ export function OnboardingWizard() {
                 }`}
                 onClick={() => handleRunModeSelect("local-rawdog")}
               >
-                <div className="font-bold text-sm">⚡ local (raw)</div>
+                <div className="flex items-center gap-2 font-bold text-sm">
+                  <LightningIcon className="h-4 w-4" />
+                  <span>local (raw)</span>
+                </div>
                 <div className="text-[12px] mt-1 opacity-70">
                   i run directly on ur machine w full access. fastest &amp;
                   simplest but no sandbox protection
@@ -729,19 +750,7 @@ export function OnboardingWizard() {
               <div className="max-w-[600px] mx-auto mt-4">
                 {cloudConnected ? (
                   <div className="flex items-center gap-2 px-4 py-2.5 border border-green-500/30 bg-green-500/10 text-green-400 text-sm rounded-lg justify-center">
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <title>Connected</title>
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
+                    <CheckIcon className="h-4 w-4" />
                     connected~
                   </div>
                 ) : (
@@ -1052,19 +1061,7 @@ export function OnboardingWizard() {
               <div className="max-w-[600px] mx-auto">
                 {cloudConnected ? (
                   <div className="flex items-center gap-2 px-4 py-2.5 border border-green-500/30 bg-green-500/10 text-green-400 text-sm rounded-lg justify-center">
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <title>Connected</title>
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
+                    <CheckIcon className="h-4 w-4" />
                     connected~
                   </div>
                 ) : (
@@ -1148,19 +1145,7 @@ export function OnboardingWizard() {
                 ) : anthropicConnected ? (
                   <div className="flex flex-col items-center gap-3">
                     <div className="flex items-center gap-2 px-6 py-3 border border-green-500/30 bg-green-500/10 text-green-400 text-sm font-medium w-full max-w-xs justify-center">
-                      <svg
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <title>Connected</title>
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
+                      <CheckIcon className="h-[18px] w-[18px]" />
                       Connected to Claude
                     </div>
                     <p className="text-xs text-muted text-center">
@@ -1220,19 +1205,7 @@ export function OnboardingWizard() {
                 {openaiConnected ? (
                   <div className="flex flex-col items-center gap-3">
                     <div className="flex items-center gap-2 px-6 py-3 border border-green-500/30 bg-green-500/10 text-green-400 text-sm font-medium w-full max-w-xs justify-center">
-                      <svg
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <title>Connected</title>
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
+                      <CheckIcon className="h-[18px] w-[18px]" />
                       Connected to ChatGPT
                     </div>
                     <p className="text-xs text-muted text-center">
@@ -1509,19 +1482,7 @@ export function OnboardingWizard() {
                             <div className="mt-3">
                               {cloudConnected ? (
                                 <div className="flex items-center gap-2 px-4 py-2.5 border border-green-500/30 bg-green-500/10 text-green-400 text-sm rounded-lg w-fit">
-                                  <svg
-                                    width="16"
-                                    height="16"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2.5"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                  >
-                                    <title>Connected</title>
-                                    <polyline points="20 6 9 17 4 12" />
-                                  </svg>
+                                  <CheckIcon className="h-4 w-4" />
                                   connected~ no keys needed
                                 </div>
                               ) : (
@@ -2131,7 +2092,11 @@ function DockerSetupStep() {
               : "bg-red-50 border-red-200 text-red-800 dark:bg-red-950 dark:border-red-800 dark:text-red-200"
           }`}
         >
-          <span>{isInstalled ? "✅" : "❌"}</span>
+          {isInstalled ? (
+            <CheckIcon className="h-4 w-4" />
+          ) : (
+            <CloseIcon className="h-4 w-4" />
+          )}
           <span>Docker {isInstalled ? "installed" : "not found"}</span>
         </div>
 
@@ -2143,7 +2108,11 @@ function DockerSetupStep() {
                 : "bg-yellow-50 border-yellow-200 text-yellow-800 dark:bg-yellow-950 dark:border-yellow-800 dark:text-yellow-200"
             }`}
           >
-            <span>{isRunning ? "✅" : "⚠️"}</span>
+            {isRunning ? (
+              <CheckIcon className="h-4 w-4" />
+            ) : (
+              <AlertIcon className="h-4 w-4" />
+            )}
             <span>Docker daemon {isRunning ? "running" : "not running"}</span>
           </div>
         )}
@@ -2156,7 +2125,11 @@ function DockerSetupStep() {
                 : "bg-card border-border text-txt opacity-60"
             }`}
           >
-            <span>{hasAppleContainer ? "✅" : "➖"}</span>
+            {hasAppleContainer ? (
+              <CheckIcon className="h-4 w-4" />
+            ) : (
+              <MinusIcon className="h-4 w-4" />
+            )}
             <span>
               Apple Container{" "}
               {hasAppleContainer

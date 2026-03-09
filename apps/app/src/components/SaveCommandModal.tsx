@@ -4,6 +4,10 @@
 
 import { useState, useCallback, useEffect, useRef, useId } from "react";
 import { Dialog } from "./ui/Dialog.js";
+import { Button } from "./ui/Button.js";
+import { Card } from "./ui/Card.js";
+import { Input } from "./ui/Input.js";
+import { CloseIcon } from "./ui/Icons.js";
 
 interface SaveCommandModalProps {
   open: boolean;
@@ -61,26 +65,28 @@ export function SaveCommandModal({
 
   return (
     <Dialog open={open} onClose={onClose} ariaLabelledBy={dialogTitleId}>
-      <div className="w-full max-w-md border border-border bg-card shadow-lg flex flex-col overflow-hidden">
+      <Card className="flex w-full max-w-md flex-col overflow-hidden rounded-[28px] border-white/12 bg-[#07090e]/96 shadow-[0_24px_72px_rgba(0,0,0,0.36)]">
         {/* Header */}
-        <div className="flex items-center px-5 py-3 border-b border-border shrink-0">
-          <span id={dialogTitleId} className="font-bold text-sm flex-1">Save as /Command</span>
-          <button
+        <div className="flex shrink-0 items-center border-b border-white/10 px-5 py-3">
+          <span id={dialogTitleId} className="flex-1 text-sm font-bold text-white">Save as /Command</span>
+          <Button
             type="button"
-            className="text-muted hover:text-txt text-lg leading-none px-1 cursor-pointer"
+            variant="ghost"
+            size="icon"
+            className="rounded-full"
             onClick={onClose}
             aria-label="Close"
           >
-            &times;
-          </button>
+            <CloseIcon className="h-4 w-4" />
+          </Button>
         </div>
 
         {/* Body */}
-        <div className="px-5 py-4 flex flex-col gap-3">
-          <label id={inputLabelId} htmlFor={inputId} className="text-xs text-muted">Command name</label>
+        <div className="flex flex-col gap-3 px-5 py-4">
+          <label id={inputLabelId} htmlFor={inputId} className="text-xs uppercase tracking-[0.18em] text-white/46">Command name</label>
           <div className="flex items-center gap-1">
-            <span className="text-sm text-muted" aria-hidden="true">/</span>
-            <input
+            <span className="text-sm text-white/42" aria-hidden="true">/</span>
+            <Input
               id={inputId}
               ref={inputRef}
               type="text"
@@ -95,34 +101,33 @@ export function SaveCommandModal({
               aria-invalid={!!error || undefined}
               aria-labelledby={inputLabelId}
               aria-describedby={error ? inputErrorId : undefined}
-              className="flex-1 bg-surface border border-border px-2 py-1.5 text-sm text-txt placeholder:text-muted/50 outline-none focus:border-accent"
+              className="flex-1 rounded-2xl"
             />
           </div>
           {error && <p id={inputErrorId} className="text-xs text-danger" role="alert">{error}</p>}
 
-          <span className="text-xs text-muted mt-1">Preview</span>
-          <pre className="text-xs text-muted bg-surface border border-border px-3 py-2 whitespace-pre-wrap break-words max-h-24 overflow-y-auto">
+          <span className="mt-1 text-xs uppercase tracking-[0.18em] text-white/46">Preview</span>
+          <pre className="max-h-24 overflow-y-auto rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs whitespace-pre-wrap break-words text-white/58">
             {preview}
           </pre>
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-2 px-5 py-3 border-t border-border">
-          <button
+        <div className="flex justify-end gap-2 border-t border-white/10 px-5 py-3">
+          <Button
             type="button"
-            className="px-3 py-1.5 text-xs border border-border text-muted hover:text-txt cursor-pointer"
+            variant="outline"
+            size="sm"
+            className="rounded-xl"
             onClick={onClose}
           >
             Cancel
-          </button>
-          <button
-            className="px-3 py-1.5 text-xs border border-accent bg-accent text-accent-fg hover:opacity-90 cursor-pointer"
-            onClick={handleSubmit}
-          >
+          </Button>
+          <Button type="button" variant="default" size="sm" className="rounded-xl" onClick={handleSubmit}>
             Save
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
     </Dialog>
   );
 }
