@@ -6,9 +6,8 @@
  * inside the ./inventory/ directory.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { useApp } from "../AppContext";
-import { createTranslator } from "../i18n";
 import { BscTradePanel, type TrackedToken } from "./BscTradePanel";
 import {
   BSC_GAS_THRESHOLD,
@@ -50,9 +49,8 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
     getBscTradePreflight,
     getBscTradeQuote,
     getBscTradeTxStatus,
-    uiLanguage,
+    t,
   } = useApp();
-  const t = useMemo(() => createTranslator(uiLanguage), [uiLanguage]);
 
   // ── Tracked tokens state ──────────────────────────────────────────
   const [trackedTokens, setTrackedTokens] = useState<TrackedToken[]>(() =>
@@ -69,10 +67,10 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
   );
   const hasWalletIdentity = Boolean(
     cloudConnected ||
-      walletAddresses?.evmAddress ||
-      walletAddresses?.solanaAddress ||
-      walletConfig?.evmAddress ||
-      walletConfig?.solanaAddress,
+    walletAddresses?.evmAddress ||
+    walletAddresses?.solanaAddress ||
+    walletConfig?.evmAddress ||
+    walletConfig?.solanaAddress,
   );
   const needsSetup =
     !hasWalletIdentity && !hasManagedBscRpc && !hasLegacyEvmProviders;
@@ -165,31 +163,26 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
   function renderSetup() {
     return (
       <div
-        className={`wallets-bsc__setup mt-6 border p-6 text-center ${
-          inModal
-            ? "border-[var(--border)] bg-[rgba(255,255,255,0.04)] backdrop-blur-sm rounded-xl"
-            : "border-border bg-card"
-        }`}
+        className={`wallets-bsc__setup mt-6 border p-6 text-center ${inModal
+          ? "border-[var(--border)] bg-[rgba(255,255,255,0.04)] backdrop-blur-sm rounded-xl"
+          : "border-border bg-card"
+          }`}
       >
         <div className="text-sm font-bold mb-2">
           {t("wallet.setup.rpcNotConfigured")}
         </div>
         <p className="text-xs text-muted mb-4 leading-relaxed max-w-md mx-auto">
-          To view balances and trade on BSC you need RPC provider keys. Connect
-          to <strong>Eliza Cloud</strong> for managed RPC access, or configure{" "}
-          <strong>NodeReal / QuickNode</strong> endpoints manually in{" "}
-          <strong>Settings</strong>.
+          {t("wallet.setup.rpcHint")}
         </p>
         <button
           type="button"
-          className={`px-4 py-1.5 border cursor-pointer text-xs font-mono ${
-            inModal
-              ? "border-[var(--accent)] bg-[var(--accent)] text-white rounded-md hover:opacity-90"
-              : "border-accent bg-accent text-accent-fg hover:bg-accent-hover hover:border-accent-hover"
-          }`}
+          className={`px-4 py-1.5 border cursor-pointer text-xs font-mono ${inModal
+            ? "border-[var(--accent)] bg-[var(--accent)] text-white rounded-md hover:opacity-90"
+            : "border-accent bg-accent text-accent-fg hover:bg-accent-hover hover:border-accent-hover"
+            }`}
           onClick={goToRpcSettings}
         >
-          Configure RPC
+          {t("wallet.setup.configureRpc")}
         </button>
       </div>
     );
@@ -209,11 +202,10 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
     if (!evmAddr && !solAddr) {
       return (
         <div
-          className={`mt-4 border px-4 py-6 text-center ${
-            inModal
-              ? "border-[var(--border)] bg-[rgba(255,255,255,0.04)] backdrop-blur-sm rounded-xl"
-              : "border-border bg-card"
-          }`}
+          className={`mt-4 border px-4 py-6 text-center ${inModal
+            ? "border-[var(--border)] bg-[rgba(255,255,255,0.04)] backdrop-blur-sm rounded-xl"
+            : "border-border bg-card"
+            }`}
         >
           <div className="text-sm font-bold mb-1">
             {t("wallet.noOnchainWallet")}
@@ -223,11 +215,10 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
           </p>
           <button
             type="button"
-            className={`px-4 py-1.5 border cursor-pointer text-xs font-mono ${
-              inModal
-                ? "border-[var(--accent)] bg-[var(--accent)] text-white rounded-md hover:opacity-90"
-                : "border-accent bg-accent text-accent-fg hover:bg-accent-hover hover:border-accent-hover"
-            }`}
+            className={`px-4 py-1.5 border cursor-pointer text-xs font-mono ${inModal
+              ? "border-[var(--accent)] bg-[var(--accent)] text-white rounded-md hover:opacity-90"
+              : "border-accent bg-accent text-accent-fg hover:bg-accent-hover hover:border-accent-hover"
+              }`}
             onClick={() => setTab("settings")}
           >
             {t("common.settings")}

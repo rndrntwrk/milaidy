@@ -518,17 +518,16 @@ export interface ConnectorConfig {
   token?: string;
   apiKey?: string;
   [key: string]:
-    | string
-    | boolean
-    | number
-    | string[]
-    | Record<string, unknown>
-    | undefined;
+  | string
+  | boolean
+  | number
+  | string[]
+  | Record<string, unknown>
+  | undefined;
 }
 
 export interface OnboardingData {
   name: string;
-  theme: string;
   runMode: "local" | "cloud";
   /** Sandbox execution mode: "off" (rawdog), "light" (cloud), "standard" (local sandbox), "max". */
   sandboxMode?: "off" | "light" | "standard" | "max";
@@ -663,12 +662,12 @@ export interface PluginInfo {
   configured: boolean;
   envKey: string | null;
   category:
-    | "ai-provider"
-    | "connector"
-    | "streaming"
-    | "database"
-    | "app"
-    | "feature";
+  | "ai-provider"
+  | "connector"
+  | "streaming"
+  | "database"
+  | "app"
+  | "feature";
   source: "bundled" | "store";
   parameters: PluginParamDef[];
   validationErrors: Array<{ field: string; message: string }>;
@@ -927,14 +926,14 @@ export interface SecurityAuditResponse {
 
 export type SecurityAuditStreamEvent =
   | {
-      type: "snapshot";
-      entries: SecurityAuditEntry[];
-      totalBuffered: number;
-    }
+    type: "snapshot";
+    entries: SecurityAuditEntry[];
+    totalBuffered: number;
+  }
   | {
-      type: "entry";
-      entry: SecurityAuditEntry;
-    };
+    type: "entry";
+    entry: SecurityAuditEntry;
+  };
 
 export type StreamEventType =
   | "agent_event"
@@ -1261,12 +1260,12 @@ export interface CodingAgentSession {
   originalTask: string;
   workdir: string;
   status:
-    | "active"
-    | "blocked"
-    | "completed"
-    | "stopped"
-    | "error"
-    | "tool_running";
+  | "active"
+  | "blocked"
+  | "completed"
+  | "stopped"
+  | "error"
+  | "tool_running";
   decisionCount: number;
   autoResolvedCount: number;
   /** Description of the active tool when status is "tool_running". */
@@ -1468,10 +1467,10 @@ export type HyperscapeJsonValue =
 export type HyperscapePosition =
   | [number, number, number]
   | {
-      x: number;
-      y: number;
-      z: number;
-    };
+    x: number;
+    y: number;
+    z: number;
+  };
 
 export interface HyperscapeEmbeddedAgent {
   agentId: string;

@@ -101,12 +101,14 @@
 /* ── Typing indicator animation ─────────────────────────────────────── */
 
 @keyframes typing-bounce {
+
   0%,
   60%,
   100% {
     opacity: 0.3;
     transform: translateY(0);
   }
+
   30% {
     opacity: 1;
     transform: translateY(-4px);
@@ -124,6 +126,7 @@
     opacity: 0;
     transform: translateY(-4px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -160,12 +163,15 @@
 .wallet-wrapper:hover::after {
   display: block;
 }
+
 .wallet-wrapper:hover .wallet-tooltip {
   display: block;
 }
+
 .wallet-wrapper:focus-within::after {
   display: block;
 }
+
 .wallet-wrapper:focus-within .wallet-tooltip {
   display: block;
 }
@@ -191,40 +197,23 @@
 .btn:hover {
   opacity: 0.85;
 }
+
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.theme-btn {
-  padding: 6px 14px;
-  text-align: center;
-  cursor: pointer;
-  font-family: inherit;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  transition:
-    border-color var(--duration-fast, 100ms),
-    color var(--duration-fast, 100ms);
-}
 
-.theme-btn:hover {
-  border-color: var(--accent);
-}
-
-.theme-btn.active {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-subtle);
-}
 
 /* ── Loading screen dither effect ─────────────────────────────────── */
 
 @keyframes dither-fade {
+
   0%,
   100% {
     opacity: 0.02;
   }
+
   45%,
   55% {
     opacity: 1;
@@ -247,6 +236,7 @@
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -261,6 +251,7 @@
     transform: translateX(100%);
     opacity: 0;
   }
+
   to {
     transform: translateX(0);
     opacity: 1;
@@ -330,6 +321,7 @@ kbd {
     opacity: 0;
     transform: translateY(10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -341,6 +333,7 @@ kbd {
     opacity: 0;
     transform: translateY(-10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -352,6 +345,7 @@ kbd {
     opacity: 0;
     transform: scale(0.95);
   }
+
   to {
     opacity: 1;
     transform: scale(1);
@@ -359,10 +353,12 @@ kbd {
 }
 
 @keyframes shake {
+
   0%,
   100% {
     transform: translateX(0);
   }
+
   10%,
   30%,
   50%,
@@ -370,6 +366,7 @@ kbd {
   90% {
     transform: translateX(-2px);
   }
+
   20%,
   40%,
   60%,
@@ -379,12 +376,14 @@ kbd {
 }
 
 @keyframes glow {
+
   0%,
   100% {
     box-shadow:
       0 0 5px var(--accent),
       0 0 10px var(--accent);
   }
+
   50% {
     box-shadow:
       0 0 20px var(--accent),
@@ -474,6 +473,7 @@ kbd {
 
 /* Reduced motion - !important is intentional for accessibility override */
 @media (prefers-reduced-motion: reduce) {
+
   *,
   *::before,
   *::after {
@@ -491,11 +491,9 @@ kbd {
 /* ── Wallets BSC-first view ───────────────────────────────────────── */
 
 .wallets-bsc {
-  --wb-card-highlight: linear-gradient(
-    135deg,
-    rgba(240, 185, 11, 0.12),
-    rgba(240, 185, 11, 0.02)
-  );
+  --wb-card-highlight: linear-gradient(135deg,
+      rgba(240, 185, 11, 0.12),
+      rgba(240, 185, 11, 0.02));
 }
 
 .wallets-bsc__setup code {
@@ -1199,6 +1197,7 @@ kbd {
 
 .wt__token-logo.is-letter {
   /* background comes from chain class */
+  background: var(--bg-muted);
 }
 
 /* ── Native token row special styling ────────────────────────────── */
@@ -1244,8 +1243,7 @@ kbd {
   gap: 8px;
   padding: 5px 8px;
   background: color-mix(in srgb, var(--danger, #e74c3c) 8%, var(--bg) 92%);
-  border: 1px solid
-    color-mix(in srgb, var(--danger, #e74c3c) 30%, var(--border) 70%);
+  border: 1px solid color-mix(in srgb, var(--danger, #e74c3c) 30%, var(--border) 70%);
   border-radius: 3px;
 }
 
@@ -1258,8 +1256,7 @@ kbd {
 }
 
 .wt__error-retry {
-  border: 1px solid
-    color-mix(in srgb, var(--danger, #e74c3c) 40%, var(--border) 60%);
+  border: 1px solid color-mix(in srgb, var(--danger, #e74c3c) 40%, var(--border) 60%);
   background: transparent;
   color: var(--danger, #e74c3c);
   padding: 2px 8px;

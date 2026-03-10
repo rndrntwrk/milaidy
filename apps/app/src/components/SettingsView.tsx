@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { THEMES, useApp } from "../AppContext";
+import { useApp } from "../AppContext";
 import { createTranslator } from "../i18n";
 import { CodingAgentSettingsSection } from "./CodingAgentSettingsSection";
 import { ConfigPageView } from "./ConfigPageView";
@@ -53,7 +53,7 @@ const SETTINGS_SECTIONS: SettingsSectionDef[] = [
     id: "appearance",
     label: "Appearance",
     icon: Palette,
-    description: "Themes and visual preferences",
+    description: "Visual preferences",
   },
   {
     id: "ai-model",
@@ -253,16 +253,14 @@ function SettingsSidebar({
                 key={section.id}
                 type="button"
                 onClick={() => onSectionChange(section.id)}
-                className={`flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all duration-200 min-w-fit lg:min-w-0 whitespace-nowrap lg:whitespace-normal ${
-                  isActive
-                    ? "bg-accent text-accent-fg shadow-md"
-                    : "text-txt hover:bg-bg-hover hover:shadow-sm"
-                }`}
+                className={`flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all duration-200 min-w-fit lg:min-w-0 whitespace-nowrap lg:whitespace-normal ${isActive
+                  ? "bg-accent text-accent-fg shadow-md"
+                  : "text-txt hover:bg-bg-hover hover:shadow-sm"
+                  }`}
               >
                 <span
-                  className={`w-9 h-9 flex items-center justify-center shrink-0 rounded-lg ${
-                    isActive ? "bg-accent-foreground/20" : "bg-bg-accent"
-                  }`}
+                  className={`w-9 h-9 flex items-center justify-center shrink-0 rounded-lg ${isActive ? "bg-accent-foreground/20" : "bg-bg-accent"
+                    }`}
                 >
                   <Icon className="w-4 h-4" />
                 </span>
@@ -662,12 +660,10 @@ export function SettingsView({
     pluginSaving,
     pluginSaveSuccess,
     // Theme
-    currentTheme,
     uiLanguage,
     // Actions
     loadPlugins,
     handlePluginToggle,
-    setTheme,
     setUiLanguage,
     setTab,
     loadUpdateStatus: _loadUpdateStatus,
@@ -779,11 +775,10 @@ export function SettingsView({
             <div className="inline-flex gap-1.5 border border-border rounded-lg p-1">
               <button
                 type="button"
-                className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors duration-200 ${
-                  uiLanguage === "en"
-                    ? "bg-accent text-accent-fg shadow-sm"
-                    : "text-txt hover:bg-bg-hover"
-                }`}
+                className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors duration-200 ${uiLanguage === "en"
+                  ? "bg-accent text-accent-fg shadow-sm"
+                  : "text-txt hover:bg-bg-hover"
+                  }`}
                 onClick={() => {
                   setUiLanguage("en");
                   setActionNotice(t("settings.languageSaved"), "success", 2200);
@@ -793,11 +788,10 @@ export function SettingsView({
               </button>
               <button
                 type="button"
-                className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors duration-200 ${
-                  uiLanguage === "zh-CN"
-                    ? "bg-accent text-accent-fg shadow-sm"
-                    : "text-txt hover:bg-bg-hover"
-                }`}
+                className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors duration-200 ${uiLanguage === "zh-CN"
+                  ? "bg-accent text-accent-fg shadow-sm"
+                  : "text-txt hover:bg-bg-hover"
+                  }`}
                 onClick={() => {
                   setUiLanguage("zh-CN");
                   setActionNotice(t("settings.languageSaved"), "success", 2200);
@@ -806,29 +800,6 @@ export function SettingsView({
                 {t("settings.languageChineseSimplified")}
               </button>
             </div>
-          </div>
-
-          <div className="text-xs font-semibold text-txt-strong mb-2">
-            {t("settings.themeStyle")}
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {THEMES.map((th) => (
-              <button
-                key={th.id}
-                type="button"
-                className={`theme-btn p-4 border rounded-xl text-left transition-all duration-200 hover:border-accent hover:shadow-md hover:-translate-y-0.5 ${
-                  currentTheme === th.id
-                    ? "active border-accent bg-accent-subtle shadow-md"
-                    : "border-border bg-bg hover:bg-bg-hover"
-                }`}
-                onClick={() => setTheme(th.id)}
-              >
-                <div className="text-sm font-semibold text-txt-strong mb-1">
-                  {th.label}
-                </div>
-                <div className="text-[11px] text-muted">{th.hint}</div>
-              </button>
-            ))}
           </div>
         </SectionCard>
       )}

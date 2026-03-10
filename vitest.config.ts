@@ -244,7 +244,7 @@ export default defineConfig({
     },
     server: {
       deps: {
-        inline: ["@elizaos/core"],
+        inline: ["@elizaos/core", "zod"],
       },
     },
   },

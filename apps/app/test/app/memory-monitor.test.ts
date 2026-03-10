@@ -18,10 +18,7 @@ const originalPerformance = globalThis.performance;
 describe("startMemoryLeakDetector", () => {
   beforeEach(() => {
     Object.defineProperty(globalThis, "performance", {
-      value: {
-        ...originalPerformance,
-        memory: { ...mockMemory },
-      },
+      value: { ...originalPerformance, memory: { ...mockMemory } },
       writable: true,
       configurable: true,
     });
@@ -228,24 +225,16 @@ describe("startMemoryLeakDetector", () => {
 
 describe("memory leak detection edge cases", () => {
   beforeEach(() => {
-    Object.defineProperty(globalThis, "performance", {
-      value: {
-        ...originalPerformance,
-        memory: { ...mockMemory },
-      },
-      writable: true,
-      configurable: true,
+    vi.stubGlobal("performance", {
+      ...originalPerformance,
+      memory: { ...mockMemory },
     });
     vi.useFakeTimers();
   });
 
   afterEach(() => {
     vi.useRealTimers();
-    Object.defineProperty(globalThis, "performance", {
-      value: originalPerformance,
-      writable: true,
-      configurable: true,
-    });
+    vi.unstubAllGlobals();
   });
 
   it("handles stable memory (no growth)", async () => {

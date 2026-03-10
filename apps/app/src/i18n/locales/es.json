@@ -1,0 +1,22 @@
+{
+  "onboarding.languageQuestion": "¿qué idioma deberíamos hablar?",
+  "game.agentActivity": "Actividad del Agente",
+  "common.refresh": "Actualizar",
+  "common.hide": "Ocultar",
+  "game.commandSent": "Comando enviado al agente.",
+  "game.noActiveSession": "No hay sesión de juego activa.",
+  "game.backToApps": "Volver a Aplicaciones",
+  "game.noAgentActivity": "Aún no hay actividad del agente.",
+  "game.connected": "Conectado",
+  "game.connecting": "Conectando...",
+  "game.disconnected": "Desconectado",
+  "game.showLogs": "Mostrar Registros",
+  "game.hideLogs": "Ocultar Registros",
+  "game.stopCapture": "Detener Captura",
+  "game.retakeCapture": "Volver a Capturar",
+  "game.unpinOverlay": "Desanclar Superposición",
+  "game.keepOnTop": "Mantener Encima",
+  "game.openInNewTab": "Abrir en Nueva Pestaña",
+  "game.stopping": "Deteniendo...",
+  "game.stop": "Detener"
+}
