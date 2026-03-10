@@ -1,9 +1,8 @@
+import { getTabGroups, type TabGroup } from "@milady/app-core/navigation";
 import { Menu, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../AppContext";
-import { createTranslator } from "../i18n";
-import { getTabGroups, type TabGroup } from "../navigation";
 
 /** Map static navigation group labels to i18n keys. */
 const NAV_LABEL_I18N_KEY: Record<string, string> = {
@@ -24,8 +23,7 @@ interface NavProps {
 }
 
 export function Nav({ mobileLeft }: NavProps) {
-  const { tab, setTab, plugins, uiLanguage } = useApp();
-  const t = useMemo(() => createTranslator(uiLanguage), [uiLanguage]);
+  const { tab, setTab, plugins, t } = useApp();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const streamingEnabled = useMemo(
@@ -61,7 +59,7 @@ export function Nav({ mobileLeft }: NavProps) {
   return (
     <>
       {/* Mobile Header Navigation */}
-      <nav className="lg:hidden border-b border-border bg-bg px-3 py-2 flex items-center justify-between">
+      <nav className="lg:hidden border-b border-border/50 bg-bg/80 backdrop-blur-md px-3 py-2 flex items-center justify-between">
         <div className="flex-1 min-w-0 overflow-x-auto">
           {mobileLeft ?? (
             <div className="flex items-center gap-2">
@@ -74,7 +72,7 @@ export function Nav({ mobileLeft }: NavProps) {
         </div>
         <button
           type="button"
-          className="inline-flex items-center justify-center w-11 h-11 min-w-[44px] min-h-[44px] border border-border bg-card text-txt cursor-pointer hover:border-accent hover:text-accent transition-all duration-200 hover:shadow-sm rounded-md"
+          className="inline-flex items-center justify-center w-11 h-11 min-w-[44px] min-h-[44px] border border-border/50 bg-bg/50 backdrop-blur-md text-txt cursor-pointer hover:border-accent hover:text-accent transition-all duration-300 hover:shadow-[0_0_15px_rgba(var(--accent),0.3)] hover:-translate-y-0.5 active:scale-95 rounded-xl"
           onClick={() => setMobileMenuOpen(true)}
           aria-label="Open navigation menu"
           aria-expanded={mobileMenuOpen}
@@ -84,7 +82,7 @@ export function Nav({ mobileLeft }: NavProps) {
       </nav>
 
       {/* Desktop Navigation */}
-      <nav className="hidden lg:flex border-b border-border bg-bg/80 backdrop-blur-sm py-1.5 px-3 xl:px-5 gap-0.5 overflow-x-auto whitespace-nowrap sticky top-0 z-10">
+      <nav className="hidden lg:flex border-b border-border/50 bg-bg/60 backdrop-blur-xl py-2 px-3 xl:px-5 gap-1 overflow-x-auto whitespace-nowrap sticky top-0 z-10">
         {tabGroups.map((group: TabGroup) => {
           const primaryTab = group.tabs[0];
           const isActive = group.tabs.includes(tab);
@@ -93,15 +91,15 @@ export function Nav({ mobileLeft }: NavProps) {
             <button
               type="button"
               key={group.label}
-              className={`inline-flex items-center gap-1.5 shrink-0 px-3 xl:px-4 py-1.5 text-[12px] bg-transparent border-0 border-b-2 cursor-pointer transition-all duration-200 ${
+              className={`inline-flex items-center gap-2 shrink-0 px-3 xl:px-4 py-2 text-[12px] bg-transparent border border-transparent cursor-pointer transition-all duration-300 rounded-full ${
                 isActive
-                  ? "text-accent font-medium border-b-accent bg-accent-subtle/50"
-                  : "text-muted border-b-transparent hover:text-txt hover:border-b-muted/50 hover:bg-bg-hover"
+                  ? "text-accent-fg font-bold bg-accent shadow-[0_0_15px_rgba(var(--accent),0.4)] border-accent/50 scale-105"
+                  : "text-muted hover:text-txt hover:bg-bg-hover hover:border-border/50"
               }`}
               onClick={() => setTab(primaryTab)}
               title={group.description}
             >
-              <Icon className="w-3.5 h-3.5" />
+              <Icon className="w-4 h-4" />
               <span>{t(NAV_LABEL_I18N_KEY[group.label] ?? group.label)}</span>
             </button>
           );
@@ -132,12 +130,12 @@ export function Nav({ mobileLeft }: NavProps) {
                   <activeGroup.icon className="w-4 h-4 text-accent-fg" />
                 </span>
                 <span className="text-sm font-semibold text-txt-strong">
-                  Menu
+                  {t("nav.Menu")}
                 </span>
               </div>
               <button
                 type="button"
-                className="inline-flex items-center justify-center w-11 h-11 min-w-[44px] min-h-[44px] border border-border bg-card text-txt cursor-pointer hover:border-accent hover:text-accent transition-all duration-200 hover:shadow-sm rounded-md"
+                className="inline-flex items-center justify-center w-11 h-11 min-w-[44px] min-h-[44px] border border-border/50 bg-card/50 backdrop-blur-sm text-txt cursor-pointer hover:border-accent hover:text-accent transition-all duration-300 hover:shadow-[0_0_15px_rgba(var(--accent),0.3)] hover:-translate-y-0.5 active:scale-95 rounded-xl"
                 onClick={() => setMobileMenuOpen(false)}
                 aria-label="Close navigation menu"
               >
@@ -155,10 +153,10 @@ export function Nav({ mobileLeft }: NavProps) {
                     <button
                       key={group.label}
                       type="button"
-                      className={`w-full flex items-center gap-3 px-3 py-3.5 border rounded-lg text-[14px] font-medium transition-all duration-200 cursor-pointer min-h-[48px] ${
+                      className={`w-full flex items-center gap-3 px-3 py-3.5 border rounded-xl text-[14px] font-medium transition-all duration-300 cursor-pointer min-h-[48px] ${
                         isActive
-                          ? "border-accent bg-accent-subtle text-accent shadow-sm"
-                          : "border-transparent bg-transparent text-txt hover:border-border hover:bg-bg-hover"
+                          ? "border-accent/50 bg-accent text-accent-fg shadow-[0_0_15px_rgba(var(--accent),0.3)] scale-[1.02]"
+                          : "border-transparent bg-transparent text-txt hover:border-border/50 hover:bg-bg-hover"
                       }`}
                       style={{ animationDelay: `${index * 50}ms` }}
                       onClick={() => {
@@ -193,11 +191,11 @@ export function Nav({ mobileLeft }: NavProps) {
 
             {/* Footer */}
             <div className="border-t border-border p-3 text-[11px] text-muted text-center">
-              Press{" "}
+              {t("nav.Press")}{" "}
               <kbd className="px-1.5 py-0.5 bg-bg-accent border border-border rounded text-[10px] font-mono">
-                ESC
+                {t("nav.ESC")}
               </kbd>{" "}
-              to close
+              {t("nav.toClose")}
             </div>
           </div>
         </div>

@@ -25,7 +25,14 @@ describe("Nav language switching", () => {
   });
 
   it("renders english labels by default", async () => {
+    const t = (k: string) => {
+      if (k === "nav.chat") return "Chat";
+      if (k === "nav.wallets") return "Wallets";
+      if (k === "nav.settings") return "Settings";
+      return k;
+    };
     mockUseApp.mockReturnValue({
+      t,
       tab: "chat",
       setTab: vi.fn(),
       uiLanguage: "en",
@@ -47,7 +54,14 @@ describe("Nav language switching", () => {
   });
 
   it("renders chinese labels when uiLanguage is zh-CN", async () => {
+    const t = (k: string) => {
+      if (k === "nav.chat") return "聊天";
+      if (k === "nav.wallets") return "钱包";
+      if (k === "nav.settings") return "设置";
+      return k;
+    };
     mockUseApp.mockReturnValue({
+      t,
       tab: "chat",
       setTab: vi.fn(),
       uiLanguage: "zh-CN",
@@ -69,7 +83,13 @@ describe("Nav language switching", () => {
   });
 
   it("shows companion tab in native shell mode", async () => {
+    const t = (k: string) => {
+      if (k === "nav.companion") return "Companion";
+      if (k === "nav.chat") return "Chat";
+      return k;
+    };
     mockUseApp.mockReturnValue({
+      t,
       tab: "chat",
       setTab: vi.fn(),
       uiLanguage: "en",

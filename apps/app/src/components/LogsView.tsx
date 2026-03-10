@@ -2,10 +2,10 @@
  * Logs view component — logs viewer with filtering.
  */
 
+import type { LogEntry } from "@milady/app-core/api";
+import { formatTime } from "@milady/app-core/components";
 import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../AppContext";
-import type { LogEntry } from "../api-client";
-import { formatTime } from "./shared/format";
 
 /** Per-tag badge colour map. */
 const TAG_COLORS: Record<string, { bg: string; fg: string }> = {
@@ -30,6 +30,7 @@ export function LogsView() {
     logSourceFilter,
     loadLogs,
     setState,
+    t,
   } = useApp();
 
   useEffect(() => {
@@ -91,7 +92,7 @@ export function LogsView() {
           className="text-xs px-3 py-1.5 border border-border bg-card text-txt min-w-56"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search logs..."
+          placeholder={t("logsview.SearchLogs")}
           aria-label="Search logs"
         />
 
@@ -100,11 +101,11 @@ export function LogsView() {
           value={logLevelFilter}
           onChange={handleLevelChange}
         >
-          <option value="">All levels</option>
-          <option value="debug">Debug</option>
-          <option value="info">Info</option>
-          <option value="warn">Warn</option>
-          <option value="error">Error</option>
+          <option value="">{t("logsview.AllLevels")}</option>
+          <option value="debug">{t("logsview.Debug")}</option>
+          <option value="info">{t("logsview.Info")}</option>
+          <option value="warn">{t("logsview.Warn")}</option>
+          <option value="error">{t("logsview.Error")}</option>
         </select>
 
         <select
@@ -112,7 +113,7 @@ export function LogsView() {
           value={logSourceFilter}
           onChange={handleSourceChange}
         >
-          <option value="">All sources</option>
+          <option value="">{t("logsview.AllSources")}</option>
           {logSources.map((s) => (
             <option key={s} value={s}>
               {s}
@@ -126,7 +127,7 @@ export function LogsView() {
             value={logTagFilter}
             onChange={handleTagChange}
           >
-            <option value="">All tags</option>
+            <option value="">{t("logsview.AllTags")}</option>
             {logTags.map((tag) => (
               <option key={tag} value={tag}>
                 {tag}
@@ -141,7 +142,7 @@ export function LogsView() {
             className="text-xs px-3 py-1.5 border border-border bg-card text-txt cursor-pointer hover:border-accent hover:text-accent"
             onClick={handleClearFilters}
           >
-            Clear filters
+            {t("logsview.ClearFilters")}
           </button>
         )}
 
@@ -150,7 +151,7 @@ export function LogsView() {
           className="text-xs px-3 py-1.5 border border-border bg-card text-txt cursor-pointer hover:border-accent hover:text-accent ml-auto"
           onClick={() => void loadLogs()}
         >
-          Refresh
+          {t("logsview.Refresh")}
         </button>
       </div>
 
@@ -158,7 +159,7 @@ export function LogsView() {
       <div className="font-mono text-xs flex-1 min-h-0 overflow-y-auto border border-border p-2 bg-card">
         {filteredLogs.length === 0 ? (
           <div className="text-center py-8 text-muted">
-            No log entries
+            {t("logsview.NoLogEntries")}
             {hasActiveFilters ? " matching filters" : " yet"}.
           </div>
         ) : (

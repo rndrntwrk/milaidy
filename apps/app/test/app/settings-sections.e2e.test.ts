@@ -70,15 +70,15 @@ import { SettingsView } from "../../src/components/SettingsView";
 
 type SettingsState = {
   // Cloud
-  cloudEnabled: boolean;
-  cloudConnected: boolean;
-  cloudCredits: number;
-  cloudCreditsLow: boolean;
-  cloudCreditsCritical: boolean;
-  cloudTopUpUrl: string;
-  cloudUserId: string;
-  cloudLoginBusy: boolean;
-  cloudLoginError: string;
+  miladyCloudEnabled: boolean;
+  miladyCloudConnected: boolean;
+  miladyCloudCredits: number;
+  miladyCloudCreditsLow: boolean;
+  miladyCloudCreditsCritical: boolean;
+  miladyCloudTopUpUrl: string;
+  miladyCloudUserId: string;
+  miladyCloudLoginBusy: boolean;
+  miladyCloudLoginError: string;
   cloudDisconnecting: boolean;
   // Plugins
   plugins: Array<{ name: string; enabled: boolean; description?: string }>;
@@ -93,15 +93,15 @@ type SettingsState = {
 
 function createSettingsState(): SettingsState {
   return {
-    cloudEnabled: true,
-    cloudConnected: false,
-    cloudCredits: 100,
-    cloudCreditsLow: false,
-    cloudCreditsCritical: false,
-    cloudTopUpUrl: "https://example.com/topup",
-    cloudUserId: "",
-    cloudLoginBusy: false,
-    cloudLoginError: "",
+    miladyCloudEnabled: true,
+    miladyCloudConnected: false,
+    miladyCloudCredits: 100,
+    miladyCloudCreditsLow: false,
+    miladyCloudCreditsCritical: false,
+    miladyCloudTopUpUrl: "https://example.com/topup",
+    miladyCloudUserId: "",
+    miladyCloudLoginBusy: false,
+    miladyCloudLoginError: "",
     cloudDisconnecting: false,
     plugins: [
       {
@@ -127,6 +127,7 @@ function createUseAppMock(
   overrides: Record<string, unknown> = {},
 ) {
   return {
+    t: (k: string) => k,
     ...state,
     exportBusy: false,
     exportPassword: "",
@@ -361,7 +362,7 @@ describe("SettingsView Sections", () => {
 
   describe("Cloud Integration Section", () => {
     it("shows login button when not connected", async () => {
-      state.cloudConnected = false;
+      state.miladyCloudConnected = false;
 
       let tree: TestRenderer.ReactTestRenderer | null = null;
 
@@ -384,8 +385,8 @@ describe("SettingsView Sections", () => {
     });
 
     it("shows disconnect button when connected", async () => {
-      state.cloudConnected = true;
-      state.cloudUserId = "user-123";
+      state.miladyCloudConnected = true;
+      state.miladyCloudUserId = "user-123";
 
       let tree: TestRenderer.ReactTestRenderer | null = null;
 
@@ -405,8 +406,8 @@ describe("SettingsView Sections", () => {
     });
 
     it("shows credits when connected", async () => {
-      state.cloudConnected = true;
-      state.cloudCredits = 500;
+      state.miladyCloudConnected = true;
+      state.miladyCloudCredits = 500;
 
       let tree: TestRenderer.ReactTestRenderer | null = null;
 
@@ -434,7 +435,7 @@ describe("SettingsView Sections", () => {
       const dangerText = tree?.root.findAll(
         (node) =>
           node.type === "span" &&
-          node.children.some((c) => c === "Danger Zone"),
+          node.children.some((c) => c === "settings.dangerZone"),
       );
       expect(dangerText.length).toBeGreaterThan(0);
     });

@@ -2,8 +2,15 @@
  * Root App component — routing shell.
  */
 
+import { ErrorBoundary } from "@milady/app-core/components";
+import type { Tab } from "@milady/app-core/navigation";
+import {
+  APPS_ENABLED,
+  COMPANION_ENABLED,
+  pathForTab,
+} from "@milady/app-core/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useApp } from "./AppContext";
+import { getVrmUrl, useApp } from "./AppContext";
 import { AdvancedPageView } from "./components/AdvancedPageView";
 import { AppsPageView } from "./components/AppsPageView";
 import { AutonomousPanel } from "./components/AutonomousPanel";
@@ -25,6 +32,7 @@ import { InventoryView } from "./components/InventoryView";
 import { KnowledgeView } from "./components/KnowledgeView";
 import { LifoSandboxView } from "./components/LifoSandboxView";
 import { LoadingScreen } from "./components/LoadingScreen";
+
 import { Nav } from "./components/Nav";
 import { OnboardingWizard } from "./components/OnboardingWizard";
 import { PairingView } from "./components/PairingView";
@@ -34,15 +42,12 @@ import { ShellOverlays } from "./components/ShellOverlays";
 import { StartupFailureView } from "./components/StartupFailureView";
 import { StreamView } from "./components/StreamView";
 import { SystemWarningBanner } from "./components/SystemWarningBanner";
-import { ErrorBoundary } from "./components/shared/ErrorBoundary";
 import { TerminalPanel } from "./components/TerminalPanel";
 import { BugReportProvider, useBugReportState } from "./hooks/useBugReport";
 import { useContextMenu } from "./hooks/useContextMenu";
 import { useLifoAutoPopout } from "./hooks/useLifoAutoPopout";
 import { useStreamPopoutNavigation } from "./hooks/useStreamPopoutNavigation";
 import { isLifoPopoutMode, isLifoPopoutValue } from "./lifo-popout";
-import type { Tab } from "./navigation";
-import { APPS_ENABLED, COMPANION_ENABLED, pathForTab } from "./navigation";
 
 const CHAT_MOBILE_BREAKPOINT_PX = 1024;
 
@@ -86,7 +91,6 @@ function ViewRouter() {
       case "plugins":
       case "skills":
       case "actions":
-      case "workflows":
       case "triggers":
       case "fine-tuning":
       case "trajectories":
@@ -124,7 +128,16 @@ export function App() {
     activeGameViewerUrl,
     gameOverlayEnabled,
     setActionNotice,
+    selectedVrmIndex,
+    customVrmUrl,
   } = useApp();
+
+  // Compute active VRM URL for preloading during the loading screen
+  const activeVrmUrl = useMemo(() => {
+    if (selectedVrmIndex === 0 && customVrmUrl) return customVrmUrl;
+    const safeIndex = selectedVrmIndex > 0 ? selectedVrmIndex : 1;
+    return getVrmUrl(safeIndex);
+  }, [selectedVrmIndex, customVrmUrl]);
   const isPopout = useIsPopout();
   const shellMode = uiShellMode ?? "companion";
   const effectiveTab: Tab =
@@ -140,7 +153,7 @@ export function App() {
   const [customActionsPanelOpen, setCustomActionsPanelOpen] = useState(false);
   const [customActionsEditorOpen, setCustomActionsEditorOpen] = useState(false);
   const [editingAction, setEditingAction] = useState<
-    import("./api-client").CustomActionDef | null
+    import("@milady/app-core/api").CustomActionDef | null
   >(null);
   const [isChatMobileLayout, setIsChatMobileLayout] = useState(() =>
     typeof window !== "undefined"
@@ -156,7 +169,6 @@ export function App() {
     tab === "plugins" ||
     tab === "skills" ||
     tab === "actions" ||
-    tab === "workflows" ||
     tab === "triggers" ||
     tab === "fine-tuning" ||
     tab === "trajectories" ||
@@ -336,6 +348,7 @@ export function App() {
     return (
       <LoadingScreen
         phase={agentStarting ? "initializing-agent" : startupPhase}
+        vrmUrl={activeVrmUrl}
       />
     );
   }

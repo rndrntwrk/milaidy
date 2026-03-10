@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import { cyberGreen, isRich, theme } from "../terminal/theme";
+=======
+import { isRich, theme } from "../terminal/theme";
+>>>>>>> cacea236b8e993bfded6ab6141efe34574d2acd1
 import { resolveCommitHash } from "./git-commit";
 
 type BannerOptions = {
@@ -38,9 +42,9 @@ export function emitCliBanner(version: string, options: BannerOptions = {}) {
   if (argv.some((a) => a === "--version" || a === "-V" || a === "-v")) {
     return;
   }
-  const rich = options.richTty ?? isRich();
+  const _rich = options.richTty ?? isRich();
   const line = formatCliBannerLine(version, options);
-  process.stdout.write(`\n${line}\n\n`);
+  process.stdout.write(`${line}\n\n`);
   bannerEmitted = true;
 }
 

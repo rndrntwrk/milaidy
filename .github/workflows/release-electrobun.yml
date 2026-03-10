@@ -559,6 +559,25 @@ jobs:
         if: matrix.platform.os == 'windows'
         run: pwsh -File apps/app/electrobun/scripts/smoke-test-windows.ps1
 
+      - name: Install Playwright Chromium (Windows)
+        if: matrix.platform.os == 'windows'
+        run: bunx playwright install chromium --with-deps
+
+      - name: Run Windows UI Playwright Tests
+        if: matrix.platform.os == 'windows'
+        run: |
+          cd apps/app
+          bunx playwright test --config playwright.electron.packaged.config.ts test/electron-packaged/electrobun-windows-startup.e2e.spec.ts
+
+      - name: Upload Windows Playwright UI diagnostics
+        if: failure() && matrix.platform.os == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: electrobun-windows-ui-playwright-diagnostics
+          path: apps/app/test-results/**
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Stage Windows setup executables
         if: matrix.platform.os == 'windows'
         shell: pwsh

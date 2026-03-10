@@ -1,42 +1,34 @@
 /**
- * Loading screen — ASCII "milady" logo with per-character dither fade.
- *
- * Each letter independently cycles through quantised opacity steps on its
- * own random schedule, producing a constantly shifting dither pattern that
- * resolves into the logo and dissolves again.
+ * Loading screen — modern, game-like loader with animated spinner ring
+ * and smooth phase indicator. Uses the same `--bg` background as the main app.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { StartupPhase } from "../AppContext";
 
-/* ── Types ─────────────────────────────────────────────────────────── */
+/* ── Phase config ──────────────────────────────────────────────────── */
 
-interface CharCell {
-  char: string;
-  isLetter: boolean;
-  /** Random animation-delay in seconds */
-  delay: number;
-  /** Random animation-duration in seconds */
-  duration: number;
-}
+const PHASE_META: Record<StartupPhase, { label: string; progress: number }> = {
+  "starting-backend": { label: "Starting backend", progress: 20 },
+  "initializing-agent": { label: "Initializing agent", progress: 50 },
+  ready: { label: "Ready", progress: 100 },
+};
 
 /* ── Component ─────────────────────────────────────────────────────── */
-
-const PHASE_LABELS: Record<StartupPhase, string> = {
-  "starting-backend": "starting backend",
-  "initializing-agent": "initializing agent",
-  ready: "ready",
-};
 
 interface LoadingScreenProps {
   phase?: StartupPhase;
   elapsedSeconds?: number;
+  /** URL of the VRM to prefetch so it’s cached when the 3D viewer mounts. */
+  vrmUrl?: string;
 }
 
 export function LoadingScreen({
   phase = "starting-backend",
   elapsedSeconds,
+  vrmUrl,
 }: LoadingScreenProps) {
+  const [vrmCached, setVrmCached] = useState(false);
   const [runtimeElapsedSeconds, setRuntimeElapsedSeconds] = useState(0);
 
   useEffect(() => {
@@ -50,19 +42,81 @@ export function LoadingScreen({
     return () => clearInterval(timer);
   }, [elapsedSeconds]);
 
+  // Prefetch VRM binary so the browser cache has it when VrmEngine loads later
+  useEffect(() => {
+    if (!vrmUrl) return;
+    const controller = new AbortController();
+    fetch(vrmUrl, { signal: controller.signal })
+      .then(() => setVrmCached(true))
+      .catch(() => {
+        /* non-blocking — VRM will load normally later */
+      });
+    return () => controller.abort();
+  }, [vrmUrl]);
+
   const displayedElapsedSeconds =
     typeof elapsedSeconds === "number"
       ? Math.max(0, Math.floor(elapsedSeconds))
       : runtimeElapsedSeconds;
 
+  const meta = PHASE_META[phase];
+  // Bump progress once VRM is cached
+  const progress = vrmCached ? Math.max(meta.progress, 80) : meta.progress;
+  const label = vrmCached && phase !== "ready" ? "Loading avatar" : meta.label;
+
   return (
-    <div className="flex flex-col items-center justify-center h-screen bg-bg gap-8">
-      <div
-        className="text-muted text-xs tracking-widest uppercase"
-        style={{ fontFamily: "var(--mono)" }}
-      >
-        {PHASE_LABELS[phase]} ({displayedElapsedSeconds}s)
+    <div className="loading-screen">
+      {/* Ambient glow behind the spinner */}
+      <div className="loading-screen__glow" />
+
+      {/* Spinner ring */}
+      <div className="loading-screen__spinner">
+        <svg viewBox="0 0 100 100" className="loading-screen__ring">
+          <title>Loading spinner</title>
+          {/* Track */}
+          <circle
+            cx="50"
+            cy="50"
+            r="44"
+            fill="none"
+            stroke="var(--border)"
+            strokeWidth="3"
+            opacity="0.3"
+          />
+          {/* Animated arc */}
+          <circle
+            cx="50"
+            cy="50"
+            r="44"
+            fill="none"
+            stroke="var(--accent)"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeDasharray="180 276"
+            className="loading-screen__arc"
+          />
+        </svg>
+
+        {/* Center logo mark */}
+        <div className="loading-screen__logo">M</div>
       </div>
+
+      {/* Progress bar */}
+      <div className="loading-screen__progress-track">
+        <div
+          className="loading-screen__progress-fill"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+
+      {/* Phase label */}
+      <div className="loading-screen__label">
+        {label}
+        <span className="loading-screen__dots" />
+      </div>
+
+      {/* Elapsed timer */}
+      <div className="loading-screen__timer">{displayedElapsedSeconds}s</div>
     </div>
   );
 }

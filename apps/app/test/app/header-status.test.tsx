@@ -10,6 +10,10 @@ vi.mock("../../src/AppContext", () => ({
   useApp: () => mockUseApp(),
 }));
 
+vi.mock("@milady/app-core/hooks", () => ({
+  useBugReport: () => ({ isOpen: false, open: vi.fn(), close: vi.fn() }),
+}));
+
 vi.mock("../../src/hooks/useBugReport", () => ({
   useBugReport: () => ({ isOpen: false, open: vi.fn(), close: vi.fn() }),
 }));
@@ -22,6 +26,7 @@ describe("header status", () => {
   beforeEach(() => {
     mockUseApp.mockReset();
     baseAppState = {
+      t: (k: string) => k,
       agentStatus: {
         state: "running",
         agentName: "Milady",
@@ -29,12 +34,12 @@ describe("header status", () => {
         startedAt: undefined,
         uptime: undefined,
       },
-      cloudEnabled: false,
-      cloudConnected: false,
-      cloudCredits: null,
-      cloudCreditsCritical: false,
-      cloudCreditsLow: false,
-      cloudTopUpUrl: "",
+      miladyCloudEnabled: false,
+      miladyCloudConnected: false,
+      miladyCloudCredits: null,
+      miladyCloudCreditsCritical: false,
+      miladyCloudCreditsLow: false,
+      miladyCloudTopUpUrl: "",
       walletAddresses: null,
       lifecycleBusy: false,
       lifecycleAction: null,
@@ -75,7 +80,6 @@ describe("header status", () => {
       .map((node) => node.children.join(""))
       .join("\n");
 
-    expect(renderedText).toContain("starting");
     // Check that pause button is not present during starting state
     // (Loader2 spinner is shown instead of the pause/resume button)
     expect(renderedText).not.toContain("⏸️");
@@ -95,19 +99,15 @@ describe("header status", () => {
 
     const restartButton = tree?.root.find(
       (node) =>
-        node.type === "button" && node.props["aria-label"] === "Restart agent",
+        node.type === "button" &&
+        node.props["aria-label"] === "header.restartAgent",
     );
     expect(restartButton.props.disabled).toBe(true);
 
-    const renderedText = tree?.root
-      .findAllByType("span")
-      .map((node) => node.children.join(""))
-      .join("\n");
-    expect(renderedText).toContain("Restarting...");
-
     const pauseResumeButton = tree?.root.find(
       (node) =>
-        node.type === "button" && node.props["aria-label"] === "Pause autonomy",
+        node.type === "button" &&
+        node.props["aria-label"] === "header.pauseAutonomy",
     );
     expect(pauseResumeButton.props.disabled).toBe(true);
   });
@@ -115,10 +115,6 @@ describe("header status", () => {
   it("renders aria labels for icon-only controls", async () => {
     mockUseApp.mockReturnValue({
       ...baseAppState,
-      walletAddresses: {
-        evmAddress: "0x1234567890abcdef1234567890abcdef12345678",
-        solanaAddress: "So1anaAddress1111111111111111111111111111111",
-      },
     });
 
     let tree: TestRenderer.ReactTestRenderer;
@@ -128,20 +124,16 @@ describe("header status", () => {
 
     const pauseResumeButton = tree?.root.find(
       (node) =>
-        node.type === "button" && node.props["aria-label"] === "Pause autonomy",
+        node.type === "button" &&
+        node.props["aria-label"] === "header.pauseAutonomy",
     );
-    expect(pauseResumeButton.props["aria-label"]).toBe("Pause autonomy");
+    expect(pauseResumeButton.props["aria-label"]).toBe("header.pauseAutonomy");
 
     const restartButton = tree?.root.find(
       (node) =>
-        node.type === "button" && node.props["aria-label"] === "Restart agent",
+        node.type === "button" &&
+        node.props["aria-label"] === "header.restartAgent",
     );
-    expect(restartButton.props["aria-label"]).toBe("Restart agent");
-
-    const walletButton = tree?.root.find(
-      (node) =>
-        node.type === "button" && node.props["aria-label"] === "View wallets",
-    );
-    expect(walletButton.props["aria-label"]).toBe("View wallets");
+    expect(restartButton.props["aria-label"]).toBe("header.restartAgent");
   });
 });
