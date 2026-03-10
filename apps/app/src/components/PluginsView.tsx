@@ -12,6 +12,7 @@ import { resolveProStreamerBrandComponent, resolveProStreamerBrandIcon } from ".
 import type { ConfigUiHint } from "../types";
 import type { JsonSchemaObject } from "./config-catalog";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer";
+import * as OperatorPanels from "./PluginOperatorPanels.js";
 import { configRenderModeForTheme } from "./shared/configRenderMode";
 import { autoLabel } from "./shared/labels";
 import { Badge } from "./ui/Badge.js";
@@ -60,128 +61,14 @@ import {
 } from "./ui/Icons";
 import { WhatsAppQrOverlay } from "./WhatsAppQrOverlay";
 
-const STREAM555_PRIMARY_PLUGIN_IDS = new Set([
-  "stream555-control",
-  "555stream",
-]);
-const STREAM555_LEGACY_PLUGIN_IDS = new Set([
-  "stream555-auth",
-  "stream555-ads",
-]);
-const ARCADE555_PRIMARY_PLUGIN_IDS = new Set([
-  "555arcade",
-  "arcade555",
-  "arcade555-canonical",
-]);
-const ARCADE555_LEGACY_PLUGIN_IDS = new Set([
-  "five55-games",
-  "five55-score-capture",
-  "five55-leaderboard",
-  "five55-quests",
-  "five55-battles",
-  "five55-admin",
-  "five55-social",
-  "five55-rewards",
-  "five55-github",
-]);
-
-function normalizeStream555PluginId(rawId: string): string {
-  return rawId
-    .trim()
-    .toLowerCase()
-    .replace(/^@[^/]+\//, "")
-    .replace(/^plugin-/, "");
-}
-
-function isStream555PrimaryPlugin(pluginId: string): boolean {
-  return STREAM555_PRIMARY_PLUGIN_IDS.has(normalizeStream555PluginId(pluginId));
-}
-
-function isStream555LegacyPlugin(pluginId: string): boolean {
-  return STREAM555_LEGACY_PLUGIN_IDS.has(normalizeStream555PluginId(pluginId));
-}
-
-function normalizeArcade555PluginId(rawId: string): string {
-  return rawId
-    .trim()
-    .toLowerCase()
-    .replace(/^@[^/]+\//, "")
-    .replace(/^plugin-/, "");
-}
-
-function isArcade555PrimaryPlugin(pluginId: string): boolean {
-  return ARCADE555_PRIMARY_PLUGIN_IDS.has(normalizeArcade555PluginId(pluginId));
-}
-
-function isArcade555LegacyPlugin(pluginId: string): boolean {
-  return ARCADE555_LEGACY_PLUGIN_IDS.has(normalizeArcade555PluginId(pluginId));
-}
-
-type Stream555DestinationSpec = {
-  id: string;
-  label: string;
-  urlKey: string;
-  streamKeyKey: string;
-  enabledKey: string;
-};
-
-const STREAM555_DESTINATION_SPECS: Stream555DestinationSpec[] = [
-  {
-    id: "pumpfun",
-    label: "Pump.fun",
-    urlKey: "STREAM555_DEST_PUMPFUN_RTMP_URL",
-    streamKeyKey: "STREAM555_DEST_PUMPFUN_STREAM_KEY",
-    enabledKey: "STREAM555_DEST_PUMPFUN_ENABLED",
-  },
-  {
-    id: "x",
-    label: "X",
-    urlKey: "STREAM555_DEST_X_RTMP_URL",
-    streamKeyKey: "STREAM555_DEST_X_STREAM_KEY",
-    enabledKey: "STREAM555_DEST_X_ENABLED",
-  },
-  {
-    id: "twitch",
-    label: "Twitch",
-    urlKey: "STREAM555_DEST_TWITCH_RTMP_URL",
-    streamKeyKey: "STREAM555_DEST_TWITCH_STREAM_KEY",
-    enabledKey: "STREAM555_DEST_TWITCH_ENABLED",
-  },
-  {
-    id: "kick",
-    label: "Kick",
-    urlKey: "STREAM555_DEST_KICK_RTMP_URL",
-    streamKeyKey: "STREAM555_DEST_KICK_STREAM_KEY",
-    enabledKey: "STREAM555_DEST_KICK_ENABLED",
-  },
-  {
-    id: "youtube",
-    label: "YouTube",
-    urlKey: "STREAM555_DEST_YOUTUBE_RTMP_URL",
-    streamKeyKey: "STREAM555_DEST_YOUTUBE_STREAM_KEY",
-    enabledKey: "STREAM555_DEST_YOUTUBE_ENABLED",
-  },
-  {
-    id: "facebook",
-    label: "Facebook",
-    urlKey: "STREAM555_DEST_FACEBOOK_RTMP_URL",
-    streamKeyKey: "STREAM555_DEST_FACEBOOK_STREAM_KEY",
-    enabledKey: "STREAM555_DEST_FACEBOOK_ENABLED",
-  },
-  {
-    id: "custom",
-    label: "Custom",
-    urlKey: "STREAM555_DEST_CUSTOM_RTMP_URL",
-    streamKeyKey: "STREAM555_DEST_CUSTOM_STREAM_KEY",
-    enabledKey: "STREAM555_DEST_CUSTOM_ENABLED",
-  },
-];
+type Stream555DestinationSpec =
+  (typeof OperatorPanels.STREAM555_DESTINATION_SPECS)[number];
 
 const STREAM555_DESTINATION_KEY_MAP = new Map<
   string,
   Stream555DestinationSpec
 >(
-  STREAM555_DESTINATION_SPECS.flatMap((spec) => [
+  OperatorPanels.STREAM555_DESTINATION_SPECS.flatMap((spec) => [
     [spec.enabledKey, spec] as const,
     [spec.urlKey, spec] as const,
     [spec.streamKeyKey, spec] as const,
@@ -189,38 +76,8 @@ const STREAM555_DESTINATION_KEY_MAP = new Map<
 );
 
 const STREAM555_DESTINATION_ORDER_MAP = new Map<string, number>(
-  STREAM555_DESTINATION_SPECS.map((spec, index) => [spec.id, index]),
+  OperatorPanels.STREAM555_DESTINATION_SPECS.map((spec, index) => [spec.id, index]),
 );
-
-type Stream555DestinationStatus = {
-  id: string;
-  label: string;
-  enabled: boolean;
-  streamKeySet: boolean;
-  streamKeySuffix: string | null;
-  urlSet: boolean;
-};
-
-type Stream555StatusSummary = {
-  authState: "connected" | "wallet_enabled" | "not_configured";
-  authMode: string;
-  authSource: string | null;
-  preferredChain: "solana" | "evm";
-  walletProvisionAllowed: boolean;
-  hasSolanaWallet: boolean;
-  hasEvmWallet: boolean;
-  walletDetectionAvailable: boolean;
-  destinations: Stream555DestinationStatus[];
-  savedDestinations: number;
-  enabledDestinations: number;
-  readyDestinations: number;
-};
-
-type PluginOperationalDisplay = {
-  tone: "ok" | "warn" | "error";
-  primary: string;
-  secondary: string;
-};
 
 type PluginUiActionSchema = {
   label?: string;
@@ -242,7 +99,7 @@ type LifecycleStatusToken = {
   tone: "ok" | "warn" | "error";
 };
 
-function parseBoolish(value: unknown): boolean {
+export function parseBoolish(value: unknown): boolean {
   if (typeof value === "boolean") return value;
   if (typeof value !== "string") return false;
   const normalized = value.trim().toLowerCase();
@@ -255,7 +112,7 @@ function parseBoolish(value: unknown): boolean {
   );
 }
 
-function stream555DestinationIcon(specId: string) {
+export function stream555DestinationIcon(specId: string) {
   const brandComponent = resolveProStreamerBrandComponent([specId]);
   if (brandComponent) {
     return brandComponent;
@@ -286,7 +143,7 @@ function asPluginUiSchema(plugin: PluginInfo): PluginUiSchema | null {
   return schema as PluginUiSchema;
 }
 
-function getPluginUiAction(
+export function getPluginUiAction(
   plugin: PluginInfo,
   actionId: string,
 ): PluginUiActionSchema | null {
@@ -326,7 +183,7 @@ function buildLifecycleStatusTokens(plugin: PluginInfo): LifecycleStatusToken[] 
   return tokens;
 }
 
-function maskSuffix(maskedValue: unknown): string | null {
+export function maskSuffix(maskedValue: unknown): string | null {
   if (typeof maskedValue !== "string" || maskedValue.trim().length === 0) {
     return null;
   }
@@ -342,9 +199,9 @@ function maskSuffix(maskedValue: unknown): string | null {
   return null;
 }
 
-function buildStream555StatusSummary(
+export function buildStream555StatusSummary(
   params: PluginParamDef[],
-): Stream555StatusSummary {
+): OperatorPanels.Stream555StatusSummary {
   const paramByKey = new Map(params.map((param) => [param.key, param]));
   const hasConfiguredParam = (
     keys: string[],
@@ -407,7 +264,7 @@ function buildStream555StatusSummary(
       ? `Wallet auth (${preferredChain === "evm" ? "Ethereum fallback" : "Solana preferred"})`
       : "Not configured";
 
-  const destinations = STREAM555_DESTINATION_SPECS.map((spec) => {
+  const destinations = OperatorPanels.STREAM555_DESTINATION_SPECS.map((spec) => {
     const enabledParam = paramByKey.get(spec.enabledKey);
     const streamKeyParam = paramByKey.get(spec.streamKeyKey);
     const urlParam = paramByKey.get(spec.urlKey);
@@ -451,10 +308,10 @@ function buildStream555StatusSummary(
   };
 }
 
-function buildPluginOperationalDisplay(
+export function buildPluginOperationalDisplay(
   plugin: PluginInfo,
-  streamSummary?: Stream555StatusSummary | null,
-): PluginOperationalDisplay {
+  streamSummary?: OperatorPanels.Stream555StatusSummary | null,
+): OperatorPanels.PluginOperationalDisplay {
   const warnings = plugin.operationalWarnings ?? [];
   const errors = plugin.operationalErrors ?? [];
   const tone: "ok" | "warn" | "error" =
@@ -488,7 +345,7 @@ function buildPluginOperationalDisplay(
     return { tone, primary, secondary };
   }
 
-  if (isArcade555PrimaryPlugin(plugin.id)) {
+  if (OperatorPanels.isArcade555PrimaryPlugin(plugin.id)) {
     const counts = plugin.operationalCounts ?? {};
     const sessionReady =
       Number(counts.sessionBootstrapped ?? 0) > 0
@@ -525,12 +382,12 @@ function buildPluginOperationalDisplay(
   };
 }
 
-function toRecord(value: unknown): Record<string, unknown> | null {
+export function toRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
 }
 
-function readAutonomyStepMessage(
+export function readAutonomyStepMessage(
   step: Record<string, unknown> | null,
   fallback: string,
 ): string {
@@ -572,14 +429,14 @@ function readAutonomyStepMessage(
   return fallback;
 }
 
-function Stream555ControlActionsPanel({
+export function Stream555ControlActionsPanel({
   plugin,
   summary,
   onRefresh,
   setActionNotice,
 }: {
   plugin: PluginInfo;
-  summary: Stream555StatusSummary;
+  summary: OperatorPanels.Stream555StatusSummary;
   onRefresh: () => Promise<void>;
   setActionNotice: (
     text: string,
@@ -966,7 +823,7 @@ function Stream555ControlActionsPanel({
   );
 }
 
-function Arcade555ControlActionsPanel({
+export function Arcade555ControlActionsPanel({
   plugin,
   onRefresh,
   setActionNotice,
@@ -1904,7 +1761,7 @@ export function paramsToSchema(
   const properties: Record<string, Record<string, unknown>> = {};
   const required: string[] = [];
   const hints: Record<string, ConfigUiHint> = {};
-  const isStream555Plugin = isStream555PrimaryPlugin(pluginId);
+  const isStream555Plugin = OperatorPanels.isStream555PrimaryPlugin(pluginId);
 
   for (const p of params) {
     // Build JSON Schema property
@@ -2340,8 +2197,8 @@ function PluginConfigForm({
       }
     }
 
-    if (isStream555PrimaryPlugin(plugin.id)) {
-      for (const spec of STREAM555_DESTINATION_SPECS) {
+    if (OperatorPanels.isStream555PrimaryPlugin(plugin.id)) {
+      for (const spec of OperatorPanels.STREAM555_DESTINATION_SPECS) {
         const enabledValue = v[spec.enabledKey];
         const hasExplicitEnabledValue =
           enabledValue !== undefined &&
@@ -2791,7 +2648,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
   // ── Derived data ───────────────────────────────────────────────────
 
   const hasArcadePrimaryPlugin = useMemo(
-    () => plugins.some((p: PluginInfo) => isArcade555PrimaryPlugin(p.id)),
+    () => plugins.some((p: PluginInfo) => OperatorPanels.isArcade555PrimaryPlugin(p.id)),
     [plugins],
   );
 
@@ -2802,8 +2659,8 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
         (p: PluginInfo) =>
           p.category !== "database" &&
           !ALWAYS_ON_PLUGIN_IDS.has(p.id) &&
-          !isStream555LegacyPlugin(p.id) &&
-          !(hasArcadePrimaryPlugin && isArcade555LegacyPlugin(p.id)) &&
+          !OperatorPanels.isStream555LegacyPlugin(p.id) &&
+          !(hasArcadePrimaryPlugin && OperatorPanels.isArcade555LegacyPlugin(p.id)) &&
           (mode !== "connectors" || p.category === "connector"),
       ),
     [plugins, mode, hasArcadePrimaryPlugin],
@@ -2933,7 +2790,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
     const config = pluginConfigs[pluginId] ?? {};
     await handlePluginConfigSave(pluginId, config);
     const shouldSyncChannels =
-      isStream555PrimaryPlugin(pluginId) &&
+      OperatorPanels.isStream555PrimaryPlugin(pluginId) &&
       Object.keys(config).some((key) =>
         STREAM555_DESTINATION_KEY_MAP.has(key),
       );
@@ -3157,14 +3014,14 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
 
   const renderPluginCard = (p: PluginInfo) => {
     const hasParams = p.parameters && p.parameters.length > 0;
-    const isStream555 = isStream555PrimaryPlugin(p.id);
-    const isArcade555 = isArcade555PrimaryPlugin(p.id);
+    const isStream555 = OperatorPanels.isStream555PrimaryPlugin(p.id);
+    const isArcade555 = OperatorPanels.isArcade555PrimaryPlugin(p.id);
     const streamSummary = isStream555
-      ? buildStream555StatusSummary(p.parameters ?? [])
+      ? OperatorPanels.buildStream555StatusSummary(p.parameters ?? [])
       : null;
     const operationalDisplay =
       isStream555 || isArcade555
-        ? buildPluginOperationalDisplay(p, streamSummary)
+        ? OperatorPanels.buildPluginOperationalDisplay(p, streamSummary)
         : null;
     const isOpen = pluginSettingsOpen.has(p.id);
     const setCount = hasParams
@@ -3644,18 +3501,18 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                   )}
 
                   <div className="px-5 py-3">
-                    {(isStream555PrimaryPlugin(p.id) ||
-                      isArcade555PrimaryPlugin(p.id)) &&
+                    {(OperatorPanels.isStream555PrimaryPlugin(p.id) ||
+                      OperatorPanels.isArcade555PrimaryPlugin(p.id)) &&
                       (() => {
-                        const streamSummary = isStream555PrimaryPlugin(p.id)
-                          ? buildStream555StatusSummary(p.parameters ?? [])
+                        const streamSummary = OperatorPanels.isStream555PrimaryPlugin(p.id)
+                          ? OperatorPanels.buildStream555StatusSummary(p.parameters ?? [])
                           : null;
                         const uiSchema = asPluginUiSchema(p);
                         const lifecycleTokens = buildLifecycleStatusTokens(p);
                         const collectionLabel =
                           uiSchema?.nouns?.collectionLabel?.trim() ||
                           (streamSummary ? "Channels" : "Games");
-                        const operationalDisplay = buildPluginOperationalDisplay(
+                        const operationalDisplay = OperatorPanels.buildPluginOperationalDisplay(
                           p,
                           streamSummary,
                         );
@@ -3741,14 +3598,14 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                               ) : null}
                             </Card>
                             {streamSummary ? (
-                              <Stream555ControlActionsPanel
+                              <OperatorPanels.Stream555ControlActionsPanel
                                 plugin={p}
                                 summary={streamSummary}
                                 onRefresh={loadPlugins}
                                 setActionNotice={setActionNotice}
                               />
                             ) : (
-                              <Arcade555ControlActionsPanel
+                              <OperatorPanels.Arcade555ControlActionsPanel
                                 plugin={p}
                                 onRefresh={loadPlugins}
                                 setActionNotice={setActionNotice}

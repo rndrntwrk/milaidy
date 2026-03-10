@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { client, type VoiceConfig } from "../api-client.js";
 import { useApp } from "../AppContext.js";
 import { useVoiceChat } from "../hooks/useVoiceChat.js";
-import { ChatAvatar } from "./ChatAvatar.js";
+import { ProStreamerStageComposition } from "./ProStreamerStageComposition.js";
 import { Badge } from "./ui/Badge.js";
 import { Button } from "./ui/Button.js";
 import { ScrollArea } from "./ui/ScrollArea.js";
@@ -18,15 +18,6 @@ import {
   SystemIcon,
 } from "./ui/Icons.js";
 
-function formatTurnState(
-  chatSending: boolean,
-  chatFirstTokenReceived: boolean,
-  agentStatusState: string | undefined,
-): string {
-  if (chatSending) return chatFirstTokenReceived ? "streaming" : "thinking";
-  return agentStatusState ?? "idle";
-}
-
 export function AgentCore() {
   const {
     chatAvatarSpeaking,
@@ -37,6 +28,11 @@ export function AgentCore() {
     agentStatus,
     chatPendingImages,
     autonomousEvents,
+    activeGameDisplayName,
+    activeGameSandbox,
+    activeGameViewerUrl,
+    liveHeroSource,
+    liveLayoutMode,
     setState,
     handleChatSend,
     handleChatStop,
@@ -45,11 +41,6 @@ export function AgentCore() {
   const [voiceConfig, setVoiceConfig] = useState<VoiceConfig | null>(null);
 
   const agentName = resolveAgentDisplayName(agentStatus?.agentName);
-  const turnState = formatTurnState(
-    chatSending,
-    chatFirstTokenReceived,
-    agentStatus?.state,
-  );
 
   const timelineEntries = useMemo(() => {
     const messageEntries = conversationMessages.slice(-12).map((message) => ({
@@ -127,11 +118,15 @@ export function AgentCore() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_24%,rgba(255,255,255,0.045),transparent_34%),linear-gradient(180deg,rgba(0,0,0,0.08),rgba(0,0,0,0.42)_72%,rgba(0,0,0,0.74)_100%)]" />
       </div>
 
-      <div className="absolute inset-x-[18%] bottom-[12.25rem] top-[10rem] z-[1] sm:inset-x-[16%] sm:bottom-[11.75rem] sm:top-[8.25rem] lg:inset-x-[20%] lg:bottom-[10.5rem] lg:top-[6rem] xl:inset-x-[22%]">
-        <div className="absolute inset-0">
-          <ChatAvatar isSpeaking={chatAvatarSpeaking} />
-        </div>
-      </div>
+      <ProStreamerStageComposition
+        agentName={agentName}
+        activeGameDisplayName={activeGameDisplayName}
+        activeGameSandbox={activeGameSandbox}
+        activeGameViewerUrl={activeGameViewerUrl}
+        isSpeaking={chatAvatarSpeaking}
+        liveHeroSource={liveHeroSource}
+        liveLayoutMode={liveLayoutMode}
+      />
 
       <div className="absolute inset-x-0 bottom-[16.25rem] top-[9rem] z-10 sm:bottom-[15.25rem] sm:top-[7.5rem] lg:bottom-[13.75rem] lg:top-[5.5rem]">
         <ScrollArea ref={timelineScrollRef} className="h-full w-full px-3 sm:px-6 lg:px-10">

@@ -4,6 +4,7 @@ import { DrawerShell } from "./DrawerShell.js";
 import { SectionEmptyState } from "./SectionStates.js";
 import { SectionShell } from "./SectionShell.js";
 import { SummaryStatRow, type SummaryStatItem } from "./SummaryStatRow.js";
+import * as OperatorPanels from "./PluginOperatorPanels.js";
 import { Button } from "./ui/Button.js";
 import { Sheet } from "./ui/Sheet.js";
 import { OpsIcon } from "./ui/Icons.js";
@@ -24,6 +25,8 @@ export function OpsDrawer({
     extensionStatus,
     mcpServerStatuses,
     plugins,
+    loadPlugins,
+    setActionNotice,
     setTab,
   } = useApp();
 
@@ -92,6 +95,21 @@ export function OpsDrawer({
   ] as const satisfies ReadonlyArray<{ label: string; tab: Tab }>).filter((link) =>
     isTabEnabled(link.tab),
   );
+  const streamPlugin = useMemo(
+    () => plugins.find((plugin) => OperatorPanels.isStream555PrimaryPlugin(plugin.id)) ?? null,
+    [plugins],
+  );
+  const arcadePlugin = useMemo(
+    () => plugins.find((plugin) => OperatorPanels.isArcade555PrimaryPlugin(plugin.id)) ?? null,
+    [plugins],
+  );
+  const streamSummary = useMemo(
+    () =>
+      streamPlugin
+        ? OperatorPanels.buildStream555StatusSummary(streamPlugin.parameters ?? [])
+        : null,
+    [streamPlugin],
+  );
 
   return (
     <Sheet open={open} onClose={onClose} side="right" className="w-[min(38rem,100vw)]">
@@ -157,6 +175,35 @@ export function OpsDrawer({
             />
           ) : null}
         </SectionShell>
+
+        {streamPlugin && streamSummary ? (
+          <SectionShell
+            title="555 Stream"
+            description="Shared operator controls for authentication, destinations, and stream readiness."
+            contentClassName="gap-3"
+          >
+            <OperatorPanels.Stream555ControlActionsPanel
+              plugin={streamPlugin}
+              summary={streamSummary}
+              onRefresh={loadPlugins}
+              setActionNotice={setActionNotice}
+            />
+          </SectionShell>
+        ) : null}
+
+        {arcadePlugin ? (
+          <SectionShell
+            title="555 Arcade"
+            description="Canonical arcade bootstrap, play, switch, and progress controls."
+            contentClassName="gap-3"
+          >
+            <OperatorPanels.Arcade555ControlActionsPanel
+              plugin={arcadePlugin}
+              onRefresh={loadPlugins}
+              setActionNotice={setActionNotice}
+            />
+          </SectionShell>
+        ) : null}
       </DrawerShell>
     </Sheet>
   );

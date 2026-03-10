@@ -47,11 +47,17 @@ export function MiladyOsDashboard() {
     autonomousEvents,
     agentStatus,
     triggers,
+    quickLayerStatuses,
+    activeGameViewerUrl,
+    activeGameDisplayName,
+    gameOverlayEnabled,
     openDockSurface,
     closeDockSurface,
     openHudControlStack,
     openHudAssetVault,
     closeHudSurface,
+    runQuickLayer,
+    setState,
     setRailDisplay,
     collapseRails,
   } = useApp();
@@ -82,6 +88,52 @@ export function MiladyOsDashboard() {
     : safeTriggers.length > 0
       ? `${Math.min(safeTriggers.length, 9)}`
       : undefined;
+  const liveTrayActions = [
+    { id: "go-live", label: "Go Live" },
+    { id: "screen-share", label: "Screen Share" },
+    { id: "play-games", label: "Play Games" },
+    { id: "ads", label: "Ads" },
+    { id: "reaction-segment", label: "Reaction" },
+    { id: "end-live", label: "End Live" },
+  ] as const;
+  const hasActiveGame = activeGameViewerUrl.trim().length > 0;
+
+  const renderLiveTray = () => (
+    <div className="absolute inset-x-4 bottom-4 z-20 flex flex-wrap items-center gap-2 rounded-[24px] border border-white/8 bg-black/48 px-3 py-3 shadow-[0_18px_40px_rgba(0,0,0,0.34)] backdrop-blur-2xl">
+      <div className="pr-2 text-[10px] uppercase tracking-[0.22em] text-white/50">
+        Live Controls
+      </div>
+      {liveTrayActions.map((action) => {
+        const status = quickLayerStatuses[action.id];
+        return (
+          <Button
+            key={action.id}
+            type="button"
+            variant={status === "disabled" ? "outline" : "secondary"}
+            size="sm"
+            className="rounded-full"
+            disabled={status === "disabled"}
+            onClick={() => void runQuickLayer(action.id)}
+          >
+            {action.label}
+          </Button>
+        );
+      })}
+      {hasActiveGame ? (
+        <Button
+          type="button"
+          variant={gameOverlayEnabled ? "secondary" : "outline"}
+          size="sm"
+          className="rounded-full"
+          onClick={() => setState("gameOverlayEnabled", true)}
+        >
+          {gameOverlayEnabled
+            ? `Viewing ${activeGameDisplayName || "game"}`
+            : `Resume ${activeGameDisplayName || "Game"}`}
+        </Button>
+      ) : null}
+    </div>
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -120,6 +172,7 @@ export function MiladyOsDashboard() {
         <div className="absolute inset-0 z-10">
           <AgentCore />
         </div>
+        {renderLiveTray()}
       </div>
 
       <div className="absolute left-4 top-1/2 z-30 hidden -translate-y-1/2 xl:block">
@@ -164,6 +217,7 @@ export function MiladyOsDashboard() {
         <div className="relative z-10 h-[min(44rem,calc(100dvh-11rem))] min-h-[34rem] pt-2">
           <AgentCore />
         </div>
+        {renderLiveTray()}
       </div>
     </div>
   );
@@ -176,6 +230,7 @@ export function MiladyOsDashboard() {
         <div className="relative z-10 h-[min(38rem,calc(100dvh-10.5rem))] min-h-[31rem] pt-2">
           <AgentCore />
         </div>
+        {renderLiveTray()}
       </div>
     </div>
   );

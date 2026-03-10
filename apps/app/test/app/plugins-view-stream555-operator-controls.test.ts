@@ -14,6 +14,9 @@ const mockExecuteAutonomyPlan = vi.fn();
 vi.mock("../../src/AppContext", () => ({
   useApp: () => mockUseApp(),
 }));
+vi.mock("../../src/components/ui/Dialog.js", () => ({
+  Dialog: ({ open, children }: any) => (open ? React.createElement("div", null, children) : null),
+}));
 
 vi.mock("../../src/api-client", () => ({
   client: {

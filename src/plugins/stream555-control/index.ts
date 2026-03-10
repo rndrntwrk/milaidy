@@ -135,6 +135,20 @@ function readParamValue(
   return value?.trim() ? value.trim() : undefined;
 }
 
+type LiveLayoutMode = "camera-full" | "camera-hold";
+
+function resolveSceneForLayoutMode(
+  rawLayoutMode: string | undefined,
+  fallbackScene: string,
+): string {
+  const layoutMode = rawLayoutMode?.trim().toLowerCase() as
+    | LiveLayoutMode
+    | undefined;
+  if (layoutMode === "camera-hold") return "active-pip";
+  if (layoutMode === "camera-full") return "default";
+  return fallbackScene;
+}
+
 function assertStreamReadAccess(): void {
   assertFive55Capability(CAPABILITY_POLICY, "stream.read");
 }
@@ -748,7 +762,10 @@ const goLiveAction: Action = {
       const inputType =
         readParam(options as HandlerOptions | undefined, "inputType") || "website";
       const inputUrl = readParam(options as HandlerOptions | undefined, "inputUrl");
-      const scene = readParam(options as HandlerOptions | undefined, "scene") || "default";
+      const scene = resolveSceneForLayoutMode(
+        readParam(options as HandlerOptions | undefined, "layoutMode"),
+        readParam(options as HandlerOptions | undefined, "scene") || "default",
+      );
       const applyDestinations = parseBooleanFlag(
         readParam(options as HandlerOptions | undefined, "applyDestinations"),
         parseBooleanFlag(trimEnv(STREAM555_DEST_SYNC_ON_GO_LIVE_ENV), true),
@@ -805,6 +822,7 @@ const goLiveAction: Action = {
     { name: "inputType", description: "camera|screen|website|avatar|radio|...", required: false, schema: { type: "string" as const } },
     { name: "inputUrl", description: "Optional source url for website/rtmp/file", required: false, schema: { type: "string" as const } },
     { name: "scene", description: "Initial scene id", required: false, schema: { type: "string" as const } },
+    { name: "layoutMode", description: "Optional Alice layout mode (camera-full|camera-hold)", required: false, schema: { type: "string" as const } },
     { name: "applyDestinations", description: "Apply configured RTMP destinations before go-live (default true)", required: false, schema: { type: "string" as const } },
     { name: "destinationPlatforms", description: "Comma-separated subset of destinations to apply before go-live", required: false, schema: { type: "string" as const } },
   ],
@@ -916,7 +934,10 @@ const goLiveAppAction: Action = {
         ) ??
         parseAllowLocalhost(process.env.STREAM555_ALLOW_LOCALHOST_APP_URLS) ??
         defaultAllowLocalhostForEnv();
-      const scene = readParam(options as HandlerOptions | undefined, "scene") || "default";
+      const scene = resolveSceneForLayoutMode(
+        readParam(options as HandlerOptions | undefined, "layoutMode"),
+        readParam(options as HandlerOptions | undefined, "scene") || "default",
+      );
       const requestedSessionId = readParam(
         options as HandlerOptions | undefined,
         "sessionId",
@@ -1040,6 +1061,12 @@ const goLiveAppAction: Action = {
       name: "viewerUrl",
       description:
         "Optional explicit viewer URL override (must be reachable by capture-service)",
+      required: false,
+      schema: { type: "string" as const },
+    },
+    {
+      name: "layoutMode",
+      description: "Optional Alice layout mode (camera-full|camera-hold)",
       required: false,
       schema: { type: "string" as const },
     },
