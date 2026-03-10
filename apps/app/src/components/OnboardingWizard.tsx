@@ -29,7 +29,7 @@ export function OnboardingWizard() {
     onboardingApiKey,
     onboardingMiladyCloudTab,
     onboardingRestarting,
-    miladyCloudConnected: miladyCloudConnected,
+    miladyCloudConnected,
     handleOnboardingNext,
     handleOnboardingBack,
     setState,
@@ -120,7 +120,8 @@ export function OnboardingWizard() {
       case "dockerSetup":
         return true; // informational step, always valid
       case "cloudProvider":
-        if (onboardingCloudProvider === "miladycloud") return miladyCloudConnected;
+        if (onboardingCloudProvider === "miladycloud")
+          return miladyCloudConnected;
         return onboardingCloudProvider.length > 0;
       case "modelSelection":
         return (

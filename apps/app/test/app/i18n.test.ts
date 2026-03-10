@@ -1,8 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
+import {
+  createTranslator,
+  MESSAGES,
+  normalizeLanguage,
+  t,
+} from "@milady/app-core/i18n";
 import { describe, expect, it } from "vitest";
-import { createTranslator, normalizeLanguage, t } from "@milady/app-core/i18n";
-import { MESSAGES } from "@milady/app-core/i18n";
 
 describe("i18n helpers", () => {
   it("normalizes supported language tags", () => {

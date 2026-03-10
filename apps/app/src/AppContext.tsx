@@ -154,7 +154,6 @@ export {
   formatStartupErrorDetail,
   type GamePostMessageAuthPayload,
   getVrmBackgroundUrl,
-  getVrmNeedsFlip,
   getVrmPreviewUrl,
   getVrmTitle,
   getVrmUrl,
@@ -467,22 +466,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSelectedVrmIndexRaw(normalized);
     saveAvatarIndex(normalized);
     // Sync to server so headless stream capture uses the same avatar
-    client.saveStreamSettings({ avatarIndex: normalized }).catch(() => { });
+    client.saveStreamSettings({ avatarIndex: normalized }).catch(() => {});
   }, []);
 
   // --- Milady Cloud ---
   const [miladyCloudEnabled, setMiladyCloudEnabled] = useState(false);
   const [miladyCloudConnected, setMiladyCloudConnected] = useState(false);
-  const [miladyCloudCredits, setMiladyCloudCredits] = useState<number | null>(null);
-  const [miladyCloudCreditsLow, setMiladyCloudCreditsLow] = useState(false);
-  const [miladyCloudCreditsCritical, setMiladyCloudCreditsCritical] = useState(false);
-  const [miladyCloudTopUpUrl, setMiladyCloudTopUpUrl] = useState(
-    "/cloud/billing",
+  const [miladyCloudCredits, setMiladyCloudCredits] = useState<number | null>(
+    null,
   );
-  const [miladyCloudUserId, setMiladyCloudUserId] = useState<string | null>(null);
+  const [miladyCloudCreditsLow, setMiladyCloudCreditsLow] = useState(false);
+  const [miladyCloudCreditsCritical, setMiladyCloudCreditsCritical] =
+    useState(false);
+  const [miladyCloudTopUpUrl, setMiladyCloudTopUpUrl] =
+    useState("/cloud/billing");
+  const [miladyCloudUserId, setMiladyCloudUserId] = useState<string | null>(
+    null,
+  );
   const [miladyCloudLoginBusy, setMiladyCloudLoginBusy] = useState(false);
-  const [miladyCloudLoginError, setMiladyCloudLoginError] = useState<string | null>(null);
-  const [miladyCloudDisconnecting, setMiladyCloudDisconnecting] = useState(false);
+  const [miladyCloudLoginError, setMiladyCloudLoginError] = useState<
+    string | null
+  >(null);
+  const [miladyCloudDisconnecting, setMiladyCloudDisconnecting] =
+    useState(false);
 
   // --- Updates ---
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
@@ -1404,7 +1410,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActionNotice(LIFECYCLE_MESSAGES.start.success, "success", 2400);
     } catch (err) {
       setActionNotice(
-        `Failed to ${LIFECYCLE_MESSAGES.start.verb} agent: ${err instanceof Error ? err.message : "unknown error"
+        `Failed to ${LIFECYCLE_MESSAGES.start.verb} agent: ${
+          err instanceof Error ? err.message : "unknown error"
         }`,
         "error",
         4200,
@@ -1423,7 +1430,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActionNotice(LIFECYCLE_MESSAGES.stop.success, "success", 2400);
     } catch (err) {
       setActionNotice(
-        `Failed to ${LIFECYCLE_MESSAGES.stop.verb} agent: ${err instanceof Error ? err.message : "unknown error"
+        `Failed to ${LIFECYCLE_MESSAGES.stop.verb} agent: ${
+          err instanceof Error ? err.message : "unknown error"
         }`,
         "error",
         4200,
@@ -1462,7 +1470,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActionNotice(LIFECYCLE_MESSAGES[action].success, "success", 2400);
     } catch (err) {
       setActionNotice(
-        `Failed to ${LIFECYCLE_MESSAGES[action].verb} agent: ${err instanceof Error ? err.message : "unknown error"
+        `Failed to ${LIFECYCLE_MESSAGES[action].verb} agent: ${
+          err instanceof Error ? err.message : "unknown error"
         }`,
         "error",
         4200,
@@ -1503,7 +1512,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActionNotice(LIFECYCLE_MESSAGES.restart.success, "success", 2400);
     } catch (err) {
       setActionNotice(
-        `Failed to ${LIFECYCLE_MESSAGES.restart.verb} agent: ${err instanceof Error ? err.message : "unknown error"
+        `Failed to ${LIFECYCLE_MESSAGES.restart.verb} agent: ${
+          err instanceof Error ? err.message : "unknown error"
         }`,
         "error",
         4200,
@@ -1594,8 +1604,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     const confirmed = window.confirm(
       "This will completely reset the agent — wiping all config, memory, and data.\n\n" +
-      "You will be taken back to the onboarding wizard.\n\n" +
-      "Are you sure?",
+        "You will be taken back to the onboarding wizard.\n\n" +
+        "Are you sure?",
     );
     if (!confirmed) return;
     if (!beginLifecycleAction("reset")) return;
@@ -1621,7 +1631,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActionNotice(LIFECYCLE_MESSAGES.reset.success, "success", 3200);
     } catch (err) {
       setActionNotice(
-        `Failed to ${LIFECYCLE_MESSAGES.reset.verb} agent: ${err instanceof Error ? err.message : "unknown error"
+        `Failed to ${LIFECYCLE_MESSAGES.reset.verb} agent: ${
+          err instanceof Error ? err.message : "unknown error"
         }`,
         "error",
         4200,
@@ -1767,7 +1778,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         const customAction = customActions.find(
           (action) =>
-            `/${normalizeCustomActionName(action.name).toLowerCase()}` === slash.name,
+            `/${normalizeCustomActionName(action.name).toLowerCase()}` ===
+            slash.name,
         );
         if (customAction) {
           const { params, missingRequired } = parseCustomActionParams(
@@ -1786,7 +1798,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (!result.ok) {
             appendLocalCommandTurn(
               rawText,
-              `Custom action "${customAction.name}" failed: ${result.error ?? "unknown error"
+              `Custom action "${customAction.name}" failed: ${
+                result.error ?? "unknown error"
               }`,
             );
             return { handled: true };
@@ -2253,7 +2266,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // Also stop any active PTY sessions — the user wants everything to halt
     for (const session of ptySessions) {
-      client.stopCodingAgent(session.sessionId).catch(() => { });
+      client.stopCodingAgent(session.sessionId).catch(() => {});
     }
   }, [ptySessions]);
 
@@ -2589,7 +2602,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           /* ignore */
         });
         setActionNotice(
-          `Failed to ${enabled ? "enable" : "disable"} ${pluginName}: ${err instanceof Error ? err.message : "unknown error"
+          `Failed to ${enabled ? "enable" : "disable"} ${pluginName}: ${
+            err instanceof Error ? err.message : "unknown error"
           }`,
           "error",
           4200,
@@ -3510,7 +3524,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const resp = await client.cloudLogin();
       if (!resp.ok) {
-        setMiladyCloudLoginError(resp.error || "Failed to start Milady Cloud login");
+        setMiladyCloudLoginError(
+          resp.error || "Failed to start Milady Cloud login",
+        );
         miladyCloudLoginBusyRef.current = false;
         setMiladyCloudLoginBusy(false);
         return;
@@ -3551,7 +3567,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setMiladyCloudLoginBusy(false);
             setMiladyCloudConnected(true);
             setMiladyCloudEnabled(true);
-            setActionNotice("Logged in to Milady Cloud successfully.", "success", 6000);
+            setActionNotice(
+              "Logged in to Milady Cloud successfully.",
+              "success",
+              6000,
+            );
             void loadWalletConfig();
             // Delay the credit fetch slightly so the backend has time to
             // persist the API key before we query cloud status / credits.
@@ -3572,11 +3592,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       }, 1000);
     } catch (err) {
-      setMiladyCloudLoginError(err instanceof Error ? err.message : "Milady Cloud login failed");
+      setMiladyCloudLoginError(
+        err instanceof Error ? err.message : "Milady Cloud login failed",
+      );
       miladyCloudLoginBusyRef.current = false;
       setMiladyCloudLoginBusy(false);
     }
-  }, [miladyCloudLoginBusy, setActionNotice, pollCloudCredits, loadWalletConfig]);
+  }, [
+    miladyCloudLoginBusy,
+    setActionNotice,
+    pollCloudCredits,
+    loadWalletConfig,
+  ]);
 
   const handleCloudDisconnect = useCallback(async () => {
     if (
@@ -4312,7 +4339,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               setPtySessions(mapServerTasksToSessions(status.tasks));
             }
           })
-          .catch(() => { }); // non-critical
+          .catch(() => {}); // non-critical
       };
       hydratePtySessions();
       let ptyHydratedViaWs = false;
@@ -4327,17 +4354,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
 
       // Surface system-level warnings (connector failures, wiring exhaustion, etc.)
-      unbindSystemWarnings = client.onWsEvent("system-warning", (data: Record<string, unknown>) => {
-        const message = typeof data.message === "string" ? data.message : "";
-        if (message) {
-          setSystemWarnings((prev) => {
-            if (prev.includes(message)) return prev;
-            const next = [...prev, message];
-            if (next.length > 50) next.splice(0, next.length - 50);
-            return next;
-          });
-        }
-      });
+      unbindSystemWarnings = client.onWsEvent(
+        "system-warning",
+        (data: Record<string, unknown>) => {
+          const message = typeof data.message === "string" ? data.message : "";
+          if (message) {
+            setSystemWarnings((prev) => {
+              if (prev.includes(message)) return prev;
+              const next = [...prev, message];
+              if (next.length > 50) next.splice(0, next.length - 50);
+              return next;
+            });
+          }
+        },
+      );
 
       // Re-hydrate when the tab becomes visible — browsers may throttle
       // or drop WS messages for background tabs.
@@ -4382,15 +4412,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
         },
       );
-      unbindRestartRequired = client.onWsEvent("restart-required", (data: Record<string, unknown>) => {
-        if (Array.isArray(data.reasons)) {
-          setPendingRestartReasons(
-            data.reasons.filter((el): el is string => typeof el === "string"),
-          );
-          setPendingRestart(true);
-          setRestartBannerDismissed(false);
-        }
-      });
+      unbindRestartRequired = client.onWsEvent(
+        "restart-required",
+        (data: Record<string, unknown>) => {
+          if (Array.isArray(data.reasons)) {
+            setPendingRestartReasons(
+              data.reasons.filter((el): el is string => typeof el === "string"),
+            );
+            setPendingRestart(true);
+            setRestartBannerDismissed(false);
+          }
+        },
+      );
       unbindAgentEvents = client.onWsEvent(
         "agent_event",
         (data: Record<string, unknown>) => {
@@ -4543,11 +4576,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
               return prev.map((s) =>
                 s.sessionId === sessionId
                   ? {
-                    ...s,
-                    status: "tool_running" as const,
-                    toolDescription: toolDesc,
-                    lastActivity: `Running ${toolDesc}`.slice(0, 60),
-                  }
+                      ...s,
+                      status: "tool_running" as const,
+                      toolDescription: toolDesc,
+                      lastActivity: `Running ${toolDesc}`.slice(0, 60),
+                    }
                   : s,
               );
             }
@@ -4561,11 +4594,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
               return prev.map((s) =>
                 s.sessionId === sessionId
                   ? {
-                    ...s,
-                    status: "active" as const,
-                    toolDescription: undefined,
-                    lastActivity: excerpt,
-                  }
+                      ...s,
+                      status: "active" as const,
+                      toolDescription: undefined,
+                      lastActivity: excerpt,
+                    }
                   : s,
               );
             }
@@ -4584,11 +4617,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
               return prev.map((s) =>
                 s.sessionId === sessionId
                   ? {
-                    ...s,
-                    status: "active" as const,
-                    toolDescription: undefined,
-                    lastActivity: excerpt,
-                  }
+                      ...s,
+                      status: "active" as const,
+                      toolDescription: undefined,
+                      lastActivity: excerpt,
+                    }
                   : s,
               );
             }
@@ -4596,11 +4629,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
               return prev.map((s) =>
                 s.sessionId === sessionId
                   ? {
-                    ...s,
-                    status: "active" as const,
-                    toolDescription: undefined,
-                    lastActivity: "Running",
-                  }
+                      ...s,
+                      status: "active" as const,
+                      toolDescription: undefined,
+                      lastActivity: "Running",
+                    }
                   : s,
               );
             }
@@ -4610,10 +4643,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
               return prev.map((s) =>
                 s.sessionId === sessionId
                   ? {
-                    ...s,
-                    status: "error" as const,
-                    lastActivity: `Error: ${errMsg}`.slice(0, 60),
-                  }
+                      ...s,
+                      status: "error" as const,
+                      lastActivity: `Error: ${errMsg}`.slice(0, 60),
+                    }
                   : s,
               );
             }
@@ -4729,7 +4762,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
       window.removeEventListener(navEvent, handleNavChange);
-      if (miladyCloudPollInterval.current) clearInterval(miladyCloudPollInterval.current);
+      if (miladyCloudPollInterval.current)
+        clearInterval(miladyCloudPollInterval.current);
       if (miladyCloudLoginPollTimer.current)
         clearInterval(miladyCloudLoginPollTimer.current);
       unbindStatus?.();

@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
+
+import type { CustomActionDef } from "@milady/app-core/api";
 import React, { useEffect, useState } from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { CustomActionDef } from "@milady/app-core/api";
 
 const { mockClient, mockUseApp, mockUseVoiceChat } = vi.hoisted(() => ({
   mockClient: {
@@ -70,7 +71,7 @@ function createContext(
     chatSending: false,
     chatFirstTokenReceived: false,
     conversationMessages: [],
-    handleChatSend: vi.fn(async () => { }),
+    handleChatSend: vi.fn(async () => {}),
     handleChatStop: vi.fn(),
     setState: vi.fn(),
     droppedFiles: [],
@@ -112,7 +113,9 @@ function findInputByPlaceholder(
 ): TestRenderer.ReactTestInstance {
   const found = root.root.findAll(
     (n) =>
-      n.type === "input" && typeof n.props.placeholder === "string" && n.props.placeholder.includes(placeholder),
+      n.type === "input" &&
+      typeof n.props.placeholder === "string" &&
+      n.props.placeholder.includes(placeholder),
   );
   expect(found.length).toBeGreaterThan(0);
   return found[0];
@@ -283,7 +286,10 @@ describe("custom actions smoke flow", () => {
     );
     expect(title.length).toBe(1);
 
-    const createButton = findButtonByText(tree, "customactionspanel.NewCustomAction");
+    const createButton = findButtonByText(
+      tree,
+      "customactionspanel.NewCustomAction",
+    );
     await act(async () => {
       createButton.props.onClick();
     });
@@ -316,7 +322,10 @@ describe("custom actions smoke flow", () => {
       "Build a URL health check action",
     );
 
-    const nameInput = findInputByPlaceholder(tree, "customactioneditor.MYACTION");
+    const nameInput = findInputByPlaceholder(
+      tree,
+      "customactioneditor.MYACTION",
+    );
     expect(nameInput.props.value).toBe("CHECK_SITE");
 
     const descriptionArea = tree?.root.findAll(

@@ -28,8 +28,8 @@ interface ChatViewContextStub {
     updater:
       | Array<{ data: string; mimeType: string; name: string }>
       | ((
-        prev: Array<{ data: string; mimeType: string; name: string }>,
-      ) => Array<{ data: string; mimeType: string; name: string }>),
+          prev: Array<{ data: string; mimeType: string; name: string }>,
+        ) => Array<{ data: string; mimeType: string; name: string }>),
   ) => void;
   uiLanguage: "en" | "zh-CN";
   chatMode: "simple" | "power";
@@ -41,10 +41,10 @@ interface ChatViewContextStub {
   handleChatRetry: (id: string) => void;
   lifecycleBusy: boolean;
   lifecycleAction: string | null;
-  autonomousEvents: any[];
-  workbench: any;
+  autonomousEvents: unknown[];
+  workbench: unknown;
   openEmotePicker: () => void;
-  ptySessions: any[];
+  ptySessions: unknown[];
 }
 
 const { mockClient, mockUseApp, mockUseVoiceChat } = vi.hoisted(() => ({
@@ -89,7 +89,7 @@ function createContext(
     chatSending: false,
     chatFirstTokenReceived: false,
     conversationMessages: [],
-    handleChatSend: vi.fn(async () => { }),
+    handleChatSend: vi.fn(async () => {}),
     handleChatStop: vi.fn(),
     setState: vi.fn(),
     droppedFiles: [],
@@ -99,9 +99,9 @@ function createContext(
     setChatPendingImages: vi.fn(),
     chatMode: "simple",
     chatAgentVoiceMuted: false,
-    handleStart: vi.fn(async () => { }),
-    handlePauseResume: vi.fn(async () => { }),
-    handleRestart: vi.fn(async () => { }),
+    handleStart: vi.fn(async () => {}),
+    handlePauseResume: vi.fn(async () => {}),
+    handleRestart: vi.fn(async () => {}),
     handleChatRetry: vi.fn(),
     lifecycleBusy: false,
     lifecycleAction: null,
@@ -172,7 +172,7 @@ describe("ChatView", () => {
     });
     await flush();
 
-    const root = tree!.root;
+    const root = tree?.root;
     const headerCount = root.findAll(
       (node) => node.type === "div" && text(node) === "Milady",
     ).length;
@@ -197,7 +197,7 @@ describe("ChatView", () => {
     });
     await flush();
 
-    const root = tree!.root;
+    const root = tree?.root;
     const userTextNodes = root.findAll(
       (node) => node.type === "span" && text(node) === "stream me",
     );
@@ -291,7 +291,7 @@ describe("ChatView", () => {
     });
     await flush();
 
-    const scroller = tree!.root.findByProps({
+    const scroller = tree?.root.findByProps({
       "data-testid": "chat-messages-scroll",
     });
     expect(String(scroller.props.className)).toContain("pr-3");
@@ -359,7 +359,7 @@ describe("ChatView", () => {
     });
 
     await act(async () => {
-      tree!.update(React.createElement(ChatView));
+      tree?.update(React.createElement(ChatView));
     });
     await flush();
 
@@ -428,7 +428,7 @@ describe("ChatView", () => {
     });
 
     await act(async () => {
-      tree!.update(React.createElement(ChatView));
+      tree?.update(React.createElement(ChatView));
     });
     await flush();
 
@@ -496,7 +496,7 @@ describe("ChatView", () => {
     });
 
     await act(async () => {
-      tree!.update(React.createElement(ChatView));
+      tree?.update(React.createElement(ChatView));
     });
     await flush();
 
@@ -525,10 +525,10 @@ describe("ChatView", () => {
     });
     await flush();
 
-    const textarea = tree!.root.find((node) => node.type === "textarea");
+    const textarea = tree?.root.find((node) => node.type === "textarea");
     expect(textarea).toBeDefined();
 
-    const buttons = tree!.root.findAllByType("button" as React.ElementType);
+    const buttons = tree?.root.findAllByType("button" as React.ElementType);
 
     const attachButton = buttons.find(
       (node) => node.props["aria-label"] === "Attach image",
@@ -539,7 +539,7 @@ describe("ChatView", () => {
       (node) => node.props["aria-label"] === "chat.voiceInput",
     );
     expect(micButton).toBeDefined();
-    expect(micButton!.props["aria-pressed"]).toBe(false);
+    expect(micButton?.props["aria-pressed"]).toBe(false);
   });
 
   it("disables send when chat input is empty or whitespace", async () => {
@@ -552,7 +552,7 @@ describe("ChatView", () => {
     await flush();
 
     // Find send button by aria-label since we now use an icon instead of text
-    const buttons = tree!.root.findAllByType("button" as React.ElementType);
+    const buttons = tree?.root.findAllByType("button" as React.ElementType);
     const sendButton = buttons.find(
       (node) => node.props["aria-label"] === "chat.send",
     );
@@ -574,7 +574,7 @@ describe("ChatView", () => {
     });
     await flush();
 
-    const removeButton = tree!.root.find(
+    const removeButton = tree?.root.find(
       (node) =>
         node.type === "button" &&
         node.props["aria-label"] === "Remove image receipt.png",
@@ -639,7 +639,8 @@ describe("addImageFiles functional updater", () => {
       throw new Error("ChatView test renderer did not initialize");
     }
     const fileInput = tree.root.find(
-      (node: any) => node.type === "input" && node.props.accept === "image/*",
+      (node: TestRenderer.ReactTestInstance) =>
+        node.type === "input" && node.props.accept === "image/*",
     );
 
     const fakeFile = new Proxy(

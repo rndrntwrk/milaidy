@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
+
+import type { Tab } from "@milady/app-core/navigation";
+import { getTabGroups } from "@milady/app-core/navigation";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Tab } from "@milady/app-core/navigation";
-import { getTabGroups } from "@milady/app-core/navigation";
 
 const { mockUseApp, noop } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
@@ -209,7 +210,7 @@ function getButtonByLabel(
       typeof node.props.onClick === "function" &&
       (textOf(node).trim() === label ||
         node.props["aria-label"] === label ||
-        node.props.title === label)
+        node.props.title === label),
   );
   if (buttons.length === 0) {
     console.error(`ERROR: Failed to find button by label: ${label}`);
@@ -440,30 +441,30 @@ describe("pages navigation smoke (e2e)", () => {
       patch: Partial<HarnessState>;
       token: string;
     }> = [
-        {
-          name: "loading",
-          patch: { onboardingLoading: true, onboardingComplete: false },
-          token: "LoadingScreen",
+      {
+        name: "loading",
+        patch: { onboardingLoading: true, onboardingComplete: false },
+        token: "LoadingScreen",
+      },
+      {
+        name: "pairing",
+        patch: {
+          onboardingLoading: false,
+          onboardingComplete: true,
+          authRequired: true,
         },
-        {
-          name: "pairing",
-          patch: {
-            onboardingLoading: false,
-            onboardingComplete: true,
-            authRequired: true,
-          },
-          token: "PairingView",
+        token: "PairingView",
+      },
+      {
+        name: "onboarding",
+        patch: {
+          onboardingLoading: false,
+          authRequired: false,
+          onboardingComplete: false,
         },
-        {
-          name: "onboarding",
-          patch: {
-            onboardingLoading: false,
-            authRequired: false,
-            onboardingComplete: false,
-          },
-          token: "OnboardingWizard",
-        },
-      ];
+        token: "OnboardingWizard",
+      },
+    ];
 
     for (const entry of cases) {
       state = {

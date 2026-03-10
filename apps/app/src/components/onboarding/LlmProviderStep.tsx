@@ -246,10 +246,11 @@ export function LlmProviderStep() {
       <button
         type="button"
         key={provider.id}
-        className={`${padding} border-[1.5px] cursor-pointer transition-all text-left flex items-center gap-3 rounded-lg ${isSelected
-          ? "border-accent !bg-accent !text-accent-fg shadow-[0_0_0_3px_var(--accent),var(--shadow-md)]"
-          : "border-border bg-card hover:border-border-hover hover:bg-bg-hover hover:shadow-md hover:-translate-y-0.5"
-          }`}
+        className={`${padding} border-[1.5px] cursor-pointer transition-all text-left flex items-center gap-3 rounded-lg ${
+          isSelected
+            ? "border-accent !bg-accent !text-accent-fg shadow-[0_0_0_3px_var(--accent),var(--shadow-md)]"
+            : "border-border bg-card hover:border-border-hover hover:bg-bg-hover hover:shadow-md hover:-translate-y-0.5"
+        }`}
         onClick={() => handleProviderSelect(provider.id)}
       >
         <img
@@ -344,20 +345,22 @@ export function LlmProviderStep() {
           <div className="flex items-center gap-4 border-b border-border mb-4">
             <button
               type="button"
-              className={`text-sm pb-2 border-b-2 ${onboardingMiladyCloudTab === "login"
-                ? "border-accent text-accent"
-                : "border-transparent text-muted hover:text-txt"
-                }`}
+              className={`text-sm pb-2 border-b-2 ${
+                onboardingMiladyCloudTab === "login"
+                  ? "border-accent text-accent"
+                  : "border-transparent text-muted hover:text-txt"
+              }`}
               onClick={() => setState("onboardingMiladyCloudTab", "login")}
             >
               {t("onboardingwizard.Login")}
             </button>
             <button
               type="button"
-              className={`text-sm pb-2 border-b-2 ${onboardingMiladyCloudTab === "apikey"
-                ? "border-accent text-accent"
-                : "border-transparent text-muted hover:text-txt"
-                }`}
+              className={`text-sm pb-2 border-b-2 ${
+                onboardingMiladyCloudTab === "apikey"
+                  ? "border-accent text-accent"
+                  : "border-transparent text-muted hover:text-txt"
+              }`}
               onClick={() => setState("onboardingMiladyCloudTab", "apikey")}
             >
               {t("onboardingwizard.APIKey")}
@@ -446,20 +449,22 @@ export function LlmProviderStep() {
           <div className="flex items-center gap-4 border-b border-border mb-3">
             <button
               type="button"
-              className={`text-sm pb-2 border-b-2 ${onboardingSubscriptionTab === "token"
-                ? "border-accent text-accent"
-                : "border-transparent text-muted hover:text-txt"
-                }`}
+              className={`text-sm pb-2 border-b-2 ${
+                onboardingSubscriptionTab === "token"
+                  ? "border-accent text-accent"
+                  : "border-transparent text-muted hover:text-txt"
+              }`}
               onClick={() => setState("onboardingSubscriptionTab", "token")}
             >
               {t("onboardingwizard.SetupToken")}
             </button>
             <button
               type="button"
-              className={`text-sm pb-2 border-b-2 ${onboardingSubscriptionTab === "oauth"
-                ? "border-accent text-accent"
-                : "border-transparent text-muted hover:text-txt"
-                }`}
+              className={`text-sm pb-2 border-b-2 ${
+                onboardingSubscriptionTab === "oauth"
+                  ? "border-accent text-accent"
+                  : "border-transparent text-muted hover:text-txt"
+              }`}
               onClick={() => setState("onboardingSubscriptionTab", "oauth")}
             >
               {t("onboardingwizard.OAuthLogin")}
@@ -749,10 +754,11 @@ export function LlmProviderStep() {
                   <button
                     type="button"
                     key={model.id}
-                    className={`w-full px-4 py-3 border cursor-pointer transition-colors text-left rounded-lg ${onboardingOpenRouterModel === model.id
-                      ? "border-accent !bg-accent !text-accent-fg"
-                      : "border-border bg-card hover:border-accent/50"
-                      }`}
+                    className={`w-full px-4 py-3 border cursor-pointer transition-colors text-left rounded-lg ${
+                      onboardingOpenRouterModel === model.id
+                        ? "border-accent !bg-accent !text-accent-fg"
+                        : "border-border bg-card hover:border-accent/50"
+                    }`}
                     onClick={() => handleOpenRouterModelSelect(model.id)}
                   >
                     <div className="font-bold text-sm">{model.name}</div>

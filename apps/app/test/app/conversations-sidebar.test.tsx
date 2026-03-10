@@ -33,9 +33,9 @@ function createContext(overrides: Record<string, unknown> = {}) {
     activeConversationId: "conv-1",
     unreadConversations: new Set<string>(),
     handleNewConversation: vi.fn(),
-    handleSelectConversation: vi.fn(async () => { }),
-    handleDeleteConversation: vi.fn(async () => { }),
-    handleRenameConversation: vi.fn(async () => { }),
+    handleSelectConversation: vi.fn(async () => {}),
+    handleDeleteConversation: vi.fn(async () => {}),
+    handleRenameConversation: vi.fn(async () => {}),
     uiLanguage: "en",
     ...overrides,
   };
@@ -60,7 +60,7 @@ describe("ConversationsSidebar", () => {
   });
 
   it("requires explicit confirmation before deleting", async () => {
-    const handleDeleteConversation = vi.fn(async () => { });
+    const handleDeleteConversation = vi.fn(async () => {});
     mockUseApp.mockReturnValue(createContext({ handleDeleteConversation }));
 
     let tree!: TestRenderer.ReactTestRenderer;
@@ -72,7 +72,7 @@ describe("ConversationsSidebar", () => {
       "data-testid": "conv-delete",
     });
     await act(async () => {
-      deleteTrigger.props.onClick({ stopPropagation: () => { } });
+      deleteTrigger.props.onClick({ stopPropagation: () => {} });
     });
 
     expect(handleDeleteConversation).not.toHaveBeenCalled();
@@ -81,7 +81,7 @@ describe("ConversationsSidebar", () => {
   });
 
   it("deletes only after clicking Yes", async () => {
-    const handleDeleteConversation = vi.fn(async () => { });
+    const handleDeleteConversation = vi.fn(async () => {});
     mockUseApp.mockReturnValue(createContext({ handleDeleteConversation }));
 
     let tree!: TestRenderer.ReactTestRenderer;
@@ -93,7 +93,7 @@ describe("ConversationsSidebar", () => {
       "data-testid": "conv-delete",
     });
     await act(async () => {
-      deleteTrigger.props.onClick({ stopPropagation: () => { } });
+      deleteTrigger.props.onClick({ stopPropagation: () => {} });
     });
 
     const yesButton = findButtonByText(tree, "conversations.deleteYes");

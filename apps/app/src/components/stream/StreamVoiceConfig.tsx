@@ -5,12 +5,12 @@
  * provider + API key status, and a test button to speak sample text.
  */
 
-import { useTimeout } from "../../hooks/useTimeout";
 import { client } from "@milady/app-core/api";
-import { useCallback, useEffect, useState } from "react";
-import { useApp } from "../../AppContext";
 import { Button } from "@milady/ui";
 import { Volume2, VolumeX } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { useApp } from "../../AppContext";
+import { useTimeout } from "../../hooks/useTimeout";
 
 interface VoiceStatus {
   enabled: boolean;
@@ -81,7 +81,10 @@ export function StreamVoiceConfig({ streamLive }: { streamLive: boolean }) {
       // Poll will update speaking state
       setTimeout(() => setSpeaking(false), 3000);
     }
-  }, [speaking]);
+  }, [
+    speaking, // Poll will update speaking state
+    setTimeout,
+  ]);
 
   if (!status) return null;
 
@@ -97,10 +100,11 @@ export function StreamVoiceConfig({ streamLive }: { streamLive: boolean }) {
         size="sm"
         onClick={toggleEnabled}
         disabled={loading}
-        className={`flex items-center gap-1.5 px-2 py-1 h-7 rounded text-xs font-medium transition-colors ${status.enabled
+        className={`flex items-center gap-1.5 px-2 py-1 h-7 rounded text-xs font-medium transition-colors ${
+          status.enabled
             ? "bg-accent/20 text-accent hover:bg-accent/30"
             : "bg-surface text-muted hover:bg-surface-hover"
-          }`}
+        }`}
         title={
           status.enabled
             ? "Voice on stream: ON (click to disable)"

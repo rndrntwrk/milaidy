@@ -1,4 +1,3 @@
-import { useTimeout } from "../hooks/useTimeout";
 import { client } from "@milady/app-core/api";
 import {
   dispatchMiladyEvent,
@@ -8,6 +7,7 @@ import {
 import { Menu, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../AppContext";
+import { useTimeout } from "../hooks/useTimeout";
 
 // Types
 interface EmoteItem {
@@ -309,16 +309,19 @@ export function EmotePicker() {
   }, [search, activeCategory]);
 
   // Play emote
-  const playEmote = useCallback(async (emoteId: string) => {
-    setPlaying(emoteId);
-    try {
-      await client.playEmote(emoteId);
-    } catch (err) {
-      console.error("Failed to play emote:", err);
-    } finally {
-      setTimeout(() => setPlaying(null), 1000);
-    }
-  }, []);
+  const playEmote = useCallback(
+    async (emoteId: string) => {
+      setPlaying(emoteId);
+      try {
+        await client.playEmote(emoteId);
+      } catch (err) {
+        console.error("Failed to play emote:", err);
+      } finally {
+        setTimeout(() => setPlaying(null), 1000);
+      }
+    },
+    [setTimeout],
+  );
 
   // Stop emote
   const stopEmote = useCallback(() => {

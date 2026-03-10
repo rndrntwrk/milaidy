@@ -7,9 +7,9 @@
  *   3. Stream source selector (stream-tab, game, custom-url)
  */
 
+import { Button, Checkbox, Input, Switch } from "@milady/ui";
 import { useState } from "react";
 import { useApp } from "../../AppContext";
-import { Button, Input, Checkbox, Switch } from "@milady/ui";
 import type { StreamSourceType } from "./helpers";
 import { isSupportedStreamUrl, STREAM_SOURCE_LABELS } from "./helpers";
 import { getAllWidgets } from "./overlays/registry";
@@ -50,9 +50,11 @@ function ConfigField({
       return (
         <label
           key={fieldKey}
+          htmlFor={`config-${fieldKey}`}
           className="flex items-center gap-2 text-[12px] text-txt cursor-pointer"
         >
           <Checkbox
+            id={`config-${fieldKey}`}
             checked={Boolean(value)}
             onCheckedChange={(checked) => onChange(fieldKey, !!checked)}
           />
@@ -61,9 +63,14 @@ function ConfigField({
       );
     case "number":
       return (
-        <label key={fieldKey} className="flex flex-col gap-0.5">
+        <label
+          key={fieldKey}
+          htmlFor={`config-${fieldKey}`}
+          className="flex flex-col gap-0.5"
+        >
           <span className="text-[11px] text-muted">{field.label}</span>
           <Input
+            id={`config-${fieldKey}`}
             type="number"
             min={field.min}
             max={field.max}
@@ -77,9 +84,14 @@ function ConfigField({
       );
     case "select":
       return (
-        <label key={fieldKey} className="flex flex-col gap-0.5">
+        <label
+          key={fieldKey}
+          htmlFor={`config-${fieldKey}`}
+          className="flex flex-col gap-0.5"
+        >
           <span className="text-[11px] text-muted">{field.label}</span>
           <select
+            id={`config-${fieldKey}`}
             value={typeof value === "string" ? value : String(field.default)}
             onChange={(e) => onChange(fieldKey, e.target.value)}
             className="bg-bg-muted border border-border text-txt text-[12px] rounded px-2 py-1 cursor-pointer"
@@ -94,9 +106,14 @@ function ConfigField({
       );
     case "color":
       return (
-        <label key={fieldKey} className="flex items-center gap-2">
+        <label
+          key={fieldKey}
+          htmlFor={`config-${fieldKey}`}
+          className="flex items-center gap-2"
+        >
           <span className="text-[11px] text-muted">{field.label}</span>
           <input
+            id={`config-${fieldKey}`}
             type="color"
             value={typeof value === "string" ? value : String(field.default)}
             onChange={(e) => onChange(fieldKey, e.target.value)}
@@ -106,9 +123,14 @@ function ConfigField({
       );
     default:
       return (
-        <label key={fieldKey} className="flex flex-col gap-0.5">
+        <label
+          key={fieldKey}
+          htmlFor={`config-${fieldKey}`}
+          className="flex flex-col gap-0.5"
+        >
           <span className="text-[11px] text-muted">{field.label}</span>
           <Input
+            id={`config-${fieldKey}`}
             type="text"
             value={
               typeof value === "string" ? value : String(field.default ?? "")
@@ -220,10 +242,11 @@ export function StreamSettings({
       variant={section === id ? "default" : "ghost"}
       size="sm"
       onClick={() => setSection(id)}
-      className={`px-3 py-1.5 text-[12px] font-medium rounded transition-colors h-auto ${section === id
+      className={`px-3 py-1.5 text-[12px] font-medium rounded transition-colors h-auto ${
+        section === id
           ? "bg-accent/20 text-accent hover:bg-accent/30"
           : "text-muted hover:text-txt hover:bg-bg-muted"
-        }`}
+      }`}
     >
       {label}
     </Button>
@@ -291,16 +314,18 @@ export function StreamSettings({
                             : undefined
                         }
                         onClick={() => onDestinationChange(d.id)}
-                        className={`w-full flex items-center justify-start gap-3 px-4 py-3 h-auto rounded-lg border transition-colors disabled:opacity-50 text-left ${active
+                        className={`w-full flex items-center justify-start gap-3 px-4 py-3 h-auto rounded-lg border transition-colors disabled:opacity-50 text-left ${
+                          active
                             ? "border-accent/60 bg-accent/10"
                             : "border-border bg-white/[0.03] hover:border-accent/30 hover:bg-white/[0.05]"
-                          }`}
+                        }`}
                       >
                         <span
-                          className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${active
+                          className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                            active
                               ? "bg-accent shadow-[0_0_6px_theme(colors.accent.DEFAULT)]"
                               : "bg-muted/30"
-                            }`}
+                          }`}
                         />
                         <span
                           className={`text-[13px] font-medium ${active ? "text-accent" : "text-txt"}`}
@@ -388,16 +413,18 @@ export function StreamSettings({
                             );
                           }
                         }}
-                        className={`w-full h-auto flex items-center justify-start gap-3 px-4 py-3 rounded-lg border transition-colors text-left ${active && st !== "custom-url"
+                        className={`w-full h-auto flex items-center justify-start gap-3 px-4 py-3 rounded-lg border transition-colors text-left ${
+                          active && st !== "custom-url"
                             ? "border-accent/60 bg-accent/10"
                             : "border-border bg-white/[0.03] hover:border-accent/30 hover:bg-white/[0.05]"
-                          }`}
+                        }`}
                       >
                         <span
-                          className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${active && st !== "custom-url"
+                          className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                            active && st !== "custom-url"
                               ? "bg-accent"
                               : "bg-muted/30"
-                            }`}
+                          }`}
                         />
                         <div>
                           <div
@@ -420,10 +447,11 @@ export function StreamSettings({
 
                       {st === "custom-url" && (
                         <div
-                          className={`mt-1 flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-colors ${active
+                          className={`mt-1 flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-colors ${
+                            active
                               ? "border-accent/60 bg-accent/10"
                               : "border-border bg-white/[0.03]"
-                            }`}
+                          }`}
                         >
                           <Input
                             placeholder={t("streamsettings.httpsYourUrlCom")}

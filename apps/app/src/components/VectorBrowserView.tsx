@@ -110,11 +110,11 @@ function rowToMemory(row: Record<string, unknown>): MemoryRecord {
     roomId: String(row.roomId ?? row.room_id ?? row.roomID ?? ""),
     entityId: String(
       row.entityId ??
-      row.entity_id ??
-      row.entityID ??
-      row.userId ??
-      row.user_id ??
-      "",
+        row.entity_id ??
+        row.entityID ??
+        row.userId ??
+        row.user_id ??
+        "",
     ),
     type: String(row.type ?? row.memoryType ?? row.memory_type ?? ""),
     createdAt: String(row.createdAt ?? row.created_at ?? row.timestamp ?? ""),
@@ -1366,11 +1366,7 @@ export function VectorBrowserView() {
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                 className="w-[220px] bg-card text-xs"
               />
-              <Button
-                variant="default"
-                size="sm"
-                onClick={handleSearch}
-              >
+              <Button variant="default" size="sm" onClick={handleSearch}>
                 {t("vectorbrowserview.Search")}
               </Button>
             </div>

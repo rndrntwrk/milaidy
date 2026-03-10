@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
-import React from "react";
-import TestRenderer, { act } from "react-test-renderer";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import type {
   AppLaunchResult,
   AppViewerAuthMessage,
   RegistryAppInfo,
 } from "@milady/app-core/api";
+import React from "react";
+import TestRenderer, { act } from "react-test-renderer";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 interface AppsContextStub {
   setState: (
@@ -242,7 +243,8 @@ describe("AppsView", () => {
       if (k === "appsview.Back") return "Back";
       if (k === "appsview.Refresh") return "Refresh";
       if (k === "appsview.ActiveOnly") return "Active Only";
-      if (k === "appsview.SaySomethingToSel") return "Say something to selected agent...";
+      if (k === "appsview.SaySomethingToSel")
+        return "Say something to selected agent...";
       return k;
     };
     mockUseApp.mockReturnValue({
@@ -462,7 +464,9 @@ describe("AppsView", () => {
     const root = tree?.root;
     expect(root.findAll((node) => text(node) === "Hyperscape").length).toBe(1);
     expect(root.findAll((node) => text(node) === "Babylon").length).toBe(1);
-    expect(root.findAll((node) => text(node) === "appsview.Active").length).toBe(1);
+    expect(
+      root.findAll((node) => text(node) === "appsview.Active").length,
+    ).toBe(1);
     expect(root.findAll((node) => text(node) === ">").length).toBe(2);
 
     const searchInput = root.findByType("input");
@@ -619,7 +623,9 @@ describe("AppsView", () => {
     await act(async () => {
       findButtonByTitle(tree?.root, "Open Babylon").props.onClick();
     });
-    expect(tree?.root.findAll((node) => text(node) === "appsview.Back").length).toBe(1);
+    expect(
+      tree?.root.findAll((node) => text(node) === "appsview.Back").length,
+    ).toBe(1);
     expect(
       tree?.root.findAll((node) => text(node) === "Hyperscape").length,
     ).toBe(0);

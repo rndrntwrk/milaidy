@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MiladyClient } from "@milady/app-core/api";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 function buildSseDoneResponse(): Response {
   const encoder = new TextEncoder();

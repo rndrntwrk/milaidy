@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
+
+import type { AppViewerAuthMessage } from "@milady/app-core/api";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AppViewerAuthMessage } from "@milady/app-core/api";
 
 interface GameContextStub {
   t: (key: string) => string;
@@ -56,7 +57,7 @@ function createContext(overrides?: Partial<GameContextStub>): GameContextStub {
     gameOverlayEnabled: false,
     plugins: [],
     logs: [],
-    loadLogs: vi.fn(async () => { }),
+    loadLogs: vi.fn(async () => {}),
     setState: vi.fn<GameContextStub["setState"]>(),
     setActionNotice: vi.fn<GameContextStub["setActionNotice"]>(),
     ...overrides,
@@ -276,7 +277,7 @@ describe("GameView", () => {
       }
     }) as typeof window.addEventListener);
     vi.spyOn(window, "removeEventListener").mockImplementation(
-      (() => { }) as typeof window.removeEventListener,
+      (() => {}) as typeof window.removeEventListener,
     );
 
     const postMessage =
@@ -349,7 +350,7 @@ describe("GameView", () => {
       }
     }) as typeof window.addEventListener);
     vi.spyOn(window, "removeEventListener").mockImplementation(
-      (() => { }) as typeof window.removeEventListener,
+      (() => {}) as typeof window.removeEventListener,
     );
 
     const postMessage =

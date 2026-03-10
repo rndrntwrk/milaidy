@@ -1,8 +1,8 @@
-import { afterEach, describe, expect, it } from "vitest";
 import {
   getBackendStartupTimeoutMs,
   isElectrobunRuntime,
 } from "@milady/app-core/bridge";
+import { afterEach, describe, expect, it } from "vitest";
 
 const originalWindow = globalThis.window;
 

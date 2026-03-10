@@ -1,8 +1,4 @@
-import {
-  act,
-  create,
-  type ReactTestRenderer,
-} from "react-test-renderer";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 import * as AppContext from "../AppContext";
 import { Header } from "./Header";
@@ -51,7 +47,7 @@ describe("Header", () => {
     if (!testRenderer) {
       throw new Error("Failed to render Header");
     }
-    const root = (testRenderer as any).root;
+    const root = (testRenderer as ReactTestRenderer).root;
 
     // Check agent name
     const agentName = root.findByProps({ "data-testid": "agent-name" });

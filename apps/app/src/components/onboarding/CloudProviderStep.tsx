@@ -9,9 +9,9 @@ export function CloudProviderStep() {
     onboardingCloudProvider,
     onboardingAvatar,
     customVrmUrl,
-    miladyCloudConnected: miladyCloudConnected,
-    miladyCloudLoginBusy: miladyCloudLoginBusy,
-    miladyCloudLoginError: miladyCloudLoginError,
+    miladyCloudConnected,
+    miladyCloudLoginBusy,
+    miladyCloudLoginError,
     handleCloudLogin,
     setState,
   } = useApp();
@@ -46,19 +46,21 @@ export function CloudProviderStep() {
             <button
               type="button"
               key={provider.id}
-              className={`w-full px-4 py-3 border cursor-pointer bg-card transition-colors rounded-lg text-left ${onboardingCloudProvider === provider.id
+              className={`w-full px-4 py-3 border cursor-pointer bg-card transition-colors rounded-lg text-left ${
+                onboardingCloudProvider === provider.id
                   ? "border-accent !bg-accent !text-accent-fg"
                   : "border-border hover:border-accent"
-                }`}
+              }`}
               onClick={() => handleCloudProviderSelect(provider.id)}
             >
               <div className="font-bold text-sm">{provider.name}</div>
               {provider.description && (
                 <div
-                  className={`text-xs mt-0.5 ${onboardingCloudProvider === provider.id
+                  className={`text-xs mt-0.5 ${
+                    onboardingCloudProvider === provider.id
                       ? "text-accent-fg/70"
                       : "text-muted"
-                    }`}
+                  }`}
                 >
                   {provider.description}
                 </div>
@@ -104,7 +106,9 @@ export function CloudProviderStep() {
             </button>
           )}
           {miladyCloudLoginError && (
-            <p className="text-danger text-[13px] mt-2">{miladyCloudLoginError}</p>
+            <p className="text-danger text-[13px] mt-2">
+              {miladyCloudLoginError}
+            </p>
           )}
         </div>
       )}

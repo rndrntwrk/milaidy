@@ -1,7 +1,7 @@
+import { Switch } from "@milady/app-core/components";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
-import { Switch } from "@milady/app-core/components";
 
 describe("Switch", () => {
   it("emits the toggled value when clicked", () => {

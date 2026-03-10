@@ -1,7 +1,7 @@
 import { client } from "@milady/app-core/api";
+import { Cpu, Globe, Shield, Sparkles, UploadCloud } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { useApp } from "../../AppContext";
-import { Sparkles, UploadCloud, Shield, Cpu, Globe } from "lucide-react";
 
 export function WelcomeStep() {
   const { t } = useApp();
@@ -90,8 +90,8 @@ export function WelcomeStep() {
           elizaOS
         </h1>
         <p className="text-xl text-muted/70 max-w-lg mx-auto leading-relaxed font-light">
-          Experience the next generation of autonomous orchestration.
-          Connect your workforce, automate your world.
+          Experience the next generation of autonomous orchestration. Connect
+          your workforce, automate your world.
         </p>
       </div>
 

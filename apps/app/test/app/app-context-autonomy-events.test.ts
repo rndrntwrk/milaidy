@@ -1,8 +1,9 @@
 /** @vitest-environment jsdom */
+
+import type { StreamEventEnvelope } from "@milady/app-core/api";
 import React, { useEffect } from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { StreamEventEnvelope } from "@milady/app-core/api";
 
 const { mockClient, wsHandlers } = vi.hoisted(() => {
   const handlers = new Map<string, (data: Record<string, unknown>) => void>();

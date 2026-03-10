@@ -3,10 +3,10 @@ import { useApp } from "../../AppContext";
 export function CloudLoginStep() {
   const {
     t,
-    miladyCloudConnected: miladyCloudConnected,
-    miladyCloudUserId: miladyCloudUserId,
-    miladyCloudLoginBusy: miladyCloudLoginBusy,
-    miladyCloudLoginError: miladyCloudLoginError,
+    miladyCloudConnected,
+    miladyCloudUserId,
+    miladyCloudLoginBusy,
+    miladyCloudLoginError,
     handleCloudLogin,
   } = useApp();
 
@@ -49,7 +49,9 @@ export function CloudLoginStep() {
             )}
           </button>
           {miladyCloudLoginError && (
-            <p className="text-danger text-[13px] mt-2.5">{miladyCloudLoginError}</p>
+            <p className="text-danger text-[13px] mt-2.5">
+              {miladyCloudLoginError}
+            </p>
           )}
         </div>
       )}

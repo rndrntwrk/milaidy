@@ -1,5 +1,13 @@
 // @vitest-environment jsdom
 import crypto from "node:crypto";
+import {
+  type CreateTriggerRequest,
+  MiladyClient,
+  type TriggerHealthSnapshot,
+  type TriggerRunRecord,
+  type TriggerSummary,
+  type UpdateTriggerRequest,
+} from "@milady/app-core/api";
 import React, {
   type ReactElement,
   useCallback,
@@ -18,14 +26,6 @@ import {
   it,
   vi,
 } from "vitest";
-import {
-  type CreateTriggerRequest,
-  MiladyClient,
-  type TriggerHealthSnapshot,
-  type TriggerRunRecord,
-  type TriggerSummary,
-  type UpdateTriggerRequest,
-} from "@milady/app-core/api";
 
 const { mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
@@ -159,13 +159,13 @@ function createTriggerRuntimeHarness(): TriggerRuntimeHarness {
       tasks = tasks.map((task) =>
         task.id === taskId
           ? {
-            ...task,
-            ...update,
-            metadata: {
-              ...(task.metadata ?? {}),
-              ...(update.metadata ?? {}),
-            },
-          }
+              ...task,
+              ...update,
+              metadata: {
+                ...(task.metadata ?? {}),
+                ...(update.metadata ?? {}),
+              },
+            }
           : task,
       );
     },
@@ -462,7 +462,9 @@ async function flush(): Promise<void> {
 describe("TriggersView UI E2E", () => {
   let server: { port: number; close: () => Promise<void> } | null = null;
   let runtimeHarness: TriggerRuntimeHarness;
-  let startApiServerFn: typeof import("../../../../src/api/server").startApiServer | null = null;
+  let startApiServerFn:
+    | typeof import("../../../../src/api/server").startApiServer
+    | null = null;
 
   beforeAll(async () => {
     const serverModule = await import("../../../../src/api/server");
@@ -474,6 +476,7 @@ describe("TriggersView UI E2E", () => {
     runtimeHarness = createTriggerRuntimeHarness();
     server = await startApiServerFn({
       port: 0,
+      // biome-ignore lint/suspicious/noExplicitAny: test mock
       runtime: runtimeHarness.runtime as any,
     });
   });
@@ -509,7 +512,7 @@ describe("TriggersView UI E2E", () => {
     const client = new MiladyClient(`http://127.0.0.1:${server.port}`);
     const triggerDisplayName = "Trigger UI E2E";
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
         React.createElement(TriggerUiHarness, { client }),

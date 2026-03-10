@@ -99,13 +99,15 @@ describe("header status", () => {
 
     const restartButton = tree?.root.find(
       (node) =>
-        node.type === "button" && node.props["aria-label"] === "header.restartAgent",
+        node.type === "button" &&
+        node.props["aria-label"] === "header.restartAgent",
     );
     expect(restartButton.props.disabled).toBe(true);
 
     const pauseResumeButton = tree?.root.find(
       (node) =>
-        node.type === "button" && node.props["aria-label"] === "header.pauseAutonomy",
+        node.type === "button" &&
+        node.props["aria-label"] === "header.pauseAutonomy",
     );
     expect(pauseResumeButton.props.disabled).toBe(true);
   });
@@ -122,13 +124,15 @@ describe("header status", () => {
 
     const pauseResumeButton = tree?.root.find(
       (node) =>
-        node.type === "button" && node.props["aria-label"] === "header.pauseAutonomy",
+        node.type === "button" &&
+        node.props["aria-label"] === "header.pauseAutonomy",
     );
     expect(pauseResumeButton.props["aria-label"]).toBe("header.pauseAutonomy");
 
     const restartButton = tree?.root.find(
       (node) =>
-        node.type === "button" && node.props["aria-label"] === "header.restartAgent",
+        node.type === "button" &&
+        node.props["aria-label"] === "header.restartAgent",
     );
     expect(restartButton.props["aria-label"]).toBe("header.restartAgent");
   });

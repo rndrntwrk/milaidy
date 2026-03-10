@@ -103,7 +103,12 @@ export function GameView() {
     } finally {
       setSendingChat(false);
     }
-  }, [chatInput, setActionNotice, loadLogs]);
+  }, [
+    chatInput,
+    setActionNotice,
+    loadLogs, // Refresh logs to show activity
+    setTimeout,
+  ]);
   const postMessageTargetOrigin = useMemo(
     () => resolvePostMessageTargetOrigin(activeGameViewerUrl),
     [activeGameViewerUrl],
@@ -339,12 +344,13 @@ export function GameView() {
                   {formatTime(entry.timestamp, { fallback: "—" })}
                 </span>
                 <span
-                  className={`font-semibold text-[10px] uppercase ${entry.level === "error"
-                    ? "text-danger"
-                    : entry.level === "warn"
-                      ? "text-warn"
-                      : "text-muted"
-                    }`}
+                  className={`font-semibold text-[10px] uppercase ${
+                    entry.level === "error"
+                      ? "text-danger"
+                      : entry.level === "warn"
+                        ? "text-warn"
+                        : "text-muted"
+                  }`}
                 >
                   {entry.level}
                 </span>

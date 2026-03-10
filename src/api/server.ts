@@ -350,13 +350,13 @@ interface ServerState {
   runtime: AgentRuntime | null;
   config: MiladyConfig;
   agentState:
-  | "not_started"
-  | "starting"
-  | "running"
-  | "paused"
-  | "stopped"
-  | "restarting"
-  | "error";
+    | "not_started"
+    | "starting"
+    | "running"
+    | "paused"
+    | "stopped"
+    | "restarting"
+    | "error";
   agentName: string;
   model: string | undefined;
   startedAt: number | undefined;
@@ -394,8 +394,8 @@ interface ServerState {
   broadcastWs: ((data: Record<string, unknown>) => void) | null;
   /** Broadcast a JSON payload to WebSocket clients bound to a specific client id. */
   broadcastWsToClientId:
-  | ((clientId: string, data: Record<string, unknown>) => number)
-  | null;
+    | ((clientId: string, data: Record<string, unknown>) => number)
+    | null;
   /** Currently active conversation ID from the frontend (sent via WS). */
   activeConversationId: string | null;
   /** Transient OAuth flow state for subscription auth. */
@@ -528,13 +528,13 @@ type ResponseBlock =
   | { type: "text"; text: string }
   | { type: "ui-spec"; spec: Record<string, unknown>; raw: string }
   | {
-    type: "config-form";
-    pluginId: string;
-    pluginName?: string;
-    schema: Record<string, unknown>;
-    hints?: Record<string, unknown>;
-    values?: Record<string, unknown>;
-  };
+      type: "config-form";
+      pluginId: string;
+      pluginName?: string;
+      schema: Record<string, unknown>;
+      hints?: Record<string, unknown>;
+      values?: Record<string, unknown>;
+    };
 
 /** Regex matching fenced JSON code blocks: ```json ... ``` or ``` ... ``` */
 const FENCED_JSON_RE_SERVER = /```(?:json)?\s*\n([\s\S]*?)```/g;
@@ -1323,10 +1323,10 @@ export function discoverPluginsFromManifest(): PluginEntry[] {
             : filteredConfigKeys.length === 0;
           const filteredParams = p.pluginParameters
             ? Object.fromEntries(
-              Object.entries(p.pluginParameters).filter(
-                ([k]) => !HIDDEN_KEYS.has(k),
-              ),
-            )
+                Object.entries(p.pluginParameters).filter(
+                  ([k]) => !HIDDEN_KEYS.has(k),
+                ),
+              )
             : undefined;
           const parameters = filteredParams
             ? buildParamDefs(filteredParams)
@@ -1798,17 +1798,17 @@ async function discoverSkills(
       // eslint-disable-next-line -- runtime service is loosely typed; cast via unknown
       const svc = service as unknown as
         | {
-          getLoadedSkills?: () => Array<{
-            slug: string;
-            name: string;
-            description: string;
-            source: string;
-            path: string;
-          }>;
-          getSkillScanStatus?: (
-            slug: string,
-          ) => "clean" | "warning" | "critical" | "blocked" | null;
-        }
+            getLoadedSkills?: () => Array<{
+              slug: string;
+              name: string;
+              description: string;
+              source: string;
+              path: string;
+            }>;
+            getSkillScanStatus?: (
+              slug: string,
+            ) => "clean" | "warning" | "critical" | "blocked" | null;
+          }
         | undefined;
       if (svc && typeof svc.getLoadedSkills === "function") {
         const loadedSkills = svc.getLoadedSkills();
@@ -2061,7 +2061,7 @@ function isAbortError(error: unknown): boolean {
   return error instanceof DOMException
     ? error.name === "AbortError" || error.name === "TimeoutError"
     : error instanceof Error &&
-    (error.name === "AbortError" || error.name === "TimeoutError");
+        (error.name === "AbortError" || error.name === "TimeoutError");
 }
 
 function createTimeoutError(message: string): Error {
@@ -2171,14 +2171,14 @@ export async function streamResponseBodyWithByteLimit(
   const streamTimeoutPromise =
     typeof timeoutMs === "number" && timeoutMs > 0
       ? new Promise<never>((_resolve, reject) => {
-        streamTimeoutHandle = setTimeout(() => {
-          reject(
-            createTimeoutError(
-              `Upstream response body timed out after ${timeoutMs}ms`,
-            ),
-          );
-        }, timeoutMs);
-      })
+          streamTimeoutHandle = setTimeout(() => {
+            reject(
+              createTimeoutError(
+                `Upstream response body timed out after ${timeoutMs}ms`,
+              ),
+            );
+          }, timeoutMs);
+        })
       : null;
 
   try {
@@ -2591,7 +2591,7 @@ async function generateChatResponse(
   let activeStreamSource: StreamSource = "unset";
   const messageSource =
     typeof message.content.source === "string" &&
-      message.content.source.trim().length > 0
+    message.content.source.trim().length > 0
       ? message.content.source
       : "api";
   const emitChunk = (chunk: string): void => {
@@ -2661,8 +2661,8 @@ async function generateChatResponse(
 
   let result:
     | Awaited<
-      ReturnType<NonNullable<AgentRuntime["messageService"]>["handleMessage"]>
-    >
+        ReturnType<NonNullable<AgentRuntime["messageService"]>["handleMessage"]>
+      >
     | undefined;
   let _handlerError: unknown = null;
   try {
@@ -2696,13 +2696,13 @@ async function generateChatResponse(
       {
         onStreamChunk: opts?.onChunk
           ? async (chunk: string) => {
-            if (opts?.isAborted?.()) {
-              throw new Error("client_disconnected");
+              if (opts?.isAborted?.()) {
+                throw new Error("client_disconnected");
+              }
+              if (!chunk) return;
+              if (!claimStreamSource("onStreamChunk")) return;
+              appendIncomingText(chunk);
             }
-            if (!chunk) return;
-            if (!claimStreamSource("onStreamChunk")) return;
-            appendIncomingText(chunk);
-          }
           : undefined,
       },
     );
@@ -3093,16 +3093,16 @@ export function buildUserMessages(params: {
   // Persisted message: compact placeholder URL, no raw bytes in DB.
   const messageToStore = compactAttachments?.length
     ? createMessageMemory({
-      id,
-      entityId: userId,
-      roomId,
-      content: {
-        text: prompt,
-        source: "client_chat",
-        channelType,
-        attachments: compactAttachments,
-      },
-    })
+        id,
+        entityId: userId,
+        roomId,
+        content: {
+          text: prompt,
+          source: "client_chat",
+          channelType,
+          attachments: compactAttachments,
+        },
+      })
     : userMessage;
   return { userMessage, messageToStore };
 }
@@ -3151,9 +3151,9 @@ async function readChatRequestPayload(
   // that slipped past the allowlist check.
   const images = Array.isArray(body.images)
     ? (body.images as ChatImageAttachment[]).map((img) => ({
-      ...img,
-      mimeType: img.mimeType.toLowerCase(),
-    }))
+        ...img,
+        mimeType: img.mimeType.toLowerCase(),
+      }))
     : undefined;
   return {
     prompt: body.text.trim(),
@@ -4562,8 +4562,8 @@ function resolveAgentAutomationModeFromConfig(
       : null;
   const agentAutomation =
     features?.agentAutomation &&
-      typeof features.agentAutomation === "object" &&
-      !Array.isArray(features.agentAutomation)
+    typeof features.agentAutomation === "object" &&
+    !Array.isArray(features.agentAutomation)
       ? (features.agentAutomation as Record<string, unknown>)
       : null;
   return parseAgentAutomationMode(agentAutomation?.mode) ?? "full";
@@ -4586,7 +4586,7 @@ function persistAgentAutomationMode(
 
   const features = state.config.features as Record<
     string,
-    boolean | { enabled?: boolean;[k: string]: unknown }
+    boolean | { enabled?: boolean; [k: string]: unknown }
   >;
   const current = features.agentAutomation;
   const currentObject =
@@ -5273,11 +5273,11 @@ function rejectWebSocketUpgrade(
   const body = `${message}\n`;
   socket.write(
     `HTTP/1.1 ${statusCode} ${statusText}\r\n` +
-    "Connection: close\r\n" +
-    "Content-Type: text/plain; charset=utf-8\r\n" +
-    `Content-Length: ${Buffer.byteLength(body)}\r\n` +
-    "\r\n" +
-    body,
+      "Connection: close\r\n" +
+      "Content-Type: text/plain; charset=utf-8\r\n" +
+      `Content-Length: ${Buffer.byteLength(body)}\r\n` +
+      "\r\n" +
+      body,
     () => socket.end(),
   );
 }
@@ -6170,10 +6170,10 @@ function wireCoordinatorEventRouting(st: ServerState): boolean {
               const conv = st.activeConversationId
                 ? st.conversations.get(st.activeConversationId)
                 : Array.from(st.conversations.values()).sort(
-                  (a, b) =>
-                    new Date(b.updatedAt).getTime() -
-                    new Date(a.updatedAt).getTime(),
-                )[0];
+                    (a, b) =>
+                      new Date(b.updatedAt).getTime() -
+                      new Date(a.updatedAt).getTime(),
+                  )[0];
               if (conv) {
                 st.broadcastWs?.({
                   type: "proactive-message",
@@ -6739,8 +6739,8 @@ async function handleRequest(
         const envRoot = config.env as Record<string, unknown>;
         const vars =
           envRoot.vars &&
-            typeof envRoot.vars === "object" &&
-            !Array.isArray(envRoot.vars)
+          typeof envRoot.vars === "object" &&
+          !Array.isArray(envRoot.vars)
             ? (envRoot.vars as Record<string, unknown>)
             : {};
         vars.MILADY_USE_PI_AI = "1";
@@ -8617,8 +8617,8 @@ async function handleRequest(
         try {
           const svc = state.runtime.getService("AGENT_SKILLS_SERVICE") as
             | {
-              getLoadedSkills?: () => Array<{ slug: string; source: string }>;
-            }
+                getLoadedSkills?: () => Array<{ slug: string; source: string }>;
+              }
             | undefined;
           if (svc && typeof svc.getLoadedSkills === "function") {
             for (const s of svc.getLoadedSkills()) {
@@ -8752,12 +8752,12 @@ async function handleRequest(
     try {
       const service = state.runtime.getService("AGENT_SKILLS_SERVICE") as
         | {
-          install?: (
-            slug: string,
-            opts?: { version?: string; force?: boolean },
-          ) => Promise<boolean>;
-          isInstalled?: (slug: string) => Promise<boolean>;
-        }
+            install?: (
+              slug: string,
+              opts?: { version?: string; force?: boolean },
+            ) => Promise<boolean>;
+            isInstalled?: (slug: string) => Promise<boolean>;
+          }
         | undefined;
 
       if (!service || typeof service.install !== "function") {
@@ -8834,8 +8834,8 @@ async function handleRequest(
     try {
       const service = state.runtime.getService("AGENT_SKILLS_SERVICE") as
         | {
-          uninstall?: (slug: string) => Promise<boolean>;
-        }
+            uninstall?: (slug: string) => Promise<boolean>;
+          }
         | undefined;
 
       if (!service || typeof service.uninstall !== "function") {
@@ -9096,12 +9096,12 @@ async function handleRequest(
       try {
         const svc = state.runtime.getService("AGENT_SKILLS_SERVICE") as
           | {
-            getLoadedSkills?: () => Array<{
-              slug: string;
-              path: string;
-              source: string;
-            }>;
-          }
+              getLoadedSkills?: () => Array<{
+                slug: string;
+                path: string;
+                source: string;
+              }>;
+            }
           | undefined;
         if (svc?.getLoadedSkills) {
           const loaded = svc.getLoadedSkills().find((s) => s.slug === skillId);
@@ -9178,12 +9178,12 @@ async function handleRequest(
       try {
         const svc = state.runtime.getService("AGENT_SKILLS_SERVICE") as
           | {
-            getLoadedSkills?: () => Array<{
-              slug: string;
-              path: string;
-              source: string;
-            }>;
-          }
+              getLoadedSkills?: () => Array<{
+                slug: string;
+                path: string;
+                source: string;
+              }>;
+            }
           | undefined;
         if (svc?.getLoadedSkills) {
           const loaded = svc.getLoadedSkills().find((s) => s.slug === skillId);
@@ -9273,12 +9273,12 @@ async function handleRequest(
       try {
         const svc = state.runtime.getService("AGENT_SKILLS_SERVICE") as
           | {
-            getLoadedSkills?: () => Array<{
-              slug: string;
-              path: string;
-              source: string;
-            }>;
-          }
+              getLoadedSkills?: () => Array<{
+                slug: string;
+                path: string;
+                source: string;
+              }>;
+            }
           | undefined;
         if (svc?.getLoadedSkills) {
           const loaded = svc.getLoadedSkills().find((s) => s.slug === skillId);
@@ -9487,12 +9487,12 @@ async function handleRequest(
 
         const service = state.runtime.getService("AGENT_SKILLS_SERVICE") as
           | {
-            install?: (
-              skillSlug: string,
-              opts?: { version?: string; force?: boolean },
-            ) => Promise<boolean>;
-            isInstalled?: (skillSlug: string) => Promise<boolean>;
-          }
+              install?: (
+                skillSlug: string,
+                opts?: { version?: string; force?: boolean },
+              ) => Promise<boolean>;
+              isInstalled?: (skillSlug: string) => Promise<boolean>;
+            }
           | undefined;
 
         if (!service || typeof service.install !== "function") {
@@ -10248,7 +10248,11 @@ async function handleRequest(
     // Clean up disconnected or timed-out sessions
     for (const [id, session] of state.whatsappPairingSessions) {
       const status = session.getStatus();
-      if (status === "disconnected" || status === "timeout" || status === "error") {
+      if (
+        status === "disconnected" ||
+        status === "timeout" ||
+        status === "error"
+      ) {
         session.stop();
         state.whatsappPairingSessions.delete(id);
       }
@@ -10297,8 +10301,8 @@ async function handleRequest(
     const messages =
       state.config && typeof state.config === "object"
         ? ((state.config as Record<string, unknown>).messages as
-          | Record<string, unknown>
-          | undefined)
+            | Record<string, unknown>
+            | undefined)
         : undefined;
     const tts =
       messages && typeof messages === "object"
@@ -10350,8 +10354,8 @@ async function handleRequest(
 
     const requestedVoiceSettings =
       body.voice_settings &&
-        typeof body.voice_settings === "object" &&
-        !Array.isArray(body.voice_settings)
+      typeof body.voice_settings === "object" &&
+      !Array.isArray(body.voice_settings)
         ? body.voice_settings
         : undefined;
 
@@ -10378,7 +10382,7 @@ async function handleRequest(
       model_id: modelId,
       apply_text_normalization:
         body.apply_text_normalization === "on" ||
-          body.apply_text_normalization === "off"
+        body.apply_text_normalization === "off"
           ? body.apply_text_normalization
           : "auto",
     };
@@ -10452,8 +10456,8 @@ async function handleRequest(
           err instanceof Error
             ? err
             : new Error(
-              `ElevenLabs proxy error: ${typeof err === "string" ? err : String(err)}`,
-            ),
+                `ElevenLabs proxy error: ${typeof err === "string" ? err : String(err)}`,
+              ),
         );
         return;
       }
@@ -10570,7 +10574,7 @@ async function handleRequest(
       const p = path.join(avatarDir, `custom-background.${old}`);
       try {
         fs.unlinkSync(p);
-      } catch { }
+      } catch {}
     }
     const bgPath = path.join(avatarDir, `custom-background.${ext}`);
     fs.writeFileSync(bgPath, rawBody);
@@ -10598,7 +10602,7 @@ async function handleRequest(
           found = p;
           break;
         }
-      } catch { }
+      } catch {}
     }
     if (!found) {
       error(res, "No custom background found", 404);
@@ -10962,8 +10966,8 @@ async function handleRequest(
     const localSigner = Boolean(process.env.EVM_PRIVATE_KEY?.trim());
     const bscRpcReady = Boolean(
       process.env.NODEREAL_BSC_RPC_URL?.trim() ||
-      process.env.QUICKNODE_BSC_RPC_URL?.trim() ||
-      process.env.BSC_RPC_URL?.trim(),
+        process.env.QUICKNODE_BSC_RPC_URL?.trim() ||
+        process.env.BSC_RPC_URL?.trim(),
     );
     const canLocalTrade = canUseLocalTradeExecution(tradePermissionMode, false);
     const canAgentAutoTrade = canUseLocalTradeExecution(
@@ -11533,8 +11537,8 @@ async function handleRequest(
         : "30d";
     const source =
       sourceParam === "agent" ||
-        sourceParam === "manual" ||
-        sourceParam === "all"
+      sourceParam === "manual" ||
+      sourceParam === "all"
         ? sourceParam
         : "all";
 
@@ -11622,14 +11626,14 @@ async function handleRequest(
       data: isBnb
         ? "0x"
         : (() => {
-          const iface = new ethers.Interface([
-            "function transfer(address to, uint256 amount) returns (bool)",
-          ]);
-          return iface.encodeFunctionData("transfer", [
-            toAddress,
-            ethers.parseUnits(body.amount?.trim(), decimals),
-          ]);
-        })(),
+            const iface = new ethers.Interface([
+              "function transfer(address to, uint256 amount) returns (bool)",
+            ]);
+            return iface.encodeFunctionData("transfer", [
+              toAddress,
+              ethers.parseUnits(body.amount?.trim(), decimals),
+            ]);
+          })(),
       valueWei: isBnb ? ethers.parseEther(body.amount.trim()).toString() : "0",
       explorerUrl: "https://bscscan.com",
       assetSymbol: body.assetSymbol,
@@ -12932,8 +12936,8 @@ async function handleRequest(
     const localizedExamples =
       lang === "zh-CN"
         ? ((runtime.character as Record<string, unknown>).postExamples_zhCN as
-          | string[]
-          | undefined)
+            | string[]
+            | undefined)
         : undefined;
     const postExamples =
       localizedExamples && localizedExamples.length > 0
@@ -14627,10 +14631,10 @@ async function handleRequest(
         : [],
       parameters: Array.isArray(body.parameters)
         ? (body.parameters as Array<{
-          name: string;
-          description: string;
-          required: boolean;
-        }>)
+            name: string;
+            description: string;
+            required: boolean;
+          }>)
         : [],
       handler,
       enabled: body.enabled !== false,
@@ -15095,9 +15099,9 @@ export async function startApiServer(opts?: {
     | null = null;
   let onAgentMessageFn:
     | ((
-      text: string,
-      state: import("./stream-routes.js").StreamRouteState,
-    ) => Promise<void>)
+        text: string,
+        state: import("./stream-routes.js").StreamRouteState,
+      ) => Promise<void>)
     | null = null;
 
   const trainingServiceCtor = await resolveTrainingServiceCtor();
@@ -15194,7 +15198,7 @@ export async function startApiServer(opts?: {
   );
 
   // Warm per-provider model caches in background (non-blocking)
-  void getOrFetchAllProviders().catch(() => { });
+  void getOrFetchAllProviders().catch(() => {});
 
   // ── Intercept loggers so ALL agent/plugin/service logs appear in the UI ──
   // We patch both the global `logger` singleton from @elizaos/core (used by
@@ -15554,13 +15558,13 @@ export async function startApiServer(opts?: {
         const screenCapture = (globalThis as Record<string, unknown>)
           .__miladyScreenCapture as
           | {
-            isFrameCaptureActive(): boolean;
-            startFrameCapture(opts: {
-              fps?: number;
-              quality?: number;
-              endpoint?: string;
-            }): Promise<void>;
-          }
+              isFrameCaptureActive(): boolean;
+              startFrameCapture(opts: {
+                fps?: number;
+                quality?: number;
+                endpoint?: string;
+              }): Promise<void>;
+            }
           | undefined;
 
         // Build destination registry — all configured destinations
@@ -15582,8 +15586,8 @@ export async function startApiServer(opts?: {
               "retake",
               createRetakeDestination(
                 connectors.retake as
-                | { accessToken?: string; apiUrl?: string }
-                | undefined,
+                  | { accessToken?: string; apiUrl?: string }
+                  | undefined,
               ),
             );
           } catch (err) {
@@ -15710,12 +15714,12 @@ export async function startApiServer(opts?: {
             const msgs = cfg?.messages as Record<string, unknown> | undefined;
             return msgs
               ? {
-                messages: {
-                  tts: msgs.tts as
-                    | import("../config/types.messages").TtsConfig
-                    | undefined,
-                },
-              }
+                  messages: {
+                    tts: msgs.tts as
+                      | import("../config/types.messages").TtsConfig
+                      | undefined,
+                  },
+                }
               : undefined;
           },
         };

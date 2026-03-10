@@ -1,11 +1,11 @@
-import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   AgentStatus,
   StreamEventEnvelope,
   WorkbenchOverview,
 } from "@milady/app-core/api";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AutonomyRunHealthMap } from "../../src/autonomy-events";
 
 interface AutonomousPanelContextStub {

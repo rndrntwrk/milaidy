@@ -1,17 +1,18 @@
 // @vitest-environment jsdom
-import React from "react";
-import TestRenderer, { act } from "react-test-renderer";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import type {
   TrainingDatasetRecord,
   TrainingJobRecord,
   TrainingModelRecord,
   TrainingTrajectoryList,
 } from "@milady/app-core/api";
+import React from "react";
+import TestRenderer, { act } from "react-test-renderer";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 interface FineTuningContextStub {
   t: (key: string) => string;
-  setState: (key: string, value: any) => void;
+  setState: (key: string, value: unknown) => void;
   handleRestart: () => Promise<void>;
   setActionNotice: (
     text: string,
@@ -201,14 +202,19 @@ describe("FineTuningView", () => {
 
     appContext = {
       t: (k: string) => {
-        if (k === "finetuningview.LimitTrajectories") return "Limit trajectories";
-        if (k === "finetuningview.MinLLMCallsPerTr") return "Min LLM calls per trajectory";
-        if (k === "finetuningview.OllamaModelNameO") return "Ollama model name (optional)";
-        if (k === "finetuningview.BaseModelForOllam") return "Base model for Ollama (optional)";
-        if (k === "finetuningview.ProviderModelEG") return 'Provider model (e.g. "ollama/my-model")';
+        if (k === "finetuningview.LimitTrajectories")
+          return "Limit trajectories";
+        if (k === "finetuningview.MinLLMCallsPerTr")
+          return "Min LLM calls per trajectory";
+        if (k === "finetuningview.OllamaModelNameO")
+          return "Ollama model name (optional)";
+        if (k === "finetuningview.BaseModelForOllam")
+          return "Base model for Ollama (optional)";
+        if (k === "finetuningview.ProviderModelEG")
+          return 'Provider model (e.g. "ollama/my-model")';
         return k;
       },
-      setState: vi.fn((key, value) => {
+      setState: vi.fn((_key, _value) => {
         // Mock implementation if needed, otherwise a no-op
       }),
       handleRestart: async () => undefined,
@@ -276,7 +282,7 @@ describe("FineTuningView", () => {
   });
 
   it("loads training data on mount", async () => {
-    let tree: TestRenderer.ReactTestRenderer = null!;
+    let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(FineTuningView));
     });
@@ -297,7 +303,7 @@ describe("FineTuningView", () => {
   });
 
   it("builds dataset from form inputs", async () => {
-    let tree: TestRenderer.ReactTestRenderer = null!;
+    let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(FineTuningView));
     });
@@ -306,15 +312,9 @@ describe("FineTuningView", () => {
     const root = tree?.root;
     try {
       console.log("TREE DUMP:", JSON.stringify(tree?.toJSON(), null, 2));
-    } catch { }
-    const limitInput = findInputByPlaceholder(
-      root,
-      "Limit",
-    );
-    const minCallsInput = findInputByPlaceholder(
-      root,
-      "Min LLM",
-    );
+    } catch {}
+    const limitInput = findInputByPlaceholder(root, "Limit");
+    const minCallsInput = findInputByPlaceholder(root, "Min LLM");
     await act(async () => {
       limitInput.props.onChange({ target: { value: "120" } });
       minCallsInput.props.onChange({ target: { value: "2" } });
@@ -336,7 +336,7 @@ describe("FineTuningView", () => {
 
   it("shows error notice when starting a training job fails", async () => {
     mockClientFns.startTrainingJob.mockRejectedValueOnce(new Error("boom"));
-    let tree: TestRenderer.ReactTestRenderer = null!;
+    let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(FineTuningView));
     });
@@ -353,7 +353,7 @@ describe("FineTuningView", () => {
   });
 
   it("starts a training job and handles live training events", async () => {
-    let tree: TestRenderer.ReactTestRenderer = null!;
+    let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(FineTuningView));
     });
@@ -390,7 +390,7 @@ describe("FineTuningView", () => {
   });
 
   it("cancels an active job", async () => {
-    let tree: TestRenderer.ReactTestRenderer = null!;
+    let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(FineTuningView));
     });
@@ -409,7 +409,7 @@ describe("FineTuningView", () => {
   });
 
   it("imports, activates, benchmarks, and smoke-tests selected model", async () => {
-    let tree: TestRenderer.ReactTestRenderer = null!;
+    let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(FineTuningView));
     });
@@ -417,18 +417,12 @@ describe("FineTuningView", () => {
 
     const root = tree?.root;
 
-    const ollamaNameInput = findInputByPlaceholder(
-      root,
-      "Ollama model name",
-    );
+    const ollamaNameInput = findInputByPlaceholder(root, "Ollama model name");
     const baseModelInput = findInputByPlaceholder(
       root,
       "Base model for Ollama",
     );
-    const providerModelInput = findInputByPlaceholder(
-      root,
-      "Provider model",
-    );
+    const providerModelInput = findInputByPlaceholder(root, "Provider model");
 
     await act(async () => {
       ollamaNameInput.props.onChange({ target: { value: "milady-ft-model" } });

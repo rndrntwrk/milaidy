@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
+
+import type { AppViewerAuthMessage, LogEntry } from "@milady/app-core/api";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AppViewerAuthMessage, LogEntry } from "@milady/app-core/api";
 
 interface GameContextStub {
   activeGameApp: string;

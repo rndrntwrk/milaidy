@@ -16,7 +16,6 @@ const NAV_LABEL_I18N_KEY: Record<string, string> = {
   Apps: "nav.apps",
   Settings: "nav.settings",
   Advanced: "nav.advanced",
-  Cloud: "nav.cloud",
 };
 
 interface NavProps {
@@ -92,10 +91,11 @@ export function Nav({ mobileLeft }: NavProps) {
             <button
               type="button"
               key={group.label}
-              className={`inline-flex items-center gap-2 shrink-0 px-3 xl:px-4 py-2 text-[12px] bg-transparent border border-transparent cursor-pointer transition-all duration-300 rounded-full ${isActive
+              className={`inline-flex items-center gap-2 shrink-0 px-3 xl:px-4 py-2 text-[12px] bg-transparent border border-transparent cursor-pointer transition-all duration-300 rounded-full ${
+                isActive
                   ? "text-accent-fg font-bold bg-accent shadow-[0_0_15px_rgba(var(--accent),0.4)] border-accent/50 scale-105"
                   : "text-muted hover:text-txt hover:bg-bg-hover hover:border-border/50"
-                }`}
+              }`}
               onClick={() => setTab(primaryTab)}
               title={group.description}
             >
@@ -153,10 +153,11 @@ export function Nav({ mobileLeft }: NavProps) {
                     <button
                       key={group.label}
                       type="button"
-                      className={`w-full flex items-center gap-3 px-3 py-3.5 border rounded-xl text-[14px] font-medium transition-all duration-300 cursor-pointer min-h-[48px] ${isActive
+                      className={`w-full flex items-center gap-3 px-3 py-3.5 border rounded-xl text-[14px] font-medium transition-all duration-300 cursor-pointer min-h-[48px] ${
+                        isActive
                           ? "border-accent/50 bg-accent text-accent-fg shadow-[0_0_15px_rgba(var(--accent),0.3)] scale-[1.02]"
                           : "border-transparent bg-transparent text-txt hover:border-border/50 hover:bg-bg-hover"
-                        }`}
+                      }`}
                       style={{ animationDelay: `${index * 50}ms` }}
                       onClick={() => {
                         setTab(primaryTab);
@@ -164,8 +165,9 @@ export function Nav({ mobileLeft }: NavProps) {
                       }}
                     >
                       <span
-                        className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 ${isActive ? "bg-accent/20" : "bg-bg-accent"
-                          }`}
+                        className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 ${
+                          isActive ? "bg-accent/20" : "bg-bg-accent"
+                        }`}
                       >
                         <Icon
                           className={`w-4 h-4 ${isActive ? "text-accent" : "text-muted"}`}

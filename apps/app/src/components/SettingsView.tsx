@@ -26,6 +26,7 @@ import {
   AlertTriangle,
   Bot,
   ChevronRight,
+  Cloud,
   Download,
   Image,
   Loader2,
@@ -46,6 +47,7 @@ import { useApp } from "../AppContext";
 import { CodingAgentSettingsSection } from "./CodingAgentSettingsSection";
 import { ConfigPageView } from "./ConfigPageView";
 import { MediaSettingsSection } from "./MediaSettingsSection";
+import { CloudDashboard } from "./MiladyCloudDashboard";
 import { PermissionsSection } from "./PermissionsSection";
 import { ProviderSwitcher } from "./ProviderSwitcher";
 import { VoiceConfigView } from "./VoiceConfigView";
@@ -69,6 +71,12 @@ const SETTINGS_SECTIONS: SettingsSectionDef[] = [
     label: "AI Model",
     icon: Bot,
     description: "Provider and model settings",
+  },
+  {
+    id: "cloud",
+    label: "Milady Cloud",
+    icon: Cloud,
+    description: "Manage your cloud agents and resources",
   },
   {
     id: "coding-agents",
@@ -184,14 +192,16 @@ function SettingsSidebar({
                 key={section.id}
                 type="button"
                 onClick={() => onSectionChange(section.id)}
-                className={`flex items-center gap-3 px-3 py-3 rounded-2xl text-left transition-all duration-300 min-w-fit lg:min-w-0 whitespace-nowrap lg:whitespace-normal group ${isActive
-                  ? "bg-accent text-accent-fg shadow-[0_0_15px_rgba(var(--accent),0.2)] scale-[1.01]"
-                  : "text-txt hover:bg-bg-hover hover:border-border/50 border border-transparent"
-                  }`}
+                className={`flex items-center gap-3 px-3 py-3 rounded-2xl text-left transition-all duration-300 min-w-fit lg:min-w-0 whitespace-nowrap lg:whitespace-normal group ${
+                  isActive
+                    ? "bg-accent text-accent-fg shadow-[0_0_15px_rgba(var(--accent),0.2)] scale-[1.01]"
+                    : "text-txt hover:bg-bg-hover hover:border-border/50 border border-transparent"
+                }`}
               >
                 <span
-                  className={`w-9 h-9 flex items-center justify-center shrink-0 rounded-lg ${isActive ? "bg-accent-foreground/20" : "bg-bg-accent"
-                    }`}
+                  className={`w-9 h-9 flex items-center justify-center shrink-0 rounded-lg ${
+                    isActive ? "bg-accent-foreground/20" : "bg-bg-accent"
+                  }`}
                 >
                   <Icon className="w-4 h-4" />
                 </span>
@@ -595,16 +605,16 @@ export function SettingsView({
 
   const {
     // Milady Cloud
-    miladyCloudEnabled: miladyCloudEnabled,
-    miladyCloudConnected: miladyCloudConnected,
-    miladyCloudCredits: miladyCloudCredits,
-    miladyCloudCreditsLow: miladyCloudCreditsLow,
-    miladyCloudCreditsCritical: miladyCloudCreditsCritical,
-    miladyCloudTopUpUrl: miladyCloudTopUpUrl,
-    miladyCloudUserId: miladyCloudUserId,
-    miladyCloudLoginBusy: miladyCloudLoginBusy,
-    miladyCloudLoginError: miladyCloudLoginError,
-    miladyCloudDisconnecting: miladyCloudDisconnecting,
+    miladyCloudEnabled,
+    miladyCloudConnected,
+    miladyCloudCredits,
+    miladyCloudCreditsLow,
+    miladyCloudCreditsCritical,
+    miladyCloudTopUpUrl,
+    miladyCloudUserId,
+    miladyCloudLoginBusy,
+    miladyCloudLoginError,
+    miladyCloudDisconnecting,
     // Plugins
     plugins,
     pluginSaving,
@@ -726,10 +736,11 @@ export function SettingsView({
                 <button
                   key={lang.id}
                   type="button"
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md font-medium transition-colors duration-200 ${uiLanguage === lang.id
-                    ? "bg-accent text-accent-fg shadow-sm"
-                    : "text-txt hover:bg-bg-hover"
-                    }`}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md font-medium transition-colors duration-200 ${
+                    uiLanguage === lang.id
+                      ? "bg-accent text-accent-fg shadow-sm"
+                      : "text-txt hover:bg-bg-hover"
+                  }`}
                   onClick={() => {
                     setUiLanguage(lang.id);
                     setActionNotice(
@@ -789,6 +800,15 @@ export function SettingsView({
         >
           <CodingAgentSettingsSection />
         </SectionCard>
+      )}
+
+      {visibleSectionIds.has("cloud") && (
+        <section
+          id="cloud"
+          className="bg-bg rounded-2xl border border-border/50 overflow-hidden relative"
+        >
+          <CloudDashboard />
+        </section>
       )}
 
       {visibleSectionIds.has("wallet-rpc") && (

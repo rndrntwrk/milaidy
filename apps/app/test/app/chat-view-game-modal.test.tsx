@@ -68,7 +68,7 @@ function createContext(
     chatSending: false,
     chatFirstTokenReceived: false,
     conversationMessages: [],
-    handleChatSend: vi.fn(async () => { }),
+    handleChatSend: vi.fn(async () => {}),
     handleChatStop: vi.fn(),
     setState: vi.fn(),
     droppedFiles: [],
@@ -137,7 +137,7 @@ describe("ChatView game-modal variant", () => {
   });
 
   it("keeps mic and send controls usable in game-modal", async () => {
-    const handleChatSend = vi.fn(async () => { });
+    const handleChatSend = vi.fn(async () => {});
     mockUseApp.mockReturnValue(
       createContext({
         handleChatSend,
@@ -161,17 +161,21 @@ describe("ChatView game-modal variant", () => {
     });
 
     // Find mic button by aria-label
-    const micButton = tree?.root.findByProps({ "aria-label": "chat.voiceInput" });
+    const micButton = tree?.root.findByProps({
+      "aria-label": "chat.voiceInput",
+    });
     expect(micButton).toBeTruthy();
 
-    // Find send button - in game-modal it's the one with the Send icon and no text, 
+    // Find send button - in game-modal it's the one with the Send icon and no text,
     // but it has handleChatSend in onClick.
     const buttons = tree?.root.findAllByType("button" as React.ElementType);
-    const sendButton = buttons.find(b => b.props.onClick && b.props.onClick.toString().includes("handleChatSend"));
+    const sendButton = buttons.find((b) =>
+      b.props.onClick?.toString().includes("handleChatSend"),
+    );
     expect(sendButton).toBeTruthy();
 
     await act(async () => {
-      sendButton!.props.onClick();
+      sendButton?.props.onClick();
     });
     expect(handleChatSend).toHaveBeenCalled();
   });
@@ -195,7 +199,9 @@ describe("ChatView game-modal variant", () => {
     expect(textarea.props.placeholder).toBe("chat.agentStarting");
 
     // Mic button should also be disabled and have the correct aria-label
-    const micButton = tree?.root.findByProps({ "aria-label": "chat.agentStarting" });
+    const micButton = tree?.root.findByProps({
+      "aria-label": "chat.agentStarting",
+    });
     expect(micButton.props.disabled).toBe(true);
   });
 });

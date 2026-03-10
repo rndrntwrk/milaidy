@@ -7,12 +7,7 @@
 
 import { client } from "@milady/app-core/api";
 import { STOP_EMOTE_EVENT } from "@milady/app-core/events";
-import {
-  getVrmNeedsFlip,
-  getVrmPreviewUrl,
-  getVrmUrl,
-  useApp,
-} from "@milady/app-core/state";
+import { getVrmPreviewUrl, getVrmUrl, useApp } from "@milady/app-core/state";
 import { resolveAppAssetUrl } from "@milady/app-core/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AvatarLoader } from "./avatar/AvatarLoader";
@@ -41,7 +36,6 @@ export function ChatAvatar({
     selectedVrmIndex > 0
       ? getVrmPreviewUrl(selectedVrmIndex)
       : getVrmPreviewUrl(1);
-  const needsFlip = selectedVrmIndex > 0 && getVrmNeedsFlip(selectedVrmIndex);
 
   const vrmEngineRef = useRef<VrmEngine | null>(null);
   const [engineReady, setEngineReady] = useState(false);
@@ -127,7 +121,6 @@ export function ChatAvatar({
               isSpeaking={isSpeaking}
               interactive
               interactiveMode="orbitZoom"
-              forceFaceCameraFlip={needsFlip}
               onEngineReady={handleEngineReady}
               onEngineState={handleEngineState}
             />

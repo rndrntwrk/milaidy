@@ -80,11 +80,11 @@ function createOnboardingContext(
     miladyCloudConnected: false,
     miladyCloudLoginBusy: false,
     miladyCloudLoginError: "",
-    handleOnboardingNext: vi.fn(async () => { }),
+    handleOnboardingNext: vi.fn(async () => {}),
     handleOnboardingBack: vi.fn(),
     setState: vi.fn(),
     setTheme: vi.fn(),
-    handleCloudLogin: vi.fn(async () => { }),
+    handleCloudLogin: vi.fn(async () => {}),
     ...overrides,
   };
 }
@@ -107,7 +107,7 @@ describe("Onboarding language mode", () => {
       tree = TestRenderer.create(React.createElement(OnboardingWizard));
     });
 
-    expect(collectText(tree!.root)).toContain("onboarding.whereShouldILive");
+    expect(collectText(tree?.root)).toContain("onboarding.whereShouldILive");
   });
 
   it("shows chinese copy when uiLanguage is zh-CN", async () => {
@@ -119,7 +119,7 @@ describe("Onboarding language mode", () => {
       tree = TestRenderer.create(React.createElement(OnboardingWizard));
     });
 
-    const text = collectText(tree!.root);
+    const text = collectText(tree?.root);
     expect(text).toContain("onboarding.whereShouldILive");
     expect(text).toContain("onboarding.pickHowToRun");
   });

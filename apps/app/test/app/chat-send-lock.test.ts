@@ -83,7 +83,7 @@ const { mockClient } = vi.hoisted(() => ({
     sendWsMessage: vi.fn(),
     connectWs: vi.fn(),
     disconnectWs: vi.fn(),
-    onWsEvent: vi.fn(() => () => { }),
+    onWsEvent: vi.fn(() => () => {}),
     getAgentEvents: vi.fn(async () => ({ events: [], latestEventId: null })),
     getStatus: vi.fn(async () => ({
       state: "running",
@@ -254,10 +254,10 @@ describe("chat send locking", () => {
       memories: [],
       knowledge: [],
     });
-    mockClient.sendWsMessage.mockImplementation(() => { });
-    mockClient.connectWs.mockImplementation(() => { });
-    mockClient.disconnectWs.mockImplementation(() => { });
-    mockClient.onWsEvent.mockReturnValue(() => { });
+    mockClient.sendWsMessage.mockImplementation(() => {});
+    mockClient.connectWs.mockImplementation(() => {});
+    mockClient.disconnectWs.mockImplementation(() => {});
+    mockClient.onWsEvent.mockReturnValue(() => {});
     mockClient.getAgentEvents.mockResolvedValue({
       events: [],
       latestEventId: null,

@@ -129,7 +129,6 @@ export class VrmEngine {
   private vrmName: string | null = null;
   private lookAtTarget = new THREE.Vector3(0, 0.5, 0);
   private readonly idleGlbUrl = resolveAppAssetUrl("animations/idle.glb");
-  private forceFaceCameraFlip = false;
   private cameraAnimation: CameraAnimationConfig = {
     ...DEFAULT_CAMERA_ANIMATION,
   };
@@ -419,9 +418,6 @@ export class VrmEngine {
   setCameraAnimation(config: Partial<CameraAnimationConfig>): void {
     this.cameraAnimation = { ...this.cameraAnimation, ...config };
   }
-  setForceFaceCameraFlip(enabled: boolean): void {
-    this.forceFaceCameraFlip = enabled;
-  }
 
   async playEmote(
     path: string,
@@ -538,11 +534,7 @@ export class VrmEngine {
     } catch {
       /* optional in some versions */
     }
-    if (this.forceFaceCameraFlip) {
-      vrm.scene.updateMatrixWorld(true);
-    } else {
-      this.cameraManager.ensureFacingCamera(vrm, this.camera);
-    }
+    this.cameraManager.ensureFacingCamera(vrm, this.camera);
     if (
       this.loadingAborted ||
       !this.scene ||

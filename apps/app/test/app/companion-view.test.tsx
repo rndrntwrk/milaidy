@@ -9,7 +9,6 @@ const { mockUseApp } = vi.hoisted(() => ({
 
 vi.mock("../../src/AppContext", () => ({
   useApp: () => mockUseApp(),
-  getVrmNeedsFlip: () => false,
   getVrmPreviewUrl: () => "/vrms/previews/milady-1.png",
   getVrmUrl: () => "/vrms/milady-1.vrm",
   getVrmBackgroundUrl: (index: number) =>
@@ -31,15 +30,15 @@ vi.mock("../../src/components/ChatModalView.js", () => ({
     ),
 }));
 
-const mockUploadCustomVrm = vi.fn(async () => { });
-const mockUploadCustomBackground = vi.fn(async () => { });
+const mockUploadCustomVrm = vi.fn(async () => {});
+const mockUploadCustomBackground = vi.fn(async () => {});
 
 vi.mock("@milady/app-core/api", () => ({
   client: {
     uploadCustomVrm: (...args: unknown[]) => mockUploadCustomVrm(...args),
     uploadCustomBackground: (...args: unknown[]) =>
       mockUploadCustomBackground(...args),
-    onWsEvent: vi.fn(() => () => { }),
+    onWsEvent: vi.fn(() => () => {}),
   },
 }));
 
@@ -63,8 +62,8 @@ function createContext() {
     walletLoading: false,
     walletNftsLoading: false,
     walletError: null,
-    loadBalances: vi.fn(async () => { }),
-    loadNfts: vi.fn(async () => { }),
+    loadBalances: vi.fn(async () => {}),
+    loadNfts: vi.fn(async () => {}),
     getBscTradePreflight: vi.fn(async () => ({
       ok: false,
       reasons: ["disabled"],
@@ -135,9 +134,9 @@ function createContext() {
     miladyCloudTopUpUrl: "",
     lifecycleBusy: false,
     lifecycleAction: null,
-    handlePauseResume: vi.fn(async () => { }),
-    handleRestart: vi.fn(async () => { }),
-    copyToClipboard: vi.fn(async () => { }),
+    handlePauseResume: vi.fn(async () => {}),
+    handleRestart: vi.fn(async () => {}),
+    copyToClipboard: vi.fn(async () => {}),
     uiLanguage: "en",
     setUiLanguage: vi.fn(),
     uiShellMode: "companion",
@@ -153,7 +152,7 @@ function text(node: TestRenderer.ReactTestInstance): string {
     .join("");
 }
 
-function countByClass(
+function _countByClass(
   node: TestRenderer.ReactTestInstance,
   className: string,
 ): number {

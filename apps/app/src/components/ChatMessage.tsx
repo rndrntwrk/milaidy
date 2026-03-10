@@ -2,12 +2,12 @@
  * Enhanced chat message component with actions and better UX.
  */
 
-import { useTimeout } from "../hooks/useTimeout";
 import type { ConversationMessage } from "@milady/app-core/api";
 import { Button } from "@milady/ui";
 import { Check, Copy, RefreshCw, Trash2 } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useApp } from "../AppContext";
+import { useTimeout } from "../hooks/useTimeout";
 import { MessageContent } from "./MessageContent";
 
 interface ChatMessageProps {
@@ -56,7 +56,7 @@ export function ChatMessage({
     }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  }, [message.text, onCopy]);
+  }, [message.text, onCopy, setTimeout]);
 
   return (
     <article

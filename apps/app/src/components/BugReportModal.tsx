@@ -1,10 +1,10 @@
-import { useTimeout } from "../hooks/useTimeout";
 import { client } from "@milady/app-core/api";
 import { Button, Input } from "@milady/ui";
 import { ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "../AppContext";
 import { useBugReport } from "../hooks/useBugReport";
+import { useTimeout } from "../hooks/useTimeout";
 
 const ENV_OPTIONS = ["macOS", "Windows", "Linux", "Other"] as const;
 const GITHUB_NEW_ISSUE_URL =
@@ -85,13 +85,13 @@ export function BugReportModal() {
                     : "Other",
           }));
       })
-      .catch(() => { });
+      .catch(() => {});
     setTimeout(() => descRef.current?.focus(), 50);
 
     return () => {
       cancelled = true;
     };
-  }, [isOpen]);
+  }, [isOpen, setTimeout]);
 
   const updateField = useCallback(
     <K extends keyof BugReportForm>(key: K, value: BugReportForm[K]) => {

@@ -10,11 +10,11 @@ import {
   type OnboardingOptions,
   type PluginParamDef,
 } from "@milady/app-core/api";
-import { useTimeout } from "../hooks/useTimeout";
 import type { ConfigUiHint } from "@milady/app-core/types";
 import { Button, Input } from "@milady/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "../AppContext";
+import { useTimeout } from "../hooks/useTimeout";
 import { ApiKeyConfig } from "./ApiKeyConfig";
 import type { JsonSchemaObject } from "./config-catalog";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer";
@@ -60,15 +60,15 @@ export interface ProviderSwitcherProps {
 }
 
 export function ProviderSwitcher({
-  miladyCloudEnabled: miladyCloudEnabled,
-  miladyCloudConnected: miladyCloudConnected,
-  miladyCloudCredits: miladyCloudCredits,
-  miladyCloudCreditsLow: miladyCloudCreditsLow,
-  miladyCloudCreditsCritical: miladyCloudCreditsCritical,
-  miladyCloudTopUpUrl: miladyCloudTopUpUrl,
-  miladyCloudUserId: miladyCloudUserId,
-  miladyCloudLoginBusy: miladyCloudLoginBusy,
-  miladyCloudLoginError: miladyCloudLoginError,
+  miladyCloudEnabled,
+  miladyCloudConnected,
+  miladyCloudCredits,
+  miladyCloudCreditsLow,
+  miladyCloudCreditsCritical,
+  miladyCloudTopUpUrl,
+  miladyCloudUserId,
+  miladyCloudLoginBusy,
+  miladyCloudLoginError,
   miladyCloudDisconnecting: cloudDisconnecting,
   plugins,
   pluginSaving,
@@ -162,10 +162,14 @@ export function ProviderSwitcher({
         const envLarge =
           typeof vars.LARGE_MODEL === "string" ? vars.LARGE_MODEL : "";
         setCurrentSmallModel(
-          models?.small || envSmall || (miladyCloudEnabledCfg ? defaultSmall : ""),
+          models?.small ||
+            envSmall ||
+            (miladyCloudEnabledCfg ? defaultSmall : ""),
         );
         setCurrentLargeModel(
-          models?.large || envLarge || (miladyCloudEnabledCfg ? defaultLarge : ""),
+          models?.large ||
+            envLarge ||
+            (miladyCloudEnabledCfg ? defaultLarge : ""),
         );
         const rawPiAi =
           (typeof vars.MILADY_USE_PI_AI === "string"
@@ -252,8 +256,8 @@ export function ProviderSwitcher({
       : selectedProviderId === "pi-ai"
         ? "pi-ai"
         : selectedProviderId &&
-          (allAiProviders.some((p) => p.id === selectedProviderId) ||
-            isSubscriptionId(selectedProviderId))
+            (allAiProviders.some((p) => p.id === selectedProviderId) ||
+              isSubscriptionId(selectedProviderId))
           ? selectedProviderId
           : cloudHandlesInference
             ? "__cloud__"
@@ -267,9 +271,9 @@ export function ProviderSwitcher({
 
   const selectedProvider =
     resolvedSelectedId &&
-      resolvedSelectedId !== "__cloud__" &&
-      resolvedSelectedId !== "pi-ai" &&
-      !isSubscriptionId(resolvedSelectedId)
+    resolvedSelectedId !== "__cloud__" &&
+    resolvedSelectedId !== "pi-ai" &&
+    !isSubscriptionId(resolvedSelectedId)
       ? (allAiProviders.find((p) => p.id === resolvedSelectedId) ?? null)
       : null;
 
@@ -424,7 +428,7 @@ export function ProviderSwitcher({
     } finally {
       setPiAiSaving(false);
     }
-  }, [piAiModelSpec]);
+  }, [piAiModelSpec, setTimeout]);
 
   const handleSelectPiAi = useCallback(async () => {
     hasManualSelection.current = true;

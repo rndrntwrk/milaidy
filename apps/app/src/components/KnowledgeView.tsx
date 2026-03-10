@@ -192,10 +192,11 @@ function UploadZone({
   return (
     <div className="mb-8">
       <section
-        className={`border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center transition-all duration-300 relative overflow-hidden backdrop-blur-sm ${dragOver
-          ? "border-accent bg-accent/5 scale-[1.02] shadow-[0_0_30px_rgba(var(--accent),0.15)]"
-          : "border-border/40 hover:border-accent/40 bg-card/20 hover:bg-card/40"
-          } ${uploading ? "opacity-50 pointer-events-none" : ""}`}
+        className={`border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center transition-all duration-300 relative overflow-hidden backdrop-blur-sm ${
+          dragOver
+            ? "border-accent bg-accent/5 scale-[1.02] shadow-[0_0_30px_rgba(var(--accent),0.15)]"
+            : "border-border/40 hover:border-accent/40 bg-card/20 hover:bg-card/40"
+        } ${uploading ? "opacity-50 pointer-events-none" : ""}`}
         onDragOver={(e) => {
           e.preventDefault();
           setDragOver(true);

@@ -7,10 +7,11 @@ vi.mock("../../src/AppContext", () => ({
     uiLanguage: "en",
     t: (k: string) => {
       if (k === "startupfailureview.StartupFailed") return "Startup Failed:";
-      if (k === "startupfailureview.ThisOriginDoesNot") return "This origin does not host the agent backend.";
+      if (k === "startupfailureview.ThisOriginDoesNot")
+        return "This origin does not host the agent backend.";
       if (k === "startupfailureview.OpenApp") return "Open App";
       return k;
-    }
+    },
   }),
 }));
 

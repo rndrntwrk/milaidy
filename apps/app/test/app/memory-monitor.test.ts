@@ -3,8 +3,8 @@
  * Tests the standalone startMemoryLeakDetector function which doesn't require React.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { startMemoryLeakDetector } from "@milady/app-core/hooks";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let mockDateNow = 1000000;
 vi.spyOn(Date, "now").mockImplementation(() => mockDateNow);

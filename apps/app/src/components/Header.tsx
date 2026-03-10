@@ -19,12 +19,12 @@ import { AgentModeDropdown } from "./shared/AgentModeDropdown";
 export function Header() {
   const {
     agentStatus,
-    miladyCloudEnabled: miladyCloudEnabled,
-    miladyCloudConnected: miladyCloudConnected,
-    miladyCloudCredits: miladyCloudCredits,
-    miladyCloudCreditsCritical: miladyCloudCreditsCritical,
-    miladyCloudCreditsLow: miladyCloudCreditsLow,
-    miladyCloudTopUpUrl: miladyCloudTopUpUrl,
+    miladyCloudEnabled,
+    miladyCloudConnected,
+    miladyCloudCredits,
+    miladyCloudCreditsCritical,
+    miladyCloudCreditsLow,
+    miladyCloudTopUpUrl,
     lifecycleBusy,
     lifecycleAction,
     handlePauseResume,

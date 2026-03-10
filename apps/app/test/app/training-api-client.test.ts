@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { MiladyClient } from "@milady/app-core/api";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 describe("MiladyClient training endpoints", () => {
   const originalFetch = globalThis.fetch;

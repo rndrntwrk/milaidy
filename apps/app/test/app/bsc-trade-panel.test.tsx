@@ -15,7 +15,11 @@ function findByTestId(
 
 const mockSetActionNotice = vi.fn();
 vi.mock("../../src/AppContext", () => ({
-  useApp: () => ({ t: (_k: string) => "Latest quote", setActionNotice: mockSetActionNotice, copyToClipboard: vi.fn().mockResolvedValue(undefined) }),
+  useApp: () => ({
+    t: (_k: string) => "Latest quote",
+    setActionNotice: mockSetActionNotice,
+    copyToClipboard: vi.fn().mockResolvedValue(undefined),
+  }),
 }));
 
 describe("BscTradePanel", () => {
@@ -61,7 +65,7 @@ describe("BscTradePanel", () => {
   });
 
   it("quotes the current trade inputs from the toolbar button", async () => {
-    const setActionNotice = mockSetActionNotice;
+    const _setActionNotice = mockSetActionNotice;
     const getBscTradePreflight = vi.fn().mockResolvedValue({
       ok: true,
       reasons: [],

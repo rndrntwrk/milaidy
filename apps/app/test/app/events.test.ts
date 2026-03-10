@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import { describe, expect, expectTypeOf, it, vi } from "vitest";
 
 import {
   AGENT_READY_EVENT,
@@ -19,6 +18,7 @@ import {
   TRAY_ACTION_EVENT,
   VOICE_CONFIG_UPDATED_EVENT,
 } from "@milady/app-core/events";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 
 describe("event constants", () => {
   it("exports all expected milady:* event names", () => {

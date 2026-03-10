@@ -211,14 +211,14 @@ function parseGeneratedAction(payload: unknown): {
       url,
       headers: parseHeaders(rawHttp.headers).length
         ? parseHeaders(rawHttp.headers).reduce<Record<string, string>>(
-          (acc, item) => {
-            if (item.key) {
-              acc[item.key] = item.value;
-            }
-            return acc;
-          },
-          {},
-        )
+            (acc, item) => {
+              if (item.key) {
+                acc[item.key] = item.value;
+              }
+              return acc;
+            },
+            {},
+          )
         : undefined,
       bodyTemplate: toNonEmptyString(rawHttp.bodyTemplate),
     };
@@ -381,9 +381,9 @@ export function CustomActionEditor({
         setHttpHeaders(
           Object.keys(headers).length > 0
             ? Object.entries(headers).map(([key, value]) => ({
-              key,
-              value,
-            }))
+                key,
+                value,
+              }))
             : [{ key: "", value: "" }],
         );
         setHttpBody(handler.bodyTemplate || "");
@@ -441,9 +441,9 @@ export function CustomActionEditor({
       setHttpHeaders(
         handler.headers
           ? Object.entries(handler.headers).map(([key, value]) => ({
-            key,
-            value,
-          }))
+              key,
+              value,
+            }))
           : [{ key: "", value: "" }],
       );
     } else if (parsed.handlerType === "shell") {
@@ -833,10 +833,11 @@ export function CustomActionEditor({
                     setHandlerType(type);
                     setFormError("");
                   }}
-                  className={`px-3 py-1.5 text-xs border cursor-pointer ${handlerType === type
-                    ? "border-accent bg-accent text-white"
-                    : "border-border text-muted hover:text-txt"
-                    }`}
+                  className={`px-3 py-1.5 text-xs border cursor-pointer ${
+                    handlerType === type
+                      ? "border-accent bg-accent text-white"
+                      : "border-border text-muted hover:text-txt"
+                  }`}
                 >
                   {type === "http"
                     ? "HTTP Request"
@@ -1108,11 +1109,7 @@ export function CustomActionEditor({
               {testing ? "Testing..." : "Test"}
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onClose}
-          >
+          <Button variant="outline" size="sm" onClick={onClose}>
             {t("customactioneditor.Cancel")}
           </Button>
           <Button

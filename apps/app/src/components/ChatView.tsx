@@ -11,7 +11,6 @@ import {
   type ImageAttachment,
   type VoiceConfig,
 } from "@milady/app-core/api";
-import { useTimeout } from "../hooks/useTimeout";
 import { VOICE_CONFIG_UPDATED_EVENT } from "@milady/app-core/events";
 import { Button, Textarea } from "@milady/ui";
 import { Mic, Paperclip, Send, Smile, Square } from "lucide-react";
@@ -26,6 +25,7 @@ import {
   useState,
 } from "react";
 import { getVrmPreviewUrl, useApp } from "../AppContext";
+import { useTimeout } from "../hooks/useTimeout";
 import {
   useVoiceChat,
   type VoicePlaybackStartEvent,
@@ -201,7 +201,7 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
       setState("chatInput", text);
       setTimeout(() => void handleChatSend("VOICE_DM"), 50);
     },
-    [isComposerLocked, setState, handleChatSend],
+    [isComposerLocked, setState, handleChatSend, setTimeout],
   );
 
   const handleVoicePlaybackStart = useCallback(
@@ -460,10 +460,11 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
               return (
                 <GameModalMessage key={msg.id} msg={msg}>
                   <div
-                    className={`max-w-[85%] rounded-2xl px-4 py-3 text-[15px] leading-relaxed ${isUser
-                      ? "bg-accent/80 text-white rounded-br-sm"
-                      : "bg-black/30 text-white/90 rounded-bl-sm"
-                      }`}
+                    className={`max-w-[85%] rounded-2xl px-4 py-3 text-[15px] leading-relaxed ${
+                      isUser
+                        ? "bg-accent/80 text-white rounded-br-sm"
+                        : "bg-black/30 text-white/90 rounded-bl-sm"
+                    }`}
                   >
                     <div
                       className="break-words"
@@ -609,10 +610,11 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
             <Button
               variant="ghost"
               size="icon"
-              className={`flex shrink-0 items-center justify-center w-[46px] h-[46px] mb-1.5 rounded-full transition-all ${voice.isListening
-                ? "bg-accent/20 text-accent"
-                : "bg-transparent text-white/50 hover:bg-white/10 hover:text-white"
-                } ${isComposerLocked ? "opacity-50" : ""}`}
+              className={`flex shrink-0 items-center justify-center w-[46px] h-[46px] mb-1.5 rounded-full transition-all ${
+                voice.isListening
+                  ? "bg-accent/20 text-accent"
+                  : "bg-transparent text-white/50 hover:bg-white/10 hover:text-white"
+              } ${isComposerLocked ? "opacity-50" : ""}`}
               onClick={voice.toggleListening}
               aria-label={
                 isAgentStarting
@@ -699,10 +701,11 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
           <Button
             variant={chatPendingImages.length > 0 ? "secondary" : "ghost"}
             size="icon"
-            className={`h-[38px] w-[38px] shrink-0 ${chatPendingImages.length > 0
-              ? "bg-accent/10 sm:hover:bg-accent/20 border-accent/20 text-accent/80 hover:text-accent shadow-sm"
-              : "text-muted hover:bg-black/5 hover:text-txt"
-              }`}
+            className={`h-[38px] w-[38px] shrink-0 ${
+              chatPendingImages.length > 0
+                ? "bg-accent/10 sm:hover:bg-accent/20 border-accent/20 text-accent/80 hover:text-accent shadow-sm"
+                : "text-muted hover:bg-black/5 hover:text-txt"
+            }`}
             onClick={() => fileInputRef.current?.click()}
             aria-label="Attach image"
             title={t("chatview.AttachImage")}
@@ -716,10 +719,11 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
             <Button
               variant={voice.isListening ? "default" : "ghost"}
               size="icon"
-              className={`h-[38px] w-[38px] shrink-0 ${voice.isListening
-                ? "bg-accent shadow-[0_0_10px_rgba(124,58,237,0.4)] animate-pulse"
-                : "text-muted hover:bg-black/5 hover:text-txt"
-                }`}
+              className={`h-[38px] w-[38px] shrink-0 ${
+                voice.isListening
+                  ? "bg-accent shadow-[0_0_10px_rgba(124,58,237,0.4)] animate-pulse"
+                  : "text-muted hover:bg-black/5 hover:text-txt"
+              }`}
               onClick={voice.toggleListening}
               aria-label={
                 isAgentStarting

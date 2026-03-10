@@ -36,7 +36,7 @@ const { mockClient } = vi.hoisted(() => ({
     sendWsMessage: vi.fn(),
     connectWs: vi.fn(),
     disconnectWs: vi.fn(),
-    onWsEvent: vi.fn(() => () => { }),
+    onWsEvent: vi.fn(() => () => {}),
     getAgentEvents: vi.fn(async () => ({ events: [], latestEventId: null })),
     getStatus: vi.fn(async () => ({
       state: "running",
@@ -85,7 +85,7 @@ function createDeferred<T>() {
 }
 
 type ProbeApi = {
-  setState: (key: string, value: any) => void;
+  setState: (key: string, value: unknown) => void;
   handleOnboardingNext: () => Promise<void>;
   handleOnboardingBack: () => void;
   handleCloudLogin: () => Promise<void>;
@@ -97,6 +97,7 @@ function Probe(props: { onReady: (api: ProbeApi) => void }) {
 
   useEffect(() => {
     onReady({
+      // biome-ignore lint/suspicious/noExplicitAny: test probe
       setState: (key, value) => app.setState(key as any, value),
       handleOnboardingNext: app.handleOnboardingNext,
       handleOnboardingBack: app.handleOnboardingBack,
@@ -153,10 +154,10 @@ describe("cloud login locking", () => {
         },
       ],
     });
-    mockClient.sendWsMessage.mockImplementation(() => { });
-    mockClient.connectWs.mockImplementation(() => { });
-    mockClient.disconnectWs.mockImplementation(() => { });
-    mockClient.onWsEvent.mockReturnValue(() => { });
+    mockClient.sendWsMessage.mockImplementation(() => {});
+    mockClient.connectWs.mockImplementation(() => {});
+    mockClient.disconnectWs.mockImplementation(() => {});
+    mockClient.onWsEvent.mockReturnValue(() => {});
     mockClient.getAgentEvents.mockResolvedValue({
       events: [],
       latestEventId: null,

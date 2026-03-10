@@ -90,7 +90,8 @@ describe("SaveCommandModal keyboard behavior", () => {
 
     const saveButton = tree.root.find(
       (node) =>
-        node.type === "button" && node.props.children === "savecommandmodal.Save",
+        node.type === "button" &&
+        node.props.children === "savecommandmodal.Save",
     );
 
     act(() => {

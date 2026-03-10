@@ -424,8 +424,7 @@ describe("Settings Reset UI", () => {
     // Find the Danger Zone text
     const dangerZoneText = renderedTree.root.findAll(
       (node) =>
-        node.type === "span" &&
-        node.children.includes("settings.dangerZone"),
+        node.type === "span" && node.children.includes("settings.dangerZone"),
     );
     expect(dangerZoneText.length).toBeGreaterThan(0);
   });

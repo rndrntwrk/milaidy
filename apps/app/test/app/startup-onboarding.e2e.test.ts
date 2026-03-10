@@ -377,7 +377,10 @@ describe("app startup onboarding flow (e2e)", () => {
           state.onboardingStep = "setupMode";
           break;
         case "setupMode":
-          state.onboardingStep = state.onboardingSetupMode === "advanced" ? "runMode" : "llmProvider";
+          state.onboardingStep =
+            state.onboardingSetupMode === "advanced"
+              ? "runMode"
+              : "llmProvider";
           break;
         case "runMode":
           state.onboardingStep = "llmProvider";

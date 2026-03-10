@@ -369,7 +369,7 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
 
   useEffect(() => {
     elevenCacheRef.current.clear();
-  }, [options.voiceConfig]);
+  }, []);
 
   // ── Mouth animation loop ──────────────────────────────────────────
 
@@ -557,7 +557,7 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
           await ctx.resume();
         } catch {
           // Force a fresh context if resume fails
-          ctx.close().catch(() => { });
+          ctx.close().catch(() => {});
           ctx = new AudioContext();
           audioCtxRef.current = ctx;
         }
@@ -594,7 +594,7 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
         };
         const apiToken =
           typeof window !== "undefined" &&
-            typeof window.__MILADY_API_TOKEN__ === "string"
+          typeof window.__MILADY_API_TOKEN__ === "string"
             ? window.__MILADY_API_TOKEN__.trim()
             : "";
 
@@ -928,8 +928,8 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
           const elConfig = voiceConfigRef.current?.elevenlabs;
           const cacheKey =
             voiceConfigRef.current?.provider === "elevenlabs" &&
-              voiceConfigRef.current?.mode !== "cloud" &&
-              elConfig
+            voiceConfigRef.current?.mode !== "cloud" &&
+            elConfig
               ? makeElevenCacheKey(firstSentence, elConfig)
               : undefined;
 

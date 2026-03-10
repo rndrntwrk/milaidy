@@ -1,7 +1,7 @@
+import type { CodingAgentSession } from "@milady/app-core/api";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { CodingAgentSession } from "@milady/app-core/api";
 
 // ---------------------------------------------------------------------------
 // Mocks

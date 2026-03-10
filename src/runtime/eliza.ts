@@ -244,14 +244,14 @@ function configureLocalEmbeddingPlugin(
   const configuredRepo = embeddingConfig?.modelRepo?.trim();
   const configuredDimensions =
     typeof embeddingConfig?.dimensions === "number" &&
-      Number.isInteger(embeddingConfig.dimensions) &&
-      embeddingConfig.dimensions > 0
+    Number.isInteger(embeddingConfig.dimensions) &&
+    embeddingConfig.dimensions > 0
       ? String(embeddingConfig.dimensions)
       : undefined;
   const configuredContextSize =
     typeof embeddingConfig?.contextSize === "number" &&
-      Number.isInteger(embeddingConfig.contextSize) &&
-      embeddingConfig.contextSize > 0
+    Number.isInteger(embeddingConfig.contextSize) &&
+    embeddingConfig.contextSize > 0
       ? String(embeddingConfig.contextSize)
       : undefined;
 
@@ -433,7 +433,7 @@ async function waitForTrajectoryLoggerService(
 
   try {
     await Promise.race([
-      runtimeLike.getServiceLoadPromise("trajectory_logger").then(() => { }),
+      runtimeLike.getServiceLoadPromise("trajectory_logger").then(() => {}),
       timeoutPromise,
     ]);
     if (timedOut) {
@@ -764,8 +764,8 @@ export function collectPluginNames(config: MiladyConfig): Set<string> {
     | undefined;
   const configPiAiFlag =
     (configEnv?.vars &&
-      typeof configEnv.vars === "object" &&
-      !Array.isArray(configEnv.vars)
+    typeof configEnv.vars === "object" &&
+    !Array.isArray(configEnv.vars)
       ? (configEnv.vars as Record<string, unknown>).MILADY_USE_PI_AI
       : undefined) ?? configEnv?.MILADY_USE_PI_AI;
   const piAiEnabled =
@@ -1230,7 +1230,7 @@ export function ensureBrowserServerLink(): boolean {
     if (!existsSync(stagehandIndex)) {
       logger.info(
         `[milady] Browser server not found at ${stagehandDir} — ` +
-        `@elizaos/plugin-browser will not be loaded`,
+          `@elizaos/plugin-browser will not be loaded`,
       );
       return false;
     }
@@ -1370,7 +1370,7 @@ async function resolvePlugins(
         });
         logger.warn(
           `[milady] Skipping ${pluginName}: browser server not available. ` +
-          `Build the stagehand-server or remove the plugin from plugins.allow.`,
+            `Build the stagehand-server or remove the plugin from plugins.allow.`,
         );
         return null;
       }
@@ -1512,7 +1512,7 @@ async function resolvePlugins(
   // Summary logging
   logger.info(
     `[milady] Plugin resolution complete: ${plugins.length}/${pluginsToLoad.size} loaded` +
-    (failedPlugins.length > 0 ? `, ${failedPlugins.length} failed` : ""),
+      (failedPlugins.length > 0 ? `, ${failedPlugins.length} failed` : ""),
   );
   if (failedPlugins.length > 0) {
     logger.info(
@@ -3061,7 +3061,7 @@ export const logToChatListener = (entry: LogEntry) => {
             isLog: "true",
           },
         )
-        .catch(() => { });
+        .catch(() => {});
     }
   }
 };
@@ -3149,12 +3149,12 @@ export async function startEliza(
     const postgresUrl = process.env.POSTGRES_URL;
     logger.info(
       `[milady] Database provider: ${dbProvider}` +
-      (dbProvider === "pglite" && pgliteDir
-        ? ` | data dir: ${pgliteDir}`
-        : "") +
-      (dbProvider === "postgres" && postgresUrl
-        ? ` | connection: ${postgresUrl.replace(/:\/\/([^:]+):([^@]+)@/, "://$1:***@")}`
-        : ""),
+        (dbProvider === "pglite" && pgliteDir
+          ? ` | data dir: ${pgliteDir}`
+          : "") +
+        (dbProvider === "postgres" && postgresUrl
+          ? ` | connection: ${postgresUrl.replace(/:\/\/([^:]+):([^@]+)@/, "://$1:***@")}`
+          : ""),
     );
   }
 
@@ -3357,8 +3357,8 @@ export async function startEliza(
     ?.mode as string | undefined;
   const sandboxMode: SandboxMode =
     sandboxModeStr === "light" ||
-      sandboxModeStr === "standard" ||
-      sandboxModeStr === "max"
+    sandboxModeStr === "standard" ||
+    sandboxModeStr === "max"
       ? sandboxModeStr
       : "off";
   const isSandboxActive = sandboxMode !== "off";
@@ -3390,18 +3390,18 @@ export async function startEliza(
         workspaceRoot: workspaceDir ?? undefined,
         browser: browserSettings
           ? {
-            enabled: (browserSettings.enabled as boolean) ?? false,
-            image: (browserSettings.image as string) ?? undefined,
-            cdpPort: (browserSettings.cdpPort as number) ?? undefined,
-            vncPort: (browserSettings.vncPort as number) ?? undefined,
-            noVncPort: (browserSettings.noVncPort as number) ?? undefined,
-            headless: (browserSettings.headless as boolean) ?? undefined,
-            enableNoVnc:
-              (browserSettings.enableNoVnc as boolean) ?? undefined,
-            autoStart: (browserSettings.autoStart as boolean) ?? true,
-            autoStartTimeoutMs:
-              (browserSettings.autoStartTimeoutMs as number) ?? undefined,
-          }
+              enabled: (browserSettings.enabled as boolean) ?? false,
+              image: (browserSettings.image as string) ?? undefined,
+              cdpPort: (browserSettings.cdpPort as number) ?? undefined,
+              vncPort: (browserSettings.vncPort as number) ?? undefined,
+              noVncPort: (browserSettings.noVncPort as number) ?? undefined,
+              headless: (browserSettings.headless as boolean) ?? undefined,
+              enableNoVnc:
+                (browserSettings.enableNoVnc as boolean) ?? undefined,
+              autoStart: (browserSettings.autoStart as boolean) ?? true,
+              autoStartTimeoutMs:
+                (browserSettings.autoStartTimeoutMs as number) ?? undefined,
+            }
           : undefined,
       });
 
@@ -3458,17 +3458,17 @@ export async function startEliza(
     // Sandbox options — only active when mode != "off"
     ...(isSandboxActive
       ? {
-        sandboxMode: true,
-        sandboxAuditHandler: sandboxAuditLog
-          ? (event: SandboxFetchAuditEvent) => {
-            sandboxAuditLog.recordTokenReplacement(
-              event.direction,
-              event.url,
-              event.tokenIds,
-            );
-          }
-          : undefined,
-      }
+          sandboxMode: true,
+          sandboxAuditHandler: sandboxAuditLog
+            ? (event: SandboxFetchAuditEvent) => {
+                sandboxAuditLog.recordTokenReplacement(
+                  event.direction,
+                  event.url,
+                  event.tokenIds,
+                );
+              }
+            : undefined,
+        }
       : {}),
     settings: {
       VALIDATION_LEVEL: "fast",
@@ -3527,11 +3527,11 @@ export async function startEliza(
     const loadedNames = resolvedPlugins.map((p) => p.name).join(", ");
     logger.error(
       `[milady] @elizaos/plugin-sql was NOT found among resolved plugins. ` +
-      `Loaded: [${loadedNames}]`,
+        `Loaded: [${loadedNames}]`,
     );
     throw new Error(
       "@elizaos/plugin-sql is required but was not loaded. " +
-      "Ensure the package is installed and built (check for import errors above).",
+        "Ensure the package is installed and built (check for import errors above).",
     );
   }
 
@@ -3550,8 +3550,8 @@ export async function startEliza(
   } else {
     logger.warn(
       "[milady] @elizaos/plugin-local-embedding not found — embeddings " +
-      "will fall back to whatever TEXT_EMBEDDING handler is registered by " +
-      "other plugins (may incur cloud API costs)",
+        "will fall back to whatever TEXT_EMBEDDING handler is registered by " +
+        "other plugins (may incur cloud API costs)",
     );
   }
 
@@ -3602,19 +3602,19 @@ export async function startEliza(
 
       const svc = runtime.getService("AGENT_SKILLS_SERVICE") as
         | {
-          getCatalogStats?: () => {
-            loaded: number;
-            total: number;
-            storageType: string;
-          };
-        }
+            getCatalogStats?: () => {
+              loaded: number;
+              total: number;
+              storageType: string;
+            };
+          }
         | null
         | undefined;
       if (svc?.getCatalogStats) {
         const stats = svc.getCatalogStats();
         logger.info(
           `[milady] AgentSkills ready — ${stats.loaded} skills loaded, ` +
-          `${stats.total} in catalog (storage: ${stats.storageType})`,
+            `${stats.total} in catalog (storage: ${stats.storageType})`,
         );
       }
 
@@ -3976,7 +3976,7 @@ export async function startEliza(
     console.log("[milady] Server running. Press Ctrl+C to stop.");
 
     // Keep process alive — the API server handles all interaction
-    const keepAlive = setInterval(() => { }, 1 << 30); // ~12 days
+    const keepAlive = setInterval(() => {}, 1 << 30); // ~12 days
 
     // Cleanup on exit
     const cleanup = async () => {
@@ -4074,7 +4074,7 @@ export async function startEliza(
           !fallbackWorld.metadata.ownership ||
           typeof fallbackWorld.metadata.ownership !== "object" ||
           (fallbackWorld.metadata.ownership as { ownerId: string }).ownerId !==
-          userId
+            userId
         ) {
           fallbackWorld.metadata.ownership = { ownerId: userId };
           needsUpdate = true;

@@ -24,7 +24,8 @@ const meta = {
     miladyCloudConnected: false,
     miladyCloudCredits: 100,
     creditColor: "text-ok border-ok",
-    miladyCloudTopUpUrl: "https://www.elizacloud.ai/dashboard/settings?tab=billing",
+    miladyCloudTopUpUrl:
+      "https://www.miladycloud.ai/dashboard/settings?tab=billing",
     evmShort: "0x12...34ab",
     solShort: null,
     handleSwitchToNativeShell: fn(),
@@ -53,7 +54,8 @@ export const Thinking: Story = {
     miladyCloudEnabled: true,
     miladyCloudConnected: true,
     miladyCloudCredits: 100,
-    miladyCloudTopUpUrl: "https://www.elizacloud.ai/dashboard/settings?tab=billing",
+    miladyCloudTopUpUrl:
+      "https://www.miladycloud.ai/dashboard/settings?tab=billing",
   },
 };
 

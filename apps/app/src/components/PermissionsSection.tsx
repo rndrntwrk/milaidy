@@ -252,8 +252,9 @@ function CapabilityToggle({
 
   return (
     <div
-      className={`flex items-center gap-3 p-3 border border-[var(--border)] ${enabled ? "bg-[var(--accent)]/10" : "bg-[var(--card)]"
-        }`}
+      className={`flex items-center gap-3 p-3 border border-[var(--border)] ${
+        enabled ? "bg-[var(--accent)]/10" : "bg-[var(--card)]"
+      }`}
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
@@ -623,10 +624,11 @@ export function PermissionsOnboardingSection({
           return (
             <div
               key={def.id}
-              className={`flex items-center gap-4 p-4 border ${isGranted
-                ? "border-[var(--ok)] bg-[var(--ok)]/10"
-                : "border-[var(--border)] bg-[var(--card)]"
-                }`}
+              className={`flex items-center gap-4 p-4 border ${
+                isGranted
+                  ? "border-[var(--ok)] bg-[var(--ok)]/10"
+                  : "border-[var(--border)] bg-[var(--card)]"
+              }`}
             >
               <PermissionIcon icon={def.icon} />
               <div className="flex-1">

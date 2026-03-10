@@ -534,9 +534,9 @@ function PluginConfigForm({
         if (isArrayField && typeof configValue === "string") {
           v[p.key] = configValue
             ? configValue
-              .split(",")
-              .map((s: string) => s.trim())
-              .filter(Boolean)
+                .split(",")
+                .map((s: string) => s.trim())
+                .filter(Boolean)
             : [];
         } else {
           v[p.key] = configValue;
@@ -545,9 +545,9 @@ function PluginConfigForm({
         if (isArrayField && typeof p.currentValue === "string") {
           v[p.key] = String(p.currentValue)
             ? String(p.currentValue)
-              .split(",")
-              .map((s: string) => s.trim())
-              .filter(Boolean)
+                .split(",")
+                .map((s: string) => s.trim())
+                .filter(Boolean)
             : [];
         } else {
           v[p.key] = p.currentValue;
@@ -1328,8 +1328,9 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
         onDragOver={(e) => handleDragOver(e, p.id)}
         onDrop={(e) => handleDrop(e, p.id)}
         onDragEnd={handleDragEnd}
-        className={`border border-border bg-card transition-colors duration-150 flex flex-col ${enabledBorder} ${isOpen ? "ring-1 ring-accent" : "hover:border-accent/40"
-          } ${isDragging ? "opacity-30" : ""} ${isDragOver ? "ring-2 ring-accent/60" : ""}`}
+        className={`border border-border bg-card transition-colors duration-150 flex flex-col ${enabledBorder} ${
+          isOpen ? "ring-1 ring-accent" : "hover:border-accent/40"
+        } ${isDragging ? "opacity-30" : ""} ${isDragOver ? "ring-2 ring-accent/60" : ""}`}
         data-plugin-id={p.id}
       >
         {/* Top: drag handle + icon + name + toggle */}
@@ -1372,13 +1373,15 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
             <button
               type="button"
               data-plugin-toggle={p.id}
-              className={`text-[10px] font-bold tracking-wider px-2.5 py-[2px] border transition-colors duration-150 shrink-0 ${p.enabled
+              className={`text-[10px] font-bold tracking-wider px-2.5 py-[2px] border transition-colors duration-150 shrink-0 ${
+                p.enabled
                   ? "bg-accent text-accent-fg border-accent"
                   : "bg-transparent text-muted border-border hover:text-txt"
-                } ${toggleDisabled
+              } ${
+                toggleDisabled
                   ? "opacity-60 cursor-not-allowed"
                   : "cursor-pointer"
-                }`}
+              }`}
               onClick={(e) => {
                 e.stopPropagation();
                 void handleTogglePlugin(p.id, !p.enabled);
@@ -1402,10 +1405,11 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
           )}
           {p.enabled && !p.isActive && !isShowcase && (
             <span
-              className={`text-[10px] px-1.5 py-px border lowercase tracking-wide whitespace-nowrap ${p.loadError
+              className={`text-[10px] px-1.5 py-px border lowercase tracking-wide whitespace-nowrap ${
+                p.loadError
                   ? "border-destructive bg-[rgba(153,27,27,0.04)] text-destructive"
                   : "border-warn bg-[rgba(234,179,8,0.06)] text-warn"
-                }`}
+              }`}
               title={
                 p.loadError || "Plugin is enabled but not loaded in the runtime"
               }
@@ -1458,10 +1462,11 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
           {hasParams && !isShowcase ? (
             <>
               <span
-                className={`inline-block w-2 h-2 rounded-full shadow-[0_0_10px_currentColor] shrink-0 ${allParamsSet
+                className={`inline-block w-2 h-2 rounded-full shadow-[0_0_10px_currentColor] shrink-0 ${
+                  allParamsSet
                     ? "bg-ok text-ok"
                     : "bg-destructive text-destructive"
-                  }`}
+                }`}
               />
               <span className="text-[11px] font-bold tracking-wide text-muted">
                 {setCount}/{totalCount} {t("pluginsview.configured")}
@@ -1494,7 +1499,7 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
               >
                 {installingPlugins.has(p.id)
                   ? installProgress.get(p.npmName ?? "")?.message ||
-                  "Installing..."
+                    "Installing..."
                   : "Install"}
               </Button>
             )}
@@ -1502,10 +1507,11 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
             <Button
               variant="ghost"
               size="sm"
-              className={`h-7 px-2.5 text-[11px] font-bold transition-all flex items-center gap-1.5 ${isOpen
+              className={`h-7 px-2.5 text-[11px] font-bold transition-all flex items-center gap-1.5 ${
+                isOpen
                   ? "text-accent bg-accent/10 hover:bg-accent/20"
                   : "text-muted hover:text-txt hover:bg-white/5"
-                }`}
+              }`}
               onClick={(e) => {
                 e.stopPropagation();
                 toggleSettings(p.id);
@@ -1607,8 +1613,9 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
     return (
       <div className="plugins-game-modal">
         <div
-          className={`plugins-game-list-panel${gameNarrow && gameMobileDetail ? " is-hidden" : ""
-            }`}
+          className={`plugins-game-list-panel${
+            gameNarrow && gameMobileDetail ? " is-hidden" : ""
+          }`}
         >
           <div className="plugins-game-list-head">
             <div className="plugins-game-section-title">{sectionTitle}</div>
@@ -1623,8 +1630,9 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                 <button
                   key={p.id}
                   type="button"
-                  className={`plugins-game-card${effectiveGameSelected === p.id ? " is-selected" : ""
-                    }${!p.enabled ? " is-disabled" : ""}`}
+                  className={`plugins-game-card${
+                    effectiveGameSelected === p.id ? " is-selected" : ""
+                  }${!p.enabled ? " is-disabled" : ""}`}
                   onClick={() => {
                     setGameSelectedId(p.id);
                     if (gameNarrow) setGameMobileDetail(true);
@@ -1656,8 +1664,9 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                     <div className="plugins-game-card-name">{p.name}</div>
                     <div className="plugins-game-card-meta">
                       <span
-                        className={`plugins-game-badge ${p.enabled ? "is-on" : "is-off"
-                          }`}
+                        className={`plugins-game-badge ${
+                          p.enabled ? "is-on" : "is-off"
+                        }`}
                       >
                         {p.enabled ? "ON" : "OFF"}
                       </span>
@@ -1669,8 +1678,9 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
           </div>
         </div>
         <div
-          className={`plugins-game-detail-panel${gameNarrow && !gameMobileDetail ? " is-hidden" : ""
-            }`}
+          className={`plugins-game-detail-panel${
+            gameNarrow && !gameMobileDetail ? " is-hidden" : ""
+          }`}
         >
           {selectedPlugin ? (
             <>
@@ -1718,8 +1728,9 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                   </div>
                   <button
                     type="button"
-                    className={`plugins-game-toggle ${selectedPlugin.enabled ? "is-on" : "is-off"
-                      }`}
+                    className={`plugins-game-toggle ${
+                      selectedPlugin.enabled ? "is-on" : "is-off"
+                    }`}
                     onClick={() =>
                       void handleTogglePlugin(
                         selectedPlugin.id,
@@ -1794,8 +1805,9 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                 </button>
                 <button
                   type="button"
-                  className={`plugins-game-save-btn${pluginSaveSuccess.has(selectedPlugin.id) ? " is-saved" : ""
-                    }`}
+                  className={`plugins-game-save-btn${
+                    pluginSaveSuccess.has(selectedPlugin.id) ? " is-saved" : ""
+                  }`}
                   onClick={() => void handleConfigSave(selectedPlugin.id)}
                   disabled={pluginSaving.has(selectedPlugin.id)}
                 >
@@ -1857,10 +1869,11 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
               key={s}
               variant={pluginStatusFilter === s ? "default" : "ghost"}
               size="sm"
-              className={`h-7 px-3 text-[11px] font-bold tracking-wide rounded-lg transition-all ${pluginStatusFilter === s
+              className={`h-7 px-3 text-[11px] font-bold tracking-wide rounded-lg transition-all ${
+                pluginStatusFilter === s
                   ? "shadow-sm"
                   : "text-muted hover:text-txt hover:bg-white/5"
-                }`}
+              }`}
               onClick={() => setState("pluginStatusFilter", s as StatusFilter)}
             >
               {s === "all"
@@ -1908,10 +1921,11 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
               key={tag.id}
               variant={subgroupFilter === tag.id ? "default" : "outline"}
               size="sm"
-              className={`h-7 px-3 text-[11px] font-bold tracking-wide rounded-lg transition-all ${subgroupFilter === tag.id
+              className={`h-7 px-3 text-[11px] font-bold tracking-wide rounded-lg transition-all ${
+                subgroupFilter === tag.id
                   ? "shadow-[0_0_10px_rgba(var(--accent),0.2)] border-accent"
                   : "bg-card/40 backdrop-blur-sm border-border/40 text-muted hover:text-txt shadow-sm hover:border-accent/30"
-                }`}
+              }`}
               onClick={() => setSubgroupFilter(tag.id)}
             >
               {tag.label}
@@ -2084,7 +2098,7 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                       >
                         {installingPlugins.has(p.id)
                           ? installProgress.get(p.npmName ?? "")?.message ||
-                          "Installing..."
+                            "Installing..."
                           : "Install Plugin"}
                       </Button>
                     )}
@@ -2106,14 +2120,15 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                               : "outline"
                         }
                         size="sm"
-                        className={`h-8 px-4 text-[11px] font-bold tracking-wide transition-all ${testResults.get(p.id)?.loading
+                        className={`h-8 px-4 text-[11px] font-bold tracking-wide transition-all ${
+                          testResults.get(p.id)?.loading
                             ? "opacity-70 cursor-wait"
                             : testResults.get(p.id)?.success
                               ? "bg-ok text-ok-fg border-ok hover:bg-ok/90"
                               : testResults.get(p.id)?.error
                                 ? "bg-danger text-danger-fg border-danger hover:bg-danger/90"
                                 : "border-border/40 bg-card/40 backdrop-blur-md shadow-sm hover:border-accent/40"
-                          }`}
+                        }`}
                         disabled={testResults.get(p.id)?.loading}
                         onClick={() => handleTestConnection(p.id)}
                       >
@@ -2137,10 +2152,11 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                     <Button
                       variant={saveSuccess ? "default" : "secondary"}
                       size="sm"
-                      className={`h-8 px-5 text-[12px] font-bold tracking-wide transition-all ${saveSuccess
+                      className={`h-8 px-5 text-[12px] font-bold tracking-wide transition-all ${
+                        saveSuccess
                           ? "bg-ok text-ok-fg hover:bg-ok/90"
                           : "bg-accent text-accent-fg hover:bg-accent/90 shadow-lg shadow-accent/20"
-                        }`}
+                      }`}
                       onClick={() => handleConfigSave(p.id)}
                       disabled={isSaving}
                     >

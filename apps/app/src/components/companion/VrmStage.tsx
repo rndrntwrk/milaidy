@@ -15,13 +15,11 @@ import type { TranslatorFn } from "./walletUtils";
 export function VrmStage({
   vrmPath,
   fallbackPreviewUrl,
-  needsFlip,
   cameraProfile = "companion",
   t,
 }: {
   vrmPath: string;
   fallbackPreviewUrl: string;
-  needsFlip: boolean;
   cameraProfile?: CameraProfile;
   t: TranslatorFn;
 }) {
@@ -92,7 +90,6 @@ export function VrmStage({
           interactive
           cameraProfile={cameraProfile}
           interactiveMode="orbitZoom"
-          forceFaceCameraFlip={needsFlip}
           onEngineReady={handleVrmEngineReady}
           onEngineState={handleVrmEngineState}
         />

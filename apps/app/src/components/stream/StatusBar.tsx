@@ -1,8 +1,23 @@
+import { Button, Input, Slider } from "@milady/ui";
+import {
+  ChevronDown,
+  ExternalLink,
+  PictureInPicture,
+  Pin,
+  Settings,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { useApp } from "../../AppContext";
-import { type AgentMode, IS_POPOUT, isSupportedStreamUrl, STREAM_SOURCE_LABELS, type StreamSourceType, toggleAlwaysOnTop } from "./helpers";
-import { Button, Input, Slider } from "@milady/ui";
-import { Volume2, VolumeX, Settings, PictureInPicture, Pin, ExternalLink, ChevronDown } from "lucide-react";
+import {
+  type AgentMode,
+  IS_POPOUT,
+  isSupportedStreamUrl,
+  STREAM_SOURCE_LABELS,
+  type StreamSourceType,
+  toggleAlwaysOnTop,
+} from "./helpers";
 
 function formatUptime(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -112,10 +127,11 @@ export function StatusBar({
     >
       <div className="flex items-center gap-2">
         <span
-          className={`${isPip ? "w-2 h-2" : "w-2.5 h-2.5"} rounded-full ${isLive
-            ? "bg-danger shadow-[0_0_8px_rgba(239,68,68,0.6)] animate-pulse"
-            : "bg-muted"
-            }`}
+          className={`${isPip ? "w-2 h-2" : "w-2.5 h-2.5"} rounded-full ${
+            isLive
+              ? "bg-danger shadow-[0_0_8px_rgba(239,68,68,0.6)] animate-pulse"
+              : "bg-muted"
+          }`}
         />
         {!isPip && (
           <>
@@ -181,12 +197,13 @@ export function StatusBar({
                       variant="ghost"
                       size="sm"
                       disabled={disabled}
-                      className={`w-full justify-start px-3 py-1.5 h-auto text-xs transition-colors rounded-none ${streamSource.type === st
-                        ? "bg-accent/20 text-accent hover:bg-accent/30"
-                        : disabled
-                          ? "text-muted/40 opacity-50"
-                          : "text-txt hover:bg-bg-muted"
-                        }`}
+                      className={`w-full justify-start px-3 py-1.5 h-auto text-xs transition-colors rounded-none ${
+                        streamSource.type === st
+                          ? "bg-accent/20 text-accent hover:bg-accent/30"
+                          : disabled
+                            ? "text-muted/40 opacity-50"
+                            : "text-txt hover:bg-bg-muted"
+                      }`}
                       onClick={() => {
                         if (st === "custom-url") return; // handled by input below
                         onSourceChange(
@@ -212,10 +229,11 @@ export function StatusBar({
                     value={customUrlInput}
                     onChange={(e) => setCustomUrlInput(e.target.value)}
                     disabled={!streamAvailable}
-                    className={`flex-1 h-7 bg-bg-muted text-txt text-[11px] rounded px-2 border outline-none focus-visible:ring-1 focus-visible:ring-accent disabled:opacity-50 ${trimmedCustomUrl && !customUrlValid
-                      ? "border-danger"
-                      : "border-border"
-                      }`}
+                    className={`flex-1 h-7 bg-bg-muted text-txt text-[11px] rounded px-2 border outline-none focus-visible:ring-1 focus-visible:ring-accent disabled:opacity-50 ${
+                      trimmedCustomUrl && !customUrlValid
+                        ? "border-danger"
+                        : "border-border"
+                    }`}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && customUrlValid) {
                         onSourceChange("custom-url", trimmedCustomUrl);
@@ -340,10 +358,11 @@ export function StatusBar({
           <Button
             size="sm"
             disabled={!streamAvailable || streamLoading}
-            className={`px-3 py-0.5 h-6 rounded font-semibold text-[11px] uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-wait ${isLive
-              ? "bg-danger/20 text-danger hover:bg-danger/30"
-              : "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
-              }`}
+            className={`px-3 py-0.5 h-6 rounded font-semibold text-[11px] uppercase tracking-wider transition-colors disabled:opacity-50 disabled:cursor-wait ${
+              isLive
+                ? "bg-danger/20 text-danger hover:bg-danger/30"
+                : "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
+            }`}
             onClick={onToggleStream}
             title={
               streamAvailable
@@ -359,10 +378,11 @@ export function StatusBar({
             <Button
               variant="ghost"
               size="sm"
-              className={`px-2 py-0.5 h-6 rounded transition-colors ${isPip
-                ? "bg-purple-500/20 text-purple-400"
-                : "bg-bg-muted hover:bg-purple-500/20 hover:text-purple-400"
-                }`}
+              className={`px-2 py-0.5 h-6 rounded transition-colors ${
+                isPip
+                  ? "bg-purple-500/20 text-purple-400"
+                  : "bg-bg-muted hover:bg-purple-500/20 hover:text-purple-400"
+              }`}
               title={
                 isPip
                   ? "Exit picture-in-picture"
@@ -375,10 +395,11 @@ export function StatusBar({
             <Button
               variant="ghost"
               size="sm"
-              className={`px-2 py-0.5 h-6 rounded transition-colors ${pinned
-                ? "bg-accent/20 text-accent"
-                : "bg-bg-muted hover:bg-accent/20 hover:text-accent"
-                }`}
+              className={`px-2 py-0.5 h-6 rounded transition-colors ${
+                pinned
+                  ? "bg-accent/20 text-accent"
+                  : "bg-bg-muted hover:bg-accent/20 hover:text-accent"
+              }`}
               title={pinned ? "Unpin from top" : "Pin to top (always on top)"}
               onClick={() => {
                 const next = !pinned;
@@ -402,7 +423,7 @@ export function StatusBar({
               const base = window.location.origin || "";
               const sep =
                 window.location.protocol === "file:" ||
-                  window.location.protocol === "capacitor-electron:"
+                window.location.protocol === "capacitor-electron:"
                   ? "#"
                   : "";
               const qs = apiBase

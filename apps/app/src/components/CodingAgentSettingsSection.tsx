@@ -1,8 +1,8 @@
-import { useTimeout } from "../hooks/useTimeout";
 import { client } from "@milady/app-core/api";
 import { Button } from "@milady/ui";
 import { useCallback, useEffect, useState } from "react";
 import { useApp } from "../AppContext";
+import { useTimeout } from "../hooks/useTimeout";
 import { ConfigSaveFooter } from "./ConfigSaveFooter";
 
 type AgentTab = "claude" | "gemini" | "codex" | "aider";
@@ -189,7 +189,7 @@ export function CodingAgentSettingsSection() {
       setSaveError(err instanceof Error ? err.message : "Failed to save");
     }
     setSaving(false);
-  }, [prefs]);
+  }, [prefs, setTimeout]);
 
   // Resolve the provider ID for the current tab
   const getProviderId = (tab: AgentTab, aiderProv: AiderProvider): string => {

@@ -4,12 +4,12 @@
  * Extracted from SettingsView.tsx for decomposition (P2 §10).
  */
 
-import { useTimeout } from "../hooks/useTimeout";
 import { client, type PluginParamDef } from "@milady/app-core/api";
 import { autoLabel } from "@milady/app-core/components";
 import type { ConfigUiHint } from "@milady/app-core/types";
 import { useCallback, useState } from "react";
 import { useApp } from "../AppContext";
+import { useTimeout } from "../hooks/useTimeout";
 import type { JsonSchemaObject } from "./config-catalog";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer";
 
@@ -88,7 +88,7 @@ export function ApiKeyConfig({
       }
       setModelsFetching(false);
     },
-    [loadPlugins],
+    [loadPlugins, setTimeout],
   );
 
   if (!selectedProvider || selectedProvider.parameters.length === 0)
