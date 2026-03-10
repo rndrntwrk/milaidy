@@ -28,7 +28,7 @@ import {
   Terminal,
   Upload,
   Wallet,
-  X
+  X,
 } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -54,55 +54,55 @@ const SETTINGS_SECTIONS: SettingsSectionDef[] = [
     id: "appearance",
     label: "Appearance",
     icon: Palette,
-    description: "Visual preferences"
+    description: "Visual preferences",
   },
   {
     id: "ai-model",
     label: "AI Model",
     icon: Bot,
-    description: "Provider and model settings"
+    description: "Provider and model settings",
   },
   {
     id: "coding-agents",
     label: "Coding Agents",
     icon: Terminal,
-    description: "Agent preferences, models, and permissions"
+    description: "Agent preferences, models, and permissions",
   },
   {
     id: "wallet-rpc",
     label: "Wallet & RPC",
     icon: Wallet,
-    description: "Chain RPC providers and API keys"
+    description: "Chain RPC providers and API keys",
   },
   {
     id: "media",
     label: "Media",
     icon: Image,
-    description: "Image, video, and vision providers"
+    description: "Image, video, and vision providers",
   },
   {
     id: "voice",
     label: "Voice",
     icon: Mic,
-    description: "Text-to-speech and transcription"
+    description: "Text-to-speech and transcription",
   },
   {
     id: "permissions",
     label: "Permissions",
     icon: Shield,
-    description: "Capabilities and access control"
+    description: "Capabilities and access control",
   },
   {
     id: "updates",
     label: "Updates",
     icon: RefreshCw,
-    description: "Software update settings"
+    description: "Software update settings",
   },
   {
     id: "advanced",
     label: "Advanced",
     icon: Sliders,
-    description: "Export, import, and dangerous actions"
+    description: "Export, import, and dangerous actions",
   },
 ];
 
@@ -124,12 +124,13 @@ function SettingsSidebar({
   activeSection,
   onSectionChange,
   searchQuery,
-  onSearchChange }: {
-    activeSection: string;
-    onSectionChange: (id: string) => void;
-    searchQuery: string;
-    onSearchChange: (query: string) => void;
-  }) {
+  onSearchChange,
+}: {
+  activeSection: string;
+  onSectionChange: (id: string) => void;
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
+}) {
   const { t } = useApp();
 
   const filteredSections = SETTINGS_SECTIONS.filter((section) =>
@@ -175,14 +176,16 @@ function SettingsSidebar({
                 key={section.id}
                 type="button"
                 onClick={() => onSectionChange(section.id)}
-                className={`flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all duration-200 min-w-fit lg:min-w-0 whitespace-nowrap lg:whitespace-normal ${isActive
-                  ? "bg-accent text-accent-fg shadow-md"
-                  : "text-txt hover:bg-bg-hover hover:shadow-sm"
-                  }`}
+                className={`flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all duration-200 min-w-fit lg:min-w-0 whitespace-nowrap lg:whitespace-normal ${
+                  isActive
+                    ? "bg-accent text-accent-fg shadow-md"
+                    : "text-txt hover:bg-bg-hover hover:shadow-sm"
+                }`}
               >
                 <span
-                  className={`w-9 h-9 flex items-center justify-center shrink-0 rounded-lg ${isActive ? "bg-accent-foreground/20" : "bg-bg-accent"
-                    }`}
+                  className={`w-9 h-9 flex items-center justify-center shrink-0 rounded-lg ${
+                    isActive ? "bg-accent-foreground/20" : "bg-bg-accent"
+                  }`}
                 >
                   <Icon className="w-4 h-4" />
                 </span>
@@ -210,8 +213,7 @@ function SettingsSidebar({
 
 function UpdatesSection() {
   const { t } = useApp();
-  const { updateStatus, updateLoading, loadUpdateStatus } =
-    useApp();
+  const { updateStatus, updateLoading, loadUpdateStatus } = useApp();
 
   useEffect(() => {
     void loadUpdateStatus();
@@ -245,7 +247,8 @@ function UpdatesSection() {
             {t("settings.updateAvailable")}
           </div>
           <p className="text-sm text-muted">
-            {updateStatus.currentVersion}  {t("settingsview.Rarr")} {updateStatus.latestVersion}
+            {updateStatus.currentVersion} {t("settingsview.Rarr")}{" "}
+            {updateStatus.latestVersion}
           </p>
         </div>
       )}
@@ -278,7 +281,8 @@ function AdvancedSection() {
     importSuccess,
     handleAgentExport,
     handleAgentImport,
-    setState } = useApp();
+    setState,
+  } = useApp();
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const importFileInputRef = useRef<HTMLInputElement>(null);
@@ -410,7 +414,6 @@ function AdvancedSection() {
               htmlFor="settings-export-password"
               className="text-sm font-medium text-txt-strong"
             >
-
               {t("settingsview.Password")}
             </label>
             <input
@@ -484,7 +487,6 @@ function AdvancedSection() {
 
           <div className="space-y-2">
             <div className="text-sm font-medium text-txt-strong">
-
               {t("settingsview.BackupFile")}
             </div>
             <button
@@ -506,7 +508,6 @@ function AdvancedSection() {
               htmlFor="settings-import-password"
               className="text-sm font-medium text-txt-strong"
             >
-
               {t("settingsview.Password")}
             </label>
             <input
@@ -558,10 +559,11 @@ function AdvancedSection() {
 
 export function SettingsView({
   inModal,
-  onClose }: {
-    inModal?: boolean;
-    onClose?: () => void;
-  } = {}) {
+  onClose,
+}: {
+  inModal?: boolean;
+  onClose?: () => void;
+} = {}) {
   const { t } = useApp();
   const [activeSection, setActiveSection] = useState("appearance");
   const [searchQuery, setSearchQuery] = useState("");
@@ -595,7 +597,8 @@ export function SettingsView({
     handleCloudLogin,
     handleCloudDisconnect,
     setState,
-    setActionNotice } = useApp();
+    setActionNotice,
+  } = useApp();
   const handleClose = useCallback(
     () => onClose?.() ?? setTab(inModal ? "companion" : "chat"),
     [inModal, onClose, setTab],
@@ -697,10 +700,11 @@ export function SettingsView({
             <div className="inline-flex gap-1.5 border border-border rounded-lg p-1">
               <button
                 type="button"
-                className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors duration-200 ${uiLanguage === "en"
-                  ? "bg-accent text-accent-fg shadow-sm"
-                  : "text-txt hover:bg-bg-hover"
-                  }`}
+                className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors duration-200 ${
+                  uiLanguage === "en"
+                    ? "bg-accent text-accent-fg shadow-sm"
+                    : "text-txt hover:bg-bg-hover"
+                }`}
                 onClick={() => {
                   setUiLanguage("en");
                   setActionNotice(t("settings.languageSaved"), "success", 2200);
@@ -710,10 +714,11 @@ export function SettingsView({
               </button>
               <button
                 type="button"
-                className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors duration-200 ${uiLanguage === "zh-CN"
-                  ? "bg-accent text-accent-fg shadow-sm"
-                  : "text-txt hover:bg-bg-hover"
-                  }`}
+                className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors duration-200 ${
+                  uiLanguage === "zh-CN"
+                    ? "bg-accent text-accent-fg shadow-sm"
+                    : "text-txt hover:bg-bg-hover"
+                }`}
                 onClick={() => {
                   setUiLanguage("zh-CN");
                   setActionNotice(t("settings.languageSaved"), "success", 2200);
@@ -847,7 +852,6 @@ export function SettingsView({
             className="inline-flex items-center rounded-lg border border-border px-4 py-2 text-sm font-medium text-txt transition-colors hover:bg-bg-hover"
             onClick={() => setSearchQuery("")}
           >
-
             {t("settingsview.ClearSearch")}
           </button>
         </SectionCard>

@@ -1,22 +1,18 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   getVrmBackgroundUrl,
   getVrmNeedsFlip,
   getVrmPreviewUrl,
-  getVrmTitle,
   getVrmUrl,
   useApp,
-  VRM_COUNT } from "../AppContext";
+} from "../AppContext";
 import { ChatModalView } from "./ChatModalView";
-import { CompanionCharacterRoster } from "./companion/CompanionCharacterRoster";
 import { CompanionHeader } from "./companion/CompanionHeader";
 import { CompanionHubNav } from "./companion/CompanionHubNav";
-import { useCompanionViewState } from "./companion/useCompanionViewState";
 import { VrmStage } from "./companion/VrmStage";
 
 export function CompanionView() {
   const {
-    setState,
     selectedVrmIndex,
     customVrmUrl,
     customBackgroundUrl,
@@ -37,7 +33,8 @@ export function CompanionView() {
     lifecycleAction,
     handlePauseResume,
     handleRestart,
-    t } = useApp();
+    t,
+  } = useApp();
 
   // Compute Header properties
   const name = agentStatus?.agentName ?? "Milady";
@@ -72,15 +69,9 @@ export function CompanionView() {
     ? `${walletAddresses.solanaAddress.slice(0, 4)}...${walletAddresses.solanaAddress.slice(-4)}`
     : null;
 
-  const [characterRosterOpen, setCharacterRosterOpen] = useState(false);
   const [chatDockOpen, setChatDockOpen] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth > 1024 : true,
   );
-  const vrmFileInputRef = useRef<HTMLInputElement | null>(null);
-  const bgFileInputRef = useRef<HTMLInputElement | null>(null);
-
-  // Upload state (extracted hook)
-  const { handleRosterVrmUpload, handleBgUpload } = useCompanionViewState(t);
 
   const handleSwitchToNativeShell = useCallback(() => {
     setUiShellMode("native");
@@ -103,25 +94,14 @@ export function CompanionView() {
   const needsFlip =
     selectedVrmIndex > 0 && getVrmNeedsFlip(safeSelectedVrmIndex);
 
-  const rosterItems = useMemo(
-    () =>
-      Array.from({ length: VRM_COUNT }, (_, i) => {
-        const index = i + 1;
-        return {
-          index,
-          previewUrl: getVrmPreviewUrl(index),
-          title: getVrmTitle(index) };
-      }),
-    [],
-  );
-
   return (
     <div
       className="anime-comp-screen font-display"
       style={{
         backgroundImage: `url("${vrmBackgroundUrl}")`,
         backgroundSize: "cover",
-        backgroundPosition: "center" }}
+        backgroundPosition: "center",
+      }}
     >
       <div className="anime-comp-bg-graphic" />
 
@@ -140,8 +120,6 @@ export function CompanionView() {
         <CompanionHeader
           chatDockOpen={chatDockOpen}
           setChatDockOpen={setChatDockOpen}
-          characterRosterOpen={characterRosterOpen}
-          setCharacterRosterOpen={setCharacterRosterOpen}
           name={name}
           agentState={agentState}
           stateColor={stateColor}
@@ -158,7 +136,6 @@ export function CompanionView() {
           cloudTopUpUrl={cloudTopUpUrl}
           evmShort={evmShort}
           solShort={solShort}
-          setTab={setTab}
           handleSwitchToNativeShell={handleSwitchToNativeShell}
           uiLanguage={uiLanguage}
           setUiLanguage={setUiLanguage}
@@ -180,21 +157,8 @@ export function CompanionView() {
           {/* Center (Empty to show character) */}
           <div className="anime-comp-center" />
 
-          {/* Right Panel: Actions + Character Drawer */}
+          {/* Right Panel: Actions + Game HUD Menu */}
           <aside className="anime-comp-right-panel">
-            <CompanionCharacterRoster
-              rosterItems={rosterItems}
-              selectedVrmIndex={selectedVrmIndex}
-              safeSelectedVrmIndex={safeSelectedVrmIndex}
-              characterRosterOpen={characterRosterOpen}
-              setState={setState}
-              handleRosterVrmUpload={handleRosterVrmUpload}
-              handleBgUpload={handleBgUpload}
-              vrmFileInputRef={vrmFileInputRef}
-              bgFileInputRef={bgFileInputRef}
-              t={t}
-            />
-
             {/* Game HUD Icon Menu */}
             <CompanionHubNav setTab={setTab} t={t} />
           </aside>

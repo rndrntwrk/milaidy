@@ -1,6 +1,6 @@
 import {
   useWalletPanelState,
-  type WalletPanelProps
+  type WalletPanelProps,
 } from "./useWalletPanelState";
 import { WalletNftGallery } from "./WalletNftGallery";
 import { WalletPortfolioList } from "./WalletPortfolioList";
@@ -37,7 +37,8 @@ export function CompanionWalletPanel(props: WalletPanelProps) {
     loadNfts,
     copyToClipboard,
     setActionNotice,
-    t } = state;
+    t,
+  } = state;
 
   if (!evmShort && !solShort) return null;
 
@@ -173,7 +174,9 @@ export function CompanionWalletPanel(props: WalletPanelProps) {
             <div className="anime-wallet-address-list">
               {evmAddress && (
                 <div className="anime-wallet-address-row">
-                  <span className="anime-wallet-address-chain">{t("companionwalletpanel.EVM")}</span>
+                  <span className="anime-wallet-address-chain">
+                    {t("companionwalletpanel.EVM")}
+                  </span>
                   <code
                     className="anime-wallet-address-code"
                     title={evmAddress}
@@ -198,7 +201,9 @@ export function CompanionWalletPanel(props: WalletPanelProps) {
               )}
               {solAddress && (
                 <div className="anime-wallet-address-row">
-                  <span className="anime-wallet-address-chain">{t("companionwalletpanel.SOL")}</span>
+                  <span className="anime-wallet-address-chain">
+                    {t("companionwalletpanel.SOL")}
+                  </span>
                   <code
                     className="anime-wallet-address-code"
                     title={solAddress}
@@ -230,7 +235,7 @@ export function CompanionWalletPanel(props: WalletPanelProps) {
                     { key: "tokens", label: t("wallet.tokens") },
                     {
                       key: "collectibles",
-                      label: t("wallet.collectibles")
+                      label: t("wallet.collectibles"),
                     },
                   ] as const
                 ).map((tab) => (

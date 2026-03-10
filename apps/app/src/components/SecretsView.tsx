@@ -8,9 +8,9 @@
 
 import { ChevronDown } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useApp } from "../AppContext";
 import type { SecretInfo } from "../api-client";
 import { client } from "../api-client";
-import { useApp } from "../AppContext";
 
 /* ── Constants ──────────────────────────────────────────────────────── */
 
@@ -29,7 +29,8 @@ const CATEGORY_LABELS: Record<string, string> = {
   blockchain: "Blockchain",
   connector: "Connectors",
   auth: "Authentication",
-  other: "Other" };
+  other: "Other",
+};
 
 type GroupedSecrets = {
   category: string;
@@ -52,7 +53,8 @@ function groupSecretsByCategory(secrets: SecretInfo[]): GroupedSecrets[] {
     (category) => ({
       category,
       label: CATEGORY_LABELS[category],
-      secrets: grouped.get(category) ?? [] }),
+      secrets: grouped.get(category) ?? [],
+    }),
   );
 }
 
@@ -173,13 +175,15 @@ export function SecretsView() {
       const res = await client.updateSecrets(payload);
       setSaveResult({
         ok: true,
-        message: `Updated ${res.updated.length} secret${res.updated.length !== 1 ? "s" : ""}` });
+        message: `Updated ${res.updated.length} secret${res.updated.length !== 1 ? "s" : ""}`,
+      });
       setDraft({});
       await load();
     } catch (err) {
       setSaveResult({
         ok: false,
-        message: err instanceof Error ? err.message : "Save failed" });
+        message: err instanceof Error ? err.message : "Save failed",
+      });
     } finally {
       setSaving(false);
     }
@@ -206,7 +210,6 @@ export function SecretsView() {
   if (loading) {
     return (
       <div className="text-[var(--muted)] text-[13px] italic py-8 text-center">
-
         {t("secretsview.LoadingSecrets")}
       </div>
     );
@@ -221,7 +224,6 @@ export function SecretsView() {
           className="text-[13px] text-[var(--accent)] bg-transparent border-0 cursor-pointer underline"
           onClick={load}
         >
-
           {t("secretsview.Retry")}
         </button>
       </div>
@@ -232,7 +234,6 @@ export function SecretsView() {
     <div>
       <div className="flex items-center justify-between mb-5">
         <p className="text-[13px] text-[var(--muted)] m-0">
-
           {t("secretsview.ManageAPIKeysAnd")}
         </p>
         <button
@@ -243,7 +244,6 @@ export function SecretsView() {
             setPickerSearch("");
           }}
         >
-
           {t("secretsview.AddSecret")}
         </button>
       </div>
@@ -264,7 +264,6 @@ export function SecretsView() {
       {/* Empty state */}
       {vaultSecrets.length === 0 && (
         <div className="text-[var(--muted)] text-[13px] italic py-8 text-center border border-dashed border-[var(--border)]">
-
           {t("secretsview.YourVaultIsEmpty")}
         </div>
       )}
@@ -282,7 +281,8 @@ export function SecretsView() {
               style={{
                 transform: collapsed.has(category)
                   ? "rotate(-90deg)"
-                  : "rotate(0deg)" }}
+                  : "rotate(0deg)",
+              }}
             />
             <span className="text-[14px] font-semibold text-[var(--txt)]">
               {label}
@@ -318,10 +318,11 @@ export function SecretsView() {
         <div className="flex items-center gap-3 mt-4 pt-4 border-t border-[var(--border)]">
           <button
             type="button"
-            className={`px-4 py-2 text-[13px] font-medium border-0 cursor-pointer transition-colors ${dirtyKeys.length > 0
+            className={`px-4 py-2 text-[13px] font-medium border-0 cursor-pointer transition-colors ${
+              dirtyKeys.length > 0
                 ? "bg-[var(--accent)] text-white"
                 : "bg-[var(--bg-card)] text-[var(--muted)] cursor-not-allowed"
-              }`}
+            }`}
             disabled={dirtyKeys.length === 0 || saving}
             onClick={handleSave}
           >
@@ -349,7 +350,8 @@ function SecretPicker({
   search,
   onSearchChange,
   onAdd,
-  onClose }: {
+  onClose,
+}: {
   available: SecretInfo[];
   search: string;
   onSearchChange: (v: string) => void;
@@ -380,7 +382,6 @@ function SecretPicker({
       <div className="bg-[var(--bg)] border border-[var(--border)] w-[560px] max-h-[480px] flex flex-col shadow-2xl">
         <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
           <span className="text-[14px] font-semibold text-[var(--txt)]">
-
             {t("secretsview.AddSecretsToVault")}
           </span>
           <button
@@ -445,7 +446,6 @@ function SecretPicker({
                         className="px-2.5 py-1 text-[12px] bg-[var(--accent)] text-white border-0 cursor-pointer hover:opacity-90 flex-shrink-0"
                         onClick={() => onAdd(s.key)}
                       >
-
                         {t("secretsview.Add")}
                       </button>
                     </div>
@@ -469,7 +469,8 @@ function SecretCard({
   isPinned,
   onToggleVisible,
   onDraftChange,
-  onRemove }: {
+  onRemove,
+}: {
   secret: SecretInfo;
   draftValue: string;
   isVisible: boolean;
@@ -497,7 +498,8 @@ function SecretCard({
             <span
               className="w-2 h-2 rounded-full flex-shrink-0"
               style={{
-                backgroundColor: secret.isSet ? "var(--ok)" : "var(--muted)" }}
+                backgroundColor: secret.isSet ? "var(--ok)" : "var(--muted)",
+              }}
             />
             <span className="text-[13px] font-mono font-medium text-[var(--txt)] truncate">
               {secret.key}
@@ -510,7 +512,6 @@ function SecretCard({
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {showRequired && (
             <span className="text-[10px] text-[var(--danger)] font-medium px-1.5 py-0.5 border border-[var(--danger)] rounded">
-
               {t("secretsview.Required")}
             </span>
           )}

@@ -30,7 +30,8 @@ export function WalletSendPanel({
   sendUserSignTx,
   handleSendExecute,
   handleCopyUserSignPayload,
-  t }: WalletSendPanelProps) {
+  t,
+}: WalletSendPanelProps) {
   return (
     <div className="anime-wallet-action-body">
       <label className="anime-wallet-field">
@@ -102,7 +103,10 @@ export function WalletSendPanel({
           <span>{t("wallet.latestTx")}</span>
           <code>{shortHash(sendLastTxHash)}</code>
           <a
-            href={getExplorerTxUrl("bsc", sendLastTxHash) ?? `https://bscscan.com/tx/${sendLastTxHash}`}
+            href={
+              getExplorerTxUrl("bsc", sendLastTxHash) ??
+              `https://bscscan.com/tx/${sendLastTxHash}`
+            }
             target="_blank"
             rel="noopener noreferrer"
             className="anime-wallet-tx-link"

@@ -22,11 +22,14 @@ export const CHANNEL_COLORS: Record<
   retake: {
     border: "border-fuchsia-500/30",
     bg: "bg-fuchsia-500/5",
-    text: "text-fuchsia-400" },
+    text: "text-fuchsia-400",
+  },
   discord: {
     border: "border-indigo-500/30",
     bg: "bg-indigo-500/5",
-    text: "text-indigo-400" } };
+    text: "text-indigo-400",
+  },
+};
 
 // ---------------------------------------------------------------------------
 // Event helpers
@@ -70,7 +73,8 @@ export type StreamSourceType = "stream-tab" | "game" | "custom-url";
 export const STREAM_SOURCE_LABELS: Record<StreamSourceType, string> = {
   "stream-tab": "Stream Tab",
   game: "Game",
-  "custom-url": "Custom URL" };
+  "custom-url": "Custom URL",
+};
 
 export function isSupportedStreamUrl(value: string): boolean {
   const trimmed = value.trim();

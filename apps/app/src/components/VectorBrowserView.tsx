@@ -9,8 +9,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { client, type QueryResult, type TableInfo } from "../api-client";
 import { useApp } from "../AppContext";
+import { client, type QueryResult, type TableInfo } from "../api-client";
 
 const PAGE_SIZE = 25;
 const MAX_THREE_PIXEL_RATIO = 2;
@@ -109,17 +109,17 @@ function rowToMemory(row: Record<string, unknown>): MemoryRecord {
     roomId: String(row.roomId ?? row.room_id ?? row.roomID ?? ""),
     entityId: String(
       row.entityId ??
-      row.entity_id ??
-      row.entityID ??
-      row.userId ??
-      row.user_id ??
-      "",
+        row.entity_id ??
+        row.entityID ??
+        row.userId ??
+        row.user_id ??
+        "",
     ),
     type: String(row.type ?? row.memoryType ?? row.memory_type ?? ""),
     createdAt: String(row.createdAt ?? row.created_at ?? row.timestamp ?? ""),
     unique: row.unique === true || row.unique === 1 || row.isUnique === true,
     embedding: parseEmbedding(embeddingVal),
-    raw: row
+    raw: row,
   };
 }
 
@@ -216,10 +216,11 @@ function projectTo3D(vectors: number[][]): [number, number, number][] {
 
 function VectorGraph({
   memories,
-  onSelect }: {
-    memories: MemoryRecord[];
-    onSelect: (mem: MemoryRecord) => void;
-  }) {
+  onSelect,
+}: {
+  memories: MemoryRecord[];
+  onSelect: (mem: MemoryRecord) => void;
+}) {
   const { t } = useApp();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -454,13 +455,10 @@ function VectorGraph({
     return (
       <div className="text-center py-16">
         <div className="text-[var(--muted)] text-sm mb-2">
-
           {t("vectorbrowserview.NotEnoughEmbedding")}
         </div>
         <div className="text-[var(--muted)] text-xs">
-
-          {t("vectorbrowserview.NeedAtLeast2Memo")}{" "}
-          {withEmbeddings.length}.
+          {t("vectorbrowserview.NeedAtLeast2Memo")} {withEmbeddings.length}.
         </div>
       </div>
     );
@@ -469,7 +467,7 @@ function VectorGraph({
   return (
     <div ref={containerRef} className="w-full">
       <div className="text-[11px] text-[var(--muted)] mb-2">
-        {withEmbeddings.length}  {t("vectorbrowserview.vectorsProjectedTo")}
+        {withEmbeddings.length} {t("vectorbrowserview.vectorsProjectedTo")}
       </div>
       <canvas
         ref={canvasRef}
@@ -487,10 +485,11 @@ function VectorGraph({
 
 function VectorGraph3D({
   memories,
-  onSelect }: {
-    memories: MemoryRecord[];
-    onSelect: (mem: MemoryRecord) => void;
-  }) {
+  onSelect,
+}: {
+  memories: MemoryRecord[];
+  onSelect: (mem: MemoryRecord) => void;
+}) {
   const { t } = useApp();
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -568,7 +567,7 @@ function VectorGraph3D({
           const WebGPURenderer = webgpuModule.WebGPURenderer;
           if (WebGPURenderer) {
             const webgpuRenderer = new WebGPURenderer({
-              antialias: true
+              antialias: true,
             });
             await webgpuRenderer.init?.();
             renderer = webgpuRenderer;
@@ -704,7 +703,7 @@ function VectorGraph3D({
         const material = new THREE.MeshBasicMaterial({
           color,
           transparent: true,
-          opacity: 0.85
+          opacity: 0.85,
         });
         const sphere = new THREE.Mesh(geometry, material);
         sphere.position.set(
@@ -859,7 +858,7 @@ function VectorGraph3D({
       renderer.domElement.addEventListener("mousemove", onMouseMove);
       renderer.domElement.addEventListener("click", onClick);
       renderer.domElement.addEventListener("wheel", onWheel, {
-        passive: false
+        passive: false,
       });
       renderer.domElement.addEventListener("mouseleave", onMouseLeave);
       if (cancelled) {
@@ -897,13 +896,10 @@ function VectorGraph3D({
     return (
       <div className="text-center py-16">
         <div className="text-[var(--muted)] text-sm mb-2">
-
           {t("vectorbrowserview.NotEnoughEmbedding1")}
         </div>
         <div className="text-[var(--muted)] text-xs">
-
-          {t("vectorbrowserview.NeedAtLeast2Memo")}{" "}
-          {withEmbeddings.length}.
+          {t("vectorbrowserview.NeedAtLeast2Memo")} {withEmbeddings.length}.
         </div>
       </div>
     );
@@ -914,7 +910,7 @@ function VectorGraph3D({
   return (
     <div className="relative">
       <div className="text-[11px] text-[var(--muted)] mb-2">
-        {withEmbeddings.length}  {t("vectorbrowserview.vectorsProjectedTo1")}
+        {withEmbeddings.length} {t("vectorbrowserview.vectorsProjectedTo1")}
       </div>
       <div
         ref={containerRef}
@@ -928,7 +924,7 @@ function VectorGraph3D({
           style={{
             left: tooltipPos.x + 15,
             top: tooltipPos.y + 15,
-            transform: tooltipPos.x > 400 ? "translateX(-100%)" : undefined
+            transform: tooltipPos.x > 400 ? "translateX(-100%)" : undefined,
           }}
         >
           <div className="font-medium mb-1 truncate">
@@ -955,7 +951,7 @@ function VectorGraph3D({
                 <div
                   className="w-3 h-3 rounded-full"
                   style={{
-                    backgroundColor: `#${color.toString(16).padStart(6, "0")}`
+                    backgroundColor: `#${color.toString(16).padStart(6, "0")}`,
                   }}
                 />
                 <span className="text-[var(--muted)]">{type}</span>
@@ -971,10 +967,11 @@ function VectorGraph3D({
 
 function MemoryDetailModal({
   memory,
-  onClose }: {
-    memory: MemoryRecord;
-    onClose: () => void;
-  }) {
+  onClose,
+}: {
+  memory: MemoryRecord;
+  onClose: () => void;
+}) {
   const { t } = useApp();
   return (
     <div
@@ -995,7 +992,6 @@ function MemoryDetailModal({
         {/* Header */}
         <div className="flex items-center justify-between p-3 border-b border-[var(--border)]">
           <div className="text-xs font-medium text-[var(--txt)]">
-
             {t("vectorbrowserview.MemoryDetail")}
           </div>
           <button
@@ -1010,7 +1006,6 @@ function MemoryDetailModal({
         {/* Content */}
         <div className="p-4">
           <div className="text-[11px] text-[var(--muted)] mb-1 uppercase font-bold">
-
             {t("vectorbrowserview.Content")}
           </div>
           <div className="text-xs text-[var(--txt)] whitespace-pre-wrap break-words mb-4 p-2 bg-[var(--bg)] border border-[var(--border)] max-h-[200px] overflow-auto">
@@ -1019,7 +1014,6 @@ function MemoryDetailModal({
 
           {/* Metadata */}
           <div className="text-[11px] text-[var(--muted)] mb-1 uppercase font-bold">
-
             {t("vectorbrowserview.Metadata")}
           </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs mb-4">
@@ -1027,19 +1021,29 @@ function MemoryDetailModal({
             <span className="text-[var(--txt)] font-mono truncate">
               {memory.id || "—"}
             </span>
-            <span className="text-[var(--muted)]">{t("vectorbrowserview.Type")}</span>
+            <span className="text-[var(--muted)]">
+              {t("vectorbrowserview.Type")}
+            </span>
             <span className="text-[var(--txt)]">{memory.type || "—"}</span>
-            <span className="text-[var(--muted)]">{t("vectorbrowserview.Room")}</span>
+            <span className="text-[var(--muted)]">
+              {t("vectorbrowserview.Room")}
+            </span>
             <span className="text-[var(--txt)] font-mono truncate">
               {memory.roomId || "—"}
             </span>
-            <span className="text-[var(--muted)]">{t("vectorbrowserview.Entity")}</span>
+            <span className="text-[var(--muted)]">
+              {t("vectorbrowserview.Entity")}
+            </span>
             <span className="text-[var(--txt)] font-mono truncate">
               {memory.entityId || "—"}
             </span>
-            <span className="text-[var(--muted)]">{t("vectorbrowserview.Created")}</span>
+            <span className="text-[var(--muted)]">
+              {t("vectorbrowserview.Created")}
+            </span>
             <span className="text-[var(--txt)]">{memory.createdAt || "—"}</span>
-            <span className="text-[var(--muted)]">{t("vectorbrowserview.Unique")}</span>
+            <span className="text-[var(--muted)]">
+              {t("vectorbrowserview.Unique")}
+            </span>
             <span className="text-[var(--txt)]">
               {memory.unique ? "Yes" : "No"}
             </span>
@@ -1049,8 +1053,8 @@ function MemoryDetailModal({
           {memory.embedding && (
             <>
               <div className="text-[11px] text-[var(--muted)] mb-1 uppercase font-bold">
-
-                {t("vectorbrowserview.Embedding")}{memory.embedding.length}  {t("vectorbrowserview.dimensions")}
+                {t("vectorbrowserview.Embedding")}
+                {memory.embedding.length} {t("vectorbrowserview.dimensions")}
               </div>
               <div className="p-2 bg-[var(--bg)] border border-[var(--border)] text-[10px] font-mono text-[var(--muted)] max-h-[150px] overflow-auto break-all mb-4">
                 [{memory.embedding.map((v) => v.toFixed(6)).join(", ")}]
@@ -1061,7 +1065,6 @@ function MemoryDetailModal({
           {/* Raw data */}
           <details>
             <summary className="text-[11px] text-[var(--muted)] cursor-pointer hover:text-[var(--txt)] uppercase font-bold mb-1">
-
               {t("vectorbrowserview.RawRecord")}
             </summary>
             <div className="p-2 bg-[var(--bg)] border border-[var(--border)] text-[10px] font-mono text-[var(--muted)] max-h-[200px] overflow-auto break-all">
@@ -1224,7 +1227,7 @@ export function VectorBrowserView() {
       const joinSql = buildJoinQuery({
         where: joinWhere,
         limit: PAGE_SIZE,
-        offset
+        offset,
       });
       let result: QueryResult;
 
@@ -1329,12 +1332,20 @@ export function VectorBrowserView() {
       {/* Stats bar */}
       {stats && !isConnectionError && (
         <div className="flex gap-4 mb-4 text-[11px] text-[var(--muted)]">
-          <span>{Number(stats.total).toLocaleString()}  {t("vectorbrowserview.memories")}</span>
+          <span>
+            {Number(stats.total).toLocaleString()}{" "}
+            {t("vectorbrowserview.memories")}
+          </span>
           {Number(stats.uniqueCount) > 0 && (
-            <span>{Number(stats.uniqueCount).toLocaleString()}  {t("vectorbrowserview.unique")}</span>
+            <span>
+              {Number(stats.uniqueCount).toLocaleString()}{" "}
+              {t("vectorbrowserview.unique")}
+            </span>
           )}
           {Number(stats.dimensions) > 0 && (
-            <span>{stats.dimensions}  {t("vectorbrowserview.dimensions1")}</span>
+            <span>
+              {stats.dimensions} {t("vectorbrowserview.dimensions1")}
+            </span>
           )}
         </div>
       )}
@@ -1357,7 +1368,6 @@ export function VectorBrowserView() {
                 className="px-3 py-1.5 text-xs bg-[var(--accent)] text-[var(--accent-foreground)] border border-[var(--accent)] cursor-pointer hover:opacity-80"
                 onClick={handleSearch}
               >
-
                 {t("vectorbrowserview.Search")}
               </button>
             </div>
@@ -1390,31 +1400,33 @@ export function VectorBrowserView() {
           <div className="flex gap-1 ml-auto">
             <button
               type="button"
-              className={`px-3 py-1.5 text-xs cursor-pointer border transition-colors ${viewMode === "list"
-                ? "bg-[var(--accent)] text-[var(--accent-foreground)] border-[var(--accent)]"
-                : "bg-transparent text-[var(--muted)] border-[var(--border)] hover:text-[var(--txt)]"
-                }`}
+              className={`px-3 py-1.5 text-xs cursor-pointer border transition-colors ${
+                viewMode === "list"
+                  ? "bg-[var(--accent)] text-[var(--accent-foreground)] border-[var(--accent)]"
+                  : "bg-transparent text-[var(--muted)] border-[var(--border)] hover:text-[var(--txt)]"
+              }`}
               onClick={() => setViewMode("list")}
             >
-
               {t("vectorbrowserview.List")}
             </button>
             <button
               type="button"
-              className={`px-3 py-1.5 text-xs cursor-pointer border transition-colors ${viewMode === "graph"
-                ? "bg-[var(--accent)] text-[var(--accent-foreground)] border-[var(--accent)]"
-                : "bg-transparent text-[var(--muted)] border-[var(--border)] hover:text-[var(--txt)]"
-                }`}
+              className={`px-3 py-1.5 text-xs cursor-pointer border transition-colors ${
+                viewMode === "graph"
+                  ? "bg-[var(--accent)] text-[var(--accent-foreground)] border-[var(--accent)]"
+                  : "bg-transparent text-[var(--muted)] border-[var(--border)] hover:text-[var(--txt)]"
+              }`}
               onClick={() => setViewMode("graph")}
             >
               2D
             </button>
             <button
               type="button"
-              className={`px-3 py-1.5 text-xs cursor-pointer border transition-colors ${viewMode === "3d"
-                ? "bg-[var(--accent)] text-[var(--accent-foreground)] border-[var(--accent)]"
-                : "bg-transparent text-[var(--muted)] border-[var(--border)] hover:text-[var(--txt)]"
-                }`}
+              className={`px-3 py-1.5 text-xs cursor-pointer border transition-colors ${
+                viewMode === "3d"
+                  ? "bg-[var(--accent)] text-[var(--accent-foreground)] border-[var(--accent)]"
+                  : "bg-transparent text-[var(--muted)] border-[var(--border)] hover:text-[var(--txt)]"
+              }`}
               onClick={() => setViewMode("3d")}
             >
               3D
@@ -1435,11 +1447,9 @@ export function VectorBrowserView() {
         (error.includes("agent is running") ? (
           <div className="text-center py-16">
             <div className="text-[var(--muted)] text-sm mb-2">
-
               {t("vectorbrowserview.DatabaseNotAvailab")}
             </div>
             <div className="text-[var(--muted)] text-xs mb-4">
-
               {t("vectorbrowserview.StartTheAgentToB")}
             </div>
             <button
@@ -1450,7 +1460,6 @@ export function VectorBrowserView() {
                 loadTables();
               }}
             >
-
               {t("vectorbrowserview.RetryConnection")}
             </button>
           </div>
@@ -1464,7 +1473,6 @@ export function VectorBrowserView() {
       {viewMode === "graph" &&
         (graphLoading ? (
           <div className="text-center py-16 text-[var(--muted)] text-sm italic">
-
             {t("vectorbrowserview.LoadingEmbeddings")}
           </div>
         ) : (
@@ -1475,7 +1483,6 @@ export function VectorBrowserView() {
       {viewMode === "3d" &&
         (graphLoading ? (
           <div className="text-center py-16 text-[var(--muted)] text-sm italic">
-
             {t("vectorbrowserview.LoadingEmbeddings")}
           </div>
         ) : (
@@ -1489,13 +1496,11 @@ export function VectorBrowserView() {
       {viewMode === "list" &&
         (loading ? (
           <div className="text-center py-16 text-[var(--muted)] text-sm italic">
-
             {t("vectorbrowserview.LoadingMemories")}
           </div>
         ) : memories.length === 0 ? (
           <div className="text-center py-16">
             <div className="text-[var(--muted)] text-sm mb-2">
-
               {t("vectorbrowserview.NoMemoriesFound")}
             </div>
             <div className="text-[var(--muted)] text-xs">
@@ -1528,17 +1533,21 @@ export function VectorBrowserView() {
                     </span>
                   )}
                   {mem.roomId && mem.roomId !== "undefined" && (
-                    <span>{t("vectorbrowserview.Room1")} {mem.roomId.slice(0, 12)}</span>
+                    <span>
+                      {t("vectorbrowserview.Room1")} {mem.roomId.slice(0, 12)}
+                    </span>
                   )}
                   {mem.entityId && mem.entityId !== "undefined" && (
-                    <span>{t("vectorbrowserview.Entity1")} {mem.entityId.slice(0, 12)}</span>
+                    <span>
+                      {t("vectorbrowserview.Entity1")}{" "}
+                      {mem.entityId.slice(0, 12)}
+                    </span>
                   )}
                   {mem.createdAt && mem.createdAt !== "undefined" && (
                     <span>{mem.createdAt}</span>
                   )}
                   {mem.unique && (
                     <span className="px-1.5 py-0.5 bg-green-500/20 text-green-400 font-bold">
-
                       {t("vectorbrowserview.unique")}
                     </span>
                   )}
@@ -1560,11 +1569,9 @@ export function VectorBrowserView() {
             disabled={page === 0}
             onClick={() => setPage((p) => p - 1)}
           >
-
             {t("vectorbrowserview.Prev")}
           </button>
           <span className="text-[11px] text-[var(--muted)]">
-
             {t("vectorbrowserview.Page")} {page + 1} of {totalPages}
           </span>
           <button
@@ -1573,7 +1580,6 @@ export function VectorBrowserView() {
             disabled={page >= totalPages - 1}
             onClick={() => setPage((p) => p + 1)}
           >
-
             {t("vectorbrowserview.Next")}
           </button>
         </div>

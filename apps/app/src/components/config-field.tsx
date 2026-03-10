@@ -11,10 +11,10 @@
 
 import { ChevronDown, X } from "lucide-react";
 import React, { useCallback, useRef, useState } from "react";
+import { useApp } from "../AppContext";
 import type { DynamicValue } from "../types";
 import type { FieldRenderer, FieldRenderProps } from "./config-catalog";
 import { resolveDynamic } from "./config-catalog";
-import { useApp } from "../AppContext";
 
 // ── Action binding helper ──────────────────────────────────────────────
 
@@ -290,12 +290,14 @@ function BooleanFieldInner({ fp: props }: { fp: FieldRenderProps }) {
       data-field-type="boolean"
     >
       <div
-        className={`relative w-10 h-[22px] rounded-full transition-colors duration-200 ${localVal ? "bg-[var(--accent)]" : "bg-[var(--muted)] opacity-40"
-          }`}
+        className={`relative w-10 h-[22px] rounded-full transition-colors duration-200 ${
+          localVal ? "bg-[var(--accent)]" : "bg-[var(--muted)] opacity-40"
+        }`}
       >
         <div
-          className={`absolute top-[3px] w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-200 ${localVal ? "left-[21px]" : "left-[3px]"
-            }`}
+          className={`absolute top-[3px] w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-200 ${
+            localVal ? "left-[21px]" : "left-[3px]"
+          }`}
         />
       </div>
       <span
@@ -340,7 +342,7 @@ export function renderUrlField(props: FieldRenderProps) {
 // ── 6. Select ───────────────────────────────────────────────────────────
 
 /** Dropdown select. Options from hint.options or schema.enum. */
-export function renderSelectField(props: FieldRenderProps) {
+export function RenderSelectField(props: FieldRenderProps) {
   const { t } = useApp();
   const enhancedOptions = (props.hint as Record<string, unknown>).options as
     | Array<{ value: string; label: string; description?: string }>
@@ -353,15 +355,15 @@ export function renderSelectField(props: FieldRenderProps) {
 
   const allOptions = enhancedOptions
     ? enhancedOptions.map((o) => ({
-      value: o.value,
-      label: o.label,
-      description: o.description
-    }))
+        value: o.value,
+        label: o.label,
+        description: o.description,
+      }))
     : plainOptions.map((o) => ({
-      value: o,
-      label: o,
-      description: undefined as string | undefined
-    }));
+        value: o,
+        label: o,
+        description: undefined as string | undefined,
+      }));
 
   const value = props.isSet ? String(props.value ?? "") : "";
   const effectiveValue = value || String(props.schema.default ?? "");
@@ -404,11 +406,12 @@ export function renderSelectField(props: FieldRenderProps) {
 function SearchableSelectInner({
   fp: props,
   options,
-  effectiveValue }: {
-    fp: FieldRenderProps;
-    options: Array<{ value: string; label: string; description?: string }>;
-    effectiveValue: string;
-  }) {
+  effectiveValue,
+}: {
+  fp: FieldRenderProps;
+  options: Array<{ value: string; label: string; description?: string }>;
+  effectiveValue: string;
+}) {
   const { t } = useApp();
   const matchingOpt = options.find((o) => o.value === effectiveValue);
   const [inputVal, setInputVal] = useState(
@@ -421,10 +424,10 @@ function SearchableSelectInner({
 
   const filtered = filter
     ? options.filter(
-      (o) =>
-        o.label.toLowerCase().includes(filter.toLowerCase()) ||
-        o.value.toLowerCase().includes(filter.toLowerCase()),
-    )
+        (o) =>
+          o.label.toLowerCase().includes(filter.toLowerCase()) ||
+          o.value.toLowerCase().includes(filter.toLowerCase()),
+      )
     : options;
 
   const select = useCallback(
@@ -512,13 +515,11 @@ function SearchableSelectInner({
                   fireAction(props, "change");
                 }}
               >
-
                 {t("config-field.None")}
               </button>
             )}
             {filtered.length === 0 && (
               <div className="px-3 py-3 text-[12px] text-[var(--muted)] text-center">
-
                 {t("config-field.NoMatches")}
               </div>
             )}
@@ -526,10 +527,11 @@ function SearchableSelectInner({
               <button
                 key={opt.value}
                 type="button"
-                className={`w-full text-left px-3 py-1.5 text-[12px] hover:bg-[var(--bg-hover)] transition-colors ${opt.value === effectiveValue
-                  ? "bg-[color-mix(in_srgb,var(--accent)_10%,var(--card))] text-[var(--accent)] font-medium"
-                  : ""
-                  }`}
+                className={`w-full text-left px-3 py-1.5 text-[12px] hover:bg-[var(--bg-hover)] transition-colors ${
+                  opt.value === effectiveValue
+                    ? "bg-[color-mix(in_srgb,var(--accent)_10%,var(--card))] text-[var(--accent)] font-medium"
+                    : ""
+                }`}
                 onClick={() => select(opt)}
               >
                 {opt.label}
@@ -542,7 +544,7 @@ function SearchableSelectInner({
             ))}
           </div>
           <div className="px-3 py-1 border-t border-[var(--border)] text-[10px] text-[var(--muted)]">
-            {filtered.length} of {options.length}  {t("config-field.models")}
+            {filtered.length} of {options.length} {t("config-field.models")}
           </div>
         </div>
       )}
@@ -686,7 +688,7 @@ function RadioFieldInner({ fp: props }: { fp: FieldRenderProps }) {
       | undefined) ??
     ((props.schema.enum as string[]) ?? []).map((v) => ({
       value: String(v),
-      label: String(v)
+      label: String(v),
     }));
 
   const initial = props.isSet
@@ -750,7 +752,7 @@ function MultiselectFieldInner({ fp: props }: { fp: FieldRenderProps }) {
       | undefined) ??
     ((props.schema.items?.enum as string[]) ?? []).map((v) => ({
       value: String(v),
-      label: String(v)
+      label: String(v),
     }));
 
   const rawVal = props.isSet ? props.value : [];
@@ -896,10 +898,11 @@ function JsonFieldInner({ fp: props }: { fp: FieldRenderProps }) {
   return (
     <div>
       <textarea
-        className={`w-full px-2.5 py-[7px] border ${jsonError || props.errors?.length
-          ? "border-[var(--destructive)]"
-          : "border-[var(--border)]"
-          } bg-[var(--card)] text-[13px] font-mono transition-all focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] box-border min-h-[100px] resize-y rounded-sm`}
+        className={`w-full px-2.5 py-[7px] border ${
+          jsonError || props.errors?.length
+            ? "border-[var(--destructive)]"
+            : "border-[var(--border)]"
+        } bg-[var(--card)] text-[13px] font-mono transition-all focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] box-border min-h-[100px] resize-y rounded-sm`}
         defaultValue={initial}
         placeholder={t("config-field.KeyValue")}
         rows={6}
@@ -932,10 +935,11 @@ export function renderCodeField(props: FieldRenderProps) {
 
   return (
     <textarea
-      className={`w-full px-2.5 py-[7px] border ${props.errors?.length
-        ? "border-[var(--destructive)]"
-        : "border-[var(--border)]"
-        } bg-[var(--card)] text-[13px] font-mono transition-all focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] box-border min-h-[100px] resize-y rounded-sm`}
+      className={`w-full px-2.5 py-[7px] border ${
+        props.errors?.length
+          ? "border-[var(--destructive)]"
+          : "border-[var(--border)]"
+      } bg-[var(--card)] text-[13px] font-mono transition-all focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] box-border min-h-[100px] resize-y rounded-sm`}
       defaultValue={value}
       placeholder={placeholder}
       rows={6}
@@ -969,18 +973,19 @@ function ArrayItem({
   onRemove,
   onMoveUp,
   onMoveDown,
-  onBlur }: {
-    index: number;
-    value: string;
-    total: number;
-    hasError: boolean;
-    readonly?: boolean;
-    onChange: (value: string) => void;
-    onRemove: () => void;
-    onMoveUp: () => void;
-    onMoveDown: () => void;
-    onBlur: () => void;
-  }) {
+  onBlur,
+}: {
+  index: number;
+  value: string;
+  total: number;
+  hasError: boolean;
+  readonly?: boolean;
+  onChange: (value: string) => void;
+  onRemove: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onBlur: () => void;
+}) {
   const { t } = useApp();
   return (
     <div className="flex items-center gap-1">
@@ -1098,7 +1103,6 @@ function ArrayFieldInner({ fp: props }: { fp: FieldRenderProps }) {
             fireAction(props, "click");
           }}
         >
-
           {t("config-field.AddItem")}
         </button>
       )}
@@ -1119,9 +1123,9 @@ function KeyValueFieldInner({ fp: props }: { fp: FieldRenderProps }) {
   const initialPairs: Array<{ key: string; value: string }> =
     rawVal && typeof rawVal === "object" && !Array.isArray(rawVal)
       ? Object.entries(rawVal as Record<string, unknown>).map(([k, v]) => ({
-        key: k,
-        value: String(v ?? "")
-      }))
+          key: k,
+          value: String(v ?? ""),
+        }))
       : [];
   const [pairs, setPairs] = useState(initialPairs);
 
@@ -1203,7 +1207,6 @@ function KeyValueFieldInner({ fp: props }: { fp: FieldRenderProps }) {
             fireAction(props, "click");
           }}
         >
-
           {t("config-field.AddRow")}
         </button>
       )}
@@ -1238,7 +1241,7 @@ export function renderDatetimeField(props: FieldRenderProps) {
 // ── 18. File ────────────────────────────────────────────────────────────
 
 /** File path text input with path traversal guard. */
-export function renderFileField(props: FieldRenderProps) {
+export function RenderFileField(props: FieldRenderProps) {
   const { t } = useApp();
   const value = props.isSet ? String(props.value ?? "") : "";
   const placeholder =
@@ -1264,7 +1267,6 @@ export function renderFileField(props: FieldRenderProps) {
         onClick={() => fireAction(props, "click")}
       />
       <div className="text-[11px] text-[var(--muted)] mt-0.5">
-
         {t("config-field.EnterAFilePathOr")}
       </div>
     </div>
@@ -1274,7 +1276,7 @@ export function renderFileField(props: FieldRenderProps) {
 // ── 19. Custom ──────────────────────────────────────────────────────────
 
 /** Placeholder for plugin-provided custom React components. */
-export function renderCustomField(props: FieldRenderProps) {
+export function RenderCustomField(props: FieldRenderProps) {
   const { t } = useApp();
   const componentName = (props.hint as Record<string, unknown>).component as
     | string
@@ -1286,7 +1288,6 @@ export function renderCustomField(props: FieldRenderProps) {
       data-config-key={props.key}
       data-field-type="custom"
     >
-
       {t("config-field.CustomComponent")} {componentName ?? props.fieldType}
     </div>
   );
@@ -1466,24 +1467,24 @@ function MarkdownFieldInner(props: FieldRenderProps) {
       <div className="flex items-center gap-2 mb-1">
         <button
           type="button"
-          className={`text-[11px] px-2 py-0.5 border transition-colors ${!preview
-            ? "bg-[var(--accent)] text-[var(--accent-fg)] border-[var(--accent)]"
-            : "bg-transparent text-[var(--muted)] border-[var(--border)] hover:text-[var(--txt)]"
-            }`}
+          className={`text-[11px] px-2 py-0.5 border transition-colors ${
+            !preview
+              ? "bg-[var(--accent)] text-[var(--accent-fg)] border-[var(--accent)]"
+              : "bg-transparent text-[var(--muted)] border-[var(--border)] hover:text-[var(--txt)]"
+          }`}
           onClick={() => setPreview(false)}
         >
-
           {t("config-field.Edit")}
         </button>
         <button
           type="button"
-          className={`text-[11px] px-2 py-0.5 border transition-colors ${preview
-            ? "bg-[var(--accent)] text-[var(--accent-fg)] border-[var(--accent)]"
-            : "bg-transparent text-[var(--muted)] border-[var(--border)] hover:text-[var(--txt)]"
-            }`}
+          className={`text-[11px] px-2 py-0.5 border transition-colors ${
+            preview
+              ? "bg-[var(--accent)] text-[var(--accent-fg)] border-[var(--accent)]"
+              : "bg-transparent text-[var(--muted)] border-[var(--border)] hover:text-[var(--txt)]"
+          }`}
           onClick={() => setPreview(true)}
         >
-
           {t("config-field.Preview")}
         </button>
       </div>
@@ -1497,7 +1498,6 @@ function MarkdownFieldInner(props: FieldRenderProps) {
             renderMarkdown(value)
           ) : (
             <span className="text-[var(--muted)] italic">
-
               {t("config-field.NothingToPreview")}
             </span>
           )}
@@ -1545,7 +1545,7 @@ function CheckboxGroupInner(props: FieldRenderProps) {
     props.hint.options ??
     (props.schema.enum as string[] | undefined)?.map((v) => ({
       value: v,
-      label: v
+      label: v,
     })) ??
     [];
 
@@ -1566,10 +1566,11 @@ function CheckboxGroupInner(props: FieldRenderProps) {
       {options.map((opt) => (
         <label
           key={opt.value}
-          className={`flex items-start gap-2.5 px-3 py-2 border border-[var(--border)] bg-[var(--card)] cursor-pointer transition-colors hover:bg-[var(--bg-hover)] ${selected.has(opt.value)
-            ? "border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_5%,var(--card))]"
-            : ""
-            } ${opt.disabled ? "opacity-50 pointer-events-none" : ""}`}
+          className={`flex items-start gap-2.5 px-3 py-2 border border-[var(--border)] bg-[var(--card)] cursor-pointer transition-colors hover:bg-[var(--bg-hover)] ${
+            selected.has(opt.value)
+              ? "border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_5%,var(--card))]"
+              : ""
+          } ${opt.disabled ? "opacity-50 pointer-events-none" : ""}`}
         >
           <input
             type="checkbox"
@@ -1590,7 +1591,6 @@ function CheckboxGroupInner(props: FieldRenderProps) {
       ))}
       {options.length === 0 && (
         <span className="text-[11px] text-[var(--muted)] italic">
-
           {t("config-field.NoOptionsDefined")}
         </span>
       )}
@@ -1639,9 +1639,9 @@ function TableFieldInner(props: FieldRenderProps) {
   const columns: Array<{ key: string; label: string }> = ((
     props.hint as Record<string, unknown>
   ).columns as Array<{ key: string; label: string }>) ?? [
-      { key: "key", label: "Key" },
-      { key: "value", label: "Value" },
-    ];
+    { key: "key", label: "Key" },
+    { key: "value", label: "Value" },
+  ];
 
   const rawRows = Array.isArray(props.value)
     ? (props.value as Record<string, string>[])
@@ -1721,7 +1721,6 @@ function TableFieldInner(props: FieldRenderProps) {
                       onClick={() => removeRow(ri)}
                       title={t("config-field.RemoveRow")}
                     >
-
                       {t("config-field.Times")}
                     </button>
                   )}
@@ -1737,7 +1736,6 @@ function TableFieldInner(props: FieldRenderProps) {
           className="self-start text-[11px] text-[var(--accent)] hover:underline"
           onClick={addRow}
         >
-
           {t("config-field.AddRow")}
         </button>
       )}
@@ -1757,7 +1755,7 @@ export const defaultRenderers: Record<string, FieldRenderer> = {
   number: renderNumberField,
   boolean: renderBooleanField,
   url: renderUrlField,
-  select: renderSelectField,
+  select: RenderSelectField,
   textarea: renderTextareaField,
   email: renderEmailField,
   color: renderColorField,
@@ -1769,12 +1767,12 @@ export const defaultRenderers: Record<string, FieldRenderer> = {
   array: renderArrayField,
   keyvalue: renderKeyValueField,
   datetime: renderDatetimeField,
-  file: renderFileField,
-  custom: renderCustomField,
+  file: RenderFileField,
+  custom: RenderCustomField,
   markdown: renderMarkdownField,
   "checkbox-group": renderCheckboxGroupField,
   group: renderGroupField,
-  table: renderTableField
+  table: renderTableField,
 };
 
 // ── ConfigField wrapper component ───────────────────────────────────────
@@ -1786,11 +1784,12 @@ export const defaultRenderers: Record<string, FieldRenderer> = {
 export function ConfigField({
   renderProps,
   renderer,
-  pluginId }: {
-    renderProps: FieldRenderProps;
-    renderer: FieldRenderer;
-    pluginId?: string;
-  }) {
+  pluginId,
+}: {
+  renderProps: FieldRenderProps;
+  renderer: FieldRenderer;
+  pluginId?: string;
+}) {
   const { t } = useApp();
   const label = renderProps.hint.label ?? renderProps.key;
   const envKey = renderProps.key;
@@ -1811,8 +1810,9 @@ export function ConfigField({
           ? `field-${pluginId}-${renderProps.key}`
           : `field-${renderProps.key}`
       }
-      className={`py-2.5 group/field ${renderProps.readonly ? "opacity-50 pointer-events-none" : ""
-        } ${isRequiredEmpty ? "relative" : ""}`}
+      className={`py-2.5 group/field ${
+        renderProps.readonly ? "opacity-50 pointer-events-none" : ""
+      } ${isRequiredEmpty ? "relative" : ""}`}
     >
       {/* Required-but-empty accent bar */}
       {isRequiredEmpty && (
@@ -1826,14 +1826,13 @@ export function ConfigField({
             className="font-semibold leading-tight truncate"
             style={{
               fontSize: "var(--plugin-label-size)",
-              color: "var(--plugin-label)"
+              color: "var(--plugin-label)",
             }}
           >
             {label}
           </span>
           {renderProps.required && !renderProps.isSet && (
             <span className="text-[10px] text-[var(--destructive)] font-semibold px-1.5 py-px bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] rounded-sm shrink-0">
-
               {t("config-field.Required")}
             </span>
           )}
@@ -1864,10 +1863,12 @@ export function ConfigField({
                 className="leading-snug flex items-start gap-1"
                 style={{
                   fontSize: "var(--plugin-error-size)",
-                  color: "var(--plugin-error)"
+                  color: "var(--plugin-error)",
                 }}
               >
-                <span className="shrink-0 mt-px">{t("config-field.Times")}</span>
+                <span className="shrink-0 mt-px">
+                  {t("config-field.Times")}
+                </span>
                 <span>{err}</span>
               </div>
             ))}
@@ -1880,15 +1881,15 @@ export function ConfigField({
             className="mt-1 leading-relaxed line-clamp-2"
             style={{
               fontSize: "var(--plugin-help-size)",
-              color: "var(--plugin-help)"
+              color: "var(--plugin-help)",
             }}
           >
             {renderProps.hint.help ?? renderProps.schema.description}
             {renderProps.schema.default != null && (
               <span className="opacity-70">
                 {" "}
-
-                {t("config-field.Default")} {String(renderProps.schema.default)})
+                {t("config-field.Default")} {String(renderProps.schema.default)}
+                )
               </span>
             )}
           </div>

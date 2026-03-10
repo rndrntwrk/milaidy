@@ -5,7 +5,8 @@ const STATUS_DOT: Record<string, string> = {
   active: "bg-ok",
   tool_running: "bg-accent",
   blocked: "bg-warn",
-  error: "bg-danger" };
+  error: "bg-danger",
+};
 
 const PULSE_STATUSES = new Set(["active", "tool_running"]);
 

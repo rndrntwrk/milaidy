@@ -32,7 +32,8 @@ export class VrmFootShadow {
       map: shadowTexture,
       transparent: true,
       alphaTest: 0.001,
-      depthWrite: false });
+      depthWrite: false,
+    });
 
     const shadow = new THREE.Mesh(shadowGeometry, shadowMaterial);
     shadow.rotation.x = -Math.PI / 2;

@@ -4,7 +4,8 @@ import { COMMAND_PALETTE_EVENT } from "../events";
 import { useBugReport } from "../hooks/useBugReport";
 import {
   buildCommandPaletteCommands,
-  type CommandItem } from "./command-palette-commands";
+  type CommandItem,
+} from "./command-palette-commands";
 
 export function CommandPalette() {
   const {
@@ -23,7 +24,8 @@ export function CommandPalette() {
     handleChatClear,
     activeGameViewerUrl,
     setState,
-    t } = useApp();
+    t,
+  } = useApp();
   const { open: openBugReport } = useBugReport();
   const closeCommandPalette = useCallback(
     () => setState("commandPaletteOpen", false),
@@ -50,7 +52,8 @@ export function CommandPalette() {
       loadLogs,
       loadWorkbench,
       handleChatClear,
-      openBugReport });
+      openBugReport,
+    });
   }, [
     agentState,
     currentGameViewerUrl,
@@ -226,7 +229,6 @@ export function CommandPalette() {
         <div className="flex-1 overflow-y-auto py-1">
           {filteredCommands.length === 0 ? (
             <div className="py-5 text-center text-muted text-[13px]">
-
               {t("commandpalette.NoCommandsFound")}
             </div>
           ) : (
@@ -234,10 +236,11 @@ export function CommandPalette() {
               <button
                 type="button"
                 key={cmd.id}
-                className={`w - full px - 4 py - 2.5 cursor - pointer flex justify - between items - center text - left text - sm font - body ${idx === commandActiveIndex
+                className={`w - full px - 4 py - 2.5 cursor - pointer flex justify - between items - center text - left text - sm font - body ${
+                  idx === commandActiveIndex
                     ? "bg-bg-hover"
                     : "hover:bg-bg-hover"
-                  } `}
+                } `}
                 onClick={() => {
                   cmd.action();
                   closeCommandPalette();

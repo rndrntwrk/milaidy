@@ -2,7 +2,6 @@
  * Pairing view component — simple pairing screen for authentication.
  */
 
-import {} from "react";
 import { useApp } from "../AppContext";
 
 const PAIRING_DOCS_URL =
@@ -17,7 +16,8 @@ export function PairingView() {
     pairingBusy,
     handlePairingSubmit,
     setState,
-    t } = useApp();
+    t,
+  } = useApp();
 
   const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setState("pairingCodeInput", e.target.value);
@@ -41,11 +41,9 @@ export function PairingView() {
   return (
     <div className="max-w-[560px] mx-auto mt-15 p-6 border border-border bg-card rounded-[10px]">
       <h1 className="text-lg font-semibold mb-2 text-txt-strong">
-
         {t("pairingview.PairingRequired")}
       </h1>
       <p className="text-muted mb-4 leading-relaxed">
-
         {t("pairingview.EnterThePairingCo")}
       </p>
 
@@ -56,7 +54,6 @@ export function PairingView() {
               htmlFor="pairing-code"
               className="text-sm text-txt-strong block mb-2"
             >
-
               {t("pairingview.PairingCode")}
             </label>
             <input
@@ -104,7 +101,6 @@ export function PairingView() {
             rel="noreferrer"
             className="inline-flex px-3 py-2 border border-border rounded text-txt hover:border-accent hover:text-accent"
           >
-
             {t("pairingview.PairingSetupDocs")}
           </a>
         </div>

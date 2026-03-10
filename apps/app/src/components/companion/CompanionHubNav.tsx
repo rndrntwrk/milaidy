@@ -4,12 +4,44 @@ import type { TranslatorFn } from "./walletUtils";
 
 export function CompanionHubNav({
   setTab,
-  t }: {
+  t,
+}: {
   setTab: (tab: Tab) => void;
   t: TranslatorFn;
 }) {
   return (
     <nav className="anime-hub-menu">
+      {/* Character */}
+      <button
+        type="button"
+        className="anime-hub-btn"
+        onClick={() => setTab("character")}
+        style={
+          {
+            "--ac-accent": "#f97316", // orange
+            "--ac-accent-rgb": "249, 115, 22",
+          } as React.CSSProperties
+        }
+      >
+        <div className="anime-hub-btn-icon">
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+        </div>
+        <span className="anime-hub-btn-label">{t("nav.character")}</span>
+      </button>
+
       {/* Talents */}
       <button
         type="button"
@@ -18,7 +50,8 @@ export function CompanionHubNav({
         style={
           {
             "--ac-accent": "#00e1ff",
-            "--ac-accent-rgb": "0, 225, 255" } as React.CSSProperties
+            "--ac-accent-rgb": "0, 225, 255",
+          } as React.CSSProperties
         }
       >
         <div className="anime-hub-btn-icon">
@@ -47,7 +80,8 @@ export function CompanionHubNav({
         style={
           {
             "--ac-accent": "#a78bfa",
-            "--ac-accent-rgb": "167, 139, 250" } as React.CSSProperties
+            "--ac-accent-rgb": "167, 139, 250",
+          } as React.CSSProperties
         }
       >
         <div className="anime-hub-btn-icon">
@@ -76,7 +110,8 @@ export function CompanionHubNav({
         style={
           {
             "--ac-accent": "#f43f5e",
-            "--ac-accent-rgb": "244, 63, 94" } as React.CSSProperties
+            "--ac-accent-rgb": "244, 63, 94",
+          } as React.CSSProperties
         }
       >
         <div className="anime-hub-btn-icon">
@@ -105,7 +140,8 @@ export function CompanionHubNav({
         style={
           {
             "--ac-accent": "#f0b232",
-            "--ac-accent-rgb": "240, 178, 50" } as React.CSSProperties
+            "--ac-accent-rgb": "240, 178, 50",
+          } as React.CSSProperties
         }
       >
         <div className="anime-hub-btn-icon">
@@ -128,7 +164,7 @@ export function CompanionHubNav({
         <span className="anime-hub-btn-label">{t("nav.plugins")}</span>
       </button>
 
-      {/* Apps */}
+      {/* Apps — commented out, will be re-enabled later
       <button
         type="button"
         className="anime-hub-btn"
@@ -159,6 +195,7 @@ export function CompanionHubNav({
         </div>
         <span className="anime-hub-btn-label">{t("nav.apps")}</span>
       </button>
+      */}
 
       {/* Wallets */}
       <button
@@ -168,7 +205,8 @@ export function CompanionHubNav({
         style={
           {
             "--ac-accent": "#f0b90b",
-            "--ac-accent-rgb": "240, 185, 11" } as React.CSSProperties
+            "--ac-accent-rgb": "240, 185, 11",
+          } as React.CSSProperties
         }
       >
         <div className="anime-hub-btn-icon">
@@ -193,7 +231,7 @@ export function CompanionHubNav({
         </span>
       </button>
 
-      {/* Stream */}
+      {/* Stream — commented out, will be re-enabled later
       <button
         type="button"
         className="anime-hub-btn"
@@ -224,8 +262,9 @@ export function CompanionHubNav({
           {t("nav.stream") || "Stream"}
         </span>
       </button>
+      */}
 
-      {/* LIFO Sandbox */}
+      {/* LIFO Sandbox — commented out, will be re-enabled later
       <button
         type="button"
         className="anime-hub-btn"
@@ -254,6 +293,7 @@ export function CompanionHubNav({
         </div>
         <span className="anime-hub-btn-label">{t("nav.lifo") || "LIFO"}</span>
       </button>
+      */}
 
       {/* Settings */}
       <button
@@ -263,7 +303,8 @@ export function CompanionHubNav({
         style={
           {
             "--ac-accent": "#e2e8f0",
-            "--ac-accent-rgb": "226, 232, 240" } as React.CSSProperties
+            "--ac-accent-rgb": "226, 232, 240",
+          } as React.CSSProperties
         }
       >
         <div className="anime-hub-btn-icon">
@@ -293,7 +334,8 @@ export function CompanionHubNav({
         style={
           {
             "--ac-accent": "#38bdf8",
-            "--ac-accent-rgb": "56, 189, 248" } as React.CSSProperties
+            "--ac-accent-rgb": "56, 189, 248",
+          } as React.CSSProperties
         }
       >
         <div className="anime-hub-btn-icon">

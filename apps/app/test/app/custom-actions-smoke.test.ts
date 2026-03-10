@@ -78,7 +78,7 @@ function createContext(
     selectedVrmIndex: 0,
     chatPendingImages: [],
     ...overrides,
-      uiLanguage: "en" as const,
+    uiLanguage: "en" as const,
     t: (k: string) => k,
   };
 }

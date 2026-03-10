@@ -16,13 +16,19 @@ import type {
   KnowledgeDocument,
   KnowledgeFragment,
   KnowledgeSearchResult,
-  KnowledgeStats
+  KnowledgeStats,
 } from "../api-client";
 import { client } from "../api-client";
+import {
+  btnDanger,
+  btnGhost,
+  btnPrimary,
+  inputCls,
+} from "./shared/button-styles";
 import { ConfirmDeleteControl } from "./shared/confirm-delete-control";
 import { formatByteSize, formatShortDate } from "./shared/format";
 import { SearchBar } from "./shared/SearchBar";
-import { btnPrimary, btnGhost, btnDanger, inputCls } from "./shared/button-styles";
+
 const MAX_UPLOAD_REQUEST_BYTES = 32 * 1_048_576; // Must match server knowledge route limit
 const BULK_UPLOAD_TARGET_BYTES = 24 * 1_048_576;
 const MAX_BULK_REQUEST_DOCUMENTS = 100;
@@ -44,7 +50,7 @@ const SUPPORTED_UPLOAD_EXTENSIONS = new Set([
 ]);
 const DIRECTORY_INPUT_ATTRS = {
   webkitdirectory: "",
-  directory: ""
+  directory: "",
 } as Record<string, string>;
 
 export type KnowledgeUploadFile = File & {
@@ -89,17 +95,17 @@ function isSupportedKnowledgeFile(file: Pick<File, "name">): boolean {
 function StatsCard({
   stats,
   loading,
-  hasError }: {
-    stats: KnowledgeStats | null;
-    loading: boolean;
-    hasError?: boolean;
-  }) {
+  hasError,
+}: {
+  stats: KnowledgeStats | null;
+  loading: boolean;
+  hasError?: boolean;
+}) {
   const { t } = useApp();
   return (
     <div className="grid grid-cols-2 gap-4 mb-6">
       <div className="p-4 border border-[var(--border)] bg-[var(--card)] rounded">
         <div className="text-[11px] uppercase tracking-wider text-[var(--muted)] mb-1">
-
           {t("knowledgeview.Documents")}
         </div>
         <div className="text-2xl font-semibold text-[var(--txt)]">
@@ -108,14 +114,12 @@ function StatsCard({
       </div>
       <div className="p-4 border border-[var(--border)] bg-[var(--card)] rounded overflow-visible">
         <div className="text-[11px] uppercase tracking-wider text-[var(--muted)] mb-1 flex items-center gap-1">
-
           {t("knowledgeview.Fragments")}
           <span className="relative group">
             <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-[var(--muted)] text-[9px] leading-none cursor-help opacity-60 group-hover:opacity-100 transition-opacity">
               ?
             </span>
             <span className="pointer-events-none absolute left-0 top-full mt-1.5 w-52 px-2.5 py-1.5 rounded bg-[var(--bg-elevated)] text-[var(--text-strong)] text-[11px] normal-case tracking-normal leading-snug opacity-0 group-hover:opacity-100 transition-opacity border border-[var(--border-strong)] shadow-md">
-
               {t("knowledgeview.DocumentsAreSplit")}
             </span>
           </span>
@@ -134,15 +138,16 @@ function UploadZone({
   onFilesUpload,
   onUrlUpload,
   uploading,
-  uploadStatus }: {
-    onFilesUpload: (
-      files: KnowledgeUploadFile[],
-      options: KnowledgeUploadOptions,
-    ) => void;
-    onUrlUpload: (url: string, options: KnowledgeUploadOptions) => void;
-    uploading: boolean;
-    uploadStatus: { current: number; total: number; filename: string } | null;
-  }) {
+  uploadStatus,
+}: {
+  onFilesUpload: (
+    files: KnowledgeUploadFile[],
+    options: KnowledgeUploadOptions,
+  ) => void;
+  onUrlUpload: (url: string, options: KnowledgeUploadOptions) => void;
+  uploading: boolean;
+  uploadStatus: { current: number; total: number; filename: string } | null;
+}) {
   const { t } = useApp();
   const [dragOver, setDragOver] = useState(false);
   const [urlInput, setUrlInput] = useState("");
@@ -169,7 +174,7 @@ function UploadZone({
       const files = e.target.files;
       if (files && files.length > 0 && !uploading) {
         onFilesUpload(Array.from(files) as KnowledgeUploadFile[], {
-          includeImageDescriptions
+          includeImageDescriptions,
         });
       }
       e.target.value = "";
@@ -189,10 +194,11 @@ function UploadZone({
   return (
     <div className="mb-6">
       <section
-        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${dragOver
-          ? "border-[var(--accent)] bg-[var(--accent)]/5"
-          : "border-[var(--border)] hover:border-[var(--muted)]"
-          } ${uploading ? "opacity-50 pointer-events-none" : ""}`}
+        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+          dragOver
+            ? "border-[var(--accent)] bg-[var(--accent)]/5"
+            : "border-[var(--border)] hover:border-[var(--muted)]"
+        } ${uploading ? "opacity-50 pointer-events-none" : ""}`}
         onDragOver={(e) => {
           e.preventDefault();
           setDragOver(true);
@@ -239,7 +245,6 @@ function UploadZone({
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
           >
-
             {t("knowledgeview.ChooseFiles")}
           </button>
           <button
@@ -248,7 +253,6 @@ function UploadZone({
             onClick={() => folderInputRef.current?.click()}
             disabled={uploading}
           >
-
             {t("knowledgeview.ChooseFolder")}
           </button>
           <button
@@ -257,7 +261,6 @@ function UploadZone({
             onClick={() => setShowUrlInput(!showUrlInput)}
             disabled={uploading}
           >
-
             {t("knowledgeview.AddFromURL")}
           </button>
         </div>
@@ -276,11 +279,9 @@ function UploadZone({
       {showUrlInput && (
         <div className="mt-4 p-4 border border-[var(--border)] bg-[var(--card)] rounded">
           <div className="text-xs text-[var(--muted)] mb-2">
-
             {t("knowledgeview.PasteAURLToImpor")}
           </div>
           <div className="text-[11px] text-[var(--muted)] mb-2">
-
             {t("knowledgeview.ImageURLsCanOptio")}
           </div>
           <div className="flex gap-2">
@@ -299,7 +300,6 @@ function UploadZone({
               onClick={handleUrlSubmit}
               disabled={!urlInput.trim() || uploading}
             >
-
               {t("knowledgeview.Import")}
             </button>
           </div>
@@ -313,20 +313,20 @@ function UploadZone({
 
 function SearchResults({
   results,
-  onClear }: {
-    results: KnowledgeSearchResult[];
-    onClear: () => void;
-  }) {
+  onClear,
+}: {
+  results: KnowledgeSearchResult[];
+  onClear: () => void;
+}) {
   const { t } = useApp();
   return (
     <div className="mb-6">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-medium text-[var(--txt)]">
-
-          {t("knowledgeview.SearchResults")}{results.length})
+          {t("knowledgeview.SearchResults")}
+          {results.length})
         </h3>
         <button type="button" className={btnGhost} onClick={onClear}>
-
           {t("knowledgeview.Clear")}
         </button>
       </div>
@@ -341,7 +341,8 @@ function SearchResults({
                 {result.documentTitle || "Unknown Document"}
               </span>
               <span className="text-[10px] px-1.5 py-0.5 bg-[var(--accent)]/10 text-[var(--accent)] rounded">
-                {(result.similarity * 100).toFixed(0)}{t("knowledgeview.Match")}
+                {(result.similarity * 100).toFixed(0)}
+                {t("knowledgeview.Match")}
               </span>
             </div>
             <p className="text-sm text-[var(--txt)] line-clamp-3">
@@ -351,7 +352,6 @@ function SearchResults({
         ))}
         {results.length === 0 && (
           <div className="text-center py-8 text-[var(--muted)]">
-
             {t("knowledgeview.NoResultsFound")}
           </div>
         )}
@@ -366,12 +366,13 @@ function DocumentCard({
   doc,
   onSelect,
   onDelete,
-  deleting }: {
-    doc: KnowledgeDocument;
-    onSelect: (id: string) => void;
-    onDelete: (id: string) => void;
-    deleting: boolean;
-  }) {
+  deleting,
+}: {
+  doc: KnowledgeDocument;
+  onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
+  deleting: boolean;
+}) {
   const { t } = useApp();
   return (
     <div className="flex items-center justify-between p-4 border border-[var(--border)] bg-[var(--card)] rounded hover:border-[var(--accent)]/50 transition-colors">
@@ -390,13 +391,11 @@ function DocumentCard({
           <span>{formatShortDate(doc.createdAt, { fallback: "—" })}</span>
           {doc.source === "youtube" && (
             <span className="px-1.5 py-0.5 bg-[#e74c3c]/10 text-[#e74c3c] rounded text-[10px]">
-
               {t("knowledgeview.YouTube")}
             </span>
           )}
           {doc.source === "url" && (
             <span className="px-1.5 py-0.5 bg-[var(--accent)]/10 text-[var(--accent)] rounded text-[10px]">
-
               {t("knowledgeview.URL")}
             </span>
           )}
@@ -420,10 +419,11 @@ function DocumentCard({
 
 function DocumentDetailModal({
   documentId,
-  onClose }: {
-    documentId: string;
-    onClose: () => void;
-  }) {
+  onClose,
+}: {
+  documentId: string;
+  onClose: () => void;
+}) {
   const { t } = useApp();
   const [doc, setDoc] = useState<KnowledgeDocument | null>(null);
   const [fragments, setFragments] = useState<KnowledgeFragment[]>([]);
@@ -472,7 +472,6 @@ function DocumentDetailModal({
             {loading ? "Loading..." : doc?.filename || "Document"}
           </h2>
           <button type="button" className={btnGhost} onClick={onClose}>
-
             {t("knowledgeview.Close")}
           </button>
         </div>
@@ -481,7 +480,6 @@ function DocumentDetailModal({
         <div className="flex-1 overflow-y-auto p-4">
           {loading && (
             <div className="text-center py-8 text-[var(--muted)]">
-
               {t("knowledgeview.Loading")}
             </div>
           )}
@@ -496,16 +494,22 @@ function DocumentDetailModal({
               <div className="mb-6 p-4 bg-[var(--card)] border border-[var(--border)] rounded">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <span className="text-[var(--muted)]">{t("knowledgeview.Type")}</span>{" "}
+                    <span className="text-[var(--muted)]">
+                      {t("knowledgeview.Type")}
+                    </span>{" "}
                     <span className="text-[var(--txt)]">{doc.contentType}</span>
                   </div>
                   <div>
-                    <span className="text-[var(--muted)]">{t("knowledgeview.Source")}</span>{" "}
+                    <span className="text-[var(--muted)]">
+                      {t("knowledgeview.Source")}
+                    </span>{" "}
                     <span className="text-[var(--txt)]">{doc.source}</span>
                   </div>
                   {doc.url && (
                     <div className="col-span-2">
-                      <span className="text-[var(--muted)]">{t("knowledgeview.URL1")}</span>{" "}
+                      <span className="text-[var(--muted)]">
+                        {t("knowledgeview.URL1")}
+                      </span>{" "}
                       <a
                         href={doc.url}
                         target="_blank"
@@ -521,8 +525,8 @@ function DocumentDetailModal({
 
               {/* Fragments */}
               <h3 className="text-sm font-medium text-[var(--txt)] mb-3">
-
-                {t("knowledgeview.Fragments1")}{fragments.length})
+                {t("knowledgeview.Fragments1")}
+                {fragments.length})
               </h3>
               <div className="space-y-3">
                 {fragments.map((fragment, index) => (
@@ -532,12 +536,10 @@ function DocumentDetailModal({
                   >
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs text-[var(--muted)]">
-
                         {t("knowledgeview.Fragment")} {index + 1}
                       </span>
                       {fragment.position !== undefined && (
                         <span className="text-[10px] text-[var(--muted)]">
-
                           {t("knowledgeview.Position")} {fragment.position}
                         </span>
                       )}
@@ -549,7 +551,6 @@ function DocumentDetailModal({
                 ))}
                 {fragments.length === 0 && (
                   <div className="text-center py-4 text-[var(--muted)]">
-
                     {t("knowledgeview.NoFragmentsFound")}
                   </div>
                 )}
@@ -689,8 +690,8 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
         contentType: file.type || "application/octet-stream",
         metadata: {
           includeImageDescriptions: options.includeImageDescriptions,
-          relativePath: file.webkitRelativePath || undefined
-        }
+          relativePath: file.webkitRelativePath || undefined,
+        },
       };
       const requestBytes = new TextEncoder().encode(
         JSON.stringify(request),
@@ -704,7 +705,7 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
       return {
         filename: uploadFilename,
         request,
-        requestBytes
+        requestBytes,
       };
     },
     [readKnowledgeFile],
@@ -758,7 +759,7 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
       setUploadStatus({
         current: 0,
         total: uploadQueue.length,
-        filename: "Preparing..."
+        filename: "Preparing...",
       });
 
       try {
@@ -790,12 +791,12 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
           setUploadStatus({
             current: successful + failures.length,
             total: uploadQueue.length,
-            filename: `Uploading batch starting with ${batchLabel}`
+            filename: `Uploading batch starting with ${batchLabel}`,
           });
 
           try {
             const result = await client.uploadKnowledgeDocumentsBulk({
-              documents: batchToUpload.map((item) => item.request)
+              documents: batchToUpload.map((item) => item.request),
             });
 
             for (const item of result.results) {
@@ -824,7 +825,7 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
           setUploadStatus({
             current: index + 1,
             total: uploadQueue.length,
-            filename: `Preparing: ${uploadFilename}`
+            filename: `Preparing: ${uploadFilename}`,
           });
 
           try {
@@ -912,7 +913,7 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
       setUploading(true);
       try {
         const result = await client.uploadKnowledgeFromUrl(url, {
-          includeImageDescriptions: options.includeImageDescriptions
+          includeImageDescriptions: options.includeImageDescriptions,
         });
 
         const baseMessage = result.isYouTubeTranscript
@@ -945,7 +946,7 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
       try {
         const result = await client.searchKnowledge(query, {
           threshold: 0.3,
-          limit: 20
+          limit: 20,
         });
         setSearchResults(result.results);
       } catch (err) {
@@ -998,7 +999,6 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
     >
       {!inModal && (
         <h1 className="text-xl font-semibold text-[var(--txt)] mb-6">
-
           {t("knowledgeview.KnowledgeBase")}
         </h1>
       )}
@@ -1025,7 +1025,6 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
             onClick={() => loadData()}
             className="ml-3 px-2 py-1 text-xs border border-[var(--danger)] rounded hover:bg-[var(--danger)]/20 transition-colors"
           >
-
             {t("knowledgeview.Retry")}
           </button>
         </div>
@@ -1051,8 +1050,8 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-medium text-[var(--txt)]">
-
-            {t("knowledgeview.Documents1")}{documents.length})
+            {t("knowledgeview.Documents1")}
+            {documents.length})
           </h2>
           <button
             type="button"
@@ -1066,16 +1065,16 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
 
         {loading && documents.length === 0 && (
           <div className="text-center py-8 text-[var(--muted)]">
-
             {t("knowledgeview.LoadingDocuments")}
           </div>
         )}
 
         {!loading && documents.length === 0 && (
           <div className="text-center py-12 border border-dashed border-[var(--border)] rounded-lg">
-            <div className="text-[var(--muted)] mb-2">{t("knowledgeview.NoDocumentsYet")}</div>
+            <div className="text-[var(--muted)] mb-2">
+              {t("knowledgeview.NoDocumentsYet")}
+            </div>
             <div className="text-xs text-[var(--muted)]">
-
               {t("knowledgeview.UploadFilesOrImpo")}
             </div>
           </div>

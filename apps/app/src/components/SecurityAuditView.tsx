@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useApp } from "../AppContext";
 import {
   client,
   type SecurityAuditEntry,
   type SecurityAuditEventType,
   type SecurityAuditFilter,
-  type SecurityAuditSeverity } from "../api-client";
+  type SecurityAuditSeverity,
+} from "../api-client";
 import { formatDateTime } from "./shared/format";
-import { useApp } from "../AppContext";
 
 const EVENT_TYPES: SecurityAuditEventType[] = [
   "sandbox_mode_transition",
@@ -61,8 +62,7 @@ function formatErrorMessage(error: unknown): string {
 }
 
 export function SecurityAuditView() {
-  const {
-    t } = useApp();
+  const { t } = useApp();
   const [entries, setEntries] = useState<SecurityAuditEntry[]>([]);
   const [typeFilter, setTypeFilter] = useState("");
   const [severityFilter, setSeverityFilter] = useState("");
@@ -76,7 +76,8 @@ export function SecurityAuditView() {
 
   const buildFilter = useCallback((): SecurityAuditFilter => {
     const nextFilter: SecurityAuditFilter = {
-      limit: currentLimit };
+      limit: currentLimit,
+    };
 
     const type = typeFilter.trim();
     if (type) {
@@ -211,7 +212,6 @@ export function SecurityAuditView() {
               setLimitFilter(String(DEFAULT_LIMIT));
             }}
           >
-
             {t("securityauditview.ClearFilters")}
           </button>
         )}
@@ -221,7 +221,6 @@ export function SecurityAuditView() {
           className="text-xs px-3 py-1.5 border border-border bg-card text-txt cursor-pointer hover:border-accent hover:text-accent"
           onClick={() => void refresh()}
         >
-
           {t("securityauditview.Refresh")}
         </button>
 
@@ -245,12 +244,10 @@ export function SecurityAuditView() {
       <div className="font-mono text-xs flex-1 min-h-0 overflow-y-auto border border-border p-2 bg-card">
         {loading && !live ? (
           <div className="text-center py-8 text-muted">
-
             {t("securityauditview.LoadingAuditEntrie")}
           </div>
         ) : entries.length === 0 ? (
           <div className="text-center py-8 text-muted">
-
             {t("securityauditview.NoAuditEntriesFou")}
           </div>
         ) : (
@@ -278,7 +275,6 @@ export function SecurityAuditView() {
               {entry.metadata && Object.keys(entry.metadata).length > 0 && (
                 <details className="mt-2">
                   <summary className="cursor-pointer text-[11px] text-muted hover:text-txt">
-
                     {t("securityauditview.Metadata")}
                   </summary>
                   <pre className="mt-2 p-2 bg-bg border border-border overflow-x-auto text-[11px] leading-relaxed">

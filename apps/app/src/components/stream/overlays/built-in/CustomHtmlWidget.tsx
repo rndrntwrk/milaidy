@@ -22,18 +22,16 @@
  */
 
 import { useRef } from "react";
+import { useApp } from "../../../../AppContext";
 import { registerWidget } from "../registry";
 import type { WidgetDefinition, WidgetRenderProps } from "../types";
-import { useApp } from "../../../../AppContext";
-import {} from "react";
 
 /** CSP that blocks all network access — inline scripts/styles only. */
 const INLINE_CSP =
   "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline';";
 
 function CustomHtml({ instance }: WidgetRenderProps) {
-  const {
-    t } = useApp();
+  const { t } = useApp();
   const mode = (instance.config.mode as string) ?? "inline";
   const htmlContent = (instance.config.html as string) ?? "";
   const cssContent = (instance.config.css as string) ?? "";
@@ -92,13 +90,16 @@ const definition: WidgetDefinition = {
       options: [
         { label: "Inline HTML", value: "inline" },
         { label: "External URL", value: "url" },
-      ] },
+      ],
+    },
     html: { type: "string", label: "HTML", default: "" },
     css: { type: "string", label: "CSS", default: "" },
     js: { type: "string", label: "JavaScript", default: "" },
-    url: { type: "string", label: "URL", default: "" } },
+    url: { type: "string", label: "URL", default: "" },
+  },
   defaultConfig: { mode: "inline", html: "", css: "", js: "", url: "" },
-  render: CustomHtml };
+  render: CustomHtml,
+};
 
 registerWidget(definition);
 export default definition;

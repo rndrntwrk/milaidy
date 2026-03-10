@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   parsePositiveFloat,
-  parsePositiveInteger } from "../../../../src/utils/number-parsing";
+  parsePositiveInteger,
+} from "../../../../src/utils/number-parsing";
 import { useApp } from "../AppContext";
 import {
   client,
@@ -13,7 +14,8 @@ import {
   type TrainingStatus,
   type TrainingStreamEvent,
   type TrainingTrajectoryDetail,
-  type TrainingTrajectoryList } from "../api-client";
+  type TrainingTrajectoryList,
+} from "../api-client";
 import { formatTime } from "./shared/format";
 
 const TRAINING_EVENT_KINDS = new Set<TrainingStreamEvent["kind"]>([
@@ -63,7 +65,8 @@ function asTrainingEvent(
       typeof payload.datasetId === "string" ? payload.datasetId : undefined,
     progress:
       typeof payload.progress === "number" ? payload.progress : undefined,
-    phase: typeof payload.phase === "string" ? payload.phase : undefined };
+    phase: typeof payload.phase === "string" ? payload.phase : undefined,
+  };
 }
 
 function summarizeAvailability(reason?: string): string {
@@ -76,8 +79,7 @@ function summarizeAvailability(reason?: string): string {
 }
 
 export function FineTuningView() {
-  const { handleRestart, setActionNotice,
-    t } = useApp();
+  const { handleRestart, setActionNotice, t } = useApp();
 
   const [pageLoading, setPageLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -86,7 +88,8 @@ export function FineTuningView() {
   const [trajectoryList, setTrajectoryList] = useState<TrainingTrajectoryList>({
     available: false,
     total: 0,
-    trajectories: [] });
+    trajectories: [],
+  });
   const [selectedTrajectory, setSelectedTrajectory] =
     useState<TrainingTrajectoryDetail | null>(null);
   const [trajectoryLoading, setTrajectoryLoading] = useState(false);
@@ -149,7 +152,8 @@ export function FineTuningView() {
   const loadTrajectories = useCallback(async () => {
     const listed = await client.listTrainingTrajectories({
       limit: 100,
-      offset: 0 });
+      offset: 0,
+    });
     setTrajectoryList(listed);
   }, []);
 
@@ -262,7 +266,8 @@ export function FineTuningView() {
         model: startModel.trim() || undefined,
         iterations: parsePositiveInteger(startIterations),
         batchSize: parsePositiveInteger(startBatchSize),
-        learningRate: parsePositiveFloat(startLearningRate) };
+        learningRate: parsePositiveFloat(startLearningRate),
+      };
       const result = await client.startTrainingJob(options);
       setSelectedJobId(result.job.id);
       await Promise.all([loadJobs(), loadStatus()]);
@@ -322,7 +327,8 @@ export function FineTuningView() {
         {
           modelName: importModelName.trim() || undefined,
           baseModel: importBaseModel.trim() || undefined,
-          ollamaUrl: importOllamaUrl.trim() || undefined },
+          ollamaUrl: importOllamaUrl.trim() || undefined,
+        },
       );
       await loadModels();
       setActivateProviderModel(
@@ -479,7 +485,9 @@ export function FineTuningView() {
 
   if (pageLoading) {
     return (
-      <div className="text-sm text-muted">{t("finetuningview.LoadingFineTuning")}</div>
+      <div className="text-sm text-muted">
+        {t("finetuningview.LoadingFineTuning")}
+      </div>
     );
   }
 
@@ -488,9 +496,10 @@ export function FineTuningView() {
       <section className="border border-border bg-card p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold">{t("finetuningview.FineTuning")}</h2>
+            <h2 className="text-lg font-semibold">
+              {t("finetuningview.FineTuning")}
+            </h2>
             <p className="text-xs text-muted mt-1">
-
               {t("finetuningview.BuildDatasetsFrom")}
             </p>
           </div>
@@ -501,7 +510,6 @@ export function FineTuningView() {
               void refreshAll();
             }}
           >
-
             {t("finetuningview.RefreshAll")}
           </button>
         </div>
@@ -515,18 +523,33 @@ export function FineTuningView() {
       <section className="border border-border bg-card p-4">
         <h3 className="text-sm font-bold mb-3">{t("finetuningview.Status")}</h3>
         <div className="grid grid-cols-2 md:grid-cols-6 gap-2 text-xs">
-          <div>{t("finetuningview.Runtime")} {status?.runtimeAvailable ? "ready" : "offline"}</div>
-          <div>{t("finetuningview.RunningJobs")} {status?.runningJobs ?? 0}</div>
-          <div>{t("finetuningview.QueuedJobs")} {status?.queuedJobs ?? 0}</div>
-          <div>{t("finetuningview.Datasets")} {status?.datasetCount ?? 0}</div>
-          <div>{t("finetuningview.Models")} {status?.modelCount ?? 0}</div>
-          <div>{t("finetuningview.FailedJobs")} {status?.failedJobs ?? 0}</div>
+          <div>
+            {t("finetuningview.Runtime")}{" "}
+            {status?.runtimeAvailable ? "ready" : "offline"}
+          </div>
+          <div>
+            {t("finetuningview.RunningJobs")} {status?.runningJobs ?? 0}
+          </div>
+          <div>
+            {t("finetuningview.QueuedJobs")} {status?.queuedJobs ?? 0}
+          </div>
+          <div>
+            {t("finetuningview.Datasets")} {status?.datasetCount ?? 0}
+          </div>
+          <div>
+            {t("finetuningview.Models")} {status?.modelCount ?? 0}
+          </div>
+          <div>
+            {t("finetuningview.FailedJobs")} {status?.failedJobs ?? 0}
+          </div>
         </div>
       </section>
 
       <section className="border border-border bg-card p-4">
         <div className="flex items-center justify-between gap-3 mb-3">
-          <h3 className="text-sm font-bold">{t("finetuningview.Trajectories")}</h3>
+          <h3 className="text-sm font-bold">
+            {t("finetuningview.Trajectories")}
+          </h3>
           <button
             type="button"
             className="px-2 py-1 text-xs border border-border hover:border-accent"
@@ -534,7 +557,6 @@ export function FineTuningView() {
               void loadTrajectories();
             }}
           >
-
             {t("finetuningview.Refresh")}
           </button>
         </div>
@@ -545,18 +567,16 @@ export function FineTuningView() {
         ) : (
           <div className="space-y-3">
             <div className="text-xs text-muted">
-              {trajectoryList.total}  {t("finetuningview.trajectoryRowsAvai")}
+              {trajectoryList.total} {t("finetuningview.trajectoryRowsAvai")}
             </div>
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               <div className="border border-border">
                 <div className="px-2 py-1 text-[11px] border-b border-border text-muted">
-
                   {t("finetuningview.LatestTrajectories")}
                 </div>
                 <div className="max-h-72 overflow-auto">
                   {trajectoryList.trajectories.length === 0 ? (
                     <div className="p-3 text-xs text-muted">
-
                       {t("finetuningview.NoTrajectoriesFoun")}
                     </div>
                   ) : (
@@ -573,8 +593,8 @@ export function FineTuningView() {
                           {trajectory.trajectoryId}
                         </div>
                         <div className="text-muted mt-1">
-
-                          {t("finetuningview.Calls")} {trajectory.llmCallCount}  {t("finetuningview.Reward")}{" "}
+                          {t("finetuningview.Calls")} {trajectory.llmCallCount}{" "}
+                          {t("finetuningview.Reward")}{" "}
                           {trajectory.totalReward ?? "n/a"} ·{" "}
                           {formatDate(trajectory.createdAt)}
                         </div>
@@ -585,35 +605,38 @@ export function FineTuningView() {
               </div>
               <div className="border border-border p-2">
                 <div className="text-[11px] text-muted mb-2">
-
                   {t("finetuningview.SelectedTrajectory")}
                 </div>
                 {trajectoryLoading ? (
                   <div className="text-xs text-muted">
-
                     {t("finetuningview.LoadingTrajectoryD")}
                   </div>
                 ) : !selectedTrajectory ? (
                   <div className="text-xs text-muted">
-
                     {t("finetuningview.ChooseATrajectory")}
                   </div>
                 ) : (
                   <div className="space-y-2">
                     <div className="text-xs">
-                      <span className="font-semibold">{t("finetuningview.Trajectory")}</span>{" "}
+                      <span className="font-semibold">
+                        {t("finetuningview.Trajectory")}
+                      </span>{" "}
                       <span className="font-mono">
                         {selectedTrajectory.trajectoryId}
                       </span>
                     </div>
                     <div className="text-xs">
-                      <span className="font-semibold">{t("finetuningview.Agent")}</span>{" "}
+                      <span className="font-semibold">
+                        {t("finetuningview.Agent")}
+                      </span>{" "}
                       <span className="font-mono">
                         {selectedTrajectory.agentId}
                       </span>
                     </div>
                     <div className="text-xs">
-                      <span className="font-semibold">{t("finetuningview.Reward1")}</span>{" "}
+                      <span className="font-semibold">
+                        {t("finetuningview.Reward1")}
+                      </span>{" "}
                       {selectedTrajectory.totalReward ?? "n/a"}
                     </div>
                     <textarea
@@ -630,7 +653,9 @@ export function FineTuningView() {
       </section>
 
       <section className="border border-border bg-card p-4">
-        <h3 className="text-sm font-bold mb-3">{t("finetuningview.Datasets1")}</h3>
+        <h3 className="text-sm font-bold mb-3">
+          {t("finetuningview.Datasets1")}
+        </h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-3">
           <input
             className="px-2 py-1 border border-border bg-bg text-sm"
@@ -661,13 +686,14 @@ export function FineTuningView() {
               void loadDatasets();
             }}
           >
-
             {t("finetuningview.RefreshDatasets")}
           </button>
         </div>
         <div className="space-y-2 max-h-52 overflow-auto">
           {datasets.length === 0 ? (
-            <div className="text-xs text-muted">{t("finetuningview.NoDatasetsYet")}</div>
+            <div className="text-xs text-muted">
+              {t("finetuningview.NoDatasetsYet")}
+            </div>
           ) : (
             datasets.map((dataset) => (
               <label
@@ -682,9 +708,8 @@ export function FineTuningView() {
                 />
                 <span className="font-mono">{dataset.id}</span>
                 <span className="text-muted">
-                  {dataset.sampleCount}  {t("finetuningview.samples")} {dataset.trajectoryCount}{" "}
-
-                  {t("finetuningview.trajectories")}
+                  {dataset.sampleCount} {t("finetuningview.samples")}{" "}
+                  {dataset.trajectoryCount} {t("finetuningview.trajectories")}
                 </span>
               </label>
             ))
@@ -693,7 +718,9 @@ export function FineTuningView() {
       </section>
 
       <section className="border border-border bg-card p-4">
-        <h3 className="text-sm font-bold mb-3">{t("finetuningview.TrainingJobs")}</h3>
+        <h3 className="text-sm font-bold mb-3">
+          {t("finetuningview.TrainingJobs")}
+        </h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
           <select
             className="px-2 py-1 border border-border bg-bg text-sm"
@@ -762,12 +789,10 @@ export function FineTuningView() {
               void loadStatus();
             }}
           >
-
             {t("finetuningview.RefreshJobs")}
           </button>
           {activeRunningJob && (
             <div className="text-xs text-warn flex items-center">
-
               {t("finetuningview.ActiveJob")}{" "}
               <span className="font-mono ml-1">{activeRunningJob.id}</span>
             </div>
@@ -776,13 +801,16 @@ export function FineTuningView() {
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <div className="border border-border max-h-72 overflow-auto">
             {jobs.length === 0 ? (
-              <div className="p-3 text-xs text-muted">{t("finetuningview.NoJobsYet")}</div>
+              <div className="p-3 text-xs text-muted">
+                {t("finetuningview.NoJobsYet")}
+              </div>
             ) : (
               jobs.map((job) => (
                 <div
                   key={job.id}
-                  className={`px-2 py-2 border-b border-border text-xs ${selectedJobId === job.id ? "bg-bg-hover" : ""
-                    }`}
+                  className={`px-2 py-2 border-b border-border text-xs ${
+                    selectedJobId === job.id ? "bg-bg-hover" : ""
+                  }`}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <button
@@ -816,21 +844,26 @@ export function FineTuningView() {
             )}
           </div>
           <div className="border border-border p-2">
-            <div className="text-[11px] text-muted mb-2">{t("finetuningview.SelectedJobLogs")}</div>
+            <div className="text-[11px] text-muted mb-2">
+              {t("finetuningview.SelectedJobLogs")}
+            </div>
             {!selectedJob ? (
               <div className="text-xs text-muted">
-
                 {t("finetuningview.SelectAJobToInsp")}
               </div>
             ) : (
               <div className="space-y-2">
                 <div className="text-xs">
-                  <span className="font-semibold">{t("finetuningview.Status1")}</span>{" "}
+                  <span className="font-semibold">
+                    {t("finetuningview.Status1")}
+                  </span>{" "}
                   {selectedJob.status} · {formatProgress(selectedJob.progress)}{" "}
                   · {selectedJob.phase}
                 </div>
                 <div className="text-xs">
-                  <span className="font-semibold">{t("finetuningview.Dataset")}</span>{" "}
+                  <span className="font-semibold">
+                    {t("finetuningview.Dataset")}
+                  </span>{" "}
                   <span className="font-mono">{selectedJob.datasetId}</span>
                 </div>
                 <textarea
@@ -845,12 +878,13 @@ export function FineTuningView() {
       </section>
 
       <section className="border border-border bg-card p-4">
-        <h3 className="text-sm font-bold mb-3">{t("finetuningview.TrainedModels")}</h3>
+        <h3 className="text-sm font-bold mb-3">
+          {t("finetuningview.TrainedModels")}
+        </h3>
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           <div className="border border-border max-h-72 overflow-auto">
             {models.length === 0 ? (
               <div className="p-3 text-xs text-muted">
-
                 {t("finetuningview.NoTrainedModelsYe")}
               </div>
             ) : (
@@ -858,22 +892,21 @@ export function FineTuningView() {
                 <button
                   type="button"
                   key={model.id}
-                  className={`w-full text-left px-2 py-2 border-b border-border text-xs ${selectedModelId === model.id
+                  className={`w-full text-left px-2 py-2 border-b border-border text-xs ${
+                    selectedModelId === model.id
                       ? "bg-bg-hover"
                       : "hover:bg-bg-hover"
-                    }`}
+                  }`}
                   onClick={() => setSelectedModelId(model.id)}
                 >
                   <div className="font-mono">
                     {model.id} {model.active ? "· active" : ""}
                   </div>
                   <div className="text-muted mt-1">
-
                     {t("finetuningview.backend")} {model.backend}
                     {model.ollamaModel ? ` · ollama: ${model.ollamaModel}` : ""}
                   </div>
                   <div className="text-muted">
-
                     {t("finetuningview.benchmark")} {model.benchmark.status}
                     {model.benchmark.lastRunAt
                       ? ` · ${formatDate(model.benchmark.lastRunAt)}`
@@ -884,20 +917,25 @@ export function FineTuningView() {
             )}
           </div>
           <div className="border border-border p-2">
-            <div className="text-[11px] text-muted mb-2">{t("finetuningview.ModelActions")}</div>
+            <div className="text-[11px] text-muted mb-2">
+              {t("finetuningview.ModelActions")}
+            </div>
             {!selectedModel ? (
               <div className="text-xs text-muted">
-
                 {t("finetuningview.SelectAModelToIm")}
               </div>
             ) : (
               <div className="space-y-2">
                 <div className="text-xs">
-                  <span className="font-semibold">{t("finetuningview.Model")}</span>{" "}
+                  <span className="font-semibold">
+                    {t("finetuningview.Model")}
+                  </span>{" "}
                   <span className="font-mono">{selectedModel.id}</span>
                 </div>
                 <div className="text-xs">
-                  <span className="font-semibold">{t("finetuningview.AdapterPath")}</span>{" "}
+                  <span className="font-semibold">
+                    {t("finetuningview.AdapterPath")}
+                  </span>{" "}
                   <span className="font-mono">
                     {selectedModel.adapterPath ?? "n/a"}
                   </span>
@@ -994,11 +1032,12 @@ export function FineTuningView() {
       </section>
 
       <section className="border border-border bg-card p-4">
-        <h3 className="text-sm font-bold mb-3">{t("finetuningview.LiveTrainingEvents")}</h3>
+        <h3 className="text-sm font-bold mb-3">
+          {t("finetuningview.LiveTrainingEvents")}
+        </h3>
         <div className="max-h-56 overflow-auto border border-border">
           {trainingEvents.length === 0 ? (
             <div className="p-3 text-xs text-muted">
-
               {t("finetuningview.NoLiveEventsYet")}
             </div>
           ) : (

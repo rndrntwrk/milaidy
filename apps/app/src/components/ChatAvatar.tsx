@@ -5,19 +5,19 @@
  * Autonomous Loop sidebar). Voice controls are managed externally.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getVrmNeedsFlip,
   getVrmPreviewUrl,
   getVrmUrl,
-  useApp
+  useApp,
 } from "@milady/app-core/state";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { client } from "../api-client";
 import { resolveAppAssetUrl } from "../asset-url";
 import { STOP_EMOTE_EVENT } from "../events";
+import { AvatarLoader } from "./avatar/AvatarLoader";
 import type { VrmEngine, VrmEngineState } from "./avatar/VrmEngine";
 import { VrmViewer } from "./avatar/VrmViewer";
-import { AvatarLoader } from "./avatar/AvatarLoader";
 
 export interface ChatAvatarProps {
   /** Mouth openness value (0-1) for lip sync animation */
@@ -28,7 +28,8 @@ export interface ChatAvatarProps {
 
 export function ChatAvatar({
   mouthOpen = 0,
-  isSpeaking = false }: ChatAvatarProps) {
+  isSpeaking = false,
+}: ChatAvatarProps) {
   const { selectedVrmIndex, customVrmUrl } = useApp();
 
   // Resolve VRM path from selected index or custom upload
@@ -106,7 +107,7 @@ export function ChatAvatar({
           opacity: avatarVisible ? 0.95 : 0,
           transition: "opacity 0.45s ease-in-out",
           background:
-            "radial-gradient(circle at 50% 100%, rgba(255,255,255,0.08), transparent 60%)"
+            "radial-gradient(circle at 50% 100%, rgba(255,255,255,0.08), transparent 60%)",
         }}
       >
         <div className="absolute inset-0 overflow-hidden">
@@ -117,7 +118,7 @@ export function ChatAvatar({
               transition: "opacity 0.45s ease",
               // Keep a stable full-body framing in the narrow chat sidebar.
               transform: "scale(1.02) translateY(1%)",
-              transformOrigin: "50% 42%"
+              transformOrigin: "50% 42%",
             }}
           >
             <VrmViewer

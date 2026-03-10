@@ -2,22 +2,21 @@
  * Decorative elements and close button for the companion shell overlay.
  */
 
+import { useApp } from "../AppContext";
 import type { Tab } from "../navigation";
 import type { TabFlags } from "./companion-shell-styles";
-import { useApp } from "../AppContext";
-import {} from "react";
 
 /* ── Decorative elements per tab ───────────────────────────────────── */
 
 export function DecorativeElements({
   f,
-  accentColor }: {
+  accentColor,
+}: {
   tab: Tab;
   f: TabFlags;
   accentColor: string;
 }) {
-  const {
-    t } = useApp();
+  const { t } = useApp();
   return (
     <div
       className={`pointer-events-none absolute inset-0 overflow-hidden ${f.isPluginsLike ? "" : "rounded-[16px]"}`}
@@ -27,7 +26,6 @@ export function DecorativeElements({
           <div
             className={`absolute bottom-4 left-4 text-[${accentColor}]/30 text-[9px] font-mono tracking-widest transform -rotate-90 origin-bottom-left`}
           >
-
             {t("companionshelldecorations.V104NEURALUPLIN")}
           </div>
           <div
@@ -45,7 +43,6 @@ export function DecorativeElements({
           <div className="absolute bottom-3 left-3 w-[20px] h-[1px] bg-white/15" />
           <div className="absolute bottom-3 left-3 w-[1px] h-[20px] bg-white/15" />
           <div className="absolute bottom-3 right-4 text-white/15 text-[9px] font-mono tracking-widest">
-
             {t("companionshelldecorations.CFGPANELV2")}
           </div>
         </>
@@ -57,7 +54,6 @@ export function DecorativeElements({
           <div className="absolute bottom-3 left-3 w-[20px] h-[1px] bg-white/15" />
           <div className="absolute bottom-3 left-3 w-[1px] h-[20px] bg-white/15" />
           <div className="absolute bottom-3 right-4 text-white/15 text-[9px] font-mono tracking-widest">
-
             {t("companionshelldecorations.ADVPANELV1")}
           </div>
         </>
@@ -69,7 +65,6 @@ export function DecorativeElements({
           <div className="absolute bottom-3 left-3 w-[20px] h-[1px] bg-[#8b5cf6]/15" />
           <div className="absolute bottom-3 left-3 w-[1px] h-[20px] bg-[#8b5cf6]/15" />
           <div className="absolute bottom-3 right-4 text-[#8b5cf6]/20 text-[9px] font-mono tracking-widest">
-
             {t("companionshelldecorations.LIFOSANDBOXV1")}
           </div>
         </>
@@ -79,7 +74,6 @@ export function DecorativeElements({
           <div className="absolute top-[12%] right-0 w-[1.5px] h-[100px] bg-gradient-to-b from-transparent via-[#ef4444]/25 to-transparent" />
           <div className="absolute bottom-[12%] left-0 w-[1.5px] h-[100px] bg-gradient-to-b from-transparent via-[#ef4444]/25 to-transparent" />
           <div className="absolute top-3 right-4 text-[#ef4444]/20 text-[9px] font-mono tracking-widest">
-
             {t("companionshelldecorations.STREAMLIVEV1")}
           </div>
         </>
@@ -89,7 +83,6 @@ export function DecorativeElements({
           <div className="absolute top-[15%] right-0 w-[1.5px] h-[80px] bg-gradient-to-b from-transparent via-[#a78bfa]/20 to-transparent" />
           <div className="absolute bottom-[15%] left-0 w-[1.5px] h-[80px] bg-gradient-to-b from-transparent via-[#a78bfa]/20 to-transparent" />
           <div className="absolute bottom-3 right-4 text-[#a78bfa]/20 text-[9px] font-mono tracking-widest">
-
             {t("companionshelldecorations.KNOWBASEV1")}
           </div>
         </>
@@ -101,7 +94,6 @@ export function DecorativeElements({
           <div className="absolute bottom-3 left-3 w-[20px] h-[1px] bg-[#f0b90b]/15" />
           <div className="absolute bottom-3 left-3 w-[1px] h-[20px] bg-[#f0b90b]/15" />
           <div className="absolute bottom-3 right-4 text-[#f0b90b]/20 text-[9px] font-mono tracking-widest">
-
             {t("companionshelldecorations.WALLETBSCV1")}
           </div>
         </>
@@ -111,7 +103,6 @@ export function DecorativeElements({
           <div className="absolute top-[15%] right-0 w-[1.5px] h-[80px] bg-gradient-to-b from-transparent via-[#10b981]/20 to-transparent" />
           <div className="absolute bottom-[15%] left-0 w-[1.5px] h-[80px] bg-gradient-to-b from-transparent via-[#10b981]/20 to-transparent" />
           <div className="absolute bottom-3 right-4 text-[#10b981]/20 text-[9px] font-mono tracking-widest">
-
             {t("companionshelldecorations.APPPANELV1")}
           </div>
         </>
@@ -137,7 +128,8 @@ export function DecorativeElements({
 
 export function CloseButton({
   centered,
-  onClick }: {
+  onClick,
+}: {
   centered: boolean;
   onClick: () => void;
 }) {

@@ -16,20 +16,23 @@ import {
   Monitor,
   MousePointer2,
   Settings,
-  Terminal } from "lucide-react";
+  Terminal,
+} from "lucide-react";
 import {
   type Dispatch,
   type SetStateAction,
   useCallback,
   useEffect,
-  useState} from "react";
+  useState,
+} from "react";
 import { useApp } from "../AppContext";
 import {
   type AllPermissionsState,
   client,
   type PermissionStatus,
   type PluginInfo,
-  type SystemPermissionId } from "../api-client";
+  type SystemPermissionId,
+} from "../api-client";
 import { hasRequiredOnboardingPermissions } from "../onboarding-permissions";
 import { StatusBadge } from "./shared/ui-badges";
 import { Switch } from "./shared/ui-switch";
@@ -52,35 +55,40 @@ const SYSTEM_PERMISSIONS: PermissionDef[] = [
       "Control mouse, keyboard, and interact with other applications",
     icon: "cursor",
     platforms: ["darwin"],
-    requiredForFeatures: ["computeruse", "browser"] },
+    requiredForFeatures: ["computeruse", "browser"],
+  },
   {
     id: "screen-recording",
     name: "Screen Recording",
     description: "Capture screen content for screenshots and vision",
     icon: "monitor",
     platforms: ["darwin"],
-    requiredForFeatures: ["computeruse", "vision"] },
+    requiredForFeatures: ["computeruse", "vision"],
+  },
   {
     id: "microphone",
     name: "Microphone",
     description: "Voice input for talk mode and speech recognition",
     icon: "mic",
     platforms: ["darwin", "win32", "linux"],
-    requiredForFeatures: ["talkmode", "voice"] },
+    requiredForFeatures: ["talkmode", "voice"],
+  },
   {
     id: "camera",
     name: "Camera",
     description: "Video input for vision and video capture",
     icon: "camera",
     platforms: ["darwin", "win32", "linux"],
-    requiredForFeatures: ["camera", "vision"] },
+    requiredForFeatures: ["camera", "vision"],
+  },
   {
     id: "shell",
     name: "Shell Access",
     description: "Execute terminal commands and scripts",
     icon: "terminal",
     platforms: ["darwin", "win32", "linux"],
-    requiredForFeatures: ["shell"] },
+    requiredForFeatures: ["shell"],
+  },
 ];
 
 /** Capability toggle definition. */
@@ -96,23 +104,27 @@ const CAPABILITIES: CapabilityDef[] = [
     id: "browser",
     label: "Browser Control",
     description: "Automated web browsing and interaction",
-    requiredPermissions: ["accessibility"] },
+    requiredPermissions: ["accessibility"],
+  },
   {
     id: "computeruse",
     label: "Computer Use",
     description: "Full desktop control with mouse and keyboard",
-    requiredPermissions: ["accessibility", "screen-recording"] },
+    requiredPermissions: ["accessibility", "screen-recording"],
+  },
   {
     id: "vision",
     label: "Vision",
     description: "Screen capture and visual analysis",
-    requiredPermissions: ["screen-recording"] },
+    requiredPermissions: ["screen-recording"],
+  },
   {
     id: "coding-agent",
     label: "Coding Agent Swarms",
     description:
       "Orchestrate CLI coding agents (Claude Code, Gemini, Codex, Aider, Pi)",
-    requiredPermissions: [] },
+    requiredPermissions: [],
+  },
 ];
 
 const PERMISSION_BADGE_LABELS: Record<
@@ -123,7 +135,8 @@ const PERMISSION_BADGE_LABELS: Record<
   denied: { tone: "danger", label: "Denied" },
   "not-determined": { tone: "warning", label: "Not Set" },
   restricted: { tone: "muted", label: "Restricted" },
-  "not-applicable": { tone: "muted", label: "N/A" } };
+  "not-applicable": { tone: "muted", label: "N/A" },
+};
 
 /** Icon mapping for permissions. */
 function PermissionIcon({ icon }: { icon: string }) {
@@ -132,7 +145,8 @@ function PermissionIcon({ icon }: { icon: string }) {
     monitor: <Monitor className="w-4 h-4" />,
     mic: <Mic className="w-4 h-4" />,
     camera: <Camera className="w-4 h-4" />,
-    terminal: <Terminal className="w-4 h-4" /> };
+    terminal: <Terminal className="w-4 h-4" />,
+  };
   return (
     <span className="text-base">
       {icons[icon] || <Settings className="w-4 h-4" />}
@@ -149,7 +163,8 @@ function PermissionRow({
   onOpenSettings,
   isShell,
   shellEnabled,
-  onToggleShell }: {
+  onToggleShell,
+}: {
   def: PermissionDef;
   status: PermissionStatus;
   canRequest: boolean;
@@ -199,7 +214,6 @@ function PermissionRow({
                 className="btn text-[11px] py-1 px-2.5"
                 onClick={onRequest}
               >
-
                 {t("permissionssection.Request")}
               </button>
             )}
@@ -208,7 +222,6 @@ function PermissionRow({
               className="btn text-[11px] py-1 px-2.5"
               onClick={onOpenSettings}
             >
-
               {t("permissionssection.Settings")}
             </button>
           </>
@@ -223,7 +236,8 @@ function CapabilityToggle({
   cap,
   plugin,
   permissionsGranted,
-  onToggle }: {
+  onToggle,
+}: {
   cap: CapabilityDef;
   plugin: PluginInfo | null;
   permissionsGranted: boolean;
@@ -236,15 +250,15 @@ function CapabilityToggle({
 
   return (
     <div
-      className={`flex items-center gap-3 p-3 border border-[var(--border)] ${enabled ? "bg-[var(--accent)]/10" : "bg-[var(--card)]"
-        }`}
+      className={`flex items-center gap-3 p-3 border border-[var(--border)] ${
+        enabled ? "bg-[var(--accent)]/10" : "bg-[var(--card)]"
+      }`}
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-semibold text-[13px]">{cap.label}</span>
           {!permissionsGranted && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--warning)]/20 text-[var(--warning)]">
-
               {t("permissionssection.MissingPermissions")}
             </span>
           )}
@@ -317,7 +331,7 @@ function usePermissionActions(
 
 export function PermissionsSection() {
   const { t } = useApp();
-  const { plugins, handlePluginToggle} = useApp();
+  const { plugins, handlePluginToggle } = useApp();
   const [permissions, setPermissions] = useState<AllPermissionsState | null>(
     null,
   );
@@ -401,7 +415,6 @@ export function PermissionsSection() {
   if (loading) {
     return (
       <div className="text-center py-6 text-[var(--muted)] text-xs">
-
         {t("permissionssection.LoadingPermissions")}
       </div>
     );
@@ -410,7 +423,6 @@ export function PermissionsSection() {
   if (!permissions) {
     return (
       <div className="text-center py-6 text-[var(--muted)] text-xs">
-
         {t("permissionssection.UnableToLoadPermi")}
       </div>
     );
@@ -421,7 +433,9 @@ export function PermissionsSection() {
       {/* System Permissions */}
       <div>
         <div className="flex justify-between items-center mb-3">
-          <div className="font-bold text-sm">{t("permissionssection.SystemPermissions")}</div>
+          <div className="font-bold text-sm">
+            {t("permissionssection.SystemPermissions")}
+          </div>
           <div className="flex gap-2">
             <button
               type="button"
@@ -439,7 +453,6 @@ export function PermissionsSection() {
                 }
               }}
             >
-
               {t("permissionssection.AllowAll")}
             </button>
             <button
@@ -489,7 +502,9 @@ export function PermissionsSection() {
 
       {/* Capability Toggles */}
       <div>
-        <div className="font-bold text-sm mb-3">{t("permissionssection.Capabilities")}</div>
+        <div className="font-bold text-sm mb-3">
+          {t("permissionssection.Capabilities")}
+        </div>
         <div className="space-y-2">
           {CAPABILITIES.map((cap) => {
             const plugin = plugins.find((p) => p.id === cap.id) ?? null;
@@ -510,7 +525,6 @@ export function PermissionsSection() {
           })}
         </div>
         <div className="text-[11px] text-[var(--muted)] mt-2">
-
           {t("permissionssection.CapabilitiesRequire")}
         </div>
       </div>
@@ -524,7 +538,8 @@ export function PermissionsSection() {
  * Shows only essential permissions with clear CTAs.
  */
 export function PermissionsOnboardingSection({
-  onContinue }: {
+  onContinue,
+}: {
   onContinue: (options?: { allowPermissionBypass?: boolean }) => void;
 }) {
   const { t } = useApp();
@@ -556,7 +571,6 @@ export function PermissionsOnboardingSection({
     return (
       <div className="text-center py-8">
         <div className="text-[var(--muted)] text-sm">
-
           {t("permissionssection.CheckingPermissions")}
         </div>
       </div>
@@ -567,7 +581,6 @@ export function PermissionsOnboardingSection({
     return (
       <div className="text-center py-8">
         <div className="text-[var(--muted)] text-sm mb-4">
-
           {t("permissionssection.UnableToCheckPerm")}
         </div>
         <button
@@ -575,7 +588,6 @@ export function PermissionsOnboardingSection({
           className="btn"
           onClick={() => onContinue({ allowPermissionBypass: true })}
         >
-
           {t("permissionssection.Continue")}
         </button>
       </div>
@@ -591,9 +603,10 @@ export function PermissionsOnboardingSection({
   return (
     <div>
       <div className="text-center mb-6">
-        <div className="text-xl font-bold mb-2">{t("permissionssection.SystemPermissions")}</div>
+        <div className="text-xl font-bold mb-2">
+          {t("permissionssection.SystemPermissions")}
+        </div>
         <div className="text-[var(--muted)] text-sm">
-
           {t("permissionssection.GrantPermissionsTo")}
         </div>
       </div>
@@ -608,10 +621,11 @@ export function PermissionsOnboardingSection({
           return (
             <div
               key={def.id}
-              className={`flex items-center gap-4 p-4 border ${isGranted
+              className={`flex items-center gap-4 p-4 border ${
+                isGranted
                   ? "border-[var(--ok)] bg-[var(--ok)]/10"
                   : "border-[var(--border)] bg-[var(--card)]"
-                }`}
+              }`}
             >
               <PermissionIcon icon={def.icon} />
               <div className="flex-1">
@@ -630,7 +644,6 @@ export function PermissionsOnboardingSection({
                       className="btn text-xs py-1.5 px-3"
                       onClick={() => handleRequest(def.id)}
                     >
-
                       {t("permissionssection.Grant")}
                     </button>
                   )}
@@ -639,7 +652,6 @@ export function PermissionsOnboardingSection({
                     className="btn text-xs py-1.5 px-3"
                     onClick={() => handleOpenSettings(def.id)}
                   >
-
                     {t("permissionssection.OpenSettings")}
                   </button>
                 </div>
@@ -657,7 +669,8 @@ export function PermissionsOnboardingSection({
             className="btn text-xs py-2 px-6 w-full max-w-xs"
             style={{
               background: "var(--accent)",
-              borderColor: "var(--accent)" }}
+              borderColor: "var(--accent)",
+            }}
             onClick={async () => {
               for (const def of essentialPermissions) {
                 const state = permissions[def.id];
@@ -670,7 +683,6 @@ export function PermissionsOnboardingSection({
               }
             }}
           >
-
             {t("permissionssection.AllowAllPermission")}
           </button>
         </div>
@@ -682,7 +694,6 @@ export function PermissionsOnboardingSection({
           className="btn text-xs py-2 px-6 opacity-70"
           onClick={() => onContinue({ allowPermissionBypass: true })}
         >
-
           {t("permissionssection.SkipForNow")}
         </button>
         {allGranted && (
@@ -691,17 +702,16 @@ export function PermissionsOnboardingSection({
             className="btn text-xs py-2 px-6"
             style={{
               background: "var(--accent)",
-              borderColor: "var(--accent)" }}
+              borderColor: "var(--accent)",
+            }}
             onClick={() => onContinue()}
           >
-
             {t("permissionssection.Continue")}
           </button>
         )}
       </div>
 
       <div className="text-center mt-4 text-[11px] text-[var(--muted)]">
-
         {t("permissionssection.YouCanChangeThese")}
       </div>
     </div>

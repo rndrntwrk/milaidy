@@ -4,6 +4,24 @@
 
 import { VRM_COUNT } from "../../AppContext";
 
+export function getLocalizedConversationTitle(
+  title: string | undefined | null,
+  t: (
+    key: string,
+    vars?: Record<string, string | number | boolean | null | undefined>,
+  ) => string,
+): string {
+  if (
+    !title ||
+    title === "New Chat" ||
+    title === "conversations.newChatTitle"
+  ) {
+    const localized = t("conversations.newChatTitle");
+    return localized === "conversations.newChatTitle" ? "New Chat" : localized;
+  }
+  return title;
+}
+
 export const BROWSER_CAPABILITY_PLUGIN_IDS = new Set([
   "browser",
   "browserbase",
@@ -114,7 +132,8 @@ export function estimateTokenCost(
     deepseek: [0.55, 2.19],
     qwen: [0.35, 1.4],
     kimi: [0.2, 0.8],
-    moonshot: [0.2, 0.8] };
+    moonshot: [0.2, 0.8],
+  };
 
   let inputCostPerMillion = 1.0;
   let outputCostPerMillion = 3.0;

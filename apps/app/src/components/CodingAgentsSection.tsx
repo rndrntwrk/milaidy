@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
+import { useApp } from "../AppContext";
 import type { CodingAgentSession } from "../api-client";
 import { client } from "../api-client";
 import { XTerminal } from "./XTerminal";
-import { useApp } from "../AppContext";
 
 /** Agent type display labels. */
 const AGENT_LABELS: Record<string, string> = {
   claude: "Claude",
   gemini: "Gemini",
   codex: "Codex",
-  aider: "Aider" };
+  aider: "Aider",
+};
 
 /** Status dot color classes. */
 const STATUS_DOT: Record<string, string> = {
@@ -18,14 +19,15 @@ const STATUS_DOT: Record<string, string> = {
   blocked: "bg-warn",
   error: "bg-danger",
   completed: "bg-ok opacity-50",
-  stopped: "bg-muted" };
+  stopped: "bg-muted",
+};
 
 interface CodingAgentsSectionProps {
   sessions: CodingAgentSession[];
 }
 
 export function CodingAgentsSection({ sessions }: CodingAgentsSectionProps) {
-    const { t } = useApp();
+  const { t } = useApp();
   const [collapsed, setCollapsed] = useState(false);
   const [stopping, setStopping] = useState<Set<string>>(new Set());
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
@@ -71,7 +73,10 @@ export function CodingAgentsSection({ sessions }: CodingAgentsSectionProps) {
         className="flex justify-between items-center px-3 py-2 cursor-pointer hover:bg-bg-hover text-xs font-semibold uppercase tracking-wide text-muted w-full"
         onClick={() => setCollapsed(!collapsed)}
       >
-        <span>{t("codingagentssection.CodingAgents")}{sessions.length})</span>
+        <span>
+          {t("codingagentssection.CodingAgents")}
+          {sessions.length})
+        </span>
         <span>{collapsed ? "\u25B6" : "\u25BC"}</span>
       </button>
       {!collapsed && (

@@ -8,15 +8,24 @@ import {
   Play,
   RotateCcw,
   Search,
-  Wallet } from "lucide-react";
+  Wallet,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { useApp } from "../AppContext";
 import { COMMAND_PALETTE_EVENT, dispatchMiladyEvent } from "../events";
 import { useBugReport } from "../hooks/useBugReport";
+import { AgentModeDropdown } from "./shared/AgentModeDropdown";
+import { LanguageDropdown } from "./shared/LanguageDropdown";
 import { IconTooltip as IconButtonTooltip } from "./shared/tooltips";
 
 // Status indicator with icon
-function StatusIndicator({ state }: { state: string }) {
+function StatusIndicator({
+  state,
+  t,
+}: {
+  state: string;
+  t: (key: string) => string;
+}) {
   const getStatusConfig = () => {
     switch (state) {
       case "running":
@@ -24,25 +33,29 @@ function StatusIndicator({ state }: { state: string }) {
           icon: Check,
           colorClass: "text-ok border-ok bg-ok/10",
           dotColor: "bg-ok",
-          label: "Running" };
+          label: t("header.statusRunning"),
+        };
       case "paused":
         return {
           icon: Pause,
           colorClass: "text-warn border-warn bg-warn/10",
           dotColor: "bg-warn",
-          label: "Paused" };
+          label: t("header.statusPaused"),
+        };
       case "error":
         return {
           icon: AlertTriangle,
           colorClass: "text-danger border-danger bg-danger/10",
           dotColor: "bg-danger",
-          label: "Error" };
+          label: t("header.statusError"),
+        };
       default:
         return {
           icon: Loader2,
           colorClass: "text-muted border-muted bg-muted/10",
           dotColor: "bg-muted",
-          label: state.replace(/_/g, " ") };
+          label: state.replace(/_/g, " "),
+        };
     }
   };
 
@@ -87,7 +100,10 @@ export function Header() {
     registryStatus,
     uiShellMode,
     setUiShellMode,
-    t } = useApp();
+    uiLanguage,
+    setUiLanguage,
+    t,
+  } = useApp();
 
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -234,7 +250,6 @@ export function Header() {
               data-testid="ui-shell-toggle"
             >
               <span className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-current/50 text-[10px] leading-none">
-
                 {t("header.X21C4")}
               </span>
               <span className="hidden sm:flex flex-col items-start leading-[1.02]">
@@ -249,7 +264,7 @@ export function Header() {
 
             {/* Status & Controls Group */}
             <div className="flex items-center gap-2 shrink-0 bg-bg-accent/50 rounded-lg p-1">
-              <StatusIndicator state={state} />
+              <StatusIndicator state={state} t={t} />
 
               {/* Pause/Resume Button */}
               {state === "restarting" || state === "starting" ? (
@@ -359,6 +374,16 @@ export function Header() {
               </button>
             </IconButtonTooltip>
 
+            {/* Agent Mode */}
+            <AgentModeDropdown />
+
+            {/* Language Selector */}
+            <LanguageDropdown
+              uiLanguage={uiLanguage}
+              setUiLanguage={setUiLanguage}
+              t={t}
+            />
+
             {/* Wallet Dropdown */}
             {(evmShort || solShort) && (
               <div className="wallet-wrapper relative inline-flex shrink-0 group">
@@ -382,7 +407,6 @@ export function Header() {
                   {evmShort && (
                     <div className="flex items-center gap-2 text-xs py-2 px-1 rounded-md hover:bg-bg-hover transition-colors">
                       <span className="font-bold font-mono min-w-[40px] text-muted">
-
                         {t("header.EVM")}
                       </span>
                       <code className="font-mono flex-1 truncate text-txt-strong">
@@ -411,7 +435,6 @@ export function Header() {
                   {solShort && (
                     <div className="flex items-center gap-2 text-xs py-2 px-1 rounded-md hover:bg-bg-hover transition-colors border-t border-border">
                       <span className="font-bold font-mono min-w-[40px] text-muted">
-
                         {t("header.SOL")}
                       </span>
                       <code className="font-mono flex-1 truncate text-txt-strong">

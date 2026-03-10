@@ -15,7 +15,8 @@ const TAG_COLORS: Record<string, { bg: string; fg: string }> = {
   cloud: { bg: "rgba(59, 130, 246, 0.15)", fg: "rgb(59, 130, 246)" },
   plugins: { bg: "rgba(168, 85, 247, 0.15)", fg: "rgb(168, 85, 247)" },
   autonomy: { bg: "rgba(245, 158, 11, 0.15)", fg: "rgb(245, 158, 11)" },
-  websocket: { bg: "rgba(20, 184, 166, 0.15)", fg: "rgb(20, 184, 166)" } };
+  websocket: { bg: "rgba(20, 184, 166, 0.15)", fg: "rgb(20, 184, 166)" },
+};
 
 export function LogsView() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -29,8 +30,8 @@ export function LogsView() {
     logSourceFilter,
     loadLogs,
     setState,
-    t } = useApp();
-
+    t,
+  } = useApp();
 
   useEffect(() => {
     void loadLogs();
@@ -141,7 +142,6 @@ export function LogsView() {
             className="text-xs px-3 py-1.5 border border-border bg-card text-txt cursor-pointer hover:border-accent hover:text-accent"
             onClick={handleClearFilters}
           >
-
             {t("logsview.ClearFilters")}
           </button>
         )}
@@ -151,7 +151,6 @@ export function LogsView() {
           className="text-xs px-3 py-1.5 border border-border bg-card text-txt cursor-pointer hover:border-accent hover:text-accent ml-auto"
           onClick={() => void loadLogs()}
         >
-
           {t("logsview.Refresh")}
         </button>
       </div>
@@ -160,7 +159,6 @@ export function LogsView() {
       <div className="font-mono text-xs flex-1 min-h-0 overflow-y-auto border border-border p-2 bg-card">
         {filteredLogs.length === 0 ? (
           <div className="text-center py-8 text-muted">
-
             {t("logsview.NoLogEntries")}
             {hasActiveFilters ? " matching filters" : " yet"}.
           </div>
@@ -178,12 +176,13 @@ export function LogsView() {
 
               {/* Level */}
               <span
-                className={`font-semibold w-[44px] uppercase text-[11px] ${entry.level === "error"
-                  ? "text-danger"
-                  : entry.level === "warn"
-                    ? "text-warn"
-                    : "text-muted"
-                  }`}
+                className={`font-semibold w-[44px] uppercase text-[11px] ${
+                  entry.level === "error"
+                    ? "text-danger"
+                    : entry.level === "warn"
+                      ? "text-warn"
+                      : "text-muted"
+                }`}
               >
                 {entry.level}
               </span>
@@ -204,7 +203,8 @@ export function LogsView() {
                       style={{
                         background: c ? c.bg : "var(--bg-muted)",
                         color: c ? c.fg : "var(--muted)",
-                        fontFamily: "var(--font-body, sans-serif)" }}
+                        fontFamily: "var(--font-body, sans-serif)",
+                      }}
                     >
                       {t}
                     </span>

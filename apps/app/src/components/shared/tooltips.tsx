@@ -3,7 +3,7 @@
  */
 
 import { X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "../../AppContext";
 
 interface TooltipProps {
@@ -25,7 +25,8 @@ export function Tooltip({
   showArrow = true,
   className = "",
   visible: controlledVisible,
-  onDismiss }: TooltipProps) {
+  onDismiss,
+}: TooltipProps) {
   const [isVisible, setIsVisible] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLButtonElement>(null);
@@ -52,7 +53,8 @@ export function Tooltip({
     top: "bottom-full left-1/2 -translate-x-1/2 mb-2",
     bottom: "top-full left-1/2 -translate-x-1/2 mt-2",
     left: "right-full top-1/2 -translate-y-1/2 mr-2",
-    right: "left-full top-1/2 -translate-y-1/2 ml-2" };
+    right: "left-full top-1/2 -translate-y-1/2 ml-2",
+  };
 
   const arrowClasses = {
     top: "top-full left-1/2 -translate-x-1/2 border-t-border border-l-transparent border-r-transparent border-b-transparent",
@@ -60,7 +62,8 @@ export function Tooltip({
       "bottom-full left-1/2 -translate-x-1/2 border-b-border border-l-transparent border-r-transparent border-t-transparent",
     left: "left-full top-1/2 -translate-y-1/2 border-l-border border-t-transparent border-b-transparent border-r-transparent",
     right:
-      "right-full top-1/2 -translate-y-1/2 border-r-border border-t-transparent border-b-transparent border-l-transparent" };
+      "right-full top-1/2 -translate-y-1/2 border-r-border border-t-transparent border-b-transparent border-l-transparent",
+  };
 
   return (
     <button
@@ -113,7 +116,8 @@ export function IconTooltip({
   children,
   label,
   shortcut,
-  position = "top" }: {
+  position = "top",
+}: {
   children: React.ReactNode;
   label: string;
   shortcut?: string;
@@ -166,9 +170,9 @@ export function Spotlight({
   totalSteps,
   onNext,
   onPrev,
-  onSkip }: SpotlightProps) {
-  const {
-    t } = useApp();
+  onSkip,
+}: SpotlightProps) {
+  const { t } = useApp();
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
 
   useEffect(() => {
@@ -200,7 +204,8 @@ export function Spotlight({
             ${targetRect.left - padding}px 100%,
             100% 100%,
             100% 0%
-          )` }}
+          )`,
+        }}
       />
 
       {/* Tooltip card */}
@@ -208,11 +213,11 @@ export function Spotlight({
         className="absolute bg-card border border-border rounded-xl shadow-2xl p-5 max-w-sm pointer-events-auto"
         style={{
           top: targetRect.bottom + padding + 16,
-          left: Math.min(targetRect.left, window.innerWidth - 340) }}
+          left: Math.min(targetRect.left, window.innerWidth - 340),
+        }}
       >
         <div className="flex items-center justify-between mb-3">
           <span className="text-xs text-muted font-medium">
-
             {t("tooltips.Step")} {step} of {totalSteps}
           </span>
           <button
@@ -220,7 +225,6 @@ export function Spotlight({
             onClick={onSkip}
             className="text-xs text-muted hover:text-txt"
           >
-
             {t("tooltips.SkipTour")}
           </button>
         </div>
@@ -235,7 +239,6 @@ export function Spotlight({
             disabled={step === 1}
             className="px-4 py-2 text-sm border border-border rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-bg-hover transition-colors"
           >
-
             {t("tooltips.Previous")}
           </button>
 
@@ -244,8 +247,9 @@ export function Spotlight({
               (dotIndex) => (
                 <div
                   key={`step-dot-${dotIndex}`}
-                  className={`w-2 h-2 rounded-full transition-colors ${dotIndex + 1 === step ? "bg-accent" : "bg-border"
-                    }`}
+                  className={`w-2 h-2 rounded-full transition-colors ${
+                    dotIndex + 1 === step ? "bg-accent" : "bg-border"
+                  }`}
                 />
               ),
             )}
@@ -307,5 +311,6 @@ export function useGuidedTour(steps: TourStep[]) {
     next,
     prev,
     skip,
-    totalSteps: steps.length };
+    totalSteps: steps.length,
+  };
 }

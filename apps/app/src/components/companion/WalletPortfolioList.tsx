@@ -29,7 +29,8 @@ export function WalletPortfolioList({
   handleCopySelectedTokenAddress,
   handleSelectedTokenSwap,
   handleSelectedTokenSend,
-  t }: WalletPortfolioListProps) {
+  t,
+}: WalletPortfolioListProps) {
   return (
     <>
       <div className="anime-wallet-token-list">
@@ -65,7 +66,8 @@ export function WalletPortfolioList({
                   $
                   {row.valueUsd.toLocaleString("en-US", {
                     minimumFractionDigits: 2,
-                    maximumFractionDigits: 2 })}
+                    maximumFractionDigits: 2,
+                  })}
                 </span>
                 <span className="anime-wallet-token-chain">{row.chain}</span>
               </div>
@@ -128,7 +130,8 @@ export function WalletPortfolioList({
                 $
                 {selectedWalletToken.valueUsd.toLocaleString("en-US", {
                   minimumFractionDigits: 2,
-                  maximumFractionDigits: 2 })}
+                  maximumFractionDigits: 2,
+                })}
               </strong>
             </div>
           </div>

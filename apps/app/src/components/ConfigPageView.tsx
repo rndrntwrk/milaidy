@@ -64,16 +64,18 @@ function CloudRpcStatus({
   creditsCritical,
   topUpUrl,
   loginBusy,
-  onLogin }: CloudRpcStatusProps) {
+  onLogin,
+}: CloudRpcStatusProps) {
   const { t } = useApp();
   if (connected) {
     return (
       <div className="flex items-center gap-2 text-xs">
         <span className="inline-block w-2 h-2 rounded-full bg-[var(--ok,#16a34a)]" />
-        <span className="font-semibold">{t("configpageview.ConnectedToElizaC")}</span>
+        <span className="font-semibold">
+          {t("configpageview.ConnectedToElizaC")}
+        </span>
         {credits !== null && (
           <span className="text-[var(--muted)] ml-auto">
-
             {t("configpageview.Credits")}{" "}
             <span
               className={
@@ -93,7 +95,6 @@ function CloudRpcStatus({
                 rel="noopener noreferrer"
                 className="text-[10px] ml-1.5 text-[var(--accent)]"
               >
-
                 {t("configpageview.TopUp")}
               </a>
             )}
@@ -108,7 +109,6 @@ function CloudRpcStatus({
       <div className="flex items-center gap-2 text-xs">
         <span className="inline-block w-2 h-2 rounded-full bg-[var(--muted)]" />
         <span className="text-[var(--muted)]">
-
           {t("configpageview.RequiresElizaCloud")}
         </span>
       </div>
@@ -141,17 +141,17 @@ function buildRpcRendererConfig(
     schema: {
       type: "object",
       properties: {},
-      required: []
+      required: [],
     },
     hints: {},
     values: {},
-    setKeys: new Set<string>()
+    setKeys: new Set<string>(),
   };
 
   for (const field of fields) {
     props.schema.properties[field.configKey] = {
       type: "string",
-      description: field.label
+      description: field.label,
     };
     props.hints[field.configKey] = {
       label: field.label,
@@ -159,7 +159,7 @@ function buildRpcRendererConfig(
       placeholder: field.isSet
         ? "Already set — leave blank to keep"
         : "Enter API key",
-      width: "full"
+      width: "full",
     };
     if (rpcFieldValues[field.configKey] !== undefined) {
       props.values[field.configKey] = rpcFieldValues[field.configKey];
@@ -197,7 +197,8 @@ function RpcConfigSection<T extends string>({
   rpcFieldValues,
   onRpcFieldChange,
   cloud,
-  containerClassName }: RpcSectionProps<T>) {
+  containerClassName,
+}: RpcSectionProps<T>) {
   const rpcConfig = buildRpcRendererConfig(
     selectedProvider,
     providerConfigs,
@@ -256,10 +257,11 @@ function renderRpcProviderButtons<T extends string>(
           <button
             type="button"
             key={provider.id}
-            className={`text-center px-2 py-2 border cursor-pointer transition-colors ${active
-              ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]"
-              : "border-[var(--border)] bg-[var(--card)] hover:border-[var(--accent)]"
-              }`}
+            className={`text-center px-2 py-2 border cursor-pointer transition-colors ${
+              active
+                ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]"
+                : "border-[var(--border)] bg-[var(--card)] hover:border-[var(--accent)]"
+            }`}
             onClick={() => onSelect(provider.id)}
           >
             <div
@@ -283,33 +285,33 @@ const CLOUD_SERVICE_DEFS: {
   label: string;
   description: string;
 }[] = [
-    {
-      key: "inference",
-      label: "Model Inference",
-      description:
-        "Use ElizaCloud for LLM calls. Turn off to use your own API keys (Anthropic, OpenAI, etc.)"
-    },
-    {
-      key: "rpc",
-      label: "Blockchain RPC",
-      description: "Use ElizaCloud RPC endpoints for EVM, BSC, and Solana"
-    },
-    {
-      key: "media",
-      label: "Media Generation",
-      description: "Use ElizaCloud for image, video, audio, and vision"
-    },
-    {
-      key: "tts",
-      label: "Text-to-Speech",
-      description: "Use ElizaCloud for TTS voice synthesis"
-    },
-    {
-      key: "embeddings",
-      label: "Embeddings",
-      description: "Use ElizaCloud for text embedding generation"
-    },
-  ];
+  {
+    key: "inference",
+    label: "Model Inference",
+    description:
+      "Use ElizaCloud for LLM calls. Turn off to use your own API keys (Anthropic, OpenAI, etc.)",
+  },
+  {
+    key: "rpc",
+    label: "Blockchain RPC",
+    description: "Use ElizaCloud RPC endpoints for EVM, BSC, and Solana",
+  },
+  {
+    key: "media",
+    label: "Media Generation",
+    description: "Use ElizaCloud for image, video, audio, and vision",
+  },
+  {
+    key: "tts",
+    label: "Text-to-Speech",
+    description: "Use ElizaCloud for TTS voice synthesis",
+  },
+  {
+    key: "embeddings",
+    label: "Embeddings",
+    description: "Use ElizaCloud for text embedding generation",
+  },
+];
 
 function CloudServicesSection() {
   const { t } = useApp();
@@ -318,7 +320,7 @@ function CloudServicesSection() {
     rpc: true,
     media: true,
     tts: true,
-    embeddings: true
+    embeddings: true,
   });
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -341,7 +343,7 @@ function CloudServicesSection() {
               Object.entries(cloud.services ?? {}).filter(
                 ([, v]) => typeof v === "boolean",
               ),
-            )
+            ),
           }));
         }
         setLoaded(true);
@@ -364,7 +366,7 @@ function CloudServicesSection() {
 
       try {
         await client.updateConfig({
-          cloud: { services: updated, inferenceMode }
+          cloud: { services: updated, inferenceMode },
         });
         setNeedsRestart(true);
       } catch (err) {
@@ -383,16 +385,16 @@ function CloudServicesSection() {
   return (
     <div className="p-4 border border-[var(--border)] bg-[var(--card)] mt-4">
       <div className="flex items-center justify-between mb-3">
-        <div className="font-bold text-sm">{t("configpageview.CloudServices")}</div>
+        <div className="font-bold text-sm">
+          {t("configpageview.CloudServices")}
+        </div>
         {needsRestart && (
           <span className="text-[11px] text-[var(--warning,#f59e0b)] font-medium">
-
             {t("configpageview.RestartRequiredFor")}
           </span>
         )}
       </div>
       <p className="text-[12px] text-[var(--muted)] mb-4">
-
         {t("configpageview.ChooseWhichElizaCl")}
       </p>
       <div className="space-y-2">
@@ -419,12 +421,14 @@ function CloudServicesSection() {
               aria-labelledby={`cloud-service-${key}`}
               disabled={saving}
               onClick={() => void handleToggle(key)}
-              className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors cursor-pointer ${services[key] ? "bg-[var(--accent)]" : "bg-[var(--border)]"
-                }`}
+              className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors cursor-pointer ${
+                services[key] ? "bg-[var(--accent)]" : "bg-[var(--border)]"
+              }`}
             >
               <span
-                className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${services[key] ? "translate-x-4" : "translate-x-0"
-                  }`}
+                className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${
+                  services[key] ? "translate-x-4" : "translate-x-0"
+                }`}
               />
             </button>
           </div>
@@ -437,7 +441,19 @@ function CloudServicesSection() {
 /* ── ConfigPageView ──────────────────────────────────────────────────── */
 
 export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
-  const { t, cloudConnected, cloudCredits, cloudCreditsLow, cloudCreditsCritical, cloudTopUpUrl, cloudLoginBusy, walletConfig, walletApiKeySaving, handleWalletApiKeySave, handleCloudLogin } = useApp();
+  const {
+    t,
+    cloudConnected,
+    cloudCredits,
+    cloudCreditsLow,
+    cloudCreditsCritical,
+    cloudTopUpUrl,
+    cloudLoginBusy,
+    walletConfig,
+    walletApiKeySaving,
+    handleWalletApiKeySave,
+    handleCloudLogin,
+  } = useApp();
 
   const [secretsOpen, setSecretsOpen] = useState(false);
 
@@ -474,23 +490,23 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
       {
         configKey: "ALCHEMY_API_KEY",
         label: "Alchemy API Key",
-        isSet: walletConfig?.alchemyKeySet ?? false
+        isSet: walletConfig?.alchemyKeySet ?? false,
       },
     ],
     infura: [
       {
         configKey: "INFURA_API_KEY",
         label: "Infura API Key",
-        isSet: walletConfig?.infuraKeySet ?? false
+        isSet: walletConfig?.infuraKeySet ?? false,
       },
     ],
     ankr: [
       {
         configKey: "ANKR_API_KEY",
         label: "Ankr API Key",
-        isSet: walletConfig?.ankrKeySet ?? false
+        isSet: walletConfig?.ankrKeySet ?? false,
       },
-    ]
+    ],
   };
 
   const bscRpcConfigs: RpcSectionConfigMap = {
@@ -498,16 +514,16 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
       {
         configKey: "NODEREAL_BSC_RPC_URL",
         label: "NodeReal BSC RPC URL",
-        isSet: walletConfig?.nodeRealBscRpcSet ?? false
+        isSet: walletConfig?.nodeRealBscRpcSet ?? false,
       },
     ],
     quicknode: [
       {
         configKey: "QUICKNODE_BSC_RPC_URL",
         label: "QuickNode BSC RPC URL",
-        isSet: walletConfig?.quickNodeBscRpcSet ?? false
+        isSet: walletConfig?.quickNodeBscRpcSet ?? false,
       },
-    ]
+    ],
   };
 
   const solanaRpcConfigs: RpcSectionConfigMap = {
@@ -515,14 +531,14 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
       {
         configKey: "HELIUS_API_KEY",
         label: "Helius API Key",
-        isSet: walletConfig?.heliusKeySet ?? false
+        isSet: walletConfig?.heliusKeySet ?? false,
       },
       {
         configKey: "BIRDEYE_API_KEY",
         label: "Birdeye API Key",
-        isSet: walletConfig?.birdeyeKeySet ?? false
+        isSet: walletConfig?.birdeyeKeySet ?? false,
       },
-    ]
+    ],
   };
 
   const cloudStatusProps = {
@@ -532,16 +548,17 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
     creditsCritical: cloudCreditsCritical,
     topUpUrl: cloudTopUpUrl,
     loginBusy: cloudLoginBusy,
-    onLogin: () => void handleCloudLogin()
+    onLogin: () => void handleCloudLogin(),
   };
 
   return (
     <div>
       {!embedded && (
         <>
-          <h2 className="text-lg font-bold mb-1">{t("configpageview.Config")}</h2>
+          <h2 className="text-lg font-bold mb-1">
+            {t("configpageview.Config")}
+          </h2>
           <p className="text-[13px] text-[var(--muted)] mb-5">
-
             {t("configpageview.WalletProvidersAnd")}
           </p>
         </>
@@ -552,7 +569,9 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
           ═══════════════════════════════════════════════════════════════ */}
       <div className="p-4 border border-[var(--border)] bg-[var(--card)]">
         <div className="flex items-center justify-between mb-4">
-          <div className="font-bold text-sm">{t("configpageview.WalletAmpRPC")}</div>
+          <div className="font-bold text-sm">
+            {t("configpageview.WalletAmpRPC")}
+          </div>
           <button
             type="button"
             className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] text-[var(--muted)] hover:text-[var(--txt)] bg-transparent border border-[var(--border)] rounded cursor-pointer transition-colors hover:border-[var(--accent)]"
@@ -673,14 +692,15 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
                   <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                   <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                 </svg>
-                <span className="font-bold text-sm">{t("configpageview.SecretsVault1")}</span>
+                <span className="font-bold text-sm">
+                  {t("configpageview.SecretsVault1")}
+                </span>
               </div>
               <button
                 type="button"
                 className="text-[var(--muted)] hover:text-[var(--txt)] text-lg leading-none px-1 bg-transparent border-0 cursor-pointer"
                 onClick={() => setSecretsOpen(false)}
               >
-
                 {t("configpageview.Times")}
               </button>
             </div>

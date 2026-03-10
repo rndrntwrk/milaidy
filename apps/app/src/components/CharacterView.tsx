@@ -20,11 +20,13 @@ import type { JsonSchemaObject } from "./config-catalog";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer";
 import { TagEditor } from "./shared/TagEditor";
 import { ThemedSelect } from "./shared/ThemedSelect";
-import { PREMADE_VOICES } from "./shared/voice-types";
-import { sanitizeApiKey, type VoicePreset } from "./shared/voice-types";
+import {
+  PREMADE_VOICES,
+  sanitizeApiKey,
+  type VoicePreset,
+} from "./shared/voice-types";
 
 const DEFAULT_ELEVEN_FAST_MODEL = "eleven_flash_v2_5";
-
 
 type CharacterConversation = NonNullable<
   CharacterData["messageExamples"]
@@ -58,7 +60,7 @@ function parseImportedMessage(value: unknown): CharacterMessage | null {
         : "";
   return {
     name: speaker,
-    content: { text: contentText }
+    content: { text: contentText },
   };
 }
 
@@ -119,7 +121,8 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
     syncRegistryProfile,
     loadDropStatus,
     mintFromDrop,
-    walletConfig } = useApp();
+    walletConfig,
+  } = useApp();
 
   useEffect(() => {
     void loadCharacter();
@@ -156,20 +159,20 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
       style: {
         all: d.style?.all ?? [],
         chat: d.style?.chat ?? [],
-        post: d.style?.post ?? []
+        post: d.style?.post ?? [],
       },
       adjectives: d.adjectives ?? [],
       topics: d.topics ?? [],
       messageExamples: (d.messageExamples ?? []).map((convo) =>
         (convo.examples ?? []).map((msg) => ({
           user: msg.name,
-          content: { text: msg.content?.text ?? "" }
+          content: { text: msg.content?.text ?? "" },
         })),
       ),
-      postExamples: d.postExamples ?? []
+      postExamples: d.postExamples ?? [],
     };
     const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-      type: "application/json"
+      type: "application/json",
     });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -262,8 +265,6 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
   );
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
 
-
-
   /* Load voice config on mount */
   useEffect(() => {
     void (async () => {
@@ -288,13 +289,13 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
       }
       setVoiceLoading(false);
     })();
-  }, [PREMADE_VOICES]);
+  }, []);
 
   const handleVoiceFieldChange = useCallback(
     (key: string, value: string | number) => {
       setVoiceConfig((prev) => ({
         ...prev,
-        elevenlabs: { ...(prev.elevenlabs ?? {}), [key]: value }
+        elevenlabs: { ...(prev.elevenlabs ?? {}), [key]: value },
       }));
     },
     [],
@@ -304,7 +305,7 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
     setSelectedPresetId(preset.id);
     setVoiceConfig((prev) => ({
       ...prev,
-      elevenlabs: { ...(prev.elevenlabs ?? {}), voiceId: preset.voiceId }
+      elevenlabs: { ...(prev.elevenlabs ?? {}), voiceId: preset.voiceId },
     }));
   }, []);
 
@@ -339,7 +340,7 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
     try {
       const normalizedElevenlabs = {
         ...voiceConfig.elevenlabs,
-        modelId: voiceConfig.elevenlabs?.modelId ?? DEFAULT_ELEVEN_FAST_MODEL
+        modelId: voiceConfig.elevenlabs?.modelId ?? DEFAULT_ELEVEN_FAST_MODEL,
       };
       const sanitizedKey = sanitizeApiKey(normalizedElevenlabs?.apiKey);
       if (sanitizedKey) normalizedElevenlabs.apiKey = sanitizedKey;
@@ -348,13 +349,13 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
       const normalizedVoiceConfig: VoiceConfig = {
         ...voiceConfig,
         provider: voiceConfig.provider ?? "elevenlabs",
-        elevenlabs: normalizedElevenlabs
+        elevenlabs: normalizedElevenlabs,
       };
 
       await client.updateConfig({
         messages: {
-          tts: normalizedVoiceConfig
-        }
+          tts: normalizedVoiceConfig,
+        },
       });
       dispatchWindowEvent(VOICE_CONFIG_UPDATED_EVENT, normalizedVoiceConfig);
       setVoiceSaveSuccess(true);
@@ -386,7 +387,7 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
       system: d.system ?? "",
       bio: bioText,
       style: d.style ?? { all: [], chat: [], post: [] },
-      postExamples: d.postExamples ?? []
+      postExamples: d.postExamples ?? [],
     }),
     [d, bioText],
   );
@@ -436,8 +437,8 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
                 ) => ({
                   examples: convo.map((msg) => ({
                     name: msg.user,
-                    content: { text: msg.content.text }
-                  }))
+                    content: { text: msg.content.text },
+                  })),
                 }),
               );
               handleFieldEdit("messageExamples", formatted);
@@ -512,7 +513,6 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
     return (
       <div className={sectionCls}>
         <div className="text-center py-6 text-[var(--muted)] text-[13px]">
-
           {t("characterview.loadingCharacterDa")}
         </div>
       </div>
@@ -537,7 +537,6 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
           {!isRegistered && !dropLive && (
             <div className="flex flex-col gap-3">
               <div className="text-[12px] text-[var(--muted)]">
-
                 {t("characterview.RegisterYourAgent")}
               </div>
               <div className="flex items-center gap-2">
@@ -562,22 +561,19 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-2 px-3 py-2 border border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]">
                 <span className="text-xs font-bold text-[var(--accent)]">
-
                   {t("characterview.MINTISLIVE")}
                 </span>
                 <span className="text-[11px] text-[var(--muted)]">
-
-                  {t("characterview.MiladyMaker")}{(dropStatus?.currentSupply ?? 0) + 1} of{" "}
+                  {t("characterview.MiladyMaker")}
+                  {(dropStatus?.currentSupply ?? 0) + 1} of{" "}
                   {dropStatus?.maxSupply ?? 2138}
                 </span>
               </div>
               <div className="text-[12px] text-[var(--muted)]">
-
                 {t("characterview.ClaimYourLimitedE")}{" "}
-                {dropStatus?.maxSupply ?? 2138}  {t("characterview.total")}{" "}
+                {dropStatus?.maxSupply ?? 2138} {t("characterview.total")}{" "}
                 {(dropStatus?.maxSupply ?? 2138) -
                   (dropStatus?.currentSupply ?? 0)}{" "}
-
                 {t("characterview.remaining")}
               </div>
               <div className="flex items-center gap-2">
@@ -607,8 +603,8 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
               )}
               {mintResult && (
                 <div className="text-xs text-[var(--ok,#16a34a)]">
-
-                  {t("characterview.MintedToken")}{mintResult.agentId}  {t("characterview.MiladyMaker1")}
+                  {t("characterview.MintedToken")}
+                  {mintResult.agentId} {t("characterview.MiladyMaker1")}
                   {mintResult.mintNumber}
                   {mintResult.isShiny && " (shiny)"}{" "}
                   <a
@@ -617,7 +613,6 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
                     rel="noopener noreferrer"
                     className="underline text-[var(--accent)]"
                   >
-
                     {t("characterview.viewTx")}
                   </a>
                 </div>
@@ -635,19 +630,22 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2 text-[12px]">
                     <span className="text-[var(--ok,#16a34a)] font-semibold">
-
                       {t("characterview.Registered")}
                     </span>
                     <span className="text-[var(--muted)]">|</span>
-                    <span>{t("characterview.Token")}{registryStatus.tokenId}</span>
+                    <span>
+                      {t("characterview.Token")}
+                      {registryStatus.tokenId}
+                    </span>
                     <span className="text-[var(--muted)]">|</span>
                     <span>{onChainName}</span>
                   </div>
                   {nameOutOfSync && (
                     <div className="flex items-center gap-2">
                       <span className="text-[11px] text-[var(--warn,#f59e0b)]">
-
-                        {t("characterview.OnChainName")}{onChainName}{t("characterview.DiffersFrom")}
+                        {t("characterview.OnChainName")}
+                        {onChainName}
+                        {t("characterview.DiffersFrom")}
                         {currentName}"
                       </span>
                       <button
@@ -671,7 +669,6 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
                     rel="noopener noreferrer"
                     className="text-[11px] underline text-[var(--accent)]"
                   >
-
                     {t("characterview.viewOnEtherscan")}
                   </a>
                 </div>
@@ -680,7 +677,6 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
 
           {hasWallet && userMinted && !isRegistered && (
             <div className="text-[12px] text-[var(--ok,#16a34a)]">
-
               {t("characterview.MintedFromCollecti")}
             </div>
           )}
@@ -691,7 +687,9 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
       <div className={sectionCls}>
         {/* Header row: title + action buttons */}
         <div className="flex items-center justify-between mb-4">
-          <div className="font-bold text-sm">{t("characterview.IdentityPersonali")}</div>
+          <div className="font-bold text-sm">
+            {t("characterview.IdentityPersonali")}
+          </div>
           <div className="flex items-center gap-1.5">
             <button
               type="button"
@@ -707,7 +705,6 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
               onClick={() => fileInputRef.current?.click()}
               title={t("characterview.importCharacterJso")}
             >
-
               {t("characterview.import")}
             </button>
             <button
@@ -716,7 +713,6 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
               title={t("characterview.exportAsCharacter")}
               type="button"
             >
-
               {t("characterview.export")}
             </button>
           </div>
@@ -741,7 +737,6 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
                 onClick={() => void handleRandomName()}
                 title={t("characterview.randomName")}
               >
-
                 {t("characterview.random")}
               </button>
             </div>
@@ -823,7 +818,6 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
           <div className="flex flex-col gap-1">
             <div className="flex items-center justify-between">
               <span className={labelCls}>
-
                 {t("characterview.directionsAndThing")}
               </span>
               <button
@@ -851,9 +845,10 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
       <div className={sectionCls}>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-1.5">
-            <div className="font-bold text-sm">{t("characterview.StyleRules")}</div>
+            <div className="font-bold text-sm">
+              {t("characterview.StyleRules")}
+            </div>
             <span className="font-normal text-[11px] text-[var(--muted)]">
-
               {t("characterview.CommunicationGuid")}
             </span>
           </div>
@@ -895,7 +890,9 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
 
       {/* ═══ SECTION 3: EXAMPLES ═══ */}
       <div className={sectionCls}>
-        <div className="font-bold text-sm mb-3">{t("characterview.Examples")}</div>
+        <div className="font-bold text-sm mb-3">
+          {t("characterview.Examples")}
+        </div>
 
         <div className="flex flex-col gap-3">
           {/* Chat Examples */}
@@ -907,7 +904,6 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
 
               {t("characterview.chatExamples")}
               <span className="font-normal text-[var(--muted)]">
-
                 {t("characterview.HowTheAgentResp")}
               </span>
               <button
@@ -932,7 +928,6 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
                 >
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-[10px] text-[var(--muted)] font-semibold">
-
                       {t("characterview.conversation")} {ci + 1}
                     </span>
                     <button
@@ -944,7 +939,6 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
                         handleFieldEdit("messageExamples", updated);
                       }}
                     >
-
                       {t("characterview.remove")}
                     </button>
                   </div>
@@ -964,11 +958,11 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
                         onChange={(e) => {
                           const updated = [...(d.messageExamples ?? [])];
                           const convoClone = {
-                            examples: [...updated[ci].examples]
+                            examples: [...updated[ci].examples],
                           };
                           convoClone.examples[mi] = {
                             ...convoClone.examples[mi],
-                            content: { text: e.target.value }
+                            content: { text: e.target.value },
                           };
                           updated[ci] = convoClone;
                           handleFieldEdit("messageExamples", updated);
@@ -981,7 +975,6 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
               ))}
               {(d.messageExamples ?? []).length === 0 && (
                 <div className={`${hintCls} py-2`}>
-
                   {t("characterview.noChatExamplesYet")}
                 </div>
               )}
@@ -997,7 +990,6 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
 
               {t("characterview.postExamples")}
               <span className="font-normal text-[var(--muted)]">
-
                 {t("characterview.SocialMediaVoice")}
               </span>
               <button
@@ -1034,14 +1026,12 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
                       handleFieldEdit("postExamples", updated);
                     }}
                   >
-
                     {t("characterview.Times")}
                   </button>
                 </div>
               ))}
               {(d.postExamples ?? []).length === 0 && (
                 <div className={`${hintCls} py-2`}>
-
                   {t("characterview.noPostExamplesYet")}
                 </div>
               )}
@@ -1053,7 +1043,6 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
                   handleFieldEdit("postExamples", updated);
                 }}
               >
-
                 {t("characterview.AddPost")}
               </button>
             </div>
@@ -1067,13 +1056,11 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
 
         {voiceLoading ? (
           <div className="text-center py-4 text-[var(--muted)] text-[13px]">
-
             {t("characterview.LoadingVoiceConfig")}
           </div>
         ) : (
           <div className="flex flex-col gap-4">
             <div className="text-xs text-[var(--muted)]">
-
               {t("characterview.ChooseTheSpeaking")}
             </div>
 
@@ -1094,8 +1081,8 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
                       ).map((p) => ({
                         id: p.id,
                         text: p.name,
-                        hint: p.hint
-                      }))
+                        hint: p.hint,
+                      })),
                     },
                     {
                       label: "Male",
@@ -1104,8 +1091,8 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
                       ).map((p) => ({
                         id: p.id,
                         text: p.name,
-                        hint: p.hint
-                      }))
+                        hint: p.hint,
+                      })),
                     },
                     {
                       label: "Character",
@@ -1114,12 +1101,12 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
                       ).map((p) => ({
                         id: p.id,
                         text: p.name,
-                        hint: p.hint
-                      }))
+                        hint: p.hint,
+                      })),
                     },
                     {
                       label: "Other",
-                      items: [{ id: "__custom__", text: "Custom voice ID..." }]
+                      items: [{ id: "__custom__", text: "Custom voice ID..." }],
                     },
                   ]}
                   onChange={(id) => {
@@ -1143,7 +1130,6 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
                       onClick={handleStopTest}
                       type="button"
                     >
-
                       {t("characterview.stop")}
                     </button>
                   ) : (
@@ -1152,7 +1138,6 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
                       className={tinyBtnCls}
                       onClick={() => handleTestVoice(activePreset.previewUrl)}
                     >
-
                       {t("characterview.preview")}
                     </button>
                   );
@@ -1198,16 +1183,16 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
                             "eleven_multilingual_v2",
                             "eleven_turbo_v2",
                             "eleven_monolingual_v1",
-                          ]
+                          ],
                         },
                         stability: { type: "number", minimum: 0, maximum: 1 },
                         similarityBoost: {
                           type: "number",
                           minimum: 0,
-                          maximum: 1
+                          maximum: 1,
                         },
-                        speed: { type: "number", minimum: 0.5, maximum: 2 }
-                      }
+                        speed: { type: "number", minimum: 0.5, maximum: 2 },
+                      },
                     } satisfies JsonSchemaObject
                   }
                   hints={{
@@ -1219,48 +1204,48 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
                         { value: "", label: "Default (Flash v2.5)" },
                         {
                           value: "eleven_flash_v2_5",
-                          label: "Flash v2.5 (Fastest)"
+                          label: "Flash v2.5 (Fastest)",
                         },
                         { value: "eleven_turbo_v2_5", label: "Turbo v2.5" },
                         {
                           value: "eleven_multilingual_v2",
-                          label: "Multilingual v2"
+                          label: "Multilingual v2",
                         },
                         { value: "eleven_turbo_v2", label: "Turbo v2" },
                         {
                           value: "eleven_monolingual_v1",
-                          label: "Monolingual v1"
+                          label: "Monolingual v1",
                         },
-                      ]
+                      ],
                     } satisfies ConfigUiHint,
                     stability: {
                       label: "Stability",
                       type: "number",
                       width: "third",
                       placeholder: "0.5",
-                      step: 0.05
+                      step: 0.05,
                     } satisfies ConfigUiHint,
                     similarityBoost: {
                       label: "Similarity",
                       type: "number",
                       width: "third",
                       placeholder: "0.75",
-                      step: 0.05
+                      step: 0.05,
                     } satisfies ConfigUiHint,
                     speed: {
                       label: "Speed",
                       type: "number",
                       width: "third",
                       placeholder: "1.0",
-                      step: 0.1
-                    } satisfies ConfigUiHint
+                      step: 0.1,
+                    } satisfies ConfigUiHint,
                   }}
                   values={{
                     modelId: voiceConfig.elevenlabs?.modelId ?? "",
                     stability: voiceConfig.elevenlabs?.stability ?? "",
                     similarityBoost:
                       voiceConfig.elevenlabs?.similarityBoost ?? "",
-                    speed: voiceConfig.elevenlabs?.speed ?? ""
+                    speed: voiceConfig.elevenlabs?.speed ?? "",
                   }}
                   registry={defaultRegistry}
                   onChange={(key, value) => {

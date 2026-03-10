@@ -50,7 +50,12 @@ export function chainIcon(chain: string): { code: string; cls: string } {
   if (c === "base") return { code: "B", cls: "bg-chain-base" };
   if (c === "bsc" || c === "bnb chain" || c === "bnb smart chain")
     return { code: "B", cls: "bg-chain-bsc" };
-  if (c === "avax" || c === "avalanche" || c === "c-chain" || c === "avalanche c-chain")
+  if (
+    c === "avax" ||
+    c === "avalanche" ||
+    c === "c-chain" ||
+    c === "avalanche c-chain"
+  )
     return { code: "A", cls: "bg-chain-avax" };
   if (c === "arbitrum") return { code: "A", cls: "bg-chain-arb" };
   if (c === "optimism") return { code: "O", cls: "bg-chain-op" };
@@ -70,7 +75,12 @@ export function isBscChainName(chain: string): boolean {
 
 export function isAvaxChainName(chain: string): boolean {
   const c = normalizeChainName(chain);
-  return c === "avax" || c === "avalanche" || c === "c-chain" || c === "avalanche c-chain";
+  return (
+    c === "avax" ||
+    c === "avalanche" ||
+    c === "c-chain" ||
+    c === "avalanche c-chain"
+  );
 }
 
 /* ── Balance formatter ──────────────────────────────────────────────── */

@@ -5,7 +5,7 @@
  * away from the Apps tab. Provides drag, resize, and close controls.
  */
 
-import { useCallback, useRef, useState} from "react";
+import { useCallback, useRef, useState } from "react";
 import { useApp } from "../AppContext";
 
 export function GameViewOverlay() {
@@ -14,7 +14,8 @@ export function GameViewOverlay() {
     activeGameViewerUrl,
     activeGameSandbox,
     setState,
-    t } = useApp();
+    t,
+  } = useApp();
 
   // --- Drag state ---
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -32,7 +33,8 @@ export function GameViewOverlay() {
     const onMove = (ev: MouseEvent) => {
       setPos({
         x: ev.clientX - dragOffset.current.x,
-        y: ev.clientY - dragOffset.current.y });
+        y: ev.clientY - dragOffset.current.y,
+      });
     };
     const onUp = () => {
       setDragging(false);
@@ -85,7 +87,6 @@ export function GameViewOverlay() {
             onClick={handleExpand}
             title={t("gameviewoverlay.ExpandBackToApps")}
           >
-
             {t("gameviewoverlay.Expand")}
           </button>
           <button
@@ -94,7 +95,6 @@ export function GameViewOverlay() {
             onClick={handleClose}
             title={t("gameviewoverlay.CloseOverlay")}
           >
-
             {t("gameviewoverlay.Close")}
           </button>
         </div>

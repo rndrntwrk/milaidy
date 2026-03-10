@@ -27,7 +27,8 @@ export const CLEAR_SCROLLBACK_RE = /\x1b\[3J/g;
  */
 export function XTerminal({
   sessionId,
-  active = true }: {
+  active = true,
+}: {
   sessionId: string;
   active?: boolean;
 }) {
@@ -61,7 +62,9 @@ export function XTerminal({
           background: "#0a0a0a",
           foreground: "#d4e8c4",
           cursor: "#5a9a2a",
-          selectionBackground: "rgba(90, 154, 42, 0.3)" } });
+          selectionBackground: "rgba(90, 154, 42, 0.3)",
+        },
+      });
       const fitAddon = new FitAddon();
       terminal.loadAddon(fitAddon);
 

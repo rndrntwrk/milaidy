@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type {
   WalletBalancesResponse,
-  WalletNftsResponse
+  WalletNftsResponse,
 } from "../../api-client";
 import { getNativeLogoUrl } from "../chainConfig";
 import {
@@ -13,7 +13,7 @@ import {
   type TranslatorFn,
   type WalletCollectibleRow,
   type WalletPortfolioChainFilter,
-  type WalletTokenRow
+  type WalletTokenRow,
 } from "./walletUtils";
 
 export type UseWalletPortfolioArgs = {
@@ -34,14 +34,15 @@ export function useWalletPortfolio(args: UseWalletPortfolioArgs) {
     walletSelectedTokenKey,
     walletPanelOpen,
     walletReady,
-    t } = args;
+    t,
+  } = args;
 
   // ---- Milady token metadata ----
 
   const [miladyTokenMeta, setMiladyTokenMeta] = useState<TokenMetadata>({
     symbol: "MILADY",
     name: "Milady",
-    logoUrl: null
+    logoUrl: null,
   });
   const [miladyTokenMetaLoaded, setMiladyTokenMetaLoaded] = useState(false);
 
@@ -76,7 +77,7 @@ export function useWalletPortfolio(args: UseWalletPortfolioArgs) {
         isNative: true,
         valueUsd: nativeValue,
         balance: chain.nativeBalance,
-        logoUrl: getNativeLogoUrl(chain.chain)
+        logoUrl: getNativeLogoUrl(chain.chain),
       });
       for (const token of chain.tokens ?? []) {
         rows.push({
@@ -89,7 +90,7 @@ export function useWalletPortfolio(args: UseWalletPortfolioArgs) {
           isNative: false,
           valueUsd: Number.parseFloat(token.valueUsd) || 0,
           balance: token.balance,
-          logoUrl: token.logoUrl || null
+          logoUrl: token.logoUrl || null,
         });
       }
     }
@@ -105,7 +106,7 @@ export function useWalletPortfolio(args: UseWalletPortfolioArgs) {
         isNative: true,
         valueUsd: Number.parseFloat(walletBalances.solana.solValueUsd) || 0,
         balance: walletBalances.solana.solBalance,
-        logoUrl: getNativeLogoUrl("solana")
+        logoUrl: getNativeLogoUrl("solana"),
       });
       for (const token of walletBalances.solana.tokens ?? []) {
         rows.push({
@@ -118,7 +119,7 @@ export function useWalletPortfolio(args: UseWalletPortfolioArgs) {
           isNative: false,
           valueUsd: Number.parseFloat(token.valueUsd) || 0,
           balance: token.balance,
-          logoUrl: token.logoUrl || null
+          logoUrl: token.logoUrl || null,
         });
       }
     }
@@ -144,7 +145,7 @@ export function useWalletPortfolio(args: UseWalletPortfolioArgs) {
           isNative: true,
           valueUsd: 0,
           balance: "0",
-          logoUrl: getNativeLogoUrl("bsc")
+          logoUrl: getNativeLogoUrl("bsc"),
         },
       );
     }
@@ -169,7 +170,7 @@ export function useWalletPortfolio(args: UseWalletPortfolioArgs) {
           isNative: false,
           valueUsd: 0,
           balance: "0",
-          logoUrl: miladyTokenMeta.logoUrl
+          logoUrl: miladyTokenMeta.logoUrl,
         },
       );
     }
@@ -195,7 +196,7 @@ export function useWalletPortfolio(args: UseWalletPortfolioArgs) {
           chainKey: resolvePortfolioChainKey(chainGroup.chain),
           name: nft.name || `#${nft.tokenId}`,
           collectionName: nft.collectionName || "EVM NFT",
-          imageUrl: nft.imageUrl || null
+          imageUrl: nft.imageUrl || null,
         });
       }
     }
@@ -206,7 +207,7 @@ export function useWalletPortfolio(args: UseWalletPortfolioArgs) {
         chainKey: "solana",
         name: nft.name || "Solana NFT",
         collectionName: nft.collectionName || "Solana NFT",
-        imageUrl: nft.imageUrl || null
+        imageUrl: nft.imageUrl || null,
       });
     }
     return rows;
@@ -295,6 +296,6 @@ export function useWalletPortfolio(args: UseWalletPortfolioArgs) {
     selectedWalletToken,
     selectedWalletTokenShare,
     selectedWalletTokenExplorerUrl,
-    walletChainOptions
+    walletChainOptions,
   };
 }

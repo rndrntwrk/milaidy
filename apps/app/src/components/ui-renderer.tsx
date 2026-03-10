@@ -15,8 +15,9 @@ import React, {
   useCallback,
   useContext,
   useMemo,
-  useState
+  useState,
 } from "react";
+import { useApp } from "../AppContext";
 import { getByPath, setByPath } from "./config-catalog";
 import type {
   AuthState,
@@ -26,9 +27,8 @@ import type {
   UiRenderContext,
   UiSpec,
   ValidationCheck,
-  VisibilityCondition
+  VisibilityCondition,
 } from "./ui-spec";
-import { useApp } from "../AppContext";
 
 const UiContext = createContext<UiRenderContext | null>(null);
 
@@ -236,7 +236,7 @@ const BUILTIN_VALIDATORS: Record<
     }
   },
   min: (v, args) => Number(v) >= Number(args?.value ?? -Infinity),
-  max: (v, args) => Number(v) <= Number(args?.value ?? Infinity)
+  max: (v, args) => Number(v) <= Number(args?.value ?? Infinity),
 };
 
 // ── Validation runner ───────────────────────────────────────────────
@@ -321,14 +321,14 @@ const GAP: Record<string, string> = {
   sm: "gap-1.5",
   md: "gap-3",
   lg: "gap-5",
-  xl: "gap-8"
+  xl: "gap-8",
 };
 
 const ALIGN: Record<string, string> = {
   start: "items-start",
   center: "items-center",
   end: "items-end",
-  stretch: "items-stretch"
+  stretch: "items-stretch",
 };
 
 const JUSTIFY: Record<string, string> = {
@@ -336,7 +336,7 @@ const JUSTIFY: Record<string, string> = {
   center: "justify-center",
   end: "justify-end",
   between: "justify-between",
-  around: "justify-around"
+  around: "justify-around",
 };
 
 // ── Tailwind class constants ────────────────────────────────────────
@@ -430,7 +430,7 @@ const TextComponent: ComponentFn = (props) => {
     caption: "text-xs text-[var(--muted)]",
     muted: "text-sm text-[var(--muted)]",
     lead: "text-sm font-medium",
-    code: "text-xs font-mono bg-[var(--bg-hover)] px-1.5 py-0.5 border border-[var(--border)]"
+    code: "text-xs font-mono bg-[var(--bg-hover)] px-1.5 py-0.5 border border-[var(--border)]",
   };
   return <div className={cls[variant] ?? "text-sm"}>{text}</div>;
 };
@@ -689,10 +689,11 @@ const ToggleComponent: ComponentFn = (props, _children, ctx, el) => {
   return (
     <button
       type="button"
-      className={`px-3 py-1.5 text-xs border cursor-pointer transition-colors ${pressed
-        ? "bg-[var(--accent)] text-[var(--accent-foreground,#fff)] border-[var(--accent)]"
-        : "bg-[var(--card)] text-[var(--text)] border-[var(--border)] hover:bg-[var(--bg-hover)]"
-        }`}
+      className={`px-3 py-1.5 text-xs border cursor-pointer transition-colors ${
+        pressed
+          ? "bg-[var(--accent)] text-[var(--accent-foreground,#fff)] border-[var(--accent)]"
+          : "bg-[var(--card)] text-[var(--text)] border-[var(--border)] hover:bg-[var(--bg-hover)]"
+      }`}
       onClick={() => {
         setValue(!pressed);
         fireEvent(el.on?.press, ctx);
@@ -733,10 +734,11 @@ const ToggleGroupComponent: ComponentFn = (props, _children, ctx) => {
           <button
             key={item.value}
             type="button"
-            className={`px-2.5 py-1 text-xs border cursor-pointer transition-colors ${active
-              ? "bg-[var(--accent)] text-[var(--accent-foreground,#fff)] border-[var(--accent)]"
-              : "bg-[var(--card)] text-[var(--text)] border-[var(--border)] hover:bg-[var(--bg-hover)]"
-              }`}
+            className={`px-2.5 py-1 text-xs border cursor-pointer transition-colors ${
+              active
+                ? "bg-[var(--accent)] text-[var(--accent-foreground,#fff)] border-[var(--accent)]"
+                : "bg-[var(--card)] text-[var(--text)] border-[var(--border)] hover:bg-[var(--bg-hover)]"
+            }`}
             onClick={() => toggle(item.value)}
           >
             {item.label}
@@ -762,10 +764,11 @@ const ButtonGroupComponent: ComponentFn = (props, _children, ctx) => {
           <button
             key={btn.value}
             type="button"
-            className={`px-3 py-1.5 text-xs border cursor-pointer transition-colors ${active
-              ? "bg-[var(--accent)] text-[var(--accent-foreground,#fff)] border-[var(--accent)]"
-              : "bg-[var(--card)] text-[var(--text)] border-[var(--border)] hover:bg-[var(--bg-hover)]"
-              }`}
+            className={`px-3 py-1.5 text-xs border cursor-pointer transition-colors ${
+              active
+                ? "bg-[var(--accent)] text-[var(--accent-foreground,#fff)] border-[var(--accent)]"
+                : "bg-[var(--card)] text-[var(--text)] border-[var(--border)] hover:bg-[var(--bg-hover)]"
+            }`}
             onClick={() => setValue(btn.value)}
           >
             {btn.label}
@@ -844,7 +847,6 @@ const CarouselComponent: ComponentFn = (props) => {
           onClick={() => setCurrent((p) => Math.max(0, p - 1))}
           disabled={current === 0}
         >
-
           {t("ui-renderer.Larr")}
         </button>
         <span className="text-[10px] text-[var(--muted)] self-center">
@@ -856,7 +858,6 @@ const CarouselComponent: ComponentFn = (props) => {
           onClick={() => setCurrent((p) => Math.min(items.length - 1, p + 1))}
           disabled={current === items.length - 1}
         >
-
           {t("ui-renderer.Rarr")}
         </button>
       </div>
@@ -873,7 +874,7 @@ const BadgeComponent: ComponentFn = (props) => {
       "bg-[rgba(243,156,18,0.1)] text-[var(--warn,#f39c12)] border-[var(--warn,#f39c12)]",
     error:
       "bg-[rgba(231,76,60,0.1)] text-[var(--destructive)] border-[var(--destructive)]",
-    info: "bg-[rgba(52,152,219,0.1)] text-[var(--accent)] border-[var(--accent)]"
+    info: "bg-[rgba(52,152,219,0.1)] text-[var(--accent)] border-[var(--accent)]",
   };
   return (
     <span
@@ -937,13 +938,13 @@ const AlertComponent: ComponentFn = (props) => {
     info: "border-[var(--accent)]",
     success: "border-[var(--ok)]",
     warning: "border-[var(--warn,#f39c12)]",
-    error: "border-[var(--destructive)]"
+    error: "border-[var(--destructive)]",
   };
   const textCls: Record<string, string> = {
     info: "text-[var(--accent)]",
     success: "text-[var(--ok)]",
     warning: "text-[var(--warn,#f39c12)]",
-    error: "text-[var(--destructive)]"
+    error: "text-[var(--destructive)]",
   };
   return (
     <div
@@ -1052,7 +1053,7 @@ const ButtonComponent: ComponentFn = (props, _children, ctx, el) => {
     danger:
       "bg-[var(--destructive)] text-white border-[var(--destructive)] hover:opacity-90",
     ghost:
-      "bg-transparent text-[var(--text)] border-transparent hover:bg-[var(--bg-hover)]"
+      "bg-transparent text-[var(--text)] border-transparent hover:bg-[var(--bg-hover)]",
   };
   return (
     <button
@@ -1111,7 +1112,7 @@ const DropdownMenuComponent: ComponentFn = (props, _children, ctx) => {
                 if (ctx.onAction)
                   ctx.onAction("menuSelect", {
                     value: item.value,
-                    label: item.label
+                    label: item.label,
                   });
               }}
             >
@@ -1141,10 +1142,11 @@ const TabsComponent: ComponentFn = (props, _children, ctx) => {
           <button
             key={tab.value}
             type="button"
-            className={`px-3 py-1.5 text-xs cursor-pointer transition-colors ${tab.value === active
-              ? "border-b-2 border-[var(--accent)] text-[var(--accent)] font-semibold"
-              : "text-[var(--muted)] hover:text-[var(--text)]"
-              }`}
+            className={`px-3 py-1.5 text-xs cursor-pointer transition-colors ${
+              tab.value === active
+                ? "border-b-2 border-[var(--accent)] text-[var(--accent)] font-semibold"
+                : "text-[var(--muted)] hover:text-[var(--text)]"
+            }`}
             onClick={() => setValue(tab.value)}
           >
             {tab.label}
@@ -1171,17 +1173,17 @@ const PaginationComponent: ComponentFn = (props, _children, ctx) => {
         disabled={current <= 1}
         onClick={() => setValue(current - 1)}
       >
-
         ←
       </button>
       {Array.from({ length: total }, (_, i) => i + 1).map((page) => (
         <button
           key={page}
           type="button"
-          className={`px-2 py-1 text-xs border cursor-pointer ${page === current
-            ? "bg-[var(--accent)] text-[var(--accent-foreground,#fff)] border-[var(--accent)]"
-            : "border-[var(--border)] bg-[var(--card)] hover:bg-[var(--bg-hover)]"
-            }`}
+          className={`px-2 py-1 text-xs border cursor-pointer ${
+            page === current
+              ? "bg-[var(--accent)] text-[var(--accent-foreground,#fff)] border-[var(--accent)]"
+              : "border-[var(--border)] bg-[var(--card)] hover:bg-[var(--bg-hover)]"
+          }`}
           onClick={() => setValue(page)}
         >
           {page}
@@ -1193,7 +1195,6 @@ const PaginationComponent: ComponentFn = (props, _children, ctx) => {
         disabled={current >= total}
         onClick={() => setValue(current + 1)}
       >
-
         →
       </button>
     </div>
@@ -1272,7 +1273,7 @@ const LineGraphComponent: ComponentFn = (props) => {
   const w = 100;
   const points = data.map((d, i) => ({
     x: (i / Math.max(data.length - 1, 1)) * w,
-    y: h - (d.value / maxVal) * h
+    y: h - (d.value / maxVal) * h,
   }));
   const pathD = points
     .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`)
@@ -1367,7 +1368,6 @@ const PopoverComponent: ComponentFn = (props) => {
             className="text-[10px] text-[var(--muted)] mt-1 cursor-pointer hover:text-[var(--text)]"
             onClick={() => setOpen(false)}
           >
-
             Close
           </button>
         </div>
@@ -1478,7 +1478,6 @@ const DialogComponent: ComponentFn = (props, children, ctx) => {
             className="text-[var(--muted)] hover:text-[var(--text)] text-lg leading-none px-1 cursor-pointer"
             onClick={close}
           >
-
             ×
           </button>
         </div>
@@ -1577,7 +1576,7 @@ const COMPONENTS: Record<string, ComponentFn> = {
   Collapsible: CollapsibleComponent,
   Accordion: AccordionComponent,
   Dialog: DialogComponent,
-  Drawer: DrawerComponent
+  Drawer: DrawerComponent,
 };
 
 // ══════════════════════════════════════════════════════════════════════
@@ -1599,7 +1598,6 @@ function ElementRenderer({ elementId }: { elementId: string }) {
   if (!component) {
     return (
       <div className="text-[10px] text-[var(--destructive)] border border-dashed border-[var(--destructive)] p-2">
-
         {t("ui-renderer.UnknownComponent")} {el.type}
       </div>
     );
@@ -1668,9 +1666,10 @@ export function UiRenderer({
   onAction,
   loading,
   auth,
-  validators }: UiRendererProps) {
+  validators,
+}: UiRendererProps) {
   const [state, setStateRaw] = useState<Record<string, unknown>>(() => ({
-    ...spec.state
+    ...spec.state,
   }));
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
 
@@ -1707,7 +1706,7 @@ export function UiRenderer({
       loading,
       validators,
       fieldErrors,
-      validateField
+      validateField,
     }),
     [
       spec,

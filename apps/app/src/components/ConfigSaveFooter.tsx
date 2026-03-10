@@ -5,14 +5,15 @@ export function ConfigSaveFooter({
   saving,
   saveError,
   saveSuccess,
-  onSave }: {
+  onSave,
+}: {
   dirty: boolean;
   saving: boolean;
   saveError: string | null;
   saveSuccess: boolean;
   onSave: () => void;
 }) {
-    const { t } = useApp();
+  const { t } = useApp();
   if (!dirty) {
     return null;
   }
@@ -20,7 +21,11 @@ export function ConfigSaveFooter({
   return (
     <div className="flex items-center justify-end gap-3 pt-2 border-t border-[var(--border)]">
       {saveError && <span className="text-xs text-red-500">{saveError}</span>}
-      {saveSuccess && <span className="text-xs text-green-600">{t("configsavefooter.Saved")}</span>}
+      {saveSuccess && (
+        <span className="text-xs text-green-600">
+          {t("configsavefooter.Saved")}
+        </span>
+      )}
       <button
         type="button"
         className="px-4 py-1.5 text-xs font-semibold bg-[var(--accent)] text-[var(--accent-foreground)] cursor-pointer hover:opacity-90 disabled:opacity-50"

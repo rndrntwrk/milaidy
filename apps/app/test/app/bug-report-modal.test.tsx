@@ -299,7 +299,9 @@ describe("BugReportModal", () => {
     });
 
     // Fallback path does not transition to success URL view
-    expect(getText(tree?.root)).not.toContain("bugreportmodal.BugReportSubmitted");
+    expect(getText(tree?.root)).not.toContain(
+      "bugreportmodal.BugReportSubmitted",
+    );
     // Form should still be visible (not replaced by success state)
     expect(getTextareas(tree?.root).length).toBeGreaterThan(0);
   });
@@ -335,7 +337,9 @@ describe("BugReportModal", () => {
     const before = getTextareas(tree?.root).length;
 
     const logsToggle = getButtons(tree?.root).find((b) =>
-      b.children.some((c) => typeof c === "string" && c.trim() === "bugreportmodal.Logs"),
+      b.children.some(
+        (c) => typeof c === "string" && c.trim() === "bugreportmodal.Logs",
+      ),
     );
     act(() => {
       logsToggle?.props.onClick();

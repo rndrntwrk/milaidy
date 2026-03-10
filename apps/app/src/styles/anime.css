@@ -17,11 +17,9 @@
   right: 0;
   bottom: 0;
   overflow: hidden;
-  background: radial-gradient(
-    circle at 50% 120%,
-    var(--ac-bg-light) 0%,
-    var(--ac-bg-dark) 80%
-  );
+  background: radial-gradient(circle at 50% 120%,
+      var(--ac-bg-light) 0%,
+      var(--ac-bg-dark) 80%);
   color: var(--ac-text-primary);
   font-family: var(--font-display), sans-serif;
   border-radius: 16px;
@@ -46,16 +44,12 @@
   position: absolute;
   inset: 0;
   background-image:
-    radial-gradient(
-      circle at 10% 20%,
+    radial-gradient(circle at 10% 20%,
       rgba(255, 255, 255, 0.03) 0%,
-      transparent 40%
-    ),
-    radial-gradient(
-      circle at 80% 80%,
+      transparent 40%),
+    radial-gradient(circle at 80% 80%,
       rgba(0, 225, 255, 0.05) 0%,
-      transparent 40%
-    );
+      transparent 40%);
   background-size: cover;
   opacity: 0.6;
   z-index: 0;
@@ -117,7 +111,7 @@
   padding: 24px 32px;
 }
 
-.anime-comp-ui-layer > * {
+.anime-comp-ui-layer>* {
   pointer-events: auto;
 }
 
@@ -132,12 +126,15 @@
 /* ── Header ── */
 .anime-comp-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   margin-bottom: 24px;
+  position: relative;
 }
 
 .anime-comp-header-left {
+  position: absolute;
+  left: 0;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -180,6 +177,8 @@
 }
 
 .anime-comp-header-right {
+  position: absolute;
+  right: 0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -191,11 +190,9 @@
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   background:
-    radial-gradient(
-      120% 120% at 0% 0%,
+    radial-gradient(120% 120% at 0% 0%,
       rgba(240, 178, 50, 0.18),
-      transparent 58%
-    ),
+      transparent 58%),
     linear-gradient(145deg, rgba(16, 21, 34, 0.9), rgba(8, 11, 20, 0.94));
   color: rgba(232, 238, 250, 0.9);
   display: inline-flex;
@@ -228,11 +225,9 @@
   gap: 8px;
   padding: 6px 8px 6px 12px;
   border-radius: 999px;
-  background: linear-gradient(
-    135deg,
-    rgba(20, 24, 38, 0.8) 0%,
-    rgba(10, 12, 18, 0.9) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(20, 24, 38, 0.8) 0%,
+      rgba(10, 12, 18, 0.9) 100%);
   border: 1px solid rgba(255, 255, 255, 0.16);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
 }
@@ -286,11 +281,9 @@
   padding: 2px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  background: linear-gradient(
-    140deg,
-    rgba(13, 17, 30, 0.9) 0%,
-    rgba(7, 10, 18, 0.94) 100%
-  );
+  background: linear-gradient(140deg,
+      rgba(13, 17, 30, 0.9) 0%,
+      rgba(7, 10, 18, 0.94) 100%);
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.03),
     0 5px 14px rgba(0, 0, 0, 0.3);
@@ -319,39 +312,159 @@
 .anime-lang-toggle-btn.is-active {
   color: #f8fafc;
   border-color: rgba(56, 189, 248, 0.58);
-  background: linear-gradient(
-    135deg,
-    rgba(56, 189, 248, 0.18) 0%,
-    rgba(30, 41, 59, 0.8) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(56, 189, 248, 0.18) 0%,
+      rgba(30, 41, 59, 0.8) 100%);
   box-shadow:
     0 0 14px rgba(56, 189, 248, 0.26),
     inset 0 0 10px rgba(56, 189, 248, 0.17);
 }
 
-/* ── Hub Header Extensions (Wallet, Balance, Status) ── */
+/* ── Language Dropdown ── */
+.anime-lang-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+.anime-lang-dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(140deg,
+      rgba(13, 17, 30, 0.9) 0%,
+      rgba(7, 10, 18, 0.94) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03),
+    0 5px 14px rgba(0, 0, 0, 0.3);
+  color: rgba(203, 213, 225, 0.9);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.anime-lang-dropdown-trigger:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #fff;
+}
+
+.anime-lang-dropdown-trigger.is-open {
+  border-color: rgba(56, 189, 248, 0.5);
+  box-shadow:
+    0 0 12px rgba(56, 189, 248, 0.18),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+.anime-lang-dropdown-flag {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.anime-lang-dropdown-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.anime-lang-dropdown-caret {
+  opacity: 0.6;
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.anime-lang-dropdown-caret.is-open {
+  transform: rotate(180deg);
+  opacity: 1;
+}
+
+.anime-lang-dropdown-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 170px;
+  padding: 4px;
+  margin: 0;
+  list-style: none;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  background: linear-gradient(165deg,
+      rgba(15, 19, 32, 0.96) 0%,
+      rgba(7, 10, 18, 0.97) 100%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  z-index: 100;
+  animation: anime-lang-menu-in 0.15s ease forwards;
+}
+
+@keyframes anime-lang-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.anime-lang-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(220, 228, 240, 0.85);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.anime-lang-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+
+.anime-lang-dropdown-item.is-active {
+  border-color: rgba(56, 189, 248, 0.35);
+  background: linear-gradient(135deg,
+      rgba(56, 189, 248, 0.12) 0%,
+      rgba(30, 41, 59, 0.5) 100%);
+  color: #f8fafc;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.14);
+}
+
+.anime-lang-dropdown-item-flag {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.anime-lang-dropdown-item-label {
+  flex: 1;
+}
+
+.anime-lang-dropdown-check {
+  color: rgba(56, 189, 248, 0.9);
+  flex-shrink: 0;
+}
+
 .anime-header-extensions {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-left: 12px;
-  padding-left: 16px;
   position: relative;
-}
-
-.anime-header-extensions::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 10%;
-  bottom: 10%;
-  width: 1px;
-  background: linear-gradient(
-    to bottom,
-    transparent,
-    rgba(255, 255, 255, 0.2),
-    transparent
-  );
 }
 
 .anime-header-pill {
@@ -359,11 +472,9 @@
   align-items: center;
   gap: 10px;
   padding: 6px 16px 6px 20px;
-  background: linear-gradient(
-    135deg,
-    rgba(20, 24, 38, 0.85) 0%,
-    rgba(10, 12, 18, 0.95) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(20, 24, 38, 0.85) 0%,
+      rgba(10, 12, 18, 0.95) 100%);
   backdrop-filter: blur(12px);
   border-top: 1px solid rgba(255, 255, 255, 0.15);
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
@@ -391,11 +502,9 @@
 
 .anime-header-pill.is-clickable:hover {
   border-color: var(--ac-accent);
-  background: linear-gradient(
-    135deg,
-    rgba(30, 36, 56, 0.9) 0%,
-    rgba(15, 18, 28, 0.95) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(30, 36, 56, 0.9) 0%,
+      rgba(15, 18, 28, 0.95) 100%);
   box-shadow:
     0 4px 20px rgba(0, 225, 255, 0.15),
     inset 2px 0 15px rgba(0, 225, 255, 0.2);
@@ -405,11 +514,9 @@
 
 .anime-header-pill.is-danger {
   border-left-color: #ff3c3c;
-  background: linear-gradient(
-    135deg,
-    rgba(40, 10, 10, 0.85) 0%,
-    rgba(20, 5, 5, 0.95) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(40, 10, 10, 0.85) 0%,
+      rgba(20, 5, 5, 0.95) 100%);
   box-shadow:
     0 4px 20px rgba(0, 0, 0, 0.4),
     inset 2px 0 10px rgba(255, 60, 60, 0.1);
@@ -512,11 +619,9 @@
   right: 0;
   width: 440px;
   background:
-    radial-gradient(
-      120% 90% at 0% 0%,
+    radial-gradient(120% 90% at 0% 0%,
       rgba(240, 178, 50, 0.14),
-      transparent 54%
-    ),
+      transparent 54%),
     linear-gradient(165deg, rgba(17, 23, 34, 0.96), rgba(7, 10, 18, 0.96));
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 14px;
@@ -564,13 +669,11 @@
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.2s ease;
-  background: linear-gradient(
-    120deg,
-    rgba(255, 255, 255, 0.05),
-    transparent 34%,
-    rgba(240, 178, 50, 0.08) 70%,
-    transparent
-  );
+  background: linear-gradient(120deg,
+      rgba(255, 255, 255, 0.05),
+      transparent 34%,
+      rgba(240, 178, 50, 0.08) 70%,
+      transparent);
 }
 
 .anime-wallet-popover.is-open::before {
@@ -834,11 +937,9 @@
 .anime-wallet-portfolio-tab.is-active {
   border-color: color-mix(in srgb, var(--ac-accent) 68%, white 32%);
   color: #0f172a;
-  background: linear-gradient(
-    106deg,
-    color-mix(in srgb, var(--ac-accent) 84%, white 16%),
-    color-mix(in srgb, var(--ac-accent) 62%, #d4b35f 38%)
-  );
+  background: linear-gradient(106deg,
+      color-mix(in srgb, var(--ac-accent) 84%, white 16%),
+      color-mix(in srgb, var(--ac-accent) 62%, #d4b35f 38%));
 }
 
 .anime-wallet-portfolio-filters {
@@ -914,18 +1015,15 @@
 }
 
 .anime-wallet-token-row.is-active {
-  background: color-mix(
-    in srgb,
-    var(--ac-accent) 12%,
-    rgba(255, 255, 255, 0.02)
-  );
+  background: color-mix(in srgb,
+      var(--ac-accent) 12%,
+      rgba(255, 255, 255, 0.02));
   box-shadow: inset 2px 0 0 color-mix(in srgb, var(--ac-accent) 72%, white 28%);
 }
 
 .anime-wallet-token-row:focus-visible {
   background: rgba(255, 255, 255, 0.05);
-  box-shadow: inset 0 0 0 1px
-    color-mix(in srgb, var(--ac-accent) 58%, white 42%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ac-accent) 58%, white 42%);
 }
 
 .anime-wallet-token-main {
@@ -1015,7 +1113,7 @@
   min-width: 0;
 }
 
-.anime-wallet-token-detail-toggle-meta > span:first-child {
+.anime-wallet-token-detail-toggle-meta>span:first-child {
   font-size: 10px;
   font-weight: 700;
   color: rgba(241, 245, 255, 0.9);
@@ -1024,7 +1122,7 @@
   text-overflow: ellipsis;
 }
 
-.anime-wallet-token-detail-toggle-meta > span:last-child {
+.anime-wallet-token-detail-toggle-meta>span:last-child {
   font-size: 9px;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -1067,14 +1165,14 @@
   gap: 2px;
 }
 
-.anime-wallet-token-detail-item > span {
+.anime-wallet-token-detail-item>span {
   font-size: 8px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: rgba(203, 210, 230, 0.68);
 }
 
-.anime-wallet-token-detail-item > strong {
+.anime-wallet-token-detail-item>strong {
   font-size: 10px;
   color: rgba(244, 247, 255, 0.95);
   font-weight: 700;
@@ -1088,7 +1186,7 @@
   gap: 3px;
 }
 
-.anime-wallet-token-detail-address > span {
+.anime-wallet-token-detail-address>span {
   font-size: 8px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -1096,7 +1194,7 @@
 }
 
 .anime-wallet-token-detail-address code,
-.anime-wallet-token-detail-address > span:last-child {
+.anime-wallet-token-detail-address>span:last-child {
   font-size: 9px;
   font-family: var(--font-mono), monospace;
   color: rgba(234, 239, 250, 0.84);
@@ -1269,7 +1367,7 @@
   gap: 2px;
 }
 
-.anime-wallet-recent-meta > span {
+.anime-wallet-recent-meta>span {
   font-size: 10px;
   color: rgba(243, 246, 253, 0.92);
   white-space: nowrap;
@@ -1350,11 +1448,9 @@
 .anime-wallet-popover-action.is-primary {
   border-color: color-mix(in srgb, var(--ac-accent) 62%, white 38%);
   color: #0f172a;
-  background: linear-gradient(
-    108deg,
-    color-mix(in srgb, var(--ac-accent) 86%, white 14%),
-    color-mix(in srgb, var(--ac-accent) 64%, #d4b35f 36%)
-  );
+  background: linear-gradient(108deg,
+      color-mix(in srgb, var(--ac-accent) 86%, white 14%),
+      color-mix(in srgb, var(--ac-accent) 64%, #d4b35f 36%));
 }
 
 .anime-wallet-mode-switch {
@@ -1389,11 +1485,9 @@
 .anime-wallet-mode-btn.is-active {
   border-color: color-mix(in srgb, var(--ac-accent) 68%, white 32%);
   color: #0f172a;
-  background: linear-gradient(
-    106deg,
-    color-mix(in srgb, var(--ac-accent) 84%, white 16%),
-    color-mix(in srgb, var(--ac-accent) 62%, #d4b35f 38%)
-  );
+  background: linear-gradient(106deg,
+      color-mix(in srgb, var(--ac-accent) 84%, white 16%),
+      color-mix(in srgb, var(--ac-accent) 62%, #d4b35f 38%));
 }
 
 .anime-wallet-readiness-row {
@@ -1486,11 +1580,9 @@
 
 .anime-wallet-flow-step.is-active .anime-wallet-flow-marker {
   border-color: color-mix(in srgb, var(--ac-accent) 74%, white 26%);
-  background: linear-gradient(
-    120deg,
-    color-mix(in srgb, var(--ac-accent) 86%, white 14%),
-    color-mix(in srgb, var(--ac-accent) 62%, #d4b35f 38%)
-  );
+  background: linear-gradient(120deg,
+      color-mix(in srgb, var(--ac-accent) 86%, white 14%),
+      color-mix(in srgb, var(--ac-accent) 62%, #d4b35f 38%));
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--ac-accent) 14%, transparent);
 }
 
@@ -1499,20 +1591,16 @@
 }
 
 .anime-wallet-flow-rail.is-active {
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--ac-accent) 82%, white 18%),
-    color-mix(in srgb, var(--ac-accent) 64%, #d4b35f 36%)
-  );
+  background: linear-gradient(90deg,
+      color-mix(in srgb, var(--ac-accent) 82%, white 18%),
+      color-mix(in srgb, var(--ac-accent) 64%, #d4b35f 36%));
 }
 
 .anime-wallet-status-hint {
   border-left: 2px solid color-mix(in srgb, var(--ac-accent) 68%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--ac-accent) 9%,
-    rgba(255, 255, 255, 0.01)
-  );
+  background: color-mix(in srgb,
+      var(--ac-accent) 9%,
+      rgba(255, 255, 255, 0.01));
   color: rgba(235, 239, 248, 0.84);
   padding: 6px 8px;
   border-radius: 7px;
@@ -1552,11 +1640,9 @@
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 16px;
   background:
-    radial-gradient(
-      120% 92% at 0% 0%,
+    radial-gradient(120% 92% at 0% 0%,
       rgba(240, 178, 50, 0.16),
-      transparent 56%
-    ),
+      transparent 56%),
     linear-gradient(168deg, rgba(17, 23, 34, 0.96), rgba(7, 10, 18, 0.96));
   box-shadow:
     0 24px 46px rgba(0, 0, 0, 0.58),
@@ -1772,7 +1858,7 @@
   gap: 4px;
 }
 
-.anime-wallet-field > span {
+.anime-wallet-field>span {
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.09em;
@@ -2361,12 +2447,10 @@
 
 .anime-comp-character-panel {
   border: 1px solid rgba(255, 255, 255, 0.16);
-  background: linear-gradient(
-    160deg,
-    rgba(51, 57, 74, 0.9) 0%,
-    rgba(31, 36, 52, 0.9) 62%,
-    rgba(24, 30, 46, 0.92) 100%
-  );
+  background: linear-gradient(160deg,
+      rgba(51, 57, 74, 0.9) 0%,
+      rgba(31, 36, 52, 0.9) 62%,
+      rgba(24, 30, 46, 0.92) 100%);
   box-shadow:
     0 14px 28px rgba(0, 0, 0, 0.35),
     0 0 0 1px rgba(255, 255, 255, 0.03) inset;
@@ -2633,11 +2717,9 @@
   width: 72px;
   height: 72px;
   border-radius: 50%;
-  background: radial-gradient(
-    circle at 30% 30%,
-    rgba(255, 255, 255, 0.95),
-    rgba(240, 240, 240, 0.85)
-  );
+  background: radial-gradient(circle at 30% 30%,
+      rgba(255, 255, 255, 0.95),
+      rgba(240, 240, 240, 0.85));
   border: 2px solid rgba(255, 255, 255, 0.8);
   cursor: pointer;
   box-shadow:
@@ -2937,12 +3019,10 @@
   left: -100%;
   width: 50%;
   height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(0, 225, 255, 0.2),
-    transparent
-  );
+  background: linear-gradient(90deg,
+      transparent,
+      rgba(0, 225, 255, 0.2),
+      transparent);
   transform: skewX(-20deg);
   transition: all 0.5s ease;
 }
@@ -2994,13 +3074,11 @@
   padding: 0 12px;
   height: 36px;
   transition: all 0.3s ease;
-  clip-path: polygon(
-    0 0,
-    100% 0,
-    100% calc(100% - 6px),
-    calc(100% - 6px) 100%,
-    0 100%
-  );
+  clip-path: polygon(0 0,
+      100% 0,
+      100% calc(100% - 6px),
+      calc(100% - 6px) 100%,
+      0 100%);
 }
 
 .anime-tech-input-wrap:focus-within {
@@ -3030,23 +3108,19 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(
-    135deg,
-    rgba(20, 24, 38, 0.8) 0%,
-    rgba(10, 12, 18, 0.95) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(20, 24, 38, 0.8) 0%,
+      rgba(10, 12, 18, 0.95) 100%);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-left: 3px solid rgba(0, 225, 255, 0.3);
   padding: 0;
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-  clip-path: polygon(
-    12px 0,
-    100% 0,
-    100% calc(100% - 12px),
-    calc(100% - 12px) 100%,
-    0 100%,
-    0 12px
-  );
+  clip-path: polygon(12px 0,
+      100% 0,
+      100% calc(100% - 12px),
+      calc(100% - 12px) 100%,
+      0 100%,
+      0 12px);
 }
 
 .anime-skill-card:hover {
@@ -3060,11 +3134,9 @@
 
 .anime-skill-card.is-active {
   border-left-color: var(--accent);
-  background: linear-gradient(
-    135deg,
-    rgba(30, 40, 60, 0.9) 0%,
-    rgba(15, 20, 30, 0.95) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(30, 40, 60, 0.9) 0%,
+      rgba(15, 20, 30, 0.95) 100%);
 }
 
 .anime-skill-card::after {
@@ -3074,11 +3146,9 @@
   right: 0;
   width: 40px;
   height: 40px;
-  background: linear-gradient(
-    135deg,
-    transparent 50%,
-    rgba(255, 255, 255, 0.05) 50%
-  );
+  background: linear-gradient(135deg,
+      transparent 50%,
+      rgba(255, 255, 255, 0.05) 50%);
   pointer-events: none;
 }
 
@@ -3115,22 +3185,18 @@
 /* Main section panel — chamfered corners, gold left border, L-bracket corners */
 .char-panel {
   position: relative;
-  background: linear-gradient(
-    135deg,
-    rgba(212, 175, 55, 0.05) 0%,
-    rgba(10, 12, 20, 0.92) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(212, 175, 55, 0.05) 0%,
+      rgba(10, 12, 20, 0.92) 100%);
   border: 1px solid rgba(212, 175, 55, 0.12);
   border-left: 3px solid rgba(212, 175, 55, 0.55);
   padding: 14px 18px 18px;
-  clip-path: polygon(
-    0 0,
-    calc(100% - 18px) 0,
-    100% 18px,
-    100% 100%,
-    18px 100%,
-    0 calc(100% - 18px)
-  );
+  clip-path: polygon(0 0,
+      calc(100% - 18px) 0,
+      100% 18px,
+      100% 100%,
+      18px 100%,
+      0 calc(100% - 18px));
   transition:
     box-shadow 0.3s ease,
     border-color 0.3s ease;
@@ -3313,12 +3379,10 @@
   height: 100%;
   pointer-events: none;
   z-index: 3;
-  background: linear-gradient(
-    180deg,
-    transparent 10%,
-    var(--s-accent-glow) 50%,
-    transparent 90%
-  );
+  background: linear-gradient(180deg,
+      transparent 10%,
+      var(--s-accent-glow) 50%,
+      transparent 90%);
   box-shadow: 0 0 10px var(--s-glow-edge);
 }
 
@@ -3336,7 +3400,7 @@
 }
 
 /* Keep content above grid overlay */
-.settings-content-area > * {
+.settings-content-area>* {
   position: relative;
   z-index: 2;
 }
@@ -3525,14 +3589,12 @@
   padding: 7px 18px;
   transition: all 0.2s ease;
   position: relative;
-  clip-path: polygon(
-    6px 0,
-    100% 0,
-    100% calc(100% - 6px),
-    calc(100% - 6px) 100%,
-    0 100%,
-    0 6px
-  );
+  clip-path: polygon(6px 0,
+      100% 0,
+      100% calc(100% - 6px),
+      calc(100% - 6px) 100%,
+      0 100%,
+      0 6px);
 }
 
 .settings-content-area .btn:hover {
@@ -3551,6 +3613,7 @@
   border-color: var(--border);
   color: var(--muted);
 }
+
 .btn.btn-ghost:hover {
   border-color: var(--accent);
   color: var(--txt);
@@ -3562,6 +3625,7 @@
   border-color: var(--border);
   color: var(--danger);
 }
+
 .btn.btn-danger:hover {
   border-color: var(--danger);
   opacity: 1;
@@ -3573,6 +3637,7 @@
   border-color: rgba(255, 255, 255, 0.12);
   color: var(--s-text-secondary);
 }
+
 .settings-content-area .btn.btn-ghost:hover {
   border-color: var(--s-accent);
   color: var(--s-text);
@@ -3585,6 +3650,7 @@
   border-color: rgba(255, 255, 255, 0.12);
   color: var(--danger, #ef4444);
 }
+
 .settings-content-area .btn.btn-danger:hover {
   border-color: var(--danger, #ef4444);
   background: rgba(239, 68, 68, 0.08);
@@ -3632,14 +3698,12 @@
 
 /* Provider grid tabs (ConfigPageView RPC buttons) — game tab bar */
 .settings-content-area .grid button[class*="border"][class*="cursor-pointer"] {
-  clip-path: polygon(
-    4px 0,
-    100% 0,
-    100% calc(100% - 4px),
-    calc(100% - 4px) 100%,
-    0 100%,
-    0 4px
-  );
+  clip-path: polygon(4px 0,
+      100% 0,
+      100% calc(100% - 4px),
+      calc(100% - 4px) 100%,
+      0 100%,
+      0 4px);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -3655,8 +3719,7 @@
 }
 
 /* Inactive provider tab hover — warm glow */
-.settings-content-area .grid
-  button[class*="cursor-pointer"]:not([class*="bg-[var(--accent)]"]):hover {
+.settings-content-area .grid button[class*="cursor-pointer"]:not([class*="bg-[var(--accent)]"]):hover {
   background: rgba(240, 178, 50, 0.06);
   box-shadow: inset 0 0 20px rgba(240, 178, 50, 0.04);
 }
@@ -3786,12 +3849,12 @@
   padding: 0;
 }
 
-.settings-section-card + .settings-section-card {
+.settings-section-card+.settings-section-card {
   border-top: none;
   margin-top: 8px;
 }
 
-.settings-section-card > *:not(.settings-section-title) {
+.settings-section-card>*:not(.settings-section-title) {
   padding: 4px 24px 16px;
 }
 
@@ -3805,12 +3868,10 @@
   text-transform: uppercase;
   color: var(--s-text-secondary);
   padding: 11px 24px 9px;
-  background: linear-gradient(
-    90deg,
-    var(--s-accent-subtle) 0%,
-    rgba(240, 178, 50, 0.03) 40%,
-    transparent 100%
-  );
+  background: linear-gradient(90deg,
+      var(--s-accent-subtle) 0%,
+      rgba(240, 178, 50, 0.03) 40%,
+      transparent 100%);
   border-bottom: 1px solid var(--s-border-subtle);
   border-top: 1px solid var(--s-border-subtle);
   margin-bottom: 0;
@@ -3850,12 +3911,10 @@
 .settings-hsr-line {
   flex: 1;
   height: 2px;
-  background: linear-gradient(
-    90deg,
-    var(--s-accent-glow) 0%,
-    var(--s-glow-edge) 50%,
-    transparent 100%
-  );
+  background: linear-gradient(90deg,
+      var(--s-accent-glow) 0%,
+      var(--s-glow-edge) 50%,
+      transparent 100%);
   box-shadow: 0 0 6px var(--s-glow-edge);
 }
 
@@ -3870,11 +3929,9 @@
 }
 
 .settings-hsr-row:hover {
-  background: linear-gradient(
-    90deg,
-    rgba(240, 178, 50, 0.04) 0%,
-    rgba(240, 178, 50, 0.01) 100%
-  );
+  background: linear-gradient(90deg,
+      rgba(240, 178, 50, 0.04) 0%,
+      rgba(240, 178, 50, 0.01) 100%);
 }
 
 .settings-hsr-row-left {
@@ -3976,30 +4033,24 @@
   flex: 0 0 calc(33.333% - 8px);
   position: relative;
   padding: 16px 12px;
-  background: linear-gradient(
-    135deg,
-    var(--s-card-bg-hover) 0%,
-    var(--s-card-bg) 100%
-  );
+  background: linear-gradient(135deg,
+      var(--s-card-bg-hover) 0%,
+      var(--s-card-bg) 100%);
   border: 1px solid var(--s-border);
   cursor: pointer;
   transition: all 0.2s ease;
-  clip-path: polygon(
-    8px 0,
-    100% 0,
-    100% calc(100% - 8px),
-    calc(100% - 8px) 100%,
-    0 100%,
-    0 8px
-  );
+  clip-path: polygon(8px 0,
+      100% 0,
+      100% calc(100% - 8px),
+      calc(100% - 8px) 100%,
+      0 100%,
+      0 8px);
 }
 
 .settings-hsr-theme-card:hover {
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.08) 0%,
-    var(--s-card-bg-hover) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(255, 255, 255, 0.08) 0%,
+      var(--s-card-bg-hover) 100%);
   border-color: rgba(240, 178, 50, 0.3);
   box-shadow: 0 0 15px rgba(240, 178, 50, 0.06);
 }
@@ -4020,14 +4071,12 @@
   left: 0;
   pointer-events: none;
   border: 1px solid var(--s-accent);
-  clip-path: polygon(
-    8px 0,
-    100% 0,
-    100% calc(100% - 8px),
-    calc(100% - 8px) 100%,
-    0 100%,
-    0 8px
-  );
+  clip-path: polygon(8px 0,
+      100% 0,
+      100% calc(100% - 8px),
+      calc(100% - 8px) 100%,
+      0 100%,
+      0 8px);
 }
 
 /* Sticky header */
@@ -4119,6 +4168,7 @@
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
+
 /* Also hide the grid overlay + glow edge pseudo-elements */
 .settings-content-area:has(.conn-master-detail)::before,
 .settings-content-area:has(.conn-master-detail)::after {
@@ -4213,13 +4263,11 @@
   padding: 7px 12px;
   outline: none;
   transition: all 0.3s ease;
-  clip-path: polygon(
-    0 0,
-    100% 0,
-    100% calc(100% - 6px),
-    calc(100% - 6px) 100%,
-    0 100%
-  );
+  clip-path: polygon(0 0,
+      100% 0,
+      100% calc(100% - 6px),
+      calc(100% - 6px) 100%,
+      0 100%);
 }
 
 .conn-search-input:focus {
@@ -4414,10 +4462,12 @@
 }
 
 @keyframes conn-pulse {
+
   0%,
   100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.5;
   }
@@ -4572,12 +4622,10 @@
   left: -100%;
   width: 50%;
   height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(244, 114, 182, 0.2),
-    transparent
-  );
+  background: linear-gradient(90deg,
+      transparent,
+      rgba(244, 114, 182, 0.2),
+      transparent);
   transform: skewX(-20deg);
   transition: all 0.5s ease;
 }
@@ -4679,12 +4727,10 @@
   --pg-card-hover: rgba(255, 255, 255, 0.06);
   --pg-text: rgba(247, 246, 252, 0.96);
   --pg-muted: rgba(228, 232, 245, 0.74);
-  --pg-panel-bg: linear-gradient(
-    148deg,
-    rgba(18, 22, 34, 0.9) 0%,
-    rgba(8, 11, 20, 0.86) 52%,
-    rgba(5, 8, 14, 0.84) 100%
-  );
+  --pg-panel-bg: linear-gradient(148deg,
+      rgba(18, 22, 34, 0.9) 0%,
+      rgba(8, 11, 20, 0.86) 52%,
+      rgba(5, 8, 14, 0.84) 100%);
 
   display: grid;
   grid-template-columns: 236px minmax(0, 1fr);
@@ -4742,19 +4788,15 @@
     -22px 18px 38px rgba(0, 0, 0, 0.46),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
   background:
-    radial-gradient(
-      120% 90% at -6% -12%,
+    radial-gradient(120% 90% at -6% -12%,
       color-mix(in srgb, var(--pg-accent) 14%, transparent),
-      transparent 56%
-    ),
+      transparent 56%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 24%),
-    repeating-linear-gradient(
-      0deg,
+    repeating-linear-gradient(0deg,
       rgba(255, 255, 255, 0.02) 0,
       rgba(255, 255, 255, 0.02) 1px,
       transparent 1px,
-      transparent 26px
-    ),
+      transparent 26px),
     var(--pg-panel-bg);
 }
 
@@ -5068,11 +5110,9 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.05),
-    transparent 34%
-  );
+  background: linear-gradient(180deg,
+      rgba(255, 255, 255, 0.05),
+      transparent 34%);
   pointer-events: none;
   opacity: 0.65;
 }
@@ -5083,17 +5123,13 @@
 }
 
 .plugins-game-card.is-selected {
-  border-color: color-mix(
-    in srgb,
-    var(--pg-accent) 40%,
-    rgba(255, 255, 255, 0.12)
-  );
+  border-color: color-mix(in srgb,
+      var(--pg-accent) 40%,
+      rgba(255, 255, 255, 0.12));
   border-left-color: color-mix(in srgb, var(--pg-accent) 82%, white 18%);
-  background: color-mix(
-    in srgb,
-    var(--pg-accent) 14%,
-    rgba(255, 255, 255, 0.03)
-  );
+  background: color-mix(in srgb,
+      var(--pg-accent) 14%,
+      rgba(255, 255, 255, 0.03));
   box-shadow:
     inset 2px 0 14px color-mix(in srgb, var(--pg-accent) 16%, transparent),
     0 0 16px color-mix(in srgb, var(--pg-accent) 16%, transparent);
@@ -5118,11 +5154,9 @@
   align-items: center;
   justify-content: center;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  background: linear-gradient(
-    145deg,
-    rgba(255, 255, 255, 0.08),
-    rgba(0, 0, 0, 0.28)
-  );
+  background: linear-gradient(145deg,
+      rgba(255, 255, 255, 0.08),
+      rgba(0, 0, 0, 0.28));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
   border-radius: 9px;
   flex-shrink: 0;
@@ -5227,12 +5261,10 @@
   right: 0;
   bottom: -1px;
   height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in srgb, var(--pg-accent) 62%, transparent),
-    transparent
-  );
+  background: linear-gradient(90deg,
+      transparent,
+      color-mix(in srgb, var(--pg-accent) 62%, transparent),
+      transparent);
   opacity: 0.8;
   pointer-events: none;
 }
@@ -5365,7 +5397,7 @@
   margin-bottom: 14px;
 }
 
-.plugins-game-detail-errors div + div {
+.plugins-game-detail-errors div+div {
   margin-top: 3px;
 }
 
@@ -5586,14 +5618,12 @@
   height: min(86vh, 920px);
   min-height: 520px;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   border-radius: 18px;
   border: 1px solid rgba(164, 178, 208, 0.26);
-  background: linear-gradient(
-    178deg,
-    rgba(18, 24, 38, 0.76) 0%,
-    rgba(9, 13, 24, 0.86) 100%
-  );
+  background: linear-gradient(178deg,
+      rgba(18, 24, 38, 0.76) 0%,
+      rgba(9, 13, 24, 0.86) 100%);
   box-shadow:
     0 20px 58px rgba(0, 0, 0, 0.52),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
@@ -5607,11 +5637,9 @@
   min-height: 0;
   border-radius: 22px;
   border-color: rgba(171, 186, 218, 0.3);
-  background: linear-gradient(
-    176deg,
-    rgba(12, 18, 31, 0.82) 0%,
-    rgba(6, 10, 20, 0.9) 100%
-  );
+  background: linear-gradient(176deg,
+      rgba(12, 18, 31, 0.82) 0%,
+      rgba(6, 10, 20, 0.9) 100%);
   box-shadow:
     0 18px 54px rgba(0, 0, 0, 0.54),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
@@ -5625,11 +5653,9 @@
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(
-      90% 80% at 0% 0%,
+    radial-gradient(90% 80% at 0% 0%,
       color-mix(in srgb, var(--accent, #f0b232) 11%, transparent),
-      transparent 60%
-    ),
+      transparent 60%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 20%);
   opacity: 0.72;
 }
@@ -5647,11 +5673,9 @@
   gap: 10px;
   padding: 11px 13px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.07),
-    rgba(255, 255, 255, 0.02)
-  );
+  background: linear-gradient(180deg,
+      rgba(255, 255, 255, 0.07),
+      rgba(255, 255, 255, 0.02));
 }
 
 .chat-game-shell-docked .chat-game-header {
@@ -5788,11 +5812,9 @@
   border: 1px solid rgba(255, 255, 255, 0.11);
   border-radius: 8px;
   padding: 9px 9px 8px;
-  background: linear-gradient(
-    160deg,
-    rgba(10, 14, 25, 0.92),
-    rgba(7, 10, 20, 0.86)
-  );
+  background: linear-gradient(160deg,
+      rgba(10, 14, 25, 0.92),
+      rgba(7, 10, 20, 0.86));
   display: flex;
   flex-direction: column;
   gap: 7px;
@@ -5833,28 +5855,21 @@
 }
 
 .chat-game-mode-chip:hover {
-  border-color: color-mix(
-    in srgb,
-    var(--accent, #f0b232) 55%,
-    rgba(160, 176, 208, 0.28)
-  );
+  border-color: color-mix(in srgb,
+      var(--accent, #f0b232) 55%,
+      rgba(160, 176, 208, 0.28));
   color: rgba(255, 255, 255, 0.96);
 }
 
 .chat-game-mode-chip.is-active {
   color: color-mix(in srgb, var(--accent, #f0b232) 84%, white 16%);
-  border-color: color-mix(
-    in srgb,
-    var(--accent, #f0b232) 62%,
-    rgba(160, 176, 208, 0.2)
-  );
-  background: color-mix(
-    in srgb,
-    var(--accent, #f0b232) 15%,
-    rgba(8, 14, 26, 0.88)
-  );
-  box-shadow: inset 0 0 10px
-    color-mix(in srgb, var(--accent, #f0b232) 16%, transparent);
+  border-color: color-mix(in srgb,
+      var(--accent, #f0b232) 62%,
+      rgba(160, 176, 208, 0.2));
+  background: color-mix(in srgb,
+      var(--accent, #f0b232) 15%,
+      rgba(8, 14, 26, 0.88));
+  box-shadow: inset 0 0 10px color-mix(in srgb, var(--accent, #f0b232) 16%, transparent);
 }
 
 .chat-game-mode-chip:disabled {
@@ -5874,14 +5889,12 @@
 .chat-game-body {
   position: relative;
   z-index: 1;
-  min-height: 0;
+  min-height: 100%;
   display: grid;
   grid-template-columns: 276px minmax(0, 1fr);
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.03),
-    transparent 36%
-  );
+  background: linear-gradient(90deg,
+      rgba(255, 255, 255, 0.03),
+      transparent 36%);
 }
 
 .chat-game-shell-docked .chat-game-body {
@@ -5891,11 +5904,9 @@
 .chat-game-sidebar {
   min-height: 0;
   border-right: 1px solid rgba(255, 255, 255, 0.07);
-  background: linear-gradient(
-    180deg,
-    rgba(8, 12, 22, 0.74),
-    rgba(4, 7, 14, 0.86)
-  );
+  background: linear-gradient(180deg,
+      rgba(8, 12, 22, 0.74),
+      rgba(4, 7, 14, 0.86));
 }
 
 .chat-game-sidebar-root {
@@ -5956,11 +5967,9 @@
 .chat-game-sidebar-footer {
   padding: 10px 11px 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.02),
-    rgba(8, 12, 22, 0.4)
-  );
+  background: linear-gradient(180deg,
+      rgba(255, 255, 255, 0.02),
+      rgba(8, 12, 22, 0.4));
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -6047,16 +6056,12 @@
 
 .chat-game-sidebar-cap-pill.is-on {
   color: color-mix(in srgb, var(--accent, #f0b232) 90%, white 10%);
-  border-color: color-mix(
-    in srgb,
-    var(--accent, #f0b232) 56%,
-    rgba(160, 176, 208, 0.28)
-  );
-  background: color-mix(
-    in srgb,
-    var(--accent, #f0b232) 16%,
-    rgba(8, 13, 24, 0.78)
-  );
+  border-color: color-mix(in srgb,
+      var(--accent, #f0b232) 56%,
+      rgba(160, 176, 208, 0.28));
+  background: color-mix(in srgb,
+      var(--accent, #f0b232) 16%,
+      rgba(8, 13, 24, 0.78));
 }
 
 .chat-game-sidebar-cap-pill.is-off {
@@ -6112,12 +6117,11 @@
 }
 
 .chat-game-conv-item {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 10px;
-  border-radius: 12px;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.07);
   background: rgba(255, 255, 255, 0.02);
   cursor: pointer;
@@ -6135,13 +6139,10 @@
 
 .chat-game-conv-item.is-active {
   border-color: color-mix(in srgb, var(--accent, #f0b232) 42%, white 58%);
-  background: color-mix(
-    in srgb,
-    var(--accent, #f0b232) 10%,
-    rgba(255, 255, 255, 0.03)
-  );
-  box-shadow: inset 0 0 0 1px
-    color-mix(in srgb, var(--accent, #f0b232) 20%, transparent);
+  background: color-mix(in srgb,
+      var(--accent, #f0b232) 10%,
+      rgba(255, 255, 255, 0.03));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent, #f0b232) 20%, transparent);
 }
 
 .chat-game-conv-unread {
@@ -6149,37 +6150,33 @@
   height: 8px;
   border-radius: 999px;
   background: var(--accent, #f0b232);
-  box-shadow: 0 0 8px
-    color-mix(in srgb, var(--accent, #f0b232) 50%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent, #f0b232) 50%, transparent);
   flex-shrink: 0;
 }
 
-.chat-game-conv-avatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 999px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(0, 0, 0, 0.35);
-  position: relative;
-  flex-shrink: 0;
-}
+/* Avatar styles removed — sidebar is now compact single-row */
 
-.chat-game-conv-avatar-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.chat-game-conv-avatar-initial {
-  display: none;
+.chat-game-conv-select-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  cursor: pointer;
 }
 
 .chat-game-conv-body {
   min-width: 0;
+  flex: 1;
   display: flex;
-  flex-direction: column;
-  gap: 3px;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
 }
 
 .chat-game-conv-title {
@@ -6190,12 +6187,16 @@
   overflow: hidden;
   text-overflow: ellipsis;
   letter-spacing: 0.03em;
+  flex: 1;
+  min-width: 0;
 }
 
 .chat-game-conv-time {
   font-size: 10px;
   color: rgba(218, 226, 242, 0.52);
   letter-spacing: 0.04em;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .chat-game-conv-action {
@@ -6231,11 +6232,9 @@
 .chat-game-thread {
   min-height: 0;
   display: flex;
-  background: linear-gradient(
-    180deg,
-    rgba(6, 10, 19, 0.48),
-    rgba(4, 8, 16, 0.62)
-  );
+  background: linear-gradient(180deg,
+      rgba(6, 10, 19, 0.48),
+      rgba(4, 8, 16, 0.62));
 }
 
 .chat-game-thread-inner {
@@ -6319,16 +6318,12 @@
 }
 
 .chat-game-bubble-user {
-  background: color-mix(
-    in srgb,
-    var(--accent, #f0b232) 12%,
-    rgba(14, 19, 31, 0.9)
-  );
-  border-color: color-mix(
-    in srgb,
-    var(--accent, #f0b232) 30%,
-    rgba(255, 255, 255, 0.12)
-  );
+  background: color-mix(in srgb,
+      var(--accent, #f0b232) 12%,
+      rgba(14, 19, 31, 0.9));
+  border-color: color-mix(in srgb,
+      var(--accent, #f0b232) 30%,
+      rgba(255, 255, 255, 0.12));
 }
 
 .chat-game-bubble-typing {
@@ -6387,11 +6382,9 @@
   display: flex;
   align-items: flex-end;
   gap: 10px;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.02),
-    transparent 58%
-  );
+  background: linear-gradient(180deg,
+      rgba(255, 255, 255, 0.02),
+      transparent 58%);
 }
 
 .chat-game-mic-btn {
@@ -6448,8 +6441,7 @@
 
 .chat-game-input:focus {
   border-color: color-mix(in srgb, var(--accent, #f0b232) 68%, white 32%);
-  box-shadow: 0 0 0 1px
-    color-mix(in srgb, var(--accent, #f0b232) 42%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent, #f0b232) 42%, transparent);
 }
 
 .chat-game-send-btn {
@@ -6587,12 +6579,10 @@
   min-height: 100%;
   overflow: hidden;
   background:
-    radial-gradient(
-      120% 135% at 50% 108%,
+    radial-gradient(120% 135% at 50% 108%,
       rgba(26, 42, 86, 0.92) 0%,
       rgba(10, 18, 39, 0.97) 52%,
-      rgba(6, 11, 24, 1) 100%
-    ),
+      rgba(6, 11, 24, 1) 100%),
     linear-gradient(165deg, #050912 0%, #0a1328 58%, #070d1c 100%);
 }
 
@@ -6601,21 +6591,15 @@
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(
-      circle at 14% 16%,
+    radial-gradient(circle at 14% 16%,
       rgba(240, 178, 50, 0.12),
-      transparent 36%
-    ),
-    radial-gradient(
-      circle at 84% 12%,
+      transparent 36%),
+    radial-gradient(circle at 84% 12%,
       rgba(125, 211, 252, 0.08),
-      transparent 32%
-    ),
-    radial-gradient(
-      circle at 52% 100%,
+      transparent 32%),
+    radial-gradient(circle at 52% 100%,
       rgba(37, 99, 235, 0.16),
-      transparent 44%
-    );
+      transparent 44%);
   pointer-events: none;
 }
 
@@ -6640,11 +6624,9 @@
   border-radius: 22px;
   border: 1px solid rgba(182, 197, 220, 0.24);
   background:
-    radial-gradient(
-      145% 180% at 0% 0%,
+    radial-gradient(145% 180% at 0% 0%,
       rgba(240, 178, 50, 0.1),
-      transparent 48%
-    ),
+      transparent 48%),
     linear-gradient(145deg, rgba(12, 19, 37, 0.92), rgba(7, 11, 24, 0.96));
   backdrop-filter: blur(10px);
   box-shadow:
@@ -6684,11 +6666,9 @@
 }
 
 .onboarding-game-progress-fill {
-  background: linear-gradient(
-    90deg,
-    rgba(240, 178, 50, 0.98) 0%,
-    rgba(252, 211, 77, 0.98) 100%
-  );
+  background: linear-gradient(90deg,
+      rgba(240, 178, 50, 0.98) 0%,
+      rgba(252, 211, 77, 0.98) 100%);
   box-shadow: 0 0 16px rgba(240, 178, 50, 0.36);
 }
 
@@ -6699,11 +6679,9 @@
 }
 
 .onboarding-game-shell .onboarding-speech {
-  background: linear-gradient(
-    150deg,
-    rgba(20, 29, 52, 0.86),
-    rgba(10, 16, 31, 0.94)
-  );
+  background: linear-gradient(150deg,
+      rgba(20, 29, 52, 0.86),
+      rgba(10, 16, 31, 0.94));
   border-color: rgba(188, 202, 226, 0.26);
   box-shadow: 0 12px 34px rgba(2, 8, 21, 0.52);
 }
@@ -6765,11 +6743,9 @@
 
 .onboarding-game-btn--primary {
   border: 1px solid rgba(248, 214, 129, 0.78);
-  background: linear-gradient(
-    135deg,
-    rgba(240, 178, 50, 0.96),
-    rgba(209, 148, 19, 0.96)
-  );
+  background: linear-gradient(135deg,
+      rgba(240, 178, 50, 0.96),
+      rgba(209, 148, 19, 0.96));
   color: #fff8ea;
   box-shadow: 0 10px 24px rgba(240, 178, 50, 0.28);
 }

@@ -3,7 +3,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useApp } from "./AppContext";
+import { getVrmUrl, useApp } from "./AppContext";
 import { AdvancedPageView } from "./components/AdvancedPageView";
 import { AppsPageView } from "./components/AppsPageView";
 import { AutonomousPanel } from "./components/AutonomousPanel";
@@ -123,7 +123,16 @@ export function App() {
     activeGameViewerUrl,
     gameOverlayEnabled,
     setActionNotice,
+    selectedVrmIndex,
+    customVrmUrl,
   } = useApp();
+
+  // Compute active VRM URL for preloading during the loading screen
+  const activeVrmUrl = useMemo(() => {
+    if (selectedVrmIndex === 0 && customVrmUrl) return customVrmUrl;
+    const safeIndex = selectedVrmIndex > 0 ? selectedVrmIndex : 1;
+    return getVrmUrl(safeIndex);
+  }, [selectedVrmIndex, customVrmUrl]);
   const isPopout = useIsPopout();
   const shellMode = uiShellMode ?? "companion";
   const effectiveTab: Tab =
@@ -334,6 +343,7 @@ export function App() {
     return (
       <LoadingScreen
         phase={agentStarting ? "initializing-agent" : startupPhase}
+        vrmUrl={activeVrmUrl}
       />
     );
   }

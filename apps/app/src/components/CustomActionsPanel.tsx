@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { type CustomActionDef, client } from "../api-client";
 import { useApp } from "../AppContext";
+import { type CustomActionDef, client } from "../api-client";
 
 interface CustomActionsPanelProps {
   open: boolean;
@@ -11,19 +11,21 @@ interface CustomActionsPanelProps {
 const HANDLER_TYPE_COLORS: Record<string, string> = {
   http: "bg-blue-500/20 text-blue-400",
   shell: "bg-green-500/20 text-green-400",
-  code: "bg-purple-500/20 text-purple-400" };
+  code: "bg-purple-500/20 text-purple-400",
+};
 
 const HANDLER_TYPE_NAMES: Record<string, string> = {
   http: "HTTP",
   shell: "Shell",
-  code: "Code" };
+  code: "Code",
+};
 
 export function CustomActionsPanel({
   open,
   onClose,
-  onOpenEditor }: CustomActionsPanelProps) {
-  const {
-    t } = useApp();
+  onOpenEditor,
+}: CustomActionsPanelProps) {
+  const { t } = useApp();
   const [actions, setActions] = useState<CustomActionDef[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -74,13 +76,15 @@ export function CustomActionsPanel({
     try {
       const next = !action.enabled;
       await client.updateCustomAction(action.id, {
-        enabled: next });
+        enabled: next,
+      });
       setActions((prev) =>
         prev.map((item) =>
           item.id === action.id
             ? {
-              ...item,
-              enabled: next }
+                ...item,
+                enabled: next,
+              }
             : item,
         ),
       );
@@ -117,18 +121,22 @@ export function CustomActionsPanel({
 
   return (
     <div
-      className={`border-l border-border bg-card flex flex-col transition-all duration-200 ${open ? "w-80" : "w-0 overflow-hidden"
-        }`}
+      className={`border-l border-border bg-card flex flex-col transition-all duration-200 ${
+        open ? "w-80" : "w-0 overflow-hidden"
+      }`}
     >
       {open && (
         <>
           {/* Header */}
           <div className="flex items-start justify-between p-4 border-b border-border">
             <div>
-              <h2 className="text-sm font-semibold text-txt">{t("customactionspanel.CustomActions")}</h2>
+              <h2 className="text-sm font-semibold text-txt">
+                {t("customactionspanel.CustomActions")}
+              </h2>
               <p className="text-xs text-muted mt-0.5">
-                {actions.length}  {t("customactionspanel.action")}{actions.length === 1 ? "" : "s"} ·{" "}
-                {enabledCount}  {t("customactionspanel.enabled")}
+                {actions.length} {t("customactionspanel.action")}
+                {actions.length === 1 ? "" : "s"} · {enabledCount}{" "}
+                {t("customactionspanel.enabled")}
               </p>
             </div>
             <button
@@ -158,7 +166,6 @@ export function CustomActionsPanel({
               onClick={handleCreate}
               className="w-full bg-accent text-txt hover:bg-accent/90 transition-colors rounded px-3 py-2 text-sm font-medium"
             >
-
               {t("customactionspanel.NewCustomAction")}
             </button>
 
@@ -182,7 +189,6 @@ export function CustomActionsPanel({
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
             {loading ? (
               <div className="text-center text-muted text-xs py-8">
-
                 {t("customactionspanel.LoadingYourActions")}
               </div>
             ) : filteredActions.length === 0 ? (
@@ -203,20 +209,22 @@ export function CustomActionsPanel({
                         {action.name}
                       </div>
                       <p className="text-[10px] text-muted mt-0.5">
-                        {action.parameters?.length || 0}  {t("customactionspanel.parameter")}
+                        {action.parameters?.length || 0}{" "}
+                        {t("customactionspanel.parameter")}
                         {(action.parameters?.length || 0) === 1 ? "" : "s"}
                         {action.similes?.length
                           ? ` • ${action.similes.length} alias`.concat(
-                            action.similes.length === 1 ? "" : "es",
-                          )
+                              action.similes.length === 1 ? "" : "es",
+                            )
                           : ""}
                       </p>
                     </div>
 
                     <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap ${HANDLER_TYPE_COLORS[action.handler.type] ||
+                      className={`text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap ${
+                        HANDLER_TYPE_COLORS[action.handler.type] ||
                         "bg-surface text-muted"
-                        }`}
+                      }`}
                     >
                       {HANDLER_TYPE_NAMES[action.handler.type] ??
                         action.handler.type}
@@ -247,7 +255,6 @@ export function CustomActionsPanel({
                         className="text-xs text-accent hover:text-accent/80 transition-colors"
                         title={t("customactionspanel.EditAction")}
                       >
-
                         {t("customactionspanel.Edit")}
                       </button>
                       <button
@@ -256,7 +263,6 @@ export function CustomActionsPanel({
                         className="text-xs text-danger hover:text-danger/80 transition-colors"
                         title={t("customactionspanel.DeleteAction")}
                       >
-
                         {t("customactionspanel.Delete")}
                       </button>
                     </div>

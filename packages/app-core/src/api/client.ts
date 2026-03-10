@@ -4199,8 +4199,10 @@ export class MiladyClient {
 
   async requestGreeting(
     id: string,
+    lang?: string,
   ): Promise<{ text: string; agentName: string; generated: boolean }> {
-    return this.fetch(`/api/conversations/${encodeURIComponent(id)}/greeting`, {
+    const qs = lang ? `?lang=${encodeURIComponent(lang)}` : "";
+    return this.fetch(`/api/conversations/${encodeURIComponent(id)}/greeting${qs}`, {
       method: "POST",
     });
   }

@@ -14,7 +14,7 @@ vi.stubGlobal("setInterval", (cb: () => void) => {
   intervalCallbacks.push(cb);
   return intervalCallbacks.length;
 });
-vi.stubGlobal("clearInterval", (id: number) => {
+vi.stubGlobal("clearInterval", (_id: number) => {
   // Simple mock: just clear all for these tests since we only test one thing per block
   // or we could remove by index if needed.
   intervalCallbacks = [];
@@ -61,7 +61,6 @@ describe("startMemoryLeakDetector", () => {
   });
 
   it("returns a cleanup function", async () => {
-
     const stop = startMemoryLeakDetector();
     expect(typeof stop).toBe("function");
     stop();
@@ -83,7 +82,9 @@ describe("startMemoryLeakDetector", () => {
       perfToken.usedJSHeapSize = currentHeap;
       console.log(`t: ${mockDateNow}, heap: ${currentHeap}`);
       mockDateNow += 1000;
-      intervalCallbacks.forEach((cb) => cb());
+      intervalCallbacks.forEach((cb) => {
+        cb();
+      });
     }
 
     expect(onLeak).toHaveBeenCalled();
@@ -108,7 +109,9 @@ describe("startMemoryLeakDetector", () => {
       currentHeap += 100 * 1024 * 1024;
       perfToken.usedJSHeapSize = currentHeap;
       mockDateNow += 1000;
-      intervalCallbacks.forEach((cb) => cb());
+      intervalCallbacks.forEach((cb) => {
+        cb();
+      });
     }
 
     // onLeak should not have been called since we stopped
@@ -131,7 +134,9 @@ describe("startMemoryLeakDetector", () => {
       currentHeap += 100 * 1024 * 1024;
       perfToken.usedJSHeapSize = currentHeap;
       mockDateNow += 1000;
-      intervalCallbacks.forEach((cb) => cb());
+      intervalCallbacks.forEach((cb) => {
+        cb();
+      });
     }
 
     // Should not trigger because threshold is too high
@@ -151,7 +156,9 @@ describe("startMemoryLeakDetector", () => {
     // Advance time - should not crash
     for (let i = 0; i < 10; i++) {
       mockDateNow += 1000;
-      intervalCallbacks.forEach((cb) => cb());
+      intervalCallbacks.forEach((cb) => {
+        cb();
+      });
     }
 
     // onLeak should not be called since memory API isn't available
@@ -177,7 +184,9 @@ describe("startMemoryLeakDetector", () => {
       currentHeap += 100 * 1024 * 1024;
       perfToken.usedJSHeapSize = currentHeap;
       mockDateNow += 1000;
-      intervalCallbacks.forEach((cb) => cb());
+      intervalCallbacks.forEach((cb) => {
+        cb();
+      });
     }
 
     expect(capturedInfo).not.toBeNull();
@@ -201,7 +210,9 @@ describe("startMemoryLeakDetector", () => {
       currentHeap += 100 * 1024 * 1024;
       perfToken.usedJSHeapSize = currentHeap;
       mockDateNow += 1000;
-      intervalCallbacks.forEach((cb) => cb());
+      intervalCallbacks.forEach((cb) => {
+        cb();
+      });
     }
 
     // Should not trigger yet - not enough samples
@@ -212,7 +223,9 @@ describe("startMemoryLeakDetector", () => {
       currentHeap += 100 * 1024 * 1024;
       perfToken.usedJSHeapSize = currentHeap;
       mockDateNow += 1000;
-      intervalCallbacks.forEach((cb) => cb());
+      intervalCallbacks.forEach((cb) => {
+        cb();
+      });
     }
 
     // Now should have triggered
@@ -247,7 +260,9 @@ describe("memory leak detection edge cases", () => {
     // Advance time without changing memory
     for (let i = 0; i < 20; i++) {
       mockDateNow += 1000;
-      intervalCallbacks.forEach((cb) => cb());
+      intervalCallbacks.forEach((cb) => {
+        cb();
+      });
     }
 
     // Should not detect leak with stable memory
@@ -270,7 +285,9 @@ describe("memory leak detection edge cases", () => {
       currentHeap -= 20 * 1024 * 1024; // Memory decreases
       perfToken.usedJSHeapSize = currentHeap;
       mockDateNow += 1000;
-      intervalCallbacks.forEach((cb) => cb());
+      intervalCallbacks.forEach((cb) => {
+        cb();
+      });
     }
 
     // Should not detect leak when memory is decreasing
@@ -300,7 +317,9 @@ describe("memory leak detection edge cases", () => {
       currentHeap += 100 * 1024 * 1024;
       perfToken.usedJSHeapSize = currentHeap;
       mockDateNow += 1000;
-      intervalCallbacks.forEach((cb) => cb());
+      intervalCallbacks.forEach((cb) => {
+        cb();
+      });
     }
 
     // Both should have detected the leak

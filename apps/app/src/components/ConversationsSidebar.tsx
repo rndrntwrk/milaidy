@@ -4,10 +4,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../AppContext";
-import { type AgentSelfStatusSnapshot, client } from "../api-client";
-import { SELF_STATUS_SYNC_EVENT } from "../events";
 import { ConversationListItem } from "./conversations/ConversationListItem";
-import { GameModalFooter } from "./conversations/GameModalFooter";
 
 export type ConversationsSidebarVariant = "default" | "game-modal";
 
@@ -20,27 +17,23 @@ interface ConversationsSidebarProps {
 export function ConversationsSidebar({
   mobile = false,
   onClose,
-  variant = "default" }: ConversationsSidebarProps) {
+  variant = "default",
+}: ConversationsSidebarProps) {
   const {
     conversations,
     activeConversationId,
     unreadConversations,
-    agentStatus,
-    chatLastUsage,
     handleNewConversation,
     handleSelectConversation,
     handleDeleteConversation,
     handleRenameConversation,
-    t } = useApp();
+    t,
+  } = useApp();
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [selfStatus, setSelfStatus] = useState<AgentSelfStatusSnapshot | null>(
-    null,
-  );
-  const [selfStatusLoading, setSelfStatusLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Focus input when editing starts
@@ -102,52 +95,6 @@ export function ConversationsSidebar({
 
   const isGameModal = variant === "game-modal";
 
-  // Self-status polling for game-modal variant
-  useEffect(() => {
-    if (!isGameModal) return;
-
-    let cancelled = false;
-    let firstLoad = true;
-
-    const syncSelfStatus = async () => {
-      if (firstLoad) {
-        setSelfStatusLoading(true);
-      }
-      try {
-        const snapshot = await client.getAgentSelfStatus();
-        if (cancelled) return;
-        setSelfStatus(snapshot);
-      } catch {
-        if (cancelled) return;
-        setSelfStatus(null);
-      } finally {
-        if (!cancelled && firstLoad) {
-          setSelfStatusLoading(false);
-        }
-        firstLoad = false;
-      }
-    };
-
-    void syncSelfStatus();
-    const onSelfStatusRefresh = () => {
-      void syncSelfStatus();
-    };
-    const unbindStatus = client.onWsEvent("status", () => {
-      void syncSelfStatus();
-    });
-    const unbindWsReconnected = client.onWsEvent("ws-reconnected", () => {
-      void syncSelfStatus();
-    });
-    window.addEventListener(SELF_STATUS_SYNC_EVENT, onSelfStatusRefresh);
-
-    return () => {
-      cancelled = true;
-      unbindStatus();
-      unbindWsReconnected();
-      window.removeEventListener(SELF_STATUS_SYNC_EVENT, onSelfStatusRefresh);
-    };
-  }, [isGameModal]);
-
   return (
     <aside
       className={
@@ -170,9 +117,8 @@ export function ConversationsSidebar({
             onClick={onClose}
             aria-label={t("conversations.closePanel")}
           >
-            
-                                  {t("conversationssidebar.Times")}
-                                </button>
+            {t("conversationssidebar.Times")}
+          </button>
         </div>
       )}
 
@@ -243,17 +189,6 @@ export function ConversationsSidebar({
           ))
         )}
       </div>
-
-      {/* Game-modal footer: AI provider, capabilities, token usage */}
-      {isGameModal && (
-        <GameModalFooter
-          selfStatus={selfStatus}
-          selfStatusLoading={selfStatusLoading}
-          agentStatusModel={agentStatus?.model}
-          chatLastUsage={chatLastUsage}
-          t={t}
-        />
-      )}
     </aside>
   );
 }

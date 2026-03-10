@@ -5,12 +5,12 @@
  */
 
 import { useCallback, useState } from "react";
+import { useApp } from "../AppContext";
 import { client, type PluginParamDef } from "../api-client";
 import type { ConfigUiHint } from "../types";
 import type { JsonSchemaObject } from "./config-catalog";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer";
 import { autoLabel } from "./shared/labels";
-import { useApp } from "../AppContext";
 
 interface ProviderPlugin {
   id: string;
@@ -38,9 +38,9 @@ export function ApiKeyConfig({
   pluginSaving,
   pluginSaveSuccess,
   handlePluginConfigSave,
-  loadPlugins }: ApiKeyConfigProps) {
-  const {
-    t } = useApp();
+  loadPlugins,
+}: ApiKeyConfigProps) {
+  const { t } = useApp();
   const [pluginFieldValues, setPluginFieldValues] = useState<
     Record<string, Record<string, string>>
   >({});
@@ -53,7 +53,8 @@ export function ApiKeyConfig({
     (pluginId: string, key: string, value: string) => {
       setPluginFieldValues((prev) => ({
         ...prev,
-        [pluginId]: { ...(prev[pluginId] ?? {}), [key]: value } }));
+        [pluginId]: { ...(prev[pluginId] ?? {}), [key]: value },
+      }));
     },
     [],
   );
@@ -114,7 +115,8 @@ export function ApiKeyConfig({
     hints[p.key] = {
       label: autoLabel(p.key, selectedProvider.id),
       sensitive: p.sensitive ?? false,
-      ...serverHints[p.key] };
+      ...serverHints[p.key],
+    };
     if (p.description && !hints[p.key].help) hints[p.key].help = p.description;
   }
   const schema = { type: "object", properties, required } as JsonSchemaObject;
@@ -134,11 +136,11 @@ export function ApiKeyConfig({
     <div className="mt-4 pt-4 border-t border-[var(--border)]">
       <div className="flex justify-between items-center mb-3">
         <div className="text-xs font-semibold">
-          {selectedProvider.name}  {t("apikeyconfig.Settings")}
+          {selectedProvider.name} {t("apikeyconfig.Settings")}
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-[var(--muted)]">
-            {setCount}/{params.length}  {t("apikeyconfig.configured")}
+            {setCount}/{params.length} {t("apikeyconfig.configured")}
           </span>
           <span
             className="text-[11px] px-2 py-[3px] border"
@@ -148,7 +150,8 @@ export function ApiKeyConfig({
                 : "var(--warning,#f39c12)",
               color: selectedProvider.configured
                 ? "#2d8a4e"
-                : "var(--warning,#f39c12)" }}
+                : "var(--warning,#f39c12)",
+            }}
           >
             {selectedProvider.configured ? "Configured" : "Needs Setup"}
           </span>

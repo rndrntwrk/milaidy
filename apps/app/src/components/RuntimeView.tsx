@@ -8,13 +8,14 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useApp } from "../AppContext";
 import {
   client,
   type RuntimeDebugSnapshot,
   type RuntimeOrderItem,
-  type RuntimeServiceOrderItem } from "../api-client";
+  type RuntimeServiceOrderItem,
+} from "../api-client";
 import { formatDateTime } from "./shared/format";
-import { useApp } from "../AppContext";
 
 type RuntimeSectionKey =
   | "runtime"
@@ -59,8 +60,8 @@ function nodeSummary(value: unknown): string {
         typeof record.className === "string" ? record.className : "Object";
       const props =
         record.properties &&
-          typeof record.properties === "object" &&
-          !Array.isArray(record.properties)
+        typeof record.properties === "object" &&
+        !Array.isArray(record.properties)
           ? Object.keys(record.properties as Record<string, unknown>).length
           : 0;
       return `${className} {${props}}`;
@@ -84,14 +85,16 @@ function nodeEntries(
     return value.map((entry, i) => ({
       key: `[${i}]`,
       value: entry,
-      path: `${path}[${i}]` }));
+      path: `${path}[${i}]`,
+    }));
   }
   if (!value || typeof value !== "object") return [];
   return Object.entries(value as Record<string, unknown>).map(
     ([key, entry]) => ({
       key,
       value: entry,
-      path: `${path}.${key}` }),
+      path: `${path}.${key}`,
+    }),
   );
 }
 
@@ -190,8 +193,8 @@ function ServicesOrderCard(props: { entries: RuntimeServiceOrderItem[] }) {
   return (
     <div className="border border-[var(--border)] bg-[var(--card)] rounded-md p-3 min-h-[150px]">
       <div className="text-xs font-semibold mb-2">
-
-        {t("runtimeview.Services")}{entries.length}  {t("runtimeview.types")}
+        {t("runtimeview.Services")}
+        {entries.length} {t("runtimeview.types")}
       </div>
       <div className="max-h-[180px] overflow-auto text-[11px] font-mono leading-5">
         {entries.length === 0 ? (
@@ -245,7 +248,8 @@ export function RuntimeView() {
       const next = await client.getRuntimeSnapshot({
         depth,
         maxArrayLength,
-        maxObjectEntries });
+        maxObjectEntries,
+      });
       setSnapshot(next);
     } catch (err) {
       setError(
@@ -276,11 +280,12 @@ export function RuntimeView() {
   return (
     <div className="flex flex-col gap-4 h-full">
       <div className="border-b border-border bg-card p-2">
-        <div className="text-[13px] font-semibold mr-2">{t("runtime.debug")}</div>
+        <div className="text-[13px] font-semibold mr-2">
+          {t("runtime.debug")}
+        </div>
       </div>
       <div className="flex flex-wrap items-end gap-3 border border-[var(--border)] bg-[var(--card)] rounded-md p-3">
         <label className="text-[11px] text-[var(--muted)] flex items-center gap-1">
-
           {t("runtimeview.depth")}
           <input
             type="number"
@@ -294,7 +299,6 @@ export function RuntimeView() {
           />
         </label>
         <label className="text-[11px] text-[var(--muted)] flex items-center gap-1">
-
           {t("runtimeview.arrayCap")}
           <input
             type="number"
@@ -310,7 +314,6 @@ export function RuntimeView() {
           />
         </label>
         <label className="text-[11px] text-[var(--muted)] flex items-center gap-1">
-
           {t("runtimeview.objectCap")}
           <input
             type="number"
@@ -338,7 +341,6 @@ export function RuntimeView() {
           onClick={() => setExpandedPaths(new Set([rootPath]))}
           className="px-3 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--bg)] hover:bg-[var(--bg-hover)]"
         >
-
           {t("runtimeview.Collapse")}
         </button>
         <button
@@ -348,7 +350,6 @@ export function RuntimeView() {
           }
           className="px-3 py-1.5 text-xs rounded border border-[var(--border)] bg-[var(--bg)] hover:bg-[var(--bg-hover)]"
         >
-
           {t("runtimeview.ExpandTop")}
         </button>
         <div className="text-[11px] text-[var(--muted)] ml-auto">
@@ -358,34 +359,62 @@ export function RuntimeView() {
         </div>
       </div>
 
-      {
-        snapshot && (
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            <OrderCard title={t("runtimeview.Plugins")} entries={snapshot.order.plugins} />
-            <OrderCard title={t("runtimeview.Actions")} entries={snapshot.order.actions} />
-            <OrderCard title={t("runtimeview.Providers")} entries={snapshot.order.providers} />
-            <OrderCard title={t("runtimeview.Evaluators")} entries={snapshot.order.evaluators} />
-            <ServicesOrderCard entries={snapshot.order.services} />
-            <div className="border border-[var(--border)] bg-[var(--card)] rounded-md p-3">
-              <div className="text-xs font-semibold mb-2">{t("runtimeview.Summary")}</div>
-              <div className="text-[11px] font-mono leading-5">
-                <div>
-
-                  {t("runtimeview.runtime")} {snapshot.runtimeAvailable ? "available" : "offline"}
-                </div>
-                <div>{t("runtimeview.agent")} {snapshot.meta.agentName}</div>
-                <div>{t("runtimeview.state")} {snapshot.meta.agentState}</div>
-                <div>{t("runtimeview.model")} {snapshot.meta.model ?? "n/a"}</div>
-                <div>{t("runtimeview.plugins")} {snapshot.meta.pluginCount}</div>
-                <div>{t("runtimeview.actions")} {snapshot.meta.actionCount}</div>
-                <div>{t("runtimeview.providers")} {snapshot.meta.providerCount}</div>
-                <div>{t("runtimeview.evaluators")} {snapshot.meta.evaluatorCount}</div>
-                <div>{t("runtimeview.services")} {snapshot.meta.serviceCount}</div>
+      {snapshot && (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <OrderCard
+            title={t("runtimeview.Plugins")}
+            entries={snapshot.order.plugins}
+          />
+          <OrderCard
+            title={t("runtimeview.Actions")}
+            entries={snapshot.order.actions}
+          />
+          <OrderCard
+            title={t("runtimeview.Providers")}
+            entries={snapshot.order.providers}
+          />
+          <OrderCard
+            title={t("runtimeview.Evaluators")}
+            entries={snapshot.order.evaluators}
+          />
+          <ServicesOrderCard entries={snapshot.order.services} />
+          <div className="border border-[var(--border)] bg-[var(--card)] rounded-md p-3">
+            <div className="text-xs font-semibold mb-2">
+              {t("runtimeview.Summary")}
+            </div>
+            <div className="text-[11px] font-mono leading-5">
+              <div>
+                {t("runtimeview.runtime")}{" "}
+                {snapshot.runtimeAvailable ? "available" : "offline"}
+              </div>
+              <div>
+                {t("runtimeview.agent")} {snapshot.meta.agentName}
+              </div>
+              <div>
+                {t("runtimeview.state")} {snapshot.meta.agentState}
+              </div>
+              <div>
+                {t("runtimeview.model")} {snapshot.meta.model ?? "n/a"}
+              </div>
+              <div>
+                {t("runtimeview.plugins")} {snapshot.meta.pluginCount}
+              </div>
+              <div>
+                {t("runtimeview.actions")} {snapshot.meta.actionCount}
+              </div>
+              <div>
+                {t("runtimeview.providers")} {snapshot.meta.providerCount}
+              </div>
+              <div>
+                {t("runtimeview.evaluators")} {snapshot.meta.evaluatorCount}
+              </div>
+              <div>
+                {t("runtimeview.services")} {snapshot.meta.serviceCount}
               </div>
             </div>
           </div>
-        )
-      }
+        </div>
+      )}
 
       <div className="flex gap-1 border-b border-[var(--border)]">
         {SECTION_TABS.map((tab) => {
@@ -395,10 +424,11 @@ export function RuntimeView() {
               key={tab.key}
               type="button"
               onClick={() => setActiveSection(tab.key)}
-              className={`px-3 py-2 text-xs font-medium border-b-2 -mb-px ${active
-                ? "border-accent text-accent"
-                : "border-transparent text-muted hover:text-txt hover:border-border"
-                }`}
+              className={`px-3 py-2 text-xs font-medium border-b-2 -mb-px ${
+                active
+                  ? "border-accent text-accent"
+                  : "border-transparent text-muted hover:text-txt hover:border-border"
+              }`}
             >
               {tab.label}
             </button>
@@ -417,7 +447,6 @@ export function RuntimeView() {
           </div>
         ) : !snapshot.runtimeAvailable ? (
           <div className="text-xs text-[var(--muted)] p-3">
-
             {t("runtimeview.AgentRuntimeIsNot")}
           </div>
         ) : (
@@ -431,6 +460,6 @@ export function RuntimeView() {
           />
         )}
       </div>
-    </div >
+    </div>
   );
 }

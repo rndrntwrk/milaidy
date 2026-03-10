@@ -15,8 +15,8 @@
  */
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { type MemorySample, useMemoryMonitor } from "../hooks/useMemoryMonitor";
 import { useApp } from "../AppContext";
+import { type MemorySample, useMemoryMonitor } from "../hooks/useMemoryMonitor";
 
 interface MemoryDebugPanelProps {
   /** Force enable in production (default: false, only shows in dev) */
@@ -33,7 +33,8 @@ function formatMB(bytes: number): string {
 
 function MiniChart({
   samples,
-  maxSamples }: {
+  maxSamples,
+}: {
   samples: MemorySample[];
   maxSamples: number;
 }) {
@@ -90,11 +91,11 @@ function MiniChart({
 export function MemoryDebugPanel({
   forceEnable = false,
   initialPosition = { x: 16, y: 16 },
-  initialMinimized = true }: MemoryDebugPanelProps) {
+  initialMinimized = true,
+}: MemoryDebugPanelProps) {
   const { t } = useApp();
   // Only render in dev mode unless forced
   const shouldRender = forceEnable || import.meta.env.DEV;
-
 
   const [minimized, setMinimized] = useState(initialMinimized);
   const [position, setPosition] = useState(initialPosition);
@@ -115,8 +116,10 @@ export function MemoryDebugPanel({
         console.warn("[MemoryDebugPanel] Potential memory leak detected!", {
           growthRate: `${trendInfo.mbPerMinute.toFixed(2)} MB/min`,
           currentHeap: formatMB(metricsInfo.usedHeapSize),
-          samples: trendInfo.sampleCount });
-      } });
+          samples: trendInfo.sampleCount,
+        });
+      },
+    });
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -125,7 +128,8 @@ export function MemoryDebugPanel({
         x: position.x,
         y: position.y,
         startX: e.clientX,
-        startY: e.clientY };
+        startY: e.clientY,
+      };
 
       const handleMouseMove = (moveE: MouseEvent) => {
         if (!dragOrigin.current) return;
@@ -133,7 +137,8 @@ export function MemoryDebugPanel({
         const dy = moveE.clientY - dragOrigin.current.startY;
         setPosition({
           x: Math.max(0, dragOrigin.current.x + dx),
-          y: Math.max(0, dragOrigin.current.y + dy) });
+          y: Math.max(0, dragOrigin.current.y + dy),
+        });
       };
 
       const handleMouseUp = () => {
@@ -162,10 +167,10 @@ export function MemoryDebugPanel({
     return (
       <span className={color}>
         {sign}
-        {trend.mbPerMinute.toFixed(2)}  {t("memorydebugpanel.MBMin")}
+        {trend.mbPerMinute.toFixed(2)} {t("memorydebugpanel.MBMin")}
       </span>
     );
-  }, [trend]);
+  }, [trend, t]);
 
   if (!shouldRender || !supported) return null;
 
@@ -177,15 +182,17 @@ export function MemoryDebugPanel({
       style={{
         left: position.x,
         top: position.y,
-        minWidth: minimized ? 120 : 200 }}
+        minWidth: minimized ? 120 : 200,
+      }}
       onMouseDown={handleMouseDown}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-2 py-1 border-b border-border bg-bg-muted rounded-t-lg cursor-move">
         <div className="flex items-center gap-1.5">
           <span
-            className={`w-2 h-2 rounded-full ${isLeaking ? "bg-danger animate-pulse" : "bg-success"
-              }`}
+            className={`w-2 h-2 rounded-full ${
+              isLeaking ? "bg-danger animate-pulse" : "bg-success"
+            }`}
           />
           <span className="text-txt-muted">{t("memorydebugpanel.Memory")}</span>
         </div>
@@ -265,12 +272,13 @@ export function MemoryDebugPanel({
             {metrics && (
               <div className="h-1.5 bg-bg-muted rounded-full overflow-hidden">
                 <div
-                  className={`h-full transition-all ${metrics.usagePercent > 80
+                  className={`h-full transition-all ${
+                    metrics.usagePercent > 80
                       ? "bg-danger"
                       : metrics.usagePercent > 60
                         ? "bg-warning"
                         : "bg-accent"
-                    }`}
+                  }`}
                   style={{ width: `${Math.min(100, metrics.usagePercent)}%` }}
                 />
               </div>
@@ -288,7 +296,6 @@ export function MemoryDebugPanel({
             {/* Leak warning */}
             {isLeaking && (
               <div className="text-danger text-center text-[10px] font-bold animate-pulse">
-
                 {t("memorydebugpanel.POTENTIALLEAKDETEC")}
               </div>
             )}

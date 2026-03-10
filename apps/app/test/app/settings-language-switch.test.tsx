@@ -81,22 +81,22 @@ function createSettingsContext(
     importPassword: "",
     importError: "",
     importSuccess: "",
-    loadPlugins: vi.fn(async () => { }),
-    handlePluginToggle: vi.fn(async () => { }),
+    loadPlugins: vi.fn(async () => {}),
+    handlePluginToggle: vi.fn(async () => {}),
     setTheme: vi.fn(),
     setUiLanguage: vi.fn(),
     setTab: vi.fn(),
-    loadUpdateStatus: vi.fn(async () => { }),
-    handleChannelChange: vi.fn(async () => { }),
-    checkExtensionStatus: vi.fn(async () => { }),
-    handlePluginConfigSave: vi.fn(async () => { }),
-    handleAgentExport: vi.fn(async () => { }),
-    handleAgentImport: vi.fn(async () => { }),
-    handleCloudLogin: vi.fn(async () => { }),
-    handleCloudDisconnect: vi.fn(async () => { }),
-    handleReset: vi.fn(async () => { }),
-    handleExportKeys: vi.fn(async () => { }),
-    copyToClipboard: vi.fn(async () => { }),
+    loadUpdateStatus: vi.fn(async () => {}),
+    handleChannelChange: vi.fn(async () => {}),
+    checkExtensionStatus: vi.fn(async () => {}),
+    handlePluginConfigSave: vi.fn(async () => {}),
+    handleAgentExport: vi.fn(async () => {}),
+    handleAgentImport: vi.fn(async () => {}),
+    handleCloudLogin: vi.fn(async () => {}),
+    handleCloudDisconnect: vi.fn(async () => {}),
+    handleReset: vi.fn(async () => {}),
+    handleExportKeys: vi.fn(async () => {}),
+    copyToClipboard: vi.fn(async () => {}),
     setActionNotice: vi.fn(),
     setState: vi.fn(),
     ...overrides,
@@ -118,9 +118,9 @@ describe("Settings language switch", () => {
     mockClient.getOnboardingOptions.mockReset();
     mockClient.getConfig.mockReset();
     class MockIntersectionObserver {
-      observe() { }
-      disconnect() { }
-      unobserve() { }
+      observe() {}
+      disconnect() {}
+      unobserve() {}
     }
     Object.defineProperty(globalThis, "IntersectionObserver", {
       value: MockIntersectionObserver,

@@ -1,7 +1,8 @@
-import {
+import type {
   WalletTradingProfileResponse,
   WalletTradingProfileSourceFilter,
-  WalletTradingProfileWindow } from "../../api-client";
+  WalletTradingProfileWindow,
+} from "../../api-client";
 import type { TranslatorFn } from "./walletUtils";
 
 /** TODO: Integrated by CompanionView in PR #812's companion shell. */
@@ -17,7 +18,8 @@ export function WalletTradingProfileModal({
   onRefresh,
   onWindowFilterChange,
   onSourceFilterChange,
-  t }: {
+  t,
+}: {
   open: boolean;
   loading: boolean;
   error: string | null;
@@ -41,7 +43,8 @@ export function WalletTradingProfileModal({
   const windowLabels: Record<WalletTradingProfileWindow, string> = {
     "7d": "7D",
     "30d": "30D",
-    all: "ALL" };
+    all: "ALL",
+  };
 
   const summary = profile?.summary ?? null;
   const pnlBnb = Number.parseFloat(summary?.realizedPnlBnb ?? "0");
@@ -108,7 +111,7 @@ export function WalletTradingProfileModal({
               className={`anime-wallet-trading-profile-stat-value ${pnlBnb >= 0 ? "is-positive" : "is-negative"}`}
             >
               {pnlBnb >= 0 ? "+" : ""}
-              {pnlBnb.toFixed(4)}  {t("wallettradingprofilemodal.BNB")}
+              {pnlBnb.toFixed(4)} {t("wallettradingprofilemodal.BNB")}
               {pnlUsd != null && (
                 <span className="anime-wallet-trading-profile-stat-usd">
                   {" "}
@@ -122,7 +125,7 @@ export function WalletTradingProfileModal({
               {t("wallet.profile.volume")}
             </span>
             <span className="anime-wallet-trading-profile-stat-value">
-              {volumeBnb.toFixed(4)}  {t("wallettradingprofilemodal.BNB")}
+              {volumeBnb.toFixed(4)} {t("wallettradingprofilemodal.BNB")}
             </span>
           </div>
           <div className="anime-wallet-trading-profile-stat">

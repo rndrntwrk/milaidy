@@ -7,17 +7,17 @@
  */
 
 import { useCallback, useState } from "react";
+import { useApp } from "../AppContext";
 import type {
   BscTradeExecuteRequest,
   BscTradeExecuteResponse,
   BscTradePreflightResponse,
   BscTradeQuoteRequest,
   BscTradeQuoteResponse,
-  BscTradeTxStatusResponse
+  BscTradeTxStatusResponse,
 } from "../api-client";
-import { useApp } from "../AppContext";
-import { formatBalance } from "./inventory/constants";
 import { HEX_ADDRESS_RE } from "./companion/walletUtils";
+import { formatBalance } from "./inventory/constants";
 
 /* ── Constants ─────────────────────────────────────────────────────── */
 
@@ -95,7 +95,7 @@ export function TradePanel({
         );
         setTradeFeedback({
           tone: "error",
-          text: "Enter a valid token contract address first."
+          text: "Enter a valid token contract address first.",
         });
         return;
       }
@@ -105,7 +105,7 @@ export function TradePanel({
         setActionNotice("Enter a valid BNB amount first.", "error", 3200);
         setTradeFeedback({
           tone: "error",
-          text: "Enter a valid BNB amount first."
+          text: "Enter a valid BNB amount first.",
         });
         return;
       }
@@ -126,7 +126,7 @@ export function TradePanel({
             );
             setTradeFeedback({
               tone: "error",
-              text: preflight.reasons[0] ?? "Preflight checks failed."
+              text: preflight.reasons[0] ?? "Preflight checks failed.",
             });
             return;
           }
@@ -135,7 +135,7 @@ export function TradePanel({
         const result = await getBscTradeQuote({
           side,
           tokenAddress,
-          amount
+          amount,
         });
         setLatestQuote(result);
         setLatestExecution(null);
@@ -148,14 +148,14 @@ export function TradePanel({
         );
         setTradeFeedback({
           tone: "success",
-          text: `${side === "buy" ? "Quote ready" : "Sell quote ready"}: ${result.quoteOut?.amount ?? ""} ${result.quoteOut?.symbol ?? ""}`.trim()
+          text: `${side === "buy" ? "Quote ready" : "Sell quote ready"}: ${result.quoteOut?.amount ?? ""} ${result.quoteOut?.symbol ?? ""}`.trim(),
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         setActionNotice(message, "error", 4600);
         setTradeFeedback({
           tone: "error",
-          text: message
+          text: message,
         });
       }
     },
@@ -179,7 +179,7 @@ export function TradePanel({
       );
       setTradeFeedback({
         tone: "error",
-        text: "Enter a valid token contract address first."
+        text: "Enter a valid token contract address first.",
       });
       return;
     }
@@ -193,7 +193,7 @@ export function TradePanel({
         );
         setTradeFeedback({
           tone: "error",
-          text: result.reasons[0] ?? "Preflight checks failed."
+          text: result.reasons[0] ?? "Preflight checks failed.",
         });
         return;
       }
@@ -203,14 +203,14 @@ export function TradePanel({
       setActionNotice(message, "success", 2600);
       setTradeFeedback({
         tone: "success",
-        text: message
+        text: message,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setActionNotice(message, "error", 4600);
       setTradeFeedback({
         tone: "error",
-        text: message
+        text: message,
       });
     }
   }, [getBscTradePreflight, quickTokenAddress, setActionNotice]);
@@ -234,7 +234,7 @@ export function TradePanel({
     setPendingTrade({
       side: latestQuote.side,
       amount: quickAmount,
-      token: quickTokenAddress
+      token: quickTokenAddress,
     });
   }, [latestQuote, quickAmount, quickTokenAddress]);
 
@@ -245,7 +245,7 @@ export function TradePanel({
       const result = await executeBscTrade({
         side: latestQuote.side,
         tokenAddress: pendingTrade.token,
-        amount: pendingTrade.amount
+        amount: pendingTrade.amount,
       });
       setLatestExecution(result);
       if (result?.executed && result?.execution) {
@@ -283,7 +283,7 @@ export function TradePanel({
     const newToken: TrackedToken = {
       address: quickTokenAddress,
       symbol: `TKN-${quickTokenAddress.slice(2, 6)}`,
-      addedAt: Date.now()
+      addedAt: Date.now(),
     };
     onAddToken(newToken);
     setActionNotice("Token added to watchlist.", "success", 2600);
@@ -307,27 +307,26 @@ export function TradePanel({
               rel="noopener noreferrer"
               className="text-accent"
             >
-
               {t("bsctradepanel.ViewTx")} {shortHash}
             </a>
           </div>
           {status === "pending" && (
             <div className="flex items-center gap-2">
-              <span className="text-yellow-500">{t("bsctradepanel.Pending")}</span>
+              <span className="text-yellow-500">
+                {t("bsctradepanel.Pending")}
+              </span>
               <button
                 type="button"
                 data-testid="wallet-tx-refresh"
                 className="px-2 py-0.5 border border-border bg-bg text-[10px] font-mono cursor-pointer hover:border-accent"
                 onClick={handleRefreshTxStatus}
               >
-
                 {t("bsctradepanel.RefreshStatus")}
               </button>
             </div>
           )}
           {txStatus && (
             <div className="text-muted">
-
               {t("bsctradepanel.Confirmations")} {txStatus.confirmations ?? 0}
             </div>
           )}
@@ -339,7 +338,6 @@ export function TradePanel({
       return (
         <div className="border border-border p-2 text-xs space-y-1">
           <div className="text-yellow-500">
-
             {t("bsctradepanel.RequiresWalletSign")}
           </div>
           {latestExecution.unsignedApprovalTx && (
@@ -353,7 +351,6 @@ export function TradePanel({
                 )
               }
             >
-
               {t("bsctradepanel.CopyApprovalTX")}
             </button>
           )}
@@ -366,7 +363,6 @@ export function TradePanel({
                 copyToClipboard(JSON.stringify(latestExecution.unsignedTx))
               }
             >
-
               {t("bsctradepanel.CopySwapTX")}
             </button>
           )}
@@ -387,7 +383,6 @@ export function TradePanel({
           {tradeReady ? "Trade Ready" : "Trade Not Ready"}
         </span>
         <span className="text-muted">
-
           {t("bsctradepanel.BNB")} {formatBalance(String(bnbBalance))}
         </span>
         {getBscTradePreflight && (
@@ -399,7 +394,6 @@ export function TradePanel({
               void handlePreflight();
             }}
           >
-
             {t("bsctradepanel.Preflight")}
           </button>
         )}
@@ -412,7 +406,6 @@ export function TradePanel({
               void handleToolbarQuote();
             }}
           >
-
             {t("bsctradepanel.Quote")}
           </button>
         )}
@@ -421,12 +414,13 @@ export function TradePanel({
       {tradeFeedback && (
         <div
           data-testid="wallet-trade-feedback"
-          className={`border px-2 py-1.5 text-xs ${tradeFeedback.tone === "success"
-            ? "border-green-500/40 text-green-400"
-            : tradeFeedback.tone === "info"
-              ? "border-accent/40 text-accent"
-              : "border-red-500/40 text-red-400"
-            }`}
+          className={`border px-2 py-1.5 text-xs ${
+            tradeFeedback.tone === "success"
+              ? "border-green-500/40 text-green-400"
+              : tradeFeedback.tone === "info"
+                ? "border-accent/40 text-accent"
+                : "border-red-500/40 text-red-400"
+          }`}
         >
           {tradeFeedback.text}
         </div>
@@ -449,7 +443,6 @@ export function TradePanel({
             className="px-2 py-1 border border-border bg-bg text-[10px] font-mono cursor-pointer hover:border-accent"
             onClick={handleAddToken}
           >
-
             {t("bsctradepanel.Add")}
           </button>
         </div>
@@ -460,13 +453,14 @@ export function TradePanel({
               key={amt}
               type="button"
               data-testid={`wallet-quick-amount-${amt}`}
-              className={`px-2 py-0.5 border text-[10px] font-mono cursor-pointer ${quickAmount === String(amt)
-                ? "border-accent text-accent"
-                : "border-border bg-bg hover:border-accent"
-                }`}
+              className={`px-2 py-0.5 border text-[10px] font-mono cursor-pointer ${
+                quickAmount === String(amt)
+                  ? "border-accent text-accent"
+                  : "border-border bg-bg hover:border-accent"
+              }`}
               onClick={() => setQuickAmount(String(amt))}
             >
-              {amt}  {t("bsctradepanel.BNB1")}
+              {amt} {t("bsctradepanel.BNB1")}
             </button>
           ))}
         </div>
@@ -480,7 +474,6 @@ export function TradePanel({
               void handleQuickBuy();
             }}
           >
-
             {t("bsctradepanel.Buy")}
           </button>
           <button
@@ -491,7 +484,6 @@ export function TradePanel({
               void handleQuickSell();
             }}
           >
-
             {t("bsctradepanel.Sell")}
           </button>
         </div>
@@ -499,7 +491,9 @@ export function TradePanel({
         {/* Latest quote display */}
         {latestQuote && (
           <div className="border border-border p-2 text-xs">
-            <div className="font-bold mb-1">{t("bsctradepanel.LatestQuote")}</div>
+            <div className="font-bold mb-1">
+              {t("bsctradepanel.LatestQuote")}
+            </div>
             <div className="text-muted">
               {latestQuote.side === "buy" ? "Buy" : "Sell"}{" "}
               {latestQuote.quoteOut?.amount ?? ""}{" "}
@@ -508,8 +502,8 @@ export function TradePanel({
             {pendingTrade ? (
               <div className="mt-1 flex items-center gap-2">
                 <span className="text-yellow-500 font-bold">
-
-                  {t("bsctradepanel.Confirm")} {pendingTrade.side}  {t("bsctradepanel.trade")}
+                  {t("bsctradepanel.Confirm")} {pendingTrade.side}{" "}
+                  {t("bsctradepanel.trade")}
                 </span>
                 <button
                   type="button"
@@ -517,7 +511,6 @@ export function TradePanel({
                   className="px-3 py-1 border border-green-500 text-green-500 text-[10px] font-mono cursor-pointer hover:bg-green-500 hover:text-white"
                   onClick={handleConfirmExecute}
                 >
-
                   {t("bsctradepanel.Confirm")}
                 </button>
                 <button
@@ -526,7 +519,6 @@ export function TradePanel({
                   className="px-3 py-1 border border-border text-muted text-[10px] font-mono cursor-pointer hover:border-danger hover:text-danger"
                   onClick={handleCancelExecute}
                 >
-
                   {t("bsctradepanel.Cancel")}
                 </button>
               </div>
@@ -537,7 +529,6 @@ export function TradePanel({
                 className="mt-1 px-3 py-1 border border-accent bg-accent text-accent-fg text-[10px] font-mono cursor-pointer"
                 onClick={handleRequestExecute}
               >
-
                 {t("bsctradepanel.ExecuteTrade")}
               </button>
             )}

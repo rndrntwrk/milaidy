@@ -30,7 +30,8 @@ import type {
   ShowIfCondition,
   ValidationCheck,
   ValidationConfig,
-  VisibilityCondition } from "../types";
+  VisibilityCondition,
+} from "../types";
 
 export type { ActionBinding } from "../types";
 
@@ -296,14 +297,18 @@ export const visibility = {
   never: false as const,
   when: (path: string): VisibilityCondition => ({ path }),
   and: (...conditions: LogicExpression[]): LogicExpression => ({
-    and: conditions }),
+    and: conditions,
+  }),
   or: (...conditions: LogicExpression[]): LogicExpression => ({
-    or: conditions }),
+    or: conditions,
+  }),
   not: (condition: LogicExpression): LogicExpression => ({ not: condition }),
   eq: (left: DynamicValue, right: DynamicValue): LogicExpression => ({
-    eq: [left, right] }),
+    eq: [left, right],
+  }),
   neq: (left: DynamicValue, right: DynamicValue): LogicExpression => ({
-    neq: [left, right] }),
+    neq: [left, right],
+  }),
   gt: (
     left: DynamicValue<number>,
     right: DynamicValue<number>,
@@ -319,7 +324,8 @@ export const visibility = {
   lte: (
     left: DynamicValue<number>,
     right: DynamicValue<number>,
-  ): LogicExpression => ({ lte: [left, right] }) };
+  ): LogicExpression => ({ lte: [left, right] }),
+};
 
 // ── Built-in validation functions (≈ json-render builtInValidationFunctions)
 
@@ -375,7 +381,8 @@ export const builtInValidators: Record<string, ValidationFunction> = {
       return false;
     }
   },
-  matches: (value, args) => value === args?.other };
+  matches: (value, args) => value === args?.other,
+};
 
 /**
  * Run validation checks for a field value.
@@ -417,30 +424,37 @@ export function runValidation(
 export const check = {
   required: (message = "This field is required"): ValidationCheck => ({
     fn: "required",
-    message }),
+    message,
+  }),
   email: (message = "Invalid email address"): ValidationCheck => ({
     fn: "email",
-    message }),
+    message,
+  }),
   minLength: (min: number, message?: string): ValidationCheck => ({
     fn: "minLength",
     args: { min },
-    message: message ?? `Must be at least ${min} characters` }),
+    message: message ?? `Must be at least ${min} characters`,
+  }),
   maxLength: (max: number, message?: string): ValidationCheck => ({
     fn: "maxLength",
     args: { max },
-    message: message ?? `Must be at most ${max} characters` }),
+    message: message ?? `Must be at most ${max} characters`,
+  }),
   pattern: (pattern: string, message = "Invalid format"): ValidationCheck => ({
     fn: "pattern",
     args: { pattern },
-    message }),
+    message,
+  }),
   min: (min: number, message?: string): ValidationCheck => ({
     fn: "min",
     args: { min },
-    message: message ?? `Must be at least ${min}` }),
+    message: message ?? `Must be at least ${min}`,
+  }),
   max: (max: number, message?: string): ValidationCheck => ({
     fn: "max",
     args: { max },
-    message: message ?? `Must be at most ${max}` }),
+    message: message ?? `Must be at most ${max}`,
+  }),
   url: (message = "Invalid URL"): ValidationCheck => ({ fn: "url", message }),
   matches: (
     otherPath: string,
@@ -448,7 +462,9 @@ export const check = {
   ): ValidationCheck => ({
     fn: "matches",
     args: { other: { path: otherPath } },
-    message }) };
+    message,
+  }),
+};
 
 // ── Action definitions (≈ json-render ActionDefinition) ─────────────────
 
@@ -583,8 +599,10 @@ export function defineCatalog<
             {
               code: "custom",
               message: `Unknown field type: ${type}`,
-              path: [] },
-          ]) } as z.ZodSafeParseResult<unknown>;
+              path: [],
+            },
+          ]),
+        } as z.ZodSafeParseResult<unknown>;
       return def.validator.safeParse(value);
     },
 
@@ -594,7 +612,8 @@ export function defineCatalog<
 
     prompt(): string {
       return generateCatalogPrompt(fields, actions, functions);
-    } };
+    },
+  };
 }
 
 // ── Prompt generation (≈ json-render catalog.prompt()) ──────────────────
@@ -655,7 +674,10 @@ function generateCatalogPrompt(
             label: "...",
             help: "...",
             group: "...",
-            validation: { checks: [{ fn: "required", message: "..." }] } } } },
+            validation: { checks: [{ fn: "required", message: "..." }] },
+          },
+        },
+      },
       null,
       2,
     ),
@@ -787,7 +809,8 @@ export function defineRegistry<
 
     resolveAction(name: string): ActionHandler | undefined {
       return handlerMap[name];
-    } };
+    },
+  };
 }
 
 // ── Field type resolution ──────────────────────────────────────────────
@@ -880,86 +903,115 @@ export const defaultCatalog = defineCatalog({
   fields: {
     text: {
       validator: z.string(),
-      description: "Single-line text input" },
+      description: "Single-line text input",
+    },
     password: {
       validator: z.string(),
-      description: "Masked input with show/hide toggle and API-backed reveal" },
+      description: "Masked input with show/hide toggle and API-backed reveal",
+    },
     number: {
       validator: z.coerce.number(),
-      description: "Numeric input with optional min/max/step" },
+      description: "Numeric input with optional min/max/step",
+    },
     boolean: {
       validator: z.coerce.boolean(),
-      description: "Toggle switch (on/off)" },
+      description: "Toggle switch (on/off)",
+    },
     url: {
       validator: z.string(),
-      description: "URL input with validation" },
+      description: "URL input with validation",
+    },
     select: {
       validator: z.string(),
-      description: "Single-select dropdown from enum values" },
+      description: "Single-select dropdown from enum values",
+    },
     textarea: {
       validator: z.string(),
-      description: "Multi-line text input for long values" },
+      description: "Multi-line text input for long values",
+    },
     email: {
       validator: z.string().email().or(z.literal("")),
-      description: "Email address input with validation" },
+      description: "Email address input with validation",
+    },
     color: {
       validator: z
         .string()
         .regex(/^#[0-9a-fA-F]{3,8}$/)
         .or(z.literal("")),
-      description: "Color picker with hex value display" },
+      description: "Color picker with hex value display",
+    },
     radio: {
       validator: z.string(),
-      description: "Single-select radio button group with descriptions" },
+      description: "Single-select radio button group with descriptions",
+    },
     multiselect: {
       validator: z.array(z.string()).or(z.string()),
-      description: "Multi-select checkbox group for array values" },
+      description: "Multi-select checkbox group for array values",
+    },
     date: {
       validator: z.string(),
-      description: "Date or date-time input" },
+      description: "Date or date-time input",
+    },
     json: {
       validator: z.string(),
-      description: "JSON editor with syntax highlighting and validation" },
+      description: "JSON editor with syntax highlighting and validation",
+    },
     code: {
       validator: z.string(),
-      description: "Code editor with syntax highlighting" },
+      description: "Code editor with syntax highlighting",
+    },
     array: {
       validator: z.array(z.unknown()),
-      description: "Repeatable field group with add/remove items" },
+      description: "Repeatable field group with add/remove items",
+    },
     keyvalue: {
       validator: z.record(z.string(), z.string()),
-      description: "Key-value pair editor with add/remove rows" },
+      description: "Key-value pair editor with add/remove rows",
+    },
     datetime: {
       validator: z.string(),
-      description: "Date and time picker input" },
+      description: "Date and time picker input",
+    },
     file: {
       validator: z.string(),
-      description: "File path or upload input" },
+      description: "File path or upload input",
+    },
     custom: {
       validator: z.unknown(),
-      description: "Plugin-provided custom React component" },
+      description: "Plugin-provided custom React component",
+    },
     markdown: {
       validator: z.string(),
-      description: "Markdown editor with preview toggle" },
+      description: "Markdown editor with preview toggle",
+    },
     "checkbox-group": {
       validator: z.array(z.string()).or(z.string()),
-      description: "Checkbox group for multiple selections with descriptions" },
+      description: "Checkbox group for multiple selections with descriptions",
+    },
     group: {
       validator: z.record(z.string(), z.unknown()).or(z.string()),
-      description: "Fieldset container for grouping related configuration" },
+      description: "Fieldset container for grouping related configuration",
+    },
     table: {
       validator: z.array(z.record(z.string(), z.string())).or(z.string()),
-      description: "Tabular data editor with add/remove rows" } },
+      description: "Tabular data editor with add/remove rows",
+    },
+  },
   actions: {
     save: {
       params: z.object({}),
-      description: "Save the current configuration" },
+      description: "Save the current configuration",
+    },
     reset: {
       params: z.object({}),
-      description: "Reset all fields to their defaults" },
+      description: "Reset all fields to their defaults",
+    },
     testConnection: {
       params: z.object({ key: z.string().optional() }),
-      description: "Test the connection/API key validity" } } });
+      description: "Test the connection/API key validity",
+    },
+  },
+});
 
 // ── Schema traversal helpers ───────────────────────────────────────────
 
@@ -1027,7 +1079,8 @@ export function resolveFields(
       showIf: hint.showIf,
       visible: hint.visible,
       validation: hint.validation,
-      readonly: hint.readonly ?? false });
+      readonly: hint.readonly ?? false,
+    });
   }
 
   // Sort: non-advanced before advanced, then by order, then alphabetically

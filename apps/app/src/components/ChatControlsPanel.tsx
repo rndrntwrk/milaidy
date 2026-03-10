@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { AppState } from "../AppContext";
-import { ChatAvatar } from "./ChatAvatar";
 import { useApp } from "../AppContext";
+import { ChatAvatar } from "./ChatAvatar";
 
 interface ChatControlsPanelProps {
   mobile: boolean;
@@ -16,8 +16,9 @@ export function ChatControlsPanel({
   chatAvatarVisible,
   chatAvatarSpeaking,
   chatAgentVoiceMuted,
-  setState }: ChatControlsPanelProps) {
-    const { t } = useApp();
+  setState,
+}: ChatControlsPanelProps) {
+  const { t } = useApp();
   const [collapsed, setCollapsed] = useState(false);
 
   return (
@@ -39,17 +40,15 @@ export function ChatControlsPanel({
               <ChatAvatar isSpeaking={chatAvatarSpeaking} />
             ) : (
               <div className="h-full w-full flex items-end justify-center pb-5 text-xs text-muted">
-                
-                                                  {t("chatcontrolspanel.AvatarHidden")}
-                                                </div>
+                {t("chatcontrolspanel.AvatarHidden")}
+              </div>
             )}
           </div>
 
           <div className="pt-2 flex flex-col gap-2">
             <div className="text-[10px] leading-relaxed text-muted">
-              
-                                        {t("chatcontrolspanel.ChannelProfileIsS")}
-                                      </div>
+              {t("chatcontrolspanel.ChannelProfileIsS")}
+            </div>
 
             <div className="grid grid-cols-2 gap-1.5">
               <button

@@ -159,13 +159,13 @@ function createTriggerRuntimeHarness(): TriggerRuntimeHarness {
       tasks = tasks.map((task) =>
         task.id === taskId
           ? {
-            ...task,
-            ...update,
-            metadata: {
-              ...(task.metadata ?? {}),
-              ...(update.metadata ?? {}),
-            },
-          }
+              ...task,
+              ...update,
+              metadata: {
+                ...(task.metadata ?? {}),
+                ...(update.metadata ?? {}),
+              },
+            }
           : task,
       );
     },
@@ -464,9 +464,9 @@ describe("TriggersView UI E2E", () => {
   let runtimeHarness: TriggerRuntimeHarness;
   let startApiServerFn:
     | ((options?: {
-      port?: number;
-      runtime?: object;
-    }) => Promise<{ port: number; close: () => Promise<void> }>)
+        port?: number;
+        runtime?: object;
+      }) => Promise<{ port: number; close: () => Promise<void> }>)
     | null = null;
 
   beforeAll(async () => {

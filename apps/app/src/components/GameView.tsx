@@ -17,7 +17,8 @@ import { formatTime } from "./shared/format";
 const DEFAULT_VIEWER_SANDBOX = "allow-scripts allow-same-origin allow-popups";
 const READY_EVENT_BY_AUTH_TYPE: Record<string, string> = {
   HYPERSCAPE_AUTH: "HYPERSCAPE_READY",
-  RS_2004SCAPE_AUTH: "RS_2004SCAPE_READY" };
+  RS_2004SCAPE_AUTH: "RS_2004SCAPE_READY",
+};
 
 function resolvePostMessageTargetOrigin(viewerUrl: string): string {
   if (viewerUrl.startsWith("/")) return window.location.origin;
@@ -31,7 +32,8 @@ const TAG_COLORS: Record<string, { bg: string; fg: string }> = {
   hyperscape: { bg: "rgba(245, 158, 11, 0.15)", fg: "rgb(245, 158, 11)" },
   game: { bg: "rgba(34, 197, 94, 0.15)", fg: "rgb(34, 197, 94)" },
   autonomy: { bg: "rgba(245, 158, 11, 0.15)", fg: "rgb(245, 158, 11)" },
-  websocket: { bg: "rgba(20, 184, 166, 0.15)", fg: "rgb(20, 184, 166)" } };
+  websocket: { bg: "rgba(20, 184, 166, 0.15)", fg: "rgb(20, 184, 166)" },
+};
 
 export function GameView() {
   const {
@@ -47,7 +49,8 @@ export function GameView() {
     loadLogs,
     setState,
     setActionNotice,
-    t } = useApp();
+    t,
+  } = useApp();
   const [stopping, setStopping] = useState(false);
   const [showLogsPanel, setShowLogsPanel] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<
@@ -60,7 +63,6 @@ export function GameView() {
   const authSentRef = useRef(false);
   const viewerSessionRef = useRef<string>("");
   const logsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
 
   // Stream iframe frames to retake.tv when capture is active
   useRetakeCapture(iframeRef, retakeCapture);
@@ -329,12 +331,13 @@ export function GameView() {
                   {formatTime(entry.timestamp, { fallback: "—" })}
                 </span>
                 <span
-                  className={`font-semibold text-[10px] uppercase ${entry.level === "error"
-                    ? "text-danger"
-                    : entry.level === "warn"
-                      ? "text-warn"
-                      : "text-muted"
-                    }`}
+                  className={`font-semibold text-[10px] uppercase ${
+                    entry.level === "error"
+                      ? "text-danger"
+                      : entry.level === "warn"
+                        ? "text-warn"
+                        : "text-muted"
+                  }`}
                 >
                   {entry.level}
                 </span>
@@ -346,7 +349,8 @@ export function GameView() {
                       className="text-[9px] px-1 py-px rounded"
                       style={{
                         background: c ? c.bg : "var(--bg-muted)",
-                        color: c ? c.fg : "var(--muted)" }}
+                        color: c ? c.fg : "var(--muted)",
+                      }}
                     >
                       {t}
                     </span>
@@ -386,18 +390,18 @@ export function GameView() {
         </span>
         {activeGamePostMessageAuth ? (
           <span className="text-[10px] px-1.5 py-0.5 border border-border text-muted">
-            
-                                  {t("gameview.postMessageAuth")}
-                                </span>
+            {t("gameview.postMessageAuth")}
+          </span>
         ) : null}
         <span className="flex-1" />
         {/* Toggle logs panel */}
         <button
           type="button"
-          className={`text-xs px-3 py-1 border cursor-pointer hover:bg-accent-hover disabled:opacity-40 ${showLogsPanel
-            ? "bg-accent text-accent-fg border-accent"
-            : "bg-card text-txt border-border hover:border-accent"
-            }`}
+          className={`text-xs px-3 py-1 border cursor-pointer hover:bg-accent-hover disabled:opacity-40 ${
+            showLogsPanel
+              ? "bg-accent text-accent-fg border-accent"
+              : "bg-card text-txt border-border hover:border-accent"
+          }`}
           onClick={() => setShowLogsPanel(!showLogsPanel)}
         >
           {showLogsPanel ? t("game.hideLogs") : t("game.showLogs")}
@@ -405,10 +409,11 @@ export function GameView() {
         {retakeEnabled && (
           <button
             type="button"
-            className={`text-xs px-3 py-1 border cursor-pointer hover:bg-accent-hover disabled:opacity-40 ${retakeCapture
-              ? "bg-accent text-accent-fg border-accent"
-              : "bg-card text-txt border-border hover:border-accent"
-              }`}
+            className={`text-xs px-3 py-1 border cursor-pointer hover:bg-accent-hover disabled:opacity-40 ${
+              retakeCapture
+                ? "bg-accent text-accent-fg border-accent"
+                : "bg-card text-txt border-border hover:border-accent"
+            }`}
             onClick={() => setRetakeCapture(!retakeCapture)}
             title={t("game.retakeTitle")}
           >
@@ -417,10 +422,11 @@ export function GameView() {
         )}
         <button
           type="button"
-          className={`text-xs px-3 py-1 border cursor-pointer hover:bg-accent-hover disabled:opacity-40 ${gameOverlayEnabled
-            ? "bg-accent text-accent-fg border-accent"
-            : "bg-card text-txt border-border hover:border-accent"
-            }`}
+          className={`text-xs px-3 py-1 border cursor-pointer hover:bg-accent-hover disabled:opacity-40 ${
+            gameOverlayEnabled
+              ? "bg-accent text-accent-fg border-accent"
+              : "bg-card text-txt border-border hover:border-accent"
+          }`}
           onClick={() => setState("gameOverlayEnabled", !gameOverlayEnabled)}
           title={
             gameOverlayEnabled

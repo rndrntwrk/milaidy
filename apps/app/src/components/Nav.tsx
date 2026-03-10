@@ -15,15 +15,15 @@ const NAV_LABEL_I18N_KEY: Record<string, string> = {
   Social: "nav.social",
   Apps: "nav.apps",
   Settings: "nav.settings",
-  Advanced: "nav.advanced" };
+  Advanced: "nav.advanced",
+};
 
 interface NavProps {
   mobileLeft?: ReactNode;
 }
 
 export function Nav({ mobileLeft }: NavProps) {
-  const { tab, setTab, plugins,
-    t } = useApp();
+  const { tab, setTab, plugins, t } = useApp();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const streamingEnabled = useMemo(
@@ -130,9 +130,8 @@ export function Nav({ mobileLeft }: NavProps) {
                   <activeGroup.icon className="w-4 h-4 text-accent-fg" />
                 </span>
                 <span className="text-sm font-semibold text-txt-strong">
-                  
-                                                    {t("nav.Menu")}
-                                                  </span>
+                  {t("nav.Menu")}
+                </span>
               </div>
               <button
                 type="button"
@@ -192,15 +191,12 @@ export function Nav({ mobileLeft }: NavProps) {
 
             {/* Footer */}
             <div className="border-t border-border p-3 text-[11px] text-muted text-center">
-              
-                                        {t("nav.Press")}{" "}
+              {t("nav.Press")}{" "}
               <kbd className="px-1.5 py-0.5 bg-bg-accent border border-border rounded text-[10px] font-mono">
-                
-                                              {t("nav.ESC")}
-                                            </kbd>{" "}
-              
-                                        {t("nav.toClose")}
-                                      </div>
+                {t("nav.ESC")}
+              </kbd>{" "}
+              {t("nav.toClose")}
+            </div>
           </div>
         </div>
       )}

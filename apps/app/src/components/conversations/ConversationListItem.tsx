@@ -3,11 +3,10 @@
  */
 
 import type React from "react";
-import { getVrmPreviewUrl } from "../../AppContext";
 import {
-  avatarIndexFromConversationId,
-  formatRelativeTime } from "./conversation-utils";
-
+  formatRelativeTime,
+  getLocalizedConversationTitle,
+} from "./conversation-utils";
 
 interface ConversationListItemProps {
   conv: { id: string; title: string; updatedAt: string };
@@ -53,26 +52,26 @@ export function ConversationListItem({
   onDelete,
   onConfirmDelete,
   onCancelDelete,
-  onSetConfirmDelete }: ConversationListItemProps) {
-  const avatarSrc = getVrmPreviewUrl(avatarIndexFromConversationId(conv.id));
-  const fallbackInitial = conv.title.trim().charAt(0).toUpperCase() || "#";
-
+  onSetConfirmDelete,
+}: ConversationListItemProps) {
   return (
     <div
       key={conv.id}
       data-testid="conv-item"
       data-active={isActive || undefined}
-      className={`${isGameModal
+      className={`${
+        isGameModal
           ? "chat-game-conv-item"
           : "flex items-center px-3 py-2 gap-2 cursor-pointer transition-colors border-l-[3px]"
-        } ${isActive
+      } ${
+        isActive
           ? isGameModal
             ? "is-active"
             : "bg-bg-hover border-l-accent"
           : isGameModal
             ? ""
             : "border-l-transparent hover:bg-bg-hover"
-        } group`}
+      } group`}
     >
       {isEditing ? (
         <input
@@ -105,31 +104,20 @@ export function ConversationListItem({
                 }
               />
             )}
-            {isGameModal && (
-              <div className="chat-game-conv-avatar">
-                <img
-                  src={avatarSrc}
-                  alt={conv.title}
-                  className="chat-game-conv-avatar-img"
-                />
-                <span className="chat-game-conv-avatar-initial">
-                  {fallbackInitial}
-                </span>
-              </div>
-            )}
+
             <div
               className={isGameModal ? "chat-game-conv-body" : "flex-1 min-w-0"}
             >
-              <div
+              <span
                 className={
                   isGameModal
                     ? "chat-game-conv-title"
                     : "font-medium truncate text-txt"
                 }
               >
-                {conv.title}
-              </div>
-              <div
+                {getLocalizedConversationTitle(conv.title, t)}
+              </span>
+              <span
                 className={
                   isGameModal
                     ? "chat-game-conv-time"
@@ -137,7 +125,7 @@ export function ConversationListItem({
                 }
               >
                 {formatRelativeTime(conv.updatedAt, t)}
-              </div>
+              </span>
             </div>
           </button>
 
@@ -155,8 +143,7 @@ export function ConversationListItem({
             }}
             title={t("conversations.rename")}
           >
-
-            {t("conversationlistitem.X270E")}
+            &#x270E;
           </button>
 
           {/* Delete with confirm (default variant) or direct delete (game-modal) */}
@@ -171,8 +158,7 @@ export function ConversationListItem({
               }}
               title={t("conversations.delete")}
             >
-
-              {t("conversationlistitem.Times")}
+              &times;
             </button>
           ) : confirmDeleteId === conv.id ? (
             <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -207,7 +193,6 @@ export function ConversationListItem({
               }}
               title={t("conversations.delete")}
             >
-
               {t("conversationlistitem.Times")}
             </button>
           )}

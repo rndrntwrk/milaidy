@@ -24,14 +24,16 @@ function createMockAction() {
     isRunning: vi.fn(() => true),
     clampWhenFinished: false,
     time: 0,
-    getClip: vi.fn(() => ({ tracks: [{ name: "t1" }, { name: "t2" }] })) };
+    getClip: vi.fn(() => ({ tracks: [{ name: "t1" }, { name: "t2" }] })),
+  };
 }
 
 const mockAction = createMockAction();
 const hoisted = vi.hoisted(() => {
   const mockMixerInstance = {
     update: vi.fn(),
-    clipAction: vi.fn(() => mockAction) };
+    clipAction: vi.fn(() => mockAction),
+  };
   const mockRendererInstance = {
     setPixelRatio: vi.fn(),
     setClearColor: vi.fn(),
@@ -43,7 +45,8 @@ const hoisted = vi.hoisted(() => {
     shadowMap: { enabled: false, type: 0 },
     toneMapping: 0,
     toneMappingExposure: 1.0,
-    outputColorSpace: "" };
+    outputColorSpace: "",
+  };
   const mockWebGpuRendererInstance = {
     setPixelRatio: vi.fn(),
     setClearColor: vi.fn(),
@@ -51,7 +54,8 @@ const hoisted = vi.hoisted(() => {
     render: vi.fn(),
     dispose: vi.fn(),
     domElement: {} as HTMLCanvasElement,
-    init: vi.fn(async () => {}) };
+    init: vi.fn(async () => {}),
+  };
   const mockMToonMaterialLoaderPlugin = vi.fn(
     function MockMToonMaterialLoaderPlugin(
       this: { parser: unknown; options: unknown },
@@ -86,7 +90,8 @@ const hoisted = vi.hoisted(() => {
     mockRendererInstance,
     mockVRMLoaderPlugin,
     mockWebGpuRendererInstance,
-    navigatorMock };
+    navigatorMock,
+  };
 });
 
 const mockCameraInstance = {
@@ -96,18 +101,21 @@ const mockCameraInstance = {
     y: 1.1,
     z: 2.8,
     copy: vi.fn(),
-    clone: vi.fn(() => ({ x: 0, y: 1.1, z: 2.8 })) },
+    clone: vi.fn(() => ({ x: 0, y: 1.1, z: 2.8 })),
+  },
   rotation: { x: 0, y: 0 },
   aspect: 1,
   fov: 25,
   near: 0.01,
   far: 1000,
   lookAt: vi.fn(),
-  updateProjectionMatrix: vi.fn() };
+  updateProjectionMatrix: vi.fn(),
+};
 
 const mockSceneInstance = {
   add: vi.fn(),
-  remove: vi.fn() };
+  remove: vi.fn(),
+};
 
 vi.mock("three", () => {
   const LoopRepeat = 2201;
@@ -155,11 +163,13 @@ vi.mock("three", () => {
 
   class MockDirectionalLight {
     position = {
-      set: vi.fn().mockReturnValue({ normalize: vi.fn() }) };
+      set: vi.fn().mockReturnValue({ normalize: vi.fn() }),
+    };
     castShadow = false;
     shadow = {
       mapSize: { setScalar: vi.fn() },
-      camera: { near: 0, far: 0, left: 0, right: 0, top: 0, bottom: 0 } };
+      camera: { near: 0, far: 0, left: 0, right: 0, top: 0, bottom: 0 },
+    };
   }
 
   class MockAmbientLight {}
@@ -230,7 +240,8 @@ vi.mock("three", () => {
       },
       { findByName: vi.fn(() => null) },
     ),
-    MathUtils: { degToRad: vi.fn((deg: number) => (deg * Math.PI) / 180) } };
+    MathUtils: { degToRad: vi.fn((deg: number) => (deg * Math.PI) / 180) },
+  };
 });
 
 vi.mock("three/webgpu", () => ({
@@ -242,7 +253,8 @@ vi.mock("three/webgpu", () => ({
     dispose = hoisted.mockWebGpuRendererInstance.dispose;
     domElement = hoisted.mockWebGpuRendererInstance.domElement;
     init = hoisted.mockWebGpuRendererInstance.init;
-  } }));
+  },
+}));
 
 vi.mock("@pixiv/three-vrm", () => ({
   MToonMaterialLoaderPlugin: hoisted.mockMToonMaterialLoaderPlugin,
@@ -250,16 +262,20 @@ vi.mock("@pixiv/three-vrm", () => ({
   VRMUtils: {
     deepDispose: vi.fn(),
     removeUnnecessaryVertices: vi.fn(),
-    combineSkeletons: vi.fn() } }));
+    combineSkeletons: vi.fn(),
+  },
+}));
 
 vi.mock("@pixiv/three-vrm/nodes", () => ({
-  MToonNodeMaterial: class MockMToonNodeMaterial {} }));
+  MToonNodeMaterial: class MockMToonNodeMaterial {},
+}));
 
 vi.mock("three/addons/loaders/GLTFLoader.js", () => ({
   GLTFLoader: class MockGLTFLoader {
     register = hoisted.mockLoaderRegister;
     loadAsync = hoisted.mockLoaderLoadAsync;
-  } }));
+  },
+}));
 
 vi.mock("three/examples/jsm/controls/OrbitControls.js", () => ({
   OrbitControls: class MockOrbitControls {
@@ -279,10 +295,12 @@ vi.mock("three/examples/jsm/controls/OrbitControls.js", () => ({
     addEventListener = vi.fn();
     removeEventListener = vi.fn();
     enabled = true;
-  } }));
+  },
+}));
 
 vi.mock("../../../asset-url", () => ({
-  resolveAppAssetUrl: vi.fn((p: string) => `/mock/${p}`) }));
+  resolveAppAssetUrl: vi.fn((p: string) => `/mock/${p}`),
+}));
 
 // Stub DOM APIs that VrmEngine relies on
 const rafIds = { current: 0 };
@@ -290,33 +308,42 @@ Object.assign(globalThis, {
   requestAnimationFrame: vi.fn(() => {
     return ++rafIds.current;
   }),
-  cancelAnimationFrame: vi.fn() });
+  cancelAnimationFrame: vi.fn(),
+});
 
 // VrmEngine.setup() accesses window.devicePixelRatio
 Object.assign(globalThis, {
   window: {
     devicePixelRatio: 1,
     addEventListener: vi.fn(),
-    removeEventListener: vi.fn() } });
+    removeEventListener: vi.fn(),
+  },
+});
 Object.defineProperty(globalThis, "navigator", {
   configurable: true,
-  value: hoisted.navigatorMock as unknown as Navigator });
+  value: hoisted.navigatorMock as unknown as Navigator,
+});
 
 // VrmEngine.createFootShadow accesses document.createElement
 const mockCanvas2d = {
   createRadialGradient: vi.fn(() => ({
-    addColorStop: vi.fn() })),
+    addColorStop: vi.fn(),
+  })),
   fillStyle: "",
   fillRect: vi.fn(),
   fill: vi.fn(),
   beginPath: vi.fn(),
-  arc: vi.fn() };
+  arc: vi.fn(),
+};
 Object.assign(globalThis, {
   document: {
     createElement: vi.fn(() => ({
       width: 0,
       height: 0,
-      getContext: vi.fn(() => mockCanvas2d) })) } });
+      getContext: vi.fn(() => mockCanvas2d),
+    })),
+  },
+});
 
 // ---------------------------------------------------------------------------
 // Import after mocks
@@ -340,7 +367,9 @@ function createMockCanvas(): HTMLCanvasElement {
       left: 0,
       bottom: 600,
       right: 800,
-      toJSON: () => ({}) }) } as unknown as HTMLCanvasElement;
+      toJSON: () => ({}),
+    }),
+  } as unknown as HTMLCanvasElement;
 }
 
 async function waitForEngineReady(engine: VrmEngine): Promise<void> {
@@ -648,7 +677,8 @@ describe("VrmEngine", () => {
       expect(hoisted.mockMToonMaterialLoaderPlugin).toHaveBeenCalledWith(
         hoisted.mockLoaderParser,
         expect.objectContaining({
-          materialType: expect.any(Function) }),
+          materialType: expect.any(Function),
+        }),
       );
       expect(hoisted.mockVRMLoaderPlugin).toHaveBeenCalledWith(
         hoisted.mockLoaderParser,

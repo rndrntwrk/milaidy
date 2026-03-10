@@ -6,5 +6,5 @@ export {
   estimateTokenCost,
   formatRelativeTime,
   isNonChatModelLabel,
-  resolveProviderLabel } from "./conversation-utils";
-export { GameModalFooter } from "./GameModalFooter";
+  resolveProviderLabel,
+} from "./conversation-utils";

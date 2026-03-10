@@ -9,7 +9,8 @@ type WalletNftGalleryProps = {
 export function WalletNftGallery({
   filteredWalletCollectibleRows,
   walletNftsLoading,
-  t }: WalletNftGalleryProps) {
+  t,
+}: WalletNftGalleryProps) {
   return (
     <div className="anime-wallet-nft-grid">
       {walletNftsLoading ? (

@@ -12,20 +12,20 @@ import type {
   WalletAddresses,
   WalletBalancesResponse,
   WalletConfigStatus,
-  WalletNftsResponse
+  WalletNftsResponse,
 } from "../../api-client";
+import type { TrackedToken } from "../BscTradePanel";
 import {
   CHAIN_CONFIGS,
   PRIMARY_CHAIN_KEYS,
-  resolveChainKey
+  resolveChainKey,
 } from "../chainConfig";
-import type { TrackedToken } from "../BscTradePanel";
 import {
   isBscChainName,
   type NftItem,
   type TokenRow,
   type TrackedBscToken,
-  toNormalizedAddress
+  toNormalizedAddress,
 } from "./constants";
 
 export interface InventoryDataInput {
@@ -89,15 +89,16 @@ export function useInventoryData({
   inventorySort,
   inventoryChainFocus,
   trackedBscTokens,
-  trackedTokens }: InventoryDataInput): InventoryDataOutput {
+  trackedTokens,
+}: InventoryDataInput): InventoryDataOutput {
   const chainFocus = inventoryChainFocus ?? "all";
 
   // ── Primary chain data (BSC by default, extensible) ────────────────
   const primaryChain = useMemo(() => {
     if (!walletBalances?.evm?.chains) return null;
     return (
-      walletBalances.evm.chains.find(
-        (c: EvmChainBalance) => isBscChainName(c.chain),
+      walletBalances.evm.chains.find((c: EvmChainBalance) =>
+        isBscChainName(c.chain),
       ) ?? null
     );
   }, [walletBalances]);
@@ -119,7 +120,8 @@ export function useInventoryData({
         const chainKey = resolveChainKey(chain.chain);
         if (chainKey) seenChainKeys.add(chainKey);
         // Filter by chain focus when not "all"
-        if (chainFocus !== "all" && !matchesChainFocus(chain.chain, chainFocus)) continue;
+        if (chainFocus !== "all" && !matchesChainFocus(chain.chain, chainFocus))
+          continue;
         rows.push({
           chain: chain.chain,
           symbol: chain.nativeSymbol,
@@ -129,7 +131,7 @@ export function useInventoryData({
           balance: chain.nativeBalance,
           valueUsd: Number.parseFloat(chain.nativeValueUsd) || 0,
           balanceRaw: Number.parseFloat(chain.nativeBalance) || 0,
-          isNative: true
+          isNative: true,
         });
         if (chain.error) continue;
         for (const tk of chain.tokens) {
@@ -143,7 +145,7 @@ export function useInventoryData({
             valueUsd: Number.parseFloat(tk.valueUsd) || 0,
             balanceRaw: Number.parseFloat(tk.balance) || 0,
             isNative: false,
-            isTracked: false
+            isTracked: false,
           });
         }
       }
@@ -163,7 +165,7 @@ export function useInventoryData({
             balance: "0",
             valueUsd: 0,
             balanceRaw: 0,
-            isNative: true
+            isNative: true,
           });
         }
       }
@@ -178,12 +180,15 @@ export function useInventoryData({
         balance: "0",
         valueUsd: 0,
         balanceRaw: 0,
-        isNative: true
+        isNative: true,
       });
     }
 
     // Solana tokens
-    if ((chainFocus === "all" || chainFocus === "solana") && walletBalances?.solana) {
+    if (
+      (chainFocus === "all" || chainFocus === "solana") &&
+      walletBalances?.solana
+    ) {
       rows.push({
         chain: "Solana",
         symbol: "SOL",
@@ -193,7 +198,7 @@ export function useInventoryData({
         balance: walletBalances.solana.solBalance,
         valueUsd: Number.parseFloat(walletBalances.solana.solValueUsd) || 0,
         balanceRaw: Number.parseFloat(walletBalances.solana.solBalance) || 0,
-        isNative: true
+        isNative: true,
       });
       for (const tk of walletBalances.solana.tokens) {
         rows.push({
@@ -205,7 +210,7 @@ export function useInventoryData({
           balance: tk.balance,
           valueUsd: Number.parseFloat(tk.valueUsd) || 0,
           balanceRaw: Number.parseFloat(tk.balance) || 0,
-          isNative: false
+          isNative: false,
         });
       }
     }
@@ -233,7 +238,7 @@ export function useInventoryData({
           valueUsd: 0,
           balanceRaw: 0,
           isNative: false,
-          isTracked: true
+          isTracked: true,
         });
       }
       for (const tracked of trackedTokens) {
@@ -252,7 +257,7 @@ export function useInventoryData({
             valueUsd: 0,
             balanceRaw: 0,
             isNative: false,
-            isTracked: true
+            isTracked: true,
           });
         }
       }
@@ -318,7 +323,7 @@ export function useInventoryData({
           chain: chainData.chain,
           name: nft.name,
           imageUrl: nft.imageUrl,
-          collectionName: nft.collectionName || nft.tokenType
+          collectionName: nft.collectionName || nft.tokenType,
         });
       }
     }
@@ -328,7 +333,7 @@ export function useInventoryData({
           chain: "Solana",
           name: nft.name,
           imageUrl: nft.imageUrl,
-          collectionName: nft.collectionName
+          collectionName: nft.collectionName,
         });
       }
     }
@@ -340,7 +345,8 @@ export function useInventoryData({
     primaryChain?.error ??
     chainErrors.find((chain) => isBscChainName(chain.chain))?.error ??
     null;
-  const primaryNativeBalance: string | null = primaryChain?.nativeBalance ?? null;
+  const primaryNativeBalance: string | null =
+    primaryChain?.nativeBalance ?? null;
 
   const focusedRows = useMemo(() => {
     if (chainFocus === "all") return sortedRows;
@@ -361,7 +367,9 @@ export function useInventoryData({
 
   const visibleChainErrors = useMemo(() => {
     if (chainFocus === "all") return chainErrors;
-    return chainErrors.filter((chain) => matchesChainFocus(chain.chain, chainFocus));
+    return chainErrors.filter((chain) =>
+      matchesChainFocus(chain.chain, chainFocus),
+    );
   }, [chainErrors, chainFocus]);
 
   return {
@@ -385,6 +393,6 @@ export function useInventoryData({
     bscChainError: primaryChainError,
     primaryChainError,
     bscNativeBalance: primaryNativeBalance,
-    primaryNativeBalance
+    primaryNativeBalance,
   };
 }

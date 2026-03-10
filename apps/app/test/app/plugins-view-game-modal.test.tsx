@@ -5,10 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PluginInfo } from "../../src/api-client";
 
 const mockUseApp = vi.fn();
-const mockOnWsEvent = vi.fn(() => () => { });
+const mockOnWsEvent = vi.fn(() => () => {});
 const mockHandlePluginToggle = vi.fn();
-const mockLoadPlugins = vi.fn(async () => { });
-const mockHandlePluginConfigSave = vi.fn(async () => { });
+const mockLoadPlugins = vi.fn(async () => {});
+const mockHandlePluginConfigSave = vi.fn(async () => {});
 const mockSetActionNotice = vi.fn();
 const mockSetState = vi.fn();
 const mockTestPluginConnection = vi.fn(async () => ({
@@ -163,7 +163,7 @@ describe("PluginsView game modal", () => {
     mockSetState.mockReset();
     mockTestPluginConnection.mockReset();
 
-    mockOnWsEvent.mockReturnValue(() => { });
+    mockOnWsEvent.mockReturnValue(() => {});
     mockLoadPlugins.mockResolvedValue(undefined);
     mockHandlePluginToggle.mockResolvedValue(undefined);
     mockHandlePluginConfigSave.mockResolvedValue(undefined);

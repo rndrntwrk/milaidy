@@ -11,13 +11,18 @@ import { useApp } from "../AppContext";
 import type {
   SkillInfo,
   SkillMarketplaceResult,
-  SkillScanReportSummary
+  SkillScanReportSummary,
 } from "../api-client";
 import { client } from "../api-client";
+import {
+  btnDanger,
+  btnGhost,
+  btnPrimary,
+  inputCls,
+} from "./shared/button-styles";
 import { ConfirmDeleteControl } from "./shared/confirm-delete-control";
 import { StatusBadge } from "./shared/ui-badges";
 import { Switch } from "./shared/ui-switch";
-import { btnPrimary, btnGhost, btnDanger, inputCls } from "./shared/button-styles";
 
 /* ── Skill Card ─────────────────────────────────────────────────────── */
 
@@ -32,19 +37,20 @@ function SkillCard({
   onDelete,
   onReview,
   onAcknowledge,
-  onDismissReview }: {
-    skill: SkillInfo;
-    skillToggleAction: string;
-    skillReviewId: string;
-    skillReviewReport: ReturnType<typeof useApp>["skillReviewReport"];
-    skillReviewLoading: boolean;
-    onToggle: (id: string, enabled: boolean) => void;
-    onEdit: (skill: SkillInfo) => void;
-    onDelete: (id: string, name: string) => void;
-    onReview: (id: string) => void;
-    onAcknowledge: (id: string) => void;
-    onDismissReview: () => void;
-  }) {
+  onDismissReview,
+}: {
+  skill: SkillInfo;
+  skillToggleAction: string;
+  skillReviewId: string;
+  skillReviewReport: ReturnType<typeof useApp>["skillReviewReport"];
+  skillReviewLoading: boolean;
+  onToggle: (id: string, enabled: boolean) => void;
+  onEdit: (skill: SkillInfo) => void;
+  onDelete: (id: string, name: string) => void;
+  onReview: (id: string) => void;
+  onAcknowledge: (id: string) => void;
+  onDismissReview: () => void;
+}) {
   const { t } = useApp();
   const isQuarantined =
     skill.scanStatus === "warning" || skill.scanStatus === "critical";
@@ -53,10 +59,11 @@ function SkillCard({
 
   return (
     <div
-      className={`flex flex-col border bg-[var(--card)] transition-colors ${isQuarantined || isBlocked
-        ? "border-[#e74c3c]/40"
-        : "border-[var(--border)] hover:border-[var(--accent)]/50"
-        }`}
+      className={`flex flex-col border bg-[var(--card)] transition-colors ${
+        isQuarantined || isBlocked
+          ? "border-[#e74c3c]/40"
+          : "border-[var(--border)] hover:border-[var(--accent)]/50"
+      }`}
       data-skill-id={skill.id}
     >
       {/* Main content area */}
@@ -75,8 +82,8 @@ function SkillCard({
             }
             tone={
               skill.scanStatus === "blocked" ||
-                skill.scanStatus === "critical" ||
-                skill.scanStatus === "warning"
+              skill.scanStatus === "critical" ||
+              skill.scanStatus === "warning"
                 ? skill.scanStatus === "warning"
                   ? "warning"
                   : "danger"
@@ -103,7 +110,6 @@ function SkillCard({
               className="px-2.5 py-1 text-[11px] font-medium bg-[#f39c12]/15 text-[#f39c12] border border-[#f39c12]/30 cursor-pointer hover:bg-[#f39c12]/25 transition-colors"
               onClick={() => onReview(skill.id)}
             >
-
               {t("skillsview.ReviewFindings")}
             </button>
           )}
@@ -128,7 +134,6 @@ function SkillCard({
           className={btnGhost}
           onClick={() => onEdit(skill)}
         >
-
           {t("skillsview.Edit")}
         </button>
         <ConfirmDeleteControl
@@ -153,14 +158,13 @@ function SkillCard({
         <div className="border-t border-[var(--border)] p-4 bg-[var(--bg)]">
           <div className="flex items-center gap-3 mb-3">
             <span className="text-xs font-semibold text-[var(--txt)]">
-
               {t("skillsview.ScanReport")}
             </span>
             <span className="text-[11px] text-[#e74c3c] font-mono">
-              {skillReviewReport.summary.critical}  {t("skillsview.critical")}
+              {skillReviewReport.summary.critical} {t("skillsview.critical")}
             </span>
             <span className="text-[11px] text-[#f39c12] font-mono">
-              {skillReviewReport.summary.warn}  {t("skillsview.warnings")}
+              {skillReviewReport.summary.warn} {t("skillsview.warnings")}
             </span>
           </div>
           {skillReviewReport.findings.length > 0 && (
@@ -172,14 +176,16 @@ function SkillCard({
                 ) => (
                   <div
                     key={`${f.file}:${f.line}:${f.message}`}
-                    className={`flex items-start gap-2 px-3 py-1.5 text-[11px] font-mono ${idx > 0 ? "border-t border-[var(--border)]" : ""
-                      }`}
+                    className={`flex items-start gap-2 px-3 py-1.5 text-[11px] font-mono ${
+                      idx > 0 ? "border-t border-[var(--border)]" : ""
+                    }`}
                   >
                     <span
-                      className={`shrink-0 px-1.5 py-px font-bold text-[10px] uppercase ${f.severity === "critical"
-                        ? "bg-[#e74c3c]/15 text-[#e74c3c]"
-                        : "bg-[#f39c12]/15 text-[#f39c12]"
-                        }`}
+                      className={`shrink-0 px-1.5 py-px font-bold text-[10px] uppercase ${
+                        f.severity === "critical"
+                          ? "bg-[#e74c3c]/15 text-[#e74c3c]"
+                          : "bg-[#f39c12]/15 text-[#f39c12]"
+                      }`}
                     >
                       {f.severity}
                     </span>
@@ -200,7 +206,6 @@ function SkillCard({
               className={btnPrimary}
               onClick={() => onAcknowledge(skill.id)}
             >
-
               {t("skillsview.AcknowledgeAmpEn")}
             </button>
             <button
@@ -208,14 +213,12 @@ function SkillCard({
               className={btnGhost}
               onClick={onDismissReview}
             >
-
               {t("skillsview.Dismiss")}
             </button>
           </div>
         </div>
       ) : isReviewing && skillReviewLoading ? (
         <div className="border-t border-[var(--border)] p-4 text-xs text-[var(--muted)] italic">
-
           {t("skillsview.LoadingScanReport")}
         </div>
       ) : null}
@@ -230,13 +233,14 @@ function MarketplaceCard({
   isInstalled,
   skillsMarketplaceAction,
   onInstall,
-  onUninstall }: {
-    item: SkillMarketplaceResult;
-    isInstalled: boolean;
-    skillsMarketplaceAction: string;
-    onInstall: (item: SkillMarketplaceResult) => void;
-    onUninstall: (skillId: string, name: string) => void;
-  }) {
+  onUninstall,
+}: {
+  item: SkillMarketplaceResult;
+  isInstalled: boolean;
+  skillsMarketplaceAction: string;
+  onInstall: (item: SkillMarketplaceResult) => void;
+  onUninstall: (skillId: string, name: string) => void;
+}) {
   const { t } = useApp();
   const isInstalling = skillsMarketplaceAction === `install:${item.id}`;
   const isUninstalling = skillsMarketplaceAction === `uninstall:${item.id}`;
@@ -260,7 +264,9 @@ function MarketplaceCard({
           {item.score != null && (
             <>
               <span className="text-[var(--border)]">/</span>
-              <span>{t("skillsview.score")} {item.score.toFixed(2)}</span>
+              <span>
+                {t("skillsview.score")} {item.score.toFixed(2)}
+              </span>
             </>
           )}
           {item.tags && item.tags.length > 0 && (
@@ -318,21 +324,22 @@ function InstallModal({
   uninstallMarketplaceSkill,
   installSkillFromGithubUrl,
   setState,
-  onClose }: {
-    skills: SkillInfo[];
-    skillsMarketplaceQuery: string;
-    skillsMarketplaceResults: SkillMarketplaceResult[];
-    skillsMarketplaceError: string;
-    skillsMarketplaceLoading: boolean;
-    skillsMarketplaceAction: string;
-    skillsMarketplaceManualGithubUrl: string;
-    searchSkillsMarketplace: () => Promise<void>;
-    installSkillFromMarketplace: (item: SkillMarketplaceResult) => Promise<void>;
-    uninstallMarketplaceSkill: (skillId: string, name: string) => Promise<void>;
-    installSkillFromGithubUrl: () => Promise<void>;
-    setState: ReturnType<typeof useApp>["setState"];
-    onClose: () => void;
-  }) {
+  onClose,
+}: {
+  skills: SkillInfo[];
+  skillsMarketplaceQuery: string;
+  skillsMarketplaceResults: SkillMarketplaceResult[];
+  skillsMarketplaceError: string;
+  skillsMarketplaceLoading: boolean;
+  skillsMarketplaceAction: string;
+  skillsMarketplaceManualGithubUrl: string;
+  searchSkillsMarketplace: () => Promise<void>;
+  installSkillFromMarketplace: (item: SkillMarketplaceResult) => Promise<void>;
+  uninstallMarketplaceSkill: (skillId: string, name: string) => Promise<void>;
+  installSkillFromGithubUrl: () => Promise<void>;
+  setState: ReturnType<typeof useApp>["setState"];
+  onClose: () => void;
+}) {
   const { t } = useApp();
   const [tab, setTab] = useState<InstallTab>("search");
 
@@ -356,11 +363,9 @@ function InstallModal({
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
           <div>
             <div className="text-sm font-semibold text-[var(--txt)]">
-
               {t("skillsview.InstallSkill")}
             </div>
             <div className="text-[11px] text-[var(--muted)] mt-0.5">
-
               {t("skillsview.AddSkillsFromThe")}
             </div>
           </div>
@@ -384,10 +389,11 @@ function InstallModal({
             <button
               type="button"
               key={t.id}
-              className={`flex-1 px-4 py-2.5 text-xs font-medium bg-transparent border-0 border-b-2 cursor-pointer transition-colors ${tab === t.id
-                ? "text-[var(--accent)] border-b-[var(--accent)]"
-                : "text-[var(--muted)] border-b-transparent hover:text-[var(--txt)]"
-                }`}
+              className={`flex-1 px-4 py-2.5 text-xs font-medium bg-transparent border-0 border-b-2 cursor-pointer transition-colors ${
+                tab === t.id
+                  ? "text-[var(--accent)] border-b-[var(--accent)]"
+                  : "text-[var(--muted)] border-b-transparent hover:text-[var(--txt)]"
+              }`}
               onClick={() => setTab(t.id)}
             >
               {t.label}
@@ -430,18 +436,16 @@ function InstallModal({
               {skillsMarketplaceResults.length === 0 ? (
                 <div className="text-center py-12">
                   <div className="text-[var(--muted)] text-sm mb-1">
-
                     {t("skillsview.NoResults")}
                   </div>
                   <div className="text-[var(--muted)] text-[11px]">
-
                     {t("skillsview.SearchAboveToDisc")}
                   </div>
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">
                   <div className="text-[11px] text-[var(--muted)] mb-1">
-                    {skillsMarketplaceResults.length}  {t("skillsview.result")}
+                    {skillsMarketplaceResults.length} {t("skillsview.result")}
                     {skillsMarketplaceResults.length !== 1 ? "s" : ""}
                   </div>
                   {skillsMarketplaceResults.map((item) => (
@@ -462,11 +466,9 @@ function InstallModal({
           {tab === "url" && (
             <div>
               <div className="text-xs text-[var(--txt)] mb-1 font-medium">
-
                 {t("skillsview.GitHubRepositoryUR")}
               </div>
               <div className="text-[11px] text-[var(--muted)] mb-3">
-
                 {t("skillsview.PasteAFullGitHub")}
               </div>
               <div className="flex gap-2 items-center">
@@ -517,28 +519,28 @@ function CreateSkillForm({
   skillCreating,
   setState,
   onCancel,
-  onCreate }: {
-    skillCreateName: string;
-    skillCreateDescription: string;
-    skillCreating: boolean;
-    setState: ReturnType<typeof useApp>["setState"];
-    onCancel: () => void;
-    onCreate: () => void;
-  }) {
+  onCreate,
+}: {
+  skillCreateName: string;
+  skillCreateDescription: string;
+  skillCreating: boolean;
+  setState: ReturnType<typeof useApp>["setState"];
+  onCancel: () => void;
+  onCreate: () => void;
+}) {
   const { t } = useApp();
   return (
     <div className="border border-[var(--accent)]/40 bg-[var(--card)] mb-4">
       <div className="px-4 py-3 border-b border-[var(--border)]">
         <div className="text-xs font-semibold text-[var(--txt)]">
-
           {t("skillsview.CreateNewSkill")}
         </div>
       </div>
       <div className="p-4 flex flex-col gap-3">
         <div>
           <span className="block text-[11px] text-[var(--muted)] mb-1 font-medium">
-
-            {t("skillsview.SkillName")} <span className="text-[#e74c3c]">*</span>
+            {t("skillsview.SkillName")}{" "}
+            <span className="text-[#e74c3c]">*</span>
           </span>
           <input
             className={`${inputCls} w-full`}
@@ -552,7 +554,6 @@ function CreateSkillForm({
         </div>
         <div>
           <span className="block text-[11px] text-[var(--muted)] mb-1 font-medium">
-
             {t("skillsview.Description")}
           </span>
           <input
@@ -567,7 +568,6 @@ function CreateSkillForm({
         </div>
         <div className="flex gap-2 justify-end pt-1">
           <button type="button" className={btnGhost} onClick={onCancel}>
-
             {t("skillsview.Cancel")}
           </button>
           <button
@@ -590,12 +590,13 @@ function EditSkillModal({
   skillId,
   skillName,
   onClose,
-  onSaved }: {
-    skillId: string;
-    skillName: string;
-    onClose: () => void;
-    onSaved: () => void;
-  }) {
+  onSaved,
+}: {
+  skillId: string;
+  skillName: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const { t } = useApp();
   const [content, setContent] = useState("");
   const [originalContent, setOriginalContent] = useState("");
@@ -683,19 +684,18 @@ function EditSkillModal({
               {skillName}
             </div>
             <span className="text-[10px] font-mono text-[var(--muted)] px-1.5 py-0.5 bg-[var(--card)] border border-[var(--border)]">
-
               {t("skillsview.SKILLMd")}
             </span>
             {hasChanges && (
               <span className="text-[10px] text-[var(--accent)] font-medium">
-
                 {t("skillsview.unsaved")}
               </span>
             )}
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[10px] text-[var(--muted)]">
-              {navigator.platform.includes("Mac") ? "⌘S" : "Ctrl+S"}  {t("skillsview.toSave")}
+              {navigator.platform.includes("Mac") ? "⌘S" : "Ctrl+S"}{" "}
+              {t("skillsview.toSave")}
             </span>
             <button
               type="button"
@@ -711,7 +711,6 @@ function EditSkillModal({
         <div className="flex-1 overflow-hidden">
           {loading ? (
             <div className="flex items-center justify-center h-full text-[var(--muted)] text-sm">
-
               {t("skillsview.LoadingSkillSource")}
             </div>
           ) : error && !content ? (
@@ -722,7 +721,6 @@ function EditSkillModal({
                 className={btnGhost}
                 onClick={() => loadSource()}
               >
-
                 {t("skillsview.Retry")}
               </button>
             </div>
@@ -794,7 +792,8 @@ export function SkillsView({ inModal: _inModal }: { inModal?: boolean } = {}) {
     installSkillFromMarketplace,
     uninstallMarketplaceSkill,
     installSkillFromGithubUrl,
-    setState } = useApp();
+    setState,
+  } = useApp();
 
   const [installModalOpen, setInstallModalOpen] = useState(false);
   const [filterText, setFilterText] = useState("");
@@ -843,7 +842,7 @@ export function SkillsView({ inModal: _inModal }: { inModal?: boolean } = {}) {
         active,
         inactive,
         activeCount,
-        totalCount: skills.length
+        totalCount: skills.length,
       };
     }, [skills, filterText]);
 

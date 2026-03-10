@@ -16,15 +16,16 @@ import React, {
   useCallback,
   useImperativeHandle,
   useMemo,
-  useState
+  useState,
 } from "react";
+import { useApp } from "../AppContext";
 import type { ConfigUiHint } from "../types";
 import type {
   FieldRegistry,
   FieldRenderer,
   FieldRenderProps,
   JsonSchemaObject,
-  ResolvedField
+  ResolvedField,
 } from "./config-catalog";
 import {
   defaultCatalog,
@@ -32,10 +33,9 @@ import {
   evaluateShowIf,
   evaluateVisibility,
   resolveFields,
-  runValidation
+  runValidation,
 } from "./config-catalog";
 import { ConfigField } from "./config-field";
-import { useApp } from "../AppContext";
 
 // ── Props ──────────────────────────────────────────────────────────────
 
@@ -154,7 +154,7 @@ const GROUP_ICONS: Record<string, string> = {
   autonomy: "\u{1F916}",
   "background jobs": "\u{1F504}",
   "n8n connection": "\u{1F517}",
-  app: "\u{1F4F1}"
+  app: "\u{1F4F1}",
 };
 
 function groupIcon(group: string): string {
@@ -188,7 +188,8 @@ interface ValidationSummaryProps {
 function ValidationSummary({
   fieldErrors,
   fieldLabels,
-  pluginId }: ValidationSummaryProps) {
+  pluginId,
+}: ValidationSummaryProps) {
   const { t } = useApp();
   const errorEntries = [...fieldErrors.entries()].filter(
     ([, errors]) => errors.length > 0,
@@ -213,7 +214,6 @@ function ValidationSummary({
     >
       <div className="text-[13px] font-semibold text-[var(--destructive)] mb-2">
         {totalErrors} {totalErrors === 1 ? "field needs" : "fields need"}{" "}
-
         {t("config-renderer.attention")}
       </div>
       <ul className="list-none m-0 p-0 flex flex-col gap-1">
@@ -250,7 +250,7 @@ const THEME_TO_CSS: Record<keyof import("../types").PluginUiTheme, string> = {
   borderColor: "--plugin-border",
   focusRing: "--plugin-focus-ring",
   inputHeight: "--plugin-input-height",
-  maxFieldWidth: "--plugin-max-field-width"
+  maxFieldWidth: "--plugin-max-field-width",
 };
 
 // ── Component ──────────────────────────────────────────────────────────
@@ -270,7 +270,8 @@ export const ConfigRenderer = forwardRef<
     onChange,
     renderField: renderFieldOverride,
     showValidationSummary = true,
-    theme }: ConfigRendererProps,
+    theme,
+  }: ConfigRendererProps,
   ref,
 ) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -407,7 +408,7 @@ export const ConfigRenderer = forwardRef<
             ? () => revealSecret(pluginId, field.key)
             : undefined,
         onAction: (action: string, params?: Record<string, unknown>) =>
-          executeAction(action, params)
+          executeAction(action, params),
       };
     },
     [
@@ -457,7 +458,7 @@ export const ConfigRenderer = forwardRef<
         groups: new Map<string, ResolvedField[]>(),
         advanced: [] as ResolvedField[],
         showHeaders: false,
-        allVisibleFields: [] as ResolvedField[]
+        allVisibleFields: [] as ResolvedField[],
       };
 
     const catalog = registry.catalog;
@@ -492,7 +493,7 @@ export const ConfigRenderer = forwardRef<
       groups: fieldGroups,
       advanced: advancedFields,
       showHeaders: fieldGroups.size > 1,
-      allVisibleFields: visibleFields
+      allVisibleFields: visibleFields,
     };
   }, [schema, hints, registry, isFieldVisible, values]);
 
@@ -556,14 +557,15 @@ export const ConfigRenderer = forwardRef<
     return Object.keys(style).length > 0 ? style : undefined;
   }, [theme]);
 
+  // ── useApp for i18n ─────────────────────────────────────────────────
+  const { t: tFn } = useApp();
+
   // ── Empty state ──────────────────────────────────────────────────────
 
   if (!schema) {
-    const { t } = useApp();
     return (
       <div className="text-xs text-[var(--muted)] italic py-3">
-
-        {t("config-renderer.NoSchemaProvided")}
+        {tFn("config-renderer.NoSchemaProvided")}
       </div>
     );
   }
@@ -582,7 +584,7 @@ export const ConfigRenderer = forwardRef<
               <div
                 className="h-full bg-[var(--warning,#f39c12)] rounded-full transition-all duration-300"
                 style={{
-                  width: `${(configProgress.requiredSet / configProgress.requiredTotal) * 100}%`
+                  width: `${(configProgress.requiredSet / configProgress.requiredTotal) * 100}%`,
                 }}
               />
             </div>
@@ -616,7 +618,11 @@ export const ConfigRenderer = forwardRef<
 
       {advanced.length > 0 && (
         <div className="mt-5 pt-4 border-t border-[var(--border)]">
-          <AdvancedSectionToggle advanced={advanced} advancedOpen={advancedOpen} setAdvancedOpen={setAdvancedOpen} />
+          <AdvancedSectionToggle
+            advanced={advanced}
+            advancedOpen={advancedOpen}
+            setAdvancedOpen={setAdvancedOpen}
+          />
           {advancedOpen && (
             <div className="grid grid-cols-6 gap-x-5 gap-y-0 pt-1 animate-[cr-slide_var(--duration-normal,200ms)_ease]">
               {advanced.map((f) => renderField(f))}
@@ -628,23 +634,40 @@ export const ConfigRenderer = forwardRef<
   );
 });
 
-function ConfigProgressText({ configProgress }: { configProgress: { requiredSet: number; requiredTotal: number; configured: number; total: number } }) {
+function ConfigProgressText({
+  configProgress,
+}: {
+  configProgress: {
+    requiredSet: number;
+    requiredTotal: number;
+    configured: number;
+    total: number;
+  };
+}) {
   const { t } = useApp();
   return (
     <div className="flex items-center justify-between mb-1.5">
       <span className="text-[12px] font-semibold text-[var(--warning,#f39c12)]">
         {configProgress.requiredSet}/{configProgress.requiredTotal}{" "}
-
         {t("config-renderer.requiredFieldsConf")}
       </span>
       <span className="text-[11px] text-[var(--muted)]">
-        {configProgress.configured}/{configProgress.total}  {t("config-renderer.total")}
+        {configProgress.configured}/{configProgress.total}{" "}
+        {t("config-renderer.total")}
       </span>
     </div>
   );
 }
 
-function AdvancedSectionToggle({ advanced, advancedOpen, setAdvancedOpen }: { advanced: ResolvedField[]; advancedOpen: boolean; setAdvancedOpen: React.Dispatch<React.SetStateAction<boolean>> }) {
+function AdvancedSectionToggle({
+  advanced,
+  advancedOpen,
+  setAdvancedOpen,
+}: {
+  advanced: ResolvedField[];
+  advancedOpen: boolean;
+  setAdvancedOpen: React.Dispatch<React.SetStateAction<boolean>>;
+}) {
   const { t } = useApp();
   return (
     <button
@@ -659,7 +682,6 @@ function AdvancedSectionToggle({ advanced, advancedOpen, setAdvancedOpen }: { ad
         &#9654;
       </span>
       <span className="text-[12px] font-bold uppercase tracking-wider text-[var(--muted)] group-hover:text-[var(--text)] transition-colors">
-
         {t("config-renderer.Advanced")}
       </span>
       <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-bold bg-[var(--accent-subtle,rgba(255,255,255,0.05))] text-[var(--accent)] border border-[var(--border)] rounded-sm">

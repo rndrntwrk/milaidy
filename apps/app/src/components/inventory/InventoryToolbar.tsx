@@ -35,7 +35,8 @@ export function InventoryToolbar({
   walletNfts,
   setState,
   loadBalances,
-  loadNfts }: InventoryToolbarProps) {
+  loadNfts,
+}: InventoryToolbarProps) {
   return (
     <div className="wt__toolbar">
       <button
@@ -121,7 +122,6 @@ export function InventoryToolbar({
           inventoryView === "tokens" ? loadBalances() : loadNfts()
         }
       >
-
         {t("inventorytoolbar.Refresh")}
       </button>
     </div>

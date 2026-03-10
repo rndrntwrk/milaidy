@@ -15,14 +15,14 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState
+  useState,
 } from "react";
 import { getVrmPreviewUrl, useApp } from "../AppContext";
 import { client, type ImageAttachment, type VoiceConfig } from "../api-client";
 import { VOICE_CONFIG_UPDATED_EVENT } from "../events";
 import {
   useVoiceChat,
-  type VoicePlaybackStartEvent
+  type VoicePlaybackStartEvent,
 } from "../hooks/useVoiceChat";
 import { AgentActivityBox } from "./AgentActivityBox";
 
@@ -84,7 +84,8 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
     uiLanguage,
     openEmotePicker,
     ptySessions,
-    t } = useApp();
+    t,
+  } = useApp();
 
   const messagesRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -158,7 +159,7 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
       const speechEndedAtMs = nowMs();
       pendingVoiceTurnRef.current = {
         speechEndedAtMs,
-        expiresAtMs: speechEndedAtMs + 15000
+        expiresAtMs: speechEndedAtMs + 15000,
       };
       setVoiceLatency(null);
       setState("chatInput", text);
@@ -187,7 +188,7 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
       setVoiceLatency((prev) => ({
         speechEndToFirstTokenMs: prev?.speechEndToFirstTokenMs ?? null,
         speechEndToVoiceStartMs: silenceMs,
-        firstSegmentCached: event.cached
+        firstSegmentCached: event.cached,
       }));
     },
     [],
@@ -197,7 +198,7 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
     onTranscript: handleVoiceTranscript,
     onPlaybackStart: handleVoicePlaybackStart,
     lang: uiLanguage === "zh-CN" ? "zh-CN" : "en-US",
-    voiceConfig
+    voiceConfig,
   });
   const { queueAssistantSpeech, stopSpeaking } = voice;
 
@@ -268,7 +269,7 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
     setVoiceLatency((prev) => ({
       speechEndToFirstTokenMs: ttftMs,
       speechEndToVoiceStartMs: prev?.speechEndToVoiceStartMs ?? null,
-      firstSegmentCached: prev?.firstSegmentCached ?? null
+      firstSegmentCached: prev?.firstSegmentCached ?? null,
     }));
   }, [chatFirstTokenReceived]);
 
@@ -296,7 +297,7 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
     const nearBottom = distanceFromBottom < 150;
     el.scrollTo({
       top: el.scrollHeight,
-      behavior: nearBottom ? "instant" : "smooth"
+      behavior: nearBottom ? "instant" : "smooth",
     });
   }, [chatSending, visibleMsgs]);
 
@@ -425,7 +426,10 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
                   <div
                     className={`chat-game-bubble ${isUser ? "chat-game-bubble-user" : ""}`}
                   >
-                    <div className="chat-game-message-body" style={{ fontFamily: 'var(--font-chat)' }}>
+                    <div
+                      className="chat-game-message-body"
+                      style={{ fontFamily: "var(--font-chat)" }}
+                    >
                       <MessageContent message={msg} />
                     </div>
                   </div>
@@ -525,10 +529,11 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
           className="pb-1 text-[10px] text-muted relative"
           style={{ zIndex: 1 }}
         >
-
-          {t("chatview.SilenceEndFirstTo")} {voiceLatency.speechEndToFirstTokenMs ?? "—"}
-
-          {t("chatview.msEndVoiceStart")} {voiceLatency.speechEndToVoiceStartMs ?? "—"}{t("chatview.msFirst")}{" "}
+          {t("chatview.SilenceEndFirstTo")}{" "}
+          {voiceLatency.speechEndToFirstTokenMs ?? "—"}
+          {t("chatview.msEndVoiceStart")}{" "}
+          {voiceLatency.speechEndToVoiceStartMs ?? "—"}
+          {t("chatview.msFirst")}{" "}
           {voiceLatency.firstSegmentCached == null
             ? "—"
             : voiceLatency.firstSegmentCached
@@ -630,10 +635,11 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
           {/* Paperclip / image attach button */}
           <button
             type="button"
-            className={`h-[38px] w-[38px] shrink-0 flex items-center justify-center border rounded cursor-pointer transition-all duration-200 hover:shadow-sm self-end ${chatPendingImages.length > 0
+            className={`h-[38px] w-[38px] shrink-0 flex items-center justify-center border rounded cursor-pointer transition-all duration-200 hover:shadow-sm self-end ${
+              chatPendingImages.length > 0
                 ? "border-accent bg-accent/10 text-accent"
                 : "border-border bg-card text-muted hover:border-accent hover:text-accent"
-              }`}
+            }`}
             onClick={() => fileInputRef.current?.click()}
             aria-label="Attach image"
             title={t("chatview.AttachImage")}
@@ -646,10 +652,11 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
           {voice.supported && (
             <button
               type="button"
-              className={`h-[38px] w-[38px] flex-shrink-0 flex items-center justify-center border rounded cursor-pointer transition-all self-end ${voice.isListening
+              className={`h-[38px] w-[38px] flex-shrink-0 flex items-center justify-center border rounded cursor-pointer transition-all self-end ${
+                voice.isListening
                   ? "bg-accent border-accent text-accent-fg shadow-[0_0_10px_rgba(124,58,237,0.4)] animate-pulse"
                   : "border-border bg-card text-muted hover:border-accent hover:text-accent"
-                }`}
+              }`}
               onClick={voice.toggleListening}
               aria-label={
                 isAgentStarting
@@ -690,7 +697,10 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
 
           {/* Textarea / live transcript */}
           {voice.isListening && voice.interimTranscript ? (
-            <div className="flex-1 min-w-0 px-3 py-2 border border-accent bg-card text-txt text-[15px] leading-[1.7] min-h-[38px] flex items-center" style={{ fontFamily: 'var(--font-chat)' }}>
+            <div
+              className="flex-1 min-w-0 px-3 py-2 border border-accent bg-card text-txt text-[15px] leading-[1.7] min-h-[38px] flex items-center"
+              style={{ fontFamily: "var(--font-chat)" }}
+            >
               <span className="text-muted italic">
                 {voice.interimTranscript}
               </span>
@@ -699,7 +709,7 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
             <textarea
               ref={textareaRef}
               className="flex-1 min-w-0 px-3 py-2 border border-border bg-card text-txt text-[15px] leading-[1.7] resize-none overflow-y-hidden min-h-[38px] max-h-[200px] focus:border-accent focus:outline-none"
-              style={{ fontFamily: 'var(--font-chat)' }}
+              style={{ fontFamily: "var(--font-chat)" }}
               rows={1}
               aria-label="Chat message"
               placeholder={

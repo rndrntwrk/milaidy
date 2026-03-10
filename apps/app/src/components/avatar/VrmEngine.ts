@@ -2,7 +2,7 @@ import {
   MToonMaterialLoaderPlugin,
   type VRM,
   VRMLoaderPlugin,
-  VRMUtils
+  VRMUtils,
 } from "@pixiv/three-vrm";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
@@ -11,14 +11,14 @@ import { resolveAppAssetUrl } from "../../asset-url";
 import {
   type AnimationLoaderContext,
   loadEmoteClip,
-  loadIdleClip
+  loadIdleClip,
 } from "./VrmAnimationLoader";
 import { VrmBlinkController } from "./VrmBlinkController";
 import {
   type CameraAnimationConfig,
   type CameraProfile,
   type InteractionMode,
-  VrmCameraManager
+  VrmCameraManager,
 } from "./VrmCameraManager";
 import { VrmFootShadow } from "./VrmFootShadow";
 
@@ -58,7 +58,7 @@ const DEFAULT_CAMERA_ANIMATION: CameraAnimationConfig = {
   swayAmplitude: 0.06,
   bobAmplitude: 0.03,
   rotationAmplitude: 0.01,
-  speed: 0.8
+  speed: 0.8,
 };
 const MAX_RENDERER_PIXEL_RATIO = 2;
 
@@ -85,7 +85,7 @@ async function createRenderer(
       const renderer = new WebGPURenderer({
         canvas,
         alpha: true,
-        antialias: true
+        antialias: true,
       }) as unknown as RendererLike & { init?: () => Promise<unknown> };
       await renderer.init?.();
       console.info("[VrmEngine] Using WebGPURenderer");
@@ -100,7 +100,7 @@ async function createRenderer(
   const renderer = new THREE.WebGLRenderer({
     canvas,
     alpha: true,
-    antialias: true
+    antialias: true,
   }) as unknown as RendererLike;
   console.info("[VrmEngine] Using WebGLRenderer");
   return { backend: "webgl", renderer };
@@ -122,8 +122,8 @@ export class VrmEngine {
   private vrmLoadRequestId = 0;
   private vrmReady = false;
   private teleportProgress = 1.0;
-  private teleportClipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0);
-  private teleportClippedMaterials: THREE.Material[] = [];
+  private teleportProgressUniform: { value: number } | null = null;
+  private teleportDissolvedMaterials: THREE.Material[] = [];
   private mouthValue = 0;
   private mouthSmoothed = 0;
   private vrmName: string | null = null;
@@ -131,7 +131,7 @@ export class VrmEngine {
   private readonly idleGlbUrl = resolveAppAssetUrl("animations/idle.glb");
   private forceFaceCameraFlip = false;
   private cameraAnimation: CameraAnimationConfig = {
-    ...DEFAULT_CAMERA_ANIMATION
+    ...DEFAULT_CAMERA_ANIMATION,
   };
   private baseCameraPosition = new THREE.Vector3();
   private elapsedTime = 0;
@@ -299,7 +299,7 @@ export class VrmEngine {
     this.emoteAction = null;
     this.emoteClipCache.clear();
     this.teleportProgress = 1.0;
-    this.cleanupTeleportClipping();
+    this.cleanupTeleportDissolve();
     if (this.renderer) {
       this.renderer.dispose();
       if (this.rendererBackend === "webgl") {
@@ -364,7 +364,7 @@ export class VrmEngine {
       vrmName: this.vrmName,
       idlePlaying,
       idleTime: this.idleAction?.time ?? 0,
-      idleTracks: this.idleAction?.getClip()?.tracks.length ?? 0
+      idleTracks: this.idleAction?.getClip()?.tracks.length ?? 0,
     };
   }
   setMouthOpen(value: number): void {
@@ -463,7 +463,7 @@ export class VrmEngine {
     loader.register((parser) => {
       if (webGpuNodes) {
         const mtoonMaterialPlugin = new MToonMaterialLoaderPlugin(parser, {
-          materialType: webGpuNodes.MToonNodeMaterial
+          materialType: webGpuNodes.MToonNodeMaterial,
         });
         return new VRMLoaderPlugin(parser, { mtoonMaterialPlugin });
       }
@@ -531,73 +531,143 @@ export class VrmEngine {
       await this.loadAndPlayIdle(vrm);
       if (!this.loadingAborted && this.vrm === vrm) {
         this.vrmReady = true;
-        this.playTeleportReveal(vrm);
+        await this.playTeleportReveal(vrm);
         vrm.scene.visible = true;
       }
     } catch {
       if (!this.loadingAborted && this.vrm === vrm) {
         this.vrmReady = true;
-        this.playTeleportReveal(vrm);
         vrm.scene.visible = true;
       }
     }
   }
 
-  private playTeleportReveal(vrm: VRM) {
+  private async playTeleportReveal(vrm: VRM): Promise<void> {
     this.teleportProgress = 0.0;
-    this.cleanupTeleportClipping();
+    this.cleanupTeleportDissolve();
 
-    // Use a clipping plane that sweeps upward.
-    // Normal (0, -1, 0) + constant = clipY means: discard fragments with y > clipY.
-    // We start with clipY very low (everything clipped) and raise it.
-    const clipPlane = this.teleportClipPlane;
-    clipPlane.normal.set(0, -1, 0);
-    clipPlane.constant = -0.2; // start below feet
+    try {
+      const tsl = await import("three/tsl");
 
-    // Enable local clipping on the renderer
-    const r = this.renderer as any;
-    if (r && typeof r.localClippingEnabled !== 'undefined') {
-      r.localClippingEnabled = true;
-    }
+      const uProgress = tsl.uniform(0.0);
+      this.teleportProgressUniform = uProgress;
 
-    // Attach the clip plane to every material on the VRM
-    vrm.scene.traverse((obj) => {
-      if (obj instanceof THREE.Mesh) {
-        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+      vrm.scene.traverse((obj: THREE.Object3D) => {
+        if (!(obj instanceof THREE.Mesh)) return;
+        const mats = Array.isArray(obj.material)
+          ? obj.material
+          : [obj.material];
         for (const mat of mats) {
-          if (!mat.userData._teleportClipped) {
-            mat.userData._teleportClipped = true;
-            mat.clippingPlanes = mat.clippingPlanes
-              ? [...mat.clippingPlanes, clipPlane]
-              : [clipPlane];
-            mat.clipShadows = true;
-            mat.needsUpdate = true;
-            this.teleportClippedMaterials.push(mat);
-          }
+          if (!mat.isNodeMaterial || mat.userData._dissolveApplied) continue;
+          mat.userData._dissolveApplied = true;
+          mat.userData._origOpacityNode = mat.opacityNode ?? null;
+          // biome-ignore lint/suspicious/noExplicitAny: Three.js NodeMaterial emissiveNode is not in public types
+          mat.userData._origEmissiveNode = (mat as any).emissiveNode ?? null;
+          mat.userData._origAlphaTest = mat.alphaTest;
+
+          // World-space Y from TSL
+          const worldY = tsl.positionWorld.y;
+
+          // Sweep threshold: -0.2 → 2.0 as progress goes 0 → 1
+          const threshold = uProgress.mul(2.2).add(-0.2);
+
+          // Distance above dissolve line
+          const diff = worldY.sub(threshold);
+
+          // Dither noise using a hash of world position
+          const noiseCoord = tsl.vec2(
+            worldY.mul(40.0),
+            tsl.positionWorld.x.add(tsl.positionWorld.z).mul(30.0),
+          );
+          const noise = tsl.fract(
+            tsl
+              .sin(tsl.dot(noiseCoord, tsl.vec2(12.9898, 78.233)))
+              .mul(43758.5453),
+          );
+
+          // Ratio: 0 = fully visible, 1 = fully hidden (wider zone = 0.3)
+          const ratio = diff.div(0.3).clamp(0.0, 1.0);
+
+          // Dithered alpha: visible when noise >= ratio
+          const dissolveAlpha = tsl.step(ratio, noise);
+
+          // --- Holographic glow at the dissolve edge ---
+          // Glow is strongest right at the dissolve boundary
+          const edgeDist = diff.abs();
+          const glowWidth = tsl.float(0.15);
+          const glowIntensity = tsl
+            .float(1.0)
+            .sub(edgeDist.div(glowWidth).clamp(0.0, 1.0));
+          // Holographic color: cyan-magenta shift based on world position
+          const hueShift = tsl.fract(worldY.mul(3.0).add(uProgress.mul(2.0)));
+          const holoR = tsl
+            .smoothstep(tsl.float(0.3), tsl.float(0.7), hueShift)
+            .mul(0.8)
+            .add(0.2);
+          const holoG = tsl.float(0.9);
+          const holoB = tsl
+            .smoothstep(tsl.float(0.7), tsl.float(0.3), hueShift)
+            .mul(0.8)
+            .add(0.2);
+          const holoColor = tsl.vec3(holoR, holoG, holoB);
+
+          // Only show glow when dissolve is active and fragment is visible
+          const glowActive = tsl
+            .step(tsl.float(0.001), uProgress)
+            .mul(tsl.float(1.0).sub(tsl.step(tsl.float(0.999), uProgress)));
+          const emissiveBoost = holoColor.mul(
+            glowIntensity.mul(3.0).mul(glowActive).mul(dissolveAlpha),
+          );
+
+          // Compose with existing nodes
+          const origOpacity = mat.opacityNode;
+          mat.opacityNode = origOpacity
+            ? origOpacity.mul(dissolveAlpha)
+            : dissolveAlpha;
+
+          // biome-ignore lint/suspicious/noExplicitAny: Three.js NodeMaterial emissiveNode is not in public types
+          const origEmissive = (mat as any).emissiveNode;
+          // biome-ignore lint/suspicious/noExplicitAny: Three.js NodeMaterial emissiveNode is not in public types
+          (mat as any).emissiveNode = origEmissive
+            ? origEmissive.add(emissiveBoost)
+            : emissiveBoost;
+
+          mat.alphaTest = 0.01;
+          mat.transparent = true;
+          mat.needsUpdate = true;
+          this.teleportDissolvedMaterials.push(mat);
         }
-      }
-    });
+      });
+    } catch (err) {
+      console.warn(
+        "[VrmEngine] TSL dissolve unavailable, showing instantly:",
+        err,
+      );
+    }
   }
 
-  private cleanupTeleportClipping(): void {
-    for (const mat of this.teleportClippedMaterials) {
-      if (mat.clippingPlanes) {
-        mat.clippingPlanes = mat.clippingPlanes.filter(
-          (p: THREE.Plane) => p !== this.teleportClipPlane,
-        );
-        if (mat.clippingPlanes.length === 0) {
-          mat.clippingPlanes = null;
-        }
+  private cleanupTeleportDissolve(): void {
+    for (const mat of this.teleportDissolvedMaterials) {
+      if (mat.userData._dissolveApplied) {
+        (mat as unknown as Record<string, unknown>).opacityNode =
+          mat.userData._origOpacityNode ?? null;
+        (mat as unknown as Record<string, unknown>).emissiveNode =
+          mat.userData._origEmissiveNode ?? null;
+        mat.alphaTest = mat.userData._origAlphaTest ?? 0;
+        delete mat.userData._dissolveApplied;
+        delete mat.userData._origOpacityNode;
+        delete mat.userData._origEmissiveNode;
+        delete mat.userData._origAlphaTest;
+        mat.needsUpdate = true;
       }
-      delete mat.userData._teleportClipped;
-      mat.needsUpdate = true;
     }
-    this.teleportClippedMaterials = [];
+    this.teleportDissolvedMaterials = [];
+    this.teleportProgressUniform = null;
   }
   private get animationLoaderContext(): AnimationLoaderContext {
     return {
       isAborted: () => this.loadingAborted,
-      isCurrentVrm: (vrm: VRM) => this.vrm === vrm
+      isCurrentVrm: (vrm: VRM) => this.vrm === vrm,
     };
   }
   private loop(): void {
@@ -612,15 +682,15 @@ export class VrmEngine {
     this.mixer?.update(rawDelta);
     if (this.vrm) {
       if (this.teleportProgress < 1.0) {
-        this.teleportProgress += stableDelta * 0.7; // ~1.4 seconds duration
+        this.teleportProgress += stableDelta * 2.0; // ~0.5 seconds duration
         if (this.teleportProgress > 1.0) this.teleportProgress = 1.0;
 
-        // Animate clipping plane upward: from -0.2 (below feet) to 2.0 (above head)
-        const clipY = -0.2 + this.teleportProgress * 2.2;
-        this.teleportClipPlane.constant = clipY;
+        if (this.teleportProgressUniform) {
+          this.teleportProgressUniform.value = this.teleportProgress;
+        }
 
         if (this.teleportProgress >= 1.0) {
-          this.cleanupTeleportClipping();
+          this.cleanupTeleportDissolve();
         }
       }
 

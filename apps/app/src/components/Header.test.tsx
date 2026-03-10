@@ -2,7 +2,7 @@ import {
   act,
   create,
   type ReactTestInstance,
-  type ReactTestRenderer
+  type ReactTestRenderer,
 } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 import * as AppContext from "../AppContext";
@@ -10,11 +10,11 @@ import { Header } from "./Header";
 
 // Mock the AppContext
 vi.mock("../AppContext", () => ({
-  useApp: vi.fn()
+  useApp: vi.fn(),
 }));
 
 vi.mock("../hooks/useBugReport", () => ({
-  useBugReport: () => ({ isOpen: false, open: vi.fn(), close: vi.fn() })
+  useBugReport: () => ({ isOpen: false, open: vi.fn(), close: vi.fn() }),
 }));
 
 describe("Header", () => {
@@ -31,7 +31,7 @@ describe("Header", () => {
       cloudTopUpUrl: "",
       walletAddresses: {
         evmAddress: "0x1234567890123456789012345678901234567890",
-        solanaAddress: "So11111111111111111111111111111111111111112"
+        solanaAddress: "So11111111111111111111111111111111111111112",
       },
       lifecycleBusy: false,
       lifecycleAction: null,
@@ -41,7 +41,11 @@ describe("Header", () => {
       setTab: vi.fn(),
       dropStatus: null,
       loadDropStatus: vi.fn(),
-      registryStatus: null
+      registryStatus: null,
+      uiLanguage: "en",
+      setUiLanguage: vi.fn(),
+      uiShellMode: "native",
+      setUiShellMode: vi.fn(),
     };
 
     // @ts-expect-error - test uses a narrowed subset of the full app context type.

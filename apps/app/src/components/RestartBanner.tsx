@@ -9,7 +9,8 @@ export function RestartBanner() {
     restartBannerDismissed,
     dismissRestartBanner,
     triggerRestart,
-    t } = useApp();
+    t,
+  } = useApp();
 
   const [restarting, setRestarting] = useState(false);
 
@@ -46,7 +47,6 @@ export function RestartBanner() {
           onClick={dismissRestartBanner}
           className="rounded px-3 py-1 text-[12px] text-amber-100 hover:bg-amber-700 transition-colors"
         >
-
           {t("restartbanner.Later")}
         </button>
         <button

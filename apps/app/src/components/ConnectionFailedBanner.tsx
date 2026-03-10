@@ -6,13 +6,14 @@ import { isElectrobunRuntime } from "../bridge/electrobun-runtime";
  * after all attempts are exhausted (red). Offers Retry when failed.
  */
 export function ConnectionFailedBanner() {
-    const { t } = useApp();
+  const { t } = useApp();
   const bannerTop = isElectrobunRuntime() ? 40 : 0;
   const {
     backendConnection,
     backendDisconnectedBannerDismissed,
     dismissBackendDisconnectedBanner,
-    retryBackendConnection } = useApp();
+    retryBackendConnection,
+  } = useApp();
 
   if (!backendConnection) return null;
 
@@ -45,8 +46,8 @@ export function ConnectionFailedBanner() {
           />
         </svg>
         <span className="truncate">
-          
-                          {t("connectionfailedbanner.ReconnectingAtt")} {backendConnection.reconnectAttempt}/
+          {t("connectionfailedbanner.ReconnectingAtt")}{" "}
+          {backendConnection.reconnectAttempt}/
           {backendConnection.maxReconnectAttempts})
         </span>
       </div>
@@ -64,28 +65,25 @@ export function ConnectionFailedBanner() {
         style={{ top: bannerTop }}
       >
         <span className="truncate">
-          
-                          {t("connectionfailedbanner.ConnectionLostAfte")} {backendConnection.maxReconnectAttempts}{" "}
-          
-                          {t("connectionfailedbanner.attemptsRealTime")}
-                        </span>
+          {t("connectionfailedbanner.ConnectionLostAfte")}{" "}
+          {backendConnection.maxReconnectAttempts}{" "}
+          {t("connectionfailedbanner.attemptsRealTime")}
+        </span>
         <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={dismissBackendDisconnectedBanner}
             className="rounded px-3 py-1 text-[12px] text-red-100 hover:bg-red-700 transition-colors cursor-pointer"
           >
-            
-                                {t("connectionfailedbanner.Dismiss")}
-                              </button>
+            {t("connectionfailedbanner.Dismiss")}
+          </button>
           <button
             type="button"
             onClick={retryBackendConnection}
             className="rounded bg-white px-3 py-1 text-[12px] font-semibold text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
           >
-            
-                                {t("connectionfailedbanner.RetryConnection")}
-                              </button>
+            {t("connectionfailedbanner.RetryConnection")}
+          </button>
         </div>
       </div>
     );

@@ -1,8 +1,8 @@
 import { ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useApp } from "../AppContext";
 import { client } from "../api-client";
 import { useBugReport } from "../hooks/useBugReport";
-import { useApp } from "../AppContext";
 
 const ENV_OPTIONS = ["macOS", "Windows", "Linux", "Other"] as const;
 const GITHUB_NEW_ISSUE_URL =
@@ -27,7 +27,8 @@ const EMPTY_FORM: BugReportForm = {
   environment: "",
   nodeVersion: "",
   modelProvider: "",
-  logs: "" };
+  logs: "",
+};
 
 async function copyText(text: string): Promise<boolean> {
   try {
@@ -77,9 +78,10 @@ export function BugReportModal() {
                   ? "Windows"
                   : info.platform === "linux"
                     ? "Linux"
-                    : "Other" }));
+                    : "Other",
+          }));
       })
-      .catch(() => { });
+      .catch(() => {});
     setTimeout(() => descRef.current?.focus(), 50);
 
     return () => {
@@ -132,7 +134,8 @@ export function BugReportModal() {
         environment: form.environment,
         nodeVersion: form.nodeVersion,
         modelProvider: form.modelProvider,
-        logs: form.logs });
+        logs: form.logs,
+      });
       if (result.url) {
         setResultUrl(result.url);
       } else if (result.fallback) {
@@ -189,7 +192,8 @@ export function BugReportModal() {
     },
     role: "dialog" as const,
     "aria-modal": true as const,
-    tabIndex: -1 };
+    tabIndex: -1,
+  };
 
   // Success state
   if (resultUrl) {
@@ -198,7 +202,6 @@ export function BugReportModal() {
         <div className="w-full max-w-md border border-border bg-card shadow-lg flex flex-col">
           <div className="flex items-center px-5 py-3 border-b border-border">
             <span className="font-bold text-sm flex-1">
-
               {t("bugreportmodal.BugReportSubmitted")}
             </span>
             <button
@@ -206,13 +209,11 @@ export function BugReportModal() {
               className="text-muted hover:text-txt text-lg leading-none px-1 cursor-pointer"
               onClick={close}
             >
-
               {t("bugreportmodal.Times")}
             </button>
           </div>
           <div className="px-5 py-6 text-center">
             <p className="text-sm text-txt mb-3">
-
               {t("bugreportmodal.YourBugReportHas")}
             </p>
             <a
@@ -230,7 +231,6 @@ export function BugReportModal() {
               onClick={close}
               className="px-4 py-1.5 border border-border text-sm text-muted hover:text-txt cursor-pointer"
             >
-
               {t("bugreportmodal.Close")}
             </button>
           </div>
@@ -244,13 +244,14 @@ export function BugReportModal() {
       <div className="w-full max-w-lg border border-border bg-card shadow-lg flex flex-col max-h-[85vh]">
         {/* Header */}
         <div className="flex items-center px-5 py-3 border-b border-border shrink-0">
-          <span className="font-bold text-sm flex-1">{t("bugreportmodal.ReportABug")}</span>
+          <span className="font-bold text-sm flex-1">
+            {t("bugreportmodal.ReportABug")}
+          </span>
           <button
             type="button"
             className="text-muted hover:text-txt text-lg leading-none px-1 cursor-pointer"
             onClick={close}
           >
-
             {t("bugreportmodal.Times")}
           </button>
         </div>
@@ -264,8 +265,8 @@ export function BugReportModal() {
           )}
 
           <label className={labelClass}>
-
-            {t("bugreportmodal.Description")} <span className="text-danger">*</span>
+            {t("bugreportmodal.Description")}{" "}
+            <span className="text-danger">*</span>
             <textarea
               ref={descRef}
               className={textareaClass}
@@ -277,8 +278,8 @@ export function BugReportModal() {
           </label>
 
           <label className={labelClass}>
-
-            {t("bugreportmodal.StepsToReproduce")} <span className="text-danger">*</span>
+            {t("bugreportmodal.StepsToReproduce")}{" "}
+            <span className="text-danger">*</span>
             <textarea
               className={textareaClass}
               placeholder={"1. Go to ...\n2. Click on ...\n3. Observe ..."}
@@ -289,7 +290,6 @@ export function BugReportModal() {
           </label>
 
           <label className={labelClass}>
-
             {t("bugreportmodal.ExpectedBehavior")}
             <textarea
               className={textareaClass}
@@ -301,7 +301,6 @@ export function BugReportModal() {
           </label>
 
           <label className={labelClass}>
-
             {t("bugreportmodal.ActualBehavior")}
             <textarea
               className={textareaClass}
@@ -314,7 +313,6 @@ export function BugReportModal() {
 
           <div className="flex gap-3">
             <label className={`${labelClass} flex-1`}>
-
               {t("bugreportmodal.Environment")}
               <select
                 className={inputClass}
@@ -330,7 +328,6 @@ export function BugReportModal() {
               </select>
             </label>
             <label className={`${labelClass} flex-1`}>
-
               {t("bugreportmodal.NodeVersion")}
               <input
                 type="text"
@@ -343,7 +340,6 @@ export function BugReportModal() {
           </div>
 
           <label className={labelClass}>
-
             {t("bugreportmodal.ModelProvider")}
             <input
               type="text"
@@ -387,7 +383,6 @@ export function BugReportModal() {
             onClick={close}
             className="px-3 py-1.5 border border-border text-sm text-muted hover:text-txt cursor-pointer"
           >
-
             {t("bugreportmodal.Cancel")}
           </button>
           <div className="flex items-center gap-2">

@@ -77,7 +77,7 @@ import {
   Wallet,
   Webhook,
   Wrench,
-  Zap
+  Zap,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../AppContext";
@@ -86,9 +86,9 @@ import { client } from "../api-client";
 import type { ConfigUiHint } from "../types";
 import type { JsonSchemaObject } from "./config-catalog";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer";
+import { SHOWCASE_PLUGIN } from "./plugins/showcase-data";
 import { autoLabel } from "./shared/labels";
 import { WhatsAppQrOverlay } from "./WhatsAppQrOverlay";
-import { SHOWCASE_PLUGIN } from "./plugins/showcase-data";
 
 /* ── Always-on plugins (hidden from all views) ────────────────────────── */
 
@@ -334,7 +334,7 @@ export function paramsToSchema(
     const hint: ConfigUiHint = {
       label: autoLabel(p.key, pluginId),
       sensitive: p.sensitive ?? false,
-      advanced: isAdvancedParam(p)
+      advanced: isAdvancedParam(p),
     };
 
     // Port numbers — constrain range
@@ -485,7 +485,7 @@ export function paramsToSchema(
 
   return {
     schema: { type: "object", properties, required } as JsonSchemaObject,
-    hints
+    hints,
   };
 }
 
@@ -494,11 +494,12 @@ export function paramsToSchema(
 function PluginConfigForm({
   plugin,
   pluginConfigs,
-  onParamChange }: {
-    plugin: PluginInfo;
-    pluginConfigs: Record<string, Record<string, string>>;
-    onParamChange: (pluginId: string, paramKey: string, value: string) => void;
-  }) {
+  onParamChange,
+}: {
+  plugin: PluginInfo;
+  pluginConfigs: Record<string, Record<string, string>>;
+  onParamChange: (pluginId: string, paramKey: string, value: string) => void;
+}) {
   const params = plugin.parameters ?? [];
   const { schema, hints: autoHints } = useMemo(
     () => paramsToSchema(params, plugin.id),
@@ -532,9 +533,9 @@ function PluginConfigForm({
         if (isArrayField && typeof configValue === "string") {
           v[p.key] = configValue
             ? configValue
-              .split(",")
-              .map((s: string) => s.trim())
-              .filter(Boolean)
+                .split(",")
+                .map((s: string) => s.trim())
+                .filter(Boolean)
             : [];
         } else {
           v[p.key] = configValue;
@@ -543,9 +544,9 @@ function PluginConfigForm({
         if (isArrayField && typeof p.currentValue === "string") {
           v[p.key] = String(p.currentValue)
             ? String(p.currentValue)
-              .split(",")
-              .map((s: string) => s.trim())
-              .filter(Boolean)
+                .split(",")
+                .map((s: string) => s.trim())
+                .filter(Boolean)
             : [];
         } else {
           v[p.key] = p.currentValue;
@@ -695,7 +696,7 @@ const DEFAULT_ICONS: Record<string, LucideIcon> = {
   blooio: Circle,
   acp: Construction,
   elizacloud: Cloud,
-  twilio: Phone
+  twilio: Phone,
 };
 
 /** Resolve display icon: explicit plugin.icon, fallback to default map, or null. */
@@ -806,7 +807,7 @@ const FEATURE_SUBGROUP: Record<string, string> = {
   babylon: "gaming",
   mysticism: "gaming",
   personality: "gaming",
-  moltbook: "gaming"
+  moltbook: "gaming",
 };
 
 const SUBGROUP_DISPLAY_ORDER = [
@@ -840,7 +841,7 @@ const SUBGROUP_LABELS: Record<string, string> = {
   gaming: "Gaming & Creative",
   "feature-other": "Other Features",
   streaming: "Streaming Destinations",
-  showcase: "Showcase"
+  showcase: "Showcase",
 };
 
 function subgroupForPlugin(plugin: PluginInfo): string {
@@ -878,7 +879,8 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
     handlePluginConfigSave,
     setActionNotice,
     setState,
-    t } = useApp();
+    t,
+  } = useApp();
 
   const [pluginConfigs, setPluginConfigs] = useState<
     Record<string, Record<string, string>>
@@ -1030,7 +1032,7 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
     () =>
       sorted.map((plugin) => ({
         plugin,
-        subgroup: subgroupForPlugin(plugin)
+        subgroup: subgroupForPlugin(plugin),
       })),
     [sorted],
   );
@@ -1052,7 +1054,7 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
     ).map((sg) => ({
       id: sg,
       label: SUBGROUP_LABELS[sg],
-      count: subgroupCounts[sg] ?? 0
+      count: subgroupCounts[sg] ?? 0,
     }));
     return [{ id: "all", label: "All", count: sorted.length }, ...dynamicTags];
   }, [sorted.length, subgroupCounts]);
@@ -1088,7 +1090,7 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
   ) => {
     setPluginConfigs((prev) => ({
       ...prev,
-      [pluginId]: { ...prev[pluginId], [paramKey]: value }
+      [pluginId]: { ...prev[pluginId], [paramKey]: value },
     }));
   };
 
@@ -1132,7 +1134,7 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
           success: false,
           error: err instanceof Error ? err.message : String(err),
           loading: false,
-          durationMs: 0
+          durationMs: 0,
         });
         return next;
       });
@@ -1325,8 +1327,9 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
         onDragOver={(e) => handleDragOver(e, p.id)}
         onDrop={(e) => handleDrop(e, p.id)}
         onDragEnd={handleDragEnd}
-        className={`border border-border bg-card transition-colors duration-150 flex flex-col ${enabledBorder} ${isOpen ? "ring-1 ring-accent" : "hover:border-accent/40"
-          } ${isDragging ? "opacity-30" : ""} ${isDragOver ? "ring-2 ring-accent/60" : ""}`}
+        className={`border border-border bg-card transition-colors duration-150 flex flex-col ${enabledBorder} ${
+          isOpen ? "ring-1 ring-accent" : "hover:border-accent/40"
+        } ${isDragging ? "opacity-30" : ""} ${isDragOver ? "ring-2 ring-accent/60" : ""}`}
         data-plugin-id={p.id}
       >
         {/* Top: drag handle + icon + name + toggle */}
@@ -1335,7 +1338,6 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
             className="text-[10px] text-muted opacity-30 hover:opacity-70 cursor-grab active:cursor-grabbing shrink-0 select-none leading-none"
             title={t("pluginsview.DragToReorder")}
           >
-
             {t("pluginsview.X2807")}
           </span>
           <span className="font-bold text-sm flex items-center gap-1.5 min-w-0 truncate flex-1">
@@ -1364,20 +1366,21 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
           </span>
           {isShowcase ? (
             <span className="text-[10px] font-bold tracking-wider px-2.5 py-[2px] border border-accent text-accent bg-accent-subtle shrink-0">
-
               {t("pluginsview.DEMO")}
             </span>
           ) : (
             <button
               type="button"
               data-plugin-toggle={p.id}
-              className={`text-[10px] font-bold tracking-wider px-2.5 py-[2px] border transition-colors duration-150 shrink-0 ${p.enabled
-                ? "bg-accent text-accent-fg border-accent"
-                : "bg-transparent text-muted border-border hover:text-txt"
-                } ${toggleDisabled
+              className={`text-[10px] font-bold tracking-wider px-2.5 py-[2px] border transition-colors duration-150 shrink-0 ${
+                p.enabled
+                  ? "bg-accent text-accent-fg border-accent"
+                  : "bg-transparent text-muted border-border hover:text-txt"
+              } ${
+                toggleDisabled
                   ? "opacity-60 cursor-not-allowed"
                   : "cursor-pointer"
-                }`}
+              }`}
               onClick={(e) => {
                 e.stopPropagation();
                 void handleTogglePlugin(p.id, !p.enabled);
@@ -1401,10 +1404,11 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
           )}
           {p.enabled && !p.isActive && !isShowcase && (
             <span
-              className={`text-[10px] px-1.5 py-px border lowercase tracking-wide whitespace-nowrap ${p.loadError
-                ? "border-destructive bg-[rgba(153,27,27,0.04)] text-destructive"
-                : "border-warn bg-[rgba(234,179,8,0.06)] text-warn"
-                }`}
+              className={`text-[10px] px-1.5 py-px border lowercase tracking-wide whitespace-nowrap ${
+                p.loadError
+                  ? "border-destructive bg-[rgba(153,27,27,0.04)] text-destructive"
+                  : "border-warn bg-[rgba(234,179,8,0.06)] text-warn"
+              }`}
               title={
                 p.loadError || "Plugin is enabled but not loaded in the runtime"
               }
@@ -1414,7 +1418,6 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
           )}
           {isToggleBusy && (
             <span className="text-[10px] px-1.5 py-px border border-accent bg-accent-subtle text-accent lowercase tracking-wide whitespace-nowrap">
-
               {t("pluginsview.restarting")}
             </span>
           )}
@@ -1427,7 +1430,7 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
             display: "-webkit-box",
             WebkitLineClamp: 3,
             WebkitBoxOrient: "vertical",
-            overflow: "hidden"
+            overflow: "hidden",
           }}
         >
           {p.description || "No description available"}
@@ -1457,21 +1460,20 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
           {hasParams && !isShowcase ? (
             <>
               <span
-                className={`inline-block w-[7px] h-[7px] rounded-full shrink-0 ${allParamsSet ? "bg-ok" : "bg-destructive"
-                  }`}
+                className={`inline-block w-[7px] h-[7px] rounded-full shrink-0 ${
+                  allParamsSet ? "bg-ok" : "bg-destructive"
+                }`}
               />
               <span className="text-[10px] text-muted">
-                {setCount}/{totalCount}  {t("pluginsview.configured")}
+                {setCount}/{totalCount} {t("pluginsview.configured")}
               </span>
             </>
           ) : !hasParams && !isShowcase ? (
             <span className="text-[10px] text-muted opacity-50">
-
               {t("pluginsview.NoConfigNeeded")}
             </span>
           ) : (
             <span className="text-[10px] text-muted opacity-50">
-
               {t("pluginsview.23FieldDemos")}
             </span>
           )}
@@ -1492,15 +1494,16 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
               >
                 {installingPlugins.has(p.id)
                   ? installProgress.get(p.npmName ?? "")?.message ||
-                  "Installing..."
+                    "Installing..."
                   : "Install"}
               </button>
             )}
           {hasParams && (
             <button
               type="button"
-              className={`text-[10px] text-muted hover:text-accent cursor-pointer transition-colors flex items-center gap-1 ${isOpen ? "text-accent" : ""
-                }`}
+              className={`text-[10px] text-muted hover:text-accent cursor-pointer transition-colors flex items-center gap-1 ${
+                isOpen ? "text-accent" : ""
+              }`}
               onClick={() => toggleSettings(p.id)}
               title={t("pluginsview.Settings")}
             >
@@ -1599,8 +1602,9 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
     return (
       <div className="plugins-game-modal">
         <div
-          className={`plugins-game-list-panel${gameNarrow && gameMobileDetail ? " is-hidden" : ""
-            }`}
+          className={`plugins-game-list-panel${
+            gameNarrow && gameMobileDetail ? " is-hidden" : ""
+          }`}
         >
           <div className="plugins-game-list-head">
             <div className="plugins-game-section-title">{sectionTitle}</div>
@@ -1608,15 +1612,16 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
           <div className="plugins-game-list-scroll">
             {gameVisiblePlugins.length === 0 ? (
               <div className="plugins-game-list-empty">
-                No {sectionTitle.toLowerCase()}  {t("pluginsview.found")}
+                No {sectionTitle.toLowerCase()} {t("pluginsview.found")}
               </div>
             ) : (
               gameVisiblePlugins.map((p: PluginInfo) => (
                 <button
                   key={p.id}
                   type="button"
-                  className={`plugins-game-card${effectiveGameSelected === p.id ? " is-selected" : ""
-                    }${!p.enabled ? " is-disabled" : ""}`}
+                  className={`plugins-game-card${
+                    effectiveGameSelected === p.id ? " is-selected" : ""
+                  }${!p.enabled ? " is-disabled" : ""}`}
                   onClick={() => {
                     setGameSelectedId(p.id);
                     if (gameNarrow) setGameMobileDetail(true);
@@ -1648,8 +1653,9 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                     <div className="plugins-game-card-name">{p.name}</div>
                     <div className="plugins-game-card-meta">
                       <span
-                        className={`plugins-game-badge ${p.enabled ? "is-on" : "is-off"
-                          }`}
+                        className={`plugins-game-badge ${
+                          p.enabled ? "is-on" : "is-off"
+                        }`}
                       >
                         {p.enabled ? "ON" : "OFF"}
                       </span>
@@ -1661,8 +1667,9 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
           </div>
         </div>
         <div
-          className={`plugins-game-detail-panel${gameNarrow && !gameMobileDetail ? " is-hidden" : ""
-            }`}
+          className={`plugins-game-detail-panel${
+            gameNarrow && !gameMobileDetail ? " is-hidden" : ""
+          }`}
         >
           {selectedPlugin ? (
             <>
@@ -1673,7 +1680,6 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                     className="plugins-game-back-btn"
                     onClick={() => setGameMobileDetail(false)}
                   >
-
                     {t("pluginsview.Back")}
                   </button>
                 )}
@@ -1711,8 +1717,9 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                   </div>
                   <button
                     type="button"
-                    className={`plugins-game-toggle ${selectedPlugin.enabled ? "is-on" : "is-off"
-                      }`}
+                    className={`plugins-game-toggle ${
+                      selectedPlugin.enabled ? "is-on" : "is-off"
+                    }`}
                     onClick={() =>
                       void handleTogglePlugin(
                         selectedPlugin.id,
@@ -1783,13 +1790,13 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                   className="plugins-game-action-btn"
                   onClick={() => void handleTestConnection(selectedPlugin.id)}
                 >
-
                   {t("pluginsview.TestConnection")}
                 </button>
                 <button
                   type="button"
-                  className={`plugins-game-save-btn${pluginSaveSuccess.has(selectedPlugin.id) ? " is-saved" : ""
-                    }`}
+                  className={`plugins-game-save-btn${
+                    pluginSaveSuccess.has(selectedPlugin.id) ? " is-saved" : ""
+                  }`}
                   onClick={() => void handleConfigSave(selectedPlugin.id)}
                   disabled={pluginSaving.has(selectedPlugin.id)}
                 >
@@ -1805,8 +1812,9 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
             <div className="plugins-game-detail-empty">
               <span className="plugins-game-detail-empty-icon">🧩</span>
               <span className="plugins-game-detail-empty-text">
-
-                {t("pluginsview.SelectA")} {mode === "connectors" ? "channel" : "plugin"}  {t("pluginsview.toC")}
+                {t("pluginsview.SelectA")}{" "}
+                {mode === "connectors" ? "channel" : "plugin"}{" "}
+                {t("pluginsview.toC")}
               </span>
             </div>
           )}
@@ -1837,7 +1845,6 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
               onClick={() => setState("pluginSearch", "")}
               title={t("pluginsview.ClearSearch")}
             >
-
               {t("pluginsview.Times")}
             </button>
           )}
@@ -1849,10 +1856,11 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
             <button
               key={s}
               type="button"
-              className={`px-2.5 py-[3px] border text-[11px] cursor-pointer transition-colors duration-150 ${pluginStatusFilter === s
-                ? "bg-accent text-accent-fg border-accent"
-                : "bg-surface text-txt border-border hover:bg-bg-hover"
-                }`}
+              className={`px-2.5 py-[3px] border text-[11px] cursor-pointer transition-colors duration-150 ${
+                pluginStatusFilter === s
+                  ? "bg-accent text-accent-fg border-accent"
+                  : "bg-surface text-txt border-border hover:bg-bg-hover"
+              }`}
               onClick={() => setState("pluginStatusFilter", s as StatusFilter)}
             >
               {s === "all"
@@ -1870,7 +1878,6 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
             onClick={handleResetOrder}
             title={t("pluginsview.ResetToDefaultSor")}
           >
-
             {t("pluginsview.ResetOrder")}
           </button>
         )}
@@ -1881,14 +1888,12 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
           className="px-2.5 py-[3px] border border-accent bg-accent text-accent-fg text-[11px] cursor-pointer shrink-0 hover:bg-accent-hover hover:border-accent-hover"
           onClick={() => setAddDirOpen(true)}
         >
-
           {t("pluginsview.AddPlugin")}
         </button>
       </div>
 
       {hasPluginToggleInFlight && (
         <div className="mb-3 px-3 py-2 border border-accent bg-accent-subtle text-[11px] text-accent">
-
           {t("pluginsview.ApplyingPluginChan")}
         </div>
       )}
@@ -1900,10 +1905,11 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
             <button
               key={tag.id}
               type="button"
-              className={`px-2.5 py-[3px] border text-[11px] cursor-pointer transition-colors duration-150 ${subgroupFilter === tag.id
-                ? "bg-accent text-accent-fg border-accent"
-                : "bg-surface text-txt border-border hover:bg-bg-hover"
-                }`}
+              className={`px-2.5 py-[3px] border text-[11px] cursor-pointer transition-colors duration-150 ${
+                subgroupFilter === tag.id
+                  ? "bg-accent text-accent-fg border-accent"
+                  : "bg-surface text-txt border-border hover:bg-bg-hover"
+              }`}
               onClick={() => setSubgroupFilter(tag.id)}
             >
               {tag.label} ({tag.count})
@@ -1996,7 +2002,6 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                   )}
                   {isShowcase && (
                     <span className="text-[10px] font-bold tracking-wider px-2.5 py-[2px] border border-accent text-accent bg-accent-subtle">
-
                       {t("pluginsview.DEMO")}
                     </span>
                   )}
@@ -2005,7 +2010,6 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                     className="text-muted hover:text-txt text-lg leading-none px-1 cursor-pointer"
                     onClick={() => toggleSettings(p.id)}
                   >
-
                     {t("pluginsview.Times")}
                   </button>
                 </div>
@@ -2030,7 +2034,6 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                       {p.pluginDeps && p.pluginDeps.length > 0 && (
                         <span className="flex items-center gap-1 flex-wrap">
                           <span className="text-[10px] text-muted opacity-60">
-
                             {t("pluginsview.dependsOn")}
                           </span>
                           {p.pluginDeps.map((dep: string) => (
@@ -2072,7 +2075,7 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                       >
                         {installingPlugins.has(p.id)
                           ? installProgress.get(p.npmName ?? "")?.message ||
-                          "Installing..."
+                            "Installing..."
                           : "Install Plugin"}
                       </button>
                     )}
@@ -2081,21 +2084,21 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                         className="px-3 py-1.5 text-[11px] text-destructive"
                         title={p.loadError}
                       >
-
                         {t("pluginsview.PackageBrokenMis")}
                       </span>
                     )}
                     {p.isActive && (
                       <button
                         type="button"
-                        className={`px-3 py-1.5 text-[11px] border rounded-sm transition-colors ${testResults.get(p.id)?.loading
-                          ? "border-[var(--border)] text-[var(--muted)] cursor-wait"
-                          : testResults.get(p.id)?.success
-                            ? "border-[var(--ok)] text-[var(--ok)] bg-[color-mix(in_srgb,var(--ok)_5%,transparent)]"
-                            : testResults.get(p.id)?.error
-                              ? "border-[var(--destructive)] text-[var(--destructive)]"
-                              : "border-[var(--border)] text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--accent)] cursor-pointer"
-                          }`}
+                        className={`px-3 py-1.5 text-[11px] border rounded-sm transition-colors ${
+                          testResults.get(p.id)?.loading
+                            ? "border-[var(--border)] text-[var(--muted)] cursor-wait"
+                            : testResults.get(p.id)?.success
+                              ? "border-[var(--ok)] text-[var(--ok)] bg-[color-mix(in_srgb,var(--ok)_5%,transparent)]"
+                              : testResults.get(p.id)?.error
+                                ? "border-[var(--destructive)] text-[var(--destructive)]"
+                                : "border-[var(--border)] text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--accent)] cursor-pointer"
+                        }`}
                         disabled={testResults.get(p.id)?.loading}
                         onClick={() => handleTestConnection(p.id)}
                       >
@@ -2113,15 +2116,15 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                       className="bg-transparent border border-border text-muted cursor-pointer text-[12px] px-4 py-1.5 rounded-sm hover:text-txt hover:bg-bg-hover transition-colors"
                       onClick={() => handleConfigReset(p.id)}
                     >
-
                       {t("pluginsview.Reset")}
                     </button>
                     <button
                       type="button"
-                      className={`text-[12px] px-5 py-1.5 cursor-pointer border rounded-sm transition-all duration-200 font-medium ${saveSuccess
-                        ? "!bg-ok !text-white !border-ok"
-                        : "bg-accent text-accent-fg border-accent hover:bg-accent-hover hover:shadow-sm"
-                        }`}
+                      className={`text-[12px] px-5 py-1.5 cursor-pointer border rounded-sm transition-all duration-200 font-medium ${
+                        saveSuccess
+                          ? "!bg-ok !text-white !border-ok"
+                          : "bg-accent text-accent-fg border-accent hover:bg-accent-hover hover:shadow-sm"
+                      }`}
                       onClick={() => handleConfigSave(p.id)}
                       disabled={isSaving}
                     >
@@ -2160,7 +2163,9 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
         >
           <div className="w-full max-w-md border border-border bg-card p-5 shadow-lg">
             <div className="flex items-center justify-between mb-4">
-              <div className="font-bold text-sm">{t("pluginsview.AddPlugin1")}</div>
+              <div className="font-bold text-sm">
+                {t("pluginsview.AddPlugin1")}
+              </div>
               <button
                 type="button"
                 className="text-muted hover:text-txt text-lg leading-none px-1"
@@ -2169,13 +2174,11 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                   setAddDirPath("");
                 }}
               >
-
                 {t("pluginsview.Times")}
               </button>
             </div>
 
             <p className="text-xs text-muted mb-3">
-
               {t("pluginsview.EnterThePathToA")}
             </p>
 
@@ -2199,7 +2202,6 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
                   setAddDirPath("");
                 }}
               >
-
                 {t("pluginsview.Cancel")}
               </button>
               <button
@@ -2223,10 +2225,11 @@ function PluginListView({ label, mode = "all", inModal }: PluginListViewProps) {
 /** Unified plugins view — tag-filtered plugin list. */
 export function PluginsView({
   mode = "all",
-  inModal }: {
-    mode?: PluginsViewMode;
-    inModal?: boolean;
-  }) {
+  inModal,
+}: {
+  mode?: PluginsViewMode;
+  inModal?: boolean;
+}) {
   return (
     <PluginListView
       label={mode === "connectors" ? "Connectors" : "Plugins"}

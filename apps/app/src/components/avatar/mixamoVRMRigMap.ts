@@ -58,4 +58,5 @@ export const mixamoVRMRigMap: Record<string, VRMHumanBoneName> = {
   mixamorigRightUpLeg: "rightUpperLeg",
   mixamorigRightLeg: "rightLowerLeg",
   mixamorigRightFoot: "rightFoot",
-  mixamorigRightToeBase: "rightToes" };
+  mixamorigRightToeBase: "rightToes",
+};

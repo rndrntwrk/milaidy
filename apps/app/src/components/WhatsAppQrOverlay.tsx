@@ -1,6 +1,6 @@
-import { useEffect, useRef} from "react";
-import { useWhatsAppPairing } from "../hooks/useWhatsAppPairing";
+import { useEffect, useRef } from "react";
 import { useApp } from "../AppContext";
+import { useWhatsAppPairing } from "../hooks/useWhatsAppPairing";
 
 interface WhatsAppQrOverlayProps {
   accountId?: string;
@@ -10,7 +10,8 @@ interface WhatsAppQrOverlayProps {
 
 export function WhatsAppQrOverlay({
   accountId = "default",
-  onConnected }: WhatsAppQrOverlayProps) {
+  onConnected,
+}: WhatsAppQrOverlayProps) {
   const {
     status,
     qrDataUrl,
@@ -18,9 +19,9 @@ export function WhatsAppQrOverlay({
     error,
     startPairing,
     stopPairing,
-    disconnect } = useWhatsAppPairing(accountId);
-  const {
-    t } = useApp();
+    disconnect,
+  } = useWhatsAppPairing(accountId);
+  const { t } = useApp();
 
   // Fire onConnected once when status transitions to "connected"
   const firedRef = useRef(false);
@@ -40,8 +41,8 @@ export function WhatsAppQrOverlay({
         <div className="flex items-center gap-2">
           <span className="inline-block w-2 h-2 rounded-full bg-[var(--ok)]" />
           <span className="text-xs font-medium text-[var(--ok)]">
-
-            {t("whatsappqroverlay.Connected")}{phoneNumber ? ` (+${phoneNumber})` : ""}
+            {t("whatsappqroverlay.Connected")}
+            {phoneNumber ? ` (+${phoneNumber})` : ""}
           </span>
         </div>
         <div className="text-[10px] text-[var(--muted)] mt-1">
@@ -55,7 +56,6 @@ export function WhatsAppQrOverlay({
             className="mt-2 px-2.5 py-1 text-[10px] border border-[var(--destructive)] text-[var(--destructive)] bg-transparent hover:bg-[var(--destructive)] hover:text-white cursor-pointer transition-colors"
             onClick={() => void disconnect()}
           >
-
             {t("whatsappqroverlay.Disconnect")}
           </button>
         )}
@@ -80,7 +80,6 @@ export function WhatsAppQrOverlay({
             void startPairing();
           }}
         >
-
           {t("whatsappqroverlay.TryAgain")}
         </button>
       </div>
@@ -92,11 +91,9 @@ export function WhatsAppQrOverlay({
     return (
       <div className="border border-[var(--border)] bg-[var(--surface)] p-4 mt-3">
         <div className="text-xs text-[var(--muted)] mb-2">
-
           {t("whatsappqroverlay.ScanAQRCodeWith")}
         </div>
         <div className="text-[10px] text-[var(--muted)] mb-2 opacity-70">
-
           {t("whatsappqroverlay.UsesAnUnofficialW")}
         </div>
         <button
@@ -107,7 +104,6 @@ export function WhatsAppQrOverlay({
             void startPairing();
           }}
         >
-
           {t("whatsappqroverlay.ConnectWhatsApp")}
         </button>
       </div>
@@ -130,7 +126,6 @@ export function WhatsAppQrOverlay({
           ) : (
             <div className="w-48 h-48 border border-[var(--border)] bg-[var(--bg)] flex items-center justify-center">
               <span className="text-xs text-[var(--muted)] animate-pulse">
-
                 {t("whatsappqroverlay.GeneratingQR")}
               </span>
             </div>
@@ -139,24 +134,27 @@ export function WhatsAppQrOverlay({
 
         {/* Instructions */}
         <div className="flex-1 min-w-0">
-          <div className="text-xs font-medium mb-2">{t("whatsappqroverlay.ScanWithWhatsApp")}</div>
+          <div className="text-xs font-medium mb-2">
+            {t("whatsappqroverlay.ScanWithWhatsApp")}
+          </div>
           <ol className="text-[11px] text-[var(--muted)] space-y-1 list-decimal pl-4 m-0">
             <li>{t("whatsappqroverlay.OpenWhatsAppOnYou")}</li>
             <li>
-
-              {t("whatsappqroverlay.Tap")} <strong>{t("whatsappqroverlay.Menu")}</strong> or <strong>{t("whatsappqroverlay.Settings")}</strong>  {t("whatsappqroverlay.andSelect")}{" "}
+              {t("whatsappqroverlay.Tap")}{" "}
+              <strong>{t("whatsappqroverlay.Menu")}</strong> or{" "}
+              <strong>{t("whatsappqroverlay.Settings")}</strong>{" "}
+              {t("whatsappqroverlay.andSelect")}{" "}
               <strong>{t("whatsappqroverlay.LinkedDevices")}</strong>
             </li>
             <li>
-
-              {t("whatsappqroverlay.Tap")} <strong>{t("whatsappqroverlay.LinkADevice")}</strong>
+              {t("whatsappqroverlay.Tap")}{" "}
+              <strong>{t("whatsappqroverlay.LinkADevice")}</strong>
             </li>
             <li>{t("whatsappqroverlay.PointYourPhoneAt")}</li>
           </ol>
           <div className="mt-3 flex items-center gap-2">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse" />
             <span className="text-[10px] text-[var(--muted)]">
-
               {t("whatsappqroverlay.QRRefreshesAutomat")}
             </span>
           </div>
@@ -165,7 +163,6 @@ export function WhatsAppQrOverlay({
             className="mt-3 px-2.5 py-1 text-[10px] border border-[var(--border)] text-[var(--muted)] hover:text-[var(--txt)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors"
             onClick={() => void stopPairing()}
           >
-
             {t("whatsappqroverlay.Cancel")}
           </button>
         </div>

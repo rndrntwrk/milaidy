@@ -5,7 +5,8 @@ import { client } from "../api-client";
 import {
   dispatchMiladyEvent,
   EMOTE_PICKER_EVENT,
-  STOP_EMOTE_EVENT } from "../events";
+  STOP_EMOTE_EVENT,
+} from "../events";
 
 // Types
 interface EmoteItem {
@@ -23,7 +24,8 @@ const CATEGORY_ICONS: Record<string, string> = {
   combat: "\u{2694}",
   idle: "\u{1F9D8}",
   movement: "\u{1F3C3}",
-  other: "\u{2728}" };
+  other: "\u{2728}",
+};
 
 // Emote icons
 const EMOTE_ICONS: Record<string, string> = {
@@ -55,7 +57,8 @@ const EMOTE_ICONS: Record<string, string> = {
   run: "\u{1F3C3}",
   walk: "\u{1F6B6}",
   crawling: "\u{1F40D}",
-  fall: "\u{1F4A5}" };
+  fall: "\u{1F4A5}",
+};
 
 // All emotes
 const ALL_EMOTES: EmoteItem[] = [
@@ -68,76 +71,90 @@ const ALL_EMOTES: EmoteItem[] = [
     id: "crying",
     name: "Crying",
     category: "emotion",
-    icon: EMOTE_ICONS.crying },
+    icon: EMOTE_ICONS.crying,
+  },
   {
     id: "sorrow",
     name: "Sorrow",
     category: "emotion",
-    icon: EMOTE_ICONS.sorrow },
+    icon: EMOTE_ICONS.sorrow,
+  },
   {
     id: "rude-gesture",
     name: "Rude Gesture",
     category: "emotion",
-    icon: EMOTE_ICONS["rude-gesture"] },
+    icon: EMOTE_ICONS["rude-gesture"],
+  },
   {
     id: "looking-around",
     name: "Looking Around",
     category: "emotion",
-    icon: EMOTE_ICONS["looking-around"] },
+    icon: EMOTE_ICONS["looking-around"],
+  },
 
   // Dance
   {
     id: "dance-happy",
     name: "Dance Happy",
     category: "dance",
-    icon: EMOTE_ICONS["dance-happy"] },
+    icon: EMOTE_ICONS["dance-happy"],
+  },
   {
     id: "dance-breaking",
     name: "Dance Breaking",
     category: "dance",
-    icon: EMOTE_ICONS["dance-breaking"] },
+    icon: EMOTE_ICONS["dance-breaking"],
+  },
   {
     id: "dance-hiphop",
     name: "Dance Hip Hop",
     category: "dance",
-    icon: EMOTE_ICONS["dance-hiphop"] },
+    icon: EMOTE_ICONS["dance-hiphop"],
+  },
   {
     id: "dance-popping",
     name: "Dance Popping",
     category: "dance",
-    icon: EMOTE_ICONS["dance-popping"] },
+    icon: EMOTE_ICONS["dance-popping"],
+  },
 
   // Combat
   {
     id: "hook-punch",
     name: "Hook Punch",
     category: "combat",
-    icon: EMOTE_ICONS["hook-punch"] },
+    icon: EMOTE_ICONS["hook-punch"],
+  },
   {
     id: "punching",
     name: "Punching",
     category: "combat",
-    icon: EMOTE_ICONS.punching },
+    icon: EMOTE_ICONS.punching,
+  },
   {
     id: "firing-gun",
     name: "Firing Gun",
     category: "combat",
-    icon: EMOTE_ICONS["firing-gun"] },
+    icon: EMOTE_ICONS["firing-gun"],
+  },
   {
     id: "sword-swing",
     name: "Sword Swing",
     category: "combat",
-    icon: EMOTE_ICONS["sword-swing"] },
+    icon: EMOTE_ICONS["sword-swing"],
+  },
   {
     id: "chopping",
     name: "Chopping",
     category: "combat",
-    icon: EMOTE_ICONS.chopping },
+    icon: EMOTE_ICONS.chopping,
+  },
   {
     id: "spell-cast",
     name: "Spell Cast",
     category: "combat",
-    icon: EMOTE_ICONS["spell-cast"] },
+    icon: EMOTE_ICONS["spell-cast"],
+  },
   { id: "range", name: "Range", category: "combat", icon: EMOTE_ICONS.range },
   { id: "death", name: "Death", category: "combat", icon: EMOTE_ICONS.death },
 
@@ -149,7 +166,8 @@ const ALL_EMOTES: EmoteItem[] = [
     id: "fishing",
     name: "Fishing",
     category: "idle",
-    icon: EMOTE_ICONS.fishing },
+    icon: EMOTE_ICONS.fishing,
+  },
 
   // Movement
   { id: "float", name: "Float", category: "movement", icon: EMOTE_ICONS.float },
@@ -161,7 +179,8 @@ const ALL_EMOTES: EmoteItem[] = [
     id: "crawling",
     name: "Crawling",
     category: "movement",
-    icon: EMOTE_ICONS.crawling },
+    icon: EMOTE_ICONS.crawling,
+  },
   { id: "fall", name: "Fall", category: "movement", icon: EMOTE_ICONS.fall },
 ];
 
@@ -180,11 +199,11 @@ const CATEGORY_LABELS: Record<string, string> = {
   dance: "Dance",
   combat: "Combat",
   idle: "Idle",
-  movement: "Movement" };
+  movement: "Movement",
+};
 
 export function EmotePicker() {
-  const { emotePickerOpen, openEmotePicker, closeEmotePicker,
-    t } = useApp();
+  const { emotePickerOpen, openEmotePicker, closeEmotePicker, t } = useApp();
   const [search, setSearch] = useState("");
   const [playing, setPlaying] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -221,7 +240,8 @@ export function EmotePicker() {
       dragOrigin.current = {
         startX: e.clientX,
         startY: e.clientY,
-        rect };
+        rect,
+      };
 
       const onPointerMove = (moveEvent: PointerEvent) => {
         if (!dragOrigin.current) return;
@@ -362,7 +382,9 @@ export function EmotePicker() {
       >
         <div className="flex items-center gap-2">
           <Menu className="w-4 h-4 text-gray-400" />
-          <span className="text-sm font-semibold text-white">{t("emotepicker.Emotes")}</span>
+          <span className="text-sm font-semibold text-white">
+            {t("emotepicker.Emotes")}
+          </span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -372,7 +394,6 @@ export function EmotePicker() {
             onClick={stopEmote}
             className="rounded bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-700"
           >
-
             {t("emotepicker.Stop")}
           </button>
 
@@ -407,12 +428,12 @@ export function EmotePicker() {
         <button
           type="button"
           onClick={() => setActiveCategory(null)}
-          className={`shrink-0 rounded px-2 py-1 text-xs font-medium ${activeCategory === null
+          className={`shrink-0 rounded px-2 py-1 text-xs font-medium ${
+            activeCategory === null
               ? "bg-blue-600 text-white"
               : "bg-gray-800 text-gray-300 hover:bg-gray-700"
-            }`}
+          }`}
         >
-
           {t("emotepicker.All")}
         </button>
         {CATEGORIES.map((cat) => (
@@ -420,10 +441,11 @@ export function EmotePicker() {
             type="button"
             key={cat}
             onClick={() => setActiveCategory(cat)}
-            className={`shrink-0 rounded px-2 py-1 text-xs font-medium ${activeCategory === cat
+            className={`shrink-0 rounded px-2 py-1 text-xs font-medium ${
+              activeCategory === cat
                 ? "bg-blue-600 text-white"
                 : "bg-gray-800 text-gray-300 hover:bg-gray-700"
-              }`}
+            }`}
           >
             <span className="mr-1">{CATEGORY_ICONS[cat]}</span>
             {CATEGORY_LABELS[cat]}
@@ -441,10 +463,11 @@ export function EmotePicker() {
               onClick={() => playEmote(emote.id)}
               disabled={playing === emote.id}
               title={emote.name}
-              className={`flex aspect-square items-center justify-center rounded text-2xl transition-colors ${playing === emote.id
+              className={`flex aspect-square items-center justify-center rounded text-2xl transition-colors ${
+                playing === emote.id
                   ? "bg-blue-600"
                   : "bg-gray-800 hover:bg-gray-700"
-                }`}
+              }`}
             >
               {emote.icon}
             </button>
@@ -453,7 +476,6 @@ export function EmotePicker() {
 
         {filteredEmotes.length === 0 && (
           <div className="py-8 text-center text-sm text-gray-500">
-
             {t("emotepicker.NoEmotesFound")}
           </div>
         )}

@@ -5,6 +5,50 @@
  */
 
 import {
+  type ActionNotice,
+  AGENT_READY_TIMEOUT_MS,
+  AGENT_TRANSFER_MIN_PASSWORD_LENGTH,
+  AppContext,
+  type AppContextValue,
+  type AppState,
+  asApiLikeError,
+  type ChatTurnUsage,
+  computeStreamingDelta,
+  formatSearchBullet,
+  formatStartupErrorDetail,
+  type GamePostMessageAuthPayload,
+  LIFECYCLE_MESSAGES,
+  type LifecycleAction,
+  type LoadConversationMessagesResult,
+  loadAvatarIndex,
+  loadChatAvatarVisible,
+  loadChatMode,
+  loadChatVoiceMuted,
+  loadUiLanguage,
+  loadUiShellMode,
+  normalizeAvatarIndex,
+  normalizeCustomActionName,
+  normalizeUiShellMode,
+  ONBOARDING_PERMISSION_LABELS,
+  type OnboardingNextOptions,
+  type OnboardingStep,
+  parseAgentStatusEvent,
+  parseCustomActionParams,
+  parseProactiveMessageEvent,
+  parseSlashCommandInput,
+  parseStreamEventEnvelopeEvent,
+  type StartupErrorState,
+  type StartupPhase,
+  saveAvatarIndex,
+  saveChatAvatarVisible,
+  saveChatMode,
+  saveChatVoiceMuted,
+  saveUiLanguage,
+  saveUiShellMode,
+  shouldApplyFinalStreamText,
+  type UiShellMode,
+} from "@milady/app-core/state";
+import {
   type ReactNode,
   useCallback,
   useEffect,
@@ -12,7 +56,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { createTranslator } from "./i18n";
 import {
   type AgentStartupDiagnostics,
   type AgentStatus,
@@ -85,6 +128,7 @@ import {
   normalizeSlashCommandName,
 } from "./chat-commands";
 import {
+  createTranslator,
   normalizeLanguage,
   t as translateText,
   type UiLanguage,
@@ -94,109 +138,64 @@ import { pathForTab, type Tab, tabFromPath } from "./navigation";
 import { getMissingOnboardingPermissions } from "./onboarding-permissions";
 import { mapServerTasksToSessions } from "./pty-session-hydrate";
 
-import {
-  type AppState,
-  type AppContextValue,
-  parseAgentStatusEvent,
-  parseProactiveMessageEvent,
-  parseStreamEventEnvelopeEvent,
-  computeStreamingDelta,
-  shouldApplyFinalStreamText,
-  parseSlashCommandInput,
-  normalizeCustomActionName,
-  parseCustomActionParams,
-  formatSearchBullet,
-  asApiLikeError,
-  formatStartupErrorDetail,
-  loadUiLanguage,
-  loadUiShellMode,
-  saveUiShellMode,
-  loadAvatarIndex,
-  saveAvatarIndex,
-  loadChatAvatarVisible,
-  loadChatVoiceMuted,
-  saveChatAvatarVisible,
-  saveChatVoiceMuted,
-  loadChatMode,
-  saveChatMode,
-  saveUiLanguage,
-  normalizeAvatarIndex,
-  type UiShellMode,
-  normalizeUiShellMode,
-  type LifecycleAction,
-  LIFECYCLE_MESSAGES,
-  type OnboardingNextOptions,
-  ONBOARDING_PERMISSION_LABELS,
-  AGENT_TRANSFER_MIN_PASSWORD_LENGTH,
-  AGENT_READY_TIMEOUT_MS,
-  type StartupErrorState,
-  AppContext,
-  type StartupPhase,
-  type ActionNotice,
-  type ChatTurnUsage,
-  type OnboardingStep,
-  type GamePostMessageAuthPayload,
-  type LoadConversationMessagesResult,
-} from "@milady/app-core/state";
-
 export {
+  type ActionNotice,
+  AGENT_READY_TIMEOUT_MS,
+  AGENT_STATES,
+  AGENT_TRANSFER_MIN_PASSWORD_LENGTH,
+  type AppActions,
   AppContext,
-  useApp,
-  parseAgentStatusEvent,
-  parseProactiveMessageEvent,
-  parseStreamEventEnvelopeEvent,
-  computeStreamingDelta,
-  shouldApplyFinalStreamText,
-  parseSlashCommandInput,
-  normalizeCustomActionName,
-  parseCustomActionParams,
-  formatSearchBullet,
+  type AppContextValue,
+  type AppState,
   asApiLikeError,
+  type ChatTurnUsage,
+  computeStreamingDelta,
+  formatSearchBullet,
   formatStartupErrorDetail,
+  type GamePostMessageAuthPayload,
+  getVrmBackgroundUrl,
+  getVrmNeedsFlip,
+  getVrmPreviewUrl,
+  getVrmTitle,
+  getVrmUrl,
+  isOfficialVrmIndex,
+  LIFECYCLE_MESSAGES,
+  type LifecycleAction,
+  type LoadConversationMessagesResult,
+  loadAvatarIndex,
+  loadChatAvatarVisible,
+  loadChatMode,
+  loadChatVoiceMuted,
   loadUiLanguage,
   loadUiShellMode,
-  saveUiShellMode,
-  loadAvatarIndex,
-  saveAvatarIndex,
-  loadChatAvatarVisible,
-  loadChatVoiceMuted,
-  saveChatAvatarVisible,
-  saveChatVoiceMuted,
-  loadChatMode,
-  saveChatMode,
-  saveUiLanguage,
   normalizeAvatarIndex,
-  normalizeUiShellMode,
-  LIFECYCLE_MESSAGES,
-  ONBOARDING_PERMISSION_LABELS,
-  AGENT_TRANSFER_MIN_PASSWORD_LENGTH,
-  AGENT_READY_TIMEOUT_MS,
-  getVrmUrl,
-  getVrmPreviewUrl,
-  getVrmBackgroundUrl,
-  getVrmTitle,
-  isOfficialVrmIndex,
-  getVrmNeedsFlip,
-  VRM_COUNT,
-  AGENT_STATES,
-  parseAgentStartupDiagnostics,
-  parseConversationMessageEvent,
+  normalizeCustomActionName,
   normalizeStreamComparisonText,
-  type AppState,
-  type AppContextValue,
-  type UiShellMode,
-  type LifecycleAction,
+  normalizeUiShellMode,
+  ONBOARDING_PERMISSION_LABELS,
   type OnboardingNextOptions,
-  type StartupErrorState,
-  type StartupPhase,
-  type ActionNotice,
-  type ChatTurnUsage,
   type OnboardingStep,
-  type GamePostMessageAuthPayload,
-  type LoadConversationMessagesResult,
-  type AppActions,
+  parseAgentStartupDiagnostics,
+  parseAgentStatusEvent,
+  parseConversationMessageEvent,
+  parseCustomActionParams,
+  parseProactiveMessageEvent,
+  parseSlashCommandInput,
+  parseStreamEventEnvelopeEvent,
   type SlashCommandInput,
   type StartupErrorReason,
+  type StartupErrorState,
+  type StartupPhase,
+  saveAvatarIndex,
+  saveChatAvatarVisible,
+  saveChatMode,
+  saveChatVoiceMuted,
+  saveUiLanguage,
+  saveUiShellMode,
+  shouldApplyFinalStreamText,
+  type UiShellMode,
+  useApp,
+  VRM_COUNT,
 } from "@milady/app-core/state";
 
 // ── Provider ───────────────────────────────────────────────────────────
@@ -416,9 +415,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [inventorySort, setInventorySort] = useState<
     "chain" | "symbol" | "value"
   >("value");
-  const [inventoryChainFocus, setInventoryChainFocus] = useState<string>(
-    "bsc",
-  );
+  const [inventoryChainFocus, setInventoryChainFocus] = useState<string>("bsc");
   const [walletError, setWalletError] = useState<string | null>(null);
 
   // --- ERC-8004 Registry ---
@@ -468,7 +465,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSelectedVrmIndexRaw(normalized);
     saveAvatarIndex(normalized);
     // Sync to server so headless stream capture uses the same avatar
-    client.saveStreamSettings({ avatarIndex: normalized }).catch(() => { });
+    client.saveStreamSettings({ avatarIndex: normalized }).catch(() => {});
   }, []);
 
   // --- Cloud ---
@@ -560,7 +557,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     useState<OnboardingStep>("welcome");
   const [onboardingOptions, setOnboardingOptions] =
     useState<OnboardingOptions | null>(null);
-  const [onboardingName, setOnboardingName] = useState("");
+  const [onboardingName, setOnboardingName] = useState("Eliza");
   const [onboardingOwnerName, setOnboardingOwnerName] = useState("anon");
   const [onboardingSetupMode, setOnboardingSetupMode] = useState<
     "" | "quick" | "advanced"
@@ -1402,7 +1399,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActionNotice(LIFECYCLE_MESSAGES.start.success, "success", 2400);
     } catch (err) {
       setActionNotice(
-        `Failed to ${LIFECYCLE_MESSAGES.start.verb} agent: ${err instanceof Error ? err.message : "unknown error"
+        `Failed to ${LIFECYCLE_MESSAGES.start.verb} agent: ${
+          err instanceof Error ? err.message : "unknown error"
         }`,
         "error",
         4200,
@@ -1421,7 +1419,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActionNotice(LIFECYCLE_MESSAGES.stop.success, "success", 2400);
     } catch (err) {
       setActionNotice(
-        `Failed to ${LIFECYCLE_MESSAGES.stop.verb} agent: ${err instanceof Error ? err.message : "unknown error"
+        `Failed to ${LIFECYCLE_MESSAGES.stop.verb} agent: ${
+          err instanceof Error ? err.message : "unknown error"
         }`,
         "error",
         4200,
@@ -1451,7 +1450,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActionNotice(LIFECYCLE_MESSAGES[action].success, "success", 2400);
     } catch (err) {
       setActionNotice(
-        `Failed to ${LIFECYCLE_MESSAGES[action].verb} agent: ${err instanceof Error ? err.message : "unknown error"
+        `Failed to ${LIFECYCLE_MESSAGES[action].verb} agent: ${
+          err instanceof Error ? err.message : "unknown error"
         }`,
         "error",
         4200,
@@ -1491,7 +1491,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActionNotice(LIFECYCLE_MESSAGES.restart.success, "success", 2400);
     } catch (err) {
       setActionNotice(
-        `Failed to ${LIFECYCLE_MESSAGES.restart.verb} agent: ${err instanceof Error ? err.message : "unknown error"
+        `Failed to ${LIFECYCLE_MESSAGES.restart.verb} agent: ${
+          err instanceof Error ? err.message : "unknown error"
         }`,
         "error",
         4200,
@@ -1582,8 +1583,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     const confirmed = window.confirm(
       "This will completely reset the agent — wiping all config, memory, and data.\n\n" +
-      "You will be taken back to the onboarding wizard.\n\n" +
-      "Are you sure?",
+        "You will be taken back to the onboarding wizard.\n\n" +
+        "Are you sure?",
     );
     if (!confirmed) return;
     if (!beginLifecycleAction("reset")) return;
@@ -1609,7 +1610,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActionNotice(LIFECYCLE_MESSAGES.reset.success, "success", 3200);
     } catch (err) {
       setActionNotice(
-        `Failed to ${LIFECYCLE_MESSAGES.reset.verb} agent: ${err instanceof Error ? err.message : "unknown error"
+        `Failed to ${LIFECYCLE_MESSAGES.reset.verb} agent: ${
+          err instanceof Error ? err.message : "unknown error"
         }`,
         "error",
         4200,
@@ -1628,46 +1630,52 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ── Chat ───────────────────────────────────────────────────────────
 
   /** Request an agent greeting for a conversation and add it to messages. */
-  const fetchGreeting = useCallback(async (convId: string) => {
-    setChatSending(true);
-    try {
-      const data = await client.requestGreeting(convId);
-      if (data.text) {
-        setConversationMessages((prev: ConversationMessage[]) => [
-          ...prev,
-          {
-            id: `greeting-${Date.now()}`,
-            role: "assistant",
-            text: data.text,
-            timestamp: Date.now(),
-          },
-        ]);
+  const fetchGreeting = useCallback(
+    async (convId: string) => {
+      setChatSending(true);
+      try {
+        const data = await client.requestGreeting(convId, uiLanguage);
+        if (data.text) {
+          setConversationMessages((prev: ConversationMessage[]) => [
+            ...prev,
+            {
+              id: `greeting-${Date.now()}`,
+              role: "assistant",
+              text: data.text,
+              timestamp: Date.now(),
+            },
+          ]);
+        }
+      } catch {
+        /* greeting failed silently — user can still chat */
+      } finally {
+        setChatSending(false);
       }
-    } catch {
-      /* greeting failed silently — user can still chat */
-    } finally {
-      setChatSending(false);
-    }
-  }, []);
+    },
+    [uiLanguage],
+  );
 
-  const handleNewConversation = useCallback(async () => {
-    try {
-      const { conversation } = await client.createConversation();
-      setConversations((prev) => [conversation, ...prev]);
-      setActiveConversationId(conversation.id);
-      activeConversationIdRef.current = conversation.id;
-      setConversationMessages([]);
-      // Agent sends the first message
-      greetingFiredRef.current = true;
-      void fetchGreeting(conversation.id);
-      client.sendWsMessage({
-        type: "active-conversation",
-        conversationId: conversation.id,
-      });
-    } catch {
-      /* ignore */
-    }
-  }, [fetchGreeting]);
+  const handleNewConversation = useCallback(
+    async (title?: string) => {
+      try {
+        const { conversation } = await client.createConversation(title);
+        setConversations((prev) => [conversation, ...prev]);
+        setActiveConversationId(conversation.id);
+        activeConversationIdRef.current = conversation.id;
+        setConversationMessages([]);
+        // Agent sends the first message
+        greetingFiredRef.current = true;
+        void fetchGreeting(conversation.id);
+        client.sendWsMessage({
+          type: "active-conversation",
+          conversationId: conversation.id,
+        });
+      } catch {
+        /* ignore */
+      }
+    },
+    [fetchGreeting],
+  );
 
   const appendLocalCommandTurn = useCallback(
     (userText: string, assistantText: string) => {
@@ -1768,7 +1776,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (!result.ok) {
             appendLocalCommandTurn(
               rawText,
-              `Custom action "${customAction.name}" failed: ${result.error ?? "unknown error"
+              `Custom action "${customAction.name}" failed: ${
+                result.error ?? "unknown error"
               }`,
             );
             return { handled: true };
@@ -2116,6 +2125,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ],
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: t is stable but defined later
   const sendActionMessage = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
@@ -2127,7 +2137,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         let convId: string = activeConversationId ?? "";
         if (!convId) {
           try {
-            const { conversation } = await client.createConversation();
+            const { conversation } = await client.createConversation(
+              t("conversations.newChatTitle"),
+            );
             setConversations((prev) => [conversation, ...prev]);
             setActiveConversationId(conversation.id);
             activeConversationIdRef.current = conversation.id;
@@ -2232,7 +2244,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // Also stop any active PTY sessions — the user wants everything to halt
     for (const session of ptySessions) {
-      client.stopCodingAgent(session.sessionId).catch(() => { });
+      client.stopCodingAgent(session.sessionId).catch(() => {});
     }
   }, [ptySessions]);
 
@@ -2568,7 +2580,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           /* ignore */
         });
         setActionNotice(
-          `Failed to ${enabled ? "enable" : "disable"} ${pluginName}: ${err instanceof Error ? err.message : "unknown error"
+          `Failed to ${enabled ? "enable" : "disable"} ${pluginName}: ${
+            err instanceof Error ? err.message : "unknown error"
           }`,
           "error",
           4200,
@@ -3274,24 +3287,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTab,
   ]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: setState and onboardingStyle are stable/managed elsewhere
   const handleOnboardingNext = useCallback(
     async (options?: OnboardingNextOptions) => {
       const opts = onboardingOptions;
       switch (onboardingStep) {
         case "welcome":
-          setOnboardingStep("name");
+          // Skip name step — default name is "Eliza"
+          setOnboardingStep("ownerName");
           break;
         case "name":
+          // Legacy fallback — should not reach here
           setOnboardingStep("ownerName");
           break;
         case "ownerName":
-          setOnboardingStep("avatar");
+          // Skip avatar and style steps — use defaults
+          // Auto-select first style if none chosen
+          if (!onboardingStyle && onboardingOptions?.styles?.length) {
+            setState(
+              "onboardingStyle",
+              onboardingOptions.styles[0].catchphrase,
+            );
+          }
+          if (
+            dropStatus?.dropEnabled &&
+            !dropStatus.userHasMinted &&
+            !dropStatus.mintedOut
+          ) {
+            setOnboardingStep("mint");
+          } else {
+            setOnboardingStep("setupMode");
+          }
           break;
         case "avatar":
-          setOnboardingStep("style");
+          // Legacy fallback
+          setOnboardingStep("setupMode");
           break;
         case "style": {
-          // If drop is enabled and user hasn't minted, go to mint step
+          // Legacy fallback
           if (
             dropStatus?.dropEnabled &&
             !dropStatus.userHasMinted &&
@@ -3407,19 +3440,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const handleOnboardingBack = useCallback(() => {
     switch (onboardingStep) {
       case "name":
+        // Legacy fallback
         setOnboardingStep("welcome");
         break;
       case "ownerName":
-        setOnboardingStep("name");
+        setOnboardingStep("welcome");
         break;
       case "avatar":
+        // Legacy fallback
         setOnboardingStep("ownerName");
         break;
       case "style":
-        setOnboardingStep("avatar");
+        // Legacy fallback
+        setOnboardingStep("ownerName");
         break;
       case "mint":
-        setOnboardingStep("style");
+        setOnboardingStep("ownerName");
         break;
       case "setupMode":
         if (
@@ -3429,7 +3465,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ) {
           setOnboardingStep("mint");
         } else {
-          setOnboardingStep("style");
+          setOnboardingStep("ownerName");
         }
         break;
       case "runMode":
@@ -3628,7 +3664,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     if (exportPassword.length < AGENT_TRANSFER_MIN_PASSWORD_LENGTH) {
       setExportError(
-        `Password must be at least ${AGENT_TRANSFER_MIN_PASSWORD_LENGTH} characters.`
+        `Password must be at least ${AGENT_TRANSFER_MIN_PASSWORD_LENGTH} characters.`,
       );
       setExportSuccess(null);
       return;
@@ -3652,7 +3688,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       setExportSuccess(
-        `Exported successfully (${(blob.size / 1024).toFixed(0)} KB)`
+        `Exported successfully (${(blob.size / 1024).toFixed(0)} KB)`,
       );
       setExportPassword("");
     } catch (err) {
@@ -3677,7 +3713,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     if (importPassword.length < AGENT_TRANSFER_MIN_PASSWORD_LENGTH) {
       setImportError(
-        `Password must be at least ${AGENT_TRANSFER_MIN_PASSWORD_LENGTH} characters.`
+        `Password must be at least ${AGENT_TRANSFER_MIN_PASSWORD_LENGTH} characters.`,
       );
       setImportSuccess(null);
       return;
@@ -3698,7 +3734,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         .filter(Boolean)
         .join(", ");
       setImportSuccess(
-        `Imported "${result.agentName}" successfully: ${summary || "no data"}. Restart the agent to activate.`
+        `Imported "${result.agentName}" successfully: ${summary || "no data"}. Restart the agent to activate.`,
       );
       setImportPassword("");
       setImportFile(null);
@@ -3861,6 +3897,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ── Initialization ─────────────────────────────────────────────────
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: t is stable but defined later
   useEffect(() => {
     const startupRunId = startupRetryNonce;
     let unbindStatus: (() => void) | null = null;
@@ -4232,7 +4269,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         } else {
           // First launch — create a conversation and greet
           try {
-            const { conversation } = await client.createConversation();
+            const { conversation } = await client.createConversation(
+              t("conversations.newChatTitle"),
+            );
             setConversations([conversation]);
             setActiveConversationId(conversation.id);
             activeConversationIdRef.current = conversation.id;
@@ -4260,7 +4299,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             greetingFiredRef.current = true;
             setChatSending(true);
             try {
-              const data = await client.requestGreeting(greetConvId);
+              const data = await client.requestGreeting(
+                greetConvId,
+                uiLanguage,
+              );
               if (data.text) {
                 setConversationMessages((prev: ConversationMessage[]) => [
                   ...prev,
@@ -4297,7 +4339,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
               setPtySessions(mapServerTasksToSessions(status.tasks));
             }
           })
-          .catch(() => { }); // non-critical
+          .catch(() => {}); // non-critical
       };
       hydratePtySessions();
       let ptyHydratedViaWs = false;
@@ -4525,11 +4567,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
               return prev.map((s) =>
                 s.sessionId === sessionId
                   ? {
-                    ...s,
-                    status: "tool_running" as const,
-                    toolDescription: toolDesc,
-                    lastActivity: `Running ${toolDesc}`.slice(0, 60),
-                  }
+                      ...s,
+                      status: "tool_running" as const,
+                      toolDescription: toolDesc,
+                      lastActivity: `Running ${toolDesc}`.slice(0, 60),
+                    }
                   : s,
               );
             }
@@ -4543,11 +4585,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
               return prev.map((s) =>
                 s.sessionId === sessionId
                   ? {
-                    ...s,
-                    status: "active" as const,
-                    toolDescription: undefined,
-                    lastActivity: excerpt,
-                  }
+                      ...s,
+                      status: "active" as const,
+                      toolDescription: undefined,
+                      lastActivity: excerpt,
+                    }
                   : s,
               );
             }
@@ -4566,11 +4608,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
               return prev.map((s) =>
                 s.sessionId === sessionId
                   ? {
-                    ...s,
-                    status: "active" as const,
-                    toolDescription: undefined,
-                    lastActivity: excerpt,
-                  }
+                      ...s,
+                      status: "active" as const,
+                      toolDescription: undefined,
+                      lastActivity: excerpt,
+                    }
                   : s,
               );
             }
@@ -4578,11 +4620,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
               return prev.map((s) =>
                 s.sessionId === sessionId
                   ? {
-                    ...s,
-                    status: "active" as const,
-                    toolDescription: undefined,
-                    lastActivity: "Running",
-                  }
+                      ...s,
+                      status: "active" as const,
+                      toolDescription: undefined,
+                      lastActivity: "Running",
+                    }
                   : s,
               );
             }
@@ -4592,10 +4634,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
               return prev.map((s) =>
                 s.sessionId === sessionId
                   ? {
-                    ...s,
-                    status: "error" as const,
-                    lastActivity: `Error: ${errMsg}`.slice(0, 60),
-                  }
+                      ...s,
+                      status: "error" as const,
+                      lastActivity: `Error: ${errMsg}`.slice(0, 60),
+                    }
                   : s,
               );
             }
@@ -4736,6 +4778,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     pollCloudCredits,
     setSelectedVrmIndex,
     startupRetryNonce,
+    uiLanguage,
   ]);
 
   // When agent transitions to "running", send a greeting if conversation is empty

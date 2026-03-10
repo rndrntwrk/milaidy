@@ -215,7 +215,7 @@ export function findPatchRegions(
           start: blockStart,
           end: blockEnd,
           spec,
-          raw: rawLines.join("\n")
+          raw: rawLines.join("\n"),
         });
       }
     }
@@ -281,7 +281,7 @@ function parseSegments(text: string): Segment[] {
     regions.push({
       start: m.index,
       end: m.index + m[0].length,
-      segment: { kind: "config", pluginId: m[1] }
+      segment: { kind: "config", pluginId: m[1] },
     });
     m = CONFIG_RE.exec(cleaned);
   }
@@ -296,7 +296,7 @@ function parseSegments(text: string): Segment[] {
       regions.push({
         start: m.index,
         end: m.index + m[0].length,
-        segment: { kind: "ui-spec", spec: parsed, raw: json }
+        segment: { kind: "ui-spec", spec: parsed, raw: json },
       });
     }
     m = FENCED_JSON_RE.exec(cleaned);
@@ -312,7 +312,7 @@ function parseSegments(text: string): Segment[] {
       regions.push({
         start: patch.start,
         end: patch.end,
-        segment: { kind: "ui-spec", spec: patch.spec, raw: patch.raw }
+        segment: { kind: "ui-spec", spec: patch.spec, raw: patch.raw },
       });
     }
   }
@@ -524,7 +524,7 @@ function InlinePluginConfig({ pluginId: rawPluginId }: { pluginId: string }) {
   if (dismissed) {
     return (
       <div className="my-2 px-3 py-2 border border-ok/30 bg-ok/5 text-xs text-ok">
-        {plugin?.name ?? pluginId}  {t("messagecontent.Enabled")}
+        {plugin?.name ?? pluginId} {t("messagecontent.Enabled")}
       </div>
     );
   }
@@ -532,8 +532,8 @@ function InlinePluginConfig({ pluginId: rawPluginId }: { pluginId: string }) {
   if (loading) {
     return (
       <div className="my-2 px-3 py-2 border border-border bg-card text-xs text-muted italic">
-
-        {t("messagecontent.Loading")} {pluginId}  {t("messagecontent.configuration")}
+        {t("messagecontent.Loading")} {pluginId}{" "}
+        {t("messagecontent.configuration")}
       </div>
     );
   }
@@ -541,8 +541,9 @@ function InlinePluginConfig({ pluginId: rawPluginId }: { pluginId: string }) {
   if (!plugin) {
     return (
       <div className="my-2 px-3 py-2 border border-border bg-card text-xs text-muted italic">
-
-        {t("messagecontent.Plugin")}{pluginId}{t("messagecontent.NotFound")}
+        {t("messagecontent.Plugin")}
+        {pluginId}
+        {t("messagecontent.NotFound")}
       </div>
     );
   }
@@ -559,11 +560,15 @@ function InlinePluginConfig({ pluginId: rawPluginId }: { pluginId: string }) {
           ) : (
             <span className="text-[13px] opacity-60">{"\u2699\uFE0F"}</span>
           )}
-          <span>{plugin.name}  {t("messagecontent.Configuration")}</span>
+          <span>
+            {plugin.name} {t("messagecontent.Configuration")}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           {plugin.configured && (
-            <span className="text-[10px] text-ok font-medium">{t("messagecontent.Configured")}</span>
+            <span className="text-[10px] text-ok font-medium">
+              {t("messagecontent.Configured")}
+            </span>
           )}
           <span
             className={`text-[10px] font-medium ${isEnabled ? "text-ok" : "text-muted"}`}
@@ -588,7 +593,6 @@ function InlinePluginConfig({ pluginId: rawPluginId }: { pluginId: string }) {
         </div>
       ) : (
         <div className="px-3 py-2 text-xs text-muted italic">
-
           {t("messagecontent.NoConfigurablePara")}
         </div>
       )}
@@ -626,7 +630,9 @@ function InlinePluginConfig({ pluginId: rawPluginId }: { pluginId: string }) {
           </button>
         )}
 
-        {saved && <span className="text-xs text-ok">{t("messagecontent.Saved")}</span>}
+        {saved && (
+          <span className="text-xs text-ok">{t("messagecontent.Saved")}</span>
+        )}
         {error && <span className="text-xs text-danger">{error}</span>}
       </div>
     </div>
@@ -652,7 +658,6 @@ function UiSpecBlock({ spec, raw }: { spec: UiSpec; raw: string }) {
     <div className="my-2 border border-border overflow-hidden">
       <div className="flex items-center justify-between px-3 py-1.5 bg-bg-hover border-b border-border">
         <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">
-
           {t("messagecontent.InteractiveUI")}
         </span>
         <button

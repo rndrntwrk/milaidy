@@ -1,15 +1,16 @@
 import { useEffect, useRef } from "react";
+import { useApp } from "../../AppContext";
 import type { StreamEventEnvelope } from "../../api-client";
 import { formatTime } from "../shared/format";
 import {
   CHANNEL_COLORS,
   getEventFrom,
   getEventSource,
-  getEventText } from "./helpers";
-import { useApp } from "../../AppContext";
+  getEventText,
+} from "./helpers";
 
 export function ActivityFeed({ events }: { events: StreamEventEnvelope[] }) {
-    const { t } = useApp();
+  const { t } = useApp();
   const feedRef = useRef<HTMLDivElement>(null);
   const prevLenRef = useRef(0);
 
@@ -24,9 +25,8 @@ export function ActivityFeed({ events }: { events: StreamEventEnvelope[] }) {
     <div className="flex flex-col h-full border-l border-border bg-bg">
       <div className="px-3 py-2 border-b border-border shrink-0">
         <span className="text-xs font-bold uppercase tracking-wider text-muted">
-          
-                            {t("activityfeed.Activity")}
-                          </span>
+          {t("activityfeed.Activity")}
+        </span>
       </div>
       <div
         ref={feedRef}
@@ -34,9 +34,8 @@ export function ActivityFeed({ events }: { events: StreamEventEnvelope[] }) {
       >
         {events.length === 0 ? (
           <div className="text-muted text-xs py-4 text-center">
-            
-                                  {t("activityfeed.NoEventsYet")}
-                                </div>
+            {t("activityfeed.NoEventsYet")}
+          </div>
         ) : (
           events.map((event) => {
             const isThought = event.stream === "thought";

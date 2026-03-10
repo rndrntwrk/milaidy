@@ -41,7 +41,8 @@ export const ACCENT_COLORS: Record<string, string> = {
   knowledge: "#a78bfa",
   wallets: "#f0b90b",
   stream: "#ef4444",
-  lifo: "#8b5cf6" };
+  lifo: "#8b5cf6",
+};
 
 export const TOP_BAR_COLORS: Record<string, string> = {
   skills: "#00e1ff",
@@ -51,7 +52,8 @@ export const TOP_BAR_COLORS: Record<string, string> = {
   plugins: "#f0b232",
   connectors: "#f0b232",
   apps: "rgba(16, 185, 129, 0.7)",
-  knowledge: "rgba(167, 139, 250, 0.7)" };
+  knowledge: "rgba(167, 139, 250, 0.7)",
+};
 
 /* ── Tab flags ─────────────────────────────────────────────────────── */
 
@@ -103,7 +105,8 @@ export function tabFlags(tab: Tab) {
     isAdvancedOverlay,
     isPluginsLike,
     isCentered,
-    isCharacter };
+    isCharacter,
+  };
 }
 
 export type TabFlags = ReturnType<typeof tabFlags>;
@@ -275,7 +278,8 @@ export function viewWrapperStyle(
       "--surface": "rgba(255, 255, 255, 0.06)",
       "--bg-hover": "rgba(255, 255, 255, 0.04)",
       "--bg-muted": "rgba(255, 255, 255, 0.03)",
-      "--border-hover": "rgba(255, 255, 255, 0.15)" } as React.CSSProperties;
+      "--border-hover": "rgba(255, 255, 255, 0.15)",
+    } as React.CSSProperties;
   }
   return {
     "--bg": "transparent",
@@ -284,5 +288,6 @@ export function viewWrapperStyle(
     "--accent": accentColor,
     "--accent-foreground": f.isSkills ? "#000000" : "#ffffff",
     "--muted": "rgba(255, 255, 255, 0.55)",
-    "--txt": "#ffffff" } as React.CSSProperties;
+    "--txt": "#ffffff",
+  } as React.CSSProperties;
 }

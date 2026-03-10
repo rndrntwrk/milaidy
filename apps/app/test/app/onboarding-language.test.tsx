@@ -80,11 +80,11 @@ function createOnboardingContext(
     cloudConnected: false,
     cloudLoginBusy: false,
     cloudLoginError: "",
-    handleOnboardingNext: vi.fn(async () => { }),
+    handleOnboardingNext: vi.fn(async () => {}),
     handleOnboardingBack: vi.fn(),
     setState: vi.fn(),
     setTheme: vi.fn(),
-    handleCloudLogin: vi.fn(async () => { }),
+    handleCloudLogin: vi.fn(async () => {}),
     ...overrides,
   };
 }

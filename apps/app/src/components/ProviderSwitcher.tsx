@@ -5,17 +5,18 @@
  * Composes SubscriptionStatus and ApiKeyConfig sub-components.
  */
 
-import { useCallback, useEffect, useRef, useState} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useApp } from "../AppContext";
 import {
   client,
   type OnboardingOptions,
-  type PluginParamDef } from "../api-client";
+  type PluginParamDef,
+} from "../api-client";
 import type { ConfigUiHint } from "../types";
 import { ApiKeyConfig } from "./ApiKeyConfig";
 import type { JsonSchemaObject } from "./config-catalog";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer";
 import { SubscriptionStatus } from "./SubscriptionStatus";
-import { useApp } from "../AppContext";
 
 interface PluginInfo {
   id: string;
@@ -76,9 +77,9 @@ export function ProviderSwitcher({
   handleCloudLogin,
   handleCloudDisconnect,
   setState,
-  setTab }: ProviderSwitcherProps) {
-  const {
-    t } = useApp();
+  setTab,
+}: ProviderSwitcherProps) {
+  const { t } = useApp();
   /* ── Model selection state ─────────────────────────────────────── */
   const [modelOptions, setModelOptions] = useState<
     OnboardingOptions["models"] | null
@@ -247,8 +248,8 @@ export function ProviderSwitcher({
       : selectedProviderId === "pi-ai"
         ? "pi-ai"
         : selectedProviderId &&
-          (allAiProviders.some((p) => p.id === selectedProviderId) ||
-            isSubscriptionId(selectedProviderId))
+            (allAiProviders.some((p) => p.id === selectedProviderId) ||
+              isSubscriptionId(selectedProviderId))
           ? selectedProviderId
           : cloudHandlesInference
             ? "__cloud__"
@@ -262,9 +263,9 @@ export function ProviderSwitcher({
 
   const selectedProvider =
     resolvedSelectedId &&
-      resolvedSelectedId !== "__cloud__" &&
-      resolvedSelectedId !== "pi-ai" &&
-      !isSubscriptionId(resolvedSelectedId)
+    resolvedSelectedId !== "__cloud__" &&
+    resolvedSelectedId !== "pi-ai" &&
+    !isSubscriptionId(resolvedSelectedId)
       ? (allAiProviders.find((p) => p.id === resolvedSelectedId) ?? null)
       : null;
 
@@ -287,8 +288,10 @@ export function ProviderSwitcher({
           await client.updateConfig({
             cloud: {
               services: { inference: false },
-              inferenceMode: "byok" },
-            env: { vars: { MILADY_USE_PI_AI: "" } } });
+              inferenceMode: "byok",
+            },
+            env: { vars: { MILADY_USE_PI_AI: "" } },
+          });
           setPiAiEnabled(false);
           setCloudHandlesInference(false);
           if (!willTogglePlugins) {
@@ -335,8 +338,10 @@ export function ProviderSwitcher({
         await client.updateConfig({
           cloud: {
             services: { inference: false },
-            inferenceMode: "byok" },
-          env: { vars: { MILADY_USE_PI_AI: "" } } });
+            inferenceMode: "byok",
+          },
+          env: { vars: { MILADY_USE_PI_AI: "" } },
+        });
         const switchId =
           providerId === "anthropic-subscription"
             ? "anthropic-subscription"
@@ -367,12 +372,15 @@ export function ProviderSwitcher({
         cloud: {
           enabled: true,
           services: { inference: true },
-          inferenceMode: "cloud" },
+          inferenceMode: "cloud",
+        },
         env: { vars: { MILADY_USE_PI_AI: "" } },
         agents: { defaults: { model: { primary: null } } },
         models: {
           small: currentSmallModel || "moonshotai/kimi-k2-turbo",
-          large: currentLargeModel || "moonshotai/kimi-k2-0905" } });
+          large: currentLargeModel || "moonshotai/kimi-k2-0905",
+        },
+      });
       setState("cloudEnabled", true);
       setCloudHandlesInference(true);
       setPiAiEnabled(false);
@@ -389,12 +397,17 @@ export function ProviderSwitcher({
       await client.updateConfig({
         cloud: {
           services: { inference: false },
-          inferenceMode: "byok" },
+          inferenceMode: "byok",
+        },
         env: { vars: { MILADY_USE_PI_AI: "1" } },
         agents: {
           defaults: {
             model: {
-              primary: piAiModelSpec.trim() || null } } } });
+              primary: piAiModelSpec.trim() || null,
+            },
+          },
+        },
+      });
       setPiAiEnabled(true);
       setPiAiSaveSuccess(true);
       setTimeout(() => setPiAiSaveSuccess(false), 2000);
@@ -436,18 +449,19 @@ export function ProviderSwitcher({
     ...subscriptionProviders.map((provider) => ({
       id: provider.id,
       label: provider.label,
-      disabled: false })),
+      disabled: false,
+    })),
     ...allAiProviders.map((provider) => ({
       id: provider.id,
       label: provider.name,
-      disabled: false })),
+      disabled: false,
+    })),
   ];
 
   if (totalCols === 0) {
     return (
       <div className="p-4 border border-[var(--warning,#f39c12)] bg-[var(--card)]">
         <div className="text-xs text-[var(--warning,#f39c12)]">
-
           {t("providerswitcher.NoAIProvidersAvai")}{" "}
           <button
             type="button"
@@ -456,10 +470,8 @@ export function ProviderSwitcher({
               setTab("plugins");
             }}
           >
-
             {t("providerswitcher.Plugins")}
           </button>{" "}
-
           {t("providerswitcher.page")}
         </div>
       </div>
@@ -474,7 +486,6 @@ export function ProviderSwitcher({
           htmlFor="provider-switcher-select"
           className="block text-xs font-semibold mb-1.5 text-[var(--muted)]"
         >
-
           {t("providerswitcher.SelectAIProvider")}
         </label>
         <select
@@ -512,7 +523,6 @@ export function ProviderSwitcher({
           ))}
         </select>
         <p className="text-[11px] text-[var(--muted)] mt-1.5">
-
           {t("providerswitcher.ChooseYourPreferre")}
         </p>
       </div>
@@ -526,7 +536,6 @@ export function ProviderSwitcher({
                 <div className="flex items-center gap-2">
                   <span className="inline-block w-2 h-2 rounded-full bg-[var(--ok,#16a34a)]" />
                   <span className="text-xs font-semibold">
-
                     {t("providerswitcher.LoggedIntoElizaCl")}
                   </span>
                 </div>
@@ -550,7 +559,9 @@ export function ProviderSwitcher({
                 )}
                 {cloudCredits !== null && (
                   <span>
-                    <span className="text-[var(--muted)]">{t("providerswitcher.Credits")}</span>{" "}
+                    <span className="text-[var(--muted)]">
+                      {t("providerswitcher.Credits")}
+                    </span>{" "}
                     <span
                       className={
                         cloudCreditsCritical
@@ -568,7 +579,6 @@ export function ProviderSwitcher({
                       rel="noopener noreferrer"
                       className="text-[11px] ml-2 text-[var(--accent)]"
                     >
-
                       {t("providerswitcher.TopUp")}
                     </a>
                   </span>
@@ -583,15 +593,20 @@ export function ProviderSwitcher({
                       small: {
                         type: "string",
                         enum: modelOptions.small.map((m) => m.id),
-                        description: "Fast model for simple tasks" },
+                        description: "Fast model for simple tasks",
+                      },
                       large: {
                         type: "string",
                         enum: modelOptions.large.map((m) => m.id),
-                        description: "Powerful model for complex reasoning" } },
-                    required: [] as string[] };
+                        description: "Powerful model for complex reasoning",
+                      },
+                    },
+                    required: [] as string[],
+                  };
                   const modelHints: Record<string, ConfigUiHint> = {
                     small: { label: "Small Model", width: "half" },
-                    large: { label: "Large Model", width: "half" } };
+                    large: { label: "Large Model", width: "half" },
+                  };
                   const modelValues: Record<string, unknown> = {};
                   const modelSetKeys = new Set<string>();
                   if (currentSmallModel) {
@@ -616,7 +631,8 @@ export function ProviderSwitcher({
                         if (key === "large") setCurrentLargeModel(val);
                         const updated = {
                           small: key === "small" ? val : currentSmallModel,
-                          large: key === "large" ? val : currentLargeModel };
+                          large: key === "large" ? val : currentLargeModel,
+                        };
                         void (async () => {
                           setModelSaving(true);
                           try {
@@ -640,13 +656,11 @@ export function ProviderSwitcher({
               <div className="flex items-center justify-end gap-2 mt-3">
                 {modelSaving && (
                   <span className="text-[11px] text-[var(--muted)]">
-
                     {t("providerswitcher.SavingAmpRestart")}
                   </span>
                 )}
                 {modelSaveSuccess && (
                   <span className="text-[11px] text-[var(--ok,#16a34a)]">
-
                     {t("providerswitcher.SavedRestartingA")}
                   </span>
                 )}
@@ -656,7 +670,6 @@ export function ProviderSwitcher({
             <div>
               {cloudLoginBusy ? (
                 <div className="text-xs text-[var(--muted)]">
-
                   {t("providerswitcher.WaitingForBrowser")}
                 </div>
               ) : (
@@ -671,11 +684,9 @@ export function ProviderSwitcher({
                     className="btn text-xs py-[5px] px-3.5 font-bold !mt-0"
                     onClick={() => void handleCloudLogin()}
                   >
-
                     {t("providerswitcher.LogInToElizaClou")}
                   </button>
                   <div className="text-[11px] text-[var(--muted)] mt-1.5">
-
                     {t("providerswitcher.OpensABrowserWind")}
                   </div>
                 </>
@@ -702,16 +713,16 @@ export function ProviderSwitcher({
       {/* pi-ai settings */}
       {!isCloudSelected && isPiAiSelected && (
         <div className="mt-4 pt-4 border-t border-[var(--border)]">
-          <div className="text-xs font-semibold mb-2">{t("providerswitcher.PiPiAiSettings")}</div>
+          <div className="text-xs font-semibold mb-2">
+            {t("providerswitcher.PiPiAiSettings")}
+          </div>
           <div className="text-[11px] text-[var(--muted)] mb-2">
-
             {t("providerswitcher.UsesLocalCredentia")}
           </div>
           <label
             htmlFor="pi-ai-model-override"
             className="block text-[11px] text-[var(--muted)] mb-1"
           >
-
             {t("providerswitcher.PrimaryModelOverri")}
           </label>
 
@@ -733,7 +744,6 @@ export function ProviderSwitcher({
                 className="w-full px-2.5 py-[8px] border border-[var(--border)] bg-[var(--card)] text-[13px] transition-colors focus:border-[var(--accent)] focus:outline-none"
               >
                 <option value="">
-
                   {t("providerswitcher.UsePiDefaultModel")}
                   {piAiDefaultModelSpec ? ` (${piAiDefaultModelSpec})` : ""}
                 </option>
@@ -742,7 +752,9 @@ export function ProviderSwitcher({
                     {model.name} ({model.provider})
                   </option>
                 ))}
-                <option value="__custom__">{t("providerswitcher.CustomModelSpec")}</option>
+                <option value="__custom__">
+                  {t("providerswitcher.CustomModelSpec")}
+                </option>
               </select>
 
               {piAiModelSelectValue === "__custom__" && (
@@ -768,13 +780,11 @@ export function ProviderSwitcher({
           <div className="flex items-center justify-end gap-2 mt-3">
             {piAiSaving && (
               <span className="text-[11px] text-[var(--muted)]">
-
                 {t("providerswitcher.SavingAmpRestart")}
               </span>
             )}
             {piAiSaveSuccess && (
               <span className="text-[11px] text-[var(--ok,#16a34a)]">
-
                 {t("providerswitcher.SavedRestartingA")}
               </span>
             )}

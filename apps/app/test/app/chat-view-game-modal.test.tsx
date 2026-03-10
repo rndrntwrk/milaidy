@@ -68,7 +68,7 @@ function createContext(
     chatSending: false,
     chatFirstTokenReceived: false,
     conversationMessages: [],
-    handleChatSend: vi.fn(async () => { }),
+    handleChatSend: vi.fn(async () => {}),
     handleChatStop: vi.fn(),
     setState: vi.fn(),
     droppedFiles: [],
@@ -144,7 +144,7 @@ describe("ChatView game-modal variant", () => {
   });
 
   it("keeps mic and send controls usable in game-modal", async () => {
-    const handleChatSend = vi.fn(async () => { });
+    const handleChatSend = vi.fn(async () => {});
     mockUseApp.mockReturnValue(
       createContext({
         handleChatSend,

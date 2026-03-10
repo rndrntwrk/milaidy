@@ -4,9 +4,9 @@
 
 import { Check, Copy, RefreshCw, Trash2 } from "lucide-react";
 import { useCallback, useState } from "react";
+import { useApp } from "../AppContext";
 import type { ConversationMessage } from "../api-client";
 import { MessageContent } from "./MessageContent";
-import { useApp } from "../AppContext";
 
 interface ChatMessageProps {
   message: ConversationMessage;
@@ -35,7 +35,8 @@ export function ChatMessage({
   agentAvatarSrc,
   onCopy,
   onRetry,
-  onDelete }: ChatMessageProps) {
+  onDelete,
+}: ChatMessageProps) {
   const { t } = useApp();
   const [copied, setCopied] = useState(false);
   const [showActions, setShowActions] = useState(false);
@@ -102,7 +103,6 @@ export function ChatMessage({
               message.source &&
               message.source !== "client_chat" && (
                 <span className="text-[10px] text-muted opacity-60">
-
                   {t("chatmessage.via")} {message.source}
                 </span>
               )}
@@ -111,11 +111,12 @@ export function ChatMessage({
 
         {/* Message Content */}
         <div
-          className={`relative group px-4 py-2.5 text-[15px] leading-[1.7] whitespace-pre-wrap break-words rounded-2xl ${isUser
-            ? "bg-accent text-accent-fg rounded-br-md"
-            : "bg-bg-accent border border-border text-txt rounded-bl-md"
-            }`}
-          style={{ fontFamily: 'var(--font-chat)' }}
+          className={`relative group px-4 py-2.5 text-[15px] leading-[1.7] whitespace-pre-wrap break-words rounded-2xl ${
+            isUser
+              ? "bg-accent text-accent-fg rounded-br-md"
+              : "bg-bg-accent border border-border text-txt rounded-bl-md"
+          }`}
+          style={{ fontFamily: "var(--font-chat)" }}
         >
           <MessageContent message={message} />
 
@@ -123,7 +124,6 @@ export function ChatMessage({
           {!isUser && message.interrupted && (
             <div className="flex items-center gap-2 mt-2 pt-2 border-t border-danger/30">
               <span className="text-xs text-danger">
-
                 {t("chatmessage.ResponseInterrupte")}
               </span>
               {onRetry && (
@@ -192,10 +192,11 @@ export function ChatMessage({
 
 export function TypingIndicator({
   agentName,
-  agentAvatarSrc }: {
-    agentName: string;
-    agentAvatarSrc?: string | null;
-  }) {
+  agentAvatarSrc,
+}: {
+  agentName: string;
+  agentAvatarSrc?: string | null;
+}) {
   const agentInitial = agentName.trim().charAt(0).toUpperCase() || "A";
 
   return (
@@ -263,12 +264,14 @@ export function ChatEmptyState({ agentName }: { agentName: string }) {
         </svg>
       </div>
       <h3 className="text-lg font-semibold text-txt-strong mb-2">
-
         {t("chatmessage.StartAConversation")}
       </h3>
-      <p className="text-sm text-muted max-w-sm mb-6" style={{ fontFamily: 'var(--font-chat)' }}>
-
-        {t("chatmessage.SendAMessageTo")} {agentName}  {t("chatmessage.toBeginChattingY")}
+      <p
+        className="text-sm text-muted max-w-sm mb-6"
+        style={{ fontFamily: "var(--font-chat)" }}
+      >
+        {t("chatmessage.SendAMessageTo")} {agentName}{" "}
+        {t("chatmessage.toBeginChattingY")}
       </p>
       <div className="flex flex-wrap justify-center gap-2">
         {["Hello!", "How are you?", "Tell me a joke", "Help me with..."].map(

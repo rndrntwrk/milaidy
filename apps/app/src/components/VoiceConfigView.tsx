@@ -16,15 +16,19 @@ import {
   client,
   type VoiceConfig,
   type VoiceMode,
-  type VoiceProvider
+  type VoiceProvider,
 } from "../api-client";
 import { dispatchWindowEvent, VOICE_CONFIG_UPDATED_EVENT } from "../events";
 import {
   CloudConnectionStatus,
-  CloudSourceModeToggle
+  CloudSourceModeToggle,
 } from "./CloudSourceControls";
 import { ConfigSaveFooter } from "./ConfigSaveFooter";
-import { sanitizeApiKey, PREMADE_VOICES, VOICE_PROVIDERS } from "./shared/voice-types";
+import {
+  PREMADE_VOICES,
+  sanitizeApiKey,
+  VOICE_PROVIDERS,
+} from "./shared/voice-types";
 
 const DEFAULT_ELEVEN_FAST_MODEL = "eleven_flash_v2_5";
 
@@ -32,17 +36,18 @@ const MODEL_SIZES: Array<{
   id: NonNullable<SwabbleConfig["modelSize"]>;
   hint: string;
 }> = [
-    { id: "tiny", hint: "(faster)" },
-    { id: "base", hint: "(recommended)" },
-    { id: "small", hint: "" },
-    { id: "medium", hint: "(accurate)" },
-    { id: "large", hint: "(accurate)" },
-  ];
+  { id: "tiny", hint: "(faster)" },
+  { id: "base", hint: "(recommended)" },
+  { id: "small", hint: "" },
+  { id: "medium", hint: "(accurate)" },
+  { id: "large", hint: "(accurate)" },
+];
 
 function WakeWordSection({
-  serverConfig }: {
-    serverConfig?: Partial<SwabbleConfig> | null;
-  }) {
+  serverConfig,
+}: {
+  serverConfig?: Partial<SwabbleConfig> | null;
+}) {
   const { t } = useApp();
   const [triggers, setTriggers] = useState<string[]>(["milady"]);
   const [triggerInput, setTriggerInput] = useState("");
@@ -99,7 +104,7 @@ function WakeWordSection({
     (): SwabbleConfig => ({
       triggers,
       minPostTriggerGap: sensitivity,
-      modelSize
+      modelSize,
     }),
     [triggers, sensitivity, modelSize],
   );
@@ -170,26 +175,29 @@ function WakeWordSection({
       {/* Subsection header + enable toggle */}
       <div className="flex items-center justify-between">
         <div className="text-xs font-semibold text-[var(--muted)]">
-
           {t("voiceconfigview.WakeWord")}
         </div>
         <button
           type="button"
           onClick={() => void handleToggle()}
-          className={`relative inline-flex h-5 w-9 cursor-pointer items-center rounded-full transition-colors ${enabled ? "bg-[var(--accent)]" : "bg-[var(--border)]"
-            }`}
+          className={`relative inline-flex h-5 w-9 cursor-pointer items-center rounded-full transition-colors ${
+            enabled ? "bg-[var(--accent)]" : "bg-[var(--border)]"
+          }`}
           aria-label={enabled ? "Disable wake word" : "Enable wake word"}
         >
           <span
-            className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${enabled ? "translate-x-4" : "translate-x-0.5"
-              }`}
+            className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${
+              enabled ? "translate-x-4" : "translate-x-0.5"
+            }`}
           />
         </button>
       </div>
 
       {/* Trigger tag input */}
       <div className="flex flex-col gap-1.5">
-        <span className="text-xs font-semibold">{t("voiceconfigview.Triggers")}</span>
+        <span className="text-xs font-semibold">
+          {t("voiceconfigview.Triggers")}
+        </span>
         <div className="flex flex-wrap gap-1 p-1.5 border border-[var(--border)] bg-[var(--card)] min-h-[2rem]">
           {triggers.map((t) => (
             <span
@@ -225,7 +233,6 @@ function WakeWordSection({
           />
         </div>
         <div className="text-[10px] text-[var(--muted)]">
-
           {t("voiceconfigview.PressEnterOrComma")}
         </div>
       </div>
@@ -233,7 +240,9 @@ function WakeWordSection({
       {/* Sensitivity slider */}
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold">{t("voiceconfigview.WakeSensitivity")}</span>
+          <span className="text-xs font-semibold">
+            {t("voiceconfigview.WakeSensitivity")}
+          </span>
           <span className="text-[10px] text-[var(--muted)]">
             {sensitivity.toFixed(2)}s
           </span>
@@ -250,14 +259,15 @@ function WakeWordSection({
           }
         />
         <div className="text-[10px] text-[var(--muted)]">
-
           {t("voiceconfigview.LowerMoreSensiti")}
         </div>
       </div>
 
       {/* Model size buttons */}
       <div className="flex flex-col gap-1.5">
-        <span className="text-xs font-semibold">{t("voiceconfigview.ModelSize")}</span>
+        <span className="text-xs font-semibold">
+          {t("voiceconfigview.ModelSize")}
+        </span>
         <div className="flex gap-1.5">
           {MODEL_SIZES.map((m) => {
             const active = modelSize === m.id;
@@ -265,10 +275,11 @@ function WakeWordSection({
               <button
                 key={m.id}
                 type="button"
-                className={`flex-1 px-2 py-1.5 text-xs cursor-pointer transition-colors border ${active
-                  ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]"
-                  : "border-[var(--border)] bg-[var(--card)] text-[var(--text)] hover:border-[var(--accent)]"
-                  }`}
+                className={`flex-1 px-2 py-1.5 text-xs cursor-pointer transition-colors border ${
+                  active
+                    ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]"
+                    : "border-[var(--border)] bg-[var(--card)] text-[var(--text)] hover:border-[var(--accent)]"
+                }`}
                 onClick={() => void handleModelSizeChange(m.id)}
               >
                 <div className="font-semibold">{m.id}</div>
@@ -285,7 +296,9 @@ function WakeWordSection({
 
       {/* Audio level meter */}
       <div className="flex flex-col gap-1">
-        <span className="text-xs font-semibold">{t("voiceconfigview.Microphone")}</span>
+        <span className="text-xs font-semibold">
+          {t("voiceconfigview.Microphone")}
+        </span>
         <div className="h-1.5 w-full bg-[var(--border)] overflow-hidden">
           <div
             className="h-full bg-green-500 transition-all duration-75"
@@ -368,7 +381,7 @@ export function VoiceConfigView() {
   const handleApiKeyChange = useCallback((apiKey: string) => {
     setVoiceConfig((prev) => ({
       ...prev,
-      elevenlabs: { ...prev.elevenlabs, apiKey: apiKey || undefined }
+      elevenlabs: { ...prev.elevenlabs, apiKey: apiKey || undefined },
     }));
     setDirty(true);
   }, []);
@@ -376,7 +389,7 @@ export function VoiceConfigView() {
   const handleVoiceSelect = useCallback((voiceId: string) => {
     setVoiceConfig((prev) => ({
       ...prev,
-      elevenlabs: { ...prev.elevenlabs, voiceId }
+      elevenlabs: { ...prev.elevenlabs, voiceId },
     }));
     setDirty(true);
   }, []);
@@ -404,10 +417,10 @@ export function VoiceConfigView() {
       const normalizedElevenLabs =
         provider === "elevenlabs"
           ? {
-            ...voiceConfig.elevenlabs,
-            modelId:
-              voiceConfig.elevenlabs?.modelId ?? DEFAULT_ELEVEN_FAST_MODEL
-          }
+              ...voiceConfig.elevenlabs,
+              modelId:
+                voiceConfig.elevenlabs?.modelId ?? DEFAULT_ELEVEN_FAST_MODEL,
+            }
           : voiceConfig.elevenlabs;
       const sanitizedKey = sanitizeApiKey(normalizedElevenLabs?.apiKey);
       if (normalizedElevenLabs) {
@@ -421,7 +434,7 @@ export function VoiceConfigView() {
           provider === "elevenlabs"
             ? (voiceConfig.mode ?? "own-key")
             : undefined,
-        elevenlabs: normalizedElevenLabs
+        elevenlabs: normalizedElevenLabs,
       };
       // Also persist swabble (wake word) config — fall back to server config
       // if the plugin isn't available on this platform (e.g. Electrobun).
@@ -440,8 +453,8 @@ export function VoiceConfigView() {
         messages: {
           ...messages,
           tts: normalizedVoiceConfig,
-          ...(swabbleCfg ? { swabble: swabbleCfg } : {})
-        }
+          ...(swabbleCfg ? { swabble: swabbleCfg } : {}),
+        },
       });
       dispatchWindowEvent(VOICE_CONFIG_UPDATED_EVENT, normalizedVoiceConfig);
       setSaveSuccess(true);
@@ -456,7 +469,6 @@ export function VoiceConfigView() {
   if (loading) {
     return (
       <div className="py-4 text-center text-[var(--muted)] text-xs">
-
         {t("voiceconfigview.LoadingVoiceConfig")}
       </div>
     );
@@ -472,7 +484,6 @@ export function VoiceConfigView() {
       {/* Provider selection */}
       <div className="flex flex-col gap-2">
         <div className="text-xs font-semibold text-[var(--muted)]">
-
           {t("voiceconfigview.TTSProvider")}
         </div>
         <div className="flex gap-2">
@@ -482,10 +493,11 @@ export function VoiceConfigView() {
               <button
                 key={p.id}
                 type="button"
-                className={`flex-1 px-3 py-2 text-xs cursor-pointer transition-colors border ${active
-                  ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]"
-                  : "border-[var(--border)] bg-[var(--card)] text-[var(--text)] hover:border-[var(--accent)]"
-                  }`}
+                className={`flex-1 px-3 py-2 text-xs cursor-pointer transition-colors border ${
+                  active
+                    ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]"
+                    : "border-[var(--border)] bg-[var(--card)] text-[var(--text)] hover:border-[var(--accent)]"
+                }`}
                 onClick={() => handleProviderChange(p.id)}
               >
                 <div className="font-semibold">{p.label}</div>
@@ -506,10 +518,11 @@ export function VoiceConfigView() {
             : `${providerInfo?.label} — No API key needed`}
         </span>
         <span
-          className={`text-[10px] px-1.5 py-0.5 border ${isConfigured
-            ? "border-green-600 text-green-600"
-            : "border-yellow-600 text-yellow-600"
-            }`}
+          className={`text-[10px] px-1.5 py-0.5 border ${
+            isConfigured
+              ? "border-green-600 text-green-600"
+              : "border-yellow-600 text-yellow-600"
+          }`}
         >
           {isConfigured ? "Configured" : "Needs Setup"}
         </span>
@@ -521,7 +534,6 @@ export function VoiceConfigView() {
           {/* API source mode */}
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs font-semibold text-[var(--muted)]">
-
               {t("voiceconfigview.APISource")}
             </span>
             <CloudSourceModeToggle
@@ -541,7 +553,9 @@ export function VoiceConfigView() {
           {/* API Key */}
           {currentMode === "own-key" && (
             <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-semibold">{t("voiceconfigview.ElevenLabsAPIKey")}</span>
+              <span className="text-xs font-semibold">
+                {t("voiceconfigview.ElevenLabsAPIKey")}
+              </span>
               <input
                 type="password"
                 className="px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-xs focus:border-[var(--accent)] focus:outline-none"
@@ -553,7 +567,6 @@ export function VoiceConfigView() {
                 onChange={(e) => handleApiKeyChange(e.target.value)}
               />
               <div className="text-[10px] text-[var(--muted)]">
-
                 {t("voiceconfigview.GetYourKeyAt")}{" "}
                 <a
                   href="https://elevenlabs.io"
@@ -561,12 +574,10 @@ export function VoiceConfigView() {
                   rel="noopener noreferrer"
                   className="text-[var(--accent)] hover:underline"
                 >
-
                   {t("voiceconfigview.elevenlabsIo")}
                 </a>
               </div>
               <div className="text-[10px] text-[var(--muted)]">
-
                 {t("voiceconfigview.FastPathDefaultE")}
                 {DEFAULT_ELEVEN_FAST_MODEL}`).
               </div>
@@ -575,7 +586,9 @@ export function VoiceConfigView() {
 
           {/* Voice presets */}
           <div className="flex flex-col gap-2">
-            <div className="text-xs font-semibold">{t("voiceconfigview.Voice")}</div>
+            <div className="text-xs font-semibold">
+              {t("voiceconfigview.Voice")}
+            </div>
             <div className="grid grid-cols-3 gap-1.5">
               {PREMADE_VOICES.map((preset) => {
                 const active = selectedVoiceId === preset.voiceId;
@@ -583,10 +596,11 @@ export function VoiceConfigView() {
                   <button
                     key={preset.id}
                     type="button"
-                    className={`px-2 py-1.5 text-xs cursor-pointer transition-colors border text-left ${active
-                      ? "border-[var(--accent)] bg-[var(--accent)]/10"
-                      : "border-[var(--border)] bg-[var(--card)] hover:border-[var(--accent)]"
-                      }`}
+                    className={`px-2 py-1.5 text-xs cursor-pointer transition-colors border text-left ${
+                      active
+                        ? "border-[var(--accent)] bg-[var(--accent)]/10"
+                        : "border-[var(--border)] bg-[var(--card)] hover:border-[var(--accent)]"
+                    }`}
                     onClick={() => handleVoiceSelect(preset.voiceId)}
                   >
                     <div className="font-semibold">{preset.name}</div>
@@ -621,7 +635,6 @@ export function VoiceConfigView() {
                     }
                   }}
                 >
-
                   {t("voiceconfigview.Stop")}
                 </button>
               )}
@@ -633,7 +646,6 @@ export function VoiceConfigView() {
       {/* Edge TTS settings */}
       {currentProvider === "edge" && (
         <div className="py-2 px-3 border border-[var(--border)] bg-[var(--bg-muted)] text-xs text-[var(--muted)]">
-
           {t("voiceconfigview.EdgeTTSUsesMicros")}
         </div>
       )}
@@ -641,7 +653,6 @@ export function VoiceConfigView() {
       {/* Simple voice settings */}
       {currentProvider === "simple-voice" && (
         <div className="py-2 px-3 border border-[var(--border)] bg-[var(--bg-muted)] text-xs text-[var(--muted)]">
-
           {t("voiceconfigview.SimpleVoiceUsesYo")}
         </div>
       )}

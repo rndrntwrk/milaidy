@@ -5,27 +5,28 @@
  * render translation keys as labels without needing the full app context.
  */
 
-import React, { createContext, useContext } from "react";
+import type React from "react";
+import { createContext } from "react";
 
 const MockAppContext = createContext<{ t: (key: string) => string }>({
-    t: (k: string) => k,
+  t: (k: string) => k,
 });
 
 export function AppMockProvider({ children }: { children: React.ReactNode }) {
-    return (
-        <MockAppContext.Provider value={{ t: (k: string) => k }}>
-            {children}
-        </MockAppContext.Provider>
-    );
+  return (
+    <MockAppContext.Provider value={{ t: (k: string) => k }}>
+      {children}
+    </MockAppContext.Provider>
+  );
 }
 
 /**
  * Storybook decorator that wraps stories in the mock app provider.
  */
 export function withAppMock(Story: React.ComponentType) {
-    return (
-        <AppMockProvider>
-            <Story />
-        </AppMockProvider>
-    );
+  return (
+    <AppMockProvider>
+      <Story />
+    </AppMockProvider>
+  );
 }

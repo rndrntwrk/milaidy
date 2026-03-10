@@ -14,7 +14,7 @@ function findByTestId(
 }
 
 vi.mock("../../src/AppContext", () => ({
-  useApp: () => ({ t: (k: string) => "Latest quote" }),
+  useApp: () => ({ t: (_k: string) => "Latest quote" }),
 }));
 
 describe("BscTradePanel", () => {

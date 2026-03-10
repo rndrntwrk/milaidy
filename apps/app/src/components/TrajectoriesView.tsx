@@ -5,41 +5,45 @@
  * Supports filtering, search, export, and clearing trajectories.
  */
 
-import { useCallback, useEffect, useState} from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useApp } from "../AppContext";
 import {
   client,
   type TrajectoryConfig,
   type TrajectoryListResult,
   type TrajectoryRecord,
-  type TrajectoryStats } from "../api-client";
+  type TrajectoryStats,
+} from "../api-client";
 import {
   formatTrajectoryDuration,
   formatTrajectoryTimestamp,
-  formatTrajectoryTokenCount } from "./trajectory-format";
-import { useApp } from "../AppContext";
+  formatTrajectoryTokenCount,
+} from "./trajectory-format";
 
 type StatusFilter = "" | "active" | "completed" | "error";
 
 const STATUS_COLORS: Record<string, { bg: string; fg: string }> = {
   active: { bg: "rgba(59, 130, 246, 0.15)", fg: "rgb(59, 130, 246)" },
   completed: { bg: "rgba(34, 197, 94, 0.15)", fg: "rgb(34, 197, 94)" },
-  error: { bg: "rgba(239, 68, 68, 0.15)", fg: "rgb(239, 68, 68)" } };
+  error: { bg: "rgba(239, 68, 68, 0.15)", fg: "rgb(239, 68, 68)" },
+};
 
 const SOURCE_COLORS: Record<string, { bg: string; fg: string }> = {
   chat: { bg: "rgba(99, 102, 241, 0.15)", fg: "rgb(99, 102, 241)" },
   autonomy: { bg: "rgba(245, 158, 11, 0.15)", fg: "rgb(245, 158, 11)" },
   telegram: { bg: "rgba(34, 197, 94, 0.15)", fg: "rgb(34, 197, 94)" },
   discord: { bg: "rgba(88, 101, 242, 0.15)", fg: "rgb(88, 101, 242)" },
-  api: { bg: "rgba(156, 163, 175, 0.15)", fg: "rgb(156, 163, 175)" } };
+  api: { bg: "rgba(156, 163, 175, 0.15)", fg: "rgb(156, 163, 175)" },
+};
 
 interface TrajectoriesViewProps {
   onSelectTrajectory?: (id: string) => void;
 }
 
 export function TrajectoriesView({
-  onSelectTrajectory }: TrajectoriesViewProps) {
-  const {
-    t } = useApp();
+  onSelectTrajectory,
+}: TrajectoriesViewProps) {
+  const { t } = useApp();
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState<TrajectoryListResult | null>(null);
   const [stats, setStats] = useState<TrajectoryStats | null>(null);
@@ -67,7 +71,8 @@ export function TrajectoriesView({
           offset: page * pageSize,
           status: statusFilter || undefined,
           source: sourceFilter || undefined,
-          search: searchQuery || undefined }),
+          search: searchQuery || undefined,
+        }),
         client.getTrajectoryStats(),
         client.getTrajectoryConfig(),
       ]);
@@ -180,28 +185,35 @@ export function TrajectoriesView({
             <span className="text-muted text-[10px]">
               (
               {formatTrajectoryTokenCount(stats.totalPromptTokens, {
-                emptyLabel: "0" })}
+                emptyLabel: "0",
+              })}
               ↑{" "}
               {formatTrajectoryTokenCount(stats.totalCompletionTokens, {
-                emptyLabel: "0" })}
+                emptyLabel: "0",
+              })}
               ↓)
             </span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-muted">{t("trajectoriesview.AvgDuration")}</span>
+            <span className="text-muted">
+              {t("trajectoriesview.AvgDuration")}
+            </span>
             <span className="font-semibold">
               {formatTrajectoryDuration(stats.averageDurationMs)}
             </span>
           </div>
           <div className="ml-auto flex items-center gap-2">
             <label className="flex items-center gap-1.5">
-              <span className="text-muted">{t("trajectoriesview.Logging")}</span>
+              <span className="text-muted">
+                {t("trajectoriesview.Logging")}
+              </span>
               <button
                 type="button"
-                className={`px-2 py-0.5 text-[11px] border rounded ${config?.enabled
+                className={`px-2 py-0.5 text-[11px] border rounded ${
+                  config?.enabled
                     ? "bg-success/20 border-success text-success"
                     : "bg-warn/20 border-warn text-warn"
-                  }`}
+                }`}
                 onClick={handleEnableLogging}
                 disabled={config?.enabled}
               >
@@ -263,7 +275,6 @@ export function TrajectoriesView({
             className="text-xs px-3 py-1.5 border border-border bg-card text-txt cursor-pointer hover:border-accent hover:text-accent"
             onClick={handleClearFilters}
           >
-
             {t("trajectoriesview.ClearFilters")}
           </button>
         )}
@@ -292,7 +303,6 @@ export function TrajectoriesView({
                 className="block w-full text-left text-xs px-3 py-1.5 hover:bg-muted/20"
                 onClick={() => handleExport("json", true)}
               >
-
                 {t("trajectoriesview.JSONWithPrompts")}
               </button>
               <button
@@ -300,7 +310,6 @@ export function TrajectoriesView({
                 className="block w-full text-left text-xs px-3 py-1.5 hover:bg-muted/20"
                 onClick={() => handleExport("json", false)}
               >
-
                 {t("trajectoriesview.JSONRedacted")}
               </button>
               <button
@@ -308,7 +317,6 @@ export function TrajectoriesView({
                 className="block w-full text-left text-xs px-3 py-1.5 hover:bg-muted/20"
                 onClick={() => handleExport("csv", false)}
               >
-
                 {t("trajectoriesview.CSVSummaryOnly")}
               </button>
               <button
@@ -316,7 +324,6 @@ export function TrajectoriesView({
                 className="block w-full text-left text-xs px-3 py-1.5 hover:bg-muted/20"
                 onClick={() => handleExport("zip", true)}
               >
-
                 {t("trajectoriesview.ZIPFolders")}
               </button>
             </div>
@@ -344,16 +351,14 @@ export function TrajectoriesView({
       <div className="flex-1 min-h-0 overflow-y-auto border border-border bg-card">
         {loading && trajectories.length === 0 ? (
           <div className="text-center py-8 text-muted">
-
             {t("trajectoriesview.LoadingTrajectories")}
           </div>
         ) : trajectories.length === 0 ? (
           <div className="text-center py-8 text-muted">
-
-            {t("trajectoriesview.NoTrajectories")} {hasActiveFilters ? "matching filters" : "yet"}.
+            {t("trajectoriesview.NoTrajectories")}{" "}
+            {hasActiveFilters ? "matching filters" : "yet"}.
             {!config?.enabled && (
               <div className="mt-2 text-warn text-[11px]">
-
                 {t("trajectoriesview.TrajectoryLoggingS")}
               </div>
             )}
@@ -362,12 +367,24 @@ export function TrajectoriesView({
           <table className="w-full text-xs">
             <thead className="bg-muted/10 sticky top-0">
               <tr>
-                <th className="text-left px-2 py-1.5 font-medium">{t("trajectoriesview.Time")}</th>
-                <th className="text-left px-2 py-1.5 font-medium">{t("trajectoriesview.Source")}</th>
-                <th className="text-left px-2 py-1.5 font-medium">{t("trajectoriesview.Status")}</th>
-                <th className="text-right px-2 py-1.5 font-medium">{t("trajectoriesview.Calls")}</th>
-                <th className="text-right px-2 py-1.5 font-medium">{t("trajectoriesview.Tokens1")}</th>
-                <th className="text-right px-2 py-1.5 font-medium">{t("trajectoriesview.Duration")}</th>
+                <th className="text-left px-2 py-1.5 font-medium">
+                  {t("trajectoriesview.Time")}
+                </th>
+                <th className="text-left px-2 py-1.5 font-medium">
+                  {t("trajectoriesview.Source")}
+                </th>
+                <th className="text-left px-2 py-1.5 font-medium">
+                  {t("trajectoriesview.Status")}
+                </th>
+                <th className="text-right px-2 py-1.5 font-medium">
+                  {t("trajectoriesview.Calls")}
+                </th>
+                <th className="text-right px-2 py-1.5 font-medium">
+                  {t("trajectoriesview.Tokens1")}
+                </th>
+                <th className="text-right px-2 py-1.5 font-medium">
+                  {t("trajectoriesview.Duration")}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -390,7 +407,8 @@ export function TrajectoriesView({
                         className="inline-block text-[10px] px-1.5 py-px rounded"
                         style={{
                           background: sourceColor.bg,
-                          color: sourceColor.fg }}
+                          color: sourceColor.fg,
+                        }}
                       >
                         {traj.source}
                       </span>
@@ -400,7 +418,8 @@ export function TrajectoriesView({
                         className="inline-block text-[10px] px-1.5 py-px rounded"
                         style={{
                           background: statusColor.bg,
-                          color: statusColor.fg }}
+                          color: statusColor.fg,
+                        }}
                       >
                         {traj.status}
                       </span>
@@ -431,7 +450,6 @@ export function TrajectoriesView({
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-xs">
           <span className="text-muted">
-
             {t("trajectoriesview.Showing")} {page * pageSize + 1}–
             {Math.min((page + 1) * pageSize, total)} of {total}
           </span>
@@ -442,7 +460,6 @@ export function TrajectoriesView({
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
             >
-
               {t("trajectoriesview.Prev")}
             </button>
             <button
@@ -451,7 +468,6 @@ export function TrajectoriesView({
               onClick={() => setPage((p) => p + 1)}
               disabled={page >= totalPages - 1}
             >
-
               {t("trajectoriesview.Next")}
             </button>
           </div>

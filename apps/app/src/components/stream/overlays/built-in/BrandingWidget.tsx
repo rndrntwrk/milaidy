@@ -35,13 +35,17 @@ const definition: WidgetDefinition = {
       label: "Opacity",
       default: 0.6,
       min: 0.1,
-      max: 1 },
+      max: 1,
+    },
     showLabel: {
       type: "boolean",
       label: "Show agent name",
-      default: true } },
+      default: true,
+    },
+  },
   defaultConfig: { opacity: 0.6, showLabel: true },
-  render: Branding };
+  render: Branding,
+};
 
 registerWidget(definition);
 export default definition;

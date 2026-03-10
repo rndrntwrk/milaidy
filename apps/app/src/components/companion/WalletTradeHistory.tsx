@@ -4,7 +4,8 @@ import {
   shortHash,
   type TranslatorFn,
   type WalletRecentFilter,
-  type WalletRecentTrade } from "./walletUtils";
+  type WalletRecentTrade,
+} from "./walletUtils";
 
 type RecentTradeGroup = {
   key: string;
@@ -42,7 +43,8 @@ export function WalletTradeHistory({
   walletRecentBusyHashes,
   refreshRecentTradeStatus,
   handleCopyRecentTxHash,
-  t }: WalletTradeHistoryProps) {
+  t,
+}: WalletTradeHistoryProps) {
   return (
     <div className="anime-wallet-recent-section">
       <div className="anime-wallet-recent-header">
@@ -158,13 +160,15 @@ export function WalletTradeHistory({
                           {entry.confirmations > 0 && (
                             <span>
                               {t("wallet.txStatus.confirmations", {
-                                count: entry.confirmations })}
+                                count: entry.confirmations,
+                              })}
                             </span>
                           )}
                           {typeof entry.nonce === "number" && (
                             <span>
                               {t("wallet.txStatus.nonce", {
-                                nonce: entry.nonce })}
+                                nonce: entry.nonce,
+                              })}
                             </span>
                           )}
                         </div>

@@ -3,8 +3,8 @@
  */
 
 import { useState } from "react";
+import { getContractLogoUrl, getNativeLogoUrl } from "../chainConfig";
 import { chainIcon } from "./constants";
-import { getNativeLogoUrl, getContractLogoUrl } from "../chainConfig";
 
 /* ── Logo URL resolver ──────────────────────────────────────────────── */
 
@@ -27,13 +27,14 @@ export function TokenLogo({
   chain,
   contractAddress,
   preferredLogoUrl = null,
-  size = 32 }: {
-    symbol: string;
-    chain: string;
-    contractAddress: string | null;
-    preferredLogoUrl?: string | null;
-    size?: number;
-  }) {
+  size = 32,
+}: {
+  symbol: string;
+  chain: string;
+  contractAddress: string | null;
+  preferredLogoUrl?: string | null;
+  size?: number;
+}) {
   const [errored, setErrored] = useState(false);
   const usePreferredLogo = Boolean(preferredLogoUrl?.startsWith("http"));
   const url = errored

@@ -41,7 +41,8 @@ function buildDefaultLayout(): OverlayLayout {
     enabled: def.type === "thought-bubble" || def.type === "branding",
     position: { ...def.defaultPosition },
     zIndex: def.defaultZIndex,
-    config: { ...def.defaultConfig } }));
+    config: { ...def.defaultConfig },
+  }));
 
   return { version: 1, name: "Default", widgets };
 }
@@ -153,17 +154,20 @@ export function useOverlayLayout(
       enabled: true,
       position: { ...def.defaultPosition },
       zIndex: def.defaultZIndex,
-      config: { ...def.defaultConfig } };
+      config: { ...def.defaultConfig },
+    };
 
     setLayout((prev) => ({
       ...prev,
-      widgets: [...prev.widgets, instance] }));
+      widgets: [...prev.widgets, instance],
+    }));
   }, []);
 
   const removeWidget = useCallback((id: string) => {
     setLayout((prev) => ({
       ...prev,
-      widgets: prev.widgets.filter((w) => w.id !== id) }));
+      widgets: prev.widgets.filter((w) => w.id !== id),
+    }));
   }, []);
 
   const toggleWidget = useCallback((id: string) => {
@@ -171,7 +175,8 @@ export function useOverlayLayout(
       ...prev,
       widgets: prev.widgets.map((w) =>
         w.id === id ? { ...w, enabled: !w.enabled } : w,
-      ) }));
+      ),
+    }));
   }, []);
 
   const updateWidget = useCallback(
@@ -183,7 +188,8 @@ export function useOverlayLayout(
         ...prev,
         widgets: prev.widgets.map((w) =>
           w.id === id ? { ...w, ...patch } : w,
-        ) }));
+        ),
+      }));
     },
     [],
   );
@@ -191,7 +197,8 @@ export function useOverlayLayout(
   const moveWidget = useCallback((id: string, position: WidgetPosition) => {
     setLayout((prev) => ({
       ...prev,
-      widgets: prev.widgets.map((w) => (w.id === id ? { ...w, position } : w)) }));
+      widgets: prev.widgets.map((w) => (w.id === id ? { ...w, position } : w)),
+    }));
   }, []);
 
   const resetLayout = useCallback(() => {
@@ -206,5 +213,6 @@ export function useOverlayLayout(
     toggleWidget,
     updateWidget,
     moveWidget,
-    resetLayout };
+    resetLayout,
+  };
 }

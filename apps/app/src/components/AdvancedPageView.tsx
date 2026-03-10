@@ -49,32 +49,39 @@ const SUB_TABS: Array<{ id: SubTab; label: string; description: string }> = [
   {
     id: "triggers",
     label: "Triggers",
-    description: "Scheduled and event-based automations" },
+    description: "Scheduled and event-based automations",
+  },
   {
     id: "fine-tuning",
     label: "Fine-Tuning",
-    description: "Dataset and model training workflows" },
+    description: "Dataset and model training workflows",
+  },
   {
     id: "trajectories",
     label: "Trajectories",
-    description: "LLM call history and analysis" },
+    description: "LLM call history and analysis",
+  },
   {
     id: "runtime",
     label: "Runtime",
-    description: "Deep runtime object introspection and load order" },
+    description: "Deep runtime object introspection and load order",
+  },
   {
     id: "database",
     label: "Databases",
-    description: "Tables, media, and vector browser" },
+    description: "Tables, media, and vector browser",
+  },
   {
     id: "lifo",
     label: "Lifo",
-    description: "Browser-native shell sandbox and file explorer" },
+    description: "Browser-native shell sandbox and file explorer",
+  },
   { id: "logs", label: "Logs", description: "Runtime and service logs" },
   {
     id: "security",
     label: "Security",
-    description: "Sandbox and policy audit feed" },
+    description: "Sandbox and policy audit feed",
+  },
 ];
 
 const MODAL_SUB_TABS = SUB_TABS.filter(
@@ -236,7 +243,8 @@ const SUBTAB_ICONS: Record<string, ReactNode> = {
     >
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
     </svg>
-  ) };
+  ),
+};
 
 function mapTabToSubTab(tab: Tab, inModal?: boolean): SubTab {
   switch (tab) {
@@ -380,7 +388,8 @@ export function AdvancedPageView({ inModal }: { inModal?: boolean } = {}) {
                 "--s-accent-glow": "rgba(123, 143, 181, 0.35)",
                 "--s-accent-subtle": "rgba(123, 143, 181, 0.12)",
                 "--s-grid-line": "rgba(123, 143, 181, 0.02)",
-                "--s-glow-edge": "rgba(123, 143, 181, 0.08)" } as React.CSSProperties)
+                "--s-glow-edge": "rgba(123, 143, 181, 0.08)",
+              } as React.CSSProperties)
             : undefined
         }
       >

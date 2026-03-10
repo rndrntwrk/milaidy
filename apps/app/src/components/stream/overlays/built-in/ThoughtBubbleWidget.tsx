@@ -59,15 +59,19 @@ const definition: WidgetDefinition = {
       label: "Fade delay (ms)",
       default: 8000,
       min: 2000,
-      max: 30000 },
+      max: 30000,
+    },
     maxLength: {
       type: "number",
       label: "Max text length",
       default: 200,
       min: 50,
-      max: 500 } },
+      max: 500,
+    },
+  },
   defaultConfig: { fadeDuration: 8000, maxLength: 200 },
-  render: ThoughtBubble };
+  render: ThoughtBubble,
+};
 
 registerWidget(definition);
 export default definition;

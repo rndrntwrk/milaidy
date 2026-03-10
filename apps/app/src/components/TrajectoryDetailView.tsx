@@ -6,16 +6,18 @@
  */
 
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { useCallback, useEffect, useState} from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useApp } from "../AppContext";
 import {
   client,
   type TrajectoryDetailResult,
-  type TrajectoryLlmCall } from "../api-client";
+  type TrajectoryLlmCall,
+} from "../api-client";
 import {
   formatTrajectoryDuration,
   formatTrajectoryTimestamp,
-  formatTrajectoryTokenCount } from "./trajectory-format";
-import { useApp } from "../AppContext";
+  formatTrajectoryTokenCount,
+} from "./trajectory-format";
 
 interface TrajectoryDetailViewProps {
   trajectoryId: string;
@@ -37,7 +39,8 @@ function estimateCost(
     "claude-3-opus": [15, 75],
     "claude-3-sonnet": [3, 15],
     "claude-3-haiku": [0.25, 1.25],
-    "claude-3.5-sonnet": [3, 15] };
+    "claude-3.5-sonnet": [3, 15],
+  };
 
   // Find matching model (partial match)
   let inputCost = 1;
@@ -75,7 +78,9 @@ function CodeBlock({ content, label }: { content: string; label: string }) {
           {label}
         </span>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-muted">{lines}  {t("trajectorydetailview.lines")}</span>
+          <span className="text-[10px] text-muted">
+            {lines} {t("trajectorydetailview.lines")}
+          </span>
           {lines > 20 && (
             <button
               type="button"
@@ -91,7 +96,6 @@ function CodeBlock({ content, label }: { content: string; label: string }) {
             onClick={() => navigator.clipboard.writeText(content)}
             title={t("trajectorydetailview.CopyToClipboard")}
           >
-
             {t("trajectorydetailview.Copy")}
           </button>
         </div>
@@ -105,7 +109,8 @@ function CodeBlock({ content, label }: { content: string; label: string }) {
 
 function LlmCallCard({
   call,
-  index }: {
+  index,
+}: {
   call: TrajectoryLlmCall;
   index: number;
 }) {
@@ -134,7 +139,6 @@ function LlmCallCard({
       {/* Metadata row */}
       <div className="flex flex-wrap gap-4 px-3 py-1.5 text-[10px] text-muted border-b border-border">
         <span>
-
           {t("trajectorydetailview.Tokens")}{" "}
           <span className="text-txt font-mono">
             {formatTrajectoryTokenCount(totalTokens, { emptyLabel: "—" })}
@@ -146,20 +150,19 @@ function LlmCallCard({
           </span>
         </span>
         <span>
-
           {t("trajectorydetailview.EstCost")}{" "}
           <span className="text-warn font-mono">
             {estimateCost(promptTokens, completionTokens, call.model)}
           </span>
         </span>
         <span>
-
-          {t("trajectorydetailview.Temp")} <span className="text-txt font-mono">{call.temperature}</span>
+          {t("trajectorydetailview.Temp")}{" "}
+          <span className="text-txt font-mono">{call.temperature}</span>
         </span>
         {call.maxTokens > 0 && (
           <span>
-
-            {t("trajectorydetailview.Max")} <span className="text-txt font-mono">{call.maxTokens}</span>
+            {t("trajectorydetailview.Max")}{" "}
+            <span className="text-txt font-mono">{call.maxTokens}</span>
           </span>
         )}
       </div>
@@ -177,12 +180,16 @@ function LlmCallCard({
             ) : (
               <ChevronRight className="w-3 h-3 inline" />
             )}{" "}
-
-            {t("trajectorydetailview.SystemPrompt")}{call.systemPrompt.length.toLocaleString()}  {t("trajectorydetailview.chars")}
+            {t("trajectorydetailview.SystemPrompt")}
+            {call.systemPrompt.length.toLocaleString()}{" "}
+            {t("trajectorydetailview.chars")}
           </button>
           {showSystem && (
             <div className="p-2">
-              <CodeBlock content={call.systemPrompt} label={t("trajectorydetailview.System")} />
+              <CodeBlock
+                content={call.systemPrompt}
+                label={t("trajectorydetailview.System")}
+              />
             </div>
           )}
         </div>
@@ -192,12 +199,18 @@ function LlmCallCard({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-0 md:gap-0 divide-y md:divide-y-0 md:divide-x divide-border">
         {/* Input (User Prompt) */}
         <div className="p-2">
-          <CodeBlock content={call.userPrompt} label={t("trajectorydetailview.InputUser")} />
+          <CodeBlock
+            content={call.userPrompt}
+            label={t("trajectorydetailview.InputUser")}
+          />
         </div>
 
         {/* Output (Response) */}
         <div className="p-2">
-          <CodeBlock content={call.response} label={t("trajectorydetailview.OutputResponse")} />
+          <CodeBlock
+            content={call.response}
+            label={t("trajectorydetailview.OutputResponse")}
+          />
         </div>
       </div>
     </div>
@@ -206,7 +219,8 @@ function LlmCallCard({
 
 export function TrajectoryDetailView({
   trajectoryId,
-  onBack }: TrajectoryDetailViewProps) {
+  onBack,
+}: TrajectoryDetailViewProps) {
   const { t } = useApp();
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<TrajectoryDetailResult | null>(null);
@@ -234,7 +248,9 @@ export function TrajectoryDetailView({
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-muted text-sm">{t("trajectorydetailview.LoadingTrajectory")}</div>
+        <div className="text-muted text-sm">
+          {t("trajectorydetailview.LoadingTrajectory")}
+        </div>
       </div>
     );
   }
@@ -249,7 +265,6 @@ export function TrajectoryDetailView({
             className="text-xs px-3 py-1.5 border border-border bg-card hover:border-accent"
             onClick={onBack}
           >
-
             {t("trajectorydetailview.GoBack")}
           </button>
         )}
@@ -260,14 +275,15 @@ export function TrajectoryDetailView({
   if (!detail) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3">
-        <div className="text-muted text-sm">{t("trajectorydetailview.TrajectoryNotFound")}</div>
+        <div className="text-muted text-sm">
+          {t("trajectorydetailview.TrajectoryNotFound")}
+        </div>
         {onBack && (
           <button
             type="button"
             className="text-xs px-3 py-1.5 border border-border bg-card hover:border-accent"
             onClick={onBack}
           >
-
             {t("trajectorydetailview.GoBack")}
           </button>
         )}
@@ -295,11 +311,12 @@ export function TrajectoryDetailView({
             className="text-xs px-2 py-1 border border-border bg-card hover:border-accent"
             onClick={onBack}
           >
-
             {t("trajectorydetailview.Back")}
           </button>
         )}
-        <h2 className="text-sm font-semibold">{t("trajectorydetailview.TrajectoryDetail")}</h2>
+        <h2 className="text-sm font-semibold">
+          {t("trajectorydetailview.TrajectoryDetail")}
+        </h2>
         <span className="text-[10px] text-muted font-mono">
           {trajectory.id.slice(0, 8)}...
         </span>
@@ -314,11 +331,15 @@ export function TrajectoryDetailView({
           </span>
         </div>
         <div>
-          <span className="text-muted">{t("trajectorydetailview.Source")} </span>
+          <span className="text-muted">
+            {t("trajectorydetailview.Source")}{" "}
+          </span>
           <span className="text-accent">{trajectory.source}</span>
         </div>
         <div>
-          <span className="text-muted">{t("trajectorydetailview.Status")} </span>
+          <span className="text-muted">
+            {t("trajectorydetailview.Status")}{" "}
+          </span>
           <span
             className={
               trajectory.status === "completed"
@@ -332,15 +353,21 @@ export function TrajectoryDetailView({
           </span>
         </div>
         <div>
-          <span className="text-muted">{t("trajectorydetailview.Duration")} </span>
+          <span className="text-muted">
+            {t("trajectorydetailview.Duration")}{" "}
+          </span>
           <span>{formatTrajectoryDuration(trajectory.durationMs)}</span>
         </div>
         <div>
-          <span className="text-muted">{t("trajectorydetailview.LLMCalls")} </span>
+          <span className="text-muted">
+            {t("trajectorydetailview.LLMCalls")}{" "}
+          </span>
           <span className="font-semibold">{llmCalls.length}</span>
         </div>
         <div>
-          <span className="text-muted">{t("trajectorydetailview.TotalTokens")} </span>
+          <span className="text-muted">
+            {t("trajectorydetailview.TotalTokens")}{" "}
+          </span>
           <span className="text-accent font-mono">
             {formatTrajectoryTokenCount(
               totalPromptTokens + totalCompletionTokens,
@@ -354,7 +381,6 @@ export function TrajectoryDetailView({
       <div className="flex-1 min-h-0 overflow-y-auto">
         {llmCalls.length === 0 ? (
           <div className="text-center py-8 text-muted">
-
             {t("trajectorydetailview.NoLLMCallsRecorde")}
           </div>
         ) : (

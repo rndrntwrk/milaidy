@@ -607,7 +607,7 @@ if (pdfTargets.length === 0) {
   // Use regex to match various minified patterns of the default import
   // Pattern: import <var> from "pdfjs-dist" or import <var> from"pdfjs-dist"
   const pdfBuggyImportRegex = /import\s+(\w+)\s+from\s*"pdfjs-dist"/g;
-  const pdfNodeImportRegex = /from\s*"pdfjs-dist"/g;
+  const _pdfNodeImportRegex = /from\s*"pdfjs-dist"/g;
   // Use .js instead of .mjs — bun's cache extraction consistently skips .mjs files
   const pdfLegacySpecifier = 'from "pdfjs-dist/legacy/build/pdf.js"';
 
@@ -648,8 +648,14 @@ if (pdfTargets.length === 0) {
     if (target.includes("/dist/node/")) {
       if (src.includes(pdfLegacySpecifier)) {
         console.log("  - pdfjs-dist legacy Node import patch already present.");
-      } else if (src.includes('from "pdfjs-dist"') || src.includes('from "pdfjs-dist/legacy/build/pdf.mjs"')) {
-        src = src.replace(/from\s*"pdfjs-dist(\/legacy\/build\/pdf\.mjs)?"/g, pdfLegacySpecifier);
+      } else if (
+        src.includes('from "pdfjs-dist"') ||
+        src.includes('from "pdfjs-dist/legacy/build/pdf.mjs"')
+      ) {
+        src = src.replace(
+          /from\s*"pdfjs-dist(\/legacy\/build\/pdf\.mjs)?"/g,
+          pdfLegacySpecifier,
+        );
         patched = true;
         console.log(
           "  - Redirected plugin-pdf Node build to pdfjs-dist legacy entry.",

@@ -11,16 +11,18 @@ import {
   Minimize2,
   Terminal,
   Trash2,
-  X } from "lucide-react";
+  X,
+} from "lucide-react";
 import {
   forwardRef,
   useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
-  useState } from "react";
-import { client } from "../api-client";
+  useState,
+} from "react";
 import { useApp } from "../AppContext";
+import { client } from "../api-client";
 
 export interface TerminalPanelHandle {
   /** Programmatically run a command via the API. */
@@ -39,8 +41,7 @@ interface TerminalLine {
 
 export const TerminalPanel = forwardRef<TerminalPanelHandle>(
   function TerminalPanel(_props, ref) {
-    const {
-    t } = useApp();
+    const { t } = useApp();
     const [open, setOpen] = useState(false);
     const [minimized, setMinimized] = useState(false);
     const [lines, setLines] = useState<TerminalLine[]>([]);
@@ -135,7 +136,8 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle>(
       toggle: () => {
         setOpen((prev) => !prev);
       },
-      isOpen: () => open }));
+      isOpen: () => open,
+    }));
 
     const handleClear = useCallback(() => {
       setLines([]);
@@ -169,10 +171,12 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle>(
           >
             <div className="flex items-center gap-2">
               <Terminal className="w-4 h-4 text-accent" />
-              <span className="text-xs font-mono text-muted">{t("terminalpanel.Terminal")}</span>
+              <span className="text-xs font-mono text-muted">
+                {t("terminalpanel.Terminal")}
+              </span>
               {unreadCount > 0 && (
                 <span className="ml-2 px-1.5 py-0.5 bg-accent text-accent-fg text-[10px] rounded-full">
-                  {unreadCount}  {t("terminalpanel.new")}
+                  {unreadCount} {t("terminalpanel.new")}
                 </span>
               )}
             </div>
@@ -198,7 +202,9 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle>(
                 {unreadCount}
               </span>
             )}
-            <span className="ml-1 text-[10px] opacity-60">{t("terminalpanel.CtrlShiftT")}</span>
+            <span className="ml-1 text-[10px] opacity-60">
+              {t("terminalpanel.CtrlShiftT")}
+            </span>
           </button>
         </div>
       );
@@ -214,7 +220,6 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle>(
           <div className="flex items-center gap-2">
             <Terminal className="w-4 h-4 text-accent" />
             <span className="text-[11px] font-mono text-muted-strong tracking-wide">
-
               {t("terminalpanel.TERMINAL")}
             </span>
           </div>
@@ -264,7 +269,6 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle>(
             <div className="flex flex-col items-center justify-center h-full text-center">
               <Terminal className="w-8 h-8 text-muted opacity-30 mb-2" />
               <span className="text-muted opacity-60 text-[11px]">
-
                 {t("terminalpanel.TerminalOutputWill")}
                 <br />
 
@@ -293,7 +297,9 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle>(
 
         {/* Status bar */}
         <div className="flex items-center justify-between px-3 py-1 border-t border-border bg-bg-accent text-[10px] text-muted">
-          <span>{lines.length}  {t("terminalpanel.lines")}</span>
+          <span>
+            {lines.length} {t("terminalpanel.lines")}
+          </span>
           <span>{t("terminalpanel.CtrlShiftTToTogg")}</span>
         </div>
       </div>

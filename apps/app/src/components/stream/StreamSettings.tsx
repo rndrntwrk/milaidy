@@ -7,13 +7,13 @@
  *   3. Stream source selector (stream-tab, game, custom-url)
  */
 
-import { useState} from "react";
+import { useState } from "react";
+import { useApp } from "../../AppContext";
 import type { StreamSourceType } from "./helpers";
 import { isSupportedStreamUrl, STREAM_SOURCE_LABELS } from "./helpers";
 import { getAllWidgets } from "./overlays/registry";
 import type { WidgetConfigField, WidgetInstance } from "./overlays/types";
 import type { UseOverlayLayout } from "./overlays/useOverlayLayout";
-import { useApp } from "../../AppContext";
 
 type Section = "channel" | "overlays" | "source";
 
@@ -37,7 +37,8 @@ function ConfigField({
   fieldKey,
   field,
   value,
-  onChange }: {
+  onChange,
+}: {
   fieldKey: string;
   field: WidgetConfigField;
   value: unknown;
@@ -128,7 +129,8 @@ function ConfigField({
 function WidgetRow({
   instance,
   onToggle,
-  onUpdate }: {
+  onUpdate,
+}: {
   instance: WidgetInstance;
   onToggle: () => void;
   onUpdate: (patch: Partial<Pick<WidgetInstance, "config">>) => void;
@@ -144,15 +146,17 @@ function WidgetRow({
         <button
           type="button"
           onClick={onToggle}
-          className={`relative w-8 h-4 rounded-full transition-colors flex-shrink-0 cursor-pointer ${instance.enabled
-            ? "bg-[var(--accent)]"
-            : "bg-[rgba(255,255,255,0.12)]"
-            }`}
+          className={`relative w-8 h-4 rounded-full transition-colors flex-shrink-0 cursor-pointer ${
+            instance.enabled
+              ? "bg-[var(--accent)]"
+              : "bg-[rgba(255,255,255,0.12)]"
+          }`}
           title={instance.enabled ? "Disable widget" : "Enable widget"}
         >
           <span
-            className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${instance.enabled ? "translate-x-4" : "translate-x-0.5"
-              }`}
+            className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${
+              instance.enabled ? "translate-x-4" : "translate-x-0.5"
+            }`}
           />
         </button>
 
@@ -210,9 +214,9 @@ export function StreamSettings({
   activeGameViewerUrl,
   onSourceChange,
   overlayLayout,
-  onClose }: StreamSettingsProps) {
-  const {
-    t } = useApp();
+  onClose,
+}: StreamSettingsProps) {
+  const { t } = useApp();
   const [section, setSection] = useState<Section>("channel");
   const [customUrlInput, setCustomUrlInput] = useState(
     streamSource.type === "custom-url" ? (streamSource.url ?? "") : "",
@@ -226,10 +230,11 @@ export function StreamSettings({
     <button
       type="button"
       onClick={() => setSection(id)}
-      className={`px-3 py-1.5 text-[12px] font-medium rounded transition-colors cursor-pointer ${section === id
-        ? "bg-[var(--accent)]/20 text-[var(--accent)]"
-        : "text-muted hover:text-txt hover:bg-bg-muted"
-        }`}
+      className={`px-3 py-1.5 text-[12px] font-medium rounded transition-colors cursor-pointer ${
+        section === id
+          ? "bg-[var(--accent)]/20 text-[var(--accent)]"
+          : "text-muted hover:text-txt hover:bg-bg-muted"
+      }`}
     >
       {label}
     </button>
@@ -247,7 +252,6 @@ export function StreamSettings({
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
           <span className="text-[13px] font-semibold text-txt">
-
             {t("streamsettings.StreamSettings")}
           </span>
           <button
@@ -272,13 +276,11 @@ export function StreamSettings({
           {section === "channel" && (
             <div className="flex flex-col gap-3">
               <p className="text-[12px] text-muted">
-
                 {t("streamsettings.SelectWhereToBroa")}
               </p>
 
               {destinations.length === 0 ? (
                 <div className="text-[12px] text-muted border border-border rounded-lg p-4 text-center">
-
                   {t("streamsettings.NoStreamingDestina")}
                   <br />
 
@@ -299,16 +301,18 @@ export function StreamSettings({
                             : undefined
                         }
                         onClick={() => onDestinationChange(d.id)}
-                        className={`flex items-center gap-3 px-4 py-3 rounded-lg border transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed text-left ${active
-                          ? "border-[var(--accent)]/60 bg-[var(--accent)]/10"
-                          : "border-border bg-[rgba(255,255,255,0.03)] hover:border-[var(--accent)]/30 hover:bg-[rgba(255,255,255,0.05)]"
-                          }`}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-lg border transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed text-left ${
+                          active
+                            ? "border-[var(--accent)]/60 bg-[var(--accent)]/10"
+                            : "border-border bg-[rgba(255,255,255,0.03)] hover:border-[var(--accent)]/30 hover:bg-[rgba(255,255,255,0.05)]"
+                        }`}
                       >
                         <span
-                          className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${active
-                            ? "bg-[var(--accent)] shadow-[0_0_6px_var(--accent)]"
-                            : "bg-muted/30"
-                            }`}
+                          className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                            active
+                              ? "bg-[var(--accent)] shadow-[0_0_6px_var(--accent)]"
+                              : "bg-muted/30"
+                          }`}
                         />
                         <span
                           className={`text-[13px] font-medium ${active ? "text-[var(--accent)]" : "text-txt"}`}
@@ -317,7 +321,6 @@ export function StreamSettings({
                         </span>
                         {active && (
                           <span className="ml-auto text-[10px] text-[var(--accent)] font-semibold uppercase tracking-wide">
-
                             {t("streamsettings.Active")}
                           </span>
                         )}
@@ -329,7 +332,6 @@ export function StreamSettings({
 
               {streamLive && (
                 <p className="text-[11px] text-[#f59e0b] border border-[#f59e0b]/30 rounded px-3 py-1.5 bg-[#f59e0b]/5">
-
                   {t("streamsettings.StreamIsLiveSt")}
                 </p>
               )}
@@ -341,7 +343,6 @@ export function StreamSettings({
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <p className="text-[12px] text-muted">
-
                   {t("streamsettings.ToggleAndConfigure")}
                 </p>
                 <button
@@ -349,14 +350,12 @@ export function StreamSettings({
                   onClick={resetLayout}
                   className="text-[11px] text-muted hover:text-danger transition-colors cursor-pointer"
                 >
-
                   {t("streamsettings.ResetDefaults")}
                 </button>
               </div>
 
               {layout.widgets.length === 0 ? (
                 <div className="text-[12px] text-muted border border-border rounded-lg p-4 text-center">
-
                   {t("streamsettings.NoWidgetsAvailable")}
                 </div>
               ) : (
@@ -378,7 +377,6 @@ export function StreamSettings({
           {section === "source" && (
             <div className="flex flex-col gap-3">
               <p className="text-[12px] text-muted">
-
                 {t("streamsettings.ChooseWhatContent")}
               </p>
 
@@ -401,16 +399,18 @@ export function StreamSettings({
                             );
                           }
                         }}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed text-left ${active && st !== "custom-url"
-                          ? "border-[var(--accent)]/60 bg-[var(--accent)]/10"
-                          : "border-border bg-[rgba(255,255,255,0.03)] hover:border-[var(--accent)]/30 hover:bg-[rgba(255,255,255,0.05)]"
-                          }`}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed text-left ${
+                          active && st !== "custom-url"
+                            ? "border-[var(--accent)]/60 bg-[var(--accent)]/10"
+                            : "border-border bg-[rgba(255,255,255,0.03)] hover:border-[var(--accent)]/30 hover:bg-[rgba(255,255,255,0.05)]"
+                        }`}
                       >
                         <span
-                          className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${active && st !== "custom-url"
-                            ? "bg-[var(--accent)]"
-                            : "bg-muted/30"
-                            }`}
+                          className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                            active && st !== "custom-url"
+                              ? "bg-[var(--accent)]"
+                              : "bg-muted/30"
+                          }`}
                         />
                         <div>
                           <div
@@ -433,10 +433,11 @@ export function StreamSettings({
 
                       {st === "custom-url" && (
                         <div
-                          className={`mt-1 flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors ${active
-                            ? "border-[var(--accent)]/60 bg-[var(--accent)]/10"
-                            : "border-border bg-[rgba(255,255,255,0.03)]"
-                            }`}
+                          className={`mt-1 flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors ${
+                            active
+                              ? "border-[var(--accent)]/60 bg-[var(--accent)]/10"
+                              : "border-border bg-[rgba(255,255,255,0.03)]"
+                          }`}
                         >
                           <input
                             type="text"
@@ -460,7 +461,6 @@ export function StreamSettings({
                             }}
                             className="px-2 py-1 rounded bg-[var(--accent)]/20 text-[var(--accent)] text-[11px] font-semibold hover:bg-[var(--accent)]/30 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                           >
-
                             {t("streamsettings.Use")}
                           </button>
                         </div>
@@ -469,7 +469,6 @@ export function StreamSettings({
                         trimmedCustomUrl &&
                         !customUrlValid && (
                           <p className="mt-1 px-1 text-[10px] text-danger">
-
                             {t("streamsettings.CustomURLsMustSta")}
                           </p>
                         )}

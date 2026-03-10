@@ -1,7 +1,5 @@
 import type { BscTradeTxStatusResponse } from "../../api-client";
-import {
-  getExplorerTokenUrl,
-} from "../chainConfig";
+import { getExplorerTokenUrl } from "../chainConfig";
 
 export type TranslatorFn = (
   key: string,
@@ -45,7 +43,13 @@ export const AVAX_NATIVE_LOGO_URL =
 export const WALLET_RECENT_TRADES_KEY = "anime_wallet_recent_trades";
 export const MAX_WALLET_RECENT_TRADES = 10;
 
-export type WalletPortfolioChainFilter = "all" | "bsc" | "evm" | "solana" | "avax" | (string & {});
+export type WalletPortfolioChainFilter =
+  | "all"
+  | "bsc"
+  | "evm"
+  | "solana"
+  | "avax"
+  | (string & {});
 
 export type WalletTokenRow = {
   key: string;
@@ -250,7 +254,7 @@ export async function fetchTokenMetadata(
     const response = await fetch(
       `https://api.dexscreener.com/latest/dex/tokens/${trimmed}`,
       {
-        signal: controller.signal
+        signal: controller.signal,
       },
     );
     if (!response.ok) return null;
@@ -271,7 +275,7 @@ export async function fetchTokenMetadata(
     return {
       symbol: tokenRef?.symbol?.trim() || "TOKEN",
       name: tokenRef?.name?.trim() || "Unknown Token",
-      logoUrl: pair.info?.imageUrl?.trim() || null
+      logoUrl: pair.info?.imageUrl?.trim() || null,
     };
   } catch {
     return null;
@@ -283,5 +287,4 @@ export async function fetchTokenMetadata(
 /** @deprecated Use `fetchTokenMetadata(address, "bsc")` instead. */
 export const fetchBscTokenMetadata = (
   contractAddress: string,
-): Promise<TokenMetadata | null> =>
-  fetchTokenMetadata(contractAddress, "bsc");
+): Promise<TokenMetadata | null> => fetchTokenMetadata(contractAddress, "bsc");

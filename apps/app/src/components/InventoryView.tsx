@@ -14,7 +14,7 @@ import {
   loadTrackedBscTokens,
   loadTrackedTokens,
   removeTrackedBscToken,
-  saveTrackedTokens
+  saveTrackedTokens,
 } from "./inventory";
 import { InventoryToolbar } from "./inventory/InventoryToolbar";
 import { NftGrid } from "./inventory/NftGrid";
@@ -48,7 +48,8 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
     getBscTradePreflight,
     getBscTradeQuote,
     getBscTradeTxStatus,
-    t } = useApp();
+    t,
+  } = useApp();
 
   // ── Tracked tokens state ──────────────────────────────────────────
   const [trackedTokens, setTrackedTokens] = useState<TrackedToken[]>(() =>
@@ -65,10 +66,10 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
   );
   const hasWalletIdentity = Boolean(
     cloudConnected ||
-    walletAddresses?.evmAddress ||
-    walletAddresses?.solanaAddress ||
-    walletConfig?.evmAddress ||
-    walletConfig?.solanaAddress,
+      walletAddresses?.evmAddress ||
+      walletAddresses?.solanaAddress ||
+      walletConfig?.evmAddress ||
+      walletConfig?.solanaAddress,
   );
   const needsSetup =
     !hasWalletIdentity && !hasManagedBscRpc && !hasLegacyEvmProviders;
@@ -93,16 +94,17 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
     visibleChainErrors,
     bscChainError,
     bscNativeBalance,
-    bscChain } = useInventoryData({
-      walletBalances,
-      walletAddresses,
-      walletConfig,
-      walletNfts,
-      inventorySort,
-      inventoryChainFocus,
-      trackedBscTokens,
-      trackedTokens
-    });
+    bscChain,
+  } = useInventoryData({
+    walletBalances,
+    walletAddresses,
+    walletConfig,
+    walletNfts,
+    inventorySort,
+    inventoryChainFocus,
+    trackedBscTokens,
+    trackedTokens,
+  });
 
   const bscNativeBalanceNum = Number.parseFloat(bscNativeBalance ?? "");
   const evmAddr = walletAddresses?.evmAddress ?? walletConfig?.evmAddress;
@@ -160,10 +162,11 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
   function renderSetup() {
     return (
       <div
-        className={`wallets-bsc__setup mt-6 border p-6 text-center ${inModal
-          ? "border-[var(--border)] bg-[rgba(255,255,255,0.04)] backdrop-blur-sm rounded-xl"
-          : "border-border bg-card"
-          }`}
+        className={`wallets-bsc__setup mt-6 border p-6 text-center ${
+          inModal
+            ? "border-[var(--border)] bg-[rgba(255,255,255,0.04)] backdrop-blur-sm rounded-xl"
+            : "border-border bg-card"
+        }`}
       >
         <div className="text-sm font-bold mb-2">
           {t("wallet.setup.rpcNotConfigured")}
@@ -173,10 +176,11 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
         </p>
         <button
           type="button"
-          className={`px-4 py-1.5 border cursor-pointer text-xs font-mono ${inModal
-            ? "border-[var(--accent)] bg-[var(--accent)] text-white rounded-md hover:opacity-90"
-            : "border-accent bg-accent text-accent-fg hover:bg-accent-hover hover:border-accent-hover"
-            }`}
+          className={`px-4 py-1.5 border cursor-pointer text-xs font-mono ${
+            inModal
+              ? "border-[var(--accent)] bg-[var(--accent)] text-white rounded-md hover:opacity-90"
+              : "border-accent bg-accent text-accent-fg hover:bg-accent-hover hover:border-accent-hover"
+          }`}
           onClick={goToRpcSettings}
         >
           {t("wallet.setup.configureRpc")}
@@ -199,10 +203,11 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
     if (!evmAddr && !solAddr) {
       return (
         <div
-          className={`mt-4 border px-4 py-6 text-center ${inModal
-            ? "border-[var(--border)] bg-[rgba(255,255,255,0.04)] backdrop-blur-sm rounded-xl"
-            : "border-border bg-card"
-            }`}
+          className={`mt-4 border px-4 py-6 text-center ${
+            inModal
+              ? "border-[var(--border)] bg-[rgba(255,255,255,0.04)] backdrop-blur-sm rounded-xl"
+              : "border-border bg-card"
+          }`}
         >
           <div className="text-sm font-bold mb-1">
             {t("wallet.noOnchainWallet")}
@@ -212,10 +217,11 @@ export function InventoryView({ inModal }: { inModal?: boolean } = {}) {
           </p>
           <button
             type="button"
-            className={`px-4 py-1.5 border cursor-pointer text-xs font-mono ${inModal
-              ? "border-[var(--accent)] bg-[var(--accent)] text-white rounded-md hover:opacity-90"
-              : "border-accent bg-accent text-accent-fg hover:bg-accent-hover hover:border-accent-hover"
-              }`}
+            className={`px-4 py-1.5 border cursor-pointer text-xs font-mono ${
+              inModal
+                ? "border-[var(--accent)] bg-[var(--accent)] text-white rounded-md hover:opacity-90"
+                : "border-accent bg-accent text-accent-fg hover:bg-accent-hover hover:border-accent-hover"
+            }`}
             onClick={() => setTab("settings")}
           >
             {t("common.settings")}

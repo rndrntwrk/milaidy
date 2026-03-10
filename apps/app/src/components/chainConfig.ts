@@ -9,67 +9,75 @@
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
-export type ChainKey = "bsc" | "avax" | "solana" | "ethereum" | "base" | "arbitrum" | "optimism" | "polygon";
+export type ChainKey =
+  | "bsc"
+  | "avax"
+  | "solana"
+  | "ethereum"
+  | "base"
+  | "arbitrum"
+  | "optimism"
+  | "polygon";
 
 export interface Stablecoin {
-    symbol: string;
-    address: string;
+  symbol: string;
+  address: string;
 }
 
 export interface ChainConfig {
-    /** Unique identifier used as filter key and in storage keys. */
-    chainKey: ChainKey;
-    /** Human-readable chain name. */
-    name: string;
-    /** Native gas-token symbol (e.g. BNB, AVAX, SOL). */
-    nativeSymbol: string;
-    /** Native token decimals. */
-    nativeDecimals: number;
-    /** Whether this is an EVM-compatible chain. */
-    isEvm: boolean;
+  /** Unique identifier used as filter key and in storage keys. */
+  chainKey: ChainKey;
+  /** Human-readable chain name. */
+  name: string;
+  /** Native gas-token symbol (e.g. BNB, AVAX, SOL). */
+  nativeSymbol: string;
+  /** Native token decimals. */
+  nativeDecimals: number;
+  /** Whether this is an EVM-compatible chain. */
+  isEvm: boolean;
 
-    /* ── Explorer ──────────────────────────────── */
+  /* ── Explorer ──────────────────────────────── */
 
-    /** Base URL of the chain's block explorer. */
-    explorerBaseUrl: string;
-    /** Path template for token pages — `{address}` is replaced. */
-    explorerTokenPath: string;
-    /** Path template for transaction pages — `{hash}` is replaced. */
-    explorerTxPath: string;
+  /** Base URL of the chain's block explorer. */
+  explorerBaseUrl: string;
+  /** Path template for token pages — `{address}` is replaced. */
+  explorerTokenPath: string;
+  /** Path template for transaction pages — `{hash}` is replaced. */
+  explorerTxPath: string;
 
-    /* ── Logos ──────────────────────────────────── */
+  /* ── Logos ──────────────────────────────────── */
 
-    /** URL for the native gas-token logo. */
-    nativeLogoUrl: string;
-    /** TrustWallet assets CDN slug (e.g. `smartchain`, `avalanchec`). */
-    trustWalletSlug: string | null;
+  /** URL for the native gas-token logo. */
+  nativeLogoUrl: string;
+  /** TrustWallet assets CDN slug (e.g. `smartchain`, `avalanchec`). */
+  trustWalletSlug: string | null;
 
-    /* ── Gas ────────────────────────────────────── */
+  /* ── Gas ────────────────────────────────────── */
 
-    /** Minimum native balance to consider the wallet "trade-ready". */
-    gasReadyThreshold: number;
-    /** Reserve kept aside from max-balance swaps. */
-    swapGasReserve: number;
+  /** Minimum native balance to consider the wallet "trade-ready". */
+  gasReadyThreshold: number;
+  /** Reserve kept aside from max-balance swaps. */
+  swapGasReserve: number;
 
-    /* ── Stablecoins ───────────────────────────── */
+  /* ── Stablecoins ───────────────────────────── */
 
-    /** Well-known stablecoin contract addresses on this chain. */
-    stablecoins: Stablecoin[];
+  /** Well-known stablecoin contract addresses on this chain. */
+  stablecoins: Stablecoin[];
 
-    /* ── Address ───────────────────────────────── */
+  /* ── Address ───────────────────────────────── */
 
-    /** Regex to validate an address on this chain. */
-    addressRegex: RegExp;
+  /** Regex to validate an address on this chain. */
+  addressRegex: RegExp;
 
-    /* ── DexScreener ───────────────────────────── */
+  /* ── DexScreener ───────────────────────────── */
 
-    /** Chain ID used by the DexScreener API. */
-    dexScreenerChainId: string;
+  /** Chain ID used by the DexScreener API. */
+  dexScreenerChainId: string;
 
-    /* ── Variants ──────────────────────────────── */
+  /* ── Variants ──────────────────────────────── */
 
-    /** Alternative chain name strings that resolve to this config. */
-    nameVariants: string[];
+  /** Alternative chain name strings that resolve to this config. */
+  nameVariants: string[];
 }
 
 /* ── Registry ──────────────────────────────────────────────────────── */
@@ -78,185 +86,188 @@ const HEX_ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 const SOLANA_ADDRESS_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 export const CHAIN_CONFIGS: Record<ChainKey, ChainConfig> = {
-    bsc: {
-        chainKey: "bsc",
-        name: "BSC",
-        nativeSymbol: "BNB",
-        nativeDecimals: 18,
-        isEvm: true,
-        explorerBaseUrl: "https://bscscan.com",
-        explorerTokenPath: "/token/{address}",
-        explorerTxPath: "/tx/{hash}",
-        nativeLogoUrl:
-            "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/smartchain/info/logo.png",
-        trustWalletSlug: "smartchain",
-        gasReadyThreshold: 0.005,
-        swapGasReserve: 0.002,
-        stablecoins: [
-            { symbol: "USDT", address: "0x55d398326f99059fF775485246999027B3197955" },
-            { symbol: "USDC", address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d" },
-        ],
-        addressRegex: HEX_ADDRESS_RE,
-        dexScreenerChainId: "bsc",
-        nameVariants: ["bsc", "bnb chain", "bnb smart chain"],
-    },
+  bsc: {
+    chainKey: "bsc",
+    name: "BSC",
+    nativeSymbol: "BNB",
+    nativeDecimals: 18,
+    isEvm: true,
+    explorerBaseUrl: "https://bscscan.com",
+    explorerTokenPath: "/token/{address}",
+    explorerTxPath: "/tx/{hash}",
+    nativeLogoUrl:
+      "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/smartchain/info/logo.png",
+    trustWalletSlug: "smartchain",
+    gasReadyThreshold: 0.005,
+    swapGasReserve: 0.002,
+    stablecoins: [
+      { symbol: "USDT", address: "0x55d398326f99059fF775485246999027B3197955" },
+      { symbol: "USDC", address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d" },
+    ],
+    addressRegex: HEX_ADDRESS_RE,
+    dexScreenerChainId: "bsc",
+    nameVariants: ["bsc", "bnb chain", "bnb smart chain"],
+  },
 
-    avax: {
-        chainKey: "avax",
-        name: "Avalanche",
-        nativeSymbol: "AVAX",
-        nativeDecimals: 18,
-        isEvm: true,
-        explorerBaseUrl: "https://snowtrace.io",
-        explorerTokenPath: "/token/{address}",
-        explorerTxPath: "/tx/{hash}",
-        nativeLogoUrl:
-            "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/info/logo.png",
-        trustWalletSlug: "avalanchec",
-        gasReadyThreshold: 0.01,
-        swapGasReserve: 0.005,
-        stablecoins: [
-            { symbol: "USDT", address: "0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7" },
-            { symbol: "USDC", address: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E" },
-        ],
-        addressRegex: HEX_ADDRESS_RE,
-        dexScreenerChainId: "avalanche",
-        nameVariants: ["avax", "avalanche", "c-chain", "avalanche c-chain"],
-    },
+  avax: {
+    chainKey: "avax",
+    name: "Avalanche",
+    nativeSymbol: "AVAX",
+    nativeDecimals: 18,
+    isEvm: true,
+    explorerBaseUrl: "https://snowtrace.io",
+    explorerTokenPath: "/token/{address}",
+    explorerTxPath: "/tx/{hash}",
+    nativeLogoUrl:
+      "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/info/logo.png",
+    trustWalletSlug: "avalanchec",
+    gasReadyThreshold: 0.01,
+    swapGasReserve: 0.005,
+    stablecoins: [
+      { symbol: "USDT", address: "0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7" },
+      { symbol: "USDC", address: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E" },
+    ],
+    addressRegex: HEX_ADDRESS_RE,
+    dexScreenerChainId: "avalanche",
+    nameVariants: ["avax", "avalanche", "c-chain", "avalanche c-chain"],
+  },
 
-    solana: {
-        chainKey: "solana",
-        name: "Solana",
-        nativeSymbol: "SOL",
-        nativeDecimals: 9,
-        isEvm: false,
-        explorerBaseUrl: "https://solscan.io",
-        explorerTokenPath: "/token/{address}",
-        explorerTxPath: "/tx/{hash}",
-        nativeLogoUrl:
-            "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/solana/info/logo.png",
-        trustWalletSlug: "solana",
-        gasReadyThreshold: 0.01,
-        swapGasReserve: 0.005,
-        stablecoins: [
-            { symbol: "USDC", address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" },
-        ],
-        addressRegex: SOLANA_ADDRESS_RE,
-        dexScreenerChainId: "solana",
-        nameVariants: ["solana", "sol"],
-    },
+  solana: {
+    chainKey: "solana",
+    name: "Solana",
+    nativeSymbol: "SOL",
+    nativeDecimals: 9,
+    isEvm: false,
+    explorerBaseUrl: "https://solscan.io",
+    explorerTokenPath: "/token/{address}",
+    explorerTxPath: "/tx/{hash}",
+    nativeLogoUrl:
+      "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/solana/info/logo.png",
+    trustWalletSlug: "solana",
+    gasReadyThreshold: 0.01,
+    swapGasReserve: 0.005,
+    stablecoins: [
+      {
+        symbol: "USDC",
+        address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      },
+    ],
+    addressRegex: SOLANA_ADDRESS_RE,
+    dexScreenerChainId: "solana",
+    nameVariants: ["solana", "sol"],
+  },
 
-    ethereum: {
-        chainKey: "ethereum",
-        name: "Ethereum",
-        nativeSymbol: "ETH",
-        nativeDecimals: 18,
-        isEvm: true,
-        explorerBaseUrl: "https://etherscan.io",
-        explorerTokenPath: "/token/{address}",
-        explorerTxPath: "/tx/{hash}",
-        nativeLogoUrl:
-            "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png",
-        trustWalletSlug: "ethereum",
-        gasReadyThreshold: 0.005,
-        swapGasReserve: 0.002,
-        stablecoins: [
-            { symbol: "USDT", address: "0xdAC17F958D2ee523a2206206994597C13D831ec7" },
-            { symbol: "USDC", address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" },
-        ],
-        addressRegex: HEX_ADDRESS_RE,
-        dexScreenerChainId: "ethereum",
-        nameVariants: ["ethereum", "mainnet", "eth"],
-    },
+  ethereum: {
+    chainKey: "ethereum",
+    name: "Ethereum",
+    nativeSymbol: "ETH",
+    nativeDecimals: 18,
+    isEvm: true,
+    explorerBaseUrl: "https://etherscan.io",
+    explorerTokenPath: "/token/{address}",
+    explorerTxPath: "/tx/{hash}",
+    nativeLogoUrl:
+      "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png",
+    trustWalletSlug: "ethereum",
+    gasReadyThreshold: 0.005,
+    swapGasReserve: 0.002,
+    stablecoins: [
+      { symbol: "USDT", address: "0xdAC17F958D2ee523a2206206994597C13D831ec7" },
+      { symbol: "USDC", address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" },
+    ],
+    addressRegex: HEX_ADDRESS_RE,
+    dexScreenerChainId: "ethereum",
+    nameVariants: ["ethereum", "mainnet", "eth"],
+  },
 
-    base: {
-        chainKey: "base",
-        name: "Base",
-        nativeSymbol: "ETH",
-        nativeDecimals: 18,
-        isEvm: true,
-        explorerBaseUrl: "https://basescan.org",
-        explorerTokenPath: "/token/{address}",
-        explorerTxPath: "/tx/{hash}",
-        nativeLogoUrl:
-            "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png",
-        trustWalletSlug: "base",
-        gasReadyThreshold: 0.005,
-        swapGasReserve: 0.001,
-        stablecoins: [
-            { symbol: "USDC", address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" },
-        ],
-        addressRegex: HEX_ADDRESS_RE,
-        dexScreenerChainId: "base",
-        nameVariants: ["base"],
-    },
+  base: {
+    chainKey: "base",
+    name: "Base",
+    nativeSymbol: "ETH",
+    nativeDecimals: 18,
+    isEvm: true,
+    explorerBaseUrl: "https://basescan.org",
+    explorerTokenPath: "/token/{address}",
+    explorerTxPath: "/tx/{hash}",
+    nativeLogoUrl:
+      "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png",
+    trustWalletSlug: "base",
+    gasReadyThreshold: 0.005,
+    swapGasReserve: 0.001,
+    stablecoins: [
+      { symbol: "USDC", address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" },
+    ],
+    addressRegex: HEX_ADDRESS_RE,
+    dexScreenerChainId: "base",
+    nameVariants: ["base"],
+  },
 
-    arbitrum: {
-        chainKey: "arbitrum",
-        name: "Arbitrum",
-        nativeSymbol: "ETH",
-        nativeDecimals: 18,
-        isEvm: true,
-        explorerBaseUrl: "https://arbiscan.io",
-        explorerTokenPath: "/token/{address}",
-        explorerTxPath: "/tx/{hash}",
-        nativeLogoUrl:
-            "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png",
-        trustWalletSlug: null,
-        gasReadyThreshold: 0.005,
-        swapGasReserve: 0.001,
-        stablecoins: [
-            { symbol: "USDC", address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" },
-        ],
-        addressRegex: HEX_ADDRESS_RE,
-        dexScreenerChainId: "arbitrum",
-        nameVariants: ["arbitrum"],
-    },
+  arbitrum: {
+    chainKey: "arbitrum",
+    name: "Arbitrum",
+    nativeSymbol: "ETH",
+    nativeDecimals: 18,
+    isEvm: true,
+    explorerBaseUrl: "https://arbiscan.io",
+    explorerTokenPath: "/token/{address}",
+    explorerTxPath: "/tx/{hash}",
+    nativeLogoUrl:
+      "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png",
+    trustWalletSlug: null,
+    gasReadyThreshold: 0.005,
+    swapGasReserve: 0.001,
+    stablecoins: [
+      { symbol: "USDC", address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" },
+    ],
+    addressRegex: HEX_ADDRESS_RE,
+    dexScreenerChainId: "arbitrum",
+    nameVariants: ["arbitrum"],
+  },
 
-    optimism: {
-        chainKey: "optimism",
-        name: "Optimism",
-        nativeSymbol: "ETH",
-        nativeDecimals: 18,
-        isEvm: true,
-        explorerBaseUrl: "https://optimistic.etherscan.io",
-        explorerTokenPath: "/token/{address}",
-        explorerTxPath: "/tx/{hash}",
-        nativeLogoUrl:
-            "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png",
-        trustWalletSlug: null,
-        gasReadyThreshold: 0.005,
-        swapGasReserve: 0.001,
-        stablecoins: [
-            { symbol: "USDC", address: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85" },
-        ],
-        addressRegex: HEX_ADDRESS_RE,
-        dexScreenerChainId: "optimism",
-        nameVariants: ["optimism"],
-    },
+  optimism: {
+    chainKey: "optimism",
+    name: "Optimism",
+    nativeSymbol: "ETH",
+    nativeDecimals: 18,
+    isEvm: true,
+    explorerBaseUrl: "https://optimistic.etherscan.io",
+    explorerTokenPath: "/token/{address}",
+    explorerTxPath: "/tx/{hash}",
+    nativeLogoUrl:
+      "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png",
+    trustWalletSlug: null,
+    gasReadyThreshold: 0.005,
+    swapGasReserve: 0.001,
+    stablecoins: [
+      { symbol: "USDC", address: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85" },
+    ],
+    addressRegex: HEX_ADDRESS_RE,
+    dexScreenerChainId: "optimism",
+    nameVariants: ["optimism"],
+  },
 
-    polygon: {
-        chainKey: "polygon",
-        name: "Polygon",
-        nativeSymbol: "MATIC",
-        nativeDecimals: 18,
-        isEvm: true,
-        explorerBaseUrl: "https://polygonscan.com",
-        explorerTokenPath: "/token/{address}",
-        explorerTxPath: "/tx/{hash}",
-        nativeLogoUrl:
-            "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png",
-        trustWalletSlug: "polygon",
-        gasReadyThreshold: 0.5,
-        swapGasReserve: 0.1,
-        stablecoins: [
-            { symbol: "USDT", address: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F" },
-            { symbol: "USDC", address: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359" },
-        ],
-        addressRegex: HEX_ADDRESS_RE,
-        dexScreenerChainId: "polygon",
-        nameVariants: ["polygon"],
-    },
+  polygon: {
+    chainKey: "polygon",
+    name: "Polygon",
+    nativeSymbol: "MATIC",
+    nativeDecimals: 18,
+    isEvm: true,
+    explorerBaseUrl: "https://polygonscan.com",
+    explorerTokenPath: "/token/{address}",
+    explorerTxPath: "/tx/{hash}",
+    nativeLogoUrl:
+      "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png",
+    trustWalletSlug: "polygon",
+    gasReadyThreshold: 0.5,
+    swapGasReserve: 0.1,
+    stablecoins: [
+      { symbol: "USDT", address: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F" },
+      { symbol: "USDC", address: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359" },
+    ],
+    addressRegex: HEX_ADDRESS_RE,
+    dexScreenerChainId: "polygon",
+    nameVariants: ["polygon"],
+  },
 };
 
 /* ── Lookup helpers ────────────────────────────────────────────────── */
@@ -264,14 +275,14 @@ export const CHAIN_CONFIGS: Record<ChainKey, ChainConfig> = {
 /** Pre-built lookup table: lowercase variant → ChainConfig. */
 const _variantMap = new Map<string, ChainConfig>();
 for (const config of Object.values(CHAIN_CONFIGS)) {
-    for (const variant of config.nameVariants) {
-        _variantMap.set(variant.toLowerCase(), config);
-    }
+  for (const variant of config.nameVariants) {
+    _variantMap.set(variant.toLowerCase(), config);
+  }
 }
 
 /** Resolve a chain name (case-insensitive, trimmed) to its config. */
 export function getChainConfig(chainName: string): ChainConfig | null {
-    return _variantMap.get(chainName.trim().toLowerCase()) ?? null;
+  return _variantMap.get(chainName.trim().toLowerCase()) ?? null;
 }
 
 /**
@@ -279,8 +290,8 @@ export function getChainConfig(chainName: string): ChainConfig | null {
  * Returns `null` for unrecognised chains.
  */
 export function resolveChainKey(chainName: string): ChainKey | null {
-    const config = getChainConfig(chainName);
-    return config?.chainKey ?? null;
+  const config = getChainConfig(chainName);
+  return config?.chainKey ?? null;
 }
 
 /**
@@ -288,14 +299,14 @@ export function resolveChainKey(chainName: string): ChainKey | null {
  * Returns `null` if the chain is unknown or the address is invalid.
  */
 export function getExplorerTokenUrl(
-    chainName: string,
-    address: string,
+  chainName: string,
+  address: string,
 ): string | null {
-    const config = getChainConfig(chainName);
-    if (!config) return null;
-    const trimmed = address.trim();
-    if (!config.addressRegex.test(trimmed)) return null;
-    return `${config.explorerBaseUrl}${config.explorerTokenPath.replace("{address}", trimmed)}`;
+  const config = getChainConfig(chainName);
+  if (!config) return null;
+  const trimmed = address.trim();
+  if (!config.addressRegex.test(trimmed)) return null;
+  return `${config.explorerBaseUrl}${config.explorerTokenPath.replace("{address}", trimmed)}`;
 }
 
 /**
@@ -303,19 +314,19 @@ export function getExplorerTokenUrl(
  * Returns `null` if the chain is unknown.
  */
 export function getExplorerTxUrl(
-    chainName: string,
-    hash: string,
+  chainName: string,
+  hash: string,
 ): string | null {
-    const config = getChainConfig(chainName);
-    if (!config) return null;
-    return `${config.explorerBaseUrl}${config.explorerTxPath.replace("{hash}", hash.trim())}`;
+  const config = getChainConfig(chainName);
+  if (!config) return null;
+  return `${config.explorerBaseUrl}${config.explorerTxPath.replace("{hash}", hash.trim())}`;
 }
 
 /**
  * Get the native token logo URL for a chain, or `null` if unknown.
  */
 export function getNativeLogoUrl(chainName: string): string | null {
-    return getChainConfig(chainName)?.nativeLogoUrl ?? null;
+  return getChainConfig(chainName)?.nativeLogoUrl ?? null;
 }
 
 /**
@@ -323,13 +334,13 @@ export function getNativeLogoUrl(chainName: string): string | null {
  * Returns `null` if the chain has no TrustWallet slug or no contract address.
  */
 export function getContractLogoUrl(
-    chainName: string,
-    contractAddress: string | null,
+  chainName: string,
+  contractAddress: string | null,
 ): string | null {
-    if (!contractAddress) return null;
-    const config = getChainConfig(chainName);
-    if (!config?.trustWalletSlug) return null;
-    return `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${config.trustWalletSlug}/assets/${contractAddress}/logo.png`;
+  if (!contractAddress) return null;
+  const config = getChainConfig(chainName);
+  if (!config?.trustWalletSlug) return null;
+  return `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${config.trustWalletSlug}/assets/${contractAddress}/logo.png`;
 }
 
 /**
@@ -337,13 +348,13 @@ export function getContractLogoUrl(
  * Returns `null` if not found.
  */
 export function getStablecoinAddress(
-    chainName: string,
-    symbol: string,
+  chainName: string,
+  symbol: string,
 ): string | null {
-    const config = getChainConfig(chainName);
-    if (!config) return null;
-    const upper = symbol.trim().toUpperCase();
-    return config.stablecoins.find((s) => s.symbol === upper)?.address ?? null;
+  const config = getChainConfig(chainName);
+  if (!config) return null;
+  const upper = symbol.trim().toUpperCase();
+  return config.stablecoins.find((s) => s.symbol === upper)?.address ?? null;
 }
 
 /** The three primary chains we want to support prominently. */

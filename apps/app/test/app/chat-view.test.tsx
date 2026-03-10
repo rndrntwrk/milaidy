@@ -83,7 +83,6 @@ function createContext(
     selectedVrmIndex: 0,
     chatPendingImages: [],
     setChatPendingImages: vi.fn(),
-    uiLanguage: "en",
     chatMode: "simple",
     chatAgentVoiceMuted: false,
     handleStart: vi.fn(async () => {}),
@@ -97,7 +96,7 @@ function createContext(
     openEmotePicker: vi.fn(),
     ptySessions: [],
     ...overrides,
-      uiLanguage: "en" as const,
+    uiLanguage: "en" as const,
     t: (k: string) => k,
   };
 }

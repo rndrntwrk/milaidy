@@ -1,18 +1,19 @@
 import { useEffect, useMemo, useRef } from "react";
+import { useApp } from "../../AppContext";
 import type {
   ConversationMessage,
-  StreamEventEnvelope } from "../../api-client";
+  StreamEventEnvelope,
+} from "../../api-client";
 import { CHANNEL_COLORS, getEventSource, getEventText } from "./helpers";
-import { useApp } from "../../AppContext";
 
 export function ChatContent({
   events,
-  messages }: {
+  messages,
+}: {
   events: StreamEventEnvelope[];
   messages: ConversationMessage[];
 }) {
-  const {
-    t } = useApp();
+  const { t } = useApp();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const recentExchanges = useMemo(() => {
@@ -42,7 +43,8 @@ export function ChatContent({
         text: msg.text,
         source: msg.source,
         from: msg.from ?? eventFromLookup.get(msg.text.trim()),
-        ts: msg.timestamp });
+        ts: msg.timestamp,
+      });
     }
 
     const assistantEvents = events
@@ -56,7 +58,8 @@ export function ChatContent({
           role: "event",
           text,
           source: getEventSource(evt),
-          ts: evt.ts });
+          ts: evt.ts,
+        });
       }
     }
 
@@ -75,7 +78,6 @@ export function ChatContent({
     >
       {recentExchanges.length === 0 ? (
         <div className="flex items-center justify-center h-full text-muted text-sm">
-
           {t("chatcontent.WaitingForMessages")}
         </div>
       ) : (
@@ -87,18 +89,20 @@ export function ChatContent({
           return (
             <div
               key={exchange.id}
-              className={`flex ${exchange.role === "assistant" || exchange.role === "event"
+              className={`flex ${
+                exchange.role === "assistant" || exchange.role === "event"
                   ? "justify-end"
                   : "justify-start"
-                }`}
+              }`}
             >
               <div
-                className={`max-w-[75%] rounded-lg px-4 py-2.5 ${exchange.role === "assistant" || exchange.role === "event"
+                className={`max-w-[75%] rounded-lg px-4 py-2.5 ${
+                  exchange.role === "assistant" || exchange.role === "event"
                     ? "bg-accent/20 text-txt-strong"
                     : channelStyle
                       ? `${channelStyle.bg} text-txt border ${channelStyle.border}`
                       : "bg-bg-muted text-txt"
-                  }`}
+                }`}
               >
                 <div
                   className={`text-[10px] uppercase mb-1 ${channelStyle?.text ?? "text-muted"}`}

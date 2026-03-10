@@ -1,10 +1,11 @@
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { useEffect, useState} from "react";
+import { useEffect, useState } from "react";
+import { useApp } from "../AppContext";
 import {
   type CustomActionDef,
   type CustomActionHandler,
-  client } from "../api-client";
-import { useApp } from "../AppContext";
+  client,
+} from "../api-client";
 
 interface CustomActionEditorProps {
   open: boolean;
@@ -111,7 +112,8 @@ function parseParameters(value: unknown): ParamDef[] {
       return {
         name,
         description: toNonEmptyString(candidate.description) || name,
-        required: candidate.required === true } satisfies ParamDef;
+        required: candidate.required === true,
+      } satisfies ParamDef;
     })
     .filter((param): param is ParamDef => param !== null);
 }
@@ -150,7 +152,8 @@ function parseGeneratedAction(payload: unknown): {
   if (!name) {
     return {
       ok: false,
-      errors: ["Generated action must include a name."] };
+      errors: ["Generated action must include a name."],
+    };
   }
 
   const handlerSource = raw.handler;
@@ -161,7 +164,8 @@ function parseGeneratedAction(payload: unknown): {
   ) {
     return {
       ok: false,
-      errors: ["Generated action must include a handler block."] };
+      errors: ["Generated action must include a handler block."],
+    };
   }
 
   const hTypeRaw =
@@ -176,7 +180,8 @@ function parseGeneratedAction(payload: unknown): {
   ) {
     return {
       ok: false,
-      errors: ["Generated handler type must be http, shell, or code."] };
+      errors: ["Generated handler type must be http, shell, or code."],
+    };
   }
 
   const params = parseParameters(raw.parameters);
@@ -195,7 +200,8 @@ function parseGeneratedAction(payload: unknown): {
     if (!url) {
       return {
         ok: false,
-        errors: ["HTTP action requires a URL."] };
+        errors: ["HTTP action requires a URL."],
+      };
     }
 
     const handler: CustomActionHandler = {
@@ -204,16 +210,17 @@ function parseGeneratedAction(payload: unknown): {
       url,
       headers: parseHeaders(rawHttp.headers).length
         ? parseHeaders(rawHttp.headers).reduce<Record<string, string>>(
-          (acc, item) => {
-            if (item.key) {
-              acc[item.key] = item.value;
-            }
-            return acc;
-          },
-          {},
-        )
+            (acc, item) => {
+              if (item.key) {
+                acc[item.key] = item.value;
+              }
+              return acc;
+            },
+            {},
+          )
         : undefined,
-      bodyTemplate: toNonEmptyString(rawHttp.bodyTemplate) };
+      bodyTemplate: toNonEmptyString(rawHttp.bodyTemplate),
+    };
 
     return {
       ok: true,
@@ -224,8 +231,10 @@ function parseGeneratedAction(payload: unknown): {
         handler,
         parameters: params,
         similes: parseSimiles(raw.similes),
-        enabled: raw.enabled === true },
-      errors: [] };
+        enabled: raw.enabled === true,
+      },
+      errors: [],
+    };
   }
 
   if (handlerType === "shell") {
@@ -237,7 +246,8 @@ function parseGeneratedAction(payload: unknown): {
     if (!command) {
       return {
         ok: false,
-        errors: ["Shell action requires a command template."] };
+        errors: ["Shell action requires a command template."],
+      };
     }
 
     return {
@@ -248,11 +258,14 @@ function parseGeneratedAction(payload: unknown): {
         handlerType,
         handler: {
           type: "shell",
-          command },
+          command,
+        },
         parameters: params,
         similes: parseSimiles(raw.similes),
-        enabled: raw.enabled === true },
-      errors: [] };
+        enabled: raw.enabled === true,
+      },
+      errors: [],
+    };
   }
 
   const rawCode = handlerSource as {
@@ -265,7 +278,8 @@ function parseGeneratedAction(payload: unknown): {
   if (!code) {
     return {
       ok: false,
-      errors: ["Code action requires a JavaScript code block."] };
+      errors: ["Code action requires a JavaScript code block."],
+    };
   }
 
   return {
@@ -276,11 +290,14 @@ function parseGeneratedAction(payload: unknown): {
       handlerType,
       handler: {
         type: "code",
-        code },
+        code,
+      },
       parameters: params,
       similes: parseSimiles(raw.similes),
-      enabled: raw.enabled === true },
-    errors: [] };
+      enabled: raw.enabled === true,
+    },
+    errors: [],
+  };
 }
 
 function parseSimilesInput(value: string): string[] {
@@ -294,9 +311,9 @@ export function CustomActionEditor({
   open,
   action,
   onSave,
-  onClose }: CustomActionEditorProps) {
-  const {
-    t } = useApp();
+  onClose,
+}: CustomActionEditorProps) {
+  const { t } = useApp();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [similesInput, setSimilesInput] = useState("");
@@ -350,7 +367,8 @@ export function CustomActionEditor({
         action.parameters?.map((p) => ({
           name: p.name,
           description: p.description || "",
-          required: p.required || false })) || [],
+          required: p.required || false,
+        })) || [],
       );
 
       const handler = action.handler;
@@ -362,8 +380,9 @@ export function CustomActionEditor({
         setHttpHeaders(
           Object.keys(headers).length > 0
             ? Object.entries(headers).map(([key, value]) => ({
-              key,
-              value }))
+                key,
+                value,
+              }))
             : [{ key: "", value: "" }],
         );
         setHttpBody(handler.bodyTemplate || "");
@@ -421,8 +440,9 @@ export function CustomActionEditor({
       setHttpHeaders(
         handler.headers
           ? Object.entries(handler.headers).map(([key, value]) => ({
-            key,
-            value }))
+              key,
+              value,
+            }))
           : [{ key: "", value: "" }],
       );
     } else if (parsed.handlerType === "shell") {
@@ -497,12 +517,14 @@ export function CustomActionEditor({
         if (field === "name") {
           return {
             ...parameter,
-            [field]: normalizeParamName(value as string) };
+            [field]: normalizeParamName(value as string),
+          };
         }
 
         return {
           ...parameter,
-          [field]: value };
+          [field]: value,
+        };
       }),
     );
     setFormError("");
@@ -603,7 +625,8 @@ export function CustomActionEditor({
           method: normalizeMethod(httpMethod),
           url: httpUrl,
           headers,
-          bodyTemplate: httpBody || undefined };
+          bodyTemplate: httpBody || undefined,
+        };
       } else if (handlerType === "shell") {
         if (!shellCommand.trim()) {
           setFormError("Shell command is required.");
@@ -612,7 +635,8 @@ export function CustomActionEditor({
 
         handler = {
           type: "shell",
-          command: shellCommand };
+          command: shellCommand,
+        };
       } else {
         if (!code.trim()) {
           setFormError("Code is required.");
@@ -621,7 +645,8 @@ export function CustomActionEditor({
 
         handler = {
           type: "code",
-          code };
+          code,
+        };
       }
 
       const similes = parseSimilesInput(similesInput);
@@ -632,7 +657,8 @@ export function CustomActionEditor({
         similes,
         parameters: normalizedParameters,
         handler,
-        enabled: action?.enabled ?? true };
+        enabled: action?.enabled ?? true,
+      };
 
       const saved = action?.id
         ? await client.updateCustomAction(action.id, actionDef)
@@ -665,12 +691,14 @@ export function CustomActionEditor({
       const duration = Date.now() - startTime;
       setTestResult({
         output: JSON.stringify(result, null, 2),
-        duration });
+        duration,
+      });
     } catch (err: unknown) {
       const duration = Date.now() - startTime;
       setTestResult({
         error: err instanceof Error ? err.message : String(err),
-        duration });
+        duration,
+      });
     } finally {
       setTesting(false);
     }
@@ -691,7 +719,6 @@ export function CustomActionEditor({
             onClick={onClose}
             className="text-muted hover:text-txt text-xl leading-none cursor-pointer"
           >
-
             {t("customactioneditor.Times")}
           </button>
         </div>
@@ -708,7 +735,6 @@ export function CustomActionEditor({
           {!action && (
             <div className="flex flex-col gap-1 border border-accent/30 bg-accent/5 p-3">
               <span className="text-xs text-accent font-medium">
-
                 {t("customactioneditor.DescribeWhatYouWa")}
               </span>
               <div className="flex gap-2">
@@ -737,7 +763,6 @@ export function CustomActionEditor({
                 </button>
               </div>
               <span className="text-xs text-muted/70">
-
                 {t("customactioneditor.TheAgentWillGener")}
               </span>
             </div>
@@ -745,7 +770,9 @@ export function CustomActionEditor({
 
           {/* Name */}
           <div className="flex flex-col gap-1">
-            <span className="text-xs text-muted">{t("customactioneditor.Name")}</span>
+            <span className="text-xs text-muted">
+              {t("customactioneditor.Name")}
+            </span>
             <input
               type="text"
               value={name}
@@ -757,7 +784,9 @@ export function CustomActionEditor({
 
           {/* Description */}
           <div className="flex flex-col gap-1">
-            <span className="text-xs text-muted">{t("customactioneditor.Description")}</span>
+            <span className="text-xs text-muted">
+              {t("customactioneditor.Description")}
+            </span>
             <textarea
               value={description}
               onChange={(e) => setDescriptionValue(e.target.value)}
@@ -769,7 +798,9 @@ export function CustomActionEditor({
 
           {/* Similes */}
           <div className="flex flex-col gap-1">
-            <span className="text-xs text-muted">{t("customactioneditor.AliasesOptional")}</span>
+            <span className="text-xs text-muted">
+              {t("customactioneditor.AliasesOptional")}
+            </span>
             <input
               type="text"
               value={similesInput}
@@ -781,14 +812,15 @@ export function CustomActionEditor({
               className="flex-1 bg-surface border border-border px-2 py-1.5 text-sm text-txt placeholder:text-muted/50 outline-none focus:border-accent"
             />
             <span className="text-xs text-muted/70">
-
               {t("customactioneditor.CommaSeparatedAlte")}
             </span>
           </div>
 
           {/* Handler Type Tabs */}
           <div className="flex flex-col gap-1">
-            <span className="text-xs text-muted">{t("customactioneditor.HandlerType")}</span>
+            <span className="text-xs text-muted">
+              {t("customactioneditor.HandlerType")}
+            </span>
             <div className="flex gap-2">
               {(["http", "shell", "code"] as const).map((type) => (
                 <button
@@ -798,10 +830,11 @@ export function CustomActionEditor({
                     setHandlerType(type);
                     setFormError("");
                   }}
-                  className={`px-3 py-1.5 text-xs border cursor-pointer ${handlerType === type
-                    ? "border-accent bg-accent text-white"
-                    : "border-border text-muted hover:text-txt"
-                    }`}
+                  className={`px-3 py-1.5 text-xs border cursor-pointer ${
+                    handlerType === type
+                      ? "border-accent bg-accent text-white"
+                      : "border-border text-muted hover:text-txt"
+                  }`}
                 >
                   {type === "http"
                     ? "HTTP Request"
@@ -842,13 +875,14 @@ export function CustomActionEditor({
 
               <div className="flex flex-col gap-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted">{t("customactioneditor.HeadersOptional")}</span>
+                  <span className="text-xs text-muted">
+                    {t("customactioneditor.HeadersOptional")}
+                  </span>
                   <button
                     type="button"
                     onClick={addHeader}
                     className="text-xs text-accent hover:opacity-80 cursor-pointer"
                   >
-
                     {t("customactioneditor.Add")}
                   </button>
                 </div>
@@ -876,7 +910,6 @@ export function CustomActionEditor({
                       onClick={() => removeHeader(i)}
                       className="px-2 text-muted hover:text-txt cursor-pointer"
                     >
-
                       {t("customactioneditor.Times")}
                     </button>
                   </div>
@@ -885,7 +918,6 @@ export function CustomActionEditor({
 
               <div className="flex flex-col gap-1">
                 <span className="text-xs text-muted">
-
                   {t("customactioneditor.BodyTemplateOptio")}
                 </span>
                 <textarea
@@ -904,7 +936,9 @@ export function CustomActionEditor({
 
           {handlerType === "shell" && (
             <div className="flex flex-col gap-1">
-              <span className="text-xs text-muted">{t("customactioneditor.CommandTemplate")}</span>
+              <span className="text-xs text-muted">
+                {t("customactioneditor.CommandTemplate")}
+              </span>
               <textarea
                 value={shellCommand}
                 onChange={(e) => {
@@ -916,15 +950,17 @@ export function CustomActionEditor({
                 className="bg-surface border border-border px-2 py-1.5 text-sm text-txt placeholder:text-muted/50 outline-none focus:border-accent resize-none font-mono"
               />
               <span className="text-xs text-muted/70">
-
-                {t("customactioneditor.Use")} {`{{paramName}}`}  {t("customactioneditor.forParameterSubsti")}
+                {t("customactioneditor.Use")} {`{{paramName}}`}{" "}
+                {t("customactioneditor.forParameterSubsti")}
               </span>
             </div>
           )}
 
           {handlerType === "code" && (
             <div className="flex flex-col gap-1">
-              <span className="text-xs text-muted">{t("customactioneditor.JavaScriptCode")}</span>
+              <span className="text-xs text-muted">
+                {t("customactioneditor.JavaScriptCode")}
+              </span>
               <textarea
                 value={code}
                 onChange={(e) => {
@@ -941,13 +977,14 @@ export function CustomActionEditor({
           {/* Parameters */}
           <div className="flex flex-col gap-2 border-t border-border pt-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted">{t("customactioneditor.Parameters")}</span>
+              <span className="text-xs text-muted">
+                {t("customactioneditor.Parameters")}
+              </span>
               <button
                 type="button"
                 onClick={addParameter}
                 className="text-xs text-accent hover:opacity-80 cursor-pointer"
               >
-
                 {t("customactioneditor.AddParameter")}
               </button>
             </div>
@@ -989,7 +1026,6 @@ export function CustomActionEditor({
                   onClick={() => removeParameter(i)}
                   className="px-2 text-muted hover:text-txt cursor-pointer"
                 >
-
                   {t("customactioneditor.Times")}
                 </button>
               </div>
@@ -1025,7 +1061,8 @@ export function CustomActionEditor({
                         onChange={(e) =>
                           setTestParams({
                             ...testParams,
-                            [param.name]: e.target.value })
+                            [param.name]: e.target.value,
+                          })
                         }
                         placeholder={param.description || "value"}
                         className="bg-surface border border-border px-2 py-1.5 text-sm text-txt placeholder:text-muted/50 outline-none focus:border-accent"
@@ -1036,7 +1073,6 @@ export function CustomActionEditor({
                   <div className="bg-surface border border-border p-2 text-xs font-mono">
                     {testResult.error && (
                       <div className="text-red-400">
-
                         {t("customactioneditor.Error")} {testResult.error}
                       </div>
                     )}
@@ -1047,8 +1083,8 @@ export function CustomActionEditor({
                     )}
                     {testResult.duration !== undefined && (
                       <div className="text-muted mt-1">
-
-                        {t("customactioneditor.Duration")} {testResult.duration}ms
+                        {t("customactioneditor.Duration")} {testResult.duration}
+                        ms
                       </div>
                     )}
                   </div>
@@ -1075,7 +1111,6 @@ export function CustomActionEditor({
             onClick={onClose}
             className="px-3 py-1.5 text-xs border border-border text-muted hover:text-txt cursor-pointer"
           >
-
             {t("customactioneditor.Cancel")}
           </button>
           <button

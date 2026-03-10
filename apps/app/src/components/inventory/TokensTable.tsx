@@ -24,7 +24,8 @@ export function TokensTable({
   visibleRows,
   visibleChainErrors,
   inventoryChainFocus,
-  handleUntrackToken }: TokensTableProps) {
+  handleUntrackToken,
+}: TokensTableProps) {
   if (walletLoading) {
     return (
       <div className="text-center py-10 text-muted italic text-xs">
@@ -86,7 +87,9 @@ export function TokensTable({
                       </div>
                       <div className="text-[10px] text-muted leading-tight mt-0.5">
                         {row.isNative ? (
-                          <span className="wt__native-badge">{t("tokenstable.nativeGas")}</span>
+                          <span className="wt__native-badge">
+                            {t("tokenstable.nativeGas")}
+                          </span>
                         ) : (
                           <span className="inline-flex items-center gap-1">
                             <span className="truncate max-w-[160px] inline-block">

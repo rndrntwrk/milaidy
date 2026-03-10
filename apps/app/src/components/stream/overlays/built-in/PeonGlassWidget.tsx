@@ -34,7 +34,8 @@ function formatTime(ts: number): string {
   return d.toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
-    second: "2-digit" });
+    second: "2-digit",
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -73,7 +74,8 @@ function PeonGlass({ instance, events }: WidgetRenderProps) {
       source: getEventSource(e),
       text: text.length > 120 ? `${text.slice(0, 120)}...` : text,
       ts: e.ts,
-      fading: false };
+      fading: false,
+    };
 
     setVisibleItems((prev) => {
       const next = [...prev.filter((i) => i.id !== item.id), item];
@@ -109,7 +111,8 @@ function PeonGlass({ instance, events }: WidgetRenderProps) {
         flexDirection: "column",
         gap: 6,
         fontFamily: "'Inter', 'SF Pro', system-ui, sans-serif",
-        overflow: "hidden" }}
+        overflow: "hidden",
+      }}
     >
       {visibleItems.map((item) => (
         <div
@@ -123,13 +126,15 @@ function PeonGlass({ instance, events }: WidgetRenderProps) {
             overflow: "hidden",
             opacity: item.fading ? 0 : 1,
             transform: item.fading ? "translateY(-4px)" : "translateY(0)",
-            transition: "opacity 0.6s ease, transform 0.6s ease" }}
+            transition: "opacity 0.6s ease, transform 0.6s ease",
+          }}
         >
           {/* Accent color bar */}
           <div
             style={{
               height: 3,
-              background: `linear-gradient(90deg, ${accentColor}, ${accentColor}88)` }}
+              background: `linear-gradient(90deg, ${accentColor}, ${accentColor}88)`,
+            }}
           />
 
           <div style={{ padding: "8px 12px" }}>
@@ -139,7 +144,8 @@ function PeonGlass({ instance, events }: WidgetRenderProps) {
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                marginBottom: 4 }}
+                marginBottom: 4,
+              }}
             >
               <span
                 style={{
@@ -147,7 +153,8 @@ function PeonGlass({ instance, events }: WidgetRenderProps) {
                   fontWeight: 600,
                   textTransform: "uppercase",
                   letterSpacing: "0.08em",
-                  color: accentColor }}
+                  color: accentColor,
+                }}
               >
                 {item.source}
               </span>
@@ -155,7 +162,8 @@ function PeonGlass({ instance, events }: WidgetRenderProps) {
                 style={{
                   fontSize: 8,
                   color: "rgba(255, 255, 255, 0.35)",
-                  fontVariantNumeric: "tabular-nums" }}
+                  fontVariantNumeric: "tabular-nums",
+                }}
               >
                 {formatTime(item.ts)}
               </span>
@@ -167,7 +175,8 @@ function PeonGlass({ instance, events }: WidgetRenderProps) {
                 margin: 0,
                 fontSize: 11,
                 lineHeight: 1.45,
-                color: "rgba(255, 255, 255, 0.85)" }}
+                color: "rgba(255, 255, 255, 0.85)",
+              }}
             >
               {item.text}
             </p>
@@ -179,7 +188,8 @@ function PeonGlass({ instance, events }: WidgetRenderProps) {
               height: 2,
               background: `${accentColor}22`,
               position: "relative",
-              overflow: "hidden" }}
+              overflow: "hidden",
+            }}
           >
             <div
               style={{
@@ -189,7 +199,8 @@ function PeonGlass({ instance, events }: WidgetRenderProps) {
                 height: "100%",
                 width: "100%",
                 background: `linear-gradient(90deg, transparent, ${accentColor}66, transparent)`,
-                animation: "peon-glass-sweep 2s ease-in-out infinite" }}
+                animation: "peon-glass-sweep 2s ease-in-out infinite",
+              }}
             />
           </div>
         </div>
@@ -229,21 +240,26 @@ const definition: WidgetDefinition = {
     accentColor: {
       type: "color",
       label: "Accent color",
-      default: "#a78bfa" },
+      default: "#a78bfa",
+    },
     maxItems: {
       type: "number",
       label: "Max visible items",
       default: 4,
       min: 1,
-      max: 8 },
+      max: 8,
+    },
     displayDuration: {
       type: "number",
       label: "Display duration (ms)",
       default: 6000,
       min: 2000,
-      max: 20000 } },
+      max: 20000,
+    },
+  },
   defaultConfig: { accentColor: "#a78bfa", maxItems: 4, displayDuration: 6000 },
-  render: PeonGlass };
+  render: PeonGlass,
+};
 
 registerWidget(definition);
 export default definition;

@@ -2,13 +2,13 @@ import { useCallback, useMemo, useState } from "react";
 import type {
   BscTransferExecuteRequest,
   BscTransferExecuteResponse,
-  EvmChainBalance
+  EvmChainBalance,
 } from "../../api-client";
 import { getStablecoinAddress } from "../chainConfig";
 import {
   HEX_ADDRESS_RE,
   mapWalletTradeError,
-  type TranslatorFn
+  type TranslatorFn,
 } from "./walletUtils";
 
 export type UseWalletSendStateArgs = {
@@ -33,7 +33,8 @@ export function useWalletSendState(args: UseWalletSendStateArgs) {
     loadBalances,
     executeBscTransfer,
     setActionNotice,
-    t } = args;
+    t,
+  } = args;
 
   const [sendTo, setSendTo] = useState("");
   const [sendAmount, setSendAmount] = useState("");
@@ -92,7 +93,7 @@ export function useWalletSendState(args: UseWalletSendStateArgs) {
         ...(sendAssetTokenAddress
           ? { tokenAddress: sendAssetTokenAddress }
           : {}),
-        confirm: true
+        confirm: true,
       });
 
       if (result.requiresUserSignature) {
@@ -153,6 +154,6 @@ export function useWalletSendState(args: UseWalletSendStateArgs) {
     sendUserSignTx,
     sendReady,
     handleSendExecute,
-    resetSendFlow
+    resetSendFlow,
   };
 }

@@ -8,7 +8,8 @@ import {
   cardSizeClass,
   overlayBackdropClass,
   TOP_BAR_COLORS,
-  tabFlags } from "./companion-shell-styles";
+  tabFlags,
+} from "./companion-shell-styles";
 
 describe("COMPANION_OVERLAY_TABS", () => {
   const expectedTabs: Tab[] = [

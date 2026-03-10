@@ -17,7 +17,8 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState } from "react";
+  useState,
+} from "react";
 import { useApp } from "../AppContext";
 import { client, isApiError } from "../api-client";
 import { ActivityFeed } from "./stream/ActivityFeed";
@@ -31,7 +32,8 @@ import {
   IS_POPOUT,
   PIP_SIZE,
   type StreamSourceType,
-  TERMINAL_ACTIVE_WINDOW_MS } from "./stream/helpers";
+  TERMINAL_ACTIVE_WINDOW_MS,
+} from "./stream/helpers";
 import { IdleContent } from "./stream/IdleContent";
 import { OverlayLayer } from "./stream/overlays/OverlayLayer";
 import { useOverlayLayout } from "./stream/overlays/useOverlayLayout";
@@ -52,7 +54,8 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
     activeGameViewerUrl,
     activeGameSandbox,
     chatAvatarSpeaking,
-    t } = useApp();
+    t,
+  } = useApp();
 
   const agentName = agentStatus?.agentName ?? "Milady";
 
@@ -132,7 +135,7 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
             setStreamSource({ type: "game", url: activeGameViewerUrl });
           }
         })
-        .catch(() => { });
+        .catch(() => {});
     } else if (!activeGameViewerUrl.trim() && streamSource.type === "game") {
       client
         .setStreamSource("stream-tab")
@@ -141,7 +144,7 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
             setStreamSource({ type: "stream-tab" });
           }
         })
-        .catch(() => { });
+        .catch(() => {});
     }
     return () => {
       cancelled = true;
@@ -169,7 +172,7 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
           const base = window.location.origin || "";
           const sep =
             window.location.protocol === "file:" ||
-              window.location.protocol === "capacitor-electron:"
+            window.location.protocol === "capacitor-electron:"
               ? "#"
               : "";
           const qs = apiBase
@@ -203,19 +206,19 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
       .then((res) => {
         if (res.ok) setDestinations(res.destinations);
       })
-      .catch(() => { });
+      .catch(() => {});
   }, [streamAvailable]);
 
   // ── Volume / mute / destination handlers ────────────────────────────
   const handleVolumeChange = useCallback((vol: number) => {
     setVolume(vol);
-    client.setStreamVolume(vol).catch(() => { });
+    client.setStreamVolume(vol).catch(() => {});
   }, []);
 
   const handleToggleMute = useCallback(() => {
     const next = !muted;
     setMuted(next);
-    (next ? client.muteStream() : client.unmuteStream()).catch(() => { });
+    (next ? client.muteStream() : client.unmuteStream()).catch(() => {});
   }, [muted]);
 
   const handleDestinationChange = useCallback((id: string) => {
@@ -224,7 +227,7 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
       .then((res) => {
         if (res.ok && res.destination) setActiveDestination(res.destination);
       })
-      .catch(() => { });
+      .catch(() => {});
   }, []);
 
   const handleSourceChange = useCallback(
@@ -342,17 +345,19 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
   const pipScale = isPip ? PIP_SIZE.width / FULL_SIZE.width : 1;
   const pipStyle: CSSProperties | undefined = isPip
     ? {
-      width: FULL_SIZE.width,
-      height: FULL_SIZE.height,
-      transform: `scale(${pipScale})`,
-      transformOrigin: "top left" }
+        width: FULL_SIZE.width,
+        height: FULL_SIZE.height,
+        transform: `scale(${pipScale})`,
+        transformOrigin: "top left",
+      }
     : undefined;
 
   return (
     <div
       data-stream-view
-      className={`flex flex-col text-txt font-body ${inModal ? "bg-transparent" : "bg-bg"
-        } ${isPip ? "" : "h-full w-full"}`}
+      className={`flex flex-col text-txt font-body ${
+        inModal ? "bg-transparent" : "bg-bg"
+      } ${isPip ? "" : "h-full w-full"}`}
       style={pipStyle}
     >
       <StatusBar
@@ -384,10 +389,11 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
       {/* Stream voice config — TTS toggle and status */}
       {!isPip && streamAvailable && (
         <div
-          className={`flex items-center px-4 py-1 border-b ${inModal
+          className={`flex items-center px-4 py-1 border-b ${
+            inModal
               ? "border-[var(--border)] bg-[rgba(255,255,255,0.03)]"
               : "border-border bg-bg"
-            }`}
+          }`}
         >
           <StreamVoiceConfig streamLive={streamLive} />
         </div>
@@ -400,21 +406,17 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
             <div className="h-full flex items-center justify-center p-6">
               <div className="max-w-md rounded-2xl border border-border bg-bg-muted/50 p-6 text-center shadow-lg">
                 <p className="text-[11px] uppercase tracking-[0.24em] text-muted">
-
                   {t("streamview.StreamingUnavailabl")}
                 </p>
                 <h2 className="mt-2 text-xl font-semibold text-txt">
-
                   {t("streamview.EnableTheStreaming")}
                 </h2>
                 <p className="mt-3 text-sm leading-6 text-muted">
-
-                  {t("streamview.MiladyCouldNotRea")} <code>{t("streamview.streamingBase")}</code>{" "}
-
+                  {t("streamview.MiladyCouldNotRea")}{" "}
+                  <code>{t("streamview.streamingBase")}</code>{" "}
                   {t("streamview.pluginThenReload")}
                 </p>
                 <p className="mt-4 text-xs text-muted">
-
                   {t("streamview.IfThePluginIsAlr")}
                 </p>
               </div>

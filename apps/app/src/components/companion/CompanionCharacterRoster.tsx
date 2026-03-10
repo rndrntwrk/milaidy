@@ -18,7 +18,8 @@ export function CompanionCharacterRoster({
   handleBgUpload,
   vrmFileInputRef,
   bgFileInputRef,
-  t }: {
+  t,
+}: {
   rosterItems: RosterItem[];
   selectedVrmIndex: number;
   safeSelectedVrmIndex: number;
@@ -86,7 +87,8 @@ export function CompanionCharacterRoster({
               style={{
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center" }}
+                justifyContent: "center",
+              }}
             >
               <svg
                 width="24"
@@ -103,7 +105,9 @@ export function CompanionCharacterRoster({
               </svg>
             </div>
             <div className="anime-roster-meta">
-              <span className="anime-roster-name">{t("companioncharacterroster.Custom")}</span>
+              <span className="anime-roster-name">
+                {t("companioncharacterroster.Custom")}
+              </span>
             </div>
           </button>
         </div>

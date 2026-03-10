@@ -190,7 +190,8 @@ function PeonSakura({ instance, events, agentMode }: WidgetRenderProps) {
         width: "100%",
         height: "100%",
         position: "relative",
-        overflow: "hidden" }}
+        overflow: "hidden",
+      }}
     >
       <canvas
         ref={canvasRef}
@@ -199,7 +200,8 @@ function PeonSakura({ instance, events, agentMode }: WidgetRenderProps) {
           inset: 0,
           width: "100%",
           height: "100%",
-          pointerEvents: "none" }}
+          pointerEvents: "none",
+        }}
       />
 
       {showStatus && latestText && (
@@ -217,7 +219,8 @@ function PeonSakura({ instance, events, agentMode }: WidgetRenderProps) {
             fontFamily: "'Inter', system-ui, sans-serif",
             display: "flex",
             alignItems: "center",
-            gap: 6 }}
+            gap: 6,
+          }}
         >
           <span style={{ fontSize: 12 }}>{modeEmoji}</span>
           <span
@@ -225,7 +228,8 @@ function PeonSakura({ instance, events, agentMode }: WidgetRenderProps) {
               fontSize: 10,
               color: accentColor,
               opacity: 0.85,
-              lineHeight: 1.3 }}
+              lineHeight: 1.3,
+            }}
           >
             {latestText}
           </span>
@@ -253,17 +257,22 @@ const definition: WidgetDefinition = {
       label: "Base petal count",
       default: 12,
       min: 4,
-      max: 40 },
+      max: 40,
+    },
     showStatus: {
       type: "boolean",
       label: "Show status bar",
-      default: true },
+      default: true,
+    },
     accentColor: {
       type: "color",
       label: "Text color",
-      default: "#f9a8d4" } },
+      default: "#f9a8d4",
+    },
+  },
   defaultConfig: { petalDensity: 12, showStatus: true, accentColor: "#f9a8d4" },
-  render: PeonSakura };
+  render: PeonSakura,
+};
 
 registerWidget(definition);
 export default definition;
