@@ -238,10 +238,9 @@ describe("Agent Orchestrator Plugin Loading", () => {
       version: string;
     };
     const [major] = pkg.version.split(".").map(Number);
-    expect(
-      major >= 2,
-      `Expected >= 2.0.0-alpha, got ${pkg.version}`,
-    ).toBe(true);
+    expect(major >= 2, `Expected >= 2.0.0-alpha, got ${pkg.version}`).toBe(
+      true,
+    );
   });
 });
 

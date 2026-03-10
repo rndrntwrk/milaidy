@@ -144,39 +144,6 @@ async function installFoundry() {
 }
 
 // ---------------------------------------------------------------------------
-// ASCII banner — printed once at startup in cyber green (#00FF41).
-// Keep in sync with src/ascii.ts.
-// ---------------------------------------------------------------------------
-
-const ASCII_ART = `\
-        miladym                        iladym      
-    iladymil                                ady    
-    mil                                         ad   
-ymi                                   ladymila     
-dym                                    ila dymila    
-dy       miladymil                     ady   milady   
-    miladymilad                     ymila dymilady  
-    mi    ladymila                   dymiladymil     
-adymiladymiladymi                  l  adymila d    
-ym   iladymiladymil                 ad ymilad  y    
-m  il  adymiladym  i                  l   ad   y     
-    mi  ladymila  dy                    mi           
-    la          dy                         mil      
-        ad      ym                                   
-        iladym`;
-
-function printBanner() {
-  if (supportsColor) {
-    const colored = ASCII_ART.split("\n")
-      .map((line) => green(line))
-      .join("\n");
-    console.log(`\n${colored}\n`);
-  } else {
-    console.log(`\n${ASCII_ART}\n`);
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Runtime detection — prefer bun when available, fall back to node/npx.
 // ---------------------------------------------------------------------------
 
@@ -218,7 +185,7 @@ const hasBun = !forceNodeRuntime && !!which("bun");
 if (!hasBun && !which("npx")) {
   console.error(
     'Neither "bun" nor "npx" was found in your PATH. ' +
-      "Install Bun or Node.js with npx to run this dev script.",
+    "Install Bun or Node.js with npx to run this dev script.",
   );
   process.exit(1);
 }
@@ -455,8 +422,8 @@ function createOnchainDevConfig({
 
   const nextRegistry =
     config.registry &&
-    typeof config.registry === "object" &&
-    !Array.isArray(config.registry)
+      typeof config.registry === "object" &&
+      !Array.isArray(config.registry)
       ? { ...config.registry }
       : {};
   nextRegistry.mainnetRpc = rpcUrl;
@@ -466,8 +433,8 @@ function createOnchainDevConfig({
 
   const nextFeatures =
     config.features &&
-    typeof config.features === "object" &&
-    !Array.isArray(config.features)
+      typeof config.features === "object" &&
+      !Array.isArray(config.features)
       ? { ...config.features }
       : {};
   nextFeatures.dropEnabled = true;
@@ -1054,16 +1021,14 @@ if (uiOnly) {
   startVite();
 } else {
   console.log(`${orange("\nmilady dev mode")}\n`);
-  printBanner();
   console.log(`  ${green("[milady]")} ${green("Starting dev server...")}\n`);
   console.log(
     `  ${green("[milady]")} ${dim(
-      `API log level=${devLogLevel}${
-        quietApiLogs
-          ? " (errors only)"
-          : verboseApiLogs
-            ? " (verbose)"
-            : " (startup + warnings/errors)"
+      `API log level=${devLogLevel}${quietApiLogs
+        ? " (errors only)"
+        : verboseApiLogs
+          ? " (verbose)"
+          : " (startup + warnings/errors)"
       }`,
     )}`,
   );
@@ -1141,22 +1106,22 @@ if (uiOnly) {
 
   const apiCmd = hasBun
     ? [
-        "bun",
-        ...resolvedStealthImports.flatMap((filePath) => [
-          "--preload",
-          filePath,
-        ]),
-        "--watch",
-        "src/runtime/dev-server.ts",
-      ]
+      "bun",
+      ...resolvedStealthImports.flatMap((filePath) => [
+        "--preload",
+        filePath,
+      ]),
+      "--watch",
+      "src/runtime/dev-server.ts",
+    ]
     : [
-        "node",
-        ...resolvedStealthImports.flatMap((filePath) => ["--import", filePath]),
-        "--import",
-        "tsx",
-        "--watch",
-        "src/runtime/dev-server.ts",
-      ];
+      "node",
+      ...resolvedStealthImports.flatMap((filePath) => ["--import", filePath]),
+      "--import",
+      "tsx",
+      "--watch",
+      "src/runtime/dev-server.ts",
+    ];
   apiProcess = spawn(apiCmd[0], apiCmd.slice(1), {
     cwd,
     env: {
@@ -1171,7 +1136,7 @@ if (uiOnly) {
 
   if (quietApiLogs) {
     apiProcess.stderr.on("data", createErrorFilter(process.stderr));
-    apiProcess.stdout.on("data", () => {});
+    apiProcess.stdout.on("data", () => { });
   } else if (verboseApiLogs) {
     apiProcess.stderr.on("data", (data) => {
       process.stderr.write(data);
