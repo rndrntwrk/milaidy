@@ -9,7 +9,13 @@ import { Button } from "./ui/Button.js";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/Card.js";
 
 export function CustomActionsView() {
-  const { setTab, setActionNotice, plugins, conversationMessages } = useApp();
+  const {
+    setTab,
+    setActionNotice,
+    conversationMessages,
+    quickLayerStatuses,
+    runQuickLayer,
+  } = useApp();
   const [actions, setActions] = useState<CustomActionDef[]>([]);
   const [search, setSearch] = useState("");
   const [editorOpen, setEditorOpen] = useState(false);
@@ -18,56 +24,14 @@ export function CustomActionsView() {
   );
   const [loading, setLoading] = useState(true);
 
-  type LayerStatus = "active" | "disabled" | "available";
   const quickLayers = QUICK_LAYER_DOCK;
 
-  const resolvePluginStatus = useCallback(
-    (id: string): LayerStatus => {
-      const needle = id.trim().toLowerCase();
-      const plugin = plugins.find((p) => {
-        const pluginId = p.id.trim().toLowerCase();
-        const pluginName = p.name.trim().toLowerCase();
-        return (
-          pluginId === needle ||
-          pluginId === needle.replace(/^alice-/, "") ||
-          pluginName === needle ||
-          pluginName.includes(needle)
-        );
-      });
-
-      if (!plugin) return "available";
-      if (plugin.isActive === true) return "active";
-      if (plugin.enabled === false) return "disabled";
-      if (plugin.enabled === true && plugin.isActive === false) return "disabled";
-      return "available";
-    },
-    [plugins],
-  );
-
-  const resolveLayerStatus = useCallback(
-    (pluginIds: string[]): LayerStatus => {
-      if (pluginIds.length === 0) return "available";
-      const statuses = pluginIds.map((id) => resolvePluginStatus(id));
-      if (statuses.every((status) => status === "active")) return "active";
-      if (statuses.some((status) => status === "disabled")) return "disabled";
-      return "available";
-    },
-    [resolvePluginStatus],
-  );
-
   const triggerDockedLayer = useCallback(
-    (layerId: string, layerLabel: string) => {
-      setTab("chat");
+    (layerId: (typeof quickLayers)[number]["id"], layerLabel: string) => {
       setActionNotice(`Running ${layerLabel} from Actions tab...`, "info", 2200);
-      window.setTimeout(() => {
-        window.dispatchEvent(
-          new CustomEvent("milaidy:quick-layer:run", {
-            detail: { layerId },
-          }),
-        );
-      }, 120);
+      void runQuickLayer(layerId);
     },
-    [setActionNotice, setTab],
+    [runQuickLayer, setActionNotice],
   );
 
   const actionTimeline = useMemo(
@@ -232,7 +196,7 @@ export function CustomActionsView() {
         <CardContent className="pt-0">
           <div className="flex flex-wrap gap-2">
             {quickLayers.map((layer) => {
-              const status = resolveLayerStatus(layer.pluginIds);
+              const status = quickLayerStatuses[layer.id];
               const tone =
                 status === "active"
                   ? "border-white/18 bg-white/[0.14] text-white"

@@ -1,15 +1,8 @@
 import { useMemo } from "react";
 import { useApp } from "../AppContext.js";
+import { liveSourceKindLabel } from "../liveComposition.js";
 import { Badge } from "./ui/Badge.js";
 import { ConnectionIcon } from "./ui/Icons.js";
-
-function normalizeMode(raw: string | null | undefined): string {
-  const value = (raw ?? "").toLowerCase();
-  if (!value) return "chat";
-  if (value.includes("auto")) return "autonomous";
-  if (value.includes("chat")) return "chat";
-  return value;
-}
 
 function normalizeMissionState(raw: string | null | undefined, chatSending: boolean): string {
   if (chatSending) return "executing";
@@ -21,7 +14,15 @@ function normalizeMissionState(raw: string | null | undefined, chatSending: bool
 }
 
 export function MiladyStatusStrip() {
-  const { connected, agentStatus, plugins, chatSending } = useApp();
+  const {
+    connected,
+    agentStatus,
+    plugins,
+    chatSending,
+    liveBroadcastState,
+    liveLayoutMode,
+    liveHeroSource,
+  } = useApp();
 
   const channelBadges = useMemo(
     () =>
@@ -47,13 +48,19 @@ export function MiladyStatusStrip() {
     [plugins],
   );
 
-  const mode = normalizeMode(agentStatus?.runMode ?? agentStatus?.mode ?? agentStatus?.autonomyMode);
   const missionState = normalizeMissionState(agentStatus?.state, chatSending);
   const model = agentStatus?.model || "unknown";
   const liveChannels = channelBadges.filter((badge) => badge.state === "live");
-  const showMode = mode !== "chat";
+  const mode = liveBroadcastState === "live" ? "broadcast" : null;
+  const showMode = Boolean(mode);
   const showMissionState = missionState !== "idle";
   const showModel = model && model !== "unknown";
+  const showLiveHero = Boolean(liveHeroSource);
+  const liveLayoutLabel =
+    liveLayoutMode === "camera-hold" ? "camera hold" : "camera full";
+  const heroLabel = liveHeroSource
+    ? `${liveSourceKindLabel(liveHeroSource.kind)}: ${liveHeroSource.label}`
+    : null;
 
   return (
     <div className="pointer-events-none absolute right-3 top-3 z-30 flex max-w-[calc(100%-1.5rem)] justify-end sm:right-4 sm:top-4">
@@ -62,6 +69,15 @@ export function MiladyStatusStrip() {
           <ConnectionIcon className="h-3.5 w-3.5" />
           {connected ? "live" : "offline"}
         </Badge>
+        <Badge variant={liveBroadcastState === "live" ? "accent" : "outline"}>
+          {liveBroadcastState === "live" ? "on air" : "off air"}
+        </Badge>
+        <Badge variant="outline">{liveLayoutLabel}</Badge>
+        {showLiveHero ? (
+          <Badge variant="outline" className="hidden xl:inline-flex" title={heroLabel ?? undefined}>
+            {heroLabel}
+          </Badge>
+        ) : null}
         {showModel ? <Badge variant="outline" className="hidden 2xl:inline-flex">{model}</Badge> : null}
         {showMode ? <Badge variant="outline" className="hidden lg:inline-flex">{mode}</Badge> : null}
         {showMissionState ? <Badge variant="outline">{missionState}</Badge> : null}

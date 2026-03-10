@@ -24,9 +24,6 @@ interface CustomActionsPanelProps {
   onClose: () => void;
   onOpenEditor: (action?: CustomActionDef | null) => void;
 }
-
-type LayerStatus = "active" | "disabled" | "available";
-
 const HANDLER_TYPE_COLORS: Record<string, string> = {
   http: "bg-blue-500/20 text-blue-300",
   shell: "bg-emerald-500/20 text-emerald-300",
@@ -44,7 +41,7 @@ export function CustomActionsPanel({
   onClose,
   onOpenEditor,
 }: CustomActionsPanelProps) {
-  const { plugins, setActionNotice, setTab } = useApp();
+  const { setActionNotice, quickLayerStatuses, runQuickLayer } = useApp();
   const [actions, setActions] = useState<CustomActionDef[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -64,65 +61,24 @@ export function CustomActionsPanel({
     }
   }, []);
 
-  const resolvePluginStatus = useCallback(
-    (id: string): LayerStatus => {
-      const needle = id.trim().toLowerCase();
-      const plugin = plugins.find((p) => {
-        const pluginId = p.id.trim().toLowerCase();
-        const pluginName = p.name.trim().toLowerCase();
-        return (
-          pluginId === needle ||
-          pluginId === needle.replace(/^alice-/, "") ||
-          pluginName === needle ||
-          pluginName.includes(needle)
-        );
-      });
-
-      if (!plugin) return "available";
-      if (plugin.isActive === true) return "active";
-      if (plugin.enabled === false) return "disabled";
-      if (plugin.enabled === true && plugin.isActive === false) return "disabled";
-      return "available";
-    },
-    [plugins],
-  );
-
-  const resolveLayerStatus = useCallback(
-    (pluginIds: string[]): LayerStatus => {
-      if (pluginIds.length === 0) return "available";
-      const statuses = pluginIds.map((id) => resolvePluginStatus(id));
-      if (statuses.every((status) => status === "active")) return "active";
-      if (statuses.some((status) => status === "disabled")) return "disabled";
-      return "available";
-    },
-    [resolvePluginStatus],
-  );
-
   const layerStatuses = useMemo(
     () =>
       new Map(
         QUICK_LAYER_DOCK.map((layer) => [
           layer.id,
-          resolveLayerStatus(layer.pluginIds),
+          quickLayerStatuses[layer.id],
         ]),
       ),
-    [resolveLayerStatus],
+    [quickLayerStatuses],
   );
 
   const triggerDockedLayer = useCallback(
-    (layerId: string, layerLabel: string) => {
-      setTab("chat");
+    (layerId: (typeof QUICK_LAYER_DOCK)[number]["id"], layerLabel: string) => {
       setActionNotice(`Running ${layerLabel} from Actions drawer...`, "info", 2200);
       onClose();
-      window.setTimeout(() => {
-        window.dispatchEvent(
-          new CustomEvent("milaidy:quick-layer:run", {
-            detail: { layerId },
-          }),
-        );
-      }, 120);
+      void runQuickLayer(layerId);
     },
-    [onClose, setActionNotice, setTab],
+    [onClose, runQuickLayer, setActionNotice],
   );
 
   useEffect(() => {

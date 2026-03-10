@@ -2,14 +2,7 @@ import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TestRenderer, { act } from "react-test-renderer";
 
-interface PluginStub {
-  id: string;
-  name: string;
-  enabled?: boolean;
-  isActive?: boolean;
-}
-
-interface ChatQuickLayerContextStub {
+interface ChatContextStub {
   agentStatus: { agentName: string } | null;
   chatInput: string;
   chatSending: boolean;
@@ -30,8 +23,28 @@ interface ChatQuickLayerContextStub {
     tone?: "info" | "success" | "error",
     ttlMs?: number,
   ) => void;
-  plugins: PluginStub[];
-  activeGameViewerUrl: string;
+  quickLayerStatuses: Record<string, "active" | "disabled" | "available">;
+  autonomousRunOpen: boolean;
+  autoRunMode: "newscast" | "topic" | "games" | "free";
+  autoRunTopic: string;
+  autoRunDurationMin: number;
+  autoRunAvatarRuntime: "auto" | "local" | "premium";
+  autoRunPreview: {
+    profile: string;
+    canStart: boolean;
+    estimate: {
+      totalCredits: number;
+      runtimeCredits: number;
+      grandTotalCredits: number;
+    };
+    balance?: { creditBalance: number };
+  } | null;
+  autoRunPreviewBusy: boolean;
+  autoRunLaunching: boolean;
+  runQuickLayer: (layerId: string) => Promise<void>;
+  closeAutonomousRun: () => void;
+  runAutonomousEstimate: () => Promise<unknown>;
+  runAutonomousLaunch: () => Promise<void>;
   droppedFiles: string[];
   shareIngestNotice: string;
   selectedVrmIndex: number;
@@ -40,9 +53,8 @@ interface ChatQuickLayerContextStub {
 const { mockClient, mockUseApp, mockUseVoiceChat } = vi.hoisted(() => ({
   mockClient: {
     getConfig: vi.fn(),
-    executeAutonomyPlan: vi.fn(),
-    getFive55GamesCatalog: vi.fn(),
-    playFive55Game: vi.fn(),
+    listFive55MasteryRuns: vi.fn(),
+    startFive55MasteryRun: vi.fn(),
   },
   mockUseApp: vi.fn(),
   mockUseVoiceChat: vi.fn(),
@@ -73,10 +85,10 @@ vi.mock("../../src/api-client", () => ({
 import { ChatView } from "../../src/components/ChatView";
 
 function createContext(
-  overrides?: Partial<ChatQuickLayerContextStub>,
-): ChatQuickLayerContextStub {
+  overrides?: Partial<ChatContextStub>,
+): ChatContextStub {
   return {
-    agentStatus: { agentName: "Milaidy" },
+    agentStatus: { agentName: "Alice" },
     chatInput: "",
     chatSending: false,
     chatFirstTokenReceived: false,
@@ -86,8 +98,42 @@ function createContext(
     setState: vi.fn(),
     setTab: vi.fn(),
     setActionNotice: vi.fn(),
-    plugins: [],
-    activeGameViewerUrl: "",
+    quickLayerStatuses: {
+      stream: "available",
+      "go-live": "available",
+      "autonomous-run": "available",
+      "screen-share": "available",
+      ads: "available",
+      "invite-guest": "available",
+      radio: "available",
+      pip: "available",
+      "reaction-segment": "available",
+      earnings: "available",
+      "play-games": "available",
+      swap: "available",
+      "end-live": "available",
+    },
+    autonomousRunOpen: true,
+    autoRunMode: "games",
+    autoRunTopic: "",
+    autoRunDurationMin: 30,
+    autoRunAvatarRuntime: "local",
+    autoRunPreview: {
+      profile: "standard",
+      canStart: true,
+      estimate: {
+        totalCredits: 10,
+        runtimeCredits: 4,
+        grandTotalCredits: 14,
+      },
+      balance: { creditBalance: 200 },
+    },
+    autoRunPreviewBusy: false,
+    autoRunLaunching: false,
+    runQuickLayer: vi.fn(async () => {}),
+    closeAutonomousRun: vi.fn(),
+    runAutonomousEstimate: vi.fn(async () => null),
+    runAutonomousLaunch: vi.fn(async () => {}),
     droppedFiles: [],
     shareIngestNotice: "",
     selectedVrmIndex: 0,
@@ -101,26 +147,26 @@ async function flush(): Promise<void> {
   });
 }
 
-async function triggerQuickLayer(layerId: string): Promise<void> {
-  await act(async () => {
-    window.dispatchEvent(
-      new CustomEvent("milaidy:quick-layer:run", {
-        detail: { layerId },
-      }),
-    );
-  });
-  await flush();
+function findButtonByText(
+  root: TestRenderer.ReactTestInstance,
+  label: string,
+): TestRenderer.ReactTestInstance {
+  return root.find(
+    (node) =>
+      node.type === "button" &&
+      node.children.some(
+        (child) => typeof child === "string" && child.includes(label),
+      ),
+  );
 }
 
-describe("ChatView quick layers", () => {
+describe("ChatView autonomous run panel", () => {
   beforeEach(() => {
-    vi.useFakeTimers();
     mockUseApp.mockReset();
     mockUseVoiceChat.mockReset();
     mockClient.getConfig.mockReset();
-    mockClient.executeAutonomyPlan.mockReset();
-    mockClient.getFive55GamesCatalog.mockReset();
-    mockClient.playFive55Game.mockReset();
+    mockClient.listFive55MasteryRuns.mockReset();
+    mockClient.startFive55MasteryRun.mockReset();
 
     mockUseVoiceChat.mockReturnValue({
       supported: false,
@@ -134,28 +180,16 @@ describe("ChatView quick layers", () => {
       stopSpeaking: vi.fn(),
     });
     mockClient.getConfig.mockResolvedValue({});
+    mockClient.listFive55MasteryRuns.mockResolvedValue({ runs: [] });
+    mockClient.startFive55MasteryRun.mockResolvedValue({ runId: "run-1" });
   });
 
   afterEach(() => {
-    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
-  it("Go Live primes stream prompt and sends in power mode", async () => {
-    const ctx = createContext({
-      plugins: [{ id: "stream", name: "stream", enabled: true, isActive: true }],
-    });
-    mockUseApp.mockReturnValue(ctx);
-    mockClient.executeAutonomyPlan.mockResolvedValue({
-      ok: true,
-      allSucceeded: true,
-      stoppedEarly: false,
-      failedStepIndex: null,
-      stopOnFailure: false,
-      successCount: 3,
-      failedCount: 0,
-      results: [],
-    });
+  it("renders the autonomous setup from shared app state", async () => {
+    mockUseApp.mockReturnValue(createContext());
 
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
@@ -163,79 +197,15 @@ describe("ChatView quick layers", () => {
     });
     await flush();
 
-    await triggerQuickLayer("go-live");
-
-    expect(mockClient.executeAutonomyPlan).toHaveBeenCalled();
-    expect(ctx.setState).toHaveBeenCalledWith(
-      "chatInput",
-      expect.stringContaining("You are now live. Give a concise on-air opener"),
-    );
-
-    await act(async () => {
-      vi.advanceTimersByTime(35);
-    });
-    expect(ctx.handleChatSend).toHaveBeenCalledWith("power");
+    const text = JSON.stringify(tree!.toJSON());
+    expect(text).toContain("Autonomous Run Setup");
+    expect(text).toContain("Estimate Cost");
+    expect(text).toContain("Start Autonomous Run");
   });
 
-  it("Play Games launches autonomous spectate viewer and nudges chat with active game context", async () => {
-    const ctx = createContext({
-      plugins: [
-        { id: "five55-games", name: "five55-games", enabled: true, isActive: true },
-      ],
-    });
+  it("routes estimate and launch actions through the shared app callbacks", async () => {
+    const ctx = createContext();
     mockUseApp.mockReturnValue(ctx);
-    mockClient.getFive55GamesCatalog.mockResolvedValue({
-      games: [
-        {
-          id: "ninja-evilcorp",
-          title: "ninja_vs_evilcorp.555",
-          description: "Stealth platformer",
-          category: "arcade",
-          difficulty: "hard",
-          path: "/games/ninja/index.html",
-        },
-      ],
-      total: 1,
-      includeBeta: true,
-      category: "all",
-    });
-    mockClient.executeAutonomyPlan.mockResolvedValue({
-      ok: true,
-      allSucceeded: true,
-      stoppedEarly: false,
-      failedStepIndex: null,
-      stopOnFailure: true,
-      successCount: 1,
-      failedCount: 0,
-      results: [
-        {
-          success: true,
-          result: {
-            text: JSON.stringify({
-              ok: true,
-              action: "FIVE55_GAMES_PLAY",
-              message: "game play started",
-              status: 200,
-              data: {
-                game: {
-                  id: "ninja-evilcorp",
-                  title: "ninja_vs_evilcorp.555",
-                },
-                mode: "spectate",
-                viewer: {
-                  url: "https://555.example/games/ninja/index.html?bot=true&spectate=1",
-                  sandbox:
-                    "allow-scripts allow-same-origin allow-popups allow-forms",
-                  postMessageAuth: false,
-                },
-                launchUrl:
-                  "https://555.example/games/ninja/index.html?bot=true&spectate=1",
-              },
-            }),
-          },
-        },
-      ],
-    });
 
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
@@ -243,128 +213,45 @@ describe("ChatView quick layers", () => {
     });
     await flush();
 
-    await triggerQuickLayer("play-games");
-
-    expect(mockClient.getFive55GamesCatalog).toHaveBeenCalledWith({
-      includeBeta: true,
+    await act(async () => {
+      findButtonByText(tree!.root, "Estimate Cost").props.onClick();
     });
-    expect(mockClient.executeAutonomyPlan).toHaveBeenCalledWith(
-      expect.objectContaining({
-        plan: expect.objectContaining({
-          id: "quick-layer-play-games-autonomous",
-        }),
-      }),
-    );
-    expect(mockClient.playFive55Game).not.toHaveBeenCalled();
-
-    expect(ctx.setState).toHaveBeenCalledWith("activeGameApp", "five55:ninja-evilcorp");
-    expect(ctx.setState).toHaveBeenCalledWith(
-      "activeGameViewerUrl",
-      "https://555.example/games/ninja/index.html?bot=true&spectate=1",
-    );
-    expect(ctx.setState).toHaveBeenCalledWith("appsSubTab", "games");
-    expect(ctx.setTab).toHaveBeenCalledWith("apps");
-    expect(ctx.setState).toHaveBeenCalledWith(
-      "chatInput",
-      expect.stringContaining("in autonomous bot mode"),
-    );
+    expect(ctx.runAutonomousEstimate).toHaveBeenCalled();
 
     await act(async () => {
-      vi.advanceTimersByTime(35);
+      findButtonByText(tree!.root, "Start Autonomous Run").props.onClick();
     });
-    expect(ctx.handleChatSend).toHaveBeenCalledWith("power");
+    expect(ctx.runAutonomousLaunch).toHaveBeenCalled();
   });
 
-  it("Play Games falls back to API play launch when tool payload returns localhost", async () => {
+  it("writes autonomous config changes back through setState", async () => {
     const ctx = createContext({
-      plugins: [
-        { id: "five55-games", name: "five55-games", enabled: true, isActive: true },
-      ],
+      autoRunMode: "topic",
+      autoRunTopic: "market structure",
     });
     mockUseApp.mockReturnValue(ctx);
-    mockClient.getFive55GamesCatalog.mockResolvedValue({
-      games: [
-        {
-          id: "ninja-evilcorp",
-          title: "ninja_vs_evilcorp.555",
-          description: "Stealth platformer",
-          category: "arcade",
-          difficulty: "hard",
-          path: "/games/ninja/index.html",
-        },
-      ],
-      total: 1,
-      includeBeta: true,
-      category: "all",
-    });
-    mockClient.executeAutonomyPlan.mockResolvedValue({
-      ok: true,
-      allSucceeded: true,
-      stoppedEarly: false,
-      failedStepIndex: null,
-      stopOnFailure: true,
-      successCount: 1,
-      failedCount: 0,
-      results: [
-        {
-          success: true,
-          result: {
-            text: JSON.stringify({
-              ok: true,
-              action: "FIVE55_GAMES_PLAY",
-              message: "game play started",
-              status: 200,
-              data: {
-                game: {
-                  id: "ninja-evilcorp",
-                  title: "ninja_vs_evilcorp.555",
-                },
-                mode: "spectate",
-                viewer: {
-                  url: "http://127.0.0.1:3333/games/ninja/index.html?bot=true",
-                  sandbox:
-                    "allow-scripts allow-same-origin allow-popups allow-forms",
-                  postMessageAuth: false,
-                },
-              },
-            }),
-          },
-        },
-      ],
-    });
-    mockClient.playFive55Game.mockResolvedValue({
-      game: {
-        id: "ninja-evilcorp",
-        title: "ninja_vs_evilcorp.555",
-        description: "Stealth platformer",
-        category: "arcade",
-        difficulty: "hard",
-        path: "/games/ninja/index.html",
-      },
-      mode: "spectate",
-      viewer: {
-        url: "https://555.example/games/ninja/index.html?bot=true",
-        sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
-        postMessageAuth: false,
-      },
-      launchUrl: "https://555.example/games/ninja/index.html?bot=true",
-      startedAt: new Date().toISOString(),
-    });
 
+    let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
-      TestRenderer.create(React.createElement(ChatView));
+      tree = TestRenderer.create(React.createElement(ChatView));
     });
     await flush();
 
-    await triggerQuickLayer("play-games");
+    const selects = tree!.root.findAllByType("select");
+    const inputs = tree!.root.findAllByType("input");
 
-    expect(mockClient.playFive55Game).toHaveBeenCalledWith({
-      gameId: "ninja-evilcorp",
-      mode: "spectate",
+    await act(async () => {
+      selects[0].props.onChange({ target: { value: "games" } });
+      inputs.find((node) => node.props.type === "number")?.props.onChange({
+        target: { value: "45" },
+      });
+      inputs.find((node) => node.props.type === "text")?.props.onChange({
+        target: { value: "new focus" },
+      });
     });
-    expect(ctx.setState).toHaveBeenCalledWith(
-      "activeGameViewerUrl",
-      "https://555.example/games/ninja/index.html?bot=true",
-    );
+
+    expect(ctx.setState).toHaveBeenCalledWith("autoRunMode", "games");
+    expect(ctx.setState).toHaveBeenCalledWith("autoRunDurationMin", 45);
+    expect(ctx.setState).toHaveBeenCalledWith("autoRunTopic", "new focus");
   });
 });

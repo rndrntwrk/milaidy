@@ -56,6 +56,13 @@ vi.mock("../src/components/ui/Sheet.js", () => ({
 vi.mock("../src/components/ui/Icons.js", () => ({
   OpsIcon: () => <span>OpsIcon</span>,
 }));
+vi.mock("../src/components/PluginOperatorPanels.js", () => ({
+  isStream555PrimaryPlugin: () => false,
+  isArcade555PrimaryPlugin: () => false,
+  buildStream555StatusSummary: () => null,
+  Stream555ControlActionsPanel: () => null,
+  Arcade555ControlActionsPanel: () => null,
+}));
 
 function renderText(renderer: ReturnType<typeof create> | null): string {
   return JSON.stringify(renderer?.toJSON() ?? null);
@@ -106,6 +113,8 @@ describe("Milady navigation gating", () => {
       extensionStatus: null,
       mcpServerStatuses: [],
       plugins: [],
+      loadPlugins: vi.fn(async () => {}),
+      setActionNotice: vi.fn(),
       setTab: vi.fn(),
     });
 

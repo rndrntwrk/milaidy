@@ -96,8 +96,21 @@ const SPRINT_GAME_ORDER = [
 type GamesDialect = "five55-web" | "milaidy-proxy" | "agent-v1";
 type GameSessionMode = "standard" | "ranked" | "spectate" | "solo" | "agent";
 type AgentBearerSource = string | (() => Promise<string>);
+type LiveLayoutMode = "camera-full" | "camera-hold";
 
 let cachedAgentSessionId: string | undefined;
+
+function resolveSceneForLayoutMode(
+  rawLayoutMode: string | undefined,
+  fallbackScene: string,
+): string {
+  const layoutMode = rawLayoutMode?.trim().toLowerCase() as
+    | LiveLayoutMode
+    | undefined;
+  if (layoutMode === "camera-hold") return "active-pip";
+  if (layoutMode === "camera-full") return "default";
+  return fallbackScene;
+}
 
 function trimEnv(key: string): string | undefined {
   const value = process.env[key]?.trim();
@@ -628,7 +641,9 @@ async function startAgentScreenStream(
   base: string,
   token: string,
   sessionId: string,
+  layoutMode?: string,
 ): Promise<string | undefined> {
+  const scene = resolveSceneForLayoutMode(layoutMode, "active-pip");
   const response = await fetchJson(
     "POST",
     base,
@@ -637,6 +652,9 @@ async function startAgentScreenStream(
     {
       input: {
         type: "screen",
+      },
+      options: {
+        scene,
       },
     },
   );
@@ -655,6 +673,7 @@ async function ensureAgentCloudflareOutput(
   base: string,
   token: string,
   sessionId: string,
+  layoutMode?: string,
 ): Promise<void> {
   const snapshot = await fetchAgentSessionSnapshot(base, token, sessionId);
   if (snapshot.cfSessionId) return;
@@ -663,7 +682,12 @@ async function ensureAgentCloudflareOutput(
     await stopAgentStream(base, token, sessionId);
   }
 
-  const startedCfSessionId = await startAgentScreenStream(base, token, sessionId);
+  const startedCfSessionId = await startAgentScreenStream(
+    base,
+    token,
+    sessionId,
+    layoutMode,
+  );
   if (startedCfSessionId) return;
 
   const verifiedSnapshot = await fetchAgentSessionSnapshot(base, token, sessionId);
@@ -1774,6 +1798,10 @@ const goLivePlayAction: Action = {
         options as HandlerOptions | undefined,
         "gameId",
       );
+      const layoutMode = readParam(
+        options as HandlerOptions | undefined,
+        "layoutMode",
+      );
       const mode = normalizeMode(
         readParam(options as HandlerOptions | undefined, "mode"),
         dialect,
@@ -1792,7 +1820,7 @@ const goLivePlayAction: Action = {
       );
 
       const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
-      await ensureAgentCloudflareOutput(base, token, sessionId);
+      await ensureAgentCloudflareOutput(base, token, sessionId, layoutMode);
 
       const resolvedGameId = await resolveAgentGameId(
         base,
@@ -1901,7 +1929,7 @@ const goLivePlayAction: Action = {
         await stopAgentStream(base, token, sessionId, {
           allowMissing: true,
         });
-        await ensureAgentCloudflareOutput(base, token, sessionId);
+        await ensureAgentCloudflareOutput(base, token, sessionId, layoutMode);
       }
 
       const phase = lastConnectivity?.lastSnapshot?.phase ?? "unknown";
@@ -1930,6 +1958,12 @@ const goLivePlayAction: Action = {
     {
       name: "sessionId",
       description: "Optional stream session id for agent-v1 dialect",
+      required: false,
+      schema: { type: "string" as const },
+    },
+    {
+      name: "layoutMode",
+      description: "Optional Alice layout mode (camera-full|camera-hold)",
       required: false,
       schema: { type: "string" as const },
     },

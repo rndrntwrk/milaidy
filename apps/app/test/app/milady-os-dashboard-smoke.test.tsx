@@ -50,6 +50,7 @@ vi.mock("../../src/components/CommandDock", () => ({
 import { MiladyOsDashboard } from "../../src/components/MiladyOsDashboard";
 
 function renderWithTab(tab: string) {
+  const runQuickLayer = vi.fn(async () => {});
   mockUseApp.mockReturnValue({
     tab,
     dockSurface:
@@ -70,11 +71,24 @@ function renderWithTab(tab: string) {
     autonomousEvents: [],
     agentStatus: null,
     triggers: [],
+    quickLayerStatuses: {
+      "go-live": "available",
+      "screen-share": "available",
+      "play-games": "available",
+      ads: "available",
+      "reaction-segment": "available",
+      "end-live": "available",
+    },
+    activeGameViewerUrl: "",
+    activeGameDisplayName: "",
+    gameOverlayEnabled: false,
     openDockSurface: vi.fn(),
     closeDockSurface: vi.fn(),
     openHudControlStack: vi.fn(),
     openHudAssetVault: vi.fn(),
     closeHudSurface: vi.fn(),
+    runQuickLayer,
+    setState: vi.fn(),
     setRailDisplay: vi.fn(),
     collapseRails: vi.fn(),
   });
@@ -83,7 +97,7 @@ function renderWithTab(tab: string) {
     tree = TestRenderer.create(React.createElement(MiladyOsDashboard));
   });
   if (!tree) throw new Error("failed to render dashboard");
-  return tree;
+  return { tree, runQuickLayer };
 }
 
 function textOf(node: TestRenderer.ReactTestInstance): string {
@@ -94,7 +108,7 @@ function textOf(node: TestRenderer.ReactTestInstance): string {
 
 describe("MiladyOsDashboard", () => {
   it("keeps the HUD shell on screen and opens the control stack for settings tabs", () => {
-    const tree = renderWithTab("settings");
+    const { tree } = renderWithTab("settings");
     const content = textOf(tree.root);
     expect(content).toContain("StatusStrip");
     expect(content).toContain("ControlStackModal");
@@ -102,9 +116,24 @@ describe("MiladyOsDashboard", () => {
   });
 
   it("opens the asset vault for vault tabs instead of routing away", () => {
-    const tree = renderWithTab("character");
+    const { tree } = renderWithTab("character");
     const content = textOf(tree.root);
     expect(content).toContain("AssetVaultDrawer");
     expect(content).toContain("AgentCore");
+  });
+
+  it("runs live tray actions without requiring ChatView to be mounted", () => {
+    const { tree, runQuickLayer } = renderWithTab("settings");
+    const buttons = tree.root.findAllByType("button");
+    const goLive = buttons.find((button) =>
+      button.children.some((child) => child === "Go Live"),
+    );
+    expect(goLive).toBeDefined();
+
+    act(() => {
+      goLive?.props.onClick();
+    });
+
+    expect(runQuickLayer).toHaveBeenCalledWith("go-live");
   });
 });
