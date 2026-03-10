@@ -4,10 +4,22 @@ import TestRenderer, { act } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../src/components/ChatAvatar", () => ({
-  ChatAvatar: ({ isSpeaking }: { isSpeaking?: boolean }) =>
+  ChatAvatar: ({
+    isSpeaking,
+    sceneMark,
+    scenePreset,
+  }: {
+    isSpeaking?: boolean;
+    sceneMark?: string;
+    scenePreset?: string;
+  }) =>
     React.createElement(
       "div",
-      { "data-chat-avatar": isSpeaking ? "speaking" : "idle" },
+      {
+        "data-chat-avatar": isSpeaking ? "speaking" : "idle",
+        "data-scene-mark": sceneMark ?? "stage",
+        "data-scene-preset": scenePreset ?? "default",
+      },
       "ChatAvatar",
     ),
 }));
@@ -47,6 +59,12 @@ describe("ProStreamerStageComposition", () => {
     expect(layoutNode).toBeDefined();
     expect(textOf(tree.root)).toContain("Alice Camera");
     expect(tree.root.findAllByType("iframe")).toHaveLength(0);
+    expect(
+      tree.root.findByProps({
+        "data-scene-mark": "stage",
+        "data-scene-preset": "pro-streamer-stage",
+      }),
+    ).toBeDefined();
   });
 
   it("renders the active game as hero and keeps Alice in hold", () => {
@@ -74,6 +92,13 @@ describe("ProStreamerStageComposition", () => {
     expect(iframe.props.title).toBe("Hyper Racer hero feed");
     expect(textOf(tree.root)).toContain("Game Hero");
     expect(textOf(tree.root)).toContain("Alice");
+    expect(
+      tree.root.findByProps({
+        "data-scene-mark": "portrait",
+        "data-scene-preset": "pro-streamer-stage",
+      }),
+    ).toBeDefined();
+    expect(tree.root.findAllByProps({ "data-chat-avatar": "speaking" })).toHaveLength(1);
   });
 
   it("shows a placeholder hero when the source is active but not locally viewable", () => {
@@ -96,5 +121,11 @@ describe("ProStreamerStageComposition", () => {
     expect(tree.root.findAllByType("iframe")).toHaveLength(0);
     expect(textOf(tree.root)).toContain("Screen Hero");
     expect(textOf(tree.root)).toContain("Screen share active");
+    expect(
+      tree.root.findByProps({
+        "data-scene-mark": "portrait",
+        "data-scene-preset": "pro-streamer-stage",
+      }),
+    ).toBeDefined();
   });
 });

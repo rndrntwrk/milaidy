@@ -56,33 +56,6 @@ function resolveStageHeroFrame(
   };
 }
 
-function CameraHoldWindow({
-  agentName,
-  isSpeaking,
-}: {
-  agentName: string;
-  isSpeaking: boolean;
-}) {
-  return (
-    <div
-      className="absolute bottom-[8.5rem] right-4 z-[4] h-[10.5rem] w-[8rem] overflow-hidden rounded-[24px] border border-white/16 bg-black/55 shadow-[0_18px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl sm:bottom-[9rem] sm:right-5 sm:h-[12rem] sm:w-[9.5rem] lg:bottom-[10rem] lg:right-6 lg:h-[14rem] lg:w-[11rem] xl:h-[15.5rem] xl:w-[12rem]"
-      data-stage-camera-hold
-    >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_100%,rgba(255,255,255,0.08),transparent_56%),linear-gradient(180deg,rgba(255,255,255,0.08),rgba(0,0,0,0.35)_34%,rgba(0,0,0,0.72)_100%)]" />
-      <div className="absolute inset-x-2 top-2 z-[2] flex items-center justify-between rounded-full border border-white/12 bg-black/46 px-2.5 py-1 text-[9px] uppercase tracking-[0.18em] text-white/68">
-        <span>{agentName}</span>
-        <span>Hold</span>
-      </div>
-      <div className="absolute inset-[0.35rem] overflow-hidden rounded-[20px]">
-        <ChatAvatar isSpeaking={isSpeaking} />
-      </div>
-      <div className="absolute inset-x-2 bottom-2 z-[2] rounded-full border border-white/10 bg-black/46 px-2.5 py-1 text-center text-[9px] uppercase tracking-[0.18em] text-white/58">
-        camera
-      </div>
-    </div>
-  );
-}
-
 export function ProStreamerStageComposition({
   agentName,
   activeGameDisplayName,
@@ -92,8 +65,9 @@ export function ProStreamerStageComposition({
   liveHeroSource,
   liveLayoutMode,
 }: ProStreamerStageCompositionProps) {
+  const isCameraHoldLayout = liveLayoutMode === "camera-hold";
   const heroFrame =
-    liveLayoutMode === "camera-hold"
+    isCameraHoldLayout
       ? resolveStageHeroFrame(
           liveHeroSource,
           activeGameDisplayName,
@@ -101,13 +75,17 @@ export function ProStreamerStageComposition({
           activeGameSandbox,
         )
       : null;
+  const cameraInHold = isCameraHoldLayout && heroFrame !== null;
+  const cameraSurfaceClassName = cameraInHold
+    ? "absolute bottom-[8.5rem] right-4 z-[4] h-[10.5rem] w-[8rem] overflow-hidden rounded-[24px] border border-white/16 bg-black/55 shadow-[0_18px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl transition-[width,height,top,right,bottom,left,transform] duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] sm:bottom-[9rem] sm:right-5 sm:h-[12rem] sm:w-[9.5rem] lg:bottom-[10rem] lg:right-6 lg:h-[14rem] lg:w-[11rem] xl:h-[15.5rem] xl:w-[12rem]"
+    : "absolute inset-0 z-[1] overflow-hidden rounded-[inherit] transition-[width,height,top,right,bottom,left,transform] duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)]";
 
-  if (heroFrame) {
-    return (
-      <div
-        className="absolute inset-0"
-        data-stage-layout="camera-hold"
-      >
+  return (
+    <div
+      className="absolute inset-0"
+      data-stage-layout={cameraInHold ? "camera-hold" : "camera-full"}
+    >
+      {heroFrame ? (
         <div className="absolute inset-[0.8rem] bottom-[7.2rem] overflow-hidden rounded-[28px] border border-white/10 bg-[#04060a] shadow-[0_24px_64px_rgba(0,0,0,0.4)] sm:inset-[1rem] sm:bottom-[7.8rem] lg:inset-[1.2rem] lg:bottom-[8.4rem]">
           {heroFrame.viewerUrl ? (
             <div className="absolute inset-0 pointer-events-none" data-stage-hero-frame>
@@ -142,21 +120,44 @@ export function ProStreamerStageComposition({
             {heroFrame.label}
           </div>
         </div>
-        <CameraHoldWindow agentName={agentName} isSpeaking={isSpeaking} />
-      </div>
-    );
-  }
+      ) : null}
 
-  return (
-    <div className="absolute inset-0" data-stage-layout="camera-full">
-      <div className="absolute inset-x-[18%] bottom-[12.25rem] top-[10rem] z-[1] sm:inset-x-[16%] sm:bottom-[11.75rem] sm:top-[8.25rem] lg:inset-x-[20%] lg:bottom-[10.5rem] lg:top-[6rem] xl:inset-x-[22%]">
-        <div className="absolute inset-0">
-          <ChatAvatar isSpeaking={isSpeaking} />
+      <div
+        className={cameraSurfaceClassName}
+        data-stage-camera-surface
+        data-stage-camera-mode={cameraInHold ? "hold" : "full"}
+        data-stage-camera-hold={cameraInHold || undefined}
+      >
+        {cameraInHold ? (
+          <>
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_100%,rgba(255,255,255,0.08),transparent_56%),linear-gradient(180deg,rgba(255,255,255,0.08),rgba(0,0,0,0.35)_34%,rgba(0,0,0,0.72)_100%)]" />
+            <div className="absolute inset-x-2 top-2 z-[2] flex items-center justify-between rounded-full border border-white/12 bg-black/46 px-2.5 py-1 text-[9px] uppercase tracking-[0.18em] text-white/68">
+              <span>{agentName}</span>
+              <span>Hold</span>
+            </div>
+          </>
+        ) : null}
+
+        <div className={cameraInHold ? "absolute inset-[0.35rem] overflow-hidden rounded-[20px]" : "absolute inset-0"}>
+          <ChatAvatar
+            isSpeaking={isSpeaking}
+            scenePreset="pro-streamer-stage"
+            sceneMark={cameraInHold ? "portrait" : "stage"}
+          />
         </div>
+
+        {cameraInHold ? (
+          <div className="absolute inset-x-2 bottom-2 z-[2] rounded-full border border-white/10 bg-black/46 px-2.5 py-1 text-center text-[9px] uppercase tracking-[0.18em] text-white/58">
+            camera
+          </div>
+        ) : null}
       </div>
-      <div className="absolute right-4 top-4 z-[2] rounded-full border border-white/12 bg-black/46 px-3 py-1.5 text-[10px] uppercase tracking-[0.24em] text-white/64 sm:right-5 sm:top-5">
-        {agentName} Camera
-      </div>
+
+      {!cameraInHold ? (
+        <div className="absolute right-4 top-4 z-[2] rounded-full border border-white/12 bg-black/46 px-3 py-1.5 text-[10px] uppercase tracking-[0.24em] text-white/64 sm:right-5 sm:top-5">
+          {agentName} Camera
+        </div>
+      ) : null}
     </div>
   );
 }

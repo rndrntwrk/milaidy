@@ -7,6 +7,7 @@
 
 import { useEffect, useRef } from "react";
 import { DEFAULT_PRO_STREAMER_VRM_URL } from "../../AppContext";
+import type { StageSceneMark, StageScenePreset } from "../../proStreamerStageScene";
 import { VrmEngine, type VrmEngineState } from "./VrmEngine";
 
 const DEFAULT_VRM_PATH = DEFAULT_PRO_STREAMER_VRM_URL;
@@ -17,6 +18,8 @@ export type VrmViewerProps = {
   mouthOpen: number;
   /** When true the engine generates mouth animation internally */
   isSpeaking?: boolean;
+  scenePreset?: StageScenePreset;
+  sceneMark?: StageSceneMark;
   onEngineState?: (state: VrmEngineState) => void;
   onEngineReady?: (engine: VrmEngine) => void;
   onViewerError?: (error: Error) => void;
@@ -26,6 +29,8 @@ export function VrmViewer(props: VrmViewerProps) {
   const {
     mouthOpen,
     isSpeaking,
+    scenePreset,
+    sceneMark,
     onEngineReady,
     onEngineState,
     onViewerError,
@@ -68,6 +73,8 @@ export function VrmViewer(props: VrmViewerProps) {
           }
         }
       });
+      void engine.setScenePreset(scenePreset ?? "default");
+      void engine.setSceneMark(sceneMark ?? "stage");
     } catch (err) {
       const error =
         err instanceof Error
@@ -91,11 +98,22 @@ export function VrmViewer(props: VrmViewerProps) {
       engine.resize(rect.width, rect.height);
     };
     resize();
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(() => {
+        resize();
+      });
+      resizeObserver.observe(canvas);
+      if (canvas.parentElement) {
+        resizeObserver.observe(canvas.parentElement);
+      }
+    }
     window.addEventListener("resize", resize);
 
     return () => {
       mountedRef.current = false;
       window.removeEventListener("resize", resize);
+      resizeObserver?.disconnect();
 
       const engineToDispose = engine;
       setTimeout(() => {
@@ -108,6 +126,18 @@ export function VrmViewer(props: VrmViewerProps) {
       }, 100);
     };
   }, [onEngineReady, onEngineState, onViewerError]);
+
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine || !engine.isInitialized()) return;
+    void engine.setScenePreset(scenePreset ?? "default");
+  }, [scenePreset]);
+
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine || !engine.isInitialized()) return;
+    void engine.setSceneMark(sceneMark ?? "stage");
+  }, [sceneMark]);
 
   // Load VRM when path changes
   useEffect(() => {

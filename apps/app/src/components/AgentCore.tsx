@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { client, type VoiceConfig } from "../api-client.js";
 import { useApp } from "../AppContext.js";
 import { useVoiceChat } from "../hooks/useVoiceChat.js";
@@ -19,6 +19,9 @@ import {
 } from "./ui/Icons.js";
 
 export function AgentCore() {
+  const COMPOSER_BOTTOM_OFFSET_PX = 16;
+  const COMPOSER_CLEARANCE_BUFFER_PX = 24;
+  const DEFAULT_COMPOSER_CLEARANCE_PX = 256;
   const {
     chatAvatarSpeaking,
     conversationMessages,
@@ -38,7 +41,11 @@ export function AgentCore() {
     handleChatStop,
   } = useApp();
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLFormElement | null>(null);
   const [voiceConfig, setVoiceConfig] = useState<VoiceConfig | null>(null);
+  const [composerClearancePx, setComposerClearancePx] = useState(
+    DEFAULT_COMPOSER_CLEARANCE_PX,
+  );
 
   const agentName = resolveAgentDisplayName(agentStatus?.agentName);
 
@@ -97,6 +104,35 @@ export function AgentCore() {
     voiceConfig,
   });
 
+  useLayoutEffect(() => {
+    const composerNode = composerRef.current;
+    if (!composerNode) return;
+
+    const updateComposerClearance = () => {
+      const nextClearance = Math.ceil(
+        composerNode.getBoundingClientRect().height +
+          COMPOSER_BOTTOM_OFFSET_PX +
+          COMPOSER_CLEARANCE_BUFFER_PX,
+      );
+      setComposerClearancePx((current) =>
+        Math.abs(current - nextClearance) > 1 ? nextClearance : current,
+      );
+    };
+
+    updateComposerClearance();
+
+    if (typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(() => {
+        updateComposerClearance();
+      });
+      observer.observe(composerNode);
+      return () => observer.disconnect();
+    }
+
+    window.addEventListener("resize", updateComposerClearance);
+    return () => window.removeEventListener("resize", updateComposerClearance);
+  }, []);
+
   useEffect(() => {
     const node = timelineScrollRef.current;
     if (!node) return;
@@ -107,6 +143,7 @@ export function AgentCore() {
   }, [
     chatFirstTokenReceived,
     chatSending,
+    composerClearancePx,
     timelineEntries.length,
     timelineEntries[timelineEntries.length - 1]?.id,
   ]);
@@ -114,8 +151,8 @@ export function AgentCore() {
   return (
     <div className="relative h-full w-full overflow-hidden">
       <div className="absolute inset-0">
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.012)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.012)_1px,transparent_1px)] bg-[size:34px_34px] opacity-15" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_24%,rgba(255,255,255,0.045),transparent_34%),linear-gradient(180deg,rgba(0,0,0,0.08),rgba(0,0,0,0.42)_72%,rgba(0,0,0,0.74)_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.008)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.008)_1px,transparent_1px)] bg-[size:34px_34px] opacity-8" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_24%,rgba(255,255,255,0.024),transparent_30%),linear-gradient(180deg,rgba(0,0,0,0.01),rgba(0,0,0,0.05)_70%,rgba(0,0,0,0.1)_100%)]" />
       </div>
 
       <ProStreamerStageComposition
@@ -128,7 +165,11 @@ export function AgentCore() {
         liveLayoutMode={liveLayoutMode}
       />
 
-      <div className="absolute inset-x-0 bottom-[16.25rem] top-[9rem] z-10 sm:bottom-[15.25rem] sm:top-[7.5rem] lg:bottom-[13.75rem] lg:top-[5.5rem]">
+      <div
+        className="absolute inset-x-0 top-[9rem] z-10 sm:top-[7.5rem] lg:top-[5.5rem]"
+        data-conversation-viewport
+        style={{ bottom: `${composerClearancePx}px` }}
+      >
         <ScrollArea ref={timelineScrollRef} className="h-full w-full px-3 sm:px-6 lg:px-10">
           <div
             data-conversation-timeline
@@ -210,7 +251,9 @@ export function AgentCore() {
       </div>
 
       <form
+        ref={composerRef}
         className="pro-streamer-composer-shell absolute bottom-4 left-4 right-4 z-10"
+        data-composer-shell
         onSubmit={(event) => {
           event.preventDefault();
           if (chatSending) {

@@ -1,7 +1,15 @@
 import { type VRM, VRMLoaderPlugin, VRMUtils } from "@pixiv/three-vrm";
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { resolveAppAssetUrl } from "../../asset-url";
+import { computeStageCoverFit } from "../../proStreamerStageFit";
+import {
+  instantiateProStreamerStageScene,
+  type ProStreamerStageSceneContract,
+  type StageMarkTransform,
+  type StageSceneMark,
+  type StageScenePreset,
+} from "../../proStreamerStageScene";
 
 export type VrmEngineState = {
   vrmLoaded: boolean;
@@ -12,6 +20,21 @@ export type VrmEngineState = {
 };
 
 type UpdateCallback = () => void;
+
+type VrmFrameMetrics = {
+  distance: number;
+  shoulderHeight: number;
+};
+
+type MarkTransition = {
+  duration: number;
+  elapsed: number;
+  fromPosition: THREE.Vector3;
+  toPosition: THREE.Vector3;
+  fromQuaternion: THREE.Quaternion;
+  toQuaternion: THREE.Quaternion;
+  walkQuaternion: THREE.Quaternion;
+};
 
 export type CameraAnimationConfig = {
   enabled: boolean;
@@ -29,13 +52,47 @@ const DEFAULT_CAMERA_ANIMATION: CameraAnimationConfig = {
   speed: 0.8,
 };
 
-/** Blink animation phase */
 type BlinkPhase = "idle" | "closing" | "closed" | "opening";
+
+function cloneVector3(value: THREE.Vector3): THREE.Vector3 {
+  return new THREE.Vector3(value.x, value.y, value.z);
+}
+
+function cloneQuaternion(value: THREE.Quaternion): THREE.Quaternion {
+  return new THREE.Quaternion(value.x, value.y, value.z, value.w);
+}
+
+function quaternionsClose(
+  left: THREE.Quaternion,
+  right: THREE.Quaternion,
+  epsilon = 1e-4,
+): boolean {
+  return 1 - Math.abs(left.dot(right)) < epsilon;
+}
+
+function yawFacingQuaternion(
+  from: THREE.Vector3,
+  to: THREE.Vector3,
+  fallback: THREE.Quaternion,
+): THREE.Quaternion {
+  const direction = new THREE.Vector3(to.x - from.x, 0, to.z - from.z);
+  if (direction.lengthSq() < 1e-6) {
+    return cloneQuaternion(fallback);
+  }
+
+  const yaw = Math.atan2(direction.x, direction.z);
+  return new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0));
+}
+
+function easeInOutQuad(t: number): number {
+  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+}
 
 export class VrmEngine {
   private renderer: THREE.WebGLRenderer | null = null;
   private scene: THREE.Scene | null = null;
   private camera: THREE.PerspectiveCamera | null = null;
+  private characterRoot: THREE.Group | null = null;
   private clock = new THREE.Clock();
   private vrm: VRM | null = null;
   private mixer: THREE.AnimationMixer | null = null;
@@ -50,6 +107,7 @@ export class VrmEngine {
   private vrmName: string | null = null;
   private lookAtTarget = new THREE.Vector3(0, 1, 0);
   private readonly idleGlbUrl = resolveAppAssetUrl("animations/idle.glb");
+  private readonly walkGlbUrl = resolveAppAssetUrl("animations/emotes/walk.glb");
   private forceFaceCameraFlip = true;
 
   private cameraAnimation: CameraAnimationConfig = {
@@ -58,35 +116,36 @@ export class VrmEngine {
   private baseCameraPosition = new THREE.Vector3();
   private elapsedTime = 0;
 
-  // ── Speaking-driven mouth animation ──────────────────────────────
   private speaking = false;
   private speakingStartTime = 0;
 
-  // ── Eye blink animation ──────────────────────────────────────────
   private blinkPhase: BlinkPhase = "idle";
   private blinkTimer = 0;
   private blinkPhaseTimer = 0;
   private blinkValue = 0;
   private nextBlinkDelay = 2 + Math.random() * 3;
 
-  /** Duration (seconds) for eyelids to close */
   private static readonly BLINK_CLOSE_DURATION = 0.06;
-  /** Duration (seconds) eyelids stay fully closed */
   private static readonly BLINK_HOLD_DURATION = 0.04;
-  /** Duration (seconds) for eyelids to re-open */
   private static readonly BLINK_OPEN_DURATION = 0.12;
-  /** Minimum seconds between blinks */
   private static readonly BLINK_MIN_INTERVAL = 1.8;
-  /** Maximum seconds between blinks */
   private static readonly BLINK_MAX_INTERVAL = 5.5;
-  /** Probability of a quick double-blink */
   private static readonly DOUBLE_BLINK_CHANCE = 0.15;
 
-  // ── Emote playback state ────────────────────────────────────────────────
   private emoteAction: THREE.AnimationAction | null = null;
   private emoteTimeout: ReturnType<typeof setTimeout> | null = null;
   private emoteClipCache = new Map<string, THREE.AnimationClip>();
   private emoteRequestId = 0;
+
+  private currentScenePreset: StageScenePreset = "default";
+  private currentSceneMark: StageSceneMark = "stage";
+  private frameMetrics: VrmFrameMetrics | null = null;
+  private stageScene: ProStreamerStageSceneContract | null = null;
+  private stageLoadRequestId = 0;
+  private markTransition: MarkTransition | null = null;
+  private currentRigPosition = new THREE.Vector3();
+  private currentRigQuaternion = new THREE.Quaternion();
+  private viewportSize = new THREE.Vector2(1, 1);
 
   setup(canvas: HTMLCanvasElement, onUpdate: UpdateCallback): void {
     if (this.initialized && this.renderer?.domElement === canvas) {
@@ -117,6 +176,10 @@ export class VrmEngine {
     camera.position.set(0, 1.1, 2.8);
     this.camera = camera;
 
+    const characterRoot = new THREE.Group();
+    scene.add(characterRoot);
+    this.characterRoot = characterRoot;
+
     const keyLight = new THREE.DirectionalLight(0xffffff, 0.9);
     keyLight.position.set(1.5, 2.0, 1.5);
     scene.add(keyLight);
@@ -140,19 +203,27 @@ export class VrmEngine {
   dispose(): void {
     this.loadingAborted = true;
     this.initialized = false;
+    this.markTransition = null;
 
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
-    if (this.scene && this.vrm) {
-      this.scene.remove(this.vrm.scene);
+    if (this.characterRoot && this.vrm) {
+      this.characterRoot.remove(this.vrm.scene);
       VRMUtils.deepDispose(this.vrm.scene);
+    }
+    if (this.scene && this.stageScene?.sceneRoot.parent === this.scene) {
+      this.scene.remove(this.stageScene.sceneRoot);
     }
     this.vrm = null;
     this.vrmName = null;
     this.mixer = null;
     this.idleAction = null;
+    this.frameMetrics = null;
+    this.stageScene = null;
+    this.currentRigPosition.set(0, 0, 0);
+    this.currentRigQuaternion.identity();
     if (this.emoteTimeout !== null) {
       clearTimeout(this.emoteTimeout);
       this.emoteTimeout = null;
@@ -163,6 +234,7 @@ export class VrmEngine {
     this.renderer = null;
     this.scene = null;
     this.camera = null;
+    this.characterRoot = null;
     this.onUpdate = null;
   }
 
@@ -171,9 +243,13 @@ export class VrmEngine {
     if (width <= 0 || height <= 0) return;
     const aspect = width / height;
     if (!Number.isFinite(aspect) || aspect <= 0) return;
+    this.viewportSize.set(width, height);
     this.renderer.setSize(width, height, false);
     this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
+    if (this.currentScenePreset === "pro-streamer-stage") {
+      this.applySceneLayout({ animateMark: false });
+    }
   }
 
   getState(): VrmEngineState {
@@ -191,11 +267,6 @@ export class VrmEngine {
     this.mouthValue = Math.max(0, Math.min(1, value));
   }
 
-  /**
-   * Drive mouth animation from speaking state.
-   * When `speaking` is true the engine generates natural jaw movement
-   * internally (layered sine waves), bypassing the manual `mouthValue`.
-   */
   setSpeaking(speaking: boolean): void {
     if (speaking && !this.speaking) {
       this.speakingStartTime = this.elapsedTime;
@@ -211,11 +282,23 @@ export class VrmEngine {
     this.forceFaceCameraFlip = enabled;
   }
 
-  /**
-   * Play an emote animation. Crossfades from idle into the emote, and for
-   * non-looping emotes automatically fades back to idle after `duration`
-   * seconds. For looping emotes, call {@link stopEmote} to return to idle.
-   */
+  async setScenePreset(preset: StageScenePreset): Promise<void> {
+    this.currentScenePreset = preset;
+
+    if (preset === "pro-streamer-stage") {
+      await this.ensureStageSceneLoaded();
+    } else {
+      this.detachStageScene();
+    }
+
+    this.applySceneLayout({ animateMark: false });
+  }
+
+  async setSceneMark(mark: StageSceneMark): Promise<void> {
+    this.currentSceneMark = mark;
+    this.applySceneLayout({ animateMark: true });
+  }
+
   async playEmote(
     glbPath: string,
     duration: number,
@@ -225,16 +308,14 @@ export class VrmEngine {
     const mixer = this.mixer;
     if (!vrm || !mixer) return;
 
-    // Stop any currently-playing emote first.
     this.stopEmote();
 
-    // Track this request so stale async loads are discarded.
-    this.emoteRequestId++;
+    this.emoteRequestId += 1;
     const requestId = this.emoteRequestId;
 
     const clip = await this.loadEmoteClip(glbPath, vrm);
     if (!clip || this.vrm !== vrm || this.mixer !== mixer) return;
-    if (this.emoteRequestId !== requestId) return; // superseded by newer call
+    if (this.emoteRequestId !== requestId) return;
 
     const action = mixer.clipAction(clip);
     action.reset();
@@ -244,7 +325,6 @@ export class VrmEngine {
     );
     action.clampWhenFinished = !loop;
 
-    // Crossfade: idle out → emote in
     const fadeDuration = 0.3;
     if (this.idleAction) {
       this.idleAction.fadeOut(fadeDuration);
@@ -254,7 +334,6 @@ export class VrmEngine {
     this.emoteAction = action;
 
     if (!loop) {
-      // After the emote finishes, fade back to idle.
       const safeDuration =
         Number.isFinite(duration) && duration > 0 ? duration : 3;
       const returnDelay = Math.max(0.5, safeDuration) * 1000;
@@ -266,7 +345,6 @@ export class VrmEngine {
     }
   }
 
-  /** Stop the current emote and crossfade back to idle. */
   stopEmote(): void {
     if (this.emoteTimeout !== null) {
       clearTimeout(this.emoteTimeout);
@@ -290,13 +368,14 @@ export class VrmEngine {
     if (!this.camera) throw new Error("VrmEngine not initialized");
     if (this.loadingAborted) return;
 
-    if (this.vrm) {
-      this.scene.remove(this.vrm.scene);
+    if (this.characterRoot && this.vrm) {
+      this.characterRoot.remove(this.vrm.scene);
       VRMUtils.deepDispose(this.vrm.scene);
       this.vrm = null;
       this.vrmName = null;
       this.mixer = null;
       this.idleAction = null;
+      this.frameMetrics = null;
       this.stopEmote();
       this.emoteClipCache.clear();
     }
@@ -315,9 +394,10 @@ export class VrmEngine {
       | undefined
       | object;
     console.warn = (...args: ConsoleArg[]) => {
-      const msg = args.map((a) => String(a)).join(" ");
-      if (msg.includes("VRMExpressionLoaderPlugin: An expression preset"))
+      const msg = args.map((arg) => String(arg)).join(" ");
+      if (msg.includes("VRMExpressionLoaderPlugin: An expression preset")) {
         return;
+      }
       originalWarn(...args);
     };
 
@@ -328,7 +408,7 @@ export class VrmEngine {
       console.warn = originalWarn;
     }
 
-    if (this.loadingAborted || !this.scene) return;
+    if (this.loadingAborted || !this.scene || !this.characterRoot) return;
 
     const vrm = gltf.userData.vrm as VRM | undefined;
     if (!vrm) {
@@ -342,21 +422,24 @@ export class VrmEngine {
     VRMUtils.removeUnnecessaryVertices(vrm.scene);
     VRMUtils.combineSkeletons(vrm.scene);
 
-    this.centerAndFrame(vrm);
-    if (this.forceFaceCameraFlip) {
+    this.frameMetrics = this.normalizeModel(vrm);
+    if (this.currentScenePreset === "pro-streamer-stage") {
+      this.ensureFacingCamera(vrm);
+    } else if (this.forceFaceCameraFlip) {
       vrm.scene.rotateY(Math.PI);
       vrm.scene.updateMatrixWorld(true);
     } else {
       this.ensureFacingCamera(vrm);
     }
 
-    if (this.loadingAborted || !this.scene) return;
+    if (this.loadingAborted || !this.scene || !this.characterRoot) return;
 
     vrm.scene.visible = false;
-    this.scene.add(vrm.scene);
+    this.characterRoot.add(vrm.scene);
     this.vrm = vrm;
     this.vrmName = name ?? null;
     this.resetBlink();
+    this.applySceneLayout({ animateMark: false });
 
     try {
       await this.loadAndPlayIdle(vrm);
@@ -370,6 +453,42 @@ export class VrmEngine {
     }
   }
 
+  private async ensureStageSceneLoaded(): Promise<void> {
+    if (!this.scene) return;
+    if (this.stageScene) {
+      if (this.stageScene.sceneRoot.parent !== this.scene) {
+        this.scene.add(this.stageScene.sceneRoot);
+      }
+      return;
+    }
+
+    const requestId = ++this.stageLoadRequestId;
+    try {
+      const contract = await instantiateProStreamerStageScene();
+      if (
+        this.loadingAborted ||
+        !this.scene ||
+        this.currentScenePreset !== "pro-streamer-stage" ||
+        requestId !== this.stageLoadRequestId
+      ) {
+        return;
+      }
+      this.stageScene = contract;
+      this.scene.add(contract.sceneRoot);
+      contract.sceneRoot.updateMatrixWorld(true);
+    } catch (err) {
+      console.error("[VrmEngine] Failed to load pro streamer stage:", err);
+      this.stageScene = null;
+    }
+  }
+
+  private detachStageScene(): void {
+    if (this.scene && this.stageScene?.sceneRoot.parent === this.scene) {
+      this.scene.remove(this.stageScene.sceneRoot);
+    }
+    this.stageScene = null;
+  }
+
   private loop(): void {
     this.animationFrameId = requestAnimationFrame(() => this.loop());
     const renderer = this.renderer;
@@ -380,83 +499,91 @@ export class VrmEngine {
     const delta = this.clock.getDelta();
     this.elapsedTime += delta;
     this.mixer?.update(delta);
+
     if (this.vrm) {
       this.applyMouthToVrm(this.vrm);
       this.updateBlink(delta);
       this.vrm.update(delta);
     }
 
-    if (this.cameraAnimation.enabled && this.baseCameraPosition.length() > 0) {
-      const t = this.elapsedTime * this.cameraAnimation.speed;
-
-      const swayX =
-        Math.sin(t * 0.5) * 0.6 +
-        Math.sin(t * 0.8 + 1.2) * 0.25 +
-        Math.sin(t * 1.3 + 2.5) * 0.15;
-
-      const bobY =
-        Math.sin(t * 0.7 + 0.5) * 0.5 +
-        Math.sin(t * 1.1 + 1.8) * 0.3 +
-        Math.sin(t * 0.3) * 0.2;
-
-      const swayZ =
-        Math.sin(t * 0.4 + 1.0) * 0.4 + Math.sin(t * 0.9 + 2.0) * 0.3;
-
-      camera.position.x =
-        this.baseCameraPosition.x + swayX * this.cameraAnimation.swayAmplitude;
-      camera.position.y =
-        this.baseCameraPosition.y + bobY * this.cameraAnimation.bobAmplitude;
-      camera.position.z =
-        this.baseCameraPosition.z +
-        swayZ * this.cameraAnimation.swayAmplitude * 0.5;
-
-      const rotX =
-        Math.sin(t * 0.6 + 0.3) * this.cameraAnimation.rotationAmplitude * 0.5;
-      const rotY = Math.sin(t * 0.4) * this.cameraAnimation.rotationAmplitude;
-
-      camera.rotation.x = rotX;
-      camera.rotation.y = rotY;
+    if (this.currentScenePreset === "pro-streamer-stage" && this.stageScene) {
+      this.updateMarkTransition(delta);
+    } else {
+      this.updateDefaultCamera(camera);
+      camera.lookAt(this.lookAtTarget);
     }
 
-    camera.lookAt(this.lookAtTarget);
     renderer.render(scene, camera);
     this.onUpdate?.();
   }
 
-  private centerAndFrame(vrm: VRM): void {
+  private updateDefaultCamera(camera: THREE.PerspectiveCamera): void {
+    if (!this.cameraAnimation.enabled || this.baseCameraPosition.length() <= 0) {
+      return;
+    }
+
+    const t = this.elapsedTime * this.cameraAnimation.speed;
+
+    const swayX =
+      Math.sin(t * 0.5) * 0.6 +
+      Math.sin(t * 0.8 + 1.2) * 0.25 +
+      Math.sin(t * 1.3 + 2.5) * 0.15;
+
+    const bobY =
+      Math.sin(t * 0.7 + 0.5) * 0.5 +
+      Math.sin(t * 1.1 + 1.8) * 0.3 +
+      Math.sin(t * 0.3) * 0.2;
+
+    const swayZ =
+      Math.sin(t * 0.4 + 1.0) * 0.4 + Math.sin(t * 0.9 + 2.0) * 0.3;
+
+    camera.position.x =
+      this.baseCameraPosition.x + swayX * this.cameraAnimation.swayAmplitude;
+    camera.position.y =
+      this.baseCameraPosition.y + bobY * this.cameraAnimation.bobAmplitude;
+    camera.position.z =
+      this.baseCameraPosition.z +
+      swayZ * this.cameraAnimation.swayAmplitude * 0.5;
+
+    const rotX =
+      Math.sin(t * 0.6 + 0.3) * this.cameraAnimation.rotationAmplitude * 0.5;
+    const rotY = Math.sin(t * 0.4) * this.cameraAnimation.rotationAmplitude;
+
+    camera.rotation.x = rotX;
+    camera.rotation.y = rotY;
+  }
+
+  private normalizeModel(vrm: VRM): VrmFrameMetrics {
     const camera = this.camera;
-    if (!camera) return;
+    if (!camera) {
+      return {
+        distance: 2.8,
+        shoulderHeight: 0.42,
+      };
+    }
 
     const box = new THREE.Box3().setFromObject(vrm.scene);
-    const center = box.getCenter(new THREE.Vector3());
-    vrm.scene.position.sub(center);
+    const initialSize = box.getSize(new THREE.Vector3());
 
-    const box2 = new THREE.Box3().setFromObject(vrm.scene);
-    const size2 = box2.getSize(new THREE.Vector3());
+    const height = Math.max(0.001, initialSize.y);
+    const width = Math.max(0.001, initialSize.x);
+    const depth = Math.max(0.001, initialSize.z);
 
-    const height = Math.max(0.001, size2.y);
-    const width = Math.max(0.001, size2.x);
-    const depth = Math.max(0.001, size2.z);
-
-    // Normalize all models to a standard reference height (~1.0 unit) so
-    // oversized realistic characters and tiny chibi characters appear the
-    // same size in the chat viewport.
-    const STANDARD_HEIGHT = 1.0;
-    const scaleFactor = STANDARD_HEIGHT / height;
+    const standardHeight = 1.0;
+    const scaleFactor = standardHeight / height;
     vrm.scene.scale.multiplyScalar(scaleFactor);
     vrm.scene.updateMatrixWorld(true);
 
-    // Re-center after scaling
     const box3 = new THREE.Box3().setFromObject(vrm.scene);
     const center3 = box3.getCenter(new THREE.Vector3());
-    vrm.scene.position.sub(center3);
+    vrm.scene.position.x -= center3.x;
+    vrm.scene.position.z -= center3.z;
+    vrm.scene.position.y -= box3.min.y;
+    vrm.scene.updateMatrixWorld(true);
 
-    const scaledHeight = STANDARD_HEIGHT;
+    const scaledHeight = standardHeight;
     const scaledWidth = width * scaleFactor;
     const scaledDepth = depth * scaleFactor;
-
-    // Frame on upper body: look at shoulder height, zoom in to crop below waist.
-    // Offset camera left so the model renders on the right side of the canvas.
     const upperBodyHeight = Math.max(
       scaledWidth,
       scaledHeight * 0.55,
@@ -467,14 +594,187 @@ export class VrmEngine {
     const fovRad = (camera.fov * Math.PI) / 180;
     const distance = (upperBodyHeight * 0.5) / Math.tan(fovRad * 0.5);
 
-    this.lookAtTarget.set(0, shoulderHeight, 0);
+    return {
+      distance,
+      shoulderHeight,
+    };
+  }
 
-    camera.near = Math.max(0.01, distance / 100);
-    camera.far = Math.max(100, distance * 100);
-    camera.updateProjectionMatrix();
+  private applySceneLayout(options: { animateMark: boolean }): void {
+    const camera = this.camera;
+    const characterRoot = this.characterRoot;
+    if (!camera || !characterRoot) return;
 
-    camera.position.set(0, shoulderHeight, distance);
+    if (this.currentScenePreset === "pro-streamer-stage" && this.stageScene) {
+      characterRoot.scale.setScalar(
+        Math.max(0.1, this.stageScene.anchorMetadata.targetHeightM),
+      );
+      this.applyStageCamera(this.stageScene);
+      const targetMark =
+        this.currentSceneMark === "portrait"
+          ? this.stageScene.portraitMark
+          : this.stageScene.stageMark;
+
+      if (!this.vrm || !options.animateMark) {
+        this.markTransition = null;
+        this.applyMarkTransform(targetMark);
+        this.ensureFacingCamera(this.vrm);
+        return;
+      }
+
+      this.transitionToMark(targetMark);
+      return;
+    }
+
+    this.markTransition = null;
+    characterRoot.position.set(0, 0, 0);
+    characterRoot.quaternion.identity();
+    characterRoot.scale.setScalar(1);
+    this.currentRigPosition.copy(characterRoot.position);
+    this.currentRigQuaternion.copy(characterRoot.quaternion);
+
+    if (!this.frameMetrics) return;
+
+    this.lookAtTarget.set(0, this.frameMetrics.shoulderHeight, 0);
+    camera.near = Math.max(0.01, this.frameMetrics.distance / 100);
+    camera.far = Math.max(100, this.frameMetrics.distance * 100);
+    camera.position.set(0, this.frameMetrics.shoulderHeight, this.frameMetrics.distance);
     this.baseCameraPosition.copy(camera.position);
+    camera.updateProjectionMatrix();
+  }
+
+  private applyStageCamera(stageScene: ProStreamerStageSceneContract): void {
+    const camera = this.camera;
+    if (!camera) return;
+
+    const authoredCamera = stageScene.stageCamera;
+    const authoredPosition = stageScene.stageCameraNode.getWorldPosition(
+      new THREE.Vector3(),
+    );
+
+    const viewportAspect =
+      this.viewportSize.y > 0
+        ? this.viewportSize.x / this.viewportSize.y
+        : camera.aspect > 0
+          ? camera.aspect
+          : stageScene.backdropMetrics.aspect;
+    const lookTarget = stageScene.backdropMetrics.center;
+
+    camera.position.copy(authoredPosition);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(lookTarget);
+    camera.updateMatrixWorld(true);
+
+    const cameraForward = new THREE.Vector3(0, 0, -1)
+      .applyQuaternion(camera.quaternion)
+      .normalize();
+    const numerator = Math.abs(
+      lookTarget.clone().sub(camera.position).dot(stageScene.backdropMetrics.normal),
+    );
+    const denominator = Math.max(
+      1e-6,
+      Math.abs(cameraForward.dot(stageScene.backdropMetrics.normal)),
+    );
+    const cameraToPlaneDistance = numerator / denominator;
+
+    const coverFit = computeStageCoverFit({
+      backdropWidth: stageScene.backdropMetrics.width,
+      backdropHeight: stageScene.backdropMetrics.height,
+      viewportAspect,
+      cameraToPlaneDistance,
+    });
+
+    camera.fov = coverFit.fovDegrees;
+    camera.near = authoredCamera.near;
+    camera.far = authoredCamera.far;
+    camera.updateProjectionMatrix();
+  }
+
+  private applyMarkTransform(mark: StageMarkTransform): void {
+    const characterRoot = this.characterRoot;
+    if (!characterRoot) return;
+
+    characterRoot.position.copy(mark.position);
+    characterRoot.quaternion.copy(mark.quaternion);
+    this.currentRigPosition.copy(mark.position);
+    this.currentRigQuaternion.copy(mark.quaternion);
+  }
+
+  private transitionToMark(targetMark: StageMarkTransform): void {
+    const characterRoot = this.characterRoot;
+    if (!characterRoot) return;
+
+    const currentPosition = cloneVector3(this.currentRigPosition);
+    const currentQuaternion = cloneQuaternion(this.currentRigQuaternion);
+    const targetPosition = cloneVector3(targetMark.position);
+    const targetQuaternion = cloneQuaternion(targetMark.quaternion);
+    const distance = currentPosition.distanceTo(targetPosition);
+    const rotationClose = quaternionsClose(currentQuaternion, targetQuaternion);
+
+    if (distance < 1e-3 && rotationClose) {
+      this.markTransition = null;
+      this.applyMarkTransform(targetMark);
+      return;
+    }
+
+    this.markTransition = {
+      duration: 0.9,
+      elapsed: 0,
+      fromPosition: currentPosition,
+      toPosition: targetPosition,
+      fromQuaternion: currentQuaternion,
+      toQuaternion: targetQuaternion,
+      walkQuaternion: yawFacingQuaternion(
+        currentPosition,
+        targetPosition,
+        targetQuaternion,
+      ),
+    };
+
+    if (distance >= 0.05) {
+      void this.playEmote(this.walkGlbUrl, 0, true);
+    }
+  }
+
+  private updateMarkTransition(delta: number): void {
+    const transition = this.markTransition;
+    const characterRoot = this.characterRoot;
+    if (!transition || !characterRoot) return;
+
+    transition.elapsed += delta;
+    const progress = Math.min(1, transition.elapsed / transition.duration);
+    const easedProgress = easeInOutQuad(progress);
+
+    characterRoot.position.lerpVectors(
+      transition.fromPosition,
+      transition.toPosition,
+      easedProgress,
+    );
+
+    if (progress < 0.7) {
+      const facingT = Math.min(1, progress / 0.25);
+      characterRoot.quaternion.copy(transition.fromQuaternion);
+      characterRoot.quaternion.slerp(transition.walkQuaternion, facingT);
+    } else {
+      const settleT = Math.min(1, (progress - 0.7) / 0.3);
+      characterRoot.quaternion.copy(transition.walkQuaternion);
+      characterRoot.quaternion.slerp(transition.toQuaternion, settleT);
+    }
+
+    this.currentRigPosition.copy(characterRoot.position);
+    this.currentRigQuaternion.copy(characterRoot.quaternion);
+
+    if (progress >= 1) {
+      this.applyMarkTransform({
+        position: transition.toPosition,
+        quaternion: transition.toQuaternion,
+      });
+      if (this.vrm) {
+        this.ensureFacingCamera(this.vrm);
+      }
+      this.markTransition = null;
+      this.stopEmote();
+    }
   }
 
   private async loadAndPlayIdle(vrm: VRM): Promise<void> {
@@ -515,7 +815,6 @@ export class VrmEngine {
     glbPath: string,
     vrm: VRM,
   ): Promise<THREE.AnimationClip | null> {
-    // Return from cache if already loaded for this VRM.
     const cached = this.emoteClipCache.get(glbPath);
     if (cached) return cached;
 
@@ -544,13 +843,6 @@ export class VrmEngine {
     }
   }
 
-  /**
-   * Apply mouth expression to the VRM.
-   *
-   * When the engine is in "speaking" mode it generates layered sine-wave
-   * jaw movement internally. Otherwise it falls back to the externally
-   * supplied `mouthValue` (from `setMouthOpen()`).
-   */
   private applyMouthToVrm(vrm: VRM): void {
     const manager = vrm.expressionManager;
     if (!manager) return;
@@ -558,7 +850,6 @@ export class VrmEngine {
     let target: number;
 
     if (this.speaking) {
-      // Internal speech animation — layered sine waves (~6-8 Hz)
       const elapsed = this.elapsedTime - this.speakingStartTime;
       const base = Math.sin(elapsed * 12) * 0.3 + 0.4;
       const detail = Math.sin(elapsed * 18.7) * 0.15;
@@ -569,20 +860,11 @@ export class VrmEngine {
     }
 
     const next = Math.max(0, Math.min(1, target));
-    // Smooth close faster than open for a more natural feel
     const alpha = next > this.mouthSmoothed ? 0.3 : 0.2;
     this.mouthSmoothed = this.mouthSmoothed * (1 - alpha) + next * alpha;
     manager.setValue("aa", this.mouthSmoothed);
   }
 
-  // ── Eye blink ──────────────────────────────────────────────────────
-
-  /**
-   * Advance the blink state machine and apply the "blink" expression.
-   *
-   * State flow: idle → closing → closed → opening → idle
-   * Random interval between blinks with occasional double-blinks.
-   */
   private updateBlink(delta: number): void {
     const vrm = this.vrm;
     if (!vrm?.expressionManager) return;
@@ -602,7 +884,6 @@ export class VrmEngine {
           1,
           this.blinkPhaseTimer / VrmEngine.BLINK_CLOSE_DURATION,
         );
-        // Ease-in (accelerate) — eyelids speed up as they close
         this.blinkValue = t * t;
         if (t >= 1) {
           this.blinkPhase = "closed";
@@ -626,7 +907,6 @@ export class VrmEngine {
           1,
           this.blinkPhaseTimer / VrmEngine.BLINK_OPEN_DURATION,
         );
-        // Ease-out (decelerate) — eyelids slow down as they finish opening
         const eased = 1 - (1 - t) * (1 - t);
         this.blinkValue = 1 - eased;
         if (t >= 1) {
@@ -643,18 +923,15 @@ export class VrmEngine {
     vrm.expressionManager.setValue("blink", this.blinkValue);
   }
 
-  /** Pick the delay (seconds) until the next blink. */
   private scheduleNextBlink(): void {
     const range = VrmEngine.BLINK_MAX_INTERVAL - VrmEngine.BLINK_MIN_INTERVAL;
     this.nextBlinkDelay = VrmEngine.BLINK_MIN_INTERVAL + Math.random() * range;
 
-    // Occasional quick double-blink
     if (Math.random() < VrmEngine.DOUBLE_BLINK_CHANCE) {
       this.nextBlinkDelay = 0.12 + Math.random() * 0.08;
     }
   }
 
-  /** Reset blink state (called when a new VRM is loaded). */
   private resetBlink(): void {
     this.blinkPhase = "idle";
     this.blinkTimer = 0;
