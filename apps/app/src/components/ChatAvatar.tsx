@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getVrmPreviewUrl, getVrmUrl, useApp } from "../AppContext";
 import { client } from "../api-client";
+import type { StageSceneMark, StageScenePreset } from "../proStreamerStageScene";
 import type { VrmEngine, VrmEngineState } from "./avatar/VrmEngine";
 import { VrmViewer } from "./avatar/VrmViewer";
 
@@ -16,11 +17,15 @@ export interface ChatAvatarProps {
   mouthOpen?: number;
   /** Whether the agent is currently speaking (drives engine-side mouth anim) */
   isSpeaking?: boolean;
+  scenePreset?: StageScenePreset;
+  sceneMark?: StageSceneMark;
 }
 
 export function ChatAvatar({
   mouthOpen = 0,
   isSpeaking = false,
+  scenePreset = "default",
+  sceneMark = "stage",
 }: ChatAvatarProps) {
   const { selectedVrmIndex, customVrmUrl } = useApp();
 
@@ -39,6 +44,7 @@ export function ChatAvatar({
   const [vrmLoaded, setVrmLoaded] = useState(false);
   const [showFallback, setShowFallback] = useState(false);
   const [viewerFailed, setViewerFailed] = useState(false);
+  const isStageScene = scenePreset === "pro-streamer-stage";
 
   const avatarVisible = engineReady || vrmLoaded || showFallback;
 
@@ -100,9 +106,11 @@ export function ChatAvatar({
       <div
         className="absolute inset-0"
         style={{
-          opacity: avatarVisible ? 0.95 : 0,
+          opacity: avatarVisible ? 1 : 0,
           transition: "opacity 0.45s ease-in-out",
-          background:
+          background: isStageScene
+            ? "transparent"
+            :
             "radial-gradient(circle at 50% 100%, rgba(255,255,255,0.08), transparent 60%)",
         }}
       >
@@ -112,14 +120,16 @@ export function ChatAvatar({
             style={{
               opacity: vrmLoaded && !viewerFailed ? 1 : 0,
               transition: "opacity 0.45s ease",
-              transform: "scale(1.22) translateY(-8%)",
-              transformOrigin: "50% 28%",
+              transform: isStageScene ? undefined : "scale(1.22) translateY(-8%)",
+              transformOrigin: isStageScene ? undefined : "50% 28%",
             }}
           >
             <VrmViewer
               vrmPath={vrmPath}
               mouthOpen={mouthOpen}
               isSpeaking={isSpeaking}
+              scenePreset={scenePreset}
+              sceneMark={sceneMark}
               onEngineReady={handleEngineReady}
               onEngineState={handleEngineState}
               onViewerError={handleViewerError}

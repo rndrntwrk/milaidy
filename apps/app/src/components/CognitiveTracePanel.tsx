@@ -3,28 +3,44 @@ import { useApp } from "../AppContext.js";
 import { SectionEmptyState } from "./SectionStates.js";
 import { Badge } from "./ui/Badge.js";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/Card.js";
+import { cn } from "./ui/utils.js";
 import { buildPublicActionEntries } from "./shared/publicActionEntries.js";
 
-export function CognitiveTracePanel({ embedded = false }: { embedded?: boolean }) {
+export function CognitiveTracePanel({
+  embedded = false,
+  mode,
+  className,
+}: {
+  embedded?: boolean;
+  mode?: "card" | "content";
+  className?: string;
+}) {
   const { autonomousEvents } = useApp();
+  const contentMode = mode === "content" || embedded;
 
   const traces = useMemo(
     () =>
       buildPublicActionEntries(autonomousEvents)
-        .slice(-8)
-        .reverse(),
+      .slice(-8)
+      .reverse(),
     [autonomousEvents],
   );
 
-  if (embedded) {
+  if (contentMode) {
     return traces.length === 0 ? (
       <SectionEmptyState
         title="No public activity"
         description="Public-safe action summaries will appear here once the agent starts working."
-        className="pro-streamer-empty-compact border-dashed bg-transparent shadow-none"
+        className={cn(
+          "pro-streamer-empty-compact border-dashed bg-transparent shadow-none",
+          className,
+        )}
       />
     ) : (
-      <div className="flex flex-col-reverse gap-2 overflow-y-auto px-0 pb-0 pt-3">
+      <div
+        className={cn("flex flex-col-reverse gap-2", className)}
+        data-action-log-trace-list
+      >
         {traces.map((event) => (
           <div key={event.id} className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
             <div className="mb-2 flex items-center justify-between gap-2">

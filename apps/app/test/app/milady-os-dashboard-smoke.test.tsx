@@ -49,7 +49,10 @@ vi.mock("../../src/components/CommandDock", () => ({
 
 import { MiladyOsDashboard } from "../../src/components/MiladyOsDashboard";
 
-function renderWithTab(tab: string) {
+function renderWithTab(
+  tab: string,
+  options?: { leftRailState?: "collapsed" | "peek" | "expanded" },
+) {
   const runQuickLayer = vi.fn(async () => {});
   mockUseApp.mockReturnValue({
     tab,
@@ -59,9 +62,9 @@ function renderWithTab(tab: string) {
         : tab === "knowledge"
           ? "memory"
           : "none",
-    leftRailState: "collapsed",
+    leftRailState: options?.leftRailState ?? "collapsed",
     rightRailState: "collapsed",
-    activeBubble: "none",
+    activeBubble: options?.leftRailState === "expanded" ? "action-log" : "none",
     streamViewMode: "broadcast",
     hudSurface: tab === "settings" ? "control-stack" : "none",
     hudControlSection: tab === "settings" ? "settings" : null,
@@ -123,12 +126,18 @@ describe("MiladyOsDashboard", () => {
   });
 
   it("runs live tray actions without requiring ChatView to be mounted", () => {
-    const { tree, runQuickLayer } = renderWithTab("settings");
+    const { tree, runQuickLayer } = renderWithTab("settings", {
+      leftRailState: "expanded",
+    });
     const buttons = tree.root.findAllByType("button");
     const goLive = buttons.find((button) =>
       button.children.some((child) => child === "Go Live"),
     );
     expect(goLive).toBeDefined();
+    expect(textOf(tree.root)).toContain("Live Controls");
+    expect(
+      tree.root.findByProps({ "data-action-log-live-controls": true }),
+    ).toBeDefined();
 
     act(() => {
       goLive?.props.onClick();

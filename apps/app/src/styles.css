@@ -837,7 +837,7 @@
 .pro-streamer-composer-panel {
   border-radius: 1.75rem;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.035);
+  background: rgba(6, 8, 12, 0.08);
   backdrop-filter: blur(22px);
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.28);
   padding: 1rem 1rem 0.9rem;
@@ -846,7 +846,7 @@
 .pro-streamer-composer-panel__body {
   min-height: 7rem;
   border-radius: 1.35rem;
-  background: rgba(0, 0, 0, 0.22);
+  background: rgba(0, 0, 0, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
   padding: 1rem 1.1rem 0.95rem;
 }
@@ -1833,7 +1833,7 @@
 /* Pro Streamer remediation overrides */
 
 .pro-streamer-stage {
-  padding-inline: clamp(1rem, 2vw, 1.75rem);
+  padding-inline: 0;
 }
 
 .pro-streamer-drawer-shell__header {
@@ -2012,7 +2012,7 @@
 
 @media (max-width: 1279px) {
   .pro-streamer-stage {
-    padding-inline: 0.75rem;
+    padding-inline: 0;
   }
 
   .pro-streamer-composer-panel {
