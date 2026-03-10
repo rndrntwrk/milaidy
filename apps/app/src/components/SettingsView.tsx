@@ -30,6 +30,7 @@ import { SectionEmptyState, SectionErrorState, SectionLoadingState } from "./Sec
 import { SectionShell } from "./SectionShell";
 import { SelectablePillGrid } from "./SelectablePillGrid";
 import { VoiceConfigView } from "./VoiceConfigView";
+import { configRenderModeForTheme } from "./shared/configRenderMode";
 import { Badge } from "./ui/Badge.js";
 import { Button } from "./ui/Button.js";
 import { Dialog } from "./ui/Dialog.js";
@@ -177,6 +178,7 @@ export function SettingsView() {
     copyToClipboard,
     setState,
   } = useApp();
+  const configRenderMode = configRenderModeForTheme(currentTheme);
 
   /* ── Model selection state ─────────────────────────────────────────── */
   const [modelOptions, setModelOptions] = useState<OnboardingOptions["models"] | null>(null);
@@ -815,6 +817,7 @@ export function SettingsView() {
                             values={modelValues}
                             setKeys={modelSetKeys}
                             registry={defaultRegistry}
+                            renderMode={configRenderMode}
                             onChange={(key, value) => {
                               const val = String(value);
                               if (key === "small") setCurrentSmallModel(val);
@@ -1160,6 +1163,7 @@ export function SettingsView() {
                           setKeys={setKeys}
                           registry={defaultRegistry}
                           pluginId={selectedProvider.id}
+                          renderMode={configRenderMode}
                           onChange={(key, value) => handlePluginFieldChange(selectedProvider.id, key, String(value ?? ""))}
                         />
                       );
@@ -1338,6 +1342,7 @@ export function SettingsView() {
                 }}
                 values={{ channel: updateStatus.channel }}
                 registry={defaultRegistry}
+                renderMode={configRenderMode}
                 onChange={(key, value) => {
                   if (key === "channel")
                     void handleChannelChange(

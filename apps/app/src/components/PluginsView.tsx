@@ -11,6 +11,7 @@ import { client } from "../api-client";
 import type { ConfigUiHint } from "../types";
 import type { JsonSchemaObject } from "./config-catalog";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer";
+import { configRenderModeForTheme } from "./shared/configRenderMode";
 import { autoLabel } from "./shared/labels";
 import { Badge } from "./ui/Badge.js";
 import { Button } from "./ui/Button.js";
@@ -2244,6 +2245,8 @@ function PluginConfigForm({
   pluginConfigs: Record<string, Record<string, string>>;
   onParamChange: (pluginId: string, paramKey: string, value: string) => void;
 }) {
+  const { currentTheme } = useApp();
+  const configRenderMode = configRenderModeForTheme(currentTheme);
   const params = plugin.parameters ?? [];
   const { schema, hints: autoHints } = useMemo(
     () => paramsToSchema(params, plugin.id),
@@ -2362,6 +2365,7 @@ function PluginConfigForm({
       registry={defaultRegistry}
       pluginId={plugin.id}
       onChange={handleChange}
+      renderMode={configRenderMode}
     />
   );
 }

@@ -5,10 +5,12 @@
  */
 
 import { useCallback, useState } from "react";
+import { useApp } from "../AppContext";
 import { client, type PluginParamDef } from "../api-client";
 import type { ConfigUiHint } from "../types";
 import type { JsonSchemaObject } from "./config-catalog";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer";
+import { configRenderModeForTheme } from "./shared/configRenderMode";
 import { autoLabel } from "./shared/labels";
 
 interface ProviderPlugin {
@@ -39,6 +41,8 @@ export function ApiKeyConfig({
   handlePluginConfigSave,
   loadPlugins,
 }: ApiKeyConfigProps) {
+  const { currentTheme } = useApp();
+  const configRenderMode = configRenderModeForTheme(currentTheme);
   const [pluginFieldValues, setPluginFieldValues] = useState<
     Record<string, Record<string, string>>
   >({});
@@ -163,6 +167,7 @@ export function ApiKeyConfig({
         setKeys={setKeys}
         registry={defaultRegistry}
         pluginId={selectedProvider.id}
+        renderMode={configRenderMode}
         onChange={(key, value) =>
           handlePluginFieldChange(selectedProvider.id, key, String(value ?? ""))
         }

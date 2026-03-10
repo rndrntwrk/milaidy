@@ -7,8 +7,8 @@ export function FormFieldStack({
   children,
   className,
 }: {
-  label: string;
-  help?: string;
+  label: ReactNode;
+  help?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {

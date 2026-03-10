@@ -14,6 +14,7 @@ import { ConfigRenderer, defaultRegistry } from "./config-renderer";
 import { SecretsView } from "./SecretsView";
 import { SelectablePillGrid } from "./SelectablePillGrid";
 import { SectionShell } from "./SectionShell";
+import { configRenderModeForTheme } from "./shared/configRenderMode";
 import { Button } from "./ui/Button";
 import {
   Card,
@@ -181,6 +182,7 @@ type RpcSectionProps<T extends string> = {
   onRpcFieldChange: (key: string, value: unknown) => void;
   cloud: RpcSectionCloudProps;
   containerClassName: string;
+  renderMode: "legacy" | "minimal";
 };
 
 function RpcConfigSection<T extends string>({
@@ -194,6 +196,7 @@ function RpcConfigSection<T extends string>({
   onRpcFieldChange,
   cloud,
   containerClassName,
+  renderMode,
 }: RpcSectionProps<T>) {
   const rpcConfig = buildRpcRendererConfig(
     selectedProvider,
@@ -228,6 +231,7 @@ function RpcConfigSection<T extends string>({
             values={rpcConfig.values}
             setKeys={rpcConfig.setKeys}
             registry={defaultRegistry}
+            renderMode={renderMode}
             onChange={onRpcFieldChange}
           />
         ) : null}
@@ -267,7 +271,10 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
     walletApiKeySaving,
     handleWalletApiKeySave,
     handleCloudLogin,
+    currentTheme,
   } = useApp();
+
+  const configRenderMode = configRenderModeForTheme(currentTheme);
 
   const [secretsOpen, setSecretsOpen] = useState(false);
   const [rpcFieldValues, setRpcFieldValues] = useState<Record<string, string>>(
@@ -388,6 +395,7 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
               onRpcFieldChange={handleRpcFieldChange}
               cloud={cloudStatusProps}
               containerClassName="grid grid-cols-2 gap-1.5 xl:grid-cols-4"
+              renderMode={configRenderMode}
             />
 
             <RpcConfigSection
@@ -401,6 +409,7 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
               onRpcFieldChange={handleRpcFieldChange}
               cloud={cloudStatusProps}
               containerClassName="grid grid-cols-2 gap-1.5"
+              renderMode={configRenderMode}
             />
           </div>
 
