@@ -18,6 +18,7 @@ import type { ConfigUiHint } from "../types";
 import type { JsonSchemaObject } from "./config-catalog";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer";
 import { paramsToSchema } from "./PluginsView";
+import { configRenderModeForTheme } from "./shared/configRenderMode";
 import { UiRenderer } from "./ui-renderer";
 import type { UiSpec } from "./ui-spec";
 import { Button } from "./ui/Button.js";
@@ -150,7 +151,8 @@ function InlinePluginConfig({ pluginId }: { pluginId: string }) {
   const [dismissed, setDismissed] = useState(false);
   const mountedRef = useRef(true);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { setActionNotice, loadPlugins } = useApp();
+  const { setActionNotice, loadPlugins, currentTheme } = useApp();
+  const configRenderMode = configRenderModeForTheme(currentTheme);
 
   // Track mount state — reset to true on each mount (needed for StrictMode
   // which unmounts/remounts and would leave the ref false otherwise).
@@ -363,6 +365,7 @@ function InlinePluginConfig({ pluginId }: { pluginId: string }) {
             setKeys={setKeys}
             registry={defaultRegistry}
             pluginId={plugin.id}
+            renderMode={configRenderMode}
             onChange={handleChange}
           />
         </div>

@@ -13,7 +13,13 @@ import React, { useCallback, useRef, useState } from "react";
 import type { DynamicValue } from "../types";
 import type { FieldRenderer, FieldRenderProps } from "./config-catalog";
 import { resolveDynamic } from "./config-catalog";
+import { FormFieldStack } from "./FormFieldStack";
+import { SelectablePillGrid } from "./SelectablePillGrid";
+import { Badge } from "./ui/Badge";
+import { Button } from "./ui/Button";
 import { ChevronDownIcon, ChevronUpIcon, CloseIcon } from "./ui/Icons";
+import { Switch } from "./ui/Switch";
+import { cn } from "./ui/utils";
 
 // ── Action binding helper ──────────────────────────────────────────────
 
@@ -42,14 +48,32 @@ function fireAction(props: FieldRenderProps, eventName: string): void {
 
 // ── Shared Tailwind class constants ─────────────────────────────────────
 
-const INPUT_CLS =
+type ConfigFieldUiMode = NonNullable<FieldRenderProps["uiMode"]>;
+
+const LEGACY_INPUT_CLS =
   "w-full px-3 py-2 border border-[var(--border)] bg-[var(--card)] text-[13px] font-[var(--mono)] transition-all focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] box-border h-[36px] rounded-sm placeholder:text-[var(--muted)] placeholder:opacity-60";
 
-const INPUT_ERROR_CLS =
+const LEGACY_INPUT_ERROR_CLS =
   "w-full px-3 py-2 border border-[var(--destructive)] bg-[color-mix(in_srgb,var(--destructive)_3%,var(--card))] text-[13px] font-[var(--mono)] transition-all focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] box-border h-[36px] rounded-sm placeholder:text-[var(--muted)] placeholder:opacity-60";
 
-function inputCls(hasError: boolean): string {
-  return hasError ? INPUT_ERROR_CLS : INPUT_CLS;
+const MINIMAL_INPUT_CLS =
+  "w-full rounded-[18px] border border-white/10 bg-black/22 px-4 py-2.5 text-sm text-white/88 transition-colors outline-none placeholder:text-white/30 focus:border-white/18 focus-visible:ring-2 focus-visible:ring-white/16";
+
+const MINIMAL_INPUT_ERROR_CLS =
+  "w-full rounded-[18px] border border-danger/45 bg-danger/10 px-4 py-2.5 text-sm text-white/88 transition-colors outline-none placeholder:text-white/30 focus:border-danger/60 focus-visible:ring-2 focus-visible:ring-danger/20";
+
+function isMinimalMode(uiMode?: FieldRenderProps["uiMode"]): uiMode is "minimal" {
+  return uiMode === "minimal";
+}
+
+function inputCls(
+  hasError: boolean,
+  uiMode: ConfigFieldUiMode = "legacy",
+): string {
+  if (uiMode === "minimal") {
+    return hasError ? MINIMAL_INPUT_ERROR_CLS : MINIMAL_INPUT_CLS;
+  }
+  return hasError ? LEGACY_INPUT_ERROR_CLS : LEGACY_INPUT_CLS;
 }
 
 // ── 1. Text ─────────────────────────────────────────────────────────────
@@ -62,7 +86,7 @@ export function renderTextField(props: FieldRenderProps) {
 
   return (
     <input
-      className={inputCls(!!props.errors?.length)}
+      className={inputCls(!!props.errors?.length, props.uiMode)}
       type="text"
       defaultValue={value}
       placeholder={placeholder}
@@ -122,11 +146,43 @@ function PasswordFieldInner({ fp: props }: { fp: FieldRenderProps }) {
     }
   }, [visible, onReveal]);
 
+  if (!isMinimalMode(props.uiMode)) {
+    return (
+      <div className="flex items-center gap-2">
+        <input
+          ref={inputRef}
+          className={cn(inputCls(!!props.errors?.length, props.uiMode), "flex-1")}
+          type={visible ? "text" : "password"}
+          defaultValue=""
+          placeholder={placeholder}
+          data-config-key={props.key}
+          data-field-type="password"
+          onChange={(e) => {
+            props.onChange(e.target.value);
+            fireAction(props, "change");
+          }}
+          onBlur={() => fireAction(props, "blur")}
+        />
+        <button
+          type="button"
+          className="px-3 py-2 border border-[var(--border)] bg-[var(--bg-hover)] text-[12px] text-[var(--muted)] cursor-pointer transition-colors hover:bg-[var(--surface)] hover:text-[var(--text)] h-[36px] rounded-sm min-w-[88px] shrink-0"
+          onClick={() => {
+            void handleToggle();
+            fireAction(props, "click");
+          }}
+          title={visible ? "Hide value" : "Reveal value"}
+        >
+          {busy ? "\u2026" : visible ? "\u{1F441} Hide" : "\u{1F441} Show"}
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex">
+    <div className="flex items-center gap-2">
       <input
         ref={inputRef}
-        className="flex-1 px-3 py-2 border border-[var(--border)] border-r-0 bg-[var(--card)] text-[13px] font-[var(--mono)] transition-all focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] box-border h-[36px] rounded-l-sm placeholder:text-[var(--muted)] placeholder:opacity-60"
+        className={cn(inputCls(!!props.errors?.length, props.uiMode), "flex-1")}
         type={visible ? "text" : "password"}
         defaultValue=""
         placeholder={placeholder}
@@ -138,9 +194,11 @@ function PasswordFieldInner({ fp: props }: { fp: FieldRenderProps }) {
         }}
         onBlur={() => fireAction(props, "blur")}
       />
-      <button
+      <Button
         type="button"
-        className="px-3 border border-[var(--border)] bg-[var(--bg-hover)] text-[11px] text-[var(--muted)] cursor-pointer whitespace-nowrap min-w-[56px] text-center transition-colors hover:bg-[var(--surface)] hover:text-[var(--text)] h-[36px] font-medium rounded-r-sm"
+        variant="outline"
+        size="sm"
+        className="min-w-[88px] shrink-0"
         onClick={() => {
           void handleToggle();
           fireAction(props, "click");
@@ -148,7 +206,7 @@ function PasswordFieldInner({ fp: props }: { fp: FieldRenderProps }) {
         title={visible ? "Hide value" : "Reveal value"}
       >
         {busy ? "\u2026" : visible ? "\u{1F441} Hide" : "\u{1F441} Show"}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -200,7 +258,7 @@ function NumberFieldInner({ fp: props }: { fp: FieldRenderProps }) {
           </button>
         )}
         <input
-          className={`${inputCls(!!props.errors?.length)} ${unit ? "flex-1" : "w-full"} text-center`}
+          className={`${inputCls(!!props.errors?.length, props.uiMode)} ${unit ? "flex-1" : "w-full"} text-center`}
           type="number"
           value={val}
           placeholder={placeholder}
@@ -262,42 +320,65 @@ function BooleanFieldInner({ fp: props }: { fp: FieldRenderProps }) {
 
   const [localVal, setLocalVal] = useState(initialVal);
 
-  const handleToggle = () => {
-    const next = !localVal;
-    setLocalVal(next);
-    props.onChange(String(next));
-    fireAction(props, "change");
-  };
+  if (!isMinimalMode(props.uiMode)) {
+    return (
+      <button
+        type="button"
+        className="flex items-center gap-2 cursor-pointer bg-transparent border-none p-0"
+        data-config-key={props.key}
+        data-field-type="boolean"
+        disabled={props.readonly}
+        onClick={() => {
+          if (props.readonly) return;
+          const next = !localVal;
+          setLocalVal(next);
+          props.onChange(String(next));
+          fireAction(props, "change");
+          fireAction(props, "click");
+        }}
+      >
+        <span
+          className={cn(
+            "relative inline-flex h-7 w-14 items-center rounded-full border transition-colors",
+            localVal
+              ? "border-[var(--warning,#f39c12)] bg-[color-mix(in_srgb,var(--warning,#f39c12)_45%,transparent)]"
+              : "border-[var(--border)] bg-[var(--bg-hover)]",
+          )}
+        >
+          <span
+            className={cn(
+              "inline-block h-6 w-6 rounded-full bg-[var(--card)] transition-transform",
+              localVal ? "translate-x-7" : "translate-x-0.5",
+            )}
+          />
+        </span>
+        <span className="text-[13px] text-[var(--warning,#f39c12)]">
+          {localVal ? "Enabled" : "Disabled"}
+        </span>
+      </button>
+    );
+  }
 
   return (
-    <button
-      type="button"
-      className="flex items-center gap-2.5 cursor-pointer bg-transparent border-none p-0 group"
-      disabled={props.readonly}
-      onClick={() => {
-        handleToggle();
-        fireAction(props, "click");
-      }}
+    <div
+      className="flex items-center gap-3"
       data-config-key={props.key}
       data-field-type="boolean"
     >
-      <div
-        className={`relative w-10 h-[22px] rounded-full transition-colors duration-200 ${
-          localVal ? "bg-[var(--accent)]" : "bg-[var(--muted)] opacity-40"
-        }`}
-      >
-        <div
-          className={`absolute top-[3px] w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-200 ${
-            localVal ? "left-[21px]" : "left-[3px]"
-          }`}
-        />
-      </div>
-      <span
-        className={`text-xs transition-colors ${localVal ? "text-[var(--text)] font-medium" : "text-[var(--muted)]"}`}
-      >
+      <Switch
+        checked={localVal}
+        disabled={props.readonly}
+        onCheckedChange={(next) => {
+          setLocalVal(next);
+          props.onChange(String(next));
+          fireAction(props, "change");
+        }}
+        onClick={() => fireAction(props, "click")}
+      />
+      <span className={cn("text-sm", localVal ? "text-white/88" : "text-white/56")}>
         {localVal ? "Enabled" : "Disabled"}
       </span>
-    </button>
+    </div>
   );
 }
 
@@ -314,7 +395,7 @@ export function renderUrlField(props: FieldRenderProps) {
 
   return (
     <input
-      className={inputCls(!!props.errors?.length)}
+      className={inputCls(!!props.errors?.length, props.uiMode)}
       type="url"
       defaultValue={value}
       placeholder={placeholder}
@@ -374,7 +455,7 @@ export function renderSelectField(props: FieldRenderProps) {
 
   return (
     <select
-      className={`${INPUT_CLS} appearance-auto`}
+      className={`${inputCls(!!props.errors?.length, props.uiMode)} appearance-auto pr-10`}
       defaultValue={effectiveValue}
       data-config-key={props.key}
       data-field-type="select"
@@ -456,7 +537,7 @@ function SearchableSelectInner({
       {/* Trigger button that looks like a select */}
       <button
         type="button"
-        className={`${inputCls(!!props.errors?.length)} text-left flex items-center justify-between gap-2 cursor-pointer`}
+        className={`${inputCls(!!props.errors?.length, props.uiMode)} text-left flex items-center justify-between gap-2 cursor-pointer`}
         disabled={props.readonly}
         onClick={() => {
           setOpen(!open);
@@ -475,15 +556,19 @@ function SearchableSelectInner({
 
       {/* Dropdown panel */}
       {open && (
-        <div className="absolute z-50 left-0 right-0 mt-1 border border-[var(--border)] bg-[var(--card)] shadow-lg max-h-[280px] flex flex-col rounded-sm">
+        <div className="absolute left-0 right-0 z-50 mt-2 max-h-[280px] overflow-hidden rounded-[20px] border border-white/10 bg-black/78 shadow-2xl backdrop-blur-xl">
           {/* Search input */}
-          <div className="p-1.5 border-b border-[var(--border)]">
+          <div className="border-b border-white/10 p-2">
             <input
               ref={inputRef}
-              className="w-full px-2 py-1.5 border border-[var(--border)] bg-[var(--bg)] text-[12px] font-[var(--mono)] focus:border-[var(--accent)] focus:outline-none rounded-sm"
+              className={cn(
+                isMinimalMode(props.uiMode)
+                  ? "w-full rounded-[14px] border border-white/10 bg-black/24 px-3 py-2 text-xs text-white/80 outline-none focus:border-white/18 focus-visible:ring-2 focus-visible:ring-white/16"
+                  : "w-full px-2.5 py-[7px] border border-[var(--border)] bg-[var(--card)] text-[12px] transition-all focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] box-border rounded-sm placeholder:text-[var(--muted)] placeholder:opacity-60",
+              )}
               type="text"
               value={filter}
-              placeholder={`Search ${options.length} models...`}
+              placeholder={`Search ${options.length} options...`}
               onChange={(e) => setFilter(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Escape") {
@@ -500,7 +585,12 @@ function SearchableSelectInner({
             {!props.required && (
               <button
                 type="button"
-                className="w-full text-left px-3 py-1.5 text-[12px] text-[var(--muted)] hover:bg-[var(--bg-hover)] transition-colors italic"
+                className={cn(
+                  "w-full px-3 py-2 text-left text-xs italic transition-colors",
+                  isMinimalMode(props.uiMode)
+                    ? "text-white/52 hover:bg-white/[0.05]"
+                    : "text-[var(--muted)] hover:bg-[var(--bg-hover)]",
+                )}
                 onClick={() => {
                   props.onChange("");
                   setInputVal("");
@@ -513,7 +603,7 @@ function SearchableSelectInner({
               </button>
             )}
             {filtered.length === 0 && (
-              <div className="px-3 py-3 text-[12px] text-[var(--muted)] text-center">
+              <div className="px-3 py-3 text-center text-xs text-white/46">
                 No matches
               </div>
             )}
@@ -521,24 +611,44 @@ function SearchableSelectInner({
               <button
                 key={opt.value}
                 type="button"
-                className={`w-full text-left px-3 py-1.5 text-[12px] hover:bg-[var(--bg-hover)] transition-colors ${
+                className={cn(
+                  "w-full px-3 py-2 text-left text-xs transition-colors",
+                  isMinimalMode(props.uiMode)
+                    ? "hover:bg-white/[0.05]"
+                    : "hover:bg-[var(--bg-hover)]",
                   opt.value === effectiveValue
-                    ? "bg-[color-mix(in_srgb,var(--accent)_10%,var(--card))] text-[var(--accent)] font-medium"
-                    : ""
-                }`}
+                    ? isMinimalMode(props.uiMode)
+                      ? "bg-white/[0.08] font-medium text-white"
+                      : "bg-[color-mix(in_srgb,var(--accent)_8%,var(--card))] font-medium text-[var(--text)]"
+                    : "",
+                )}
                 onClick={() => select(opt)}
               >
                 {opt.label}
                 {opt.description && (
-                  <span className="text-[var(--muted)] ml-1.5 text-[11px]">
+                  <span
+                    className={cn(
+                      "ml-1.5 text-[11px]",
+                      isMinimalMode(props.uiMode)
+                        ? "text-white/42"
+                        : "text-[var(--muted)]",
+                    )}
+                  >
                     {opt.description}
                   </span>
                 )}
               </button>
             ))}
           </div>
-          <div className="px-3 py-1 border-t border-[var(--border)] text-[10px] text-[var(--muted)]">
-            {filtered.length} of {options.length} models
+          <div
+            className={cn(
+              "border-t px-3 py-2 text-[10px]",
+              isMinimalMode(props.uiMode)
+                ? "border-white/10 text-white/46"
+                : "border-[var(--border)] text-[var(--muted)]",
+            )}
+          >
+            {filtered.length} of {options.length} options
           </div>
         </div>
       )}
@@ -571,7 +681,11 @@ function TextareaFieldInner({ fp: props }: { fp: FieldRenderProps }) {
   return (
     <textarea
       ref={textareaRef}
-      className="w-full px-3 py-2 border border-[var(--border)] bg-[var(--card)] text-[13px] font-[var(--mono)] transition-all focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] box-border min-h-[72px] max-h-[400px] rounded-sm placeholder:text-[var(--muted)] placeholder:opacity-60"
+      className={cn(
+        isMinimalMode(props.uiMode)
+          ? "min-h-[88px] max-h-[400px] w-full rounded-[18px] border border-white/10 bg-black/22 px-4 py-3 text-sm text-white/88 outline-none transition-colors placeholder:text-white/30 focus:border-white/18 focus-visible:ring-2 focus-visible:ring-white/16"
+          : "w-full px-2.5 py-[7px] border border-[var(--border)] bg-[var(--card)] text-[13px] font-[var(--mono)] transition-all focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] box-border min-h-[100px] resize-y rounded-sm placeholder:text-[var(--muted)] placeholder:opacity-60",
+      )}
       style={{ fieldSizing: "content" } as React.CSSProperties}
       defaultValue={value}
       placeholder={placeholder}
@@ -600,7 +714,7 @@ export function renderEmailField(props: FieldRenderProps) {
 
   return (
     <input
-      className={inputCls(!!props.errors?.length)}
+      className={inputCls(!!props.errors?.length, props.uiMode)}
       type="email"
       defaultValue={value}
       placeholder={placeholder}
@@ -648,7 +762,7 @@ function ColorFieldInner({ fp: props }: { fp: FieldRenderProps }) {
         onClick={() => fireAction(props, "click")}
       />
       <input
-        className={`${inputCls(!!props.errors?.length)} flex-1`}
+        className={`${inputCls(!!props.errors?.length, props.uiMode)} flex-1`}
         type="text"
         value={color}
         placeholder="#000000"
@@ -696,38 +810,59 @@ function RadioFieldInner({ fp: props }: { fp: FieldRenderProps }) {
     fireAction(props, "change");
   };
 
+  if (!isMinimalMode(props.uiMode)) {
+    return (
+      <div data-config-key={props.key} data-field-type="radio" className="flex flex-col gap-2">
+        {options.map((opt) => {
+          const checked = selected === opt.value;
+          return (
+            <label
+              key={opt.value}
+              className={cn(
+                "flex flex-col gap-1 text-[13px] cursor-pointer",
+                props.readonly || opt.disabled ? "opacity-50 pointer-events-none" : "",
+              )}
+            >
+              <span className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name={props.key}
+                  value={opt.value}
+                  checked={checked}
+                  disabled={props.readonly || opt.disabled}
+                  onChange={() => handleChange(opt.value)}
+                  onClick={() => fireAction(props, "click")}
+                  onBlur={() => fireAction(props, "blur")}
+                />
+                <span>{opt.label}</span>
+              </span>
+              {opt.description ? (
+                <span className="pl-6 text-[11px] text-[var(--muted)]">
+                  {opt.description}
+                </span>
+              ) : null}
+            </label>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
-    <div
-      className="flex flex-col gap-1.5"
-      data-config-key={props.key}
-      data-field-type="radio"
-    >
-      {options.map((opt) => (
-        <label
-          key={opt.value}
-          className="flex items-start gap-2 cursor-pointer text-[13px]"
-        >
-          <input
-            type="radio"
-            name={props.key}
-            value={opt.value}
-            checked={opt.value === selected}
-            disabled={props.readonly || opt.disabled}
-            onChange={() => handleChange(opt.value)}
-            onClick={() => fireAction(props, "click")}
-            onBlur={() => fireAction(props, "blur")}
-            className="mt-0.5 shrink-0"
-          />
-          <span>
-            {opt.label}
-            {opt.description && (
-              <div className="text-[11px] text-[var(--muted)] mt-px">
-                {opt.description}
-              </div>
-            )}
-          </span>
-        </label>
-      ))}
+    <div data-config-key={props.key} data-field-type="radio">
+      <SelectablePillGrid
+        options={options.map((opt) => ({
+          value: opt.value,
+          label: opt.label,
+          description: opt.description,
+          disabled: props.readonly || opt.disabled,
+        }))}
+        value={selected}
+        onChange={(next) => {
+          handleChange(next);
+          fireAction(props, "click");
+        }}
+      />
     </div>
   );
 }
@@ -842,7 +977,7 @@ export function renderDateField(props: FieldRenderProps) {
 
   return (
     <input
-      className={inputCls(!!props.errors?.length)}
+      className={inputCls(!!props.errors?.length, props.uiMode)}
       type={inputType}
       defaultValue={value}
       data-config-key={props.key}
@@ -1160,7 +1295,7 @@ function KeyValueFieldInner({ fp: props }: { fp: FieldRenderProps }) {
           className="flex items-center gap-1"
         >
           <input
-            className={`${inputCls(!!props.errors?.length)} flex-1`}
+          className={`${inputCls(!!props.errors?.length, props.uiMode)} flex-1`}
             type="text"
             value={pair.key}
             placeholder="Key"
@@ -1169,7 +1304,7 @@ function KeyValueFieldInner({ fp: props }: { fp: FieldRenderProps }) {
             onBlur={() => fireAction(props, "blur")}
           />
           <input
-            className={`${inputCls(!!props.errors?.length)} flex-1`}
+            className={`${inputCls(!!props.errors?.length, props.uiMode)} flex-1`}
             type="text"
             value={pair.value}
             placeholder="Value"
@@ -1215,7 +1350,7 @@ export function renderDatetimeField(props: FieldRenderProps) {
 
   return (
     <input
-      className={inputCls(!!props.errors?.length)}
+      className={inputCls(!!props.errors?.length, props.uiMode)}
       type="datetime-local"
       defaultValue={value}
       data-config-key={props.key}
@@ -1494,7 +1629,7 @@ function MarkdownFieldInner(props: FieldRenderProps) {
         </div>
       ) : (
         <textarea
-          className={`${inputCls(!!props.errors?.length)} min-h-[100px] h-auto resize-y font-[var(--mono)]`}
+          className={`${inputCls(!!props.errors?.length, props.uiMode)} min-h-[100px] h-auto resize-y font-[var(--mono)]`}
           defaultValue={value}
           placeholder={props.hint.placeholder ?? "Markdown content..."}
           data-config-key={props.key}
@@ -1783,12 +1918,108 @@ export function ConfigField({
   const labelDiffersFromKey = label !== envKey;
   const errors = renderProps.errors ?? [];
   const hasError = errors.length > 0;
-  const isRequiredEmpty = renderProps.required && !renderProps.isSet;
 
   const renderFn =
     renderer ??
     defaultRenderers[renderProps.fieldType] ??
     defaultRenderers.text;
+
+  const uiMode = renderProps.uiMode ?? "legacy";
+  const fieldHelp = renderProps.hint.help ?? renderProps.schema.description;
+  const helpContent =
+    fieldHelp || labelDiffersFromKey ? (
+      <div className="space-y-1">
+        {fieldHelp ? <div>{fieldHelp}</div> : null}
+        {labelDiffersFromKey ? (
+          <code
+            className={cn(
+              "block text-[10px] uppercase tracking-[0.18em]",
+              uiMode === "minimal" ? "text-white/34" : "text-[var(--muted)]",
+            )}
+          >
+            {envKey}
+          </code>
+        ) : null}
+      </div>
+    ) : undefined;
+
+  if (uiMode !== "minimal") {
+    return (
+      <div
+        id={
+          pluginId
+            ? `field-${pluginId}-${renderProps.key}`
+            : `field-${renderProps.key}`
+        }
+        className={cn(
+          "py-2.5",
+          renderProps.readonly ? "opacity-50 pointer-events-none" : "",
+          renderProps.required && !renderProps.isSet
+            ? "border-l-2 border-[var(--warning,#f39c12)] pl-3"
+            : "",
+        )}
+      >
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <span className="text-[13px] font-semibold leading-tight text-[var(--text)]">
+            {label}
+          </span>
+          {renderProps.required && !renderProps.isSet ? (
+            <span className="text-[10px] uppercase tracking-[0.14em] text-[var(--warning,#f39c12)]">
+              Required
+            </span>
+          ) : null}
+          {renderProps.isSet ? (
+            <span className="text-[10px] uppercase tracking-[0.14em] text-[var(--ok,#2d8a4e)]">
+              Configured
+            </span>
+          ) : null}
+        </div>
+
+        <div className="space-y-2">
+          {renderFn(renderProps)}
+          {fieldHelp ? (
+            <div className="text-[11px] leading-snug text-[var(--muted)]">
+              {fieldHelp}
+            </div>
+          ) : null}
+          {labelDiffersFromKey ? (
+            <code className="block text-[10px] uppercase tracking-[0.14em] text-[var(--muted)] opacity-75">
+              {envKey}
+            </code>
+          ) : null}
+          {hasError && (
+            <div className="flex flex-col gap-1">
+              {errors.map((err) => (
+                <div
+                  key={err}
+                  className="flex items-start gap-2 text-[11px] leading-snug text-[var(--destructive)]"
+                >
+                  <span className="mt-px shrink-0">&times;</span>
+                  <span>{err}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const labelContent = (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-sm font-semibold leading-tight text-white/88">{label}</span>
+      {renderProps.required && !renderProps.isSet ? (
+        <Badge variant="danger" className="px-2 py-0.5 text-[9px] tracking-[0.16em]">
+          Required
+        </Badge>
+      ) : null}
+      {renderProps.isSet ? (
+        <Badge variant="success" className="px-2 py-0.5 text-[9px] tracking-[0.16em]">
+          Configured
+        </Badge>
+      ) : null}
+    </div>
+  );
 
   return (
     <div
@@ -1797,81 +2028,26 @@ export function ConfigField({
           ? `field-${pluginId}-${renderProps.key}`
           : `field-${renderProps.key}`
       }
-      className={`py-2.5 group/field ${
-        renderProps.readonly ? "opacity-50 pointer-events-none" : ""
-      } ${isRequiredEmpty ? "relative" : ""}`}
+      className={cn("py-2.5", renderProps.readonly ? "opacity-50 pointer-events-none" : "")}
     >
-      {/* Required-but-empty accent bar */}
-      {isRequiredEmpty && (
-        <div className="absolute left-0 top-2.5 bottom-2.5 w-[2px] bg-[var(--destructive)] opacity-40 rounded-full" />
-      )}
-
-      <div className={isRequiredEmpty ? "pl-2.5" : ""}>
-        {/* Label row */}
-        <div className="flex items-center gap-2 mb-1.5">
-          <span
-            className="font-semibold leading-tight break-words"
-            style={{
-              fontSize: "var(--plugin-label-size)",
-              color: "var(--plugin-label)",
-            }}
-          >
-            {label}
-          </span>
-          {renderProps.required && !renderProps.isSet && (
-            <span className="text-[10px] text-[var(--destructive)] font-semibold px-1.5 py-px bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] rounded-sm shrink-0">
-              Required
-            </span>
-          )}
-          {renderProps.isSet && (
-            <span className="inline-flex items-center gap-1 text-[10px] text-[var(--ok)] font-medium shrink-0">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--ok)]" />
-              Configured
-            </span>
-          )}
-          {/* Env key — right-aligned, subtle, only when label differs */}
-          {labelDiffersFromKey && (
-            <code className="text-[10px] font-mono text-[var(--muted)] opacity-0 group-hover/field:opacity-50 transition-opacity truncate ml-auto">
-              {envKey}
-            </code>
+      <FormFieldStack label={labelContent} help={helpContent}>
+        <div className="space-y-2">
+          {renderFn(renderProps)}
+          {hasError && (
+            <div className="flex flex-col gap-1">
+              {errors.map((err) => (
+                <div
+                  key={err}
+                  className="flex items-start gap-2 text-xs leading-snug text-danger"
+                >
+                  <span className="mt-px shrink-0">&times;</span>
+                  <span>{err}</span>
+                </div>
+              ))}
+            </div>
           )}
         </div>
-
-        {/* Field renderer */}
-        {renderFn(renderProps)}
-
-        {/* Errors */}
-        {hasError && (
-          <div className="mt-1.5 flex flex-col gap-0.5">
-            {errors.map((err) => (
-              <div
-                key={err}
-                className="leading-snug flex items-start gap-1"
-                style={{
-                  fontSize: "var(--plugin-error-size)",
-                  color: "var(--plugin-error)",
-                }}
-              >
-                <span className="shrink-0 mt-px">&times;</span>
-                <span>{err}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Help text */}
-        {(renderProps.hint.help || renderProps.schema.description) && (
-          <div
-            className="mt-1 leading-relaxed whitespace-normal"
-            style={{
-              fontSize: "var(--plugin-help-size)",
-              color: "var(--plugin-help)",
-            }}
-          >
-            {renderProps.hint.help ?? renderProps.schema.description}
-          </div>
-        )}
-      </div>
+      </FormFieldStack>
     </div>
   );
 }

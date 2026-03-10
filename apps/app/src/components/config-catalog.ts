@@ -740,6 +740,8 @@ export interface FieldRenderProps {
   errors?: string[];
   /** Whether the field should be non-editable. */
   readonly?: boolean;
+  /** Visual chrome mode selected by the hosting surface. */
+  uiMode?: "legacy" | "minimal";
   /** For sensitive fields — async callback to fetch the real value from the server. */
   onReveal?: () => Promise<string | null>;
   /** Dispatch a named action with optional parameters. */

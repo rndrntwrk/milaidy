@@ -16,6 +16,7 @@ import type { ConfigUiHint } from "../types";
 import { AvatarSelector } from "./AvatarSelector";
 import type { JsonSchemaObject } from "./config-catalog";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer";
+import { configRenderModeForTheme } from "./shared/configRenderMode";
 
 const DEFAULT_ELEVEN_FAST_MODEL = "eleven_flash_v2_5";
 const REDACTED_SECRET = "[REDACTED]";
@@ -305,7 +306,10 @@ export function CharacterView() {
     loadDropStatus,
     mintFromDrop,
     walletConfig,
+    currentTheme,
   } = useApp();
+
+  const configRenderMode = configRenderModeForTheme(currentTheme);
 
   useEffect(() => {
     void loadCharacter();
@@ -1581,6 +1585,7 @@ export function CharacterView() {
                     speed: voiceConfig.elevenlabs?.speed ?? "",
                   }}
                   registry={defaultRegistry}
+                  renderMode={configRenderMode}
                   onChange={(key, value) => {
                     handleVoiceFieldChange(
                       key,

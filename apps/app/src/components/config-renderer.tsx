@@ -62,6 +62,8 @@ export interface ConfigRendererProps {
   ) => React.ReactNode;
   /** Show a validation error summary above the form fields when errors exist. Defaults to true. */
   showValidationSummary?: boolean;
+  /** Visual mode for embedded config surfaces. Defaults to legacy schema chrome. */
+  renderMode?: "minimal" | "legacy";
   /** Partial theme overrides for plugin UI tokens. */
   theme?: Partial<import("../types").PluginUiTheme>;
 }
@@ -268,6 +270,7 @@ export const ConfigRenderer = forwardRef<
     onChange,
     renderField: renderFieldOverride,
     showValidationSummary = true,
+    renderMode = "legacy",
     theme,
   }: ConfigRendererProps,
   ref,
@@ -411,6 +414,7 @@ export const ConfigRenderer = forwardRef<
         required: field.required,
         errors: fieldErrors.get(field.key),
         readonly: field.readonly,
+        uiMode: renderMode,
         onReveal:
           isSensitive && revealSecret && pluginId
             ? () => revealSecret(pluginId, field.key)
@@ -577,10 +581,13 @@ export const ConfigRenderer = forwardRef<
 
   // ── Render ───────────────────────────────────────────────────────────
 
+  const minimalChrome = renderMode !== "legacy";
+
   return (
     <div style={themeStyle}>
       {/* Progress indicator */}
-      {configProgress &&
+      {!minimalChrome &&
+        configProgress &&
         configProgress.requiredTotal > 0 &&
         configProgress.requiredSet < configProgress.requiredTotal && (
           <div className="mb-4 px-3.5 py-2.5 border border-[var(--warning,#f39c12)] bg-[color-mix(in_srgb,var(--warning,#f39c12)_6%,transparent)] rounded-sm">
@@ -642,35 +649,55 @@ export const ConfigRenderer = forwardRef<
 
         return (
           <div key={group} className={groupIndex > 0 ? "mt-5" : ""}>
-            {(showHeaders || isCollapsibleGroup) &&
+            {(!minimalChrome ? showHeaders || isCollapsibleGroup : isCollapsibleGroup) &&
               (isCollapsibleGroup ? (
                 <button
                   type="button"
-                  className="w-full flex items-center gap-2 mb-3 cursor-pointer bg-transparent border-none p-0 text-left group"
+                  className={
+                    minimalChrome
+                      ? "group mb-3 flex w-full items-center gap-3 border-none bg-transparent p-0 text-left"
+                      : "group mb-3 flex w-full items-center gap-2 border-none bg-transparent p-0 text-left"
+                  }
                   onClick={() => toggleGroupOpen(group)}
                   aria-expanded={isGroupOpen}
                 >
                   <span
-                    className="inline-block text-[10px] text-[var(--muted)] transition-transform duration-200 group-hover:text-[var(--text)]"
+                    className={
+                      minimalChrome
+                        ? "inline-block text-[10px] text-white/42 transition-transform duration-200 group-hover:text-white/70"
+                        : "inline-block text-[10px] text-[var(--muted)] transition-transform duration-200 group-hover:text-[var(--text)]"
+                    }
                     style={{
                       transform: isGroupOpen ? "rotate(90deg)" : "none",
                     }}
                   >
                     &#9654;
                   </span>
-                  <span className="text-base leading-none">
+                  <span className={minimalChrome ? "text-base leading-none opacity-80" : "text-base leading-none"}>
                     {groupIcon(displayGroup)}
                   </span>
-                  <span className="text-[12px] font-bold uppercase tracking-wider text-[var(--text)] opacity-70">
+                  <span
+                    className={
+                      minimalChrome
+                        ? "text-[11px] font-semibold uppercase tracking-[0.22em] text-white/62"
+                        : "text-[12px] font-bold uppercase tracking-wider text-[var(--text)] opacity-70"
+                    }
+                  >
                     {displayGroup}
                   </span>
-                  <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-bold bg-[var(--accent-subtle,rgba(255,255,255,0.05))] text-[var(--accent)] border border-[var(--border)] rounded-sm">
+                  <span
+                    className={
+                      minimalChrome
+                        ? "inline-flex min-h-6 min-w-[1.75rem] items-center justify-center rounded-full border border-white/10 bg-white/[0.04] px-2 text-[10px] font-medium uppercase tracking-[0.14em] text-white/58"
+                        : "inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-bold bg-[var(--accent-subtle,rgba(255,255,255,0.05))] text-[var(--accent)] border border-[var(--border)] rounded-sm"
+                    }
+                  >
                     {groupCount}
                   </span>
-                  <span className="flex-1 h-px bg-[var(--border)] ml-1" />
+                  <span className={minimalChrome ? "ml-1 h-px flex-1 bg-white/10" : "ml-1 h-px flex-1 bg-[var(--border)]"} />
                 </button>
               ) : (
-                <div className="flex items-center gap-2 mb-3">
+                <div className="mb-3 flex items-center gap-2">
                   <span className="text-base leading-none">
                     {groupIcon(displayGroup)}
                   </span>
@@ -690,25 +717,45 @@ export const ConfigRenderer = forwardRef<
       })}
 
       {advanced.length > 0 && (
-        <div className="mt-5 pt-4 border-t border-[var(--border)]">
+        <div className={minimalChrome ? "mt-6 border-t border-white/10 pt-4" : "mt-5 border-t border-[var(--border)] pt-4"}>
           <button
             type="button"
-            className="flex items-center gap-2 cursor-pointer select-none group mb-3"
+            className={
+              minimalChrome
+                ? "group mb-3 flex w-full items-center gap-3 cursor-pointer select-none"
+                : "group mb-3 flex items-center gap-2 cursor-pointer select-none"
+            }
             onClick={() => setAdvancedOpen((prev) => !prev)}
           >
             <span
-              className="inline-block text-[10px] text-[var(--muted)] transition-transform duration-200 group-hover:text-[var(--text)]"
+              className={
+                minimalChrome
+                  ? "inline-block text-[10px] text-white/42 transition-transform duration-200 group-hover:text-white/70"
+                  : "inline-block text-[10px] text-[var(--muted)] transition-transform duration-200 group-hover:text-[var(--text)]"
+              }
               style={{ transform: advancedOpen ? "rotate(90deg)" : "none" }}
             >
               &#9654;
             </span>
-            <span className="text-[12px] font-bold uppercase tracking-wider text-[var(--muted)] group-hover:text-[var(--text)] transition-colors">
-              Advanced
+            <span
+              className={
+                minimalChrome
+                  ? "text-[11px] font-semibold uppercase tracking-[0.22em] text-white/62 transition-colors group-hover:text-white/82"
+                  : "text-[12px] font-bold uppercase tracking-wider text-[var(--muted)] transition-colors group-hover:text-[var(--text)]"
+              }
+            >
+              {minimalChrome ? "Advanced settings" : "Advanced"}
             </span>
-            <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-bold bg-[var(--accent-subtle,rgba(255,255,255,0.05))] text-[var(--accent)] border border-[var(--border)] rounded-sm">
+            <span
+              className={
+                minimalChrome
+                  ? "inline-flex min-h-6 min-w-[1.75rem] items-center justify-center rounded-full border border-white/10 bg-white/[0.04] px-2 text-[10px] font-medium uppercase tracking-[0.14em] text-white/58"
+                  : "inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-bold bg-[var(--accent-subtle,rgba(255,255,255,0.05))] text-[var(--accent)] border border-[var(--border)] rounded-sm"
+              }
+            >
               {advanced.length}
             </span>
-            <span className="flex-1 h-px bg-[var(--border)] opacity-50 ml-1" />
+            <span className={minimalChrome ? "ml-1 h-px flex-1 bg-white/10" : "ml-1 h-px flex-1 bg-[var(--border)] opacity-50"} />
           </button>
           {advancedOpen && (
             <div className="grid grid-cols-6 gap-x-5 gap-y-0 pt-1 animate-[cr-slide_var(--duration-normal,200ms)_ease]">
