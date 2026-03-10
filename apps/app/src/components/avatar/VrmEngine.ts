@@ -607,7 +607,7 @@ export class VrmEngine {
 
     if (this.currentScenePreset === "pro-streamer-stage" && this.stageScene) {
       characterRoot.scale.setScalar(
-        Math.max(0.1, this.stageScene.anchorMetadata.targetHeightM),
+        Math.max(0.1, this.stageScene.anchorMetadata.targetHeightM * 4),
       );
       this.applyStageCamera(this.stageScene);
       const targetMark =
