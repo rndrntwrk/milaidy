@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../AppContext";
 import type { PluginInfo, PluginParamDef } from "../api-client";
 import { client } from "../api-client";
+import { resolveProStreamerBrandComponent, resolveProStreamerBrandIcon } from "../proStreamerBrandIcons";
 import type { ConfigUiHint } from "../types";
 import type { JsonSchemaObject } from "./config-catalog";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer";
@@ -255,6 +256,10 @@ function parseBoolish(value: unknown): boolean {
 }
 
 function stream555DestinationIcon(specId: string) {
+  const brandComponent = resolveProStreamerBrandComponent([specId]);
+  if (brandComponent) {
+    return brandComponent;
+  }
   switch (specId) {
     case "pumpfun":
       return PumpFunIcon;
@@ -582,6 +587,7 @@ function Stream555ControlActionsPanel({
     ttlMs?: number,
   ) => void;
 }) {
+  const { currentTheme } = useApp();
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [lastNotice, setLastNotice] = useState<{
     tone: "success" | "error";
@@ -754,6 +760,10 @@ function Stream555ControlActionsPanel({
       : isAuthenticated
         ? "Authenticated"
         : (authenticateAction?.label ?? "Authenticate Wallet");
+  const showBrandedDestinationStatus = currentTheme === "milady-os";
+  const surfacedDestinations = summary.destinations.filter(
+    (destination) => destination.enabled || destination.streamKeySet,
+  );
 
   return (
     <Card className="pro-streamer-provider-card mb-3 space-y-3 p-4">
@@ -783,6 +793,33 @@ function Stream555ControlActionsPanel({
           {isAuthenticated ? "Connected" : "Awaiting auth"}
         </Badge>
       </div>
+      {showBrandedDestinationStatus && surfacedDestinations.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {surfacedDestinations.map((destination) => {
+            const DestinationIcon = stream555DestinationIcon(destination.id);
+            const toneClass = destination.enabled
+              ? destination.streamKeySet
+                ? "border-ok/30 bg-[rgba(22,101,52,0.08)] text-ok"
+                : "border-warn/30 bg-[rgba(234,179,8,0.08)] text-warn"
+              : "border-white/10 bg-white/[0.04] text-white/60";
+            const stateLabel = destination.enabled
+              ? destination.streamKeySet
+                ? "ready"
+                : "enabled"
+              : "saved";
+            return (
+              <span
+                key={`${plugin.id}-${destination.id}`}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] ${toneClass}`}
+              >
+                <DestinationIcon className="h-3.5 w-3.5" />
+                <span>{destination.label}</span>
+                <span className="opacity-70">{stateLabel}</span>
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
       <div className="pro-streamer-provider-actions">
         <Button
           type="button"
@@ -2374,7 +2411,7 @@ function PluginConfigForm({
 
 type PluginIconComponent = typeof AgentIcon;
 
-const DEFAULT_ICONS: Record<string, PluginIconComponent> = {
+const DEFAULT_ICONS: Partial<Record<string, PluginIconComponent>> = {
   // AI Providers
   anthropic: BrainIcon,
   "google-genai": SparkIcon,
@@ -2490,16 +2527,31 @@ function isImageIcon(value: string): boolean {
 }
 
 /** Resolve display icon: explicit remote/local image, semantic SVG fallback, or null. */
-function resolveIcon(p: PluginInfo): ResolvedPluginIcon | null {
+function resolveIcon(
+  p: PluginInfo,
+  preferProStreamerBrandIcons: boolean = false,
+): ResolvedPluginIcon | null {
   if (p.icon && isImageIcon(p.icon)) {
     return { kind: "image", src: p.icon };
   }
+
+  if (preferProStreamerBrandIcons) {
+    const brandIcon = resolveProStreamerBrandIcon([p.icon, p.id, p.name]);
+    if (brandIcon) {
+      return brandIcon;
+    }
+  }
+
   const Component = (p.icon && DEFAULT_ICONS[p.icon]) || DEFAULT_ICONS[p.id];
   return Component ? { kind: "component", Component } : null;
 }
 
-function renderPluginIcon(p: PluginInfo, className = "h-4 w-4 text-white/72") {
-  const icon = resolveIcon(p);
+function renderPluginIcon(
+  p: PluginInfo,
+  className = "h-4 w-4 text-white/72",
+  preferProStreamerBrandIcons: boolean = false,
+) {
+  const icon = resolveIcon(p, preferProStreamerBrandIcons);
   if (!icon) return null;
   if (icon.kind === "image") {
     return (
@@ -2653,6 +2705,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
     handlePluginConfigSave,
     setActionNotice,
     setState,
+    currentTheme,
   } = useApp();
 
   const [pluginConfigs, setPluginConfigs] = useState<
@@ -2676,6 +2729,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
   const [installingPlugins, setInstallingPlugins] = useState<Set<string>>(
     new Set(),
   );
+  const useProStreamerBrandIcons = currentTheme === "milady-os";
   const [installProgress, setInstallProgress] = useState<
     Map<string, { phase: string; message: string }>
   >(new Map());
@@ -3162,7 +3216,7 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
             <GripVerticalIcon className="h-3 w-3" />
           </span>
           <span className="font-bold text-sm flex items-center gap-1.5 min-w-0 truncate flex-1">
-            {renderPluginIcon(p)}
+            {renderPluginIcon(p, "h-4 w-4 text-white/72", useProStreamerBrandIcons)}
             {p.name}
           </span>
           {isShowcase ? (
@@ -3522,7 +3576,11 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                 {/* Dialog header */}
                 <div className="flex shrink-0 items-center gap-3 border-b border-white/10 px-5 py-3">
                   <span id={`plugin-settings-${p.id}`} className="font-bold text-sm flex items-center gap-1.5 flex-1 min-w-0">
-                    {renderPluginIcon(p)}
+                    {renderPluginIcon(
+                      p,
+                      "h-4 w-4 text-white/72",
+                      useProStreamerBrandIcons,
+                    )}
                     {p.name}
                   </span>
                   <Badge variant="outline" className="rounded-full lowercase tracking-wide">

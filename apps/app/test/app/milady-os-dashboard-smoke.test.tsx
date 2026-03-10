@@ -36,20 +36,10 @@ vi.mock("../../src/components/ThreadsDrawer", () => ({
     open ? React.createElement("div", null, "ThreadsDrawer") : null,
 }));
 vi.mock("../../src/components/AssetVaultDrawer", () => ({
-  miladyAssetSectionForTab: (tab: string) =>
-    tab === "character"
-      ? "character"
-      : tab === "wallets"
-        ? "wallets"
-        : tab === "identity"
-          ? "identity"
-          : null,
   AssetVaultDrawer: ({ open }: { open: boolean }) =>
     open ? React.createElement("div", null, "AssetVaultDrawer") : null,
 }));
 vi.mock("../../src/components/ControlStackModal", () => ({
-  miladyControlSectionForTab: (tab: string) =>
-    tab === "settings" ? "settings" : tab === "plugins" ? "plugins-connectors" : null,
   ControlStackModal: ({ open }: { open: boolean }) =>
     open ? React.createElement("div", null, "ControlStackModal") : null,
 }));
@@ -80,8 +70,8 @@ function renderWithTab(tab: string) {
     autonomousEvents: [],
     agentStatus: null,
     triggers: [],
-    triggerHealth: false,
     openDockSurface: vi.fn(),
+    closeDockSurface: vi.fn(),
     openHudControlStack: vi.fn(),
     openHudAssetVault: vi.fn(),
     closeHudSurface: vi.fn(),

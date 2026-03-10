@@ -1,89 +1,120 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ComponentType,
+  type PointerEvent as ReactPointerEvent,
+  type SVGProps,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useApp } from "../AppContext";
 import { client } from "../api-client";
+import {
+  ActivityIcon,
+  AlertIcon,
+  CloseIcon,
+  CloudIcon,
+  EyeIcon,
+  FistIcon,
+  HandIcon,
+  HeartIcon,
+  HookIcon,
+  LightningIcon,
+  MenuIcon,
+  PauseIcon,
+  RestartIcon,
+  SkullIcon,
+  SparkIcon,
+  TargetIcon,
+  TearIcon,
+  ThreadsIcon,
+} from "./ui/Icons";
+
+type EmoteIconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
 // Types
 interface EmoteItem {
   id: string;
   name: string;
   category: string;
-  icon: string;
+  Icon: EmoteIconComponent;
 }
 
 // Category icons
-const CATEGORY_ICONS: Record<string, string> = {
-  greeting: "\u{1F44B}",
-  emotion: "\u{1F622}",
-  dance: "\u{1F57A}",
-  combat: "\u{2694}",
-  idle: "\u{1F9D8}",
-  movement: "\u{1F3C3}",
-  other: "\u{2728}",
+const CATEGORY_ICONS: Record<string, EmoteIconComponent> = {
+  greeting: HandIcon,
+  emotion: HeartIcon,
+  dance: ActivityIcon,
+  combat: FistIcon,
+  idle: PauseIcon,
+  movement: ActivityIcon,
+  other: SparkIcon,
 };
 
 // Emote icons
-const EMOTE_ICONS: Record<string, string> = {
-  wave: "\u{1F44B}",
-  kiss: "\u{1F48B}",
-  crying: "\u{1F62D}",
-  sorrow: "\u{1F614}",
-  "rude-gesture": "\u{1F595}",
-  "looking-around": "\u{1F440}",
-  "dance-happy": "\u{1F483}",
-  "dance-breaking": "\u{1F938}",
-  "dance-hiphop": "\u{1F57A}",
-  "dance-popping": "\u{1FAA9}",
-  "hook-punch": "\u{1F44A}",
-  punching: "\u{1F94A}",
-  "firing-gun": "\u{1F52B}",
-  "sword-swing": "\u{2694}",
-  chopping: "\u{1FA93}",
-  "spell-cast": "\u{1FA84}",
-  range: "\u{1F3F9}",
-  death: "\u{1F480}",
-  idle: "\u{1F9D8}",
-  talk: "\u{1F5E3}",
-  squat: "\u{1F9CE}",
-  fishing: "\u{1F3A3}",
-  float: "\u{1F54A}",
-  jump: "\u{1F4A8}",
-  flip: "\u{1F938}",
-  run: "\u{1F3C3}",
-  walk: "\u{1F6B6}",
-  crawling: "\u{1F40D}",
-  fall: "\u{1F4A5}",
+const EMOTE_ICONS: Record<string, EmoteIconComponent> = {
+  wave: HandIcon,
+  kiss: HeartIcon,
+  crying: TearIcon,
+  sorrow: TearIcon,
+  "rude-gesture": HandIcon,
+  "looking-around": EyeIcon,
+  "dance-happy": SparkIcon,
+  "dance-breaking": ActivityIcon,
+  "dance-hiphop": ActivityIcon,
+  "dance-popping": SparkIcon,
+  "hook-punch": FistIcon,
+  punching: FistIcon,
+  "firing-gun": TargetIcon,
+  "sword-swing": TargetIcon,
+  chopping: FistIcon,
+  "spell-cast": SparkIcon,
+  range: TargetIcon,
+  death: SkullIcon,
+  idle: PauseIcon,
+  talk: ThreadsIcon,
+  squat: ActivityIcon,
+  fishing: HookIcon,
+  float: CloudIcon,
+  jump: LightningIcon,
+  flip: RestartIcon,
+  run: ActivityIcon,
+  walk: ActivityIcon,
+  crawling: ActivityIcon,
+  fall: AlertIcon,
 };
 
 // All emotes
 const ALL_EMOTES: EmoteItem[] = [
   // Greeting
-  { id: "wave", name: "Wave", category: "greeting", icon: EMOTE_ICONS.wave },
-  { id: "kiss", name: "Kiss", category: "greeting", icon: EMOTE_ICONS.kiss },
+  { id: "wave", name: "Wave", category: "greeting", Icon: EMOTE_ICONS.wave },
+  { id: "kiss", name: "Kiss", category: "greeting", Icon: EMOTE_ICONS.kiss },
 
   // Emotion
   {
     id: "crying",
     name: "Crying",
     category: "emotion",
-    icon: EMOTE_ICONS.crying,
+    Icon: EMOTE_ICONS.crying,
   },
   {
     id: "sorrow",
     name: "Sorrow",
     category: "emotion",
-    icon: EMOTE_ICONS.sorrow,
+    Icon: EMOTE_ICONS.sorrow,
   },
   {
     id: "rude-gesture",
     name: "Rude Gesture",
     category: "emotion",
-    icon: EMOTE_ICONS["rude-gesture"],
+    Icon: EMOTE_ICONS["rude-gesture"],
   },
   {
     id: "looking-around",
     name: "Looking Around",
     category: "emotion",
-    icon: EMOTE_ICONS["looking-around"],
+    Icon: EMOTE_ICONS["looking-around"],
   },
 
   // Dance
@@ -91,25 +122,25 @@ const ALL_EMOTES: EmoteItem[] = [
     id: "dance-happy",
     name: "Dance Happy",
     category: "dance",
-    icon: EMOTE_ICONS["dance-happy"],
+    Icon: EMOTE_ICONS["dance-happy"],
   },
   {
     id: "dance-breaking",
     name: "Dance Breaking",
     category: "dance",
-    icon: EMOTE_ICONS["dance-breaking"],
+    Icon: EMOTE_ICONS["dance-breaking"],
   },
   {
     id: "dance-hiphop",
     name: "Dance Hip Hop",
     category: "dance",
-    icon: EMOTE_ICONS["dance-hiphop"],
+    Icon: EMOTE_ICONS["dance-hiphop"],
   },
   {
     id: "dance-popping",
     name: "Dance Popping",
     category: "dance",
-    icon: EMOTE_ICONS["dance-popping"],
+    Icon: EMOTE_ICONS["dance-popping"],
   },
 
   // Combat
@@ -117,65 +148,65 @@ const ALL_EMOTES: EmoteItem[] = [
     id: "hook-punch",
     name: "Hook Punch",
     category: "combat",
-    icon: EMOTE_ICONS["hook-punch"],
+    Icon: EMOTE_ICONS["hook-punch"],
   },
   {
     id: "punching",
     name: "Punching",
     category: "combat",
-    icon: EMOTE_ICONS.punching,
+    Icon: EMOTE_ICONS.punching,
   },
   {
     id: "firing-gun",
     name: "Firing Gun",
     category: "combat",
-    icon: EMOTE_ICONS["firing-gun"],
+    Icon: EMOTE_ICONS["firing-gun"],
   },
   {
     id: "sword-swing",
     name: "Sword Swing",
     category: "combat",
-    icon: EMOTE_ICONS["sword-swing"],
+    Icon: EMOTE_ICONS["sword-swing"],
   },
   {
     id: "chopping",
     name: "Chopping",
     category: "combat",
-    icon: EMOTE_ICONS.chopping,
+    Icon: EMOTE_ICONS.chopping,
   },
   {
     id: "spell-cast",
     name: "Spell Cast",
     category: "combat",
-    icon: EMOTE_ICONS["spell-cast"],
+    Icon: EMOTE_ICONS["spell-cast"],
   },
-  { id: "range", name: "Range", category: "combat", icon: EMOTE_ICONS.range },
-  { id: "death", name: "Death", category: "combat", icon: EMOTE_ICONS.death },
+  { id: "range", name: "Range", category: "combat", Icon: EMOTE_ICONS.range },
+  { id: "death", name: "Death", category: "combat", Icon: EMOTE_ICONS.death },
 
   // Idle
-  { id: "idle", name: "Idle", category: "idle", icon: EMOTE_ICONS.idle },
-  { id: "talk", name: "Talk", category: "idle", icon: EMOTE_ICONS.talk },
-  { id: "squat", name: "Squat", category: "idle", icon: EMOTE_ICONS.squat },
+  { id: "idle", name: "Idle", category: "idle", Icon: EMOTE_ICONS.idle },
+  { id: "talk", name: "Talk", category: "idle", Icon: EMOTE_ICONS.talk },
+  { id: "squat", name: "Squat", category: "idle", Icon: EMOTE_ICONS.squat },
   {
     id: "fishing",
     name: "Fishing",
     category: "idle",
-    icon: EMOTE_ICONS.fishing,
+    Icon: EMOTE_ICONS.fishing,
   },
 
   // Movement
-  { id: "float", name: "Float", category: "movement", icon: EMOTE_ICONS.float },
-  { id: "jump", name: "Jump", category: "movement", icon: EMOTE_ICONS.jump },
-  { id: "flip", name: "Flip", category: "movement", icon: EMOTE_ICONS.flip },
-  { id: "run", name: "Run", category: "movement", icon: EMOTE_ICONS.run },
-  { id: "walk", name: "Walk", category: "movement", icon: EMOTE_ICONS.walk },
+  { id: "float", name: "Float", category: "movement", Icon: EMOTE_ICONS.float },
+  { id: "jump", name: "Jump", category: "movement", Icon: EMOTE_ICONS.jump },
+  { id: "flip", name: "Flip", category: "movement", Icon: EMOTE_ICONS.flip },
+  { id: "run", name: "Run", category: "movement", Icon: EMOTE_ICONS.run },
+  { id: "walk", name: "Walk", category: "movement", Icon: EMOTE_ICONS.walk },
   {
     id: "crawling",
     name: "Crawling",
     category: "movement",
-    icon: EMOTE_ICONS.crawling,
+    Icon: EMOTE_ICONS.crawling,
   },
-  { id: "fall", name: "Fall", category: "movement", icon: EMOTE_ICONS.fall },
+  { id: "fall", name: "Fall", category: "movement", Icon: EMOTE_ICONS.fall },
 ];
 
 const CATEGORIES = [
@@ -226,7 +257,7 @@ export function EmotePicker() {
 
   // Drag handlers
   const onPointerDown = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
+    (e: ReactPointerEvent<HTMLDivElement>) => {
       const el = panelRef.current;
       if (!el) return;
 
@@ -375,7 +406,7 @@ export function EmotePicker() {
         onPointerDown={onPointerDown}
       >
         <div className="flex items-center gap-2">
-          <span className="text-sm text-muted">☰</span>
+          <MenuIcon className="h-4 w-4 text-muted" />
           <span className="text-sm font-semibold text-txt">Emotes</span>
         </div>
 
@@ -399,7 +430,7 @@ export function EmotePicker() {
             className="text-muted hover:text-txt"
             aria-label="Close emote picker"
           >
-            ✕
+            <CloseIcon className="h-4 w-4" />
           </button>
         </div>
       </div>
@@ -433,46 +464,53 @@ export function EmotePicker() {
         >
           All
         </button>
-        {CATEGORIES.map((cat) => (
-          <button
-            type="button"
-            key={cat}
-            id={`emote-tab-${cat}`}
-            onClick={() => setActiveCategory(cat)}
-            role="tab"
-            aria-selected={activeCategory === cat}
-            aria-controls="emote-tabpanel"
-            className={`shrink-0 rounded px-2 py-1 text-xs font-medium ${
-              activeCategory === cat
-                ? "bg-accent text-accent-fg"
-                : "bg-bg-accent text-txt hover:bg-bg-hover"
-            }`}
-          >
-            <span className="mr-1">{CATEGORY_ICONS[cat]}</span>
-            {CATEGORY_LABELS[cat]}
-          </button>
-        ))}
+        {CATEGORIES.map((cat) => {
+          const CategoryIcon = CATEGORY_ICONS[cat];
+          return (
+            <button
+              type="button"
+              key={cat}
+              id={`emote-tab-${cat}`}
+              onClick={() => setActiveCategory(cat)}
+              role="tab"
+              aria-selected={activeCategory === cat}
+              aria-controls="emote-tabpanel"
+              className={`shrink-0 rounded px-2 py-1 text-xs font-medium ${
+                activeCategory === cat
+                  ? "bg-accent text-accent-fg"
+                  : "bg-bg-accent text-txt hover:bg-bg-hover"
+              }`}
+            >
+              <CategoryIcon className="mr-1 inline-block h-3.5 w-3.5 align-[-0.125rem]" />
+              {CATEGORY_LABELS[cat]}
+            </button>
+          );
+        })}
       </div>
 
       {/* Emote grid */}
       <div className="max-h-[400px] overflow-y-auto p-3" role="tabpanel" id="emote-tabpanel" aria-labelledby={activeCategory ? `emote-tab-${activeCategory}` : "emote-tab-all"}>
         <div className="grid grid-cols-5 gap-2">
-          {filteredEmotes.map((emote) => (
-            <button
-              type="button"
-              key={emote.id}
-              onClick={() => playEmote(emote.id)}
-              disabled={playing === emote.id}
-              title={emote.name}
-              className={`flex aspect-square items-center justify-center rounded text-2xl transition-colors ${
-                playing === emote.id
-                  ? "bg-accent"
-                  : "bg-bg-accent hover:bg-bg-hover"
-              }`}
-            >
-              {emote.icon}
-            </button>
-          ))}
+          {filteredEmotes.map((emote) => {
+            const EmoteIcon = emote.Icon;
+            return (
+              <button
+                type="button"
+                key={emote.id}
+                onClick={() => playEmote(emote.id)}
+                disabled={playing === emote.id}
+                title={emote.name}
+                aria-label={emote.name}
+                className={`flex aspect-square items-center justify-center rounded border transition-colors ${
+                  playing === emote.id
+                    ? "border-accent bg-accent text-accent-fg"
+                    : "border-border bg-bg-accent text-txt hover:bg-bg-hover"
+                }`}
+              >
+                <EmoteIcon className="h-6 w-6" />
+              </button>
+            );
+          })}
         </div>
 
         {filteredEmotes.length === 0 && (

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { DrawerShell } from "./DrawerShell.js";
 import { useApp } from "../AppContext.js";
 import { AvatarSelector } from "./AvatarSelector.js";
@@ -8,23 +8,13 @@ import { Button } from "./ui/Button.js";
 import { SummaryStatRow } from "./SummaryStatRow.js";
 import { VaultIcon } from "./ui/Icons.js";
 import { Sheet } from "./ui/Sheet.js";
+import { type HudAssetSection } from "../miladyHudRouting.js";
 
-export type AssetVaultSection = "character" | "wallets" | "identity";
-
-export function miladyAssetSectionForTab(
-  tab: string,
-): AssetVaultSection | null {
-  switch (tab) {
-    case "character":
-      return "character";
-    case "wallets":
-      return "wallets";
-    case "identity":
-      return "identity";
-    default:
-      return null;
-  }
-}
+const SECTION_LABELS: Record<HudAssetSection, string> = {
+  identity: "Identity",
+  character: "Avatar",
+  wallets: "Wallets",
+};
 
 export function AssetVaultDrawer({
   open,
@@ -33,7 +23,7 @@ export function AssetVaultDrawer({
 }: {
   open: boolean;
   onClose: () => void;
-  section?: AssetVaultSection;
+  section?: HudAssetSection;
 }) {
   const {
     characterData,
@@ -43,13 +33,9 @@ export function AssetVaultDrawer({
     agentStatus,
     setState,
     setTab,
+    openHudAssetVault,
   } = useApp();
-  const [activeSection, setActiveSection] = useState<AssetVaultSection>(section);
   const agentName = resolveAgentDisplayName(characterData?.name, agentStatus?.agentName);
-
-  useEffect(() => {
-    setActiveSection(section);
-  }, [section]);
 
   const walletTotalUsd = useMemo(() => {
     if (!walletBalances) return 0;
@@ -82,6 +68,12 @@ export function AssetVaultDrawer({
   const hasIdentityProfile = Boolean(characterData && Object.keys(characterData).length > 0);
   const hasAvatar = selectedVrmIndex !== null && selectedVrmIndex !== undefined;
   const hasWallets = Boolean(walletAddresses?.evmAddress || walletAddresses?.solanaAddress);
+  const activeAvatarLabel =
+    typeof selectedVrmIndex === "number"
+      ? selectedVrmIndex === 1
+        ? "Alice"
+        : `Model ${selectedVrmIndex}`
+      : "Not linked";
 
   const summaryRows = useMemo(
     () => [
@@ -99,12 +91,6 @@ export function AssetVaultDrawer({
     [agentName, linkedChains, walletAddresses?.evmAddress, walletAddresses?.solanaAddress, walletTotalUsd],
   );
 
-  const sectionLabels: Record<AssetVaultSection, string> = {
-    identity: "Identity",
-    character: "Avatar",
-    wallets: "Wallets",
-  };
-
   if (!open) return null;
 
   return (
@@ -116,19 +102,19 @@ export function AssetVaultDrawer({
         onClose={onClose}
         toolbar={
           <div className="grid grid-cols-3 gap-2">
-            {(["identity", "character", "wallets"] as AssetVaultSection[]).map(
+            {(["identity", "character", "wallets"] as HudAssetSection[]).map(
               (entry) => (
                 <Button
                   key={entry}
-                  variant={activeSection === entry ? "secondary" : "ghost"}
+                  variant={section === entry ? "secondary" : "ghost"}
                   className={`rounded-2xl border ${
-                    activeSection === entry
+                    section === entry
                       ? "border-white/18 bg-white/[0.14] text-white"
                       : "border-white/8 text-white/55 hover:border-white/16 hover:bg-white/[0.06] hover:text-white"
                   }`}
-                  onClick={() => setActiveSection(entry)}
+                  onClick={() => openHudAssetVault(entry)}
                 >
-                  {sectionLabels[entry]}
+                  {SECTION_LABELS[entry]}
                 </Button>
               ),
             )}
@@ -138,7 +124,7 @@ export function AssetVaultDrawer({
           <SummaryStatRow items={summaryRows} className="pro-streamer-drawer-summary-row" />
         }
       >
-        {activeSection === "identity" ? (
+        {section === "identity" ? (
           <SectionShell
             title="Identity"
             description="Public-facing profile and persona."
@@ -189,7 +175,7 @@ export function AssetVaultDrawer({
           </SectionShell>
         ) : null}
 
-        {activeSection === "character" ? (
+        {section === "character" ? (
           <SectionShell
             title="Avatar"
             description="Choose the model used on stage."
@@ -199,7 +185,7 @@ export function AssetVaultDrawer({
               <div className="pro-streamer-status-card">
                 <div className="pro-streamer-status-card__label">Active avatar</div>
                 <div className="pro-streamer-status-card__value">
-                  {typeof selectedVrmIndex === "number" ? `Model ${selectedVrmIndex}` : "Not linked"}
+                  {activeAvatarLabel}
                 </div>
                 <div className="pro-streamer-status-card__meta">
                   {hasAvatar ? "Ready for stage" : "Choose a model below"}
@@ -215,7 +201,7 @@ export function AssetVaultDrawer({
           </SectionShell>
         ) : null}
 
-        {activeSection === "wallets" ? (
+        {section === "wallets" ? (
           <SectionShell
             title="Wallets"
             description="Addresses, balances, and linked chains."

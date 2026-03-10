@@ -11,7 +11,7 @@ import { client, type QueryResult } from "../api-client";
 import { Button } from "./ui/Button";
 import { Card } from "./ui/Card";
 import { Dialog } from "./ui/Dialog";
-import { CloseIcon } from "./ui/Icons";
+import { AudioIcon, CloseIcon, ImageIcon, VideoIcon } from "./ui/Icons";
 
 type MediaType = "all" | "image" | "video" | "audio";
 
@@ -289,7 +289,10 @@ export function MediaGalleryView() {
               <div className="w-full aspect-square bg-[var(--bg)] flex items-center justify-center overflow-hidden">
                 {item.type === "image" ? (
                   failedImageUrls.has(item.url) ? (
-                    <span className="text-2xl opacity-50">🖼</span>
+                    <ImageIcon
+                      className="h-8 w-8 text-white/35"
+                      aria-label="Image placeholder"
+                    />
                   ) : (
                     <img
                       src={item.url}
@@ -300,9 +303,15 @@ export function MediaGalleryView() {
                     />
                   )
                 ) : item.type === "video" ? (
-                  <span className="text-2xl opacity-50">🎬</span>
+                  <VideoIcon
+                    className="h-8 w-8 text-white/35"
+                    aria-label="Video placeholder"
+                  />
                 ) : (
-                  <span className="text-2xl opacity-50">🎵</span>
+                  <AudioIcon
+                    className="h-8 w-8 text-white/35"
+                    aria-label="Audio placeholder"
+                  />
                 )}
               </div>
               {/* Info */}

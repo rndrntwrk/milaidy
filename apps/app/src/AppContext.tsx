@@ -44,7 +44,6 @@ import {
   type SkillScanReportSummary,
   type StreamEventEnvelope,
   type StylePreset,
-  type SystemPermissionId,
   type TriggerHealthSnapshot,
   type TriggerRunRecord,
   type TriggerSummary,
@@ -56,20 +55,34 @@ import {
   type WalletExportResult,
   type WalletNftsResponse,
   type WhitelistStatus,
-  type WorkbenchOverview,
+ type WorkbenchOverview,
 } from "./api-client";
-import { tabFromPath, pathForTab, type Tab } from "./navigation";
+import { pathForTab, tabFromPath } from "./navigation";
 import { resolveAppAssetUrl } from "./asset-url";
 import {
   getMissingOnboardingPermissions,
   ONBOARDING_PERMISSION_LABELS,
 } from "./onboarding-permissions";
 import type { ToastItem } from "./components/ui/Toast";
+import {
+  assetVaultSectionForTab,
+  controlSectionForTab,
+  defaultTabForControlSection,
+  isTabEnabled,
+  sanitizeControlSection,
+  type HudAssetSection,
+  type HudControlSection,
+  type Tab,
+} from "./miladyHudRouting.js";
 
 // ── VRM helpers ─────────────────────────────────────────────────────────
 
 /** Number of built-in milady VRM avatars shipped with the app. */
 export const VRM_COUNT = 8;
+export const DEFAULT_PRO_STREAMER_VRM_FILENAME = "alice.vrm";
+export const DEFAULT_PRO_STREAMER_VRM_URL = resolveAppAssetUrl(
+  `vrms/${DEFAULT_PRO_STREAMER_VRM_FILENAME}`,
+);
 
 function normalizeAvatarIndex(index: number): number {
   if (!Number.isFinite(index)) return 1;
@@ -83,7 +96,9 @@ function normalizeAvatarIndex(index: number): number {
 export function getVrmUrl(index: number): string {
   const normalized = normalizeAvatarIndex(index);
   const safeIndex = normalized > 0 ? normalized : 1;
-  return resolveAppAssetUrl(`vrms/${safeIndex}.vrm`);
+  return safeIndex === 1
+    ? DEFAULT_PRO_STREAMER_VRM_URL
+    : resolveAppAssetUrl(`vrms/${safeIndex}.vrm`);
 }
 
 /** Resolve a built-in VRM index (1–8) to its preview thumbnail URL. */
@@ -107,35 +122,9 @@ export type ThemeName =
   | "milady-os";
 
 export type DockSurface = "none" | "threads" | "memory" | "ops" | "vault";
-export type HudSurface = "none" | "control-stack" | "threads" | "asset-vault";
+export type HudSurface = "none" | "control-stack";
 export type RailBubbleState = "collapsed" | "peek" | "expanded";
 export type ActiveBubble = "none" | "action-log" | "mission-stack";
-export type HudControlSection =
-  | "settings"
-  | "apps"
-  | "advanced"
-  | "plugins-connectors"
-  | "custom-actions"
-  | "triggers"
-  | "identity"
-  | "approvals"
-  | "safe-mode"
-  | "governance"
-  | "fine-tuning"
-  | "trajectories"
-  | "runtime"
-  | "database"
-  | "logs"
-  | "security";
-export type HudAssetSection = "character" | "wallets" | "identity";
-export type HudFocusCard =
-  | "agent-core"
-  | "runtime"
-  | "trace"
-  | "memory"
-  | "actions"
-  | "mission"
-  | "feeds";
 
 export const THEMES: ReadonlyArray<{
   id: ThemeName;
@@ -163,129 +152,6 @@ function replaceMiladyLocationWithRoot() {
   }
   if (window.location.pathname !== "/" || window.location.search || window.location.hash) {
     window.history.replaceState(null, "", "/");
-  }
-}
-
-function miladyControlSectionForTab(tab: Tab): HudControlSection | null {
-  switch (tab) {
-    case "settings":
-      return "settings";
-    case "apps":
-      return "apps";
-    case "advanced":
-      return "advanced";
-    case "connectors":
-    case "plugins":
-    case "skills":
-      return "plugins-connectors";
-    case "actions":
-      return "custom-actions";
-    case "triggers":
-      return "triggers";
-    case "identity":
-      return "identity";
-    case "approvals":
-      return "approvals";
-    case "safe-mode":
-      return "safe-mode";
-    case "governance":
-      return "governance";
-    case "fine-tuning":
-      return "fine-tuning";
-    case "trajectories":
-      return "trajectories";
-    case "runtime":
-      return "runtime";
-    case "database":
-      return "database";
-    case "logs":
-      return "logs";
-    case "security":
-      return "security";
-    default:
-      return null;
-  }
-}
-
-function miladyAssetSectionForTab(tab: Tab): HudAssetSection | null {
-  switch (tab) {
-    case "character":
-      return "character";
-    case "wallets":
-      return "wallets";
-    case "identity":
-      return "identity";
-    default:
-      return null;
-  }
-}
-
-function miladyFocusCardForTab(tab: Tab): HudFocusCard {
-  switch (tab) {
-    case "knowledge":
-      return "memory";
-    case "runtime":
-      return "runtime";
-    case "logs":
-    case "security":
-      return "feeds";
-    case "triggers":
-    case "approvals":
-      return "mission";
-    case "plugins":
-    case "skills":
-    case "actions":
-    case "connectors":
-    case "apps":
-      return "actions";
-    case "advanced":
-    case "fine-tuning":
-    case "trajectories":
-    case "database":
-    case "governance":
-    case "safe-mode":
-      return "trace";
-    default:
-      return "agent-core";
-  }
-}
-
-function defaultMiladyTabForControlSection(section: HudControlSection): Tab {
-  switch (section) {
-    case "settings":
-      return "settings";
-    case "apps":
-      return "apps";
-    case "advanced":
-      return "advanced";
-    case "plugins-connectors":
-      return "plugins";
-    case "custom-actions":
-      return "actions";
-    case "triggers":
-      return "triggers";
-    case "identity":
-      return "identity";
-    case "approvals":
-      return "approvals";
-    case "safe-mode":
-      return "safe-mode";
-    case "governance":
-      return "governance";
-    case "fine-tuning":
-      return "fine-tuning";
-    case "trajectories":
-      return "trajectories";
-    case "runtime":
-      return "runtime";
-    case "database":
-      return "database";
-    case "logs":
-      return "logs";
-    case "security":
-      return "security";
-    default:
-      return "settings";
   }
 }
 
@@ -409,15 +275,6 @@ function resolveOnboardingStyleCatchphrase(
     return preferred;
   }
   return options.styles[0]?.catchphrase ?? "";
-}
-
-function resolveOnboardingStylePreset(
-  options: OnboardingOptions | null | undefined,
-  requested: string,
-): StylePreset | undefined {
-  if (!options) return undefined;
-  const catchphrase = resolveOnboardingStyleCatchphrase(options, requested);
-  return options.styles.find((preset) => preset.catchphrase === catchphrase);
 }
 
 // ── Action notice ──────────────────────────────────────────────────────
@@ -730,7 +587,6 @@ export interface AppState {
   hudSurface: HudSurface;
   hudControlSection: HudControlSection | null;
   hudAssetSection: HudAssetSection | null;
-  hudFocusCard: HudFocusCard;
   connected: boolean;
   agentStatus: AgentStatus | null;
   onboardingComplete: boolean;
@@ -1011,11 +867,9 @@ export interface AppActions {
   openDockSurface: (surface: Exclude<DockSurface, "none">) => void;
   closeDockSurface: () => void;
   setStreamViewMode: (mode: "broadcast" | "operator") => void;
-  openHudThreads: () => void;
   openHudControlStack: (section?: HudControlSection, tabOverride?: Tab) => void;
   openHudAssetVault: (section?: HudAssetSection, tabOverride?: Tab) => void;
   closeHudSurface: () => void;
-  focusHudCard: (card: HudFocusCard, tabOverride?: Tab) => void;
   setRailDisplay: (
     bubble: Exclude<ActiveBubble, "none">,
     state: RailBubbleState,
@@ -1195,7 +1049,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     useState<HudControlSection | null>(null);
   const [hudAssetSection, setHudAssetSection] =
     useState<HudAssetSection | null>(null);
-  const [hudFocusCard, setHudFocusCard] = useState<HudFocusCard>("agent-core");
   const [connected, setConnected] = useState(false);
   const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
@@ -1637,9 +1490,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const chatAbortRef = useRef<AbortController | null>(null);
   /** Synchronous lock so same-tick chat submits cannot double-send. */
   const chatSendBusyRef = useRef(false);
-  /** Batches streaming tokens so we update state once per animation frame. */
-  const pendingTokensRef = useRef("");
-  const tokenRafIdRef = useRef(0);
   /** Synchronous lock for export action to prevent duplicate clicks in the same tick. */
   const exportBusyRef = useRef(false);
   /** Synchronous lock for import action to prevent duplicate clicks in the same tick. */
@@ -1726,10 +1576,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const closeHudSurface = useCallback(() => {
     collapseRails();
-    setDockSurface("none");
     setHudSurface("none");
     setHudControlSection(null);
-    setHudAssetSection(null);
   }, [collapseRails]);
 
   const closeDockSurface = useCallback(() => {
@@ -1739,67 +1587,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const openDockSurface = useCallback(
     (surface: Exclude<DockSurface, "none">) => {
       collapseRails();
-      setDockSurface(surface);
       setHudSurface("none");
       setHudControlSection(null);
+      setDockSurface(surface);
 
-      if (surface === "threads") {
-        setHudAssetSection(null);
-        setHudFocusCard("agent-core");
+      if (surface === "vault") {
+        setHudAssetSection(
+          (current) => current ?? assetVaultSectionForTab(tab) ?? "identity",
+        );
         return;
       }
 
+      setHudAssetSection(null);
       if (surface === "memory") {
-        setHudAssetSection(null);
-        setHudFocusCard("memory");
         setTabRaw("knowledge");
         return;
       }
 
       if (surface === "ops") {
-        setHudAssetSection(null);
-        setHudFocusCard("actions");
         setTabRaw("plugins");
-        return;
       }
-
-      setHudAssetSection((current) => current ?? "identity");
-      setHudFocusCard("agent-core");
     },
-    [collapseRails],
+    [collapseRails, tab],
   );
-
-  const openHudThreads = useCallback(() => {
-    collapseRails();
-    setDockSurface("threads");
-    setHudSurface("none");
-    setHudControlSection(null);
-    setHudAssetSection(null);
-  }, [collapseRails]);
-
-  const focusHudCard = useCallback((card: HudFocusCard, tabOverride?: Tab) => {
-    setHudFocusCard(card);
-    if (tabOverride) {
-      setTabRaw(tabOverride);
-    }
-    if (card === "agent-core") {
-      collapseRails();
-      setDockSurface("none");
-      setHudSurface("none");
-      setHudControlSection(null);
-      setHudAssetSection(null);
-    }
-  }, [collapseRails]);
 
   const openHudControlStack = useCallback(
     (section: HudControlSection = "settings", tabOverride?: Tab) => {
-      const targetTab = tabOverride ?? defaultMiladyTabForControlSection(section);
+      const resolvedSection = sanitizeControlSection(section);
+      const overrideSection = tabOverride ? controlSectionForTab(tabOverride) : null;
+      const targetTab =
+        tabOverride &&
+        isTabEnabled(tabOverride) &&
+        overrideSection === resolvedSection
+          ? tabOverride
+          : defaultTabForControlSection(resolvedSection);
       collapseRails();
       setDockSurface("none");
       setHudSurface("control-stack");
-      setHudControlSection(section);
+      setHudControlSection(resolvedSection);
       setHudAssetSection(null);
-      setHudFocusCard(miladyFocusCardForTab(targetTab));
       setTabRaw(targetTab);
     },
     [collapseRails],
@@ -1807,29 +1633,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const openHudAssetVault = useCallback(
     (section: HudAssetSection = "identity", tabOverride?: Tab) => {
+      const targetTab =
+        tabOverride && isTabEnabled(tabOverride) ? tabOverride : section;
       collapseRails();
       setDockSurface("vault");
       setHudSurface("none");
       setHudAssetSection(section);
       setHudControlSection(null);
-      setHudFocusCard("agent-core");
-      setTabRaw(tabOverride ?? section);
+      setTabRaw(targetTab);
     },
     [collapseRails],
   );
 
   const applyMiladyTabIntent = useCallback(
     (newTab: Tab) => {
-      setTabRaw(newTab);
-      const controlSection = miladyControlSectionForTab(newTab);
-      const assetSection = miladyAssetSectionForTab(newTab);
+      const targetTab = isTabEnabled(newTab) ? newTab : "chat";
+      setTabRaw(targetTab);
+      const controlSection = controlSectionForTab(targetTab);
+      const assetSection = assetVaultSectionForTab(targetTab);
       if (controlSection) {
         collapseRails();
         setDockSurface("none");
         setHudSurface("control-stack");
         setHudControlSection(controlSection);
         setHudAssetSection(null);
-        setHudFocusCard(miladyFocusCardForTab(newTab));
         return;
       }
       if (assetSection) {
@@ -1838,16 +1665,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setHudSurface("none");
         setHudAssetSection(assetSection);
         setHudControlSection(null);
-        setHudFocusCard("agent-core");
         return;
       }
-      if (newTab === "knowledge") {
+      if (targetTab === "knowledge") {
         collapseRails();
         setDockSurface("memory");
         setHudSurface("none");
         setHudControlSection(null);
         setHudAssetSection(null);
-        setHudFocusCard("memory");
         return;
       }
       collapseRails();
@@ -1855,7 +1680,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setHudSurface("none");
       setHudControlSection(null);
       setHudAssetSection(null);
-      setHudFocusCard(miladyFocusCardForTab(newTab));
     },
     [collapseRails],
   );
@@ -1880,7 +1704,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setHudSurface("none");
       setHudControlSection(null);
       setHudAssetSection(null);
-      setHudFocusCard("agent-core");
       const restoreTab = lastLegacyTabRef.current || "chat";
       setTabRaw(restoreTab);
       const path = pathForTab(restoreTab);
@@ -1896,6 +1719,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setTab = useCallback(
     (newTab: Tab) => {
+      if (!isTabEnabled(newTab)) return;
       if (newTab === "apps") {
         setAppsSubTab(activeGameViewerUrl.trim() ? "games" : "browse");
       }
@@ -5030,7 +4854,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value: AppContextValue = {
     // State
-    tab, currentTheme, dockSurface, streamViewMode, leftRailState, rightRailState, activeBubble, hudSurface, hudControlSection, hudAssetSection, hudFocusCard, connected, agentStatus, onboardingComplete, onboardingLoading,
+    tab, currentTheme, dockSurface, streamViewMode, leftRailState, rightRailState, activeBubble, hudSurface, hudControlSection, hudAssetSection, connected, agentStatus, onboardingComplete, onboardingLoading,
     startupPhase, startupError, authRequired, actionNotice, toasts, lifecycleBusy, lifecycleAction,
     pendingRestart, pendingRestartReasons, restartBannerDismissed,
     pairingEnabled, pairingExpiresAt, pairingCodeInput, pairingError, pairingBusy,
@@ -5069,7 +4893,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     onboardingProvider, onboardingApiKey, onboardingOpenRouterModel, onboardingPrimaryModel,
     onboardingTelegramToken, onboardingDiscordToken, onboardingWhatsAppSessionPath,
     onboardingTwilioAccountSid, onboardingTwilioAuthToken, onboardingTwilioPhoneNumber,
-    onboardingBlooioApiKey, onboardingBlooioPhoneNumber, onboardingSubscriptionTab,
+    onboardingBlooioApiKey, onboardingBlooioPhoneNumber, onboardingGithubToken, onboardingSubscriptionTab,
     onboardingSelectedChains, onboardingRpcSelections, onboardingRpcKeys,
     onboardingAvatar, onboardingRestarting,
     commandPaletteOpen, commandQuery, commandActiveIndex, emotePickerOpen,
@@ -5096,11 +4920,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     openDockSurface,
     closeDockSurface,
     setStreamViewMode,
-    openHudThreads,
     openHudControlStack,
     openHudAssetVault,
     closeHudSurface,
-    focusHudCard,
     setRailDisplay,
     collapseRails,
     handleStart,

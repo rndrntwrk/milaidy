@@ -17,6 +17,7 @@ import { AvatarSelector } from "./AvatarSelector";
 import type { JsonSchemaObject } from "./config-catalog";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer";
 import { configRenderModeForTheme } from "./shared/configRenderMode";
+import { ChevronRightIcon } from "./ui/Icons";
 
 const DEFAULT_ELEVEN_FAST_MODEL = "eleven_flash_v2_5";
 const REDACTED_SECRET = "[REDACTED]";
@@ -1237,9 +1238,7 @@ export function CharacterView() {
           {/* Chat Examples */}
           <details className="group">
             <summary className="flex items-center gap-1.5 cursor-pointer select-none text-xs font-semibold list-none [&::-webkit-details-marker]:hidden">
-              <span className="inline-block transition-transform group-open:rotate-90">
-                &#9654;
-              </span>
+              <ChevronRightIcon className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
               chat examples
               <span className="font-normal text-[var(--muted)]">
                 — how the agent responds
@@ -1322,9 +1321,7 @@ export function CharacterView() {
           {/* Post Examples */}
           <details className="group">
             <summary className="flex items-center gap-1.5 cursor-pointer select-none text-xs font-semibold list-none [&::-webkit-details-marker]:hidden">
-              <span className="inline-block transition-transform group-open:rotate-90">
-                &#9654;
-              </span>
+              <ChevronRightIcon className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
               post examples
               <span className="font-normal text-[var(--muted)]">
                 — social media voice
@@ -1500,9 +1497,7 @@ export function CharacterView() {
 
             <details className="group">
               <summary className="flex items-center gap-1.5 cursor-pointer select-none text-xs font-semibold list-none [&::-webkit-details-marker]:hidden">
-                <span className="inline-block transition-transform group-open:rotate-90">
-                  &#9654;
-                </span>
+                <ChevronRightIcon className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
                 advanced voice settings
               </summary>
               <div className="mt-3">

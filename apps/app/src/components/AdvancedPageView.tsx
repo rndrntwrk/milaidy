@@ -12,7 +12,7 @@
  *   - Logs: Runtime log viewer
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "../AppContext";
 import type { Tab } from "../navigation";
 import { CustomActionsView } from "./CustomActionsView";
@@ -47,29 +47,10 @@ type SubTab =
   | "logs"
   | "security";
 
-const SUB_TABS: Array<{ id: SubTab; label: string; description: string }> = [
-  { id: "plugins", label: "Plugins", description: "Features and connectors" },
-  { id: "skills", label: "Skills", description: "Custom agent skills" },
-  { id: "actions", label: "Actions", description: "Custom agent actions" },
-  { id: "triggers", label: "Triggers", description: "Scheduled and event-based automations" },
-  { id: "identity", label: "Identity", description: "Agent identity and preferences" },
-  { id: "approvals", label: "Approvals", description: "Pending approval queue" },
-  { id: "safe-mode", label: "Safe Mode", description: "Safe mode status and controls" },
-  { id: "governance", label: "Governance", description: "Policies, compliance, and retention" },
-  { id: "fine-tuning", label: "Fine-Tuning", description: "Dataset and model training workflows" },
-  { id: "trajectories", label: "Trajectories", description: "LLM call history and analysis" },
-  { id: "runtime", label: "Runtime", description: "Deep runtime object introspection and load order" },
-  { id: "database", label: "Databases", description: "Tables, media, and vector browser" },
-  { id: "logs", label: "Logs", description: "Runtime and service logs" },
-  {
-    id: "security",
-    label: "Security",
-    description: "Sandbox and policy audit feed",
-  },
-];
-
 function mapTabToSubTab(tab: Tab): SubTab {
   switch (tab) {
+    case "advanced":
+      return "plugins";
     case "plugins": return "plugins";
     case "skills": return "skills";
     case "actions": return "actions";
@@ -83,66 +64,24 @@ function mapTabToSubTab(tab: Tab): SubTab {
     case "runtime": return "runtime";
     case "database": return "database";
     case "logs": return "logs";
+    case "security": return "security";
     default: return "plugins";
   }
 }
 
 export function AdvancedPageView() {
-  const { tab, setTab } = useApp();
+  const { tab } = useApp();
   const [selectedTrajectoryId, setSelectedTrajectoryId] = useState<
     string | null
   >(null);
 
   const currentSubTab = mapTabToSubTab(tab);
-  const handleSubTabChange = (subTab: SubTab) => {
-    setSelectedTrajectoryId(null);
-    switch (subTab) {
-      case "plugins":
-        setTab("plugins");
-        break;
-      case "skills":
-        setTab("skills");
-        break;
-      case "actions":
-        setTab("actions");
-        break;
-      case "triggers":
-        setTab("triggers");
-        break;
-      case "identity":
-        setTab("identity");
-        break;
-      case "approvals":
-        setTab("approvals");
-        break;
-      case "safe-mode":
-        setTab("safe-mode");
-        break;
-      case "governance":
-        setTab("governance");
-        break;
-      case "fine-tuning":
-        setTab("fine-tuning");
-        break;
-      case "trajectories":
-        setTab("trajectories");
-        break;
-      case "runtime":
-        setTab("runtime");
-        break;
-      case "database":
-        setTab("database");
-        break;
-      case "logs":
-        setTab("logs");
-        break;
-      case "security":
-        setTab("security");
-        break;
-      default:
-        setTab("plugins");
+
+  useEffect(() => {
+    if (currentSubTab !== "trajectories" && selectedTrajectoryId !== null) {
+      setSelectedTrajectoryId(null);
     }
-  };
+  }, [currentSubTab, selectedTrajectoryId]);
 
   const renderContent = () => {
     switch (currentSubTab) {

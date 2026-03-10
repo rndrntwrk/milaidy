@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useMemo } from "react";
 import { useApp } from "../AppContext.js";
 import { useBugReport } from "../hooks/useBugReport.js";
 import { Dialog } from "./ui/Dialog.js";
+import { isTabEnabled } from "../miladyHudRouting.js";
 
 interface CommandItem {
   id: string;
@@ -71,7 +72,6 @@ export function CommandPalette() {
     // Navigation commands
     commands.push(
       { id: "nav-chat", label: "Open Chat", action: () => setTab("chat") },
-      { id: "nav-apps", label: "Open Apps", action: () => setTab("apps") },
       {
         id: "nav-character",
         label: "Open Character",
@@ -125,7 +125,15 @@ export function CommandPalette() {
       },
     );
 
-    if (currentGameViewerUrl.trim()) {
+    if (isTabEnabled("apps")) {
+      commands.splice(1, 0, {
+        id: "nav-apps",
+        label: "Open Apps",
+        action: () => setTab("apps"),
+      });
+    }
+
+    if (isTabEnabled("apps") && currentGameViewerUrl.trim()) {
       commands.push({
         id: "nav-current-game",
         label: "Open Current Game",
@@ -275,7 +283,6 @@ export function CommandPalette() {
       open={commandPaletteOpen}
       onClose={closeCommandPalette}
       ariaLabel="Command palette"
-      backdropClassName="items-start pt-30"
     >
       <div className="bg-bg border border-border w-[520px] max-h-[420px] flex flex-col shadow-2xl">
         <input

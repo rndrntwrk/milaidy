@@ -9,145 +9,16 @@ import { Badge } from "./ui/Badge.js";
 import { Button } from "./ui/Button.js";
 import { CloseIcon, StackIcon } from "./ui/Icons.js";
 import { resolveThemeDisplayName } from "./shared/themeDisplayName.js";
+import {
+  controlSectionForTab,
+  defaultTabForControlSection,
+  getControlStackSectionMeta,
+  getControlStackSections,
+  sanitizeControlSection,
+  type HudControlSection,
+} from "../miladyHudRouting.js";
 
-export type ControlStackSection =
-  | "settings"
-  | "apps"
-  | "advanced"
-  | "plugins-connectors"
-  | "custom-actions"
-  | "triggers"
-  | "identity"
-  | "approvals"
-  | "safe-mode"
-  | "governance"
-  | "fine-tuning"
-  | "trajectories"
-  | "runtime"
-  | "database"
-  | "logs"
-  | "security";
-
-const SECTION_DEFAULT_TAB: Record<ControlStackSection, Tab> = {
-  settings: "settings",
-  apps: "apps",
-  advanced: "advanced",
-  "plugins-connectors": "plugins",
-  "custom-actions": "actions",
-  triggers: "triggers",
-  identity: "identity",
-  approvals: "approvals",
-  "safe-mode": "safe-mode",
-  governance: "governance",
-  "fine-tuning": "fine-tuning",
-  trajectories: "trajectories",
-  runtime: "runtime",
-  database: "database",
-  logs: "logs",
-  security: "security",
-};
-
-const SECTION_LABELS: Record<ControlStackSection, string> = {
-  settings: "Settings",
-  apps: "Apps",
-  advanced: "Advanced",
-  "plugins-connectors": "Plugins & Connectors",
-  "custom-actions": "Custom Actions",
-  triggers: "Triggers",
-  identity: "Identity",
-  approvals: "Approvals",
-  "safe-mode": "Safe Mode",
-  governance: "Governance",
-  "fine-tuning": "Fine-Tuning",
-  trajectories: "Trajectories",
-  runtime: "Runtime",
-  database: "Database",
-  logs: "Logs",
-  security: "Security",
-};
-
-const SECTION_COPY: Record<ControlStackSection, string> = {
-  settings: "Master preferences, model defaults, and runtime-wide behavior.",
-  apps: "Launch and inspect installed surfaces without leaving the dashboard.",
-  advanced: "Deep operator controls routed into one route-less overlay.",
-  "plugins-connectors": "Connector state, plugin health, and external service wiring.",
-  "custom-actions": "Curated quick actions and automations that can be triggered from the HUD.",
-  triggers: "Schedules, recurring workflows, and trigger execution controls.",
-  identity: "Persona, identity, and profile configuration.",
-  approvals: "Human-in-the-loop requests and mission review.",
-  "safe-mode": "Safety posture, guardrails, and constrained execution settings.",
-  governance: "Policies, governance controls, and operational rules.",
-  "fine-tuning": "Advanced tuning surfaces for behavior and model calibration.",
-  trajectories: "Trajectory inspection and cognitive trace analysis.",
-  runtime: "Runtime health, process state, and execution diagnostics.",
-  database: "Database browser, vector memory, and document stores.",
-  logs: "Structured logs, telemetry, and stream diagnostics.",
-  security: "Security audit stream and channel trust state.",
-};
-
-const SECTION_ORDER: ControlStackSection[] = [
-  "settings",
-  "apps",
-  "advanced",
-  "plugins-connectors",
-  "custom-actions",
-  "triggers",
-  "identity",
-  "approvals",
-  "safe-mode",
-  "governance",
-  "fine-tuning",
-  "trajectories",
-  "runtime",
-  "database",
-  "logs",
-  "security",
-];
-
-export function miladyControlSectionForTab(
-  tab: string,
-): ControlStackSection | null {
-  switch (tab) {
-    case "settings":
-      return "settings";
-    case "apps":
-      return "apps";
-    case "advanced":
-      return "advanced";
-    case "connectors":
-    case "plugins":
-    case "skills":
-      return "plugins-connectors";
-    case "actions":
-      return "custom-actions";
-    case "triggers":
-      return "triggers";
-    case "identity":
-      return "identity";
-    case "approvals":
-      return "approvals";
-    case "safe-mode":
-      return "safe-mode";
-    case "governance":
-      return "governance";
-    case "fine-tuning":
-      return "fine-tuning";
-    case "trajectories":
-      return "trajectories";
-    case "runtime":
-      return "runtime";
-    case "database":
-      return "database";
-    case "logs":
-      return "logs";
-    case "security":
-      return "security";
-    default:
-      return null;
-  }
-}
-
-function renderSectionContent(resolvedSection: ControlStackSection, activeTab: Tab) {
+function renderSectionContent(resolvedSection: HudControlSection, activeTab: Tab) {
   if (resolvedSection === "settings") return <SettingsView />;
   if (resolvedSection === "apps") return <AppsPageView />;
   if (resolvedSection === "plugins-connectors" && activeTab === "connectors") {
@@ -162,23 +33,30 @@ export function ControlStackModal({
   onClose,
 }: {
   open: boolean;
-  section?: ControlStackSection | null;
+  section?: HudControlSection | null;
   onClose: () => void;
 }) {
   const { tab, setTab } = useApp();
   const themeName = resolveThemeDisplayName();
+  const sections = getControlStackSections();
 
-  const resolvedSection = section ?? miladyControlSectionForTab(tab) ?? "settings";
+  const resolvedSection = sanitizeControlSection(
+    section ?? controlSectionForTab(tab) ?? "settings",
+  );
+  const sectionMeta = getControlStackSectionMeta(resolvedSection);
   const activeTab = useMemo(() => {
     if (resolvedSection === "plugins-connectors") {
       return tab === "connectors" || tab === "skills" ? tab : "plugins";
     }
     if (resolvedSection === "advanced") {
-      return tab === "advanced" ? "advanced" : SECTION_DEFAULT_TAB.advanced;
+      return tab === "advanced"
+        ? "advanced"
+        : defaultTabForControlSection(resolvedSection);
     }
-    return tab === SECTION_DEFAULT_TAB[resolvedSection]
+    const defaultTab = defaultTabForControlSection(resolvedSection);
+    return tab === defaultTab
       ? tab
-      : SECTION_DEFAULT_TAB[resolvedSection];
+      : defaultTab;
   }, [resolvedSection, tab]);
 
   if (!open) return null;
@@ -193,7 +71,7 @@ export function ControlStackModal({
               {themeName} Control Stack
             </div>
             <div className="pro-streamer-control-stack-copy mt-1">
-              {SECTION_COPY[resolvedSection]}
+              {sectionMeta.copy}
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -214,18 +92,18 @@ export function ControlStackModal({
 
         <div className="border-b border-white/10 bg-white/[0.03] px-3 py-3 lg:px-4">
           <div className="flex gap-2 overflow-x-auto pb-1">
-            {SECTION_ORDER.map((entry) => (
+            {sections.map((entry) => (
               <Button
-                key={entry}
-                variant={resolvedSection === entry ? "secondary" : "ghost"}
+                key={entry.id}
+                variant={resolvedSection === entry.id ? "secondary" : "ghost"}
                 className={`h-auto shrink-0 rounded-full border px-3 py-2 text-[11px] ${
-                  resolvedSection === entry
+                  resolvedSection === entry.id
                     ? "border-white/18 bg-white/[0.14] text-white"
                     : "border-white/8 bg-transparent text-white/55 hover:border-white/16 hover:bg-white/[0.06] hover:text-white"
                 }`}
-                onClick={() => setTab(SECTION_DEFAULT_TAB[entry])}
+                onClick={() => setTab(entry.defaultTab)}
               >
-                {SECTION_LABELS[entry]}
+                {entry.label}
               </Button>
             ))}
           </div>

@@ -17,7 +17,13 @@ import { FormFieldStack } from "./FormFieldStack";
 import { SelectablePillGrid } from "./SelectablePillGrid";
 import { Badge } from "./ui/Badge";
 import { Button } from "./ui/Button";
-import { ChevronDownIcon, ChevronUpIcon, CloseIcon } from "./ui/Icons";
+import {
+  ChevronDownIcon,
+  ChevronUpIcon,
+  CloseIcon,
+  EyeIcon,
+  EyeOffIcon,
+} from "./ui/Icons";
 import { Switch } from "./ui/Switch";
 import { cn } from "./ui/utils";
 
@@ -120,6 +126,8 @@ function PasswordFieldInner({ fp: props }: { fp: FieldRenderProps }) {
   const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const onReveal = props.onReveal;
+  const VisibilityIcon = visible ? EyeOffIcon : EyeIcon;
+  const visibilityLabel = visible ? "Hide" : "Show";
 
   const handleToggle = useCallback(async () => {
     const input = inputRef.current;
@@ -165,14 +173,21 @@ function PasswordFieldInner({ fp: props }: { fp: FieldRenderProps }) {
         />
         <button
           type="button"
-          className="px-3 py-2 border border-[var(--border)] bg-[var(--bg-hover)] text-[12px] text-[var(--muted)] cursor-pointer transition-colors hover:bg-[var(--surface)] hover:text-[var(--text)] h-[36px] rounded-sm min-w-[88px] shrink-0"
+          className="inline-flex h-[36px] min-w-[88px] shrink-0 items-center justify-center gap-1.5 rounded-sm border border-[var(--border)] bg-[var(--bg-hover)] px-3 py-2 text-[12px] text-[var(--muted)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text)]"
           onClick={() => {
             void handleToggle();
             fireAction(props, "click");
           }}
           title={visible ? "Hide value" : "Reveal value"}
         >
-          {busy ? "\u2026" : visible ? "\u{1F441} Hide" : "\u{1F441} Show"}
+          {busy ? (
+            "Loading..."
+          ) : (
+            <>
+              <VisibilityIcon className="h-3.5 w-3.5" />
+              <span>{visibilityLabel}</span>
+            </>
+          )}
         </button>
       </div>
     );
@@ -205,7 +220,14 @@ function PasswordFieldInner({ fp: props }: { fp: FieldRenderProps }) {
         }}
         title={visible ? "Hide value" : "Reveal value"}
       >
-        {busy ? "\u2026" : visible ? "\u{1F441} Hide" : "\u{1F441} Show"}
+        {busy ? (
+          "Loading..."
+        ) : (
+          <span className="inline-flex items-center gap-1.5">
+            <VisibilityIcon className="h-3.5 w-3.5" />
+            <span>{visibilityLabel}</span>
+          </span>
+        )}
       </Button>
     </div>
   );
@@ -1153,10 +1175,11 @@ function ArrayItem({
       {!readonly && (
         <button
           type="button"
-          className="px-2 py-1.5 border border-[var(--border)] bg-[var(--bg-hover)] text-xs text-[var(--muted)] cursor-pointer transition-colors hover:bg-[var(--surface)] hover:text-[var(--destructive)] h-[36px] rounded-sm"
+          className="inline-flex h-[36px] items-center justify-center rounded-sm border border-[var(--border)] bg-[var(--bg-hover)] px-2 py-1.5 text-[var(--muted)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--destructive)]"
           onClick={onRemove}
+          aria-label={`Remove item ${index + 1}`}
         >
-          ✕
+          <CloseIcon className="h-3.5 w-3.5" />
         </button>
       )}
     </div>
@@ -1315,13 +1338,14 @@ function KeyValueFieldInner({ fp: props }: { fp: FieldRenderProps }) {
           {!props.readonly && (
             <button
               type="button"
-              className="px-2 py-1.5 border border-[var(--border)] bg-[var(--bg-hover)] text-xs text-[var(--muted)] cursor-pointer transition-colors hover:bg-[var(--surface)] hover:text-[var(--destructive)] h-[36px] rounded-sm"
+              className="inline-flex h-[36px] items-center justify-center rounded-sm border border-[var(--border)] bg-[var(--bg-hover)] px-2 py-1.5 text-[var(--muted)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--destructive)]"
               onClick={() => {
                 removeRow(index);
                 fireAction(props, "click");
               }}
+              aria-label={`Remove row ${index + 1}`}
             >
-              ✕
+              <CloseIcon className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
