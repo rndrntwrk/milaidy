@@ -43,6 +43,7 @@ export function AvatarSelector({
   };
 
   const avatarIndices = Array.from({ length: VRM_COUNT }, (_, i) => i + 1);
+  const avatarLabel = (index: number) => (index === 1 ? "Alice" : `Avatar ${index}`);
   const containerClass = fullWidth
     ? "grid gap-3 w-full"
     : "flex flex-wrap gap-3 justify-start";
@@ -68,11 +69,13 @@ export function AvatarSelector({
                 : "opacity-60 hover:opacity-100 hover:scale-105"
             }`}
             onClick={() => onSelect(i)}
+            aria-label={`Select ${avatarLabel(i)}`}
+            title={avatarLabel(i)}
             type="button"
           >
             <img
               src={getVrmPreviewUrl(i)}
-              alt={`Avatar ${i}`}
+              alt={avatarLabel(i)}
               className="w-full h-full object-cover"
             />
           </button>

@@ -3,10 +3,11 @@ import { useApp } from "../AppContext.js";
 import { DrawerShell } from "./DrawerShell.js";
 import { SectionEmptyState } from "./SectionStates.js";
 import { SectionShell } from "./SectionShell.js";
-import { SummaryStatRow } from "./SummaryStatRow.js";
+import { SummaryStatRow, type SummaryStatItem } from "./SummaryStatRow.js";
 import { Button } from "./ui/Button.js";
 import { Sheet } from "./ui/Sheet.js";
 import { OpsIcon } from "./ui/Icons.js";
+import { isTabEnabled, type Tab } from "../miladyHudRouting.js";
 
 export function OpsDrawer({
   open,
@@ -26,7 +27,7 @@ export function OpsDrawer({
     setTab,
   } = useApp();
 
-  const summaryCards = useMemo(() => {
+  const summaryCards = useMemo<SummaryStatItem[]>(() => {
     const liveChannels = plugins.filter(
       (plugin) => plugin.category === "connector" && plugin.enabled && plugin.isActive,
     ).length;
@@ -83,14 +84,14 @@ export function OpsDrawer({
     [plugins],
   );
 
-  const mcpLive = mcpServerStatuses.filter((server) => server.connected).length;
-  const relayLive = Boolean(extensionStatus?.relayReachable);
-  const quickLinks = [
+  const quickLinks = ([
     { label: "Connectors", tab: "connectors" },
     { label: "Plugins", tab: "plugins" },
     { label: "Actions", tab: "actions" },
     { label: "Apps", tab: "apps" },
-  ] as const;
+  ] as const satisfies ReadonlyArray<{ label: string; tab: Tab }>).filter((link) =>
+    isTabEnabled(link.tab),
+  );
 
   return (
     <Sheet open={open} onClose={onClose} side="right" className="w-[min(38rem,100vw)]">

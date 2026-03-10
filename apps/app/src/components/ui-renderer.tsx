@@ -22,7 +22,7 @@ import { Button } from "./ui/Button";
 import { Card } from "./ui/Card";
 import { Dialog } from "./ui/Dialog";
 import { Sheet } from "./ui/Sheet";
-import { ChevronRightIcon, CloseIcon } from "./ui/Icons";
+import { ChevronRightIcon, CloseIcon, StarIcon } from "./ui/Icons";
 import type {
   AuthState,
   CondExpr,
@@ -828,7 +828,7 @@ const CarouselComponent: ComponentFn = (props) => {
           onClick={() => setCurrent((p) => Math.min(items.length - 1, p + 1))}
           disabled={current === items.length - 1}
         >
-          &rarr;
+          <ChevronRightIcon className="h-3.5 w-3.5" />
         </button>
       </div>
     </div>
@@ -966,12 +966,15 @@ const RatingComponent: ComponentFn = (props) => {
       ) : null}
       <div className="flex gap-0.5">
         {Array.from({ length: max }, (_, i) => i + 1).map((starValue) => (
-          <span
+          <StarIcon
             key={starValue}
-            className={`text-sm ${starValue <= value ? "text-[var(--warn,#f39c12)]" : "text-[var(--muted)] opacity-30"}`}
-          >
-            ★
-          </span>
+            className={`h-4 w-4 ${
+              starValue <= value
+                ? "text-[var(--warn,#f39c12)]"
+                : "text-[var(--muted)] opacity-30"
+            }`}
+            fill={starValue <= value ? "currentColor" : "none"}
+          />
         ))}
       </div>
     </div>
@@ -1163,7 +1166,7 @@ const PaginationComponent: ComponentFn = (props, _children, ctx) => {
         disabled={current >= total}
         onClick={() => setValue(current + 1)}
       >
-        &rarr;
+        <ChevronRightIcon className="h-3.5 w-3.5" />
       </button>
     </div>
   );
@@ -1319,12 +1322,10 @@ const CollapsibleComponent: ComponentFn = (props, children) => {
         className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold cursor-pointer hover:bg-[var(--bg-hover)] transition-colors"
         onClick={() => setOpen(!open)}
       >
-        <span
-          className="text-[10px] transition-transform"
+        <ChevronRightIcon
+          className="h-3.5 w-3.5 transition-transform"
           style={{ transform: open ? "rotate(90deg)" : "none" }}
-        >
-          &#9654;
-        </span>
+        />
         {String(props.title ?? "Collapsible")}
       </button>
       {open && <div className="px-3 pb-3">{children}</div>}
@@ -1426,8 +1427,6 @@ const DrawerComponent: ComponentFn = (props, children, ctx) => {
       open={true}
       onClose={close}
       side="bottom"
-      title={props.title ? String(props.title) : undefined}
-      description={props.description ? String(props.description) : undefined}
     >
       {children}
     </Sheet>
@@ -1527,7 +1526,10 @@ function ElementRenderer({ elementId }: { elementId: string }) {
               <ElementRenderer elementId={childId} />
             </UiContext.Provider>
           ));
-          const itemKey = String(item[el.repeat?.key] ?? Math.random());
+          const repeatKey = el.repeat?.key;
+          const itemKey = repeatKey
+            ? String(item[repeatKey] ?? Math.random())
+            : String(Math.random());
           return (
             <React.Fragment key={itemKey}>
               {component(resolvedProps, childNodes, itemCtx, el)}

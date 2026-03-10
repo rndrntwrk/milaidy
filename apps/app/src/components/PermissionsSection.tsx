@@ -31,6 +31,7 @@ import { StatusBadge } from "./shared/ui-badges";
 import { Switch } from "./shared/ui-switch";
 import {
   CameraIcon,
+  CheckIcon,
   CursorIcon,
   MonitorIcon,
   SettingsIcon,
@@ -581,7 +582,7 @@ export function PermissionsOnboardingSection({
                   : "border-[var(--border)] bg-[var(--card)]"
               }`}
             >
-              <PermissionIcon icon={def.icon} />
+              <PermissionIcon Icon={def.icon} />
               <div className="flex-1">
                 <div className="font-semibold text-sm">{def.name}</div>
                 <div className="text-[11px] text-[var(--muted)]">
@@ -589,7 +590,9 @@ export function PermissionsOnboardingSection({
                 </div>
               </div>
               {isGranted ? (
-                <span className="text-[var(--ok)] text-sm">✓</span>
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--ok)]/35 bg-[var(--ok)]/12 text-[var(--ok)]">
+                  <CheckIcon className="h-4 w-4" />
+                </span>
               ) : (
                 <div className="flex gap-2">
                   {canRequest && (

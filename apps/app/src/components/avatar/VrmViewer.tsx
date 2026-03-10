@@ -6,13 +6,13 @@
  */
 
 import { useEffect, useRef } from "react";
-import { resolveAppAssetUrl } from "../../asset-url";
+import { DEFAULT_PRO_STREAMER_VRM_URL } from "../../AppContext";
 import { VrmEngine, type VrmEngineState } from "./VrmEngine";
 
-const DEFAULT_VRM_PATH = resolveAppAssetUrl("vrms/1.vrm");
+const DEFAULT_VRM_PATH = DEFAULT_PRO_STREAMER_VRM_URL;
 
 export type VrmViewerProps = {
-  /** Path to the VRM file to load (default: built-in milady #1) */
+  /** Path to the VRM file to load (default: built-in pro streamer avatar) */
   vrmPath?: string;
   mouthOpen: number;
   /** When true the engine generates mouth animation internally */

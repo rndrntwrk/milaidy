@@ -12,6 +12,8 @@
  */
 
 import React, {
+  type ComponentType,
+  type SVGProps,
   forwardRef,
   useCallback,
   useImperativeHandle,
@@ -35,6 +37,50 @@ import {
   runValidation,
 } from "./config-catalog";
 import { ConfigField } from "./config-field";
+import {
+  ActivityIcon,
+  AgentIcon,
+  ArbitrumIcon,
+  BaseChainIcon,
+  BellIcon,
+  BookIcon,
+  BrainIcon,
+  BroadcastIcon,
+  CalendarIcon,
+  ChartIcon,
+  ChevronRightIcon,
+  CloudIcon,
+  CodeIcon,
+  ConnectionIcon,
+  CreditIcon,
+  DatabaseIcon,
+  DocumentIcon,
+  EditIcon,
+  EthereumIcon,
+  FlaskIcon,
+  FolderIcon,
+  GlobeIcon,
+  KeyIcon,
+  LightningIcon,
+  LockIcon,
+  MegaphoneIcon,
+  MicIcon,
+  MonitorIcon,
+  OperatorIcon,
+  OutputIcon,
+  PackageIcon,
+  PhoneIcon,
+  RestartIcon,
+  RulerIcon,
+  SettingsIcon,
+  ShieldIcon,
+  SolanaIcon,
+  SparkIcon,
+  ThreadsIcon,
+  VideoIcon,
+  WalletIcon,
+  XBrandIcon,
+} from "./ui/Icons";
 
 // ── Props ──────────────────────────────────────────────────────────────
 
@@ -76,90 +122,92 @@ export interface ConfigRendererHandle {
 
 // ── Group icons ────────────────────────────────────────────────────────
 
-const GROUP_ICONS: Record<string, string> = {
+type GroupIconComponent = ComponentType<SVGProps<SVGSVGElement>>;
+
+const GROUP_ICONS: Record<string, GroupIconComponent> = {
   // Auth & Security
-  auth: "\u{1F511}",
-  authentication: "\u{1F511}",
-  security: "\u{1F6E1}\uFE0F",
-  permissions: "\u{1F512}",
-  "api keys": "\u{1F511}",
+  auth: KeyIcon,
+  authentication: KeyIcon,
+  security: ShieldIcon,
+  permissions: LockIcon,
+  "api keys": KeyIcon,
   // Connection & Network
-  connection: "\u{1F517}",
-  network: "\u{1F310}",
-  api: "\u{1F50C}",
-  webhook: "\u{1F4E1}",
+  connection: ConnectionIcon,
+  network: GlobeIcon,
+  api: CodeIcon,
+  webhook: MegaphoneIcon,
   // Models & AI
-  models: "\u{1F916}",
-  model: "\u{1F916}",
-  "ai models": "\u{1F916}",
-  "text generation": "\u{1F916}",
-  embeddings: "\u{1F9E0}",
+  models: AgentIcon,
+  model: AgentIcon,
+  "ai models": AgentIcon,
+  "text generation": AgentIcon,
+  embeddings: BrainIcon,
   // Behavior & Config
-  behavior: "\u2699\uFE0F",
-  configuration: "\u2699\uFE0F",
-  general: "\u2699\uFE0F",
-  defaults: "\u2699\uFE0F",
-  advanced: "\u{1F527}",
-  features: "\u2728",
+  behavior: SettingsIcon,
+  configuration: SettingsIcon,
+  general: SettingsIcon,
+  defaults: SettingsIcon,
+  advanced: SettingsIcon,
+  features: SparkIcon,
   // Time & Scheduling
-  timing: "\u23F1\uFE0F",
-  scheduling: "\u{1F4C5}",
+  timing: ActivityIcon,
+  scheduling: CalendarIcon,
   // Storage & Data
-  storage: "\u{1F4BE}",
-  bucket: "\u{1F4E6}",
-  paths: "\u{1F4C2}",
-  output: "\u{1F4E4}",
-  repository: "\u{1F4DA}",
+  storage: DatabaseIcon,
+  bucket: PackageIcon,
+  paths: FolderIcon,
+  output: OutputIcon,
+  repository: BookIcon,
   // Communication
-  messaging: "\u{1F4AC}",
-  channels: "\u{1F4E2}",
-  chatrooms: "\u{1F4AC}",
-  voice: "\u{1F3A4}",
-  speech: "\u{1F3A4}",
-  "speech-to-text": "\u{1F3A4}",
+  messaging: ThreadsIcon,
+  channels: BroadcastIcon,
+  chatrooms: ThreadsIcon,
+  voice: MicIcon,
+  speech: MicIcon,
+  "speech-to-text": MicIcon,
   // Identity
-  identity: "\u{1F464}",
-  "client identity": "\u{1F464}",
-  session: "\u{1F464}",
+  identity: OperatorIcon,
+  "client identity": OperatorIcon,
+  session: OperatorIcon,
   // Display & Media
-  display: "\u{1F3A8}",
-  media: "\u{1F3AC}",
+  display: MonitorIcon,
+  media: VideoIcon,
   // Notifications
-  notifications: "\u{1F514}",
-  logging: "\u{1F4DD}",
+  notifications: BellIcon,
+  logging: DocumentIcon,
   // Finance & Trading
-  trading: "\u{1F4C8}",
-  "risk management": "\u{1F6E1}\uFE0F",
-  wallet: "\u{1F4B0}",
-  payment: "\u{1F4B3}",
-  pricing: "\u{1F4B2}",
+  trading: ChartIcon,
+  "risk management": ShieldIcon,
+  wallet: WalletIcon,
+  payment: CreditIcon,
+  pricing: CreditIcon,
   // Blockchain
-  blockchain: "\u26D3\uFE0F",
-  ethereum: "\u26D3\uFE0F",
-  solana: "\u26D3\uFE0F",
-  base: "\u26D3\uFE0F",
-  arbitrum: "\u26D3\uFE0F",
-  bsc: "\u26D3\uFE0F",
-  testnets: "\u{1F9EA}",
-  "dex config": "\u{1F4CA}",
+  blockchain: ConnectionIcon,
+  ethereum: EthereumIcon,
+  solana: SolanaIcon,
+  base: BaseChainIcon,
+  arbitrum: ArbitrumIcon,
+  bsc: ConnectionIcon,
+  testnets: FlaskIcon,
+  "dex config": ChartIcon,
   // Social
-  posting: "\u{1F4DD}",
-  "x/twitter authentication": "\u{1F511}",
-  "x/twitter behavior": "\u{1F426}",
+  posting: EditIcon,
+  "x/twitter authentication": KeyIcon,
+  "x/twitter behavior": XBrandIcon,
   // System
-  limits: "\u{1F4CF}",
-  providers: "\u{1F50C}",
-  commands: "\u2318",
-  actions: "\u26A1",
-  policies: "\u{1F4DC}",
-  autonomy: "\u{1F916}",
-  "background jobs": "\u{1F504}",
-  "n8n connection": "\u{1F517}",
-  app: "\u{1F4F1}",
+  limits: RulerIcon,
+  providers: CloudIcon,
+  commands: CodeIcon,
+  actions: LightningIcon,
+  policies: DocumentIcon,
+  autonomy: AgentIcon,
+  "background jobs": RestartIcon,
+  "n8n connection": ConnectionIcon,
+  app: PhoneIcon,
 };
 
-function groupIcon(group: string): string {
-  return GROUP_ICONS[group.toLowerCase()] ?? "\u25A0";
+function groupIcon(group: string): GroupIconComponent {
+  return GROUP_ICONS[group.toLowerCase()] ?? SettingsIcon;
 }
 
 // ── Width → Tailwind column span ───────────────────────────────────────
@@ -224,7 +272,7 @@ function ValidationSummary({
               className="text-[12px] text-[var(--destructive)] cursor-pointer bg-transparent border-none p-0 hover:underline transition-all text-left flex items-center gap-1.5"
               onClick={() => handleFieldClick(key)}
             >
-              <span className="opacity-60">&rarr;</span>
+              <ChevronRightIcon className="h-3.5 w-3.5 opacity-60" />
               <span>{fieldLabels.get(key) ?? key}</span>
             </button>
           </li>
@@ -623,6 +671,7 @@ export const ConfigRenderer = forwardRef<
         const normalizedGroup = group.trim().toLowerCase();
         const displayGroup =
           normalizedGroup === "destinations" ? "Channels" : group;
+        const GroupIcon = groupIcon(displayGroup);
         const isCollapsibleGroup =
           normalizedGroup === "destinations" || normalizedGroup === "channels";
         const isGroupOpen = isCollapsibleGroup
@@ -661,20 +710,15 @@ export const ConfigRenderer = forwardRef<
                   onClick={() => toggleGroupOpen(group)}
                   aria-expanded={isGroupOpen}
                 >
-                  <span
+                  <ChevronRightIcon
                     className={
                       minimalChrome
-                        ? "inline-block text-[10px] text-white/42 transition-transform duration-200 group-hover:text-white/70"
-                        : "inline-block text-[10px] text-[var(--muted)] transition-transform duration-200 group-hover:text-[var(--text)]"
+                        ? `h-3.5 w-3.5 text-white/42 transition-transform duration-200 group-hover:text-white/70 ${isGroupOpen ? "rotate-90" : ""}`
+                        : `h-3.5 w-3.5 text-[var(--muted)] transition-transform duration-200 group-hover:text-[var(--text)] ${isGroupOpen ? "rotate-90" : ""}`
                     }
-                    style={{
-                      transform: isGroupOpen ? "rotate(90deg)" : "none",
-                    }}
-                  >
-                    &#9654;
-                  </span>
-                  <span className={minimalChrome ? "text-base leading-none opacity-80" : "text-base leading-none"}>
-                    {groupIcon(displayGroup)}
+                  />
+                  <span className={minimalChrome ? "inline-flex text-base leading-none opacity-80" : "inline-flex text-base leading-none"}>
+                    <GroupIcon className="h-[18px] w-[18px]" />
                   </span>
                   <span
                     className={
@@ -698,8 +742,8 @@ export const ConfigRenderer = forwardRef<
                 </button>
               ) : (
                 <div className="mb-3 flex items-center gap-2">
-                  <span className="text-base leading-none">
-                    {groupIcon(displayGroup)}
+                  <span className="inline-flex text-base leading-none">
+                    <GroupIcon className="h-[18px] w-[18px]" />
                   </span>
                   <span className="text-[12px] font-bold uppercase tracking-wider text-[var(--text)] opacity-70">
                     {displayGroup}
@@ -707,14 +751,14 @@ export const ConfigRenderer = forwardRef<
                   <span className="flex-1 h-px bg-[var(--border)] ml-1" />
                 </div>
               ))}
-            {isGroupOpen && (
-              <div className="grid grid-cols-6 gap-x-5 gap-y-0">
-                {fields.map((f) => renderField(f))}
-              </div>
-            )}
-          </div>
-        );
-      })}
+              {isGroupOpen && (
+                <div className="grid grid-cols-6 gap-x-5 gap-y-0">
+                  {fields.map((f) => renderField(f))}
+                </div>
+              )}
+            </div>
+          );
+        })}
 
       {advanced.length > 0 && (
         <div className={minimalChrome ? "mt-6 border-t border-white/10 pt-4" : "mt-5 border-t border-[var(--border)] pt-4"}>
@@ -727,16 +771,13 @@ export const ConfigRenderer = forwardRef<
             }
             onClick={() => setAdvancedOpen((prev) => !prev)}
           >
-            <span
+            <ChevronRightIcon
               className={
                 minimalChrome
-                  ? "inline-block text-[10px] text-white/42 transition-transform duration-200 group-hover:text-white/70"
-                  : "inline-block text-[10px] text-[var(--muted)] transition-transform duration-200 group-hover:text-[var(--text)]"
+                  ? `h-3.5 w-3.5 text-white/42 transition-transform duration-200 group-hover:text-white/70 ${advancedOpen ? "rotate-90" : ""}`
+                  : `h-3.5 w-3.5 text-[var(--muted)] transition-transform duration-200 group-hover:text-[var(--text)] ${advancedOpen ? "rotate-90" : ""}`
               }
-              style={{ transform: advancedOpen ? "rotate(90deg)" : "none" }}
-            >
-              &#9654;
-            </span>
+            />
             <span
               className={
                 minimalChrome

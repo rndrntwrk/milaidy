@@ -10,19 +10,19 @@ import { OpsDrawer } from "./OpsDrawer.js";
 import { MiladyStatusStrip } from "./MiladyStatusStrip.js";
 import {
   AssetVaultDrawer,
-  miladyAssetSectionForTab,
-  type AssetVaultSection,
 } from "./AssetVaultDrawer.js";
-import {
-  ControlStackModal,
-  miladyControlSectionForTab,
-} from "./ControlStackModal.js";
+import { ControlStackModal } from "./ControlStackModal.js";
 import { MiladyRailBubble } from "./MiladyRailBubble.js";
 import { SectionEmptyState } from "./SectionStates.js";
 import { Sheet } from "./ui/Sheet.js";
 import { Button } from "./ui/Button.js";
 import { Badge } from "./ui/Badge.js";
 import { ActivityIcon, CloseIcon, MissionIcon } from "./ui/Icons.js";
+import {
+  assetVaultSectionForTab,
+  controlSectionForTab,
+  type HudAssetSection,
+} from "../miladyHudRouting.js";
 
 type ViewportMode = "mobile" | "tablet" | "desktop";
 
@@ -47,8 +47,8 @@ export function MiladyOsDashboard() {
     autonomousEvents,
     agentStatus,
     triggers,
-    triggerHealth,
     openDockSurface,
+    closeDockSurface,
     openHudControlStack,
     openHudAssetVault,
     closeHudSurface,
@@ -65,9 +65,9 @@ export function MiladyOsDashboard() {
   );
 
   const controlStackSection =
-    hudControlSection ?? miladyControlSectionForTab(tab) ?? "settings";
+    hudControlSection ?? controlSectionForTab(tab) ?? "settings";
   const assetVaultSection =
-    hudAssetSection ?? miladyAssetSectionForTab(tab) ?? "identity";
+    hudAssetSection ?? assetVaultSectionForTab(tab) ?? "identity";
   const activeSurface =
     hudSurface === "control-stack" ? "control-stack" : dockSurface;
   const executing = chatSending || chatFirstTokenReceived;
@@ -76,28 +76,12 @@ export function MiladyOsDashboard() {
     : safeAutonomousEvents.length > 0
       ? `${Math.min(safeAutonomousEvents.length, 9)}`
       : undefined;
-  const actionSummary = executing
-    ? "Live execution updates are flowing to stage."
-    : safeAutonomousEvents.length > 0
-      ? "Recent public-safe execution updates are ready."
-      : "No public actions yet.";
   const awaitingApproval = (agentStatus?.state ?? "").toLowerCase().includes("approval");
   const missionBadge = awaitingApproval
     ? "!"
     : safeTriggers.length > 0
       ? `${Math.min(safeTriggers.length, 9)}`
       : undefined;
-  const nextTriggerLabel = useMemo(() => {
-    if (safeTriggers.length === 0) return null;
-    return safeTriggers[0]?.displayName ?? "Queued routine";
-  }, [safeTriggers]);
-  const missionSummary = awaitingApproval
-    ? "Operator review is required before the next step."
-    : nextTriggerLabel
-      ? `Next routine: ${nextTriggerLabel}.`
-      : triggerHealth
-        ? "Automations are armed and standing by."
-        : "No queued interventions.";
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -262,19 +246,19 @@ export function MiladyOsDashboard() {
             onOpenThreads={() => openDockSurface("threads")}
             onOpenMemory={() => openDockSurface("memory")}
             onOpenOps={() => openDockSurface("ops")}
-            onOpenVault={() => openHudAssetVault(assetVaultSection as AssetVaultSection)}
+            onOpenVault={() => openHudAssetVault(assetVaultSection)}
             onOpenControlStack={() => openHudControlStack(controlStackSection, tab)}
           />
         </div>
       </div>
 
-      <ThreadsDrawer open={dockSurface === "threads"} onClose={closeHudSurface} />
-      <MemoryDrawer open={dockSurface === "memory"} onClose={closeHudSurface} />
-      <OpsDrawer open={dockSurface === "ops"} onClose={closeHudSurface} />
+      <ThreadsDrawer open={dockSurface === "threads"} onClose={closeDockSurface} />
+      <MemoryDrawer open={dockSurface === "memory"} onClose={closeDockSurface} />
+      <OpsDrawer open={dockSurface === "ops"} onClose={closeDockSurface} />
       <AssetVaultDrawer
         open={dockSurface === "vault" && Boolean(assetVaultSection)}
-        section={(assetVaultSection ?? "identity") as AssetVaultSection}
-        onClose={closeHudSurface}
+        section={(assetVaultSection ?? "identity") as HudAssetSection}
+        onClose={closeDockSurface}
       />
       <ControlStackModal
         open={hudSurface === "control-stack"}
