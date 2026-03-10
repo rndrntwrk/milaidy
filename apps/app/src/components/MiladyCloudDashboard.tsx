@@ -1,17 +1,122 @@
 import { Button, SectionCard } from "@milady/ui";
+import type { CloudCompatAgent } from "@milady/app-core/api";
 import {
+  AlertCircle,
   CircleDollarSign,
   ExternalLink,
   History,
   LayoutDashboard,
+  Loader2,
   Plus,
   RefreshCw,
+  Server,
   Settings,
   Shield,
+  Trash2,
   Zap,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "../AppContext";
+
+const STATUS_BADGE: Record<string, { label: string; className: string }> = {
+  running: {
+    label: "Running",
+    className: "bg-ok/10 text-ok border-ok/20",
+  },
+  queued: {
+    label: "Queued",
+    className: "bg-warn/10 text-warn border-warn/20",
+  },
+  provisioning: {
+    label: "Provisioning",
+    className: "bg-accent/10 text-accent border-accent/20",
+  },
+  stopped: {
+    label: "Stopped",
+    className: "bg-muted/10 text-muted border-border/40",
+  },
+  failed: {
+    label: "Failed",
+    className: "bg-danger/10 text-danger border-danger/20",
+  },
+};
+
+function AgentStatusBadge({ status }: { status: string }) {
+  const badge = STATUS_BADGE[status] ?? STATUS_BADGE.stopped;
+  return (
+    <span
+      className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${badge!.className}`}
+    >
+      {badge!.label}
+    </span>
+  );
+}
+
+function CloudAgentCard({
+  agent,
+  onDelete,
+  deleting,
+}: {
+  agent: CloudCompatAgent;
+  onDelete: (id: string) => void;
+  deleting: boolean;
+}) {
+  return (
+    <div className="rounded-2xl border border-border/50 bg-bg/30 p-4 flex flex-col justify-between gap-3 hover:border-accent/30 transition-all duration-200">
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-2">
+          <Server className="w-4 h-4 text-accent shrink-0" />
+          <span className="font-bold text-sm text-txt-strong truncate max-w-[140px]">
+            {agent.agent_name || "Unnamed Agent"}
+          </span>
+        </div>
+        <AgentStatusBadge status={agent.status} />
+      </div>
+
+      <div className="text-[11px] text-muted space-y-1">
+        <div className="flex justify-between">
+          <span>Node</span>
+          <span className="font-mono text-txt-strong/70">
+            {agent.node_id?.slice(0, 8) ?? "—"}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span>Created</span>
+          <span className="text-txt-strong/70">
+            {new Date(agent.created_at).toLocaleDateString()}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex gap-2 mt-1">
+        {agent.web_ui_url && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1 rounded-xl h-8 text-xs border-border/40"
+            onClick={() => window.open(agent.web_ui_url!, "_blank")}
+          >
+            <ExternalLink className="w-3 h-3 mr-1" />
+            Open
+          </Button>
+        )}
+        <Button
+          variant="outline"
+          size="sm"
+          className="rounded-xl h-8 text-xs border-danger/30 text-danger hover:bg-danger/10"
+          onClick={() => onDelete(agent.agent_id)}
+          disabled={deleting}
+        >
+          {deleting ? (
+            <Loader2 className="w-3 h-3 animate-spin" />
+          ) : (
+            <Trash2 className="w-3 h-3" />
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export function CloudDashboard() {
   const {
@@ -30,19 +135,80 @@ export function CloudDashboard() {
   } = useApp();
 
   const [refreshing, setRefreshing] = useState(false);
+  const [cloudAgents, setCloudAgents] = useState<CloudCompatAgent[]>([]);
+  const [agentsLoading, setAgentsLoading] = useState(false);
+  const [agentsError, setAgentsError] = useState<string | null>(null);
+  const [deletingAgentId, setDeletingAgentId] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+
+  // We import the client lazily to avoid circular dependency issues
+  const fetchCloudAgents = useCallback(async () => {
+    setAgentsLoading(true);
+    setAgentsError(null);
+    try {
+      // Use the global api client (same pattern as AppContext)
+      const res = await fetch("/api/cloud/compat/agents");
+      const data = await res.json();
+      if (!mountedRef.current) return;
+      if (data.success && Array.isArray(data.data)) {
+        setCloudAgents(data.data);
+      } else {
+        setCloudAgents([]);
+        if (data.error) setAgentsError(data.error);
+      }
+    } catch (err) {
+      if (!mountedRef.current) return;
+      setAgentsError(
+        err instanceof Error ? err.message : "Failed to load cloud agents",
+      );
+      setCloudAgents([]);
+    } finally {
+      if (mountedRef.current) setAgentsLoading(false);
+    }
+  }, []);
+
+  const handleDeleteAgent = useCallback(
+    async (agentId: string) => {
+      setDeletingAgentId(agentId);
+      try {
+        const res = await fetch(
+          `/api/cloud/compat/agents/${encodeURIComponent(agentId)}`,
+          { method: "DELETE" },
+        );
+        const data = await res.json();
+        if (data.success) {
+          setCloudAgents((prev) =>
+            prev.filter((a) => a.agent_id !== agentId),
+          );
+        }
+      } catch {
+        // Silently fail — user can retry
+      } finally {
+        setDeletingAgentId(null);
+      }
+    },
+    [],
+  );
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadDropStatus();
-    // Simulate some network delay for better UX feel
-    setTimeout(() => setRefreshing(false), 800);
-  }, [loadDropStatus]);
+    await Promise.all([loadDropStatus(), fetchCloudAgents()]);
+    setTimeout(() => setRefreshing(false), 600);
+  }, [loadDropStatus, fetchCloudAgents]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (miladyCloudConnected) {
       void loadDropStatus();
+      void fetchCloudAgents();
     }
-  }, [miladyCloudConnected, loadDropStatus]);
+  }, [miladyCloudConnected, loadDropStatus, fetchCloudAgents]);
 
   const creditStatusColor = miladyCloudCreditsCritical
     ? "text-danger"
@@ -147,19 +313,42 @@ export function CloudDashboard() {
             description={t("miladyclouddashboard.CloudAgentsDesc")}
             className="border-border/50 bg-bg/40 backdrop-blur-xl rounded-3xl overflow-hidden shadow-sm"
           >
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-              {/* This will be populated by cloud agents list later */}
-              <div className="aspect-[4/3] rounded-2xl border border-dashed border-border/60 flex flex-col items-center justify-center p-6 text-center group hover:border-accent/50 hover:bg-accent/5 transition-all duration-300 cursor-pointer">
-                <div className="w-12 h-12 rounded-full bg-bg-accent flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <Plus className="w-6 h-6 text-muted group-hover:text-accent" />
-                </div>
-                <h3 className="font-bold text-txt-strong mb-1">
-                  {t("miladyclouddashboard.DeployNewAgent")}
-                </h3>
-                <p className="text-xs text-muted">
-                  {t("miladyclouddashboard.InitializeInstance")}
-                </p>
+            {agentsError && (
+              <div className="mt-4 flex items-center gap-2 text-sm text-danger bg-danger/10 rounded-xl p-3 border border-danger/20">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                {agentsError}
               </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+              {agentsLoading && cloudAgents.length === 0 ? (
+                <div className="col-span-full flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 text-accent animate-spin" />
+                </div>
+              ) : (
+                <>
+                  {cloudAgents.map((agent) => (
+                    <CloudAgentCard
+                      key={agent.agent_id}
+                      agent={agent}
+                      onDelete={handleDeleteAgent}
+                      deleting={deletingAgentId === agent.agent_id}
+                    />
+                  ))}
+                  {/* Deploy new agent card */}
+                  <div className="aspect-[4/3] rounded-2xl border border-dashed border-border/60 flex flex-col items-center justify-center p-6 text-center group hover:border-accent/50 hover:bg-accent/5 transition-all duration-300 cursor-pointer">
+                    <div className="w-12 h-12 rounded-full bg-bg-accent flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                      <Plus className="w-6 h-6 text-muted group-hover:text-accent" />
+                    </div>
+                    <h3 className="font-bold text-txt-strong mb-1">
+                      {t("miladyclouddashboard.DeployNewAgent")}
+                    </h3>
+                    <p className="text-xs text-muted">
+                      {t("miladyclouddashboard.InitializeInstance")}
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
           </SectionCard>
 

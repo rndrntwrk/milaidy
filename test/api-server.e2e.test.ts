@@ -308,6 +308,7 @@ function createRuntimeForStreamTests(options: {
           enableAutonomy: async () => { },
           disableAutonomy: async () => { },
           isLoopRunning: () => options.loopRunning ?? false,
+          getStatus: () => ({ enabled: options.loopRunning ?? false }),
         } as never;
       }
       return null;
@@ -420,6 +421,7 @@ function createRuntimeForAutonomySurfaceTests(options: {
           enableAutonomy: async () => { },
           disableAutonomy: async () => { },
           isLoopRunning: () => options.loopRunning ?? true,
+          getStatus: () => ({ enabled: options.loopRunning ?? true }),
         } as never;
       }
       return null;
@@ -489,12 +491,10 @@ function createRuntimeForWorkbenchCrudTests(options?: {
       if (serviceType === "AUTONOMY") {
         return {
           isLoopRunning: () => options?.loopRunning ?? false,
+          getStatus: () => ({ enabled: options?.loopRunning ?? false }),
           getAutonomousRoomId: () =>
             "00000000-0000-0000-0000-000000000201" as UUID,
-        } as {
-          isLoopRunning: () => boolean;
-          getAutonomousRoomId: () => UUID;
-        };
+        } as never;
       }
       return null;
     },

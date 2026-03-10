@@ -24,7 +24,8 @@ vi.mock("../../src/AppContext", () => ({
 }));
 
 vi.mock("../../src/components/Header", () => ({
-  Header: ({ mobileLeft }: { mobileLeft?: React.ReactNode }) => React.createElement("div", null, "Header", mobileLeft),
+  Header: ({ mobileLeft }: { mobileLeft?: React.ReactNode }) =>
+    React.createElement("div", null, "Header", mobileLeft),
 }));
 vi.mock("../../src/components/CommandPalette", () => ({
   CommandPalette: () => React.createElement("div", null, "CommandPalette"),
@@ -147,7 +148,7 @@ describe("app startup routing (e2e)", () => {
   });
 
   it("renders chat screen when startup state is ready", async () => {
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree = undefined as unknown as TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(App));
     });
@@ -187,7 +188,7 @@ describe("app startup routing (e2e)", () => {
       retryStartup: vi.fn(),
     });
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree = undefined as unknown as TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(App));
     });
@@ -210,7 +211,7 @@ describe("app startup routing (e2e)", () => {
   it("uses mobile chat drawers on narrow viewports", async () => {
     setViewportWidth(390);
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree = undefined as unknown as TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(App));
     });
@@ -260,7 +261,7 @@ describe("app startup routing (e2e)", () => {
     mockIsLifoPopoutMode.mockReturnValue(true);
     window.history.pushState({}, "", "/lifo?popout=lifo");
 
-    let tree: TestRenderer.ReactTestRenderer;
+    let tree = undefined as unknown as TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(App));
     });

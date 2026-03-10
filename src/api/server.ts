@@ -138,6 +138,7 @@ import {
 import { handleBugReportRoutes } from "./bug-report-routes";
 import { handleCharacterRoutes } from "./character-routes";
 import { type CloudRouteState, handleCloudRoute } from "./cloud-routes";
+import { handleCloudCompatRoute } from "./cloud-compat-routes";
 import { handleCloudStatusRoutes } from "./cloud-status-routes";
 import {
   extractAnthropicSystemAndLastUser,
@@ -11758,6 +11759,16 @@ async function handleRequest(
 
   // ── Cloud routes (/api/cloud/*) ─────────────────────────────────────────
   if (pathname.startsWith("/api/cloud/")) {
+    // Compat proxy routes — transparent proxy to Eliza Cloud v2 /api/compat/*
+    const compatHandled = await handleCloudCompatRoute(
+      req,
+      res,
+      pathname,
+      method,
+      { config: state.config },
+    );
+    if (compatHandled) return;
+
     const cloudState: CloudRouteState = {
       config: state.config,
       cloudManager: state.cloudManager,

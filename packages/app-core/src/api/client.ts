@@ -1195,6 +1195,52 @@ export interface CloudLoginPollResponse {
   error?: string;
 }
 
+// Cloud Compat (Eliza Cloud v2 thin-client types)
+export interface CloudCompatAgent {
+  agent_id: string;
+  agent_name: string;
+  node_id: string | null;
+  container_id: string | null;
+  headscale_ip: string | null;
+  bridge_url: string | null;
+  web_ui_url: string | null;
+  status: string;
+  agent_config: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  containerUrl: string;
+  webUiUrl: string | null;
+  database_status: string;
+  error_message: string | null;
+  last_heartbeat_at: string | null;
+}
+export interface CloudCompatAgentStatus {
+  status: string;
+  lastHeartbeat: string | null;
+  bridgeUrl: string | null;
+  webUiUrl: string | null;
+  currentNode: string | null;
+  suspendedReason: string | null;
+  databaseStatus: string;
+}
+export interface CloudCompatJob {
+  jobId: string;
+  type: string;
+  status: "queued" | "processing" | "completed" | "failed" | "retrying";
+  data: Record<string, unknown>;
+  result: Record<string, unknown> | null;
+  error: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  retryCount: number;
+  id: string;
+  name: string;
+  state: string;
+  created_on: string;
+  completed_on: string | null;
+}
+
 // Skills Marketplace
 export interface SkillMarketplaceResult {
   id: string;
@@ -3198,6 +3244,133 @@ export class MiladyClient {
   }
   async cloudDisconnect(): Promise<{ ok: boolean }> {
     return this.fetch("/api/cloud/disconnect", { method: "POST" });
+  }
+
+  // Cloud Compat (Eliza Cloud v2 thin-client endpoints)
+
+  /** List all cloud-hosted agents for the authenticated user. */
+  async getCloudCompatAgents(): Promise<{
+    success: boolean;
+    data: CloudCompatAgent[];
+  }> {
+    return this.fetch("/api/cloud/compat/agents");
+  }
+
+  /** Create a new cloud-hosted agent. */
+  async createCloudCompatAgent(opts: {
+    agentName: string;
+    agentConfig?: Record<string, unknown>;
+    environmentVars?: Record<string, string>;
+  }): Promise<{
+    success: boolean;
+    data: {
+      agentId: string;
+      agentName: string;
+      jobId: string;
+      status: string;
+      nodeId: string | null;
+      message: string;
+    };
+  }> {
+    return this.fetch("/api/cloud/compat/agents", {
+      method: "POST",
+      body: JSON.stringify(opts),
+    });
+  }
+
+  /** Get a specific cloud-hosted agent by ID. */
+  async getCloudCompatAgent(agentId: string): Promise<{
+    success: boolean;
+    data: CloudCompatAgent;
+  }> {
+    return this.fetch(`/api/cloud/compat/agents/${encodeURIComponent(agentId)}`);
+  }
+
+  /** Delete a cloud-hosted agent. */
+  async deleteCloudCompatAgent(agentId: string): Promise<{
+    success: boolean;
+    data: { jobId: string; status: string; message: string };
+  }> {
+    return this.fetch(
+      `/api/cloud/compat/agents/${encodeURIComponent(agentId)}`,
+      { method: "DELETE" },
+    );
+  }
+
+  /** Get status of a cloud-hosted agent. */
+  async getCloudCompatAgentStatus(agentId: string): Promise<{
+    success: boolean;
+    data: CloudCompatAgentStatus;
+  }> {
+    return this.fetch(
+      `/api/cloud/compat/agents/${encodeURIComponent(agentId)}/status`,
+    );
+  }
+
+  /** Get logs from a cloud-hosted agent. */
+  async getCloudCompatAgentLogs(
+    agentId: string,
+    tail = 100,
+  ): Promise<{ success: boolean; data: string }> {
+    return this.fetch(
+      `/api/cloud/compat/agents/${encodeURIComponent(agentId)}/logs?tail=${tail}`,
+    );
+  }
+
+  /** Restart a cloud-hosted agent. */
+  async restartCloudCompatAgent(agentId: string): Promise<{
+    success: boolean;
+    data: { jobId: string; status: string; message: string };
+  }> {
+    return this.fetch(
+      `/api/cloud/compat/agents/${encodeURIComponent(agentId)}/restart`,
+      { method: "POST" },
+    );
+  }
+
+  /** Suspend a cloud-hosted agent. */
+  async suspendCloudCompatAgent(agentId: string): Promise<{
+    success: boolean;
+    data: { jobId: string; status: string; message: string };
+  }> {
+    return this.fetch(
+      `/api/cloud/compat/agents/${encodeURIComponent(agentId)}/suspend`,
+      { method: "POST" },
+    );
+  }
+
+  /** Resume a cloud-hosted agent. */
+  async resumeCloudCompatAgent(agentId: string): Promise<{
+    success: boolean;
+    data: { jobId: string; status: string; message: string };
+  }> {
+    return this.fetch(
+      `/api/cloud/compat/agents/${encodeURIComponent(agentId)}/resume`,
+      { method: "POST" },
+    );
+  }
+
+  /** Get cloud availability (capacity info). */
+  async getCloudCompatAvailability(): Promise<{
+    success: boolean;
+    data: {
+      totalSlots: number;
+      usedSlots: number;
+      availableSlots: number;
+      acceptingNewAgents: boolean;
+    };
+  }> {
+    return this.fetch("/api/cloud/compat/availability");
+  }
+
+  /** Poll a cloud job status by job ID. */
+  async getCloudCompatJobStatus(jobId: string): Promise<{
+    success: boolean;
+    data: CloudCompatJob;
+  }> {
+    return this.fetch(
+      `/api/cloud/compat/jobs/${encodeURIComponent(jobId)}`,
+    );
   }
 
   // Apps & Registry

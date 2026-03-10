@@ -291,6 +291,7 @@ describe("pages navigation smoke (e2e)", () => {
       setUiShellMode: vi.fn(),
       uiLanguage: "en",
       agentStatus: { state: "running", agentName: "Milady" },
+      loadDropStatus: vi.fn(),
       unreadConversations: new Set(),
       activeGameViewerUrl: null,
       gameOverlayEnabled: false,
@@ -317,7 +318,7 @@ describe("pages navigation smoke (e2e)", () => {
     });
     const renderedTree = requireTree(tree);
 
-    const expectedByPrimaryTab: Partial<Record<Tab, string>> = {
+    const expectedByPrimaryTab: Record<string, string> = {
       chat: "ChatView Ready",
       companion: "CompanionView Ready",
       stream: "StreamView Ready",
@@ -494,6 +495,7 @@ describe("pages navigation smoke (e2e)", () => {
         setUiShellMode: vi.fn(),
         uiLanguage: "en",
         agentStatus: { state: "running", agentName: "Milady" },
+        loadDropStatus: vi.fn(),
         unreadConversations: new Set(),
         activeGameViewerUrl: null,
         gameOverlayEnabled: false,
@@ -508,7 +510,7 @@ describe("pages navigation smoke (e2e)", () => {
       Object.assign(state, entry.patch);
       mockUseApp.mockImplementation(() => state);
 
-      let tree: TestRenderer.ReactTestRenderer;
+      let tree = undefined as unknown as TestRenderer.ReactTestRenderer;
       await act(async () => {
         tree = TestRenderer.create(React.createElement(App));
       });

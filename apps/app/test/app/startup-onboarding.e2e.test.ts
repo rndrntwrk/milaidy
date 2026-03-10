@@ -438,40 +438,38 @@ describe("app startup onboarding flow (e2e)", () => {
   });
 
   it("progresses through onboarding and lands in chat", async () => {
-    let tree: TestRenderer.ReactTestRenderer | null = null;
+    let tree = undefined as unknown as TestRenderer.ReactTestRenderer;
 
     await act(async () => {
       tree = TestRenderer.create(React.createElement(App));
     });
-    if (!tree) throw new Error("failed to render App");
-    const renderedTree = tree;
 
     for (let i = 0; i < 20 && !state.onboardingComplete; i += 1) {
       if (state.onboardingStep === "setupMode") {
         state.onboardingSetupMode = "quick";
-        await rerender(renderedTree);
+        await rerender(tree);
       }
 
       if (state.onboardingStep === "llmProvider") {
         state.onboardingProvider = "ollama";
         // Mock api key requirement bypassing logic or ensure valid state
         state.onboardingApiKey = "test-key";
-        await rerender(renderedTree);
+        await rerender(tree);
       }
 
       if (state.onboardingStep === "permissions") {
-        clickButton(renderedTree, "permissions-continue");
+        clickButton(tree, "permissions-continue");
       } else {
-        clickButton(renderedTree, "next");
+        clickButton(tree, "next");
       }
-      await rerender(renderedTree);
+      await rerender(tree);
     }
 
     expect(state.onboardingComplete).toBe(true);
 
-    const renderedText = renderedTree.root
+    const renderedText = tree.root
       .findAllByType("div")
-      .map((node) => node.children.join(""))
+      .map((node: { children: (string | object)[] }) => node.children.join(""))
       .join("\n");
 
     expect(renderedText).toContain("ChatView");

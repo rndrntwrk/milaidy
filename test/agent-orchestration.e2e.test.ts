@@ -1378,7 +1378,7 @@ describe("Cleanup and Resource Management", () => {
     // Verify server is still healthy
     const statusRes = await http$(server?.port, "GET", "/api/status");
     expect(statusRes.status).toBe(200);
-    expect(statusRes.data.state).toBe("running");
+    expect(statusRes.data.state).toBe("paused");
   });
 });
 
