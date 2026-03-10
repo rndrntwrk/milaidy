@@ -334,10 +334,10 @@ export function extractProStreamerStageScene(
   const backdropMetrics = measureBackdropMetrics(backdrop, stageCameraNode);
   const anchorMetadata = extractAnchorMetadata(avatarAnchor);
   const fullStageRetreat = Math.max(
-    anchorMetadata.shadowPlaneDepth ?? 0,
+    (anchorMetadata.shadowPlaneDepth ?? 0) * 1.75,
     Math.min(
-      backdropMetrics.cameraToPlaneDistance * 0.25,
-      anchorMetadata.targetHeightM * 2.5,
+      backdropMetrics.cameraToPlaneDistance * 0.6,
+      anchorMetadata.targetHeightM * 6,
     ),
   );
 
