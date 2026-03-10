@@ -61,6 +61,8 @@ try {
   // Step 4: Build plugins
   if (!skipPlugins) {
     console.log("\n=== Step 4/5: Build Capacitor plugins ===");
+    // Authoritative plugin list — must match apps/app/package.json plugin:build
+    // script. When adding or removing a plugin, update both locations.
     const plugins = [
       "gateway",
       "swabble",

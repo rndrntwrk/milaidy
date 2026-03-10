@@ -46,22 +46,35 @@ const SIGTERM_GRACE_MS = 5_000;
 // Diagnostic logging
 // ---------------------------------------------------------------------------
 
+/**
+ * Resolve the platform-appropriate config directory for Milady.
+ *   Windows: %APPDATA%\Milady  (e.g. C:\Users\X\AppData\Roaming\Milady)
+ *   macOS/Linux: ~/.config/Milady
+ *
+ * Exported for testability — accepts explicit overrides so tests don't need
+ * to mock process globals.
+ */
+export function resolveConfigDir(opts?: {
+  platform?: string;
+  appdata?: string;
+  homedir?: string;
+}): string {
+  const platform = opts?.platform ?? process.platform;
+  const homedir = opts?.homedir ?? os.homedir();
+  if (platform === "win32") {
+    const roaming =
+      opts?.appdata ?? process.env.APPDATA ?? path.join(homedir, "AppData", "Roaming");
+    return path.join(roaming, "Milady");
+  }
+  return path.join(homedir, ".config", "Milady");
+}
+
 let diagnosticLogPath: string | null = null;
 
 function getDiagnosticLogPath(): string {
   if (diagnosticLogPath !== null) return diagnosticLogPath;
   try {
-    // Use platform-standard config dir:
-    //   Windows: %APPDATA%\Milady  (e.g. C:\Users\X\AppData\Roaming\Milady)
-    //   macOS/Linux: ~/.config/Milady
-    const configDir =
-      process.platform === "win32"
-        ? path.join(
-            process.env.APPDATA ??
-              path.join(os.homedir(), "AppData", "Roaming"),
-            "Milady",
-          )
-        : path.join(os.homedir(), ".config", "Milady");
+    const configDir = resolveConfigDir();
     if (!fs.existsSync(configDir)) {
       fs.mkdirSync(configDir, { recursive: true });
     }

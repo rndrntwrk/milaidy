@@ -118,6 +118,15 @@ export class ScreenCaptureManager {
   /**
    * Override the capture target webview. Pass null to revert to mainWebview.
    * Used when a StreamView is popped out to a separate window.
+   *
+   * NOTE: Since screen capture was moved to native CLI tools on all platforms
+   * (screencapture on macOS, PowerShell on Windows, scrot/import on Linux),
+   * this override is intentionally inert — frame capture always captures the
+   * full screen, not a specific webview. The setter is retained because it is
+   * wired into the RPC schema (screencapture:setCaptureTarget) and called by
+   * StreamView popout logic. Removing it would require coordinated changes
+   * across rpc-schema.ts, rpc-handlers.ts, electrobun-bridge.ts, and the
+   * renderer.
    */
   setCaptureTarget(webview: Webview | null): void {
     this.captureTargetWebview = webview;
@@ -231,9 +240,12 @@ export class ScreenCaptureManager {
             stderr: "ignore",
           });
         } else if (platform === "win32") {
-          // Windows: use PowerShell with .NET System.Drawing to capture the screen
+          // Windows: use PowerShell with .NET to capture the primary screen.
+          // System.Windows.Forms is needed for Screen.PrimaryScreen.Bounds;
+          // System.Drawing provides Bitmap and CopyFromScreen.
           const psScript = `
 Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.Windows.Forms
 $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
 $bmp = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height)
 $gfx = [System.Drawing.Graphics]::FromImage($bmp)
