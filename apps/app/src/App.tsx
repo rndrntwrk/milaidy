@@ -199,7 +199,14 @@ export function App() {
   const agentStarting = agentStatus?.state === "starting";
 
   if (startupError) {
-    return <StartupFailureView error={startupError} onRetry={retryStartup} />;
+    return (
+      <StartupFailureView
+        error={startupError}
+        onRetry={retryStartup}
+        currentTheme={currentTheme}
+        agentName={agentStatus?.agentName}
+      />
+    );
   }
 
   if (onboardingLoading || agentStarting) {
