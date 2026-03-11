@@ -124,6 +124,35 @@ function triggerComposerResize() {
   }
 }
 
+function buildUseAppState(overrides: Record<string, unknown> = {}) {
+  return {
+    chatAvatarSpeaking: false,
+    conversationMessages: [
+      {
+        id: "assistant-1",
+        timestamp: Date.now(),
+        role: "assistant",
+        text: "Latest assistant reply",
+      },
+    ],
+    chatInput: "",
+    chatSending: false,
+    chatFirstTokenReceived: false,
+    agentStatus: { agentName: "rasp" },
+    chatPendingImages: [],
+    autonomousEvents: [],
+    activeGameDisplayName: "",
+    activeGameSandbox: "",
+    activeGameViewerUrl: "",
+    liveHeroSource: null,
+    liveLayoutMode: "camera-full",
+    setState: vi.fn(),
+    handleChatSend: vi.fn(async () => {}),
+    handleChatStop: vi.fn(async () => {}),
+    ...overrides,
+  };
+}
+
 describe("AgentCore layout", () => {
   beforeEach(() => {
     composerHeight = 200;
@@ -132,31 +161,7 @@ describe("AgentCore layout", () => {
       isListening: false,
       toggleListening: vi.fn(),
     });
-    mockUseApp.mockReturnValue({
-      chatAvatarSpeaking: false,
-      conversationMessages: [
-        {
-          id: "assistant-1",
-          timestamp: Date.now(),
-          role: "assistant",
-          text: "Latest assistant reply",
-        },
-      ],
-      chatInput: "",
-      chatSending: false,
-      chatFirstTokenReceived: false,
-      agentStatus: { agentName: "rasp" },
-      chatPendingImages: [],
-      autonomousEvents: [],
-      activeGameDisplayName: "",
-      activeGameSandbox: "",
-      activeGameViewerUrl: "",
-      liveHeroSource: null,
-      liveLayoutMode: "camera-full",
-      setState: vi.fn(),
-      handleChatSend: vi.fn(async () => {}),
-      handleChatStop: vi.fn(async () => {}),
-    });
+    mockUseApp.mockReturnValue(buildUseAppState());
 
     vi.stubGlobal("ResizeObserver", ResizeObserverMock);
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
@@ -238,40 +243,27 @@ describe("AgentCore layout", () => {
   });
 
   it("renders operator action blocks as pills instead of raw prompt text in the stage lane", () => {
-    mockUseApp.mockReturnValue({
-      chatAvatarSpeaking: false,
-      conversationMessages: [
-        {
-          id: "operator-action-1",
-          timestamp: Date.now(),
-          role: "user",
-          text: "internal prompt text that should not render",
-          blocks: [
-            {
-              type: "action-pill",
-              label: "Backflip",
-              kind: "avatar",
-              detail: "One-shot motion",
-            },
-          ],
-          source: "operator_action",
-        },
-      ],
-      chatInput: "",
-      chatSending: false,
-      chatFirstTokenReceived: false,
-      agentStatus: { agentName: "rasp" },
-      chatPendingImages: [],
-      autonomousEvents: [],
-      activeGameDisplayName: "",
-      activeGameSandbox: "",
-      activeGameViewerUrl: "",
-      liveHeroSource: null,
-      liveLayoutMode: "camera-full",
-      setState: vi.fn(),
-      handleChatSend: vi.fn(async () => {}),
-      handleChatStop: vi.fn(async () => {}),
-    });
+    mockUseApp.mockReturnValue(
+      buildUseAppState({
+        conversationMessages: [
+          {
+            id: "operator-action-1",
+            timestamp: Date.now(),
+            role: "user",
+            text: "internal prompt text that should not render",
+            blocks: [
+              {
+                type: "action-pill",
+                label: "Backflip",
+                kind: "avatar",
+                detail: "One-shot motion",
+              },
+            ],
+            source: "operator_action",
+          },
+        ],
+      }),
+    );
 
     act(() => {
       root?.render(React.createElement(AgentCore));
@@ -279,9 +271,128 @@ describe("AgentCore layout", () => {
 
     const timeline = container?.querySelector("[data-conversation-timeline]");
     const text = timeline?.textContent ?? "";
+    const pillEntry = container?.querySelector(
+      '[data-stage-entry-role="operator"][data-stage-entry-kind="action-pill"]',
+    );
 
+    expect(pillEntry).toBeTruthy();
     expect(text).toContain("Backflip");
     expect(text).toContain("One-shot motion");
     expect(text).not.toContain("internal prompt text that should not render");
+  });
+
+  it("collapses legacy operator-action messages into a chip with opt-in details", () => {
+    mockUseApp.mockReturnValue(
+      buildUseAppState({
+        conversationMessages: [
+          {
+            id: "operator-action-legacy-1",
+            timestamp: Date.now(),
+            role: "user",
+            text: "Open clip vault\ninternal prompt payload that should stay hidden",
+            source: "operator_action",
+          },
+        ],
+      }),
+    );
+
+    act(() => {
+      root?.render(React.createElement(AgentCore));
+    });
+
+    const chipEntry = container?.querySelector(
+      '[data-stage-entry-role="operator"][data-stage-entry-kind="action-chip"]',
+    ) as HTMLDivElement | null;
+    const detailsButton = chipEntry?.querySelector("button") as HTMLButtonElement | null;
+
+    expect(chipEntry).toBeTruthy();
+    expect(chipEntry?.textContent).toContain("Open clip vault");
+    expect(chipEntry?.textContent).not.toContain(
+      "internal prompt payload that should stay hidden",
+    );
+
+    act(() => {
+      detailsButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(chipEntry?.textContent).toContain(
+      "internal prompt payload that should stay hidden",
+    );
+    expect(container?.querySelector("[data-stage-entry-detail]")).toBeTruthy();
+  });
+
+  it("renders operator and assistant bubbles plus centered system events with stable selectors", () => {
+    mockUseApp.mockReturnValue(
+      buildUseAppState({
+        conversationMessages: [
+          {
+            id: "assistant-1",
+            timestamp: 10,
+            role: "assistant",
+            text: "Assistant reply",
+          },
+          {
+            id: "user-1",
+            timestamp: 20,
+            role: "user",
+            text: "Operator message",
+          },
+        ],
+        autonomousEvents: [
+          {
+            eventId: "evt-1",
+            ts: 30,
+            stream: "action",
+            payload: {
+              actionName: "Switch Scene",
+              status: "Live scene updated.",
+            },
+          },
+        ],
+      }),
+    );
+
+    act(() => {
+      root?.render(React.createElement(AgentCore));
+    });
+
+    const assistantBubble = container?.querySelector(
+      '[data-stage-entry-role="assistant"][data-stage-entry-kind="bubble"]',
+    );
+    const operatorBubble = container?.querySelector(
+      '[data-stage-entry-role="operator"][data-stage-entry-kind="bubble"]',
+    );
+    const systemEvent = container?.querySelector(
+      '[data-stage-entry-role="system"][data-stage-entry-kind="system-event"]',
+    );
+
+    expect(assistantBubble?.textContent).toContain("Assistant reply");
+    expect(operatorBubble?.textContent).toContain("Operator message");
+    expect(systemEvent?.textContent).toContain("Executing Switch Scene");
+    expect(systemEvent?.textContent).toContain("Live scene updated.");
+  });
+
+  it("renders the same timeline entry set without breakpoint-driven hiding", () => {
+    mockUseApp.mockReturnValue(
+      buildUseAppState({
+        conversationMessages: Array.from({ length: 5 }, (_, index) => ({
+          id: `message-${index}`,
+          timestamp: index + 1,
+          role: index % 2 === 0 ? "assistant" : "user",
+          text: `Message ${index + 1}`,
+        })),
+      }),
+    );
+
+    act(() => {
+      root?.render(React.createElement(AgentCore));
+    });
+
+    const stageEntries = Array.from(
+      container?.querySelectorAll("[data-stage-entry-role][data-stage-entry-kind]") ?? [],
+    ) as HTMLDivElement[];
+
+    expect(stageEntries).toHaveLength(5);
+    expect(stageEntries.every((entry) => !entry.className.includes("hidden"))).toBe(true);
   });
 });

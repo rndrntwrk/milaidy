@@ -24,6 +24,7 @@ import {
 import { Sheet } from "./ui/Sheet.js";
 import { Button } from "./ui/Button.js";
 import { Badge } from "./ui/Badge.js";
+import { Card } from "./ui/Card.js";
 import {
   ActivityIcon,
   ChevronDownIcon,
@@ -56,6 +57,7 @@ export function MiladyOsDashboard() {
     hudSurface,
     hudControlSection,
     hudAssetSection,
+    actionLogInlineNotice,
     chatSending,
     chatFirstTokenReceived,
     autonomousEvents,
@@ -75,6 +77,7 @@ export function MiladyOsDashboard() {
     closeHudSurface,
     runQuickLayer,
     openGoLiveModal,
+    dismissActionLogInlineNotice,
     playAvatarEmote,
     stopAvatarEmote,
     setState,
@@ -98,11 +101,13 @@ export function MiladyOsDashboard() {
   const activeSurface =
     hudSurface === "control-stack" ? "control-stack" : dockSurface;
   const executing = chatSending || chatFirstTokenReceived;
-  const actionBadge = executing
-    ? "•"
-    : safeAutonomousEvents.length > 0
-      ? `${Math.min(safeAutonomousEvents.length, 9)}`
-      : undefined;
+  const actionBadge = actionLogInlineNotice
+    ? "!"
+    : executing
+      ? "•"
+      : safeAutonomousEvents.length > 0
+        ? `${Math.min(safeAutonomousEvents.length, 9)}`
+        : undefined;
   const awaitingApproval = (agentStatus?.state ?? "").toLowerCase().includes("approval");
   const missionBadge = awaitingApproval
     ? "!"
@@ -163,9 +168,63 @@ export function MiladyOsDashboard() {
           ? "Manual motion"
           : "Auto motion";
 
+  const renderActionLogInlineNotice = () => {
+    if (!actionLogInlineNotice) return null;
+    const toneClasses =
+      actionLogInlineNotice.tone === "warning"
+        ? "border-warn/24 bg-warn/10 text-warn"
+        : actionLogInlineNotice.tone === "error"
+          ? "border-danger/24 bg-danger/10 text-danger"
+          : actionLogInlineNotice.tone === "success"
+            ? "border-ok/24 bg-ok/10 text-ok"
+            : "border-accent/24 bg-accent/10 text-accent";
+
+    return (
+      <Card
+        className={`rounded-[22px] border px-4 py-3 shadow-none ${toneClasses}`}
+        data-action-log-inline-notice
+      >
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-[10px] uppercase tracking-[0.22em] opacity-70">
+              {actionLogInlineNotice.title ?? "Action Log"}
+            </div>
+            <div className="mt-1 text-sm leading-relaxed">
+              {actionLogInlineNotice.message}
+            </div>
+            {actionLogInlineNotice.actionLabel ? (
+              <div className="mt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full"
+                  data-action-log-inline-cta
+                  onClick={() => setRailDisplay("action-log", "expanded")}
+                >
+                  {actionLogInlineNotice.actionLabel}
+                </Button>
+              </div>
+            ) : null}
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="rounded-full"
+            aria-label="Dismiss action log notice"
+            onClick={dismissActionLogInlineNotice}
+          >
+            <CloseIcon className="h-4 w-4" />
+          </Button>
+        </div>
+      </Card>
+    );
+  };
+
   const renderActionLogLiveDock = () => (
     <div
-      className="border-b border-white/8 px-4 py-4"
+      className="border-b border-white/8 pb-3.5"
       data-action-log-live-controls
     >
       <div className="flex items-start justify-between gap-3">
@@ -181,7 +240,7 @@ export function MiladyOsDashboard() {
           Pinned
         </Badge>
       </div>
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-2.5 flex flex-wrap gap-2">
         {liveTrayActions.map((action) => {
           const status = quickLayerStatuses[action.id];
           const isGoLiveAction = action.id === "go-live";
@@ -220,7 +279,7 @@ export function MiladyOsDashboard() {
         ) : null}
       </div>
 
-      <div className="mt-4 border-t border-white/8 pt-4">
+      <div className="mt-3.5 border-t border-white/8 pt-3.5">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.22em] text-white/46">
@@ -246,7 +305,7 @@ export function MiladyOsDashboard() {
           )}
           <span>{avatarMotionLabel}</span>
         </div>
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-2.5 flex flex-wrap gap-2">
           {pinnedAvatarActions.map((action) => {
             const ActionIcon = getAvatarEmoteIcon(action);
             const isActive = activeAvatarEmoteId === action.id;
@@ -280,7 +339,7 @@ export function MiladyOsDashboard() {
           </Button>
         </div>
         {moreAvatarActions.size > 0 ? (
-          <div className="mt-3">
+          <div className="mt-2.5">
             <Button
               type="button"
               variant="ghost"
@@ -296,7 +355,7 @@ export function MiladyOsDashboard() {
               More Motions
             </Button>
             {avatarActionsExpanded ? (
-              <div className="mt-3 space-y-3">
+              <div className="mt-2.5 space-y-2.5">
                 {Array.from(moreAvatarActions.entries()).map(([group, motions]) => {
                   const GroupIcon = AVATAR_EMOTE_GROUP_ICONS[group];
                   return (
@@ -525,12 +584,18 @@ export function MiladyOsDashboard() {
         compact={viewportMode === "desktop"}
         className={
           viewportMode === "desktop"
-            ? "w-[min(22rem,92vw)] sm:top-[10vh] sm:bottom-[10vh] sm:h-auto sm:max-h-none"
+            ? "w-[min(22rem,92vw)] sm:top-[10vh] sm:bottom-auto sm:h-[80vh] sm:max-h-[80vh]"
             : "h-[80dvh]"
         }
       >
-        <div className="pro-streamer-summary-sheet flex h-full min-h-0 flex-col overflow-hidden">
-          <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-white/8 bg-[rgba(9,13,20,0.96)] px-4 py-3 backdrop-blur-xl">
+        <div
+          className="pro-streamer-summary-sheet flex h-full min-h-0 flex-col overflow-hidden"
+          data-action-log-shell
+        >
+          <div
+            className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-white/8 bg-[rgba(9,13,20,0.96)] px-4 py-3 backdrop-blur-xl"
+            data-action-log-header
+          >
             <div className="text-sm font-medium text-white/90">Action Log</div>
             <Button
               variant="ghost"
@@ -543,7 +608,8 @@ export function MiladyOsDashboard() {
             </Button>
           </div>
           <div className="shrink-0 border-b border-white/8" data-action-log-pinned-region>
-            <div className="max-h-[min(38vh,28rem)] overflow-y-auto overscroll-contain">
+            <div className="max-h-[min(38vh,28rem)] overflow-y-auto overscroll-contain px-4 py-3">
+              <div data-action-log-inline-notice-slot>{renderActionLogInlineNotice()}</div>
               {renderActionLogLiveDock()}
             </div>
           </div>

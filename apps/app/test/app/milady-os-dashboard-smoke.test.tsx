@@ -54,10 +54,24 @@ import { MiladyOsDashboard } from "../../src/components/MiladyOsDashboard";
 
 function renderWithTab(
   tab: string,
-  options?: { leftRailState?: "collapsed" | "peek" | "expanded" },
+  options?: {
+    appContextOverrides?: Record<string, unknown>;
+    leftRailState?: "collapsed" | "peek" | "expanded";
+    windowWidth?: number;
+  },
 ) {
+  const previousInnerWidth = window.innerWidth;
+  if (options?.windowWidth) {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      writable: true,
+      value: options.windowWidth,
+    });
+  }
   const runQuickLayer = vi.fn(async () => {});
   const openGoLiveModal = vi.fn();
+  const dismissActionLogInlineNotice = vi.fn();
+  const setRailDisplay = vi.fn();
   mockUseApp.mockReturnValue({
     tab,
     dockSurface:
@@ -73,6 +87,7 @@ function renderWithTab(
     hudSurface: tab === "settings" ? "control-stack" : "none",
     hudControlSection: tab === "settings" ? "settings" : null,
     hudAssetSection: tab === "character" ? "character" : null,
+    actionLogInlineNotice: null,
     chatSending: false,
     chatFirstTokenReceived: false,
     autonomousEvents: [],
@@ -96,21 +111,30 @@ function renderWithTab(
     closeHudSurface: vi.fn(),
     runQuickLayer,
     openGoLiveModal,
+    dismissActionLogInlineNotice,
     availableEmotes: [],
     activeAvatarEmoteId: null,
     avatarMotionMode: "idle",
     playAvatarEmote: vi.fn(async () => {}),
     stopAvatarEmote: vi.fn(),
     setState: vi.fn(),
-    setRailDisplay: vi.fn(),
+    setRailDisplay,
     collapseRails: vi.fn(),
+    ...options?.appContextOverrides,
   });
   let tree: TestRenderer.ReactTestRenderer | null = null;
   act(() => {
     tree = TestRenderer.create(React.createElement(MiladyOsDashboard));
   });
+  if (options?.windowWidth) {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      writable: true,
+      value: previousInnerWidth,
+    });
+  }
   if (!tree) throw new Error("failed to render dashboard");
-  return { tree, runQuickLayer, openGoLiveModal };
+  return { tree, runQuickLayer, openGoLiveModal, dismissActionLogInlineNotice, setRailDisplay };
 }
 
 function textOf(node: TestRenderer.ReactTestInstance): string {
@@ -157,10 +181,73 @@ describe("MiladyOsDashboard", () => {
     expect(openGoLiveModal).toHaveBeenCalled();
     expect(runQuickLayer).not.toHaveBeenCalledWith("go-live");
     expect(
+      tree.root.findByProps({ "data-action-log-shell": true }),
+    ).toBeDefined();
+    expect(
+      tree.root.findByProps({ "data-action-log-header": true }),
+    ).toBeDefined();
+    expect(
       tree.root.findByProps({ "data-action-log-pinned-region": true }),
     ).toBeDefined();
     expect(
       tree.root.findByProps({ "data-action-log-feed-region": true }),
     ).toBeDefined();
+  });
+
+  it("keeps the Action Log shell on an explicit desktop 80vh rail", () => {
+    const { tree } = renderWithTab("settings", {
+      leftRailState: "expanded",
+      windowWidth: 1440,
+    });
+
+    const sheet = tree.root.findByProps({ "data-sheet-side": "left" });
+    expect(sheet.props.className).toContain("sm:h-[80vh]");
+    expect(sheet.props.className).toContain("sm:top-[10vh]");
+  });
+
+  it("keeps the Action Log shell on an explicit mobile 80dvh sheet", () => {
+    const { tree } = renderWithTab("settings", {
+      leftRailState: "expanded",
+      windowWidth: 390,
+    });
+
+    const sheet = tree.root.findByProps({ "data-sheet-side": "bottom" });
+    expect(sheet.props.className).toContain("h-[80dvh]");
+  });
+
+  it("renders and dismisses the persistent Action Log inline notice", () => {
+    const actionLogInlineNotice = {
+      id: "notice-1",
+      tone: "warning",
+      title: "Play Games",
+      message: "Game launched, but stream feed attach needs follow-up in stream controls.",
+      actionLabel: "Review live controls",
+    };
+    const {
+      tree,
+      dismissActionLogInlineNotice,
+      setRailDisplay,
+    } = renderWithTab("settings", {
+      appContextOverrides: {
+        actionLogInlineNotice,
+      },
+      leftRailState: "expanded",
+    });
+    expect(
+      tree.root.findByProps({ "data-action-log-inline-notice": true }),
+    ).toBeDefined();
+    expect(textOf(tree.root)).toContain(
+      "Game launched, but stream feed attach needs follow-up",
+    );
+
+    act(() => {
+      tree.root.findByProps({ "data-action-log-inline-cta": true }).props.onClick();
+    });
+    expect(setRailDisplay).toHaveBeenCalledWith("action-log", "expanded");
+
+    act(() => {
+      tree.root.findByProps({ "aria-label": "Dismiss action log notice" }).props.onClick();
+    });
+    expect(dismissActionLogInlineNotice).toHaveBeenCalled();
   });
 });

@@ -21,6 +21,139 @@ import {
   ThreadsIcon,
 } from "./ui/Icons.js";
 
+type OperatorActionBlock = Extract<ContentBlock, { type: "action-pill" }>;
+
+type TimelineMessageEntry = {
+  id: string;
+  type: "message";
+  timestampMs: number;
+  role: "user" | "assistant";
+  text: string;
+  blocks?: ContentBlock[];
+  source?: string;
+};
+
+type TimelineSystemEntry = {
+  id: string;
+  type: "system";
+  timestampMs: number;
+  title: string;
+  detail: string;
+  variant: "accent" | "success" | "warning" | "danger" | "outline";
+  timestamp: string;
+};
+
+type TimelineEntry = TimelineMessageEntry | TimelineSystemEntry;
+
+type StageEntryRole = "operator" | "assistant" | "system";
+type StageEntryKind = "bubble" | "action-pill" | "action-chip" | "system-event";
+
+const STAGE_ENTRY_MAX_WIDTH_CLASS =
+  "max-w-[82%] sm:max-w-[64%] lg:max-w-[38%] xl:max-w-[32%]";
+
+function getActionPillBlock(
+  blocks?: ContentBlock[],
+): OperatorActionBlock | undefined {
+  return blocks?.find(
+    (block): block is OperatorActionBlock => block.type === "action-pill",
+  );
+}
+
+function formatStageBubbleText(text: string) {
+  const trimmed = text.trim();
+  return trimmed.length > 0 ? trimmed : "...";
+}
+
+function getLegacyOperatorActionPreview(text: string) {
+  const normalized = text.replace(/\r\n?/g, "\n");
+  const nonEmptyLines = normalized
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  const label = nonEmptyLines[0] ?? "Operator action";
+
+  return {
+    label,
+    rawText: normalized.length > 0 ? normalized : label,
+    hasHiddenDetail: nonEmptyLines.length > 1,
+  };
+}
+
+function classifyStageEntry(entry: TimelineEntry): {
+  role: StageEntryRole;
+  kind: StageEntryKind;
+  actionBlock?: OperatorActionBlock;
+  legacyAction?: ReturnType<typeof getLegacyOperatorActionPreview>;
+} {
+  if (entry.type === "system") {
+    return {
+      role: "system",
+      kind: "system-event",
+    };
+  }
+
+  const actionBlock = entry.role === "user" ? getActionPillBlock(entry.blocks) : undefined;
+  if (actionBlock) {
+    return {
+      role: "operator",
+      kind: "action-pill",
+      actionBlock,
+    };
+  }
+
+  if (entry.role === "user" && entry.source === "operator_action") {
+    return {
+      role: "operator",
+      kind: "action-chip",
+      legacyAction: getLegacyOperatorActionPreview(entry.text),
+    };
+  }
+
+  return {
+    role: entry.role === "user" ? "operator" : "assistant",
+    kind: "bubble",
+  };
+}
+
+function LegacyOperatorActionChip({
+  preview,
+}: {
+  preview: ReturnType<typeof getLegacyOperatorActionPreview>;
+}) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  return (
+    <div className={`flex flex-col items-end gap-1.5 ${STAGE_ENTRY_MAX_WIDTH_CLASS}`}>
+      <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-white/12 bg-[linear-gradient(135deg,rgba(255,255,255,0.09),rgba(255,255,255,0.03))] px-3 py-1.5 text-[12px] font-medium text-white/90 shadow-[0_12px_30px_rgba(0,0,0,0.2)] backdrop-blur-xl">
+        <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/10 bg-black/24 text-white/72">
+          <OperatorIcon className="h-3 w-3" />
+        </span>
+        <span className="truncate">{preview.label}</span>
+      </div>
+      {preview.hasHiddenDetail ? (
+        <div className="flex flex-col items-end gap-1">
+          <button
+            type="button"
+            className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] uppercase tracking-[0.22em] text-white/54 transition hover:border-white/18 hover:text-white"
+            aria-expanded={detailsOpen}
+            onClick={() => setDetailsOpen((current) => !current)}
+          >
+            {detailsOpen ? "Hide Details" : "Details"}
+          </button>
+          {detailsOpen ? (
+            <div
+              className="w-full rounded-[18px] border border-white/10 bg-black/38 px-3 py-2 text-left text-[11px] leading-relaxed text-white/72 backdrop-blur-xl"
+              data-stage-entry-detail
+            >
+              {preview.rawText}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function AgentCore() {
   const COMPOSER_BOTTOM_OFFSET_PX = 16;
   const COMPOSER_CLEARANCE_BUFFER_PX = 24;
@@ -54,13 +187,13 @@ export function AgentCore() {
 
   const agentName = resolveAgentDisplayName(agentStatus?.agentName);
 
-  const timelineEntries = useMemo(() => {
+  const timelineEntries = useMemo<TimelineEntry[]>(() => {
     const messageEntries = conversationMessages.slice(-12).map((message) => ({
       id: message.id,
       type: "message" as const,
       timestampMs: message.timestamp,
       role: message.role,
-      text: message.text?.trim() || "...",
+      text: message.text ?? "",
       blocks: message.blocks,
       source: message.source,
     }));
@@ -211,16 +344,16 @@ export function AgentCore() {
                   </div>
                 </div>
               ) : (
-                timelineEntries.map((entry, index) => {
-                  const visibilityClass =
-                    index < timelineEntries.length - 4
-                      ? "hidden lg:flex"
-                      : index < timelineEntries.length - 2
-                        ? "hidden md:flex"
-                        : "flex";
+                timelineEntries.map((entry) => {
+                  const stageEntry = classifyStageEntry(entry);
                   if (entry.type === "system") {
                     return (
-                      <div key={entry.id} className={`${visibilityClass} w-full justify-center`}>
+                      <div
+                        key={entry.id}
+                        className="flex w-full justify-center"
+                        data-stage-entry-role={stageEntry.role}
+                        data-stage-entry-kind={stageEntry.kind}
+                      >
                         <div className="max-w-[min(44rem,88vw)] rounded-full border border-white/10 bg-black/36 px-4 py-2.5 text-center backdrop-blur-xl">
                           <div className="inline-flex items-center gap-2 text-[10px] uppercase tracking-[0.22em] text-white/54">
                             <SystemIcon className="h-4 w-4" />
@@ -235,32 +368,30 @@ export function AgentCore() {
                     );
                   }
 
-                  const isOperator = entry.role === "user";
-                  const actionBlock = entry.blocks?.find(
-                    (block): block is Extract<ContentBlock, { type: "action-pill" }> =>
-                      block.type === "action-pill",
-                  );
-                  const renderOperatorActionPill =
-                    isOperator && actionBlock && entry.blocks?.length === 1;
+                  const isOperator = stageEntry.role === "operator";
                   return (
                     <div
                       key={entry.id}
-                      className={`${visibilityClass} w-full ${isOperator ? "justify-end" : "justify-start"}`}
+                      className={`flex w-full ${isOperator ? "justify-end" : "justify-start"}`}
+                      data-stage-entry-role={stageEntry.role}
+                      data-stage-entry-kind={stageEntry.kind}
                     >
-                      {renderOperatorActionPill ? (
-                        <div className="flex max-w-[82%] flex-col items-end sm:max-w-[64%] lg:max-w-[38%] xl:max-w-[32%]">
+                      {stageEntry.kind === "action-pill" && stageEntry.actionBlock ? (
+                        <div className={`flex flex-col items-end ${STAGE_ENTRY_MAX_WIDTH_CLASS}`}>
                           <OperatorActionPill
-                            label={actionBlock.label}
-                            kind={actionBlock.kind}
-                            detail={actionBlock.detail}
+                            label={stageEntry.actionBlock.label}
+                            kind={stageEntry.actionBlock.kind}
+                            detail={stageEntry.actionBlock.detail}
                             compact
                             showEyebrow={false}
-                            detailClassName="text-[10px] text-white/50"
+                            detailClassName="text-[10px] leading-snug text-white/46"
                           />
                         </div>
+                      ) : stageEntry.kind === "action-chip" && stageEntry.legacyAction ? (
+                        <LegacyOperatorActionChip preview={stageEntry.legacyAction} />
                       ) : (
                         <div
-                          className={`w-fit max-w-[82%] rounded-[26px] border px-4 py-3 backdrop-blur-xl sm:max-w-[64%] lg:max-w-[38%] xl:max-w-[32%] ${
+                          className={`w-fit ${STAGE_ENTRY_MAX_WIDTH_CLASS} rounded-[26px] border px-4 py-3 backdrop-blur-xl ${
                             isOperator
                               ? "border-white/14 bg-white/[0.08] text-white"
                               : "border-white/10 bg-black/40 text-white/88"
@@ -284,7 +415,7 @@ export function AgentCore() {
                             )}
                           </div>
                           <div className="whitespace-pre-wrap text-[15px] leading-relaxed">
-                            {entry.text}
+                            {formatStageBubbleText(entry.text)}
                           </div>
                         </div>
                       )}
