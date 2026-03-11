@@ -733,13 +733,15 @@ function SearchableSelectInner({
           {/* Options list */}
           <div className="overflow-y-auto flex-1">
             {!props.required && (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
                 className={cn(
-                  "w-full px-3 py-2 text-left text-xs italic transition-colors",
+                  "h-auto w-full justify-start whitespace-normal rounded-none px-3 py-2 text-left text-xs italic transition-colors",
                   isMinimalMode(props.uiMode)
-                    ? "text-white/52 hover:bg-white/[0.05]"
-                    : "text-[var(--muted)] hover:bg-[var(--bg-hover)]",
+                    ? "text-white/52 hover:bg-white/[0.05] hover:text-white/72"
+                    : "text-[var(--muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]",
                 )}
                 onClick={() => {
                   props.onChange("");
@@ -750,7 +752,7 @@ function SearchableSelectInner({
                 }}
               >
                 -- none --
-              </button>
+              </Button>
             )}
             {filtered.length === 0 && (
               <div className="px-3 py-3 text-center text-xs text-white/46">
@@ -758,14 +760,16 @@ function SearchableSelectInner({
               </div>
             )}
             {filtered.map((opt) => (
-              <button
+              <Button
                 key={opt.value}
                 type="button"
+                variant="ghost"
+                size="sm"
                 className={cn(
-                  "w-full px-3 py-2 text-left text-xs transition-colors",
+                  "h-auto w-full justify-start whitespace-normal rounded-none px-3 py-2 text-left text-xs transition-colors",
                   isMinimalMode(props.uiMode)
-                    ? "hover:bg-white/[0.05]"
-                    : "hover:bg-[var(--bg-hover)]",
+                    ? "hover:bg-white/[0.05] hover:text-white"
+                    : "hover:bg-[var(--bg-hover)] hover:text-[var(--text)]",
                   opt.value === effectiveValue
                     ? isMinimalMode(props.uiMode)
                       ? "bg-white/[0.08] font-medium text-white"
@@ -787,7 +791,7 @@ function SearchableSelectInner({
                     {opt.description}
                   </span>
                 )}
-              </button>
+              </Button>
             ))}
           </div>
           <div
@@ -1052,14 +1056,16 @@ function MultiselectFieldInner({ fp: props }: { fp: FieldRenderProps }) {
             >
               {opt.label}
               {!props.readonly && (
-                <button
+                <Button
                   type="button"
-                  className="inline-flex items-center justify-center w-3.5 h-3.5 text-[10px] rounded-full hover:bg-[var(--accent)] hover:text-white transition-colors cursor-pointer"
+                  variant="ghost"
+                  size="icon"
+                  className="h-3.5 w-3.5 rounded-full border-none bg-transparent p-0 text-[10px] hover:bg-[var(--accent)] hover:text-white"
                   onClick={() => remove(opt.value)}
                   aria-label={`Remove ${opt.label}`}
                 >
                   <CloseIcon className="h-3 w-3" />
-                </button>
+                </Button>
               )}
             </Badge>
           ))}
@@ -1234,26 +1240,30 @@ function ArrayItem({
     <div className="flex items-center gap-1">
       {!readonly && (
         <div className="flex flex-col shrink-0">
-          <button
+          <Button
             type="button"
-            className="px-1 py-0 text-[10px] leading-tight text-[var(--muted)] cursor-pointer hover:text-[var(--text)] disabled:opacity-30 disabled:cursor-not-allowed"
+            variant="ghost"
+            size="icon"
+            className="h-auto w-auto rounded-none border-none bg-transparent px-1 py-0 text-[10px] leading-tight text-[var(--muted)] hover:bg-transparent hover:text-[var(--text)] disabled:opacity-30"
             onClick={onMoveUp}
             disabled={index === 0}
             title="Move up"
             aria-label="Move up"
           >
             <ChevronUpIcon className="h-3.5 w-3.5" />
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="px-1 py-0 text-[10px] leading-tight text-[var(--muted)] cursor-pointer hover:text-[var(--text)] disabled:opacity-30 disabled:cursor-not-allowed"
+            variant="ghost"
+            size="icon"
+            className="h-auto w-auto rounded-none border-none bg-transparent px-1 py-0 text-[10px] leading-tight text-[var(--muted)] hover:bg-transparent hover:text-[var(--text)] disabled:opacity-30"
             onClick={onMoveDown}
             disabled={index === total - 1}
             title="Move down"
             aria-label="Move down"
           >
             <ChevronDownIcon className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         </div>
       )}
       <Input
