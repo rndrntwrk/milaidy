@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { client, type VoiceConfig } from "../api-client.js";
+import { client, type ContentBlock, type VoiceConfig } from "../api-client.js";
 import { useApp } from "../AppContext.js";
 import { useVoiceChat } from "../hooks/useVoiceChat.js";
 import { ProStreamerStageComposition } from "./ProStreamerStageComposition.js";
+import { OperatorActionPill } from "./shared/OperatorActionPill.js";
 import { Badge } from "./ui/Badge.js";
 import { Button } from "./ui/Button.js";
 import { ScrollArea } from "./ui/ScrollArea.js";
@@ -60,6 +61,8 @@ export function AgentCore() {
       timestampMs: message.timestamp,
       role: message.role,
       text: message.text?.trim() || "...",
+      blocks: message.blocks,
+      source: message.source,
     }));
 
     const actionEntries = buildPublicActionEntries(autonomousEvents)
@@ -233,39 +236,58 @@ export function AgentCore() {
                   }
 
                   const isOperator = entry.role === "user";
+                  const actionBlock = entry.blocks?.find(
+                    (block): block is Extract<ContentBlock, { type: "action-pill" }> =>
+                      block.type === "action-pill",
+                  );
+                  const renderOperatorActionPill =
+                    isOperator && actionBlock && entry.blocks?.length === 1;
                   return (
                     <div
                       key={entry.id}
                       className={`${visibilityClass} w-full ${isOperator ? "justify-end" : "justify-start"}`}
                     >
-                      <div
-                        className={`w-fit max-w-[82%] rounded-[26px] border px-4 py-3 backdrop-blur-xl sm:max-w-[64%] lg:max-w-[38%] xl:max-w-[32%] ${
-                          isOperator
-                            ? "border-white/14 bg-white/[0.08] text-white"
-                            : "border-white/10 bg-black/40 text-white/88"
-                        }`}
-                      >
+                      {renderOperatorActionPill ? (
+                        <div className="flex max-w-[82%] flex-col items-end sm:max-w-[64%] lg:max-w-[38%] xl:max-w-[32%]">
+                          <OperatorActionPill
+                            label={actionBlock.label}
+                            kind={actionBlock.kind}
+                            detail={actionBlock.detail}
+                            compact
+                            showEyebrow={false}
+                            detailClassName="text-[10px] text-white/50"
+                          />
+                        </div>
+                      ) : (
                         <div
-                          className={`mb-2 flex items-center gap-2 text-[10px] uppercase tracking-[0.22em] text-white/48 ${
-                            isOperator ? "justify-end" : "justify-start"
+                          className={`w-fit max-w-[82%] rounded-[26px] border px-4 py-3 backdrop-blur-xl sm:max-w-[64%] lg:max-w-[38%] xl:max-w-[32%] ${
+                            isOperator
+                              ? "border-white/14 bg-white/[0.08] text-white"
+                              : "border-white/10 bg-black/40 text-white/88"
                           }`}
                         >
-                          {isOperator ? (
-                            <>
-                              <span>Operator</span>
-                              <OperatorIcon className="h-4 w-4" />
-                            </>
-                          ) : (
-                            <>
-                              <AgentIcon className="h-4 w-4" />
-                              <span>{agentName}</span>
-                            </>
-                          )}
+                          <div
+                            className={`mb-2 flex items-center gap-2 text-[10px] uppercase tracking-[0.22em] text-white/48 ${
+                              isOperator ? "justify-end" : "justify-start"
+                            }`}
+                          >
+                            {isOperator ? (
+                              <>
+                                <span>Operator</span>
+                                <OperatorIcon className="h-4 w-4" />
+                              </>
+                            ) : (
+                              <>
+                                <AgentIcon className="h-4 w-4" />
+                                <span>{agentName}</span>
+                              </>
+                            )}
+                          </div>
+                          <div className="whitespace-pre-wrap text-[15px] leading-relaxed">
+                            {entry.text}
+                          </div>
                         </div>
-                        <div className="whitespace-pre-wrap text-[15px] leading-relaxed">
-                          {entry.text}
-                        </div>
-                      </div>
+                      )}
                     </div>
                   );
                 })

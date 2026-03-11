@@ -821,6 +821,13 @@ export interface ConversationMessage {
   source?: string;
 }
 
+export interface OperatorActionMessagePayload {
+  label: string;
+  kind: "stream" | "avatar" | "launch";
+  detail?: string;
+  fallbackText?: string;
+}
+
 export type ConversationChannelType =
   | "DM"
   | "GROUP"
@@ -4816,6 +4823,16 @@ export class MiladyClient {
       ...response,
       text: this.normalizeAssistantText(response.text),
     };
+  }
+
+  async logConversationOperatorAction(
+    id: string,
+    payload: OperatorActionMessagePayload,
+  ): Promise<{ message: ConversationMessage }> {
+    return this.fetch(`/api/conversations/${encodeURIComponent(id)}/operator-action`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   }
 
   async sendConversationMessageStream(
