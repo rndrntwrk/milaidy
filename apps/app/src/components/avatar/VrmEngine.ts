@@ -19,7 +19,13 @@ export type VrmEngineState = {
   idleTime: number;
   idleTracks: number;
   activeAnimationState: "idle" | "emote" | "static-fallback";
-  activeIdleSource: "alice" | "mixamo" | "legacy-fallback" | null;
+  activeIdleSource:
+    | "alice-native"
+    | "mixamo-retargeted"
+    | "legacy-fallback"
+    | "procedural-fallback"
+    | null;
+  idleFallbackActive: boolean;
   idleHealthy: boolean;
 };
 
@@ -38,6 +44,13 @@ type MarkTransition = {
   fromQuaternion: THREE.Quaternion;
   toQuaternion: THREE.Quaternion;
   walkQuaternion: THREE.Quaternion;
+};
+
+type ResolvedAnimationSource = "alice-native" | "mixamo-retargeted";
+
+type IdleCandidatePlan = {
+  glbUrl: string;
+  fallbackActive: boolean;
 };
 
 export type CameraAnimationConfig = {
@@ -114,16 +127,25 @@ export class VrmEngine {
   private readonly guaranteedIdleFallbackGlbUrl = resolveAppAssetUrl(
     "animations/alice/idle/catching-breath.glb",
   );
+  private readonly defaultStageIdleGlbUrls = [
+    this.guaranteedIdleFallbackGlbUrl,
+    resolveAppAssetUrl("animations/alice/idle/idle-03.glb"),
+    resolveAppAssetUrl("animations/alice/idle/idle-04.glb"),
+    resolveAppAssetUrl("animations/alice/idle/idle-07.glb"),
+    resolveAppAssetUrl("animations/alice/idle/idle-09.glb"),
+    resolveAppAssetUrl("animations/alice/idle/idle-15.glb"),
+  ];
   private readonly walkGlbUrl = resolveAppAssetUrl(
     "animations/alice/movement/walking.glb",
   );
   private idleGlbUrls: string[] = [];
   private activeIdleGlbUrl: string | null = null;
-  private activeIdleSource: "alice" | "mixamo" | "legacy-fallback" | null = null;
+  private activeIdleSource: VrmEngineState["activeIdleSource"] = null;
   private idleRotationDeadline = Number.POSITIVE_INFINITY;
-  private idleFallbackForced = false;
+  private idleFallbackActive = false;
   private verifiedIdleGlbUrls = new Set<string>();
   private failedIdleGlbUrls = new Set<string>();
+  private rejectedIdleReasons = new Map<string, string>();
   private forceFaceCameraFlip = true;
 
   private cameraAnimation: CameraAnimationConfig = {
@@ -152,7 +174,7 @@ export class VrmEngine {
   private emoteTimeout: ReturnType<typeof setTimeout> | null = null;
   private emoteClipCache = new Map<
     string,
-    { clip: THREE.AnimationClip; source: "alice" | "mixamo" }
+    { clip: THREE.AnimationClip; source: ResolvedAnimationSource }
   >();
   private emoteRequestId = 0;
 
@@ -246,9 +268,10 @@ export class VrmEngine {
     this.activeIdleGlbUrl = null;
     this.activeIdleSource = null;
     this.idleRotationDeadline = Number.POSITIVE_INFINITY;
-    this.idleFallbackForced = false;
+    this.idleFallbackActive = false;
     this.verifiedIdleGlbUrls.clear();
     this.failedIdleGlbUrls.clear();
+    this.rejectedIdleReasons.clear();
     this.frameMetrics = null;
     this.stageScene = null;
     this.currentRigPosition.set(0, 0, 0);
@@ -301,6 +324,7 @@ export class VrmEngine {
           ? "idle"
           : "static-fallback",
       activeIdleSource: this.activeIdleSource,
+      idleFallbackActive: this.idleFallbackActive,
       idleHealthy:
         (idlePlaying && (this.idleAction?.getClip()?.tracks.length ?? 0) > 0) ||
         proceduralIdlePlaying,
@@ -339,9 +363,10 @@ export class VrmEngine {
     this.activeIdleGlbUrl = null;
     this.activeIdleSource = null;
     this.idleRotationDeadline = Number.POSITIVE_INFINITY;
-    this.idleFallbackForced = false;
+    this.idleFallbackActive = false;
     this.verifiedIdleGlbUrls.clear();
     this.failedIdleGlbUrls.clear();
+    this.rejectedIdleReasons.clear();
 
     if (this.vrm && !this.emoteAction) {
       void this.loadAndPlayIdle(this.vrm);
@@ -358,6 +383,10 @@ export class VrmEngine {
     }
 
     this.applySceneLayout({ animateMark: false });
+
+    if (this.vrm && !this.emoteAction) {
+      void this.loadAndPlayIdle(this.vrm);
+    }
   }
 
   async setSceneMark(mark: StageSceneMark): Promise<void> {
@@ -453,9 +482,10 @@ export class VrmEngine {
       this.activeIdleGlbUrl = null;
       this.activeIdleSource = null;
       this.idleRotationDeadline = Number.POSITIVE_INFINITY;
-      this.idleFallbackForced = false;
+      this.idleFallbackActive = false;
       this.verifiedIdleGlbUrls.clear();
       this.failedIdleGlbUrls.clear();
+      this.rejectedIdleReasons.clear();
     }
 
     const loader = new GLTFLoader();
@@ -688,47 +718,153 @@ export class VrmEngine {
     };
   }
 
-  private getIdleCandidateUrls(): string[] {
-    const ordered: string[] = [];
+  private getConfiguredIdleGlbUrls(): string[] {
+    const configured =
+      this.currentScenePreset === "pro-streamer-stage"
+        ? [...this.defaultStageIdleGlbUrls, ...this.idleGlbUrls]
+        : this.idleGlbUrls;
+    return Array.from(
+      new Set(configured.map((value) => value.trim()).filter(Boolean)),
+    );
+  }
+
+  private getIdleFallbackGlbUrls(): string[] {
+    return this.currentScenePreset === "pro-streamer-stage"
+      ? [this.guaranteedIdleFallbackGlbUrl, this.idleFallbackGlbUrl]
+      : [this.idleFallbackGlbUrl, this.guaranteedIdleFallbackGlbUrl];
+  }
+
+  private getIdleCandidatePlans(): IdleCandidatePlan[] {
+    const ordered: IdleCandidatePlan[] = [];
     const seen = new Set<string>();
-    const push = (glbUrl: string | null | undefined) => {
+    const push = (
+      glbUrl: string | null | undefined,
+      fallbackActive = false,
+    ) => {
       const trimmed = glbUrl?.trim();
-      if (!trimmed || seen.has(trimmed)) return;
+      if (!trimmed || seen.has(trimmed) || this.failedIdleGlbUrls.has(trimmed)) {
+        return;
+      }
       seen.add(trimmed);
-      ordered.push(trimmed);
+      ordered.push({
+        glbUrl: trimmed,
+        fallbackActive,
+      });
     };
 
-    const verifiedChoices = Array.from(this.verifiedIdleGlbUrls).filter(
-      (glbUrl) => glbUrl !== this.activeIdleGlbUrl,
+    const configuredChoices = this.getConfiguredIdleGlbUrls().filter(
+      (glbUrl) =>
+        this.verifiedIdleGlbUrls.has(glbUrl) &&
+        !this.failedIdleGlbUrls.has(glbUrl),
     );
-    if (verifiedChoices.length > 0) {
-      const index = Math.floor(Math.random() * verifiedChoices.length);
-      push(verifiedChoices[index]);
-      for (const glbUrl of verifiedChoices) {
-        push(glbUrl);
-      }
-    } else {
-      const configuredChoices = this.idleGlbUrls.filter(
-        (glbUrl) =>
-          glbUrl !== this.activeIdleGlbUrl &&
-          !this.failedIdleGlbUrls.has(glbUrl),
-      );
-      if (configuredChoices.length > 0) {
-        const index = Math.floor(Math.random() * configuredChoices.length);
-        push(configuredChoices[index]);
-        for (const glbUrl of configuredChoices) {
-          push(glbUrl);
-        }
-      }
+    const activeIndex = configuredChoices.indexOf(this.activeIdleGlbUrl ?? "");
+    const rotatedChoices =
+      activeIndex >= 0
+        ? [
+            ...configuredChoices.slice(activeIndex + 1),
+            ...configuredChoices.slice(0, activeIndex),
+          ]
+        : configuredChoices;
+    for (const glbUrl of rotatedChoices) {
+      if (glbUrl === this.activeIdleGlbUrl) continue;
+      push(glbUrl);
     }
 
     if (this.activeIdleGlbUrl && !this.failedIdleGlbUrls.has(this.activeIdleGlbUrl)) {
-      push(this.activeIdleGlbUrl);
+      push(this.activeIdleGlbUrl, this.idleFallbackActive);
     }
 
-    push(this.idleFallbackGlbUrl);
-    push(this.guaranteedIdleFallbackGlbUrl);
+    for (const glbUrl of this.getIdleFallbackGlbUrls()) {
+      push(glbUrl, true);
+    }
     return ordered;
+  }
+
+  private rememberRejectedIdle(glbUrl: string, reason: string): void {
+    this.failedIdleGlbUrls.add(glbUrl);
+    this.verifiedIdleGlbUrls.delete(glbUrl);
+    this.rejectedIdleReasons.set(glbUrl, reason);
+  }
+
+  private async loadAnimationAsset(
+    glbPath: string,
+    vrm: VRM,
+  ): Promise<Awaited<ReturnType<GLTFLoader["loadAsync"]>> | null> {
+    if (this.vrm !== vrm) return null;
+
+    const loader = new GLTFLoader();
+    const gltf = await loader.loadAsync(glbPath);
+    if (this.vrm !== vrm) return null;
+
+    gltf.scene.updateMatrixWorld(true);
+    vrm.scene.updateMatrixWorld(true);
+    return gltf;
+  }
+
+  private async loadIdleClip(
+    glbPath: string,
+    vrm: VRM,
+  ): Promise<{ clip: THREE.AnimationClip; source: ResolvedAnimationSource } | null> {
+    const cached = this.emoteClipCache.get(glbPath);
+    if (cached && this.verifiedIdleGlbUrls.has(glbPath)) return cached;
+
+    try {
+      const { classifyIdleGltfAnimationClipForVrm } = await import(
+        "./resolveGltfAnimationClipForVrm"
+      );
+      const gltf = await this.loadAnimationAsset(glbPath, vrm);
+      if (!gltf) return null;
+
+      const classification = classifyIdleGltfAnimationClipForVrm(
+        { scene: gltf.scene, animations: gltf.animations },
+        vrm,
+      );
+      if (classification.status === "rejected") {
+        this.rejectedIdleReasons.set(glbPath, classification.reason);
+        return null;
+      }
+
+      const resolved = {
+        clip: classification.clip,
+        source: classification.source,
+      };
+      this.emoteClipCache.set(glbPath, resolved);
+      this.rejectedIdleReasons.delete(glbPath);
+      return resolved;
+    } catch (err) {
+      const reason =
+        err instanceof Error ? err.message : "Failed to load idle clip";
+      console.error(`[VrmEngine] Failed to load idle: ${glbPath}`, err);
+      this.rejectedIdleReasons.set(glbPath, reason);
+      return null;
+    }
+  }
+
+  private async classifyConfiguredIdleCandidates(vrm: VRM): Promise<void> {
+    for (const glbUrl of this.getConfiguredIdleGlbUrls()) {
+      if (
+        this.verifiedIdleGlbUrls.has(glbUrl) ||
+        this.failedIdleGlbUrls.has(glbUrl)
+      ) {
+        continue;
+      }
+
+      const resolved = await this.loadIdleClip(glbUrl, vrm);
+      if (this.loadingAborted || this.vrm !== vrm) return;
+
+      if (resolved) {
+        this.failedIdleGlbUrls.delete(glbUrl);
+        this.rejectedIdleReasons.delete(glbUrl);
+        this.verifiedIdleGlbUrls.add(glbUrl);
+        continue;
+      }
+
+      this.rememberRejectedIdle(
+        glbUrl,
+        this.rejectedIdleReasons.get(glbUrl) ??
+          "idle clip failed classification or load",
+      );
+    }
   }
 
   private scheduleNextIdleRotation(clipDuration: number): void {
@@ -919,43 +1055,39 @@ export class VrmEngine {
 
   private async loadAndPlayIdle(vrm: VRM): Promise<void> {
     if (this.loadingAborted) return;
-    if (this.currentScenePreset === "pro-streamer-stage") {
-      if (this.idleAction) {
-        this.idleAction.stop();
-        this.idleAction = null;
-      }
-      this.activeIdleGlbUrl = null;
-      this.activeIdleSource = null;
-      this.idleFallbackForced = false;
-      this.idleRotationDeadline = Number.POSITIVE_INFINITY;
-      this.resetProceduralIdlePose();
-      this.proceduralIdleActive = true;
-      return;
-    }
 
-    const candidates = this.getIdleCandidateUrls();
+    await this.classifyConfiguredIdleCandidates(vrm);
+    if (this.loadingAborted || this.vrm !== vrm) return;
+
+    const configuredIdleGlbUrls = this.getConfiguredIdleGlbUrls();
+    const candidates = this.getIdleCandidatePlans();
 
     let clip: THREE.AnimationClip | null = null;
     let resolvedIdleGlbUrl: string | null = null;
-    let resolvedIdleSource: "alice" | "mixamo" | "legacy-fallback" | null = null;
+    let resolvedIdleSource: VrmEngineState["activeIdleSource"] = null;
+    let fallbackActive = false;
     for (const candidate of candidates) {
-      const resolved = await this.loadEmoteClip(candidate, vrm);
+      const resolved = this.verifiedIdleGlbUrls.has(candidate.glbUrl)
+        ? (this.emoteClipCache.get(candidate.glbUrl) ??
+            (await this.loadEmoteClip(candidate.glbUrl, vrm)))
+        : await this.loadEmoteClip(candidate.glbUrl, vrm);
+      if (this.loadingAborted || this.vrm !== vrm) return;
       if (!resolved) {
-        if (this.idleGlbUrls.includes(candidate)) {
-          this.failedIdleGlbUrls.add(candidate);
-          this.verifiedIdleGlbUrls.delete(candidate);
-        }
+        this.failedIdleGlbUrls.add(candidate.glbUrl);
+        this.verifiedIdleGlbUrls.delete(candidate.glbUrl);
         continue;
       }
       clip = resolved.clip;
-      resolvedIdleGlbUrl = candidate;
+      resolvedIdleGlbUrl = candidate.glbUrl;
+      fallbackActive = candidate.fallbackActive;
       resolvedIdleSource =
-        candidate === this.idleFallbackGlbUrl
+        candidate.glbUrl === this.idleFallbackGlbUrl
           ? "legacy-fallback"
           : resolved.source;
-      if (this.idleGlbUrls.includes(candidate)) {
-        this.failedIdleGlbUrls.delete(candidate);
-        this.verifiedIdleGlbUrls.add(candidate);
+      if (configuredIdleGlbUrls.includes(candidate.glbUrl)) {
+        this.failedIdleGlbUrls.delete(candidate.glbUrl);
+        this.rejectedIdleReasons.delete(candidate.glbUrl);
+        this.verifiedIdleGlbUrls.add(candidate.glbUrl);
       }
       break;
     }
@@ -967,7 +1099,14 @@ export class VrmEngine {
       this.loadingAborted ||
       this.vrm !== vrm
     ) {
-      this.activeIdleSource = null;
+      if (this.currentScenePreset === "pro-streamer-stage") {
+        this.activateProceduralIdleFallback();
+      } else {
+        this.activeIdleGlbUrl = null;
+        this.activeIdleSource = null;
+        this.idleFallbackActive = false;
+        this.idleRotationDeadline = Number.POSITIVE_INFINITY;
+      }
       return;
     }
 
@@ -988,13 +1127,15 @@ export class VrmEngine {
       previousIdleAction.fadeOut(0.25);
     }
 
+    this.resetProceduralIdlePose();
     action.fadeIn(0.25);
     action.play();
 
     this.idleAction = action;
     this.activeIdleGlbUrl = resolvedIdleGlbUrl;
     this.activeIdleSource = resolvedIdleSource;
-    this.idleFallbackForced = resolvedIdleSource === "legacy-fallback";
+    this.idleFallbackActive =
+      fallbackActive || resolvedIdleSource === "legacy-fallback";
     this.scheduleNextIdleRotation(clip.duration);
   }
 
@@ -1013,7 +1154,9 @@ export class VrmEngine {
       return;
     }
 
-    this.proceduralIdleActive = true;
+    if (!this.proceduralIdleActive) {
+      return;
+    }
 
     const breathingLift =
       Math.sin(this.elapsedTime * 1.15) * 0.018 +
@@ -1031,6 +1174,20 @@ export class VrmEngine {
     );
     this.applyProceduralIdleBonePose(vrm);
     vrm.scene.updateMatrixWorld(true);
+  }
+
+  private activateProceduralIdleFallback(): void {
+    if (this.idleAction) {
+      this.idleAction.stop();
+      this.idleAction = null;
+    }
+
+    this.resetProceduralIdlePose();
+    this.activeIdleGlbUrl = null;
+    this.activeIdleSource = "procedural-fallback";
+    this.idleFallbackActive = true;
+    this.idleRotationDeadline = Number.POSITIVE_INFINITY;
+    this.proceduralIdleActive = true;
   }
 
   private resetProceduralIdlePose(): void {
@@ -1109,7 +1266,7 @@ export class VrmEngine {
   private async loadEmoteClip(
     glbPath: string,
     vrm: VRM,
-  ): Promise<{ clip: THREE.AnimationClip; source: "alice" | "mixamo" } | null> {
+  ): Promise<{ clip: THREE.AnimationClip; source: ResolvedAnimationSource } | null> {
     const cached = this.emoteClipCache.get(glbPath);
     if (cached) return cached;
 
@@ -1117,14 +1274,9 @@ export class VrmEngine {
       const { resolveGltfAnimationClipForVrm } = await import(
         "./resolveGltfAnimationClipForVrm"
       );
-      if (this.vrm !== vrm) return null;
+      const gltf = await this.loadAnimationAsset(glbPath, vrm);
+      if (!gltf) return null;
 
-      const loader = new GLTFLoader();
-      const gltf = await loader.loadAsync(glbPath);
-      if (this.vrm !== vrm) return null;
-
-      gltf.scene.updateMatrixWorld(true);
-      vrm.scene.updateMatrixWorld(true);
       const resolved = resolveGltfAnimationClipForVrm(
         { scene: gltf.scene, animations: gltf.animations },
         vrm,
