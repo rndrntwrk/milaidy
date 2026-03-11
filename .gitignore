@@ -121,3 +121,8 @@ data/
 
 # Debug PTY captures from plugin-agent-orchestrator (PARALLAX_DEBUG_CAPTURE=1)
 .parallax/
+
+# Local benchmark artifacts
+captures/
+replays/
+reports/
