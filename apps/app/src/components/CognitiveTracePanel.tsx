@@ -38,16 +38,16 @@ export function CognitiveTracePanel({
       />
     ) : (
       <div
-        className={cn("flex flex-col-reverse gap-2", className)}
+        className={cn("flex flex-col-reverse gap-1.5", className)}
         data-action-log-trace-list
       >
         {traces.map((event) => (
-          <div key={event.id} className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
-            <div className="mb-2 flex items-center justify-between gap-2">
+          <div key={event.id} className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-2.5">
+            <div className="mb-1.5 flex items-center justify-between gap-2">
               <Badge variant={event.variant}>{event.title}</Badge>
               <span className="text-[10px] uppercase tracking-[0.2em] text-white/38">{event.timestamp}</span>
             </div>
-            <div className="text-xs leading-relaxed text-white/76">{event.detail}</div>
+            <div className="text-[11px] leading-relaxed text-white/76">{event.detail}</div>
           </div>
         ))}
       </div>
@@ -55,7 +55,7 @@ export function CognitiveTracePanel({
   }
 
   const body = (
-    <CardContent className="flex h-[calc(100%-72px)] flex-col-reverse gap-2 overflow-y-auto p-4">
+    <CardContent className="flex h-[calc(100%-72px)] flex-col-reverse gap-1.5 overflow-y-auto p-4">
       {traces.length === 0 ? (
         <SectionEmptyState
           title="No public actions yet"
@@ -64,12 +64,12 @@ export function CognitiveTracePanel({
         />
       ) : (
         traces.map((event) => (
-          <div key={event.id} className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
-            <div className="mb-2 flex items-center justify-between gap-2">
+          <div key={event.id} className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-2.5">
+            <div className="mb-1.5 flex items-center justify-between gap-2">
               <Badge variant={event.variant}>{event.title}</Badge>
               <span className="text-[10px] uppercase tracking-[0.2em] text-white/38">{event.timestamp}</span>
             </div>
-            <div className="text-xs leading-relaxed text-white/76">{event.detail}</div>
+            <div className="text-[11px] leading-relaxed text-white/76">{event.detail}</div>
           </div>
         ))
       )}
