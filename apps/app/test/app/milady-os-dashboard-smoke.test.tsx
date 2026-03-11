@@ -190,6 +190,9 @@ describe("MiladyOsDashboard", () => {
       tree.root.findByProps({ "data-action-log-pinned-region": true }),
     ).toBeDefined();
     expect(
+      tree.root.findByProps({ "data-action-log-inline-notice-slot": true }),
+    ).toBeDefined();
+    expect(
       tree.root.findByProps({ "data-action-log-feed-region": true }),
     ).toBeDefined();
   });
@@ -213,6 +216,43 @@ describe("MiladyOsDashboard", () => {
 
     const sheet = tree.root.findByProps({ "data-sheet-side": "bottom" });
     expect(sheet.props.className).toContain("h-[80dvh]");
+  });
+
+  it("keeps the Action Log shell clipped with a sticky header and independent feed scroll", () => {
+    const { tree } = renderWithTab("settings", {
+      leftRailState: "expanded",
+      windowWidth: 1440,
+    });
+
+    const shell = tree.root.findByProps({ "data-action-log-shell": true });
+    const header = tree.root.findByProps({ "data-action-log-header": true });
+    const pinnedRegion = tree.root.findByProps({ "data-action-log-pinned-region": true });
+    const feedRegion = tree.root.findByProps({ "data-action-log-feed-region": true });
+    const orderedRegions = shell.findAll(
+      (node) =>
+        node.parent === shell &&
+        typeof node.type === "string" &&
+        (node.props["data-action-log-header"] ||
+          node.props["data-action-log-pinned-region"] ||
+          node.props["data-action-log-feed-region"]),
+    );
+
+    expect(shell.props.className).toContain("min-h-0");
+    expect(shell.props.className).toContain("overflow-hidden");
+    expect(header.props.className).toContain("sticky");
+    expect(header.props.className).toContain("top-0");
+    expect(pinnedRegion.props.className).toContain("shrink-0");
+    expect(feedRegion.props.className).toContain("flex-1");
+    expect(feedRegion.props.className).toContain("overflow-y-auto");
+    expect(
+      orderedRegions.map((node) =>
+        node.props["data-action-log-header"]
+          ? "header"
+          : node.props["data-action-log-pinned-region"]
+            ? "pinned"
+            : "feed",
+      ),
+    ).toEqual(["header", "pinned", "feed"]);
   });
 
   it("renders and dismisses the persistent Action Log inline notice", () => {
