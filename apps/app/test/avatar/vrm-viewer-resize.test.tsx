@@ -29,7 +29,8 @@ const { MockVrmEngine, mockLoadVrmFromUrl } = vi.hoisted(() => {
       idleTime: 0,
       idleTracks: 0,
       activeAnimationState: "idle",
-      activeIdleSource: "alice",
+      activeIdleSource: "alice-native",
+      idleFallbackActive: false,
       idleHealthy: true,
     }));
 
