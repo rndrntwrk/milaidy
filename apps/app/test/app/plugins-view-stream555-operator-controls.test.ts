@@ -14,6 +14,9 @@ const mockExecuteAutonomyPlan = vi.fn();
 vi.mock("../../src/AppContext", () => ({
   useApp: () => mockUseApp(),
 }));
+vi.mock("../../src/components/ui/Dialog.js", () => ({
+  Dialog: ({ open, children }: any) => (open ? React.createElement("div", null, children) : null),
+}));
 
 vi.mock("../../src/api-client", () => ({
   client: {
@@ -364,7 +367,8 @@ describe("Stream555 operator controls", () => {
       expect(
         tree!.root.findAll(
           (node) =>
-            node.type === "button" && node.props["data-config-key"] === key,
+            node.props["data-config-key"] === key &&
+            node.props["data-field-type"] === "boolean",
         ).length,
       ).toBe(1);
     }
@@ -394,8 +398,8 @@ describe("Stream555 operator controls", () => {
     expect(
       tree!.root.findAll(
         (node) =>
-          node.type === "button" &&
-          node.props["data-config-key"] === "STREAM555_DEST_X_ENABLED",
+          node.props["data-config-key"] === "STREAM555_DEST_X_ENABLED" &&
+          node.props["data-field-type"] === "boolean",
       ).length,
     ).toBe(0);
   });

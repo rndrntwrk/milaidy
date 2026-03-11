@@ -6,23 +6,38 @@
  */
 
 import { useEffect, useRef } from "react";
-import { resolveAppAssetUrl } from "../../asset-url";
+import { DEFAULT_PRO_STREAMER_VRM_URL } from "../../AppContext";
+import type { StageSceneMark, StageScenePreset } from "../../proStreamerStageScene";
 import { VrmEngine, type VrmEngineState } from "./VrmEngine";
 
-const DEFAULT_VRM_PATH = resolveAppAssetUrl("vrms/1.vrm");
+const DEFAULT_VRM_PATH = DEFAULT_PRO_STREAMER_VRM_URL;
 
 export type VrmViewerProps = {
-  /** Path to the VRM file to load (default: built-in milady #1) */
+  /** Path to the VRM file to load (default: built-in pro streamer avatar) */
   vrmPath?: string;
+  idleGlbPaths?: string[];
   mouthOpen: number;
   /** When true the engine generates mouth animation internally */
   isSpeaking?: boolean;
+  scenePreset?: StageScenePreset;
+  sceneMark?: StageSceneMark;
   onEngineState?: (state: VrmEngineState) => void;
   onEngineReady?: (engine: VrmEngine) => void;
+  onViewerError?: (error: Error) => void;
 };
 
 export function VrmViewer(props: VrmViewerProps) {
-  const { mouthOpen, isSpeaking, onEngineReady, onEngineState, vrmPath } =
+  const {
+    mouthOpen,
+    isSpeaking,
+    scenePreset,
+    sceneMark,
+    onEngineReady,
+    onEngineState,
+    onViewerError,
+    vrmPath,
+    idleGlbPaths,
+  } =
     props;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<VrmEngine | null>(null);
@@ -48,17 +63,34 @@ export function VrmViewer(props: VrmViewerProps) {
       engineRef.current = engine;
     }
 
-    engine.setup(canvas, () => {
-      engine.setMouthOpen(mouthOpenRef.current);
-      engine.setSpeaking(isSpeakingRef.current);
-      if (onEngineState && mountedRef.current) {
-        const now = performance.now();
-        if (now - lastStateEmitMsRef.current >= 250) {
-          lastStateEmitMsRef.current = now;
-          onEngineState(engine.getState());
+    try {
+      engine.setup(canvas, () => {
+        engine.setMouthOpen(mouthOpenRef.current);
+        engine.setSpeaking(isSpeakingRef.current);
+        if (onEngineState && mountedRef.current) {
+          const now = performance.now();
+          if (now - lastStateEmitMsRef.current >= 250) {
+            lastStateEmitMsRef.current = now;
+            onEngineState(engine.getState());
+          }
         }
+      });
+      engine.setIdleGlbUrls(idleGlbPaths ?? []);
+      void engine.setScenePreset(scenePreset ?? "default");
+      void engine.setSceneMark(sceneMark ?? "stage");
+    } catch (err) {
+      const error =
+        err instanceof Error
+          ? err
+          : new Error("Failed to initialize avatar viewer");
+      console.warn("Failed to initialize VRM viewer:", error);
+      engine.dispose();
+      if (engineRef.current === engine) {
+        engineRef.current = null;
       }
-    });
+      onViewerError?.(error);
+      return;
+    }
 
     onEngineReady?.(engine);
 
@@ -69,11 +101,22 @@ export function VrmViewer(props: VrmViewerProps) {
       engine.resize(rect.width, rect.height);
     };
     resize();
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(() => {
+        resize();
+      });
+      resizeObserver.observe(canvas);
+      if (canvas.parentElement) {
+        resizeObserver.observe(canvas.parentElement);
+      }
+    }
     window.addEventListener("resize", resize);
 
     return () => {
       mountedRef.current = false;
       window.removeEventListener("resize", resize);
+      resizeObserver?.disconnect();
 
       const engineToDispose = engine;
       setTimeout(() => {
@@ -85,7 +128,25 @@ export function VrmViewer(props: VrmViewerProps) {
         }
       }, 100);
     };
-  }, [onEngineReady, onEngineState]);
+  }, [onEngineReady, onEngineState, onViewerError]);
+
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine || !engine.isInitialized()) return;
+    void engine.setScenePreset(scenePreset ?? "default");
+  }, [scenePreset]);
+
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine || !engine.isInitialized()) return;
+    void engine.setSceneMark(sceneMark ?? "stage");
+  }, [sceneMark]);
+
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine || !engine.isInitialized()) return;
+    engine.setIdleGlbUrls(idleGlbPaths ?? []);
+  }, [idleGlbPaths]);
 
   // Load VRM when path changes
   useEffect(() => {
@@ -110,6 +171,9 @@ export function VrmViewer(props: VrmViewerProps) {
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return;
         console.warn("Failed to load VRM:", err);
+        onViewerError?.(
+          err instanceof Error ? err : new Error("Failed to load VRM"),
+        );
       }
     })();
 

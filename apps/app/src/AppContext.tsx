@@ -7,9 +7,11 @@
 import {
   createContext,
   type ReactNode,
+  type SetStateAction,
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -17,8 +19,11 @@ import {
   type AgentStartupDiagnostics,
   type AgentStatus,
   type AppViewerAuthMessage,
+  type AvatarEmoteDef,
+  type AutonomyExecutePlanRequest,
   type CatalogSkill,
   type CharacterData,
+  type ContentBlock,
   type Conversation,
   type ConversationChannelType,
   type ConversationMessage,
@@ -26,6 +31,8 @@ import {
   client,
   type DropStatus,
   type ExtensionStatus,
+  type Five55AutonomyMode,
+  type Five55AutonomyPreviewResponse,
   type Five55MasteryRun,
   type ImageAttachment,
   type LogEntry,
@@ -44,7 +51,6 @@ import {
   type SkillScanReportSummary,
   type StreamEventEnvelope,
   type StylePreset,
-  type SystemPermissionId,
   type TriggerHealthSnapshot,
   type TriggerRunRecord,
   type TriggerSummary,
@@ -56,20 +62,89 @@ import {
   type WalletExportResult,
   type WalletNftsResponse,
   type WhitelistStatus,
-  type WorkbenchOverview,
+ type WorkbenchOverview,
 } from "./api-client";
-import { tabFromPath, pathForTab, type Tab } from "./navigation";
+import { pathForTab, tabFromPath } from "./navigation";
 import { resolveAppAssetUrl } from "./asset-url";
 import {
   getMissingOnboardingPermissions,
   ONBOARDING_PERMISSION_LABELS,
 } from "./onboarding-permissions";
 import type { ToastItem } from "./components/ui/Toast";
+import {
+  assetVaultSectionForTab,
+  controlSectionForTab,
+  defaultTabForControlSection,
+  isTabEnabled,
+  sanitizeControlSection,
+  type HudAssetSection,
+  type HudControlSection,
+  type Tab,
+} from "./miladyHudRouting.js";
+import {
+  QUICK_LAYER_CATALOG,
+  type QuickLayerId,
+} from "./components/quickLayerCatalog.js";
+import {
+  didToolActionSucceed,
+  findLastToolEnvelope,
+  getToolActionFailureMessage,
+} from "./components/quickLayerPlan.js";
+import {
+  computeQuickLayerRetryDelayMs,
+  getHttpStatusFromError,
+  shouldRetryQuickLayerError,
+} from "./components/quickLayerRetry.js";
+import {
+  buildAutonomousPrompt,
+  DEFAULT_GAME_SANDBOX,
+  isUnreachableLoopbackViewerUrl,
+  parseAdIdFromEnvelope,
+  parseGameLaunchFromEnvelope,
+  parseProjectedEarningsFromEnvelope,
+  selectPreferredGameId,
+  summarizeStreamState,
+  type ParsedGameLaunch,
+} from "./quickLayerRuntime.js";
+import {
+  buildQuickLayerStatusRecord,
+  hasPluginRegistration,
+  resolveQuickLayerStatus,
+  type QuickLayerStatus,
+} from "./quickLayerSupport.js";
+import {
+  removeLiveSecondarySource,
+  resolveLiveHeroSource,
+  resolveLiveLayoutMode,
+  resolveLiveSceneId,
+  upsertLiveSecondarySource,
+  type LiveLayoutMode,
+  type LiveSecondarySource,
+} from "./liveComposition.js";
+import {
+  buildStream555StatusSummary,
+  isStream555PrimaryPlugin,
+} from "./stream555Readiness";
+import {
+  routeProStreamerFeedback,
+  type ProStreamerActionLogInlineFeedback,
+  type ProStreamerFeedbackSinks,
+  type ProStreamerFeedbackTone,
+  type ProStreamerModalFeedback,
+  type ProStreamerToastFeedback,
+} from "./proStreamerFeedback.js";
 
 // ── VRM helpers ─────────────────────────────────────────────────────────
 
 /** Number of built-in milady VRM avatars shipped with the app. */
 export const VRM_COUNT = 8;
+export const DEFAULT_PRO_STREAMER_VRM_FILENAME = "alice.vrm";
+export const DEFAULT_PRO_STREAMER_VRM_URL = resolveAppAssetUrl(
+  `vrms/${DEFAULT_PRO_STREAMER_VRM_FILENAME}`,
+);
+export const DEFAULT_PRO_STREAMER_VRM_PREVIEW_URL = resolveAppAssetUrl(
+  "vrms/previews/alice-stage.svg",
+);
 
 function normalizeAvatarIndex(index: number): number {
   if (!Number.isFinite(index)) return 1;
@@ -83,14 +158,18 @@ function normalizeAvatarIndex(index: number): number {
 export function getVrmUrl(index: number): string {
   const normalized = normalizeAvatarIndex(index);
   const safeIndex = normalized > 0 ? normalized : 1;
-  return resolveAppAssetUrl(`vrms/${safeIndex}.vrm`);
+  return safeIndex === 1
+    ? DEFAULT_PRO_STREAMER_VRM_URL
+    : resolveAppAssetUrl(`vrms/${safeIndex}.vrm`);
 }
 
 /** Resolve a built-in VRM index (1–8) to its preview thumbnail URL. */
 export function getVrmPreviewUrl(index: number): string {
   const normalized = normalizeAvatarIndex(index);
   const safeIndex = normalized > 0 ? normalized : 1;
-  return resolveAppAssetUrl(`vrms/previews/milady-${safeIndex}.png`);
+  return safeIndex === 1
+    ? DEFAULT_PRO_STREAMER_VRM_PREVIEW_URL
+    : resolveAppAssetUrl(`vrms/previews/milady-${safeIndex}.png`);
 }
 
 // ── Theme ──────────────────────────────────────────────────────────────
@@ -103,23 +182,84 @@ export type ThemeName =
   | "web2000"
   | "programmer"
   | "haxor"
-  | "psycho";
+  | "psycho"
+  | "milady-os";
+
+export type DockSurface = "none" | "threads" | "memory" | "ops" | "vault";
+export type HudSurface = "none" | "control-stack";
+export type RailBubbleState = "collapsed" | "peek" | "expanded";
+export type ActiveBubble = "none" | "action-log" | "mission-stack";
+export type GoLiveLaunchMode =
+  | "camera"
+  | "radio"
+  | "screen-share"
+  | "play-games"
+  | "reaction";
+
+export interface GoLiveConfig {
+  channels: string[];
+  launchMode: GoLiveLaunchMode;
+  layoutMode: LiveLayoutMode;
+}
+
+export interface GoLiveLaunchFollowUp {
+  target: "action-log";
+  label: string;
+  detail: string;
+}
+
+export interface GoLiveLaunchResult {
+  state: "success" | "partial" | "blocked" | "failed";
+  tone: "success" | "warning" | "error";
+  message: string;
+  followUp?: GoLiveLaunchFollowUp;
+}
+
+function labelForGoLiveLaunchMode(mode: GoLiveLaunchMode): string {
+  switch (mode) {
+    case "camera":
+      return "Camera";
+    case "radio":
+      return "Lo-fi Radio";
+    case "screen-share":
+      return "Screen Share";
+    case "play-games":
+      return "Play Games";
+    case "reaction":
+      return "Reaction";
+    default:
+      return "Camera";
+  }
+}
 
 export const THEMES: ReadonlyArray<{
   id: ThemeName;
   label: string;
   hint: string;
 }> = [
-  { id: "milady", label: "milady", hint: "clean black & white" },
-  { id: "qt314", label: "qt3.14", hint: "soft pastels" },
-  { id: "web2000", label: "web2000", hint: "green hacker vibes" },
-  { id: "programmer", label: "programmer", hint: "vscode dark" },
-  { id: "haxor", label: "haxor", hint: "terminal green" },
-  { id: "psycho", label: "psycho", hint: "pure chaos" },
-];
+    { id: "milady", label: "milady", hint: "clean black & white" },
+    { id: "qt314", label: "qt3.14", hint: "soft pastels" },
+    { id: "web2000", label: "web2000", hint: "green hacker vibes" },
+    { id: "programmer", label: "programmer", hint: "vscode dark" },
+    { id: "haxor", label: "haxor", hint: "terminal green" },
+    { id: "psycho", label: "psycho", hint: "pure chaos" },
+    { id: "milady-os", label: "Pro Streamer", hint: "broadcast conversation stage" },
+  ];
 
 const VALID_THEMES = new Set<string>(THEMES.map((t) => t.id));
 const AGENT_TRANSFER_MIN_PASSWORD_LENGTH = 4;
+
+function replaceMiladyLocationWithRoot() {
+  if (typeof window === "undefined") return;
+  if (window.location.protocol === "file:") {
+    const next = `${window.location.pathname}${window.location.search}#/`;
+    window.history.replaceState(null, "", next);
+    return;
+  }
+  if (window.location.pathname !== "/" || window.location.search || window.location.hash) {
+    window.history.replaceState(null, "", "/");
+  }
+}
 
 function loadTheme(): ThemeName {
   try {
@@ -128,7 +268,7 @@ function loadTheme(): ThemeName {
   } catch {
     /* ignore */
   }
-  return "milady";
+  return "milady-os";
 }
 
 function applyTheme(name: ThemeName) {
@@ -243,20 +383,24 @@ function resolveOnboardingStyleCatchphrase(
   return options.styles[0]?.catchphrase ?? "";
 }
 
-function resolveOnboardingStylePreset(
-  options: OnboardingOptions | null | undefined,
-  requested: string,
-): StylePreset | undefined {
-  if (!options) return undefined;
-  const catchphrase = resolveOnboardingStyleCatchphrase(options, requested);
-  return options.styles.find((preset) => preset.catchphrase === catchphrase);
-}
-
 // ── Action notice ──────────────────────────────────────────────────────
 
 interface ActionNotice {
-  tone: string;
+  tone: ProStreamerFeedbackTone;
   text: string;
+}
+
+interface GoLiveInlineNotice {
+  tone: ProStreamerFeedbackTone;
+  message: string;
+}
+
+interface ActionLogInlineNotice {
+  id: string;
+  tone: ProStreamerFeedbackTone;
+  title?: string;
+  message: string;
+  actionLabel?: string;
 }
 
 type LifecycleAction =
@@ -419,6 +563,7 @@ function parseConversationMessageEvent(
   const text = value.text;
   const timestamp = value.timestamp;
   const source = value.source;
+  const blocks = value.blocks;
   if (
     typeof id !== "string" ||
     (role !== "user" && role !== "assistant") ||
@@ -428,6 +573,33 @@ function parseConversationMessageEvent(
     return null;
   }
   const parsed: ConversationMessage = { id, role, text, timestamp };
+  if (Array.isArray(blocks)) {
+    const parsedBlocks = blocks.filter((block): block is ContentBlock => {
+      if (!isRecord(block) || typeof block.type !== "string") return false;
+      if (block.type === "text") {
+        return typeof block.text === "string";
+      }
+      if (block.type === "action-pill") {
+        return (
+          typeof block.label === "string" &&
+          (block.kind === "stream" ||
+            block.kind === "avatar" ||
+            block.kind === "launch") &&
+          (block.detail === undefined || typeof block.detail === "string")
+        );
+      }
+      if (block.type === "ui-spec") {
+        return isRecord(block.spec);
+      }
+      if (block.type === "config-form") {
+        return typeof block.pluginId === "string" && isRecord(block.schema);
+      }
+      return false;
+    });
+    if (parsedBlocks.length > 0) {
+      parsed.blocks = parsedBlocks;
+    }
+  }
   if (typeof source === "string" && source.length > 0) {
     parsed.source = source;
   }
@@ -554,6 +726,14 @@ export interface AppState {
   // Core
   tab: Tab;
   currentTheme: ThemeName;
+  dockSurface: DockSurface;
+  streamViewMode: "broadcast" | "operator";
+  leftRailState: RailBubbleState;
+  rightRailState: RailBubbleState;
+  activeBubble: ActiveBubble;
+  hudSurface: HudSurface;
+  hudControlSection: HudControlSection | null;
+  hudAssetSection: HudAssetSection | null;
   connected: boolean;
   agentStatus: AgentStatus | null;
   onboardingComplete: boolean;
@@ -563,6 +743,8 @@ export interface AppState {
   authRequired: boolean;
   actionNotice: ActionNotice | null;
   toasts: ToastItem[];
+  goLiveInlineNotice: GoLiveInlineNotice | null;
+  actionLogInlineNotice: ActionLogInlineNotice | null;
   lifecycleBusy: boolean;
   lifecycleAction: LifecycleAction | null;
 
@@ -592,6 +774,15 @@ export interface AppState {
   autonomousLatestEventId: string | null;
   /** Conversation IDs with unread proactive messages from the agent. */
   unreadConversations: Set<string>;
+  quickLayerStatuses: Record<QuickLayerId, QuickLayerStatus>;
+  autonomousRunOpen: boolean;
+  autoRunMode: Five55AutonomyMode;
+  autoRunTopic: string;
+  autoRunDurationMin: number;
+  autoRunAvatarRuntime: "auto" | "local" | "premium";
+  autoRunPreview: Five55AutonomyPreviewResponse | null;
+  autoRunPreviewBusy: boolean;
+  autoRunLaunching: boolean;
 
   // Triggers
   triggers: TriggerSummary[];
@@ -783,6 +974,9 @@ export interface AppState {
 
   // Emote picker
   emotePickerOpen: boolean;
+  availableEmotes: AvatarEmoteDef[];
+  activeAvatarEmoteId: string | null;
+  avatarMotionMode: "idle" | "manual" | "auto";
 
   // MCP
   mcpConfiguredServers: Record<string, McpServerConfig>;
@@ -812,6 +1006,12 @@ export interface AppState {
   activeGamePostMessagePayload: GamePostMessageAuthPayload | null;
   five55MasteryRuns: Five55MasteryRun[];
   five55MasteryRunsLoading: boolean;
+  liveBroadcastState: "offline" | "live";
+  goLiveModalOpen: boolean;
+  liveLayoutMode: LiveLayoutMode;
+  liveSceneId: "default" | "active-pip";
+  liveSecondarySources: LiveSecondarySource[];
+  liveHeroSource: LiveSecondarySource | null;
 
   /** When true, the game iframe persists as a floating overlay across all tabs. */
   gameOverlayEnabled: boolean;
@@ -831,6 +1031,17 @@ export interface AppActions {
   // Navigation
   setTab: (tab: Tab) => void;
   setTheme: (theme: ThemeName) => void;
+  openDockSurface: (surface: Exclude<DockSurface, "none">) => void;
+  closeDockSurface: () => void;
+  setStreamViewMode: (mode: "broadcast" | "operator") => void;
+  openHudControlStack: (section?: HudControlSection, tabOverride?: Tab) => void;
+  openHudAssetVault: (section?: HudAssetSection, tabOverride?: Tab) => void;
+  closeHudSurface: () => void;
+  setRailDisplay: (
+    bubble: Exclude<ActiveBubble, "none">,
+    state: RailBubbleState,
+  ) => void;
+  collapseRails: () => void;
 
   // Lifecycle
   handleStart: () => Promise<void>;
@@ -847,10 +1058,18 @@ export interface AppActions {
   handleChatStop: () => void;
   handleChatClear: () => Promise<void>;
   handleNewConversation: () => Promise<void>;
-  setChatPendingImages: (images: ImageAttachment[]) => void;
+  setChatPendingImages: (images: SetStateAction<ImageAttachment[]>) => void;
   handleSelectConversation: (id: string) => Promise<void>;
   handleDeleteConversation: (id: string) => Promise<void>;
   handleRenameConversation: (id: string, title: string) => Promise<void>;
+  runQuickLayer: (layerId: QuickLayerId) => Promise<void>;
+  openGoLiveModal: () => void;
+  closeGoLiveModal: () => void;
+  launchGoLive: (config: GoLiveConfig) => Promise<GoLiveLaunchResult>;
+  openAutonomousRun: () => void;
+  closeAutonomousRun: () => void;
+  runAutonomousEstimate: () => Promise<Five55AutonomyPreviewResponse | null>;
+  runAutonomousLaunch: () => Promise<void>;
 
   // Triggers
   loadTriggers: () => Promise<void>;
@@ -953,6 +1172,8 @@ export interface AppActions {
   // Emote picker
   openEmotePicker: () => void;
   closeEmotePicker: () => void;
+  playAvatarEmote: (emoteId: string) => Promise<void>;
+  stopAvatarEmote: () => void;
 
   // Workbench
   loadWorkbench: () => Promise<void>;
@@ -962,8 +1183,14 @@ export interface AppActions {
   handleAgentImport: () => Promise<void>;
 
   // Action notice / toasts
-  setActionNotice: (text: string, tone?: "info" | "success" | "error", ttlMs?: number) => void;
+  setActionNotice: (
+    text: string,
+    tone?: ProStreamerFeedbackTone,
+    ttlMs?: number,
+  ) => void;
   dismissToast: (id: string) => void;
+  dismissGoLiveInlineNotice: () => void;
+  dismissActionLogInlineNotice: () => void;
 
   // Generic state setter
   setState: <K extends keyof AppState>(key: K, value: AppState[K]) => void;
@@ -992,6 +1219,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // --- Core state ---
   const [tab, setTabRaw] = useState<Tab>("chat");
   const [currentTheme, setCurrentTheme] = useState<ThemeName>(loadTheme);
+  const [dockSurface, setDockSurface] = useState<DockSurface>("none");
+  const [streamViewMode, setStreamViewMode] =
+    useState<"broadcast" | "operator">("broadcast");
+  const [leftRailState, setLeftRailState] =
+    useState<RailBubbleState>("collapsed");
+  const [rightRailState, setRightRailState] =
+    useState<RailBubbleState>("collapsed");
+  const [activeBubble, setActiveBubble] = useState<ActiveBubble>("none");
+  const [hudSurface, setHudSurface] = useState<HudSurface>("none");
+  const [hudControlSection, setHudControlSection] =
+    useState<HudControlSection | null>(null);
+  const [hudAssetSection, setHudAssetSection] =
+    useState<HudAssetSection | null>(null);
   const [connected, setConnected] = useState(false);
   const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
@@ -1004,7 +1244,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [startupRetryNonce, setStartupRetryNonce] = useState(0);
   const [authRequired, setAuthRequired] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const actionNotice: ActionNotice | null = toasts.length > 0 ? { tone: toasts[0].tone, text: toasts[0].text } : null;
+  const [goLiveInlineNotice, setGoLiveInlineNotice] =
+    useState<GoLiveInlineNotice | null>(null);
+  const [actionLogInlineNotice, setActionLogInlineNotice] =
+    useState<ActionLogInlineNotice | null>(null);
+  const actionNotice: ActionNotice | null =
+    toasts.length > 0
+      ? { tone: toasts[0].tone, text: toasts[0].text }
+      : null;
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [lifecycleAction, setLifecycleAction] =
     useState<LifecycleAction | null>(null);
@@ -1049,6 +1296,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [unreadConversations, setUnreadConversations] = useState<Set<string>>(
     new Set(),
   );
+  const [autonomousRunOpen, setAutonomousRunOpen] = useState(false);
+  const [autoRunMode, setAutoRunMode] =
+    useState<Five55AutonomyMode>("newscast");
+  const [autoRunTopic, setAutoRunTopic] = useState("");
+  const [autoRunDurationMin, setAutoRunDurationMin] = useState(30);
+  const [autoRunAvatarRuntime, setAutoRunAvatarRuntime] = useState<
+    "auto" | "local" | "premium"
+  >("local");
+  const [autoRunPreview, setAutoRunPreview] =
+    useState<Five55AutonomyPreviewResponse | null>(null);
+  const [autoRunPreviewBusy, setAutoRunPreviewBusy] = useState(false);
+  const [autoRunLaunching, setAutoRunLaunching] = useState(false);
   const activeConversationIdRef = useRef<string | null>(null);
   const conversationsRef = useRef<Conversation[]>([]);
 
@@ -1063,6 +1322,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     saveChatVoiceMuted(chatAgentVoiceMuted);
   }, [chatAgentVoiceMuted]);
+
+  useEffect(() => {
+    setAutoRunPreview(null);
+  }, [autoRunMode, autoRunTopic, autoRunDurationMin, autoRunAvatarRuntime]);
 
   // --- Triggers ---
   const [triggers, setTriggers] = useState<TriggerSummary[]>([]);
@@ -1352,6 +1615,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // --- Emote picker ---
   const [emotePickerOpen, setEmotePickerOpen] = useState(false);
+  const [availableEmotes, setAvailableEmotes] = useState<AvatarEmoteDef[]>([]);
+  const [activeAvatarEmoteId, setActiveAvatarEmoteId] = useState<string | null>(
+    null,
+  );
+  const [avatarMotionMode, setAvatarMotionMode] = useState<
+    "idle" | "manual" | "auto"
+  >("idle");
+  const avatarMotionResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const pendingManualAvatarEmoteRef = useRef<{
+    emoteId: string;
+    expiresAt: number;
+  } | null>(null);
 
   // --- MCP ---
   const [mcpConfiguredServers, setMcpConfiguredServers] = useState<
@@ -1400,7 +1677,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
   const [five55MasteryRunsLoading, setFive55MasteryRunsLoading] =
     useState(false);
+  const [liveBroadcastState, setLiveBroadcastState] =
+    useState<"offline" | "live">("offline");
+  const [goLiveModalOpen, setGoLiveModalOpen] = useState(false);
+  const [liveSecondarySources, setLiveSecondarySources] = useState<
+    LiveSecondarySource[]
+  >([]);
   const [gameOverlayEnabled, setGameOverlayEnabled] = useState(false);
+  const quickLayerStatuses = useMemo(
+    () => buildQuickLayerStatusRecord(plugins),
+    [plugins],
+  );
+  const liveLayoutMode = useMemo(
+    () => resolveLiveLayoutMode(liveSecondarySources),
+    [liveSecondarySources],
+  );
+  const liveSceneId = useMemo(
+    () => resolveLiveSceneId(liveLayoutMode),
+    [liveLayoutMode],
+  );
+  const liveHeroSource = useMemo(
+    () => resolveLiveHeroSource(liveSecondarySources),
+    [liveSecondarySources],
+  );
+  const availableEmoteById = useMemo(
+    () => new Map(availableEmotes.map((emote) => [emote.id, emote])),
+    [availableEmotes],
+  );
+
+  useEffect(() => {
+    if (activeGameViewerUrl.trim()) return;
+    setLiveSecondarySources((current) =>
+      removeLiveSecondarySource(current, "active-game"),
+    );
+  }, [activeGameViewerUrl]);
 
   // --- Admin ---
   const [appsSubTab, setAppsSubTab] = useState<"browse" | "games">("browse");
@@ -1420,6 +1730,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // --- Refs for timers ---
   const toastIdCounter = useRef(0);
+  const actionLogNoticeIdCounter = useRef(0);
   const cloudPollInterval = useRef<number | null>(null);
   const cloudLoginPollTimer = useRef<number | null>(null);
   const prevAgentStateRef = useRef<string | null>(null);
@@ -1433,9 +1744,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const chatAbortRef = useRef<AbortController | null>(null);
   /** Synchronous lock so same-tick chat submits cannot double-send. */
   const chatSendBusyRef = useRef(false);
-  /** Batches streaming tokens so we update state once per animation frame. */
-  const pendingTokensRef = useRef("");
-  const tokenRafIdRef = useRef(0);
   /** Synchronous lock for export action to prevent duplicate clicks in the same tick. */
   const exportBusyRef = useRef(false);
   /** Synchronous lock for import action to prevent duplicate clicks in the same tick. */
@@ -1465,10 +1773,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setToasts((prev: ToastItem[]) => prev.filter((t: ToastItem) => t.id !== id));
   }, []);
 
-  const setActionNotice = useCallback(
-    (text: string, tone: "info" | "success" | "error" = "info", ttlMs = 2800) => {
+  const pushToastFeedback = useCallback(
+    ({ message, tone, ttlMs = 2800 }: ProStreamerToastFeedback) => {
       const id = `toast-${++toastIdCounter.current}`;
-      setToasts((prev: ToastItem[]) => [...prev.slice(-2), { id, text, tone }]);
+      setToasts((prev: ToastItem[]) => [...prev.slice(-2), { id, text: message, tone }]);
       const handle = window.setTimeout(() => {
         toastTimers.current.delete(id);
         setToasts((prev: ToastItem[]) => prev.filter((t: ToastItem) => t.id !== id));
@@ -1476,6 +1784,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       toastTimers.current.set(id, handle);
     },
     [],
+  );
+
+  const dismissGoLiveInlineNotice = useCallback(() => {
+    setGoLiveInlineNotice(null);
+  }, []);
+
+  const dismissActionLogInlineNotice = useCallback(() => {
+    setActionLogInlineNotice(null);
+  }, []);
+
+  const setActionNotice = useCallback(
+    (text: string, tone: ProStreamerFeedbackTone = "info", ttlMs = 2800) => {
+      pushToastFeedback({ target: "toast", message: text, tone, ttlMs });
+    },
+    [pushToastFeedback],
   );
 
   // ── Clipboard ──────────────────────────────────────────────────────
@@ -1497,19 +1820,217 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ── Theme ──────────────────────────────────────────────────────────
 
+  const lastLegacyTabRef = useRef<Tab>("chat");
+
+  const collapseRails = useCallback(() => {
+    setLeftRailState("collapsed");
+    setRightRailState("collapsed");
+    setActiveBubble("none");
+  }, []);
+
+  const setRailDisplay = useCallback(
+    (bubble: Exclude<ActiveBubble, "none">, state: RailBubbleState) => {
+      if (bubble === "action-log") {
+        setLeftRailState(state);
+        setRightRailState("collapsed");
+        setActiveBubble(state === "collapsed" ? "none" : "action-log");
+        return;
+      }
+      setRightRailState(state);
+      setLeftRailState("collapsed");
+      setActiveBubble(state === "collapsed" ? "none" : "mission-stack");
+    },
+    [],
+  );
+
+  const openActionLogSurface = useCallback(() => {
+    setRailDisplay("action-log", "expanded");
+  }, [setRailDisplay]);
+
+  const proStreamerFeedbackSinks = useMemo<ProStreamerFeedbackSinks>(
+    () => ({
+      showToast: pushToastFeedback,
+      showGoLiveInline: (feedback) => {
+        setGoLiveInlineNotice({
+          tone: feedback.tone,
+          message: feedback.message,
+        });
+      },
+      showActionLogInline: (feedback: ProStreamerActionLogInlineFeedback) => {
+        setActionLogInlineNotice({
+          id: `action-log-inline-${++actionLogNoticeIdCounter.current}`,
+          tone: feedback.tone,
+          title: feedback.title,
+          message: feedback.message,
+          actionLabel: feedback.actionLabel,
+        });
+      },
+      showModal: (feedback: ProStreamerModalFeedback) => {
+        setGoLiveInlineNotice({
+          tone: feedback.tone,
+          message: feedback.message,
+        });
+      },
+      openActionLog: openActionLogSurface,
+    }),
+    [openActionLogSurface, pushToastFeedback],
+  );
+
+  const closeHudSurface = useCallback(() => {
+    collapseRails();
+    setHudSurface("none");
+    setHudControlSection(null);
+  }, [collapseRails]);
+
+  const closeDockSurface = useCallback(() => {
+    setDockSurface("none");
+  }, []);
+
+  const openDockSurface = useCallback(
+    (surface: Exclude<DockSurface, "none">) => {
+      collapseRails();
+      setHudSurface("none");
+      setHudControlSection(null);
+      setDockSurface(surface);
+
+      if (surface === "vault") {
+        setHudAssetSection(
+          (current) => current ?? assetVaultSectionForTab(tab) ?? "identity",
+        );
+        return;
+      }
+
+      setHudAssetSection(null);
+      if (surface === "memory") {
+        setTabRaw("knowledge");
+        return;
+      }
+
+      if (surface === "ops") {
+        setTabRaw("plugins");
+      }
+    },
+    [collapseRails, tab],
+  );
+
+  const openHudControlStack = useCallback(
+    (section: HudControlSection = "settings", tabOverride?: Tab) => {
+      const resolvedSection = sanitizeControlSection(section);
+      const overrideSection = tabOverride ? controlSectionForTab(tabOverride) : null;
+      const targetTab =
+        tabOverride &&
+        isTabEnabled(tabOverride) &&
+        overrideSection === resolvedSection
+          ? tabOverride
+          : defaultTabForControlSection(resolvedSection);
+      collapseRails();
+      setDockSurface("none");
+      setHudSurface("control-stack");
+      setHudControlSection(resolvedSection);
+      setHudAssetSection(null);
+      setTabRaw(targetTab);
+    },
+    [collapseRails],
+  );
+
+  const openHudAssetVault = useCallback(
+    (section: HudAssetSection = "identity", tabOverride?: Tab) => {
+      const targetTab =
+        tabOverride && isTabEnabled(tabOverride) ? tabOverride : section;
+      collapseRails();
+      setDockSurface("vault");
+      setHudSurface("none");
+      setHudAssetSection(section);
+      setHudControlSection(null);
+      setTabRaw(targetTab);
+    },
+    [collapseRails],
+  );
+
+  const applyMiladyTabIntent = useCallback(
+    (newTab: Tab) => {
+      const targetTab = isTabEnabled(newTab) ? newTab : "chat";
+      setTabRaw(targetTab);
+      const controlSection = controlSectionForTab(targetTab);
+      const assetSection = assetVaultSectionForTab(targetTab);
+      if (controlSection) {
+        collapseRails();
+        setDockSurface("none");
+        setHudSurface("control-stack");
+        setHudControlSection(controlSection);
+        setHudAssetSection(null);
+        return;
+      }
+      if (assetSection) {
+        collapseRails();
+        setDockSurface("vault");
+        setHudSurface("none");
+        setHudAssetSection(assetSection);
+        setHudControlSection(null);
+        return;
+      }
+      if (targetTab === "knowledge") {
+        collapseRails();
+        setDockSurface("memory");
+        setHudSurface("none");
+        setHudControlSection(null);
+        setHudAssetSection(null);
+        return;
+      }
+      collapseRails();
+      setDockSurface("none");
+      setHudSurface("none");
+      setHudControlSection(null);
+      setHudAssetSection(null);
+    },
+    [collapseRails],
+  );
+
   const setTheme = useCallback((name: ThemeName) => {
+    const switchingToMilady = name === "milady-os" && currentTheme !== "milady-os";
+    const switchingFromMilady = name !== "milady-os" && currentTheme === "milady-os";
+
     setCurrentTheme(name);
     applyTheme(name);
-  }, []);
+
+    if (switchingToMilady) {
+      collapseRails();
+      applyMiladyTabIntent(tab);
+      replaceMiladyLocationWithRoot();
+      return;
+    }
+
+    if (switchingFromMilady) {
+      collapseRails();
+      setDockSurface("none");
+      setHudSurface("none");
+      setHudControlSection(null);
+      setHudAssetSection(null);
+      const restoreTab = lastLegacyTabRef.current || "chat";
+      setTabRaw(restoreTab);
+      const path = pathForTab(restoreTab);
+      if (window.location.protocol === "file:") {
+        window.location.hash = path;
+      } else {
+        window.history.replaceState(null, "", path);
+      }
+    }
+  }, [applyMiladyTabIntent, currentTheme, tab]);
 
   // ── Navigation ─────────────────────────────────────────────────────
 
   const setTab = useCallback(
     (newTab: Tab) => {
-      setTabRaw(newTab);
+      if (!isTabEnabled(newTab)) return;
       if (newTab === "apps") {
         setAppsSubTab(activeGameViewerUrl.trim() ? "games" : "browse");
       }
+      if (currentTheme === "milady-os") {
+        applyMiladyTabIntent(newTab);
+        return;
+      }
+      setTabRaw(newTab);
+      lastLegacyTabRef.current = newTab;
       const path = pathForTab(newTab);
       // In Electron packaged builds (file:// URLs), use hash routing to avoid
       // "Not allowed to load local resource: file:///..." errors.
@@ -1519,7 +2040,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         window.history.pushState(null, "", path);
       }
     },
-    [activeGameViewerUrl],
+    [activeGameViewerUrl, applyMiladyTabIntent, currentTheme],
   );
 
   const sortTriggersByNextRun = useCallback(
@@ -2051,8 +2572,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActionNotice(LIFECYCLE_MESSAGES.start.success, "success", 2400);
     } catch (err) {
       setActionNotice(
-        `Failed to ${LIFECYCLE_MESSAGES.start.verb} agent: ${
-          err instanceof Error ? err.message : "unknown error"
+        `Failed to ${LIFECYCLE_MESSAGES.start.verb} agent: ${err instanceof Error ? err.message : "unknown error"
         }`,
         "error",
         4200,
@@ -2071,8 +2591,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActionNotice(LIFECYCLE_MESSAGES.stop.success, "success", 2400);
     } catch (err) {
       setActionNotice(
-        `Failed to ${LIFECYCLE_MESSAGES.stop.verb} agent: ${
-          err instanceof Error ? err.message : "unknown error"
+        `Failed to ${LIFECYCLE_MESSAGES.stop.verb} agent: ${err instanceof Error ? err.message : "unknown error"
         }`,
         "error",
         4200,
@@ -2102,8 +2621,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActionNotice(LIFECYCLE_MESSAGES[action].success, "success", 2400);
     } catch (err) {
       setActionNotice(
-        `Failed to ${LIFECYCLE_MESSAGES[action].verb} agent: ${
-          err instanceof Error ? err.message : "unknown error"
+        `Failed to ${LIFECYCLE_MESSAGES[action].verb} agent: ${err instanceof Error ? err.message : "unknown error"
         }`,
         "error",
         4200,
@@ -2124,7 +2642,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       setAgentStatus({
         ...(agentStatus ?? {
-          agentName: "Milady",
+          agentName: "rasp",
           model: undefined,
           uptime: undefined,
           startedAt: undefined,
@@ -2142,8 +2660,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActionNotice(LIFECYCLE_MESSAGES.restart.success, "success", 2400);
     } catch (err) {
       setActionNotice(
-        `Failed to ${LIFECYCLE_MESSAGES.restart.verb} agent: ${
-          err instanceof Error ? err.message : "unknown error"
+        `Failed to ${LIFECYCLE_MESSAGES.restart.verb} agent: ${err instanceof Error ? err.message : "unknown error"
         }`,
         "error",
         4200,
@@ -2194,8 +2711,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     const confirmed = window.confirm(
       "This will completely reset the agent — wiping all config, memory, and data.\n\n" +
-        "You will be taken back to the onboarding wizard.\n\n" +
-        "Are you sure?",
+      "You will be taken back to the onboarding wizard.\n\n" +
+      "Are you sure?",
     );
     if (!confirmed) return;
     if (!beginLifecycleAction("reset")) return;
@@ -2221,8 +2738,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActionNotice(LIFECYCLE_MESSAGES.reset.success, "success", 3200);
     } catch (err) {
       setActionNotice(
-        `Failed to ${LIFECYCLE_MESSAGES.reset.verb} agent: ${
-          err instanceof Error ? err.message : "unknown error"
+        `Failed to ${LIFECYCLE_MESSAGES.reset.verb} agent: ${err instanceof Error ? err.message : "unknown error"
         }`,
         "error",
         4200,
@@ -2282,18 +2798,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [fetchGreeting]);
 
-  const handleChatSend = useCallback(
-    async (channelType: ConversationChannelType = "DM") => {
-      const text = chatInput.trim();
-      if (!text) return;
-      if (chatSendBusyRef.current || chatSending) return;
+  const sendConversationTurn = useCallback(
+    async ({
+      text,
+      channelType = "DM",
+      images,
+      userBlocks,
+      clearComposer = false,
+    }: {
+      text: string;
+      channelType?: ConversationChannelType;
+      images?: ImageAttachment[];
+      userBlocks?: ContentBlock[];
+      clearComposer?: boolean;
+    }): Promise<boolean> => {
+      const trimmedText = text.trim();
+      if (!trimmedText) return false;
+      if (chatSendBusyRef.current || chatSending) return false;
       chatSendBusyRef.current = true;
-
-      // Capture and clear pending images before async work
-      const imagesToSend = chatPendingImages.length
-        ? chatPendingImages
-        : undefined;
-      setChatPendingImages([]);
 
       try {
         let convId: string = activeConversationId ?? "";
@@ -2305,11 +2827,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             activeConversationIdRef.current = conversation.id;
             convId = conversation.id;
           } catch {
-            return;
+            return false;
           }
         }
 
-        // Keep server-side active conversation in sync for proactive routing.
         client.sendWsMessage({
           type: "active-conversation",
           conversationId: convId,
@@ -2321,10 +2842,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         setConversationMessages((prev: ConversationMessage[]) => [
           ...prev,
-          { id: userMsgId, role: "user", text, timestamp: now },
+          {
+            id: userMsgId,
+            role: "user",
+            text: trimmedText,
+            timestamp: now,
+            blocks: userBlocks,
+          },
           { id: assistantMsgId, role: "assistant", text: "", timestamp: now },
         ]);
-        setChatInput("");
+
+        if (clearComposer) {
+          setChatInput("");
+        }
+
         setChatSending(true);
         setChatFirstTokenReceived(false);
 
@@ -2335,7 +2866,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         try {
           const data = await client.sendConversationMessageStream(
             convId,
-            text,
+            trimmedText,
             (token) => {
               const delta = computeStreamingDelta(streamedAssistantText, token);
               if (!delta) return;
@@ -2351,7 +2882,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             },
             channelType,
             controller.signal,
-            imagesToSend,
+            images,
           );
 
           if (shouldApplyFinalStreamText(streamedAssistantText, data.text)) {
@@ -2367,6 +2898,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             });
           }
           void loadConversations();
+          return true;
         } catch (err) {
           const abortError = err as Error;
           if (abortError.name === "AbortError") {
@@ -2376,10 +2908,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
                   !(message.id === assistantMsgId && !message.text.trim()),
               ),
             );
-            return;
+            return false;
           }
 
-          // If the conversation was lost (server restart), create a fresh one and retry once.
           const status = (err as { status?: number }).status;
           if (status === 404) {
             try {
@@ -2394,24 +2925,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
               const retryData = await client.sendConversationMessage(
                 conversation.id,
-                text,
+                trimmedText,
                 channelType,
-                imagesToSend,
+                images,
               );
               setConversationMessages([
                 {
                   id: `temp-${Date.now()}`,
                   role: "user",
-                  text,
+                  text: trimmedText,
                   timestamp: Date.now(),
+                  blocks: userBlocks,
                 },
                 {
                   id: `temp-resp-${Date.now()}`,
                   role: "assistant",
                   text: retryData.text,
                   timestamp: Date.now(),
+                  blocks: retryData.blocks,
                 },
               ]);
+              return true;
             } catch {
               setConversationMessages((prev) =>
                 prev.filter(
@@ -2419,10 +2953,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
                     !(message.id === assistantMsgId && !message.text.trim()),
                 ),
               );
+              return false;
             }
-          } else {
-            await loadConversationMessages(convId);
           }
+
+          await loadConversationMessages(convId);
+          return false;
         } finally {
           if (chatAbortRef.current === controller) {
             chatAbortRef.current = null;
@@ -2434,14 +2970,104 @@ export function AppProvider({ children }: { children: ReactNode }) {
         chatSendBusyRef.current = false;
       }
     },
-    [
-      chatInput,
-      chatSending,
-      chatPendingImages,
-      activeConversationId,
-      loadConversationMessages,
-      loadConversations,
-    ],
+    [activeConversationId, chatSending, loadConversationMessages, loadConversations],
+  );
+
+  const handleChatSend = useCallback(
+    async (channelType: ConversationChannelType = "DM") => {
+      const text = chatInput.trim();
+      if (!text) return;
+      const imagesToSend = chatPendingImages.length ? chatPendingImages : undefined;
+      setChatPendingImages([]);
+      await sendConversationTurn({
+        text,
+        channelType,
+        images: imagesToSend,
+        clearComposer: true,
+      });
+    },
+    [chatInput, chatPendingImages, sendConversationTurn],
+  );
+
+  const sendOperatorActionMessage = useCallback(
+    async ({
+      label,
+      kind,
+      detail,
+    }: {
+      label: string;
+      kind: "stream" | "avatar" | "launch";
+      detail?: string;
+    }) => {
+      let convId = activeConversationIdRef.current ?? activeConversationId;
+      if (!convId) {
+        try {
+          const { conversation } = await client.createConversation();
+          setConversations((prev) => [conversation, ...prev]);
+          setActiveConversationId(conversation.id);
+          activeConversationIdRef.current = conversation.id;
+          setConversationMessages([]);
+          convId = conversation.id;
+        } catch {
+          return false;
+        }
+      }
+
+      const appendLoggedAction = (message: ConversationMessage) => {
+        setConversationMessages((prev) => {
+          if (prev.some((entry) => entry.id === message.id)) return prev;
+          return [...prev, message];
+        });
+      };
+
+      const logActionForConversation = async (conversationId: string) => {
+        client.sendWsMessage({
+          type: "active-conversation",
+          conversationId,
+        });
+        const { message } = await client.logConversationOperatorAction(
+          conversationId,
+          {
+            label,
+            kind,
+            detail,
+            fallbackText: label,
+          },
+        );
+        appendLoggedAction(message);
+        return message;
+      };
+
+      try {
+        await logActionForConversation(convId);
+        void loadConversations();
+        return true;
+      } catch (err) {
+        const status = (err as { status?: number }).status;
+        if (status === 404) {
+          try {
+            const { conversation } = await client.createConversation();
+            setConversations((prev) => [conversation, ...prev]);
+            setActiveConversationId(conversation.id);
+            activeConversationIdRef.current = conversation.id;
+            setConversationMessages([]);
+            await logActionForConversation(conversation.id);
+            void loadConversations();
+            return true;
+          } catch {
+            return false;
+          }
+        }
+
+        setActionNotice(
+          `Action executed, but logging failed: ${err instanceof Error ? err.message : "unknown error"}`,
+          "info",
+          2600,
+        );
+        return false;
+      }
+    },
+    [activeConversationId, loadConversations, setActionNotice],
   );
 
   const handleChatStop = useCallback(() => {
@@ -2682,6 +3308,1743 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [loadConversations, setActionNotice],
   );
 
+  const openAutonomousRun = useCallback(() => {
+    setAutonomousRunOpen(true);
+    setActionNotice(
+      "Configure mode, duration, and credit estimate before starting autonomous live mode.",
+      "info",
+      2600,
+    );
+  }, [setActionNotice]);
+
+  const closeAutonomousRun = useCallback(() => {
+    setAutonomousRunOpen(false);
+  }, []);
+
+  const setLiveSource = useCallback(
+    (source: Omit<LiveSecondarySource, "activatedAt">) => {
+      setLiveSecondarySources((current) =>
+        upsertLiveSecondarySource(current, {
+          ...source,
+          activatedAt: Date.now(),
+        }),
+      );
+    },
+    [],
+  );
+
+  const resetLiveComposition = useCallback(() => {
+    setLiveBroadcastState("offline");
+    setLiveSecondarySources([]);
+  }, []);
+
+  const executePlanWithRetry = useCallback(
+    async (
+      input: AutonomyExecutePlanRequest,
+      opts?: { label?: string; maxAttempts?: number },
+    ) => {
+      const label = opts?.label ?? "Action";
+      const maxAttempts = Math.max(1, opts?.maxAttempts ?? 3);
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+          return await client.executeAutonomyPlan(input);
+        } catch (err) {
+          const status = getHttpStatusFromError(err);
+          const shouldRetry = shouldRetryQuickLayerError(
+            err,
+            attempt,
+            maxAttempts,
+          );
+          if (!shouldRetry) throw err;
+          const retryDelayMs = computeQuickLayerRetryDelayMs(attempt);
+          setActionNotice(
+            `${label} transient failure (HTTP ${status}). Retrying ${attempt + 1}/${maxAttempts}...`,
+            "info",
+            1800,
+          );
+          await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+        }
+      }
+      throw new Error(`${label} failed`);
+    },
+    [setActionNotice],
+  );
+
+  const resolveAutonomousGameLaunch = useCallback(
+    async (
+      planResults: unknown[],
+      selectedGameId?: string,
+    ): Promise<ParsedGameLaunch> => {
+      const launchFromPlan = parseGameLaunchFromEnvelope(
+        findLastToolEnvelope(planResults, "FIVE55_GAMES_PLAY"),
+      );
+      if (launchFromPlan) return launchFromPlan;
+
+      const playResult = await client.playFive55Game({
+        gameId: selectedGameId,
+        mode: "spectate",
+      });
+      const fallbackViewerUrl =
+        typeof playResult.viewer?.url === "string"
+          ? playResult.viewer.url.trim()
+          : "";
+      if (!fallbackViewerUrl) {
+        throw new Error("Game launch did not return a viewer URL.");
+      }
+      if (isUnreachableLoopbackViewerUrl(fallbackViewerUrl)) {
+        throw new Error(
+          "Game launch returned a localhost viewer URL. Configure FIVE55_GAMES_VIEWER_BASE_URL to a public URL.",
+        );
+      }
+
+      return {
+        gameId: playResult.game.id,
+        gameTitle: playResult.game.title,
+        viewerUrl: fallbackViewerUrl,
+        sandbox: playResult.viewer.sandbox,
+        postMessageAuth: Boolean(playResult.viewer.postMessageAuth),
+      };
+    },
+    [],
+  );
+
+  const openGoLiveModal = useCallback(() => {
+    dismissGoLiveInlineNotice();
+    setGoLiveModalOpen(true);
+  }, [dismissGoLiveInlineNotice]);
+
+  const closeGoLiveModal = useCallback(() => {
+    dismissGoLiveInlineNotice();
+    setGoLiveModalOpen(false);
+  }, [dismissGoLiveInlineNotice]);
+
+  const launchGoLive = useCallback(
+    async (config: GoLiveConfig): Promise<GoLiveLaunchResult> => {
+      const stream555ControlAvailable =
+        hasPluginRegistration(plugins, "stream555-control") &&
+        resolveQuickLayerStatus(plugins, ["stream555-control"]) !== "disabled";
+      const legacyStreamAvailable =
+        hasPluginRegistration(plugins, "stream") &&
+        resolveQuickLayerStatus(plugins, ["stream"]) !== "disabled";
+      const selectedChannels = Array.from(
+        new Set(
+          config.channels
+            .map((channel) => channel.trim().toLowerCase())
+            .filter(Boolean),
+        ),
+      );
+      const destinationPlatforms =
+        selectedChannels.length > 0 ? selectedChannels.join(",") : undefined;
+      const destinationParams = destinationPlatforms
+        ? { destinationPlatforms }
+        : {};
+      const destinationApplyParams = destinationPlatforms
+        ? { platforms: destinationPlatforms }
+        : {};
+      const formatChannelLabel = (channel: string) =>
+        channel === "x"
+          ? "X"
+          : channel === "pumpfun"
+            ? "Pump.fun"
+            : channel.charAt(0).toUpperCase() + channel.slice(1);
+      const channelLabel = selectedChannels.length
+        ? selectedChannels.map(formatChannelLabel).join(", ")
+        : "Configured channels";
+      const layoutLabel =
+        config.layoutMode === "camera-hold" ? "Camera hold" : "Camera full";
+      const streamPlugin =
+        plugins.find((plugin) => isStream555PrimaryPlugin(plugin.id)) ?? null;
+      const streamSummary = streamPlugin
+        ? buildStream555StatusSummary(streamPlugin.parameters ?? [])
+        : null;
+      const buildLaunchResult = (
+        state: GoLiveLaunchResult["state"],
+        message: string,
+        tone: GoLiveLaunchResult["tone"],
+        followUp?: GoLiveLaunchFollowUp,
+      ): GoLiveLaunchResult => {
+        if (state === "blocked" || state === "failed") {
+          routeProStreamerFeedback(
+            { target: "go-live-inline", tone, message },
+            proStreamerFeedbackSinks,
+          );
+        }
+        return {
+          state,
+          tone,
+          message,
+          ...(followUp ? { followUp } : {}),
+        };
+      };
+      const blocked = (
+        message: string,
+        tone: GoLiveLaunchResult["tone"] = "warning",
+      ) => buildLaunchResult("blocked", message, tone);
+      const failed = (message: string) =>
+        buildLaunchResult("failed", message, "error");
+      const succeeded = (message: string) =>
+        buildLaunchResult("success", message, "success");
+      const partial = (
+        message: string,
+        label: string,
+        detail: string,
+      ) =>
+        buildLaunchResult("partial", message, "warning", {
+          target: "action-log",
+          label,
+          detail,
+        });
+      const completeLaunch = async (
+        launchLabel: string,
+        launchResult: GoLiveLaunchResult,
+      ) => {
+        if (
+          launchResult.state === "partial" &&
+          launchResult.followUp?.target === "action-log"
+        ) {
+          routeProStreamerFeedback(
+            {
+              target: "action-log-inline",
+              tone: launchResult.tone,
+              title: launchLabel,
+              message: launchResult.message,
+              actionLabel: launchResult.followUp.label,
+            },
+            proStreamerFeedbackSinks,
+          );
+        }
+        if (
+          launchResult.state === "success" ||
+          launchResult.state === "partial"
+        ) {
+          const detailParts = [channelLabel, layoutLabel];
+          if (launchResult.state === "partial") {
+            detailParts.push("Partial launch");
+          }
+          if (launchResult.followUp?.detail) {
+            detailParts.push(launchResult.followUp.detail);
+          }
+          await sendOperatorActionMessage({
+            label: launchLabel,
+            kind: "launch",
+            detail: detailParts.join(" · "),
+          });
+        }
+        return launchResult;
+      };
+
+      dismissGoLiveInlineNotice();
+
+      if (!stream555ControlAvailable && !legacyStreamAvailable) {
+        return blocked(
+          "555 Stream is not available yet. Configure it before launching.",
+        );
+      }
+      if (selectedChannels.length === 0) {
+        return blocked("Select at least one ready channel for this launch.");
+      }
+      if (streamSummary) {
+        const invalidSelectedChannels = selectedChannels.flatMap((channel) => {
+          const destination = streamSummary.destinations.find(
+            (entry) => entry.id === channel,
+          );
+          if (!destination) {
+            return [`${formatChannelLabel(channel)} (unavailable)`];
+          }
+          if (destination.readinessState === "ready") {
+            return [];
+          }
+          const reason =
+            destination.readinessState === "missing-stream-key"
+              ? "missing stream key"
+              : destination.readinessState === "missing-url"
+                ? "missing RTMP URL"
+                : "disabled";
+          return [`${destination.label} (${reason})`];
+        });
+        if (invalidSelectedChannels.length > 0) {
+          return blocked(
+            `Selected channels are no longer ready: ${invalidSelectedChannels.join(", ")}.`,
+          );
+        }
+      }
+
+      let launchLabel = labelForGoLiveLaunchMode(config.launchMode);
+
+      try {
+        if (config.launchMode === "camera") {
+          let launchResult: GoLiveLaunchResult | null = null;
+          let stream555FailureReason: string | null = null;
+
+          if (stream555ControlAvailable) {
+            try {
+              const goLivePlan = await executePlanWithRetry(
+                {
+                  plan: {
+                    id: "go-live-modal-camera",
+                    steps: [
+                      {
+                        id: "go-live",
+                        toolName: "STREAM555_GO_LIVE",
+                        params: {
+                          layoutMode: config.layoutMode,
+                          ...destinationParams,
+                        },
+                      },
+                      {
+                        id: "segment-bootstrap",
+                        toolName: "STREAM555_GO_LIVE_SEGMENTS",
+                        params: { segmentIntent: "balanced" },
+                      },
+                    ],
+                  },
+                  request: { source: "user", sourceTrust: 1 },
+                  options: { stopOnFailure: false },
+                },
+                { label: "Guided go-live" },
+              );
+
+              const didGoLiveSucceed = didToolActionSucceed(
+                goLivePlan,
+                "STREAM555_GO_LIVE",
+              );
+              const didSegmentBootstrapSucceed = didToolActionSucceed(
+                goLivePlan,
+                "STREAM555_GO_LIVE_SEGMENTS",
+              );
+
+              if (didGoLiveSucceed) {
+                setLiveSecondarySources([]);
+                setLiveBroadcastState("live");
+                if (didSegmentBootstrapSucceed) {
+                  launchResult = succeeded(
+                    "Go live executed via 555 Stream with segment orchestration.",
+                  );
+                } else {
+                  const bootstrapFailureReason = getToolActionFailureMessage(
+                    goLivePlan,
+                    "STREAM555_GO_LIVE_SEGMENTS",
+                    "segment bootstrap did not succeed",
+                  );
+                  launchResult = partial(
+                    `Go live started, but segment bootstrap failed: ${bootstrapFailureReason}`,
+                    "Complete segment bootstrap",
+                    `Camera launch is live, but segment bootstrap failed: ${bootstrapFailureReason}`,
+                  );
+                }
+              } else if (!legacyStreamAvailable) {
+                stream555FailureReason = getToolActionFailureMessage(
+                  goLivePlan,
+                  "STREAM555_GO_LIVE",
+                  "stream555 go-live action did not succeed",
+                );
+                return failed(`Go live failed: ${stream555FailureReason}`);
+              } else {
+                stream555FailureReason = getToolActionFailureMessage(
+                  goLivePlan,
+                  "STREAM555_GO_LIVE",
+                  "stream555 go-live action did not succeed",
+                );
+              }
+            } catch (err) {
+              if (!legacyStreamAvailable) {
+                return failed(
+                  `Go live execution failed: ${err instanceof Error ? err.message : "unknown error"}`,
+                );
+              }
+              stream555FailureReason =
+                err instanceof Error ? err.message : "unknown error";
+            }
+          }
+
+          if (!launchResult && legacyStreamAvailable) {
+            const legacyPlan = await executePlanWithRetry(
+              {
+                plan: {
+                  id: "go-live-modal-camera-legacy",
+                  steps: [
+                    {
+                      id: "status-before",
+                      toolName: "STREAM_STATUS",
+                      params: { scope: "current" },
+                    },
+                    {
+                      id: "start",
+                      toolName: "STREAM_CONTROL",
+                      params: {
+                        operation: "start",
+                        scene: resolveLiveSceneId(config.layoutMode),
+                      },
+                    },
+                    {
+                      id: "status-after",
+                      toolName: "STREAM_STATUS",
+                      params: { scope: "current" },
+                    },
+                  ],
+                },
+                request: { source: "user", sourceTrust: 1 },
+                options: { stopOnFailure: false },
+              },
+              { label: "Guided go-live fallback" },
+            );
+            const streamState = summarizeStreamState(
+              findLastToolEnvelope(legacyPlan.results, "STREAM_STATUS"),
+            );
+            if (legacyPlan.allSucceeded || streamState.live) {
+              setLiveSecondarySources([]);
+              setLiveBroadcastState("live");
+              launchResult = partial(
+                stream555FailureReason
+                  ? `Go live started via legacy fallback after 555 Stream failed: ${stream555FailureReason}. Stream state: ${streamState.label}.`
+                  : `Go live executed via legacy stream. Stream state: ${streamState.label}.`,
+                "Review legacy fallback",
+                stream555FailureReason
+                  ? `Camera launch is live via legacy fallback after primary failure: ${stream555FailureReason}`
+                  : "Camera launch is live via legacy fallback. Verify destination routing and segment orchestration.",
+              );
+            } else {
+              return failed(
+                "Legacy go-live ran but stream status still needs follow-up.",
+              );
+            }
+          }
+          return completeLaunch(
+            launchLabel,
+            launchResult ?? failed("Launch did not complete."),
+          );
+        } else if (config.launchMode === "radio") {
+          if (!stream555ControlAvailable) {
+            return blocked(
+              "Lo-fi radio launch requires the 555 Stream control plugin.",
+            );
+          }
+          const plan = await executePlanWithRetry(
+            {
+              plan: {
+                id: "go-live-modal-radio",
+                steps: [
+                  {
+                    id: "go-live",
+                    toolName: "STREAM555_GO_LIVE",
+                    params: {
+                      inputType: "radio",
+                      layoutMode: config.layoutMode,
+                      ...destinationParams,
+                    },
+                  },
+                  {
+                    id: "radio-mode",
+                    toolName: "STREAM555_RADIO_CONTROL",
+                    params: { action: "setAutoDJMode", mode: "MUSIC" },
+                  },
+                ],
+              },
+              request: { source: "user", sourceTrust: 1 },
+              options: { stopOnFailure: false },
+            },
+            { label: "Guided radio launch" },
+          );
+          if (
+            didToolActionSucceed(plan, "STREAM555_GO_LIVE") &&
+            didToolActionSucceed(plan, "STREAM555_RADIO_CONTROL")
+          ) {
+            setLiveSecondarySources([]);
+            setLiveBroadcastState("live");
+            launchLabel = "Lo-fi Radio";
+            return completeLaunch(launchLabel, succeeded("Lo-fi radio is live."));
+          } else {
+            return failed(
+              `Lo-fi radio launch failed: ${getToolActionFailureMessage(
+                plan,
+                "STREAM555_GO_LIVE",
+                "go-live action did not succeed",
+              )}`,
+            );
+          }
+        } else if (config.launchMode === "screen-share") {
+          if (!stream555ControlAvailable) {
+            return blocked(
+              "Screen share launch requires the 555 Stream control plugin.",
+            );
+          }
+          const plan = await executePlanWithRetry(
+            {
+              plan: {
+                id: "go-live-modal-screen-share",
+                steps: [
+                  {
+                    id: "screen-share",
+                    toolName: "STREAM555_SCREEN_SHARE",
+                    params: {
+                      sceneId: "active-pip",
+                    },
+                  },
+                  {
+                    id: "destinations-apply",
+                    toolName: "STREAM555_DESTINATIONS_APPLY",
+                    params: {
+                      ...destinationApplyParams,
+                    },
+                  },
+                ],
+              },
+              request: { source: "user", sourceTrust: 1 },
+              options: { stopOnFailure: false },
+            },
+            { label: "Guided screen-share launch" },
+          );
+          if (didToolActionSucceed(plan, "STREAM555_SCREEN_SHARE")) {
+            setLiveBroadcastState("live");
+            setLiveSource({
+              id: "screen-share",
+              kind: "screen",
+              label: "Screen Share",
+            });
+            launchLabel = "Screen Share";
+            if (didToolActionSucceed(plan, "STREAM555_DESTINATIONS_APPLY")) {
+              return completeLaunch(
+                launchLabel,
+                succeeded("Screen share is live."),
+              );
+            }
+            const attachFailureReason = getToolActionFailureMessage(
+              plan,
+              "STREAM555_DESTINATIONS_APPLY",
+              "screen-share destination attach did not succeed",
+            );
+            return completeLaunch(
+              launchLabel,
+              partial(
+                `Screen share started, but destination attach failed: ${attachFailureReason}`,
+                "Attach selected destinations",
+                `Screen share is prepared, but destination attach failed: ${attachFailureReason}`,
+              ),
+            );
+          } else {
+            return failed(
+              `Screen-share launch failed: ${getToolActionFailureMessage(
+                plan,
+                "STREAM555_SCREEN_SHARE",
+                "screen-share action did not succeed",
+              )}`,
+            );
+          }
+        } else if (config.launchMode === "reaction") {
+          if (!stream555ControlAvailable) {
+            return blocked(
+              "Reaction launch requires the 555 Stream control plugin.",
+            );
+          }
+          const plan = await executePlanWithRetry(
+            {
+              plan: {
+                id: "go-live-modal-reaction",
+                steps: [
+                  {
+                    id: "go-live",
+                    toolName: "STREAM555_GO_LIVE",
+                    params: {
+                      layoutMode: config.layoutMode,
+                      ...destinationParams,
+                    },
+                  },
+                  {
+                    id: "segment-bootstrap",
+                    toolName: "STREAM555_GO_LIVE_SEGMENTS",
+                    params: {
+                      segmentIntent: "reaction",
+                      segmentTypes: "reaction,analysis",
+                    },
+                  },
+                  {
+                    id: "segment-override",
+                    toolName: "STREAM555_SEGMENT_OVERRIDE",
+                    params: {
+                      segmentType: "reaction",
+                      reason: "guided launch reaction mode",
+                    },
+                  },
+                ],
+              },
+              request: { source: "user", sourceTrust: 1 },
+              options: { stopOnFailure: false },
+            },
+            { label: "Guided reaction launch" },
+          );
+          const didGoLiveSucceed = didToolActionSucceed(plan, "STREAM555_GO_LIVE");
+          const didSegmentBootstrapSucceed = didToolActionSucceed(
+            plan,
+            "STREAM555_GO_LIVE_SEGMENTS",
+          );
+          const didSegmentOverrideSucceed = didToolActionSucceed(
+            plan,
+            "STREAM555_SEGMENT_OVERRIDE",
+          );
+          if (didGoLiveSucceed) {
+            setLiveSecondarySources([]);
+            setLiveBroadcastState("live");
+            launchLabel = "Reaction";
+            if (didSegmentBootstrapSucceed && didSegmentOverrideSucceed) {
+              return completeLaunch(
+                launchLabel,
+                succeeded("Reaction mode is live."),
+              );
+            }
+            const followUpReasons: string[] = [];
+            if (!didSegmentBootstrapSucceed) {
+              followUpReasons.push(
+                `segment bootstrap failed: ${getToolActionFailureMessage(
+                  plan,
+                  "STREAM555_GO_LIVE_SEGMENTS",
+                  "reaction segment bootstrap did not succeed",
+                )}`,
+              );
+            }
+            if (!didSegmentOverrideSucceed) {
+              followUpReasons.push(
+                `segment override failed: ${getToolActionFailureMessage(
+                  plan,
+                  "STREAM555_SEGMENT_OVERRIDE",
+                  "reaction override did not succeed",
+                )}`,
+              );
+            }
+            return completeLaunch(
+              launchLabel,
+              partial(
+                `Reaction mode is live, but follow-up is required: ${followUpReasons.join("; ")}`,
+                "Complete reaction orchestration",
+                `Reaction launch is live, but ${followUpReasons.join("; ")}`,
+              ),
+            );
+          } else {
+            return failed(
+              `Reaction launch failed: ${getToolActionFailureMessage(
+                plan,
+                "STREAM555_GO_LIVE",
+                "reaction go-live action did not succeed",
+              )}`,
+            );
+          }
+        } else if (config.launchMode === "play-games") {
+          launchLabel = "Play Games";
+          const catalog = await client.getFive55GamesCatalog({ includeBeta: true });
+          const selectedGameId = selectPreferredGameId(catalog.games);
+          const selectedGame = selectedGameId
+            ? catalog.games.find((game) => game.id === selectedGameId)
+            : undefined;
+
+          const playPlan = await executePlanWithRetry(
+            {
+              plan: {
+                id: "go-live-modal-play-games",
+                steps: [
+                  {
+                    id: "play-autonomous",
+                    toolName: "FIVE55_GAMES_PLAY",
+                    params: {
+                      ...(selectedGameId ? { gameId: selectedGameId } : {}),
+                      mode: "spectate",
+                    },
+                  },
+                ],
+              },
+              request: { source: "user", sourceTrust: 1 },
+              options: { stopOnFailure: true },
+            },
+            { label: "Guided play games launch" },
+          );
+
+          const launch = await resolveAutonomousGameLaunch(
+            playPlan.results,
+            selectedGameId,
+          );
+
+          if (!launch.viewerUrl) {
+            return failed(
+              "Autonomous game launch did not return a viewer URL.",
+            );
+          }
+
+          const resolvedGameId = launch.gameId || selectedGameId || "unknown-game";
+          const resolvedGameTitle =
+            launch.gameTitle || selectedGame?.title || resolvedGameId;
+
+          setActiveGameApp(`five55:${resolvedGameId}`);
+          setActiveGameDisplayName(resolvedGameTitle);
+          setActiveGameViewerUrl(launch.viewerUrl);
+          setActiveGameSandbox(launch.sandbox ?? DEFAULT_GAME_SANDBOX);
+          setActiveGamePostMessageAuth(launch.postMessageAuth);
+          setActiveGamePostMessagePayload(null);
+          launchLabel = resolvedGameTitle;
+
+          if (currentTheme === "milady-os" || !isTabEnabled("apps")) {
+            setGameOverlayEnabled(Boolean(launch.viewerUrl));
+          } else {
+            setTab("apps");
+            setAppsSubTab("games");
+          }
+
+          if (stream555ControlAvailable) {
+            const attachPlan = await executePlanWithRetry(
+              {
+                plan: {
+                  id: "go-live-modal-game-stream-attach",
+                  steps: [
+                    {
+                      id: "start-game-feed",
+                      toolName: "STREAM555_GO_LIVE",
+                      params: {
+                        inputType: "website",
+                        inputUrl: launch.viewerUrl,
+                        layoutMode: "camera-hold",
+                        ...destinationParams,
+                      },
+                    },
+                  ],
+                },
+                request: { source: "user", sourceTrust: 1 },
+                options: { stopOnFailure: false },
+              },
+              { label: "Game stream attach" },
+            );
+            if (!didToolActionSucceed(attachPlan, "STREAM555_GO_LIVE")) {
+              return completeLaunch(
+                launchLabel,
+                partial(
+                  `Game launched, but 555 Stream attach failed: ${getToolActionFailureMessage(
+                    attachPlan,
+                    "STREAM555_GO_LIVE",
+                    "game stream attach did not succeed",
+                  )}`,
+                  "Attach game stream",
+                  `Game launched, but 555 Stream attach failed for ${resolvedGameTitle}.`,
+                ),
+              );
+            }
+          } else if (legacyStreamAvailable) {
+            const attachPlan = await executePlanWithRetry(
+              {
+                plan: {
+                  id: "go-live-modal-game-legacy-attach",
+                  steps: [
+                    {
+                      id: "status-before",
+                      toolName: "STREAM_STATUS",
+                      params: { scope: "current" },
+                    },
+                    {
+                      id: "start-game-feed",
+                      toolName: "STREAM_CONTROL",
+                      params: {
+                        operation: "start",
+                        scene: "active-pip",
+                        inputType: "website",
+                        url: launch.viewerUrl,
+                      },
+                    },
+                    {
+                      id: "status-after",
+                      toolName: "STREAM_STATUS",
+                      params: { scope: "current" },
+                    },
+                  ],
+                },
+                request: { source: "user", sourceTrust: 1 },
+                options: { stopOnFailure: false },
+              },
+              { label: "Game legacy attach" },
+            );
+            const finalStatus = summarizeStreamState(
+              findLastToolEnvelope(attachPlan.results, "STREAM_STATUS"),
+            );
+            if (!(attachPlan.allSucceeded || finalStatus.live)) {
+              return completeLaunch(
+                launchLabel,
+                partial(
+                  "Game launched, but legacy stream attach still needs follow-up.",
+                  "Attach game stream",
+                  `Game launched, but legacy stream attach still needs follow-up for ${resolvedGameTitle}.`,
+                ),
+              );
+            }
+          } else {
+            return blocked(
+              "Play Games launch requires a stream plugin to broadcast the selected game.",
+            );
+          }
+
+          setLiveBroadcastState("live");
+          setLiveSource({
+            id: "active-game",
+            kind: "game",
+            label: resolvedGameTitle,
+            viewerUrl: launch.viewerUrl,
+          });
+          return completeLaunch(
+            launchLabel,
+            succeeded(`Launched ${resolvedGameTitle} live.`),
+          );
+        }
+        return failed("Launch did not complete.");
+      } catch (err) {
+        return failed(
+          `Launch failed: ${err instanceof Error ? err.message : "unknown error"}`,
+        );
+      }
+    },
+    [
+      currentTheme,
+      executePlanWithRetry,
+      plugins,
+      dismissGoLiveInlineNotice,
+      proStreamerFeedbackSinks,
+      resolveAutonomousGameLaunch,
+      sendOperatorActionMessage,
+      setLiveSource,
+      setTab,
+    ],
+  );
+
+  const runAutonomousEstimate = useCallback(async () => {
+    if (autoRunMode === "topic" && autoRunTopic.trim().length === 0) {
+      setActionNotice(
+        "Topic mode requires a topic before estimating.",
+        "info",
+        2600,
+      );
+      return null;
+    }
+
+    setAutoRunPreviewBusy(true);
+    try {
+      const preview = await client.getFive55AutonomyPreview({
+        mode: autoRunMode,
+        topic: autoRunTopic.trim() || undefined,
+        durationMin: autoRunDurationMin,
+        avatarRuntime: autoRunAvatarRuntime,
+      });
+      setAutoRunPreview(preview);
+      setActionNotice(
+        preview.canStart
+          ? "Autonomous run estimate ready."
+          : "Estimate ready. Credits are insufficient for this run.",
+        preview.canStart ? "success" : "info",
+        2600,
+      );
+      return preview;
+    } catch (err) {
+      setActionNotice(
+        `Failed to estimate autonomous run: ${err instanceof Error ? err.message : "unknown error"}`,
+        "error",
+        4200,
+      );
+      return null;
+    } finally {
+      setAutoRunPreviewBusy(false);
+    }
+  }, [
+    autoRunMode,
+    autoRunTopic,
+    autoRunDurationMin,
+    autoRunAvatarRuntime,
+    setActionNotice,
+  ]);
+
+  const runAutonomousLaunch = useCallback(async () => {
+    if (chatSending || autoRunLaunching) return;
+    if (autoRunMode === "topic" && autoRunTopic.trim().length === 0) {
+      setActionNotice(
+        "Topic mode requires a topic before launch.",
+        "info",
+        3000,
+      );
+      return;
+    }
+
+    const stream555Available =
+      hasPluginRegistration(plugins, "stream555-control") &&
+      resolveQuickLayerStatus(plugins, ["stream555-control"]) !== "disabled";
+    const legacyStreamAvailable =
+      hasPluginRegistration(plugins, "stream") &&
+      resolveQuickLayerStatus(plugins, ["stream"]) !== "disabled";
+
+    if (!stream555Available && !legacyStreamAvailable) {
+      setActionNotice(
+        "No stream control plugin is available. Enable 555 Stream or legacy stream before starting autonomous runs.",
+        "info",
+        3000,
+      );
+      return;
+    }
+
+    setAutoRunLaunching(true);
+    try {
+      const preview = autoRunPreview ?? (await runAutonomousEstimate());
+      if (!preview) return;
+      if (!preview.canStart) {
+        setActionNotice(
+          "Insufficient credits for this autonomous run. Adjust duration/runtime or top up credits.",
+          "error",
+          4200,
+        );
+        return;
+      }
+
+      let gameTitle: string | undefined;
+      let streamStartParams: Record<string, unknown> = {
+        operation: "start",
+        scene: "default",
+        inputType: "avatar",
+      };
+      let stream555StartParams: Record<string, unknown> = {
+        inputType: "avatar",
+        layoutMode: "camera-full",
+      };
+
+      if (autoRunMode === "games") {
+        const catalog = await client.getFive55GamesCatalog({ includeBeta: true });
+        const selectedGameId = selectPreferredGameId(catalog.games);
+
+        const playPlan = await executePlanWithRetry({
+          plan: {
+            id: "autonomous-live-games-launch",
+            steps: [
+              {
+                id: "play",
+                toolName: "FIVE55_GAMES_PLAY",
+                params: {
+                  ...(selectedGameId ? { gameId: selectedGameId } : {}),
+                  mode: "spectate",
+                },
+              },
+            ],
+          },
+          request: { source: "user", sourceTrust: 1 },
+          options: { stopOnFailure: true },
+        }, { label: "Autonomous game launch" });
+        const launch = await resolveAutonomousGameLaunch(
+          playPlan.results,
+          selectedGameId,
+        );
+
+        gameTitle = launch.gameTitle;
+        setActiveGameApp(`five55:${launch.gameId}`);
+        setActiveGameDisplayName(launch.gameTitle);
+        setActiveGameViewerUrl(launch.viewerUrl);
+        setActiveGameSandbox(launch.sandbox ?? DEFAULT_GAME_SANDBOX);
+        setActiveGamePostMessageAuth(launch.postMessageAuth);
+        setActiveGamePostMessagePayload(null);
+        setLiveSource({
+          id: "active-game",
+          kind: "game",
+          label: launch.gameTitle,
+          viewerUrl: launch.viewerUrl,
+        });
+        if (currentTheme === "milady-os" || !isTabEnabled("apps")) {
+          setGameOverlayEnabled(true);
+        } else {
+          setTab("apps");
+          setAppsSubTab("games");
+        }
+        streamStartParams = {
+          operation: "start",
+          scene: "active-pip",
+          inputType: "website",
+          url: launch.viewerUrl,
+        };
+        stream555StartParams = {
+          inputType: "website",
+          inputUrl: launch.viewerUrl,
+          layoutMode: "camera-hold",
+        };
+      }
+
+      if (stream555Available) {
+        const streamPlan = await executePlanWithRetry({
+          plan: {
+            id: "autonomous-live-stream555-start",
+            steps: [
+              {
+                id: "start",
+                toolName: "STREAM555_GO_LIVE",
+                params: stream555StartParams,
+              },
+            ],
+          },
+          request: { source: "user", sourceTrust: 1 },
+          options: { stopOnFailure: false },
+        }, { label: "Autonomous stream start" });
+
+        if (!didToolActionSucceed(streamPlan, "STREAM555_GO_LIVE")) {
+          const reason = getToolActionFailureMessage(
+            streamPlan,
+            "STREAM555_GO_LIVE",
+            "stream start failed",
+          );
+          setActionNotice(
+            `Autonomous stream start failed: ${reason}`,
+            "error",
+            4200,
+          );
+          return;
+        }
+      } else {
+        const streamPlan = await executePlanWithRetry({
+          plan: {
+            id: "autonomous-live-stream-start",
+            steps: [
+              {
+                id: "status-before",
+                toolName: "STREAM_STATUS",
+                params: { scope: "current" },
+              },
+              {
+                id: "start",
+                toolName: "STREAM_CONTROL",
+                params: streamStartParams,
+              },
+              {
+                id: "status-after",
+                toolName: "STREAM_STATUS",
+                params: { scope: "current" },
+              },
+            ],
+          },
+          request: { source: "user", sourceTrust: 1 },
+          options: { stopOnFailure: false },
+        }, { label: "Autonomous stream start" });
+
+        const finalStatus = summarizeStreamState(
+          findLastToolEnvelope(streamPlan.results, "STREAM_STATUS"),
+        );
+        if (!(streamPlan.allSucceeded || finalStatus.live)) {
+          setActionNotice(
+            "Autonomous launch started, but stream status needs verification.",
+            "info",
+            3600,
+          );
+        }
+      }
+
+      setLiveBroadcastState("live");
+      const prompt = buildAutonomousPrompt({
+        mode: autoRunMode,
+        topic: autoRunTopic,
+        durationMin: autoRunDurationMin,
+        gameTitle,
+      });
+      setChatInput(prompt);
+      setAutonomousRunOpen(false);
+      setTimeout(() => void handleChatSend(), 30);
+    } catch (err) {
+      setActionNotice(
+        `Autonomous live launch failed: ${err instanceof Error ? err.message : "unknown error"}`,
+        "error",
+        4200,
+      );
+    } finally {
+      setAutoRunLaunching(false);
+    }
+  }, [
+    autoRunDurationMin,
+    autoRunLaunching,
+    autoRunMode,
+    autoRunPreview,
+    autoRunTopic,
+    currentTheme,
+    chatSending,
+    executePlanWithRetry,
+    handleChatSend,
+    plugins,
+    resolveAutonomousGameLaunch,
+    runAutonomousEstimate,
+    setActionNotice,
+    setLiveSource,
+    setTab,
+  ]);
+
+  const runQuickLayer = useCallback(async (layerId: QuickLayerId) => {
+    if (chatSending) return;
+    const layer = QUICK_LAYER_CATALOG.find((entry) => entry.id === layerId);
+    if (!layer) return;
+
+    const pushQuickLayerToast = (
+      message: string,
+      tone: ProStreamerFeedbackTone = "info",
+      ttlMs = 2800,
+    ) => {
+      routeProStreamerFeedback(
+        { target: "toast", message, tone, ttlMs },
+        proStreamerFeedbackSinks,
+      );
+    };
+    const pushActionLogFollowUp = (
+      title: string,
+      message: string,
+      tone: ProStreamerFeedbackTone = "error",
+      actionLabel = "Review live controls",
+    ) => {
+      routeProStreamerFeedback(
+        {
+          target: "action-log-inline",
+          title,
+          message,
+          tone,
+          actionLabel,
+        },
+        proStreamerFeedbackSinks,
+      );
+    };
+
+    const status = quickLayerStatuses[layer.id] ?? "available";
+    if (status === "disabled" && layer.id !== "go-live") {
+      const pluginLabel = layer.pluginIds.join(", ");
+      pushQuickLayerToast(
+        `${pluginLabel} is disabled or not active. Enable the plugin when ready.`,
+        "info",
+        2200,
+      );
+      return;
+    }
+
+    if (layer.id === "autonomous-run") {
+      openAutonomousRun();
+      return;
+    }
+
+    let prompt = layer.prompt;
+    let shouldSendOperatorMessage = false;
+    let operatorDetail: string | undefined;
+    let openedViewerThisRun = false;
+    let viewerUrlForStream =
+      typeof activeGameViewerUrl === "string" && activeGameViewerUrl.trim().length > 0
+        ? activeGameViewerUrl
+        : undefined;
+    const stream555ControlAvailable =
+      hasPluginRegistration(plugins, "stream555-control") &&
+      resolveQuickLayerStatus(plugins, ["stream555-control"]) !== "disabled";
+    const legacyStreamAvailable =
+      hasPluginRegistration(plugins, "stream") &&
+      resolveQuickLayerStatus(plugins, ["stream"]) !== "disabled";
+
+    if (layer.id === "go-live") {
+      openGoLiveModal();
+      return;
+    }
+
+    if (layer.id === "screen-share") {
+      try {
+        const plan = await executePlanWithRetry({
+          plan: {
+            id: "quick-layer-screen-share",
+            steps: [
+              {
+                id: "screen-share",
+                toolName: "STREAM555_SCREEN_SHARE",
+                params: { sceneId: "active-pip" },
+              },
+            ],
+          },
+          request: { source: "user", sourceTrust: 1 },
+          options: { stopOnFailure: false },
+        }, { label: "Screen share" });
+        if (didToolActionSucceed(plan, "STREAM555_SCREEN_SHARE")) {
+          setLiveBroadcastState("live");
+          setLiveSource({
+            id: "screen-share",
+            kind: "screen",
+            label: "Screen Share",
+          });
+          pushQuickLayerToast("Screen-share request dispatched.", "success", 2600);
+          prompt =
+            "Confirm screen-share is active and narrate what viewers should focus on next.";
+          shouldSendOperatorMessage = true;
+        } else {
+          const reason = getToolActionFailureMessage(
+            plan,
+            "STREAM555_SCREEN_SHARE",
+            "screen-share action did not succeed",
+          );
+          pushActionLogFollowUp(
+            "Screen Share",
+            `Screen-share request failed: ${reason}`,
+          );
+        }
+      } catch (err) {
+        pushActionLogFollowUp(
+          "Screen Share",
+          `Screen-share request failed: ${err instanceof Error ? err.message : "unknown error"}`,
+        );
+      }
+    }
+
+    if (layer.id === "ads") {
+      try {
+        const createPlan = await executePlanWithRetry({
+          plan: {
+            id: "quick-layer-ad-create",
+            steps: [
+              {
+                id: "ad-create",
+                toolName: "STREAM555_AD_CREATE",
+                params: {
+                  type: "l-bar",
+                  imageUrl: "https://picsum.photos/seed/alice-ad/1280/720",
+                  durationMs: "15000",
+                },
+              },
+            ],
+          },
+          request: { source: "user", sourceTrust: 1 },
+          options: { stopOnFailure: false },
+        }, { label: "Ad create" });
+        if (!didToolActionSucceed(createPlan, "STREAM555_AD_CREATE")) {
+          const reason = getToolActionFailureMessage(
+            createPlan,
+            "STREAM555_AD_CREATE",
+            "ad create action did not succeed",
+          );
+          pushActionLogFollowUp("Ads", `Ad create failed: ${reason}`);
+          return;
+        }
+
+        const createdAdId = parseAdIdFromEnvelope(
+          findLastToolEnvelope(createPlan.results, "STREAM555_AD_CREATE"),
+        );
+        if (!createdAdId) {
+          pushActionLogFollowUp(
+            "Ads",
+            "Ad create request completed, but no adId was returned for trigger.",
+            "warning",
+          );
+          return;
+        }
+
+        const triggerPlan = await executePlanWithRetry({
+          plan: {
+            id: "quick-layer-ad-trigger",
+            steps: [
+              {
+                id: "ad-trigger",
+                toolName: "STREAM555_AD_TRIGGER",
+                params: { adId: createdAdId, durationMs: "15000" },
+              },
+            ],
+          },
+          request: { source: "user", sourceTrust: 1 },
+          options: { stopOnFailure: false },
+        }, { label: "Ad trigger" });
+        if (!didToolActionSucceed(triggerPlan, "STREAM555_AD_TRIGGER")) {
+          const reason = getToolActionFailureMessage(
+            triggerPlan,
+            "STREAM555_AD_TRIGGER",
+            "ad trigger action did not succeed",
+          );
+          pushActionLogFollowUp("Ads", `Ad trigger failed: ${reason}`);
+          return;
+        }
+        pushQuickLayerToast(`Ad created and triggered (${createdAdId}).`, "success", 2800);
+        prompt =
+          `Ad ${createdAdId} was triggered. Briefly summarize monetization impact and what comes next on stream.`;
+        shouldSendOperatorMessage = true;
+      } catch (err) {
+        pushActionLogFollowUp(
+          "Ads",
+          `Ad action failed: ${err instanceof Error ? err.message : "unknown error"}`,
+        );
+      }
+    }
+
+    if (layer.id === "invite-guest") {
+      try {
+        const plan = await executePlanWithRetry({
+          plan: {
+            id: "quick-layer-guest-invite",
+            steps: [
+              {
+                id: "guest-invite",
+                toolName: "STREAM555_GUEST_INVITE",
+                params: { name: "Guest" },
+              },
+            ],
+          },
+          request: { source: "user", sourceTrust: 1 },
+          options: { stopOnFailure: false },
+        }, { label: "Guest invite" });
+        if (didToolActionSucceed(plan, "STREAM555_GUEST_INVITE")) {
+          pushQuickLayerToast("Guest invite generated.", "success", 2600);
+          prompt =
+            "Announce guest invite status and provide concise host handoff guidance.";
+          shouldSendOperatorMessage = true;
+        } else {
+          const reason = getToolActionFailureMessage(
+            plan,
+            "STREAM555_GUEST_INVITE",
+            "guest invite action did not succeed",
+          );
+          pushActionLogFollowUp("Invite Guest", `Guest invite failed: ${reason}`);
+        }
+      } catch (err) {
+        pushActionLogFollowUp(
+          "Invite Guest",
+          `Guest invite failed: ${err instanceof Error ? err.message : "unknown error"}`,
+        );
+      }
+    }
+
+    if (layer.id === "radio") {
+      try {
+        const plan = await executePlanWithRetry({
+          plan: {
+            id: "quick-layer-radio-control",
+            steps: [
+              {
+                id: "radio-mode",
+                toolName: "STREAM555_RADIO_CONTROL",
+                params: { action: "setAutoDJMode", mode: "MUSIC" },
+              },
+            ],
+          },
+          request: { source: "user", sourceTrust: 1 },
+          options: { stopOnFailure: false },
+        }, { label: "Radio control" });
+        if (didToolActionSucceed(plan, "STREAM555_RADIO_CONTROL")) {
+          pushQuickLayerToast("Radio mode updated.", "success", 2600);
+          prompt = "Summarize current radio/audio mode and how it supports this segment.";
+          shouldSendOperatorMessage = true;
+        } else {
+          const reason = getToolActionFailureMessage(
+            plan,
+            "STREAM555_RADIO_CONTROL",
+            "radio control action did not succeed",
+          );
+          pushActionLogFollowUp("Radio", `Radio control failed: ${reason}`);
+        }
+      } catch (err) {
+        pushActionLogFollowUp(
+          "Radio",
+          `Radio control failed: ${err instanceof Error ? err.message : "unknown error"}`,
+        );
+      }
+    }
+
+    if (layer.id === "pip") {
+      try {
+        const plan = await executePlanWithRetry({
+          plan: {
+            id: "quick-layer-pip-enable",
+            steps: [
+              {
+                id: "pip-enable",
+                toolName: "STREAM555_PIP_ENABLE",
+                params: { sceneId: "active-pip" },
+              },
+            ],
+          },
+          request: { source: "user", sourceTrust: 1 },
+          options: { stopOnFailure: false },
+        }, { label: "PiP enable" });
+        if (didToolActionSucceed(plan, "STREAM555_PIP_ENABLE")) {
+          pushQuickLayerToast("PiP scene activated.", "success", 2600);
+          prompt =
+            "Confirm PiP composition is active and describe what each frame currently shows.";
+          shouldSendOperatorMessage = true;
+        } else {
+          const reason = getToolActionFailureMessage(
+            plan,
+            "STREAM555_PIP_ENABLE",
+            "PiP action did not succeed",
+          );
+          pushActionLogFollowUp("PiP", `PiP activation failed: ${reason}`);
+        }
+      } catch (err) {
+        pushActionLogFollowUp(
+          "PiP",
+          `PiP activation failed: ${err instanceof Error ? err.message : "unknown error"}`,
+        );
+      }
+    }
+
+    if (layer.id === "reaction-segment") {
+      try {
+        const plan = await executePlanWithRetry({
+          plan: {
+            id: "quick-layer-reaction-segment",
+            steps: [
+              {
+                id: "segment-state-before",
+                toolName: "STREAM555_SEGMENT_STATE",
+                params: {},
+              },
+              {
+                id: "segment-bootstrap",
+                toolName: "STREAM555_GO_LIVE_SEGMENTS",
+                params: {
+                  segmentIntent: "reaction",
+                  segmentTypes: "reaction,analysis",
+                },
+              },
+              {
+                id: "segment-override-reaction",
+                toolName: "STREAM555_SEGMENT_OVERRIDE",
+                params: {
+                  segmentType: "reaction",
+                  reason: "actions-tab reaction segment",
+                },
+              },
+            ],
+          },
+          request: { source: "user", sourceTrust: 1 },
+          options: { stopOnFailure: false },
+        }, { label: "Reaction segment override" });
+        if (didToolActionSucceed(plan, "STREAM555_SEGMENT_OVERRIDE")) {
+          const bootstrapOk = didToolActionSucceed(plan, "STREAM555_GO_LIVE_SEGMENTS");
+          if (bootstrapOk) {
+            pushQuickLayerToast(
+              "Reaction segment override queued with segment orchestration active.",
+              "success",
+              2600,
+            );
+          } else {
+            const bootstrapReason = getToolActionFailureMessage(
+              plan,
+              "STREAM555_GO_LIVE_SEGMENTS",
+              "segment orchestration needs follow-up",
+            );
+            pushActionLogFollowUp(
+              "Reaction",
+              `Reaction segment override queued, but segment orchestration needs follow-up: ${bootstrapReason}`,
+              "warning",
+            );
+          }
+          prompt =
+            "Start the next reaction segment now and keep your commentary focused on viewer engagement.";
+          shouldSendOperatorMessage = true;
+        } else {
+          const reason = getToolActionFailureMessage(
+            plan,
+            "STREAM555_SEGMENT_OVERRIDE",
+            "segment override action did not succeed",
+          );
+          pushActionLogFollowUp(
+            "Reaction",
+            `Reaction segment override failed: ${reason}`,
+          );
+        }
+      } catch (err) {
+        pushActionLogFollowUp(
+          "Reaction",
+          `Reaction segment override failed: ${err instanceof Error ? err.message : "unknown error"}`,
+        );
+      }
+    }
+
+    if (layer.id === "earnings") {
+      try {
+        const earningsPlan = await executePlanWithRetry({
+          plan: {
+            id: "quick-layer-earnings-estimate",
+            steps: [
+              {
+                id: "earnings-estimate",
+                toolName: "STREAM555_EARNINGS_ESTIMATE",
+                params: {
+                  categories: "gaming,reaction,news",
+                  limit: "5",
+                  poolSize: "30",
+                },
+              },
+            ],
+          },
+          request: { source: "user", sourceTrust: 1 },
+          options: { stopOnFailure: false },
+        }, { label: "Earnings estimate" });
+        if (!didToolActionSucceed(earningsPlan, "STREAM555_EARNINGS_ESTIMATE")) {
+          const reason = getToolActionFailureMessage(
+            earningsPlan,
+            "STREAM555_EARNINGS_ESTIMATE",
+            "earnings estimate action did not succeed",
+          );
+          pushActionLogFollowUp("Earnings", `Earnings estimate failed: ${reason}`);
+          return;
+        }
+        const envelope = findLastToolEnvelope(
+          earningsPlan.results,
+          "STREAM555_EARNINGS_ESTIMATE",
+        );
+        const maxPayout = parseProjectedEarningsFromEnvelope(envelope);
+        pushQuickLayerToast(
+          maxPayout && maxPayout > 0
+            ? `Projected top payout per impression: ${maxPayout.toFixed(4)} credits.`
+            : "Earnings estimate computed.",
+          "success",
+          3200,
+        );
+        prompt =
+          "Summarize projected earnings opportunities and recommend the next monetization move.";
+        shouldSendOperatorMessage = true;
+      } catch (err) {
+        pushActionLogFollowUp(
+          "Earnings",
+          `Earnings estimate failed: ${err instanceof Error ? err.message : "unknown error"}`,
+        );
+      }
+    }
+
+    if (layer.id === "end-live") {
+      try {
+        const plan = await executePlanWithRetry({
+          plan: {
+            id: "quick-layer-end-live",
+            steps: [
+              {
+                id: "end-live",
+                toolName: "STREAM555_END_LIVE",
+                params: {},
+              },
+            ],
+          },
+          request: { source: "user", sourceTrust: 1 },
+          options: { stopOnFailure: false },
+        }, { label: "End live" });
+        if (didToolActionSucceed(plan, "STREAM555_END_LIVE")) {
+          resetLiveComposition();
+          pushQuickLayerToast("End-live request dispatched.", "success", 2600);
+          prompt =
+            "Provide a concise stream wrap-up, final outcomes, and next scheduled action.";
+          shouldSendOperatorMessage = true;
+        } else {
+          const reason = getToolActionFailureMessage(
+            plan,
+            "STREAM555_END_LIVE",
+            "end-live action did not succeed",
+          );
+          pushActionLogFollowUp("End Live", `End-live failed: ${reason}`);
+        }
+      } catch (err) {
+        pushActionLogFollowUp(
+          "End Live",
+          `End-live failed: ${err instanceof Error ? err.message : "unknown error"}`,
+        );
+      }
+    }
+
+    if (layer.id === "play-games") {
+      try {
+        const catalog = await client.getFive55GamesCatalog({ includeBeta: true });
+        const selectedGameId = selectPreferredGameId(catalog.games);
+        const selectedGame = selectedGameId
+          ? catalog.games.find((game) => game.id === selectedGameId)
+          : undefined;
+
+        const playPlan = await executePlanWithRetry({
+          plan: {
+            id: "quick-layer-play-games-autonomous",
+            steps: [
+              {
+                id: "play-autonomous",
+                toolName: "FIVE55_GAMES_PLAY",
+                params: {
+                  ...(selectedGameId ? { gameId: selectedGameId } : {}),
+                  mode: "spectate",
+                },
+              },
+            ],
+          },
+          request: { source: "user", sourceTrust: 1 },
+          options: { stopOnFailure: true },
+        }, { label: "Play games" });
+
+        const launch = await resolveAutonomousGameLaunch(
+          playPlan.results,
+          selectedGameId,
+        );
+
+        if (launch.viewerUrl) {
+          const resolvedGameId = launch.gameId || selectedGameId || "unknown-game";
+          const resolvedGameTitle =
+            launch.gameTitle || selectedGame?.title || resolvedGameId;
+
+          openedViewerThisRun = true;
+          setActiveGameApp(`five55:${resolvedGameId}`);
+          setActiveGameDisplayName(resolvedGameTitle);
+          setActiveGameViewerUrl(launch.viewerUrl);
+          setActiveGameSandbox(launch.sandbox ?? DEFAULT_GAME_SANDBOX);
+          setActiveGamePostMessageAuth(launch.postMessageAuth);
+          setActiveGamePostMessagePayload(null);
+          setLiveSource({
+            id: "active-game",
+            kind: "game",
+            label: resolvedGameTitle,
+            viewerUrl: launch.viewerUrl,
+          });
+          viewerUrlForStream = launch.viewerUrl;
+          prompt =
+            `You are now spectating ${resolvedGameTitle} (${resolvedGameId}) in autonomous bot mode. ` +
+            "Provide live game commentary, key decisions, and score/capture updates while continuing in-play control.";
+          shouldSendOperatorMessage = true;
+          operatorDetail = resolvedGameTitle;
+          pushQuickLayerToast(
+            `Launched ${resolvedGameTitle} in autonomous mode.`,
+            "success",
+            2400,
+          );
+        } else {
+          pushActionLogFollowUp(
+            "Play Games",
+            "Autonomous game launch did not return a viewer URL.",
+          );
+        }
+      } catch (err) {
+        pushActionLogFollowUp(
+          "Play Games",
+          `Failed to launch five55 game: ${err instanceof Error ? err.message : "unknown error"}`,
+        );
+      }
+    }
+
+    if (layer.id === "play-games" && viewerUrlForStream) {
+      if (stream555ControlAvailable) {
+        try {
+          const attachPlan = await executePlanWithRetry({
+            plan: {
+              id: "quick-layer-game-stream555-attach",
+              steps: [
+                {
+                  id: "start-game-feed",
+                  toolName: "STREAM555_GO_LIVE",
+                  params: {
+                    inputType: "website",
+                    inputUrl: viewerUrlForStream,
+                    layoutMode: "camera-hold",
+                  },
+                },
+              ],
+            },
+            request: { source: "user", sourceTrust: 1 },
+            options: { stopOnFailure: false },
+        }, { label: "Game stream attach" });
+        if (didToolActionSucceed(attachPlan, "STREAM555_GO_LIVE")) {
+          setLiveBroadcastState("live");
+          pushQuickLayerToast(
+            "Game feed routed to 555 Stream with Alice camera in hold.",
+            "success",
+            2600,
+          );
+        } else {
+            const reason = getToolActionFailureMessage(
+            attachPlan,
+            "STREAM555_GO_LIVE",
+            "game stream attach did not succeed",
+          );
+          pushActionLogFollowUp(
+            "Play Games",
+            `Game launched, but 555 Stream attach failed: ${reason}`,
+            "warning",
+          );
+        }
+      } catch (err) {
+        pushActionLogFollowUp(
+          "Play Games",
+          `Game launched, but 555 Stream attach failed: ${err instanceof Error ? err.message : "unknown error"}`,
+          "warning",
+        );
+      }
+    } else if (legacyStreamAvailable) {
+        try {
+          const attachPlan = await executePlanWithRetry({
+            plan: {
+              id: "quick-layer-game-stream-attach",
+              steps: [
+                {
+                  id: "status-before",
+                  toolName: "STREAM_STATUS",
+                  params: { scope: "current" },
+                },
+                {
+                  id: "start-game-feed",
+                  toolName: "STREAM_CONTROL",
+                  params: {
+                    operation: "start",
+                    scene: "active-pip",
+                    inputType: "website",
+                    url: viewerUrlForStream,
+                  },
+                },
+                {
+                  id: "status-after",
+                  toolName: "STREAM_STATUS",
+                  params: { scope: "current" },
+                },
+              ],
+            },
+            request: { source: "user", sourceTrust: 1 },
+            options: { stopOnFailure: false },
+          }, { label: "Game stream attach" });
+          const finalStatus = summarizeStreamState(
+            findLastToolEnvelope(attachPlan.results, "STREAM_STATUS"),
+          );
+          if (attachPlan.allSucceeded || finalStatus.live) {
+            setLiveBroadcastState("live");
+            pushQuickLayerToast(
+              `Game feed routed to stream. Stream state: ${finalStatus.label}.`,
+              "success",
+              2600,
+            );
+          } else {
+            pushActionLogFollowUp(
+              "Play Games",
+              "Game launched, but stream feed attach needs follow-up in stream controls.",
+              "warning",
+            );
+          }
+        } catch (err) {
+          pushActionLogFollowUp(
+            "Play Games",
+            `Game launched, but stream attach failed: ${err instanceof Error ? err.message : "unknown error"}`,
+            "warning",
+          );
+        }
+      }
+    }
+
+    if (layer.id === "play-games") {
+      if (currentTheme === "milady-os" || !isTabEnabled("apps")) {
+        setGameOverlayEnabled(Boolean(viewerUrlForStream));
+      } else if (layer.navigateToApps) {
+        setTab("apps");
+        setAppsSubTab(openedViewerThisRun || activeGameViewerUrl.trim() ? "games" : "browse");
+      }
+    }
+
+    if (shouldSendOperatorMessage && (layer.label.trim().length > 0 || prompt.trim().length > 0)) {
+      await sendOperatorActionMessage({
+        label: layer.label,
+        kind: "stream",
+        detail: operatorDetail,
+      });
+    }
+  }, [
+    activeGameViewerUrl,
+    chatSending,
+    currentTheme,
+    executePlanWithRetry,
+    liveLayoutMode,
+    liveSceneId,
+    openGoLiveModal,
+    openAutonomousRun,
+    plugins,
+    proStreamerFeedbackSinks,
+    quickLayerStatuses,
+    resetLiveComposition,
+    resolveAutonomousGameLaunch,
+    sendOperatorActionMessage,
+    setLiveSource,
+    setTab,
+  ]);
+
   // ── Pairing ────────────────────────────────────────────────────────
 
   const handlePairingSubmit = useCallback(async () => {
@@ -2747,8 +5110,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           /* ignore */
         });
         setActionNotice(
-          `Failed to ${enabled ? "enable" : "disable"} ${pluginName}: ${
-            err instanceof Error ? err.message : "unknown error"
+          `Failed to ${enabled ? "enable" : "disable"} ${pluginName}: ${err instanceof Error ? err.message : "unknown error"
           }`,
           "error",
           4200,
@@ -3858,6 +6220,140 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setEmotePickerOpen(false);
   }, []);
 
+  const clearAvatarMotionReset = useCallback(() => {
+    if (avatarMotionResetTimeoutRef.current !== null) {
+      clearTimeout(avatarMotionResetTimeoutRef.current);
+      avatarMotionResetTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleAvatarMotionReset = useCallback(
+    (durationMs: number) => {
+      clearAvatarMotionReset();
+      avatarMotionResetTimeoutRef.current = setTimeout(() => {
+        pendingManualAvatarEmoteRef.current = null;
+        setActiveAvatarEmoteId(null);
+        setAvatarMotionMode("idle");
+        avatarMotionResetTimeoutRef.current = null;
+      }, Math.max(750, durationMs));
+    },
+    [clearAvatarMotionReset],
+  );
+
+  const loadAvailableEmotes = useCallback(async () => {
+    try {
+      const response = await client.listEmotes();
+      setAvailableEmotes(response.emotes ?? []);
+    } catch (err) {
+      console.warn("[milady] Failed to load emotes", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (authRequired) return;
+    void loadAvailableEmotes();
+    return () => {
+      clearAvatarMotionReset();
+    };
+  }, [authRequired, clearAvatarMotionReset, loadAvailableEmotes]);
+
+  useEffect(() => {
+    if (authRequired) return undefined;
+
+    const unbindEmotes = client.onWsEvent("emote", (data) => {
+      const emoteId =
+        typeof data.emoteId === "string" ? data.emoteId.trim() : "";
+      if (!emoteId) return;
+
+      const loop = data.loop === true;
+      const rawDuration =
+        typeof data.duration === "number" ? data.duration : Number(data.duration);
+      const durationMs =
+        Number.isFinite(rawDuration) && rawDuration > 0
+          ? rawDuration * 1000
+          : 3000;
+
+      const pending = pendingManualAvatarEmoteRef.current;
+      const isManual =
+        pending?.emoteId === emoteId && pending.expiresAt > Date.now();
+      if (!isManual) {
+        pendingManualAvatarEmoteRef.current = null;
+      }
+
+      setActiveAvatarEmoteId(emoteId);
+      setAvatarMotionMode(isManual ? "manual" : "auto");
+
+      if (loop) {
+        clearAvatarMotionReset();
+      } else {
+        scheduleAvatarMotionReset(durationMs);
+      }
+    });
+
+    return () => {
+      unbindEmotes?.();
+    };
+  }, [authRequired, clearAvatarMotionReset, scheduleAvatarMotionReset]);
+
+  const playAvatarEmote = useCallback(
+    async (emoteId: string) => {
+      const emote = availableEmoteById.get(emoteId);
+      if (!emote) {
+        setActionNotice(`Unknown avatar action: ${emoteId}`, "error", 2400);
+        return;
+      }
+
+      pendingManualAvatarEmoteRef.current = {
+        emoteId,
+        expiresAt: Date.now() + 4_000,
+      };
+      clearAvatarMotionReset();
+      setActiveAvatarEmoteId(emoteId);
+      setAvatarMotionMode("manual");
+
+      try {
+        await client.playEmote(emoteId);
+        void sendOperatorActionMessage({
+          label: emote.name,
+          kind: "avatar",
+          detail: emote.loop ? "Looping motion" : "One-shot motion",
+        });
+        if (!emote.loop) {
+          scheduleAvatarMotionReset(emote.duration * 1000);
+        }
+      } catch (err) {
+        pendingManualAvatarEmoteRef.current = null;
+        setActiveAvatarEmoteId(null);
+        setAvatarMotionMode("idle");
+        setActionNotice(
+          `Failed to play ${emote.name}: ${err instanceof Error ? err.message : "unknown error"}`,
+          "error",
+          3200,
+        );
+      }
+    },
+    [
+      availableEmoteById,
+      clearAvatarMotionReset,
+      scheduleAvatarMotionReset,
+      sendOperatorActionMessage,
+      setActionNotice,
+    ],
+  );
+
+  const stopAvatarEmote = useCallback(() => {
+    pendingManualAvatarEmoteRef.current = null;
+    clearAvatarMotionReset();
+    setActiveAvatarEmoteId(null);
+    setAvatarMotionMode("idle");
+    document.dispatchEvent(new CustomEvent("milady:stop-emote"));
+    void sendOperatorActionMessage({
+      label: "Stop Motion",
+      kind: "avatar",
+      detail: "Idle pool restored",
+    });
+  }, [clearAvatarMotionReset, sendOperatorActionMessage]);
+
   // ── Generic state setter ───────────────────────────────────────────
 
   const setState = useCallback(
@@ -3870,6 +6366,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         chatAvatarVisible: setChatAvatarVisible,
         chatAgentVoiceMuted: setChatAgentVoiceMuted,
         chatAvatarSpeaking: setChatAvatarSpeaking,
+        autonomousRunOpen: setAutonomousRunOpen,
+        autoRunMode: setAutoRunMode,
+        autoRunTopic: setAutoRunTopic,
+        autoRunDurationMin: setAutoRunDurationMin,
+        autoRunAvatarRuntime: setAutoRunAvatarRuntime,
+        autoRunPreview: setAutoRunPreview,
+        autoRunPreviewBusy: setAutoRunPreviewBusy,
+        autoRunLaunching: setAutoRunLaunching,
         startupError: setStartupError,
         pairingCodeInput: setPairingCodeInput,
         pluginFilter: setPluginFilter,
@@ -3928,6 +6432,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         commandQuery: setCommandQuery,
         commandActiveIndex: setCommandActiveIndex,
         emotePickerOpen: setEmotePickerOpen,
+        availableEmotes: setAvailableEmotes,
+        activeAvatarEmoteId: setActiveAvatarEmoteId,
+        avatarMotionMode: setAvatarMotionMode,
         storeSearch: setStoreSearch,
         storeFilter: setStoreFilter,
         storeSubTab: setStoreSubTab,
@@ -3942,6 +6449,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         activeGameSandbox: setActiveGameSandbox,
         activeGamePostMessageAuth: setActiveGamePostMessageAuth,
         activeGamePostMessagePayload: setActiveGamePostMessagePayload,
+        liveBroadcastState: setLiveBroadcastState,
+        liveSecondarySources: setLiveSecondarySources,
         gameOverlayEnabled: setGameOverlayEnabled,
         storePlugins: setStorePlugins,
         storeLoading: setStoreLoading,
@@ -4525,7 +7034,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
           : window.location.pathname;
       const urlTab = tabFromPath(navPath);
       if (urlTab) {
-        setTabRaw(urlTab);
+        if (currentTheme === "milady-os") {
+          applyMiladyTabIntent(urlTab);
+          replaceMiladyLocationWithRoot();
+        } else {
+          setTabRaw(urlTab);
+          lastLegacyTabRef.current = urlTab;
+        }
         if (urlTab === "plugins" || urlTab === "connectors") {
           void loadPlugins();
           if (urlTab === "plugins") {
@@ -4557,7 +7072,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ? window.location.hash.replace(/^#/, "") || "/"
         : window.location.pathname;
       const t = tabFromPath(navPath);
-      if (t) setTabRaw(t);
+      if (!t) return;
+      if (currentTheme === "milady-os") {
+        applyMiladyTabIntent(t);
+        replaceMiladyLocationWithRoot();
+        return;
+      }
+      setTabRaw(t);
+      lastLegacyTabRef.current = t;
     };
     const navEvent = isFileProtocol ? "hashchange" : "popstate";
     window.addEventListener(navEvent, handleNavChange);
@@ -4577,6 +7099,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     appendAutonomousEvent,
+    applyMiladyTabIntent,
     checkExtensionStatus,
     currentTheme,
     loadCharacter,
@@ -4627,11 +7150,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value: AppContextValue = {
     // State
-    tab, currentTheme, connected, agentStatus, onboardingComplete, onboardingLoading,
-    startupPhase, authRequired, actionNotice, toasts, lifecycleBusy, lifecycleAction,
+    tab, currentTheme, dockSurface, streamViewMode, leftRailState, rightRailState, activeBubble, hudSurface, hudControlSection, hudAssetSection, connected, agentStatus, onboardingComplete, onboardingLoading,
+    startupPhase, startupError, authRequired, actionNotice, toasts, lifecycleBusy, lifecycleAction,
+    pendingRestart, pendingRestartReasons, restartBannerDismissed,
     pairingEnabled, pairingExpiresAt, pairingCodeInput, pairingError, pairingBusy,
-    chatInput, chatSending, chatFirstTokenReceived, conversations, activeConversationId, conversationMessages,
-    autonomousEvents, autonomousLatestEventId, unreadConversations,
+    chatInput, chatSending, chatFirstTokenReceived, chatAvatarVisible, chatAgentVoiceMuted, chatAvatarSpeaking, conversations, activeConversationId, conversationMessages, chatPendingImages,
+    autonomousEvents, autonomousLatestEventId, unreadConversations, quickLayerStatuses, autonomousRunOpen, autoRunMode, autoRunTopic, autoRunDurationMin, autoRunAvatarRuntime, autoRunPreview, autoRunPreviewBusy, autoRunLaunching,
     triggers, triggersLoading, triggersSaving, triggerRunsById, triggerHealth, triggerError,
     plugins, pluginFilter, pluginStatusFilter, pluginSearch, pluginSettingsOpen,
     pluginAdvancedOpen, pluginSaving, pluginSaveSuccess,
@@ -4665,10 +7189,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     onboardingProvider, onboardingApiKey, onboardingOpenRouterModel, onboardingPrimaryModel,
     onboardingTelegramToken, onboardingDiscordToken, onboardingWhatsAppSessionPath,
     onboardingTwilioAccountSid, onboardingTwilioAuthToken, onboardingTwilioPhoneNumber,
-    onboardingBlooioApiKey, onboardingBlooioPhoneNumber, onboardingSubscriptionTab,
+    onboardingBlooioApiKey, onboardingBlooioPhoneNumber, onboardingGithubToken, onboardingSubscriptionTab,
     onboardingSelectedChains, onboardingRpcSelections, onboardingRpcKeys,
     onboardingAvatar, onboardingRestarting,
     commandPaletteOpen, commandQuery, commandActiveIndex, emotePickerOpen,
+    availableEmotes, activeAvatarEmoteId, avatarMotionMode,
     mcpConfiguredServers, mcpServerStatuses, mcpMarketplaceQuery, mcpMarketplaceResults,
     mcpMarketplaceLoading, mcpAction, mcpAddingServer, mcpAddingResult,
     mcpEnvInputs, mcpHeaderInputs,
@@ -4677,6 +7202,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     activeGamePostMessageAuth,
     five55MasteryRuns,
     five55MasteryRunsLoading,
+    liveBroadcastState,
+    goLiveInlineNotice,
+    actionLogInlineNotice,
+    goLiveModalOpen,
+    liveLayoutMode,
+    liveSceneId,
+    liveSecondarySources,
+    liveHeroSource,
     gameOverlayEnabled,
     appsSubTab,
     agentSubTab,
@@ -4689,6 +7222,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Actions
     setTab,
     setTheme,
+    openDockSurface,
+    closeDockSurface,
+    setStreamViewMode,
+    openHudControlStack,
+    openHudAssetVault,
+    closeHudSurface,
+    setRailDisplay,
+    collapseRails,
     handleStart,
     handleStop,
     handlePauseResume,
@@ -4705,6 +7246,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     handleSelectConversation,
     handleDeleteConversation,
     handleRenameConversation,
+    runQuickLayer,
+    openGoLiveModal,
+    closeGoLiveModal,
+    dismissGoLiveInlineNotice,
+    dismissActionLogInlineNotice,
+    launchGoLive,
+    openAutonomousRun,
+    closeAutonomousRun,
+    runAutonomousEstimate,
+    runAutonomousLaunch,
     loadTriggers,
     createTrigger,
     updateTrigger,
@@ -4757,6 +7308,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     checkExtensionStatus,
     openEmotePicker,
     closeEmotePicker,
+    playAvatarEmote,
+    stopAvatarEmote,
     loadWorkbench,
     handleAgentExport,
     handleAgentImport,

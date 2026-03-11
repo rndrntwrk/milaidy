@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getVrmPreviewUrl, getVrmUrl, useApp } from "../AppContext";
 import { client } from "../api-client";
+import type { StageSceneMark, StageScenePreset } from "../proStreamerStageScene";
 import type { VrmEngine, VrmEngineState } from "./avatar/VrmEngine";
 import { VrmViewer } from "./avatar/VrmViewer";
 
@@ -16,11 +17,15 @@ export interface ChatAvatarProps {
   mouthOpen?: number;
   /** Whether the agent is currently speaking (drives engine-side mouth anim) */
   isSpeaking?: boolean;
+  scenePreset?: StageScenePreset;
+  sceneMark?: StageSceneMark;
 }
 
 export function ChatAvatar({
   mouthOpen = 0,
   isSpeaking = false,
+  scenePreset = "default",
+  sceneMark = "stage",
 }: ChatAvatarProps) {
   const { selectedVrmIndex, customVrmUrl } = useApp();
 
@@ -38,6 +43,8 @@ export function ChatAvatar({
   const [engineReady, setEngineReady] = useState(false);
   const [vrmLoaded, setVrmLoaded] = useState(false);
   const [showFallback, setShowFallback] = useState(false);
+  const [viewerFailed, setViewerFailed] = useState(false);
+  const isStageScene = scenePreset === "pro-streamer-stage";
 
   const avatarVisible = engineReady || vrmLoaded || showFallback;
 
@@ -53,15 +60,24 @@ export function ChatAvatar({
     }
   }, []);
 
+  const handleViewerError = useCallback(() => {
+    setEngineReady(false);
+    setVrmLoaded(false);
+    setViewerFailed(true);
+    setShowFallback(true);
+  }, []);
+
   // If a VRM fails to load, show the selected static preview in the sidebar.
   useEffect(() => {
+    setEngineReady(false);
     setVrmLoaded(false);
     setShowFallback(false);
+    setViewerFailed(false);
     const timer = window.setTimeout(() => {
       setShowFallback(true);
-    }, 4000);
+    }, 1200);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [vrmPath]);
 
   // Subscribe to WebSocket emote events and trigger avatar animations.
   useEffect(() => {
@@ -90,9 +106,11 @@ export function ChatAvatar({
       <div
         className="absolute inset-0"
         style={{
-          opacity: avatarVisible ? 0.95 : 0,
+          opacity: avatarVisible ? 1 : 0,
           transition: "opacity 0.45s ease-in-out",
-          background:
+          background: isStageScene
+            ? "transparent"
+            :
             "radial-gradient(circle at 50% 100%, rgba(255,255,255,0.08), transparent 60%)",
         }}
       >
@@ -100,26 +118,29 @@ export function ChatAvatar({
           <div
             className="absolute inset-0"
             style={{
-              opacity: vrmLoaded ? 1 : 0,
+              opacity: vrmLoaded && !viewerFailed ? 1 : 0,
               transition: "opacity 0.45s ease",
-              transform: "scale(1.22) translateY(-8%)",
-              transformOrigin: "50% 28%",
+              transform: isStageScene ? undefined : "scale(1.22) translateY(-8%)",
+              transformOrigin: isStageScene ? undefined : "50% 28%",
             }}
           >
             <VrmViewer
               vrmPath={vrmPath}
               mouthOpen={mouthOpen}
               isSpeaking={isSpeaking}
+              scenePreset={scenePreset}
+              sceneMark={sceneMark}
               onEngineReady={handleEngineReady}
               onEngineState={handleEngineState}
+              onViewerError={handleViewerError}
             />
           </div>
 
-          {showFallback && !vrmLoaded && (
+          {showFallback && (!vrmLoaded || viewerFailed) && (
             <img
               src={fallbackPreviewUrl}
               alt="avatar preview"
-              className="absolute left-1/2 -translate-x-1/2 bottom-[-2%] h-[122%] object-contain opacity-90"
+              className="absolute left-1/2 top-1/2 h-[104%] -translate-x-1/2 -translate-y-[46%] object-contain opacity-95 sm:h-[112%] lg:h-[118%] xl:h-[122%]"
             />
           )}
         </div>

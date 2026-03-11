@@ -16,6 +16,8 @@ import type { ConfigUiHint } from "../types";
 import { AvatarSelector } from "./AvatarSelector";
 import type { JsonSchemaObject } from "./config-catalog";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer";
+import { configRenderModeForTheme } from "./shared/configRenderMode";
+import { ChevronRightIcon } from "./ui/Icons";
 
 const DEFAULT_ELEVEN_FAST_MODEL = "eleven_flash_v2_5";
 const REDACTED_SECRET = "[REDACTED]";
@@ -305,7 +307,10 @@ export function CharacterView() {
     loadDropStatus,
     mintFromDrop,
     walletConfig,
+    currentTheme,
   } = useApp();
+
+  const configRenderMode = configRenderModeForTheme(currentTheme);
 
   useEffect(() => {
     void loadCharacter();
@@ -912,12 +917,12 @@ export function CharacterView() {
                   MINT IS LIVE
                 </span>
                 <span className="text-[11px] text-[var(--muted)]">
-                  MiladyMaker #{(dropStatus?.currentSupply ?? 0) + 1} of{" "}
+                  rasp #{(dropStatus?.currentSupply ?? 0) + 1} of{" "}
                   {dropStatus?.maxSupply ?? 2138}
                 </span>
               </div>
               <div className="text-[12px] text-[var(--muted)]">
-                Claim your limited-edition Milady Agent NFT.{" "}
+                Claim your limited-edition rasp Agent NFT.{" "}
                 {dropStatus?.maxSupply ?? 2138} total.{" "}
                 {(dropStatus?.maxSupply ?? 2138) -
                   (dropStatus?.currentSupply ?? 0)}{" "}
@@ -950,7 +955,7 @@ export function CharacterView() {
               )}
               {mintResult && (
                 <div className="text-xs text-[var(--ok,#16a34a)]">
-                  Minted! Token #{mintResult.agentId} | MiladyMaker #
+                  Minted! Token #{mintResult.agentId} | rasp #
                   {mintResult.mintNumber}
                   {mintResult.isShiny && " (shiny)"}{" "}
                   <a
@@ -1233,9 +1238,7 @@ export function CharacterView() {
           {/* Chat Examples */}
           <details className="group">
             <summary className="flex items-center gap-1.5 cursor-pointer select-none text-xs font-semibold list-none [&::-webkit-details-marker]:hidden">
-              <span className="inline-block transition-transform group-open:rotate-90">
-                &#9654;
-              </span>
+              <ChevronRightIcon className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
               chat examples
               <span className="font-normal text-[var(--muted)]">
                 — how the agent responds
@@ -1318,9 +1321,7 @@ export function CharacterView() {
           {/* Post Examples */}
           <details className="group">
             <summary className="flex items-center gap-1.5 cursor-pointer select-none text-xs font-semibold list-none [&::-webkit-details-marker]:hidden">
-              <span className="inline-block transition-transform group-open:rotate-90">
-                &#9654;
-              </span>
+              <ChevronRightIcon className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
               post examples
               <span className="font-normal text-[var(--muted)]">
                 — social media voice
@@ -1496,9 +1497,7 @@ export function CharacterView() {
 
             <details className="group">
               <summary className="flex items-center gap-1.5 cursor-pointer select-none text-xs font-semibold list-none [&::-webkit-details-marker]:hidden">
-                <span className="inline-block transition-transform group-open:rotate-90">
-                  &#9654;
-                </span>
+                <ChevronRightIcon className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
                 advanced voice settings
               </summary>
               <div className="mt-3">
@@ -1581,6 +1580,7 @@ export function CharacterView() {
                     speed: voiceConfig.elevenlabs?.speed ?? "",
                   }}
                   registry={defaultRegistry}
+                  renderMode={configRenderMode}
                   onChange={(key, value) => {
                     handleVoiceFieldChange(
                       key,

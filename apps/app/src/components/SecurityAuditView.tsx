@@ -7,6 +7,11 @@ import {
   type SecurityAuditSeverity,
 } from "../api-client";
 import { formatDateTime } from "./shared/format";
+import { Badge } from "./ui/Badge.js";
+import { Button } from "./ui/Button.js";
+import { Card, CardContent } from "./ui/Card.js";
+import { Input } from "./ui/Input.js";
+import { Select } from "./ui/Select.js";
 
 const EVENT_TYPES: SecurityAuditEventType[] = [
   "sandbox_mode_transition",
@@ -151,9 +156,40 @@ export function SecurityAuditView() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
+      <Card className="mb-3 rounded-[22px]">
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 px-4 py-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline" className="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em]">
+            {entries.length} events
+          </Badge>
+          <Badge variant={live ? "accent" : "outline"} className="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em]">
+            {live ? "live" : "snapshot"}
+          </Badge>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="inline-flex items-center gap-2 text-xs text-white/58">
+            <input
+              type="checkbox"
+              checked={live}
+              onChange={(event) => setLive(event.target.checked)}
+            />
+            Live
+          </label>
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-full"
+            onClick={() => void refresh()}
+          >
+            Refresh
+          </Button>
+        </div>
+        </CardContent>
+      </Card>
+
       <div className="flex flex-wrap items-center gap-2 mb-3">
-        <select
-          className="text-xs px-3 py-1.5 border border-border bg-card text-txt cursor-pointer"
+        <Select
+          className="h-10 rounded-2xl text-sm"
           value={typeFilter}
           onChange={(event) => setTypeFilter(event.target.value)}
           aria-label="Filter by event type"
@@ -164,10 +200,10 @@ export function SecurityAuditView() {
               {type}
             </option>
           ))}
-        </select>
+        </Select>
 
-        <select
-          className="text-xs px-3 py-1.5 border border-border bg-card text-txt cursor-pointer"
+        <Select
+          className="h-10 rounded-2xl text-sm"
           value={severityFilter}
           onChange={(event) => setSeverityFilter(event.target.value)}
           aria-label="Filter by severity"
@@ -178,31 +214,32 @@ export function SecurityAuditView() {
               {severity}
             </option>
           ))}
-        </select>
+        </Select>
 
-        <input
+        <Input
           type="text"
-          className="text-xs px-3 py-1.5 border border-border bg-card text-txt min-w-56"
+          className="h-10 min-w-56 rounded-2xl text-sm"
           placeholder="Since (epoch ms or ISO)"
           value={sinceFilter}
           onChange={(event) => setSinceFilter(event.target.value)}
           aria-label="Since timestamp"
         />
 
-        <input
+        <Input
           type="number"
           min={MIN_LIMIT}
           max={MAX_LIMIT}
-          className="text-xs px-3 py-1.5 border border-border bg-card text-txt w-24"
+          className="h-10 w-24 rounded-2xl text-sm"
           value={limitFilter}
           onChange={(event) => setLimitFilter(event.target.value)}
           aria-label="Limit"
         />
 
         {hasFilters && (
-          <button
+          <Button
             type="button"
-            className="text-xs px-3 py-1.5 border border-border bg-card text-txt cursor-pointer hover:border-accent hover:text-accent"
+            variant="outline"
+            className="rounded-full"
             onClick={() => {
               setTypeFilter("");
               setSeverityFilter("");
@@ -211,47 +248,31 @@ export function SecurityAuditView() {
             }}
           >
             Clear filters
-          </button>
+          </Button>
         )}
-
-        <button
-          type="button"
-          className="text-xs px-3 py-1.5 border border-border bg-card text-txt cursor-pointer hover:border-accent hover:text-accent"
-          onClick={() => void refresh()}
-        >
-          Refresh
-        </button>
-
-        <label className="ml-auto inline-flex items-center gap-2 text-xs text-muted">
-          <input
-            type="checkbox"
-            checked={live}
-            onChange={(event) => setLive(event.target.checked)}
-          />
-          Live
-        </label>
       </div>
 
       {error && (
-        <div className="text-xs text-danger border border-danger/30 bg-danger/10 px-3 py-2 mb-3">
+        <div className="text-xs text-danger border border-danger/30 bg-danger/10 px-3 py-2 mb-3 rounded-2xl">
           {error}
         </div>
       )}
 
-      <div className="font-mono text-xs flex-1 min-h-0 overflow-y-auto border border-border p-2 bg-card">
+      <Card className="flex-1 min-h-0 overflow-hidden rounded-[24px]">
+        <CardContent className="font-mono flex-1 min-h-0 overflow-y-auto p-2 text-xs">
         {loading && !live ? (
-          <div className="text-center py-8 text-muted">
+          <div className="text-center py-8 text-white/45">
             Loading audit entries...
           </div>
         ) : entries.length === 0 ? (
-          <div className="text-center py-8 text-muted">
+          <div className="text-center py-8 text-white/45">
             No audit entries found.
           </div>
         ) : (
           entries.map((entry, index) => (
             <article
               key={`${entry.timestamp}-${entry.type}-${entry.summary}-${index}`}
-              className="border border-border bg-bg/40 p-3 mb-2"
+              className="mb-2 rounded-[18px] border border-white/10 bg-white/[0.03] p-3"
             >
               <div className="flex flex-wrap items-center gap-2 mb-1">
                 <span className="text-muted">
@@ -274,7 +295,7 @@ export function SecurityAuditView() {
                   <summary className="cursor-pointer text-[11px] text-muted hover:text-txt">
                     Metadata
                   </summary>
-                  <pre className="mt-2 p-2 bg-bg border border-border overflow-x-auto text-[11px] leading-relaxed">
+                  <pre className="mt-2 overflow-x-auto rounded-[18px] border border-white/10 bg-black/28 p-3 text-[11px] leading-relaxed">
                     {JSON.stringify(entry.metadata, null, 2)}
                   </pre>
                 </details>
@@ -282,7 +303,8 @@ export function SecurityAuditView() {
             </article>
           ))
         )}
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

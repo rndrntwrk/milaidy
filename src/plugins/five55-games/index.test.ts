@@ -341,6 +341,9 @@ describe("five55-games plugin actions", () => {
       input: {
         type: "screen",
       },
+      options: {
+        scene: "active-pip",
+      },
     });
     expect(String(playCall?.[0])).toContain("/api/agent/v1/sessions/session-4/games/play");
     expect(parseFetchBody(playCall as unknown[])).toEqual(
@@ -469,8 +472,80 @@ describe("five55-games plugin actions", () => {
       input: {
         type: "screen",
       },
+      options: {
+        scene: "active-pip",
+      },
     });
     expect(result?.success).toBe(true);
+  });
+
+  it("honors explicit camera-full layout mode during stream provisioning", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { sessionId: "session-layout" }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          active: false,
+          cfSessionId: null,
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse(201, { status: "created", cfSessionId: "cf-layout" }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          sessionId: "session-layout",
+          agentId: "alice",
+          gameId: "ninja",
+          profile: {
+            exists: false,
+            policyVersion: 1,
+            confidence: 0.5,
+            policySnapshot: {},
+            provenance: { source: "default" },
+          },
+          latestEpisode: null,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          game: { id: "ninja", path: "games/ninja" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          active: true,
+          phase: "live",
+          cfSessionId: "cf-layout",
+          cloudflare: {
+            isConnected: true,
+            state: "connected",
+          },
+        }),
+      );
+
+    const action = await resolveAction("FIVE55_GAMES_GO_LIVE_PLAY");
+    await action.handler?.(
+      INTERNAL_RUNTIME,
+      INTERNAL_MESSAGE,
+      INTERNAL_STATE,
+      {
+        parameters: {
+          gameId: "ninja",
+          layoutMode: "camera-full",
+        },
+      } as never,
+    );
+
+    const startCall = fetchMock.mock.calls.find((entry) =>
+      String(entry[0]).includes("/api/agent/v1/sessions/session-layout/stream/start"),
+    );
+    expect(parseFetchBody(startCall as unknown[])).toEqual({
+      input: {
+        type: "screen",
+      },
+      options: {
+        scene: "default",
+      },
+    });
   });
 
   it("skips stream provisioning when Cloudflare output is already present", async () => {

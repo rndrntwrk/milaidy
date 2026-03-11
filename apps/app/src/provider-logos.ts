@@ -45,6 +45,17 @@ const PROVIDER_LOGO_MAP_LIGHT: Record<string, string> = {
   "z.ai": "/logos/zai-icon.png",
 };
 
+function normalizeProviderLogoKey(providerId: string): string {
+  return providerId.trim().toLowerCase();
+}
+
+export function hasProviderLogo(providerId: string): boolean {
+  const normalized = normalizeProviderLogoKey(providerId);
+  return Boolean(
+    PROVIDER_LOGO_MAP_DARK[normalized] || PROVIDER_LOGO_MAP_LIGHT[normalized],
+  );
+}
+
 /**
  * Get the logo path for a provider based on theme
  * @param providerId - The provider ID (e.g., "openai", "anthropic")
@@ -56,7 +67,7 @@ export function getProviderLogo(
   isDarkMode: boolean = true,
 ): string {
   const logoMap = isDarkMode ? PROVIDER_LOGO_MAP_DARK : PROVIDER_LOGO_MAP_LIGHT;
-  const logo = logoMap[providerId.toLowerCase()];
+  const logo = logoMap[normalizeProviderLogoKey(providerId)];
   if (logo) {
     return logo;
   }

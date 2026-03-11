@@ -1,15 +1,6 @@
-/**
- * Loading screen — ASCII "milady" logo with per-character dither fade.
- *
- * Each letter independently cycles through quantised opacity steps on its
- * own random schedule, producing a constantly shifting dither pattern that
- * resolves into the logo and dissolves again.
- */
-
 import { useEffect, useMemo, useState } from "react";
 import type { StartupPhase } from "../AppContext";
-
-/* ── ASCII source ──────────────────────────────────────────────────── */
+import { MiladyBootShell } from "./MiladyBootShell.js";
 
 const ASCII_LINES = [
   "        miladym                        iladym      ",
@@ -29,18 +20,11 @@ const ASCII_LINES = [
   "        iladym",
 ];
 
-/* ── Types ─────────────────────────────────────────────────────────── */
-
 interface CharCell {
   char: string;
-  isLetter: boolean;
-  /** Random animation-delay in seconds */
   delay: number;
-  /** Random animation-duration in seconds */
   duration: number;
 }
-
-/* ── Component ─────────────────────────────────────────────────────── */
 
 const PHASE_LABELS: Record<StartupPhase, string> = {
   "starting-backend": "starting backend",
@@ -50,11 +34,15 @@ const PHASE_LABELS: Record<StartupPhase, string> = {
 interface LoadingScreenProps {
   phase?: StartupPhase;
   elapsedSeconds?: number;
+  currentTheme?: string;
+  agentName?: string | null;
 }
 
 export function LoadingScreen({
   phase = "starting-backend",
   elapsedSeconds,
+  currentTheme,
+  agentName,
 }: LoadingScreenProps) {
   const [runtimeElapsedSeconds, setRuntimeElapsedSeconds] = useState(0);
 
@@ -74,55 +62,59 @@ export function LoadingScreen({
       ? Math.max(0, Math.floor(elapsedSeconds))
       : runtimeElapsedSeconds;
 
-  /* Build the character grid once — each non-space character gets its
-     own random timing so the dither pattern is never uniform. */
-  const grid = useMemo<CharCell[][]>(
+  const artGrid = useMemo<CharCell[][]>(
     () =>
       ASCII_LINES.map((line) =>
         [...line].map((char) => ({
           char,
-          isLetter: char !== " ",
           delay: Math.random() * 5,
           duration: 1.4 + Math.random() * 3,
         })),
       ),
     [],
   );
-
-  return (
-    <div className="flex flex-col items-center justify-center h-screen bg-bg gap-8">
+  const resolvedIdentityLabel =
+    typeof agentName === "string" && agentName.trim().length > 0
+      ? agentName.trim()
+      : undefined;
+  const phaseLabel = `${PHASE_LABELS[phase]} (${displayedElapsedSeconds}s)`;
+  const art = (
+    <div className="flex flex-col items-center justify-center gap-6 px-4 py-10 sm:px-8 sm:py-14">
       <div
         aria-live="polite"
         style={{
           fontFamily: "var(--mono)",
-          fontSize: "clamp(7px, 1.4vw, 14px)",
-          lineHeight: 1.35,
-          color: "var(--text)",
+          fontSize:
+            currentTheme === "milady-os"
+              ? "clamp(7px, 1.2vw, 13px)"
+              : "clamp(7px, 1.4vw, 14px)",
+          lineHeight: currentTheme === "milady-os" ? 1.28 : 1.35,
+          color: currentTheme === "milady-os" ? "var(--accent)" : "var(--text)",
           userSelect: "none",
         }}
       >
-        {grid.map((line) => (
+        {artGrid.map((line) => (
           <div
             key={line.map((c) => c.char).join("")}
             style={{ whiteSpace: "pre" }}
           >
-            {line.map((c) =>
-              c.isLetter ? (
+            {line.map((cell) =>
+              cell.char !== " " ? (
                 <span
-                  key={`${c.char}-${c.delay.toFixed(3)}-${c.duration.toFixed(3)}`}
+                  key={`${cell.char}-${cell.delay.toFixed(3)}-${cell.duration.toFixed(3)}`}
                   className="dither-char"
                   style={{
-                    animationDelay: `${c.delay.toFixed(2)}s`,
-                    animationDuration: `${c.duration.toFixed(2)}s`,
+                    animationDelay: `${cell.delay.toFixed(2)}s`,
+                    animationDuration: `${cell.duration.toFixed(2)}s`,
                   }}
                 >
-                  {c.char}
+                  {cell.char}
                 </span>
               ) : (
                 <span
-                  key={`${c.char}-${c.delay.toFixed(3)}-${c.duration.toFixed(3)}`}
+                  key={`${cell.char}-${cell.delay.toFixed(3)}-${cell.duration.toFixed(3)}`}
                 >
-                  {c.char}
+                  {cell.char}
                 </span>
               ),
             )}
@@ -130,11 +122,35 @@ export function LoadingScreen({
         ))}
       </div>
       <div
-        className="text-muted text-xs tracking-widest uppercase"
+        className={
+          currentTheme === "milady-os"
+            ? "rounded-full border border-accent/30 bg-accent/10 px-4 py-2 font-mono text-xs uppercase tracking-[0.28em] text-accent/80"
+            : "text-muted text-xs tracking-widest uppercase"
+        }
         style={{ fontFamily: "var(--mono)" }}
       >
-        {PHASE_LABELS[phase]} ({displayedElapsedSeconds}s)
+        {currentTheme === "milady-os" ? `[${phaseLabel}]` : phaseLabel}
       </div>
     </div>
+  );
+
+  if (currentTheme !== "milady-os") {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center bg-bg gap-8">
+        {art}
+      </div>
+    );
+  }
+
+  return (
+    <MiladyBootShell
+      title="PRO STREAMER"
+      subtitle="Broadcast shell online"
+      status={phaseLabel}
+      identityLabel={resolvedIdentityLabel}
+      panelClassName="overflow-hidden"
+    >
+      {art}
+    </MiladyBootShell>
   );
 }

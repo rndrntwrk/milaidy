@@ -712,4 +712,65 @@ describe("stream555-control plugin actions", () => {
     expect(result?.success).toBe(true);
     expect(parseEnvelope(result as { text: string }).code).toBe("OK");
   });
+
+  it("maps camera-hold layout mode to the active-pip scene for app go-live", async () => {
+    const { getPluginInfo } = await import("../../services/registry-client.js");
+    vi.mocked(getPluginInfo).mockResolvedValue({
+      name: "@elizaos/app-babylon",
+      gitRepo: "elizaos/app-babylon",
+      gitUrl: "https://github.com/elizaos/app-babylon.git",
+      description: "Prediction market platform",
+      homepage: "https://babylon.social",
+      topics: ["defi"],
+      stars: 200,
+      language: "TypeScript",
+      npm: {
+        package: "@elizaos/app-babylon",
+        v0Version: null,
+        v1Version: null,
+        v2Version: "1.0.0",
+      },
+      git: { v0Branch: null, v1Branch: null, v2Branch: "main" },
+      supports: { v0: false, v1: false, v2: true },
+      kind: "app",
+      appMeta: {
+        displayName: "Babylon",
+        category: "platform",
+        launchType: "url",
+        launchUrl: "http://localhost:3000",
+        icon: null,
+        capabilities: [],
+        minPlayers: null,
+        maxPlayers: null,
+      },
+    });
+
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { sessionId: "session-layout" }))
+      .mockResolvedValueOnce(jsonResponse(200, { accepted: true }));
+
+    const action = await resolveAction("STREAM555_GO_LIVE_APP");
+    await action.handler?.(
+      makeRuntime(),
+      makeMessage(),
+      INTERNAL_STATE,
+      {
+        parameters: {
+          appName: "babylon",
+          sessionId: "session-layout",
+          layoutMode: "camera-hold",
+        },
+      } as never,
+    );
+
+    const [, streamStartCall] = fetchMock.mock.calls;
+    expect(parseFetchBody(streamStartCall)).toEqual(
+      expect.objectContaining({
+        options: expect.objectContaining({
+          scene: "active-pip",
+        }),
+      }),
+    );
+  });
 });

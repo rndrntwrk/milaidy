@@ -6,6 +6,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useApp } from "../AppContext";
 import {
   client,
   type OnboardingOptions,
@@ -15,6 +16,7 @@ import type { ConfigUiHint } from "../types";
 import { ApiKeyConfig } from "./ApiKeyConfig";
 import type { JsonSchemaObject } from "./config-catalog";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer";
+import { configRenderModeForTheme } from "./shared/configRenderMode";
 import { SubscriptionStatus } from "./SubscriptionStatus";
 
 interface PluginInfo {
@@ -78,6 +80,8 @@ export function ProviderSwitcher({
   setState,
   setTab,
 }: ProviderSwitcherProps) {
+  const { currentTheme } = useApp();
+  const configRenderMode = configRenderModeForTheme(currentTheme);
   /* ── Model selection state ─────────────────────────────────────── */
   const [modelOptions, setModelOptions] = useState<
     OnboardingOptions["models"] | null
@@ -662,6 +666,7 @@ export function ProviderSwitcher({
                       values={modelValues}
                       setKeys={modelSetKeys}
                       registry={defaultRegistry}
+                      renderMode={configRenderMode}
                       onChange={(key, value) => {
                         const val = String(value);
                         if (key === "small") setCurrentSmallModel(val);

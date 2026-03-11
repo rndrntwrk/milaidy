@@ -18,6 +18,11 @@ import {
   formatTrajectoryTimestamp,
   formatTrajectoryTokenCount,
 } from "./trajectory-format";
+import { Badge } from "./ui/Badge";
+import { Button } from "./ui/Button";
+import { Card, CardContent } from "./ui/Card";
+import { Input } from "./ui/Input";
+import { Select } from "./ui/Select";
 
 type StatusFilter = "" | "active" | "completed" | "error";
 
@@ -159,28 +164,20 @@ export function TrajectoriesView({
     <div className="flex flex-col h-full gap-3">
       {/* Stats summary */}
       {stats && (
-        <div className="flex flex-wrap gap-4 text-xs">
-          <div className="flex items-center gap-1.5">
-            <span className="text-muted">Total:</span>
-            <span className="font-semibold">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <Card className="rounded-[22px]"><CardContent className="p-4 text-xs"><div className="text-white/42 uppercase tracking-[0.18em]">Total</div><div className="mt-2 text-lg font-semibold text-white/88">
               {stats.totalTrajectories.toLocaleString()}
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-muted">LLM Calls:</span>
-            <span className="font-semibold">
+          </div></CardContent></Card>
+          <Card className="rounded-[22px]"><CardContent className="p-4 text-xs"><div className="text-white/42 uppercase tracking-[0.18em]">LLM Calls</div><div className="mt-2 text-lg font-semibold text-white/88">
               {stats.totalLlmCalls.toLocaleString()}
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-muted">Tokens:</span>
-            <span className="font-semibold text-accent">
+          </div></CardContent></Card>
+          <Card className="rounded-[22px]"><CardContent className="p-4 text-xs"><div className="text-white/42 uppercase tracking-[0.18em]">Tokens</div><div className="mt-2 text-lg font-semibold text-accent">
               {formatTrajectoryTokenCount(
                 stats.totalPromptTokens + stats.totalCompletionTokens,
                 { emptyLabel: "0" },
               )}
-            </span>
-            <span className="text-muted text-[10px]">
+          </div>
+            <div className="mt-1 text-[10px] text-white/42">
               (
               {formatTrajectoryTokenCount(stats.totalPromptTokens, {
                 emptyLabel: "0",
@@ -190,40 +187,21 @@ export function TrajectoriesView({
                 emptyLabel: "0",
               })}
               ↓)
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-muted">Avg Duration:</span>
-            <span className="font-semibold">
+            </div></CardContent></Card>
+          <Card className="rounded-[22px]"><CardContent className="p-4 text-xs"><div className="text-white/42 uppercase tracking-[0.18em]">Avg Duration</div><div className="mt-2 text-lg font-semibold text-white/88">
               {formatTrajectoryDuration(stats.averageDurationMs)}
-            </span>
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            <label className="flex items-center gap-1.5">
-              <span className="text-muted">Logging:</span>
-              <button
-                type="button"
-                className={`px-2 py-0.5 text-[11px] border rounded ${
-                  config?.enabled
-                    ? "bg-success/20 border-success text-success"
-                    : "bg-warn/20 border-warn text-warn"
-                }`}
-                onClick={handleEnableLogging}
-                disabled={config?.enabled}
-              >
-                {config?.enabled ? "ON" : "ENABLE"}
-              </button>
-            </label>
-          </div>
+          </div></CardContent></Card>
+          <Card className="rounded-[22px]"><CardContent className="flex h-full items-center justify-between gap-3 p-4 text-xs"><div><div className="text-white/42 uppercase tracking-[0.18em]">Logging</div><div className="mt-2"><Badge variant={config?.enabled ? "success" : "warning"}>{config?.enabled ? "enabled" : "disabled"}</Badge></div></div><Button onClick={handleEnableLogging} disabled={config?.enabled} variant="outline" size="sm">{config?.enabled ? "On" : "Enable"}</Button></CardContent></Card>
         </div>
       )}
 
       {/* Filters row */}
-      <div className="flex flex-wrap gap-1.5 items-center">
-        <input
+      <Card className="rounded-[24px]">
+        <CardContent className="flex flex-wrap items-center gap-2 p-4">
+        <Input
           type="text"
           placeholder="Search..."
-          className="text-xs px-3 py-1.5 border border-border bg-card text-txt w-48"
+          className="h-10 w-52 rounded-2xl"
           value={searchQuery}
           onChange={(e) => {
             setSearchQuery(e.target.value);
@@ -231,8 +209,8 @@ export function TrajectoriesView({
           }}
         />
 
-        <select
-          className="text-xs px-3 py-1.5 border border-border bg-card text-txt cursor-pointer"
+        <Select
+          className="h-10 w-44 rounded-2xl"
           value={statusFilter}
           onChange={(e) => {
             setStatusFilter(e.target.value as StatusFilter);
@@ -243,11 +221,11 @@ export function TrajectoriesView({
           <option value="active">Active</option>
           <option value="completed">Completed</option>
           <option value="error">Error</option>
-        </select>
+        </Select>
 
         {sources.length > 0 && (
-          <select
-            className="text-xs px-3 py-1.5 border border-border bg-card text-txt cursor-pointer"
+          <Select
+            className="h-10 w-44 rounded-2xl"
             value={sourceFilter}
             onChange={(e) => {
               setSourceFilter(e.target.value);
@@ -260,79 +238,61 @@ export function TrajectoriesView({
                 {s}
               </option>
             ))}
-          </select>
+          </Select>
         )}
 
         {hasActiveFilters && (
-          <button
-            type="button"
-            className="text-xs px-3 py-1.5 border border-border bg-card text-txt cursor-pointer hover:border-accent hover:text-accent"
-            onClick={handleClearFilters}
-          >
+          <Button variant="ghost" size="sm" onClick={handleClearFilters}>
             Clear filters
-          </button>
+          </Button>
         )}
 
-        <div className="ml-auto flex gap-1.5">
-          <button
-            type="button"
-            className="text-xs px-3 py-1.5 border border-border bg-card text-txt cursor-pointer hover:border-accent hover:text-accent"
+        <div className="ml-auto flex flex-wrap gap-2">
+          <Button
             onClick={() => void loadTrajectories()}
             disabled={loading}
+            variant="outline"
+            size="sm"
           >
             {loading ? "Loading..." : "Refresh"}
-          </button>
+          </Button>
+          <Button
+            onClick={() => handleExport("json", true)}
+            disabled={exporting || trajectories.length === 0}
+            variant="ghost"
+            size="sm"
+          >
+            {exporting ? "Exporting..." : "JSON"}
+          </Button>
+          <Button
+            onClick={() => handleExport("csv", false)}
+            disabled={exporting || trajectories.length === 0}
+            variant="ghost"
+            size="sm"
+          >
+            CSV
+          </Button>
+          <Button
+            onClick={() => handleExport("zip", true)}
+            disabled={exporting || trajectories.length === 0}
+            variant="ghost"
+            size="sm"
+          >
+            ZIP
+          </Button>
 
-          <div className="relative group">
-            <button
-              type="button"
-              className="text-xs px-3 py-1.5 border border-border bg-card text-txt cursor-pointer hover:border-accent hover:text-accent"
-              disabled={exporting || trajectories.length === 0}
-            >
-              {exporting ? "Exporting..." : "Export"}
-            </button>
-            <div className="absolute right-0 mt-1 hidden group-hover:block bg-card border border-border shadow-lg z-10">
-              <button
-                type="button"
-                className="block w-full text-left text-xs px-3 py-1.5 hover:bg-muted/20"
-                onClick={() => handleExport("json", true)}
-              >
-                JSON (with prompts)
-              </button>
-              <button
-                type="button"
-                className="block w-full text-left text-xs px-3 py-1.5 hover:bg-muted/20"
-                onClick={() => handleExport("json", false)}
-              >
-                JSON (redacted)
-              </button>
-              <button
-                type="button"
-                className="block w-full text-left text-xs px-3 py-1.5 hover:bg-muted/20"
-                onClick={() => handleExport("csv", false)}
-              >
-                CSV (summary only)
-              </button>
-              <button
-                type="button"
-                className="block w-full text-left text-xs px-3 py-1.5 hover:bg-muted/20"
-                onClick={() => handleExport("zip", true)}
-              >
-                ZIP (folders)
-              </button>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            className="text-xs px-3 py-1.5 border border-danger/50 bg-card text-danger cursor-pointer hover:border-danger hover:bg-danger/10"
+          <Button
             onClick={handleClearAll}
             disabled={clearing || stats?.totalTrajectories === 0}
+            variant="outline"
+            size="sm"
+            className="border-danger/35 text-danger hover:border-danger hover:bg-danger/10"
           >
             {clearing ? "Clearing..." : "Clear All"}
-          </button>
+          </Button>
         </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Error display */}
       {error && (
@@ -342,16 +302,17 @@ export function TrajectoriesView({
       )}
 
       {/* Trajectories list */}
-      <div className="flex-1 min-h-0 overflow-y-auto border border-border bg-card">
+      <Card className="flex-1 min-h-0 overflow-hidden rounded-[28px]">
+        <CardContent className="h-full overflow-y-auto p-0">
         {loading && trajectories.length === 0 ? (
-          <div className="text-center py-8 text-muted">
+          <div className="py-8 text-center text-white/42">
             Loading trajectories...
           </div>
         ) : trajectories.length === 0 ? (
-          <div className="text-center py-8 text-muted">
+          <div className="py-8 text-center text-white/42">
             No trajectories {hasActiveFilters ? "matching filters" : "yet"}.
             {!config?.enabled && (
-              <div className="mt-2 text-warn text-[11px]">
+              <div className="mt-2 text-[11px] text-warn">
                 Trajectory logging should auto-enable; click ENABLE if startup
                 is still settling.
               </div>
@@ -359,7 +320,7 @@ export function TrajectoriesView({
           </div>
         ) : (
           <table className="w-full text-xs">
-            <thead className="bg-muted/10 sticky top-0">
+            <thead className="sticky top-0 bg-white/[0.05] backdrop-blur">
               <tr>
                 <th className="text-left px-2 py-1.5 font-medium">Time</th>
                 <th className="text-left px-2 py-1.5 font-medium">Source</th>
@@ -378,7 +339,7 @@ export function TrajectoriesView({
                 return (
                   <tr
                     key={traj.id}
-                    className="border-t border-border hover:bg-muted/5 cursor-pointer"
+                    className="cursor-pointer border-t border-white/8 hover:bg-white/[0.04]"
                     onClick={() => onSelectTrajectory?.(traj.id)}
                   >
                     <td className="px-2 py-1.5 text-muted whitespace-nowrap">
@@ -386,7 +347,7 @@ export function TrajectoriesView({
                     </td>
                     <td className="px-2 py-1.5">
                       <span
-                        className="inline-block text-[10px] px-1.5 py-px rounded"
+                        className="inline-block rounded-full px-2 py-1 text-[10px]"
                         style={{
                           background: sourceColor.bg,
                           color: sourceColor.fg,
@@ -397,7 +358,7 @@ export function TrajectoriesView({
                     </td>
                     <td className="px-2 py-1.5">
                       <span
-                        className="inline-block text-[10px] px-1.5 py-px rounded"
+                        className="inline-block rounded-full px-2 py-1 text-[10px]"
                         style={{
                           background: statusColor.bg,
                           color: statusColor.fg,
@@ -426,7 +387,8 @@ export function TrajectoriesView({
             </tbody>
           </table>
         )}
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Pagination */}
       {totalPages > 1 && (
@@ -436,22 +398,22 @@ export function TrajectoriesView({
             {Math.min((page + 1) * pageSize, total)} of {total}
           </span>
           <div className="flex gap-1">
-            <button
-              type="button"
-              className="px-2 py-1 border border-border bg-card disabled:opacity-50"
+            <Button
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
+              variant="ghost"
+              size="sm"
             >
               Prev
-            </button>
-            <button
-              type="button"
-              className="px-2 py-1 border border-border bg-card disabled:opacity-50"
+            </Button>
+            <Button
               onClick={() => setPage((p) => p + 1)}
               disabled={page >= totalPages - 1}
+              variant="ghost"
+              size="sm"
             >
               Next
-            </button>
+            </Button>
           </div>
         </div>
       )}

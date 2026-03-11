@@ -6,12 +6,44 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   test: {
-    include: [path.join(here, "test/**/*.{test,spec}.{ts,tsx}")],
+    include: [path.join(here, "test/**/*.test.{ts,tsx}")],
     setupFiles: [path.join(here, "test/setup.ts")],
     environment: "node",
     alias: {
       electron: path.join(here, "test/__mocks__/electron.ts"),
       "@elizaos/skills": path.join(here, "test/__mocks__/elizaos-skills.ts"),
+      "@opentelemetry/sdk-node": path.join(
+        here,
+        "test/__mocks__/opentelemetry.ts",
+      ),
+      "@opentelemetry/auto-instrumentations-node": path.join(
+        here,
+        "test/__mocks__/opentelemetry.ts",
+      ),
+      "@opentelemetry/exporter-trace-otlp-http": path.join(
+        here,
+        "test/__mocks__/opentelemetry.ts",
+      ),
+      "@opentelemetry/exporter-metrics-otlp-http": path.join(
+        here,
+        "test/__mocks__/opentelemetry.ts",
+      ),
+      "@opentelemetry/resources": path.join(
+        here,
+        "test/__mocks__/opentelemetry.ts",
+      ),
+      "@opentelemetry/semantic-conventions": path.join(
+        here,
+        "test/__mocks__/opentelemetry.ts",
+      ),
+      "@opentelemetry/sdk-trace-base": path.join(
+        here,
+        "test/__mocks__/opentelemetry.ts",
+      ),
+      "@opentelemetry/sdk-metrics": path.join(
+        here,
+        "test/__mocks__/opentelemetry.ts",
+      ),
       "@milady/capacitor-gateway": path.join(
         here,
         "plugins/gateway/src/index.ts",

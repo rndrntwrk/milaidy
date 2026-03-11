@@ -1,12 +1,13 @@
 /**
  * Reusable avatar/character VRM selector.
  *
- * Shows a single row of the 8 built-in milady VRMs as thumbnail images.
- * The selected avatar gets a highlight ring. No text labels.
+ * Shows the built-in stage avatars plus an optional custom VRM upload tile.
+ * Slot 1 is the default Pro Streamer stage avatar.
  */
 
 import { useRef } from "react";
 import { getVrmPreviewUrl, VRM_COUNT } from "../AppContext";
+import { PlusIcon } from "./ui/Icons";
 
 export interface AvatarSelectorProps {
   /** Currently selected index (1-8 for built-in, 0 for custom) */
@@ -42,6 +43,8 @@ export function AvatarSelector({
   };
 
   const avatarIndices = Array.from({ length: VRM_COUNT }, (_, i) => i + 1);
+  const avatarLabel = (index: number) =>
+    index === 1 ? "Alice" : `Avatar ${index}`;
   const containerClass = fullWidth
     ? "grid gap-3 w-full"
     : "flex flex-wrap gap-3 justify-start";
@@ -67,13 +70,20 @@ export function AvatarSelector({
                 : "opacity-60 hover:opacity-100 hover:scale-105"
             }`}
             onClick={() => onSelect(i)}
+            aria-label={`Select ${avatarLabel(i)}`}
+            title={avatarLabel(i)}
             type="button"
           >
             <img
               src={getVrmPreviewUrl(i)}
-              alt={`Avatar ${i}`}
+              alt={avatarLabel(i)}
               className="w-full h-full object-cover"
             />
+            {i === 1 ? (
+              <span className="pointer-events-none absolute left-2 top-2 rounded-full border border-white/14 bg-black/65 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-white/88 shadow-sm backdrop-blur">
+                Default
+              </span>
+            ) : null}
           </button>
         ))}
 
@@ -94,23 +104,10 @@ export function AvatarSelector({
                   : "border-[var(--border)] text-[var(--muted)] opacity-60 hover:opacity-100 hover:border-[var(--accent)] hover:scale-105"
               }`}
               onClick={() => fileInputRef.current?.click()}
-              title="Upload custom .vrm"
+              title="Upload custom VRM"
               type="button"
             >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-label="Add new persona"
-              >
-                <title>Add new persona</title>
-                <path d="M12 5v14m-7-7h14" />
-              </svg>
+              <PlusIcon className="h-5 w-5" aria-label="Add new persona" />
             </button>
           </>
         )}

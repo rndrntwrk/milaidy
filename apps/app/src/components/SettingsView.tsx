@@ -22,11 +22,20 @@ import {
 import { ConfigPageView } from "./ConfigPageView";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer";
 import { CodingAgentSettingsSection } from "./CodingAgentSettingsSection";
+import { FormFieldStack } from "./FormFieldStack";
 import { GitHubSettingsSection } from "./GitHubSettingsSection";
 import { MediaSettingsSection } from "./MediaSettingsSection";
 import { PermissionsSection } from "./PermissionsSection";
+import { SectionEmptyState, SectionErrorState, SectionLoadingState } from "./SectionStates";
+import { SectionShell } from "./SectionShell";
+import { SelectablePillGrid } from "./SelectablePillGrid";
 import { VoiceConfigView } from "./VoiceConfigView";
+import { configRenderModeForTheme } from "./shared/configRenderMode";
+import { Badge } from "./ui/Badge.js";
+import { Button } from "./ui/Button.js";
 import { Dialog } from "./ui/Dialog.js";
+import { CloseIcon } from "./ui/Icons.js";
+import { Input } from "./ui/Input.js";
 import type { ConfigUiHint } from "../types";
 import type { JsonSchemaObject } from "./config-catalog";
 
@@ -54,7 +63,7 @@ export function Modal({
             onClick={onClose}
             aria-label="Close"
           >
-            &times;
+            <CloseIcon width="16" height="16" />
           </button>
         </div>
         {children}
@@ -169,6 +178,7 @@ export function SettingsView() {
     copyToClipboard,
     setState,
   } = useApp();
+  const configRenderMode = configRenderModeForTheme(currentTheme);
 
   /* ── Model selection state ─────────────────────────────────────────── */
   const [modelOptions, setModelOptions] = useState<OnboardingOptions["models"] | null>(null);
@@ -628,160 +638,129 @@ export function SettingsView() {
 
 
   return (
-    <div>
-      <h2 className="text-lg font-bold mb-1">Settings</h2>
-      <p className="text-[13px] text-[var(--muted)] mb-5">
-        Appearance, AI provider, updates, and app preferences.
-      </p>
-
-      {/* ═══════════════════════════════════════════════════════════════
-          1. APPEARANCE
-          ═══════════════════════════════════════════════════════════════ */}
-      <div className="p-4 border border-[var(--border)] bg-[var(--card)]">
-        <div className="font-bold text-sm mb-2">Appearance</div>
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
-          {THEMES.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={`theme-btn py-2 px-2 ${currentTheme === t.id ? "active" : ""}`}
-              onClick={() => setTheme(t.id)}
-            >
-              <div className="text-xs font-bold text-[var(--text)] whitespace-nowrap text-center">
-                {t.label}
-              </div>
-              <div className="text-[10px] text-[var(--muted)] mt-0.5 text-center whitespace-nowrap">
-                {t.hint}
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
+    <div className="space-y-6">
+      <SectionShell
+        title="Appearance"
+        description="Choose the active theme."
+        className="mb-6"
+        contentClassName="space-y-4"
+      >
+        <SelectablePillGrid
+          className="pro-streamer-settings-option-grid"
+          size="compact"
+          value={currentTheme}
+          onChange={(next) => setTheme(next)}
+          options={THEMES.map((theme) => ({
+            value: theme.id,
+            label: theme.label,
+            description: theme.hint,
+          }))}
+        />
+      </SectionShell>
 
       {/* ═══════════════════════════════════════════════════════════════
           2. AI MODEL
           ═══════════════════════════════════════════════════════════════ */}
-      <div className="mt-6 p-4 border border-[var(--border)] bg-[var(--card)]">
-        <div className="font-bold text-sm mb-4">AI Model</div>
+      <SectionShell
+        title="AI model"
+        description="Choose the active provider and configure access."
+        className="mt-6"
+        contentClassName="space-y-4"
+      >
 
         {(() => {
-          const totalCols = allAiProviders.length + 2; /* +2 for Eliza Cloud + Pi */
           const isCloudSelected = resolvedSelectedId === "__cloud__";
           const isPiAiSelected = resolvedSelectedId === "pi-ai";
+          const providerOptions = [
+            {
+              value: "__cloud__",
+              label: "Eliza Cloud",
+              description: "Managed cloud provider",
+            },
+            {
+              value: "pi-ai",
+              label: "Pi (pi-ai)",
+              description: piAiAvailable ? "Local credentials" : "Unavailable",
+              disabled: !piAiAvailable && !isPiAiSelected,
+            },
+            ...allAiProviders.map((provider) => ({
+              value: provider.id,
+              label: provider.name,
+            })),
+          ];
 
-          if (totalCols === 0) {
+          if (providerOptions.length === 0) {
             return (
-              <div className="p-4 border border-[var(--warning,#f39c12)] bg-[var(--card)]">
-                <div className="text-xs text-[var(--warning,#f39c12)]">
-                  No AI providers available. Install a provider plugin from the{" "}
-                  <a
-                    href="#"
-                    className="text-[var(--accent)] underline"
-                    onClick={(e: React.MouseEvent) => {
-                      e.preventDefault();
-                      setTab("plugins");
-                    }}
-                  >
-                    Plugins
-                  </a>{" "}
-                  page.
-                </div>
-              </div>
+              <SectionEmptyState
+                title="No AI providers available"
+                description="Install or enable a provider in Plugins and Connectors before choosing a default model surface."
+                actionLabel="Open plugins"
+                onAction={() => setTab("plugins")}
+              />
             );
           }
 
           return (
             <>
-              <div
-                className="grid gap-1.5"
-                style={{ gridTemplateColumns: `repeat(${totalCols}, 1fr)` }}
-              >
-                <button
-                  className={`text-center px-2 py-2 border cursor-pointer transition-colors ${
-                    isCloudSelected
-                      ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]"
-                      : "border-[var(--border)] bg-[var(--card)] hover:border-[var(--accent)]"
-                  }`}
-                  onClick={() => void handleSelectCloud()}
-                >
-                  <div className={`text-xs font-bold whitespace-nowrap ${isCloudSelected ? "" : "text-[var(--text)]"}`}>
-                    Eliza Cloud
-                  </div>
-                </button>
-
-                {/* pi-ai (local credentials) */}
-                <button
-                  className={`text-center px-2 py-2 border cursor-pointer transition-colors ${
-                    isPiAiSelected
-                      ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]"
-                      : "border-[var(--border)] bg-[var(--card)] hover:border-[var(--accent)]"
-                  } ${!piAiAvailable && !isPiAiSelected ? "opacity-50 cursor-not-allowed" : ""}`}
-                  onClick={() => {
-                    if (!piAiAvailable && !isPiAiSelected) return;
-                    void handleSelectPiAi();
-                  }}
-                  disabled={!piAiAvailable && !isPiAiSelected}
-                  title={
-                    piAiAvailable
-                      ? "Use local Pi credentials (~/.pi/agent)"
-                      : isPiAiSelected
-                        ? "Using pi-ai (model list still loading)"
-                        : "pi-ai is not available (no models detected)"
+              <SelectablePillGrid
+                className="pro-streamer-settings-option-grid"
+                size="compact"
+                options={providerOptions}
+                value={(resolvedSelectedId ?? "__cloud__") as string}
+                onChange={(next) => {
+                  if (next === "__cloud__") {
+                    void handleSelectCloud();
+                    return;
                   }
-                >
-                  <div className={`text-xs font-bold whitespace-nowrap ${isPiAiSelected ? "" : "text-[var(--text)]"}`}>
-                    Pi (pi-ai)
-                  </div>
-                </button>
-
-                {allAiProviders.map((provider) => {
-                  const isSelected = !isCloudSelected && !isPiAiSelected && provider.id === resolvedSelectedId;
-                  return (
-                    <button
-                      key={provider.id}
-                      className={`text-center px-2 py-2 border cursor-pointer transition-colors ${
-                        isSelected
-                          ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]"
-                          : "border-[var(--border)] bg-[var(--card)] hover:border-[var(--accent)]"
-                      }`}
-                      onClick={() => void handleSwitchProvider(provider.id)}
-                    >
-                      <div className={`text-xs font-bold whitespace-nowrap ${isSelected ? "" : "text-[var(--text)]"}`}>
-                        {provider.name}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+                  if (next === "pi-ai") {
+                    void handleSelectPiAi();
+                    return;
+                  }
+                  void handleSwitchProvider(next);
+                }}
+              />
 
               {/* Eliza Cloud settings */}
               {isCloudSelected && (
-                <div className="mt-4 pt-4 border-t border-[var(--border)]">
+                <SectionShell
+                  title="Eliza Cloud"
+                  description="Managed cloud auth, balance, and model defaults."
+                  className="mt-2"
+                  toolbar={
+                    cloudConnected ? (
+                      <Badge variant="success">Connected</Badge>
+                    ) : (
+                      <Badge variant="outline">Sign in required</Badge>
+                    )
+                  }
+                >
                   {cloudConnected ? (
-                    <div>
-                      <div className="flex justify-between items-center mb-3">
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
                           <span className="inline-block w-2 h-2 rounded-full bg-[var(--ok,#16a34a)]" />
-                          <span className="text-xs font-semibold">Logged into Eliza Cloud</span>
+                          <span className="text-sm font-medium text-white/88">Logged into Eliza Cloud</span>
                         </div>
-                        <button
-                          className="btn text-xs py-[3px] px-3 !mt-0 !bg-transparent !border-[var(--border)] !text-[var(--muted)]"
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
                           onClick={() => void handleCloudDisconnect()}
                           disabled={cloudDisconnecting}
                         >
                           {cloudDisconnecting ? "Disconnecting..." : "Disconnect"}
-                        </button>
+                        </Button>
                       </div>
 
-                      <div className="text-xs mb-4">
+                      <div className="flex flex-wrap items-center gap-3 text-sm text-white/64">
                         {cloudUserId && (
-                          <span className="text-[var(--muted)] mr-3">
+                          <span className="mr-1">
                             <code className="font-[var(--mono)] text-[11px]">{cloudUserId}</code>
                           </span>
                         )}
                         {cloudCredits !== null && (
-                          <span>
-                            <span className="text-[var(--muted)]">Credits:</span>{" "}
+                          <span className="flex items-center gap-2">
+                            <span className="text-white/55">Credits</span>
                             <span
                               className={
                                 cloudCreditsCritical
@@ -797,7 +776,7 @@ export function SettingsView() {
                               href={cloudTopUpUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-[11px] ml-2 text-[var(--accent)]"
+                              className="text-[11px] text-[var(--accent)]"
                             >
                               Top up
                             </a>
@@ -838,6 +817,7 @@ export function SettingsView() {
                             values={modelValues}
                             setKeys={modelSetKeys}
                             registry={defaultRegistry}
+                            renderMode={configRenderMode}
                             onChange={(key, value) => {
                               const val = String(value);
                               if (key === "small") setCurrentSmallModel(val);
@@ -867,104 +847,96 @@ export function SettingsView() {
                       </div>
                     </div>
                   ) : (
-                    <div>
+                    <div className="space-y-3">
                       {cloudLoginBusy ? (
-                        <div className="text-xs text-[var(--muted)]">
+                        <div className="text-sm text-[var(--muted)]">
                           Waiting for browser authentication... A new tab should have opened.
                         </div>
                       ) : (
                         <>
                           {cloudLoginError && (
-                            <div className="text-xs text-[var(--danger,#e74c3c)] mb-2">
-                              {cloudLoginError}
-                            </div>
+                            <SectionErrorState
+                              title="Cloud sign-in failed"
+                              description="The cloud auth flow did not complete."
+                              details={cloudLoginError}
+                            />
                           )}
-                          <button
-                            className="btn text-xs py-[5px] px-3.5 font-bold !mt-0"
+                          <Button
+                            type="button"
+                            variant="secondary"
                             onClick={() => void handleCloudLogin()}
                           >
                             Log in to Eliza Cloud
-                          </button>
-                          <div className="text-[11px] text-[var(--muted)] mt-1.5">
+                          </Button>
+                          <div className="text-[11px] text-[var(--muted)]">
                             Opens a browser window to authenticate.
                           </div>
                         </>
                       )}
                     </div>
                   )}
-                </div>
+                </SectionShell>
               )}
 
               {/* ── pi-ai settings (local credentials) ───────────────── */}
               {!isCloudSelected && isPiAiSelected && (
-                <div className="mt-4 pt-4 border-t border-[var(--border)]">
-                  <div className="flex justify-between items-center mb-2">
-                    <div className="text-xs font-semibold">Pi (pi-ai) Settings</div>
-                    <span
-                      className={`text-[11px] px-2 py-[3px] border ${piAiEnabled ? "" : "opacity-70"}`}
-                      style={{
-                        borderColor: piAiEnabled ? "#2d8a4e" : "var(--warning,#f39c12)",
-                        color: piAiEnabled ? "#2d8a4e" : "var(--warning,#f39c12)",
-                      }}
-                    >
+                <SectionShell
+                  title="Pi (pi-ai)"
+                  description="Local credentials from ~/.pi/agent/auth.json."
+                  className="mt-2"
+                  toolbar={
+                    <Badge variant={piAiEnabled ? "success" : "outline"}>
                       {piAiEnabled ? "Enabled" : "Disabled"}
-                    </span>
-                  </div>
-
-                  <div className="text-[11px] text-[var(--muted)] mb-3">
-                    Uses credentials from <code className="font-[var(--mono)]">~/.pi/agent/auth.json</code>.
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-semibold">Small Model (optional)</label>
-                    <div className="text-[10px] text-[var(--muted)]">
-                      Used for fast tasks. Leave blank to use pi default{piDefaultModel ? ` (${piDefaultModel})` : ""}.
-                    </div>
-                    <input
-                      className="w-full px-2.5 py-[7px] border border-[var(--border)] bg-[var(--card)] text-[13px] font-[var(--mono)] transition-colors focus:border-[var(--accent)] focus:outline-none"
-                      type="text"
-                      value={piAiSmallModel}
-                      onChange={(e) => setPiAiSmallModel(e.target.value)}
-                      placeholder={piDefaultModel ? `e.g. ${piDefaultModel}` : "provider/modelId"}
-                      list="pi-ai-models-config"
-                    />
+                    </Badge>
+                  }
+                >
+                  <div className="space-y-4">
+                    <FormFieldStack
+                      label="Small model"
+                      help={`Used for fast tasks. Leave blank to use the pi default${piDefaultModel ? ` (${piDefaultModel})` : ""}.`}
+                    >
+                      <Input
+                        value={piAiSmallModel}
+                        onChange={(e) => setPiAiSmallModel(e.target.value)}
+                        placeholder={piDefaultModel ? `e.g. ${piDefaultModel}` : "provider/modelId"}
+                        list="pi-ai-models-config"
+                      />
+                    </FormFieldStack>
                     <datalist id="pi-ai-models-config">
                       {piModels.slice(0, 400).map((m) => (
                         <option key={m.id} value={m.id} />
                       ))}
                     </datalist>
-                  </div>
 
-                  <div className="flex flex-col gap-1 mt-3">
-                    <label className="text-xs font-semibold">Large Model (optional)</label>
-                    <div className="text-[10px] text-[var(--muted)]">
-                      Used for complex reasoning. Leave blank to use pi default{piDefaultModel ? ` (${piDefaultModel})` : ""}.
-                    </div>
-                    <input
-                      className="w-full px-2.5 py-[7px] border border-[var(--border)] bg-[var(--card)] text-[13px] font-[var(--mono)] transition-colors focus:border-[var(--accent)] focus:outline-none"
-                      type="text"
-                      value={piAiLargeModel}
-                      onChange={(e) => setPiAiLargeModel(e.target.value)}
-                      placeholder={piDefaultModel ? `e.g. ${piDefaultModel}` : "provider/modelId"}
-                      list="pi-ai-models-config-large"
-                    />
+                    <FormFieldStack
+                      label="Large model"
+                      help={`Used for complex reasoning. Leave blank to use the pi default${piDefaultModel ? ` (${piDefaultModel})` : ""}.`}
+                    >
+                      <Input
+                        value={piAiLargeModel}
+                        onChange={(e) => setPiAiLargeModel(e.target.value)}
+                        placeholder={piDefaultModel ? `e.g. ${piDefaultModel}` : "provider/modelId"}
+                        list="pi-ai-models-config-large"
+                      />
+                    </FormFieldStack>
                     <datalist id="pi-ai-models-config-large">
                       {piModels.slice(0, 400).map((m) => (
                         <option key={m.id} value={m.id} />
                       ))}
                     </datalist>
-                  </div>
 
-                  <div className="flex justify-end mt-3">
-                    <button
-                      className={`btn text-xs py-[5px] px-4 !mt-0 ${piAiSaveSuccess ? "!bg-[var(--ok,#16a34a)] !border-[var(--ok,#16a34a)]" : ""}`}
-                      onClick={() => void handlePiAiSave()}
-                      disabled={piAiSaving}
-                    >
-                      {piAiSaving ? "Saving..." : piAiSaveSuccess ? "Saved" : "Save & Restart"}
-                    </button>
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => void handlePiAiSave()}
+                        disabled={piAiSaving}
+                      >
+                        {piAiSaving ? "Saving..." : piAiSaveSuccess ? "Saved" : "Save & Restart"}
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                </SectionShell>
               )}
 
               {/* ── Local provider settings ──────────────────────────── */}
@@ -988,99 +960,101 @@ export function SettingsView() {
                 if (!hasPluginParams && !supportsSubscriptionOAuth) return null;
 
                 return (
-                  <div className="mt-4 pt-4 border-t border-[var(--border)]">
-                    <div className="flex justify-between items-center mb-3">
-                      <div className="text-xs font-semibold">
-                        {selectedProvider.name} Settings
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-[var(--muted)]">
-                          {hasPluginParams ? `${setCount}/${params.length} configured` : "OAuth authorization"}
-                        </span>
-                        <span
-                          className="text-[11px] px-2 py-[3px] border"
-                          style={{
-                            borderColor: isConfigured ? "#2d8a4e" : "var(--warning,#f39c12)",
-                            color: isConfigured ? "#2d8a4e" : "var(--warning,#f39c12)",
-                          }}
-                        >
-                          {isConfigured ? "Configured" : "Needs Setup"}
-                        </span>
-                      </div>
-                    </div>
+                  <SectionShell
+                    title={selectedProvider.name}
+                    description={
+                      hasPluginParams
+                        ? `${setCount}/${params.length} settings configured.`
+                        : "OAuth authorization required."
+                    }
+                    className="mt-2"
+                    toolbar={
+                      <Badge variant={isConfigured ? "success" : "warning"}>
+                        {isConfigured ? "Configured" : "Needs setup"}
+                      </Badge>
+                    }
+                  >
 
                     {supportsSubscriptionOAuth && subscriptionProviderId && (
-                      <div className="mb-4 p-3 border border-[var(--border)] bg-[var(--card)]">
-                        <div className="flex justify-between items-center mb-2">
-                          <div className="text-xs font-semibold">Subscription OAuth</div>
-                          <span
-                            className={`text-[10px] px-2 py-[2px] border ${
+                      <SectionShell
+                        title="Subscription OAuth"
+                        description={`Expires: ${formatSubscriptionExpiry(providerStatus?.expiresAt ?? null)}`}
+                        toolbar={
+                          <Badge
+                            variant={
                               providerStatus?.configured && providerStatus?.valid
-                                ? "text-[var(--ok,#16a34a)] border-[var(--ok,#16a34a)]"
-                                : "text-[var(--warning,#f39c12)] border-[var(--warning,#f39c12)]"
-                            }`}
+                                ? "success"
+                                : "warning"
+                            }
                           >
                             {providerStatus?.configured && providerStatus?.valid
                               ? "Connected"
                               : providerStatus?.configured
                                 ? "Expired"
                                 : "Not connected"}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-[var(--muted)] mb-3">
-                          <div>
-                            Expires: {formatSubscriptionExpiry(providerStatus?.expiresAt ?? null)}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 mb-3">
-                          <button
-                            className="btn text-xs py-[5px] px-3 !mt-0 !bg-transparent !border-[var(--border)] !text-[var(--muted)] hover:!text-[var(--text)] hover:!border-[var(--accent)]"
+                          </Badge>
+                        }
+                      >
+                        <div className="flex flex-wrap items-center gap-2 mb-3">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
                             onClick={() => void loadSubscriptionStatus()}
                             disabled={subscriptionStatusLoading || providerBusy}
                           >
-                            {subscriptionStatusLoading ? "Refreshing..." : "Refresh Status"}
-                          </button>
+                            {subscriptionStatusLoading ? "Refreshing..." : "Refresh status"}
+                          </Button>
                           {providerStatus?.configured ? (
-                            <button
-                              className="btn text-xs py-[5px] px-3 !mt-0 !bg-transparent !border-[var(--danger,#e74c3c)] !text-[var(--danger,#e74c3c)]"
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
                               onClick={() => void handleSubscriptionDisconnect(subscriptionProviderId)}
                               disabled={providerBusy}
                             >
                               {providerBusy ? "Disconnecting..." : "Disconnect"}
-                            </button>
+                            </Button>
                           ) : (
-                            <button
-                              className="btn text-xs py-[5px] px-3 !mt-0"
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
                               onClick={() => void handleStartSubscriptionOAuth(subscriptionProviderId)}
                               disabled={providerBusy}
                             >
                               {providerBusy ? "Starting..." : "Connect OAuth"}
-                            </button>
+                            </Button>
                           )}
                         </div>
 
                         {subscriptionProviderId === "openai-subscription" && openaiOAuthStarted && (
-                          <div className="space-y-2">
-                            <div className="text-[11px] text-[var(--muted)]">
-                              Paste the full callback URL from the OpenAI login redirect.
-                            </div>
-                            <input
+                          <div className="space-y-3">
+                            <FormFieldStack
+                              label="OpenAI callback URL"
+                              help="Paste the full callback URL from the OpenAI login redirect."
+                            >
+                              <Input
                               type="text"
-                              className="w-full px-2.5 py-[7px] border border-[var(--border)] bg-[var(--card)] text-[13px] font-[var(--mono)] transition-colors focus:border-[var(--accent)] focus:outline-none"
                               placeholder="http://localhost:1455/auth/callback?code=..."
                               value={openaiCallbackUrl}
                               onChange={(e) => setOpenaiCallbackUrl(e.target.value)}
-                            />
+                              />
+                            </FormFieldStack>
                             <div className="flex items-center gap-2">
-                              <button
-                                className="btn text-xs py-[5px] px-3 !mt-0"
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
                                 onClick={() => void handleCompleteOpenAIOAuth()}
                                 disabled={providerBusy || !openaiCallbackUrl.trim()}
                               >
                                 {providerBusy ? "Completing..." : "Complete OpenAI Login"}
-                              </button>
-                              <button
-                                className="btn text-xs py-[5px] px-3 !mt-0 !bg-transparent !border-[var(--border)] !text-[var(--muted)] hover:!text-[var(--text)]"
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
                                 onClick={() => {
                                   setOpenaiOAuthStarted(false);
                                   setOpenaiCallbackUrl("");
@@ -1088,33 +1062,38 @@ export function SettingsView() {
                                 disabled={providerBusy}
                               >
                                 Cancel
-                              </button>
+                              </Button>
                             </div>
                           </div>
                         )}
 
                         {subscriptionProviderId === "anthropic-subscription" && anthropicOAuthStarted && (
-                          <div className="space-y-2">
-                            <div className="text-[11px] text-[var(--muted)]">
-                              Paste the authorization code returned by Anthropic.
-                            </div>
-                            <input
+                          <div className="space-y-3">
+                            <FormFieldStack
+                              label="Anthropic authorization code"
+                              help="Paste the code returned by Anthropic after sign-in."
+                            >
+                              <Input
                               type="text"
-                              className="w-full px-2.5 py-[7px] border border-[var(--border)] bg-[var(--card)] text-[13px] font-[var(--mono)] transition-colors focus:border-[var(--accent)] focus:outline-none"
                               placeholder="Authorization code..."
                               value={anthropicCode}
                               onChange={(e) => setAnthropicCode(e.target.value)}
-                            />
+                              />
+                            </FormFieldStack>
                             <div className="flex items-center gap-2">
-                              <button
-                                className="btn text-xs py-[5px] px-3 !mt-0"
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
                                 onClick={() => void handleCompleteAnthropicOAuth()}
                                 disabled={providerBusy || !anthropicCode.trim()}
                               >
                                 {providerBusy ? "Completing..." : "Complete Anthropic Login"}
-                              </button>
-                              <button
-                                className="btn text-xs py-[5px] px-3 !mt-0 !bg-transparent !border-[var(--border)] !text-[var(--muted)] hover:!text-[var(--text)]"
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
                                 onClick={() => {
                                   setAnthropicOAuthStarted(false);
                                   setAnthropicCode("");
@@ -1122,22 +1101,25 @@ export function SettingsView() {
                                 disabled={providerBusy}
                               >
                                 Cancel
-                              </button>
+                              </Button>
                             </div>
                           </div>
                         )}
 
                         {subscriptionError && (
-                          <div className="text-[11px] text-[var(--danger,#e74c3c)] mt-2">
-                            {subscriptionError}
-                          </div>
+                          <SectionErrorState
+                            title="Subscription auth failed"
+                            description="The OAuth flow did not complete for this provider."
+                            details={subscriptionError}
+                            className="mt-2"
+                          />
                         )}
                         {subscriptionSuccess && (
                           <div className="text-[11px] text-[var(--ok,#16a34a)] mt-2">
                             {subscriptionSuccess}
                           </div>
                         )}
-                      </div>
+                      </SectionShell>
                     )}
 
                     {hasPluginParams && (() => {
@@ -1181,6 +1163,7 @@ export function SettingsView() {
                           setKeys={setKeys}
                           registry={defaultRegistry}
                           pluginId={selectedProvider.id}
+                          renderMode={configRenderMode}
                           onChange={(key, value) => handlePluginFieldChange(selectedProvider.id, key, String(value ?? ""))}
                         />
                       );
@@ -1189,111 +1172,138 @@ export function SettingsView() {
                     {hasPluginParams && (
                       <div className="flex justify-between items-center mt-3">
                         <div className="flex items-center gap-2">
-                          <button
-                            className="btn text-xs py-[5px] px-3.5 !mt-0 !bg-transparent !border-[var(--border)] !text-[var(--muted)] hover:!text-[var(--text)] hover:!border-[var(--accent)]"
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="!mt-0 rounded-full"
                             onClick={() => void handleFetchModels(selectedProvider.id)}
                             disabled={modelsFetching}
                           >
                             {modelsFetching ? "Fetching..." : "Fetch Models"}
-                          </button>
+                          </Button>
                           {modelsFetchResult && (
                             <span className={`text-[11px] ${modelsFetchResult.startsWith("Error") ? "text-[var(--danger,#e74c3c)]" : "text-[var(--ok,#16a34a)]"}`}>
                               {modelsFetchResult}
                             </span>
                           )}
                         </div>
-                        <button
-                          className={`btn text-xs py-[5px] px-4 !mt-0 ${saveSuccess ? "!bg-[var(--ok,#16a34a)] !border-[var(--ok,#16a34a)]" : ""}`}
+                        <Button
+                          type="button"
+                          size="sm"
+                          className={`!mt-0 rounded-full ${saveSuccess ? "!bg-[var(--ok,#16a34a)] !border-[var(--ok,#16a34a)] !text-black" : ""}`}
                           onClick={() => handlePluginSave(selectedProvider.id)}
                           disabled={isSaving}
                         >
                           {isSaving ? "Saving..." : saveSuccess ? "Saved" : "Save"}
-                        </button>
+                        </Button>
                       </div>
                     )}
-                  </div>
+                  </SectionShell>
                 );
               })()}
             </>
           );
         })()}
-      </div>
+      </SectionShell>
 
       {/* ═══════════════════════════════════════════════════════════════
           3. WALLET / RPC / SECRETS
           ═══════════════════════════════════════════════════════════════ */}
-      <div className="mt-6">
+      <SectionShell
+        className="mt-6"
+        title="Wallet and RPC"
+        description="Keys, providers, cloud auth, and secrets."
+      >
         <ConfigPageView embedded />
-      </div>
+      </SectionShell>
 
       {/* ═══════════════════════════════════════════════════════════════
           3b. GITHUB
           ═══════════════════════════════════════════════════════════════ */}
-      <div className="mt-6 p-4 border border-[var(--border)] bg-[var(--card)]">
-        <div className="font-bold text-sm mb-4">GitHub</div>
+      <SectionShell
+        className="mt-6"
+        title="GitHub"
+        description="Repository authentication and source control integration."
+      >
         <GitHubSettingsSection />
-      </div>
+      </SectionShell>
 
       {/* ═══════════════════════════════════════════════════════════════
           3c. CODING AGENTS
           ═══════════════════════════════════════════════════════════════ */}
-      <div className="mt-6 p-4 border border-[var(--border)] bg-[var(--card)]">
-        <div className="font-bold text-sm mb-4">Coding Agents</div>
+      <SectionShell
+        className="mt-6"
+        title="Coding agents"
+        description="Execution policy and repository controls for coding workflows."
+      >
         <CodingAgentSettingsSection />
-      </div>
+      </SectionShell>
 
       {/* ═══════════════════════════════════════════════════════════════
           4. MEDIA GENERATION
           ═══════════════════════════════════════════════════════════════ */}
-      <div className="mt-6 p-4 border border-[var(--border)] bg-[var(--card)]">
-        <div className="font-bold text-sm mb-4">Media Generation</div>
+      <SectionShell
+        className="mt-6"
+        title="Media generation"
+        description="Image, video, audio, and vision provider settings."
+      >
         <MediaSettingsSection />
-      </div>
+      </SectionShell>
 
       {/* ═══════════════════════════════════════════════════════════════
           5. SPEECH (TTS / STT)
           ═══════════════════════════════════════════════════════════════ */}
-      <div className="mt-6 p-4 border border-[var(--border)] bg-[var(--card)]">
-        <div className="font-bold text-sm mb-4">Speech (TTS / STT)</div>
+      <SectionShell
+        className="mt-6"
+        title="Speech"
+        description="Text-to-speech and transcription configuration."
+      >
         <VoiceConfigView />
-      </div>
+      </SectionShell>
 
       {/* ═══════════════════════════════════════════════════════════════
           6. PERMISSIONS & CAPABILITIES
           ═══════════════════════════════════════════════════════════════ */}
-      <div className="mt-6 p-4 border border-[var(--border)] bg-[var(--card)]">
-        <div className="font-bold text-sm mb-4">Permissions & Capabilities</div>
+      <SectionShell
+        className="mt-6"
+        title="Permissions and capabilities"
+        description="Review the surfaces this agent can access and control."
+      >
         <PermissionsSection />
-      </div>
+      </SectionShell>
 
       {/* ═══════════════════════════════════════════════════════════════
           7. UPDATES
           ═══════════════════════════════════════════════════════════════ */}
-      <div className="mt-6 p-4 border border-[var(--border)] bg-[var(--card)]">
-        <div className="flex justify-between items-center mb-3">
-          <div>
-            <div className="font-bold text-sm">Software Updates</div>
-            <div className="text-xs text-[var(--muted)] mt-0.5">
+      <SectionShell
+        className="mt-6"
+        title="Software updates"
+        description="Release channel and current desktop runtime version."
+        toolbar={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="rounded-full"
+            disabled={updateLoading}
+            onClick={() => void loadUpdateStatus(true)}
+          >
+            {updateLoading ? "Checking..." : "Check now"}
+          </Button>
+        }
+      >
+        <div className="text-xs text-[var(--muted)]">
               {updateStatus ? (
                 <>Version {updateStatus.currentVersion}</>
               ) : (
                 <>Loading...</>
               )}
-            </div>
-          </div>
-          <button
-            type="button"
-            className="btn whitespace-nowrap !mt-0 text-xs py-1.5 px-3.5"
-            disabled={updateLoading}
-            onClick={() => void loadUpdateStatus(true)}
-          >
-            {updateLoading ? "Checking..." : "Check Now"}
-          </button>
         </div>
 
         {updateStatus ? (
           <>
-            <div className="mb-4">
+            <div className="mt-4">
               <ConfigRenderer
                 schema={{
                   type: "object",
@@ -1332,6 +1342,7 @@ export function SettingsView() {
                 }}
                 values={{ channel: updateStatus.channel }}
                 registry={defaultRegistry}
+                renderMode={configRenderMode}
                 onChange={(key, value) => {
                   if (key === "channel")
                     void handleChannelChange(
@@ -1342,7 +1353,7 @@ export function SettingsView() {
             </div>
 
             {updateStatus.updateAvailable && updateStatus.latestVersion && (
-              <div className="mt-3 py-2.5 px-3 border border-[var(--accent)] bg-[rgba(255,255,255,0.03)] rounded flex justify-between items-center">
+              <div className="mt-4 flex items-center justify-between gap-4 rounded-2xl border border-[var(--accent)]/35 bg-[rgba(255,255,255,0.03)] px-4 py-3">
                 <div>
                   <div className="text-[13px] font-bold text-[var(--accent)]">
                     Update available
@@ -1355,16 +1366,19 @@ export function SettingsView() {
                 <div className="text-[11px] text-[var(--muted)] text-right">
                   Run{" "}
                   <code className="bg-[var(--bg-hover,rgba(255,255,255,0.05))] px-1.5 py-0.5 rounded-sm">
-                    milady update
+                    Pro Streamer update
                   </code>
                 </div>
               </div>
             )}
 
             {updateStatus.error && (
-              <div className="mt-2 text-[11px] text-[var(--danger,#e74c3c)]">
-                {updateStatus.error}
-              </div>
+              <SectionErrorState
+                className="mt-4"
+                title="Update check failed"
+                description="The update service did not return a valid status."
+                details={updateStatus.error}
+              />
             )}
 
             {updateStatus.lastCheckAt && (
@@ -1375,32 +1389,47 @@ export function SettingsView() {
             )}
           </>
         ) : (
-          <div className="text-center py-3 text-[var(--muted)] text-xs">
-            {updateLoading
-              ? "Checking for updates..."
-              : "Unable to load update status."}
-          </div>
+          updateLoading ? (
+            <SectionLoadingState
+              className="mt-4"
+              title="Checking for updates"
+              description="Refreshing the current release channel status."
+            />
+          ) : (
+            <SectionEmptyState
+              className="mt-4"
+              title="Update status unavailable"
+              description="The app could not load the current update state yet."
+              actionLabel="Retry"
+              onAction={() => void loadUpdateStatus(true)}
+            />
+          )
         )}
-      </div>
+      </SectionShell>
 
       {/* ═══════════════════════════════════════════════════════════════
           4. CHROME EXTENSION
           ═══════════════════════════════════════════════════════════════ */}
-      <div className="mt-6 p-4 border border-[var(--border)] bg-[var(--card)]">
-        <div className="flex justify-between items-center mb-3">
-          <div className="font-bold text-sm">Chrome Extension</div>
-          <button
+      <SectionShell
+        className="mt-6"
+        title="Chrome extension"
+        description="Browser relay and local extension install status."
+        toolbar={
+          <Button
             type="button"
-            className="btn whitespace-nowrap !mt-0 text-xs py-1.5 px-3.5"
+            variant="outline"
+            size="sm"
+            className="rounded-full"
             onClick={() => void checkExtensionStatus()}
             disabled={extensionChecking}
           >
-            {extensionChecking ? "Checking..." : "Check Connection"}
-          </button>
-        </div>
+            {extensionChecking ? "Checking..." : "Check connection"}
+          </Button>
+        }
+      >
 
         {ext && (
-          <div className="p-3 border border-[var(--border)] bg-[var(--bg-muted)] mb-3">
+          <div className="mb-4 rounded-2xl border border-white/8 bg-white/[0.03] p-4">
             <div className="flex items-center gap-2 mb-2">
               <span
                 className="inline-block w-2 h-2 rounded-full"
@@ -1426,10 +1455,11 @@ export function SettingsView() {
           </div>
         )}
 
-        <div className="mt-3">
-          <div className="font-bold text-[13px] mb-2">
-            Install Chrome Extension
-          </div>
+        <SectionShell
+          className="mt-4"
+          title="Install Chrome extension"
+          description="Load the unpacked extension in Chrome and connect it to the local relay."
+        >
           <div className="text-xs text-[var(--muted)] leading-relaxed">
             <ol className="m-0 pl-5">
               <li className="mb-1.5">
@@ -1460,7 +1490,7 @@ export function SettingsView() {
                     </code>
                     <span className="italic">
                       {" "}
-                      (relative to milady package root)
+                      (relative to the app package root)
                     </span>
                   </>
                 )}
@@ -1469,57 +1499,48 @@ export function SettingsView() {
                 Pin the extension icon in Chrome&apos;s toolbar
               </li>
               <li>
-                Click the extension icon on any tab to attach/detach the Milady
+                Click the extension icon on any tab to attach/detach the agent
                 browser relay
               </li>
             </ol>
           </div>
-        </div>
+        </SectionShell>
 
         {ext?.extensionPath && (
-          <div className="mt-3 py-2 px-3 border border-[var(--border)] bg-[var(--bg-muted)] font-[var(--mono)] text-[11px] break-all">
+          <div className="mt-4 rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 font-[var(--mono)] text-[11px] break-all">
             Extension path: {ext.extensionPath}
           </div>
         )}
-      </div>
+      </SectionShell>
 
       {/* ═══════════════════════════════════════════════════════════════
           11. EXPORT / IMPORT
           ═══════════════════════════════════════════════════════════════ */}
-      <div className="mt-6 p-4 border border-[var(--border)] bg-[var(--card)]">
-        <div className="flex justify-between items-center">
-          <div className="font-bold text-sm">Agent Export / Import</div>
+      <SectionShell
+        className="mt-6"
+        title="Agent export and import"
+        description="Move configuration, memories, chats, and secrets as an encrypted bundle."
+        toolbar={
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="btn whitespace-nowrap !mt-0 text-xs py-1.5 px-3.5"
-              onClick={openImportModal}
-            >
+            <Button type="button" variant="outline" size="sm" className="rounded-full" onClick={openImportModal}>
               Import
-            </button>
-            <button
-              type="button"
-              className="btn whitespace-nowrap !mt-0 text-xs py-1.5 px-3.5"
-              onClick={openExportModal}
-            >
+            </Button>
+            <Button type="button" size="sm" className="rounded-full" onClick={openExportModal}>
               Export
-            </button>
+            </Button>
           </div>
-        </div>
-      </div>
+        }
+      />
 
       {/* ═══════════════════════════════════════════════════════════════
           12. DANGER ZONE
           ═══════════════════════════════════════════════════════════════ */}
-      <div className="mt-8 pt-6 border-t border-[var(--border)]">
-        <h3 className="text-lg font-bold text-[var(--danger,#e74c3c)]">
-          Danger Zone
-        </h3>
-        <p className="text-[13px] text-[var(--muted)] mb-5">
-          Irreversible actions. Proceed with caution.
-        </p>
-
-        <div className="border border-[var(--danger,#e74c3c)] p-4 mb-3">
+      <SectionShell
+        className="mt-8 border-[var(--danger,#e74c3c)]/40"
+        title="Danger zone"
+        description="Irreversible actions. Proceed with caution."
+      >
+        <div className="rounded-2xl border border-[var(--danger,#e74c3c)]/45 p-4 mb-3">
           <div className="flex justify-between items-center">
             <div>
               <div className="font-bold text-sm">Export Private Keys</div>
@@ -1528,17 +1549,14 @@ export function SettingsView() {
                 anyone.
               </div>
             </div>
-            <button
+            <Button
               type="button"
-              className="btn whitespace-nowrap !mt-0 text-xs py-1.5 px-4"
-              style={{
-                background: "var(--danger, #e74c3c)",
-                borderColor: "var(--danger, #e74c3c)",
-              }}
+              size="sm"
+              className="whitespace-nowrap rounded-full bg-[var(--danger,#e74c3c)] text-black hover:bg-[var(--danger,#e74c3c)]/85"
               onClick={() => void handleExportKeys()}
             >
               {walletExportVisible ? "Hide Keys" : "Export Keys"}
-            </button>
+            </Button>
           </div>
           {walletExportVisible && walletExportData && (
             <div className="mt-3 p-3 border border-[var(--danger,#e74c3c)] bg-[var(--bg-muted)] font-[var(--mono)] text-[11px] break-all leading-relaxed">
@@ -1550,15 +1568,17 @@ export function SettingsView() {
                   </span>
                   <br />
                   <span>{walletExportData.evm.privateKey}</span>
-                  <button
+                  <Button
                     type="button"
-                    className="ml-2 px-1.5 py-0.5 border border-[var(--border)] bg-[var(--bg)] cursor-pointer text-[10px] font-[var(--mono)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                    variant="outline"
+                    size="sm"
+                    className="ml-2 h-auto px-2 py-1 text-[10px] font-[var(--mono)]"
                     onClick={() =>
                       void copyToClipboard(walletExportData.evm.privateKey)
                     }
                   >
                     copy
-                  </button>
+                  </Button>
                 </div>
               )}
               {walletExportData.solana && (
@@ -1569,15 +1589,17 @@ export function SettingsView() {
                   </span>
                   <br />
                   <span>{walletExportData.solana.privateKey}</span>
-                  <button
+                  <Button
                     type="button"
-                    className="ml-2 px-1.5 py-0.5 border border-[var(--border)] bg-[var(--bg)] cursor-pointer text-[10px] font-[var(--mono)] hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                    variant="outline"
+                    size="sm"
+                    className="ml-2 h-auto px-2 py-1 text-[10px] font-[var(--mono)]"
                     onClick={() =>
                       void copyToClipboard(walletExportData.solana.privateKey)
                     }
                   >
                     copy
-                  </button>
+                  </Button>
                 </div>
               )}
               {!walletExportData.evm && !walletExportData.solana && (
@@ -1589,7 +1611,7 @@ export function SettingsView() {
           )}
         </div>
 
-        <div className="border border-[var(--danger,#e74c3c)] p-4 flex justify-between items-center">
+        <div className="rounded-2xl border border-[var(--danger,#e74c3c)]/45 p-4 flex justify-between items-center">
           <div>
             <div className="font-bold text-sm">Reset Agent</div>
             <div className="text-xs text-[var(--muted)] mt-0.5">
@@ -1597,19 +1619,16 @@ export function SettingsView() {
               wizard.
             </div>
           </div>
-          <button
+          <Button
             type="button"
-            className="btn whitespace-nowrap !mt-0 text-xs py-1.5 px-4"
-            style={{
-              background: "var(--danger, #e74c3c)",
-              borderColor: "var(--danger, #e74c3c)",
-            }}
+            size="sm"
+            className="whitespace-nowrap rounded-full bg-[var(--danger,#e74c3c)] text-black hover:bg-[var(--danger,#e74c3c)]/85"
             onClick={() => void handleReset()}
           >
             Reset Everything
-          </button>
+          </Button>
         </div>
-      </div>
+      </SectionShell>
 
       {/* ── Modals ── */}
       <Modal
@@ -1654,13 +1673,13 @@ export function SettingsView() {
             >
               Encryption Password
             </label>
-            <input
+            <Input
               id="agent-export-password-input"
               type="password"
               placeholder="Enter password (minimum 4 characters)"
               value={exportPassword}
               onChange={(e) => setState("exportPassword", e.target.value)}
-              className="px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-xs font-[var(--mono)] focus:border-[var(--accent)] focus:outline-none"
+              className="font-[var(--mono)]"
             />
             <div className="text-[11px] text-[var(--muted)]">
               Password must be at least 4 characters.
@@ -1685,21 +1704,24 @@ export function SettingsView() {
             </div>
           )}
           <div className="flex justify-end gap-2 mt-1">
-            <button
+            <Button
               type="button"
-              className="btn text-xs py-1.5 px-4 !mt-0 !bg-transparent !border-[var(--border)] !text-[var(--txt)]"
+              variant="outline"
+              size="sm"
+              className="rounded-full"
               onClick={() => setExportModalOpen(false)}
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="btn text-xs py-1.5 px-4 !mt-0"
+              size="sm"
+              className="rounded-full"
               disabled={exportBusy}
               onClick={() => void handleAgentExport()}
             >
               {exportBusy ? "Exporting..." : "Download Export"}
-            </button>
+            </Button>
           </div>
         </div>
       </Modal>
@@ -1741,13 +1763,13 @@ export function SettingsView() {
             >
               Decryption Password
             </label>
-            <input
+            <Input
               id="agent-import-password-input"
               type="password"
               placeholder="Enter password (minimum 4 characters)"
               value={importPassword}
               onChange={(e) => setState("importPassword", e.target.value)}
-              className="px-2.5 py-1.5 border border-[var(--border)] bg-[var(--card)] text-xs font-[var(--mono)] focus:border-[var(--accent)] focus:outline-none"
+              className="font-[var(--mono)]"
             />
             <div className="text-[11px] text-[var(--muted)]">
               Password must be at least 4 characters.
@@ -1764,21 +1786,24 @@ export function SettingsView() {
             </div>
           )}
           <div className="flex justify-end gap-2 mt-1">
-            <button
+            <Button
               type="button"
-              className="btn text-xs py-1.5 px-4 !mt-0 !bg-transparent !border-[var(--border)] !text-[var(--txt)]"
+              variant="outline"
+              size="sm"
+              className="rounded-full"
               onClick={() => setImportModalOpen(false)}
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="btn text-xs py-1.5 px-4 !mt-0"
+              size="sm"
+              className="rounded-full"
               disabled={importBusy}
               onClick={() => void handleAgentImport()}
             >
               {importBusy ? "Importing..." : "Import Agent"}
-            </button>
+            </Button>
           </div>
         </div>
       </Modal>

@@ -10,8 +10,10 @@
  */
 
 import {
+  type ComponentType,
   type Dispatch,
   type SetStateAction,
+  type SVGProps,
   useCallback,
   useEffect,
   useState,
@@ -27,13 +29,22 @@ import {
 import { hasRequiredOnboardingPermissions } from "../onboarding-permissions";
 import { StatusBadge } from "./shared/ui-badges";
 import { Switch } from "./shared/ui-switch";
+import {
+  CameraIcon,
+  CheckIcon,
+  CursorIcon,
+  MonitorIcon,
+  SettingsIcon,
+  TerminalIcon,
+  MicIcon,
+} from "./ui/Icons";
 
 /** Permission definition for UI rendering. */
 interface PermissionDef {
   id: SystemPermissionId;
   name: string;
   description: string;
-  icon: string;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
   platforms: string[];
   requiredForFeatures: string[];
 }
@@ -44,7 +55,7 @@ const SYSTEM_PERMISSIONS: PermissionDef[] = [
     name: "Accessibility",
     description:
       "Control mouse, keyboard, and interact with other applications",
-    icon: "cursor",
+    icon: CursorIcon,
     platforms: ["darwin"],
     requiredForFeatures: ["computeruse", "browser"],
   },
@@ -52,7 +63,7 @@ const SYSTEM_PERMISSIONS: PermissionDef[] = [
     id: "screen-recording",
     name: "Screen Recording",
     description: "Capture screen content for screenshots and vision",
-    icon: "monitor",
+    icon: MonitorIcon,
     platforms: ["darwin"],
     requiredForFeatures: ["computeruse", "vision"],
   },
@@ -60,7 +71,7 @@ const SYSTEM_PERMISSIONS: PermissionDef[] = [
     id: "microphone",
     name: "Microphone",
     description: "Voice input for talk mode and speech recognition",
-    icon: "mic",
+    icon: MicIcon,
     platforms: ["darwin", "win32", "linux"],
     requiredForFeatures: ["talkmode", "voice"],
   },
@@ -68,7 +79,7 @@ const SYSTEM_PERMISSIONS: PermissionDef[] = [
     id: "camera",
     name: "Camera",
     description: "Video input for vision and video capture",
-    icon: "camera",
+    icon: CameraIcon,
     platforms: ["darwin", "win32", "linux"],
     requiredForFeatures: ["camera", "vision"],
   },
@@ -76,7 +87,7 @@ const SYSTEM_PERMISSIONS: PermissionDef[] = [
     id: "shell",
     name: "Shell Access",
     description: "Execute terminal commands and scripts",
-    icon: "terminal",
+    icon: TerminalIcon,
     platforms: ["darwin", "win32", "linux"],
     requiredForFeatures: ["shell"],
   },
@@ -130,15 +141,16 @@ const PERMISSION_BADGE_LABELS: Record<
 };
 
 /** Icon mapping for permissions. */
-function PermissionIcon({ icon }: { icon: string }) {
-  const icons: Record<string, string> = {
-    cursor: "🖱️",
-    monitor: "🖥️",
-    mic: "🎤",
-    camera: "📷",
-    terminal: "⌨️",
-  };
-  return <span className="text-base">{icons[icon] || "⚙️"}</span>;
+function PermissionIcon({
+  Icon,
+}: {
+  Icon: ComponentType<SVGProps<SVGSVGElement>>;
+}) {
+  return (
+    <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-white/72">
+      <Icon className="h-4 w-4" />
+    </span>
+  );
 }
 
 /** Individual permission row. */
@@ -165,7 +177,7 @@ function PermissionRow({
 
   return (
     <div className="flex items-center gap-3 py-2.5 px-3 border-b border-[var(--border)] last:border-b-0">
-      <PermissionIcon icon={def.icon} />
+      <PermissionIcon Icon={def.icon ?? SettingsIcon} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-semibold text-[13px]">{def.name}</span>
@@ -570,7 +582,7 @@ export function PermissionsOnboardingSection({
                   : "border-[var(--border)] bg-[var(--card)]"
               }`}
             >
-              <PermissionIcon icon={def.icon} />
+              <PermissionIcon Icon={def.icon} />
               <div className="flex-1">
                 <div className="font-semibold text-sm">{def.name}</div>
                 <div className="text-[11px] text-[var(--muted)]">
@@ -578,7 +590,9 @@ export function PermissionsOnboardingSection({
                 </div>
               </div>
               {isGranted ? (
-                <span className="text-[var(--ok)] text-sm">✓</span>
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--ok)]/35 bg-[var(--ok)]/12 text-[var(--ok)]">
+                  <CheckIcon className="h-4 w-4" />
+                </span>
               ) : (
                 <div className="flex gap-2">
                   {canRequest && (

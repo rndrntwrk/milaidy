@@ -73,8 +73,9 @@ describe("header status", () => {
       .join("\n");
 
     expect(renderedText).toContain("starting");
-    expect(renderedText).toContain("⏳");
     expect(renderedText).not.toContain("⏸️");
+    const statusPill = tree?.root.findByProps({ "data-testid": "status-pill" });
+    expect(String(statusPill.props.className)).toContain("text-warn");
   });
 
   it("shows restart in-progress label and disables controls during lifecycle action", async () => {

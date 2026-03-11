@@ -2,21 +2,14 @@ import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TestRenderer, { act } from "react-test-renderer";
 
-interface PluginStub {
-  id: string;
-  name: string;
-  enabled?: boolean;
-  isActive?: boolean;
-}
-
 interface AppContextStub {
-  plugins: PluginStub[];
   setActionNotice: (
     text: string,
     tone?: "info" | "success" | "error",
     ttlMs?: number,
   ) => void;
-  setTab: (tab: string) => void;
+  quickLayerStatuses: Record<string, "active" | "disabled" | "available">;
+  runQuickLayer: (layerId: string) => Promise<void>;
 }
 
 const { mockUseApp, mockClient } = vi.hoisted(() => ({
@@ -40,9 +33,23 @@ import { CustomActionsPanel } from "../../src/components/CustomActionsPanel";
 
 function createContext(overrides?: Partial<AppContextStub>): AppContextStub {
   return {
-    plugins: [],
     setActionNotice: vi.fn(),
-    setTab: vi.fn(),
+    quickLayerStatuses: {
+      stream: "available",
+      "go-live": "available",
+      "autonomous-run": "available",
+      "screen-share": "available",
+      ads: "available",
+      "invite-guest": "available",
+      radio: "available",
+      pip: "available",
+      "reaction-segment": "available",
+      earnings: "available",
+      "play-games": "available",
+      swap: "available",
+      "end-live": "available",
+    },
+    runQuickLayer: vi.fn(async () => {}),
     ...overrides,
   };
 }
@@ -108,11 +115,10 @@ describe("CustomActionsPanel default dock actions", () => {
     expect(findButtonByText(tree!.root, "End Live")).toBeTruthy();
   });
 
-  it("dispatches quick-layer event from drawer and closes panel", async () => {
+  it("runs the shared quick-layer action from the drawer and closes panel", async () => {
     const ctx = createContext();
     const onClose = vi.fn();
     mockUseApp.mockReturnValue(ctx);
-    const dispatchSpy = vi.spyOn(window, "dispatchEvent");
 
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
@@ -128,35 +134,23 @@ describe("CustomActionsPanel default dock actions", () => {
 
     await act(async () => {
       findButtonByText(tree!.root, "Go Live").props.onClick();
-      vi.advanceTimersByTime(130);
     });
 
-    expect(ctx.setTab).toHaveBeenCalledWith("chat");
     expect(ctx.setActionNotice).toHaveBeenCalledWith(
       expect.stringContaining("Go Live"),
       "info",
       2200,
     );
     expect(onClose).toHaveBeenCalled();
-    expect(dispatchSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "milaidy:quick-layer:run" }),
-    );
-    const dispatchedEvent = dispatchSpy.mock.calls.at(-1)?.[0] as
-      | CustomEvent<{ layerId?: string }>
-      | undefined;
-    expect(dispatchedEvent?.detail?.layerId).toBe("go-live");
+    expect(ctx.runQuickLayer).toHaveBeenCalledWith("go-live");
   });
 
   it("marks quick action as disabled when plugin is disabled", async () => {
     const ctx = createContext({
-      plugins: [
-        {
-          id: "stream555-control",
-          name: "stream555-control",
-          enabled: false,
-          isActive: false,
-        },
-      ],
+      quickLayerStatuses: {
+        ...createContext().quickLayerStatuses,
+        "go-live": "disabled",
+      },
     });
     mockUseApp.mockReturnValue(ctx);
 

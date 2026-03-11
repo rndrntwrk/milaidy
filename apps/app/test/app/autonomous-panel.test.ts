@@ -1,4 +1,5 @@
 import React from "react";
+import TestRenderer, { act } from "react-test-renderer";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
@@ -97,12 +98,16 @@ describe("AutonomousPanel", () => {
   it("shows not-running state when agent is offline", async () => {
     mockUseApp.mockReturnValue(makeContext({ agentStatus: null }));
 
-    const markup = renderToStaticMarkup(React.createElement(AutonomousPanel));
-
-    const panel = tree!.root.findByProps({ "data-testid": "autonomous-panel" });
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(AutonomousPanel));
+    });
+    const panel = tree.root.findByProps({ "data-testid": "autonomous-panel" });
     expect(panel).toBeDefined();
-    expect(String(panel.props.className)).toContain("hidden lg:flex");
-    expect(readAllText(tree!)).toContain("Agent not running");
+    expect(String(panel.props.className)).toContain("hidden");
+    expect(String(panel.props.className)).toContain("lg:flex");
+    const markup = renderToStaticMarkup(React.createElement(AutonomousPanel));
+    expect(readAllText(markup)).toContain("Agent not running");
   });
 
   it("updates current thought/action and stream count as events arrive", async () => {
@@ -140,7 +145,7 @@ describe("AutonomousPanel", () => {
     expect(panelText).toMatch(/Event Stream \(4\)/);
     expect(panelText).toContain("Switching to execution mode");
     expect(panelText).toContain("provider event");
-    expect(panelText).toContain("Action provider event");
+    expect(panelText).toContain("Latest action provider event");
   });
 
   it("renders tasks, triggers, and todos from workbench context", async () => {

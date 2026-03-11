@@ -21,6 +21,11 @@ import type {
 import { client } from "../api-client";
 import { ConfirmDeleteControl } from "./shared/confirm-delete-control";
 import { formatByteSize, formatShortDate } from "./shared/format";
+import { Button } from "./ui/Button";
+import { Card } from "./ui/Card";
+import { Dialog } from "./ui/Dialog";
+import { ScrollArea } from "./ui/ScrollArea";
+import { CloseIcon } from "./ui/Icons";
 
 /* ── Shared style constants ─────────────────────────────────────────── */
 
@@ -419,20 +424,20 @@ function DocumentDetailModal({
   }, [documentId]);
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-[var(--bg)] border border-[var(--border)] rounded-lg w-full max-w-3xl max-h-[80vh] flex flex-col">
+    <Dialog open={true} onClose={onClose} className="max-w-3xl bg-[#07090e]/96">
+      <Card className="flex max-h-[80vh] w-full flex-col overflow-hidden rounded-[28px] border-white/10 bg-[#07090e]/96">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
-          <h2 className="text-lg font-medium text-[var(--txt)]">
+        <div className="flex items-center justify-between border-b border-white/10 p-4">
+          <h2 className="text-lg font-medium text-white/88">
             {loading ? "Loading..." : doc?.filename || "Document"}
           </h2>
-          <button type="button" className={btnGhost} onClick={onClose}>
-            Close
-          </button>
+          <Button type="button" variant="ghost" size="icon" className="rounded-full" onClick={onClose} aria-label="Close document detail">
+            <CloseIcon className="h-4 w-4" />
+          </Button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <ScrollArea className="flex-1 p-4">
           {loading && (
             <div className="text-center py-8 text-[var(--muted)]">
               Loading...
@@ -505,9 +510,9 @@ function DocumentDetailModal({
               </div>
             </>
           )}
-        </div>
-      </div>
-    </div>
+        </ScrollArea>
+      </Card>
+    </Dialog>
   );
 }
 

@@ -6,6 +6,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../AppContext";
 import type { LogEntry } from "../api-client";
 import { formatTime } from "./shared/format";
+import { Badge } from "./ui/Badge.js";
+import { Button } from "./ui/Button.js";
+import { Card, CardContent } from "./ui/Card.js";
+import { Input } from "./ui/Input.js";
+import { Select } from "./ui/Select.js";
 
 /** Per-tag badge colour map. */
 const TAG_COLORS: Record<string, { bg: string; fg: string }> = {
@@ -77,6 +82,13 @@ export function LogsView() {
     });
   }, [logs, normalizedSearch]);
 
+  const summary = useMemo(() => {
+    const errors = filteredLogs.filter((entry) => entry.level === "error").length;
+    const warnings = filteredLogs.filter((entry) => entry.level === "warn").length;
+    const infos = filteredLogs.filter((entry) => entry.level === "info").length;
+    return { errors, warnings, infos };
+  }, [filteredLogs]);
+
   const handleTagChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setState("logTagFilter", e.target.value);
     void loadLogs();
@@ -84,19 +96,45 @@ export function LogsView() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Filters row — filters left, refresh right */}
+      <Card className="mb-3 rounded-[22px]">
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 px-4 py-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline" className="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em]">
+            {filteredLogs.length} visible
+          </Badge>
+          <Badge variant={summary.errors > 0 ? "danger" : "outline"} className="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em]">
+            {summary.errors} errors
+          </Badge>
+          <Badge variant={summary.warnings > 0 ? "warning" : "outline"} className="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em]">
+            {summary.warnings} warnings
+          </Badge>
+          <Badge variant="outline" className="rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em]">
+            {summary.infos} info
+          </Badge>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          className="rounded-full"
+          onClick={() => void loadLogs()}
+        >
+          Refresh
+        </Button>
+        </CardContent>
+      </Card>
+
       <div className="flex flex-wrap gap-1.5 mb-2.5 items-center">
-        <input
+        <Input
           type="text"
-          className="text-xs px-3 py-1.5 border border-border bg-card text-txt min-w-56"
+          className="h-10 min-w-56 rounded-2xl text-sm"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search logs..."
           aria-label="Search logs"
         />
 
-        <select
-          className="text-xs px-3 py-1.5 border border-border bg-card text-txt cursor-pointer"
+        <Select
+          className="h-10 rounded-2xl text-sm"
           value={logLevelFilter}
           onChange={handleLevelChange}
         >
@@ -105,10 +143,10 @@ export function LogsView() {
           <option value="info">Info</option>
           <option value="warn">Warn</option>
           <option value="error">Error</option>
-        </select>
+        </Select>
 
-        <select
-          className="text-xs px-3 py-1.5 border border-border bg-card text-txt cursor-pointer"
+        <Select
+          className="h-10 rounded-2xl text-sm"
           value={logSourceFilter}
           onChange={handleSourceChange}
         >
@@ -118,11 +156,11 @@ export function LogsView() {
               {s}
             </option>
           ))}
-        </select>
+        </Select>
 
         {logTags.length > 0 && (
-          <select
-            className="text-xs px-3 py-1.5 border border-border bg-card text-txt cursor-pointer"
+          <Select
+            className="h-10 rounded-2xl text-sm"
             value={logTagFilter}
             onChange={handleTagChange}
           >
@@ -132,32 +170,25 @@ export function LogsView() {
                 {tag}
               </option>
             ))}
-          </select>
+          </Select>
         )}
 
         {hasActiveFilters && (
-          <button
+          <Button
             type="button"
-            className="text-xs px-3 py-1.5 border border-border bg-card text-txt cursor-pointer hover:border-accent hover:text-accent"
+            variant="outline"
+            className="rounded-full"
             onClick={handleClearFilters}
           >
             Clear filters
-          </button>
+          </Button>
         )}
-
-        <button
-          type="button"
-          className="text-xs px-3 py-1.5 border border-border bg-card text-txt cursor-pointer hover:border-accent hover:text-accent ml-auto"
-          onClick={() => void loadLogs()}
-        >
-          Refresh
-        </button>
       </div>
 
-      {/* Log entries — full remaining height */}
-      <div className="font-mono text-xs flex-1 min-h-0 overflow-y-auto border border-border p-2 bg-card">
+      <Card className="flex-1 min-h-0 overflow-hidden rounded-[24px]">
+        <CardContent className="font-mono flex-1 min-h-0 overflow-y-auto p-2 text-xs">
         {filteredLogs.length === 0 ? (
-          <div className="text-center py-8 text-muted">
+          <div className="text-center py-8 text-white/45">
             No log entries
             {hasActiveFilters ? " matching filters" : " yet"}.
           </div>
@@ -165,7 +196,7 @@ export function LogsView() {
           filteredLogs.map((entry: LogEntry) => (
             <div
               key={`${entry.timestamp}-${entry.source}-${entry.level}-${entry.message}`}
-              className="font-mono text-xs px-2 py-1 border-b border-border flex gap-2 items-baseline"
+              className="font-mono text-xs px-3 py-2 border-b border-white/8 flex gap-2 items-baseline"
               data-testid="log-entry"
             >
               {/* Timestamp */}
@@ -198,7 +229,7 @@ export function LogsView() {
                   return (
                     <span
                       key={t}
-                      className="inline-block text-[10px] px-1.5 py-px rounded-lg mr-0.5"
+                className="inline-block text-[10px] px-1.5 py-px rounded-full mr-0.5"
                       style={{
                         background: c ? c.bg : "var(--bg-muted)",
                         color: c ? c.fg : "var(--muted)",
@@ -216,7 +247,8 @@ export function LogsView() {
             </div>
           ))
         )}
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -2,31 +2,15 @@
  * Navigation — tabs + onboarding.
  */
 
-/** Apps are only enabled in dev mode; production builds hide this feature. */
-export const APPS_ENABLED = import.meta.env.DEV;
+import {
+  APPS_ENABLED,
+  isTabEnabled,
+  type HudRoutingOptions,
+  type Tab,
+} from "./miladyHudRouting.js";
 
-export type Tab =
-  | "chat"
-  | "apps"
-  | "character"
-  | "wallets"
-  | "knowledge"
-  | "connectors"
-  | "triggers"
-  | "plugins"
-  | "skills"
-  | "actions"
-  | "advanced"
-  | "fine-tuning"
-  | "trajectories"
-  | "runtime"
-  | "database"
-  | "settings"
-  | "logs"
-  | "identity"
-  | "approvals"
-  | "safe-mode"
-  | "governance";
+export { APPS_ENABLED } from "./miladyHudRouting.js";
+export type { Tab } from "./miladyHudRouting.js";
 
 const ALL_TAB_GROUPS = [
   { label: "Chat", tabs: ["chat"] as Tab[] },
@@ -84,6 +68,7 @@ const TAB_PATHS: Record<Tab, string> = {
   approvals: "/approvals",
   "safe-mode": "/safe-mode",
   governance: "/governance",
+  security: "/security",
 };
 
 /** Legacy path redirects — old paths that now map to new tabs. */
@@ -108,7 +93,11 @@ export function pathForTab(tab: Tab, basePath = ""): string {
   return base ? `${base}${p}` : p;
 }
 
-export function tabFromPath(pathname: string, basePath = ""): Tab | null {
+export function tabFromPath(
+  pathname: string,
+  basePath = "",
+  options?: HudRoutingOptions,
+): Tab | null {
   const base = normalizeBasePath(basePath);
   let p = pathname || "/";
   if (base) {
@@ -119,7 +108,9 @@ export function tabFromPath(pathname: string, basePath = ""): Tab | null {
   if (normalized.endsWith("/index.html")) normalized = "/";
   if (normalized === "/") return "chat";
   // Check current paths first, then legacy redirects
-  return PATH_TO_TAB.get(normalized) ?? LEGACY_PATHS[normalized] ?? null;
+  const tab = PATH_TO_TAB.get(normalized) ?? LEGACY_PATHS[normalized] ?? null;
+  if (!tab) return null;
+  return isTabEnabled(tab, options) ? tab : null;
 }
 
 function normalizeBasePath(basePath: string): string {
@@ -163,6 +154,7 @@ export function titleForTab(tab: Tab): string {
     case "approvals": return "Approvals";
     case "safe-mode": return "Safe Mode";
     case "governance": return "Governance";
+    case "security": return "Security";
     default: return "Milaidy";
   }
 }

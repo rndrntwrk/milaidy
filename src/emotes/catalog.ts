@@ -14,6 +14,14 @@ export type EmoteCategory =
   | "movement"
   | "other";
 
+export type EmoteDrawerGroup =
+  | "movement"
+  | "gesture"
+  | "dance"
+  | "combat"
+  | "exercise"
+  | "idle";
+
 export interface EmoteDef {
   id: string;
   name: string;
@@ -22,11 +30,34 @@ export interface EmoteDef {
   duration: number;
   loop: boolean;
   category: EmoteCategory;
+  drawerGroup: EmoteDrawerGroup;
+  pinnedInActionDrawer: boolean;
+  autoEligible: boolean;
+  idleVariant: boolean;
+}
+
+type EmoteSeed = Omit<
+  EmoteDef,
+  "pinnedInActionDrawer" | "autoEligible" | "idleVariant"
+> &
+  Partial<
+    Pick<
+      EmoteDef,
+      "pinnedInActionDrawer" | "autoEligible" | "idleVariant"
+    >
+  >;
+
+function defineEmote(seed: EmoteSeed): EmoteDef {
+  return {
+    pinnedInActionDrawer: false,
+    autoEligible: false,
+    idleVariant: false,
+    ...seed,
+  };
 }
 
 export const EMOTE_CATALOG: EmoteDef[] = [
-  // Greeting
-  {
+  defineEmote({
     id: "wave",
     name: "Wave",
     description: "Waves both hands in greeting",
@@ -34,8 +65,10 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 2.5,
     loop: false,
     category: "greeting",
-  },
-  {
+    drawerGroup: "gesture",
+    autoEligible: true,
+  }),
+  defineEmote({
     id: "kiss",
     name: "Kiss",
     description: "Blows a kiss",
@@ -43,10 +76,10 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 2,
     loop: false,
     category: "greeting",
-  },
-
-  // Emotion
-  {
+    drawerGroup: "gesture",
+    autoEligible: true,
+  }),
+  defineEmote({
     id: "crying",
     name: "Crying",
     description: "Cries sadly",
@@ -54,8 +87,10 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 3,
     loop: true,
     category: "emotion",
-  },
-  {
+    drawerGroup: "gesture",
+    autoEligible: true,
+  }),
+  defineEmote({
     id: "sorrow",
     name: "Sorrow",
     description: "Expresses deep sorrow",
@@ -63,8 +98,10 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 3,
     loop: true,
     category: "emotion",
-  },
-  {
+    drawerGroup: "gesture",
+    autoEligible: true,
+  }),
+  defineEmote({
     id: "rude-gesture",
     name: "Rude Gesture",
     description: "Makes a rude gesture",
@@ -72,8 +109,9 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 2,
     loop: false,
     category: "emotion",
-  },
-  {
+    drawerGroup: "gesture",
+  }),
+  defineEmote({
     id: "looking-around",
     name: "Looking Around",
     description: "Looks around nervously",
@@ -81,10 +119,10 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 3,
     loop: true,
     category: "emotion",
-  },
-
-  // Dance
-  {
+    drawerGroup: "gesture",
+    autoEligible: true,
+  }),
+  defineEmote({
     id: "dance-happy",
     name: "Happy Dance",
     description: "Happy dance",
@@ -92,8 +130,10 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 4,
     loop: true,
     category: "dance",
-  },
-  {
+    drawerGroup: "dance",
+    autoEligible: true,
+  }),
+  defineEmote({
     id: "dance-breaking",
     name: "Breaking",
     description: "Breakdance moves",
@@ -101,8 +141,10 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 4,
     loop: true,
     category: "dance",
-  },
-  {
+    drawerGroup: "dance",
+    autoEligible: true,
+  }),
+  defineEmote({
     id: "dance-hiphop",
     name: "Hip Hop",
     description: "Hip hop dance",
@@ -110,8 +152,10 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 4,
     loop: true,
     category: "dance",
-  },
-  {
+    drawerGroup: "dance",
+    autoEligible: true,
+  }),
+  defineEmote({
     id: "dance-popping",
     name: "Popping",
     description: "Popping dance moves",
@@ -119,10 +163,10 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 4,
     loop: true,
     category: "dance",
-  },
-
-  // Combat
-  {
+    drawerGroup: "dance",
+    autoEligible: true,
+  }),
+  defineEmote({
     id: "hook-punch",
     name: "Hook Punch",
     description: "Throws a hook punch",
@@ -130,8 +174,9 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 1.5,
     loop: false,
     category: "combat",
-  },
-  {
+    drawerGroup: "combat",
+  }),
+  defineEmote({
     id: "punching",
     name: "Punching",
     description: "Throws punches",
@@ -139,8 +184,9 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 2,
     loop: false,
     category: "combat",
-  },
-  {
+    drawerGroup: "combat",
+  }),
+  defineEmote({
     id: "firing-gun",
     name: "Firing Gun",
     description: "Fires a gun",
@@ -148,8 +194,9 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 2,
     loop: false,
     category: "combat",
-  },
-  {
+    drawerGroup: "combat",
+  }),
+  defineEmote({
     id: "sword-swing",
     name: "Sword Swing",
     description: "Swings a sword",
@@ -157,8 +204,9 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 2,
     loop: false,
     category: "combat",
-  },
-  {
+    drawerGroup: "combat",
+  }),
+  defineEmote({
     id: "chopping",
     name: "Chopping",
     description: "Chops with an axe",
@@ -166,8 +214,9 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 2,
     loop: false,
     category: "combat",
-  },
-  {
+    drawerGroup: "combat",
+  }),
+  defineEmote({
     id: "spell-cast",
     name: "Spell Cast",
     description: "Casts a magic spell",
@@ -175,8 +224,9 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 2.5,
     loop: false,
     category: "combat",
-  },
-  {
+    drawerGroup: "combat",
+  }),
+  defineEmote({
     id: "range",
     name: "Range",
     description: "Fires a ranged weapon",
@@ -184,8 +234,9 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 2,
     loop: false,
     category: "combat",
-  },
-  {
+    drawerGroup: "combat",
+  }),
+  defineEmote({
     id: "death",
     name: "Death",
     description: "Falls down defeated",
@@ -193,10 +244,9 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 3,
     loop: false,
     category: "combat",
-  },
-
-  // Idle
-  {
+    drawerGroup: "combat",
+  }),
+  defineEmote({
     id: "idle",
     name: "Idle",
     description: "Stands idle",
@@ -204,8 +254,10 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 5,
     loop: true,
     category: "idle",
-  },
-  {
+    drawerGroup: "idle",
+    autoEligible: true,
+  }),
+  defineEmote({
     id: "talk",
     name: "Talk",
     description: "Talks animatedly",
@@ -213,8 +265,10 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 3,
     loop: true,
     category: "idle",
-  },
-  {
+    drawerGroup: "idle",
+    autoEligible: true,
+  }),
+  defineEmote({
     id: "squat",
     name: "Squat",
     description: "Squats down",
@@ -222,8 +276,10 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 3,
     loop: true,
     category: "idle",
-  },
-  {
+    drawerGroup: "idle",
+    autoEligible: true,
+  }),
+  defineEmote({
     id: "fishing",
     name: "Fishing",
     description: "Casts a fishing line",
@@ -231,8 +287,10 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 5,
     loop: true,
     category: "idle",
-  },
-  {
+    drawerGroup: "idle",
+    autoEligible: true,
+  }),
+  defineEmote({
     id: "float",
     name: "Float",
     description: "Floats in the air",
@@ -240,10 +298,10 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 4,
     loop: true,
     category: "idle",
-  },
-
-  // Movement
-  {
+    drawerGroup: "idle",
+    autoEligible: true,
+  }),
+  defineEmote({
     id: "jump",
     name: "Jump",
     description: "Jumps up",
@@ -251,8 +309,9 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 1.5,
     loop: false,
     category: "movement",
-  },
-  {
+    drawerGroup: "movement",
+  }),
+  defineEmote({
     id: "flip",
     name: "Flip",
     description: "Does a backflip",
@@ -260,8 +319,9 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 2,
     loop: false,
     category: "movement",
-  },
-  {
+    drawerGroup: "movement",
+  }),
+  defineEmote({
     id: "run",
     name: "Run",
     description: "Runs in place",
@@ -269,8 +329,9 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 3,
     loop: true,
     category: "movement",
-  },
-  {
+    drawerGroup: "movement",
+  }),
+  defineEmote({
     id: "walk",
     name: "Walk",
     description: "Walks in place",
@@ -278,8 +339,9 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 3,
     loop: true,
     category: "movement",
-  },
-  {
+    drawerGroup: "movement",
+  }),
+  defineEmote({
     id: "crawling",
     name: "Crawling",
     description: "Crawls on the ground",
@@ -287,8 +349,9 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 3,
     loop: true,
     category: "movement",
-  },
-  {
+    drawerGroup: "movement",
+  }),
+  defineEmote({
     id: "fall",
     name: "Fall",
     description: "Falls down",
@@ -296,7 +359,234 @@ export const EMOTE_CATALOG: EmoteDef[] = [
     duration: 2,
     loop: false,
     category: "movement",
-  },
+    drawerGroup: "movement",
+  }),
+  defineEmote({
+    id: "walking",
+    name: "Walking",
+    description: "Walks in place with the Alice walk cycle",
+    glbPath: "/animations/alice/movement/walking.glb",
+    duration: 3,
+    loop: true,
+    category: "movement",
+    drawerGroup: "movement",
+    pinnedInActionDrawer: true,
+    autoEligible: true,
+  }),
+  defineEmote({
+    id: "casual-walk",
+    name: "Casual Walk",
+    description: "Casual in-place walk cycle",
+    glbPath: "/animations/alice/movement/casual-walk.glb",
+    duration: 3,
+    loop: true,
+    category: "movement",
+    drawerGroup: "movement",
+    autoEligible: true,
+  }),
+  defineEmote({
+    id: "running",
+    name: "Running",
+    description: "Runs in place with the Alice run cycle",
+    glbPath: "/animations/alice/movement/running.glb",
+    duration: 3,
+    loop: true,
+    category: "movement",
+    drawerGroup: "movement",
+    pinnedInActionDrawer: true,
+    autoEligible: true,
+  }),
+  defineEmote({
+    id: "backflip",
+    name: "Backflip",
+    description: "Launches into a backflip",
+    glbPath: "/animations/alice/movement/backflip.glb",
+    duration: 2.2,
+    loop: false,
+    category: "movement",
+    drawerGroup: "movement",
+    pinnedInActionDrawer: true,
+  }),
+  defineEmote({
+    id: "power-spin-jump",
+    name: "Power Spin Jump",
+    description: "Performs a dramatic spinning jump",
+    glbPath: "/animations/alice/movement/power-spin-jump.glb",
+    duration: 2.6,
+    loop: false,
+    category: "movement",
+    drawerGroup: "movement",
+  }),
+  defineEmote({
+    id: "big-heart-gesture",
+    name: "Big Heart Gesture",
+    description: "Makes a big heart gesture toward the audience",
+    glbPath: "/animations/alice/gesture/big-heart-gesture.glb",
+    duration: 3,
+    loop: false,
+    category: "greeting",
+    drawerGroup: "gesture",
+    pinnedInActionDrawer: true,
+    autoEligible: true,
+  }),
+  defineEmote({
+    id: "cheer-both-hands-01",
+    name: "Cheer Both Hands",
+    description: "Cheers with both hands raised",
+    glbPath: "/animations/alice/gesture/cheer-both-hands-01.glb",
+    duration: 3,
+    loop: false,
+    category: "greeting",
+    drawerGroup: "gesture",
+    pinnedInActionDrawer: true,
+    autoEligible: true,
+  }),
+  defineEmote({
+    id: "all-night-dance",
+    name: "All Night Dance",
+    description: "Breaks into a full dance loop",
+    glbPath: "/animations/alice/dance/all-night-dance.glb",
+    duration: 4,
+    loop: true,
+    category: "dance",
+    drawerGroup: "dance",
+    pinnedInActionDrawer: true,
+    autoEligible: true,
+  }),
+  defineEmote({
+    id: "breakdance-1990",
+    name: "Breakdance 1990",
+    description: "Spins through a classic breakdance combo",
+    glbPath: "/animations/alice/dance/breakdance-1990.glb",
+    duration: 4,
+    loop: true,
+    category: "dance",
+    drawerGroup: "dance",
+    autoEligible: true,
+  }),
+  defineEmote({
+    id: "cherish-pop-dance",
+    name: "Cherish Pop Dance",
+    description: "Performs a stylized pop dance loop",
+    glbPath: "/animations/alice/dance/cherish-pop-dance.glb",
+    duration: 4,
+    loop: true,
+    category: "dance",
+    drawerGroup: "dance",
+    autoEligible: true,
+  }),
+  defineEmote({
+    id: "angry-ground-stomp-01",
+    name: "Angry Ground Stomp",
+    description: "Slams the stage with a forceful stomp",
+    glbPath: "/animations/alice/combat/angry-ground-stomp-01.glb",
+    duration: 2.2,
+    loop: false,
+    category: "combat",
+    drawerGroup: "combat",
+  }),
+  defineEmote({
+    id: "angry-stomp",
+    name: "Angry Stomp",
+    description: "Unleashes an angry stomp animation",
+    glbPath: "/animations/alice/combat/angry-stomp.glb",
+    duration: 2.2,
+    loop: false,
+    category: "combat",
+    drawerGroup: "combat",
+  }),
+  defineEmote({
+    id: "head-down-charge",
+    name: "Head Down Charge",
+    description: "Lowers forward into a charging stance",
+    glbPath: "/animations/alice/combat/head-down-charge.glb",
+    duration: 2.4,
+    loop: false,
+    category: "combat",
+    drawerGroup: "combat",
+  }),
+  defineEmote({
+    id: "circle-crunch",
+    name: "Circle Crunch",
+    description: "Loops a crunch-style exercise motion",
+    glbPath: "/animations/alice/exercise/circle-crunch.glb",
+    duration: 3,
+    loop: true,
+    category: "other",
+    drawerGroup: "exercise",
+  }),
+  defineEmote({
+    id: "catching-breath",
+    name: "Catching Breath",
+    description: "Subtle breathing idle used in the background pool",
+    glbPath: "/animations/alice/idle/catching-breath.glb",
+    duration: 6,
+    loop: true,
+    category: "idle",
+    drawerGroup: "idle",
+    autoEligible: true,
+    idleVariant: true,
+  }),
+  defineEmote({
+    id: "idle-03",
+    name: "Idle 03",
+    description: "Alice idle variant 03",
+    glbPath: "/animations/alice/idle/idle-03.glb",
+    duration: 6,
+    loop: true,
+    category: "idle",
+    drawerGroup: "idle",
+    autoEligible: true,
+    idleVariant: true,
+  }),
+  defineEmote({
+    id: "idle-04",
+    name: "Idle 04",
+    description: "Alice idle variant 04",
+    glbPath: "/animations/alice/idle/idle-04.glb",
+    duration: 6,
+    loop: true,
+    category: "idle",
+    drawerGroup: "idle",
+    autoEligible: true,
+    idleVariant: true,
+  }),
+  defineEmote({
+    id: "idle-07",
+    name: "Idle 07",
+    description: "Alice idle variant 07",
+    glbPath: "/animations/alice/idle/idle-07.glb",
+    duration: 6,
+    loop: true,
+    category: "idle",
+    drawerGroup: "idle",
+    autoEligible: true,
+    idleVariant: true,
+  }),
+  defineEmote({
+    id: "idle-09",
+    name: "Idle 09",
+    description: "Alice idle variant 09",
+    glbPath: "/animations/alice/idle/idle-09.glb",
+    duration: 6,
+    loop: true,
+    category: "idle",
+    drawerGroup: "idle",
+    autoEligible: true,
+    idleVariant: true,
+  }),
+  defineEmote({
+    id: "idle-15",
+    name: "Idle 15",
+    description: "Alice idle variant 15",
+    glbPath: "/animations/alice/idle/idle-15.glb",
+    duration: 6,
+    loop: true,
+    category: "idle",
+    drawerGroup: "idle",
+    autoEligible: true,
+    idleVariant: true,
+  }),
 ];
 
 /**

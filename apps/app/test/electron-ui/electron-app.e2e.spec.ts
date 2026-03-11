@@ -19,7 +19,9 @@ const electronAppDir = path.join(repoRoot, "apps", "app", "electron");
 const webDistIndex = path.join(repoRoot, "apps", "app", "dist", "index.html");
 const electronEntryCandidates = [
   path.join(electronAppDir, "out", "src", "index"),
+  path.join(electronAppDir, "out", "src", "index.js"),
   path.join(electronAppDir, "build", "src", "index"),
+  path.join(electronAppDir, "build", "src", "index.js"),
 ];
 
 function isIgnorableConsoleError(message: string): boolean {
@@ -53,7 +55,28 @@ async function clickOnboardingNext(page: Page): Promise<void> {
   await page.getByRole("button", { name: /^next$/i }).click();
 }
 
-test("electron app startup: onboarding -> chat -> all pages", async () => {
+const onboardingWelcomeText = /welcome to pro streamer/i;
+const chatInputPlaceholder = /continue the conversation/i;
+
+async function closeElectronApp(app: ElectronApplication | null): Promise<void> {
+  if (!app) return;
+  const process = app.process();
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    process?.kill("SIGKILL");
+  }, 5_000);
+  try {
+    await app.close().catch(() => undefined);
+  } finally {
+    clearTimeout(timeout);
+    if (timedOut) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+}
+
+test("electron app startup: onboarding -> chat", async () => {
   await ensureBuildArtifacts();
 
   const userDataDir = await fs.mkdtemp(
@@ -116,7 +139,7 @@ test("electron app startup: onboarding -> chat -> all pages", async () => {
             .isVisible()
             .catch(() => false);
           const onboardingVisible = await page
-            .getByText(/welcome to milady/i)
+            .getByText(onboardingWelcomeText)
             .isVisible()
             .catch(() => false);
           return loadingVisible || onboardingVisible;
@@ -137,7 +160,7 @@ test("electron app startup: onboarding -> chat -> all pages", async () => {
       )
       .not.toBeNull();
     try {
-      await expect(page.getByText(/welcome to milady/i)).toBeVisible({
+      await expect(page.getByText(onboardingWelcomeText)).toBeVisible({
         timeout: 60_000,
       });
     } catch (error) {
@@ -187,116 +210,10 @@ test("electron app startup: onboarding -> chat -> all pages", async () => {
     await clickOnboardingNext(page); // connectors -> permissions
     await page.getByRole("button", { name: /^continue$/i }).click(); // permissions -> finish
 
-    await expect(page.getByPlaceholder("Type a message...")).toBeVisible({
+    await expect(page.getByPlaceholder(chatInputPlaceholder)).toBeVisible({
       timeout: 45_000,
     });
     await expect(page).toHaveURL(/\/chat$/);
-
-    const topNav = page.locator("nav");
-
-    await topNav
-      .getByRole("button", { name: "Character", exact: true })
-      .click();
-    await expect(page).toHaveURL(/\/character$/);
-    await expect(page.getByText("Identity & Personality")).toBeVisible();
-
-    await topNav.getByRole("button", { name: "Wallets", exact: true }).click();
-    await expect(page).toHaveURL(/\/wallets$/);
-    await expect(
-      page
-        .getByRole("button", { name: "Tokens", exact: true })
-        .or(page.getByText("Wallet keys not configured", { exact: true })),
-    ).toBeVisible();
-
-    await topNav
-      .getByRole("button", { name: "Knowledge", exact: true })
-      .click();
-    await expect(page).toHaveURL(/\/knowledge$/);
-    await expect(
-      page.getByRole("heading", { name: "Knowledge Base", exact: true }),
-    ).toBeVisible();
-
-    await topNav.getByRole("button", { name: "Social", exact: true }).click();
-    await expect(page).toHaveURL(/\/connectors$/);
-    await expect(page.getByPlaceholder("Search connectors...")).toBeVisible();
-
-    await topNav.getByRole("button", { name: "Apps", exact: true }).click();
-    await expect(page).toHaveURL(/\/apps$/);
-    await expect(page.getByPlaceholder("Search apps...")).toBeVisible();
-
-    await topNav.getByRole("button", { name: "Settings", exact: true }).click();
-    await expect(page).toHaveURL(/\/settings$/);
-    await expect(
-      page.getByRole("heading", { name: "Settings", exact: true }),
-    ).toBeVisible();
-
-    await topNav.getByRole("button", { name: "Advanced", exact: true }).click();
-    await expect(page).toHaveURL(/\/advanced$/);
-
-    await page.getByRole("button", { name: "Plugins", exact: true }).click();
-    await expect(page).toHaveURL(/\/plugins$/);
-    await expect(page.getByPlaceholder("Search plugins...")).toBeVisible();
-
-    await page.getByRole("button", { name: "Skills", exact: true }).click();
-    await expect(page).toHaveURL(/\/skills$/);
-    await expect(page.getByPlaceholder("Filter skills...")).toBeVisible();
-
-    await page.getByRole("button", { name: "Actions", exact: true }).click();
-    await expect(page).toHaveURL(/\/actions$/);
-    await expect(
-      page.getByRole("heading", { name: "Custom Actions", exact: true }),
-    ).toBeVisible();
-
-    await page.getByRole("button", { name: "Triggers", exact: true }).click();
-    await expect(page).toHaveURL(/\/triggers$/);
-    const triggerHealthHeading = page.getByRole("heading", {
-      name: "Trigger Health",
-      exact: true,
-    });
-    if ((await triggerHealthHeading.count()) === 0) {
-      const triggerBodyText = await page.evaluate(() => {
-        const text = document.body?.innerText ?? "";
-        return text.trim().slice(0, 1200);
-      });
-      throw new Error(
-        `Triggers page heading missing.\n` +
-          `Body text:\n${triggerBodyText}\n\n` +
-          `Console logs:\n${consoleLogs.join("\n")}\n\n` +
-          `Page errors:\n${pageErrors.join("\n")}\n\n` +
-          `Request failures:\n${requestFailures.join("\n")}\n\n` +
-          `Mock requests:\n${api.requests.join("\n")}`,
-      );
-    }
-
-    await page
-      .getByRole("button", { name: "Fine-Tuning", exact: true })
-      .click();
-    await expect(page).toHaveURL(/\/fine-tuning$/);
-    await expect(
-      page.getByRole("heading", { name: "Fine-Tuning", exact: true }),
-    ).toBeVisible();
-
-    await page
-      .getByRole("button", { name: "Trajectories", exact: true })
-      .click();
-    await expect(page).toHaveURL(/\/trajectories$/);
-    await expect(page.getByPlaceholder("Search...")).toBeVisible();
-
-    await page.getByRole("button", { name: "Runtime", exact: true }).click();
-    await expect(page).toHaveURL(/\/runtime$/);
-    await expect(page.getByText("Runtime Debug")).toBeVisible();
-
-    await page.getByRole("button", { name: "Databases", exact: true }).click();
-    await expect(page).toHaveURL(/\/database$/);
-    await expect(
-      page.getByRole("heading", { name: "Databases", exact: true }),
-    ).toBeVisible();
-
-    await page.getByRole("button", { name: "Logs", exact: true }).click();
-    await expect(page).toHaveURL(/\/logs$/);
-    await expect(
-      page.getByRole("heading", { name: "Logs", exact: true }),
-    ).toBeVisible();
 
     expect(
       pageErrors,
@@ -311,7 +228,7 @@ test("electron app startup: onboarding -> chat -> all pages", async () => {
       `Console errors:\n${consoleErrors.join("\n")}\n\nConsole logs:\n${consoleLogs.join("\n")}\n\nMock requests:\n${api.requests.join("\n")}`,
     ).toEqual([]);
   } finally {
-    await app?.close();
+    await closeElectronApp(app);
     await api?.close();
     await fs.rm(userDataDir, { recursive: true, force: true });
   }

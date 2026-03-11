@@ -133,6 +133,37 @@ export interface QueryResult {
   durationMs: number;
 }
 
+export type EmoteCategory =
+  | "greeting"
+  | "emotion"
+  | "dance"
+  | "combat"
+  | "idle"
+  | "movement"
+  | "other";
+
+export type EmoteDrawerGroup =
+  | "movement"
+  | "gesture"
+  | "dance"
+  | "combat"
+  | "exercise"
+  | "idle";
+
+export interface AvatarEmoteDef {
+  id: string;
+  name: string;
+  description: string;
+  glbPath: string;
+  duration: number;
+  loop: boolean;
+  category: EmoteCategory;
+  drawerGroup: EmoteDrawerGroup;
+  pinnedInActionDrawer: boolean;
+  autoEligible: boolean;
+  idleVariant: boolean;
+}
+
 // Custom actions types
 export type CustomActionHandler =
   | {
@@ -749,8 +780,20 @@ export interface UiSpecBlock {
   raw?: string;
 }
 
+/** A user-visible operator action pill rendered instead of raw prompt text. */
+export interface ActionPillBlock {
+  type: "action-pill";
+  label: string;
+  kind: "stream" | "avatar" | "launch";
+  detail?: string;
+}
+
 /** Union of all content block types. */
-export type ContentBlock = TextBlock | ConfigFormBlock | UiSpecBlock;
+export type ContentBlock =
+  | TextBlock
+  | ConfigFormBlock
+  | UiSpecBlock
+  | ActionPillBlock;
 
 /** An image attachment to send with a chat message. */
 export interface ImageAttachment {
@@ -776,6 +819,13 @@ export interface ConversationMessage {
   blocks?: ContentBlock[];
   /** Source channel when forwarded from another channel (e.g. "autonomy"). */
   source?: string;
+}
+
+export interface OperatorActionMessagePayload {
+  label: string;
+  kind: "stream" | "avatar" | "launch";
+  detail?: string;
+  fallbackText?: string;
 }
 
 export type ConversationChannelType =
@@ -2283,6 +2333,61 @@ const APP_LAUNCH_FETCH_TIMEOUT_MS = 45_000;
 const HYPERSCAPE_API_FETCH_TIMEOUT_MS = 30_000;
 const AUTONOMY_EXECUTE_FETCH_TIMEOUT_MS = 90_000;
 
+interface RestRequestPolicy {
+  credentials: RequestCredentials;
+  includeClientIdHeader: boolean;
+}
+
+function isHttpProtocol(protocol?: string | null): boolean {
+  return protocol === "http:" || protocol === "https:";
+}
+
+function isElectronAppProtocol(protocol?: string | null): boolean {
+  return (
+    protocol === "capacitor-electron:" ||
+    protocol === "capacitor:" ||
+    protocol === "app:" ||
+    protocol === "file:"
+  );
+}
+
+function hasHeader(headers: HeadersInit | undefined, name: string): boolean {
+  if (!headers) return false;
+  const needle = name.toLowerCase();
+  if (headers instanceof Headers) {
+    return headers.has(name);
+  }
+  if (Array.isArray(headers)) {
+    return headers.some(([key]) => key.toLowerCase() === needle);
+  }
+  return Object.keys(headers).some((key) => key.toLowerCase() === needle);
+}
+
+function mergeHeaders(
+  defaults: Record<string, string>,
+  headers: HeadersInit | undefined,
+): Record<string, string> {
+  if (!headers) return { ...defaults };
+  if (headers instanceof Headers) {
+    const merged = { ...defaults };
+    headers.forEach((value, key) => {
+      merged[key] = value;
+    });
+    return merged;
+  }
+  if (Array.isArray(headers)) {
+    const merged = { ...defaults };
+    for (const [key, value] of headers) {
+      merged[key] = value;
+    }
+    return merged;
+  }
+  return {
+    ...defaults,
+    ...headers,
+  };
+}
+
 export class MiladyClient {
   private _baseUrl: string;
   private _explicitBase: boolean;
@@ -2389,6 +2494,47 @@ export class MiladyClient {
     return false;
   }
 
+  private resolveRequestTargetUrl(path: string): URL | null {
+    try {
+      if (/^https?:\/\//i.test(path)) {
+        return new URL(path);
+      }
+      if (this.baseUrl) {
+        return new URL(path, this.baseUrl);
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }
+
+  private resolveRestRequestPolicy(path: string): RestRequestPolicy {
+    if (typeof window === "undefined") {
+      return {
+        credentials: "include",
+        includeClientIdHeader: true,
+      };
+    }
+
+    const windowProtocol = window.location.protocol;
+    const requestTarget = this.resolveRequestTargetUrl(path);
+    const isElectronExternalHttp =
+      isElectronAppProtocol(windowProtocol) &&
+      isHttpProtocol(requestTarget?.protocol ?? null);
+
+    if (isElectronExternalHttp) {
+      return {
+        credentials: "omit",
+        includeClientIdHeader: false,
+      };
+    }
+
+    return {
+      credentials: "include",
+      includeClientIdHeader: true,
+    };
+  }
+
   // --- REST API ---
 
   private async rawRequest(
@@ -2408,6 +2554,7 @@ export class MiladyClient {
         1,
         options?.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS,
       );
+      const requestPolicy = this.resolveRestRequestPolicy(path);
       const timeoutController = new AbortController();
       const timeoutId = setTimeout(() => {
         timeoutController.abort();
@@ -2418,15 +2565,21 @@ export class MiladyClient {
           : (init?.signal ?? timeoutController.signal);
 
       try {
+        const defaultHeaders: Record<string, string> = {};
+        if (
+          requestPolicy.includeClientIdHeader &&
+          !hasHeader(init?.headers, "X-Milady-Client-Id")
+        ) {
+          defaultHeaders["X-Milady-Client-Id"] = this.clientId;
+        }
+        if (token && !hasHeader(init?.headers, "Authorization")) {
+          defaultHeaders.Authorization = `Bearer ${token}`;
+        }
         return await fetch(`${this.baseUrl}${path}`, {
           ...init,
           signal,
-          credentials: init?.credentials ?? "include",
-          headers: {
-            "X-Milady-Client-Id": this.clientId,
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            ...init?.headers,
-          },
+          credentials: init?.credentials ?? requestPolicy.credentials,
+          headers: mergeHeaders(defaultHeaders, init?.headers),
         });
       } catch (err) {
         if (timeoutController.signal.aborted) {
@@ -2580,6 +2733,10 @@ export class MiladyClient {
       method: "POST",
       body: JSON.stringify({ emoteId }),
     });
+  }
+
+  async listEmotes(): Promise<{ emotes: AvatarEmoteDef[] }> {
+    return this.fetch("/api/emotes");
   }
 
   async runTerminalCommand(command: string): Promise<{ ok: boolean }> {
@@ -4686,7 +4843,7 @@ export class MiladyClient {
     const resolvedText = this.normalizeAssistantText(doneText ?? fullText);
     return {
       text: resolvedText,
-      agentName: doneAgentName ?? "Milady",
+      agentName: doneAgentName ?? "rasp",
     };
   }
 
@@ -4769,6 +4926,16 @@ export class MiladyClient {
       ...response,
       text: this.normalizeAssistantText(response.text),
     };
+  }
+
+  async logConversationOperatorAction(
+    id: string,
+    payload: OperatorActionMessagePayload,
+  ): Promise<{ message: ConversationMessage }> {
+    return this.fetch(`/api/conversations/${encodeURIComponent(id)}/operator-action`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   }
 
   async sendConversationMessageStream(

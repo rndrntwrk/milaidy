@@ -4,6 +4,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../AppContext";
+import { Button } from "./ui/Button.js";
+import { Input } from "./ui/Input.js";
+import { Badge } from "./ui/Badge.js";
+import { CloseIcon, PlusIcon } from "./ui/Icons.js";
 
 interface ConversationsSidebarProps {
   mobile?: boolean;
@@ -104,23 +108,26 @@ export function ConversationsSidebar({
   };
 
   return (
-    <aside className="hidden md:flex w-60 min-w-60 border-r border-border bg-bg flex-col overflow-y-auto text-[13px]" data-testid="conversations-sidebar" role="complementary" aria-label="Conversations">
-      <div className="p-3 border-b border-border">
-        <button
+    <aside className="hidden min-w-60 w-60 flex-col overflow-y-auto border-r border-white/10 bg-[#06080d] text-[13px] md:flex" data-testid="conversations-sidebar" role="complementary" aria-label="Conversations">
+      <div className="border-b border-white/10 p-3">
+        <Button
           type="button"
-          className="w-full px-3 py-1.5 border border-accent rounded-md bg-transparent text-accent text-[12px] font-medium cursor-pointer transition-colors hover:bg-accent hover:text-accent-fg"
+          variant="default"
+          size="sm"
+          className="w-full rounded-xl"
           onClick={() => {
             handleNewConversation();
             onClose?.();
           }}
         >
-          + New Chat
-        </button>
+          <PlusIcon className="h-4 w-4" />
+          New Chat
+        </Button>
       </div>
 
       <nav className="flex-1 overflow-y-auto py-1" aria-label="Conversation list">
         {sortedConversations.length === 0 ? (
-          <div className="px-3 py-6 text-center text-muted text-xs">
+          <div className="px-3 py-6 text-center text-xs text-white/42">
             No conversations yet
           </div>
         ) : (
@@ -133,14 +140,14 @@ export function ConversationsSidebar({
                 key={conv.id}
                 data-testid="conv-item"
                 data-active={isActive || undefined}
-                className={`flex items-center px-3 py-2 gap-2 transition-colors border-l-[3px] ${
-                  isActive ? "bg-bg-hover border-l-accent" : "border-l-transparent hover:bg-bg-hover"
+                className={`group flex items-center gap-2 border-l-[3px] px-3 py-2 transition-colors ${
+                  isActive ? "border-l-accent bg-white/[0.05]" : "border-l-transparent hover:bg-white/[0.03]"
                 } group`}
               >
                 {isEditing ? (
-                  <input
+                  <Input
                     ref={inputRef}
-                    className="w-full px-1.5 py-1 border border-accent rounded bg-card text-txt text-[13px] outline-none"
+                    className="w-full rounded-xl"
                     value={editingTitle}
                     onChange={(e) => setEditingTitle(e.target.value)}
                     onBlur={() => void handleEditSubmit(conv.id)}
@@ -150,7 +157,7 @@ export function ConversationsSidebar({
                 ) : (
                   <>
                     <button
-                      className="flex items-center gap-2 flex-1 min-w-0 bg-transparent border-none cursor-pointer text-left p-0"
+                      className="flex min-w-0 flex-1 items-center gap-2 border-none bg-transparent p-0 text-left cursor-pointer"
                       onClick={() => void handleSelectConversation(conv.id)}
                       onDoubleClick={() => handleDoubleClick(conv)}
                       aria-current={isActive ? "true" : undefined}
@@ -160,82 +167,51 @@ export function ConversationsSidebar({
                         <span className="w-2 h-2 rounded-full bg-accent shrink-0" aria-hidden="true" />
                       )}
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate text-txt">{conv.title}</div>
-                        <div className="text-[11px] text-muted mt-0.5">{formatRelativeTime(conv.updatedAt)}</div>
-                      </div>
-                    </button>
-                    <button
-                      data-testid="conv-delete"
-                      className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity border-none bg-transparent text-muted hover:text-danger hover:bg-destructive-subtle cursor-pointer text-sm px-1 py-0.5 rounded flex-shrink-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void handleDeleteConversation(conv.id);
-                      }}
-                      aria-label={`Delete ${conv.title}`}
-                    >
-                      {unreadConversations.has(conv.id) && (
-                        <span className="w-2 h-2 rounded-full bg-accent shrink-0" aria-hidden="true" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate text-txt">{conv.title}</div>
-                        <div className="text-[11px] text-muted mt-0.5">{formatRelativeTime(conv.updatedAt)}</div>
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      className="flex items-center gap-2 flex-1 min-w-0 bg-transparent border-0 p-0 m-0 text-left cursor-pointer"
-                      onClick={() => {
-                        setConfirmDeleteId(null);
-                        void handleSelectConversation(conv.id);
-                        onClose?.();
-                      }}
-                      onDoubleClick={() => handleDoubleClick(conv)}
-                    >
-                      {unreadConversations.has(conv.id) && (
-                        <span className="w-2 h-2 rounded-full bg-accent shrink-0" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate text-txt">
-                          {conv.title}
-                        </div>
-                        <div className="text-[11px] text-muted mt-0.5">
-                          {formatRelativeTime(conv.updatedAt)}
-                        </div>
+                        <div className="truncate font-medium text-white">{conv.title}</div>
+                        <div className="mt-0.5 text-[11px] text-white/42">{formatRelativeTime(conv.updatedAt)}</div>
                       </div>
                     </button>
                     {confirmDeleteId === conv.id ? (
                       <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <span className="text-[10px] text-danger">Delete?</span>
-                        <button
+                        <Badge variant="danger" className="rounded-full px-2 py-0.5 text-[10px]">
+                          Delete?
+                        </Badge>
+                        <Button
                           type="button"
-                          className="px-1.5 py-0.5 text-[10px] border border-danger bg-danger text-white cursor-pointer hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                          variant="destructive"
+                          size="sm"
+                          className="rounded-xl px-2 text-[10px]"
                           onClick={() => void handleConfirmDelete(conv.id)}
                           disabled={deletingId === conv.id}
                         >
                           {deletingId === conv.id ? "..." : "Yes"}
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           type="button"
-                          className="px-1.5 py-0.5 text-[10px] border border-border bg-card text-muted cursor-pointer hover:border-accent hover:text-accent disabled:opacity-50 disabled:cursor-not-allowed"
+                          variant="outline"
+                          size="sm"
+                          className="rounded-xl px-2 text-[10px]"
                           onClick={() => setConfirmDeleteId(null)}
                           disabled={deletingId === conv.id}
                         >
                           No
-                        </button>
+                        </Button>
                       </div>
                     ) : (
-                      <button
+                      <Button
                         type="button"
                         data-testid="conv-delete"
-                        className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity border-none bg-transparent text-muted hover:text-danger hover:bg-destructive-subtle cursor-pointer text-sm px-1 py-0.5 rounded flex-shrink-0"
+                        variant="ghost"
+                        size="icon"
+                        className="flex-shrink-0 rounded-full opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                         onClick={(e) => {
                           e.stopPropagation();
                           setConfirmDeleteId(conv.id);
                         }}
-                        title="Delete conversation"
+                        aria-label={`Delete ${conv.title}`}
                       >
-                        ×
-                      </button>
+                        <CloseIcon className="h-4 w-4" />
+                      </Button>
                     )}
                   </>
                 )}

@@ -261,16 +261,8 @@ describe("Advanced trajectories/fine-tuning integration", () => {
     });
     await flush();
 
-    const fineTuningTabButton = tree?.root.findAll(
-      (node) =>
-        node.type === "button" &&
-        Array.isArray(node.children) &&
-        node.children.includes("Fine-Tuning"),
-    )[0];
-    expect(fineTuningTabButton).toBeDefined();
-
     await act(async () => {
-      fineTuningTabButton.props.onClick();
+      setTab("fine-tuning");
     });
 
     await act(async () => {

@@ -8,6 +8,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { client, type QueryResult } from "../api-client";
+import { Button } from "./ui/Button";
+import { Card } from "./ui/Card";
+import { Dialog } from "./ui/Dialog";
+import { AudioIcon, CloseIcon, ImageIcon, VideoIcon } from "./ui/Icons";
 
 type MediaType = "all" | "image" | "video" | "audio";
 
@@ -285,7 +289,10 @@ export function MediaGalleryView() {
               <div className="w-full aspect-square bg-[var(--bg)] flex items-center justify-center overflow-hidden">
                 {item.type === "image" ? (
                   failedImageUrls.has(item.url) ? (
-                    <span className="text-2xl opacity-50">🖼</span>
+                    <ImageIcon
+                      className="h-8 w-8 text-white/35"
+                      aria-label="Image placeholder"
+                    />
                   ) : (
                     <img
                       src={item.url}
@@ -296,9 +303,15 @@ export function MediaGalleryView() {
                     />
                   )
                 ) : item.type === "video" ? (
-                  <span className="text-2xl opacity-50">🎬</span>
+                  <VideoIcon
+                    className="h-8 w-8 text-white/35"
+                    aria-label="Video placeholder"
+                  />
                 ) : (
-                  <span className="text-2xl opacity-50">🎵</span>
+                  <AudioIcon
+                    className="h-8 w-8 text-white/35"
+                    aria-label="Audio placeholder"
+                  />
                 )}
               </div>
               {/* Info */}
@@ -330,33 +343,16 @@ export function MediaGalleryView() {
 
       {/* Lightbox modal */}
       {lightboxItem && (
-        <div
-          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-8"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setLightboxItem(null);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              setLightboxItem(null);
-            }
-          }}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="bg-[var(--card)] border border-[var(--border)] max-w-[90vw] max-h-[90vh] overflow-auto">
+        <Dialog open={true} onClose={() => setLightboxItem(null)} className="max-w-[90vw] bg-[#07090e]/96">
+          <Card className="max-h-[90vh] overflow-hidden border-white/10 bg-[#07090e]/96">
             {/* Header */}
-            <div className="flex items-center justify-between p-3 border-b border-[var(--border)]">
-              <div className="text-xs text-[var(--txt)] font-medium truncate mr-4">
+            <div className="flex items-center justify-between border-b border-white/10 p-3">
+              <div className="mr-4 truncate text-xs font-medium text-white/88">
                 {lightboxItem.filename}
               </div>
-              <button
-                type="button"
-                className="text-[var(--muted)] hover:text-[var(--txt)] bg-transparent border-0 cursor-pointer text-lg px-2"
-                onClick={() => setLightboxItem(null)}
-              >
-                ×
-              </button>
+              <Button type="button" variant="ghost" size="icon" className="rounded-full" onClick={() => setLightboxItem(null)} aria-label="Close media preview">
+                <CloseIcon className="h-4 w-4" />
+              </Button>
             </div>
             {/* Content */}
             <div className="p-4 flex items-center justify-center min-h-[200px]">
@@ -385,15 +381,15 @@ export function MediaGalleryView() {
               )}
             </div>
             {/* Footer info */}
-            <div className="p-3 border-t border-[var(--border)] text-[11px] text-[var(--muted)] flex gap-4">
+            <div className="flex gap-4 border-t border-white/10 p-3 text-[11px] text-white/54">
               <span>Type: {lightboxItem.type}</span>
               <span>Source: {lightboxItem.source}</span>
               {lightboxItem.createdAt && (
                 <span>Date: {lightboxItem.createdAt}</span>
               )}
             </div>
-          </div>
-        </div>
+          </Card>
+        </Dialog>
       )}
     </div>
   );

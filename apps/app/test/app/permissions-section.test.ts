@@ -10,6 +10,13 @@
  * - Onboarding section functionality
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  CameraIcon,
+  CursorIcon,
+  MicIcon,
+  MonitorIcon,
+  TerminalIcon,
+} from "../../src/components/ui/Icons";
 
 // ---------------------------------------------------------------------------
 // Mock setup - must be before imports
@@ -361,32 +368,24 @@ describe("Status Configuration", () => {
 // ---------------------------------------------------------------------------
 
 describe("Permission Icon Mapping", () => {
-  const ICONS = {
-    cursor: "🖱️",
-    monitor: "🖥️",
-    mic: "🎤",
-    camera: "📷",
-    terminal: "⌨️",
-  };
-
   it("has icon for cursor (accessibility)", () => {
-    expect(ICONS.cursor).toBe("🖱️");
+    expect(CursorIcon).toBeTypeOf("function");
   });
 
   it("has icon for monitor (screen-recording)", () => {
-    expect(ICONS.monitor).toBe("🖥️");
+    expect(MonitorIcon).toBeTypeOf("function");
   });
 
   it("has icon for mic (microphone)", () => {
-    expect(ICONS.mic).toBe("🎤");
+    expect(MicIcon).toBeTypeOf("function");
   });
 
   it("has icon for camera", () => {
-    expect(ICONS.camera).toBe("📷");
+    expect(CameraIcon).toBeTypeOf("function");
   });
 
   it("has icon for terminal (shell)", () => {
-    expect(ICONS.terminal).toBe("⌨️");
+    expect(TerminalIcon).toBeTypeOf("function");
   });
 });
 

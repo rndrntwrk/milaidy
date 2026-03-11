@@ -33,6 +33,9 @@ import { BugReportProvider, useBugReportState } from "./hooks/useBugReport.js";
 import { TerminalPanel } from "./components/TerminalPanel.js";
 import { ToastContainer } from "./components/ui/Toast.js";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary.js";
+import { MiladyOsDashboard } from "./components/MiladyOsDashboard.js";
+import { MiladyBootShell } from "./components/MiladyBootShell.js";
+import { ActivityIcon, ThreadsIcon } from "./components/ui/Icons.js";
 
 const advancedTabs = new Set(TAB_GROUPS.find(g => g.label === "Advanced")?.tabs ?? []);
 const CHAT_MOBILE_BREAKPOINT_PX = 1024;
@@ -75,6 +78,7 @@ export function App() {
     onboardingComplete,
     retryStartup,
     tab,
+    currentTheme,
     agentStatus,
     unreadConversations,
     activeGameViewerUrl,
@@ -104,8 +108,8 @@ export function App() {
     agentStatus?.state === "running"
       ? "bg-ok shadow-[0_0_8px_color-mix(in_srgb,var(--ok)_60%,transparent)]"
       : agentStatus?.state === "paused" ||
-          agentStatus?.state === "starting" ||
-          agentStatus?.state === "restarting"
+        agentStatus?.state === "starting" ||
+        agentStatus?.state === "restarting"
         ? "bg-warn"
         : agentStatus?.state === "error"
           ? "bg-danger"
@@ -114,31 +118,17 @@ export function App() {
     <div className="flex items-center gap-2 w-max">
       <button
         type="button"
-        className={`inline-flex items-center gap-2 px-3 py-2 border rounded-md text-[12px] font-semibold transition-all cursor-pointer ${
-          mobileConversationsOpen
-            ? "border-accent bg-accent-subtle text-accent"
-            : "border-border bg-card text-txt hover:border-accent hover:text-accent"
-        }`}
+        className={`inline-flex items-center gap-2 px-3 py-2 border rounded-md text-[12px] font-semibold transition-all cursor-pointer ${mobileConversationsOpen
+          ? "border-accent bg-accent-subtle text-accent"
+          : "border-border bg-card text-txt hover:border-accent hover:text-accent"
+          }`}
         onClick={() => {
           setMobileAutonomousOpen(false);
           setMobileConversationsOpen(true);
         }}
         aria-label="Open chats panel"
       >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden
-        >
-          <title>Chats</title>
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-        </svg>
+        <ThreadsIcon width="14" height="14" aria-hidden />
         Chats
         {unreadCount > 0 && (
           <span className="inline-flex min-w-[18px] h-[18px] items-center justify-center rounded-full bg-accent text-accent-fg text-[10px] font-bold px-1">
@@ -148,32 +138,17 @@ export function App() {
       </button>
       <button
         type="button"
-        className={`inline-flex items-center gap-2 px-3 py-2 border rounded-md text-[12px] font-semibold transition-all cursor-pointer ${
-          mobileAutonomousOpen
-            ? "border-accent bg-accent-subtle text-accent"
-            : "border-border bg-card text-txt hover:border-accent hover:text-accent"
-        }`}
+        className={`inline-flex items-center gap-2 px-3 py-2 border rounded-md text-[12px] font-semibold transition-all cursor-pointer ${mobileAutonomousOpen
+          ? "border-accent bg-accent-subtle text-accent"
+          : "border-border bg-card text-txt hover:border-accent hover:text-accent"
+          }`}
         onClick={() => {
           setMobileConversationsOpen(false);
           setMobileAutonomousOpen(true);
         }}
         aria-label="Open status panel"
       >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden
-        >
-          <title>Status</title>
-          <path d="M3 3v18h18" />
-          <path d="m7 14 4-4 3 3 5-6" />
-        </svg>
+        <ActivityIcon width="14" height="14" aria-hidden />
         Status
         <span
           className={`w-2 h-2 rounded-full ${statusIndicatorClass}`}
@@ -224,26 +199,55 @@ export function App() {
   const agentStarting = agentStatus?.state === "starting";
 
   if (startupError) {
-    return <StartupFailureView error={startupError} onRetry={retryStartup} />;
+    return (
+      <StartupFailureView
+        error={startupError}
+        onRetry={retryStartup}
+        currentTheme={currentTheme}
+        agentName={agentStatus?.agentName}
+      />
+    );
   }
 
   if (onboardingLoading || agentStarting) {
     return (
       <LoadingScreen
         phase={agentStarting ? "initializing-agent" : startupPhase}
+        currentTheme={currentTheme}
+        agentName={agentStatus?.agentName}
       />
     );
   }
 
   if (authRequired) return <PairingView />;
-  if (!onboardingComplete) return <ErrorBoundary><OnboardingWizard /></ErrorBoundary>;
+  if (!onboardingComplete) {
+    return currentTheme === "milady-os" ? (
+      <MiladyBootShell
+        title="PRO STREAMER SETUP"
+        subtitle="Calibrate the node before the broadcast stage unlocks"
+        status="system calibration"
+        identityLabel={agentStatus?.agentName}
+        panelClassName="mx-auto max-w-6xl"
+      >
+        <ErrorBoundary>
+          <div className="max-h-[85vh] overflow-y-auto p-4 sm:p-6">
+            <OnboardingWizard />
+          </div>
+        </ErrorBoundary>
+      </MiladyBootShell>
+    ) : (
+      <ErrorBoundary><OnboardingWizard /></ErrorBoundary>
+    );
+  }
 
   return (
     <BugReportProvider value={bugReport}>
       <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[10001] focus:px-4 focus:py-2 focus:bg-accent focus:text-accent-fg focus:rounded">
         Skip to content
       </a>
-      {isChat ? (
+      {currentTheme === "milady-os" ? (
+        <ErrorBoundary><MiladyOsDashboard /></ErrorBoundary>
+      ) : isChat ? (
         <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
           <Header />
           <Nav mobileLeft={mobileChatControls} />

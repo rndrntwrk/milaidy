@@ -1,149 +1,75 @@
-/**
- * Accessible Dialog wrapper — provides focus trap, Escape handler, scroll lock,
- * and proper ARIA attributes for all modal/overlay components.
- */
-
-import { useEffect, useRef, useCallback, type ReactNode } from "react";
-
-/** Stack-safe scroll lock: only restore scroll when all dialogs have closed. */
-let scrollLockCount = 0;
-
-interface DialogProps {
-  open: boolean;
-  onClose: () => void;
-  children: ReactNode;
-  /** aria-label for the dialog (used when no visible title) */
-  ariaLabel?: string;
-  /** id of the element that labels this dialog */
-  ariaLabelledBy?: string;
-  /** Additional class names for the backdrop */
-  backdropClassName?: string;
-  /** Additional class names for the dialog panel */
-  className?: string;
-  /** If true, clicking outside does NOT close the dialog */
-  persistent?: boolean;
-}
+import * as React from "react";
+import { createPortal } from "react-dom";
+import { cn } from "./utils.js";
 
 export function Dialog({
   open,
   onClose,
   children,
+  className,
   ariaLabel,
   ariaLabelledBy,
-  backdropClassName = "",
-  className = "",
-  persistent = false,
-}: DialogProps) {
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
+}: {
+  open: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+  className?: string;
+  ariaLabel?: string;
+  ariaLabelledBy?: string;
+}) {
+  const panelRef = React.useRef<HTMLDivElement>(null);
+  const restoreFocusRef = React.useRef<HTMLElement | null>(null);
+  const [portalRoot, setPortalRoot] = React.useState<HTMLElement | null>(null);
 
-  // Save previous focus and lock scroll on open (stack-safe)
-  useEffect(() => {
-    if (!open) return;
+  React.useEffect(() => {
+    if (typeof document === "undefined") return;
+    setPortalRoot(document.body);
+  }, []);
 
-    previousFocusRef.current = document.activeElement as HTMLElement | null;
-    scrollLockCount++;
-    document.body.style.overflow = "hidden";
+  React.useEffect(() => {
+    if (!open || typeof window === "undefined") return undefined;
+    restoreFocusRef.current = document.activeElement as HTMLElement | null;
 
-    return () => {
-      scrollLockCount--;
-      if (scrollLockCount <= 0) {
-        scrollLockCount = 0;
-        document.body.style.overflow = "";
-      }
-      previousFocusRef.current?.focus();
-    };
-  }, [open]);
-
-  // Auto-focus the dialog on open
-  useEffect(() => {
-    if (!open || !dialogRef.current) return;
-
-    // Focus the first focusable element, or the dialog itself
-    const focusable = dialogRef.current.querySelector<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    );
-    if (focusable) {
-      focusable.focus();
-    } else {
-      dialogRef.current.focus();
-    }
-  }, [open]);
-
-  // Escape key handler
-  useEffect(() => {
-    if (!open) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopPropagation();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
         onClose();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    panelRef.current?.focus();
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      restoreFocusRef.current?.focus?.();
+    };
   }, [open, onClose]);
 
-  // Focus trap
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key !== "Tab" || !dialogRef.current) return;
+  if (!open || !portalRoot) return null;
 
-      const focusableElements = dialogRef.current.querySelectorAll<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      );
-      if (focusableElements.length === 0) return;
-
-      const first = focusableElements[0];
-      const last = focusableElements[focusableElements.length - 1];
-
-      if (e.shiftKey) {
-        if (document.activeElement === first) {
-          e.preventDefault();
-          last.focus();
-        }
-      } else {
-        if (document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    },
-    []
-  );
-
-  // Backdrop click
-  const handleBackdropClick = useCallback(
-    (e: React.MouseEvent) => {
-      if (!persistent && e.target === e.currentTarget) {
-        onClose();
-      }
-    },
-    [onClose, persistent]
-  );
-
-  if (!open) return null;
-
-  return (
+  return createPortal(
     <div
-      className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 ${backdropClassName}`}
-      onClick={handleBackdropClick}
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/82 p-4 backdrop-blur-xl"
+      onClick={onClose}
+      role="presentation"
     >
       <div
-        ref={dialogRef}
+        ref={panelRef}
+        className={cn(
+          "w-full max-w-3xl rounded-[28px] border border-white/12 bg-[#090d14]/98 shadow-[0_24px_80px_rgba(0,0,0,0.62)] backdrop-blur-2xl",
+          className,
+        )}
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel}
         aria-labelledby={ariaLabelledBy}
-        className={className}
         tabIndex={-1}
-        onKeyDown={handleKeyDown}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
       >
         {children}
       </div>
-    </div>
+    </div>,
+    portalRoot,
   );
 }

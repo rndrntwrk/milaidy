@@ -1402,7 +1402,77 @@ type ResponseBlock =
       schema: Record<string, unknown>;
       hints?: Record<string, unknown>;
       values?: Record<string, unknown>;
+    }
+  | {
+      type: "action-pill";
+      label: string;
+      kind: "stream" | "avatar" | "launch";
+      detail?: string;
     };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function sanitizeResponseBlock(value: unknown): ResponseBlock | null {
+  if (!isRecord(value) || typeof value.type !== "string") return null;
+
+  if (value.type === "text" && typeof value.text === "string") {
+    return { type: "text", text: value.text };
+  }
+
+  if (
+    value.type === "ui-spec" &&
+    isRecord(value.spec) &&
+    typeof value.raw === "string"
+  ) {
+    return { type: "ui-spec", spec: value.spec, raw: value.raw };
+  }
+
+  if (
+    value.type === "config-form" &&
+    typeof value.pluginId === "string" &&
+    isRecord(value.schema)
+  ) {
+    const block: Extract<ResponseBlock, { type: "config-form" }> = {
+      type: "config-form",
+      pluginId: value.pluginId,
+      schema: value.schema,
+    };
+    if (typeof value.pluginName === "string") block.pluginName = value.pluginName;
+    if (isRecord(value.hints)) block.hints = value.hints;
+    if (isRecord(value.values)) block.values = value.values;
+    return block;
+  }
+
+  if (
+    value.type === "action-pill" &&
+    typeof value.label === "string" &&
+    (value.kind === "stream" ||
+      value.kind === "avatar" ||
+      value.kind === "launch")
+  ) {
+    const block: Extract<ResponseBlock, { type: "action-pill" }> = {
+      type: "action-pill",
+      label: value.label,
+      kind: value.kind,
+    };
+    if (typeof value.detail === "string" && value.detail.trim().length > 0) {
+      block.detail = value.detail;
+    }
+    return block;
+  }
+
+  return null;
+}
+
+function sanitizeResponseBlocks(value: unknown): ResponseBlock[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const blocks = value
+    .map((entry) => sanitizeResponseBlock(entry))
+    .filter((entry): entry is ResponseBlock => entry !== null);
+  return blocks.length > 0 ? blocks : undefined;
+}
 
 /** Regex matching fenced JSON code blocks: ```json ... ``` or ``` ... ``` */
 const FENCED_JSON_RE_SERVER = /```(?:json)?\s*\n([\s\S]*?)```/g;
@@ -3933,8 +4003,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               order: 210,
               type: "radio",
               options: [
-                { value: "true", label: "Enabled", icon: "✅" },
-                { value: "false", label: "Disabled", icon: "⛔" },
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
               ],
             },
             STREAM555_DEST_PUMPFUN_ENABLED: {
@@ -3944,8 +4014,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               order: 300,
               type: "radio",
               options: [
-                { value: "true", label: "Enabled", icon: "✅" },
-                { value: "false", label: "Disabled", icon: "⛔" },
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
               ],
             },
             STREAM555_DEST_PUMPFUN_RTMP_URL: {
@@ -3953,7 +4023,6 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               group: "Channels",
               width: "half",
               order: 310,
-              icon: "🟠",
               showIf: {
                 field: "STREAM555_DEST_PUMPFUN_ENABLED",
                 op: "eq",
@@ -3978,8 +4047,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               order: 330,
               type: "radio",
               options: [
-                { value: "true", label: "Enabled", icon: "✅" },
-                { value: "false", label: "Disabled", icon: "⛔" },
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
               ],
             },
             STREAM555_DEST_X_RTMP_URL: {
@@ -3987,7 +4056,6 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               group: "Channels",
               width: "half",
               order: 340,
-              icon: "✖️",
               showIf: {
                 field: "STREAM555_DEST_X_ENABLED",
                 op: "eq",
@@ -4012,8 +4080,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               order: 360,
               type: "radio",
               options: [
-                { value: "true", label: "Enabled", icon: "✅" },
-                { value: "false", label: "Disabled", icon: "⛔" },
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
               ],
             },
             STREAM555_DEST_TWITCH_RTMP_URL: {
@@ -4021,7 +4089,6 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               group: "Channels",
               width: "half",
               order: 370,
-              icon: "🟣",
               showIf: {
                 field: "STREAM555_DEST_TWITCH_ENABLED",
                 op: "eq",
@@ -4046,8 +4113,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               order: 390,
               type: "radio",
               options: [
-                { value: "true", label: "Enabled", icon: "✅" },
-                { value: "false", label: "Disabled", icon: "⛔" },
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
               ],
             },
             STREAM555_DEST_KICK_RTMP_URL: {
@@ -4055,7 +4122,6 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               group: "Channels",
               width: "half",
               order: 400,
-              icon: "🟢",
               showIf: {
                 field: "STREAM555_DEST_KICK_ENABLED",
                 op: "eq",
@@ -4080,8 +4146,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               order: 420,
               type: "radio",
               options: [
-                { value: "true", label: "Enabled", icon: "✅" },
-                { value: "false", label: "Disabled", icon: "⛔" },
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
               ],
             },
             STREAM555_DEST_YOUTUBE_RTMP_URL: {
@@ -4089,7 +4155,6 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               group: "Channels",
               width: "half",
               order: 430,
-              icon: "🔴",
               showIf: {
                 field: "STREAM555_DEST_YOUTUBE_ENABLED",
                 op: "eq",
@@ -4114,8 +4179,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               order: 450,
               type: "radio",
               options: [
-                { value: "true", label: "Enabled", icon: "✅" },
-                { value: "false", label: "Disabled", icon: "⛔" },
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
               ],
             },
             STREAM555_DEST_FACEBOOK_RTMP_URL: {
@@ -4123,7 +4188,6 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               group: "Channels",
               width: "half",
               order: 460,
-              icon: "🔵",
               showIf: {
                 field: "STREAM555_DEST_FACEBOOK_ENABLED",
                 op: "eq",
@@ -4148,8 +4212,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               order: 480,
               type: "radio",
               options: [
-                { value: "true", label: "Enabled", icon: "✅" },
-                { value: "false", label: "Disabled", icon: "⛔" },
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
               ],
             },
             STREAM555_DEST_CUSTOM_RTMP_URL: {
@@ -4157,7 +4221,6 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               group: "Channels",
               width: "half",
               order: 490,
-              icon: "🧩",
               showIf: {
                 field: "STREAM555_DEST_CUSTOM_ENABLED",
                 op: "eq",
@@ -4429,13 +4492,11 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               label: "Public Base URL",
               group: "Connection",
               width: "half",
-              icon: "🌐",
             },
             STREAM555_INTERNAL_BASE_URL: {
               label: "Internal Base URL",
               group: "Connection",
               width: "half",
-              icon: "🏠",
             },
             STREAM555_INTERNAL_AGENT_IDS: {
               label: "Internal Agent IDs",
@@ -4453,19 +4514,16 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               group: "Wallet Auth",
               width: "half",
               type: "radio",
-              icon: "👛",
               options: [
                 {
                   value: "solana",
                   label: "Solana (recommended)",
                   description: "Use Solana wallet first when present.",
-                  icon: "◎",
                 },
                 {
                   value: "evm",
                   label: "Ethereum fallback",
                   description: "Use EVM wallet only when Solana is unavailable.",
-                  icon: "◇",
                 },
               ],
             },
@@ -4475,15 +4533,14 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               width: "half",
               type: "radio",
               options: [
-                { value: "true", label: "Enabled", icon: "✅" },
-                { value: "false", label: "Disabled", icon: "⛔" },
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
               ],
             },
             STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN: {
               label: "Provision Target Chain",
               group: "Wallet Auth",
               width: "half",
-              icon: "🔁",
             },
             STREAM555_ADMIN_API_KEY: {
               label: "Admin API Key",
@@ -4724,13 +4781,11 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               label: "Public Base URL",
               group: "Connection",
               width: "half",
-              icon: "🌐",
             },
             STREAM555_INTERNAL_BASE_URL: {
               label: "Internal Base URL",
               group: "Connection",
               width: "half",
-              icon: "🏠",
             },
             STREAM555_INTERNAL_AGENT_IDS: {
               label: "Internal Agent IDs",
@@ -15540,12 +15595,15 @@ async function handleRequest(
       memories.sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
       const agentId = state.runtime.agentId;
       const messages = memories.map((m) => {
-        const contentSource = (m.content as Record<string, unknown>)?.source;
+        const content = isRecord(m.content) ? m.content : {};
+        const contentSource = content.source;
+        const blocks = sanitizeResponseBlocks(content.blocks);
         return {
           id: m.id ?? "",
           role: m.entityId === agentId ? "assistant" : "user",
-          text: (m.content as { text?: string })?.text ?? "",
+          text: typeof content.text === "string" ? content.text : "",
           timestamp: m.createdAt ?? 0,
+          ...(blocks ? { blocks } : {}),
           source:
             typeof contentSource === "string" && contentSource !== "client_chat"
               ? contentSource
@@ -15563,6 +15621,99 @@ async function handleRequest(
   }
 
   // ── POST /api/conversations/:id/messages/stream ─────────────────────
+  if (
+    method === "POST" &&
+    /^\/api\/conversations\/[^/]+\/operator-action$/.test(pathname)
+  ) {
+    const convId = decodeURIComponent(pathname.split("/")[3]);
+    const conv = state.conversations.get(convId);
+    if (!conv) {
+      error(res, "Conversation not found", 404);
+      return;
+    }
+    if (!state.runtime) {
+      error(res, "Agent is not running", 503);
+      return;
+    }
+
+    const body = await readJsonBody<{
+      label?: string;
+      kind?: string;
+      detail?: string;
+      fallbackText?: string;
+    }>(req, res);
+    if (!body) return;
+
+    const label = body.label?.trim();
+    if (!label) {
+      error(res, "label is required", 400);
+      return;
+    }
+    if (
+      body.kind !== "stream" &&
+      body.kind !== "avatar" &&
+      body.kind !== "launch"
+    ) {
+      error(res, "kind must be 'stream', 'avatar', or 'launch'", 400);
+      return;
+    }
+
+    try {
+      const runtime = state.runtime;
+      const userId = ensureAdminEntityId();
+      await ensureConversationRoom(conv);
+
+      const actionBlock: Extract<ResponseBlock, { type: "action-pill" }> = {
+        type: "action-pill",
+        label,
+        kind: body.kind,
+      };
+      if (typeof body.detail === "string" && body.detail.trim().length > 0) {
+        actionBlock.detail = body.detail.trim();
+      }
+
+      const fallbackText =
+        typeof body.fallbackText === "string" && body.fallbackText.trim().length > 0
+          ? body.fallbackText.trim()
+          : label;
+
+      const message = createMessageMemory({
+        id: crypto.randomUUID() as UUID,
+        entityId: userId,
+        roomId: conv.roomId,
+        content: {
+          text: fallbackText,
+          blocks: [actionBlock],
+          source: "operator_action",
+          channelType: ChannelType.DM,
+        },
+      });
+
+      await runtime.createMemory(message, "messages");
+      conv.updatedAt = new Date().toISOString();
+
+      const responseMessage = {
+        id: message.id ?? crypto.randomUUID(),
+        role: "user" as const,
+        text: fallbackText,
+        timestamp: message.createdAt ?? Date.now(),
+        blocks: [actionBlock],
+        source: "operator_action",
+      };
+
+      state.broadcastWs?.({
+        type: "proactive-message",
+        conversationId: conv.id,
+        message: responseMessage,
+      });
+
+      json(res, { message: responseMessage });
+    } catch (err) {
+      error(res, getErrorMessage(err), 500);
+    }
+    return;
+  }
+
   if (
     method === "POST" &&
     /^\/api\/conversations\/[^/]+\/messages\/stream$/.test(pathname)

@@ -12,6 +12,20 @@ import type { ConfigUiHint } from "../types";
 import type { JsonSchemaObject } from "./config-catalog";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer";
 import { SecretsView } from "./SecretsView";
+import { SelectablePillGrid } from "./SelectablePillGrid";
+import { SectionShell } from "./SectionShell";
+import { configRenderModeForTheme } from "./shared/configRenderMode";
+import { Button } from "./ui/Button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "./ui/Card";
+import { Dialog } from "./ui/Dialog";
+import { ScrollArea } from "./ui/ScrollArea";
+import { CloudIcon, CloseIcon, LockIcon, WalletIcon } from "./ui/Icons";
 
 type RpcProviderOption<T extends string> = {
   id: T;
@@ -61,18 +75,18 @@ function CloudRpcStatus({
 }: CloudRpcStatusProps) {
   if (connected) {
     return (
-      <div className="flex items-center gap-2 text-xs">
-        <span className="inline-block w-2 h-2 rounded-full bg-[var(--ok,#16a34a)]" />
-        <span className="font-semibold">Connected to Eliza Cloud</span>
+      <div className="flex items-center gap-2 text-xs text-white/68">
+        <CloudIcon className="h-4 w-4 text-white/68" />
+        <span className="font-semibold text-white/86">Connected to Eliza Cloud</span>
         {credits !== null && (
-          <span className="text-[var(--muted)] ml-auto">
+          <span className="ml-auto text-white/46">
             Credits:{" "}
             <span
               className={
                 creditsCritical
-                  ? "text-[var(--danger,#e74c3c)] font-bold"
+                  ? "font-bold text-[var(--danger,#e74c3c)]"
                   : creditsLow
-                    ? "text-[#b8860b] font-bold"
+                    ? "font-bold text-[#d8ad4f]"
                     : ""
               }
             >
@@ -83,7 +97,7 @@ function CloudRpcStatus({
                 href={topUpUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[10px] ml-1.5 text-[var(--accent)]"
+                className="ml-1.5 text-[10px] text-[var(--accent)]"
               >
                 Top up
               </a>
@@ -97,19 +111,12 @@ function CloudRpcStatus({
   return (
     <div className="flex items-center justify-between gap-2">
       <div className="flex items-center gap-2 text-xs">
-        <span className="inline-block w-2 h-2 rounded-full bg-[var(--muted)]" />
-        <span className="text-[var(--muted)]">
-          Requires Eliza Cloud connection
-        </span>
+        <CloudIcon className="h-4 w-4 text-white/34" />
+        <span className="text-white/46">Requires Eliza Cloud connection</span>
       </div>
-      <button
-        type="button"
-        className="btn text-xs py-[3px] px-3 !mt-0 font-bold"
-        onClick={() => void onLogin()}
-        disabled={loginBusy}
-      >
+      <Button size="sm" variant="outline" onClick={() => void onLogin()} disabled={loginBusy}>
         {loginBusy ? "Connecting..." : "Log in"}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -175,6 +182,7 @@ type RpcSectionProps<T extends string> = {
   onRpcFieldChange: (key: string, value: unknown) => void;
   cloud: RpcSectionCloudProps;
   containerClassName: string;
+  renderMode: "legacy" | "minimal";
 };
 
 function RpcConfigSection<T extends string>({
@@ -188,6 +196,7 @@ function RpcConfigSection<T extends string>({
   onRpcFieldChange,
   cloud,
   containerClassName,
+  renderMode,
 }: RpcSectionProps<T>) {
   const rpcConfig = buildRpcRendererConfig(
     selectedProvider,
@@ -196,10 +205,7 @@ function RpcConfigSection<T extends string>({
   );
 
   return (
-    <div>
-      <div className="text-xs font-bold mb-1">{title}</div>
-      <div className="text-[11px] text-[var(--muted)] mb-2">{description}</div>
-
+    <SectionShell title={title} description={description} contentClassName="gap-4">
       {renderRpcProviderButtons(
         options,
         selectedProvider,
@@ -207,7 +213,7 @@ function RpcConfigSection<T extends string>({
         containerClassName,
       )}
 
-      <div className="mt-3">
+      <div>
         {selectedProvider === "eliza-cloud" ? (
           <CloudRpcStatus
             connected={cloud.connected}
@@ -225,11 +231,12 @@ function RpcConfigSection<T extends string>({
             values={rpcConfig.values}
             setKeys={rpcConfig.setKeys}
             registry={defaultRegistry}
+            renderMode={renderMode}
             onChange={onRpcFieldChange}
           />
         ) : null}
       </div>
-    </div>
+    </SectionShell>
   );
 }
 
@@ -240,33 +247,17 @@ function renderRpcProviderButtons<T extends string>(
   containerClassName: string,
 ) {
   return (
-    <div className={containerClassName}>
-      {options.map((provider) => {
-        const active = selectedProvider === provider.id;
-        return (
-          <button
-            type="button"
-            key={provider.id}
-            className={`text-center px-2 py-2 border cursor-pointer transition-colors ${
-              active
-                ? "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]"
-                : "border-[var(--border)] bg-[var(--card)] hover:border-[var(--accent)]"
-            }`}
-            onClick={() => onSelect(provider.id)}
-          >
-            <div
-              className={`text-xs font-bold whitespace-nowrap ${active ? "" : "text-[var(--text)]"}`}
-            >
-              {provider.label}
-            </div>
-          </button>
-        );
-      })}
-    </div>
+    <SelectablePillGrid
+      className={containerClassName}
+      value={selectedProvider}
+      onChange={onSelect}
+      options={options.map((provider) => ({
+        value: provider.id,
+        label: provider.label,
+      }))}
+    />
   );
 }
-
-/* ── ConfigPageView ──────────────────────────────────────────────────── */
 
 export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
   const {
@@ -280,11 +271,12 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
     walletApiKeySaving,
     handleWalletApiKeySave,
     handleCloudLogin,
+    currentTheme,
   } = useApp();
 
-  const [secretsOpen, setSecretsOpen] = useState(false);
+  const configRenderMode = configRenderModeForTheme(currentTheme);
 
-  /* ── RPC provider field values ─────────────────────────────────────── */
+  const [secretsOpen, setSecretsOpen] = useState(false);
   const [rpcFieldValues, setRpcFieldValues] = useState<Record<string, string>>(
     {},
   );
@@ -301,7 +293,6 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
     void handleWalletApiKeySave(config);
   }, [handleWalletApiKeySave, rpcFieldValues]);
 
-  /* ── RPC provider selection state ──────────────────────────────────── */
   const [selectedEvmRpc, setSelectedEvmRpc] = useState<
     "eliza-cloud" | "alchemy" | "infura" | "ankr"
   >("eliza-cloud");
@@ -362,134 +353,98 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
     <div>
       {!embedded && (
         <>
-          <h2 className="text-lg font-bold mb-1">Config</h2>
-          <p className="text-[13px] text-[var(--muted)] mb-5">
+          <h2 className="mb-1 text-lg font-bold">Config</h2>
+          <p className="mb-5 text-[13px] text-[var(--muted)]">
             Wallet providers and secrets.
           </p>
         </>
       )}
 
-      {/* ═══════════════════════════════════════════════════════════════
-          1. WALLET & RPC
-          ═══════════════════════════════════════════════════════════════ */}
-      <div className="p-4 border border-[var(--border)] bg-[var(--card)]">
-        <div className="flex items-center justify-between mb-4">
-          <div className="font-bold text-sm">Wallet &amp; RPC</div>
-          <button
-            type="button"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] text-[var(--muted)] hover:text-[var(--txt)] bg-transparent border border-[var(--border)] rounded cursor-pointer transition-colors hover:border-[var(--accent)]"
+      <Card className="border-white/10 bg-white/[0.04]">
+        <CardHeader className="gap-3 pb-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1">
+            <CardTitle className="flex items-center gap-2">
+              <WalletIcon className="h-4 w-4 text-white/70" />
+              Wallet &amp; RPC
+            </CardTitle>
+            <CardDescription>
+              Configure provider keys and cloud-backed RPC access for EVM and Solana.
+            </CardDescription>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => setSecretsOpen(true)}
             title="Secrets Vault"
           >
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <title>Secrets vault</title>
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
+            <LockIcon className="h-4 w-4" />
             Secrets
-          </button>
-        </div>
+          </Button>
+        </CardHeader>
 
-        <div className="grid grid-cols-2 gap-6">
-          {/* EVM */}
-          <RpcConfigSection
-            title="EVM"
-            description="Ethereum, Base, Arbitrum, Optimism, Polygon"
-            options={EVM_RPC_OPTIONS}
-            selectedProvider={selectedEvmRpc}
-            onSelect={setSelectedEvmRpc}
-            providerConfigs={evmRpcConfigs}
-            rpcFieldValues={rpcFieldValues}
-            onRpcFieldChange={handleRpcFieldChange}
-            cloud={cloudStatusProps}
-            containerClassName="grid grid-cols-4 gap-1.5"
-          />
+        <CardContent className="space-y-6">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <RpcConfigSection
+              title="EVM"
+              description="Ethereum, Base, Arbitrum, Optimism, Polygon"
+              options={EVM_RPC_OPTIONS}
+              selectedProvider={selectedEvmRpc}
+              onSelect={setSelectedEvmRpc}
+              providerConfigs={evmRpcConfigs}
+              rpcFieldValues={rpcFieldValues}
+              onRpcFieldChange={handleRpcFieldChange}
+              cloud={cloudStatusProps}
+              containerClassName="grid grid-cols-2 gap-1.5 xl:grid-cols-4"
+              renderMode={configRenderMode}
+            />
 
-          {/* Solana */}
-          <RpcConfigSection
-            title="Solana"
-            description="Solana mainnet tokens and NFTs"
-            options={SOLANA_RPC_OPTIONS}
-            selectedProvider={selectedSolanaRpc}
-            onSelect={setSelectedSolanaRpc}
-            providerConfigs={solanaRpcConfigs}
-            rpcFieldValues={rpcFieldValues}
-            onRpcFieldChange={handleRpcFieldChange}
-            cloud={cloudStatusProps}
-            containerClassName="grid grid-cols-2 gap-1.5"
-          />
-        </div>
-
-        <div className="flex justify-end mt-4">
-          <button
-            type="button"
-            className="btn text-[11px] py-1 px-3.5 !mt-0"
-            onClick={handleWalletSaveAll}
-            disabled={walletApiKeySaving}
-          >
-            {walletApiKeySaving ? "Saving..." : "Save"}
-          </button>
-        </div>
-      </div>
-
-      {/* ── Secrets modal ── */}
-      {secretsOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setSecretsOpen(false);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              setSecretsOpen(false);
-            }
-          }}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="w-full max-w-2xl max-h-[80vh] border border-[var(--border)] bg-[var(--card)] p-5 shadow-lg flex flex-col">
-            <div className="flex items-center justify-between mb-4 flex-shrink-0">
-              <div className="flex items-center gap-2">
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="text-[var(--accent)]"
-                >
-                  <title>Secrets vault</title>
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-                <span className="font-bold text-sm">Secrets Vault</span>
-              </div>
-              <button
-                type="button"
-                className="text-[var(--muted)] hover:text-[var(--txt)] text-lg leading-none px-1 bg-transparent border-0 cursor-pointer"
-                onClick={() => setSecretsOpen(false)}
-              >
-                &times;
-              </button>
-            </div>
-            <div className="flex-1 min-h-0 overflow-y-auto">
-              <SecretsView />
-            </div>
+            <RpcConfigSection
+              title="Solana"
+              description="Solana mainnet tokens and NFTs"
+              options={SOLANA_RPC_OPTIONS}
+              selectedProvider={selectedSolanaRpc}
+              onSelect={setSelectedSolanaRpc}
+              providerConfigs={solanaRpcConfigs}
+              rpcFieldValues={rpcFieldValues}
+              onRpcFieldChange={handleRpcFieldChange}
+              cloud={cloudStatusProps}
+              containerClassName="grid grid-cols-2 gap-1.5"
+              renderMode={configRenderMode}
+            />
           </div>
-        </div>
+
+          <div className="flex justify-end">
+            <Button onClick={handleWalletSaveAll} disabled={walletApiKeySaving}>
+              {walletApiKeySaving ? "Saving..." : "Save"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {secretsOpen && (
+        <Dialog open={secretsOpen} onClose={() => setSecretsOpen(false)} className="max-w-2xl bg-[#080808]/95">
+          <Card className="flex max-h-[80vh] w-full flex-col border-white/10 bg-[#080808]/95 p-5 shadow-[0_30px_80px_rgba(0,0,0,0.5)]">
+            <div className="mb-4 flex flex-shrink-0 items-center justify-between">
+              <div className="flex items-center gap-2">
+                <LockIcon className="h-4 w-4 text-[var(--accent)]" />
+                <span className="text-sm font-bold uppercase tracking-[0.18em] text-white/86">
+                  Secrets Vault
+                </span>
+              </div>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => setSecretsOpen(false)}
+                aria-label="Close secrets vault"
+              >
+                <CloseIcon className="h-4 w-4" />
+              </Button>
+            </div>
+            <ScrollArea className="min-h-0 flex-1">
+              <SecretsView />
+            </ScrollArea>
+          </Card>
+        </Dialog>
       )}
     </div>
   );
