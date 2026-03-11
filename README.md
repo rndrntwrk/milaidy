@@ -94,6 +94,15 @@ npm install -g miladyai
 milady setup
 ```
 
+
+
+### Homebrew (macOS / Linux)
+
+```bash
+brew tap milady-ai/milaidy
+brew install milaidy          # CLI
+brew install --cask milaidy   # Desktop app (macOS only)
+```
 ### Flatpak
 
 ```bash
