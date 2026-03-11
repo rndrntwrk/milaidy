@@ -43,6 +43,9 @@ vi.mock("../../src/components/ControlStackModal", () => ({
   ControlStackModal: ({ open }: { open: boolean }) =>
     open ? React.createElement("div", null, "ControlStackModal") : null,
 }));
+vi.mock("../../src/components/GoLiveModal", () => ({
+  GoLiveModal: () => React.createElement("div", null, "GoLiveModal"),
+}));
 vi.mock("../../src/components/CommandDock", () => ({
   CommandDock: () => React.createElement("div", null, "CommandDock"),
 }));
@@ -54,6 +57,7 @@ function renderWithTab(
   options?: { leftRailState?: "collapsed" | "peek" | "expanded" },
 ) {
   const runQuickLayer = vi.fn(async () => {});
+  const openGoLiveModal = vi.fn();
   mockUseApp.mockReturnValue({
     tab,
     dockSurface:
@@ -91,6 +95,12 @@ function renderWithTab(
     openHudAssetVault: vi.fn(),
     closeHudSurface: vi.fn(),
     runQuickLayer,
+    openGoLiveModal,
+    availableEmotes: [],
+    activeAvatarEmoteId: null,
+    avatarMotionMode: "idle",
+    playAvatarEmote: vi.fn(async () => {}),
+    stopAvatarEmote: vi.fn(),
     setState: vi.fn(),
     setRailDisplay: vi.fn(),
     collapseRails: vi.fn(),
@@ -100,7 +110,7 @@ function renderWithTab(
     tree = TestRenderer.create(React.createElement(MiladyOsDashboard));
   });
   if (!tree) throw new Error("failed to render dashboard");
-  return { tree, runQuickLayer };
+  return { tree, runQuickLayer, openGoLiveModal };
 }
 
 function textOf(node: TestRenderer.ReactTestInstance): string {
@@ -116,6 +126,7 @@ describe("MiladyOsDashboard", () => {
     expect(content).toContain("StatusStrip");
     expect(content).toContain("ControlStackModal");
     expect(content).toContain("CommandDock");
+    expect(content).toContain("GoLiveModal");
   });
 
   it("opens the asset vault for vault tabs instead of routing away", () => {
@@ -125,8 +136,8 @@ describe("MiladyOsDashboard", () => {
     expect(content).toContain("AgentCore");
   });
 
-  it("runs live tray actions without requiring ChatView to be mounted", () => {
-    const { tree, runQuickLayer } = renderWithTab("settings", {
+  it("opens the guided go-live modal from the action log without requiring ChatView to be mounted", () => {
+    const { tree, runQuickLayer, openGoLiveModal } = renderWithTab("settings", {
       leftRailState: "expanded",
     });
     const buttons = tree.root.findAllByType("button");
@@ -143,6 +154,13 @@ describe("MiladyOsDashboard", () => {
       goLive?.props.onClick();
     });
 
-    expect(runQuickLayer).toHaveBeenCalledWith("go-live");
+    expect(openGoLiveModal).toHaveBeenCalled();
+    expect(runQuickLayer).not.toHaveBeenCalledWith("go-live");
+    expect(
+      tree.root.findByProps({ "data-action-log-pinned-region": true }),
+    ).toBeDefined();
+    expect(
+      tree.root.findByProps({ "data-action-log-feed-region": true }),
+    ).toBeDefined();
   });
 });

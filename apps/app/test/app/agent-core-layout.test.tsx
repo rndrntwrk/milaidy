@@ -66,6 +66,9 @@ vi.mock("../../src/components/ui/Icons.js", () => ({
   SendIcon: () => React.createElement("span", null, "SendIcon"),
   StopIcon: () => React.createElement("span", null, "StopIcon"),
   SystemIcon: () => React.createElement("span", null, "SystemIcon"),
+  ThreadsIcon: () => React.createElement("span", null, "ThreadsIcon"),
+  ChevronDownIcon: () => React.createElement("span", null, "ChevronDownIcon"),
+  ChevronUpIcon: () => React.createElement("span", null, "ChevronUpIcon"),
 }));
 
 import { AgentCore } from "../../src/components/AgentCore.js";

@@ -8,7 +8,7 @@ import type { Tab } from "../navigation.js";
 import { Badge } from "./ui/Badge.js";
 import { Button } from "./ui/Button.js";
 import { CloseIcon, StackIcon } from "./ui/Icons.js";
-import { resolveThemeDisplayName } from "./shared/themeDisplayName.js";
+import { resolveAgentDisplayName } from "./shared/agentDisplayName.js";
 import {
   controlSectionForTab,
   defaultTabForControlSection,
@@ -36,8 +36,8 @@ export function ControlStackModal({
   section?: HudControlSection | null;
   onClose: () => void;
 }) {
-  const { tab, setTab } = useApp();
-  const themeName = resolveThemeDisplayName();
+  const { tab, setTab, agentStatus } = useApp();
+  const agentName = resolveAgentDisplayName(agentStatus?.agentName);
   const sections = getControlStackSections();
 
   const resolvedSection = sanitizeControlSection(
@@ -68,7 +68,7 @@ export function ControlStackModal({
           <div className="min-w-0">
             <div className="pro-streamer-control-stack-title flex items-center gap-2 text-white/92">
               <StackIcon className="h-4 w-4" />
-              {themeName} Control Stack
+              {agentName} Pro Stack
             </div>
             <div className="pro-streamer-control-stack-copy mt-1">
               {sectionMeta.copy}

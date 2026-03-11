@@ -45,9 +45,13 @@ export function MiladyBootShell({
   footer,
   accent = "accent",
   panelClassName = "",
-  identityLabel = "rasp",
+  identityLabel,
 }: MiladyBootShellProps) {
   const tone = ACCENT_STYLES[accent];
+  const resolvedIdentityLabel =
+    typeof identityLabel === "string" && identityLabel.trim().length > 0
+      ? identityLabel.trim()
+      : "standby";
 
   return (
     <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-[#080a0e] px-4 py-8 font-body text-txt">
@@ -73,7 +77,7 @@ export function MiladyBootShell({
           <Card className="rounded-[24px] px-4 py-3 font-mono text-[10px] uppercase tracking-[0.2em] text-white/45">
             <h2 className="text-white/85">Boot diagnostics</h2>
             <div className="mt-2 space-y-1">
-              <div>Agent: {identityLabel}</div>
+              <div>Agent: {resolvedIdentityLabel}</div>
               <div>Shell: broadcast conversation HUD</div>
               <div>Status: {status ?? "standby"}</div>
             </div>

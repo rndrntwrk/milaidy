@@ -133,6 +133,37 @@ export interface QueryResult {
   durationMs: number;
 }
 
+export type EmoteCategory =
+  | "greeting"
+  | "emotion"
+  | "dance"
+  | "combat"
+  | "idle"
+  | "movement"
+  | "other";
+
+export type EmoteDrawerGroup =
+  | "movement"
+  | "gesture"
+  | "dance"
+  | "combat"
+  | "exercise"
+  | "idle";
+
+export interface AvatarEmoteDef {
+  id: string;
+  name: string;
+  description: string;
+  glbPath: string;
+  duration: number;
+  loop: boolean;
+  category: EmoteCategory;
+  drawerGroup: EmoteDrawerGroup;
+  pinnedInActionDrawer: boolean;
+  autoEligible: boolean;
+  idleVariant: boolean;
+}
+
 // Custom actions types
 export type CustomActionHandler =
   | {
@@ -749,8 +780,20 @@ export interface UiSpecBlock {
   raw?: string;
 }
 
+/** A user-visible operator action pill rendered instead of raw prompt text. */
+export interface ActionPillBlock {
+  type: "action-pill";
+  label: string;
+  kind: "stream" | "avatar" | "launch";
+  detail?: string;
+}
+
 /** Union of all content block types. */
-export type ContentBlock = TextBlock | ConfigFormBlock | UiSpecBlock;
+export type ContentBlock =
+  | TextBlock
+  | ConfigFormBlock
+  | UiSpecBlock
+  | ActionPillBlock;
 
 /** An image attachment to send with a chat message. */
 export interface ImageAttachment {
@@ -2580,6 +2623,10 @@ export class MiladyClient {
       method: "POST",
       body: JSON.stringify({ emoteId }),
     });
+  }
+
+  async listEmotes(): Promise<{ emotes: AvatarEmoteDef[] }> {
+    return this.fetch("/api/emotes");
   }
 
   async runTerminalCommand(command: string): Promise<{ ok: boolean }> {

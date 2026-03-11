@@ -79,6 +79,11 @@ export function ProStreamerStageComposition({
   const cameraSurfaceClassName = cameraInHold
     ? "absolute bottom-[8.5rem] right-4 z-[4] h-[10.5rem] w-[8rem] overflow-hidden rounded-[24px] border border-white/16 bg-black/55 shadow-[0_18px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl transition-[width,height,top,right,bottom,left,transform] duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] sm:bottom-[9rem] sm:right-5 sm:h-[12rem] sm:w-[9.5rem] lg:bottom-[10rem] lg:right-6 lg:h-[14rem] lg:w-[11rem] xl:h-[15.5rem] xl:w-[12rem]"
     : "absolute inset-0 z-[1] overflow-hidden rounded-[inherit] transition-[width,height,top,right,bottom,left,transform] duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)]";
+  const contextPillLabel = cameraInHold
+    ? heroFrame
+      ? `${heroFrame.kindLabel} · ${heroFrame.label}`
+      : `${agentName} Camera`
+    : `${agentName} Camera`;
 
   return (
     <div
@@ -113,14 +118,21 @@ export function ProStreamerStageComposition({
             </div>
           )}
           <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_50%_24%,rgba(255,255,255,0.07),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.03),transparent_16%,rgba(0,0,0,0.24)_58%,rgba(0,0,0,0.66)_100%)]" />
-          <div className="absolute left-3 top-3 z-[2] rounded-full border border-white/12 bg-black/46 px-3 py-1.5 text-[10px] uppercase tracking-[0.24em] text-white/68 sm:left-4 sm:top-4">
-            {heroFrame.kindLabel} Hero
-          </div>
           <div className="absolute left-3 bottom-3 z-[2] rounded-full border border-white/10 bg-black/46 px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] text-white/60 sm:left-4 sm:bottom-4">
             {heroFrame.label}
           </div>
         </div>
       ) : null}
+
+      <div className="pointer-events-none absolute left-16 right-16 top-4 z-[3] flex justify-center sm:left-24 sm:right-24 sm:top-5 lg:left-32 lg:right-32 xl:left-40 xl:right-40">
+        <div
+          className="max-w-full truncate rounded-full border border-white/12 bg-black/46 px-4 py-1.5 text-center text-[10px] uppercase tracking-[0.24em] text-white/66 backdrop-blur-xl"
+          data-stage-context-pill
+          title={contextPillLabel}
+        >
+          {contextPillLabel}
+        </div>
+      </div>
 
       <div
         className={cameraSurfaceClassName}
@@ -153,11 +165,6 @@ export function ProStreamerStageComposition({
         ) : null}
       </div>
 
-      {!cameraInHold ? (
-        <div className="absolute right-4 top-4 z-[2] rounded-full border border-white/12 bg-black/46 px-3 py-1.5 text-[10px] uppercase tracking-[0.24em] text-white/64 sm:right-5 sm:top-5">
-          {agentName} Camera
-        </div>
-      ) : null}
     </div>
   );
 }

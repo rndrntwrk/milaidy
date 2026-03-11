@@ -206,6 +206,8 @@ export function App() {
     return (
       <LoadingScreen
         phase={agentStarting ? "initializing-agent" : startupPhase}
+        currentTheme={currentTheme}
+        agentName={agentStatus?.agentName}
       />
     );
   }
@@ -217,7 +219,7 @@ export function App() {
         title="PRO STREAMER SETUP"
         subtitle="Calibrate the node before the broadcast stage unlocks"
         status="system calibration"
-        identityLabel="rasp"
+        identityLabel={agentStatus?.agentName}
         panelClassName="mx-auto max-w-6xl"
       >
         <ErrorBoundary>

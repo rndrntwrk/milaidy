@@ -2,6 +2,14 @@ import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 
+const { mockUseApp } = vi.hoisted(() => ({
+  mockUseApp: vi.fn(),
+}));
+
+vi.mock("../../src/AppContext", () => ({
+  useApp: () => mockUseApp(),
+}));
+
 import { ToastContainer, type ToastItem } from "../../src/components/ui/Toast";
 
 function readAllText(tree: TestRenderer.ReactTestRenderer): string {
@@ -18,6 +26,7 @@ function makeToast(id: string, text: string, tone: ToastItem["tone"] = "info"): 
 
 describe("ToastContainer", () => {
   it("renders empty container when no toasts", async () => {
+    mockUseApp.mockReturnValue({ currentTheme: "milady-os" });
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
@@ -34,6 +43,7 @@ describe("ToastContainer", () => {
   });
 
   it("renders up to 3 toasts", async () => {
+    mockUseApp.mockReturnValue({ currentTheme: "milady-os" });
     const toasts = [
       makeToast("1", "First"),
       makeToast("2", "Second"),
@@ -56,6 +66,7 @@ describe("ToastContainer", () => {
   });
 
   it("shows toast text and dismiss button", async () => {
+    mockUseApp.mockReturnValue({ currentTheme: "milady-os" });
     const toasts = [makeToast("t1", "Hello world", "success")];
 
     let tree: TestRenderer.ReactTestRenderer;
@@ -71,6 +82,7 @@ describe("ToastContainer", () => {
   });
 
   it("calls onDismiss when dismiss button clicked", async () => {
+    mockUseApp.mockReturnValue({ currentTheme: "milady-os" });
     const onDismiss = vi.fn();
     const toasts = [makeToast("t1", "Dismiss me")];
 
@@ -90,6 +102,7 @@ describe("ToastContainer", () => {
   });
 
   it("has aria-live=polite and role=status on container", async () => {
+    mockUseApp.mockReturnValue({ currentTheme: "milady-os" });
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
@@ -99,5 +112,21 @@ describe("ToastContainer", () => {
 
     const container = tree!.root.findByProps({ role: "status" });
     expect(container.props["aria-live"]).toBe("polite");
+  });
+
+  it("keeps the legacy flat treatment for non milady themes", async () => {
+    mockUseApp.mockReturnValue({ currentTheme: "qt314" });
+    const toasts = [makeToast("t1", "Legacy toast", "info")];
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(ToastContainer, { toasts, onDismiss: () => {} }),
+      );
+    });
+
+    const dismiss = tree!.root.findByProps({ "aria-label": "Dismiss" });
+    expect(typeof dismiss.children[0]).toBe("string");
+    expect(readAllText(tree!)).toContain("Legacy toast");
   });
 });

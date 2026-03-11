@@ -24,7 +24,7 @@ export function MiladyRailBubble({
     <div className={`group pointer-events-auto pro-streamer-rail-node pro-streamer-rail-node--${side}`}>
       <Button
         variant={expanded ? "secondary" : "outline"}
-        className={`pro-streamer-rail-launcher pro-streamer-rail-launcher--${side} relative h-11 w-11 min-w-11 rounded-full border border-white/12 bg-black/78 px-0 shadow-none backdrop-blur-xl hover:border-white/22 hover:bg-black/88`}
+        className={`pro-streamer-rail-launcher pro-streamer-rail-launcher--${side} ${expanded ? "pro-streamer-rail-launcher--active" : "pro-streamer-rail-launcher--pulse"} relative h-11 w-11 min-w-11 rounded-full border border-white/12 bg-black/78 px-0 shadow-none backdrop-blur-xl hover:border-white/22 hover:bg-black/88`}
         aria-expanded={expanded}
         aria-haspopup="dialog"
         aria-label={title}

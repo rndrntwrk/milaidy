@@ -14,17 +14,24 @@ import type { DynamicValue } from "../types";
 import type { FieldRenderer, FieldRenderProps } from "./config-catalog";
 import { resolveDynamic } from "./config-catalog";
 import { FormFieldStack } from "./FormFieldStack";
-import { SelectablePillGrid } from "./SelectablePillGrid";
+import {
+  hasStream555ChannelIcon,
+  Stream555ChannelIcon,
+} from "./Stream555ChannelIcon";
 import { Badge } from "./ui/Badge";
 import { Button } from "./ui/Button";
+import { Input } from "./ui/Input";
 import {
+  CheckIcon,
   ChevronDownIcon,
   ChevronUpIcon,
   CloseIcon,
   EyeIcon,
   EyeOffIcon,
 } from "./ui/Icons";
+import { Select } from "./ui/Select";
 import { Switch } from "./ui/Switch";
+import { Textarea } from "./ui/Textarea";
 import { cn } from "./ui/utils";
 
 // ── Action binding helper ──────────────────────────────────────────────
@@ -63,10 +70,28 @@ const LEGACY_INPUT_ERROR_CLS =
   "w-full px-3 py-2 border border-[var(--destructive)] bg-[color-mix(in_srgb,var(--destructive)_3%,var(--card))] text-[13px] font-[var(--mono)] transition-all focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] box-border h-[36px] rounded-sm placeholder:text-[var(--muted)] placeholder:opacity-60";
 
 const MINIMAL_INPUT_CLS =
-  "w-full rounded-[18px] border border-white/10 bg-black/22 px-4 py-2.5 text-sm text-white/88 transition-colors outline-none placeholder:text-white/30 focus:border-white/18 focus-visible:ring-2 focus-visible:ring-white/16";
+  "h-11 w-full rounded-[20px] border border-white/10 bg-black/22 px-4 text-sm text-white/88 transition-colors outline-none placeholder:text-white/30 focus:border-white/18 focus-visible:ring-2 focus-visible:ring-white/16";
 
 const MINIMAL_INPUT_ERROR_CLS =
-  "w-full rounded-[18px] border border-danger/45 bg-danger/10 px-4 py-2.5 text-sm text-white/88 transition-colors outline-none placeholder:text-white/30 focus:border-danger/60 focus-visible:ring-2 focus-visible:ring-danger/20";
+  "h-11 w-full rounded-[20px] border border-danger/45 bg-danger/10 px-4 text-sm text-white/88 transition-colors outline-none placeholder:text-white/30 focus:border-danger/60 focus-visible:ring-2 focus-visible:ring-danger/20";
+
+const MINIMAL_TEXTAREA_CLS =
+  "min-h-[112px] w-full rounded-[20px] border border-white/10 bg-black/22 px-4 py-3 text-sm text-white/88 outline-none transition-colors placeholder:text-white/30 focus:border-white/18 focus-visible:ring-2 focus-visible:ring-white/16";
+
+const MINIMAL_TEXTAREA_ERROR_CLS =
+  "min-h-[112px] w-full rounded-[20px] border border-danger/45 bg-danger/10 px-4 py-3 text-sm text-white/88 outline-none transition-colors placeholder:text-white/30 focus:border-danger/60 focus-visible:ring-2 focus-visible:ring-danger/20";
+
+const LEGACY_TEXTAREA_CLS =
+  "w-full min-h-[100px] resize-y rounded-sm border border-[var(--border)] bg-[var(--card)] px-2.5 py-[7px] text-[13px] font-[var(--mono)] transition-all placeholder:text-[var(--muted)] placeholder:opacity-60 focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]";
+
+const LEGACY_TEXTAREA_ERROR_CLS =
+  "w-full min-h-[100px] resize-y rounded-sm border border-[var(--destructive)] bg-[color-mix(in_srgb,var(--destructive)_3%,var(--card))] px-2.5 py-[7px] text-[13px] font-[var(--mono)] transition-all placeholder:text-[var(--muted)] placeholder:opacity-60 focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]";
+
+const LEGACY_ACTION_BUTTON_CLS =
+  "rounded-sm border border-[var(--border)] bg-[var(--bg-hover)] text-[var(--muted)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text)]";
+
+const MINIMAL_ACTION_BUTTON_CLS =
+  "rounded-xl border border-white/12 bg-black/35 text-white/78 hover:border-white/20 hover:bg-white/[0.06] hover:text-white";
 
 function isMinimalMode(uiMode?: FieldRenderProps["uiMode"]): uiMode is "minimal" {
   return uiMode === "minimal";
@@ -82,6 +107,108 @@ function inputCls(
   return hasError ? LEGACY_INPUT_ERROR_CLS : LEGACY_INPUT_CLS;
 }
 
+function textareaCls(
+  hasError: boolean,
+  uiMode: ConfigFieldUiMode = "legacy",
+): string {
+  if (uiMode === "minimal") {
+    return hasError ? MINIMAL_TEXTAREA_ERROR_CLS : MINIMAL_TEXTAREA_CLS;
+  }
+  return hasError ? LEGACY_TEXTAREA_ERROR_CLS : LEGACY_TEXTAREA_CLS;
+}
+
+function actionButtonCls(
+  uiMode: ConfigFieldUiMode = "legacy",
+  extra?: string,
+): string {
+  return cn(uiMode === "minimal" ? MINIMAL_ACTION_BUTTON_CLS : LEGACY_ACTION_BUTTON_CLS, extra);
+}
+
+function sanitizeFieldLabel(label: string, fieldKey: string): string {
+  if (!hasStream555ChannelIcon(fieldKey)) return label;
+  return label.replace(/^[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F\u200D◎◇✖×●○•\s-]+/u, "").trim();
+}
+
+function selectionCardCls(
+  selected: boolean,
+  disabled: boolean,
+  uiMode: ConfigFieldUiMode = "legacy",
+): string {
+  if (uiMode === "minimal") {
+    return cn(
+      "justify-between rounded-[20px] border px-4 py-3 text-left backdrop-blur-xl",
+      selected
+        ? "border-accent/34 bg-accent/14 text-white shadow-[0_14px_36px_rgba(0,0,0,0.28)]"
+        : "border-white/10 bg-black/22 text-white/82 hover:border-white/18 hover:bg-white/[0.05]",
+      disabled && "pointer-events-none opacity-50",
+    );
+  }
+  return cn(
+    "justify-between rounded-[18px] border px-3.5 py-3 text-left",
+    selected
+      ? "border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_7%,var(--card))] text-[var(--text)]"
+      : "border-[var(--border)] bg-[var(--card)] text-[var(--text)] hover:bg-[var(--bg-hover)]",
+    disabled && "pointer-events-none opacity-50",
+  );
+}
+
+function SelectionCardButton({
+  label,
+  description,
+  selected,
+  disabled,
+  uiMode = "legacy",
+  onClick,
+}: {
+  label: string;
+  description?: string;
+  selected: boolean;
+  disabled: boolean;
+  uiMode?: ConfigFieldUiMode;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      className={selectionCardCls(selected, disabled, uiMode)}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-2">
+          <span className="text-sm font-medium leading-none">{label}</span>
+        </span>
+        {description ? (
+          <span
+            className={cn(
+              "mt-1 block text-xs leading-relaxed",
+              uiMode === "minimal" ? "text-white/52" : "text-[var(--muted)]",
+            )}
+          >
+            {description}
+          </span>
+        ) : null}
+      </span>
+      <span
+        className={cn(
+          "ml-3 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors",
+          selected
+            ? uiMode === "minimal"
+              ? "border-accent/50 bg-accent/16 text-accent"
+              : "border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground,#0b0d12)]"
+            : uiMode === "minimal"
+              ? "border-white/14 text-transparent"
+              : "border-[var(--border)] text-transparent",
+        )}
+        aria-hidden="true"
+      >
+        <CheckIcon className="h-3 w-3" />
+      </span>
+    </Button>
+  );
+}
+
 // ── 1. Text ─────────────────────────────────────────────────────────────
 
 /** Single-line text input. Fallback renderer for unresolved field types. */
@@ -91,7 +218,7 @@ export function renderTextField(props: FieldRenderProps) {
     (props.hint.placeholder as string | undefined) ?? "Enter value...";
 
   return (
-    <input
+    <Input
       className={inputCls(!!props.errors?.length, props.uiMode)}
       type="text"
       defaultValue={value}
@@ -157,7 +284,7 @@ function PasswordFieldInner({ fp: props }: { fp: FieldRenderProps }) {
   if (!isMinimalMode(props.uiMode)) {
     return (
       <div className="flex items-center gap-2">
-        <input
+        <Input
           ref={inputRef}
           className={cn(inputCls(!!props.errors?.length, props.uiMode), "flex-1")}
           type={visible ? "text" : "password"}
@@ -171,9 +298,11 @@ function PasswordFieldInner({ fp: props }: { fp: FieldRenderProps }) {
           }}
           onBlur={() => fireAction(props, "blur")}
         />
-        <button
+        <Button
           type="button"
-          className="inline-flex h-[36px] min-w-[88px] shrink-0 items-center justify-center gap-1.5 rounded-sm border border-[var(--border)] bg-[var(--bg-hover)] px-3 py-2 text-[12px] text-[var(--muted)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text)]"
+          variant="outline"
+          size="sm"
+          className={cn(actionButtonCls(props.uiMode), "min-w-[88px] shrink-0")}
           onClick={() => {
             void handleToggle();
             fireAction(props, "click");
@@ -188,14 +317,14 @@ function PasswordFieldInner({ fp: props }: { fp: FieldRenderProps }) {
               <span>{visibilityLabel}</span>
             </>
           )}
-        </button>
+        </Button>
       </div>
     );
   }
 
   return (
     <div className="flex items-center gap-2">
-      <input
+      <Input
         ref={inputRef}
         className={cn(inputCls(!!props.errors?.length, props.uiMode), "flex-1")}
         type={visible ? "text" : "password"}
@@ -271,15 +400,17 @@ function NumberFieldInner({ fp: props }: { fp: FieldRenderProps }) {
     <div>
       <div className="flex items-center gap-1.5">
         {!props.readonly && (
-          <button
+          <Button
             type="button"
-            className="px-2 py-1.5 border border-[var(--border)] bg-[var(--bg-hover)] text-sm text-[var(--muted)] cursor-pointer transition-colors hover:bg-[var(--surface)] hover:text-[var(--text)] h-[36px] rounded-sm font-mono select-none"
+            variant="outline"
+            size="sm"
+            className={cn(actionButtonCls(props.uiMode), "h-11 px-3 font-mono text-sm")}
             onClick={() => step(-1)}
           >
             −
-          </button>
+          </Button>
         )}
-        <input
+        <Input
           className={`${inputCls(!!props.errors?.length, props.uiMode)} ${unit ? "flex-1" : "w-full"} text-center`}
           type="number"
           value={val}
@@ -299,13 +430,15 @@ function NumberFieldInner({ fp: props }: { fp: FieldRenderProps }) {
           onClick={() => fireAction(props, "click")}
         />
         {!props.readonly && (
-          <button
+          <Button
             type="button"
-            className="px-2 py-1.5 border border-[var(--border)] bg-[var(--bg-hover)] text-sm text-[var(--muted)] cursor-pointer transition-colors hover:bg-[var(--surface)] hover:text-[var(--text)] h-[36px] rounded-sm font-mono select-none"
+            variant="outline"
+            size="sm"
+            className={cn(actionButtonCls(props.uiMode), "h-11 px-3 font-mono text-sm")}
             onClick={() => step(1)}
           >
             +
-          </button>
+          </Button>
         )}
         {unit && (
           <span className="text-[11px] text-[var(--muted)] font-medium shrink-0 min-w-[20px]">
@@ -344,40 +477,31 @@ function BooleanFieldInner({ fp: props }: { fp: FieldRenderProps }) {
 
   if (!isMinimalMode(props.uiMode)) {
     return (
-      <button
-        type="button"
-        className="flex items-center gap-2 cursor-pointer bg-transparent border-none p-0"
+      <div
+        className="flex items-center gap-3"
         data-config-key={props.key}
         data-field-type="boolean"
-        disabled={props.readonly}
-        onClick={() => {
-          if (props.readonly) return;
-          const next = !localVal;
-          setLocalVal(next);
-          props.onChange(String(next));
-          fireAction(props, "change");
-          fireAction(props, "click");
-        }}
       >
-        <span
+        <Switch
+          checked={localVal}
+          disabled={props.readonly}
           className={cn(
-            "relative inline-flex h-7 w-14 items-center rounded-full border transition-colors",
+            "h-8 w-14 rounded-full",
             localVal
-              ? "border-[var(--warning,#f39c12)] bg-[color-mix(in_srgb,var(--warning,#f39c12)_45%,transparent)]"
+              ? "border-[var(--warning,#f39c12)] bg-[color-mix(in_srgb,var(--warning,#f39c12)_28%,transparent)]"
               : "border-[var(--border)] bg-[var(--bg-hover)]",
           )}
-        >
-          <span
-            className={cn(
-              "inline-block h-6 w-6 rounded-full bg-[var(--card)] transition-transform",
-              localVal ? "translate-x-7" : "translate-x-0.5",
-            )}
-          />
-        </span>
-        <span className="text-[13px] text-[var(--warning,#f39c12)]">
+          onCheckedChange={(next) => {
+            setLocalVal(next);
+            props.onChange(String(next));
+            fireAction(props, "change");
+          }}
+          onClick={() => fireAction(props, "click")}
+        />
+        <span className={cn("text-[13px]", localVal ? "text-[var(--warning,#f39c12)]" : "text-[var(--muted)]")}>
           {localVal ? "Enabled" : "Disabled"}
         </span>
-      </button>
+      </div>
     );
   }
 
@@ -416,7 +540,7 @@ export function renderUrlField(props: FieldRenderProps) {
       : "https://...");
 
   return (
-    <input
+    <Input
       className={inputCls(!!props.errors?.length, props.uiMode)}
       type="url"
       defaultValue={value}
@@ -476,7 +600,7 @@ export function renderSelectField(props: FieldRenderProps) {
   }
 
   return (
-    <select
+    <Select
       className={`${inputCls(!!props.errors?.length, props.uiMode)} appearance-auto pr-10`}
       defaultValue={effectiveValue}
       data-config-key={props.key}
@@ -496,7 +620,7 @@ export function renderSelectField(props: FieldRenderProps) {
           {opt.description ? ` — ${opt.description}` : ""}
         </option>
       ))}
-    </select>
+    </Select>
   );
 }
 
@@ -557,9 +681,13 @@ function SearchableSelectInner({
   return (
     <div className="relative" ref={containerRef}>
       {/* Trigger button that looks like a select */}
-      <button
+      <Button
         type="button"
-        className={`${inputCls(!!props.errors?.length, props.uiMode)} text-left flex items-center justify-between gap-2 cursor-pointer`}
+        variant="outline"
+        className={cn(
+          inputCls(!!props.errors?.length, props.uiMode),
+          "h-11 w-full justify-between px-4 text-left font-normal",
+        )}
         disabled={props.readonly}
         onClick={() => {
           setOpen(!open);
@@ -574,14 +702,14 @@ function SearchableSelectInner({
         <span className="text-[var(--muted)] text-[10px] shrink-0">
           {open ? "\u25B2" : "\u25BC"}
         </span>
-      </button>
+      </Button>
 
       {/* Dropdown panel */}
       {open && (
         <div className="absolute left-0 right-0 z-50 mt-2 max-h-[280px] overflow-hidden rounded-[20px] border border-white/10 bg-black/78 shadow-2xl backdrop-blur-xl">
           {/* Search input */}
           <div className="border-b border-white/10 p-2">
-            <input
+            <Input
               ref={inputRef}
               className={cn(
                 isMinimalMode(props.uiMode)
@@ -701,13 +829,9 @@ function TextareaFieldInner({ fp: props }: { fp: FieldRenderProps }) {
   }, []);
 
   return (
-    <textarea
+    <Textarea
       ref={textareaRef}
-      className={cn(
-        isMinimalMode(props.uiMode)
-          ? "min-h-[88px] max-h-[400px] w-full rounded-[18px] border border-white/10 bg-black/22 px-4 py-3 text-sm text-white/88 outline-none transition-colors placeholder:text-white/30 focus:border-white/18 focus-visible:ring-2 focus-visible:ring-white/16"
-          : "w-full px-2.5 py-[7px] border border-[var(--border)] bg-[var(--card)] text-[13px] font-[var(--mono)] transition-all focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] box-border min-h-[100px] resize-y rounded-sm placeholder:text-[var(--muted)] placeholder:opacity-60",
-      )}
+      className={cn(textareaCls(!!props.errors?.length, props.uiMode), "max-h-[400px]")}
       style={{ fieldSizing: "content" } as React.CSSProperties}
       defaultValue={value}
       placeholder={placeholder}
@@ -735,7 +859,7 @@ export function renderEmailField(props: FieldRenderProps) {
     (props.hint.placeholder as string | undefined) ?? "user@example.com";
 
   return (
-    <input
+    <Input
       className={inputCls(!!props.errors?.length, props.uiMode)}
       type="email"
       defaultValue={value}
@@ -773,7 +897,12 @@ function ColorFieldInner({ fp: props }: { fp: FieldRenderProps }) {
   return (
     <div className="flex items-center gap-2">
       <input
-        className="w-[36px] h-[36px] border border-[var(--border)] p-0.5 cursor-pointer bg-transparent rounded-sm [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-none [&::-webkit-color-swatch]:rounded-sm"
+        className={cn(
+          "h-11 w-14 cursor-pointer rounded-[18px] border p-1 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-none [&::-webkit-color-swatch]:rounded-[14px]",
+          props.uiMode === "minimal"
+            ? "border-white/10 bg-black/22"
+            : "border-[var(--border)] bg-[var(--card)]",
+        )}
         type="color"
         value={color}
         data-config-key={props.key}
@@ -783,7 +912,7 @@ function ColorFieldInner({ fp: props }: { fp: FieldRenderProps }) {
         onBlur={() => fireAction(props, "blur")}
         onClick={() => fireAction(props, "click")}
       />
-      <input
+      <Input
         className={`${inputCls(!!props.errors?.length, props.uiMode)} flex-1`}
         type="text"
         value={color}
@@ -831,60 +960,30 @@ function RadioFieldInner({ fp: props }: { fp: FieldRenderProps }) {
     props.onChange(val);
     fireAction(props, "change");
   };
-
-  if (!isMinimalMode(props.uiMode)) {
-    return (
-      <div data-config-key={props.key} data-field-type="radio" className="flex flex-col gap-2">
-        {options.map((opt) => {
-          const checked = selected === opt.value;
-          return (
-            <label
-              key={opt.value}
-              className={cn(
-                "flex flex-col gap-1 text-[13px] cursor-pointer",
-                props.readonly || opt.disabled ? "opacity-50 pointer-events-none" : "",
-              )}
-            >
-              <span className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name={props.key}
-                  value={opt.value}
-                  checked={checked}
-                  disabled={props.readonly || opt.disabled}
-                  onChange={() => handleChange(opt.value)}
-                  onClick={() => fireAction(props, "click")}
-                  onBlur={() => fireAction(props, "blur")}
-                />
-                <span>{opt.label}</span>
-              </span>
-              {opt.description ? (
-                <span className="pl-6 text-[11px] text-[var(--muted)]">
-                  {opt.description}
-                </span>
-              ) : null}
-            </label>
-          );
-        })}
-      </div>
-    );
-  }
-
   return (
-    <div data-config-key={props.key} data-field-type="radio">
-      <SelectablePillGrid
-        options={options.map((opt) => ({
-          value: opt.value,
-          label: opt.label,
-          description: opt.description,
-          disabled: props.readonly || opt.disabled,
-        }))}
-        value={selected}
-        onChange={(next) => {
-          handleChange(next);
-          fireAction(props, "click");
-        }}
-      />
+    <div
+      data-config-key={props.key}
+      data-field-type="radio"
+      className={cn(
+        "grid gap-2",
+        isMinimalMode(props.uiMode) ? "sm:grid-cols-2" : "",
+      )}
+    >
+      {options.map((opt) => (
+        <SelectionCardButton
+          key={opt.value}
+          label={opt.label}
+          description={opt.description}
+          selected={selected === opt.value}
+          disabled={Boolean(props.readonly || opt.disabled)}
+          uiMode={props.uiMode}
+          onClick={() => {
+            handleChange(opt.value);
+            fireAction(props, "click");
+            fireAction(props, "blur");
+          }}
+        />
+      ))}
     </div>
   );
 }
@@ -946,9 +1045,10 @@ function MultiselectFieldInner({ fp: props }: { fp: FieldRenderProps }) {
       {selectedOptions.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {selectedOptions.map((opt) => (
-            <span
+            <Badge
               key={opt.value}
-              className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] bg-[var(--accent-subtle,rgba(59,130,246,0.1))] text-[var(--accent)] border border-[var(--accent)] border-opacity-30 rounded-full"
+              variant="accent"
+              className="gap-1 normal-case tracking-normal text-[11px]"
             >
               {opt.label}
               {!props.readonly && (
@@ -961,28 +1061,24 @@ function MultiselectFieldInner({ fp: props }: { fp: FieldRenderProps }) {
                   <CloseIcon className="h-3 w-3" />
                 </button>
               )}
-            </span>
+            </Badge>
           ))}
         </div>
       )}
-      {/* Checkbox list */}
-      <div className="flex flex-col gap-1">
+      <div className="grid gap-2 sm:grid-cols-2">
         {options.map((opt) => (
-          <label
+          <SelectionCardButton
             key={opt.value}
-            className="flex items-center gap-2 cursor-pointer text-[13px]"
-          >
-            <input
-              type="checkbox"
-              value={opt.value}
-              checked={selected.has(opt.value)}
-              disabled={props.readonly}
-              onChange={() => toggle(opt.value)}
-              onClick={() => fireAction(props, "click")}
-              onBlur={() => fireAction(props, "blur")}
-            />
-            <span>{opt.label}</span>
-          </label>
+            label={opt.label}
+            selected={selected.has(opt.value)}
+            disabled={Boolean(props.readonly)}
+            uiMode={props.uiMode}
+            onClick={() => {
+              toggle(opt.value);
+              fireAction(props, "click");
+              fireAction(props, "blur");
+            }}
+          />
         ))}
       </div>
     </div>
@@ -998,7 +1094,7 @@ export function renderDateField(props: FieldRenderProps) {
     props.schema.format === "date-time" ? "datetime-local" : "date";
 
   return (
-    <input
+    <Input
       className={inputCls(!!props.errors?.length, props.uiMode)}
       type={inputType}
       defaultValue={value}
@@ -1048,12 +1144,11 @@ function JsonFieldInner({ fp: props }: { fp: FieldRenderProps }) {
 
   return (
     <div>
-      <textarea
-        className={`w-full px-2.5 py-[7px] border ${
-          jsonError || props.errors?.length
-            ? "border-[var(--destructive)]"
-            : "border-[var(--border)]"
-        } bg-[var(--card)] text-[13px] font-mono transition-all focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] box-border min-h-[100px] resize-y rounded-sm`}
+      <Textarea
+        className={cn(
+          textareaCls(!!jsonError || !!props.errors?.length, props.uiMode),
+          "font-mono",
+        )}
         defaultValue={initial}
         placeholder='{"key": "value"}'
         rows={6}
@@ -1085,12 +1180,8 @@ export function renderCodeField(props: FieldRenderProps) {
     (props.hint.placeholder as string | undefined) ?? "Enter code...";
 
   return (
-    <textarea
-      className={`w-full px-2.5 py-[7px] border ${
-        props.errors?.length
-          ? "border-[var(--destructive)]"
-          : "border-[var(--border)]"
-      } bg-[var(--card)] text-[13px] font-mono transition-all focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] box-border min-h-[100px] resize-y rounded-sm`}
+    <Textarea
+      className={cn(textareaCls(!!props.errors?.length, props.uiMode), "font-mono")}
       defaultValue={value}
       placeholder={placeholder}
       rows={6}
@@ -1119,6 +1210,7 @@ function ArrayItem({
   value,
   total,
   hasError,
+  uiMode,
   readonly,
   onChange,
   onRemove,
@@ -1130,6 +1222,7 @@ function ArrayItem({
   value: string;
   total: number;
   hasError: boolean;
+  uiMode?: ConfigFieldUiMode;
   readonly?: boolean;
   onChange: (value: string) => void;
   onRemove: () => void;
@@ -1163,8 +1256,8 @@ function ArrayItem({
           </button>
         </div>
       )}
-      <input
-        className={`${inputCls(hasError)} flex-1`}
+      <Input
+        className={`${inputCls(hasError, uiMode)} flex-1`}
         type="text"
         value={value}
         placeholder={`Item ${index + 1}`}
@@ -1173,14 +1266,16 @@ function ArrayItem({
         onBlur={onBlur}
       />
       {!readonly && (
-        <button
+        <Button
           type="button"
-          className="inline-flex h-[36px] items-center justify-center rounded-sm border border-[var(--border)] bg-[var(--bg-hover)] px-2 py-1.5 text-[var(--muted)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--destructive)]"
+          variant="outline"
+          size="sm"
+          className={cn(actionButtonCls(uiMode), "h-[36px] px-2")}
           onClick={onRemove}
           aria-label={`Remove item ${index + 1}`}
         >
           <CloseIcon className="h-3.5 w-3.5" />
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -1235,6 +1330,7 @@ function ArrayFieldInner({ fp: props }: { fp: FieldRenderProps }) {
           value={item}
           total={items.length}
           hasError={!!props.errors?.length}
+          uiMode={props.uiMode}
           readonly={props.readonly}
           onChange={(v) => changeItem(index, v)}
           onRemove={() => {
@@ -1247,16 +1343,18 @@ function ArrayFieldInner({ fp: props }: { fp: FieldRenderProps }) {
         />
       ))}
       {!props.readonly && (
-        <button
+        <Button
           type="button"
-          className="self-start px-3 py-1.5 border border-dashed border-[var(--border)] bg-transparent text-[11px] text-[var(--muted)] cursor-pointer transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text)] hover:border-[var(--accent)] rounded-sm"
+          variant="outline"
+          size="sm"
+          className={cn(actionButtonCls(props.uiMode), "self-start border-dashed text-[11px]")}
           onClick={() => {
             addItem();
             fireAction(props, "click");
           }}
         >
           + Add item
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -1317,8 +1415,8 @@ function KeyValueFieldInner({ fp: props }: { fp: FieldRenderProps }) {
           key={`${pair.key}:${pair.value}`}
           className="flex items-center gap-1"
         >
-          <input
-          className={`${inputCls(!!props.errors?.length, props.uiMode)} flex-1`}
+          <Input
+            className={`${inputCls(!!props.errors?.length, props.uiMode)} flex-1`}
             type="text"
             value={pair.key}
             placeholder="Key"
@@ -1326,7 +1424,7 @@ function KeyValueFieldInner({ fp: props }: { fp: FieldRenderProps }) {
             onChange={(e) => updateRow(index, "key", e.target.value)}
             onBlur={() => fireAction(props, "blur")}
           />
-          <input
+          <Input
             className={`${inputCls(!!props.errors?.length, props.uiMode)} flex-1`}
             type="text"
             value={pair.value}
@@ -1336,9 +1434,11 @@ function KeyValueFieldInner({ fp: props }: { fp: FieldRenderProps }) {
             onBlur={() => fireAction(props, "blur")}
           />
           {!props.readonly && (
-            <button
+            <Button
               type="button"
-              className="inline-flex h-[36px] items-center justify-center rounded-sm border border-[var(--border)] bg-[var(--bg-hover)] px-2 py-1.5 text-[var(--muted)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--destructive)]"
+              variant="outline"
+              size="sm"
+              className={cn(actionButtonCls(props.uiMode), "h-[36px] px-2")}
               onClick={() => {
                 removeRow(index);
                 fireAction(props, "click");
@@ -1346,21 +1446,23 @@ function KeyValueFieldInner({ fp: props }: { fp: FieldRenderProps }) {
               aria-label={`Remove row ${index + 1}`}
             >
               <CloseIcon className="h-3.5 w-3.5" />
-            </button>
+            </Button>
           )}
         </div>
       ))}
       {!props.readonly && (
-        <button
+        <Button
           type="button"
-          className="self-start px-3 py-1.5 border border-dashed border-[var(--border)] bg-transparent text-[11px] text-[var(--muted)] cursor-pointer transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text)] hover:border-[var(--accent)] rounded-sm"
+          variant="outline"
+          size="sm"
+          className={cn(actionButtonCls(props.uiMode), "self-start border-dashed text-[11px]")}
           onClick={() => {
             addRow();
             fireAction(props, "click");
           }}
         >
           + Add row
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -1373,7 +1475,7 @@ export function renderDatetimeField(props: FieldRenderProps) {
   const value = props.isSet ? String(props.value ?? "") : "";
 
   return (
-    <input
+    <Input
       className={inputCls(!!props.errors?.length, props.uiMode)}
       type="datetime-local"
       defaultValue={value}
@@ -1400,8 +1502,8 @@ export function renderFileField(props: FieldRenderProps) {
 
   return (
     <div>
-      <input
-        className={inputCls(!!props.errors?.length)}
+      <Input
+        className={inputCls(!!props.errors?.length, props.uiMode)}
         type="text"
         defaultValue={value}
         placeholder={placeholder}
@@ -1614,28 +1716,32 @@ function MarkdownFieldInner(props: FieldRenderProps) {
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center gap-2 mb-1">
-        <button
+        <Button
           type="button"
-          className={`text-[11px] px-2 py-0.5 border transition-colors ${
+          variant={!preview ? "secondary" : "outline"}
+          size="sm"
+          className={`h-8 px-3 text-[11px] ${
             !preview
-              ? "bg-[var(--accent)] text-[var(--accent-fg)] border-[var(--accent)]"
-              : "bg-transparent text-[var(--muted)] border-[var(--border)] hover:text-[var(--txt)]"
+              ? ""
+              : "text-[var(--muted)] hover:text-[var(--txt)]"
           }`}
           onClick={() => setPreview(false)}
         >
           Edit
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className={`text-[11px] px-2 py-0.5 border transition-colors ${
+          variant={preview ? "secondary" : "outline"}
+          size="sm"
+          className={`h-8 px-3 text-[11px] ${
             preview
-              ? "bg-[var(--accent)] text-[var(--accent-fg)] border-[var(--accent)]"
-              : "bg-transparent text-[var(--muted)] border-[var(--border)] hover:text-[var(--txt)]"
+              ? ""
+              : "text-[var(--muted)] hover:text-[var(--txt)]"
           }`}
           onClick={() => setPreview(true)}
         >
           Preview
-        </button>
+        </Button>
       </div>
       {preview ? (
         <div
@@ -1652,8 +1758,8 @@ function MarkdownFieldInner(props: FieldRenderProps) {
           )}
         </div>
       ) : (
-        <textarea
-          className={`${inputCls(!!props.errors?.length, props.uiMode)} min-h-[100px] h-auto resize-y font-[var(--mono)]`}
+        <Textarea
+          className={`${textareaCls(!!props.errors?.length, props.uiMode)} h-auto resize-y font-[var(--mono)]`}
           defaultValue={value}
           placeholder={props.hint.placeholder ?? "Markdown content..."}
           data-config-key={props.key}
@@ -1707,35 +1813,24 @@ function CheckboxGroupInner(props: FieldRenderProps) {
 
   return (
     <div
-      className="flex flex-col gap-1.5"
+      className="flex flex-col gap-2"
       data-config-key={props.key}
       data-field-type="checkbox-group"
     >
       {options.map((opt) => (
-        <label
+        <SelectionCardButton
           key={opt.value}
-          className={`flex items-start gap-2.5 px-3 py-2 border border-[var(--border)] bg-[var(--card)] cursor-pointer transition-colors hover:bg-[var(--bg-hover)] ${
-            selected.has(opt.value)
-              ? "border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_5%,var(--card))]"
-              : ""
-          } ${opt.disabled ? "opacity-50 pointer-events-none" : ""}`}
-        >
-          <input
-            type="checkbox"
-            checked={selected.has(opt.value)}
-            disabled={props.readonly || opt.disabled}
-            onChange={() => toggle(opt.value)}
-            className="mt-0.5 accent-[var(--accent)]"
-          />
-          <div className="flex flex-col">
-            <span className="text-[13px]">{opt.label}</span>
-            {opt.description && (
-              <span className="text-[11px] text-[var(--muted)] mt-0.5">
-                {opt.description}
-              </span>
-            )}
-          </div>
-        </label>
+          label={opt.label}
+          description={opt.description}
+          selected={selected.has(opt.value)}
+          disabled={Boolean(props.readonly || opt.disabled)}
+          uiMode={props.uiMode}
+          onClick={() => {
+            toggle(opt.value);
+            fireAction(props, "click");
+            fireAction(props, "blur");
+          }}
+        />
       ))}
       {options.length === 0 && (
         <span className="text-[11px] text-[var(--muted)] italic">
@@ -1764,8 +1859,8 @@ export const renderGroupField: FieldRenderer = (props) => {
       <legend className="text-[12px] font-semibold text-[var(--muted)] px-1.5">
         {props.hint.label ?? props.key}
       </legend>
-      <textarea
-        className={`${inputCls(!!props.errors?.length)} min-h-[60px] h-auto resize-y`}
+      <Textarea
+        className={`${textareaCls(!!props.errors?.length, props.uiMode)} min-h-[60px] h-auto resize-y`}
         defaultValue={value}
         placeholder={props.hint.placeholder ?? "Group configuration..."}
         disabled={props.readonly}
@@ -1851,8 +1946,8 @@ function TableFieldInner(props: FieldRenderProps) {
               >
                 {columns.map((col) => (
                   <td key={col.key} className="px-1 py-0.5">
-                    <input
-                      className="w-full px-2 py-1 bg-transparent text-[13px] border-none outline-none focus:bg-[var(--bg-hover)]"
+                    <Input
+                      className="h-9 w-full border-transparent bg-transparent px-2 py-1 text-[13px] focus:border-white/12 focus:bg-white/[0.04] focus-visible:ring-0"
                       value={row[col.key] ?? ""}
                       placeholder={col.label}
                       disabled={props.readonly}
@@ -1862,14 +1957,16 @@ function TableFieldInner(props: FieldRenderProps) {
                 ))}
                 <td className="text-center">
                   {!props.readonly && rows.length > 1 && (
-                    <button
+                    <Button
                       type="button"
-                      className="text-[var(--muted)] hover:text-[var(--destructive)] text-[14px] px-1"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2 text-[var(--muted)] hover:text-[var(--destructive)]"
                       onClick={() => removeRow(ri)}
                       title="Remove row"
                     >
                       &times;
-                    </button>
+                    </Button>
                   )}
                 </td>
               </tr>
@@ -1878,13 +1975,15 @@ function TableFieldInner(props: FieldRenderProps) {
         </table>
       </div>
       {!props.readonly && rows.length < MAX_TABLE_ROWS && (
-        <button
+        <Button
           type="button"
-          className="self-start text-[11px] text-[var(--accent)] hover:underline"
+          variant="ghost"
+          size="sm"
+          className="self-start h-8 px-0 text-[11px] text-[var(--accent)] hover:bg-transparent hover:underline"
           onClick={addRow}
         >
           + Add row
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -1937,7 +2036,7 @@ export function ConfigField({
   renderer: FieldRenderer;
   pluginId?: string;
 }) {
-  const label = renderProps.hint.label ?? renderProps.key;
+  const label = sanitizeFieldLabel(renderProps.hint.label ?? renderProps.key, renderProps.key);
   const envKey = renderProps.key;
   const labelDiffersFromKey = label !== envKey;
   const errors = renderProps.errors ?? [];
@@ -1950,6 +2049,9 @@ export function ConfigField({
 
   const uiMode = renderProps.uiMode ?? "legacy";
   const fieldHelp = renderProps.hint.help ?? renderProps.schema.description;
+  const channelIcon = hasStream555ChannelIcon(renderProps.key) ? (
+    <Stream555ChannelIcon fieldKey={renderProps.key} />
+  ) : null;
   const helpContent =
     fieldHelp || labelDiffersFromKey ? (
       <div className="space-y-1">
@@ -1984,9 +2086,12 @@ export function ConfigField({
         )}
       >
         <div className="mb-2 flex flex-wrap items-center gap-2">
-          <span className="text-[13px] font-semibold leading-tight text-[var(--text)]">
-            {label}
-          </span>
+          <div className="flex items-center gap-2">
+            {channelIcon}
+            <span className="text-[13px] font-semibold leading-tight text-[var(--text)]">
+              {label}
+            </span>
+          </div>
           {renderProps.required && !renderProps.isSet ? (
             <span className="text-[10px] uppercase tracking-[0.14em] text-[var(--warning,#f39c12)]">
               Required
@@ -2031,7 +2136,10 @@ export function ConfigField({
 
   const labelContent = (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-sm font-semibold leading-tight text-white/88">{label}</span>
+      <div className="flex items-center gap-2">
+        {channelIcon}
+        <span className="text-sm font-semibold leading-tight text-white/88">{label}</span>
+      </div>
       {renderProps.required && !renderProps.isSet ? (
         <Badge variant="danger" className="px-2 py-0.5 text-[9px] tracking-[0.16em]">
           Required
