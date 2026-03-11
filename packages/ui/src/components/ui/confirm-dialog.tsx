@@ -53,45 +53,45 @@ export function ConfirmDialog({
 
   if (!open) return null;
 
-    return (
-        <div
-            className="fixed inset-0 flex items-center justify-center bg-black/40"
-            style={{ zIndex: 10001 }}
-            onClick={(e) => {
-                if (e.target === e.currentTarget) onCancel()
-            }}
-            onKeyDown={handleKeyDown}
-            role="dialog"
-            aria-modal="true"
-            aria-label={title}
-            tabIndex={-1}
-        >
-            <div className="mx-4 w-full max-w-md rounded-lg border border-border bg-bg p-6 shadow-2xl">
-                <h2 className="mb-3 text-base font-bold">{title}</h2>
-                <p className="mb-6 whitespace-pre-line text-sm text-muted">{message}</p>
-                <div className="flex items-center justify-end gap-3">
-                    <button
-                        type="button"
-                        onClick={onCancel}
-                        className="rounded-md border border-border px-4 py-2 text-sm transition-colors hover:bg-bg-hover"
-                    >
-                        {cancelLabel}
-                    </button>
-                    <button
-                        ref={confirmRef}
-                        type="button"
-                        onClick={onConfirm}
-                        className={cn(
-                            "rounded-md px-4 py-2 text-sm font-medium transition-opacity",
-                            TONE_STYLES[tone],
-                        )}
-                    >
-                        {confirmLabel}
-                    </button>
-                </div>
-            </div>
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center bg-black/40"
+      style={{ zIndex: 10001 }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCancel();
+      }}
+      onKeyDown={handleKeyDown}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      tabIndex={-1}
+    >
+      <div className="mx-4 w-full max-w-md rounded-lg border border-border bg-bg p-6 shadow-2xl">
+        <h2 className="mb-3 text-base font-bold">{title}</h2>
+        <p className="mb-6 whitespace-pre-line text-sm text-muted">{message}</p>
+        <div className="flex items-center justify-end gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-md border border-border px-4 py-2 text-sm transition-colors hover:bg-bg-hover"
+          >
+            {cancelLabel}
+          </button>
+          <button
+            ref={confirmRef}
+            type="button"
+            onClick={onConfirm}
+            className={cn(
+              "rounded-md px-4 py-2 text-sm font-medium transition-opacity",
+              TONE_STYLES[tone],
+            )}
+          >
+            {confirmLabel}
+          </button>
         </div>
-    );
+      </div>
+    </div>
+  );
 }
 
 /* ── useConfirm hook ─────────────────────────────────────────────────── */

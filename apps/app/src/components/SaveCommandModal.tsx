@@ -91,12 +91,20 @@ export function SaveCommandModal({
           background: "rgba(18, 22, 32, 0.96)",
           border: "1px solid rgba(240, 178, 50, 0.18)",
           backdropFilter: "blur(24px)",
-          boxShadow: "0 8px 60px rgba(0,0,0,0.6), 0 0 40px rgba(240,178,50,0.06)",
+          boxShadow:
+            "0 8px 60px rgba(0,0,0,0.6), 0 0 40px rgba(240,178,50,0.06)",
         }}
       >
         {/* Header */}
-        <div className="flex items-center px-5 py-3 shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-          <span id={dialogTitleId} className="font-bold text-sm flex-1" style={{ color: "rgba(240,238,250,0.92)" }}>
+        <div
+          className="flex items-center px-5 py-3 shrink-0"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}
+        >
+          <span
+            id={dialogTitleId}
+            className="font-bold text-sm flex-1"
+            style={{ color: "rgba(240,238,250,0.92)" }}
+          >
             {t("savecommandmodal.SaveAsCommand")}
           </span>
           <button
@@ -121,7 +129,12 @@ export function SaveCommandModal({
             {t("savecommandmodal.CommandName")}
           </label>
           <div className="flex items-center gap-1">
-            <span className="text-sm" style={{ color: "rgba(255,255,255,0.45)" }}>/</span>
+            <span
+              className="text-sm"
+              style={{ color: "rgba(255,255,255,0.45)" }}
+            >
+              /
+            </span>
             <Input
               id={inputId}
               ref={inputRef}
@@ -137,32 +150,54 @@ export function SaveCommandModal({
               aria-describedby={error ? inputErrorId : undefined}
               aria-invalid={error ? "true" : undefined}
               className="flex-1 h-8 text-sm shadow-sm"
-              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(240,238,250,0.92)" }}
+              style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                color: "rgba(240,238,250,0.92)",
+              }}
             />
           </div>
           {error && (
-            <p id={inputErrorId} className="text-xs" style={{ color: "#ef4444" }}>
+            <p
+              id={inputErrorId}
+              className="text-xs"
+              style={{ color: "#ef4444" }}
+            >
               {error}
             </p>
           )}
 
-          <span className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.45)" }}>
+          <span
+            className="text-xs mt-1"
+            style={{ color: "rgba(255,255,255,0.45)" }}
+          >
             {t("savecommandmodal.Preview")}
           </span>
           <pre
             className="text-xs px-3 py-2 whitespace-pre-wrap break-words max-h-24 overflow-y-auto"
-            style={{ color: "rgba(255,255,255,0.45)", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
+            style={{
+              color: "rgba(255,255,255,0.45)",
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.08)",
+            }}
           >
             {preview}
           </pre>
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-2 px-5 py-3" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+        <div
+          className="flex justify-end gap-2 px-5 py-3"
+          style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}
+        >
           <button
             type="button"
             className="px-3 py-1.5 h-8 text-xs font-medium rounded cursor-pointer transition-colors"
-            style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.6)" }}
+            style={{
+              background: "transparent",
+              border: "1px solid rgba(255,255,255,0.1)",
+              color: "rgba(255,255,255,0.6)",
+            }}
             onClick={onClose}
           >
             {t("savecommandmodal.Cancel")}

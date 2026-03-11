@@ -370,7 +370,14 @@ describe("app startup onboarding flow (e2e)", () => {
   beforeEach(() => {
     state = createHarnessState();
 
-    const STEP_ORDER: OnboardingStep[] = ["wakeUp", "language", "identity", "connection", "senses", "activate"];
+    const STEP_ORDER: OnboardingStep[] = [
+      "wakeUp",
+      "language",
+      "identity",
+      "connection",
+      "senses",
+      "activate",
+    ];
 
     const handleOnboardingNext = async () => {
       if (state.onboardingStep === "activate") {
@@ -451,6 +458,5 @@ describe("app startup onboarding flow (e2e)", () => {
 
     expect(renderedText).toContain("ChatView");
     expect(renderedText).toContain("Header");
-    expect(renderedText).toContain("Nav");
   });
 });

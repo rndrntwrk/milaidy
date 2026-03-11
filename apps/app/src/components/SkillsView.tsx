@@ -366,30 +366,57 @@ function InstallModal({
       <div
         className="w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden mx-4"
         style={{
-          background: "linear-gradient(148deg, rgba(18,22,34,0.95) 0%, rgba(8,11,20,0.92) 52%, rgba(5,8,14,0.9) 100%)",
+          background:
+            "linear-gradient(148deg, rgba(18,22,34,0.95) 0%, rgba(8,11,20,0.92) 52%, rgba(5,8,14,0.9) 100%)",
           border: "1px solid rgba(255,255,255,0.12)",
           borderRadius: 16,
           backdropFilter: "blur(20px) saturate(115%)",
-          boxShadow: "0 12px 30px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.05)",
+          boxShadow:
+            "0 12px 30px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.05)",
           color: "rgba(247,246,252,0.96)",
         }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+        <div
+          className="flex items-center justify-between px-5 py-4"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}
+        >
           <div>
-            <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "rgba(247,246,252,0.96)" }}>
+            <div
+              style={{
+                fontSize: 13,
+                fontWeight: 800,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: "rgba(247,246,252,0.96)",
+              }}
+            >
               Install Skill
             </div>
-            <div style={{ fontSize: 11, color: "rgba(228,232,245,0.6)", marginTop: 2 }}>
+            <div
+              style={{
+                fontSize: 11,
+                color: "rgba(228,232,245,0.6)",
+                marginTop: 2,
+              }}
+            >
               Add skills from the marketplace or a GitHub repository.
             </div>
           </div>
           <button
             type="button"
             style={{
-              width: 28, height: 28, borderRadius: "50%", border: "1px solid rgba(255,255,255,0.15)",
-              background: "transparent", color: "rgba(255,255,255,0.5)", cursor: "pointer", fontSize: 14,
-              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 28,
+              height: 28,
+              borderRadius: "50%",
+              border: "1px solid rgba(255,255,255,0.15)",
+              background: "transparent",
+              color: "rgba(255,255,255,0.5)",
+              cursor: "pointer",
+              fontSize: 14,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
             onClick={onClose}
           >
@@ -398,7 +425,10 @@ function InstallModal({
         </div>
 
         {/* Tabs */}
-        <div className="flex" style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+        <div
+          className="flex"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}
+        >
           {(
             [
               { id: "search" as const, label: "MARKETPLACE" },
@@ -409,9 +439,16 @@ function InstallModal({
               type="button"
               key={t.id}
               style={{
-                flex: 1, padding: "10px 16px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em",
-                background: "transparent", border: "none", cursor: "pointer",
-                borderBottom: tab === t.id ? "2px solid #f0b232" : "2px solid transparent",
+                flex: 1,
+                padding: "10px 16px",
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: "0.1em",
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                borderBottom:
+                  tab === t.id ? "2px solid #f0b232" : "2px solid transparent",
                 color: tab === t.id ? "#f0b232" : "rgba(255,255,255,0.45)",
                 transition: "color 0.2s, border-color 0.2s",
               }}
@@ -452,14 +489,24 @@ function InstallModal({
               </div>
 
               {skillsMarketplaceError && (
-                <div className="p-2.5 text-xs mb-3" style={{ border: "1px solid #e74c3c", color: "#e74c3c" }}>
+                <div
+                  className="p-2.5 text-xs mb-3"
+                  style={{ border: "1px solid #e74c3c", color: "#e74c3c" }}
+                >
                   {skillsMarketplaceError}
                 </div>
               )}
 
               {skillsMarketplaceResults.length === 0 ? (
                 <div className="text-center py-12">
-                  <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 12, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                  <div
+                    style={{
+                      color: "rgba(255,255,255,0.45)",
+                      fontSize: 12,
+                      letterSpacing: "0.1em",
+                      textTransform: "uppercase",
+                    }}
+                  >
                     Search above to discover skills.
                   </div>
                 </div>
@@ -486,10 +533,23 @@ function InstallModal({
 
           {tab === "url" && (
             <div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: "rgba(247,246,252,0.9)", marginBottom: 4 }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "rgba(247,246,252,0.9)",
+                  marginBottom: 4,
+                }}
+              >
                 GitHub Repository URL
               </div>
-              <div style={{ fontSize: 11, color: "rgba(228,232,245,0.55)", marginBottom: 12 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "rgba(228,232,245,0.55)",
+                  marginBottom: 12,
+                }}
+              >
                 Paste a full GitHub repository URL to install a skill directly.
               </div>
               <div className="flex gap-2 items-center">
@@ -523,7 +583,10 @@ function InstallModal({
               </div>
 
               {skillsMarketplaceError && (
-                <div className="p-2.5 text-xs mt-3" style={{ border: "1px solid #e74c3c", color: "#e74c3c" }}>
+                <div
+                  className="p-2.5 text-xs mt-3"
+                  style={{ border: "1px solid #e74c3c", color: "#e74c3c" }}
+                >
                   {skillsMarketplaceError}
                 </div>
               )}
@@ -706,7 +769,8 @@ function EditSkillModal({
           background: "rgba(18, 22, 32, 0.96)",
           border: "1px solid rgba(240, 178, 50, 0.18)",
           backdropFilter: "blur(24px)",
-          boxShadow: "0 8px 60px rgba(0,0,0,0.6), 0 0 40px rgba(240,178,50,0.06)",
+          boxShadow:
+            "0 8px 60px rgba(0,0,0,0.6), 0 0 40px rgba(240,178,50,0.06)",
         }}
       >
         {/* Header */}
@@ -715,7 +779,10 @@ function EditSkillModal({
           style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}
         >
           <div className="flex items-center gap-3 min-w-0">
-            <div className="font-semibold text-sm truncate" style={{ color: "rgba(240,238,250,0.92)" }}>
+            <div
+              className="font-semibold text-sm truncate"
+              style={{ color: "rgba(240,238,250,0.92)" }}
+            >
               {skillName}
             </div>
             <span
@@ -730,13 +797,19 @@ function EditSkillModal({
               {t("skillsview.SKILLMd")}
             </span>
             {hasChanges && (
-              <span className="text-[10px] font-medium" style={{ color: "#f0b232" }}>
+              <span
+                className="text-[10px] font-medium"
+                style={{ color: "#f0b232" }}
+              >
                 {t("skillsview.unsaved")}
               </span>
             )}
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.45)" }}>
+            <span
+              className="text-[10px]"
+              style={{ color: "rgba(255,255,255,0.45)" }}
+            >
               {navigator.platform.includes("Mac") ? "⌘S" : "Ctrl+S"}{" "}
               {t("skillsview.toSave")}
             </span>
@@ -744,8 +817,12 @@ function EditSkillModal({
               type="button"
               className="bg-transparent border-0 cursor-pointer text-lg px-2 transition-colors"
               style={{ color: "rgba(255,255,255,0.45)" }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = "rgba(240,238,250,0.92)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = "rgba(255,255,255,0.45)"; }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = "rgba(240,238,250,0.92)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = "rgba(255,255,255,0.45)";
+              }}
               onClick={onClose}
             >
               ×
@@ -756,12 +833,17 @@ function EditSkillModal({
         {/* Editor body */}
         <div className="flex-1 overflow-hidden">
           {loading ? (
-            <div className="flex items-center justify-center h-full text-sm" style={{ color: "rgba(255,255,255,0.45)" }}>
+            <div
+              className="flex items-center justify-center h-full text-sm"
+              style={{ color: "rgba(255,255,255,0.45)" }}
+            >
               {t("skillsview.LoadingSkillSource")}
             </div>
           ) : error && !content ? (
             <div className="flex flex-col items-center justify-center h-full gap-3">
-              <div className="text-sm font-medium" style={{ color: "#ef4444" }}>{error}</div>
+              <div className="text-sm font-medium" style={{ color: "#ef4444" }}>
+                {error}
+              </div>
               <button
                 type="button"
                 className="px-3 py-1.5 text-xs font-medium rounded cursor-pointer transition-colors"
@@ -795,10 +877,15 @@ function EditSkillModal({
           className="flex items-center justify-between px-5 py-3 shrink-0"
           style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}
         >
-          <div className="text-[11px]" style={{ color: "rgba(255,255,255,0.45)" }}>
+          <div
+            className="text-[11px]"
+            style={{ color: "rgba(255,255,255,0.45)" }}
+          >
             {content ? `${content.split("\n").length} lines` : ""}
             {error && content ? (
-              <span className="ml-3" style={{ color: "#ef4444" }}>{error}</span>
+              <span className="ml-3" style={{ color: "#ef4444" }}>
+                {error}
+              </span>
             ) : null}
           </div>
           <div className="flex items-center gap-2">
@@ -880,15 +967,23 @@ function SkillsModalView() {
     return skills.filter((s) => {
       if (filterTab === "on" && !s.enabled) return false;
       if (filterTab === "off" && s.enabled) return false;
-      if (searchLower && !s.name.toLowerCase().includes(searchLower) && !(s.description ?? "").toLowerCase().includes(searchLower)) return false;
+      if (
+        searchLower &&
+        !s.name.toLowerCase().includes(searchLower) &&
+        !(s.description ?? "").toLowerCase().includes(searchLower)
+      )
+        return false;
       return true;
     });
   }, [skills, filterText, filterTab]);
 
-  const effectiveSelectedId = selectedId && filtered.find((s) => s.id === selectedId)
-    ? selectedId
-    : filtered[0]?.id ?? null;
-  const selected = effectiveSelectedId ? skills.find((s) => s.id === effectiveSelectedId) ?? null : null;
+  const effectiveSelectedId =
+    selectedId && filtered.find((s) => s.id === selectedId)
+      ? selectedId
+      : (filtered[0]?.id ?? null);
+  const selected = effectiveSelectedId
+    ? (skills.find((s) => s.id === effectiveSelectedId) ?? null)
+    : null;
 
   const tabs: { key: typeof filterTab; label: string }[] = [
     { key: "all", label: `ALL (${skills.length})` },
@@ -902,7 +997,9 @@ function SkillsModalView() {
       <div className="plugins-game-list-panel">
         <div className="plugins-game-list-head">
           <div className="plugins-game-section-title">Talents</div>
-          <div className="plugins-game-section-meta">{skills.length} installed</div>
+          <div className="plugins-game-section-meta">
+            {skills.length} installed
+          </div>
         </div>
 
         {/* Search + Install */}
@@ -959,7 +1056,9 @@ function SkillsModalView() {
                 <div className="plugins-game-card-body">
                   <div className="plugins-game-card-name">{skill.name}</div>
                   <div className="plugins-game-card-meta">
-                    <span className={`plugins-game-badge ${skill.enabled ? "is-on" : "is-off"}`}>
+                    <span
+                      className={`plugins-game-badge ${skill.enabled ? "is-on" : "is-off"}`}
+                    >
                       {skill.enabled ? "ON" : "OFF"}
                     </span>
                   </div>
@@ -982,15 +1081,23 @@ function SkillsModalView() {
                   </span>
                 </div>
                 <div className="plugins-game-detail-main">
-                  <div className="plugins-game-detail-name">{selected.name}</div>
+                  <div className="plugins-game-detail-name">
+                    {selected.name}
+                  </div>
                 </div>
                 <button
                   type="button"
                   className={`plugins-game-toggle ${selected.enabled ? "is-on" : "is-off"}`}
-                  onClick={() => handleSkillToggle(selected.id, !selected.enabled)}
+                  onClick={() =>
+                    handleSkillToggle(selected.id, !selected.enabled)
+                  }
                   disabled={skillToggleAction === selected.id}
                 >
-                  {skillToggleAction === selected.id ? "..." : selected.enabled ? "ON" : "OFF"}
+                  {skillToggleAction === selected.id
+                    ? "..."
+                    : selected.enabled
+                      ? "ON"
+                      : "OFF"}
                 </button>
               </div>
             </div>
@@ -1025,34 +1132,36 @@ function SkillsModalView() {
       </div>
 
       {/* Portal modals to body so they escape the 3D transform stacking context */}
-      {editingSkill && createPortal(
-        <EditSkillModal
-          skillId={editingSkill.id}
-          skillName={editingSkill.name}
-          onClose={() => setEditingSkill(null)}
-          onSaved={() => void refreshSkills()}
-        />,
-        document.body,
-      )}
+      {editingSkill &&
+        createPortal(
+          <EditSkillModal
+            skillId={editingSkill.id}
+            skillName={editingSkill.name}
+            onClose={() => setEditingSkill(null)}
+            onSaved={() => void refreshSkills()}
+          />,
+          document.body,
+        )}
 
-      {installModalOpen && createPortal(
-        <InstallModal
-          skills={skills}
-          skillsMarketplaceQuery={skillsMarketplaceQuery}
-          skillsMarketplaceResults={skillsMarketplaceResults}
-          skillsMarketplaceError={skillsMarketplaceError}
-          skillsMarketplaceLoading={skillsMarketplaceLoading}
-          skillsMarketplaceAction={skillsMarketplaceAction}
-          skillsMarketplaceManualGithubUrl={skillsMarketplaceManualGithubUrl}
-          searchSkillsMarketplace={searchSkillsMarketplace}
-          installSkillFromMarketplace={installSkillFromMarketplace}
-          uninstallMarketplaceSkill={uninstallMarketplaceSkill}
-          installSkillFromGithubUrl={installSkillFromGithubUrl}
-          setState={setState}
-          onClose={() => setInstallModalOpen(false)}
-        />,
-        document.body,
-      )}
+      {installModalOpen &&
+        createPortal(
+          <InstallModal
+            skills={skills}
+            skillsMarketplaceQuery={skillsMarketplaceQuery}
+            skillsMarketplaceResults={skillsMarketplaceResults}
+            skillsMarketplaceError={skillsMarketplaceError}
+            skillsMarketplaceLoading={skillsMarketplaceLoading}
+            skillsMarketplaceAction={skillsMarketplaceAction}
+            skillsMarketplaceManualGithubUrl={skillsMarketplaceManualGithubUrl}
+            searchSkillsMarketplace={searchSkillsMarketplace}
+            installSkillFromMarketplace={installSkillFromMarketplace}
+            uninstallMarketplaceSkill={uninstallMarketplaceSkill}
+            installSkillFromGithubUrl={installSkillFromGithubUrl}
+            setState={setState}
+            onClose={() => setInstallModalOpen(false)}
+          />,
+          document.body,
+        )}
     </div>
   );
 }

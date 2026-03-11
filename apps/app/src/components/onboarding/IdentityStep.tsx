@@ -2,9 +2,21 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../../AppContext";
 
 const FALLBACK_NAMES = [
-  "Eliza", "Nova", "Aria", "Lyra", "Mira",
-  "Kira", "Sora", "Yuki", "Rei", "Hana",
-  "Nyx", "Echo", "Luna", "Zara", "Iris",
+  "Eliza",
+  "Nova",
+  "Aria",
+  "Lyra",
+  "Mira",
+  "Kira",
+  "Sora",
+  "Yuki",
+  "Rei",
+  "Hana",
+  "Nyx",
+  "Echo",
+  "Luna",
+  "Zara",
+  "Iris",
 ];
 
 function pickRandomName(pool: string[]): string {
@@ -12,7 +24,13 @@ function pickRandomName(pool: string[]): string {
 }
 
 export function IdentityStep() {
-  const { onboardingName, onboardingOptions, handleOnboardingNext, handleOnboardingBack, setState } = useApp();
+  const {
+    onboardingName,
+    onboardingOptions,
+    handleOnboardingNext,
+    handleOnboardingBack,
+    setState,
+  } = useApp();
 
   const hasPickedRef = useRef(false);
   const [revealed, setRevealed] = useState(false);
@@ -61,7 +79,8 @@ export function IdentityStep() {
     const serverNames = onboardingOptions?.names ?? [];
     const pool = serverNames.length > 0 ? serverNames : FALLBACK_NAMES;
     // Avoid picking the same name
-    const filtered = pool.length > 1 ? pool.filter((n) => n !== onboardingName) : pool;
+    const filtered =
+      pool.length > 1 ? pool.filter((n) => n !== onboardingName) : pool;
     const chosen = pickRandomName(filtered);
     setState("onboardingName", chosen);
     setRevealed(false);
@@ -75,7 +94,10 @@ export function IdentityStep() {
         <div className="onboarding-divider-diamond" />
       </div>
 
-      <div className="onboarding-question" style={{ fontSize: 14, fontWeight: 400, marginBottom: 8 }}>
+      <div
+        className="onboarding-question"
+        style={{ fontSize: 14, fontWeight: 400, marginBottom: 8 }}
+      >
         My name is
       </div>
 
@@ -106,7 +128,13 @@ export function IdentityStep() {
         )}
       </div>
 
-      <div style={{ textAlign: "center", opacity: revealed ? 1 : 0, transition: "opacity 0.5s" }}>
+      <div
+        style={{
+          textAlign: "center",
+          opacity: revealed ? 1 : 0,
+          transition: "opacity 0.5s",
+        }}
+      >
         <button
           type="button"
           className="onboarding-back-link"
@@ -117,12 +145,19 @@ export function IdentityStep() {
         </button>
       </div>
 
-      <p className="onboarding-desc" style={{ opacity: revealed ? 1 : 0, transition: "opacity 0.5s" }}>
+      <p
+        className="onboarding-desc"
+        style={{ opacity: revealed ? 1 : 0, transition: "opacity 0.5s" }}
+      >
         You can rename me anytime in settings.
       </p>
 
       <div className="onboarding-panel-footer">
-        <button className="onboarding-back-link" onClick={handleOnboardingBack} type="button">
+        <button
+          className="onboarding-back-link"
+          onClick={handleOnboardingBack}
+          type="button"
+        >
           ← Back
         </button>
         <button

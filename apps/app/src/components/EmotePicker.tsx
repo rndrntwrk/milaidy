@@ -394,8 +394,14 @@ export function EmotePicker() {
         onPointerDown={onPointerDown}
       >
         <div className="flex items-center gap-2">
-          <Menu className="w-4 h-4" style={{ color: "rgba(255,255,255,0.45)" }} />
-          <span className="text-sm font-semibold" style={{ color: "rgba(240,238,250,0.92)" }}>
+          <Menu
+            className="w-4 h-4"
+            style={{ color: "rgba(255,255,255,0.45)" }}
+          />
+          <span
+            className="text-sm font-semibold"
+            style={{ color: "rgba(240,238,250,0.92)" }}
+          >
             {t("emotepicker.Emotes")}
           </span>
         </div>
@@ -412,15 +418,21 @@ export function EmotePicker() {
           </button>
 
           {/* Shortcut label */}
-          <span className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>⌘E</span>
+          <span className="text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>
+            ⌘E
+          </span>
 
           {/* Close button */}
           <button
             type="button"
             onClick={closeEmotePicker}
             style={{ color: "rgba(255,255,255,0.45)" }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "rgba(240,238,250,0.92)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = "rgba(255,255,255,0.45)"; }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = "rgba(240,238,250,0.92)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = "rgba(255,255,255,0.45)";
+            }}
           >
             <X className="w-4 h-4" />
           </button>
@@ -428,7 +440,10 @@ export function EmotePicker() {
       </div>
 
       {/* Search */}
-      <div className="px-3 py-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+      <div
+        className="px-3 py-2"
+        style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}
+      >
         <input
           ref={inputRef}
           type="text"
@@ -454,7 +469,8 @@ export function EmotePicker() {
           onClick={() => setActiveCategory(null)}
           className="shrink-0 rounded px-2 py-1 text-xs font-medium transition-colors"
           style={{
-            background: activeCategory === null ? "#f0b232" : "rgba(255,255,255,0.06)",
+            background:
+              activeCategory === null ? "#f0b232" : "rgba(255,255,255,0.06)",
             color: activeCategory === null ? "#000" : "rgba(255,255,255,0.6)",
           }}
         >
@@ -467,7 +483,8 @@ export function EmotePicker() {
             onClick={() => setActiveCategory(cat)}
             className="shrink-0 rounded px-2 py-1 text-xs font-medium transition-colors"
             style={{
-              background: activeCategory === cat ? "#f0b232" : "rgba(255,255,255,0.06)",
+              background:
+                activeCategory === cat ? "#f0b232" : "rgba(255,255,255,0.06)",
               color: activeCategory === cat ? "#000" : "rgba(255,255,255,0.6)",
             }}
           >
@@ -489,7 +506,8 @@ export function EmotePicker() {
               title={emote.name}
               className="flex aspect-square items-center justify-center rounded text-2xl transition-colors"
               style={{
-                background: playing === emote.id ? "#f0b232" : "rgba(255,255,255,0.06)",
+                background:
+                  playing === emote.id ? "#f0b232" : "rgba(255,255,255,0.06)",
               }}
             >
               {emote.icon}
@@ -498,7 +516,10 @@ export function EmotePicker() {
         </div>
 
         {filteredEmotes.length === 0 && (
-          <div className="py-8 text-center text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>
+          <div
+            className="py-8 text-center text-sm"
+            style={{ color: "rgba(255,255,255,0.3)" }}
+          >
             {t("emotepicker.NoEmotesFound")}
           </div>
         )}

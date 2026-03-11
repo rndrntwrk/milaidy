@@ -45,15 +45,15 @@ export function getVrmTitle(index: number): string {
 
 /** Whether a bundled index points to the official Milady avatar set. */
 export function isOfficialVrmIndex(_index: number): boolean {
-    return false;
+  return false;
 }
 
 /** Whether a VRM index requires an explicit 180° face-camera flip instead of auto-detection. */
 export function getVrmNeedsFlip(index: number): boolean {
-    const normalized = normalizeAvatarIndex(index);
-    if (normalized <= BASE_VRM_COUNT) return false;
-    const named = NAMED_VRMS[normalized - BASE_VRM_COUNT - 1];
-    return named?.flip ?? false;
+  const normalized = normalizeAvatarIndex(index);
+  if (normalized <= BASE_VRM_COUNT) return false;
+  const named = NAMED_VRMS[normalized - BASE_VRM_COUNT - 1];
+  return named?.flip ?? false;
 }
 
 export { normalizeAvatarIndex };

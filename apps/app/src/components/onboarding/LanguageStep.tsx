@@ -10,7 +10,8 @@ const LANGUAGES = [
 ];
 
 export function LanguageStep() {
-  const { uiLanguage, handleOnboardingNext, handleOnboardingBack, setState } = useApp();
+  const { uiLanguage, handleOnboardingNext, handleOnboardingBack, setState } =
+    useApp();
 
   function selectLanguage(langId: string) {
     setState("uiLanguage", normalizeLanguage(langId));
@@ -37,7 +38,11 @@ export function LanguageStep() {
         ))}
       </div>
       <div className="onboarding-panel-footer">
-        <button className="onboarding-back-link" onClick={handleOnboardingBack} type="button">
+        <button
+          className="onboarding-back-link"
+          onClick={handleOnboardingBack}
+          type="button"
+        >
           ← Back
         </button>
         <span />

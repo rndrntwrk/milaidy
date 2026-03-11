@@ -5,7 +5,10 @@ interface AvatarLoaderProps {
   fullScreen?: boolean;
 }
 
-export function AvatarLoader({ label = "Initializing entity", fullScreen = false }: AvatarLoaderProps) {
+export function AvatarLoader({
+  label = "Initializing entity",
+  fullScreen = false,
+}: AvatarLoaderProps) {
   return (
     <div
       style={{
@@ -18,7 +21,15 @@ export function AvatarLoader({ label = "Initializing entity", fullScreen = false
         zIndex: 10,
       }}
     >
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 12, width: 280 }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-start",
+          gap: 12,
+          width: 280,
+        }}
+      >
         {/* LOADING label */}
         <div
           style={{
@@ -36,7 +47,14 @@ export function AvatarLoader({ label = "Initializing entity", fullScreen = false
         </div>
 
         {/* Progress bar */}
-        <div style={{ width: "100%", height: 3, background: "rgba(255, 255, 255, 0.1)", overflow: "hidden" }}>
+        <div
+          style={{
+            width: "100%",
+            height: 3,
+            background: "rgba(255, 255, 255, 0.1)",
+            overflow: "hidden",
+          }}
+        >
           <div
             style={{
               width: "60%",

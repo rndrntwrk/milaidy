@@ -65,8 +65,8 @@ export function WakeUpStep() {
         </div>
 
         <p className="onboarding-desc" style={{ marginBottom: "16px" }}>
-          Select an <code style={{ color: "#f0b90b" }}>.eliza-agent</code> export file and enter
-          the decryption password.
+          Select an <code style={{ color: "#f0b90b" }}>.eliza-agent</code>{" "}
+          export file and enter the decryption password.
         </p>
 
         <input
@@ -94,12 +94,18 @@ export function WakeUpStep() {
         />
 
         {importError && (
-          <p className="onboarding-desc" style={{ color: "rgba(255,100,100,0.8)", marginBottom: "8px" }}>
+          <p
+            className="onboarding-desc"
+            style={{ color: "rgba(255,100,100,0.8)", marginBottom: "8px" }}
+          >
             {importError}
           </p>
         )}
         {importSuccess && (
-          <p className="onboarding-desc" style={{ color: "rgba(100,255,100,0.8)", marginBottom: "8px" }}>
+          <p
+            className="onboarding-desc"
+            style={{ color: "rgba(100,255,100,0.8)", marginBottom: "8px" }}
+          >
             {importSuccess}
           </p>
         )}
@@ -138,12 +144,13 @@ export function WakeUpStep() {
         <div className="onboarding-divider-diamond" />
       </div>
 
-      <div className="onboarding-question" style={{ fontSize: "32px", fontWeight: 400 }}>
+      <div
+        className="onboarding-question"
+        style={{ fontSize: "32px", fontWeight: 400 }}
+      >
         elizaOS
       </div>
-      <p className="onboarding-desc">
-        Your autonomous AI companion awaits.
-      </p>
+      <p className="onboarding-desc">Your autonomous AI companion awaits.</p>
 
       <div className="onboarding-panel-footer">
         <button

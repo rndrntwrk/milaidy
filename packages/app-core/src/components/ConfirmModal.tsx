@@ -60,7 +60,11 @@ export function ConfirmModal({
   const content = (
     <div
       className="fixed inset-0 flex items-center justify-center"
-      style={{ zIndex: 10001, background: "rgba(5,7,12,0.95)", backdropFilter: "blur(24px)" }}
+      style={{
+        zIndex: 10001,
+        background: "rgba(5,7,12,0.95)",
+        backdropFilter: "blur(24px)",
+      }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onCancel();
       }}
@@ -76,17 +80,32 @@ export function ConfirmModal({
           background: "rgba(18, 22, 32, 0.96)",
           border: "1px solid rgba(240, 178, 50, 0.18)",
           backdropFilter: "blur(24px)",
-          boxShadow: "0 8px 60px rgba(0,0,0,0.6), 0 0 40px rgba(240,178,50,0.06)",
+          boxShadow:
+            "0 8px 60px rgba(0,0,0,0.6), 0 0 40px rgba(240,178,50,0.06)",
         }}
       >
-        <h2 className="text-base font-bold mb-3" style={{ color: "rgba(240,238,250,0.92)" }}>{title}</h2>
-        <p className="text-sm whitespace-pre-line mb-6" style={{ color: "rgba(255,255,255,0.45)" }}>{message}</p>
+        <h2
+          className="text-base font-bold mb-3"
+          style={{ color: "rgba(240,238,250,0.92)" }}
+        >
+          {title}
+        </h2>
+        <p
+          className="text-sm whitespace-pre-line mb-6"
+          style={{ color: "rgba(255,255,255,0.45)" }}
+        >
+          {message}
+        </p>
         <div className="flex items-center justify-end gap-3">
           <button
             type="button"
             onClick={onCancel}
             className="px-4 py-2 text-sm rounded-md transition-colors cursor-pointer"
-            style={{ border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.6)", background: "transparent" }}
+            style={{
+              border: "1px solid rgba(255,255,255,0.1)",
+              color: "rgba(255,255,255,0.6)",
+              background: "transparent",
+            }}
           >
             {cancelLabel}
           </button>

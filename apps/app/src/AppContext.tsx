@@ -3254,7 +3254,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const handleOnboardingNext = useCallback(
     async (options?: OnboardingNextOptions) => {
       const STEP_ORDER: OnboardingStep[] = [
-        "wakeUp", "language", "identity", "connection", "senses", "activate"
+        "wakeUp",
+        "language",
+        "identity",
+        "connection",
+        "senses",
+        "activate",
       ];
 
       // Auto-select first style if none chosen
@@ -3280,7 +3285,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         try {
           const permissions = await client.getPermissions();
-          const missingPermissions = getMissingOnboardingPermissions(permissions);
+          const missingPermissions =
+            getMissingOnboardingPermissions(permissions);
           if (missingPermissions.length > 0) {
             const missingLabels = missingPermissions
               .map((id) => ONBOARDING_PERMISSION_LABELS[id] ?? id)
@@ -3319,7 +3325,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const handleOnboardingBack = useCallback(() => {
     const STEP_ORDER: OnboardingStep[] = [
-      "wakeUp", "language", "identity", "connection", "senses", "activate"
+      "wakeUp",
+      "language",
+      "identity",
+      "connection",
+      "senses",
+      "activate",
     ];
 
     const currentIndex = STEP_ORDER.indexOf(onboardingStep);

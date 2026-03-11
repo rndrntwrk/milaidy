@@ -53,8 +53,12 @@ export function RestartBanner() {
           onClick={dismissRestartBanner}
           className="rounded px-3 py-1 text-[12px] transition-colors"
           style={{ color: "rgba(255,255,255,0.6)" }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.08)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "rgba(255,255,255,0.08)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "transparent";
+          }}
         >
           {t("restartbanner.Later")}
         </button>

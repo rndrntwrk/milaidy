@@ -336,7 +336,9 @@ export function App() {
   }
 
   if (onboardingLoading || agentStarting) {
-    const loadingLabel = agentStarting ? "Initializing agent" : "Starting systems";
+    const loadingLabel = agentStarting
+      ? "Initializing agent"
+      : "Starting systems";
     return <AvatarLoader label={loadingLabel} fullScreen />;
   }
 

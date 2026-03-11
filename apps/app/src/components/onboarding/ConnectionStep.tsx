@@ -330,7 +330,14 @@ export function ConnectionStep() {
   return (
     <>
       <div className="onboarding-section-title">
-        <span style={{ display: "flex", alignItems: "center", gap: "0.5rem", justifyContent: "center" }}>
+        <span
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            justifyContent: "center",
+          }}
+        >
           {selectedProvider && (
             <img
               src={getProviderLogo(selectedProvider.id, false)}
@@ -374,10 +381,16 @@ export function ConnectionStep() {
               style={{
                 fontSize: "0.875rem",
                 paddingBottom: "0.5rem",
-                color: onboardingMiladyCloudTab === "login" ? "#f0b90b" : "rgba(240,238,250,0.4)",
+                color:
+                  onboardingMiladyCloudTab === "login"
+                    ? "#f0b90b"
+                    : "rgba(240,238,250,0.4)",
                 background: "none",
                 border: "none",
-                borderBottom: onboardingMiladyCloudTab === "login" ? "2px solid #f0b90b" : "2px solid transparent",
+                borderBottom:
+                  onboardingMiladyCloudTab === "login"
+                    ? "2px solid #f0b90b"
+                    : "2px solid transparent",
                 cursor: "pointer",
               }}
               onClick={() => setState("onboardingMiladyCloudTab", "login")}
@@ -389,8 +402,14 @@ export function ConnectionStep() {
               style={{
                 fontSize: "0.875rem",
                 paddingBottom: "0.5rem",
-                borderBottom: onboardingMiladyCloudTab === "apikey" ? "2px solid #f0b90b" : "2px solid transparent",
-                color: onboardingMiladyCloudTab === "apikey" ? "#f0b90b" : "rgba(240,238,250,0.4)",
+                borderBottom:
+                  onboardingMiladyCloudTab === "apikey"
+                    ? "2px solid #f0b90b"
+                    : "2px solid transparent",
+                color:
+                  onboardingMiladyCloudTab === "apikey"
+                    ? "#f0b90b"
+                    : "rgba(240,238,250,0.4)",
                 background: "none",
                 border: "none",
                 cursor: "pointer",
@@ -418,7 +437,16 @@ export function ConnectionStep() {
                     justifyContent: "center",
                   }}
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <title>Connected</title>
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
@@ -435,19 +463,28 @@ export function ConnectionStep() {
                 </button>
               )}
               {miladyCloudLoginError && (
-                <p style={{ color: "rgb(248,113,113)", fontSize: "0.8125rem", marginTop: "0.5rem" }}>
+                <p
+                  style={{
+                    color: "rgb(248,113,113)",
+                    fontSize: "0.8125rem",
+                    marginTop: "0.5rem",
+                  }}
+                >
                   {miladyCloudLoginError}
                 </p>
               )}
-              <p className="onboarding-desc">
-                Free credits to get started.
-              </p>
+              <p className="onboarding-desc">Free credits to get started.</p>
             </div>
           ) : (
             <div>
               <label
                 htmlFor="miladycloud-apikey"
-                style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.375rem", color: "rgba(240,238,250,0.6)" }}
+                style={{
+                  display: "block",
+                  fontSize: "0.875rem",
+                  marginBottom: "0.375rem",
+                  color: "rgba(240,238,250,0.6)",
+                }}
               >
                 API Key
               </label>
@@ -493,8 +530,14 @@ export function ConnectionStep() {
                 paddingBottom: "0.5rem",
                 background: "none",
                 border: "none",
-                borderBottom: onboardingSubscriptionTab === "token" ? "2px solid #f0b90b" : "2px solid transparent",
-                color: onboardingSubscriptionTab === "token" ? "#f0b90b" : "rgba(240,238,250,0.4)",
+                borderBottom:
+                  onboardingSubscriptionTab === "token"
+                    ? "2px solid #f0b90b"
+                    : "2px solid transparent",
+                color:
+                  onboardingSubscriptionTab === "token"
+                    ? "#f0b90b"
+                    : "rgba(240,238,250,0.4)",
                 cursor: "pointer",
               }}
               onClick={() => setState("onboardingSubscriptionTab", "token")}
@@ -508,8 +551,14 @@ export function ConnectionStep() {
                 paddingBottom: "0.5rem",
                 background: "none",
                 border: "none",
-                borderBottom: onboardingSubscriptionTab === "oauth" ? "2px solid #f0b90b" : "2px solid transparent",
-                color: onboardingSubscriptionTab === "oauth" ? "#f0b90b" : "rgba(240,238,250,0.4)",
+                borderBottom:
+                  onboardingSubscriptionTab === "oauth"
+                    ? "2px solid #f0b90b"
+                    : "2px solid transparent",
+                color:
+                  onboardingSubscriptionTab === "oauth"
+                    ? "#f0b90b"
+                    : "rgba(240,238,250,0.4)",
                 cursor: "pointer",
               }}
               onClick={() => setState("onboardingSubscriptionTab", "oauth")}
@@ -538,12 +587,24 @@ export function ConnectionStep() {
                 onChange={handleApiKeyChange}
                 placeholder="sk-ant-oat01-..."
               />
-              <p className="onboarding-desc" style={{ whiteSpace: "pre-line", textAlign: "left" }}>
-                {"How to get your setup token:\n\n\u2022 Option A: Run  claude setup-token  in your terminal\n\n\u2022 Option B: Go to claude.ai/settings/api \u2192 \"Claude Code\" \u2192 \"Use setup token\""}
+              <p
+                className="onboarding-desc"
+                style={{ whiteSpace: "pre-line", textAlign: "left" }}
+              >
+                {
+                  'How to get your setup token:\n\n\u2022 Option A: Run  claude setup-token  in your terminal\n\n\u2022 Option B: Go to claude.ai/settings/api \u2192 "Claude Code" \u2192 "Use setup token"'
+                }
               </p>
             </>
           ) : anthropicConnected ? (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.75rem" }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "0.75rem",
+              }}
+            >
               <div
                 style={{
                   display: "flex",
@@ -560,7 +621,16 @@ export function ConnectionStep() {
                   justifyContent: "center",
                 }}
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <title>Connected</title>
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
@@ -571,7 +641,14 @@ export function ConnectionStep() {
               </p>
             </div>
           ) : !anthropicOAuthStarted ? (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.75rem" }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "0.75rem",
+              }}
+            >
               <button
                 type="button"
                 className="onboarding-confirm-btn"
@@ -589,8 +666,21 @@ export function ConnectionStep() {
               )}
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.75rem" }}>
-              <p style={{ fontSize: "0.875rem", textAlign: "center", color: "rgba(240,238,250,0.7)" }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "0.75rem",
+              }}
+            >
+              <p
+                style={{
+                  fontSize: "0.875rem",
+                  textAlign: "center",
+                  color: "rgba(240,238,250,0.7)",
+                }}
+              >
                 After logging in, you will receive an authorization code.
                 <br />
                 Copy and paste it below.
@@ -625,7 +715,14 @@ export function ConnectionStep() {
       {onboardingProvider === "openai-subscription" && (
         <div style={{ width: "100%" }}>
           {openaiConnected ? (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.75rem" }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "0.75rem",
+              }}
+            >
               <div
                 style={{
                   display: "flex",
@@ -642,7 +739,16 @@ export function ConnectionStep() {
                   justifyContent: "center",
                 }}
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <title>Connected</title>
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
@@ -653,7 +759,14 @@ export function ConnectionStep() {
               </p>
             </div>
           ) : !openaiOAuthStarted ? (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.75rem" }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "0.75rem",
+              }}
+            >
               <button
                 type="button"
                 className="onboarding-confirm-btn"
@@ -666,7 +779,13 @@ export function ConnectionStep() {
               </p>
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.75rem",
+              }}
+            >
               <div
                 style={{
                   padding: "0.75rem",
@@ -676,10 +795,19 @@ export function ConnectionStep() {
                   borderRadius: "0.25rem",
                 }}
               >
-                <p style={{ fontWeight: "500", marginBottom: "0.25rem", color: "rgba(240,238,250,0.8)" }}>
+                <p
+                  style={{
+                    fontWeight: "500",
+                    marginBottom: "0.25rem",
+                    color: "rgba(240,238,250,0.8)",
+                  }}
+                >
                   Almost there!
                 </p>
-                <p className="onboarding-desc" style={{ lineHeight: "1.5", textAlign: "left" }}>
+                <p
+                  className="onboarding-desc"
+                  style={{ lineHeight: "1.5", textAlign: "left" }}
+                >
                   After logging in, your browser will redirect to{" "}
                   <code
                     style={{
@@ -690,7 +818,8 @@ export function ConnectionStep() {
                   >
                     localhost:1455
                   </code>
-                  . Copy the <strong>entire URL</strong> from your browser's address bar.
+                  . Copy the <strong>entire URL</strong> from your browser's
+                  address bar.
                 </p>
               </div>
               <input
@@ -708,7 +837,13 @@ export function ConnectionStep() {
                   {openaiError}
                 </p>
               )}
-              <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center" }}>
+              <div
+                style={{
+                  display: "flex",
+                  gap: "0.5rem",
+                  justifyContent: "center",
+                }}
+              >
                 <button
                   type="button"
                   className="onboarding-confirm-btn"
@@ -760,7 +895,13 @@ export function ConnectionStep() {
               placeholder="Enter your API key..."
             />
             {apiKeyFormatWarning && (
-              <p style={{ fontSize: "0.75rem", color: "rgb(248,113,113)", marginTop: "0.5rem" }}>
+              <p
+                style={{
+                  fontSize: "0.75rem",
+                  color: "rgb(248,113,113)",
+                  marginTop: "0.5rem",
+                }}
+              >
                 {apiKeyFormatWarning}
               </p>
             )}
@@ -864,7 +1005,13 @@ export function ConnectionStep() {
             >
               Select Model
             </span>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.5rem",
+              }}
+            >
               {onboardingOptions?.openrouterModels?.map(
                 (model: OpenRouterModelOption) => (
                   <button
@@ -875,7 +1022,9 @@ export function ConnectionStep() {
                     style={{ width: "100%" }}
                   >
                     <div>
-                      <div className="onboarding-provider-name">{model.name}</div>
+                      <div className="onboarding-provider-name">
+                        {model.name}
+                      </div>
                       {model.description && (
                         <div className="onboarding-provider-desc">
                           {model.description}

@@ -174,9 +174,7 @@ describe("BugReportModal", () => {
     });
 
     const errorDivs = tree?.root.findAll(
-      (node) =>
-        node.type === "div" &&
-        node.props.style?.color === "#ef4444",
+      (node) => node.type === "div" && node.props.style?.color === "#ef4444",
     );
     expect(errorDivs?.length).toBeGreaterThan(0);
   });

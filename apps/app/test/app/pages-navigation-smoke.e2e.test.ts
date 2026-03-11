@@ -447,20 +447,20 @@ describe("pages navigation smoke (e2e)", () => {
       patch: Partial<HarnessState>;
       token: string;
     }> = [
-        {
-          name: "loading",
-          patch: { onboardingLoading: true, onboardingComplete: false },
-          token: "AvatarLoader",
+      {
+        name: "loading",
+        patch: { onboardingLoading: true, onboardingComplete: false },
+        token: "AvatarLoader",
+      },
+      {
+        name: "pairing",
+        patch: {
+          onboardingLoading: false,
+          onboardingComplete: true,
+          authRequired: true,
         },
-        {
-          name: "pairing",
-          patch: {
-            onboardingLoading: false,
-            onboardingComplete: true,
-            authRequired: true,
-          },
-          token: "PairingView",
-        },
+        token: "PairingView",
+      },
       {
         name: "onboarding",
         patch: {

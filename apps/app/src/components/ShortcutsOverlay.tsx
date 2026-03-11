@@ -81,14 +81,18 @@ export function ShortcutsOverlay() {
           background: "rgba(18, 22, 32, 0.96)",
           border: "1px solid rgba(240, 178, 50, 0.18)",
           backdropFilter: "blur(24px)",
-          boxShadow: "0 8px 60px rgba(0,0,0,0.6), 0 0 40px rgba(240,178,50,0.06)",
+          boxShadow:
+            "0 8px 60px rgba(0,0,0,0.6), 0 0 40px rgba(240,178,50,0.06)",
         }}
       >
         <div
           className="flex items-center justify-between px-5 py-4"
           style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}
         >
-          <h2 className="text-base font-bold" style={{ color: "rgba(240,238,250,0.92)" }}>
+          <h2
+            className="text-base font-bold"
+            style={{ color: "rgba(240,238,250,0.92)" }}
+          >
             {t("shortcutsoverlay.KeyboardShortcuts")}
           </h2>
           <button
@@ -104,7 +108,10 @@ export function ShortcutsOverlay() {
         <div className="p-5 space-y-5">
           {Object.entries(grouped).map(([scope, shortcuts]) => (
             <div key={scope}>
-              <h3 className="text-[11px] uppercase tracking-wide font-medium mb-2" style={{ color: "rgba(255,255,255,0.45)" }}>
+              <h3
+                className="text-[11px] uppercase tracking-wide font-medium mb-2"
+                style={{ color: "rgba(255,255,255,0.45)" }}
+              >
                 {scope}
               </h3>
               <div className="space-y-1">
@@ -113,7 +120,12 @@ export function ShortcutsOverlay() {
                     key={`${s.key}-${s.description}`}
                     className="flex items-center justify-between py-1.5 px-2 rounded"
                   >
-                    <span className="text-sm" style={{ color: "rgba(240,238,250,0.92)" }}>{s.description}</span>
+                    <span
+                      className="text-sm"
+                      style={{ color: "rgba(240,238,250,0.92)" }}
+                    >
+                      {s.description}
+                    </span>
                     <kbd
                       className="inline-flex items-center gap-0.5 px-2 py-0.5 text-[11px] font-mono rounded"
                       style={{

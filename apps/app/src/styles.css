@@ -246,10 +246,18 @@
 }
 
 @keyframes loading-dots {
-  0% { content: ""; }
-  25% { content: "."; }
-  50% { content: ".."; }
-  75% { content: "..."; }
+  0% {
+    content: "";
+  }
+  25% {
+    content: ".";
+  }
+  50% {
+    content: "..";
+  }
+  75% {
+    content: "...";
+  }
 }
 
 /* Progress bar row: bar + percentage */
@@ -301,9 +309,18 @@
 
 /* Avatar loader indeterminate bar */
 @keyframes avatar-loader-progress {
-  0% { width: 20%; opacity: 0.6; }
-  50% { width: 70%; opacity: 1; }
-  100% { width: 20%; opacity: 0.6; }
+  0% {
+    width: 20%;
+    opacity: 0.6;
+  }
+  50% {
+    width: 70%;
+    opacity: 1;
+  }
+  100% {
+    width: 20%;
+    opacity: 0.6;
+  }
 }
 
 /* ── Animation utilities ────────────────────────────────────────────── */

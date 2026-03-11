@@ -4,7 +4,9 @@ import { useApp } from "../../AppContext";
 export function OnboardingStepNav() {
   const { onboardingStep } = useApp();
 
-  const currentIndex = ONBOARDING_STEPS.findIndex((s) => s.id === onboardingStep);
+  const currentIndex = ONBOARDING_STEPS.findIndex(
+    (s) => s.id === onboardingStep,
+  );
 
   return (
     <div className="onboarding-left">

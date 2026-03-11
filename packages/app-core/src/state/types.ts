@@ -60,26 +60,26 @@ import type { Tab } from "../navigation";
 export type UiShellMode = "companion" | "native";
 
 export type OnboardingStep =
-    | "wakeUp"
-    | "language"
-    | "identity"
-    | "connection"
-    | "senses"
-    | "activate";
+  | "wakeUp"
+  | "language"
+  | "identity"
+  | "connection"
+  | "senses"
+  | "activate";
 
 export interface OnboardingStepMeta {
-    id: OnboardingStep;
-    name: string;
-    subtitle: string;
+  id: OnboardingStep;
+  name: string;
+  subtitle: string;
 }
 
 export const ONBOARDING_STEPS: OnboardingStepMeta[] = [
-    { id: "wakeUp", name: "Initialize", subtitle: "System boot" },
-    { id: "language", name: "Language", subtitle: "Communication" },
-    { id: "identity", name: "Identity", subtitle: "Designation" },
-    { id: "connection", name: "Connect", subtitle: "Neural link" },
-    { id: "senses", name: "Access", subtitle: "System permissions" },
-    { id: "activate", name: "Launch", subtitle: "Ready" },
+  { id: "wakeUp", name: "Initialize", subtitle: "System boot" },
+  { id: "language", name: "Language", subtitle: "Communication" },
+  { id: "identity", name: "Identity", subtitle: "Designation" },
+  { id: "connection", name: "Connect", subtitle: "Neural link" },
+  { id: "senses", name: "Access", subtitle: "System permissions" },
+  { id: "activate", name: "Launch", subtitle: "Ready" },
 ];
 
 export interface OnboardingNextOptions {
@@ -417,36 +417,36 @@ export interface AppState {
   importError: string | null;
   importSuccess: string | null;
 
-    // Onboarding
-    onboardingStep: OnboardingStep;
-    onboardingOptions: OnboardingOptions | null;
-    onboardingName: string;
-    onboardingOwnerName: string;
-    onboardingStyle: string;
-    onboardingRunMode: "local-rawdog" | "local-sandbox" | "cloud" | "";
-    onboardingCloudProvider: string;
-    onboardingSmallModel: string;
-    onboardingLargeModel: string;
-    onboardingProvider: string;
-    onboardingApiKey: string;
-    onboardingOpenRouterModel: string;
-    onboardingPrimaryModel: string;
-    onboardingTelegramToken: string;
-    onboardingDiscordToken: string;
-    onboardingWhatsAppSessionPath: string;
-    onboardingTwilioAccountSid: string;
-    onboardingTwilioAuthToken: string;
-    onboardingTwilioPhoneNumber: string;
-    onboardingBlooioApiKey: string;
-    onboardingBlooioPhoneNumber: string;
-    onboardingGithubToken: string;
-    onboardingSubscriptionTab: "token" | "oauth";
-    onboardingMiladyCloudTab: "login" | "apikey";
-    onboardingSelectedChains: Set<string>;
-    onboardingRpcSelections: Record<string, string>;
-    onboardingRpcKeys: Record<string, string>;
-    onboardingAvatar: number;
-    onboardingRestarting: boolean;
+  // Onboarding
+  onboardingStep: OnboardingStep;
+  onboardingOptions: OnboardingOptions | null;
+  onboardingName: string;
+  onboardingOwnerName: string;
+  onboardingStyle: string;
+  onboardingRunMode: "local-rawdog" | "local-sandbox" | "cloud" | "";
+  onboardingCloudProvider: string;
+  onboardingSmallModel: string;
+  onboardingLargeModel: string;
+  onboardingProvider: string;
+  onboardingApiKey: string;
+  onboardingOpenRouterModel: string;
+  onboardingPrimaryModel: string;
+  onboardingTelegramToken: string;
+  onboardingDiscordToken: string;
+  onboardingWhatsAppSessionPath: string;
+  onboardingTwilioAccountSid: string;
+  onboardingTwilioAuthToken: string;
+  onboardingTwilioPhoneNumber: string;
+  onboardingBlooioApiKey: string;
+  onboardingBlooioPhoneNumber: string;
+  onboardingGithubToken: string;
+  onboardingSubscriptionTab: "token" | "oauth";
+  onboardingMiladyCloudTab: "login" | "apikey";
+  onboardingSelectedChains: Set<string>;
+  onboardingRpcSelections: Record<string, string>;
+  onboardingRpcKeys: Record<string, string>;
+  onboardingAvatar: number;
+  onboardingRestarting: boolean;
 
   // Command palette
   commandPaletteOpen: boolean;

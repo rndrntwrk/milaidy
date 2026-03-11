@@ -198,9 +198,11 @@ export function BugReportModal() {
     form.description.trim() && form.stepsToReproduce.trim() && !submitting;
 
   const backdropProps = {
-    className:
-      "fixed inset-0 z-50 flex items-center justify-center",
-    style: { background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" } as React.CSSProperties,
+    className: "fixed inset-0 z-50 flex items-center justify-center",
+    style: {
+      background: "rgba(0,0,0,0.5)",
+      backdropFilter: "blur(4px)",
+    } as React.CSSProperties,
     onClick: (e: React.MouseEvent) => {
       if (e.target === e.currentTarget) close();
     },
@@ -222,11 +224,18 @@ export function BugReportModal() {
             background: "rgba(18, 22, 32, 0.96)",
             border: "1px solid rgba(240, 178, 50, 0.18)",
             backdropFilter: "blur(24px)",
-            boxShadow: "0 8px 60px rgba(0,0,0,0.6), 0 0 40px rgba(240,178,50,0.06)",
+            boxShadow:
+              "0 8px 60px rgba(0,0,0,0.6), 0 0 40px rgba(240,178,50,0.06)",
           }}
         >
-          <div className="flex items-center px-5 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-            <span className="font-bold text-sm flex-1" style={{ color: "rgba(240,238,250,0.92)" }}>
+          <div
+            className="flex items-center px-5 py-3"
+            style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}
+          >
+            <span
+              className="font-bold text-sm flex-1"
+              style={{ color: "rgba(240,238,250,0.92)" }}
+            >
               {t("bugreportmodal.BugReportSubmitted")}
             </span>
             <button
@@ -239,7 +248,10 @@ export function BugReportModal() {
             </button>
           </div>
           <div className="px-5 py-6 text-center">
-            <p className="text-sm mb-3" style={{ color: "rgba(240,238,250,0.92)" }}>
+            <p
+              className="text-sm mb-3"
+              style={{ color: "rgba(240,238,250,0.92)" }}
+            >
               {t("bugreportmodal.YourBugReportHas")}
             </p>
             <a
@@ -252,11 +264,18 @@ export function BugReportModal() {
               {resultUrl}
             </a>
           </div>
-          <div className="flex justify-end px-5 py-3" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+          <div
+            className="flex justify-end px-5 py-3"
+            style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}
+          >
             <button
               type="button"
               className="px-4 py-1.5 text-xs font-medium rounded cursor-pointer transition-colors"
-              style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(240,238,250,0.92)" }}
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                color: "rgba(240,238,250,0.92)",
+              }}
               onClick={close}
             >
               {t("bugreportmodal.Close")}
@@ -275,12 +294,19 @@ export function BugReportModal() {
           background: "rgba(18, 22, 32, 0.96)",
           border: "1px solid rgba(240, 178, 50, 0.18)",
           backdropFilter: "blur(24px)",
-          boxShadow: "0 8px 60px rgba(0,0,0,0.6), 0 0 40px rgba(240,178,50,0.06)",
+          boxShadow:
+            "0 8px 60px rgba(0,0,0,0.6), 0 0 40px rgba(240,178,50,0.06)",
         }}
       >
         {/* Header */}
-        <div className="flex items-center px-5 py-3 shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-          <span className="font-bold text-sm flex-1" style={{ color: "rgba(240,238,250,0.92)" }}>
+        <div
+          className="flex items-center px-5 py-3 shrink-0"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}
+        >
+          <span
+            className="font-bold text-sm flex-1"
+            style={{ color: "rgba(240,238,250,0.92)" }}
+          >
             {t("bugreportmodal.ReportABug")}
           </span>
           <button
@@ -296,7 +322,10 @@ export function BugReportModal() {
         {/* Body */}
         <div className="px-5 py-4 flex flex-col gap-3 overflow-y-auto">
           {errorMsg && (
-            <div className="text-xs px-3 py-2" style={{ color: "#ef4444", border: "1px solid #ef4444" }}>
+            <div
+              className="text-xs px-3 py-2"
+              style={{ color: "#ef4444", border: "1px solid #ef4444" }}
+            >
               {errorMsg}
             </div>
           )}
@@ -423,11 +452,18 @@ export function BugReportModal() {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between gap-2 px-5 py-3 shrink-0" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+        <div
+          className="flex items-center justify-between gap-2 px-5 py-3 shrink-0"
+          style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}
+        >
           <button
             type="button"
             className="px-3 py-1.5 text-xs font-medium rounded cursor-pointer transition-colors"
-            style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.6)" }}
+            style={{
+              background: "transparent",
+              border: "1px solid rgba(255,255,255,0.1)",
+              color: "rgba(255,255,255,0.6)",
+            }}
             onClick={close}
           >
             {t("bugreportmodal.Cancel")}
@@ -436,7 +472,11 @@ export function BugReportModal() {
             <button
               type="button"
               className="px-3 py-1.5 text-xs font-medium rounded cursor-pointer transition-colors disabled:opacity-50"
-              style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(240,238,250,0.92)" }}
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                color: "rgba(240,238,250,0.92)",
+              }}
               onClick={handleCopyAndOpen}
               disabled={!canSubmit}
             >

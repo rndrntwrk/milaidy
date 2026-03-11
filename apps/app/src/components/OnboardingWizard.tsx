@@ -58,7 +58,13 @@ export function OnboardingWizard() {
         strokeWidth="1"
       >
         <path d="M0 18 L0 0 L18 0" />
-        <circle cx="0" cy="0" r="2" fill="rgba(240,185,11,0.25)" stroke="none" />
+        <circle
+          cx="0"
+          cy="0"
+          r="2"
+          fill="rgba(240,185,11,0.25)"
+          stroke="none"
+        />
       </svg>
       <svg
         className="onboarding-corner onboarding-corner--tr"
@@ -68,7 +74,13 @@ export function OnboardingWizard() {
         strokeWidth="1"
       >
         <path d="M0 18 L0 0 L18 0" />
-        <circle cx="0" cy="0" r="2" fill="rgba(240,185,11,0.25)" stroke="none" />
+        <circle
+          cx="0"
+          cy="0"
+          r="2"
+          fill="rgba(240,185,11,0.25)"
+          stroke="none"
+        />
       </svg>
       <svg
         className="onboarding-corner onboarding-corner--bl"
@@ -78,7 +90,13 @@ export function OnboardingWizard() {
         strokeWidth="1"
       >
         <path d="M0 18 L0 0 L18 0" />
-        <circle cx="0" cy="0" r="2" fill="rgba(240,185,11,0.25)" stroke="none" />
+        <circle
+          cx="0"
+          cy="0"
+          r="2"
+          fill="rgba(240,185,11,0.25)"
+          stroke="none"
+        />
       </svg>
       <svg
         className="onboarding-corner onboarding-corner--br"
@@ -88,7 +106,13 @@ export function OnboardingWizard() {
         strokeWidth="1"
       >
         <path d="M0 18 L0 0 L18 0" />
-        <circle cx="0" cy="0" r="2" fill="rgba(240,185,11,0.25)" stroke="none" />
+        <circle
+          cx="0"
+          cy="0"
+          r="2"
+          fill="rgba(240,185,11,0.25)"
+          stroke="none"
+        />
       </svg>
 
       {/* Left: Step Navigation */}
@@ -106,9 +130,7 @@ export function OnboardingWizard() {
       </div>
 
       {/* Right: Content Panel */}
-      <OnboardingPanel step={onboardingStep}>
-        {renderStep()}
-      </OnboardingPanel>
+      <OnboardingPanel step={onboardingStep}>{renderStep()}</OnboardingPanel>
     </div>
   );
 }
