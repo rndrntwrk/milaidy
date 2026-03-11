@@ -18,9 +18,11 @@ import {
   type AgentStartupDiagnostics,
   type AgentStatus,
   type AppViewerAuthMessage,
+  type AvatarEmoteDef,
   type AutonomyExecutePlanRequest,
   type CatalogSkill,
   type CharacterData,
+  type ContentBlock,
   type Conversation,
   type ConversationChannelType,
   type ConversationMessage,
@@ -127,6 +129,9 @@ export const DEFAULT_PRO_STREAMER_VRM_FILENAME = "alice.vrm";
 export const DEFAULT_PRO_STREAMER_VRM_URL = resolveAppAssetUrl(
   `vrms/${DEFAULT_PRO_STREAMER_VRM_FILENAME}`,
 );
+export const DEFAULT_PRO_STREAMER_VRM_PREVIEW_URL = resolveAppAssetUrl(
+  "vrms/previews/alice-stage.svg",
+);
 
 function normalizeAvatarIndex(index: number): number {
   if (!Number.isFinite(index)) return 1;
@@ -149,7 +154,9 @@ export function getVrmUrl(index: number): string {
 export function getVrmPreviewUrl(index: number): string {
   const normalized = normalizeAvatarIndex(index);
   const safeIndex = normalized > 0 ? normalized : 1;
-  return resolveAppAssetUrl(`vrms/previews/milady-${safeIndex}.png`);
+  return safeIndex === 1
+    ? DEFAULT_PRO_STREAMER_VRM_PREVIEW_URL
+    : resolveAppAssetUrl(`vrms/previews/milady-${safeIndex}.png`);
 }
 
 // ── Theme ──────────────────────────────────────────────────────────────
@@ -169,6 +176,24 @@ export type DockSurface = "none" | "threads" | "memory" | "ops" | "vault";
 export type HudSurface = "none" | "control-stack";
 export type RailBubbleState = "collapsed" | "peek" | "expanded";
 export type ActiveBubble = "none" | "action-log" | "mission-stack";
+export type GoLiveLaunchMode =
+  | "camera"
+  | "radio"
+  | "screen-share"
+  | "play-games"
+  | "reaction";
+
+export interface GoLiveConfig {
+  channels: string[];
+  launchMode: GoLiveLaunchMode;
+  layoutMode: LiveLayoutMode;
+}
+
+export interface GoLiveLaunchResult {
+  ok: boolean;
+  tone: "success" | "warning" | "error";
+  message: string;
+}
 
 export const THEMES: ReadonlyArray<{
   id: ThemeName;
@@ -869,6 +894,9 @@ export interface AppState {
 
   // Emote picker
   emotePickerOpen: boolean;
+  availableEmotes: AvatarEmoteDef[];
+  activeAvatarEmoteId: string | null;
+  avatarMotionMode: "idle" | "manual" | "auto";
 
   // MCP
   mcpConfiguredServers: Record<string, McpServerConfig>;
@@ -899,6 +927,7 @@ export interface AppState {
   five55MasteryRuns: Five55MasteryRun[];
   five55MasteryRunsLoading: boolean;
   liveBroadcastState: "offline" | "live";
+  goLiveModalOpen: boolean;
   liveLayoutMode: LiveLayoutMode;
   liveSceneId: "default" | "active-pip";
   liveSecondarySources: LiveSecondarySource[];
@@ -954,6 +983,9 @@ export interface AppActions {
   handleDeleteConversation: (id: string) => Promise<void>;
   handleRenameConversation: (id: string, title: string) => Promise<void>;
   runQuickLayer: (layerId: QuickLayerId) => Promise<void>;
+  openGoLiveModal: () => void;
+  closeGoLiveModal: () => void;
+  launchGoLive: (config: GoLiveConfig) => Promise<GoLiveLaunchResult>;
   openAutonomousRun: () => void;
   closeAutonomousRun: () => void;
   runAutonomousEstimate: () => Promise<Five55AutonomyPreviewResponse | null>;
@@ -1060,6 +1092,8 @@ export interface AppActions {
   // Emote picker
   openEmotePicker: () => void;
   closeEmotePicker: () => void;
+  playAvatarEmote: (emoteId: string) => Promise<void>;
+  stopAvatarEmote: () => void;
 
   // Workbench
   loadWorkbench: () => Promise<void>;
@@ -1488,6 +1522,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // --- Emote picker ---
   const [emotePickerOpen, setEmotePickerOpen] = useState(false);
+  const [availableEmotes, setAvailableEmotes] = useState<AvatarEmoteDef[]>([]);
+  const [activeAvatarEmoteId, setActiveAvatarEmoteId] = useState<string | null>(
+    null,
+  );
+  const [avatarMotionMode, setAvatarMotionMode] = useState<
+    "idle" | "manual" | "auto"
+  >("idle");
+  const avatarMotionResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const pendingManualAvatarEmoteRef = useRef<{
+    emoteId: string;
+    expiresAt: number;
+  } | null>(null);
 
   // --- MCP ---
   const [mcpConfiguredServers, setMcpConfiguredServers] = useState<
@@ -1538,6 +1586,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     useState(false);
   const [liveBroadcastState, setLiveBroadcastState] =
     useState<"offline" | "live">("offline");
+  const [goLiveModalOpen, setGoLiveModalOpen] = useState(false);
   const [liveSecondarySources, setLiveSecondarySources] = useState<
     LiveSecondarySource[]
   >([]);
@@ -1557,6 +1606,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const liveHeroSource = useMemo(
     () => resolveLiveHeroSource(liveSecondarySources),
     [liveSecondarySources],
+  );
+  const availableEmoteById = useMemo(
+    () => new Map(availableEmotes.map((emote) => [emote.id, emote])),
+    [availableEmotes],
   );
 
   useEffect(() => {
@@ -2603,18 +2656,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [fetchGreeting]);
 
-  const handleChatSend = useCallback(
-    async (channelType: ConversationChannelType = "DM") => {
-      const text = chatInput.trim();
-      if (!text) return;
-      if (chatSendBusyRef.current || chatSending) return;
+  const sendConversationTurn = useCallback(
+    async ({
+      text,
+      channelType = "DM",
+      images,
+      userBlocks,
+      clearComposer = false,
+    }: {
+      text: string;
+      channelType?: ConversationChannelType;
+      images?: ImageAttachment[];
+      userBlocks?: ContentBlock[];
+      clearComposer?: boolean;
+    }): Promise<boolean> => {
+      const trimmedText = text.trim();
+      if (!trimmedText) return false;
+      if (chatSendBusyRef.current || chatSending) return false;
       chatSendBusyRef.current = true;
-
-      // Capture and clear pending images before async work
-      const imagesToSend = chatPendingImages.length
-        ? chatPendingImages
-        : undefined;
-      setChatPendingImages([]);
 
       try {
         let convId: string = activeConversationId ?? "";
@@ -2626,11 +2685,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             activeConversationIdRef.current = conversation.id;
             convId = conversation.id;
           } catch {
-            return;
+            return false;
           }
         }
 
-        // Keep server-side active conversation in sync for proactive routing.
         client.sendWsMessage({
           type: "active-conversation",
           conversationId: convId,
@@ -2642,10 +2700,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         setConversationMessages((prev: ConversationMessage[]) => [
           ...prev,
-          { id: userMsgId, role: "user", text, timestamp: now },
+          {
+            id: userMsgId,
+            role: "user",
+            text: trimmedText,
+            timestamp: now,
+            blocks: userBlocks,
+          },
           { id: assistantMsgId, role: "assistant", text: "", timestamp: now },
         ]);
-        setChatInput("");
+
+        if (clearComposer) {
+          setChatInput("");
+        }
+
         setChatSending(true);
         setChatFirstTokenReceived(false);
 
@@ -2656,7 +2724,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         try {
           const data = await client.sendConversationMessageStream(
             convId,
-            text,
+            trimmedText,
             (token) => {
               const delta = computeStreamingDelta(streamedAssistantText, token);
               if (!delta) return;
@@ -2672,7 +2740,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             },
             channelType,
             controller.signal,
-            imagesToSend,
+            images,
           );
 
           if (shouldApplyFinalStreamText(streamedAssistantText, data.text)) {
@@ -2688,6 +2756,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             });
           }
           void loadConversations();
+          return true;
         } catch (err) {
           const abortError = err as Error;
           if (abortError.name === "AbortError") {
@@ -2697,10 +2766,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
                   !(message.id === assistantMsgId && !message.text.trim()),
               ),
             );
-            return;
+            return false;
           }
 
-          // If the conversation was lost (server restart), create a fresh one and retry once.
           const status = (err as { status?: number }).status;
           if (status === 404) {
             try {
@@ -2715,24 +2783,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
               const retryData = await client.sendConversationMessage(
                 conversation.id,
-                text,
+                trimmedText,
                 channelType,
-                imagesToSend,
+                images,
               );
               setConversationMessages([
                 {
                   id: `temp-${Date.now()}`,
                   role: "user",
-                  text,
+                  text: trimmedText,
                   timestamp: Date.now(),
+                  blocks: userBlocks,
                 },
                 {
                   id: `temp-resp-${Date.now()}`,
                   role: "assistant",
                   text: retryData.text,
                   timestamp: Date.now(),
+                  blocks: retryData.blocks,
                 },
               ]);
+              return true;
             } catch {
               setConversationMessages((prev) =>
                 prev.filter(
@@ -2740,10 +2811,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
                     !(message.id === assistantMsgId && !message.text.trim()),
                 ),
               );
+              return false;
             }
-          } else {
-            await loadConversationMessages(convId);
           }
+
+          await loadConversationMessages(convId);
+          return false;
         } finally {
           if (chatAbortRef.current === controller) {
             chatAbortRef.current = null;
@@ -2755,14 +2828,52 @@ export function AppProvider({ children }: { children: ReactNode }) {
         chatSendBusyRef.current = false;
       }
     },
-    [
-      chatInput,
-      chatSending,
-      chatPendingImages,
-      activeConversationId,
-      loadConversationMessages,
-      loadConversations,
-    ],
+    [activeConversationId, chatSending, loadConversationMessages, loadConversations],
+  );
+
+  const handleChatSend = useCallback(
+    async (channelType: ConversationChannelType = "DM") => {
+      const text = chatInput.trim();
+      if (!text) return;
+      const imagesToSend = chatPendingImages.length ? chatPendingImages : undefined;
+      setChatPendingImages([]);
+      await sendConversationTurn({
+        text,
+        channelType,
+        images: imagesToSend,
+        clearComposer: true,
+      });
+    },
+    [chatInput, chatPendingImages, sendConversationTurn],
+  );
+
+  const sendOperatorActionMessage = useCallback(
+    async ({
+      label,
+      prompt,
+      kind,
+      detail,
+      channelType = "DM",
+    }: {
+      label: string;
+      prompt: string;
+      kind: "stream" | "avatar" | "launch";
+      detail?: string;
+      channelType?: ConversationChannelType;
+    }) =>
+      sendConversationTurn({
+        text: prompt,
+        channelType,
+        userBlocks: [
+          {
+            type: "action-pill",
+            label,
+            kind,
+            detail,
+          },
+        ],
+      }),
+    [sendConversationTurn],
   );
 
   const handleChatStop = useCallback(() => {
@@ -3103,6 +3214,555 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const openGoLiveModal = useCallback(() => {
+    setGoLiveModalOpen(true);
+  }, []);
+
+  const closeGoLiveModal = useCallback(() => {
+    setGoLiveModalOpen(false);
+  }, []);
+
+  const launchGoLive = useCallback(
+    async (config: GoLiveConfig): Promise<GoLiveLaunchResult> => {
+      const stream555ControlAvailable =
+        hasPluginRegistration(plugins, "stream555-control") &&
+        resolveQuickLayerStatus(plugins, ["stream555-control"]) !== "disabled";
+      const legacyStreamAvailable =
+        hasPluginRegistration(plugins, "stream") &&
+        resolveQuickLayerStatus(plugins, ["stream"]) !== "disabled";
+      const selectedChannels = Array.from(
+        new Set(
+          config.channels
+            .map((channel) => channel.trim().toLowerCase())
+            .filter(Boolean),
+        ),
+      );
+      const destinationPlatforms =
+        selectedChannels.length > 0 ? selectedChannels.join(",") : undefined;
+      const destinationParams = destinationPlatforms
+        ? { destinationPlatforms }
+        : {};
+      const channelLabel = selectedChannels.length
+        ? selectedChannels
+            .map((channel) =>
+              channel === "x"
+                ? "X"
+                : channel === "pumpfun"
+                  ? "Pump.fun"
+                  : channel.charAt(0).toUpperCase() + channel.slice(1),
+            )
+            .join(", ")
+        : "Configured channels";
+      const resolveLaunchPrompt = (mode: GoLiveLaunchMode) => {
+        switch (mode) {
+          case "camera":
+            return "You are now live. Give a concise on-air opener, current stream state, and the next production action.";
+          case "radio":
+            return "You are live in lo-fi radio mode. Summarize the current audio mood and the next on-air move.";
+          case "screen-share":
+            return "Confirm screen-share is active and narrate what viewers should focus on next.";
+          case "play-games":
+            return "You are now live with gameplay active. Provide concise production commentary, score context, and the next audience-facing beat.";
+          case "reaction":
+            return "Start the next reaction segment now and keep your commentary focused on viewer engagement.";
+          default:
+            return "You are now live. Summarize stream state and the next production action.";
+        }
+      };
+      const fail = (
+        message: string,
+        tone: GoLiveLaunchResult["tone"] = "error",
+      ): GoLiveLaunchResult => ({
+        ok: false,
+        tone,
+        message,
+      });
+      const succeed = (message: string): GoLiveLaunchResult => ({
+        ok: true,
+        tone: "success",
+        message,
+      });
+
+      if (!stream555ControlAvailable && !legacyStreamAvailable) {
+        return fail(
+          "555 Stream is not available yet. Configure it before launching.",
+          "warning",
+        );
+      }
+
+      let launchSucceeded = false;
+      let launchLabel = "Go Live";
+      let launchPrompt = resolveLaunchPrompt(config.launchMode);
+      let successMessage = `Launched ${launchLabel} on ${channelLabel}.`;
+
+      try {
+        if (config.launchMode === "camera") {
+          let stream555FailureReason: string | null = null;
+
+          if (stream555ControlAvailable) {
+            try {
+              const goLivePlan = await executePlanWithRetry(
+                {
+                  plan: {
+                    id: "go-live-modal-camera",
+                    steps: [
+                      {
+                        id: "go-live",
+                        toolName: "STREAM555_GO_LIVE",
+                        params: {
+                          layoutMode: config.layoutMode,
+                          ...destinationParams,
+                        },
+                      },
+                      {
+                        id: "segment-bootstrap",
+                        toolName: "STREAM555_GO_LIVE_SEGMENTS",
+                        params: { segmentIntent: "balanced" },
+                      },
+                    ],
+                  },
+                  request: { source: "user", sourceTrust: 1 },
+                  options: { stopOnFailure: false },
+                },
+                { label: "Guided go-live" },
+              );
+
+              const didGoLiveSucceed = didToolActionSucceed(
+                goLivePlan,
+                "STREAM555_GO_LIVE",
+              );
+              const didSegmentBootstrapSucceed = didToolActionSucceed(
+                goLivePlan,
+                "STREAM555_GO_LIVE_SEGMENTS",
+              );
+
+              if (didGoLiveSucceed) {
+                setLiveSecondarySources([]);
+                setLiveBroadcastState("live");
+                if (didSegmentBootstrapSucceed) {
+                  successMessage =
+                    "Go live executed via 555 Stream with segment orchestration.";
+                } else {
+                  const bootstrapFailureReason = getToolActionFailureMessage(
+                    goLivePlan,
+                    "STREAM555_GO_LIVE_SEGMENTS",
+                    "segment bootstrap did not succeed",
+                  );
+                  successMessage =
+                    `Go live started, but segment bootstrap failed: ${bootstrapFailureReason}`;
+                  launchPrompt =
+                    "You are live. Confirm stream health, explain why segment mode is not active, and provide the exact next remediation step.";
+                }
+                launchSucceeded = true;
+              } else if (!legacyStreamAvailable) {
+                stream555FailureReason = getToolActionFailureMessage(
+                  goLivePlan,
+                  "STREAM555_GO_LIVE",
+                  "stream555 go-live action did not succeed",
+                );
+                return fail(`Go live failed: ${stream555FailureReason}`);
+              } else {
+                stream555FailureReason = getToolActionFailureMessage(
+                  goLivePlan,
+                  "STREAM555_GO_LIVE",
+                  "stream555 go-live action did not succeed",
+                );
+              }
+            } catch (err) {
+              if (!legacyStreamAvailable) {
+                return fail(
+                  `Go live execution failed: ${err instanceof Error ? err.message : "unknown error"}`,
+                );
+              }
+            }
+          }
+
+          if (!launchSucceeded && legacyStreamAvailable) {
+            const legacyPlan = await executePlanWithRetry(
+              {
+                plan: {
+                  id: "go-live-modal-camera-legacy",
+                  steps: [
+                    {
+                      id: "status-before",
+                      toolName: "STREAM_STATUS",
+                      params: { scope: "current" },
+                    },
+                    {
+                      id: "start",
+                      toolName: "STREAM_CONTROL",
+                      params: {
+                        operation: "start",
+                        scene: resolveLiveSceneId(config.layoutMode),
+                      },
+                    },
+                    {
+                      id: "status-after",
+                      toolName: "STREAM_STATUS",
+                      params: { scope: "current" },
+                    },
+                  ],
+                },
+                request: { source: "user", sourceTrust: 1 },
+                options: { stopOnFailure: false },
+              },
+              { label: "Guided go-live fallback" },
+            );
+            const streamState = summarizeStreamState(
+              findLastToolEnvelope(legacyPlan.results, "STREAM_STATUS"),
+            );
+            if (legacyPlan.allSucceeded || streamState.live) {
+              setLiveSecondarySources([]);
+              setLiveBroadcastState("live");
+              successMessage =
+                `Go live executed via legacy stream. Stream state: ${streamState.label}.`;
+              launchSucceeded = true;
+            } else {
+              return fail(
+                "Legacy go-live ran but stream status still needs follow-up.",
+              );
+            }
+          }
+        } else if (config.launchMode === "radio") {
+          if (!stream555ControlAvailable) {
+            return fail(
+              "Lo-fi radio launch requires the 555 Stream control plugin.",
+              "warning",
+            );
+          }
+          const plan = await executePlanWithRetry(
+            {
+              plan: {
+                id: "go-live-modal-radio",
+                steps: [
+                  {
+                    id: "go-live",
+                    toolName: "STREAM555_GO_LIVE",
+                    params: {
+                      inputType: "radio",
+                      layoutMode: config.layoutMode,
+                      ...destinationParams,
+                    },
+                  },
+                  {
+                    id: "radio-mode",
+                    toolName: "STREAM555_RADIO_CONTROL",
+                    params: { action: "setAutoDJMode", mode: "MUSIC" },
+                  },
+                ],
+              },
+              request: { source: "user", sourceTrust: 1 },
+              options: { stopOnFailure: false },
+            },
+            { label: "Guided radio launch" },
+          );
+          if (
+            didToolActionSucceed(plan, "STREAM555_GO_LIVE") &&
+            didToolActionSucceed(plan, "STREAM555_RADIO_CONTROL")
+          ) {
+            setLiveSecondarySources([]);
+            setLiveBroadcastState("live");
+            successMessage = "Lo-fi radio is live.";
+            launchLabel = "Lo-fi Radio";
+            launchSucceeded = true;
+          } else {
+            return fail(
+              `Lo-fi radio launch failed: ${getToolActionFailureMessage(
+                plan,
+                "STREAM555_GO_LIVE",
+                "go-live action did not succeed",
+              )}`,
+            );
+          }
+        } else if (config.launchMode === "screen-share") {
+          if (!stream555ControlAvailable) {
+            return fail(
+              "Screen share launch requires the 555 Stream control plugin.",
+              "warning",
+            );
+          }
+          const plan = await executePlanWithRetry(
+            {
+              plan: {
+                id: "go-live-modal-screen-share",
+                steps: [
+                  {
+                    id: "go-live-screen",
+                    toolName: "STREAM555_GO_LIVE",
+                    params: {
+                      inputType: "screen",
+                      layoutMode: "camera-hold",
+                      ...destinationParams,
+                    },
+                  },
+                ],
+              },
+              request: { source: "user", sourceTrust: 1 },
+              options: { stopOnFailure: false },
+            },
+            { label: "Guided screen-share launch" },
+          );
+          if (didToolActionSucceed(plan, "STREAM555_GO_LIVE")) {
+            setLiveBroadcastState("live");
+            setLiveSource({
+              id: "screen-share",
+              kind: "screen",
+              label: "Screen Share",
+            });
+            successMessage = "Screen share is live.";
+            launchLabel = "Screen Share";
+            launchSucceeded = true;
+          } else {
+            return fail(
+              `Screen-share launch failed: ${getToolActionFailureMessage(
+                plan,
+                "STREAM555_GO_LIVE",
+                "screen-share action did not succeed",
+              )}`,
+            );
+          }
+        } else if (config.launchMode === "reaction") {
+          if (!stream555ControlAvailable) {
+            return fail(
+              "Reaction launch requires the 555 Stream control plugin.",
+              "warning",
+            );
+          }
+          const plan = await executePlanWithRetry(
+            {
+              plan: {
+                id: "go-live-modal-reaction",
+                steps: [
+                  {
+                    id: "go-live",
+                    toolName: "STREAM555_GO_LIVE",
+                    params: {
+                      layoutMode: config.layoutMode,
+                      ...destinationParams,
+                    },
+                  },
+                  {
+                    id: "segment-bootstrap",
+                    toolName: "STREAM555_GO_LIVE_SEGMENTS",
+                    params: {
+                      segmentIntent: "reaction",
+                      segmentTypes: "reaction,analysis",
+                    },
+                  },
+                  {
+                    id: "segment-override",
+                    toolName: "STREAM555_SEGMENT_OVERRIDE",
+                    params: {
+                      segmentType: "reaction",
+                      reason: "guided launch reaction mode",
+                    },
+                  },
+                ],
+              },
+              request: { source: "user", sourceTrust: 1 },
+              options: { stopOnFailure: false },
+            },
+            { label: "Guided reaction launch" },
+          );
+          if (
+            didToolActionSucceed(plan, "STREAM555_GO_LIVE") &&
+            didToolActionSucceed(plan, "STREAM555_SEGMENT_OVERRIDE")
+          ) {
+            setLiveSecondarySources([]);
+            setLiveBroadcastState("live");
+            successMessage = "Reaction mode is live.";
+            launchLabel = "Reaction";
+            launchSucceeded = true;
+          } else {
+            return fail(
+              `Reaction launch failed: ${getToolActionFailureMessage(
+                plan,
+                "STREAM555_SEGMENT_OVERRIDE",
+                "reaction override did not succeed",
+              )}`,
+            );
+          }
+        } else if (config.launchMode === "play-games") {
+          launchLabel = "Play Games";
+          const catalog = await client.getFive55GamesCatalog({ includeBeta: true });
+          const selectedGameId = selectPreferredGameId(catalog.games);
+          const selectedGame = selectedGameId
+            ? catalog.games.find((game) => game.id === selectedGameId)
+            : undefined;
+
+          const playPlan = await executePlanWithRetry(
+            {
+              plan: {
+                id: "go-live-modal-play-games",
+                steps: [
+                  {
+                    id: "play-autonomous",
+                    toolName: "FIVE55_GAMES_PLAY",
+                    params: {
+                      ...(selectedGameId ? { gameId: selectedGameId } : {}),
+                      mode: "spectate",
+                    },
+                  },
+                ],
+              },
+              request: { source: "user", sourceTrust: 1 },
+              options: { stopOnFailure: true },
+            },
+            { label: "Guided play games launch" },
+          );
+
+          const launch = await resolveAutonomousGameLaunch(
+            playPlan.results,
+            selectedGameId,
+          );
+
+          if (!launch.viewerUrl) {
+            return fail(
+              "Autonomous game launch did not return a viewer URL.",
+            );
+          }
+
+          const resolvedGameId = launch.gameId || selectedGameId || "unknown-game";
+          const resolvedGameTitle =
+            launch.gameTitle || selectedGame?.title || resolvedGameId;
+
+          setActiveGameApp(`five55:${resolvedGameId}`);
+          setActiveGameDisplayName(resolvedGameTitle);
+          setActiveGameViewerUrl(launch.viewerUrl);
+          setActiveGameSandbox(launch.sandbox ?? DEFAULT_GAME_SANDBOX);
+          setActiveGamePostMessageAuth(launch.postMessageAuth);
+          setActiveGamePostMessagePayload(null);
+          launchPrompt =
+            `You are now spectating ${resolvedGameTitle} (${resolvedGameId}) in autonomous bot mode. ` +
+            "Provide live game commentary, key decisions, and score/capture updates while continuing in-play control.";
+
+          if (stream555ControlAvailable) {
+            const attachPlan = await executePlanWithRetry(
+              {
+                plan: {
+                  id: "go-live-modal-game-stream-attach",
+                  steps: [
+                    {
+                      id: "start-game-feed",
+                      toolName: "STREAM555_GO_LIVE",
+                      params: {
+                        inputType: "website",
+                        inputUrl: launch.viewerUrl,
+                        layoutMode: "camera-hold",
+                        ...destinationParams,
+                      },
+                    },
+                  ],
+                },
+                request: { source: "user", sourceTrust: 1 },
+                options: { stopOnFailure: false },
+              },
+              { label: "Game stream attach" },
+            );
+            if (!didToolActionSucceed(attachPlan, "STREAM555_GO_LIVE")) {
+              return fail(
+                `Game launched, but 555 Stream attach failed: ${getToolActionFailureMessage(
+                  attachPlan,
+                  "STREAM555_GO_LIVE",
+                  "game stream attach did not succeed",
+                )}`,
+              );
+            }
+          } else if (legacyStreamAvailable) {
+            const attachPlan = await executePlanWithRetry(
+              {
+                plan: {
+                  id: "go-live-modal-game-legacy-attach",
+                  steps: [
+                    {
+                      id: "status-before",
+                      toolName: "STREAM_STATUS",
+                      params: { scope: "current" },
+                    },
+                    {
+                      id: "start-game-feed",
+                      toolName: "STREAM_CONTROL",
+                      params: {
+                        operation: "start",
+                        scene: "active-pip",
+                        inputType: "website",
+                        url: launch.viewerUrl,
+                      },
+                    },
+                    {
+                      id: "status-after",
+                      toolName: "STREAM_STATUS",
+                      params: { scope: "current" },
+                    },
+                  ],
+                },
+                request: { source: "user", sourceTrust: 1 },
+                options: { stopOnFailure: false },
+              },
+              { label: "Game legacy attach" },
+            );
+            const finalStatus = summarizeStreamState(
+              findLastToolEnvelope(attachPlan.results, "STREAM_STATUS"),
+            );
+            if (!(attachPlan.allSucceeded || finalStatus.live)) {
+              return fail(
+                "Game launched, but legacy stream attach still needs follow-up.",
+              );
+            }
+          } else {
+            return fail(
+              "Game launched, but no stream plugin is available to broadcast it.",
+            );
+          }
+
+          setLiveBroadcastState("live");
+          setLiveSource({
+            id: "active-game",
+            kind: "game",
+            label: resolvedGameTitle,
+            viewerUrl: launch.viewerUrl,
+          });
+
+          if (currentTheme === "milady-os" || !isTabEnabled("apps")) {
+            setGameOverlayEnabled(Boolean(launch.viewerUrl));
+          } else {
+            setTab("apps");
+            setAppsSubTab("games");
+          }
+
+          successMessage = `Launched ${resolvedGameTitle} live.`;
+          launchSucceeded = true;
+        }
+
+        if (!launchSucceeded) {
+          return fail("Launch did not complete.");
+        }
+
+        setGoLiveModalOpen(false);
+        await sendOperatorActionMessage({
+          label: launchLabel,
+          prompt: launchPrompt,
+          kind: "launch",
+          detail: `${channelLabel} · ${config.layoutMode === "camera-hold" ? "Camera hold" : "Camera full"}`,
+        });
+        return succeed(successMessage);
+      } catch (err) {
+        return fail(
+          `Launch failed: ${err instanceof Error ? err.message : "unknown error"}`,
+        );
+      }
+    },
+    [
+      currentTheme,
+      executePlanWithRetry,
+      plugins,
+      resolveAutonomousGameLaunch,
+      sendOperatorActionMessage,
+      setLiveSource,
+      setTab,
+    ],
+  );
+
   const runAutonomousEstimate = useCallback(async () => {
     if (autoRunMode === "topic" && autoRunTopic.trim().length === 0) {
       setActionNotice(
@@ -3383,6 +4043,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     let prompt = layer.prompt;
+    let shouldSendOperatorMessage = false;
+    let operatorDetail: string | undefined;
     let openedViewerThisRun = false;
     let viewerUrlForStream =
       typeof activeGameViewerUrl === "string" && activeGameViewerUrl.trim().length > 0
@@ -3396,162 +4058,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       resolveQuickLayerStatus(plugins, ["stream"]) !== "disabled";
 
     if (layer.id === "go-live") {
-      let stream555FailureReason: string | null = null;
-      if (!stream555ControlAvailable && !legacyStreamAvailable) {
-        setActionNotice(
-          "Neither 555 Stream nor legacy stream is available. Enable one before going live.",
-          "info",
-          2600,
-        );
-        return;
-      }
-
-      let goLiveCompleted = false;
-      if (stream555ControlAvailable) {
-        try {
-          const goLivePlan = await executePlanWithRetry({
-            plan: {
-              id: "quick-layer-go-live-stream555",
-              steps: [
-                {
-                  id: "go-live",
-                  toolName: "STREAM555_GO_LIVE",
-                  params: { layoutMode: liveLayoutMode },
-                },
-                {
-                  id: "segment-bootstrap",
-                  toolName: "STREAM555_GO_LIVE_SEGMENTS",
-                  params: { segmentIntent: "balanced" },
-                },
-              ],
-            },
-            request: { source: "user", sourceTrust: 1 },
-            options: { stopOnFailure: false },
-          }, { label: "Go live" });
-
-          const didGoLiveSucceed = didToolActionSucceed(goLivePlan, "STREAM555_GO_LIVE");
-          const didSegmentBootstrapSucceed = didToolActionSucceed(
-            goLivePlan,
-            "STREAM555_GO_LIVE_SEGMENTS",
-          );
-
-          if (didGoLiveSucceed && didSegmentBootstrapSucceed) {
-            setLiveBroadcastState("live");
-            setActionNotice(
-              "Go live executed via 555 Stream with segment orchestration.",
-              "success",
-              2800,
-            );
-            prompt =
-              "You are now live. Give a concise on-air opener, current stream state, and the next production action.";
-            goLiveCompleted = true;
-          } else if (didGoLiveSucceed && !didSegmentBootstrapSucceed) {
-            const bootstrapFailureReason = getToolActionFailureMessage(
-              goLivePlan,
-              "STREAM555_GO_LIVE_SEGMENTS",
-              "segment bootstrap did not succeed",
-            );
-            setLiveBroadcastState("live");
-            setActionNotice(
-              `Go live started, but segment bootstrap failed: ${bootstrapFailureReason}`,
-              "error",
-              4200,
-            );
-            prompt =
-              "You are live. Confirm stream health, explain why segment mode is not active, and provide the exact next remediation step.";
-            goLiveCompleted = true;
-          } else if (!legacyStreamAvailable) {
-            stream555FailureReason = getToolActionFailureMessage(
-              goLivePlan,
-              "STREAM555_GO_LIVE",
-              "stream555 go-live action did not succeed",
-            );
-            setActionNotice(`Go live failed: ${stream555FailureReason}`, "error", 4200);
-            goLiveCompleted = true;
-          } else {
-            stream555FailureReason = getToolActionFailureMessage(
-              goLivePlan,
-              "STREAM555_GO_LIVE",
-              "stream555 go-live action did not succeed",
-            );
-            setActionNotice(
-              `stream555 go-live failed (${stream555FailureReason}); attempting legacy stream fallback.`,
-              "info",
-              3200,
-            );
-          }
-        } catch (err) {
-          if (!legacyStreamAvailable) {
-            setActionNotice(
-              `Go live execution failed: ${err instanceof Error ? err.message : "unknown error"}`,
-              "error",
-              4200,
-            );
-            goLiveCompleted = true;
-          } else {
-            stream555FailureReason =
-              err instanceof Error ? err.message : "unknown error";
-            setActionNotice(
-              `stream555 go-live request errored (${stream555FailureReason}); attempting legacy stream fallback.`,
-              "info",
-              3200,
-            );
-          }
-        }
-      }
-
-      if (!goLiveCompleted && legacyStreamAvailable) {
-        try {
-          const plan = await executePlanWithRetry({
-            plan: {
-              id: "quick-layer-go-live-legacy",
-              steps: [
-                {
-                  id: "status-before",
-                  toolName: "STREAM_STATUS",
-                  params: { scope: "current" },
-                },
-                {
-                  id: "start",
-                  toolName: "STREAM_CONTROL",
-                  params: { operation: "start", scene: liveSceneId },
-                },
-                {
-                  id: "status-after",
-                  toolName: "STREAM_STATUS",
-                  params: { scope: "current" },
-                },
-              ],
-            },
-            request: { source: "user", sourceTrust: 1 },
-            options: { stopOnFailure: false },
-          }, { label: "Go live fallback" });
-          const streamState = summarizeStreamState(
-            findLastToolEnvelope(plan.results, "STREAM_STATUS"),
-          );
-          if (plan.allSucceeded || streamState.live) {
-            setLiveBroadcastState("live");
-            const fallbackMessage = stream555FailureReason
-              ? `Go live executed via legacy fallback (stream555 primary failed: ${stream555FailureReason}). Stream state: ${streamState.label}.`
-              : `Go live executed (legacy fallback). Stream state: ${streamState.label}.`;
-            setActionNotice(fallbackMessage, "info", 3600);
-            prompt =
-              "You are now live. Give a concise on-air opener, current stream state, and the next production action.";
-          } else {
-            setActionNotice(
-              "Go live fallback ran but one or more stream steps failed. Check stream status and retry with exact fixes.",
-              "error",
-              4200,
-            );
-          }
-        } catch (err) {
-          setActionNotice(
-            `Go live fallback failed: ${err instanceof Error ? err.message : "unknown error"}`,
-            "error",
-            4200,
-          );
-        }
-      }
+      openGoLiveModal();
+      return;
     }
 
     if (layer.id === "screen-share") {
@@ -3580,6 +4088,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setActionNotice("Screen-share request dispatched.", "success", 2600);
           prompt =
             "Confirm screen-share is active and narrate what viewers should focus on next.";
+          shouldSendOperatorMessage = true;
         } else {
           const reason = getToolActionFailureMessage(
             plan,
@@ -3665,6 +4174,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setActionNotice(`Ad created and triggered (${createdAdId}).`, "success", 2800);
         prompt =
           `Ad ${createdAdId} was triggered. Briefly summarize monetization impact and what comes next on stream.`;
+        shouldSendOperatorMessage = true;
       } catch (err) {
         setActionNotice(
           `Ad action failed: ${err instanceof Error ? err.message : "unknown error"}`,
@@ -3694,6 +4204,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setActionNotice("Guest invite generated.", "success", 2600);
           prompt =
             "Announce guest invite status and provide concise host handoff guidance.";
+          shouldSendOperatorMessage = true;
         } else {
           const reason = getToolActionFailureMessage(
             plan,
@@ -3730,6 +4241,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (didToolActionSucceed(plan, "STREAM555_RADIO_CONTROL")) {
           setActionNotice("Radio mode updated.", "success", 2600);
           prompt = "Summarize current radio/audio mode and how it supports this segment.";
+          shouldSendOperatorMessage = true;
         } else {
           const reason = getToolActionFailureMessage(
             plan,
@@ -3767,6 +4279,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setActionNotice("PiP scene activated.", "success", 2600);
           prompt =
             "Confirm PiP composition is active and describe what each frame currently shows.";
+          shouldSendOperatorMessage = true;
         } else {
           const reason = getToolActionFailureMessage(
             plan,
@@ -3827,6 +4340,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           );
           prompt =
             "Start the next reaction segment now and keep your commentary focused on viewer engagement.";
+          shouldSendOperatorMessage = true;
         } else {
           const reason = getToolActionFailureMessage(
             plan,
@@ -3887,6 +4401,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         );
         prompt =
           "Summarize projected earnings opportunities and recommend the next monetization move.";
+        shouldSendOperatorMessage = true;
       } catch (err) {
         setActionNotice(
           `Earnings estimate failed: ${err instanceof Error ? err.message : "unknown error"}`,
@@ -3917,6 +4432,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setActionNotice("End-live request dispatched.", "success", 2600);
           prompt =
             "Provide a concise stream wrap-up, final outcomes, and next scheduled action.";
+          shouldSendOperatorMessage = true;
         } else {
           const reason = getToolActionFailureMessage(
             plan,
@@ -3987,6 +4503,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           prompt =
             `You are now spectating ${resolvedGameTitle} (${resolvedGameId}) in autonomous bot mode. ` +
             "Provide live game commentary, key decisions, and score/capture updates while continuing in-play control.";
+          shouldSendOperatorMessage = true;
+          operatorDetail = resolvedGameTitle;
           setActionNotice(
             `Launched ${resolvedGameTitle} in autonomous mode.`,
             "success",
@@ -4113,8 +4631,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    setChatInput(prompt);
-
     if (layer.id === "play-games") {
       if (currentTheme === "milady-os" || !isTabEnabled("apps")) {
         setGameOverlayEnabled(Boolean(viewerUrlForStream));
@@ -4124,20 +4640,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    setTimeout(() => void handleChatSend(), 30);
+    if (shouldSendOperatorMessage && prompt.trim()) {
+      await sendOperatorActionMessage({
+        label: layer.label,
+        prompt,
+        kind: "stream",
+        detail: operatorDetail,
+      });
+    }
   }, [
     activeGameViewerUrl,
     chatSending,
     currentTheme,
     executePlanWithRetry,
-    handleChatSend,
     liveLayoutMode,
     liveSceneId,
+    openGoLiveModal,
     openAutonomousRun,
     plugins,
     quickLayerStatuses,
     resetLiveComposition,
     resolveAutonomousGameLaunch,
+    sendOperatorActionMessage,
     setActionNotice,
     setLiveSource,
     setTab,
@@ -5318,6 +5842,146 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setEmotePickerOpen(false);
   }, []);
 
+  const clearAvatarMotionReset = useCallback(() => {
+    if (avatarMotionResetTimeoutRef.current !== null) {
+      clearTimeout(avatarMotionResetTimeoutRef.current);
+      avatarMotionResetTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleAvatarMotionReset = useCallback(
+    (durationMs: number) => {
+      clearAvatarMotionReset();
+      avatarMotionResetTimeoutRef.current = setTimeout(() => {
+        pendingManualAvatarEmoteRef.current = null;
+        setActiveAvatarEmoteId(null);
+        setAvatarMotionMode("idle");
+        avatarMotionResetTimeoutRef.current = null;
+      }, Math.max(750, durationMs));
+    },
+    [clearAvatarMotionReset],
+  );
+
+  const loadAvailableEmotes = useCallback(async () => {
+    try {
+      const response = await client.listEmotes();
+      setAvailableEmotes(response.emotes ?? []);
+    } catch (err) {
+      console.warn("[milady] Failed to load emotes", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (authRequired) return;
+    void loadAvailableEmotes();
+    return () => {
+      clearAvatarMotionReset();
+    };
+  }, [authRequired, clearAvatarMotionReset, loadAvailableEmotes]);
+
+  useEffect(() => {
+    if (authRequired) return undefined;
+
+    const unbindEmotes = client.onWsEvent("emote", (data) => {
+      const emoteId =
+        typeof data.emoteId === "string" ? data.emoteId.trim() : "";
+      if (!emoteId) return;
+
+      const loop = data.loop === true;
+      const rawDuration =
+        typeof data.duration === "number" ? data.duration : Number(data.duration);
+      const durationMs =
+        Number.isFinite(rawDuration) && rawDuration > 0
+          ? rawDuration * 1000
+          : 3000;
+
+      const pending = pendingManualAvatarEmoteRef.current;
+      const isManual =
+        pending?.emoteId === emoteId && pending.expiresAt > Date.now();
+      if (!isManual) {
+        pendingManualAvatarEmoteRef.current = null;
+      }
+
+      setActiveAvatarEmoteId(emoteId);
+      setAvatarMotionMode(isManual ? "manual" : "auto");
+
+      if (loop) {
+        clearAvatarMotionReset();
+      } else {
+        scheduleAvatarMotionReset(durationMs);
+      }
+    });
+
+    return () => {
+      unbindEmotes?.();
+    };
+  }, [authRequired, clearAvatarMotionReset, scheduleAvatarMotionReset]);
+
+  const playAvatarEmote = useCallback(
+    async (emoteId: string) => {
+      const emote = availableEmoteById.get(emoteId);
+      if (!emote) {
+        setActionNotice(`Unknown avatar action: ${emoteId}`, "error", 2400);
+        return;
+      }
+
+      pendingManualAvatarEmoteRef.current = {
+        emoteId,
+        expiresAt: Date.now() + 4_000,
+      };
+      clearAvatarMotionReset();
+      setActiveAvatarEmoteId(emoteId);
+      setAvatarMotionMode("manual");
+
+      try {
+        await client.playEmote(emoteId);
+        void sendOperatorActionMessage({
+          label: emote.name,
+          prompt:
+            emote.description?.trim().length
+              ? emote.description
+              : `Operator triggered the ${emote.name} avatar motion. Acknowledge the motion naturally and continue the scene.`,
+          kind: "avatar",
+          detail: emote.loop ? "Looping motion" : "One-shot motion",
+        });
+        if (!emote.loop) {
+          scheduleAvatarMotionReset(emote.duration * 1000);
+        }
+      } catch (err) {
+        pendingManualAvatarEmoteRef.current = null;
+        setActiveAvatarEmoteId(null);
+        setAvatarMotionMode("idle");
+        setActionNotice(
+          `Failed to play ${emote.name}: ${err instanceof Error ? err.message : "unknown error"}`,
+          "error",
+          3200,
+        );
+      }
+    },
+    [
+      availableEmoteById,
+      clearAvatarMotionReset,
+      scheduleAvatarMotionReset,
+      sendOperatorActionMessage,
+      setActionNotice,
+    ],
+  );
+
+  const stopAvatarEmote = useCallback(() => {
+    pendingManualAvatarEmoteRef.current = null;
+    clearAvatarMotionReset();
+    setActiveAvatarEmoteId(null);
+    setAvatarMotionMode("idle");
+    document.dispatchEvent(new CustomEvent("milady:stop-emote"));
+    void sendOperatorActionMessage({
+      label: "Stop Motion",
+      prompt:
+        "Operator stopped the current avatar motion. Return to the idle pool and continue naturally.",
+      kind: "avatar",
+      detail: "Idle pool restored",
+    });
+  }, [clearAvatarMotionReset, sendOperatorActionMessage]);
+
   // ── Generic state setter ───────────────────────────────────────────
 
   const setState = useCallback(
@@ -5396,6 +6060,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         commandQuery: setCommandQuery,
         commandActiveIndex: setCommandActiveIndex,
         emotePickerOpen: setEmotePickerOpen,
+        availableEmotes: setAvailableEmotes,
+        activeAvatarEmoteId: setActiveAvatarEmoteId,
+        avatarMotionMode: setAvatarMotionMode,
         storeSearch: setStoreSearch,
         storeFilter: setStoreFilter,
         storeSubTab: setStoreSubTab,
@@ -6154,6 +6821,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     onboardingSelectedChains, onboardingRpcSelections, onboardingRpcKeys,
     onboardingAvatar, onboardingRestarting,
     commandPaletteOpen, commandQuery, commandActiveIndex, emotePickerOpen,
+    availableEmotes, activeAvatarEmoteId, avatarMotionMode,
     mcpConfiguredServers, mcpServerStatuses, mcpMarketplaceQuery, mcpMarketplaceResults,
     mcpMarketplaceLoading, mcpAction, mcpAddingServer, mcpAddingResult,
     mcpEnvInputs, mcpHeaderInputs,
@@ -6163,6 +6831,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     five55MasteryRuns,
     five55MasteryRunsLoading,
     liveBroadcastState,
+    goLiveModalOpen,
     liveLayoutMode,
     liveSceneId,
     liveSecondarySources,
@@ -6204,6 +6873,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     handleDeleteConversation,
     handleRenameConversation,
     runQuickLayer,
+    openGoLiveModal,
+    closeGoLiveModal,
+    launchGoLive,
     openAutonomousRun,
     closeAutonomousRun,
     runAutonomousEstimate,
@@ -6260,6 +6932,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     checkExtensionStatus,
     openEmotePicker,
     closeEmotePicker,
+    playAvatarEmote,
+    stopAvatarEmote,
     loadWorkbench,
     handleAgentExport,
     handleAgentImport,

@@ -79,6 +79,53 @@ const STREAM555_DESTINATION_ORDER_MAP = new Map<string, number>(
   OperatorPanels.STREAM555_DESTINATION_SPECS.map((spec, index) => [spec.id, index]),
 );
 
+const STREAM555_ADVANCED_SETTING_KEYS = new Set([
+  "STREAM555_REQUIRE_APPROVALS",
+  "STREAM555_WALLET_AUTH_PREFERRED_CHAIN",
+  "STREAM555_WALLET_AUTH_ALLOW_PROVISION",
+  "STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN",
+]);
+
+const ARCADE555_ADVANCED_SETTING_KEYS = new Set([
+  "ARCADE555_DEFAULT_SESSION_ID",
+  "STREAM555_DEFAULT_SESSION_ID",
+  "STREAM_SESSION_ID",
+  "GITHUB_API_TOKEN",
+  "ALICE_GH_TOKEN",
+  "ARCADE555_BASE_URL",
+  "FIVE55_GAMES_API_URL",
+  "FIVE55_GAMES_API_DIALECT",
+  "ARCADE555_AGENT_TOKEN",
+  "FIVE55_GAMES_API_BEARER_TOKEN",
+  "ARCADE555_VIEWER_BASE_URL",
+  "FIVE55_GAMES_VIEWER_BASE_URL",
+  "GAMES_BASE_URL",
+  "FIVE55_GAMES_CF_CONNECT_TIMEOUT_MS",
+  "FIVE55_GAMES_CF_CONNECT_POLL_MS",
+  "FIVE55_GAMES_CF_RECOVERY_ATTEMPTS",
+  "FIVE55_GAMES_SPRINT_SLOT_SECONDS",
+  "FIVE55_GAMES_SPRINT_AD_OFFSET_SECONDS",
+  "ALICE_INTELLIGENCE_ENABLED",
+  "ALICE_LEARNING_WRITEBACK_ENABLED",
+  "ARCADE555_ENABLE_LEGACY_HTTP_ALIASES",
+  "ARCADE555_ENABLE_LEGACY_ACTION_ALIASES",
+  "ARCADE555_SUPPRESS_LEGACY_PLUGINS",
+  "FIVE55_GAMES_PLUGIN_ENABLED",
+  "FIVE55_GITHUB_PLUGIN_ENABLED",
+]);
+
+const ARCADE555_ADVANCED_SETTING_GROUPS = new Set([
+  "Session",
+  "Authentication",
+  "Connection",
+  "Viewer",
+  "Reliability",
+  "Sprint",
+  "Alice Pilot",
+  "Compatibility",
+  "Runtime",
+]);
+
 type PluginUiActionSchema = {
   label?: string;
   variant?: "primary" | "secondary" | "danger";
@@ -96,8 +143,36 @@ type PluginUiSchema = {
 
 type LifecycleStatusToken = {
   label: string;
-  tone: "ok" | "warn" | "error";
+  tone: "ok" | "warn" | "error" | "neutral";
 };
+
+function isStream555AdvancedSetting(pluginId: string, key: string): boolean {
+  return (
+    (OperatorPanels.isStream555PrimaryPlugin(pluginId) ||
+      OperatorPanels.isStream555LegacyPlugin(pluginId)) &&
+    STREAM555_ADVANCED_SETTING_KEYS.has(key)
+  );
+}
+
+function isArcade555AdvancedSetting(pluginId: string, key: string): boolean {
+  return (
+    (OperatorPanels.isArcade555PrimaryPlugin(pluginId) ||
+      OperatorPanels.isArcade555LegacyPlugin(pluginId)) &&
+    ARCADE555_ADVANCED_SETTING_KEYS.has(key)
+  );
+}
+
+function isArcade555AdvancedGroup(
+  pluginId: string,
+  group: string | undefined,
+): boolean {
+  return (
+    typeof group === "string" &&
+    (OperatorPanels.isArcade555PrimaryPlugin(pluginId) ||
+      OperatorPanels.isArcade555LegacyPlugin(pluginId)) &&
+    ARCADE555_ADVANCED_SETTING_GROUPS.has(group)
+  );
+}
 
 export function parseBoolish(value: unknown): boolean {
   if (typeof value === "boolean") return value;
@@ -158,25 +233,39 @@ function buildLifecycleStatusTokens(plugin: PluginInfo): LifecycleStatusToken[] 
     },
     {
       label: plugin.enabled ? "Enabled" : "Disabled",
-      tone: plugin.enabled ? "ok" : "warn",
+      tone: plugin.enabled ? "ok" : "neutral",
     },
     {
       label: plugin.isActive ? "Loaded" : "Not loaded",
-      tone: plugin.isActive ? "ok" : plugin.enabled ? "warn" : "error",
+      tone: plugin.isActive
+        ? "ok"
+        : plugin.enabled
+          ? "warn"
+          : "neutral",
     },
   ];
 
   if (plugin.authenticated !== null && plugin.authenticated !== undefined) {
     tokens.push({
       label: plugin.authenticated ? "Authenticated" : "Authentication required",
-      tone: plugin.authenticated ? "ok" : "warn",
+      tone:
+        plugin.installed === false || plugin.enabled === false
+          ? "neutral"
+          : plugin.authenticated
+            ? "ok"
+            : "warn",
     });
   }
 
   if (plugin.ready !== null && plugin.ready !== undefined) {
     tokens.push({
       label: plugin.ready ? "Ready" : "Setup incomplete",
-      tone: plugin.ready ? "ok" : "warn",
+      tone:
+        plugin.installed === false || plugin.enabled === false
+          ? "neutral"
+          : plugin.ready
+            ? "ok"
+            : "warn",
     });
   }
 
@@ -2108,6 +2197,16 @@ export function paramsToSchema(
       }
     }
 
+    if (isStream555AdvancedSetting(pluginId, p.key)) {
+      hint.advanced = true;
+      hint.group = "Advanced 555 Stream Settings";
+    }
+
+    if (isArcade555AdvancedSetting(pluginId, p.key)) {
+      hint.advanced = true;
+      hint.group = "Advanced 555 Arcade Settings";
+    }
+
     if (p.description) {
       hint.help = p.description;
       if (!isStream555Plugin && p.default != null) {
@@ -2151,13 +2250,36 @@ function PluginConfigForm({
   // Server hints take priority (override auto-generated ones).
   const hints = useMemo(() => {
     const serverHints = plugin.configUiHints;
-    if (!serverHints || Object.keys(serverHints).length === 0) return autoHints;
     const merged: Record<string, ConfigUiHint> = { ...autoHints };
-    for (const [key, serverHint] of Object.entries(serverHints)) {
-      merged[key] = { ...merged[key], ...serverHint };
+    if (serverHints && Object.keys(serverHints).length > 0) {
+      for (const [key, serverHint] of Object.entries(serverHints)) {
+        merged[key] = { ...merged[key], ...serverHint };
+      }
     }
+
+    for (const [key, hint] of Object.entries(merged)) {
+      if (isStream555AdvancedSetting(plugin.id, key)) {
+        merged[key] = {
+          ...hint,
+          advanced: true,
+          group: "Advanced 555 Stream Settings",
+        };
+      }
+
+      if (
+        isArcade555AdvancedSetting(plugin.id, key) ||
+        isArcade555AdvancedGroup(plugin.id, hint.group)
+      ) {
+        merged[key] = {
+          ...hint,
+          advanced: true,
+          group: "Advanced 555 Arcade Settings",
+        };
+      }
+    }
+
     return merged;
-  }, [autoHints, plugin.configUiHints]);
+  }, [autoHints, plugin.configUiHints, plugin.id]);
 
   // Build values from current config state + existing server values.
   // Array-typed fields need comma-separated strings parsed into arrays.
@@ -3540,14 +3662,18 @@ function PluginListView({ label, mode = "all" }: PluginListViewProps) {
                                 {lifecycleTokens.map((token) => (
                                   <Badge
                                     key={`${p.id}-${token.label}`}
-                                    variant="outline"
-                                    className={`rounded-full px-2 py-0.5 text-[10px] lowercase tracking-wide whitespace-nowrap ${
-                                      token.tone === "ok"
-                                        ? "border-ok/30 bg-[rgba(22,101,52,0.06)] text-ok"
-                                        : token.tone === "warn"
-                                          ? "border-warn/30 bg-[rgba(234,179,8,0.06)] text-warn"
-                                          : "border-destructive/30 bg-[rgba(153,27,27,0.04)] text-destructive"
-                                    }`}
+                                    variant={
+                                      currentTheme === "milady-os"
+                                        ? token.tone === "ok"
+                                          ? "success"
+                                          : token.tone === "warn"
+                                            ? "warning"
+                                            : token.tone === "error"
+                                              ? "danger"
+                                              : "outline"
+                                        : "outline"
+                                    }
+                                    className="rounded-full px-2 py-0.5 text-[10px] lowercase tracking-wide whitespace-nowrap"
                                   >
                                     {token.label}
                                   </Badge>

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { client } from "../api-client.js";
 import { DrawerShell } from "./DrawerShell.js";
 import { useApp } from "../AppContext.js";
 import { AvatarSelector } from "./AvatarSelector.js";
@@ -70,9 +71,11 @@ export function AssetVaultDrawer({
   const hasWallets = Boolean(walletAddresses?.evmAddress || walletAddresses?.solanaAddress);
   const activeAvatarLabel =
     typeof selectedVrmIndex === "number"
-      ? selectedVrmIndex === 1
-        ? "Alice"
-        : `Model ${selectedVrmIndex}`
+      ? selectedVrmIndex === 0
+        ? "Custom VRM"
+        : selectedVrmIndex === 1
+          ? "Alice"
+          : `Avatar ${selectedVrmIndex}`
       : "Not linked";
 
   const summaryRows = useMemo(
@@ -194,9 +197,25 @@ export function AssetVaultDrawer({
             </div>
             <AvatarSelector
               fullWidth
-              showUpload={false}
+              showUpload
               selected={typeof selectedVrmIndex === "number" ? selectedVrmIndex : 1}
               onSelect={(index) => setState("selectedVrmIndex", index)}
+              onUpload={(file) => {
+                const previousIndex = selectedVrmIndex;
+                const url = URL.createObjectURL(file);
+                setState("customVrmUrl", url);
+                setState("selectedVrmIndex", 0);
+                client
+                  .uploadCustomVrm(file)
+                  .then(() => {
+                    setState("customVrmUrl", `/api/avatar/vrm?t=${Date.now()}`);
+                    requestAnimationFrame(() => URL.revokeObjectURL(url));
+                  })
+                  .catch(() => {
+                    setState("selectedVrmIndex", previousIndex);
+                    URL.revokeObjectURL(url);
+                  });
+              }}
             />
           </SectionShell>
         ) : null}

@@ -58,6 +58,9 @@ describe("ProStreamerStageComposition", () => {
     const layoutNode = tree.root.findByProps({ "data-stage-layout": "camera-full" });
     expect(layoutNode).toBeDefined();
     expect(textOf(tree.root)).toContain("Alice Camera");
+    expect(
+      tree.root.findByProps({ "data-stage-context-pill": true }).children.join(""),
+    ).toContain("Alice Camera");
     expect(tree.root.findAllByType("iframe")).toHaveLength(0);
     expect(
       tree.root.findByProps({
@@ -90,7 +93,9 @@ describe("ProStreamerStageComposition", () => {
     const iframe = tree.root.findByType("iframe");
     expect(iframe.props.src).toBe("https://games.example/hyper-racer");
     expect(iframe.props.title).toBe("Hyper Racer hero feed");
-    expect(textOf(tree.root)).toContain("Game Hero");
+    expect(
+      tree.root.findByProps({ "data-stage-context-pill": true }).children.join(""),
+    ).toContain("Game · Hyper Racer");
     expect(textOf(tree.root)).toContain("Alice");
     expect(
       tree.root.findByProps({

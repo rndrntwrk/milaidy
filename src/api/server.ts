@@ -3933,8 +3933,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               order: 210,
               type: "radio",
               options: [
-                { value: "true", label: "Enabled", icon: "✅" },
-                { value: "false", label: "Disabled", icon: "⛔" },
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
               ],
             },
             STREAM555_DEST_PUMPFUN_ENABLED: {
@@ -3944,8 +3944,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               order: 300,
               type: "radio",
               options: [
-                { value: "true", label: "Enabled", icon: "✅" },
-                { value: "false", label: "Disabled", icon: "⛔" },
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
               ],
             },
             STREAM555_DEST_PUMPFUN_RTMP_URL: {
@@ -3953,7 +3953,6 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               group: "Channels",
               width: "half",
               order: 310,
-              icon: "🟠",
               showIf: {
                 field: "STREAM555_DEST_PUMPFUN_ENABLED",
                 op: "eq",
@@ -3978,8 +3977,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               order: 330,
               type: "radio",
               options: [
-                { value: "true", label: "Enabled", icon: "✅" },
-                { value: "false", label: "Disabled", icon: "⛔" },
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
               ],
             },
             STREAM555_DEST_X_RTMP_URL: {
@@ -3987,7 +3986,6 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               group: "Channels",
               width: "half",
               order: 340,
-              icon: "✖️",
               showIf: {
                 field: "STREAM555_DEST_X_ENABLED",
                 op: "eq",
@@ -4012,8 +4010,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               order: 360,
               type: "radio",
               options: [
-                { value: "true", label: "Enabled", icon: "✅" },
-                { value: "false", label: "Disabled", icon: "⛔" },
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
               ],
             },
             STREAM555_DEST_TWITCH_RTMP_URL: {
@@ -4021,7 +4019,6 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               group: "Channels",
               width: "half",
               order: 370,
-              icon: "🟣",
               showIf: {
                 field: "STREAM555_DEST_TWITCH_ENABLED",
                 op: "eq",
@@ -4046,8 +4043,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               order: 390,
               type: "radio",
               options: [
-                { value: "true", label: "Enabled", icon: "✅" },
-                { value: "false", label: "Disabled", icon: "⛔" },
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
               ],
             },
             STREAM555_DEST_KICK_RTMP_URL: {
@@ -4055,7 +4052,6 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               group: "Channels",
               width: "half",
               order: 400,
-              icon: "🟢",
               showIf: {
                 field: "STREAM555_DEST_KICK_ENABLED",
                 op: "eq",
@@ -4080,8 +4076,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               order: 420,
               type: "radio",
               options: [
-                { value: "true", label: "Enabled", icon: "✅" },
-                { value: "false", label: "Disabled", icon: "⛔" },
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
               ],
             },
             STREAM555_DEST_YOUTUBE_RTMP_URL: {
@@ -4089,7 +4085,6 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               group: "Channels",
               width: "half",
               order: 430,
-              icon: "🔴",
               showIf: {
                 field: "STREAM555_DEST_YOUTUBE_ENABLED",
                 op: "eq",
@@ -4114,8 +4109,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               order: 450,
               type: "radio",
               options: [
-                { value: "true", label: "Enabled", icon: "✅" },
-                { value: "false", label: "Disabled", icon: "⛔" },
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
               ],
             },
             STREAM555_DEST_FACEBOOK_RTMP_URL: {
@@ -4123,7 +4118,6 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               group: "Channels",
               width: "half",
               order: 460,
-              icon: "🔵",
               showIf: {
                 field: "STREAM555_DEST_FACEBOOK_ENABLED",
                 op: "eq",
@@ -4148,8 +4142,8 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               order: 480,
               type: "radio",
               options: [
-                { value: "true", label: "Enabled", icon: "✅" },
-                { value: "false", label: "Disabled", icon: "⛔" },
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
               ],
             },
             STREAM555_DEST_CUSTOM_RTMP_URL: {
@@ -4157,7 +4151,6 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               group: "Channels",
               width: "half",
               order: 490,
-              icon: "🧩",
               showIf: {
                 field: "STREAM555_DEST_CUSTOM_ENABLED",
                 op: "eq",
@@ -4429,13 +4422,11 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               label: "Public Base URL",
               group: "Connection",
               width: "half",
-              icon: "🌐",
             },
             STREAM555_INTERNAL_BASE_URL: {
               label: "Internal Base URL",
               group: "Connection",
               width: "half",
-              icon: "🏠",
             },
             STREAM555_INTERNAL_AGENT_IDS: {
               label: "Internal Agent IDs",
@@ -4453,19 +4444,16 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               group: "Wallet Auth",
               width: "half",
               type: "radio",
-              icon: "👛",
               options: [
                 {
                   value: "solana",
                   label: "Solana (recommended)",
                   description: "Use Solana wallet first when present.",
-                  icon: "◎",
                 },
                 {
                   value: "evm",
                   label: "Ethereum fallback",
                   description: "Use EVM wallet only when Solana is unavailable.",
-                  icon: "◇",
                 },
               ],
             },
@@ -4475,15 +4463,14 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               width: "half",
               type: "radio",
               options: [
-                { value: "true", label: "Enabled", icon: "✅" },
-                { value: "false", label: "Disabled", icon: "⛔" },
+                { value: "true", label: "Enabled" },
+                { value: "false", label: "Disabled" },
               ],
             },
             STREAM555_WALLET_AUTH_PROVISION_TARGET_CHAIN: {
               label: "Provision Target Chain",
               group: "Wallet Auth",
               width: "half",
-              icon: "🔁",
             },
             STREAM555_ADMIN_API_KEY: {
               label: "Admin API Key",
@@ -4724,13 +4711,11 @@ function discoverPluginsFromManifest(): PluginEntry[] {
               label: "Public Base URL",
               group: "Connection",
               width: "half",
-              icon: "🌐",
             },
             STREAM555_INTERNAL_BASE_URL: {
               label: "Internal Base URL",
               group: "Connection",
               width: "half",
-              icon: "🏠",
             },
             STREAM555_INTERNAL_AGENT_IDS: {
               label: "Internal Agent IDs",

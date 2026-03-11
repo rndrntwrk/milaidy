@@ -284,15 +284,31 @@ export function createMilaidyPlugin(config?: MilaidyPluginConfig): Plugin {
       _message: Memory,
       _state: State,
     ): Promise<ProviderResult> {
-      const ids = EMOTE_CATALOG.map((e) => e.id).join(", ");
+      const autoEligible = EMOTE_CATALOG.filter((emote) => emote.autoEligible).map(
+        (emote) => emote.id,
+      );
+      const grouped = new Map<string, string[]>();
+      for (const emote of EMOTE_CATALOG) {
+        const bucket = grouped.get(emote.drawerGroup) ?? [];
+        bucket.push(emote.id);
+        grouped.set(emote.drawerGroup, bucket);
+      }
+
       return {
         text: [
           "## Available Emotes",
           "",
           "You can play emote animations on your 3D avatar using the PLAY_EMOTE action.",
-          "Use emotes sparingly and naturally during conversation to express yourself.",
+          "Use motions sparingly and naturally during conversation to express yourself.",
+          "Explicit user requests for a motion should win over your own spontaneous choices.",
+          "Subtle idles and gestures are preferred over dramatic dance or combat loops unless the conversation clearly calls for them.",
           "",
-          `Available emote IDs: ${ids}`,
+          "### Motion Groups",
+          ...Array.from(grouped.entries()).map(
+            ([group, ids]) => `- ${group}: ${ids.join(", ")}`,
+          ),
+          "",
+          `Auto-eligible motions: ${autoEligible.join(", ")}`,
         ].join("\n"),
       };
     },

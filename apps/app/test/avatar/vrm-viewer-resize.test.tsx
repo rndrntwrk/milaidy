@@ -17,6 +17,7 @@ const { MockVrmEngine, mockLoadVrmFromUrl } = vi.hoisted(() => {
     isInitialized = vi.fn(() => this.initialized);
     setScenePreset = vi.fn(async () => {});
     setSceneMark = vi.fn(async () => {});
+    setIdleGlbUrls = vi.fn();
     setMouthOpen = vi.fn();
     setSpeaking = vi.fn();
     loadVrmFromUrl = loadVrmFromUrl;
@@ -27,6 +28,9 @@ const { MockVrmEngine, mockLoadVrmFromUrl } = vi.hoisted(() => {
       idlePlaying: true,
       idleTime: 0,
       idleTracks: 0,
+      activeAnimationState: "idle",
+      activeIdleSource: "alice",
+      idleHealthy: true,
     }));
 
     constructor() {

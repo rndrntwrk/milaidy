@@ -15,6 +15,46 @@ import { EMOTE_BY_ID } from "../emotes/catalog";
 
 /** API port for posting emote requests. */
 const API_PORT = process.env.API_PORT || process.env.SERVER_PORT || "2138";
+const AUTO_EMOTE_COOLDOWN_MS = 15_000;
+
+let lastAutoEmoteAt = 0;
+let lastAutoEmoteId: string | null = null;
+
+function normalizeComparableText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function extractMessageText(message: unknown): string {
+  const candidate = (
+    message as { content?: { text?: unknown } } | undefined
+  )?.content?.text;
+  return typeof candidate === "string" ? candidate : "";
+}
+
+function messageExplicitlyRequestsEmote(messageText: string, emote: {
+  id: string;
+  name: string;
+}): boolean {
+  const haystack = normalizeComparableText(messageText);
+  if (!haystack) return false;
+
+  const terms = new Set([
+    normalizeComparableText(emote.id),
+    normalizeComparableText(emote.name),
+  ]);
+
+  for (const term of terms) {
+    if (!term) continue;
+    if (haystack.includes(term)) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 export const emoteAction: Action = {
   name: "PLAY_EMOTE",
@@ -62,6 +102,26 @@ export const emoteAction: Action = {
         };
       }
 
+      const explicitRequest = messageExplicitlyRequestsEmote(
+        extractMessageText(_message),
+        emote,
+      );
+      const now = Date.now();
+      if (emote.autoEligible && !explicitRequest) {
+        const timeSinceLastAutoEmote = now - lastAutoEmoteAt;
+        const repeatedTooSoon =
+          lastAutoEmoteId === emote.id &&
+          timeSinceLastAutoEmote < AUTO_EMOTE_COOLDOWN_MS;
+        const anyAutoTooSoon = timeSinceLastAutoEmote < AUTO_EMOTE_COOLDOWN_MS / 2;
+        if (repeatedTooSoon || anyAutoTooSoon) {
+          return {
+            text: "",
+            success: true,
+            data: { skipped: true, reason: "cooldown", emoteId: emote.id },
+          };
+        }
+      }
+
       // POST to the local API server to trigger the emote.
       const response = await fetch(`http://localhost:${API_PORT}/api/emote`, {
         method: "POST",
@@ -74,6 +134,11 @@ export const emoteAction: Action = {
           text: "",
           success: false,
         };
+      }
+
+      if (emote.autoEligible) {
+        lastAutoEmoteAt = now;
+        lastAutoEmoteId = emote.id;
       }
 
       // Return a descriptive text response.

@@ -6,16 +6,18 @@ import { ProStreamerStageComposition } from "./ProStreamerStageComposition.js";
 import { Badge } from "./ui/Badge.js";
 import { Button } from "./ui/Button.js";
 import { ScrollArea } from "./ui/ScrollArea.js";
-import { Textarea } from "./ui/Textarea.js";
 import { resolveAgentDisplayName } from "./shared/agentDisplayName.js";
 import { buildPublicActionEntries } from "./shared/publicActionEntries.js";
 import {
   AgentIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
   MicIcon,
   OperatorIcon,
   SendIcon,
   StopIcon,
   SystemIcon,
+  ThreadsIcon,
 } from "./ui/Icons.js";
 
 export function AgentCore() {
@@ -42,10 +44,12 @@ export function AgentCore() {
   } = useApp();
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLFormElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [voiceConfig, setVoiceConfig] = useState<VoiceConfig | null>(null);
   const [composerClearancePx, setComposerClearancePx] = useState(
     DEFAULT_COMPOSER_CLEARANCE_PX,
   );
+  const [chatExpanded, setChatExpanded] = useState(false);
 
   const agentName = resolveAgentDisplayName(agentStatus?.agentName);
 
@@ -103,6 +107,27 @@ export function AgentCore() {
     onTranscript: handleVoiceTranscript,
     voiceConfig,
   });
+  const hasChatDraft = chatInput.trim().length > 0;
+  const chatNeedsExpandedState =
+    hasChatDraft ||
+    chatPendingImages.length > 0 ||
+    chatSending ||
+    chatFirstTokenReceived ||
+    voice.isListening;
+
+  useEffect(() => {
+    if (chatNeedsExpandedState) {
+      setChatExpanded(true);
+    }
+  }, [chatNeedsExpandedState]);
+
+  useEffect(() => {
+    if (!chatExpanded) return;
+    const frame = window.requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [chatExpanded]);
 
   useLayoutEffect(() => {
     const composerNode = composerRef.current;
@@ -252,7 +277,7 @@ export function AgentCore() {
 
       <form
         ref={composerRef}
-        className="pro-streamer-composer-shell absolute bottom-4 left-4 right-4 z-10"
+        className="pro-streamer-chat-drawer absolute bottom-4 inset-x-0 z-10 flex justify-center px-4"
         data-composer-shell
         onSubmit={(event) => {
           event.preventDefault();
@@ -264,58 +289,85 @@ export function AgentCore() {
           void handleChatSend();
         }}
       >
-        <div className="pro-streamer-composer-panel mx-auto w-full max-w-[1160px]">
-          <div className="pro-streamer-composer-panel__body">
-            <Textarea
-              value={chatInput}
-              onChange={(event) => setState("chatInput", event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  if (chatSending) {
-                    void handleChatStop();
-                    return;
-                  }
-                  if (!chatInput.trim()) return;
-                  void handleChatSend();
-                }
-              }}
-              aria-label="Operator conversation input"
-              placeholder={voice.isListening ? "Listening..." : `Reply to ${agentName}...`}
-              className="pro-streamer-composer-panel__textarea"
-            />
-          </div>
+        <div className="pro-streamer-chat-drawer__shell">
+          <button
+            type="button"
+            className={`pro-streamer-chat-drawer__toggle ${chatExpanded ? "pro-streamer-chat-drawer__toggle--open" : ""}`}
+            aria-expanded={chatExpanded}
+            aria-controls="pro-streamer-chat-drawer-panel"
+            onClick={() => setChatExpanded((current) => !current)}
+          >
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white/[0.08] text-white/84">
+              <ThreadsIcon className="h-3.5 w-3.5" />
+            </span>
+            <span>Chat</span>
+            {chatExpanded ? (
+              <ChevronDownIcon className="h-3.5 w-3.5 text-white/68" />
+            ) : (
+              <ChevronUpIcon className="h-3.5 w-3.5 text-white/68" />
+            )}
+          </button>
 
-          <div className="pro-streamer-composer-panel__footer">
-            <div className="flex min-h-10 items-center gap-2">
-              {chatPendingImages.length > 0 ? (
-                <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px] text-white/68">
-                  {chatPendingImages.length} queued
-                </Badge>
-              ) : null}
-            </div>
+          <div
+            id="pro-streamer-chat-drawer-panel"
+            className={`pro-streamer-chat-drawer__panel ${chatExpanded ? "pro-streamer-chat-drawer__panel--open" : "pro-streamer-chat-drawer__panel--closed"}`}
+            aria-hidden={!chatExpanded}
+          >
+            <div className="pro-streamer-composer-panel w-full">
+              <div className="pro-streamer-composer-panel__body">
+                <textarea
+                  ref={textareaRef}
+                  value={chatInput}
+                  onChange={(event) => setState("chatInput", event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      if (chatSending) {
+                        void handleChatStop();
+                        return;
+                      }
+                      if (!chatInput.trim()) return;
+                      void handleChatSend();
+                    }
+                  }}
+                  aria-label="Operator conversation input"
+                  placeholder={voice.isListening ? "Listening..." : `Reply to ${agentName}...`}
+                  className="pro-streamer-composer-panel__textarea"
+                />
+              </div>
 
-            <div className="pro-streamer-composer-panel__actions">
-            <Button
-              type="button"
-              variant={voice.isListening ? "secondary" : "outline"}
-              size="icon"
-              className={`h-11 w-11 shrink-0 rounded-full ${voice.isListening ? "border-white/18 bg-white/[0.12] text-white" : "border-white/12 bg-white/[0.04] text-white/82"}`}
-              aria-label={voice.isListening ? "Stop voice input" : "Start voice input"}
-              title={voice.isListening ? "Stop voice input" : "Start voice input"}
-              onClick={voice.toggleListening}
-            >
-              <MicIcon className={`h-4 w-4 ${voice.isListening ? "fill-current" : ""}`} />
-            </Button>
-            <Button
-              type="submit"
-              variant={chatSending ? "outline" : "default"}
-              className={`h-11 shrink-0 rounded-full px-5 ${chatSending ? "border-danger/30 bg-danger/10 text-danger hover:bg-danger/14" : "bg-white/92 text-black hover:bg-white"}`}
-              aria-label={chatSending ? "Stop execution" : "Send reply"}
-            >
-              {chatSending ? <StopIcon className="h-4 w-4" /> : <SendIcon className="h-4 w-4" />}
-              <span>{chatSending ? "Stop" : "Send"}</span>
-            </Button>
+              <div className="pro-streamer-composer-panel__footer">
+                <div className="flex min-h-10 items-center gap-2">
+                  {chatPendingImages.length > 0 ? (
+                    <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px] text-white/68">
+                      {chatPendingImages.length} queued
+                    </Badge>
+                  ) : null}
+                </div>
+
+                <div className="pro-streamer-composer-panel__actions">
+                <Button
+                  type="button"
+                  variant={voice.isListening ? "secondary" : "outline"}
+                  size="icon"
+                  className={`h-11 w-11 shrink-0 rounded-full ${voice.isListening ? "border-white/18 bg-white/[0.12] text-white" : "border-white/12 bg-white/[0.04] text-white/82"}`}
+                  aria-label={voice.isListening ? "Stop voice input" : "Start voice input"}
+                  title={voice.isListening ? "Stop voice input" : "Start voice input"}
+                  onClick={voice.toggleListening}
+                >
+                  <MicIcon className={`h-4 w-4 ${voice.isListening ? "fill-current" : ""}`} />
+                </Button>
+                <Button
+                  type="submit"
+                  variant={chatSending ? "outline" : "default"}
+                  className={`h-11 shrink-0 rounded-full px-5 ${chatSending ? "border-danger/30 bg-danger/10 text-danger hover:bg-danger/14" : "bg-white/92 text-black hover:bg-white"}`}
+                  aria-label={chatSending ? "Stop execution" : "Send reply"}
+                >
+                  {chatSending ? <StopIcon className="h-4 w-4" /> : <SendIcon className="h-4 w-4" />}
+                  <span>{chatSending ? "Stop" : "Send"}</span>
+                </Button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

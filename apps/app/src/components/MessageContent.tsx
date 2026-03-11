@@ -25,6 +25,14 @@ import { Button } from "./ui/Button.js";
 import { Card } from "./ui/Card.js";
 import { Badge } from "./ui/Badge.js";
 import {
+  ActivityIcon,
+  BroadcastIcon,
+  CameraIcon,
+  PlayIcon,
+  SparkIcon,
+  VideoIcon,
+} from "./ui/Icons.js";
+import {
   parseFive55ActionEnvelope,
   type Five55ActionEnvelope,
 } from "./five55ActionEnvelope";
@@ -508,6 +516,59 @@ function ActionEnvelopeBlock({ envelope }: { envelope: Five55ActionEnvelope }) {
   );
 }
 
+function OperatorActionPillBlock({
+  label,
+  kind,
+  detail,
+}: {
+  label: string;
+  kind: "stream" | "avatar" | "launch";
+  detail?: string;
+}) {
+  const Icon =
+    kind === "avatar"
+      ? SparkIcon
+      : kind === "launch"
+        ? PlayIcon
+        : BroadcastIcon;
+  const eyebrow =
+    kind === "avatar"
+      ? "Avatar Action"
+      : kind === "launch"
+        ? "Launch"
+        : "Stream Action";
+  const accentClass =
+    kind === "avatar"
+      ? "border-[rgba(236,201,75,0.18)] bg-[linear-gradient(135deg,rgba(255,193,7,0.14),rgba(255,255,255,0.02))] text-[#ffe7a2]"
+      : kind === "launch"
+        ? "border-[rgba(125,211,252,0.18)] bg-[linear-gradient(135deg,rgba(56,189,248,0.14),rgba(255,255,255,0.02))] text-[#d5f2ff]"
+        : "border-[rgba(16,185,129,0.22)] bg-[linear-gradient(135deg,rgba(16,185,129,0.14),rgba(255,255,255,0.02))] text-[#d2fff1]";
+
+  return (
+    <div className="my-1 flex flex-col items-start gap-2">
+      <div className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.24em] text-white/42">
+        {kind === "avatar" ? (
+          <ActivityIcon className="h-3.5 w-3.5" />
+        ) : kind === "launch" ? (
+          <CameraIcon className="h-3.5 w-3.5" />
+        ) : (
+          <VideoIcon className="h-3.5 w-3.5" />
+        )}
+        {eyebrow}
+      </div>
+      <div
+        className={`inline-flex max-w-full items-center gap-2 rounded-full border px-3.5 py-2 text-sm font-medium shadow-[0_12px_30px_rgba(0,0,0,0.24)] backdrop-blur-xl ${accentClass}`}
+      >
+        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-black/24">
+          <Icon className="h-3.5 w-3.5" />
+        </span>
+        <span className="truncate">{label}</span>
+      </div>
+      {detail ? <div className="text-[11px] text-white/54">{detail}</div> : null}
+    </div>
+  );
+}
+
 function renderTextOrEnvelope(text: string) {
   const envelope = parseFive55ActionEnvelope(text);
   if (envelope) {
@@ -528,6 +589,41 @@ export function MessageContent({ message }: MessageContentProps) {
       return [{ kind: "text" as const, text: message.text }];
     }
   }, [message.text]);
+
+  if (message.blocks && message.blocks.length > 0) {
+    return (
+      <div className="space-y-2">
+        {message.blocks.map((block, index) => {
+          switch (block.type) {
+            case "text":
+              return <div key={`${message.id}-text-${index}`}>{renderTextOrEnvelope(block.text)}</div>;
+            case "config-form":
+              if (BLOCKED_IDS.has(block.pluginId)) return null;
+              return <InlinePluginConfig key={`${message.id}-config-${index}`} pluginId={block.pluginId} />;
+            case "ui-spec":
+              return (
+                <UiSpecBlock
+                  key={`${message.id}-ui-${index}`}
+                  spec={block.spec as UiSpec}
+                  raw={block.raw ?? JSON.stringify(block.spec, null, 2)}
+                />
+              );
+            case "action-pill":
+              return (
+                <OperatorActionPillBlock
+                  key={`${message.id}-action-${index}`}
+                  label={block.label}
+                  kind={block.kind}
+                  detail={block.detail}
+                />
+              );
+            default:
+              return null;
+          }
+        })}
+      </div>
+    );
+  }
 
   // Fast path: single plain-text segment (most messages)
   if (segments.length === 1 && segments[0].kind === "text") {
