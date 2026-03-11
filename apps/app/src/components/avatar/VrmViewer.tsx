@@ -15,6 +15,7 @@ const DEFAULT_VRM_PATH = DEFAULT_PRO_STREAMER_VRM_URL;
 export type VrmViewerProps = {
   /** Path to the VRM file to load (default: built-in pro streamer avatar) */
   vrmPath?: string;
+  idleGlbPaths?: string[];
   mouthOpen: number;
   /** When true the engine generates mouth animation internally */
   isSpeaking?: boolean;
@@ -35,6 +36,7 @@ export function VrmViewer(props: VrmViewerProps) {
     onEngineState,
     onViewerError,
     vrmPath,
+    idleGlbPaths,
   } =
     props;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -73,6 +75,7 @@ export function VrmViewer(props: VrmViewerProps) {
           }
         }
       });
+      engine.setIdleGlbUrls(idleGlbPaths ?? []);
       void engine.setScenePreset(scenePreset ?? "default");
       void engine.setSceneMark(sceneMark ?? "stage");
     } catch (err) {
@@ -139,6 +142,12 @@ export function VrmViewer(props: VrmViewerProps) {
     void engine.setSceneMark(sceneMark ?? "stage");
   }, [sceneMark]);
 
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine || !engine.isInitialized()) return;
+    engine.setIdleGlbUrls(idleGlbPaths ?? []);
+  }, [idleGlbPaths]);
+
   // Load VRM when path changes
   useEffect(() => {
     const engine = engineRef.current;
@@ -162,6 +171,9 @@ export function VrmViewer(props: VrmViewerProps) {
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return;
         console.warn("Failed to load VRM:", err);
+        onViewerError?.(
+          err instanceof Error ? err : new Error("Failed to load VRM"),
+        );
       }
     })();
 
