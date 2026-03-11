@@ -513,6 +513,7 @@ function parseConversationMessageEvent(
   const text = value.text;
   const timestamp = value.timestamp;
   const source = value.source;
+  const blocks = value.blocks;
   if (
     typeof id !== "string" ||
     (role !== "user" && role !== "assistant") ||
@@ -522,6 +523,33 @@ function parseConversationMessageEvent(
     return null;
   }
   const parsed: ConversationMessage = { id, role, text, timestamp };
+  if (Array.isArray(blocks)) {
+    const parsedBlocks = blocks.filter((block): block is ContentBlock => {
+      if (!isRecord(block) || typeof block.type !== "string") return false;
+      if (block.type === "text") {
+        return typeof block.text === "string";
+      }
+      if (block.type === "action-pill") {
+        return (
+          typeof block.label === "string" &&
+          (block.kind === "stream" ||
+            block.kind === "avatar" ||
+            block.kind === "launch") &&
+          (block.detail === undefined || typeof block.detail === "string")
+        );
+      }
+      if (block.type === "ui-spec") {
+        return isRecord(block.spec);
+      }
+      if (block.type === "config-form") {
+        return typeof block.pluginId === "string" && isRecord(block.schema);
+      }
+      return false;
+    });
+    if (parsedBlocks.length > 0) {
+      parsed.blocks = parsedBlocks;
+    }
+  }
   if (typeof source === "string" && source.length > 0) {
     parsed.source = source;
   }
@@ -2850,30 +2878,82 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const sendOperatorActionMessage = useCallback(
     async ({
       label,
-      prompt,
       kind,
       detail,
-      channelType = "DM",
     }: {
       label: string;
-      prompt: string;
       kind: "stream" | "avatar" | "launch";
       detail?: string;
-      channelType?: ConversationChannelType;
-    }) =>
-      sendConversationTurn({
-        text: prompt,
-        channelType,
-        userBlocks: [
+    }) => {
+      let convId = activeConversationIdRef.current ?? activeConversationId;
+      if (!convId) {
+        try {
+          const { conversation } = await client.createConversation();
+          setConversations((prev) => [conversation, ...prev]);
+          setActiveConversationId(conversation.id);
+          activeConversationIdRef.current = conversation.id;
+          setConversationMessages([]);
+          convId = conversation.id;
+        } catch {
+          return false;
+        }
+      }
+
+      const appendLoggedAction = (message: ConversationMessage) => {
+        setConversationMessages((prev) => {
+          if (prev.some((entry) => entry.id === message.id)) return prev;
+          return [...prev, message];
+        });
+      };
+
+      const logActionForConversation = async (conversationId: string) => {
+        client.sendWsMessage({
+          type: "active-conversation",
+          conversationId,
+        });
+        const { message } = await client.logConversationOperatorAction(
+          conversationId,
           {
-            type: "action-pill",
             label,
             kind,
             detail,
+            fallbackText: label,
           },
-        ],
-      }),
-    [sendConversationTurn],
+        );
+        appendLoggedAction(message);
+        return message;
+      };
+
+      try {
+        await logActionForConversation(convId);
+        void loadConversations();
+        return true;
+      } catch (err) {
+        const status = (err as { status?: number }).status;
+        if (status === 404) {
+          try {
+            const { conversation } = await client.createConversation();
+            setConversations((prev) => [conversation, ...prev]);
+            setActiveConversationId(conversation.id);
+            activeConversationIdRef.current = conversation.id;
+            setConversationMessages([]);
+            await logActionForConversation(conversation.id);
+            void loadConversations();
+            return true;
+          } catch {
+            return false;
+          }
+        }
+
+        setActionNotice(
+          `Action executed, but logging failed: ${err instanceof Error ? err.message : "unknown error"}`,
+          "info",
+          2600,
+        );
+        return false;
+      }
+    },
+    [activeConversationId, loadConversations, setActionNotice],
   );
 
   const handleChatStop = useCallback(() => {
@@ -3253,22 +3333,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             )
             .join(", ")
         : "Configured channels";
-      const resolveLaunchPrompt = (mode: GoLiveLaunchMode) => {
-        switch (mode) {
-          case "camera":
-            return "You are now live. Give a concise on-air opener, current stream state, and the next production action.";
-          case "radio":
-            return "You are live in lo-fi radio mode. Summarize the current audio mood and the next on-air move.";
-          case "screen-share":
-            return "Confirm screen-share is active and narrate what viewers should focus on next.";
-          case "play-games":
-            return "You are now live with gameplay active. Provide concise production commentary, score context, and the next audience-facing beat.";
-          case "reaction":
-            return "Start the next reaction segment now and keep your commentary focused on viewer engagement.";
-          default:
-            return "You are now live. Summarize stream state and the next production action.";
-        }
-      };
       const fail = (
         message: string,
         tone: GoLiveLaunchResult["tone"] = "error",
@@ -3292,7 +3356,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       let launchSucceeded = false;
       let launchLabel = "Go Live";
-      let launchPrompt = resolveLaunchPrompt(config.launchMode);
       let successMessage = `Launched ${launchLabel} on ${channelLabel}.`;
 
       try {
@@ -3350,8 +3413,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
                   );
                   successMessage =
                     `Go live started, but segment bootstrap failed: ${bootstrapFailureReason}`;
-                  launchPrompt =
-                    "You are live. Confirm stream health, explain why segment mode is not active, and provide the exact next remediation step.";
                 }
                 launchSucceeded = true;
               } else if (!legacyStreamAvailable) {
@@ -3632,9 +3693,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setActiveGameSandbox(launch.sandbox ?? DEFAULT_GAME_SANDBOX);
           setActiveGamePostMessageAuth(launch.postMessageAuth);
           setActiveGamePostMessagePayload(null);
-          launchPrompt =
-            `You are now spectating ${resolvedGameTitle} (${resolvedGameId}) in autonomous bot mode. ` +
-            "Provide live game commentary, key decisions, and score/capture updates while continuing in-play control.";
 
           if (stream555ControlAvailable) {
             const attachPlan = await executePlanWithRetry(
@@ -3741,7 +3799,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setGoLiveModalOpen(false);
         await sendOperatorActionMessage({
           label: launchLabel,
-          prompt: launchPrompt,
           kind: "launch",
           detail: `${channelLabel} · ${config.layoutMode === "camera-hold" ? "Camera hold" : "Camera full"}`,
         });
@@ -4640,10 +4697,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    if (shouldSendOperatorMessage && prompt.trim()) {
+    if (shouldSendOperatorMessage && (layer.label.trim().length > 0 || prompt.trim().length > 0)) {
       await sendOperatorActionMessage({
         label: layer.label,
-        prompt,
         kind: "stream",
         detail: operatorDetail,
       });
@@ -5937,10 +5993,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await client.playEmote(emoteId);
         void sendOperatorActionMessage({
           label: emote.name,
-          prompt:
-            emote.description?.trim().length
-              ? emote.description
-              : `Operator triggered the ${emote.name} avatar motion. Acknowledge the motion naturally and continue the scene.`,
           kind: "avatar",
           detail: emote.loop ? "Looping motion" : "One-shot motion",
         });
@@ -5975,8 +6027,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     document.dispatchEvent(new CustomEvent("milady:stop-emote"));
     void sendOperatorActionMessage({
       label: "Stop Motion",
-      prompt:
-        "Operator stopped the current avatar motion. Return to the idle pool and continue naturally.",
       kind: "avatar",
       detail: "Idle pool restored",
     });

@@ -69,6 +69,12 @@ vi.mock("../../src/components/ui/Icons.js", () => ({
   ThreadsIcon: () => React.createElement("span", null, "ThreadsIcon"),
   ChevronDownIcon: () => React.createElement("span", null, "ChevronDownIcon"),
   ChevronUpIcon: () => React.createElement("span", null, "ChevronUpIcon"),
+  ActivityIcon: () => React.createElement("span", null, "ActivityIcon"),
+  BroadcastIcon: () => React.createElement("span", null, "BroadcastIcon"),
+  CameraIcon: () => React.createElement("span", null, "CameraIcon"),
+  PlayIcon: () => React.createElement("span", null, "PlayIcon"),
+  SparkIcon: () => React.createElement("span", null, "SparkIcon"),
+  VideoIcon: () => React.createElement("span", null, "VideoIcon"),
 }));
 
 import { AgentCore } from "../../src/components/AgentCore.js";
@@ -229,5 +235,53 @@ describe("AgentCore layout", () => {
     });
 
     expect(viewport?.style.bottom).toBe("320px");
+  });
+
+  it("renders operator action blocks as pills instead of raw prompt text in the stage lane", () => {
+    mockUseApp.mockReturnValue({
+      chatAvatarSpeaking: false,
+      conversationMessages: [
+        {
+          id: "operator-action-1",
+          timestamp: Date.now(),
+          role: "user",
+          text: "internal prompt text that should not render",
+          blocks: [
+            {
+              type: "action-pill",
+              label: "Backflip",
+              kind: "avatar",
+              detail: "One-shot motion",
+            },
+          ],
+          source: "operator_action",
+        },
+      ],
+      chatInput: "",
+      chatSending: false,
+      chatFirstTokenReceived: false,
+      agentStatus: { agentName: "rasp" },
+      chatPendingImages: [],
+      autonomousEvents: [],
+      activeGameDisplayName: "",
+      activeGameSandbox: "",
+      activeGameViewerUrl: "",
+      liveHeroSource: null,
+      liveLayoutMode: "camera-full",
+      setState: vi.fn(),
+      handleChatSend: vi.fn(async () => {}),
+      handleChatStop: vi.fn(async () => {}),
+    });
+
+    act(() => {
+      root?.render(React.createElement(AgentCore));
+    });
+
+    const timeline = container?.querySelector("[data-conversation-timeline]");
+    const text = timeline?.textContent ?? "";
+
+    expect(text).toContain("Backflip");
+    expect(text).toContain("One-shot motion");
+    expect(text).not.toContain("internal prompt text that should not render");
   });
 });
