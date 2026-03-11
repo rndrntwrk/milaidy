@@ -581,12 +581,8 @@ export function MiladyOsDashboard() {
         open={leftRailState === "expanded"}
         side={viewportMode === "desktop" ? "left" : "bottom"}
         onClose={collapseRails}
-        compact={viewportMode === "desktop"}
-        className={
-          viewportMode === "desktop"
-            ? "w-[min(22rem,92vw)] sm:top-[10vh] sm:bottom-auto sm:h-[80vh] sm:max-h-[80vh]"
-            : "h-[80dvh]"
-        }
+        floating={viewportMode === "desktop"}
+        className={viewportMode === "desktop" ? undefined : "h-[80dvh]"}
       >
         <div
           className="pro-streamer-summary-sheet flex h-full min-h-0 flex-col overflow-hidden"

@@ -204,8 +204,10 @@ describe("MiladyOsDashboard", () => {
     });
 
     const sheet = tree.root.findByProps({ "data-sheet-side": "left" });
+    expect(sheet.props["data-sheet-layout"]).toBe("floating");
     expect(sheet.props.className).toContain("sm:h-[80vh]");
     expect(sheet.props.className).toContain("sm:top-[10vh]");
+    expect(sheet.props.className).not.toContain("sm:max-h-[min(24rem,calc(100vh-9rem))]");
   });
 
   it("keeps the Action Log shell on an explicit mobile 80dvh sheet", () => {
