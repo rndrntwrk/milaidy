@@ -8,6 +8,8 @@ describe("MiladyClient Electron API fallback", () => {
   const originalBase = (window as { __MILADY_API_BASE__?: string })
     .__MILADY_API_BASE__;
   const originalProtocol = window.location.protocol;
+  const originalToken = (window as { __MILADY_API_TOKEN__?: string })
+    .__MILADY_API_TOKEN__;
 
   beforeEach(() => {
     // Aggressively clear global state that might leak from other tests
@@ -27,6 +29,12 @@ describe("MiladyClient Electron API fallback", () => {
         originalBase;
     } else {
       delete (window as { __MILADY_API_BASE__?: string }).__MILADY_API_BASE__;
+    }
+    if (originalToken !== undefined) {
+      (window as { __MILADY_API_TOKEN__?: string }).__MILADY_API_TOKEN__ =
+        originalToken;
+    } else {
+      delete (window as { __MILADY_API_TOKEN__?: string }).__MILADY_API_TOKEN__;
     }
     Object.defineProperty(window, "location", {
       value: { ...window.location, protocol: originalProtocol },
@@ -145,5 +153,117 @@ describe("MiladyClient Electron API fallback", () => {
       "http://127.0.0.1:4444/api/status",
       expect.any(Object),
     );
+  });
+
+  it("omits credentialed CORS defaults for capacitor-electron requests against an HTTP API base", async () => {
+    (window as { __MILADY_API_BASE__?: string }).__MILADY_API_BASE__ =
+      "http://127.0.0.1:4444";
+    setProtocol("capacitor-electron:");
+
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          required: false,
+          pairingEnabled: false,
+          expiresAt: null,
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    );
+    Object.defineProperty(globalThis, "fetch", {
+      value: fetchMock,
+      writable: true,
+      configurable: true,
+    });
+
+    const client = new MiladyClient();
+    await client.getAuthStatus();
+
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit & {
+      headers: Record<string, string>;
+    }];
+    expect(requestInit.credentials).toBe("omit");
+    expect(requestInit.headers).not.toHaveProperty("X-Milady-Client-Id");
+  });
+
+  it("preserves same-origin web defaults for standard browser requests", async () => {
+    delete (window as { __MILADY_API_BASE__?: string }).__MILADY_API_BASE__;
+    setProtocol("http:");
+
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          state: "running",
+          agentName: "Milady",
+          model: "test",
+          uptime: 1,
+          startedAt: Date.now(),
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    );
+    Object.defineProperty(globalThis, "fetch", {
+      value: fetchMock,
+      writable: true,
+      configurable: true,
+    });
+
+    const client = new MiladyClient("http://localhost:2138");
+    await client.getStatus();
+
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit & {
+      headers: Record<string, string>;
+    }];
+    expect(requestInit.credentials).toBe("include");
+    expect(requestInit.headers).toHaveProperty("X-Milady-Client-Id");
+  });
+
+  it("preserves explicit request overrides in capacitor-electron mode", async () => {
+    (window as { __MILADY_API_BASE__?: string }).__MILADY_API_BASE__ =
+      "http://127.0.0.1:4444";
+    setProtocol("capacitor-electron:");
+
+    const fetchMock = vi.fn(async () =>
+      new Response(null, {
+        status: 204,
+      }),
+    );
+    Object.defineProperty(globalThis, "fetch", {
+      value: fetchMock,
+      writable: true,
+      configurable: true,
+    });
+
+    const client = new MiladyClient();
+    await (
+      client as unknown as {
+        rawRequest: (
+          path: string,
+          init?: RequestInit,
+          options?: { allowNonOk?: boolean; timeoutMs?: number },
+        ) => Promise<Response>;
+      }
+    ).rawRequest(
+      "/api/status",
+      {
+        credentials: "include",
+        headers: {
+          "X-Milady-Client-Id": "manual-client-id",
+        },
+      },
+      { allowNonOk: true },
+    );
+
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit & {
+      headers: Record<string, string>;
+    }];
+    expect(requestInit.credentials).toBe("include");
+    expect(requestInit.headers["X-Milady-Client-Id"]).toBe("manual-client-id");
   });
 });
