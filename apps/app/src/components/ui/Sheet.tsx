@@ -9,6 +9,7 @@ export function Sheet({
   onClose,
   side = "right",
   compact = false,
+  floating = false,
   className,
   children,
 }: {
@@ -16,6 +17,7 @@ export function Sheet({
   onClose: () => void;
   side?: SheetSide;
   compact?: boolean;
+  floating?: boolean;
   className?: string;
   children: ReactNode;
 }) {
@@ -111,17 +113,22 @@ export function Sheet({
         ref={dialogRef}
         onClick={(event) => event.stopPropagation()}
         data-sheet-side={side}
+        data-sheet-layout={floating ? "floating" : compact ? "compact" : "default"}
         className={cn(
           "sheet-panel",
           "absolute flex max-h-full max-w-full overflow-hidden border border-white/10 bg-[#07090e]/92 shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur-2xl outline-none",
           side === "left" &&
-            (compact
-              ? "left-2 right-2 top-20 h-auto max-h-[min(22rem,calc(100vh-6rem))] w-auto border sm:bottom-auto sm:left-3 sm:right-auto sm:top-24 sm:h-auto sm:max-h-[min(24rem,calc(100vh-9rem))] sm:w-[min(22rem,calc(100vw-5rem))] sm:rounded-[28px] md:w-[min(24rem,calc(100vw-6rem))]"
-              : "inset-y-0 left-0 w-full border-r sm:bottom-3 sm:left-3 sm:top-3 sm:w-[min(34rem,calc(100vw-3rem))] sm:rounded-[28px] md:w-[min(38rem,calc(100vw-4rem))]"),
+            (floating
+              ? "left-2 right-2 top-20 h-auto max-h-[min(80dvh,48rem)] w-auto border sm:bottom-auto sm:left-3 sm:right-auto sm:top-[10vh] sm:h-[80vh] sm:max-h-[80vh] sm:w-[min(22rem,92vw)] sm:rounded-[28px]"
+              : compact
+                ? "left-2 right-2 top-20 h-auto max-h-[min(22rem,calc(100vh-6rem))] w-auto border sm:bottom-auto sm:left-3 sm:right-auto sm:top-24 sm:h-auto sm:max-h-[min(24rem,calc(100vh-9rem))] sm:w-[min(22rem,calc(100vw-5rem))] sm:rounded-[28px] md:w-[min(24rem,calc(100vw-6rem))]"
+                : "inset-y-0 left-0 w-full border-r sm:bottom-3 sm:left-3 sm:top-3 sm:w-[min(34rem,calc(100vw-3rem))] sm:rounded-[28px] md:w-[min(38rem,calc(100vw-4rem))]"),
           side === "right" &&
-            (compact
-              ? "left-2 right-2 top-20 h-auto max-h-[min(22rem,calc(100vh-6rem))] w-auto border sm:bottom-auto sm:left-auto sm:right-3 sm:top-24 sm:h-auto sm:max-h-[min(24rem,calc(100vh-9rem))] sm:w-[min(22rem,calc(100vw-5rem))] sm:rounded-[28px] md:w-[min(24rem,calc(100vw-6rem))]"
-              : "inset-y-0 right-0 w-full border-l sm:bottom-3 sm:right-3 sm:top-3 sm:w-[min(34rem,calc(100vw-3rem))] sm:rounded-[28px] md:w-[min(38rem,calc(100vw-4rem))]"),
+            (floating
+              ? "left-2 right-2 top-20 h-auto max-h-[min(80dvh,48rem)] w-auto border sm:bottom-auto sm:left-auto sm:right-3 sm:top-[10vh] sm:h-[80vh] sm:max-h-[80vh] sm:w-[min(22rem,92vw)] sm:rounded-[28px]"
+              : compact
+                ? "left-2 right-2 top-20 h-auto max-h-[min(22rem,calc(100vh-6rem))] w-auto border sm:bottom-auto sm:left-auto sm:right-3 sm:top-24 sm:h-auto sm:max-h-[min(24rem,calc(100vh-9rem))] sm:w-[min(22rem,calc(100vw-5rem))] sm:rounded-[28px] md:w-[min(24rem,calc(100vw-6rem))]"
+                : "inset-y-0 right-0 w-full border-l sm:bottom-3 sm:right-3 sm:top-3 sm:w-[min(34rem,calc(100vw-3rem))] sm:rounded-[28px] md:w-[min(38rem,calc(100vw-4rem))]"),
           side === "bottom" &&
             "inset-x-0 bottom-0 h-[min(88vh,48rem)] border-t rounded-t-[28px] sm:inset-x-3 sm:bottom-3 sm:rounded-[28px] sm:border sm:border-white/10",
           side === "full" && "inset-0 sm:inset-3 sm:rounded-[32px]",
