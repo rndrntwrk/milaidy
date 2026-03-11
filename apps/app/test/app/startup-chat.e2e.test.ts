@@ -9,9 +9,13 @@ const { mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
 }));
 
-vi.mock("../../src/AppContext", () => ({
-  useApp: () => mockUseApp(),
-}));
+vi.mock("../../src/AppContext", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/AppContext")>();
+  return {
+    ...actual,
+    useApp: () => mockUseApp(),
+  };
+});
 
 vi.mock("../../src/components/Header", () => ({
   Header: () => React.createElement("div", null, "Header"),
@@ -22,6 +26,14 @@ vi.mock("../../src/components/Nav", () => ({
 }));
 vi.mock("../../src/components/CommandPalette", () => ({
   CommandPalette: () => React.createElement("div", null, "CommandPalette"),
+}));
+vi.mock("../../src/components/CustomActionsPanel", () => ({
+  CustomActionsPanel: () =>
+    React.createElement("div", null, "CustomActionsPanel"),
+}));
+vi.mock("../../src/components/CustomActionEditor", () => ({
+  CustomActionEditor: () =>
+    React.createElement("div", null, "CustomActionEditor"),
 }));
 vi.mock("../../src/components/EmotePicker", () => ({
   EmotePicker: () => React.createElement("div", null, "EmotePicker"),
@@ -70,6 +82,33 @@ vi.mock("../../src/components/SettingsView", () => ({
 vi.mock("../../src/components/LoadingScreen", () => ({
   LoadingScreen: () => React.createElement("div", null, "LoadingScreen"),
 }));
+vi.mock("../../src/components/StartupFailureView", () => ({
+  StartupFailureView: () =>
+    React.createElement("div", null, "StartupFailureView"),
+}));
+vi.mock("../../src/components/GameViewOverlay", () => ({
+  GameViewOverlay: () => React.createElement("div", null, "GameViewOverlay"),
+}));
+vi.mock("../../src/components/BugReportModal", () => ({
+  BugReportModal: () => React.createElement("div", null, "BugReportModal"),
+}));
+vi.mock("../../src/components/TerminalPanel", () => ({
+  TerminalPanel: () => React.createElement("div", null, "TerminalPanel"),
+}));
+vi.mock("../../src/components/MiladyOsDashboard", () => ({
+  MiladyOsDashboard: () =>
+    React.createElement("div", null, "MiladyOsDashboard"),
+}));
+vi.mock("../../src/components/MiladyBootShell", () => ({
+  MiladyBootShell: () => React.createElement("div", null, "MiladyBootShell"),
+}));
+vi.mock("../../src/components/ui/Toast", () => ({
+  ToastContainer: () => React.createElement("div", null, "ToastContainer"),
+}));
+vi.mock("../../src/components/ui/ErrorBoundary", () => ({
+  ErrorBoundary: ({ children }: { children: React.ReactNode }) =>
+    React.createElement(React.Fragment, null, children),
+}));
 
 import { App } from "../../src/App";
 
@@ -98,7 +137,18 @@ describe("app startup routing (e2e)", () => {
       authRequired: false,
       onboardingComplete: true,
       tab: "chat",
+      startupPhase: "ready",
+      startupError: null,
+      retryStartup: vi.fn(),
+      currentTheme: "milady",
+      agentStatus: { state: "running" },
+      unreadConversations: new Set(),
+      activeGameViewerUrl: "",
+      gameOverlayEnabled: false,
       actionNotice: null,
+      setActionNotice: vi.fn(),
+      quickLayerStatuses: {},
+      runQuickLayer: vi.fn(),
       toasts: [],
       dismissToast: () => {},
     });
@@ -131,7 +181,18 @@ describe("app startup routing (e2e)", () => {
       authRequired: false,
       onboardingComplete: true,
       tab: "wallets",
+      startupPhase: "ready",
+      startupError: null,
+      retryStartup: vi.fn(),
+      currentTheme: "milady",
+      agentStatus: { state: "running" },
+      unreadConversations: new Set(),
+      activeGameViewerUrl: "",
+      gameOverlayEnabled: false,
       actionNotice: null,
+      setActionNotice: vi.fn(),
+      quickLayerStatuses: {},
+      runQuickLayer: vi.fn(),
       toasts: [],
       dismissToast: () => {},
     });
@@ -179,8 +240,8 @@ describe("app startup routing (e2e)", () => {
       .findAllByType("div")
       .map((node) => node.children.join(""))
       .join("\n");
-    expect(renderedText).not.toContain("ConversationsSidebar");
-    expect(renderedText).not.toContain("AutonomousPanel");
+    expect(renderedText).toContain("ConversationsSidebar");
+    expect(renderedText).toContain("AutonomousPanel");
 
     await act(async () => {
       chatDrawerButton?.props.onClick();
@@ -202,4 +263,5 @@ describe("app startup routing (e2e)", () => {
       .join("\n");
     expect(renderedText).toContain("AutonomousPanel");
   });
+
 });

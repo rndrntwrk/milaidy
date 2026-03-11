@@ -98,6 +98,8 @@ async function flush(): Promise<void> {
 
 describe("ChatView", () => {
   beforeEach(() => {
+    globalThis.localStorage?.clear();
+    globalThis.localStorage?.setItem("milaidy:chat:voiceMuted", "false");
     mockUseApp.mockReset();
     mockUseVoiceChat.mockReset();
     mockClient.getConfig.mockReset();
@@ -320,7 +322,28 @@ describe("ChatView", () => {
     });
 
     await act(async () => {
-      tree.update(React.createElement(ChatView));
+      tree.unmount();
+      tree = TestRenderer.create(React.createElement(ChatView), {
+        createNodeMock: (element) => {
+          const node = element as {
+            type: unknown;
+            props: Record<string, unknown>;
+          };
+          if (
+            node.type === "div" &&
+            node.props["data-testid"] === "chat-messages-scroll"
+          ) {
+            return scrollerMock;
+          }
+          if (node.type === "textarea") {
+            return textareaMock;
+          }
+          if (node.type === "input" && node.props.type === "file") {
+            return fileInputMock;
+          }
+          return {};
+        },
+      });
     });
     await flush();
 
@@ -382,7 +405,28 @@ describe("ChatView", () => {
     });
 
     await act(async () => {
-      tree.update(React.createElement(ChatView));
+      tree.unmount();
+      tree = TestRenderer.create(React.createElement(ChatView), {
+        createNodeMock: (element) => {
+          const node = element as {
+            type: unknown;
+            props: Record<string, unknown>;
+          };
+          if (
+            node.type === "div" &&
+            node.props["data-testid"] === "chat-messages-scroll"
+          ) {
+            return scrollerMock;
+          }
+          if (node.type === "textarea") {
+            return textareaMock;
+          }
+          if (node.type === "input" && node.props.type === "file") {
+            return fileInputMock;
+          }
+          return {};
+        },
+      });
     });
     await flush();
 

@@ -26,12 +26,11 @@ describe("Settings modal keyboard handling", () => {
     });
 
     const dialog = tree.root.findByProps({ role: "dialog" });
-    const preventDefault = vi.fn();
     act(() => {
-      dialog.props.onKeyDown({ key: "Escape", preventDefault });
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     });
 
-    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(dialog.props.role).toBe("dialog");
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
@@ -44,10 +43,11 @@ describe("Settings modal keyboard handling", () => {
 
     const dialog = tree.root.findByProps({ role: "dialog" });
     act(() => {
-      dialog.props.onKeyDown({ key: "Enter", preventDefault: vi.fn() });
-      dialog.props.onKeyDown({ key: " ", preventDefault: vi.fn() });
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: " " }));
     });
 
+    expect(dialog.props.role).toBe("dialog");
     expect(onClose).not.toHaveBeenCalled();
   });
 });

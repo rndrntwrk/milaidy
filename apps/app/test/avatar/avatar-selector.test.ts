@@ -2,7 +2,13 @@
  * Tests for avatar selection logic — VRM index management, path resolution, localStorage persistence.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getVrmPreviewUrl, getVrmUrl, VRM_COUNT } from "../../src/AppContext";
+import {
+  DEFAULT_PRO_STREAMER_VRM_PREVIEW_URL,
+  DEFAULT_PRO_STREAMER_VRM_URL,
+  getVrmPreviewUrl,
+  getVrmUrl,
+  VRM_COUNT,
+} from "../../src/AppContext";
 
 describe("Avatar VRM Utilities", () => {
   describe("VRM_COUNT", () => {
@@ -13,30 +19,32 @@ describe("Avatar VRM Utilities", () => {
 
   describe("getVrmUrl", () => {
     it("returns correct path for each built-in index", () => {
-      for (let i = 1; i <= 8; i++) {
+      expect(getVrmUrl(1)).toBe(DEFAULT_PRO_STREAMER_VRM_URL);
+      for (let i = 2; i <= 8; i++) {
         expect(getVrmUrl(i)).toBe(`/vrms/${i}.vrm`);
       }
     });
 
     it("clamps invalid indices to avatar 1", () => {
-      expect(getVrmUrl(9)).toBe("/vrms/1.vrm");
-      expect(getVrmUrl(-3)).toBe("/vrms/1.vrm");
-      expect(getVrmUrl(Number.NaN)).toBe("/vrms/1.vrm");
-      expect(getVrmUrl(0)).toBe("/vrms/1.vrm");
+      expect(getVrmUrl(9)).toBe(DEFAULT_PRO_STREAMER_VRM_URL);
+      expect(getVrmUrl(-3)).toBe(DEFAULT_PRO_STREAMER_VRM_URL);
+      expect(getVrmUrl(Number.NaN)).toBe(DEFAULT_PRO_STREAMER_VRM_URL);
+      expect(getVrmUrl(0)).toBe(DEFAULT_PRO_STREAMER_VRM_URL);
     });
   });
 
   describe("getVrmPreviewUrl", () => {
     it("returns correct path for each preview image", () => {
-      for (let i = 1; i <= 8; i++) {
+      expect(getVrmPreviewUrl(1)).toBe(DEFAULT_PRO_STREAMER_VRM_PREVIEW_URL);
+      for (let i = 2; i <= 8; i++) {
         expect(getVrmPreviewUrl(i)).toBe(`/vrms/previews/milady-${i}.png`);
       }
     });
 
     it("clamps invalid preview indices to avatar 1", () => {
-      expect(getVrmPreviewUrl(999)).toBe("/vrms/previews/milady-1.png");
-      expect(getVrmPreviewUrl(-1)).toBe("/vrms/previews/milady-1.png");
-      expect(getVrmPreviewUrl(0)).toBe("/vrms/previews/milady-1.png");
+      expect(getVrmPreviewUrl(999)).toBe(DEFAULT_PRO_STREAMER_VRM_PREVIEW_URL);
+      expect(getVrmPreviewUrl(-1)).toBe(DEFAULT_PRO_STREAMER_VRM_PREVIEW_URL);
+      expect(getVrmPreviewUrl(0)).toBe(DEFAULT_PRO_STREAMER_VRM_PREVIEW_URL);
     });
   });
 });
@@ -139,13 +147,13 @@ describe("Avatar Selection State", () => {
           ? customVrmUrl
           : getVrmUrl(selectedVrmIndex || 1);
 
-      expect(vrmPath).toBe("/vrms/1.vrm");
+      expect(vrmPath).toBe(DEFAULT_PRO_STREAMER_VRM_URL);
     });
 
     it("defaults to index 1 when selectedVrmIndex is 0 without custom URL", () => {
       const selectedVrmIndex = 0;
       const vrmPath = getVrmUrl(selectedVrmIndex || 1);
-      expect(vrmPath).toBe("/vrms/1.vrm");
+      expect(vrmPath).toBe(DEFAULT_PRO_STREAMER_VRM_URL);
     });
   });
 });

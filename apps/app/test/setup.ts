@@ -6,11 +6,72 @@
  */
 import { vi } from "vitest";
 
+vi.mock("react-dom", async () => {
+  const actual = await vi.importActual<typeof import("react-dom")>("react-dom");
+  return {
+    ...actual,
+    createPortal: (node: unknown) => node,
+  };
+});
+
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
 }
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+function createMockCanvasContext2D() {
+  return {
+    fillStyle: "#000000",
+    strokeStyle: "#000000",
+    globalAlpha: 1,
+    lineWidth: 1,
+    font: "12px sans-serif",
+    textAlign: "start",
+    textBaseline: "alphabetic",
+    clearRect: vi.fn(),
+    fillRect: vi.fn(),
+    strokeRect: vi.fn(),
+    beginPath: vi.fn(),
+    moveTo: vi.fn(),
+    lineTo: vi.fn(),
+    arc: vi.fn(),
+    closePath: vi.fn(),
+    fill: vi.fn(),
+    stroke: vi.fn(),
+    save: vi.fn(),
+    restore: vi.fn(),
+    translate: vi.fn(),
+    rotate: vi.fn(),
+    scale: vi.fn(),
+    setTransform: vi.fn(),
+    resetTransform: vi.fn(),
+    drawImage: vi.fn(),
+    fillText: vi.fn(),
+    strokeText: vi.fn(),
+    measureText: vi.fn((text = "") => ({
+      width: String(text).length * 8,
+      actualBoundingBoxAscent: 8,
+      actualBoundingBoxDescent: 2,
+    })),
+    createLinearGradient: vi.fn(() => ({
+      addColorStop: vi.fn(),
+    })),
+    createRadialGradient: vi.fn(() => ({
+      addColorStop: vi.fn(),
+    })),
+    createPattern: vi.fn(() => null),
+    getImageData: vi.fn((x = 0, y = 0, width = 0, height = 0) => ({
+      data: new Uint8ClampedArray(Math.max(1, width * height * 4)),
+      width,
+      height,
+      colorSpace: "srgb",
+    })),
+    putImageData: vi.fn(),
+  };
+}
+
+const sharedCanvasContext = createMockCanvasContext2D();
 
 const originalConsoleError = console.error.bind(console);
 
@@ -145,10 +206,13 @@ if (typeof globalThis.document === "undefined") {
   Object.defineProperty(globalThis, "document", {
     value: {
       createElement: vi.fn(() => ({
-        getContext: vi.fn(() => ({ drawImage: vi.fn() })),
+        getContext: vi.fn(() => sharedCanvasContext),
         toDataURL: vi.fn(() => "data:image/jpeg;base64,dGVzdA=="),
         appendChild: vi.fn(),
         removeChild: vi.fn(),
+        remove: vi.fn(),
+        nodeType: 1,
+        nodeName: "CANVAS",
         play: vi.fn(() => Promise.resolve()),
         style: {},
         width: 0,
@@ -156,7 +220,13 @@ if (typeof globalThis.document === "undefined") {
         videoWidth: 1920,
         videoHeight: 1080,
       })),
-      body: { style: {} },
+      body: {
+        style: {},
+        nodeType: 1,
+        nodeName: "BODY",
+        appendChild: vi.fn(),
+        removeChild: vi.fn(),
+      },
       hidden: false,
       hasFocus: vi.fn(() => true),
       documentElement: { requestFullscreen: vi.fn() },
@@ -167,6 +237,19 @@ if (typeof globalThis.document === "undefined") {
       querySelectorAll: vi.fn(() => []),
       activeElement: null,
     },
+    writable: true,
+    configurable: true,
+  });
+}
+
+if (typeof globalThis.HTMLCanvasElement !== "undefined") {
+  Object.defineProperty(globalThis.HTMLCanvasElement.prototype, "getContext", {
+    value: vi.fn(() => sharedCanvasContext),
+    writable: true,
+    configurable: true,
+  });
+  Object.defineProperty(globalThis.HTMLCanvasElement.prototype, "toDataURL", {
+    value: vi.fn(() => "data:image/png;base64,dGVzdA=="),
     writable: true,
     configurable: true,
   });
@@ -355,6 +438,23 @@ if (typeof globalThis.window === "undefined") {
       return true;
     });
   }
+}
+
+if (typeof globalThis.KeyboardEvent === "undefined") {
+  class MockKeyboardEvent extends Event {
+    key: string;
+
+    constructor(type: string, init?: { key?: string }) {
+      super(type);
+      this.key = init?.key ?? "";
+    }
+  }
+
+  Object.defineProperty(globalThis, "KeyboardEvent", {
+    value: MockKeyboardEvent,
+    writable: true,
+    configurable: true,
+  });
 }
 
 if (typeof globalThis.WebSocket === "undefined") {

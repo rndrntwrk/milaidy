@@ -7,6 +7,7 @@
 import {
   createContext,
   type ReactNode,
+  type SetStateAction,
   useCallback,
   useContext,
   useEffect,
@@ -1057,7 +1058,7 @@ export interface AppActions {
   handleChatStop: () => void;
   handleChatClear: () => Promise<void>;
   handleNewConversation: () => Promise<void>;
-  setChatPendingImages: (images: ImageAttachment[]) => void;
+  setChatPendingImages: (images: SetStateAction<ImageAttachment[]>) => void;
   handleSelectConversation: (id: string) => Promise<void>;
   handleDeleteConversation: (id: string) => Promise<void>;
   handleRenameConversation: (id: string, title: string) => Promise<void>;

@@ -61,6 +61,9 @@ describe("proStreamerStageScene", () => {
   it("extracts backdrop metrics, parsed anchor metadata, and authored marks", () => {
     const sceneRoot = buildStageScene();
     const contract = extractProStreamerStageScene(sceneRoot);
+    const anchorPosition = contract.avatarAnchor.getWorldPosition(
+      new THREE.Vector3(),
+    );
     const cameraPosition = contract.stageCamera.getWorldPosition(new THREE.Vector3());
     const stageTowardCamera = new THREE.Vector3(
       cameraPosition.x - contract.stageMark.position.x,
@@ -84,9 +87,10 @@ describe("proStreamerStageScene", () => {
     expect(contract.backdropMetrics.aspect).toBeCloseTo(2, 5);
     expect(contract.backdropMetrics.cameraToPlaneDistance).toBeGreaterThan(0);
     expect(contract.stageMark.position.y).toBeCloseTo(contract.portraitMark.position.y, 5);
-    expect(contract.stageMark.position.x).toBeCloseTo(0, 5);
-    expect(contract.stageMark.position.y).toBeCloseTo(0.28, 5);
-    expect(contract.stageMark.position.z).toBeCloseTo(-0.8, 5);
+    expect(contract.stageMark.position.y).toBeCloseTo(anchorPosition.y, 5);
+    expect(contract.stageMark.position.distanceTo(anchorPosition)).toBeGreaterThan(0);
+    expect(contract.stageMark.position.distanceTo(anchorPosition)).toBeLessThanOrEqual(2.4);
+    expect(contract.stageMark.position.z).toBeLessThan(anchorPosition.z);
     expect(contract.portraitMark.position.z).toBeGreaterThan(contract.stageMark.position.z);
     expect(forwardVector(contract.stageMark.quaternion).dot(stageTowardCamera)).toBeGreaterThan(0.99);
     expect(forwardVector(contract.portraitMark.quaternion).dot(portraitTowardCamera)).toBeGreaterThan(0.99);

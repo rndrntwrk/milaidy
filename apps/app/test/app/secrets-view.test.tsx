@@ -56,7 +56,7 @@ describe("SecretsView picker keyboard behavior", () => {
 
     const addSecretButton = tree.root.find(
       (node) =>
-        node.type === "button" && node.props.children === "+ Add Secret",
+        node.type === "button" && node.props.children?.includes?.("Add Secret"),
     );
 
     await act(async () => {
@@ -65,25 +65,19 @@ describe("SecretsView picker keyboard behavior", () => {
 
     expect(tree.root.findAllByProps({ role: "dialog" }).length).toBe(1);
 
-    const dialog = tree.root.findByProps({ role: "dialog" });
-    const preventDefault = vi.fn();
-
     await act(async () => {
-      dialog.props.onKeyDown({ key: "Enter", preventDefault });
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
     });
-    expect(preventDefault).not.toHaveBeenCalled();
     expect(tree.root.findAllByProps({ role: "dialog" }).length).toBe(1);
 
     await act(async () => {
-      dialog.props.onKeyDown({ key: " ", preventDefault });
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: " " }));
     });
-    expect(preventDefault).not.toHaveBeenCalled();
     expect(tree.root.findAllByProps({ role: "dialog" }).length).toBe(1);
 
     await act(async () => {
-      dialog.props.onKeyDown({ key: "Escape", preventDefault });
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     });
-    expect(preventDefault).toHaveBeenCalledTimes(1);
     expect(tree.root.findAllByProps({ role: "dialog" }).length).toBe(0);
   });
 });

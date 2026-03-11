@@ -1,7 +1,12 @@
 import * as React from "react";
 import { cn } from "./utils.js";
 
-type ButtonVariant = "default" | "outline" | "ghost" | "secondary";
+type ButtonVariant =
+  | "default"
+  | "outline"
+  | "ghost"
+  | "secondary"
+  | "destructive";
 type ButtonSize = "sm" | "md" | "lg" | "icon";
 
 export interface ButtonProps
@@ -19,6 +24,8 @@ const variantClasses: Record<ButtonVariant, string> = {
     "border border-transparent bg-transparent text-white/72 hover:bg-white/[0.06] hover:text-white",
   secondary:
     "border border-accent/25 bg-accent/12 text-accent hover:bg-accent/18",
+  destructive:
+    "border border-danger/35 bg-danger text-white hover:bg-danger/90",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {

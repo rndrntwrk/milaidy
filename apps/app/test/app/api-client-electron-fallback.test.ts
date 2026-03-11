@@ -76,16 +76,21 @@ describe("MiladyClient Electron API fallback", () => {
       "http://localhost:9999";
     setProtocol("capacitor-electron:");
 
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({
-        state: "running",
-        agentName: "Milady",
-        model: "test",
-        uptime: 1,
-        startedAt: Date.now(),
-      }),
-    }));
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          state: "running",
+          agentName: "Milady",
+          model: "test",
+          uptime: 1,
+          startedAt: Date.now(),
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    );
     Object.defineProperty(globalThis, "fetch", {
       value: fetchMock,
       writable: true,
@@ -106,16 +111,21 @@ describe("MiladyClient Electron API fallback", () => {
       undefined;
     setProtocol("capacitor-electron:");
 
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({
-        state: "running",
-        agentName: "Milady",
-        model: "test",
-        uptime: 1,
-        startedAt: Date.now(),
-      }),
-    }));
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          state: "running",
+          agentName: "Milady",
+          model: "test",
+          uptime: 1,
+          startedAt: Date.now(),
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    );
     Object.defineProperty(globalThis, "fetch", {
       value: fetchMock,
       writable: true,

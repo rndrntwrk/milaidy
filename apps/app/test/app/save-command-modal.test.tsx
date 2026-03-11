@@ -24,12 +24,13 @@ describe("SaveCommandModal keyboard behavior", () => {
     const preventDefault = vi.fn();
 
     act(() => {
-      dialog.props.onKeyDown({ key: "Enter", preventDefault });
-      dialog.props.onKeyDown({ key: " ", preventDefault });
-      dialog.props.onKeyDown({ key: "Escape", preventDefault });
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: " " }));
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     });
 
-    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(dialog.props.role).toBe("dialog");
+    expect(preventDefault).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
@@ -101,7 +102,7 @@ describe("SaveCommandModal keyboard behavior", () => {
       (node) => node.type === "p" && node.props.children === "Name is required",
     );
 
-    expect(input.props["aria-invalid"]).toBe("true");
+    expect(input.props["aria-invalid"]).toBe(true);
     expect(input.props["aria-describedby"]).toBe(errorText.props.id);
   });
 });

@@ -2,9 +2,30 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { __electronTestState } from "electron";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { AgentManager } from "../../electron/src/native/agent";
+const electronTestState = vi.hoisted(() => ({
+  appPath: "",
+  isPackaged: true,
+}));
+
+vi.mock("electron", () => ({
+  app: {
+    get isPackaged() {
+      return electronTestState.isPackaged;
+    },
+    getAppPath: () => electronTestState.appPath,
+  },
+  ipcMain: {
+    handle: vi.fn(),
+    removeHandler: vi.fn(),
+  },
+  __electronTestState: electronTestState,
+}));
+
+import * as agentModule from "../../electron/src/native/agent";
+
+const { AgentManager } = agentModule;
 
 interface StartupTestState {
   started: boolean;
