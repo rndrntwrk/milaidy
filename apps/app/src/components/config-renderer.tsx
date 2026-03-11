@@ -37,6 +37,7 @@ import {
   runValidation,
 } from "./config-catalog";
 import { ConfigField } from "./config-field";
+import { Button } from "./ui/Button.js";
 import {
   ActivityIcon,
   AgentIcon,
@@ -267,14 +268,16 @@ function ValidationSummary({
       <ul className="list-none m-0 p-0 flex flex-col gap-1">
         {errorEntries.map(([key]) => (
           <li key={key}>
-            <button
+            <Button
               type="button"
-              className="text-[12px] text-[var(--destructive)] cursor-pointer bg-transparent border-none p-0 hover:underline transition-all text-left flex items-center gap-1.5"
+              variant="ghost"
+              size="sm"
+              className="h-auto w-full justify-start rounded-none p-0 text-left text-[12px] text-[var(--destructive)] hover:bg-transparent hover:text-[var(--destructive)]"
               onClick={() => handleFieldClick(key)}
             >
               <ChevronRightIcon className="h-3.5 w-3.5 opacity-60" />
               <span>{fieldLabels.get(key) ?? key}</span>
-            </button>
+            </Button>
           </li>
         ))}
       </ul>
@@ -700,12 +703,14 @@ export const ConfigRenderer = forwardRef<
           <div key={group} className={groupIndex > 0 ? "mt-5" : ""}>
             {(!minimalChrome ? showHeaders || isCollapsibleGroup : isCollapsibleGroup) &&
               (isCollapsibleGroup ? (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   className={
                     minimalChrome
-                      ? "group mb-3 flex w-full items-center gap-3 border-none bg-transparent p-0 text-left"
-                      : "group mb-3 flex w-full items-center gap-2 border-none bg-transparent p-0 text-left"
+                      ? "group mb-3 h-auto w-full justify-start gap-3 rounded-none border-none bg-transparent p-0 text-left hover:bg-transparent"
+                      : "group mb-3 h-auto w-full justify-start gap-2 rounded-none border-none bg-transparent p-0 text-left hover:bg-transparent"
                   }
                   onClick={() => toggleGroupOpen(group)}
                   aria-expanded={isGroupOpen}
@@ -739,7 +744,7 @@ export const ConfigRenderer = forwardRef<
                     {groupCount}
                   </span>
                   <span className={minimalChrome ? "ml-1 h-px flex-1 bg-white/10" : "ml-1 h-px flex-1 bg-[var(--border)]"} />
-                </button>
+                </Button>
               ) : (
                 <div className="mb-3 flex items-center gap-2">
                   <span className="inline-flex text-base leading-none">
@@ -762,12 +767,14 @@ export const ConfigRenderer = forwardRef<
 
       {advanced.length > 0 && (
         <div className={minimalChrome ? "mt-6 border-t border-white/10 pt-4" : "mt-5 border-t border-[var(--border)] pt-4"}>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             className={
               minimalChrome
-                ? "group mb-3 flex w-full items-center gap-3 cursor-pointer select-none"
-                : "group mb-3 flex items-center gap-2 cursor-pointer select-none"
+                ? "group mb-3 h-auto w-full justify-start gap-3 rounded-none p-0 hover:bg-transparent"
+                : "group mb-3 h-auto w-full justify-start gap-2 rounded-none p-0 hover:bg-transparent"
             }
             onClick={() => setAdvancedOpen((prev) => !prev)}
           >
@@ -797,7 +804,7 @@ export const ConfigRenderer = forwardRef<
               {advanced.length}
             </span>
             <span className={minimalChrome ? "ml-1 h-px flex-1 bg-white/10" : "ml-1 h-px flex-1 bg-[var(--border)] opacity-50"} />
-          </button>
+          </Button>
           {advancedOpen && (
             <div className="grid grid-cols-6 gap-x-5 gap-y-0 pt-1 animate-[cr-slide_var(--duration-normal,200ms)_ease]">
               {advanced.map((f) => renderField(f))}

@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useState } from "react";
 import { useApp, type GoLiveLaunchMode } from "../AppContext.js";
 import { client } from "../api-client.js";
-import { configRenderModeForTheme } from "./shared/configRenderMode.js";
 import {
   buildStream555StatusSummary,
   isStream555PrimaryPlugin,
   STREAM555_DESTINATION_SPECS,
-} from "./PluginOperatorPanels.js";
+} from "../stream555Readiness.js";
+import { configRenderModeForTheme } from "./shared/configRenderMode.js";
 import { paramsToSchema } from "./PluginsView.js";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer.js";
 import { SelectablePillGrid } from "./SelectablePillGrid.js";
@@ -15,6 +15,7 @@ import { Badge } from "./ui/Badge.js";
 import { Button } from "./ui/Button.js";
 import { Card } from "./ui/Card.js";
 import { Dialog } from "./ui/Dialog.js";
+import { ScrollArea } from "./ui/ScrollArea.js";
 import {
   BroadcastIcon,
   CameraIcon,
@@ -33,6 +34,16 @@ type GoLiveStep =
   | "channel-selection"
   | "segment-selection"
   | "review-and-launch";
+
+type InlineNotice = {
+  state?: "success" | "partial" | "blocked" | "failed";
+  tone: "success" | "warning" | "error";
+  message: string;
+  followUp?: {
+    label: string;
+    detail: string;
+  };
+};
 
 const GO_LIVE_SETUP_KEYS = new Set([
   "STREAM555_AGENT_API_KEY",
@@ -77,11 +88,78 @@ function labelForLaunchMode(mode: GoLiveLaunchMode) {
   }
 }
 
+function describeReadinessState(
+  readinessState: "ready" | "disabled" | "missing-stream-key" | "missing-url",
+) {
+  switch (readinessState) {
+    case "ready":
+      return "Ready for this launch";
+    case "missing-stream-key":
+      return "Enabled but missing stream key";
+    case "missing-url":
+      return "Enabled but missing RTMP URL";
+    case "disabled":
+    default:
+      return "Not enabled for launch";
+  }
+}
+
+function InlineNoticeCard({ notice }: { notice: InlineNotice }) {
+  const badgeVariant =
+    notice.tone === "success"
+      ? "success"
+      : notice.tone === "warning"
+        ? "warning"
+        : "danger";
+  const cardToneClass =
+    notice.tone === "success"
+      ? "border-ok/25 bg-ok/10 text-ok"
+      : notice.tone === "warning"
+        ? "border-warn/25 bg-warn/10 text-warn"
+        : "border-danger/25 bg-danger/10 text-danger";
+  const badgeLabel =
+    notice.state === "partial"
+      ? "Partial launch"
+      : notice.state === "blocked"
+        ? "Blocked"
+        : notice.state === "failed"
+          ? "Launch failed"
+          : notice.tone === "success"
+            ? "Saved"
+            : notice.tone === "warning"
+              ? "Attention"
+              : "Error";
+
+  return (
+    <Card
+      className={`rounded-[24px] px-4 py-3 shadow-none ${cardToneClass}`}
+      data-go-live-result-state={notice.state}
+    >
+      <div className="flex items-start gap-3">
+        <Badge variant={badgeVariant}>{badgeLabel}</Badge>
+        <div className="space-y-2 pt-0.5">
+          <div className="text-sm leading-relaxed">{notice.message}</div>
+          {notice.followUp ? (
+            <div className="rounded-[18px] border border-current/15 bg-black/16 px-3 py-2 text-xs leading-relaxed">
+              <div className="font-semibold uppercase tracking-[0.18em]">
+                {notice.followUp.label}
+              </div>
+              <div className="mt-1 opacity-90">{notice.followUp.detail}</div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export function GoLiveModal() {
   const {
     currentTheme,
     goLiveModalOpen,
     closeGoLiveModal,
+    goLiveInlineNotice,
+    dismissGoLiveInlineNotice,
     launchGoLive,
     plugins,
     loadPlugins,
@@ -89,16 +167,12 @@ export function GoLiveModal() {
     pluginSaving,
   } = useApp();
 
-  const [step, setStep] = useState<GoLiveStep>("setup-required");
   const [launchMode, setLaunchMode] = useState<GoLiveLaunchMode>("camera");
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   const [draftConfig, setDraftConfig] = useState<Record<string, unknown>>({});
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [launching, setLaunching] = useState(false);
-  const [inlineNotice, setInlineNotice] = useState<{
-    tone: "success" | "warning" | "error";
-    message: string;
-  } | null>(null);
+  const [inlineNotice, setInlineNotice] = useState<InlineNotice | null>(null);
 
   const streamPlugin = useMemo(
     () => plugins.find((plugin) => isStream555PrimaryPlugin(plugin.id)) ?? null,
@@ -112,6 +186,9 @@ export function GoLiveModal() {
     !streamPlugin ||
     summary.authState !== "connected" ||
     summary.readyDestinations === 0;
+  const [step, setStep] = useState<GoLiveStep>(
+    setupRequired ? "setup-required" : "channel-selection",
+  );
   const configRenderMode = configRenderModeForTheme(currentTheme);
 
   const setupParams = useMemo(() => {
@@ -167,19 +244,27 @@ export function GoLiveModal() {
 
   const readyChannels = useMemo(
     () =>
-      summary.destinations.filter((destination) => destination.enabled && destination.streamKeySet),
+      summary.destinations.filter(
+        (destination) => destination.readinessState === "ready",
+      ),
     [summary.destinations],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!goLiveModalOpen) return;
     setLaunchMode("camera");
     setInlineNotice(null);
+    dismissGoLiveInlineNotice();
     setDraftConfig({});
     const defaultChannels = readyChannels.map((destination) => destination.id);
     setSelectedChannels(defaultChannels);
     setStep(setupRequired ? "setup-required" : "channel-selection");
-  }, [goLiveModalOpen, readyChannels, setupRequired]);
+  }, [
+    dismissGoLiveInlineNotice,
+    goLiveModalOpen,
+    readyChannels,
+    setupRequired,
+  ]);
 
   const executeStreamSetupAction = useCallback(
     async (
@@ -192,6 +277,7 @@ export function GoLiveModal() {
       if (busyAction) return false;
       setBusyAction(key);
       setInlineNotice(null);
+      dismissGoLiveInlineNotice();
       try {
         const response = await client.executeAutonomyPlan({
           plan: {
@@ -225,7 +311,7 @@ export function GoLiveModal() {
         setBusyAction(null);
       }
     },
-    [busyAction, loadPlugins],
+    [busyAction, dismissGoLiveInlineNotice, loadPlugins],
   );
 
   const handleSaveSetup = useCallback(async () => {
@@ -261,6 +347,7 @@ export function GoLiveModal() {
 
   const handleContinueFromSetup = useCallback(async () => {
     try {
+      dismissGoLiveInlineNotice();
       const refreshed = await client.getPlugins();
       await loadPlugins();
       const refreshedPlugin =
@@ -296,26 +383,26 @@ export function GoLiveModal() {
             : "Failed to refresh 555 Stream readiness.",
       });
     }
-  }, [loadPlugins]);
+  }, [dismissGoLiveInlineNotice, loadPlugins]);
 
   const channelOptions = useMemo(
     () =>
-      summary.destinations
-        .filter((destination) => destination.enabled || destination.streamKeySet)
-        .map((destination) => ({
-          ...destination,
-          selectable: destination.enabled && destination.streamKeySet,
-        })),
+      summary.destinations.map((destination) => ({
+        ...destination,
+        selectable: destination.readinessState === "ready",
+      })),
     [summary.destinations],
   );
 
   const handleToggleChannel = useCallback((channelId: string) => {
+    const channel = channelOptions.find((entry) => entry.id === channelId);
+    if (!channel?.selectable) return;
     setSelectedChannels((current) =>
       current.includes(channelId)
         ? current.filter((entry) => entry !== channelId)
         : [...current, channelId],
     );
-  }, []);
+  }, [channelOptions]);
 
   const handleLaunch = useCallback(async () => {
     const resolvedLayoutMode = layoutModeForLaunchMode(launchMode);
@@ -328,22 +415,35 @@ export function GoLiveModal() {
     }
     setLaunching(true);
     setInlineNotice(null);
+    dismissGoLiveInlineNotice();
     try {
       const result = await launchGoLive({
         channels: selectedChannels,
         launchMode,
         layoutMode: resolvedLayoutMode,
       });
-      if (!result.ok) {
+      if (result.state !== "success") {
         setInlineNotice({
+          state: result.state,
           tone: result.tone,
           message: result.message,
+          followUp: result.followUp,
         });
+      } else {
+        closeGoLiveModal();
       }
     } finally {
       setLaunching(false);
     }
-  }, [launchGoLive, launchMode, selectedChannels]);
+  }, [
+    closeGoLiveModal,
+    dismissGoLiveInlineNotice,
+    launchGoLive,
+    launchMode,
+    selectedChannels,
+  ]);
+
+  const activeInlineNotice = goLiveInlineNotice ?? inlineNotice;
 
   const modeOptions = useMemo(
     () => [
@@ -495,17 +595,9 @@ export function GoLiveModal() {
           </Button>
         </div>
 
-        {inlineNotice ? (
-          <div
-            className={`mt-4 rounded-[20px] border px-4 py-3 text-sm ${
-              inlineNotice.tone === "success"
-                ? "border-ok/25 bg-ok/10 text-ok"
-                : inlineNotice.tone === "warning"
-                  ? "border-warn/25 bg-warn/10 text-warn"
-                  : "border-danger/25 bg-danger/10 text-danger"
-            }`}
-          >
-            {inlineNotice.message}
+        {activeInlineNotice ? (
+          <div className="mt-4">
+            <InlineNoticeCard notice={activeInlineNotice} />
           </div>
         ) : null}
 
@@ -555,33 +647,30 @@ export function GoLiveModal() {
         {channelOptions.map((channel) => {
           const active = selectedChannels.includes(channel.id);
           return (
-            <button
+            <Button
               key={channel.id}
               type="button"
+              variant="ghost"
               disabled={!channel.selectable}
               onClick={() => handleToggleChannel(channel.id)}
-              className={`rounded-[24px] border px-4 py-4 text-left transition ${
+              className={`h-auto w-full justify-start whitespace-normal rounded-[24px] border px-4 py-4 text-left transition ${
                 active
                   ? "border-accent/30 bg-accent/12 text-white"
                   : "border-white/10 bg-white/[0.04] text-white/74"
               } ${!channel.selectable ? "cursor-not-allowed opacity-55" : "hover:border-white/18 hover:bg-white/[0.06]"}`}
             >
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex w-full items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/22">
                     <Stream555ChannelIcon fieldKey={STREAM555_DESTINATION_SPECS.find((spec) => spec.id === channel.id)?.enabledKey ?? ""} />
                   </span>
-                  <div>
-                    <div className="text-base font-medium text-white">{channel.label}</div>
-                    <div className="mt-1 text-sm text-white/54">
-                      {channel.selectable
-                        ? "Ready for this launch"
-                        : channel.enabled
-                          ? "Enabled but missing stream key"
-                          : "Not enabled for launch"}
+                    <div>
+                      <div className="text-base font-medium text-white">{channel.label}</div>
+                      <div className="mt-1 text-sm text-white/54">
+                        {describeReadinessState(channel.readinessState)}
+                      </div>
                     </div>
                   </div>
-                </div>
                 <span
                   className={`inline-flex h-7 w-7 items-center justify-center rounded-full border ${
                     active
@@ -592,15 +681,11 @@ export function GoLiveModal() {
                   {active ? <CheckIcon className="h-4 w-4" /> : null}
                 </span>
               </div>
-            </button>
+            </Button>
           );
         })}
       </div>
-      {inlineNotice ? (
-        <div className="rounded-[20px] border border-warn/25 bg-warn/10 px-4 py-3 text-sm text-warn">
-          {inlineNotice.message}
-        </div>
-      ) : null}
+      {activeInlineNotice ? <InlineNoticeCard notice={activeInlineNotice} /> : null}
     </div>
   );
 
@@ -654,19 +739,7 @@ export function GoLiveModal() {
           ))}
         </div>
       </Card>
-      {inlineNotice ? (
-        <div
-          className={`rounded-[20px] border px-4 py-3 text-sm ${
-            inlineNotice.tone === "success"
-              ? "border-ok/25 bg-ok/10 text-ok"
-              : inlineNotice.tone === "warning"
-                ? "border-warn/25 bg-warn/10 text-warn"
-                : "border-danger/25 bg-danger/10 text-danger"
-          }`}
-        >
-          {inlineNotice.message}
-        </div>
-      ) : null}
+      {activeInlineNotice ? <InlineNoticeCard notice={activeInlineNotice} /> : null}
     </div>
   );
 
@@ -713,7 +786,7 @@ export function GoLiveModal() {
           </div>
         </div>
 
-        <div className="max-h-[calc(88dvh-11rem)] overflow-y-auto px-6 py-6">
+        <ScrollArea className="max-h-[calc(88dvh-11rem)] px-6 py-6">
           {step === "setup-required"
             ? renderSetupState()
             : step === "channel-selection"
@@ -721,7 +794,7 @@ export function GoLiveModal() {
               : step === "segment-selection"
                 ? renderSegmentState()
                 : renderReviewState()}
-        </div>
+        </ScrollArea>
 
         <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 border-t border-white/8 bg-[linear-gradient(180deg,rgba(10,14,22,0.8),rgba(10,14,22,0.96))] px-6 py-4 backdrop-blur-2xl">
           <div className="flex items-center gap-2 text-sm text-white/52">
