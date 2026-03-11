@@ -47,6 +47,27 @@ async function clickOnboardingNext(page: Page): Promise<void> {
   await page.getByRole("button", { name: /^next$/i }).click();
 }
 
+const onboardingWelcomeText = /welcome to pro streamer/i;
+const chatInputPlaceholder = /continue the conversation/i;
+
+async function closeElectronApp(app: ElectronApplication | null): Promise<void> {
+  if (!app) return;
+  const process = app.process();
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    process?.kill("SIGKILL");
+  }, 5_000);
+  try {
+    await app.close().catch(() => undefined);
+  } finally {
+    clearTimeout(timeout);
+    if (timedOut) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+}
+
 test("electron auth + onboarding permissions flow works end-to-end", async () => {
   await ensureBuildArtifacts();
 
@@ -97,15 +118,15 @@ test("electron auth + onboarding permissions flow works end-to-end", async () =>
 
     const unauthPage = await launchApp();
     await expect(
-      unauthPage.getByRole("heading", { name: /pairing required/i }),
+      unauthPage.getByRole("heading", { name: /pairing link/i }),
     ).toBeVisible({
       timeout: 60_000,
     });
-    await app.close();
+    await closeElectronApp(app);
     app = null;
 
     const page = await launchApp("desktop-auth-token");
-    await expect(page.getByText(/welcome to milady/i)).toBeVisible({
+    await expect(page.getByText(onboardingWelcomeText)).toBeVisible({
       timeout: 60_000,
     });
 
@@ -152,13 +173,13 @@ test("electron auth + onboarding permissions flow works end-to-end", async () =>
     );
     await page.getByRole("button", { name: /^continue$/i }).click();
 
-    await expect(page.getByPlaceholder("Type a message...")).toBeVisible({
+    await expect(page.getByPlaceholder(chatInputPlaceholder)).toBeVisible({
       timeout: 45_000,
     });
     expect(api.requests).toContain("GET /api/auth/status");
     expect(api.requests).toContain("GET /api/onboarding/status");
   } finally {
-    await app?.close();
+    await closeElectronApp(app);
     await api?.close();
     await fs.rm(userDataDir, { recursive: true, force: true });
   }

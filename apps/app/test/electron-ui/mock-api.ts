@@ -682,6 +682,28 @@ export async function startMockApiServer(
       return;
     }
 
+    if (method === "GET" && pathname === "/api/arcade555/mastery/runs") {
+      const limitParam = Number(searchParams.get("limit") ?? 8);
+      json(res, 200, {
+        runs: [],
+        limit: Number.isFinite(limitParam) ? limitParam : 8,
+        cursor: null,
+        nextCursor: null,
+        total: 0,
+      });
+      return;
+    }
+    if (method === "POST" && pathname === "/api/arcade555/mastery/runs") {
+      json(res, 200, {
+        ok: true,
+        runId: "mock-mastery-run",
+        run: null,
+        executionMode: "mock",
+        durationMs: 1,
+      });
+      return;
+    }
+
     if (method === "GET" && pathname === "/api/wallet/addresses") {
       json(res, 200, {
         evmAddress: "0x1234567890abcdef1234567890abcdef12345678",
