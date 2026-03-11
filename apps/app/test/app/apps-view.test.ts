@@ -25,6 +25,7 @@ const { mockClientFns, mockUseApp } = vi.hoisted(() => ({
     listApps: vi.fn(),
     listInstalledApps: vi.fn(),
     launchApp: vi.fn(),
+    onWsEvent: vi.fn(),
     listHyperscapeEmbeddedAgents: vi.fn(),
     getHyperscapeAgentGoal: vi.fn(),
     getHyperscapeAgentQuickActions: vi.fn(),
@@ -148,6 +149,7 @@ describe("AppsView", () => {
     mockClientFns.listApps.mockReset();
     mockClientFns.listInstalledApps.mockReset();
     mockClientFns.launchApp.mockReset();
+    mockClientFns.onWsEvent.mockReset();
     mockClientFns.listHyperscapeEmbeddedAgents.mockReset();
     mockClientFns.getHyperscapeAgentGoal.mockReset();
     mockClientFns.getHyperscapeAgentQuickActions.mockReset();
@@ -191,6 +193,7 @@ describe("AppsView", () => {
       success: true,
       message: "command sent",
     });
+    mockClientFns.onWsEvent.mockReturnValue(() => {});
     mockClientFns.listInstalledApps.mockResolvedValue([]);
   });
 
@@ -202,7 +205,7 @@ describe("AppsView", () => {
     const setState = vi.fn<AppsContextStub["setState"]>();
     const setActionNotice = vi.fn<AppsContextStub["setActionNotice"]>();
     mockUseApp.mockReturnValue({ setState, setActionNotice });
-    const app = createApp("@elizaos/app-hyperscape", "Hyperscape", "Arena");
+    const app = createApp("@elizaos/app-babylon", "Babylon", "Arena");
     mockClientFns.listApps.mockResolvedValue([app]);
     mockClientFns.launchApp.mockResolvedValue(
       createLaunchResult({
@@ -235,7 +238,7 @@ describe("AppsView", () => {
     );
     expect(setState).toHaveBeenCalledWith(
       "activeGameViewerUrl",
-      "/api/apps/local/%40elizaos%2Fapp-hyperscape/",
+      "/api/apps/local/%40elizaos%2Fapp-babylon/",
     );
     expect(setState).toHaveBeenCalledWith("activeGamePostMessageAuth", true);
     expect(setState).toHaveBeenCalledWith("tab", "apps");
@@ -251,7 +254,7 @@ describe("AppsView", () => {
     const setState = vi.fn<AppsContextStub["setState"]>();
     const setActionNotice = vi.fn<AppsContextStub["setActionNotice"]>();
     mockUseApp.mockReturnValue({ setState, setActionNotice });
-    const app = createApp("@elizaos/app-hyperscape", "Hyperscape", "Arena");
+    const app = createApp("@elizaos/app-babylon", "Babylon", "Arena");
     mockClientFns.listApps.mockResolvedValue([app]);
     mockClientFns.launchApp.mockResolvedValue(
       createLaunchResult({
@@ -279,6 +282,7 @@ describe("AppsView", () => {
       "error",
       4800,
     );
+    expect(mockClientFns.launchApp).toHaveBeenCalledWith(app.name);
     expect(setState).toHaveBeenCalledWith("tab", "apps");
     expect(setState).toHaveBeenCalledWith("appsSubTab", "games");
   });
@@ -326,7 +330,7 @@ describe("AppsView", () => {
     const setState = vi.fn<AppsContextStub["setState"]>();
     const setActionNotice = vi.fn<AppsContextStub["setActionNotice"]>();
     mockUseApp.mockReturnValue({ setState, setActionNotice });
-    const app = createApp("@elizaos/app-hyperscape", "Hyperscape", "Arena");
+    const app = createApp("@elizaos/app-babylon", "Babylon", "Arena");
     mockClientFns.listApps.mockResolvedValue([app]);
     mockClientFns.launchApp.mockResolvedValue(
       createLaunchResult({
@@ -346,11 +350,11 @@ describe("AppsView", () => {
       await findButtonByText(tree?.root, "Launch").props.onClick();
     });
 
-    expect(setState).toHaveBeenCalledWith("activeGameApp", "@elizaos/app-hyperscape");
-    expect(setState).toHaveBeenCalledWith("activeGameDisplayName", "Hyperscape");
+    expect(setState).toHaveBeenCalledWith("activeGameApp", "@elizaos/app-babylon");
+    expect(setState).toHaveBeenCalledWith("activeGameDisplayName", "Babylon");
     expect(setState).toHaveBeenCalledWith(
       "activeGameViewerUrl",
-      "/api/apps/local/%40elizaos%2Fapp-hyperscape/play?embedded=true",
+      "/api/apps/local/%40elizaos%2Fapp-babylon/play?embedded=true",
     );
     expect(setState).toHaveBeenCalledWith("tab", "apps");
     expect(setState).toHaveBeenCalledWith("appsSubTab", "games");
@@ -408,7 +412,14 @@ describe("AppsView", () => {
     expect(root.findAll((node) => text(node) === "Hyperscape").length).toBe(1);
     expect(root.findAll((node) => text(node) === "Babylon").length).toBe(1);
     expect(root.findAll((node) => text(node) === "Active").length).toBe(1);
-    expect(root.findAll((node) => text(node) === ">").length).toBe(2);
+    expect(
+      root.findAll(
+        (node) =>
+          node.type === "button" &&
+          typeof node.props.title === "string" &&
+          node.props.title.startsWith("Open "),
+      ).length,
+    ).toBe(2);
 
     const searchInput = root.findByType("input");
     await act(async () => {

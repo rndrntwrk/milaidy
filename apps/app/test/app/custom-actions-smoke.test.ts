@@ -17,10 +17,14 @@ const { mockClient, mockUseApp, mockUseVoiceChat } = vi.hoisted(() => ({
   mockUseVoiceChat: vi.fn(),
 }));
 
-vi.mock("../../src/AppContext", () => ({
-  useApp: () => mockUseApp(),
-  getVrmPreviewUrl: () => null,
-}));
+vi.mock("../../src/AppContext", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/AppContext")>();
+  return {
+    ...actual,
+    useApp: () => mockUseApp(),
+    getVrmPreviewUrl: () => null,
+  };
+});
 
 vi.mock("../../src/hooks/useVoiceChat", () => ({
   useVoiceChat: () => mockUseVoiceChat(),
@@ -58,6 +62,9 @@ interface ChatViewContextStub {
   shareIngestNotice: string;
   selectedVrmIndex: number;
   chatPendingImages: string[];
+  setActionNotice: (text: string, tone?: string, ttlMs?: number) => void;
+  quickLayerStatuses: Record<string, string>;
+  runQuickLayer: (id: string) => Promise<void>;
 }
 
 function createContext(
@@ -76,6 +83,9 @@ function createContext(
     shareIngestNotice: "",
     selectedVrmIndex: 0,
     chatPendingImages: [],
+    setActionNotice: vi.fn(),
+    quickLayerStatuses: {},
+    runQuickLayer: vi.fn(async () => {}),
     ...overrides,
   };
 }
@@ -280,7 +290,7 @@ describe("custom actions smoke flow", () => {
     );
     expect(title.length).toBe(1);
 
-    const createButton = findButtonByText(tree, "+ New Custom Action");
+    const createButton = findButtonByText(tree, "Create");
     await act(async () => {
       createButton.props.onClick();
     });

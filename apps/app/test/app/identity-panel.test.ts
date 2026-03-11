@@ -79,7 +79,7 @@ describe("IdentityPanel preference source/scope visibility", () => {
     await flush();
 
     const panelText = normalizeText(readAllText(tree!));
-    expect(panelText).toContain("Soft Preferences");
+    expect(panelText).toContain("Preference sources");
     expect(panelText).toContain("Preference");
     expect(panelText).toContain("Source");
     expect(panelText).toContain("Scope");
@@ -119,6 +119,8 @@ describe("IdentityPanel preference source/scope visibility", () => {
     });
     await flush();
 
-    expect(normalizeText(readAllText(tree!))).toContain("No preferences set");
+    expect(normalizeText(readAllText(tree!))).toContain(
+      "No soft preferences configured",
+    );
   });
 });

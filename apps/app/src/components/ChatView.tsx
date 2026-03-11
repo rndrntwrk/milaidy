@@ -63,10 +63,13 @@ export const ChatView = memo(function ChatView() {
     droppedFiles,
     shareIngestNotice,
     selectedVrmIndex,
+    chatPendingImages,
+    setChatPendingImages,
   } = useApp();
 
   const messagesRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Toggles (persisted in localStorage) ──────────────────────────
   const [avatarVisible, setAvatarVisible] = useState(() => {
@@ -217,23 +220,23 @@ export const ChatView = memo(function ChatView() {
   const agentInitial = agentName.trim().charAt(0).toUpperCase() || "A";
   const quickLayers = QUICK_LAYER_CATALOG;
 
-  const lastSpokenIdRef = useRef<string | null>(null);
-
   useEffect(() => {
     const lastAssistant = [...msgs]
       .reverse()
       .find((message) => message.role === "assistant" && message.text.trim());
-    if (!lastAssistant || chatSending || agentVoiceMuted) return;
-    if (lastAssistant.id === lastSpokenIdRef.current) return;
-    lastSpokenIdRef.current = lastAssistant.id;
-    voice.speak(lastAssistant.text);
+    if (!lastAssistant || agentVoiceMuted) return;
+    voice.queueAssistantSpeech(lastAssistant.id, lastAssistant.text, !chatSending);
   }, [msgs, chatSending, agentVoiceMuted, voice]);
 
   // Smooth auto-scroll while streaming and on new messages.
   useEffect(() => {
     const el = messagesRef.current;
     if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    if (typeof el.scrollTo === "function") {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+      return;
+    }
+    el.scrollTop = el.scrollHeight;
   }, [conversationMessages, chatSending]);
 
   // Auto-resize textarea
@@ -259,6 +262,51 @@ export const ChatView = memo(function ChatView() {
       void handleChatSend();
     }
   };
+
+  const addImageFiles = useCallback(
+    async (files: FileList | File[] | null | undefined) => {
+      if (!files || files.length === 0) return;
+      const attachments = await Promise.all(
+        Array.from(files)
+          .filter((file) => file.type.startsWith("image/"))
+          .map(
+            (file) =>
+              new Promise<{ data: string; mimeType: string; name: string }>(
+                (resolve, reject) => {
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    const result =
+                      typeof reader.result === "string" ? reader.result : "";
+                    const data =
+                      result.includes(",") ? result.split(",")[1] ?? "" : result;
+                    resolve({
+                      data,
+                      mimeType: file.type || "application/octet-stream",
+                      name: file.name,
+                    });
+                  };
+                  reader.onerror = () => {
+                    reject(reader.error ?? new Error("Failed to read file"));
+                  };
+                  reader.readAsDataURL(file);
+                },
+              ),
+          ),
+      );
+      if (attachments.length === 0) return;
+      setChatPendingImages((prev) => [...prev, ...attachments]);
+    },
+    [setChatPendingImages],
+  );
+
+  const removePendingImage = useCallback(
+    (name: string) => {
+      setChatPendingImages((prev) =>
+        prev.filter((image) => image.name !== name),
+      );
+    },
+    [setChatPendingImages],
+  );
   const showQuickLayersInChat = false;
 
   return (
@@ -563,7 +611,12 @@ export const ChatView = memo(function ChatView() {
         )}
       </div>
 
-      <div ref={messagesRef} className="flex-1 overflow-y-auto py-2 relative" style={{ zIndex: 1 }}>
+      <div
+        ref={messagesRef}
+        data-testid="chat-messages-scroll"
+        className="flex-1 overflow-y-auto py-2 pr-3 relative"
+        style={{ zIndex: 1, scrollbarGutter: "stable both-edges" }}
+      >
         {visibleMsgs.length === 0 && !chatSending ? (
           <div className="text-center py-10 text-muted italic">
             Send a message to start chatting.
@@ -665,6 +718,27 @@ export const ChatView = memo(function ChatView() {
         </div>
       )}
 
+      {chatPendingImages.length > 0 && (
+        <div className="flex flex-wrap gap-2 py-1 relative" style={{ zIndex: 1 }}>
+          {chatPendingImages.map((image) => (
+            <div
+              key={image.name}
+              className="group inline-flex items-center gap-2 rounded border border-border bg-card px-2 py-1 text-xs text-txt"
+            >
+              <span className="truncate max-w-[180px]">{image.name}</span>
+              <button
+                type="button"
+                aria-label={`Remove image ${image.name}`}
+                className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                onClick={() => removePendingImage(image.name)}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* ── Avatar / voice toggles ────────────────────────────────── */}
       <div
         className="flex items-center justify-between gap-2 pb-1.5 relative"
@@ -706,6 +780,7 @@ export const ChatView = memo(function ChatView() {
             onClick={() => {
               window.dispatchEvent(new Event("toggle-custom-actions-panel"));
             }}
+            aria-label="Open Actions drawer"
             title="Open Actions drawer"
           >
             <OpsIcon width="14" height="14" />
@@ -719,6 +794,7 @@ export const ChatView = memo(function ChatView() {
                 : "border-border text-muted hover:border-accent hover:text-accent"
             }`}
             onClick={() => setAvatarVisible((v) => !v)}
+            aria-label={avatarVisible ? "Hide avatar" : "Show avatar"}
             title={avatarVisible ? "Hide avatar" : "Show avatar"}
           >
             <AgentIcon width="14" height="14" className={!avatarVisible ? "opacity-55" : undefined} />
@@ -736,6 +812,7 @@ export const ChatView = memo(function ChatView() {
               setAgentVoiceMuted(muting);
               if (muting) voice.stopSpeaking();
             }}
+            aria-label={agentVoiceMuted ? "Unmute agent voice" : "Mute agent voice"}
             title={agentVoiceMuted ? "Unmute agent voice" : "Mute agent voice"}
           >
             <AudioIcon width="14" height="14" muted={agentVoiceMuted} />
@@ -757,11 +834,34 @@ export const ChatView = memo(function ChatView() {
                 : "border-border bg-card text-muted hover:border-accent hover:text-accent"
             }`}
             onClick={voice.toggleListening}
+            aria-label={voice.isListening ? "Stop voice input" : "Start voice input"}
+            aria-pressed={voice.isListening}
             title={voice.isListening ? "Stop listening" : "Voice input"}
           >
             <MicIcon width="16" height="16" className={voice.isListening ? "fill-current" : undefined} />
           </button>
         )}
+
+        <button
+          type="button"
+          className="h-[38px] w-[38px] flex-shrink-0 flex items-center justify-center border rounded cursor-pointer transition-all self-end border-border bg-card text-muted hover:border-accent hover:text-accent"
+          aria-label="Attach image"
+          title="Attach image"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          +
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            void addImageFiles(e.target.files);
+            e.target.value = "";
+          }}
+        />
 
         {/* Textarea / live transcript */}
         {voice.isListening && voice.interimTranscript ? (
@@ -771,6 +871,7 @@ export const ChatView = memo(function ChatView() {
         ) : (
           <textarea
             ref={textareaRef}
+            aria-label="Chat message"
             className="flex-1 px-3 py-2 border border-border bg-card text-txt text-sm font-body leading-relaxed resize-none overflow-y-hidden min-h-[38px] max-h-[200px] focus:border-accent focus:outline-none"
             rows={1}
             placeholder={voice.isListening ? "Listening..." : "Continue the conversation..."}
@@ -802,7 +903,7 @@ export const ChatView = memo(function ChatView() {
           <button
             className="h-[38px] px-3 sm:px-6 py-2 border border-accent bg-accent text-accent-fg text-sm cursor-pointer hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed self-end"
             onClick={() => void handleChatSend()}
-            disabled={chatSending}
+            disabled={chatSending || !chatInput.trim()}
           >
             Send
           </button>

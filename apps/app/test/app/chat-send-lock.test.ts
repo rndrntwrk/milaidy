@@ -70,6 +70,8 @@ const { mockClient } = vi.hoisted(() => ({
       triggers: [],
       todos: [],
     })),
+    listEmotes: vi.fn(async () => ({ emotes: [] })),
+    listFive55MasteryRuns: vi.fn(async () => ({ runs: [] })),
   },
 }));
 
@@ -94,6 +96,11 @@ type ProbeApi = {
   handleChatSend: () => Promise<void>;
   handleChatStop: () => void;
   getConversationMessages: () => Array<{ id: string; role: string; text: string }>;
+  snapshot: () => {
+    conversationMessages: Array<{ id: string; role: string; text: string }>;
+    chatSending: boolean;
+    chatFirstTokenReceived: boolean;
+  };
 };
 
 function Probe(props: { onReady: (api: ProbeApi) => void }) {
@@ -112,6 +119,15 @@ function Probe(props: { onReady: (api: ProbeApi) => void }) {
           role: msg.role,
           text: msg.text,
         })),
+      snapshot: () => ({
+        conversationMessages: app.conversationMessages.map((msg) => ({
+          id: msg.id,
+          role: msg.role,
+          text: msg.text,
+        })),
+        chatSending: app.chatSending,
+        chatFirstTokenReceived: app.chatFirstTokenReceived,
+      }),
     });
   }, [app, onReady]);
 
@@ -206,6 +222,8 @@ describe("chat send locking", () => {
       triggers: [],
       todos: [],
     });
+    mockClient.listEmotes.mockResolvedValue({ emotes: [] });
+    mockClient.listFive55MasteryRuns.mockResolvedValue({ runs: [] });
   });
 
   it("allows only one same-tick chat send request", async () => {
@@ -670,7 +688,8 @@ describe("chat send locking", () => {
       .getConversationMessages()
       .some((message) => message.role === "assistant" && message.text.includes("partial"));
     expect(preservedPartial).toBe(true);
-    expect(cancelSpy).toHaveBeenCalledWith(999);
+    expect(api?.snapshot().chatSending).toBe(false);
+    expect(api?.snapshot().chatFirstTokenReceived).toBe(false);
 
     if (previousRaf) {
       globalThis.requestAnimationFrame = previousRaf;

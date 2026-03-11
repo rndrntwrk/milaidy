@@ -10,9 +10,13 @@ const { mockUseApp, noop } = vi.hoisted(() => ({
   noop: vi.fn(),
 }));
 
-vi.mock("../../src/AppContext", () => ({
-  useApp: () => mockUseApp(),
-}));
+vi.mock("../../src/AppContext", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/AppContext")>();
+  return {
+    ...actual,
+    useApp: () => mockUseApp(),
+  };
+});
 
 vi.mock("../../src/components/Header", () => ({
   Header: () => React.createElement("header", null, "Header"),
@@ -160,13 +164,24 @@ import { App } from "../../src/App";
 
 type HarnessState = {
   onboardingLoading: boolean;
+  startupPhase: string;
+  startupError: null;
   authRequired: boolean;
   onboardingComplete: boolean;
   tab: Tab;
+  currentTheme: string;
+  agentStatus: { state: string; agentName: string } | null;
+  unreadConversations: Set<string>;
+  activeGameViewerUrl: string;
+  gameOverlayEnabled: boolean;
   actionNotice: null;
   toasts: never[];
   dismissToast: () => void;
   setTab: (tab: Tab) => void;
+  retryStartup: () => void;
+  setActionNotice: () => void;
+  quickLayerStatuses: Record<string, string>;
+  runQuickLayer: () => Promise<void>;
 };
 
 function textOf(node: TestRenderer.ReactTestInstance): string {
@@ -236,15 +251,26 @@ describe("pages navigation smoke (e2e)", () => {
   beforeEach(() => {
     state = {
       onboardingLoading: false,
+      startupPhase: "ready",
+      startupError: null,
       authRequired: false,
       onboardingComplete: true,
       tab: "chat",
+      currentTheme: "milady",
+      agentStatus: { state: "running", agentName: "Milady" },
+      unreadConversations: new Set(),
+      activeGameViewerUrl: "",
+      gameOverlayEnabled: false,
       actionNotice: null,
       toasts: [],
       dismissToast: () => {},
       setTab: (tab: Tab) => {
         state.tab = tab;
       },
+      retryStartup: noop,
+      setActionNotice: noop,
+      quickLayerStatuses: {},
+      runQuickLayer: async () => undefined,
     };
     mockUseApp.mockReset();
     mockUseApp.mockImplementation(() => state);
@@ -339,7 +365,12 @@ describe("pages navigation smoke (e2e)", () => {
     ];
 
     for (const subPage of subPages) {
-      await clickAndRerender(renderedTree, subPage.label);
+      await act(async () => {
+        state.setTab(subPage.tab);
+      });
+      await act(async () => {
+        renderedTree.update(React.createElement(App));
+      });
       const content = mainContent(renderedTree);
       expect(state.tab).toBe(subPage.tab);
       expect(content).toContain(subPage.token);

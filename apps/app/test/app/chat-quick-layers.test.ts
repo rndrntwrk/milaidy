@@ -48,6 +48,34 @@ interface ChatContextStub {
   droppedFiles: string[];
   shareIngestNotice: string;
   selectedVrmIndex: number;
+  chatPendingImages: Array<{
+    id: string;
+    name: string;
+    mimeType: string;
+    base64Data: string;
+  }>;
+  setChatPendingImages: (
+    value:
+      | Array<{
+          id: string;
+          name: string;
+          mimeType: string;
+          base64Data: string;
+        }>
+      | ((
+          prev: Array<{
+            id: string;
+            name: string;
+            mimeType: string;
+            base64Data: string;
+          }>,
+        ) => Array<{
+          id: string;
+          name: string;
+          mimeType: string;
+          base64Data: string;
+        }>),
+  ) => void;
 }
 
 const { mockClient, mockUseApp, mockUseVoiceChat } = vi.hoisted(() => ({
@@ -137,6 +165,8 @@ function createContext(
     droppedFiles: [],
     shareIngestNotice: "",
     selectedVrmIndex: 0,
+    chatPendingImages: [],
+    setChatPendingImages: vi.fn(),
     ...overrides,
   };
 }
@@ -177,6 +207,7 @@ describe("ChatView autonomous run panel", () => {
       isSpeaking: false,
       usingAudioAnalysis: false,
       speak: vi.fn(),
+      queueAssistantSpeech: vi.fn(),
       stopSpeaking: vi.fn(),
     });
     mockClient.getConfig.mockResolvedValue({});

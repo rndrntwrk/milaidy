@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { MilaidyClient } from "../../src/api-client";
+import { MiladyClient } from "../../src/api-client";
 
 describe("MilaidyClient workbench quarantine endpoints", () => {
   const originalFetch = globalThis.fetch;
@@ -20,7 +20,7 @@ describe("MilaidyClient workbench quarantine endpoints", () => {
   });
 
   test("calls quarantine list and review endpoints with expected payload", async () => {
-    const client = new MilaidyClient("http://localhost:2138", "token");
+    const client = new MiladyClient("http://localhost:2138", "token");
 
     await client.getWorkbenchQuarantine();
     await client.reviewWorkbenchQuarantined("memory/1", "reject");
