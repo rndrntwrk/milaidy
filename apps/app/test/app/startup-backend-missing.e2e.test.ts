@@ -8,6 +8,8 @@ const { mockClient } = vi.hoisted(() => ({
   mockClient: {
     hasToken: vi.fn(() => false),
     setToken: vi.fn(),
+    listEmotes: vi.fn(async () => []),
+    onWsEvent: vi.fn(() => () => {}),
     getAuthStatus: vi.fn(async () => ({
       required: false,
       pairingEnabled: false,
