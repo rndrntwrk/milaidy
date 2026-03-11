@@ -5,12 +5,13 @@
 
 import { useCallback } from "react";
 import { useApp } from "../../AppContext.js";
+import type { ProStreamerFeedbackTone } from "../../proStreamerFeedback.js";
 import { CloseIcon } from "./Icons.js";
 
 export interface ToastItem {
   id: string;
   text: string;
-  tone: "info" | "success" | "error";
+  tone: ProStreamerFeedbackTone;
 }
 
 interface ToastContainerProps {
@@ -21,6 +22,7 @@ interface ToastContainerProps {
 const toneBg: Record<ToastItem["tone"], string> = {
   success: "bg-ok",
   error: "bg-danger",
+  warning: "bg-warn",
   info: "bg-accent",
 };
 
@@ -29,6 +31,8 @@ const miladyToneClasses: Record<ToastItem["tone"], string> = {
     "border-ok/24 bg-[linear-gradient(180deg,rgba(8,18,16,0.94),rgba(7,15,14,0.9))] text-white shadow-[0_18px_52px_rgba(0,0,0,0.34)]",
   error:
     "border-danger/24 bg-[linear-gradient(180deg,rgba(24,10,10,0.94),rgba(16,9,9,0.9))] text-white shadow-[0_18px_52px_rgba(0,0,0,0.34)]",
+  warning:
+    "border-warn/24 bg-[linear-gradient(180deg,rgba(28,20,8,0.96),rgba(22,15,7,0.92))] text-white shadow-[0_18px_52px_rgba(0,0,0,0.34)]",
   info:
     "border-accent/24 bg-[linear-gradient(180deg,rgba(19,14,8,0.96),rgba(14,10,7,0.92))] text-white shadow-[0_18px_52px_rgba(0,0,0,0.34)]",
 };
@@ -60,6 +64,8 @@ export function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
                   ? "bg-ok shadow-[0_0_18px_color-mix(in_srgb,var(--ok)_75%,transparent)]"
                   : toast.tone === "error"
                     ? "bg-danger shadow-[0_0_18px_color-mix(in_srgb,var(--danger)_75%,transparent)]"
+                    : toast.tone === "warning"
+                      ? "bg-warn shadow-[0_0_18px_color-mix(in_srgb,var(--warn)_75%,transparent)]"
                     : "bg-accent shadow-[0_0_18px_color-mix(in_srgb,var(--accent)_75%,transparent)]"
               }`}
             />
@@ -69,6 +75,8 @@ export function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
                   ? "Update"
                   : toast.tone === "error"
                     ? "Attention"
+                    : toast.tone === "warning"
+                      ? "Warning"
                     : "Notice"}
               </div>
               <div className="mt-1 text-sm leading-relaxed text-white/88">

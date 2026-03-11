@@ -81,6 +81,21 @@ describe("ToastContainer", () => {
     expect(dismissBtn).toBeDefined();
   });
 
+  it("renders warning toasts with the warning label", async () => {
+    mockUseApp.mockReturnValue({ currentTheme: "milady-os" });
+    const toasts = [makeToast("t1", "Needs follow-up", "warning")];
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(ToastContainer, { toasts, onDismiss: () => {} }),
+      );
+    });
+
+    expect(readAllText(tree!)).toContain("Warning");
+    expect(readAllText(tree!)).toContain("Needs follow-up");
+  });
+
   it("calls onDismiss when dismiss button clicked", async () => {
     mockUseApp.mockReturnValue({ currentTheme: "milady-os" });
     const onDismiss = vi.fn();
