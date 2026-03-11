@@ -40,6 +40,7 @@ import {
   addLogListener,
   ChannelType,
   type Character,
+  type Component,
   createMessageMemory,
   type LogEntry,
   logger,
@@ -2215,11 +2216,94 @@ function isPluginAlreadyRegisteredError(err: unknown): boolean {
 
 interface RuntimeWithMethodBindings extends AgentRuntime {
   __miladyMethodBindingsInstalled?: boolean;
+  __miladyComponentWriteDiagnosticsInstalled?: boolean;
 }
 
 interface RuntimeWithActionAliases extends Omit<AgentRuntime, "actions"> {
   __miladyActionAliasesInstalled?: boolean;
   actions?: Array<{ name?: string; similes?: string[] }>;
+}
+
+type DbErrorLike = {
+  name?: unknown;
+  message?: unknown;
+  code?: unknown;
+  detail?: unknown;
+  hint?: unknown;
+  constraint?: unknown;
+  schema?: unknown;
+  table?: unknown;
+  column?: unknown;
+  where?: unknown;
+  cause?: unknown;
+};
+
+function getConstraintName(error: unknown): string | null {
+  if (!error || typeof error !== "object") return null;
+  const err = error as DbErrorLike;
+  if (typeof err.constraint === "string" && err.constraint.length > 0) {
+    return err.constraint;
+  }
+  if (err.cause) return getConstraintName(err.cause);
+  return null;
+}
+
+function isComponentsWorldFkViolation(error: unknown): boolean {
+  return (
+    getConstraintName(error) === "components_world_id_worlds_id_fk"
+  );
+}
+
+function toErrorDetails(error: unknown, depth = 0): Record<string, unknown> {
+  if (!error || typeof error !== "object") {
+    return { value: String(error) };
+  }
+  const err = error as DbErrorLike;
+  const details: Record<string, unknown> = {};
+  for (const key of [
+    "name",
+    "message",
+    "code",
+    "detail",
+    "hint",
+    "constraint",
+    "schema",
+    "table",
+    "column",
+    "where",
+  ] as const) {
+    const value = err[key];
+    if (typeof value === "string" || typeof value === "number") {
+      details[key] = value;
+    }
+  }
+  if (depth < 2 && err.cause) {
+    details.cause = toErrorDetails(err.cause, depth + 1);
+  }
+  return details;
+}
+
+function summarizeComponentWrite(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return { inputType: typeof input };
+  }
+  const record = input as Record<string, unknown>;
+  const data = record.data;
+  const dataKeys =
+    data && typeof data === "object" && !Array.isArray(data)
+      ? Object.keys(data as Record<string, unknown>).slice(0, 20)
+      : [];
+
+  return {
+    id: record.id,
+    type: record.type,
+    entityId: record.entityId ?? record.entity_id,
+    sourceEntityId: record.sourceEntityId ?? record.source_entity_id,
+    roomId: record.roomId ?? record.room_id,
+    worldId: record.worldId ?? record.world_id,
+    agentId: record.agentId ?? record.agent_id,
+    dataKeys,
+  };
 }
 
 function installRuntimeMethodBindings(runtime: AgentRuntime): void {
@@ -2278,6 +2362,91 @@ function installRuntimeMethodBindings(runtime: AgentRuntime): void {
     }
     return result;
   };
+
+  // Add targeted diagnostics around component writes. Rolodex reflection and
+  // relationship extraction rely heavily on components; when inserts fail,
+  // upstream logs often hide the concrete DB cause/constraint.
+  if (!runtimeWithBindings.__miladyComponentWriteDiagnosticsInstalled) {
+    type CreateComponentFn = (component: Component) => Promise<boolean>;
+    type UpdateComponentFn = (component: Component) => Promise<void>;
+    const runtimeWithComponentWrites = runtime as AgentRuntime & {
+      createComponent?: CreateComponentFn;
+      updateComponent?: UpdateComponentFn;
+    };
+
+    if (typeof runtimeWithComponentWrites.createComponent === "function") {
+      const originalCreate = runtimeWithComponentWrites.createComponent.bind(
+        runtime,
+      );
+      runtimeWithComponentWrites.createComponent = async (
+        input: Component,
+      ) => {
+        try {
+          return await originalCreate(input);
+        } catch (error) {
+          // Recovery path: some evaluators (e.g. relationship extraction)
+          // compute a synthetic worldId that may not exist yet. If we hit the
+          // components->worlds FK, retry once with the room's canonical worldId.
+          if (
+            isComponentsWorldFkViolation(error) &&
+            input.roomId &&
+            typeof runtime.getRoom === "function"
+          ) {
+            try {
+              const room = await runtime.getRoom(input.roomId);
+              if (room?.worldId && room.worldId !== input.worldId) {
+                logger.warn(
+                  `[milady] createComponent retry with room worldId (${room.worldId}) after FK violation`,
+                );
+                const recovered: Component = {
+                  ...input,
+                  worldId: room.worldId,
+                };
+                return await originalCreate(recovered);
+              }
+            } catch (retryLookupError) {
+              logger.warn(
+                `[milady] createComponent recovery lookup failed: ${formatError(retryLookupError)}`,
+              );
+            }
+          }
+
+          const component = summarizeComponentWrite(input);
+          logger.error(
+            `[milady] createComponent failed: ${formatError(error)} | component=${JSON.stringify(component)}`,
+          );
+          logger.error(
+            `[milady] createComponent db details: ${JSON.stringify(toErrorDetails(error))}`,
+          );
+          throw error;
+        }
+      };
+    }
+
+    if (typeof runtimeWithComponentWrites.updateComponent === "function") {
+      const originalUpdate = runtimeWithComponentWrites.updateComponent.bind(
+        runtime,
+      );
+      runtimeWithComponentWrites.updateComponent = async (
+        input: Component,
+      ) => {
+        try {
+          return await originalUpdate(input);
+        } catch (error) {
+          const component = summarizeComponentWrite(input);
+          logger.error(
+            `[milady] updateComponent failed: ${formatError(error)} | component=${JSON.stringify(component)}`,
+          );
+          logger.error(
+            `[milady] updateComponent db details: ${JSON.stringify(toErrorDetails(error))}`,
+          );
+          throw error;
+        }
+      };
+    }
+
+    runtimeWithBindings.__miladyComponentWriteDiagnosticsInstalled = true;
+  }
 
   runtimeWithBindings.__miladyMethodBindingsInstalled = true;
 }
