@@ -120,6 +120,18 @@ import {
   type LiveLayoutMode,
   type LiveSecondarySource,
 } from "./liveComposition.js";
+import {
+  buildStream555StatusSummary,
+  isStream555PrimaryPlugin,
+} from "./stream555Readiness";
+import {
+  routeProStreamerFeedback,
+  type ProStreamerActionLogInlineFeedback,
+  type ProStreamerFeedbackSinks,
+  type ProStreamerFeedbackTone,
+  type ProStreamerModalFeedback,
+  type ProStreamerToastFeedback,
+} from "./proStreamerFeedback.js";
 
 // ── VRM helpers ─────────────────────────────────────────────────────────
 
@@ -189,10 +201,34 @@ export interface GoLiveConfig {
   layoutMode: LiveLayoutMode;
 }
 
+export interface GoLiveLaunchFollowUp {
+  target: "action-log";
+  label: string;
+  detail: string;
+}
+
 export interface GoLiveLaunchResult {
-  ok: boolean;
+  state: "success" | "partial" | "blocked" | "failed";
   tone: "success" | "warning" | "error";
   message: string;
+  followUp?: GoLiveLaunchFollowUp;
+}
+
+function labelForGoLiveLaunchMode(mode: GoLiveLaunchMode): string {
+  switch (mode) {
+    case "camera":
+      return "Camera";
+    case "radio":
+      return "Lo-fi Radio";
+    case "screen-share":
+      return "Screen Share";
+    case "play-games":
+      return "Play Games";
+    case "reaction":
+      return "Reaction";
+    default:
+      return "Camera";
+  }
 }
 
 export const THEMES: ReadonlyArray<{
@@ -349,8 +385,21 @@ function resolveOnboardingStyleCatchphrase(
 // ── Action notice ──────────────────────────────────────────────────────
 
 interface ActionNotice {
-  tone: string;
+  tone: ProStreamerFeedbackTone;
   text: string;
+}
+
+interface GoLiveInlineNotice {
+  tone: ProStreamerFeedbackTone;
+  message: string;
+}
+
+interface ActionLogInlineNotice {
+  id: string;
+  tone: ProStreamerFeedbackTone;
+  title?: string;
+  message: string;
+  actionLabel?: string;
 }
 
 type LifecycleAction =
@@ -693,6 +742,8 @@ export interface AppState {
   authRequired: boolean;
   actionNotice: ActionNotice | null;
   toasts: ToastItem[];
+  goLiveInlineNotice: GoLiveInlineNotice | null;
+  actionLogInlineNotice: ActionLogInlineNotice | null;
   lifecycleBusy: boolean;
   lifecycleAction: LifecycleAction | null;
 
@@ -1131,8 +1182,14 @@ export interface AppActions {
   handleAgentImport: () => Promise<void>;
 
   // Action notice / toasts
-  setActionNotice: (text: string, tone?: "info" | "success" | "error", ttlMs?: number) => void;
+  setActionNotice: (
+    text: string,
+    tone?: ProStreamerFeedbackTone,
+    ttlMs?: number,
+  ) => void;
   dismissToast: (id: string) => void;
+  dismissGoLiveInlineNotice: () => void;
+  dismissActionLogInlineNotice: () => void;
 
   // Generic state setter
   setState: <K extends keyof AppState>(key: K, value: AppState[K]) => void;
@@ -1186,7 +1243,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [startupRetryNonce, setStartupRetryNonce] = useState(0);
   const [authRequired, setAuthRequired] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const actionNotice: ActionNotice | null = toasts.length > 0 ? { tone: toasts[0].tone, text: toasts[0].text } : null;
+  const [goLiveInlineNotice, setGoLiveInlineNotice] =
+    useState<GoLiveInlineNotice | null>(null);
+  const [actionLogInlineNotice, setActionLogInlineNotice] =
+    useState<ActionLogInlineNotice | null>(null);
+  const actionNotice: ActionNotice | null =
+    toasts.length > 0
+      ? { tone: toasts[0].tone, text: toasts[0].text }
+      : null;
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [lifecycleAction, setLifecycleAction] =
     useState<LifecycleAction | null>(null);
@@ -1665,6 +1729,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // --- Refs for timers ---
   const toastIdCounter = useRef(0);
+  const actionLogNoticeIdCounter = useRef(0);
   const cloudPollInterval = useRef<number | null>(null);
   const cloudLoginPollTimer = useRef<number | null>(null);
   const prevAgentStateRef = useRef<string | null>(null);
@@ -1707,10 +1772,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setToasts((prev: ToastItem[]) => prev.filter((t: ToastItem) => t.id !== id));
   }, []);
 
-  const setActionNotice = useCallback(
-    (text: string, tone: "info" | "success" | "error" = "info", ttlMs = 2800) => {
+  const pushToastFeedback = useCallback(
+    ({ message, tone, ttlMs = 2800 }: ProStreamerToastFeedback) => {
       const id = `toast-${++toastIdCounter.current}`;
-      setToasts((prev: ToastItem[]) => [...prev.slice(-2), { id, text, tone }]);
+      setToasts((prev: ToastItem[]) => [...prev.slice(-2), { id, text: message, tone }]);
       const handle = window.setTimeout(() => {
         toastTimers.current.delete(id);
         setToasts((prev: ToastItem[]) => prev.filter((t: ToastItem) => t.id !== id));
@@ -1718,6 +1783,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       toastTimers.current.set(id, handle);
     },
     [],
+  );
+
+  const dismissGoLiveInlineNotice = useCallback(() => {
+    setGoLiveInlineNotice(null);
+  }, []);
+
+  const dismissActionLogInlineNotice = useCallback(() => {
+    setActionLogInlineNotice(null);
+  }, []);
+
+  const setActionNotice = useCallback(
+    (text: string, tone: ProStreamerFeedbackTone = "info", ttlMs = 2800) => {
+      pushToastFeedback({ target: "toast", message: text, tone, ttlMs });
+    },
+    [pushToastFeedback],
   );
 
   // ── Clipboard ──────────────────────────────────────────────────────
@@ -1760,6 +1840,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActiveBubble(state === "collapsed" ? "none" : "mission-stack");
     },
     [],
+  );
+
+  const openActionLogSurface = useCallback(() => {
+    setRailDisplay("action-log", "expanded");
+  }, [setRailDisplay]);
+
+  const proStreamerFeedbackSinks = useMemo<ProStreamerFeedbackSinks>(
+    () => ({
+      showToast: pushToastFeedback,
+      showGoLiveInline: (feedback) => {
+        setGoLiveInlineNotice({
+          tone: feedback.tone,
+          message: feedback.message,
+        });
+      },
+      showActionLogInline: (feedback: ProStreamerActionLogInlineFeedback) => {
+        setActionLogInlineNotice({
+          id: `action-log-inline-${++actionLogNoticeIdCounter.current}`,
+          tone: feedback.tone,
+          title: feedback.title,
+          message: feedback.message,
+          actionLabel: feedback.actionLabel,
+        });
+      },
+      showModal: (feedback: ProStreamerModalFeedback) => {
+        setGoLiveInlineNotice({
+          tone: feedback.tone,
+          message: feedback.message,
+        });
+      },
+      openActionLog: openActionLogSurface,
+    }),
+    [openActionLogSurface, pushToastFeedback],
   );
 
   const closeHudSurface = useCallback(() => {
@@ -3295,12 +3408,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const openGoLiveModal = useCallback(() => {
+    dismissGoLiveInlineNotice();
     setGoLiveModalOpen(true);
-  }, []);
+  }, [dismissGoLiveInlineNotice]);
 
   const closeGoLiveModal = useCallback(() => {
+    dismissGoLiveInlineNotice();
     setGoLiveModalOpen(false);
-  }, []);
+  }, [dismissGoLiveInlineNotice]);
 
   const launchGoLive = useCallback(
     async (config: GoLiveConfig): Promise<GoLiveLaunchResult> => {
@@ -3322,44 +3437,142 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const destinationParams = destinationPlatforms
         ? { destinationPlatforms }
         : {};
+      const destinationApplyParams = destinationPlatforms
+        ? { platforms: destinationPlatforms }
+        : {};
+      const formatChannelLabel = (channel: string) =>
+        channel === "x"
+          ? "X"
+          : channel === "pumpfun"
+            ? "Pump.fun"
+            : channel.charAt(0).toUpperCase() + channel.slice(1);
       const channelLabel = selectedChannels.length
-        ? selectedChannels
-            .map((channel) =>
-              channel === "x"
-                ? "X"
-                : channel === "pumpfun"
-                  ? "Pump.fun"
-                  : channel.charAt(0).toUpperCase() + channel.slice(1),
-            )
-            .join(", ")
+        ? selectedChannels.map(formatChannelLabel).join(", ")
         : "Configured channels";
-      const fail = (
+      const layoutLabel =
+        config.layoutMode === "camera-hold" ? "Camera hold" : "Camera full";
+      const streamPlugin =
+        plugins.find((plugin) => isStream555PrimaryPlugin(plugin.id)) ?? null;
+      const streamSummary = streamPlugin
+        ? buildStream555StatusSummary(streamPlugin.parameters ?? [])
+        : null;
+      const buildLaunchResult = (
+        state: GoLiveLaunchResult["state"],
         message: string,
-        tone: GoLiveLaunchResult["tone"] = "error",
-      ): GoLiveLaunchResult => ({
-        ok: false,
-        tone,
-        message,
-      });
-      const succeed = (message: string): GoLiveLaunchResult => ({
-        ok: true,
-        tone: "success",
-        message,
-      });
+        tone: GoLiveLaunchResult["tone"],
+        followUp?: GoLiveLaunchFollowUp,
+      ): GoLiveLaunchResult => {
+        if (state === "blocked" || state === "failed") {
+          routeProStreamerFeedback(
+            { target: "go-live-inline", tone, message },
+            proStreamerFeedbackSinks,
+          );
+        }
+        return {
+          state,
+          tone,
+          message,
+          ...(followUp ? { followUp } : {}),
+        };
+      };
+      const blocked = (
+        message: string,
+        tone: GoLiveLaunchResult["tone"] = "warning",
+      ) => buildLaunchResult("blocked", message, tone);
+      const failed = (message: string) =>
+        buildLaunchResult("failed", message, "error");
+      const succeeded = (message: string) =>
+        buildLaunchResult("success", message, "success");
+      const partial = (
+        message: string,
+        label: string,
+        detail: string,
+      ) =>
+        buildLaunchResult("partial", message, "warning", {
+          target: "action-log",
+          label,
+          detail,
+        });
+      const completeLaunch = async (
+        launchLabel: string,
+        launchResult: GoLiveLaunchResult,
+      ) => {
+        if (
+          launchResult.state === "partial" &&
+          launchResult.followUp?.target === "action-log"
+        ) {
+          routeProStreamerFeedback(
+            {
+              target: "action-log-inline",
+              tone: launchResult.tone,
+              title: launchLabel,
+              message: launchResult.message,
+              actionLabel: launchResult.followUp.label,
+            },
+            proStreamerFeedbackSinks,
+          );
+        }
+        if (
+          launchResult.state === "success" ||
+          launchResult.state === "partial"
+        ) {
+          const detailParts = [channelLabel, layoutLabel];
+          if (launchResult.state === "partial") {
+            detailParts.push("Partial launch");
+          }
+          if (launchResult.followUp?.detail) {
+            detailParts.push(launchResult.followUp.detail);
+          }
+          await sendOperatorActionMessage({
+            label: launchLabel,
+            kind: "launch",
+            detail: detailParts.join(" · "),
+          });
+        }
+        return launchResult;
+      };
+
+      dismissGoLiveInlineNotice();
 
       if (!stream555ControlAvailable && !legacyStreamAvailable) {
-        return fail(
+        return blocked(
           "555 Stream is not available yet. Configure it before launching.",
-          "warning",
         );
       }
+      if (selectedChannels.length === 0) {
+        return blocked("Select at least one ready channel for this launch.");
+      }
+      if (streamSummary) {
+        const invalidSelectedChannels = selectedChannels.flatMap((channel) => {
+          const destination = streamSummary.destinations.find(
+            (entry) => entry.id === channel,
+          );
+          if (!destination) {
+            return [`${formatChannelLabel(channel)} (unavailable)`];
+          }
+          if (destination.readinessState === "ready") {
+            return [];
+          }
+          const reason =
+            destination.readinessState === "missing-stream-key"
+              ? "missing stream key"
+              : destination.readinessState === "missing-url"
+                ? "missing RTMP URL"
+                : "disabled";
+          return [`${destination.label} (${reason})`];
+        });
+        if (invalidSelectedChannels.length > 0) {
+          return blocked(
+            `Selected channels are no longer ready: ${invalidSelectedChannels.join(", ")}.`,
+          );
+        }
+      }
 
-      let launchSucceeded = false;
-      let launchLabel = "Go Live";
-      let successMessage = `Launched ${launchLabel} on ${channelLabel}.`;
+      let launchLabel = labelForGoLiveLaunchMode(config.launchMode);
 
       try {
         if (config.launchMode === "camera") {
+          let launchResult: GoLiveLaunchResult | null = null;
           let stream555FailureReason: string | null = null;
 
           if (stream555ControlAvailable) {
@@ -3403,25 +3616,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 setLiveSecondarySources([]);
                 setLiveBroadcastState("live");
                 if (didSegmentBootstrapSucceed) {
-                  successMessage =
-                    "Go live executed via 555 Stream with segment orchestration.";
+                  launchResult = succeeded(
+                    "Go live executed via 555 Stream with segment orchestration.",
+                  );
                 } else {
                   const bootstrapFailureReason = getToolActionFailureMessage(
                     goLivePlan,
                     "STREAM555_GO_LIVE_SEGMENTS",
                     "segment bootstrap did not succeed",
                   );
-                  successMessage =
-                    `Go live started, but segment bootstrap failed: ${bootstrapFailureReason}`;
+                  launchResult = partial(
+                    `Go live started, but segment bootstrap failed: ${bootstrapFailureReason}`,
+                    "Complete segment bootstrap",
+                    `Camera launch is live, but segment bootstrap failed: ${bootstrapFailureReason}`,
+                  );
                 }
-                launchSucceeded = true;
               } else if (!legacyStreamAvailable) {
                 stream555FailureReason = getToolActionFailureMessage(
                   goLivePlan,
                   "STREAM555_GO_LIVE",
                   "stream555 go-live action did not succeed",
                 );
-                return fail(`Go live failed: ${stream555FailureReason}`);
+                return failed(`Go live failed: ${stream555FailureReason}`);
               } else {
                 stream555FailureReason = getToolActionFailureMessage(
                   goLivePlan,
@@ -3431,14 +3647,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
               }
             } catch (err) {
               if (!legacyStreamAvailable) {
-                return fail(
+                return failed(
                   `Go live execution failed: ${err instanceof Error ? err.message : "unknown error"}`,
                 );
               }
+              stream555FailureReason =
+                err instanceof Error ? err.message : "unknown error";
             }
           }
 
-          if (!launchSucceeded && legacyStreamAvailable) {
+          if (!launchResult && legacyStreamAvailable) {
             const legacyPlan = await executePlanWithRetry(
               {
                 plan: {
@@ -3475,20 +3693,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
             if (legacyPlan.allSucceeded || streamState.live) {
               setLiveSecondarySources([]);
               setLiveBroadcastState("live");
-              successMessage =
-                `Go live executed via legacy stream. Stream state: ${streamState.label}.`;
-              launchSucceeded = true;
+              launchResult = partial(
+                stream555FailureReason
+                  ? `Go live started via legacy fallback after 555 Stream failed: ${stream555FailureReason}. Stream state: ${streamState.label}.`
+                  : `Go live executed via legacy stream. Stream state: ${streamState.label}.`,
+                "Review legacy fallback",
+                stream555FailureReason
+                  ? `Camera launch is live via legacy fallback after primary failure: ${stream555FailureReason}`
+                  : "Camera launch is live via legacy fallback. Verify destination routing and segment orchestration.",
+              );
             } else {
-              return fail(
+              return failed(
                 "Legacy go-live ran but stream status still needs follow-up.",
               );
             }
           }
+          return completeLaunch(
+            launchLabel,
+            launchResult ?? failed("Launch did not complete."),
+          );
         } else if (config.launchMode === "radio") {
           if (!stream555ControlAvailable) {
-            return fail(
+            return blocked(
               "Lo-fi radio launch requires the 555 Stream control plugin.",
-              "warning",
             );
           }
           const plan = await executePlanWithRetry(
@@ -3523,11 +3750,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ) {
             setLiveSecondarySources([]);
             setLiveBroadcastState("live");
-            successMessage = "Lo-fi radio is live.";
             launchLabel = "Lo-fi Radio";
-            launchSucceeded = true;
+            return completeLaunch(launchLabel, succeeded("Lo-fi radio is live."));
           } else {
-            return fail(
+            return failed(
               `Lo-fi radio launch failed: ${getToolActionFailureMessage(
                 plan,
                 "STREAM555_GO_LIVE",
@@ -3537,9 +3763,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
         } else if (config.launchMode === "screen-share") {
           if (!stream555ControlAvailable) {
-            return fail(
+            return blocked(
               "Screen share launch requires the 555 Stream control plugin.",
-              "warning",
             );
           }
           const plan = await executePlanWithRetry(
@@ -3548,12 +3773,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
                 id: "go-live-modal-screen-share",
                 steps: [
                   {
-                    id: "go-live-screen",
-                    toolName: "STREAM555_GO_LIVE",
+                    id: "screen-share",
+                    toolName: "STREAM555_SCREEN_SHARE",
                     params: {
-                      inputType: "screen",
-                      layoutMode: "camera-hold",
-                      ...destinationParams,
+                      sceneId: "active-pip",
+                    },
+                  },
+                  {
+                    id: "destinations-apply",
+                    toolName: "STREAM555_DESTINATIONS_APPLY",
+                    params: {
+                      ...destinationApplyParams,
                     },
                   },
                 ],
@@ -3563,30 +3793,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
             },
             { label: "Guided screen-share launch" },
           );
-          if (didToolActionSucceed(plan, "STREAM555_GO_LIVE")) {
+          if (didToolActionSucceed(plan, "STREAM555_SCREEN_SHARE")) {
             setLiveBroadcastState("live");
             setLiveSource({
               id: "screen-share",
               kind: "screen",
               label: "Screen Share",
             });
-            successMessage = "Screen share is live.";
             launchLabel = "Screen Share";
-            launchSucceeded = true;
+            if (didToolActionSucceed(plan, "STREAM555_DESTINATIONS_APPLY")) {
+              return completeLaunch(
+                launchLabel,
+                succeeded("Screen share is live."),
+              );
+            }
+            const attachFailureReason = getToolActionFailureMessage(
+              plan,
+              "STREAM555_DESTINATIONS_APPLY",
+              "screen-share destination attach did not succeed",
+            );
+            return completeLaunch(
+              launchLabel,
+              partial(
+                `Screen share started, but destination attach failed: ${attachFailureReason}`,
+                "Attach selected destinations",
+                `Screen share is prepared, but destination attach failed: ${attachFailureReason}`,
+              ),
+            );
           } else {
-            return fail(
+            return failed(
               `Screen-share launch failed: ${getToolActionFailureMessage(
                 plan,
-                "STREAM555_GO_LIVE",
+                "STREAM555_SCREEN_SHARE",
                 "screen-share action did not succeed",
               )}`,
             );
           }
         } else if (config.launchMode === "reaction") {
           if (!stream555ControlAvailable) {
-            return fail(
+            return blocked(
               "Reaction launch requires the 555 Stream control plugin.",
-              "warning",
             );
           }
           const plan = await executePlanWithRetry(
@@ -3625,21 +3871,58 @@ export function AppProvider({ children }: { children: ReactNode }) {
             },
             { label: "Guided reaction launch" },
           );
-          if (
-            didToolActionSucceed(plan, "STREAM555_GO_LIVE") &&
-            didToolActionSucceed(plan, "STREAM555_SEGMENT_OVERRIDE")
-          ) {
+          const didGoLiveSucceed = didToolActionSucceed(plan, "STREAM555_GO_LIVE");
+          const didSegmentBootstrapSucceed = didToolActionSucceed(
+            plan,
+            "STREAM555_GO_LIVE_SEGMENTS",
+          );
+          const didSegmentOverrideSucceed = didToolActionSucceed(
+            plan,
+            "STREAM555_SEGMENT_OVERRIDE",
+          );
+          if (didGoLiveSucceed) {
             setLiveSecondarySources([]);
             setLiveBroadcastState("live");
-            successMessage = "Reaction mode is live.";
             launchLabel = "Reaction";
-            launchSucceeded = true;
+            if (didSegmentBootstrapSucceed && didSegmentOverrideSucceed) {
+              return completeLaunch(
+                launchLabel,
+                succeeded("Reaction mode is live."),
+              );
+            }
+            const followUpReasons: string[] = [];
+            if (!didSegmentBootstrapSucceed) {
+              followUpReasons.push(
+                `segment bootstrap failed: ${getToolActionFailureMessage(
+                  plan,
+                  "STREAM555_GO_LIVE_SEGMENTS",
+                  "reaction segment bootstrap did not succeed",
+                )}`,
+              );
+            }
+            if (!didSegmentOverrideSucceed) {
+              followUpReasons.push(
+                `segment override failed: ${getToolActionFailureMessage(
+                  plan,
+                  "STREAM555_SEGMENT_OVERRIDE",
+                  "reaction override did not succeed",
+                )}`,
+              );
+            }
+            return completeLaunch(
+              launchLabel,
+              partial(
+                `Reaction mode is live, but follow-up is required: ${followUpReasons.join("; ")}`,
+                "Complete reaction orchestration",
+                `Reaction launch is live, but ${followUpReasons.join("; ")}`,
+              ),
+            );
           } else {
-            return fail(
+            return failed(
               `Reaction launch failed: ${getToolActionFailureMessage(
                 plan,
-                "STREAM555_SEGMENT_OVERRIDE",
-                "reaction override did not succeed",
+                "STREAM555_GO_LIVE",
+                "reaction go-live action did not succeed",
               )}`,
             );
           }
@@ -3678,7 +3961,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           );
 
           if (!launch.viewerUrl) {
-            return fail(
+            return failed(
               "Autonomous game launch did not return a viewer URL.",
             );
           }
@@ -3693,6 +3976,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setActiveGameSandbox(launch.sandbox ?? DEFAULT_GAME_SANDBOX);
           setActiveGamePostMessageAuth(launch.postMessageAuth);
           setActiveGamePostMessagePayload(null);
+          launchLabel = resolvedGameTitle;
+
+          if (currentTheme === "milady-os" || !isTabEnabled("apps")) {
+            setGameOverlayEnabled(Boolean(launch.viewerUrl));
+          } else {
+            setTab("apps");
+            setAppsSubTab("games");
+          }
 
           if (stream555ControlAvailable) {
             const attachPlan = await executePlanWithRetry(
@@ -3718,12 +4009,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
               { label: "Game stream attach" },
             );
             if (!didToolActionSucceed(attachPlan, "STREAM555_GO_LIVE")) {
-              return fail(
-                `Game launched, but 555 Stream attach failed: ${getToolActionFailureMessage(
-                  attachPlan,
-                  "STREAM555_GO_LIVE",
-                  "game stream attach did not succeed",
-                )}`,
+              return completeLaunch(
+                launchLabel,
+                partial(
+                  `Game launched, but 555 Stream attach failed: ${getToolActionFailureMessage(
+                    attachPlan,
+                    "STREAM555_GO_LIVE",
+                    "game stream attach did not succeed",
+                  )}`,
+                  "Attach game stream",
+                  `Game launched, but 555 Stream attach failed for ${resolvedGameTitle}.`,
+                ),
               );
             }
           } else if (legacyStreamAvailable) {
@@ -3763,13 +4059,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
               findLastToolEnvelope(attachPlan.results, "STREAM_STATUS"),
             );
             if (!(attachPlan.allSucceeded || finalStatus.live)) {
-              return fail(
-                "Game launched, but legacy stream attach still needs follow-up.",
+              return completeLaunch(
+                launchLabel,
+                partial(
+                  "Game launched, but legacy stream attach still needs follow-up.",
+                  "Attach game stream",
+                  `Game launched, but legacy stream attach still needs follow-up for ${resolvedGameTitle}.`,
+                ),
               );
             }
           } else {
-            return fail(
-              "Game launched, but no stream plugin is available to broadcast it.",
+            return blocked(
+              "Play Games launch requires a stream plugin to broadcast the selected game.",
             );
           }
 
@@ -3780,31 +4081,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
             label: resolvedGameTitle,
             viewerUrl: launch.viewerUrl,
           });
-
-          if (currentTheme === "milady-os" || !isTabEnabled("apps")) {
-            setGameOverlayEnabled(Boolean(launch.viewerUrl));
-          } else {
-            setTab("apps");
-            setAppsSubTab("games");
-          }
-
-          successMessage = `Launched ${resolvedGameTitle} live.`;
-          launchSucceeded = true;
+          return completeLaunch(
+            launchLabel,
+            succeeded(`Launched ${resolvedGameTitle} live.`),
+          );
         }
-
-        if (!launchSucceeded) {
-          return fail("Launch did not complete.");
-        }
-
-        setGoLiveModalOpen(false);
-        await sendOperatorActionMessage({
-          label: launchLabel,
-          kind: "launch",
-          detail: `${channelLabel} · ${config.layoutMode === "camera-hold" ? "Camera hold" : "Camera full"}`,
-        });
-        return succeed(successMessage);
+        return failed("Launch did not complete.");
       } catch (err) {
-        return fail(
+        return failed(
           `Launch failed: ${err instanceof Error ? err.message : "unknown error"}`,
         );
       }
@@ -3813,6 +4097,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       currentTheme,
       executePlanWithRetry,
       plugins,
+      dismissGoLiveInlineNotice,
+      proStreamerFeedbackSinks,
       resolveAutonomousGameLaunch,
       sendOperatorActionMessage,
       setLiveSource,
@@ -4083,10 +4369,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const layer = QUICK_LAYER_CATALOG.find((entry) => entry.id === layerId);
     if (!layer) return;
 
+    const pushQuickLayerToast = (
+      message: string,
+      tone: ProStreamerFeedbackTone = "info",
+      ttlMs = 2800,
+    ) => {
+      routeProStreamerFeedback(
+        { target: "toast", message, tone, ttlMs },
+        proStreamerFeedbackSinks,
+      );
+    };
+    const pushActionLogFollowUp = (
+      title: string,
+      message: string,
+      tone: ProStreamerFeedbackTone = "error",
+      actionLabel = "Review live controls",
+    ) => {
+      routeProStreamerFeedback(
+        {
+          target: "action-log-inline",
+          title,
+          message,
+          tone,
+          actionLabel,
+        },
+        proStreamerFeedbackSinks,
+      );
+    };
+
     const status = quickLayerStatuses[layer.id] ?? "available";
     if (status === "disabled" && layer.id !== "go-live") {
       const pluginLabel = layer.pluginIds.join(", ");
-      setActionNotice(
+      pushQuickLayerToast(
         `${pluginLabel} is disabled or not active. Enable the plugin when ready.`,
         "info",
         2200,
@@ -4142,7 +4456,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             kind: "screen",
             label: "Screen Share",
           });
-          setActionNotice("Screen-share request dispatched.", "success", 2600);
+          pushQuickLayerToast("Screen-share request dispatched.", "success", 2600);
           prompt =
             "Confirm screen-share is active and narrate what viewers should focus on next.";
           shouldSendOperatorMessage = true;
@@ -4152,13 +4466,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
             "STREAM555_SCREEN_SHARE",
             "screen-share action did not succeed",
           );
-          setActionNotice(`Screen-share request failed: ${reason}`, "error", 4200);
+          pushActionLogFollowUp(
+            "Screen Share",
+            `Screen-share request failed: ${reason}`,
+          );
         }
       } catch (err) {
-        setActionNotice(
+        pushActionLogFollowUp(
+          "Screen Share",
           `Screen-share request failed: ${err instanceof Error ? err.message : "unknown error"}`,
-          "error",
-          4200,
         );
       }
     }
@@ -4189,7 +4505,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             "STREAM555_AD_CREATE",
             "ad create action did not succeed",
           );
-          setActionNotice(`Ad create failed: ${reason}`, "error", 4200);
+          pushActionLogFollowUp("Ads", `Ad create failed: ${reason}`);
           return;
         }
 
@@ -4197,10 +4513,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           findLastToolEnvelope(createPlan.results, "STREAM555_AD_CREATE"),
         );
         if (!createdAdId) {
-          setActionNotice(
+          pushActionLogFollowUp(
+            "Ads",
             "Ad create request completed, but no adId was returned for trigger.",
-            "info",
-            4200,
+            "warning",
           );
           return;
         }
@@ -4225,18 +4541,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
             "STREAM555_AD_TRIGGER",
             "ad trigger action did not succeed",
           );
-          setActionNotice(`Ad trigger failed: ${reason}`, "error", 4200);
+          pushActionLogFollowUp("Ads", `Ad trigger failed: ${reason}`);
           return;
         }
-        setActionNotice(`Ad created and triggered (${createdAdId}).`, "success", 2800);
+        pushQuickLayerToast(`Ad created and triggered (${createdAdId}).`, "success", 2800);
         prompt =
           `Ad ${createdAdId} was triggered. Briefly summarize monetization impact and what comes next on stream.`;
         shouldSendOperatorMessage = true;
       } catch (err) {
-        setActionNotice(
+        pushActionLogFollowUp(
+          "Ads",
           `Ad action failed: ${err instanceof Error ? err.message : "unknown error"}`,
-          "error",
-          4200,
         );
       }
     }
@@ -4258,7 +4573,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           options: { stopOnFailure: false },
         }, { label: "Guest invite" });
         if (didToolActionSucceed(plan, "STREAM555_GUEST_INVITE")) {
-          setActionNotice("Guest invite generated.", "success", 2600);
+          pushQuickLayerToast("Guest invite generated.", "success", 2600);
           prompt =
             "Announce guest invite status and provide concise host handoff guidance.";
           shouldSendOperatorMessage = true;
@@ -4268,13 +4583,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
             "STREAM555_GUEST_INVITE",
             "guest invite action did not succeed",
           );
-          setActionNotice(`Guest invite failed: ${reason}`, "error", 4200);
+          pushActionLogFollowUp("Invite Guest", `Guest invite failed: ${reason}`);
         }
       } catch (err) {
-        setActionNotice(
+        pushActionLogFollowUp(
+          "Invite Guest",
           `Guest invite failed: ${err instanceof Error ? err.message : "unknown error"}`,
-          "error",
-          4200,
         );
       }
     }
@@ -4296,7 +4610,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           options: { stopOnFailure: false },
         }, { label: "Radio control" });
         if (didToolActionSucceed(plan, "STREAM555_RADIO_CONTROL")) {
-          setActionNotice("Radio mode updated.", "success", 2600);
+          pushQuickLayerToast("Radio mode updated.", "success", 2600);
           prompt = "Summarize current radio/audio mode and how it supports this segment.";
           shouldSendOperatorMessage = true;
         } else {
@@ -4305,13 +4619,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
             "STREAM555_RADIO_CONTROL",
             "radio control action did not succeed",
           );
-          setActionNotice(`Radio control failed: ${reason}`, "error", 4200);
+          pushActionLogFollowUp("Radio", `Radio control failed: ${reason}`);
         }
       } catch (err) {
-        setActionNotice(
+        pushActionLogFollowUp(
+          "Radio",
           `Radio control failed: ${err instanceof Error ? err.message : "unknown error"}`,
-          "error",
-          4200,
         );
       }
     }
@@ -4333,7 +4646,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           options: { stopOnFailure: false },
         }, { label: "PiP enable" });
         if (didToolActionSucceed(plan, "STREAM555_PIP_ENABLE")) {
-          setActionNotice("PiP scene activated.", "success", 2600);
+          pushQuickLayerToast("PiP scene activated.", "success", 2600);
           prompt =
             "Confirm PiP composition is active and describe what each frame currently shows.";
           shouldSendOperatorMessage = true;
@@ -4343,13 +4656,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
             "STREAM555_PIP_ENABLE",
             "PiP action did not succeed",
           );
-          setActionNotice(`PiP activation failed: ${reason}`, "error", 4200);
+          pushActionLogFollowUp("PiP", `PiP activation failed: ${reason}`);
         }
       } catch (err) {
-        setActionNotice(
+        pushActionLogFollowUp(
+          "PiP",
           `PiP activation failed: ${err instanceof Error ? err.message : "unknown error"}`,
-          "error",
-          4200,
         );
       }
     }
@@ -4388,13 +4700,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }, { label: "Reaction segment override" });
         if (didToolActionSucceed(plan, "STREAM555_SEGMENT_OVERRIDE")) {
           const bootstrapOk = didToolActionSucceed(plan, "STREAM555_GO_LIVE_SEGMENTS");
-          setActionNotice(
-            bootstrapOk
-              ? "Reaction segment override queued with segment orchestration active."
-              : "Reaction segment override queued.",
-            "success",
-            2600,
-          );
+          if (bootstrapOk) {
+            pushQuickLayerToast(
+              "Reaction segment override queued with segment orchestration active.",
+              "success",
+              2600,
+            );
+          } else {
+            const bootstrapReason = getToolActionFailureMessage(
+              plan,
+              "STREAM555_GO_LIVE_SEGMENTS",
+              "segment orchestration needs follow-up",
+            );
+            pushActionLogFollowUp(
+              "Reaction",
+              `Reaction segment override queued, but segment orchestration needs follow-up: ${bootstrapReason}`,
+              "warning",
+            );
+          }
           prompt =
             "Start the next reaction segment now and keep your commentary focused on viewer engagement.";
           shouldSendOperatorMessage = true;
@@ -4404,13 +4727,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
             "STREAM555_SEGMENT_OVERRIDE",
             "segment override action did not succeed",
           );
-          setActionNotice(`Reaction segment override failed: ${reason}`, "error", 4200);
+          pushActionLogFollowUp(
+            "Reaction",
+            `Reaction segment override failed: ${reason}`,
+          );
         }
       } catch (err) {
-        setActionNotice(
+        pushActionLogFollowUp(
+          "Reaction",
           `Reaction segment override failed: ${err instanceof Error ? err.message : "unknown error"}`,
-          "error",
-          4200,
         );
       }
     }
@@ -4441,7 +4766,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             "STREAM555_EARNINGS_ESTIMATE",
             "earnings estimate action did not succeed",
           );
-          setActionNotice(`Earnings estimate failed: ${reason}`, "error", 4200);
+          pushActionLogFollowUp("Earnings", `Earnings estimate failed: ${reason}`);
           return;
         }
         const envelope = findLastToolEnvelope(
@@ -4449,7 +4774,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           "STREAM555_EARNINGS_ESTIMATE",
         );
         const maxPayout = parseProjectedEarningsFromEnvelope(envelope);
-        setActionNotice(
+        pushQuickLayerToast(
           maxPayout && maxPayout > 0
             ? `Projected top payout per impression: ${maxPayout.toFixed(4)} credits.`
             : "Earnings estimate computed.",
@@ -4460,10 +4785,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           "Summarize projected earnings opportunities and recommend the next monetization move.";
         shouldSendOperatorMessage = true;
       } catch (err) {
-        setActionNotice(
+        pushActionLogFollowUp(
+          "Earnings",
           `Earnings estimate failed: ${err instanceof Error ? err.message : "unknown error"}`,
-          "error",
-          4200,
         );
       }
     }
@@ -4486,7 +4810,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }, { label: "End live" });
         if (didToolActionSucceed(plan, "STREAM555_END_LIVE")) {
           resetLiveComposition();
-          setActionNotice("End-live request dispatched.", "success", 2600);
+          pushQuickLayerToast("End-live request dispatched.", "success", 2600);
           prompt =
             "Provide a concise stream wrap-up, final outcomes, and next scheduled action.";
           shouldSendOperatorMessage = true;
@@ -4496,13 +4820,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
             "STREAM555_END_LIVE",
             "end-live action did not succeed",
           );
-          setActionNotice(`End-live failed: ${reason}`, "error", 4200);
+          pushActionLogFollowUp("End Live", `End-live failed: ${reason}`);
         }
       } catch (err) {
-        setActionNotice(
+        pushActionLogFollowUp(
+          "End Live",
           `End-live failed: ${err instanceof Error ? err.message : "unknown error"}`,
-          "error",
-          4200,
         );
       }
     }
@@ -4562,23 +4885,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
             "Provide live game commentary, key decisions, and score/capture updates while continuing in-play control.";
           shouldSendOperatorMessage = true;
           operatorDetail = resolvedGameTitle;
-          setActionNotice(
+          pushQuickLayerToast(
             `Launched ${resolvedGameTitle} in autonomous mode.`,
             "success",
             2400,
           );
         } else {
-          setActionNotice(
+          pushActionLogFollowUp(
+            "Play Games",
             "Autonomous game launch did not return a viewer URL.",
-            "error",
-            4200,
           );
         }
       } catch (err) {
-        setActionNotice(
+        pushActionLogFollowUp(
+          "Play Games",
           `Failed to launch five55 game: ${err instanceof Error ? err.message : "unknown error"}`,
-          "error",
-          4200,
         );
       }
     }
@@ -4603,34 +4924,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
             },
             request: { source: "user", sourceTrust: 1 },
             options: { stopOnFailure: false },
-          }, { label: "Game stream attach" });
-          if (didToolActionSucceed(attachPlan, "STREAM555_GO_LIVE")) {
-            setLiveBroadcastState("live");
-            setActionNotice(
-              "Game feed routed to 555 Stream with Alice camera in hold.",
-              "success",
-              2600,
-            );
-          } else {
+        }, { label: "Game stream attach" });
+        if (didToolActionSucceed(attachPlan, "STREAM555_GO_LIVE")) {
+          setLiveBroadcastState("live");
+          pushQuickLayerToast(
+            "Game feed routed to 555 Stream with Alice camera in hold.",
+            "success",
+            2600,
+          );
+        } else {
             const reason = getToolActionFailureMessage(
-              attachPlan,
-              "STREAM555_GO_LIVE",
-              "game stream attach did not succeed",
-            );
-            setActionNotice(
-              `Game launched, but 555 Stream attach failed: ${reason}`,
-              "info",
-              3600,
-            );
-          }
-        } catch (err) {
-          setActionNotice(
-            `Game launched, but 555 Stream attach failed: ${err instanceof Error ? err.message : "unknown error"}`,
-            "info",
-            4200,
+            attachPlan,
+            "STREAM555_GO_LIVE",
+            "game stream attach did not succeed",
+          );
+          pushActionLogFollowUp(
+            "Play Games",
+            `Game launched, but 555 Stream attach failed: ${reason}`,
+            "warning",
           );
         }
-      } else if (legacyStreamAvailable) {
+      } catch (err) {
+        pushActionLogFollowUp(
+          "Play Games",
+          `Game launched, but 555 Stream attach failed: ${err instanceof Error ? err.message : "unknown error"}`,
+          "warning",
+        );
+      }
+    } else if (legacyStreamAvailable) {
         try {
           const attachPlan = await executePlanWithRetry({
             plan: {
@@ -4666,23 +4987,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
           );
           if (attachPlan.allSucceeded || finalStatus.live) {
             setLiveBroadcastState("live");
-            setActionNotice(
+            pushQuickLayerToast(
               `Game feed routed to stream. Stream state: ${finalStatus.label}.`,
               "success",
               2600,
             );
           } else {
-            setActionNotice(
+            pushActionLogFollowUp(
+              "Play Games",
               "Game launched, but stream feed attach needs follow-up in stream controls.",
-              "info",
-              3600,
+              "warning",
             );
           }
         } catch (err) {
-          setActionNotice(
+          pushActionLogFollowUp(
+            "Play Games",
             `Game launched, but stream attach failed: ${err instanceof Error ? err.message : "unknown error"}`,
-            "info",
-            4200,
+            "warning",
           );
         }
       }
@@ -4714,11 +5035,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     openGoLiveModal,
     openAutonomousRun,
     plugins,
+    proStreamerFeedbackSinks,
     quickLayerStatuses,
     resetLiveComposition,
     resolveAutonomousGameLaunch,
     sendOperatorActionMessage,
-    setActionNotice,
     setLiveSource,
     setTab,
   ]);
@@ -6881,6 +7202,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     five55MasteryRuns,
     five55MasteryRunsLoading,
     liveBroadcastState,
+    goLiveInlineNotice,
+    actionLogInlineNotice,
     goLiveModalOpen,
     liveLayoutMode,
     liveSceneId,
@@ -6925,6 +7248,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     runQuickLayer,
     openGoLiveModal,
     closeGoLiveModal,
+    dismissGoLiveInlineNotice,
+    dismissActionLogInlineNotice,
     launchGoLive,
     openAutonomousRun,
     closeAutonomousRun,
