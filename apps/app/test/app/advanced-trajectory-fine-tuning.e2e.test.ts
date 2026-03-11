@@ -92,7 +92,9 @@ vi.mock("../../src/components/TriggersView", () => {
 });
 vi.mock("../../src/components/FineTuningView", () => {
   const R = require("react");
-  return { FineTuningView: () => R.createElement("div", null, "stub-fine-tuning") };
+  return {
+    FineTuningView: () => R.createElement("div", null, "stub-fine-tuning"),
+  };
 });
 
 // TrajectoriesView: render a clickable row so the test can trigger selection
@@ -108,7 +110,10 @@ vi.mock("../../src/components/TrajectoriesView", () => {
           null,
           R.createElement(
             "tr",
-            { onClick: () => props.onSelectTrajectory?.("shared-traj-123456789") },
+            {
+              onClick: () =>
+                props.onSelectTrajectory?.("shared-traj-123456789"),
+            },
             R.createElement("td", null, "shared-traj..."),
           ),
         ),
@@ -120,12 +125,19 @@ vi.mock("../../src/components/TrajectoriesView", () => {
 vi.mock("../../src/components/TrajectoryDetailView", () => {
   const R = require("react");
   return {
-    TrajectoryDetailView: (props: { trajectoryId: string; onBack: () => void }) =>
+    TrajectoryDetailView: (props: {
+      trajectoryId: string;
+      onBack: () => void;
+    }) =>
       R.createElement(
         "div",
         null,
         R.createElement("span", null, `${props.trajectoryId.slice(0, 8)}...`),
-        R.createElement("button", { onClick: props.onBack }, "trajectorydetailview.Back"),
+        R.createElement(
+          "button",
+          { onClick: props.onBack },
+          "trajectorydetailview.Back",
+        ),
       ),
   };
 });
@@ -138,7 +150,10 @@ vi.mock("@milady/ui", () => {
     R.createElement("div", { "data-testid": "ui-mock" }, props.children);
   return new Proxy(
     {},
-    { get: (_target, prop) => (typeof prop === "string" ? passthrough : undefined) },
+    {
+      get: (_target, prop) =>
+        typeof prop === "string" ? passthrough : undefined,
+    },
   );
 });
 

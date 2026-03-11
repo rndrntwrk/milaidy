@@ -48,8 +48,9 @@ function makeReq(opts: {
   emitter.url = opts.url ?? "/api/cloud/compat/agents";
   // Schedule body emission after construction
   if (opts.body) {
+    const bodyStr = opts.body;
     process.nextTick(() => {
-      emitter.emit("data", Buffer.from(opts.body!));
+      emitter.emit("data", Buffer.from(bodyStr));
       emitter.emit("end");
     });
   } else {

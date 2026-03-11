@@ -156,6 +156,7 @@ export function CloudDashboard() {
   const [agentsError, setAgentsError] = useState<string | null>(null);
   const [deletingAgentId, setDeletingAgentId] = useState<string | null>(null);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const selectedAgent = cloudAgents.find((a) => a.agent_id === selectedAgentId);
   const [showDeployForm, setShowDeployForm] = useState(false);
   const [deployAgentName, setDeployAgentName] = useState("");
   const [deploying, setDeploying] = useState(false);
@@ -454,9 +455,9 @@ export function CloudDashboard() {
 
         {/* Sidebar Area */}
         <div className="space-y-8">
-          {selectedAgentId ? (
+          {selectedAgentId && selectedAgent ? (
             <AgentDetailSidebar
-              agent={cloudAgents.find((a) => a.agent_id === selectedAgentId)!}
+              agent={selectedAgent}
               onClose={() => setSelectedAgentId(null)}
             />
           ) : (
