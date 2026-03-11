@@ -1,7 +1,14 @@
 import { useCallback, useMemo, useState } from "react";
-import { client, type PluginInfo, type PluginParamDef } from "../api-client.js";
+import { client, type PluginInfo } from "../api-client.js";
 import { resolveProStreamerBrandComponent } from "../proStreamerBrandIcons.js";
 import { useApp } from "../AppContext.js";
+import {
+  STREAM555_DESTINATION_SPECS,
+  buildStream555StatusSummary,
+  isStream555LegacyPlugin,
+  isStream555PrimaryPlugin,
+  type Stream555StatusSummary,
+} from "../stream555Readiness.js";
 import { Badge } from "./ui/Badge.js";
 import { Button } from "./ui/Button.js";
 import { Card } from "./ui/Card.js";
@@ -18,14 +25,14 @@ import {
   XBrandIcon,
 } from "./ui/Icons.js";
 
-const STREAM555_PRIMARY_PLUGIN_IDS = new Set([
-  "stream555-control",
-  "555stream",
-]);
-const STREAM555_LEGACY_PLUGIN_IDS = new Set([
-  "stream555-auth",
-  "stream555-ads",
-]);
+export {
+  STREAM555_DESTINATION_SPECS,
+  buildStream555StatusSummary,
+  isStream555LegacyPlugin,
+  isStream555PrimaryPlugin,
+};
+export type { Stream555StatusSummary } from "../stream555Readiness.js";
+
 const ARCADE555_PRIMARY_PLUGIN_IDS = new Set([
   "555arcade",
   "arcade555",
@@ -42,38 +49,6 @@ const ARCADE555_LEGACY_PLUGIN_IDS = new Set([
   "five55-rewards",
   "five55-github",
 ]);
-
-type Stream555DestinationSpec = {
-  id: string;
-  label: string;
-  urlKey: string;
-  streamKeyKey: string;
-  enabledKey: string;
-};
-
-type Stream555DestinationStatus = {
-  id: string;
-  label: string;
-  enabled: boolean;
-  streamKeySet: boolean;
-  streamKeySuffix: string | null;
-  urlSet: boolean;
-};
-
-export type Stream555StatusSummary = {
-  authState: "connected" | "wallet_enabled" | "not_configured";
-  authMode: string;
-  authSource: string | null;
-  preferredChain: "solana" | "evm";
-  walletProvisionAllowed: boolean;
-  hasSolanaWallet: boolean;
-  hasEvmWallet: boolean;
-  walletDetectionAvailable: boolean;
-  destinations: Stream555DestinationStatus[];
-  savedDestinations: number;
-  enabledDestinations: number;
-  readyDestinations: number;
-};
 
 export type PluginOperationalDisplay = {
   tone: "ok" | "warn" | "error";
@@ -96,74 +71,6 @@ type PluginUiSchema = {
   actions?: Record<string, PluginUiActionSchema>;
 };
 
-export const STREAM555_DESTINATION_SPECS: Stream555DestinationSpec[] = [
-  {
-    id: "pumpfun",
-    label: "Pump.fun",
-    urlKey: "STREAM555_DEST_PUMPFUN_RTMP_URL",
-    streamKeyKey: "STREAM555_DEST_PUMPFUN_STREAM_KEY",
-    enabledKey: "STREAM555_DEST_PUMPFUN_ENABLED",
-  },
-  {
-    id: "x",
-    label: "X",
-    urlKey: "STREAM555_DEST_X_RTMP_URL",
-    streamKeyKey: "STREAM555_DEST_X_STREAM_KEY",
-    enabledKey: "STREAM555_DEST_X_ENABLED",
-  },
-  {
-    id: "twitch",
-    label: "Twitch",
-    urlKey: "STREAM555_DEST_TWITCH_RTMP_URL",
-    streamKeyKey: "STREAM555_DEST_TWITCH_STREAM_KEY",
-    enabledKey: "STREAM555_DEST_TWITCH_ENABLED",
-  },
-  {
-    id: "kick",
-    label: "Kick",
-    urlKey: "STREAM555_DEST_KICK_RTMP_URL",
-    streamKeyKey: "STREAM555_DEST_KICK_STREAM_KEY",
-    enabledKey: "STREAM555_DEST_KICK_ENABLED",
-  },
-  {
-    id: "youtube",
-    label: "YouTube",
-    urlKey: "STREAM555_DEST_YOUTUBE_RTMP_URL",
-    streamKeyKey: "STREAM555_DEST_YOUTUBE_STREAM_KEY",
-    enabledKey: "STREAM555_DEST_YOUTUBE_ENABLED",
-  },
-  {
-    id: "facebook",
-    label: "Facebook",
-    urlKey: "STREAM555_DEST_FACEBOOK_RTMP_URL",
-    streamKeyKey: "STREAM555_DEST_FACEBOOK_STREAM_KEY",
-    enabledKey: "STREAM555_DEST_FACEBOOK_ENABLED",
-  },
-  {
-    id: "custom",
-    label: "Custom",
-    urlKey: "STREAM555_DEST_CUSTOM_RTMP_URL",
-    streamKeyKey: "STREAM555_DEST_CUSTOM_STREAM_KEY",
-    enabledKey: "STREAM555_DEST_CUSTOM_ENABLED",
-  },
-];
-
-function normalizeStream555PluginId(rawId: string): string {
-  return rawId
-    .trim()
-    .toLowerCase()
-    .replace(/^@[^/]+\//, "")
-    .replace(/^plugin-/, "");
-}
-
-export function isStream555PrimaryPlugin(pluginId: string): boolean {
-  return STREAM555_PRIMARY_PLUGIN_IDS.has(normalizeStream555PluginId(pluginId));
-}
-
-export function isStream555LegacyPlugin(pluginId: string): boolean {
-  return STREAM555_LEGACY_PLUGIN_IDS.has(normalizeStream555PluginId(pluginId));
-}
-
 function normalizeArcade555PluginId(rawId: string): string {
   return rawId
     .trim()
@@ -178,35 +85,6 @@ export function isArcade555PrimaryPlugin(pluginId: string): boolean {
 
 export function isArcade555LegacyPlugin(pluginId: string): boolean {
   return ARCADE555_LEGACY_PLUGIN_IDS.has(normalizeArcade555PluginId(pluginId));
-}
-
-function parseBoolish(value: unknown): boolean {
-  if (typeof value === "boolean") return value;
-  if (typeof value !== "string") return false;
-  const normalized = value.trim().toLowerCase();
-  return (
-    normalized === "1" ||
-    normalized === "true" ||
-    normalized === "yes" ||
-    normalized === "on" ||
-    normalized === "enabled"
-  );
-}
-
-function maskSuffix(maskedValue: unknown): string | null {
-  if (typeof maskedValue !== "string" || maskedValue.trim().length === 0) {
-    return null;
-  }
-  const value = maskedValue.trim();
-  const separatorIdx = value.lastIndexOf("...");
-  if (separatorIdx >= 0) {
-    const suffix = value.slice(separatorIdx + 3).trim();
-    return suffix.length > 0 ? suffix : null;
-  }
-  if (value.length >= 4) {
-    return value.slice(-4);
-  }
-  return null;
 }
 
 function stream555DestinationIcon(specId: string) {
@@ -292,115 +170,6 @@ function readAutonomyStepMessage(
     }
   }
   return fallback;
-}
-
-export function buildStream555StatusSummary(
-  params: PluginParamDef[],
-): Stream555StatusSummary {
-  const paramByKey = new Map(params.map((param) => [param.key, param]));
-  const hasConfiguredParam = (
-    keys: string[],
-  ): { configured: boolean; present: boolean } => {
-    let present = false;
-    for (const key of keys) {
-      const param = paramByKey.get(key);
-      if (!param) continue;
-      present = true;
-      if (param.isSet) return { configured: true, present: true };
-    }
-    return { configured: false, present };
-  };
-  const authSourceKey = [
-    "STREAM555_AGENT_API_KEY",
-    "STREAM555_AGENT_TOKEN",
-    "STREAM_API_BEARER_TOKEN",
-  ].find((key) => paramByKey.get(key)?.isSet ?? false);
-  const credentialAuthReady = Boolean(authSourceKey);
-  const preferredChainRaw =
-    paramByKey.get("STREAM555_WALLET_AUTH_PREFERRED_CHAIN")?.currentValue ??
-    paramByKey.get("STREAM555_WALLET_AUTH_PREFERRED_CHAIN")?.default ??
-    "solana";
-  const preferredChain = (
-    String(preferredChainRaw ?? "solana")
-      .trim()
-      .toLowerCase() === "evm"
-      ? "evm"
-      : "solana"
-  ) as "solana" | "evm";
-  const walletProvisionAllowed = parseBoolish(
-    paramByKey.get("STREAM555_WALLET_AUTH_ALLOW_PROVISION")?.currentValue ??
-      paramByKey.get("STREAM555_WALLET_AUTH_ALLOW_PROVISION")?.default ??
-      "true",
-  );
-  const solanaWalletState = hasConfiguredParam([
-    "SOLANA_PRIVATE_KEY",
-    "SOLANA_WALLET_PRIVATE_KEY",
-    "STREAM555_SOLANA_PRIVATE_KEY",
-  ]);
-  const evmWalletState = hasConfiguredParam([
-    "EVM_PRIVATE_KEY",
-    "ETH_PRIVATE_KEY",
-    "STREAM555_EVM_PRIVATE_KEY",
-  ]);
-  const walletDetectionAvailable =
-    solanaWalletState.present || evmWalletState.present;
-  const walletAuthEnabled =
-    preferredChain === "solana" ||
-    preferredChain === "evm" ||
-    walletProvisionAllowed;
-  const authState = credentialAuthReady
-    ? "connected"
-    : walletAuthEnabled
-      ? "wallet_enabled"
-      : "not_configured";
-  const authMode = credentialAuthReady
-    ? "API key/token"
-    : walletAuthEnabled
-      ? `Wallet auth (${preferredChain === "evm" ? "Ethereum fallback" : "Solana preferred"})`
-      : "Not configured";
-
-  const destinations = STREAM555_DESTINATION_SPECS.map((spec) => {
-    const enabledParam = paramByKey.get(spec.enabledKey);
-    const streamKeyParam = paramByKey.get(spec.streamKeyKey);
-    const urlParam = paramByKey.get(spec.urlKey);
-    const enabled = parseBoolish(
-      enabledParam?.currentValue ?? enabledParam?.default,
-    );
-    const streamKeySet = Boolean(streamKeyParam?.isSet);
-    return {
-      id: spec.id,
-      label: spec.label,
-      enabled,
-      streamKeySet,
-      streamKeySuffix: maskSuffix(streamKeyParam?.currentValue),
-      urlSet: Boolean(urlParam?.isSet),
-    };
-  });
-
-  const savedDestinations = destinations.filter(
-    (destination) => destination.streamKeySet,
-  ).length;
-  const enabledDestinations = destinations.filter(
-    (destination) => destination.enabled,
-  ).length;
-  const readyDestinations = destinations.filter(
-    (destination) => destination.enabled && destination.streamKeySet,
-  ).length;
-
-  return {
-    authState,
-    authMode,
-    authSource: authSourceKey ?? null,
-    preferredChain,
-    walletProvisionAllowed,
-    hasSolanaWallet: solanaWalletState.configured,
-    hasEvmWallet: evmWalletState.configured,
-    walletDetectionAvailable,
-    destinations,
-    savedDestinations,
-    enabledDestinations,
-    readyDestinations,
-  };
 }
 
 export function buildPluginOperationalDisplay(
@@ -667,9 +436,7 @@ export function Stream555ControlActionsPanel({
         ? "Authenticated"
         : (authenticateAction?.label ?? "Authenticate Wallet");
   const showBrandedDestinationStatus = currentTheme === "milady-os";
-  const surfacedDestinations = summary.destinations.filter(
-    (destination) => destination.enabled || destination.streamKeySet,
-  );
+  const surfacedDestinations = summary.destinations;
 
   return (
     <Card className="pro-streamer-provider-card mb-3 space-y-3 p-4">
@@ -703,16 +470,18 @@ export function Stream555ControlActionsPanel({
         <div className="flex flex-wrap gap-2">
           {surfacedDestinations.map((destination) => {
             const DestinationIcon = stream555DestinationIcon(destination.id);
-            const toneClass = destination.enabled
-              ? destination.streamKeySet
+            const toneClass =
+              destination.readinessState === "ready"
                 ? "border-ok/30 bg-[rgba(22,101,52,0.08)] text-ok"
-                : "border-warn/30 bg-[rgba(234,179,8,0.08)] text-warn"
-              : "border-white/10 bg-white/[0.04] text-white/60";
-            const stateLabel = destination.enabled
-              ? destination.streamKeySet
-                ? "ready"
-                : "enabled"
-              : "saved";
+                : destination.readinessState === "disabled"
+                  ? "border-white/10 bg-white/[0.04] text-white/60"
+                  : "border-warn/30 bg-[rgba(234,179,8,0.08)] text-warn";
+            const stateLabel =
+              destination.readinessState === "missing-stream-key"
+                ? "missing key"
+                : destination.readinessState === "missing-url"
+                  ? "missing url"
+                  : destination.readinessState;
             return (
               <span
                 key={`${plugin.id}-${destination.id}`}
