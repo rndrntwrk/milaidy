@@ -276,6 +276,7 @@ describe("AgentCore layout", () => {
     );
 
     expect(pillEntry).toBeTruthy();
+    expect(pillEntry?.className).toContain("justify-end");
     expect(text).toContain("Backflip");
     expect(text).toContain("One-shot motion");
     expect(text).not.toContain("internal prompt text that should not render");
@@ -368,6 +369,9 @@ describe("AgentCore layout", () => {
 
     expect(assistantBubble?.textContent).toContain("Assistant reply");
     expect(operatorBubble?.textContent).toContain("Operator message");
+    expect(operatorBubble?.className).toContain("justify-end");
+    expect(assistantBubble?.className).toContain("justify-start");
+    expect(systemEvent?.className).toContain("justify-center");
     expect(systemEvent?.textContent).toContain("Executing Switch Scene");
     expect(systemEvent?.textContent).toContain("Live scene updated.");
   });
