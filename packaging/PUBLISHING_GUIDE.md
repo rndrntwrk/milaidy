@@ -12,7 +12,9 @@ This guide covers the **human steps** required to publish Milady across all five
 4. [Snap](#4-snap)
 5. [Flatpak](#5-flatpak)
 6. [CI/CD Automation](#6-cicd-automation)
-7. [Version Bumping Checklist](#7-version-bumping-checklist)
+7. [iOS App Store](#7-ios-app-store)
+8. [Mac App Store](#8-mac-app-store)
+9. [Version Bumping Checklist](#9-version-bumping-checklist)
 
 ---
 
@@ -541,7 +543,61 @@ This eliminates the need for `PYPI_API_TOKEN` — GitHub Actions authenticates d
 
 ---
 
-## 7. Version Bumping Checklist
+
+## 7. iOS App Store
+
+### 7.1 Apple Developer Program (one-time)
+
+1. **Enroll** at https://developer.apple.com/programs/ ($99/year)
+2. **Create App ID**: Bundle ID `ai.milady.app`, enable Push Notifications
+3. **Create private certificates repo** `milady-ai/certificates` for Fastlane Match
+4. **Create App Store Connect app**: Platform iOS, Bundle ID `ai.milady.app`
+
+### 7.2 Required GitHub Secrets
+
+| Secret | Description |
+|---|---|
+| `APPLE_ID` | Apple ID email |
+| `APPLE_TEAM_ID` | 10-char Apple Developer Team ID |
+| `APPLE_APP_SPECIFIC_PASSWORD` | Generated at appleid.apple.com |
+| `ITC_TEAM_ID` | App Store Connect team ID |
+| `APP_STORE_APP_ID` | Numeric Apple ID from App Store Connect |
+| `MATCH_PASSWORD` | Encryption password for Match certificates |
+| `MATCH_GIT_URL` | URL to certificates repo |
+| `MATCH_GIT_BASIC_AUTHORIZATION` | base64(username:PAT) for certificates repo |
+
+### 7.3 App Privacy Nutrition Labels
+
+| Data Type | Collected | Linked to Identity | Tracking |
+|---|---|---|---|
+| Usage Data | Yes | No | No |
+| Location | Yes (optional) | No | No |
+| Photos | Yes (optional) | No | No |
+| User Content (chat) | Yes | No | No |
+
+Data is stored on-device only. Chat messages sent to user-selected AI provider.
+
+
+## 8. Mac App Store
+
+### 8.1 Additional Secrets
+
+| Secret | Description |
+|---|---|
+| `MAS_CSC_LINK` | base64-encoded Apple Distribution .p12 |
+| `MAS_CSC_KEY_PASSWORD` | Password for the .p12 |
+| `MAS_INSTALLER_CERT` | base64-encoded 3rd Party Mac Developer Installer .p12 |
+| `MAS_INSTALLER_KEY_PASSWORD` | Password for installer .p12 |
+| `APP_STORE_API_KEY_ID` | App Store Connect API key ID |
+| `APP_STORE_API_ISSUER_ID` | App Store Connect API issuer ID |
+
+### 8.2 Sandboxing
+
+Mac App Store requires App Sandbox. Entitlements at
+`apps/app/electrobun/entitlements/mas.entitlements` configure network,
+file access, camera, microphone, and JIT compilation for Bun runtime.
+
+## 9. Version Bumping Checklist
 
 When releasing a new version, update these files:
 
@@ -578,5 +634,7 @@ When releasing a new version, update these files:
 | **apt** | `sudo apt install milady` (after adding repo) |
 | **Snap** | `sudo snap install milady --classic` |
 | **Flatpak** | `flatpak install flathub ai.milady.Milady` |
+| **iOS App Store** | Search "Milady" on App Store |
+| **Mac App Store** | Search "Milady" on Mac App Store |
 | **npx** | `npx miladyai` (no install) |
 | **pipx** | `pipx install milady` |
