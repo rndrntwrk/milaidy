@@ -29,8 +29,8 @@ const { MockVrmEngine, mockLoadVrmFromUrl } = vi.hoisted(() => {
       idleTime: 0,
       idleTracks: 0,
       activeAnimationState: "idle",
-      activeIdleSource: "alice-native",
-      idleFallbackActive: false,
+      activeIdleSource: "procedural-fallback",
+      idleFallbackActive: true,
       idleHealthy: true,
     }));
 
@@ -72,7 +72,25 @@ class ResizeObserverMock {
   unobserve() {}
 }
 
-describe("VrmViewer resize handling", () => {
+type ViewerProps = Partial<React.ComponentProps<typeof VrmViewer>>;
+
+async function renderViewer(props: ViewerProps = {}) {
+  await act(async () => {
+    root?.render(
+      <div style={{ width: "100%", height: "100%" }}>
+        <VrmViewer
+          mouthOpen={0}
+          isSpeaking={false}
+          scenePreset="pro-streamer-stage"
+          sceneMark="stage"
+          {...props}
+        />
+      </div>,
+    );
+  });
+}
+
+describe("VrmViewer stage canvas behavior", () => {
   beforeEach(() => {
     MockVrmEngine.instances.length = 0;
     mockLoadVrmFromUrl.mockClear();
@@ -116,19 +134,7 @@ describe("VrmViewer resize handling", () => {
   });
 
   it("recomputes the renderer size when the canvas container resizes", async () => {
-    await act(async () => {
-      root?.render(
-        <div style={{ width: "100%", height: "100%" }}>
-          <VrmViewer
-            mouthOpen={0}
-            isSpeaking={false}
-            scenePreset="pro-streamer-stage"
-            sceneMark="stage"
-          />
-        </div>,
-      );
-    });
-
+    await renderViewer();
     const engine = MockVrmEngine.instances[0];
     expect(engine).toBeDefined();
     expect(engine.resize).toHaveBeenCalledWith(1280, 720);
@@ -142,5 +148,37 @@ describe("VrmViewer resize handling", () => {
     });
 
     expect(engine.resize).toHaveBeenLastCalledWith(900, 1100);
+  });
+
+  it("reports QA-readable stage idle diagnostics after the avatar loads", async () => {
+    const onEngineState = vi.fn();
+
+    await renderViewer({ onEngineState });
+
+    expect(mockLoadVrmFromUrl).toHaveBeenCalledWith("/vrms/alice.vrm", "alice.vrm");
+    expect(onEngineState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        activeAnimationState: "idle",
+        activeIdleSource: "procedural-fallback",
+        idleFallbackActive: true,
+        idleHealthy: true,
+      }),
+    );
+  });
+
+  it("updates the stage scene mark without losing the current diagnostics contract", async () => {
+    await renderViewer();
+
+    const engine = MockVrmEngine.instances[0];
+    expect(engine.setScenePreset).toHaveBeenCalledWith("pro-streamer-stage");
+    expect(engine.setSceneMark).toHaveBeenCalledWith("stage");
+
+    await renderViewer({
+      isSpeaking: true,
+      sceneMark: "portrait",
+    });
+
+    expect(engine.setSceneMark).toHaveBeenLastCalledWith("portrait");
+    expect(engine.setScenePreset).toHaveBeenLastCalledWith("pro-streamer-stage");
   });
 });
