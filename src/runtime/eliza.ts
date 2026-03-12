@@ -907,6 +907,34 @@ function resolveInstalledPackageVersion(packageName: string): string | null {
 async function resolveCanonicalStreamPlugin(
   config: MilaidyConfig,
 ): Promise<Plugin | null> {
+  const inRepoVendorRoot = path.resolve(
+    findMilaidyProjectRoot(path.dirname(fileURLToPath(import.meta.url))),
+    "plugins",
+    "plugin-555stream",
+  );
+  for (const candidate of [
+    path.join(inRepoVendorRoot, "dist", "index.js"),
+    path.join(inRepoVendorRoot, "src", "index.ts"),
+  ]) {
+    if (!existsSync(candidate)) continue;
+    try {
+      const mod = (await import(pathToFileURL(candidate).href)) as PluginModuleShape & {
+        stream555Plugin?: Plugin;
+      };
+      const plugin = mod.default ?? mod.plugin ?? mod.stream555Plugin;
+      if (plugin) {
+        logger.info(
+          `[milaidy] Canonical stream plugin resolved from in-repo vendor ${candidate}`,
+        );
+        return plugin;
+      }
+    } catch (err) {
+      logger.warn(
+        `[milaidy] Failed to load canonical stream plugin from in-repo vendor ${candidate}: ${formatError(err)}`,
+      );
+    }
+  }
+
   const siblingRoot = resolveSiblingWorkspacePackageRoot(
     "@rndrntwrk/plugin-555stream",
   );
