@@ -1,0 +1,108 @@
+--- a/dist/services/StreamControlService.js
++++ b/dist/services/StreamControlService.js
+@@ -199,11 +199,11 @@
+                 };
+             }
+         }
+-        // Overall pass if all required checks pass
++        // Overall pass if HTTP control is available. WebSocket is best-effort
++        // in deployments that do not expose the agent-v1 upgrade route.
+         result.allPassed =
+             result.checks.apiReachable.passed &&
+-                result.checks.authValid.passed &&
+-                result.checks.wsConnectable.passed;
++                result.checks.authValid.passed;
+         return result;
+     }
+     getRuntimeState() {
+@@ -259,6 +259,7 @@
+         }
+         // Initialize state cache for this session
+         this.initSessionState(response.data);
++        this.boundSessionId = response.data.sessionId;
+         return response.data;
+     }
+     /**
+@@ -268,14 +269,20 @@
+         if (!this.wsClient) {
+             throw new Error('[555stream] Service not initialized');
+         }
+-        // Connect if not already connected
+-        if (this.wsClient.getState() !== 'connected') {
+-            await this.wsClient.connect();
++        try {
++            // Connect if not already connected
++            if (this.wsClient.getState() !== 'connected') {
++                await this.wsClient.connect();
++            }
++            // Bind to session
++            await this.wsClient.bind(sessionId);
++            this.boundSessionId = sessionId;
++            console.log(`[555stream] Bound to session ${sessionId}`);
+         }
+-        // Bind to session
+-        await this.wsClient.bind(sessionId);
+-        this.boundSessionId = sessionId;
+-        console.log(`[555stream] Bound to session ${sessionId}`);
++        catch (error) {
++            this.wsClient.disconnect();
++            throw error;
++        }
+     }
+     /**
+      * Get cached session state
+@@ -302,9 +309,7 @@
+      * Check if service is ready (initialized, connected, bound)
+      */
+     isReady() {
+-        return !!(this.httpClient &&
+-            this.wsClient?.isReady() &&
+-            this.boundSessionId);
++        return !!(this.httpClient && this.boundSessionId);
+     }
+     /**
+      * Get configuration
+@@ -1430,4 +1435,4 @@
+         return response.data;
+     }
+ }
+-//# sourceMappingURL=StreamControlService.js.map
+\ No newline at end of file
++//# sourceMappingURL=StreamControlService.js.map
+--- a/dist/actions/bootstrap.js
++++ b/dist/actions/bootstrap.js
+@@ -73,8 +73,16 @@
+             }
+             // Create or resume session
+             const session = await service.createOrResumeSession(sessionId);
+-            // Bind WebSocket
+-            await service.bindWebSocket(session.sessionId);
++            let realtimeConnected = false;
++            let realtimeError = null;
++            try {
++                await service.bindWebSocket(session.sessionId);
++                realtimeConnected = true;
++            }
++            catch (error) {
++                realtimeError = error instanceof Error ? error.message : String(error);
++                console.warn(`[555stream] Realtime bind unavailable; continuing with HTTP session control: ${realtimeError}`);
++            }
+             // Format response
+             const response = formatBootstrapResponse(session.sessionId, session.resumed, session.active);
+             if (callback) {
+@@ -87,6 +95,8 @@
+                             resumed: session.resumed,
+                             active: session.active,
+                             productionState: session.productionState,
++                            realtimeConnected,
++                            realtimeError,
+                         },
+                     },
+                 });
+@@ -190,4 +200,4 @@
+     return lines.join('\n');
+ }
+ export default bootstrapAction;
+-//# sourceMappingURL=bootstrap.js.map
+\ No newline at end of file
++//# sourceMappingURL=bootstrap.js.map
