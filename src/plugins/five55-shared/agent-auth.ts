@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 export const STREAM555_AGENT_TOKEN_ENV = "STREAM555_AGENT_TOKEN";
 export const STREAM555_AGENT_API_KEY_ENV = "STREAM555_AGENT_API_KEY";
 export const STREAM_API_BEARER_TOKEN_ENV = "STREAM_API_BEARER_TOKEN";
@@ -8,6 +10,10 @@ export const STREAM555_AGENT_TOKEN_REFRESH_WINDOW_SECONDS_ENV =
 
 const DEFAULT_TOKEN_EXCHANGE_ENDPOINT = "/api/agent/v1/auth/token/exchange";
 const DEFAULT_REFRESH_WINDOW_SECONDS = 300;
+const DEFAULT_HTTP_TIMEOUT_MS = 8_000;
+const DEFAULT_HTTP_RETRIES = 2;
+const DEFAULT_HTTP_RETRY_BASE_MS = 250;
+const DEFAULT_HTTP_MAX_RESPONSE_CHARS = 4_000;
 
 interface AgentTokenExchangePayload {
   token?: unknown;
@@ -21,8 +27,43 @@ interface AgentTokenCacheEntry {
   expiresAtMs?: number;
 }
 
+type AgentBearerKind = "api-key-exchange" | "static-bearer";
+
+interface ResolvedAgentBearer {
+  token: string;
+  kind: AgentBearerKind;
+  usedCachedExchangeToken: boolean;
+  exchangeEndpoint?: string;
+}
+
+export type AgentRequestMethod = "GET" | "POST" | "PUT" | "DELETE";
+
+export interface AgentJsonRequestOptions {
+  method: AgentRequestMethod;
+  baseUrl: string;
+  endpoint: string;
+  body?: Record<string, unknown>;
+  headers?: Record<string, string>;
+  requestId?: string;
+  logScope?: string;
+  timeoutMs?: number;
+  retries?: number;
+  retryBaseDelayMs?: number;
+  maxResponseChars?: number;
+}
+
+export interface AgentJsonResponse {
+  ok: boolean;
+  status: number;
+  data?: Record<string, unknown>;
+  rawBody: string;
+  requestId: string;
+  refreshedOnUnauthorized: boolean;
+  authSource: AgentBearerKind;
+}
+
 let cachedExchangedToken: AgentTokenCacheEntry | null = null;
-let inFlightExchange: Promise<string> | null = null;
+let inFlightExchange: Promise<ResolvedAgentBearer> | null = null;
 
 function trimEnv(key: string): string | undefined {
   const value = process.env[key]?.trim();
@@ -37,6 +78,36 @@ function getRefreshWindowMs(): number {
     return DEFAULT_REFRESH_WINDOW_SECONDS * 1000;
   }
   return parsed * 1000;
+}
+
+function getHttpTimeoutMs(): number {
+  const raw = trimEnv("FIVE55_HTTP_TIMEOUT_MS");
+  if (!raw) return DEFAULT_HTTP_TIMEOUT_MS;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_HTTP_TIMEOUT_MS;
+}
+
+function getHttpRetries(): number {
+  const raw = trimEnv("FIVE55_HTTP_RETRIES");
+  if (!raw) return DEFAULT_HTTP_RETRIES;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_HTTP_RETRIES;
+}
+
+function getHttpRetryBaseDelayMs(): number {
+  const raw = trimEnv("FIVE55_HTTP_RETRY_BASE_MS");
+  if (!raw) return DEFAULT_HTTP_RETRY_BASE_MS;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_HTTP_RETRY_BASE_MS;
+}
+
+function getHttpMaxResponseChars(): number {
+  const raw = trimEnv("FIVE55_HTTP_MAX_RESPONSE_CHARS");
+  if (!raw) return DEFAULT_HTTP_MAX_RESPONSE_CHARS;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : DEFAULT_HTTP_MAX_RESPONSE_CHARS;
 }
 
 function parseJwtExpiryMs(token: string): number | undefined {
@@ -95,14 +166,23 @@ function normalizeBase(baseUrl: string): string {
   return trimmed;
 }
 
-async function exchangeTokenWithApiKey(baseUrl: string, apiKey: string): Promise<string> {
+async function exchangeTokenWithApiKeyDetailed(
+  baseUrl: string,
+  apiKey: string,
+): Promise<ResolvedAgentBearer> {
   const normalizedBase = normalizeBase(baseUrl);
+  const exchangeEndpoint = resolveExchangeEndpoint();
   if (
     cachedExchangedToken &&
     cachedExchangedToken.baseUrl === normalizedBase &&
     isTokenFresh(cachedExchangedToken)
   ) {
-    return cachedExchangedToken.token;
+    return {
+      token: cachedExchangedToken.token,
+      kind: "api-key-exchange",
+      usedCachedExchangeToken: true,
+      exchangeEndpoint,
+    };
   }
   if (cachedExchangedToken && cachedExchangedToken.baseUrl !== normalizedBase) {
     cachedExchangedToken = null;
@@ -112,8 +192,7 @@ async function exchangeTokenWithApiKey(baseUrl: string, apiKey: string): Promise
   }
 
   inFlightExchange = (async () => {
-    const endpoint = resolveExchangeEndpoint();
-    const exchangeUrl = new URL(endpoint, normalizedBase);
+    const exchangeUrl = new URL(exchangeEndpoint, normalizedBase);
     const response = await fetch(exchangeUrl.toString(), {
       method: "POST",
       headers: {
@@ -142,7 +221,12 @@ async function exchangeTokenWithApiKey(baseUrl: string, apiKey: string): Promise
       token: payload.token,
       expiresAtMs: Number.isFinite(expiresAtMs) ? expiresAtMs : undefined,
     };
-    return payload.token;
+    return {
+      token: payload.token,
+      kind: "api-key-exchange",
+      usedCachedExchangeToken: false,
+      exchangeEndpoint,
+    };
   })();
 
   try {
@@ -175,19 +259,211 @@ export function invalidateExchangedAgentTokenCache(): void {
   inFlightExchange = null;
 }
 
-export async function resolveAgentBearer(baseUrl: string): Promise<string> {
+function resolveStaticAgentBearer(): string | undefined {
+  return trimEnv(STREAM555_AGENT_TOKEN_ENV) || trimEnv(STREAM_API_BEARER_TOKEN_ENV);
+}
+
+async function resolveAgentBearerDetailed(baseUrl: string): Promise<ResolvedAgentBearer> {
   const apiKey = trimEnv(STREAM555_AGENT_API_KEY_ENV);
   if (apiKey) {
-    return exchangeTokenWithApiKey(baseUrl, apiKey);
+    return exchangeTokenWithApiKeyDetailed(baseUrl, apiKey);
   }
 
-  const staticToken =
-    trimEnv(STREAM555_AGENT_TOKEN_ENV) || trimEnv(STREAM_API_BEARER_TOKEN_ENV);
+  const staticToken = resolveStaticAgentBearer();
   if (staticToken) {
-    return staticToken;
+    return {
+      token: staticToken,
+      kind: "static-bearer",
+      usedCachedExchangeToken: false,
+    };
   }
 
   throw new Error(
     `${STREAM555_AGENT_API_KEY_ENV} or ${STREAM555_AGENT_TOKEN_ENV} (or ${STREAM_API_BEARER_TOKEN_ENV}) is required`,
   );
+}
+
+export async function resolveAgentBearer(baseUrl: string): Promise<string> {
+  const resolved = await resolveAgentBearerDetailed(baseUrl);
+  return resolved.token;
+}
+
+function parseJsonRecord(rawBody: string): Record<string, unknown> | undefined {
+  try {
+    const parsed = rawBody ? (JSON.parse(rawBody) as unknown) : null;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function isRetryableStatus(status: number): boolean {
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function truncate(text: string, maxChars: number): string {
+  return text.length > maxChars ? text.slice(0, maxChars) : text;
+}
+
+function logAgentAuthEvent(
+  level: "info" | "warn" | "error",
+  event: string,
+  metadata: Record<string, unknown>,
+): void {
+  const logger =
+    level === "error"
+      ? console.error
+      : level === "warn"
+        ? console.warn
+        : console.info;
+  logger("[stream555.agent-auth]", {
+    event,
+    ...metadata,
+  });
+}
+
+export function createAgentRequestId(scope = "agent"): string {
+  const normalizedScope = scope.trim().replace(/[^a-zA-Z0-9._-]+/g, "-") || "agent";
+  return `${normalizedScope}-${crypto.randomUUID()}`;
+}
+
+export async function requestAgentJson(
+  options: AgentJsonRequestOptions,
+): Promise<AgentJsonResponse> {
+  const requestId = options.requestId?.trim() || createAgentRequestId(options.logScope);
+  const logScope = options.logScope?.trim() || "agent-request";
+  const retries = Math.max(0, options.retries ?? getHttpRetries());
+  const retryBaseDelayMs = Math.max(
+    1,
+    options.retryBaseDelayMs ?? getHttpRetryBaseDelayMs(),
+  );
+  const maxResponseChars = Math.max(
+    1,
+    options.maxResponseChars ?? getHttpMaxResponseChars(),
+  );
+  const timeoutMs = Math.max(1, options.timeoutMs ?? getHttpTimeoutMs());
+  const attempts = retries + 1;
+  let refreshedOnUnauthorized = false;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const runRequest = async (
+        resolution: ResolvedAgentBearer,
+      ): Promise<AgentJsonResponse> => {
+        const bodyText =
+          options.body !== undefined ? JSON.stringify(options.body) : undefined;
+        const headers: Record<string, string> = {
+          Accept: "application/json",
+          ...(options.headers ?? {}),
+          Authorization: `Bearer ${resolution.token}`,
+          "x-request-id": requestId,
+        };
+        if (bodyText !== undefined && !headers["Content-Type"]) {
+          headers["Content-Type"] = "application/json";
+        }
+        const response = await fetch(new URL(options.endpoint, options.baseUrl).toString(), {
+          method: options.method,
+          headers,
+          ...(bodyText !== undefined ? { body: bodyText } : {}),
+          signal: controller.signal,
+        });
+        const rawBody = truncate(await response.text(), maxResponseChars);
+        return {
+          ok: response.ok,
+          status: response.status,
+          rawBody,
+          data: parseJsonRecord(rawBody),
+          requestId,
+          refreshedOnUnauthorized,
+          authSource: resolution.kind,
+        };
+      };
+
+      const bearer = await resolveAgentBearerDetailed(options.baseUrl);
+      let result = await runRequest(bearer);
+      if (result.status === 401 && bearer.kind === "api-key-exchange") {
+        refreshedOnUnauthorized = true;
+        logAgentAuthEvent("warn", "refresh-on-401", {
+          requestId,
+          logScope,
+          method: options.method,
+          endpoint: options.endpoint,
+          status: result.status,
+          usedCachedExchangeToken: bearer.usedCachedExchangeToken,
+          exchangeEndpoint: bearer.exchangeEndpoint ?? null,
+        });
+        invalidateExchangedAgentTokenCache();
+        const refreshedBearer = await resolveAgentBearerDetailed(options.baseUrl);
+        result = await runRequest(refreshedBearer);
+      }
+
+      clearTimeout(timeout);
+      logAgentAuthEvent(result.ok ? "info" : "warn", "request-complete", {
+        requestId,
+        logScope,
+        method: options.method,
+        endpoint: options.endpoint,
+        status: result.status,
+        authSource: result.authSource,
+        refreshedOnUnauthorized,
+        usedCachedExchangeToken: bearer.usedCachedExchangeToken,
+        exchangeEndpoint: bearer.exchangeEndpoint ?? null,
+      });
+      if (result.ok || !isRetryableStatus(result.status) || attempt >= attempts) {
+        return result;
+      }
+    } catch (err) {
+      clearTimeout(timeout);
+      const message = err instanceof Error ? err.message : String(err);
+      const isAbort = /aborted|abort/i.test(message);
+      if (attempt >= attempts) {
+        logAgentAuthEvent("error", "request-failed", {
+          requestId,
+          logScope,
+          method: options.method,
+          endpoint: options.endpoint,
+          timeoutMs,
+          attempts,
+          error: message,
+        });
+        return {
+          ok: false,
+          status: 0,
+          rawBody: isAbort
+            ? `request timed out after ${timeoutMs}ms`
+            : `request failed after ${attempts} attempt(s): ${message}`,
+          requestId,
+          refreshedOnUnauthorized,
+          authSource: trimEnv(STREAM555_AGENT_API_KEY_ENV)
+            ? "api-key-exchange"
+            : "static-bearer",
+        };
+      }
+    }
+
+    const delayMs = retryBaseDelayMs * 2 ** (attempt - 1);
+    await sleep(delayMs);
+  }
+
+  return {
+    ok: false,
+    status: 0,
+    rawBody: "request failed: exhausted retry budget",
+    requestId,
+    refreshedOnUnauthorized,
+    authSource: trimEnv(STREAM555_AGENT_API_KEY_ENV)
+      ? "api-key-exchange"
+      : "static-bearer",
+  };
 }

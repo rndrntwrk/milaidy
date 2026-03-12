@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { invalidateExchangedAgentTokenCache } from "../five55-shared/agent-auth.js";
 
 type EnvSnapshot = Record<string, string | undefined>;
 
@@ -84,6 +85,7 @@ describe("five55-games plugin actions", () => {
 
   beforeEach(() => {
     vi.resetModules();
+    invalidateExchangedAgentTokenCache();
     envBefore = snapshotEnv();
     process.env.FIVE55_GAMES_API_DIALECT = "agent-v1";
     process.env.FIVE55_GAMES_CF_CONNECT_TIMEOUT_MS = "1";
@@ -102,6 +104,7 @@ describe("five55-games plugin actions", () => {
   });
 
   afterEach(() => {
+    invalidateExchangedAgentTokenCache();
     restoreEnv(envBefore);
     vi.restoreAllMocks();
   });

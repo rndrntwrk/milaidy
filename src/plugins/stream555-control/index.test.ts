@@ -59,6 +59,15 @@ function parseFetchBody(call: unknown[]): Record<string, unknown> {
   return JSON.parse(body) as Record<string, unknown>;
 }
 
+function getFetchHeader(call: unknown[], key: string): string | undefined {
+  const init = call[1] as RequestInit | undefined;
+  const headers = init?.headers;
+  if (!headers || typeof headers !== "object" || Array.isArray(headers)) {
+    return undefined;
+  }
+  return (headers as Record<string, string>)[key];
+}
+
 function parseEnvelope(result: { text: string }): Record<string, unknown> {
   return JSON.parse(result.text) as Record<string, unknown>;
 }
@@ -311,6 +320,86 @@ describe("stream555-control plugin actions", () => {
       "/api/agent/v1/sessions/session-live-1/stream/start",
     );
     expect(result?.success).toBe(true);
+  });
+
+  it("refreshes exchanged agent tokens during go-live bootstrap and keeps the launch transparent", async () => {
+    delete process.env.STREAM555_AGENT_TOKEN;
+    process.env.STREAM555_AGENT_API_KEY = "stream-api-key";
+    process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT =
+      "/api/agent/v1/auth/token/exchange";
+
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { token: "stale-jwt" }))
+      .mockResolvedValueOnce(jsonResponse(401, { error: "Invalid agent token" }))
+      .mockResolvedValueOnce(jsonResponse(200, { token: "fresh-jwt" }))
+      .mockResolvedValueOnce(jsonResponse(200, { sessionId: "session-refresh-1" }))
+      .mockResolvedValueOnce(jsonResponse(200, { accepted: true }));
+
+    const action = await resolveAction("STREAM555_GO_LIVE");
+    const result = await action.handler?.(
+      makeRuntime(),
+      makeMessage(),
+      INTERNAL_STATE,
+      {
+        parameters: {
+          sessionId: "session-refresh-1",
+          inputType: "camera",
+        },
+      } as never,
+    );
+
+    expect(result?.success).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "/api/agent/v1/auth/token/exchange",
+    );
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("/api/agent/v1/sessions");
+    expect(getFetchHeader(fetchMock.mock.calls[1] ?? [], "Authorization")).toBe(
+      "Bearer stale-jwt",
+    );
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
+      "/api/agent/v1/auth/token/exchange",
+    );
+    expect(getFetchHeader(fetchMock.mock.calls[3] ?? [], "Authorization")).toBe(
+      "Bearer fresh-jwt",
+    );
+    expect(getFetchHeader(fetchMock.mock.calls[4] ?? [], "Authorization")).toBe(
+      "Bearer fresh-jwt",
+    );
+  });
+
+  it("surfaces the exact bootstrap auth failure inline when refresh cannot recover", async () => {
+    delete process.env.STREAM555_AGENT_TOKEN;
+    process.env.STREAM555_AGENT_API_KEY = "stream-api-key";
+    process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT =
+      "/api/agent/v1/auth/token/exchange";
+
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { token: "stale-jwt" }))
+      .mockResolvedValueOnce(jsonResponse(401, { error: "Invalid agent token" }))
+      .mockResolvedValueOnce(jsonResponse(200, { token: "fresh-jwt" }))
+      .mockResolvedValueOnce(jsonResponse(401, { error: "Invalid agent token" }));
+
+    const action = await resolveAction("STREAM555_GO_LIVE");
+    const result = await action.handler?.(
+      makeRuntime(),
+      makeMessage(),
+      INTERNAL_STATE,
+      {
+        parameters: {
+          sessionId: "session-refresh-2",
+          inputType: "camera",
+        },
+      } as never,
+    );
+
+    expect(result?.success).toBe(false);
+    const envelope = parseEnvelope(result as { text: string });
+    expect(envelope.message).toContain("Invalid agent token");
+    expect(envelope.message).toContain("[requestId:");
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
   it("uses screen input + default pip scene for screen share action", async () => {

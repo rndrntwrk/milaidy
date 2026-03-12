@@ -1,5 +1,6 @@
 import type { HandlerOptions } from "@elizaos/core";
 import crypto from "node:crypto";
+import { requestAgentJson } from "./agent-auth.js";
 
 export function readParam(
   options: HandlerOptions | undefined,
@@ -29,6 +30,10 @@ export interface PostJsonOptions {
   apiKeyEnv?: string;
   signingSecretEnv?: string;
   headers?: Record<string, string>;
+  agentAuth?: {
+    requestId?: string;
+    logScope?: string;
+  };
 }
 
 export type Five55ActionCode =
@@ -588,6 +593,25 @@ function parseJsonObject(
   }
 }
 
+function extractUpstreamFailureMessage(body: string): string {
+  if (!body.trim()) return "upstream request failed";
+  try {
+    const parsed = JSON.parse(body) as unknown;
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed) &&
+      typeof (parsed as { error?: unknown }).error === "string" &&
+      (parsed as { error: string }).error.trim()
+    ) {
+      return (parsed as { error: string }).error.trim();
+    }
+  } catch {
+    // ignore parse failure and use raw body
+  }
+  return body.trim();
+}
+
 export function exceptionAction(
   module: string,
   action: string,
@@ -661,11 +685,15 @@ export async function executeApiAction(
   );
   if (!upstream.ok) {
     const code = mapUpstreamCode(upstream.status);
+    const upstreamMessage = extractUpstreamFailureMessage(upstream.body);
+    const messageWithRequestId = upstream.requestId
+      ? `${upstreamMessage} [requestId: ${upstream.requestId}]`
+      : upstreamMessage;
     const endedAt = new Date().toISOString();
     emitActionLifecycle(options, context, "failed", {
       status: upstream.status,
       code,
-      message: "upstream request failed",
+      message: messageWithRequestId,
       details: { body: upstream.body },
       endedAt,
     });
@@ -674,7 +702,7 @@ export async function executeApiAction(
       options.action,
       code,
       upstream.status,
-      "upstream request failed",
+      messageWithRequestId,
       { body: upstream.body },
       buildActionTrace(context, endedAt),
     );
@@ -748,7 +776,7 @@ export async function postJson(
   endpoint: string,
   payload: Record<string, unknown>,
   options?: PostJsonOptions,
-): Promise<{ ok: boolean; status: number; body: string }> {
+): Promise<{ ok: boolean; status: number; body: string; requestId?: string }> {
   const timeoutMs = options?.timeoutMs ?? parsePositiveInt(process.env.FIVE55_HTTP_TIMEOUT_MS, 8000);
   const retries = options?.retries ?? parsePositiveInt(process.env.FIVE55_HTTP_RETRIES, 2);
   const retryBaseDelayMs =
@@ -762,6 +790,29 @@ export async function postJson(
   const bodyText = JSON.stringify(payload);
   const idempotencyKey = buildIdempotencyKey(endpoint, bodyText, options);
   const headers = buildSecurityHeaders(endpoint, bodyText, options, idempotencyKey);
+
+  if (options?.agentAuth) {
+    const response = await requestAgentJson({
+      method: "POST",
+      baseUrl: base,
+      endpoint,
+      body: payload,
+      headers,
+      requestId: options.agentAuth.requestId,
+      logScope: options.agentAuth.logScope,
+      timeoutMs,
+      retries,
+      retryBaseDelayMs,
+      maxResponseChars,
+    });
+    return {
+      ok: response.ok,
+      status: response.status,
+      body: response.rawBody,
+      requestId: response.requestId,
+    };
+  }
+
   const attempts = Math.max(1, retries + 1);
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {

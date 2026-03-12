@@ -60,6 +60,14 @@ import {
 } from "../runtime/five55-capability-policy.js";
 import { resolveFive55CapabilityForRequest } from "../runtime/five55-capability-routing.js";
 import {
+  createAgentRequestId,
+} from "../plugins/five55-shared/agent-auth.js";
+import {
+  ensureGamesAgentSessionId,
+  extractGamesUpstreamError,
+  requestGamesAgentJson,
+} from "./five55-games-agent.js";
+import {
   canonicalizeMasteryGameId,
   getMasteryContract,
   listMasteryContracts,
@@ -17307,89 +17315,6 @@ async function handleRequest(
     }
     return response;
   };
-  const resolveGamesAgentBearer = async (upstreamBase: string): Promise<string> => {
-    const staticToken =
-      process.env.STREAM555_AGENT_TOKEN?.trim() ||
-      process.env.STREAM_API_BEARER_TOKEN?.trim();
-    if (staticToken) return staticToken;
-
-    const apiKey = process.env.STREAM555_AGENT_API_KEY?.trim();
-    if (!apiKey) {
-      throw new Error(
-        "STREAM555_AGENT_API_KEY or STREAM555_AGENT_TOKEN (or STREAM_API_BEARER_TOKEN) is required",
-      );
-    }
-
-    const exchangeEndpoint =
-      process.env.STREAM555_AGENT_TOKEN_EXCHANGE_ENDPOINT?.trim() ||
-      "/api/agent/v1/auth/token/exchange";
-    const exchangeUrl = new URL(exchangeEndpoint, upstreamBase);
-    const exchangeRes = await fetch(exchangeUrl.toString(), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({ apiKey }),
-    });
-    const exchangeRaw = await exchangeRes.text();
-    const exchangeParsed = parseGamesJsonText(exchangeRaw);
-    if (!exchangeRes.ok) {
-      throw new Error(
-        `Token exchange failed (${exchangeRes.status}): ${extractGamesError(exchangeParsed, exchangeRaw)}`,
-      );
-    }
-    if (
-      !exchangeParsed ||
-      typeof exchangeParsed !== "object" ||
-      Array.isArray(exchangeParsed) ||
-      typeof (exchangeParsed as { token?: unknown }).token !== "string" ||
-      !(exchangeParsed as { token: string }).token.trim()
-    ) {
-      throw new Error("Token exchange succeeded but no token was returned");
-    }
-    return (exchangeParsed as { token: string }).token;
-  };
-  const ensureGamesAgentSessionId = async (
-    upstreamBase: string,
-    bearerToken: string,
-    preferredSessionId?: string,
-  ): Promise<string> => {
-    const sessionIdCandidate =
-      preferredSessionId?.trim() ||
-      process.env.STREAM_SESSION_ID?.trim() ||
-      process.env.STREAM555_DEFAULT_SESSION_ID?.trim();
-    const sessionUrl = new URL("/api/agent/v1/sessions", upstreamBase);
-    const sessionRes = await fetch(sessionUrl.toString(), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        Authorization: `Bearer ${bearerToken}`,
-      },
-      body: JSON.stringify(
-        sessionIdCandidate ? { sessionId: sessionIdCandidate } : {},
-      ),
-    });
-    const sessionRaw = await sessionRes.text();
-    const sessionParsed = parseGamesJsonText(sessionRaw);
-    if (!sessionRes.ok) {
-      throw new Error(
-        `Session bootstrap failed (${sessionRes.status}): ${extractGamesError(sessionParsed, sessionRaw)}`,
-      );
-    }
-    if (
-      !sessionParsed ||
-      typeof sessionParsed !== "object" ||
-      Array.isArray(sessionParsed) ||
-      typeof (sessionParsed as { sessionId?: unknown }).sessionId !== "string" ||
-      !(sessionParsed as { sessionId: string }).sessionId.trim()
-    ) {
-      throw new Error("Session bootstrap did not return sessionId");
-    }
-    return (sessionParsed as { sessionId: string }).sessionId;
-  };
-
   if (
     (method === "GET" || method === "POST") &&
     (pathname === `${canonicalGamesBase}/catalog` ||
@@ -17487,24 +17412,13 @@ async function handleRequest(
       return;
     }
 
-    let upstreamToken = "";
-    try {
-      upstreamToken = await resolveGamesAgentBearer(upstreamBase);
-    } catch (err) {
-      error(
-        res,
-        err instanceof Error ? err.message : "Failed to resolve games agent bearer",
-        503,
-      );
-      return;
-    }
-
+    const requestId = createAgentRequestId("api-five55-games-catalog");
     let sessionId = "";
     try {
       sessionId = await ensureGamesAgentSessionId(
         upstreamBase,
-        upstreamToken,
         requestedSessionId,
+        requestId,
       );
     } catch (err) {
       error(
@@ -17514,28 +17428,23 @@ async function handleRequest(
       );
       return;
     }
-
-    const upstreamUrl = new URL(
-      `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/catalog`,
-      upstreamBase,
-    );
     try {
-      const upstreamRes = await fetch(upstreamUrl.toString(), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${upstreamToken}`,
-        },
-        body: JSON.stringify(requestBody),
-      });
-      const raw = await upstreamRes.text();
-      const parsed = parseGamesJsonText(raw);
-      if (!upstreamRes.ok) {
-        error(res, extractGamesError(parsed, raw), upstreamRes.status);
-        return;
+      const upstreamResponse = await requestGamesAgentJson(
+        upstreamBase,
+        requestId,
+        "POST",
+        `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/catalog`,
+        requestBody,
+      );
+        if (!upstreamResponse.ok) {
+          error(
+            res,
+            `${extractGamesUpstreamError(upstreamResponse.data, upstreamResponse.rawBody)} [requestId: ${upstreamResponse.requestId}]`,
+            upstreamResponse.status || 502,
+          );
+          return;
       }
-      const payload = resolveCatalogPayload(parsed, {
+      const payload = resolveCatalogPayload(upstreamResponse.data, {
         includeBeta,
         category: requestedCategory,
         sessionId,
@@ -17640,24 +17549,13 @@ async function handleRequest(
       return;
     }
 
-    let upstreamToken = "";
-    try {
-      upstreamToken = await resolveGamesAgentBearer(upstreamBase);
-    } catch (err) {
-      error(
-        res,
-        err instanceof Error ? err.message : "Failed to resolve games agent bearer",
-        503,
-      );
-      return;
-    }
-
+    const requestId = createAgentRequestId("api-five55-games-play");
     let sessionId = "";
     try {
       sessionId = await ensureGamesAgentSessionId(
         upstreamBase,
-        upstreamToken,
         requestedSessionId,
+        requestId,
       );
     } catch (err) {
       error(
@@ -17674,27 +17572,23 @@ async function handleRequest(
         : "";
 
     if (!gameId) {
-      const catalogUrl = new URL(
-        `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/catalog`,
-        upstreamBase,
-      );
       try {
-        const catalogRes = await fetch(catalogUrl.toString(), {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-            Authorization: `Bearer ${upstreamToken}`,
-          },
-          body: JSON.stringify({ includeBeta: true }),
-        });
-        const catalogRaw = await catalogRes.text();
-        const catalogParsed = parseGamesJsonText(catalogRaw);
-        if (!catalogRes.ok) {
-          error(res, extractGamesError(catalogParsed, catalogRaw), catalogRes.status);
+        const catalogResponse = await requestGamesAgentJson(
+          upstreamBase,
+          requestId,
+          "POST",
+          `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/catalog`,
+          { includeBeta: true },
+        );
+        if (!catalogResponse.ok) {
+          error(
+            res,
+            `${extractGamesUpstreamError(catalogResponse.data, catalogResponse.rawBody)} [requestId: ${catalogResponse.requestId}]`,
+            catalogResponse.status || 502,
+          );
           return;
         }
-        const catalogPayload = asRecord(catalogParsed);
+        const catalogPayload = asRecord(catalogResponse.data);
         const catalogGames = Array.isArray(catalogPayload?.games)
           ? catalogPayload.games
           : [];
@@ -17722,32 +17616,27 @@ async function handleRequest(
       error(res, "No playable games available for the current session", 404);
       return;
     }
-
-    const playUrl = new URL(
-      `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/play`,
-      upstreamBase,
-    );
     try {
-      const upstreamRes = await fetch(playUrl.toString(), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${upstreamToken}`,
-        },
-        body: JSON.stringify({
+      const upstreamResponse = await requestGamesAgentJson(
+        upstreamBase,
+        requestId,
+        "POST",
+        `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/games/play`,
+        {
           gameId,
           mode,
-        }),
-      });
-      const raw = await upstreamRes.text();
-      const parsed = parseGamesJsonText(raw);
-      if (!upstreamRes.ok) {
-        error(res, extractGamesError(parsed, raw), upstreamRes.status);
+        },
+      );
+      if (!upstreamResponse.ok) {
+        error(
+          res,
+          `${extractGamesUpstreamError(upstreamResponse.data, upstreamResponse.rawBody)} [requestId: ${upstreamResponse.requestId}]`,
+          upstreamResponse.status || 502,
+        );
         return;
       }
 
-      const responsePayload = resolvePlayPayload(parsed, {
+      const responsePayload = resolvePlayPayload(upstreamResponse.data, {
         gameId,
         mode,
         sessionId,

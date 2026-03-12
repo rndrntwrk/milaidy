@@ -19,9 +19,10 @@ import {
   readParam,
 } from "../five55-shared/action-kit.js";
 import {
+  createAgentRequestId,
   describeAgentAuthSource,
   isAgentAuthConfigured,
-  resolveAgentBearer,
+  requestAgentJson,
 } from "../five55-shared/agent-auth.js";
 import { getPluginInfo, type RegistryPluginInfo } from "../../services/registry-client.js";
 import { resolveManagedAppStreamUrl } from "../../services/app-catalog.js";
@@ -190,10 +191,6 @@ function resolveBaseUrl(
   }
 
   return trimEnv(STREAM555_PUBLIC_BASE_ENV) || DEFAULT_STREAM555_PUBLIC_BASE_URL;
-}
-
-async function resolveAgentToken(baseUrl: string): Promise<string> {
-  return resolveAgentBearer(baseUrl);
 }
 
 function parseCsvList(value: string | undefined): string[] | undefined {
@@ -511,35 +508,29 @@ async function fetchJson(
   method: "GET" | "POST" | "PUT",
   base: string,
   endpoint: string,
-  token: string,
   payload: JsonObject,
-): Promise<{ ok: boolean; status: number; data?: JsonObject; rawBody: string }> {
-  const target = new URL(endpoint, base);
-  const response = await fetch(target, {
+  requestId?: string,
+): Promise<{
+  ok: boolean;
+  status: number;
+  data?: JsonObject;
+  rawBody: string;
+  requestId: string;
+}> {
+  const response = await requestAgentJson({
     method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: method === "GET" ? undefined : JSON.stringify(payload),
+    baseUrl: base,
+    endpoint,
+    ...(method === "GET" ? {} : { body: payload }),
+    requestId,
+    logScope: "stream555-control",
   });
-
-  const rawBody = await response.text();
-  let data: JsonObject | undefined;
-  try {
-    const parsed: unknown = JSON.parse(rawBody);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      data = parsed as JsonObject;
-    }
-  } catch {
-    // non-json response
-  }
-
   return {
     ok: response.ok,
     status: response.status,
-    data,
-    rawBody,
+    data: response.data as JsonObject | undefined,
+    rawBody: response.rawBody,
+    requestId: response.requestId,
   };
 }
 
@@ -594,9 +585,9 @@ function buildEnvelopeActionResult({
 
 async function applyConfiguredDestinations(params: {
   base: string;
-  token: string;
   sessionId: string;
   requestedPlatforms?: string[];
+  requestId?: string;
 }): Promise<{
   attempted: number;
   applied: DestinationApplySuccess[];
@@ -613,12 +604,12 @@ async function applyConfiguredDestinations(params: {
       "PUT",
       params.base,
       `/api/agent/v1/platforms/${encodeURIComponent(payload.platformId)}`,
-      params.token,
       {
         ...(payload.rtmpUrl ? { rtmpUrl: payload.rtmpUrl } : {}),
         ...(payload.streamKey ? { streamKey: payload.streamKey } : {}),
         enabled: payload.enabled,
       },
+      params.requestId,
     );
 
     if (!updateResponse.ok) {
@@ -634,8 +625,8 @@ async function applyConfiguredDestinations(params: {
       "POST",
       params.base,
       `/api/agent/v1/sessions/${encodeURIComponent(params.sessionId)}/platforms/${encodeURIComponent(payload.platformId)}/toggle`,
-      params.token,
       { enabled: payload.enabled },
+      params.requestId,
     );
 
     if (!toggleResponse.ok) {
@@ -663,8 +654,8 @@ async function applyConfiguredDestinations(params: {
 
 async function ensureAgentSessionId(
   base: string,
-  token: string,
   requestedSessionId?: string,
+  requestId?: string,
 ): Promise<string> {
   const preferredSessionId =
     requestedSessionId?.trim() ||
@@ -681,13 +672,13 @@ async function ensureAgentSessionId(
     "POST",
     base,
     "/api/agent/v1/sessions",
-    token,
     body,
+    requestId,
   );
 
   if (!response.ok) {
     throw new Error(
-      `session bootstrap failed (${response.status}): ${getErrorDetail(response)}`,
+      `session bootstrap failed (${response.status}): ${getErrorDetail(response)} [requestId: ${response.requestId}]`,
     );
   }
 
@@ -700,13 +691,21 @@ async function ensureAgentSessionId(
   return sessionId;
 }
 
-function commandTransport(token: string) {
+function createControlRequestId(action: string): string {
+  return createAgentRequestId(`stream555-control-${action}`);
+}
+
+function commandTransport(
+  requestId?: string,
+  logScope = "stream555-control",
+) {
   return {
     service: "stream555",
     operation: "command" as const,
     idempotent: true,
-    headers: {
-      Authorization: `Bearer ${token}`,
+    agentAuth: {
+      ...(requestId ? { requestId } : {}),
+      logScope,
     },
   };
 }
@@ -773,20 +772,21 @@ const goLiveAction: Action = {
       const destinationPlatforms = parseCsvList(
         readParam(options as HandlerOptions | undefined, "destinationPlatforms"),
       );
+      const requestId = createControlRequestId("go-live");
 
       const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
-      const token = await resolveAgentToken(base);
-      const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
       if (applyDestinations) {
         const destinationSync = await applyConfiguredDestinations({
           base,
-          token,
           sessionId,
           requestedPlatforms: destinationPlatforms,
+          requestId,
         });
         if (destinationSync.failed.length > 0) {
           console.warn("[stream555.control] destination sync failed", {
             sessionId,
+            requestId,
             failed: destinationSync.failed,
           });
         }
@@ -810,7 +810,7 @@ const goLiveAction: Action = {
         },
         responseContract: {},
         successMessage: "go-live requested",
-        transport: commandTransport(token),
+        transport: commandTransport(requestId),
         context: { sessionId },
       });
     } catch (err) {
@@ -848,15 +848,15 @@ const destinationsApplyAction: Action = {
       const requestedPlatforms = parseCsvList(
         readParam(options as HandlerOptions | undefined, "platforms"),
       );
+      const requestId = createControlRequestId("destinations-apply");
 
       const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
-      const token = await resolveAgentToken(base);
-      const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
       const syncResult = await applyConfiguredDestinations({
         base,
-        token,
         sessionId,
         requestedPlatforms,
+        requestId,
       });
 
       if (syncResult.attempted === 0) {
@@ -942,6 +942,7 @@ const goLiveAppAction: Action = {
         options as HandlerOptions | undefined,
         "sessionId",
       );
+      const requestId = createControlRequestId("go-live-app");
 
       const appName = normalizeAppName(appNameRaw);
 
@@ -997,8 +998,7 @@ const goLiveAppAction: Action = {
       }
 
       const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
-      const token = await resolveAgentToken(base);
-      const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
 
       const appOptions = {
         name: appName,
@@ -1043,7 +1043,7 @@ const goLiveAppAction: Action = {
         },
         responseContract: {},
         successMessage: "app go-live requested",
-        transport: commandTransport(token),
+        transport: commandTransport(requestId),
         context: { sessionId },
       });
     } catch (err) {
@@ -1160,8 +1160,8 @@ const goLiveSegmentsAction: Action = {
       }
 
       const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
-      const token = await resolveAgentToken(base);
-      const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+      const requestId = createControlRequestId("go-live-segments");
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
 
       return executeApiAction({
         module: "stream555.control",
@@ -1178,7 +1178,7 @@ const goLiveSegmentsAction: Action = {
         },
         responseContract: {},
         successMessage: "segment orchestration bootstrap requested",
-        transport: commandTransport(token),
+        transport: commandTransport(requestId),
         context: { sessionId },
       });
     } catch (err) {
@@ -1214,15 +1214,15 @@ const segmentStateAction: Action = {
         options as HandlerOptions | undefined,
         "sessionId",
       );
+      const requestId = createControlRequestId("segment-state");
       const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
-      const token = await resolveAgentToken(base);
-      const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
       const response = await fetchJson(
         "GET",
         base,
         `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/segments/state`,
-        token,
         {},
+        requestId,
       );
       if (!response.ok) {
         return buildEnvelopeActionResult({
@@ -1273,10 +1273,10 @@ const screenShareAction: Action = {
       const inputUrl = readParam(options as HandlerOptions | undefined, "inputUrl");
       const sceneId =
         readParam(options as HandlerOptions | undefined, "sceneId") || "active-pip";
+      const requestId = createControlRequestId("screen-share");
 
       const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
-      const token = await resolveAgentToken(base);
-      const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
 
       return executeApiAction({
         module: "stream555.control",
@@ -1296,7 +1296,7 @@ const screenShareAction: Action = {
         },
         responseContract: {},
         successMessage: "screen-share requested",
-        transport: commandTransport(token),
+        transport: commandTransport(requestId),
         context: { sessionId },
       });
     } catch (err) {
@@ -1322,9 +1322,9 @@ const endLiveAction: Action = {
         options as HandlerOptions | undefined,
         "sessionId",
       );
+      const requestId = createControlRequestId("end-live");
       const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
-      const token = await resolveAgentToken(base);
-      const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
 
       return executeApiAction({
         module: "stream555.control",
@@ -1336,7 +1336,7 @@ const endLiveAction: Action = {
         responseContract: {},
         successMessage: "end-live requested",
         transport: {
-          ...commandTransport(token),
+          ...commandTransport(requestId),
           idempotencyKey: buildStopIdempotencyKey(sessionId),
         },
         context: { sessionId },
@@ -1395,10 +1395,10 @@ const adsCreateAction: Action = {
       const twitter = readParam(options as HandlerOptions | undefined, "twitter");
       const handle = readParam(options as HandlerOptions | undefined, "handle");
       const durationMs = durationMsRaw ? Number.parseInt(durationMsRaw, 10) : undefined;
+      const requestId = createControlRequestId("ad-create");
 
       const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
-      const token = await resolveAgentToken(base);
-      const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
       const lBarPayload = buildLBarFromBrandPayload({
         type,
         imageUrl,
@@ -1441,7 +1441,7 @@ const adsCreateAction: Action = {
         },
         responseContract: {},
         successMessage: "ad created",
-        transport: commandTransport(token),
+        transport: commandTransport(requestId),
         context: { sessionId },
       });
     } catch (err) {
@@ -1489,9 +1489,9 @@ const adsTriggerAction: Action = {
         "durationMs",
       );
       const durationMs = durationMsRaw ? Number.parseInt(durationMsRaw, 10) : undefined;
+      const requestId = createControlRequestId("ad-trigger");
       const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
-      const token = await resolveAgentToken(base);
-      const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
 
       return executeApiAction({
         module: "stream555.control",
@@ -1504,7 +1504,7 @@ const adsTriggerAction: Action = {
         requestContract: {},
         responseContract: {},
         successMessage: "ad trigger requested",
-        transport: commandTransport(token),
+        transport: commandTransport(requestId),
         context: { sessionId },
       });
     } catch (err) {
@@ -1530,9 +1530,9 @@ const adsDismissAction: Action = {
         options as HandlerOptions | undefined,
         "sessionId",
       );
+      const requestId = createControlRequestId("ad-dismiss");
       const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
-      const token = await resolveAgentToken(base);
-      const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
 
       return executeApiAction({
         module: "stream555.control",
@@ -1543,7 +1543,7 @@ const adsDismissAction: Action = {
         requestContract: {},
         responseContract: {},
         successMessage: "ad dismiss requested",
-        transport: commandTransport(token),
+        transport: commandTransport(requestId),
         context: { sessionId },
       });
     } catch (err) {
@@ -1592,10 +1592,10 @@ const radioControlAction: Action = {
       if (target) radioPayload.target = target;
       if (Number.isFinite(level)) radioPayload.level = level;
       if (background) radioPayload.backgroundId = background;
+      const requestId = createControlRequestId("radio-control");
 
       const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
-      const token = await resolveAgentToken(base);
-      const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
 
       return executeApiAction({
         module: "stream555.control",
@@ -1612,7 +1612,7 @@ const radioControlAction: Action = {
         },
         responseContract: {},
         successMessage: "radio control requested",
-        transport: commandTransport(token),
+        transport: commandTransport(requestId),
         context: { sessionId },
       });
     } catch (err) {
@@ -1657,10 +1657,10 @@ const guestInviteAction: Action = {
       const expiresIn = expiresInRaw
         ? Number.parseInt(expiresInRaw, 10)
         : undefined;
+      const requestId = createControlRequestId("guest-invite");
 
       const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
-      const token = await resolveAgentToken(base);
-      const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
 
       return executeApiAction({
         module: "stream555.control",
@@ -1675,7 +1675,7 @@ const guestInviteAction: Action = {
         requestContract: {},
         responseContract: {},
         successMessage: "guest invite created",
-        transport: commandTransport(token),
+        transport: commandTransport(requestId),
         context: { sessionId },
       });
     } catch (err) {
@@ -1704,10 +1704,10 @@ const sceneSetAction: Action = {
         options as HandlerOptions | undefined,
         "sessionId",
       );
+      const requestId = createControlRequestId("scene-set");
 
       const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
-      const token = await resolveAgentToken(base);
-      const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
 
       return executeApiAction({
         module: "stream555.control",
@@ -1720,7 +1720,7 @@ const sceneSetAction: Action = {
         },
         responseContract: {},
         successMessage: "scene switch requested",
-        transport: commandTransport(token),
+        transport: commandTransport(requestId),
         context: { sessionId },
       });
     } catch (err) {
@@ -1748,9 +1748,9 @@ const pipEnableAction: Action = {
       );
       const pipScene =
         readParam(options as HandlerOptions | undefined, "sceneId") || "active-pip";
+      const requestId = createControlRequestId("pip-enable");
       const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
-      const token = await resolveAgentToken(base);
-      const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
 
       return executeApiAction({
         module: "stream555.control",
@@ -1763,7 +1763,7 @@ const pipEnableAction: Action = {
         },
         responseContract: {},
         successMessage: "pip scene requested",
-        transport: commandTransport(token),
+        transport: commandTransport(requestId),
         context: { sessionId },
       });
     } catch (err) {
@@ -1801,10 +1801,10 @@ const segmentOverrideAction: Action = {
         options as HandlerOptions | undefined,
         "requestedBy",
       );
+      const requestId = createControlRequestId("segment-override");
 
       const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
-      const token = await resolveAgentToken(base);
-      const sessionId = await ensureAgentSessionId(base, token, requestedSessionId);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
 
       return executeApiAction({
         module: "stream555.control",
@@ -1821,7 +1821,7 @@ const segmentOverrideAction: Action = {
         },
         responseContract: {},
         successMessage: "segment override requested",
-        transport: commandTransport(token),
+        transport: commandTransport(requestId),
         context: { sessionId },
       });
     } catch (err) {
@@ -1857,8 +1857,8 @@ const earningsEstimateAction: Action = {
       );
       const limit = limitRaw ? Number.parseInt(limitRaw, 10) : 5;
       const poolSize = poolSizeRaw ? Number.parseInt(poolSizeRaw, 10) : 30;
+      const requestId = createControlRequestId("earnings-estimate");
       const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
-      const token = await resolveAgentToken(base);
 
       return executeApiAction({
         module: "stream555.control",
@@ -1873,7 +1873,7 @@ const earningsEstimateAction: Action = {
         requestContract: {},
         responseContract: {},
         successMessage: "projected earnings evaluated",
-        transport: commandTransport(token),
+        transport: commandTransport(requestId),
       });
     } catch (err) {
       return exceptionAction("stream555.control", "STREAM555_EARNINGS_ESTIMATE", err);
