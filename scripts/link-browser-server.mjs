@@ -132,7 +132,7 @@ if (pluginRoot) {
 // We apply a deterministic rewrite so runtime can load the plugin consistently.
 
 const githubPluginDist = join(
-  milaidyRoot,
+  miladyRoot,
   "node_modules",
   "@elizaos",
   "plugin-github",
