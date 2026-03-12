@@ -546,7 +546,7 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  className="btn text-xs py-[5px] px-4 !mt-0"
+                  className="btn text-xs py-[5px] px-4 !mt-0 cursor-pointer"
                   disabled={registryRegistering || registryLoading}
                   onClick={() => void registerOnChain()}
                 >
