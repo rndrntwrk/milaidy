@@ -8,6 +8,10 @@ type GltfAnimationInput = {
   animations: THREE.AnimationClip[];
 };
 
+type DirectBindingOptions = {
+  allowTransformTracks: boolean;
+};
+
 export type VrmAnimationClipSource = "alice-native" | "mixamo-retargeted";
 
 export type ResolvedVrmAnimationClip = {
@@ -101,6 +105,7 @@ function resolveMixamoRetargetedClip(
 function resolveDirectBindingClip(
   animation: GltfAnimationInput,
   vrm: VRM,
+  options: DirectBindingOptions = { allowTransformTracks: true },
 ): THREE.AnimationClip | null {
   const sourceClip = animation.animations[0];
   if (!sourceClip) {
@@ -128,6 +133,9 @@ function resolveDirectBindingClip(
     const rawPropertyName = track.name.slice(lastDot + 1);
     const propertyName = directPropertyName(rawPropertyName);
     if (!propertyName) continue;
+    if (!options.allowTransformTracks && propertyName !== "quaternion") {
+      continue;
+    }
 
     const targetNodeName = targetNodes.get(normalizeNodeName(rawNodeName));
     if (!targetNodeName) continue;
@@ -174,7 +182,11 @@ export function classifyIdleGltfAnimationClipForVrm(
     };
   }
 
-  const directClip = resolveDirectBindingClip(animation, vrm);
+  // Idle clips must be in-place. Root motion and scale belong to
+  // stage-mark/emote logic, not to the admitted idle clip itself.
+  const directClip = resolveDirectBindingClip(animation, vrm, {
+    allowTransformTracks: false,
+  });
   if (directClip) {
     return {
       status: "accepted",

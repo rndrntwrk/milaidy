@@ -141,7 +141,7 @@ function makeMixamoVrm() {
 }
 
 describe("resolveGltfAnimationClipForVrm", () => {
-  it("binds Alice-native clips directly to matching VRM node names", () => {
+  it("keeps direct Alice bindings permissive for non-idle emotes", () => {
     const clip = new THREE.AnimationClip("Idle_03", 1, [
       makeVectorTrack("Hips.position"),
       makeQuaternionTrack("Hips.quaternion"),
@@ -174,6 +174,53 @@ describe("resolveGltfAnimationClipForVrm", () => {
     expect(
       resolved.clip.tracks.some((track) => track.name === "Head.quaternion"),
     ).toBe(true);
+  });
+
+  it("sanitizes Alice-native idle clips to in-place quaternion bindings", () => {
+    const clip = new THREE.AnimationClip("Idle_09", 1, [
+      makeVectorTrack("Hips.position"),
+      makeVectorTrack("Hips.scale"),
+      makeVectorTrack("Armature.scale"),
+      makeQuaternionTrack("Hips.quaternion"),
+      makeQuaternionTrack("Spine.quaternion"),
+      makeQuaternionTrack("Spine01.quaternion"),
+      makeQuaternionTrack("Spine02.quaternion"),
+      makeQuaternionTrack("LeftShoulder.quaternion"),
+      makeQuaternionTrack("LeftArm.quaternion"),
+      makeQuaternionTrack("LeftForeArm.quaternion"),
+      makeQuaternionTrack("LeftHand.quaternion"),
+      makeQuaternionTrack("RightShoulder.quaternion"),
+      makeQuaternionTrack("RightArm.quaternion"),
+      makeQuaternionTrack("RightForeArm.quaternion"),
+      makeQuaternionTrack("RightHand.quaternion"),
+      makeQuaternionTrack("neck.quaternion"),
+      makeQuaternionTrack("Head.quaternion"),
+    ]);
+
+    const classification = classifyIdleGltfAnimationClipForVrm(
+      {
+        scene: new THREE.Group(),
+        animations: [clip],
+      },
+      makeDirectBindVrm(),
+    );
+
+    expect(classification.status).toBe("accepted");
+    if (classification.status !== "accepted") {
+      throw new Error("expected accepted Alice idle classification");
+    }
+    expect(classification.source).toBe("alice-native");
+    expect(
+      classification.clip.tracks.every((track) =>
+        track.name.endsWith(".quaternion"),
+      ),
+    ).toBe(true);
+    expect(
+      classification.clip.tracks.some((track) => track.name === "Hips.position"),
+    ).toBe(false);
+    expect(
+      classification.clip.tracks.some((track) => track.name.endsWith(".scale")),
+    ).toBe(false);
   });
 
   it("accepts Mixamo-retargeted idle clips through the strict classifier", () => {

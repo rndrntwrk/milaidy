@@ -117,6 +117,9 @@ describe("VrmEngine stage idle runtime", () => {
     expect(state.idleTracks).toBe(14);
     expect(engine.proceduralIdleActive).toBe(false);
     expect(mixer.clipAction).toHaveBeenCalledWith(idleClip);
+    expect(
+      idleClip.tracks.every((track) => track.name.endsWith(".quaternion")),
+    ).toBe(true);
   });
 
   it("rotates deterministically across verified stage clips", async () => {
