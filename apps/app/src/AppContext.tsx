@@ -143,7 +143,7 @@ export const DEFAULT_PRO_STREAMER_VRM_URL = resolveAppAssetUrl(
   `vrms/${DEFAULT_PRO_STREAMER_VRM_FILENAME}`,
 );
 export const DEFAULT_PRO_STREAMER_VRM_PREVIEW_URL = resolveAppAssetUrl(
-  "vrms/previews/alice-stage.svg",
+  "vrms/previews/alice.png",
 );
 
 function normalizeAvatarIndex(index: number): number {

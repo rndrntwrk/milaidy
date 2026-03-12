@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "preview": "vite preview",
+    "asset:alice-preview": "node scripts/generate-alice-preview.mjs",
     "test": "vitest run --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts",
     "test:electron:e2e": "playwright test --config playwright.electron.config.ts",
