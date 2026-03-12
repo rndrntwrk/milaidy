@@ -35,6 +35,7 @@ describe("Avatar VRM Utilities", () => {
 
   describe("getVrmPreviewUrl", () => {
     it("returns correct path for each preview image", () => {
+      expect(DEFAULT_PRO_STREAMER_VRM_PREVIEW_URL).toBe("/vrms/previews/alice.png");
       expect(getVrmPreviewUrl(1)).toBe(DEFAULT_PRO_STREAMER_VRM_PREVIEW_URL);
       for (let i = 2; i <= 8; i++) {
         expect(getVrmPreviewUrl(i)).toBe(`/vrms/previews/milady-${i}.png`);
