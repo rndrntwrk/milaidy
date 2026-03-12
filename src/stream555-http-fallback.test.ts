@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
 // @ts-expect-error internal dependency path used to lock our patch behavior
-import { bootstrapAction } from "../plugins/plugin-555stream/dist/actions/bootstrap.js";
+import { bootstrapAction } from "../packages/plugin-555stream/dist/actions/bootstrap.js";
 // @ts-expect-error internal dependency path used to lock our patch behavior
-import { StreamControlService } from "../plugins/plugin-555stream/dist/services/StreamControlService.js";
+import { StreamControlService } from "../packages/plugin-555stream/dist/services/StreamControlService.js";
 
 function createService() {
   const service = new StreamControlService() as any;
