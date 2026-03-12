@@ -147,7 +147,8 @@ export function AvatarSelector({
             <img
               src={getVrmPreviewUrl(i)}
               alt={getVrmTitle(i)}
-              className={`w-full h-full object-cover ${loading && selected !== i ? "opacity-40" : ""}`}
+              draggable={false}
+              className={`w-full h-full object-cover select-none ${loading && selected !== i ? "opacity-40" : ""}`}
             />
             {loading && selected === i && (
               <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
