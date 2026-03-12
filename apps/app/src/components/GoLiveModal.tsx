@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useApp, type GoLiveLaunchMode } from "../AppContext.js";
 import { client } from "../api-client.js";
 import {
@@ -249,6 +249,11 @@ export function GoLiveModal() {
       ),
     [summary.destinations],
   );
+
+  useEffect(() => {
+    if (!goLiveModalOpen || streamPlugin) return;
+    void loadPlugins();
+  }, [goLiveModalOpen, loadPlugins, streamPlugin]);
 
   useLayoutEffect(() => {
     if (!goLiveModalOpen) return;

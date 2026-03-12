@@ -301,6 +301,30 @@ describe("GoLiveModal", () => {
     mockGetPlugins.mockReset();
   });
 
+  it("refreshes plugins on open when stream555 state is not loaded yet", async () => {
+    const app = makeAppContext({
+      plugins: [],
+    });
+    mockBuildStream555StatusSummary.mockImplementation(() =>
+      makeSummary({
+        authState: "wallet_enabled",
+        authMode: "Wallet auth",
+        readyDestinations: 0,
+        enabledDestinations: 0,
+        destinations: [],
+      }),
+    );
+    mockUseApp.mockReturnValue(app);
+
+    await act(async () => {
+      TestRenderer.create(React.createElement(GoLiveModal));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(app.loadPlugins).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps setup gating in place until auth and ready destinations exist", async () => {
     const summary = makeSummary({
       authState: "wallet_enabled",
