@@ -1014,15 +1014,15 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
                   handleFieldEdit("postExamples", updated);
                 }}
               >
-                + {t("characterview.AddPost")}
+                {t("characterview.AddPost")}
               </Button>
             </div>
           </details>
         </div>
       </div>
 
-      {/* ═══ SECTION 4: VOICE ═══ */}
-      <div className={sectionCls}>
+      {/* ═══ SECTION 4: VOICE ═══ — relative z-20 so dropdown stacks above save bar */}
+      <div className={`${sectionCls} relative z-20`}>
         <div className="font-bold text-sm mb-4 border-b border-border/40 pb-3 text-txt tracking-wide">
           {t("characterview.Voice")}
         </div>
@@ -1260,8 +1260,8 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
         )}
       </div>
 
-      {/* ═══ SAVE BAR ═══ */}
-      <div className={sectionCls}>
+      {/* ═══ SAVE BAR ═══ — z-10 so voice dropdown can draw above */}
+      <div className={`${sectionCls} relative z-10`}>
         <div className="flex items-center justify-end gap-4">
           {characterSaveSuccess && (
             <span className="text-xs text-green-400 font-bold bg-green-400/10 px-3 py-1.5 rounded-lg border border-green-400/20">
