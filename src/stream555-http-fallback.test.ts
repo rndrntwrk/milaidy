@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
 // @ts-expect-error internal dependency path used to lock our patch behavior
-import { bootstrapAction } from "../node_modules/@rndrntwrk/plugin-555stream/dist/actions/bootstrap.js";
+import { bootstrapAction } from "../plugins/plugin-555stream/dist/actions/bootstrap.js";
 // @ts-expect-error internal dependency path used to lock our patch behavior
-import { StreamControlService } from "../node_modules/@rndrntwrk/plugin-555stream/dist/services/StreamControlService.js";
+import { StreamControlService } from "../plugins/plugin-555stream/dist/services/StreamControlService.js";
 
 function createService() {
   const service = new StreamControlService() as any;
@@ -104,6 +104,7 @@ describe("stream555 HTTP fallback", () => {
       connect: vi
         .fn()
         .mockRejectedValue(new Error("Unexpected server response: 404")),
+      disconnect: vi.fn(),
     };
 
     const result = await service.healthcheck();
@@ -113,5 +114,6 @@ describe("stream555 HTTP fallback", () => {
     expect(result.checks.authValid.passed).toBe(true);
     expect(result.checks.wsConnectable.passed).toBe(false);
     expect(result.checks.wsConnectable.message).toContain("404");
+    expect(service.wsClient.disconnect).toHaveBeenCalledTimes(1);
   });
 });
