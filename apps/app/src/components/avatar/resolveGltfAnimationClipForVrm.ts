@@ -1,6 +1,7 @@
 import type { VRM } from "@pixiv/three-vrm";
 import * as THREE from "three";
 import { mixamoVRMRigMap } from "./mixamoVRMRigMap";
+import { inspectAliceTrackCoverage, retargetAliceGltfToVrm } from "./retargetAliceGltfToVrm";
 import { retargetMixamoGltfToVrm } from "./retargetMixamoGltfToVrm";
 
 type GltfAnimationInput = {
@@ -8,7 +9,7 @@ type GltfAnimationInput = {
   animations: THREE.AnimationClip[];
 };
 
-export type VrmAnimationClipSource = "alice-native" | "mixamo-retargeted";
+export type VrmAnimationClipSource = "alice-raw" | "mixamo-retargeted";
 
 export type ResolvedVrmAnimationClip = {
   clip: THREE.AnimationClip;
@@ -25,29 +26,6 @@ export type IdleVrmAnimationClipClassification =
       status: "rejected";
       reason: string;
     };
-
-function normalizeNodeName(name: string): string {
-  const pipe = name.lastIndexOf("|");
-  const base = pipe >= 0 ? name.slice(pipe + 1) : name;
-  const colon = base.indexOf(":");
-  const withoutNamespace = colon >= 0 ? base.slice(colon + 1) : base;
-  return withoutNamespace.trim().toLowerCase();
-}
-
-function directPropertyName(propertyName: string): string | null {
-  switch (propertyName) {
-    case "position":
-    case "translation":
-      return "position";
-    case "quaternion":
-    case "rotation":
-      return "quaternion";
-    case "scale":
-      return "scale";
-    default:
-      return null;
-  }
-}
 
 function normalizeMixamoRigName(name: string): string {
   const pipe = name.lastIndexOf("|");
@@ -76,6 +54,7 @@ function inspectMixamoTrackCoverage(
   for (const track of sourceClip.tracks) {
     const [rawRigName, propertyName] = track.name.split(".");
     if (!rawRigName || propertyName !== "quaternion") continue;
+    if (!(track instanceof THREE.QuaternionKeyframeTrack)) continue;
 
     const normalizedRigName = normalizeMixamoRigName(rawRigName);
     const vrmBoneName = mixamoVRMRigMap[normalizedRigName];
@@ -98,68 +77,39 @@ function resolveMixamoRetargetedClip(
   };
 }
 
-function resolveDirectBindingClip(
+function resolveAliceRawClip(
   animation: GltfAnimationInput,
   vrm: VRM,
-): THREE.AnimationClip | null {
-  const sourceClip = animation.animations[0];
-  if (!sourceClip) {
-    throw new Error("animation contains no clips");
-  }
+): ResolvedVrmAnimationClip {
+  return {
+    clip: retargetAliceGltfToVrm(animation, vrm),
+    source: "alice-raw",
+  };
+}
 
-  vrm.scene.updateMatrixWorld(true);
-
-  const targetNodes = new Map<string, string>();
-  vrm.scene.traverse((child) => {
-    if (!child.name) return;
-    const normalizedName = normalizeNodeName(child.name);
-    if (!normalizedName || targetNodes.has(normalizedName)) return;
-    targetNodes.set(normalizedName, child.name);
-  });
-
-  const tracks: THREE.KeyframeTrack[] = [];
-  const matchedNodes = new Set<string>();
-
-  for (const track of sourceClip.tracks) {
-    const lastDot = track.name.lastIndexOf(".");
-    if (lastDot <= 0) continue;
-
-    const rawNodeName = track.name.slice(0, lastDot);
-    const rawPropertyName = track.name.slice(lastDot + 1);
-    const propertyName = directPropertyName(rawPropertyName);
-    if (!propertyName) continue;
-
-    const targetNodeName = targetNodes.get(normalizeNodeName(rawNodeName));
-    if (!targetNodeName) continue;
-
-    const clonedTrack = track.clone();
-    clonedTrack.name = `${targetNodeName}.${propertyName}`;
-    tracks.push(clonedTrack);
-    matchedNodes.add(targetNodeName);
-  }
-
-  if (tracks.length < 12 || matchedNodes.size < 8) {
-    return null;
-  }
-
-  const clip = new THREE.AnimationClip(sourceClip.name || "alice", sourceClip.duration, tracks);
-  clip.optimize();
-  return clip;
+function hasConfidentCoverage(
+  coverage: { mappedTrackCount: number; mappedBones: Set<string> },
+): boolean {
+  return coverage.mappedTrackCount >= 10 && coverage.mappedBones.size >= 8;
 }
 
 export function resolveGltfAnimationClipForVrm(
   animation: GltfAnimationInput,
   vrm: VRM,
 ): ResolvedVrmAnimationClip {
-  const directClip = resolveDirectBindingClip(animation, vrm);
-  if (directClip) {
-    return {
-      clip: directClip,
-      source: "alice-native",
-    };
+  const mixamoCoverage = inspectMixamoTrackCoverage(animation);
+  if (hasConfidentCoverage(mixamoCoverage)) {
+    return resolveMixamoRetargetedClip(animation, vrm);
   }
 
-  return resolveMixamoRetargetedClip(animation, vrm);
+  const aliceCoverage = inspectAliceTrackCoverage(animation, vrm);
+  if (hasConfidentCoverage(aliceCoverage)) {
+    return resolveAliceRawClip(animation, vrm);
+  }
+
+  throw new Error(
+    "clip did not provide enough confident Alice or Mixamo rig bindings",
+  );
 }
 
 export function classifyIdleGltfAnimationClipForVrm(
@@ -174,26 +124,36 @@ export function classifyIdleGltfAnimationClipForVrm(
     };
   }
 
-  const directClip = resolveDirectBindingClip(animation, vrm);
-  if (directClip) {
-    return {
-      status: "accepted",
-      clip: directClip,
-      source: "alice-native",
-    };
+  const mixamoCoverage = inspectMixamoTrackCoverage(animation);
+  if (hasConfidentCoverage(mixamoCoverage)) {
+    try {
+      const resolved = resolveMixamoRetargetedClip(animation, vrm);
+      return {
+        status: "accepted",
+        clip: resolved.clip,
+        source: resolved.source,
+      };
+    } catch (err) {
+      return {
+        status: "rejected",
+        reason: err instanceof Error ? err.message : "failed to retarget idle clip",
+      };
+    }
   }
 
-  const { mappedTrackCount, mappedBones } = inspectMixamoTrackCoverage(animation);
-  if (mappedTrackCount < 10 || mappedBones.size < 8) {
+  const aliceCoverage = inspectAliceTrackCoverage(animation, vrm);
+  if (!hasConfidentCoverage(aliceCoverage)) {
     return {
       status: "rejected",
       reason:
-        "clip did not provide enough confident Mixamo rig bindings for idle admission",
+        "clip did not provide enough confident Alice or Mixamo rig bindings for idle admission",
     };
   }
 
   try {
-    const resolved = resolveMixamoRetargetedClip(animation, vrm);
+    // Idle clips must stay in-place. Any scene translation or root motion
+    // belongs to stage orchestration, not the admitted idle clip itself.
+    const resolved = resolveAliceRawClip(animation, vrm);
     return {
       status: "accepted",
       clip: resolved.clip,

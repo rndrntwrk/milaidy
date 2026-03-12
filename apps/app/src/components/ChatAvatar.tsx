@@ -40,6 +40,7 @@ export function ChatAvatar({
       : getVrmPreviewUrl(1);
 
   const vrmEngineRef = useRef<VrmEngine | null>(null);
+  const lastTriggeredEmoteRef = useRef<{ key: string; at: number } | null>(null);
   const [engineReady, setEngineReady] = useState(false);
   const [vrmLoaded, setVrmLoaded] = useState(false);
   const [showFallback, setShowFallback] = useState(false);
@@ -67,6 +68,26 @@ export function ChatAvatar({
     setShowFallback(true);
   }, []);
 
+  const triggerEmote = useCallback(
+    (glbPath: string, duration: number, loop: boolean) => {
+      const engine = vrmEngineRef.current;
+      if (!engine) return;
+
+      const safePath = glbPath.trim();
+      if (!safePath) return;
+
+      const key = `${safePath}|${duration}|${loop ? 1 : 0}`;
+      const now = performance.now();
+      const last = lastTriggeredEmoteRef.current;
+      if (last && last.key === key && now - last.at < 450) {
+        return;
+      }
+      lastTriggeredEmoteRef.current = { key, at: now };
+      void engine.playEmote(safePath, duration, loop);
+    },
+    [],
+  );
+
   // If a VRM fails to load, show the selected static preview in the sidebar.
   useEffect(() => {
     setEngineReady(false);
@@ -83,15 +104,36 @@ export function ChatAvatar({
   useEffect(() => {
     if (!engineReady) return;
     return client.onWsEvent("emote", (data) => {
-      const engine = vrmEngineRef.current;
-      if (!engine) return;
-      void engine.playEmote(
-        data.glbPath as string,
-        data.duration as number,
-        data.loop as boolean,
+      triggerEmote(
+        String(data.glbPath ?? ""),
+        Number(data.duration ?? 0),
+        data.loop === true,
       );
     });
-  }, [engineReady]);
+  }, [engineReady, triggerEmote]);
+
+  useEffect(() => {
+    if (!engineReady) return;
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        glbPath?: string;
+        duration?: number;
+        loop?: boolean;
+      }>).detail;
+      if (!detail) return;
+      triggerEmote(
+        String(detail.glbPath ?? ""),
+        Number(detail.duration ?? 0),
+        detail.loop === true,
+      );
+    };
+    document.addEventListener("milady:play-emote", handler as EventListener);
+    return () =>
+      document.removeEventListener(
+        "milady:play-emote",
+        handler as EventListener,
+      );
+  }, [engineReady, triggerEmote]);
 
   // Listen for stop-emote events from the EmotePicker control panel.
   useEffect(() => {

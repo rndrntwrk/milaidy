@@ -60,6 +60,7 @@ function makeVrm() {
   return {
     scene: new THREE.Group(),
     humanoid: {
+      autoUpdateHumanBones: true,
       getNormalizedBoneNode() {
         return null;
       },
@@ -68,13 +69,19 @@ function makeVrm() {
 }
 
 function makeEngineHarness() {
+  return makeEngineHarnessForPreset("pro-streamer-stage");
+}
+
+function makeEngineHarnessForPreset(
+  preset: "pro-streamer-stage" | "default" = "pro-streamer-stage",
+) {
   const engine = new VrmEngine() as any;
   const vrm = makeVrm();
   const mixer = new MockMixer();
 
   engine.vrm = vrm;
   engine.mixer = mixer;
-  engine.currentScenePreset = "pro-streamer-stage";
+  engine.currentScenePreset = preset;
   engine.currentSceneMark = "portrait";
   engine.loadingAborted = false;
   engine.elapsedTime = 10;
@@ -87,40 +94,32 @@ describe("VrmEngine stage idle runtime", () => {
     vi.restoreAllMocks();
   });
 
-  it("plays verified stage idles and reports healthy portrait-hold diagnostics", async () => {
+  it("uses procedural neutral idle on the pro streamer stage", async () => {
     const { engine, mixer, vrm } = makeEngineHarness();
-    const idleUrl = "/idle-a.glb";
-    const idleClip = makeClip("idle-a", 14, 4);
-
-    engine.idleGlbUrls = [idleUrl];
-    vi.spyOn(engine, "classifyConfiguredIdleCandidates").mockImplementation(
-      async () => {
-        engine.verifiedIdleGlbUrls = new Set([idleUrl]);
-        engine.emoteClipCache.set(idleUrl, {
-          clip: idleClip,
-          source: "alice-native",
-        });
-      },
+    const classifyConfiguredIdleCandidates = vi.spyOn(
+      engine,
+      "classifyConfiguredIdleCandidates",
     );
-    vi.spyOn(engine, "loadEmoteClip").mockResolvedValue({
-      clip: idleClip,
-      source: "alice-native",
-    });
+    const loadEmoteClip = vi.spyOn(engine, "loadEmoteClip");
 
     await engine.loadAndPlayIdle(vrm);
 
     const state = engine.getState();
     expect(state.activeAnimationState).toBe("idle");
-    expect(state.activeIdleSource).toBe("alice-native");
-    expect(state.idleFallbackActive).toBe(false);
+    expect(state.activeIdleSource).toBe("procedural-fallback");
+    expect(state.idleFallbackActive).toBe(true);
     expect(state.idleHealthy).toBe(true);
-    expect(state.idleTracks).toBe(14);
-    expect(engine.proceduralIdleActive).toBe(false);
-    expect(mixer.clipAction).toHaveBeenCalledWith(idleClip);
+    expect(state.idleTracks).toBe(0);
+    expect(engine.proceduralIdleActive).toBe(true);
+    expect(engine.idleAction).toBeNull();
+    expect(vrm.humanoid.autoUpdateHumanBones).toBe(true);
+    expect(classifyConfiguredIdleCandidates).not.toHaveBeenCalled();
+    expect(loadEmoteClip).not.toHaveBeenCalled();
+    expect(mixer.clipAction).not.toHaveBeenCalled();
   });
 
-  it("rotates deterministically across verified stage clips", async () => {
-    const { engine, vrm } = makeEngineHarness();
+  it("switches humanoid auto updates based on non-stage idle clip source", async () => {
+    const { engine, vrm } = makeEngineHarnessForPreset("default");
     const firstUrl = "/idle-a.glb";
     const secondUrl = "/idle-b.glb";
     const firstClip = makeClip("idle-a");
@@ -132,7 +131,7 @@ describe("VrmEngine stage idle runtime", () => {
         engine.verifiedIdleGlbUrls = new Set([firstUrl, secondUrl]);
         engine.emoteClipCache.set(firstUrl, {
           clip: firstClip,
-          source: "alice-native",
+          source: "alice-raw",
         });
         engine.emoteClipCache.set(secondUrl, {
           clip: secondClip,
@@ -146,13 +145,15 @@ describe("VrmEngine stage idle runtime", () => {
 
     await engine.loadAndPlayIdle(vrm);
     expect(engine.activeIdleGlbUrl).toBe(firstUrl);
+    expect(vrm.humanoid.autoUpdateHumanBones).toBe(false);
 
     await engine.loadAndPlayIdle(vrm);
     expect(engine.activeIdleGlbUrl).toBe(secondUrl);
+    expect(vrm.humanoid.autoUpdateHumanBones).toBe(true);
   });
 
   it("drops failed verified candidates once and does not retry them on the next rotation", async () => {
-    const { engine, vrm } = makeEngineHarness();
+    const { engine, vrm } = makeEngineHarnessForPreset("default");
     const badUrl = "/idle-bad.glb";
     const goodUrl = "/idle-good.glb";
     const goodClip = makeClip("idle-good");
@@ -162,7 +163,7 @@ describe("VrmEngine stage idle runtime", () => {
         if (url === goodUrl) {
           return {
             clip: goodClip,
-            source: "alice-native",
+            source: "alice-raw",
           };
         }
         return null;
@@ -182,6 +183,7 @@ describe("VrmEngine stage idle runtime", () => {
     expect(engine.failedIdleGlbUrls.has(badUrl)).toBe(true);
     expect(engine.verifiedIdleGlbUrls.has(badUrl)).toBe(false);
     expect(engine.activeIdleGlbUrl).toBe(goodUrl);
+    expect(vrm.humanoid.autoUpdateHumanBones).toBe(false);
 
     loadEmoteClip.mockClear();
     await engine.loadAndPlayIdle(vrm);
@@ -189,7 +191,7 @@ describe("VrmEngine stage idle runtime", () => {
   });
 
   it("falls back to the legacy idle clip before procedural fallback", async () => {
-    const { engine, vrm } = makeEngineHarness();
+    const { engine, vrm } = makeEngineHarnessForPreset("default");
     const legacyClip = makeClip("legacy-idle", 10, 5);
     const guaranteedUrl = engine.guaranteedIdleFallbackGlbUrl;
     const legacyUrl = engine.idleFallbackGlbUrl;
@@ -213,10 +215,11 @@ describe("VrmEngine stage idle runtime", () => {
     expect(state.idleFallbackActive).toBe(true);
     expect(state.idleHealthy).toBe(true);
     expect(engine.proceduralIdleActive).toBe(false);
+    expect(vrm.humanoid.autoUpdateHumanBones).toBe(true);
   });
 
-  it("activates procedural fallback when every clip-based idle path fails", async () => {
-    const { engine, vrm } = makeEngineHarness();
+  it("returns to static fallback when no non-stage idle clip is available", async () => {
+    const { engine, vrm } = makeEngineHarnessForPreset("default");
 
     vi.spyOn(engine, "classifyConfiguredIdleCandidates").mockResolvedValue(undefined);
     vi.spyOn(engine, "loadEmoteClip").mockResolvedValue(null);
@@ -224,34 +227,59 @@ describe("VrmEngine stage idle runtime", () => {
     await engine.loadAndPlayIdle(vrm);
 
     const state = engine.getState();
-    expect(state.activeIdleSource).toBe("procedural-fallback");
-    expect(state.idleFallbackActive).toBe(true);
-    expect(state.idleHealthy).toBe(true);
-    expect(state.idlePlaying).toBe(true);
-    expect(engine.proceduralIdleActive).toBe(true);
+    expect(state.activeIdleSource).toBeNull();
+    expect(state.idleFallbackActive).toBe(false);
+    expect(state.idleHealthy).toBe(false);
+    expect(state.idlePlaying).toBe(false);
+    expect(engine.proceduralIdleActive).toBe(false);
     expect(engine.idleAction).toBeNull();
+    expect(vrm.humanoid.autoUpdateHumanBones).toBe(true);
   });
 
-  it("returns from emotes to a healthy idle state", () => {
-    const { engine } = makeEngineHarness();
-    const idleClip = makeClip("idle-a");
-    const idleAction = new MockAction(idleClip);
+  it("returns to procedural neutral idle after stopping an Alice raw emote on stage", async () => {
+    const { engine, vrm } = makeEngineHarness();
     const emoteAction = new MockAction(makeClip("walk", 8, 2));
 
     emoteAction.play();
-    engine.idleAction = idleAction as unknown as THREE.AnimationAction;
     engine.emoteAction = emoteAction as unknown as THREE.AnimationAction;
-    engine.activeIdleSource = "alice-native";
+    engine.activeIdleSource = null;
     engine.idleFallbackActive = false;
+    vrm.humanoid.autoUpdateHumanBones = false;
 
-    engine.stopEmote();
+    await engine.stopEmote();
 
     const state = engine.getState();
     expect(state.activeAnimationState).toBe("idle");
-    expect(state.activeIdleSource).toBe("alice-native");
-    expect(state.idleFallbackActive).toBe(false);
+    expect(state.activeIdleSource).toBe("procedural-fallback");
+    expect(state.idleFallbackActive).toBe(true);
     expect(state.idleHealthy).toBe(true);
-    expect(idleAction.play).toHaveBeenCalled();
+    expect(engine.proceduralIdleActive).toBe(true);
+    expect(engine.idleAction).toBeNull();
     expect(engine.emoteAction).toBeNull();
+    expect(vrm.humanoid.autoUpdateHumanBones).toBe(true);
+  });
+
+  it("toggles humanoid auto updates per emote source", async () => {
+    const { engine, vrm } = makeEngineHarness();
+    engine.activeIdleSource = "procedural-fallback";
+
+    vi.spyOn(engine, "loadEmoteClip")
+      .mockResolvedValueOnce({
+        clip: makeClip("backflip", 14, 2),
+        source: "alice-raw",
+      })
+      .mockResolvedValueOnce({
+        clip: makeClip("dance", 14, 2),
+        source: "mixamo-retargeted",
+      });
+
+    await engine.playEmote("/backflip.glb", 2, false);
+    expect(vrm.humanoid.autoUpdateHumanBones).toBe(false);
+
+    engine.stopEmote();
+    expect(vrm.humanoid.autoUpdateHumanBones).toBe(true);
+
+    await engine.playEmote("/dance.glb", 2, false);
+    expect(vrm.humanoid.autoUpdateHumanBones).toBe(true);
   });
 });

@@ -6313,6 +6313,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       try {
         await client.playEmote(emoteId);
+        document.dispatchEvent(
+          new CustomEvent("milady:play-emote", {
+            detail: {
+              emoteId,
+              glbPath: emote.glbPath,
+              duration: emote.duration,
+              loop: emote.loop,
+            },
+          }),
+        );
         void sendOperatorActionMessage({
           label: emote.name,
           kind: "avatar",

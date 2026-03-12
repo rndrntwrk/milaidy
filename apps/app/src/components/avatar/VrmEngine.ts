@@ -20,7 +20,7 @@ export type VrmEngineState = {
   idleTracks: number;
   activeAnimationState: "idle" | "emote" | "static-fallback";
   activeIdleSource:
-    | "alice-native"
+    | "alice-raw"
     | "mixamo-retargeted"
     | "legacy-fallback"
     | "procedural-fallback"
@@ -46,7 +46,7 @@ type MarkTransition = {
   walkQuaternion: THREE.Quaternion;
 };
 
-type ResolvedAnimationSource = "alice-native" | "mixamo-retargeted";
+type ResolvedAnimationSource = "alice-raw" | "mixamo-retargeted";
 
 type IdleCandidatePlan = {
   glbUrl: string;
@@ -127,14 +127,6 @@ export class VrmEngine {
   private readonly guaranteedIdleFallbackGlbUrl = resolveAppAssetUrl(
     "animations/alice/idle/catching-breath.glb",
   );
-  private readonly defaultStageIdleGlbUrls = [
-    this.guaranteedIdleFallbackGlbUrl,
-    resolveAppAssetUrl("animations/alice/idle/idle-03.glb"),
-    resolveAppAssetUrl("animations/alice/idle/idle-04.glb"),
-    resolveAppAssetUrl("animations/alice/idle/idle-07.glb"),
-    resolveAppAssetUrl("animations/alice/idle/idle-09.glb"),
-    resolveAppAssetUrl("animations/alice/idle/idle-15.glb"),
-  ];
   private readonly walkGlbUrl = resolveAppAssetUrl(
     "animations/alice/movement/walking.glb",
   );
@@ -342,6 +334,15 @@ export class VrmEngine {
     this.speaking = speaking;
   }
 
+  private setHumanoidAutoUpdateForSource(
+    vrm: VRM | null,
+    source: ResolvedAnimationSource | VrmEngineState["activeIdleSource"] | null,
+  ): void {
+    const humanoid = vrm?.humanoid;
+    if (!humanoid) return;
+    humanoid.autoUpdateHumanBones = source !== "alice-raw";
+  }
+
   setCameraAnimation(config: Partial<CameraAnimationConfig>): void {
     this.cameraAnimation = { ...this.cameraAnimation, ...config };
   }
@@ -424,6 +425,7 @@ export class VrmEngine {
     if (this.idleAction) {
       this.idleAction.fadeOut(fadeDuration);
     }
+    this.setHumanoidAutoUpdateForSource(vrm, resolvedClip.source);
     this.resetProceduralIdlePose();
     action.fadeIn(fadeDuration);
     action.play();
@@ -454,12 +456,14 @@ export class VrmEngine {
       this.emoteAction = null;
     }
     if (this.idleAction) {
+      this.setHumanoidAutoUpdateForSource(this.vrm, this.activeIdleSource);
       this.idleAction.reset();
       this.idleAction.fadeIn(fadeDuration);
       this.idleAction.play();
       const clipDuration = this.idleAction.getClip()?.duration ?? 6;
       this.scheduleNextIdleRotation(clipDuration);
     } else if (this.vrm) {
+      this.setHumanoidAutoUpdateForSource(this.vrm, null);
       void this.loadAndPlayIdle(this.vrm);
     }
   }
@@ -719,12 +723,8 @@ export class VrmEngine {
   }
 
   private getConfiguredIdleGlbUrls(): string[] {
-    const configured =
-      this.currentScenePreset === "pro-streamer-stage"
-        ? [...this.defaultStageIdleGlbUrls, ...this.idleGlbUrls]
-        : this.idleGlbUrls;
     return Array.from(
-      new Set(configured.map((value) => value.trim()).filter(Boolean)),
+      new Set(this.idleGlbUrls.map((value) => value.trim()).filter(Boolean)),
     );
   }
 
@@ -1056,6 +1056,11 @@ export class VrmEngine {
   private async loadAndPlayIdle(vrm: VRM): Promise<void> {
     if (this.loadingAborted) return;
 
+    if (this.currentScenePreset === "pro-streamer-stage") {
+      this.activateProceduralIdleFallback();
+      return;
+    }
+
     await this.classifyConfiguredIdleCandidates(vrm);
     if (this.loadingAborted || this.vrm !== vrm) return;
 
@@ -1106,6 +1111,7 @@ export class VrmEngine {
         this.activeIdleSource = null;
         this.idleFallbackActive = false;
         this.idleRotationDeadline = Number.POSITIVE_INFINITY;
+        this.setHumanoidAutoUpdateForSource(vrm, null);
       }
       return;
     }
@@ -1127,6 +1133,7 @@ export class VrmEngine {
       previousIdleAction.fadeOut(0.25);
     }
 
+    this.setHumanoidAutoUpdateForSource(vrm, resolvedIdleSource);
     this.resetProceduralIdlePose();
     action.fadeIn(0.25);
     action.play();
@@ -1182,6 +1189,7 @@ export class VrmEngine {
       this.idleAction = null;
     }
 
+    this.setHumanoidAutoUpdateForSource(this.vrm, "procedural-fallback");
     this.resetProceduralIdlePose();
     this.activeIdleGlbUrl = null;
     this.activeIdleSource = "procedural-fallback";

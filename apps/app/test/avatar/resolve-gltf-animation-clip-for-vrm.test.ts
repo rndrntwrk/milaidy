@@ -5,102 +5,129 @@ import {
   resolveGltfAnimationClipForVrm,
 } from "../../src/components/avatar/resolveGltfAnimationClipForVrm";
 
-function makeQuaternionTrack(name: string) {
-  return new THREE.QuaternionKeyframeTrack(
-    name,
-    [0, 1],
-    [0, 0, 0, 1, 0, 0.2, 0, 0.98],
-  );
+function makeQuaternionTrack(
+  name: string,
+  values = [0, 0, 0, 1, 0.1, 0.2, 0, 0.97],
+) {
+  return new THREE.QuaternionKeyframeTrack(name, [0, 1], values);
 }
 
 function makeVectorTrack(name: string) {
   return new THREE.VectorKeyframeTrack(name, [0, 1], [0, 0, 0, 0.1, 0, 0]);
 }
 
-function makeDirectBindVrm() {
-  const vrmScene = new THREE.Group();
-  for (const name of [
-    "Hips",
-    "Spine",
-    "Spine01",
-    "Spine02",
-    "LeftShoulder",
-    "LeftArm",
-    "LeftForeArm",
-    "LeftHand",
-    "RightShoulder",
-    "RightArm",
-    "RightForeArm",
-    "RightHand",
-    "neck",
-    "Head",
-  ]) {
-    const bone = new THREE.Object3D();
-    bone.name = name;
-    vrmScene.add(bone);
+function addBone(parent: THREE.Object3D, name: string, rotation?: THREE.Euler) {
+  const bone = new THREE.Object3D();
+  bone.name = name;
+  if (rotation) {
+    bone.quaternion.setFromEuler(rotation);
   }
+  parent.add(bone);
+  return bone;
+}
 
-  return { scene: vrmScene } as never;
+function makeAliceScene(restVariant: "source" | "target") {
+  const root = new THREE.Group();
+  const hips = addBone(root, "Hips");
+  const spine = addBone(hips, "Spine");
+  const spine01 = addBone(spine, "Spine01");
+  const spine02 = addBone(spine01, "Spine02", restVariant === "target"
+    ? new THREE.Euler(0.03, 0.08, -0.02)
+    : undefined);
+  const neck = addBone(
+    spine02,
+    "neck",
+    restVariant === "target" ? new THREE.Euler(-0.04, 0.02, 0.01) : undefined,
+  );
+  addBone(neck, "Head", restVariant === "target" ? new THREE.Euler(0, -0.06, 0.02) : undefined);
+
+  const leftShoulder = addBone(
+    spine02,
+    "LeftShoulder",
+    restVariant === "target" ? new THREE.Euler(0.02, 0.01, -0.25) : undefined,
+  );
+  const leftArm = addBone(
+    leftShoulder,
+    "LeftArm",
+    restVariant === "target" ? new THREE.Euler(0.1, 0.03, -0.45) : undefined,
+  );
+  const leftForeArm = addBone(
+    leftArm,
+    "LeftForeArm",
+    restVariant === "target" ? new THREE.Euler(-0.08, 0.04, -0.2) : undefined,
+  );
+  addBone(leftForeArm, "LeftHand");
+
+  const rightShoulder = addBone(
+    spine02,
+    "RightShoulder",
+    restVariant === "target" ? new THREE.Euler(0.02, -0.01, 0.25) : undefined,
+  );
+  const rightArm = addBone(
+    rightShoulder,
+    "RightArm",
+    restVariant === "target" ? new THREE.Euler(0.1, -0.03, 0.45) : undefined,
+  );
+  const rightForeArm = addBone(
+    rightArm,
+    "RightForeArm",
+    restVariant === "target" ? new THREE.Euler(-0.08, -0.04, 0.2) : undefined,
+  );
+  addBone(rightForeArm, "RightHand");
+
+  const leftUpLeg = addBone(hips, "LeftUpLeg");
+  const leftLeg = addBone(leftUpLeg, "LeftLeg");
+  const leftFoot = addBone(leftLeg, "LeftFoot");
+  addBone(leftFoot, "LeftToeBase");
+
+  const rightUpLeg = addBone(hips, "RightUpLeg");
+  const rightLeg = addBone(rightUpLeg, "RightLeg");
+  const rightFoot = addBone(rightLeg, "RightFoot");
+  addBone(rightFoot, "RightToeBase");
+
+  root.updateMatrixWorld(true);
+  return root;
+}
+
+function makeAliceVrm() {
+  const scene = new THREE.Group();
+  const decoyHips = new THREE.Object3D();
+  decoyHips.name = "hips";
+  scene.add(decoyHips);
+  const decoyLeftArm = new THREE.Object3D();
+  decoyLeftArm.name = "leftarm";
+  scene.add(decoyLeftArm);
+  scene.add(makeAliceScene("target"));
+  scene.updateMatrixWorld(true);
+  return {
+    scene,
+    meta: { metaVersion: "1" },
+    humanoid: {
+      autoUpdateHumanBones: true,
+      getNormalizedBoneNode() {
+        return null;
+      },
+    },
+  } as never;
 }
 
 function makeMixamoAnimationScene() {
   const root = new THREE.Group();
-  const hips = new THREE.Object3D();
-  hips.name = "mixamorig:Hips";
-  root.add(hips);
-
-  const spine = new THREE.Object3D();
-  spine.name = "mixamorig:Spine";
-  hips.add(spine);
-
-  const spine1 = new THREE.Object3D();
-  spine1.name = "mixamorig:Spine1";
-  spine.add(spine1);
-
-  const spine2 = new THREE.Object3D();
-  spine2.name = "mixamorig:Spine2";
-  spine1.add(spine2);
-
-  const neck = new THREE.Object3D();
-  neck.name = "mixamorig:Neck";
-  spine2.add(neck);
-
-  const head = new THREE.Object3D();
-  head.name = "mixamorig:Head";
-  neck.add(head);
-
-  const leftShoulder = new THREE.Object3D();
-  leftShoulder.name = "mixamorig:LeftShoulder";
-  spine2.add(leftShoulder);
-
-  const leftArm = new THREE.Object3D();
-  leftArm.name = "mixamorig:LeftArm";
-  leftShoulder.add(leftArm);
-
-  const leftForeArm = new THREE.Object3D();
-  leftForeArm.name = "mixamorig:LeftForeArm";
-  leftArm.add(leftForeArm);
-
-  const leftHand = new THREE.Object3D();
-  leftHand.name = "mixamorig:LeftHand";
-  leftForeArm.add(leftHand);
-
-  const rightShoulder = new THREE.Object3D();
-  rightShoulder.name = "mixamorig:RightShoulder";
-  spine2.add(rightShoulder);
-
-  const rightArm = new THREE.Object3D();
-  rightArm.name = "mixamorig:RightArm";
-  rightShoulder.add(rightArm);
-
-  const rightForeArm = new THREE.Object3D();
-  rightForeArm.name = "mixamorig:RightForeArm";
-  rightArm.add(rightForeArm);
-
-  const rightHand = new THREE.Object3D();
-  rightHand.name = "mixamorig:RightHand";
-  rightForeArm.add(rightHand);
-
+  const hips = addBone(root, "mixamorig:Hips");
+  const spine = addBone(hips, "mixamorig:Spine");
+  const spine1 = addBone(spine, "mixamorig:Spine1");
+  const spine2 = addBone(spine1, "mixamorig:Spine2");
+  const neck = addBone(spine2, "mixamorig:Neck");
+  addBone(neck, "mixamorig:Head");
+  const leftShoulder = addBone(spine2, "mixamorig:LeftShoulder");
+  const leftArm = addBone(leftShoulder, "mixamorig:LeftArm");
+  const leftForeArm = addBone(leftArm, "mixamorig:LeftForeArm");
+  addBone(leftForeArm, "mixamorig:LeftHand");
+  const rightShoulder = addBone(spine2, "mixamorig:RightShoulder");
+  const rightArm = addBone(rightShoulder, "mixamorig:RightArm");
+  const rightForeArm = addBone(rightArm, "mixamorig:RightForeArm");
+  addBone(rightForeArm, "mixamorig:RightHand");
+  root.updateMatrixWorld(true);
   return root;
 }
 
@@ -122,7 +149,7 @@ function makeMixamoVrm() {
     ["rightUpperArm", "RightUpperArm"],
     ["rightLowerArm", "RightLowerArm"],
     ["rightHand", "RightHand"],
-  ]) {
+  ] as const) {
     const bone = new THREE.Object3D();
     bone.name = nodeName;
     vrmScene.add(bone);
@@ -133,6 +160,7 @@ function makeMixamoVrm() {
     scene: vrmScene,
     meta: { metaVersion: "1" },
     humanoid: {
+      autoUpdateHumanBones: true,
       getNormalizedBoneNode(name: string) {
         return bones.get(name) ?? null;
       },
@@ -141,9 +169,123 @@ function makeMixamoVrm() {
 }
 
 describe("resolveGltfAnimationClipForVrm", () => {
-  it("binds Alice-native clips directly to matching VRM node names", () => {
-    const clip = new THREE.AnimationClip("Idle_03", 1, [
+  it("sanitizes Alice clips onto raw Alice VRM bones and strips transform tracks", () => {
+    const clip = new THREE.AnimationClip("Backflip", 1, [
       makeVectorTrack("Hips.position"),
+      makeVectorTrack("Armature.scale"),
+      makeQuaternionTrack("Hips.quaternion"),
+      makeQuaternionTrack("Spine.quaternion"),
+      makeQuaternionTrack("Spine01.quaternion"),
+      makeQuaternionTrack("Spine02.quaternion"),
+      makeQuaternionTrack("LeftShoulder.quaternion"),
+      makeQuaternionTrack("LeftArm.quaternion"),
+      makeQuaternionTrack("LeftForeArm.quaternion"),
+      makeQuaternionTrack("LeftHand.quaternion"),
+      makeQuaternionTrack("RightShoulder.quaternion"),
+      makeQuaternionTrack("RightArm.quaternion"),
+      makeQuaternionTrack("RightForeArm.quaternion"),
+      makeQuaternionTrack("RightHand.quaternion"),
+      makeQuaternionTrack("neck.quaternion"),
+      makeQuaternionTrack("Head.quaternion"),
+      makeQuaternionTrack("LeftUpLeg.quaternion"),
+      makeQuaternionTrack("LeftLeg.quaternion"),
+      makeQuaternionTrack("LeftFoot.quaternion"),
+      makeQuaternionTrack("RightUpLeg.quaternion"),
+      makeQuaternionTrack("RightLeg.quaternion"),
+      makeQuaternionTrack("RightFoot.quaternion"),
+    ]);
+
+    const resolved = resolveGltfAnimationClipForVrm(
+      {
+        scene: makeAliceScene("source"),
+        animations: [clip],
+      },
+      makeAliceVrm(),
+    );
+
+    expect(resolved.source).toBe("alice-raw");
+    expect(
+      resolved.clip.tracks.every((track) => track.name.endsWith(".quaternion")),
+    ).toBe(true);
+    expect(
+      resolved.clip.tracks.some((track) => track.name === "Hips.position"),
+    ).toBe(false);
+    expect(
+      resolved.clip.tracks.some((track) =>
+        track.name.startsWith("Normalized"),
+      ),
+    ).toBe(false);
+    expect(
+      resolved.clip.tracks.some((track) => track.name === "LeftArm.quaternion"),
+    ).toBe(true);
+
+    const sourceTrack = clip.tracks.find(
+      (track) => track.name === "Spine02.quaternion",
+    ) as THREE.QuaternionKeyframeTrack | undefined;
+    const resolvedTrack = resolved.clip.tracks.find(
+      (track) => track.name === "Spine02.quaternion",
+    ) as THREE.QuaternionKeyframeTrack | undefined;
+    expect(sourceTrack).toBeDefined();
+    expect(resolvedTrack).toBeDefined();
+    expect(Array.from(resolvedTrack?.values ?? [])).toEqual(
+      Array.from(sourceTrack?.values ?? []),
+    );
+  });
+
+  it("accepts Alice idle clips as alice-raw and keeps them in-place", () => {
+    const clip = new THREE.AnimationClip("Idle_09", 1, [
+      makeVectorTrack("Hips.position"),
+      makeVectorTrack("Hips.scale"),
+      makeVectorTrack("Armature.scale"),
+      makeQuaternionTrack("Hips.quaternion"),
+      makeQuaternionTrack("Spine.quaternion"),
+      makeQuaternionTrack("Spine01.quaternion"),
+      makeQuaternionTrack("Spine02.quaternion"),
+      makeQuaternionTrack("LeftShoulder.quaternion"),
+      makeQuaternionTrack("LeftArm.quaternion"),
+      makeQuaternionTrack("LeftForeArm.quaternion"),
+      makeQuaternionTrack("LeftHand.quaternion"),
+      makeQuaternionTrack("RightShoulder.quaternion"),
+      makeQuaternionTrack("RightArm.quaternion"),
+      makeQuaternionTrack("RightForeArm.quaternion"),
+      makeQuaternionTrack("RightHand.quaternion"),
+      makeQuaternionTrack("neck.quaternion"),
+      makeQuaternionTrack("Head.quaternion"),
+    ]);
+
+    const classification = classifyIdleGltfAnimationClipForVrm(
+      {
+        scene: makeAliceScene("source"),
+        animations: [clip],
+      },
+      makeAliceVrm(),
+    );
+
+    expect(classification.status).toBe("accepted");
+    if (classification.status !== "accepted") {
+      throw new Error("expected accepted Alice idle classification");
+    }
+    expect(classification.source).toBe("alice-raw");
+    expect(
+      classification.clip.tracks.every((track) =>
+        track.name.endsWith(".quaternion"),
+      ),
+    ).toBe(true);
+    expect(
+      classification.clip.tracks.some((track) => track.name === "Hips.position"),
+    ).toBe(false);
+    expect(
+      classification.clip.tracks.some((track) => track.name.endsWith(".scale")),
+    ).toBe(false);
+    expect(
+      classification.clip.tracks.some(
+        (track) => track.name === "LeftArm.quaternion",
+      ),
+    ).toBe(true);
+  });
+
+  it("keeps Alice raw quaternions unchanged even when the target rest pose differs", () => {
+    const clip = new THREE.AnimationClip("Cheer", 1, [
       makeQuaternionTrack("Hips.quaternion"),
       makeQuaternionTrack("Spine.quaternion"),
       makeQuaternionTrack("Spine01.quaternion"),
@@ -162,18 +304,22 @@ describe("resolveGltfAnimationClipForVrm", () => {
 
     const resolved = resolveGltfAnimationClipForVrm(
       {
-        scene: new THREE.Group(),
+        scene: makeAliceScene("source"),
         animations: [clip],
       },
-      makeDirectBindVrm(),
+      makeAliceVrm(),
     );
 
-    expect(resolved.source).toBe("alice-native");
-    expect(resolved.clip.tracks).toHaveLength(15);
-    expect(resolved.clip.tracks[0]?.name).toBe("Hips.position");
-    expect(
-      resolved.clip.tracks.some((track) => track.name === "Head.quaternion"),
-    ).toBe(true);
+    const leftArmTrack = resolved.clip.tracks.find(
+      (track) => track.name === "LeftArm.quaternion",
+    ) as THREE.QuaternionKeyframeTrack | undefined;
+    const sourceLeftArmTrack = clip.tracks.find(
+      (track) => track.name === "LeftArm.quaternion",
+    ) as THREE.QuaternionKeyframeTrack | undefined;
+    expect(leftArmTrack).toBeDefined();
+    expect(Array.from(leftArmTrack?.values ?? [])).toEqual(
+      Array.from(sourceLeftArmTrack?.values ?? []),
+    );
   });
 
   it("accepts Mixamo-retargeted idle clips through the strict classifier", () => {
@@ -210,18 +356,18 @@ describe("resolveGltfAnimationClipForVrm", () => {
     expect(classification.clip.tracks.length).toBeGreaterThanOrEqual(10);
   });
 
-  it("rejects uncertain idle clips before they enter the live idle pool", () => {
+  it("rejects uncertain clips before they enter the live idle pool", () => {
     const classification = classifyIdleGltfAnimationClipForVrm(
       {
-        scene: makeMixamoAnimationScene(),
+        scene: makeAliceScene("source"),
         animations: [
           new THREE.AnimationClip("uncertain", 1, [
-            makeQuaternionTrack("mixamorig:Hips.quaternion"),
-            makeQuaternionTrack("mixamorig:Spine.quaternion"),
+            makeQuaternionTrack("Hips.quaternion"),
+            makeQuaternionTrack("Spine.quaternion"),
           ]),
         ],
       },
-      makeMixamoVrm(),
+      makeAliceVrm(),
     );
 
     expect(classification).toMatchObject({
@@ -230,36 +376,38 @@ describe("resolveGltfAnimationClipForVrm", () => {
     if (classification.status !== "rejected") {
       throw new Error("expected rejected classification");
     }
-    expect(classification.reason).toContain("confident Mixamo rig bindings");
+    expect(classification.reason).toContain("confident Alice or Mixamo");
   });
 
-  it("keeps the permissive resolver path for non-idle emotes", () => {
+  it("keeps the Mixamo resolver path for non-idle emotes", () => {
+    const clip = new THREE.AnimationClip("dance", 1, [
+      makeQuaternionTrack("mixamorig:Hips.quaternion"),
+      makeQuaternionTrack("mixamorig:Spine.quaternion"),
+      makeQuaternionTrack("mixamorig:Spine1.quaternion"),
+      makeQuaternionTrack("mixamorig:Spine2.quaternion"),
+      makeQuaternionTrack("mixamorig:Neck.quaternion"),
+      makeQuaternionTrack("mixamorig:Head.quaternion"),
+      makeQuaternionTrack("mixamorig:LeftShoulder.quaternion"),
+      makeQuaternionTrack("mixamorig:LeftArm.quaternion"),
+      makeQuaternionTrack("mixamorig:LeftForeArm.quaternion"),
+      makeQuaternionTrack("mixamorig:LeftHand.quaternion"),
+      makeQuaternionTrack("mixamorig:RightShoulder.quaternion"),
+      makeQuaternionTrack("mixamorig:RightArm.quaternion"),
+      makeQuaternionTrack("mixamorig:RightForeArm.quaternion"),
+      makeQuaternionTrack("mixamorig:RightHand.quaternion"),
+    ]);
+
     const resolved = resolveGltfAnimationClipForVrm(
       {
         scene: makeMixamoAnimationScene(),
-        animations: [
-          new THREE.AnimationClip("wave", 1, [
-            makeQuaternionTrack("mixamorig:Hips.quaternion"),
-            makeQuaternionTrack("mixamorig:Spine.quaternion"),
-            makeQuaternionTrack("mixamorig:Spine1.quaternion"),
-            makeQuaternionTrack("mixamorig:Spine2.quaternion"),
-            makeQuaternionTrack("mixamorig:Neck.quaternion"),
-            makeQuaternionTrack("mixamorig:Head.quaternion"),
-            makeQuaternionTrack("mixamorig:LeftShoulder.quaternion"),
-            makeQuaternionTrack("mixamorig:LeftArm.quaternion"),
-            makeQuaternionTrack("mixamorig:LeftForeArm.quaternion"),
-            makeQuaternionTrack("mixamorig:LeftHand.quaternion"),
-            makeQuaternionTrack("mixamorig:RightShoulder.quaternion"),
-            makeQuaternionTrack("mixamorig:RightArm.quaternion"),
-            makeQuaternionTrack("mixamorig:RightForeArm.quaternion"),
-            makeQuaternionTrack("mixamorig:RightHand.quaternion"),
-          ]),
-        ],
+        animations: [clip],
       },
       makeMixamoVrm(),
     );
 
     expect(resolved.source).toBe("mixamo-retargeted");
-    expect(resolved.clip.tracks.length).toBeGreaterThanOrEqual(10);
+    expect(
+      resolved.clip.tracks.some((track) => track.name === "Hips.quaternion"),
+    ).toBe(true);
   });
 });
