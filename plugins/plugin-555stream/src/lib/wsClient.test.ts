@@ -7,7 +7,7 @@ describe("WsClient", () => {
   it("refreshes the bearer token and retries bind once on auth failure", async () => {
     let refreshCount = 0;
     const client = new WsClient({
-      url: "wss://stream.rndrntwrk.com/api/agent/v1/ws",
+      url: "wss://stream.rndrntwrk.com/ws",
       token: "expired-token",
       tokenProvider: async () => `fresh-token-${++refreshCount}`,
       maxReconnectAttempts: 0,

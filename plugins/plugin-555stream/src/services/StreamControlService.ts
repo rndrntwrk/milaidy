@@ -108,6 +108,16 @@ function parseBooleanEnv(value: string | undefined): boolean {
   }
 }
 
+function deriveAgentWsUrl(baseUrl: string): string {
+  const parsed = new URL(baseUrl);
+  parsed.protocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
+  const normalizedPath = parsed.pathname.replace(/\/+$/g, '');
+  parsed.pathname = normalizedPath ? `${normalizedPath}/ws` : '/ws';
+  parsed.search = '';
+  parsed.hash = '';
+  return parsed.toString();
+}
+
 export class StreamControlService implements Service {
   static serviceType = 'stream555';
 
@@ -166,9 +176,7 @@ export class StreamControlService implements Service {
     });
 
     // Initialize WebSocket client
-    const wsUrl = this.config.baseUrl
-      .replace(/^http/, 'ws')
-      .replace(/\/$/, '') + '/api/agent/v1/ws';
+    const wsUrl = deriveAgentWsUrl(this.config.baseUrl);
 
     this.wsClient = new WsClient({
       url: wsUrl,

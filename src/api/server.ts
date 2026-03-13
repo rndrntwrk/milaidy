@@ -15688,6 +15688,7 @@ async function handleRequest(
       const message = createMessageMemory({
         id: crypto.randomUUID() as UUID,
         entityId: userId,
+        agentId: runtime.agentId,
         roomId: conv.roomId,
         content: {
           text: fallbackText,
@@ -15841,6 +15842,7 @@ async function handleRequest(
       const message = createMessageMemory({
         id: crypto.randomUUID() as UUID,
         entityId: userId,
+        agentId: runtime.agentId,
         roomId: conv.roomId,
         content: {
           text: prompt,
@@ -16002,6 +16004,7 @@ async function handleRequest(
       const message = createMessageMemory({
         id: crypto.randomUUID() as UUID,
         entityId: userId,
+        agentId: runtime.agentId,
         roomId: conv.roomId,
         content: {
           text: prompt,
@@ -16259,6 +16262,7 @@ async function handleRequest(
       const message = createMessageMemory({
         id: crypto.randomUUID() as UUID,
         entityId: chatUserId,
+        agentId: runtime.agentId,
         roomId: chatRoomId,
         content: {
           text: prompt,
@@ -16502,6 +16506,7 @@ async function handleRequest(
       const message = createMessageMemory({
         id: crypto.randomUUID() as UUID,
         entityId: chatUserId,
+        agentId: runtime.agentId,
         roomId: chatRoomId,
         content: {
           text: prompt,
