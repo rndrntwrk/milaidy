@@ -3422,10 +3422,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async (config: GoLiveConfig): Promise<GoLiveLaunchResult> => {
       const stream555ControlAvailable =
         hasPluginRegistration(plugins, "stream555-control") &&
-        resolveQuickLayerStatus(plugins, ["stream555-control"]) !== "disabled";
+        resolveQuickLayerStatus(plugins, ["stream555-control"]) === "active";
       const legacyStreamAvailable =
         hasPluginRegistration(plugins, "stream") &&
-        resolveQuickLayerStatus(plugins, ["stream"]) !== "disabled";
+        resolveQuickLayerStatus(plugins, ["stream"]) === "active";
       const selectedChannels = Array.from(
         new Set(
           config.channels
@@ -4165,10 +4165,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const stream555Available =
       hasPluginRegistration(plugins, "stream555-control") &&
-      resolveQuickLayerStatus(plugins, ["stream555-control"]) !== "disabled";
+      resolveQuickLayerStatus(plugins, ["stream555-control"]) === "active";
     const legacyStreamAvailable =
       hasPluginRegistration(plugins, "stream") &&
-      resolveQuickLayerStatus(plugins, ["stream"]) !== "disabled";
+      resolveQuickLayerStatus(plugins, ["stream"]) === "active";
 
     if (!stream555Available && !legacyStreamAvailable) {
       setActionNotice(
@@ -4424,10 +4424,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         : undefined;
     const stream555ControlAvailable =
       hasPluginRegistration(plugins, "stream555-control") &&
-      resolveQuickLayerStatus(plugins, ["stream555-control"]) !== "disabled";
+      resolveQuickLayerStatus(plugins, ["stream555-control"]) === "active";
     const legacyStreamAvailable =
       hasPluginRegistration(plugins, "stream") &&
-      resolveQuickLayerStatus(plugins, ["stream"]) !== "disabled";
+      resolveQuickLayerStatus(plugins, ["stream"]) === "active";
 
     if (layer.id === "go-live") {
       openGoLiveModal();

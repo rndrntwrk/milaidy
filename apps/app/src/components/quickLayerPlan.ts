@@ -16,28 +16,84 @@ export function parseToolEnvelopeFromPipelineResult(
 ): ParsedToolEnvelope | null {
   if (!pipelineResult || typeof pipelineResult !== "object") return null;
   const pipelineRecord = pipelineResult as Record<string, unknown>;
+  const fallbackAction =
+    typeof pipelineRecord.toolName === "string"
+      ? pipelineRecord.toolName
+      : undefined;
+  const fallbackOk =
+    typeof pipelineRecord.success === "boolean"
+      ? pipelineRecord.success
+      : undefined;
+  const fallbackMessage =
+    typeof pipelineRecord.error === "string" && pipelineRecord.error.trim().length > 0
+      ? pipelineRecord.error.trim()
+      : undefined;
   const toolResult = pipelineRecord.result;
-  if (!toolResult || typeof toolResult !== "object") return null;
+  if (!toolResult || typeof toolResult !== "object") {
+    if (!fallbackAction && fallbackOk === undefined && !fallbackMessage) {
+      return null;
+    }
+    return {
+      ok: fallbackOk,
+      action: fallbackAction,
+      message: fallbackMessage,
+    };
+  }
+
   const toolRecord = toolResult as Record<string, unknown>;
+  const directData = toolRecord.data;
+  const directEnvelope: ParsedToolEnvelope = {
+    ok:
+      typeof toolRecord.success === "boolean" ? toolRecord.success : fallbackOk,
+    action: fallbackAction,
+    message:
+      typeof toolRecord.error === "string" && toolRecord.error.trim().length > 0
+        ? toolRecord.error.trim()
+        : fallbackMessage,
+    data:
+      directData && typeof directData === "object" && !Array.isArray(directData)
+        ? (directData as Record<string, unknown>)
+        : undefined,
+  };
+
   const text = toolRecord.text;
-  if (typeof text !== "string" || text.trim().length === 0) return null;
+  if (typeof text !== "string" || text.trim().length === 0) {
+    return directEnvelope.action || directEnvelope.ok !== undefined || directEnvelope.message
+      ? directEnvelope
+      : null;
+  }
 
   try {
     const parsed = JSON.parse(text) as Record<string, unknown>;
-    if (!parsed || typeof parsed !== "object") return null;
+    if (!parsed || typeof parsed !== "object") return directEnvelope;
     const data = parsed.data;
     return {
-      ok: typeof parsed.ok === "boolean" ? parsed.ok : undefined,
-      action: typeof parsed.action === "string" ? parsed.action : undefined,
-      message: typeof parsed.message === "string" ? parsed.message : undefined,
-      status: typeof parsed.status === "number" ? parsed.status : undefined,
+      ok:
+        typeof parsed.ok === "boolean" ? parsed.ok : directEnvelope.ok,
+      action:
+        typeof parsed.action === "string" ? parsed.action : directEnvelope.action,
+      message:
+        typeof parsed.message === "string" && parsed.message.trim().length > 0
+          ? parsed.message
+          : directEnvelope.message,
+      status:
+        typeof parsed.status === "number" ? parsed.status : undefined,
       data:
         data && typeof data === "object" && !Array.isArray(data)
           ? (data as Record<string, unknown>)
-          : undefined,
+          : directEnvelope.data,
     };
   } catch {
-    return null;
+    if (
+      !directEnvelope.message &&
+      typeof text === "string" &&
+      text.trim().length > 0
+    ) {
+      directEnvelope.message = text.trim();
+    }
+    return directEnvelope.action || directEnvelope.ok !== undefined || directEnvelope.message
+      ? directEnvelope
+      : null;
   }
 }
 

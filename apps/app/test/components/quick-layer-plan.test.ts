@@ -13,6 +13,33 @@ function pipelineResult(payload: Record<string, unknown>): unknown {
   };
 }
 
+function structuredPipelineResult(
+  toolName: string,
+  {
+    success,
+    error,
+    text,
+    data,
+  }: {
+    success?: boolean;
+    error?: string;
+    text?: string;
+    data?: Record<string, unknown>;
+  },
+): unknown {
+  return {
+    toolName,
+    ...(typeof success === "boolean" ? { success } : {}),
+    ...(typeof error === "string" ? { error } : {}),
+    result: {
+      ...(typeof success === "boolean" ? { success } : {}),
+      ...(typeof error === "string" ? { error } : {}),
+      ...(typeof text === "string" ? { text } : {}),
+      ...(data ? { data } : {}),
+    },
+  };
+}
+
 describe("quickLayerPlan helpers", () => {
   it("finds the last matching action envelope", () => {
     const results = [
@@ -70,6 +97,27 @@ describe("quickLayerPlan helpers", () => {
     ).toBe(false);
   });
 
+  it("recognizes structured plan-step success without JSON text envelopes", () => {
+    const plan = {
+      allSucceeded: false,
+      results: [
+        structuredPipelineResult("STREAM555_GO_LIVE", {
+          success: true,
+          text: "Legacy go-live started for session test-session.",
+          data: { status: "created" },
+        }),
+        structuredPipelineResult("STREAM555_GO_LIVE_SEGMENTS", {
+          success: false,
+          error: "STREAM555_GO_LIVE_SEGMENTS failed: Stream already active",
+          text: "STREAM555_GO_LIVE_SEGMENTS failed: Stream already active",
+        }),
+      ],
+    };
+
+    expect(didToolActionSucceed(plan, "STREAM555_GO_LIVE")).toBe(true);
+    expect(didToolActionSucceed(plan, "STREAM555_GO_LIVE_SEGMENTS")).toBe(false);
+  });
+
   it("extracts a useful failure message when available", () => {
     const plan = {
       allSucceeded: false,
@@ -96,5 +144,26 @@ describe("quickLayerPlan helpers", () => {
         "ad trigger failed",
       ),
     ).toBe("ad trigger failed");
+  });
+
+  it("extracts failure messages from structured plan results", () => {
+    const plan = {
+      allSucceeded: false,
+      results: [
+        structuredPipelineResult("STREAM555_GO_LIVE_SEGMENTS", {
+          success: false,
+          error: "STREAM555_GO_LIVE_SEGMENTS failed: Stream already active",
+          text: "STREAM555_GO_LIVE_SEGMENTS failed: Stream already active",
+        }),
+      ],
+    };
+
+    expect(
+      getToolActionFailureMessage(
+        plan,
+        "STREAM555_GO_LIVE_SEGMENTS",
+        "segment bootstrap failed",
+      ),
+    ).toBe("STREAM555_GO_LIVE_SEGMENTS failed: Stream already active");
   });
 });
