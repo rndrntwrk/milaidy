@@ -1332,6 +1332,13 @@ export interface CodingAgentScratchWorkspace {
   expiresAt?: number;
 }
 
+export interface AgentPreflightResult {
+  adapter?: string;
+  installed?: boolean;
+  installCommand?: string;
+  docsUrl?: string;
+}
+
 export interface CodingAgentStatus {
   supervisionLevel: string;
   taskCount: number;

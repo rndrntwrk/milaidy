@@ -1,3 +1,4 @@
+import type { AgentPreflightResult } from "@milady/app-core/api";
 import { client } from "@milady/app-core/api";
 import { Button } from "@milady/ui";
 import { useCallback, useEffect, useState } from "react";
@@ -9,13 +10,6 @@ type AgentTab = "claude" | "gemini" | "codex" | "aider";
 type AiderProvider = "anthropic" | "openai" | "google";
 type ApprovalPreset = "readonly" | "standard" | "permissive" | "autonomous";
 type AgentSelectionStrategy = "fixed" | "ranked";
-interface AgentPreflightResult {
-  adapter?: string;
-  installed?: boolean;
-  installCommand?: string;
-  docsUrl?: string;
-}
-
 const AGENT_TABS: AgentTab[] = ["claude", "gemini", "codex", "aider"];
 
 const APPROVAL_PRESETS: {
