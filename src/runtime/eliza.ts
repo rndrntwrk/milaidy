@@ -120,6 +120,7 @@ import { SandboxAuditLog } from "../security/audit-log";
 import { SandboxManager, type SandboxMode } from "../services/sandbox-manager";
 import { diagnoseNoAIProvider } from "../services/version-compat";
 import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins";
+import { detectEmbeddingPreset } from "./embedding-presets";
 import { createMiladyPlugin } from "./milady-plugin";
 import { installDatabaseTrajectoryLogger } from "./trajectory-persistence";
 
@@ -233,13 +234,11 @@ interface PluginModuleShape {
   [key: string]: Plugin | undefined;
 }
 
-function configureLocalEmbeddingPlugin(
+export function configureLocalEmbeddingPlugin(
   _plugin: Plugin,
   config?: MiladyConfig,
 ): void {
-  // Check if we're on macOS with Apple Silicon
-  const isAppleSilicon =
-    process.platform === "darwin" && process.arch === "arm64";
+  const detectedPreset = detectEmbeddingPreset();
 
   const embeddingConfig = config?.embedding;
   const configuredModel = embeddingConfig?.model?.trim();
@@ -278,28 +277,46 @@ function configureLocalEmbeddingPlugin(
     process.env[key] = value;
   };
 
-  // Default to Nomic for zero-config local embeddings.
+  // Keep plugin-local-embedding aligned with Milady's hardware-adaptive preset
+  // selection. Hard-coding the standard preset here forces slower first-run
+  // downloads on Windows and low-spec machines.
   setEnvIfMissing(
     "LOCAL_EMBEDDING_MODEL",
-    configuredModel || "nomic-embed-text-v1.5.Q5_K_M.gguf",
+    configuredModel || detectedPreset.model,
   );
-  setEnvFromConfig("LOCAL_EMBEDDING_MODEL_REPO", configuredRepo);
-  setEnvFromConfig("LOCAL_EMBEDDING_DIMENSIONS", configuredDimensions);
-  setEnvFromConfig("LOCAL_EMBEDDING_CONTEXT_SIZE", configuredContextSize);
+  if (configuredRepo) {
+    setEnvFromConfig("LOCAL_EMBEDDING_MODEL_REPO", configuredRepo);
+  } else if (!configuredModel) {
+    setEnvIfMissing("LOCAL_EMBEDDING_MODEL_REPO", detectedPreset.modelRepo);
+  }
+  if (configuredDimensions) {
+    setEnvFromConfig("LOCAL_EMBEDDING_DIMENSIONS", configuredDimensions);
+  } else if (!configuredModel) {
+    setEnvIfMissing(
+      "LOCAL_EMBEDDING_DIMENSIONS",
+      String(detectedPreset.dimensions),
+    );
+  }
+  if (configuredContextSize) {
+    setEnvFromConfig("LOCAL_EMBEDDING_CONTEXT_SIZE", configuredContextSize);
+  } else if (!configuredModel) {
+    setEnvIfMissing(
+      "LOCAL_EMBEDDING_CONTEXT_SIZE",
+      String(detectedPreset.contextSize),
+    );
+  }
 
-  // Hardware acceleration (Metal on macOS)
-  // gpuLayers: "auto" is now safe with v3.15.1+ on Metal
   if (configuredGpuLayers) {
     process.env.LOCAL_EMBEDDING_GPU_LAYERS = configuredGpuLayers;
   } else if (!process.env.LOCAL_EMBEDDING_GPU_LAYERS) {
-    process.env.LOCAL_EMBEDDING_GPU_LAYERS = isAppleSilicon ? "auto" : "0";
+    process.env.LOCAL_EMBEDDING_GPU_LAYERS = String(detectedPreset.gpuLayers);
   }
 
   // Performance tuning
   // Disable mmap on Metal to prevent "different text" errors with some models
   setEnvIfMissing(
     "LOCAL_EMBEDDING_USE_MMAP",
-    isAppleSilicon ? "false" : "true",
+    detectedPreset.gpuLayers === "auto" ? "false" : "true",
   );
 
   // Set default models directory if not present
@@ -333,6 +350,53 @@ function configureLocalEmbeddingPlugin(
 /** Extract a human-readable error message from an unknown thrown value. */
 function formatError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+type RuntimeAdapterWithClose = {
+  close?: () => Promise<void> | void;
+};
+
+/**
+ * Best-effort runtime shutdown that also closes the database adapter.
+ *
+ * AgentRuntime.stop() only stops services. plugin-sql keeps a process-global
+ * PGlite manager, so restarts must close the adapter or the next runtime can
+ * silently reuse the same broken manager instance.
+ */
+export async function shutdownRuntime(
+  runtime: AgentRuntime | null | undefined,
+  context: string,
+): Promise<void> {
+  if (!runtime) return;
+
+  const adapter = runtime.adapter as RuntimeAdapterWithClose | undefined;
+  let firstError: unknown = null;
+
+  try {
+    await runtime.stop();
+  } catch (err) {
+    firstError = err;
+    logger.warn(
+      `[milady] ${context}: runtime stop failed: ${formatError(err)}`,
+    );
+  }
+
+  if (adapter && typeof adapter.close === "function") {
+    try {
+      await adapter.close();
+    } catch (err) {
+      if (!firstError) {
+        firstError = err;
+      }
+      logger.warn(
+        `[milady] ${context}: database adapter close failed: ${formatError(err)}`,
+      );
+    }
+  }
+
+  if (firstError) {
+    throw firstError;
+  }
 }
 
 /**
@@ -2844,6 +2908,21 @@ export function resolvePrimaryModel(config: MiladyConfig): string | undefined {
   return modelConfig.primary;
 }
 
+/**
+ * Vision is a heavy optional plugin. When Milady enables it, keep the service
+ * loaded but idle until the user explicitly selects CAMERA, SCREEN, or BOTH.
+ * This avoids background capture loops during normal app startup.
+ */
+export function resolveVisionModeSetting(
+  config: MiladyConfig,
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  const explicitMode = env.VISION_MODE?.trim();
+  if (explicitMode) return explicitMode;
+  if (config.features?.vision === true) return "OFF";
+  return undefined;
+}
+
 // ---------------------------------------------------------------------------
 // First-run onboarding
 // ---------------------------------------------------------------------------
@@ -3759,6 +3838,7 @@ export async function startEliza(
   // `model.primary` in config), we bump that plugin's priority so its
   // handlers are always selected over other providers.
   const pluginsForRuntime = otherPlugins.map((p) => p.plugin);
+  const visionModeSetting = resolveVisionModeSetting(config);
   if (primaryModel) {
     for (const plugin of pluginsForRuntime) {
       if (plugin.name === primaryModel) {
@@ -3815,6 +3895,7 @@ export async function startEliza(
       ),
       // Forward Milady config env vars as runtime settings
       ...(primaryModel ? { MODEL_PROVIDER: primaryModel } : {}),
+      ...(visionModeSetting ? { VISION_MODE: visionModeSetting } : {}),
       // Forward skills config so plugin-agent-skills can apply allow/deny filtering
       ...(config.skills?.allowBundled
         ? { SKILLS_ALLOWLIST: config.skills.allowBundled.join(",") }
@@ -4021,14 +4102,14 @@ export async function startEliza(
     logger.warn(
       `[milady] Runtime migrations failed (${formatError(err)}). Resetting local PGLite DB at ${pgliteDataDir} and retrying startup once.`,
     );
-    await resetPgliteDataDir(pgliteDataDir);
-    process.env.PGLITE_DATA_DIR = pgliteDataDir;
-
     try {
-      await runtime.stop();
+      await shutdownRuntime(runtime, "PGLite recovery");
     } catch {
       // Ignore cleanup errors — retry creates a fresh runtime anyway.
     }
+
+    await resetPgliteDataDir(pgliteDataDir);
+    process.env.PGLITE_DATA_DIR = pgliteDataDir;
 
     return await startEliza({
       ...opts,
@@ -4068,7 +4149,7 @@ export async function startEliza(
       }
 
       try {
-        await runtime.stop();
+        await shutdownRuntime(runtime, "signal shutdown");
       } catch (err) {
         logger.warn(`[milady] Error during shutdown: ${formatError(err)}`);
       }
@@ -4129,7 +4210,7 @@ export async function startEliza(
           // Stop the old runtime to release resources (DB connections, timers, etc.)
 
           try {
-            await runtime.stop();
+            await shutdownRuntime(runtime, "hot-reload cleanup");
           } catch (stopErr) {
             logger.warn(
               `[milady] Hot-reload: old runtime stop failed: ${formatError(stopErr)}`,
@@ -4190,6 +4271,7 @@ export async function startEliza(
           );
           // Boost preferred model plugin priority (same as initial startup)
           const freshPluginsForRuntime = freshOtherPlugins.map((p) => p.plugin);
+          const freshVisionModeSetting = resolveVisionModeSetting(freshConfig);
           if (freshPrimaryModel) {
             for (const plugin of freshPluginsForRuntime) {
               if (plugin.name === freshPrimaryModel) {
@@ -4205,6 +4287,9 @@ export async function startEliza(
             settings: {
               ...(freshPrimaryModel
                 ? { MODEL_PROVIDER: freshPrimaryModel }
+                : {}),
+              ...(freshVisionModeSetting
+                ? { VISION_MODE: freshVisionModeSetting }
                 : {}),
               // Disable image description when vision is explicitly toggled off.
               ...(freshConfig.features?.vision === false
@@ -4310,7 +4395,7 @@ export async function startEliza(
     const cleanup = async () => {
       clearInterval(keepAlive);
       try {
-        await runtime.stop();
+        await shutdownRuntime(runtime, "server-only shutdown");
       } catch (err) {
         logger.warn(`[milady] Error stopping runtime: ${formatError(err)}`);
       }
@@ -4434,7 +4519,7 @@ export async function startEliza(
         console.log("\nGoodbye!");
         rl.close();
         try {
-          await runtime.stop();
+          await shutdownRuntime(runtime, "cli shutdown");
         } catch (err) {
           logger.warn(`[milady] Error stopping runtime: ${formatError(err)}`);
         }

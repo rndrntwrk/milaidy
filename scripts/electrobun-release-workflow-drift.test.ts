@@ -23,11 +23,16 @@ const MACOS_DIRECT_LAUNCHER_SOURCE_PATH = path.join(
   ROOT,
   "apps/app/electrobun/scripts/macos-direct-launcher.c",
 );
+const WINDOWS_PACKAGED_TEST_PATH = path.join(
+  ROOT,
+  "apps/app/test/electron-packaged/electrobun-windows-startup.e2e.spec.ts",
+);
 
 describe("Electrobun release workflow drift", () => {
   it("stages the built renderer before packaging", () => {
     const workflow = fs.readFileSync(WORKFLOW_PATH, "utf8");
 
+    expect(workflow).toContain("name: Build renderer (vite)");
     expect(workflow).toContain("name: Stage renderer for Electrobun bundle");
     expect(workflow).toContain(
       "cp -r apps/app/dist apps/app/electrobun/renderer",
@@ -185,6 +190,27 @@ describe("Electrobun release workflow drift", () => {
     );
   });
 
+  it("prefers the live Windows build launcher and persists it for UI tests", () => {
+    const smokeScript = fs.readFileSync(WINDOWS_SMOKE_PATH, "utf8");
+    const workflow = fs.readFileSync(WORKFLOW_PATH, "utf8");
+
+    expect(smokeScript).toContain("Find-Launcher $resolvedBuildDir");
+    expect(smokeScript).toContain(
+      'Write-Host "Using $launcherSource launcher:',
+    );
+    expect(smokeScript).toContain(
+      "$persistLauncherPathFile = $env:MILADY_TEST_WINDOWS_LAUNCHER_PATH_FILE",
+    );
+    expect(smokeScript).toContain("Set-Content -Path $persistLauncherPathFile");
+    expect(workflow).toContain(
+      "MILADY_TEST_WINDOWS_LAUNCHER_PATH_FILE: $" +
+        "{{ runner.temp }}\\milady-windows-ui-launcher.txt",
+    );
+    expect(workflow).toContain(
+      'Add-Content -Path $env:GITHUB_ENV -Value "MILADY_TEST_WINDOWS_LAUNCHER_PATH=$launcherPath"',
+    );
+  });
+
   it("collects Windows smoke diagnostics from runner environment paths before upload", () => {
     const workflow = fs.readFileSync(WORKFLOW_PATH, "utf8");
 
@@ -200,5 +226,34 @@ describe("Electrobun release workflow drift", () => {
       "path: apps/app/electrobun/artifacts/windows-smoke-diagnostics/**",
     );
     expect(workflow).not.toContain("env.USERPROFILE }}\\.config\\Milady");
+  });
+
+  it("seeds the Windows embedding model cache before packaged smoke", () => {
+    const workflow = fs.readFileSync(WORKFLOW_PATH, "utf8");
+
+    expect(workflow).toContain("name: Seed Windows embedding model cache");
+    expect(workflow).toContain(
+      '$modelName = "nomic-embed-text-v1.5.Q4_K_S.gguf"',
+    );
+    expect(workflow).toContain(
+      '$modelRepo = "nomic-ai/nomic-embed-text-v1.5-GGUF"',
+    );
+    expect(workflow).toContain(
+      "Invoke-WebRequest -Uri $url -OutFile $modelPath",
+    );
+  });
+
+  it("passes a Chromium remote debugging argument to the packaged Windows app test", () => {
+    const windowsPackagedTest = fs.readFileSync(
+      WINDOWS_PACKAGED_TEST_PATH,
+      "utf8",
+    );
+
+    expect(windowsPackagedTest).toContain(
+      "[`--remote-debugging-port=$" + "{debugPort}`]",
+    );
+    expect(windowsPackagedTest).toContain(
+      "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
+    );
   });
 });

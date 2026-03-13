@@ -28,6 +28,13 @@ const electrobunArtifactsDir = path.join(
   "electrobun",
   "artifacts",
 );
+const electrobunBuildDir = path.join(
+  repoRoot,
+  "apps",
+  "app",
+  "electrobun",
+  "build",
+);
 
 function isIgnorableConsoleError(message: string): boolean {
   const patterns = [
@@ -82,11 +89,21 @@ async function resolveWindowsLauncher(tempExtractDir: string): Promise<string> {
   const explicit = process.env.MILADY_TEST_WINDOWS_LAUNCHER_PATH?.trim();
   if (explicit) {
     await fs.access(explicit);
-    return fs.realpath(explicit);
+    const resolved = await fs.realpath(explicit);
+    console.log(`Using explicit Windows launcher: ${resolved}`);
+    return resolved;
+  }
+
+  // CI Windows builds already have launcher.exe under the live build output.
+  // Prefer that over re-extracting the packaged tarball, which is slow enough
+  // to consume the entire Playwright test timeout on hosted runners.
+  let launcher = await findLauncherExe(electrobunBuildDir);
+  if (launcher) {
+    return fs.realpath(launcher);
   }
 
   // First try to find an already extracted launcher in the artifacts dir
-  let launcher = await findLauncherExe(electrobunArtifactsDir);
+  launcher = await findLauncherExe(electrobunArtifactsDir);
   if (launcher) {
     return fs.realpath(launcher);
   }
@@ -158,7 +175,7 @@ async function waitForCdp(debugPort: number, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
-      // Chromium/WebView2 CDP endpoint
+      // Chromium CDP endpoint exposed by the packaged Windows renderer.
       const response = await fetch(
         `http://127.0.0.1:${debugPort}/json/version`,
       );
@@ -250,7 +267,10 @@ test("packaged Windows app starts and reaches chat/agent-ready state", async () 
 
     appProcess = spawn(
       executablePath,
-      [], // no app args, WebView2 flag is passed via env
+      // Windows release builds use CEF/Chromium, so pass the debug port as a
+      // real Chromium argument. Keep the WebView2 env var as a compatibility
+      // fallback in case the renderer mode changes in the future.
+      [`--remote-debugging-port=${debugPort}`],
       {
         cwd: path.dirname(executablePath),
         env: {
@@ -259,7 +279,7 @@ test("packaged Windows app starts and reaches chat/agent-ready state", async () 
           MILADY_ELECTRON_TEST_API_BASE: api.baseUrl,
           MILADY_ELECTRON_DISABLE_AUTO_UPDATER: "1",
           MILADY_ELECTRON_DISABLE_DEVTOOLS: "1",
-          // Pass the debugging port to WebView2
+          // Compatibility fallback for native Windows webviews.
           WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${debugPort}`,
           // Redirect the Roaming AppData so it doesn't pollute the dev machine's real AppData
           APPDATA: userDataDir,
