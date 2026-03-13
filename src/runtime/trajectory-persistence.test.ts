@@ -518,6 +518,14 @@ describe("extractInsightsFromResponse", () => {
     expect(insights[0]).toContain("the agent completed the bug fix");
   });
 
+  it("falls back to reasoning for coordination when no other insights", () => {
+    const response =
+      '{"reasoning": "coordinate agents by routing docs to gamma and tests to beta for faster completion"}';
+    const insights = extractInsightsFromResponse(response, "coordination");
+    expect(insights).toHaveLength(1);
+    expect(insights[0]).toContain("coordinate agents");
+  });
+
   it("does not extract reasoning for non-turn-complete purposes", () => {
     const response =
       '{"reasoning": "the agent completed the bug fix successfully and tests pass"}';
