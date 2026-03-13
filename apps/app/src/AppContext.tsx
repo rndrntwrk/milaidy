@@ -3529,6 +3529,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const destinationParams = destinationPlatforms
         ? { destinationPlatforms }
         : {};
+      const avatarDestinationParams = {
+        inputType: "avatar",
+        ...destinationParams,
+      };
       const destinationApplyParams = destinationPlatforms
         ? { platforms: destinationPlatforms }
         : {};
@@ -3678,8 +3682,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
                         id: "go-live",
                         toolName: "STREAM555_GO_LIVE",
                         params: {
+                          ...avatarDestinationParams,
                           layoutMode: config.layoutMode,
-                          ...destinationParams,
                         },
                       },
                       {
@@ -3936,8 +3940,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
                     id: "go-live",
                     toolName: "STREAM555_GO_LIVE",
                     params: {
+                      ...avatarDestinationParams,
                       layoutMode: config.layoutMode,
-                      ...destinationParams,
                     },
                   },
                   {

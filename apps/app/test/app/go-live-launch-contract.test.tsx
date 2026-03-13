@@ -407,6 +407,17 @@ describe("AppContext go-live launch contract", () => {
       label: "Complete segment bootstrap",
     });
     expect(result.message).toContain("segment bootstrap failed");
+    expect(mockClient.executeAutonomyPlan).toHaveBeenCalledTimes(1);
+    expect(
+      mockClient.executeAutonomyPlan.mock.calls[0]?.[0]?.plan?.steps?.[0],
+    ).toMatchObject({
+      toolName: "STREAM555_GO_LIVE",
+      params: {
+        inputType: "avatar",
+        layoutMode: "camera-full",
+        destinationPlatforms: "twitch",
+      },
+    });
 
     await act(async () => {
       tree.unmount();
@@ -505,6 +516,17 @@ describe("AppContext go-live launch contract", () => {
     expect(result.message).toContain("follow-up is required");
     expect(result.message).toContain("segment bootstrap failed");
     expect(result.message).toContain("segment override failed");
+    expect(mockClient.executeAutonomyPlan).toHaveBeenCalledTimes(1);
+    expect(
+      mockClient.executeAutonomyPlan.mock.calls[0]?.[0]?.plan?.steps?.[0],
+    ).toMatchObject({
+      toolName: "STREAM555_GO_LIVE",
+      params: {
+        inputType: "avatar",
+        layoutMode: "camera-full",
+        destinationPlatforms: "twitch",
+      },
+    });
 
     await act(async () => {
       tree.unmount();
