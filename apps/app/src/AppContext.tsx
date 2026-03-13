@@ -232,6 +232,32 @@ function labelForGoLiveLaunchMode(mode: GoLiveLaunchMode): string {
   }
 }
 
+const CANONICAL_GAMES_GO_LIVE_PLAY_ACTION = "ARCADE555_GAMES_GO_LIVE_PLAY";
+const LEGACY_GAMES_GO_LIVE_PLAY_ACTION = "FIVE55_GAMES_GO_LIVE_PLAY";
+const GAME_LAUNCH_ACTION_PRIORITY = [
+  CANONICAL_GAMES_GO_LIVE_PLAY_ACTION,
+  LEGACY_GAMES_GO_LIVE_PLAY_ACTION,
+  "ARCADE555_GAMES_PLAY",
+  "FIVE55_GAMES_PLAY",
+] as const;
+
+function findLastGameLaunchEnvelope(results: unknown[]) {
+  for (const actionName of GAME_LAUNCH_ACTION_PRIORITY) {
+    const envelope = findLastToolEnvelope(results, actionName);
+    if (envelope) return envelope;
+  }
+  return null;
+}
+
+function isActionRegistrationFailure(message: string): boolean {
+  const normalized = message.trim().toLowerCase();
+  return (
+    normalized.includes("not registered") ||
+    normalized.includes("unknown action") ||
+    (normalized.includes("action") && normalized.includes("not found"))
+  );
+}
+
 export const THEMES: ReadonlyArray<{
   id: ThemeName;
   label: string;
@@ -3376,7 +3402,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       selectedGameId?: string,
     ): Promise<ParsedGameLaunch> => {
       const launchFromPlan = parseGameLaunchFromEnvelope(
-        findLastToolEnvelope(planResults, "FIVE55_GAMES_PLAY"),
+        findLastGameLaunchEnvelope(planResults),
       );
       if (launchFromPlan) return launchFromPlan;
 
@@ -3406,6 +3432,71 @@ export function AppProvider({ children }: { children: ReactNode }) {
       };
     },
     [],
+  );
+
+  const executeGameGoLivePlan = useCallback(
+    async ({
+      label,
+      planId,
+      selectedGameId,
+      layoutMode,
+    }: {
+      label: string;
+      planId: string;
+      selectedGameId?: string;
+      layoutMode: LiveLayoutMode;
+    }): Promise<{
+      actionName: string;
+      plan: import("./api-client").AutonomyExecutePlanResponse;
+    }> => {
+      let lastAttempt: {
+        actionName: string;
+        plan: import("./api-client").AutonomyExecutePlanResponse;
+      } | null = null;
+
+      for (const actionName of [
+        CANONICAL_GAMES_GO_LIVE_PLAY_ACTION,
+        LEGACY_GAMES_GO_LIVE_PLAY_ACTION,
+      ] as const) {
+        const plan = await executePlanWithRetry(
+          {
+            plan: {
+              id: planId,
+              steps: [
+                {
+                  id: "play-go-live",
+                  toolName: actionName,
+                  params: {
+                    ...(selectedGameId ? { gameId: selectedGameId } : {}),
+                    layoutMode,
+                    mode: "spectate",
+                  },
+                },
+              ],
+            },
+            request: { source: "user", sourceTrust: 1 },
+            options: { stopOnFailure: true },
+          },
+          { label },
+        );
+
+        lastAttempt = { actionName, plan };
+        if (didToolActionSucceed(plan, actionName)) return lastAttempt;
+
+        const failure = getToolActionFailureMessage(
+          plan,
+          actionName,
+          `${actionName} did not succeed`,
+        );
+        if (!isActionRegistrationFailure(failure)) {
+          return lastAttempt;
+        }
+      }
+
+      if (lastAttempt) return lastAttempt;
+      throw new Error("No game go-live action could be attempted.");
+    },
+    [executePlanWithRetry],
   );
 
   const openGoLiveModal = useCallback(() => {
@@ -3929,32 +4020,58 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
         } else if (config.launchMode === "play-games") {
           launchLabel = "Play Games";
+          if (!stream555ControlAvailable && !legacyStreamAvailable) {
+            return blocked(
+              "Play Games launch requires a stream plugin to broadcast the selected game.",
+            );
+          }
           const catalog = await client.getFive55GamesCatalog({ includeBeta: true });
           const selectedGameId = selectPreferredGameId(catalog.games);
           const selectedGame = selectedGameId
             ? catalog.games.find((game) => game.id === selectedGameId)
             : undefined;
 
-          const playPlan = await executePlanWithRetry(
-            {
-              plan: {
-                id: "go-live-modal-play-games",
-                steps: [
+          const useCombinedGameGoLive = stream555ControlAvailable;
+          const playPlanResult = useCombinedGameGoLive
+            ? await executeGameGoLivePlan({
+                label: "Guided play games launch",
+                planId: "go-live-modal-play-games",
+                selectedGameId,
+                layoutMode: config.layoutMode,
+              })
+            : {
+                actionName: "FIVE55_GAMES_PLAY",
+                plan: await executePlanWithRetry(
                   {
-                    id: "play-autonomous",
-                    toolName: "FIVE55_GAMES_PLAY",
-                    params: {
-                      ...(selectedGameId ? { gameId: selectedGameId } : {}),
-                      mode: "spectate",
+                    plan: {
+                      id: "go-live-modal-play-games",
+                      steps: [
+                        {
+                          id: "play-autonomous",
+                          toolName: "FIVE55_GAMES_PLAY",
+                          params: {
+                            ...(selectedGameId ? { gameId: selectedGameId } : {}),
+                            mode: "spectate",
+                          },
+                        },
+                      ],
                     },
+                    request: { source: "user", sourceTrust: 1 },
+                    options: { stopOnFailure: true },
                   },
-                ],
-              },
-              request: { source: "user", sourceTrust: 1 },
-              options: { stopOnFailure: true },
-            },
-            { label: "Guided play games launch" },
-          );
+                  { label: "Guided play games launch" },
+                ),
+              };
+          const { actionName: playActionName, plan: playPlan } = playPlanResult;
+          if (!didToolActionSucceed(playPlan, playActionName)) {
+            return failed(
+              `Play Games launch failed: ${getToolActionFailureMessage(
+                playPlan,
+                playActionName,
+                "play games launch did not succeed",
+              )}`,
+            );
+          }
 
           const launch = await resolveAutonomousGameLaunch(
             playPlan.results,
@@ -3986,44 +4103,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setAppsSubTab("games");
           }
 
-          if (stream555ControlAvailable) {
-            const attachPlan = await executePlanWithRetry(
-              {
-                plan: {
-                  id: "go-live-modal-game-stream-attach",
-                  steps: [
-                    {
-                      id: "start-game-feed",
-                      toolName: "STREAM555_GO_LIVE",
-                      params: {
-                        inputType: "website",
-                        inputUrl: launch.viewerUrl,
-                        layoutMode: "camera-hold",
-                        ...destinationParams,
-                      },
-                    },
-                  ],
-                },
-                request: { source: "user", sourceTrust: 1 },
-                options: { stopOnFailure: false },
-              },
-              { label: "Game stream attach" },
+          if (useCombinedGameGoLive) {
+            setLiveBroadcastState("live");
+            setLiveSource({
+              id: "active-game",
+              kind: "game",
+              label: resolvedGameTitle,
+              viewerUrl: launch.viewerUrl,
+            });
+            return completeLaunch(
+              launchLabel,
+              succeeded(`Launched ${resolvedGameTitle} live.`),
             );
-            if (!didToolActionSucceed(attachPlan, "STREAM555_GO_LIVE")) {
-              return completeLaunch(
-                launchLabel,
-                partial(
-                  `Game launched, but 555 Stream attach failed: ${getToolActionFailureMessage(
-                    attachPlan,
-                    "STREAM555_GO_LIVE",
-                    "game stream attach did not succeed",
-                  )}`,
-                  "Attach game stream",
-                  `Game launched, but 555 Stream attach failed for ${resolvedGameTitle}.`,
-                ),
-              );
-            }
-          } else if (legacyStreamAvailable) {
+          }
+
+          if (legacyStreamAvailable) {
             const attachPlan = await executePlanWithRetry(
               {
                 plan: {
@@ -4096,6 +4190,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     [
       currentTheme,
+      executeGameGoLivePlan,
       executePlanWithRetry,
       plugins,
       dismissGoLiveInlineNotice,
@@ -4202,28 +4297,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
         inputType: "avatar",
         layoutMode: "camera-full",
       };
+      let streamAlreadyStarted = false;
 
       if (autoRunMode === "games") {
         const catalog = await client.getFive55GamesCatalog({ includeBeta: true });
         const selectedGameId = selectPreferredGameId(catalog.games);
 
-        const playPlan = await executePlanWithRetry({
-          plan: {
-            id: "autonomous-live-games-launch",
-            steps: [
-              {
-                id: "play",
-                toolName: "FIVE55_GAMES_PLAY",
-                params: {
-                  ...(selectedGameId ? { gameId: selectedGameId } : {}),
-                  mode: "spectate",
+        const playPlanResult = stream555Available
+          ? await executeGameGoLivePlan({
+              label: "Autonomous game launch",
+              planId: "autonomous-live-games-launch",
+              selectedGameId,
+              layoutMode: "camera-hold",
+            })
+          : {
+              actionName: "FIVE55_GAMES_PLAY",
+              plan: await executePlanWithRetry({
+                plan: {
+                  id: "autonomous-live-games-launch",
+                  steps: [
+                    {
+                      id: "play",
+                      toolName: "FIVE55_GAMES_PLAY",
+                      params: {
+                        ...(selectedGameId ? { gameId: selectedGameId } : {}),
+                        mode: "spectate",
+                      },
+                    },
+                  ],
                 },
-              },
-            ],
-          },
-          request: { source: "user", sourceTrust: 1 },
-          options: { stopOnFailure: true },
-        }, { label: "Autonomous game launch" });
+                request: { source: "user", sourceTrust: 1 },
+                options: { stopOnFailure: true },
+              }, { label: "Autonomous game launch" }),
+            };
+        const { actionName: playActionName, plan: playPlan } = playPlanResult;
+        if (!didToolActionSucceed(playPlan, playActionName)) {
+          const reason = getToolActionFailureMessage(
+            playPlan,
+            playActionName,
+            "game launch failed",
+          );
+          setActionNotice(
+            `Autonomous game launch failed: ${reason}`,
+            "error",
+            4200,
+          );
+          return;
+        }
         const launch = await resolveAutonomousGameLaunch(
           playPlan.results,
           selectedGameId,
@@ -4248,20 +4368,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setTab("apps");
           setAppsSubTab("games");
         }
-        streamStartParams = {
-          operation: "start",
-          scene: "active-pip",
-          inputType: "website",
-          url: launch.viewerUrl,
-        };
-        stream555StartParams = {
-          inputType: "website",
-          inputUrl: launch.viewerUrl,
-          layoutMode: "camera-hold",
-        };
+        if (stream555Available) {
+          streamAlreadyStarted = true;
+        } else {
+          streamStartParams = {
+            operation: "start",
+            scene: "active-pip",
+            inputType: "website",
+            url: launch.viewerUrl,
+          };
+          stream555StartParams = {
+            inputType: "website",
+            inputUrl: launch.viewerUrl,
+            layoutMode: "camera-hold",
+          };
+        }
       }
 
-      if (stream555Available) {
+      if (stream555Available && !streamAlreadyStarted) {
         const streamPlan = await executePlanWithRetry({
           plan: {
             id: "autonomous-live-stream555-start",
@@ -4355,6 +4479,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     autoRunTopic,
     currentTheme,
     chatSending,
+    executeGameGoLivePlan,
     executePlanWithRetry,
     handleChatSend,
     plugins,
@@ -4839,23 +4964,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ? catalog.games.find((game) => game.id === selectedGameId)
           : undefined;
 
-        const playPlan = await executePlanWithRetry({
-          plan: {
-            id: "quick-layer-play-games-autonomous",
-            steps: [
-              {
-                id: "play-autonomous",
-                toolName: "FIVE55_GAMES_PLAY",
-                params: {
-                  ...(selectedGameId ? { gameId: selectedGameId } : {}),
-                  mode: "spectate",
+        const playPlanResult = stream555ControlAvailable
+          ? await executeGameGoLivePlan({
+              label: "Play games",
+              planId: "quick-layer-play-games-autonomous",
+              selectedGameId,
+              layoutMode: "camera-hold",
+            })
+          : {
+              actionName: "FIVE55_GAMES_PLAY",
+              plan: await executePlanWithRetry({
+                plan: {
+                  id: "quick-layer-play-games-autonomous",
+                  steps: [
+                    {
+                      id: "play-autonomous",
+                      toolName: "FIVE55_GAMES_PLAY",
+                      params: {
+                        ...(selectedGameId ? { gameId: selectedGameId } : {}),
+                        mode: "spectate",
+                      },
+                    },
+                  ],
                 },
-              },
-            ],
-          },
-          request: { source: "user", sourceTrust: 1 },
-          options: { stopOnFailure: true },
-        }, { label: "Play games" });
+                request: { source: "user", sourceTrust: 1 },
+                options: { stopOnFailure: true },
+              }, { label: "Play games" }),
+            };
+        const { actionName: playActionName, plan: playPlan } = playPlanResult;
+        if (!didToolActionSucceed(playPlan, playActionName)) {
+          throw new Error(
+            getToolActionFailureMessage(
+              playPlan,
+              playActionName,
+              "play games launch did not succeed",
+            ),
+          );
+        }
 
         const launch = await resolveAutonomousGameLaunch(
           playPlan.results,
@@ -4880,7 +5025,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
             label: resolvedGameTitle,
             viewerUrl: launch.viewerUrl,
           });
-          viewerUrlForStream = launch.viewerUrl;
           prompt =
             `You are now spectating ${resolvedGameTitle} (${resolvedGameId}) in autonomous bot mode. ` +
             "Provide live game commentary, key decisions, and score/capture updates while continuing in-play control.";
@@ -4891,6 +5035,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
             "success",
             2400,
           );
+          if (stream555ControlAvailable) {
+            setLiveBroadcastState("live");
+            pushQuickLayerToast(
+              "Game feed routed live with Alice camera in hold.",
+              "success",
+              2600,
+            );
+            viewerUrlForStream = null;
+          } else {
+            viewerUrlForStream = launch.viewerUrl;
+          }
         } else {
           pushActionLogFollowUp(
             "Play Games",
@@ -5040,6 +5195,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     quickLayerStatuses,
     resetLiveComposition,
     resolveAutonomousGameLaunch,
+    executeGameGoLivePlan,
     sendOperatorActionMessage,
     setLiveSource,
     setTab,

@@ -511,12 +511,57 @@ describe("AppContext go-live launch contract", () => {
     });
   });
 
-  it("returns partial for play-games when game attach fails", async () => {
+  it("returns success for play-games when the canonical go-live action succeeds", async () => {
+    const { api, tree } = await renderApp([makeStreamPlugin(readyTwitchParams())]);
+    mockClient.executeAutonomyPlan.mockResolvedValueOnce(
+      planResponse(
+        planStep("ARCADE555_GAMES_GO_LIVE_PLAY", true, "game launched", {
+          game: { id: "game-1", title: "555 Racer" },
+          viewer: {
+            url: "https://games.example/viewer",
+            sandbox: "allow-scripts",
+            postMessageAuth: false,
+          },
+        }),
+      ),
+    );
+
+    let result!: GoLiveLaunchResult;
+    await act(async () => {
+      result = await api.launchGoLive({
+        channels: ["twitch"],
+        launchMode: "play-games",
+        layoutMode: "camera-hold",
+      });
+    });
+
+    expect(result.state).toBe("success");
+    expect(result.message).toContain("555 Racer");
+    expect(mockClient.executeAutonomyPlan).toHaveBeenCalledTimes(1);
+    expect(
+      mockClient.executeAutonomyPlan.mock.calls[0]?.[0]?.plan?.steps?.[0]?.toolName,
+    ).toBe("ARCADE555_GAMES_GO_LIVE_PLAY");
+
+    await act(async () => {
+      tree.unmount();
+    });
+  });
+
+  it("falls back to the legacy combined action when canonical play-games go-live is unavailable", async () => {
     const { api, tree } = await renderApp([makeStreamPlugin(readyTwitchParams())]);
     mockClient.executeAutonomyPlan
       .mockResolvedValueOnce(
         planResponse(
-          planStep("FIVE55_GAMES_PLAY", true, "game launched", {
+          planStep(
+            "ARCADE555_GAMES_GO_LIVE_PLAY",
+            false,
+            'Action "ARCADE555_GAMES_GO_LIVE_PLAY" not registered',
+          ),
+        ),
+      )
+      .mockResolvedValueOnce(
+        planResponse(
+          planStep("FIVE55_GAMES_GO_LIVE_PLAY", true, "game launched", {
             game: { id: "game-1", title: "555 Racer" },
             viewer: {
               url: "https://games.example/viewer",
@@ -524,15 +569,6 @@ describe("AppContext go-live launch contract", () => {
               postMessageAuth: false,
             },
           }),
-        ),
-      )
-      .mockResolvedValueOnce(
-        planResponse(
-          planStep(
-            "STREAM555_GO_LIVE",
-            false,
-            "game stream attach did not succeed",
-          ),
         ),
       );
 
@@ -545,9 +581,44 @@ describe("AppContext go-live launch contract", () => {
       });
     });
 
-    expect(result.state).toBe("partial");
-    expect(result.followUp?.label).toBe("Attach game stream");
-    expect(result.message).toContain("555 Stream attach failed");
+    expect(result.state).toBe("success");
+    expect(result.message).toContain("555 Racer");
+    expect(mockClient.executeAutonomyPlan).toHaveBeenCalledTimes(2);
+    expect(
+      mockClient.executeAutonomyPlan.mock.calls[0]?.[0]?.plan?.steps?.[0]?.toolName,
+    ).toBe("ARCADE555_GAMES_GO_LIVE_PLAY");
+    expect(
+      mockClient.executeAutonomyPlan.mock.calls[1]?.[0]?.plan?.steps?.[0]?.toolName,
+    ).toBe("FIVE55_GAMES_GO_LIVE_PLAY");
+
+    await act(async () => {
+      tree.unmount();
+    });
+  });
+
+  it("returns failed for play-games when the combined go-live action fails", async () => {
+    const { api, tree } = await renderApp([makeStreamPlugin(readyTwitchParams())]);
+    mockClient.executeAutonomyPlan.mockResolvedValueOnce(
+      planResponse(
+        planStep(
+          "ARCADE555_GAMES_GO_LIVE_PLAY",
+          false,
+          "Cloudflare ingest stayed disconnected",
+        ),
+      ),
+    );
+
+    let result!: GoLiveLaunchResult;
+    await act(async () => {
+      result = await api.launchGoLive({
+        channels: ["twitch"],
+        launchMode: "play-games",
+        layoutMode: "camera-hold",
+      });
+    });
+
+    expect(result.state).toBe("failed");
+    expect(result.message).toContain("Cloudflare ingest stayed disconnected");
 
     await act(async () => {
       tree.unmount();
