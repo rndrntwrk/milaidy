@@ -21,7 +21,7 @@ export function MiladyStatusStrip() {
       <div className="pointer-events-auto inline-flex max-w-full items-center rounded-full border border-white/10 bg-black/52 px-2.5 py-2 shadow-[0_10px_30px_rgba(0,0,0,0.24)] backdrop-blur-2xl sm:px-3">
         <Button
           type="button"
-          variant={liveBroadcastState === "live" ? "outline" : "secondary"}
+          variant={liveBroadcastState === "live" ? "destructive" : "secondary"}
           size="sm"
           className="rounded-full"
           disabled={liveActionDisabled}
