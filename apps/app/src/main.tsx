@@ -112,9 +112,10 @@ async function initializePlatform(): Promise<void> {
   if (isElectron) {
     // Electron-specific initialization
     await initializeElectron();
-  } else {
-    // On Electron the main process owns runtime startup; avoid an extra early
-    // plugin status probe that can race backend boot and spam fetch errors.
+  } else if (!isWeb) {
+    // The web shell bootstraps against the HTTP API directly. Avoid the extra
+    // plugin status probe there so protected endpoints do not get hit before
+    // pairing/bootstrap state is known.
     await initializeAgent();
   }
 }

@@ -6271,15 +6271,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (authRequired) return;
+    if (onboardingLoading || authRequired || !onboardingComplete) return;
     void loadAvailableEmotes();
     return () => {
       clearAvatarMotionReset();
     };
-  }, [authRequired, clearAvatarMotionReset, loadAvailableEmotes]);
+  }, [
+    authRequired,
+    clearAvatarMotionReset,
+    loadAvailableEmotes,
+    onboardingComplete,
+    onboardingLoading,
+  ]);
 
   useEffect(() => {
-    if (authRequired) return undefined;
+    if (onboardingLoading || authRequired || !onboardingComplete) {
+      return undefined;
+    }
 
     const unbindEmotes = client.onWsEvent("emote", (data) => {
       const emoteId =
@@ -6314,7 +6322,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => {
       unbindEmotes?.();
     };
-  }, [authRequired, clearAvatarMotionReset, scheduleAvatarMotionReset]);
+  }, [
+    authRequired,
+    clearAvatarMotionReset,
+    onboardingComplete,
+    onboardingLoading,
+    scheduleAvatarMotionReset,
+  ]);
 
   const playAvatarEmote = useCallback(
     async (emoteId: string) => {
@@ -6619,6 +6633,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         pairingEnabled: false,
         expiresAt: null,
       };
+      const enterPairingMode = () => {
+        setAuthRequired(true);
+        setPairingEnabled(latestAuth.pairingEnabled);
+        setPairingExpiresAt(latestAuth.expiresAt);
+      };
+
       setStartupError(null);
       setStartupPhase("starting-backend");
       setAuthRequired(false);
@@ -6638,9 +6658,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const auth = await client.getAuthStatus();
           latestAuth = auth;
           if (auth.required && !client.hasToken()) {
-            setAuthRequired(true);
-            setPairingEnabled(auth.pairingEnabled);
-            setPairingExpiresAt(auth.expiresAt);
+            enterPairingMode();
             requiresAuth = true;
             break;
           }
@@ -6650,11 +6668,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           break;
         } catch (err) {
           const apiErr = asApiLikeError(err);
-          if (apiErr?.status === 401 && client.hasToken()) {
-            client.setToken(null);
-            setAuthRequired(true);
-            setPairingEnabled(latestAuth.pairingEnabled);
-            setPairingExpiresAt(latestAuth.expiresAt);
+          if (apiErr?.status === 401) {
+            if (client.hasToken()) {
+              client.setToken(null);
+            }
+            enterPairingMode();
             requiresAuth = true;
             break;
           }
@@ -6698,11 +6716,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
             return;
           } catch (err) {
             const apiErr = asApiLikeError(err);
-            if (apiErr?.status === 401 && client.hasToken()) {
-              client.setToken(null);
-              setAuthRequired(true);
-              setPairingEnabled(latestAuth.pairingEnabled);
-              setPairingExpiresAt(latestAuth.expiresAt);
+            if (apiErr?.status === 401) {
+              if (client.hasToken()) {
+                client.setToken(null);
+              }
+              enterPairingMode();
               setOnboardingLoading(false);
               return;
             }
@@ -6769,11 +6787,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
         } catch (err) {
           const apiErr = asApiLikeError(err);
-          if (apiErr?.status === 401 && client.hasToken()) {
-            client.setToken(null);
-            setAuthRequired(true);
-            setPairingEnabled(latestAuth.pairingEnabled);
-            setPairingExpiresAt(latestAuth.expiresAt);
+          if (apiErr?.status === 401) {
+            if (client.hasToken()) {
+              client.setToken(null);
+            }
+            enterPairingMode();
             setOnboardingLoading(false);
             return;
           }
