@@ -3,8 +3,8 @@
  * @deprecated Import directly from "@milady/app-core/platform" instead.
  */
 export {
-  REQUIRED_ONBOARDING_PERMISSION_IDS,
-  isOnboardingPermissionGranted,
   getMissingOnboardingPermissions,
   hasRequiredOnboardingPermissions,
+  isOnboardingPermissionGranted,
+  REQUIRED_ONBOARDING_PERMISSION_IDS,
 } from "@milady/app-core/platform";

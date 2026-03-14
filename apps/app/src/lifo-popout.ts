@@ -3,16 +3,16 @@
  * @deprecated Import directly from "@milady/app-core/platform" instead.
  */
 export {
-  LIFO_POPOUT_WINDOW_NAME,
-  LIFO_POPOUT_FEATURES,
-  LIFO_SYNC_CHANNEL_PREFIX,
-  isLifoPopoutValue,
-  getPopoutValueFromLocation,
-  isLifoPopoutModeAtLocation,
-  isLifoPopoutMode,
+  buildLifoPopoutUrl,
   generateLifoSessionId,
   getLifoSessionIdFromLocation,
   getLifoSyncChannelName,
+  getPopoutValueFromLocation,
+  isLifoPopoutMode,
+  isLifoPopoutModeAtLocation,
+  isLifoPopoutValue,
   isSafeEndpointUrl,
-  buildLifoPopoutUrl,
+  LIFO_POPOUT_FEATURES,
+  LIFO_POPOUT_WINDOW_NAME,
+  LIFO_SYNC_CHANNEL_PREFIX,
 } from "@milady/app-core/platform";

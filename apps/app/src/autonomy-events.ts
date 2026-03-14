@@ -8,10 +8,10 @@ export {
   type AutonomyRunHealth,
   type AutonomyRunHealthMap,
   type AutonomyRunHealthStatus,
-  type MergeAutonomyEventsOptions,
-  type MergeAutonomyEventsResult,
   buildAutonomyGapReplayRequests,
   hasPendingAutonomyGaps,
+  type MergeAutonomyEventsOptions,
+  type MergeAutonomyEventsResult,
   markPendingAutonomyGapsPartial,
   mergeAutonomyEvents,
 } from "@milady/app-core/autonomy";

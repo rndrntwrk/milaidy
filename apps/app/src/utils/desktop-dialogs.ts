@@ -3,6 +3,6 @@
  * @deprecated Import directly from "@milady/app-core/utils" instead.
  */
 export {
-  confirmDesktopAction,
   alertDesktopMessage,
+  confirmDesktopAction,
 } from "@milady/app-core/utils";

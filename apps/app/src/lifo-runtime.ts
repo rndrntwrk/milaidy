@@ -3,14 +3,14 @@
  * @deprecated Import directly from "@milady/app-core/platform" instead.
  */
 export {
-  type LifoKernel,
-  type LifoShell,
-  type LifoTerminal,
-  type LifoFileExplorer,
-  type LifoRegistry,
-  type LifoCommandContext,
-  type LifoRuntime,
-  type LifoSyncMessage,
-  normalizeTerminalText,
   createLifoRuntime,
+  type LifoCommandContext,
+  type LifoFileExplorer,
+  type LifoKernel,
+  type LifoRegistry,
+  type LifoRuntime,
+  type LifoShell,
+  type LifoSyncMessage,
+  type LifoTerminal,
+  normalizeTerminalText,
 } from "@milady/app-core/platform";

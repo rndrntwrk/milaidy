@@ -3,12 +3,12 @@
  * @deprecated Import directly from "@milady/app-core/chat" instead.
  */
 export {
-  type SavedCustomCommand,
-  CUSTOM_COMMANDS_STORAGE_KEY,
-  loadSavedCustomCommands,
-  saveSavedCustomCommands,
   appendSavedCustomCommand,
-  normalizeSlashCommandName,
+  CUSTOM_COMMANDS_STORAGE_KEY,
   expandSavedCustomCommand,
+  loadSavedCustomCommands,
+  normalizeSlashCommandName,
+  type SavedCustomCommand,
+  saveSavedCustomCommands,
   splitCommandArgs,
 } from "@milady/app-core/chat";
