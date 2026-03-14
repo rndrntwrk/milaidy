@@ -67,6 +67,7 @@ import {
   extractGamesUpstreamError,
   requestGamesAgentJson,
 } from "./five55-games-agent.js";
+import { isPublicUiRequest } from "./publicUiAuth.js";
 import {
   canonicalizeMasteryGameId,
   getMasteryContract,
@@ -9857,7 +9858,13 @@ async function handleRequest(
     }
   }
 
-  if (method !== "OPTIONS" && !isAuthEndpoint && !isAuthorized(req)) {
+  const publicUiRequest = isPublicUiRequest(method, pathname);
+  if (
+    method !== "OPTIONS" &&
+    !isAuthEndpoint &&
+    !publicUiRequest &&
+    !isAuthorized(req)
+  ) {
     json(res, { error: "Unauthorized" }, 401);
     return;
   }
