@@ -184,6 +184,7 @@ describe("Electrobun release workflow drift", () => {
     expect(stageScript).toContain(
       'echo "stage-macos-release-artifacts: unsupported launcher architecture: $arch"',
     );
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: bash variable expansion in shell script assertion
     expect(stageScript).toContain('"${clang_arch_args[@]}"');
   });
 

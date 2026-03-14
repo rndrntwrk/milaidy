@@ -20,6 +20,7 @@ describe("stage-macos-release-artifacts.sh", () => {
     expect(script).toContain(
       'echo "stage-macos-release-artifacts: unsupported launcher architecture: $arch"',
     );
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: bash variable expansion in shell script assertion
     expect(script).toContain('"${clang_arch_args[@]}"');
   });
 });

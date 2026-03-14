@@ -27,9 +27,9 @@ import {
   setTrafficLightsPosition,
 } from "./native/mac-window-effects";
 import { getPermissionManager } from "./native/permissions";
+import { checkWebGpuSupport } from "./native/webgpu-browser-support";
 import { registerRpcHandlers } from "./rpc-handlers";
 import { PUSH_CHANNEL_TO_RPC_MESSAGE } from "./rpc-schema";
-import { checkWebGpuSupport } from "./native/webgpu-browser-support";
 
 type SendToWebview = (message: string, payload?: unknown) => void;
 
