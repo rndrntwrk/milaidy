@@ -2,14 +2,30 @@
  * Root App component — routing shell.
  */
 
-import { ErrorBoundary } from "@milady/app-core/components";
+import {
+  AppsPageView,
+  ConnectionFailedBanner,
+  ConnectorsPageView,
+  ErrorBoundary,
+  GameViewOverlay,
+  PairingView,
+  SaveCommandModal,
+  SettingsView,
+  StartupFailureView,
+  SystemWarningBanner,
+} from "@milady/app-core/components";
+import {
+  BugReportProvider,
+  useBugReportState,
+  useContextMenu,
+  useStreamPopoutNavigation,
+} from "@milady/app-core/hooks";
 import type { Tab } from "@milady/app-core/navigation";
 import { APPS_ENABLED, COMPANION_ENABLED } from "@milady/app-core/navigation";
+import { isLifoPopoutValue } from "@milady/app-core/platform";
+import { useApp } from "@milady/app-core/state";
 import { useCallback, useEffect, useState } from "react";
-import { useApp } from "./AppContext";
 import { AdvancedPageView } from "./components/AdvancedPageView";
-import { AppsPageView } from "./components/AppsPageView";
-import { AutonomousPanel } from "./components/AutonomousPanel";
 import { AvatarLoader } from "./components/avatar/AvatarLoader";
 import { CharacterView } from "./components/CharacterView";
 import { ChatView } from "./components/ChatView";
@@ -18,27 +34,15 @@ import {
   CompanionShell,
 } from "./components/CompanionShell";
 import { CompanionView } from "./components/CompanionView";
-import { ConnectionFailedBanner } from "./components/ConnectionFailedBanner";
-import { ConnectorsPageView } from "./components/ConnectorsPageView";
 import { ConversationsSidebar } from "./components/ConversationsSidebar";
 import { CustomActionEditor } from "./components/CustomActionEditor";
 import { CustomActionsPanel } from "./components/CustomActionsPanel";
-import { GameViewOverlay } from "./components/GameViewOverlay";
 import { Header } from "./components/Header";
 import { InventoryView } from "./components/InventoryView";
 import { KnowledgeView } from "./components/KnowledgeView";
 import { OnboardingWizard } from "./components/OnboardingWizard";
-import { PairingView } from "./components/PairingView";
-import { SaveCommandModal } from "./components/SaveCommandModal";
-import { SettingsView } from "./components/SettingsView";
 import { ShellOverlays } from "./components/ShellOverlays";
-import { StartupFailureView } from "./components/StartupFailureView";
 import { StreamView } from "./components/StreamView";
-import { SystemWarningBanner } from "./components/SystemWarningBanner";
-import { BugReportProvider, useBugReportState } from "./hooks/useBugReport";
-import { useContextMenu } from "./hooks/useContextMenu";
-import { useStreamPopoutNavigation } from "./hooks/useStreamPopoutNavigation";
-import { isLifoPopoutValue } from "./lifo-popout";
 
 const CHAT_MOBILE_BREAKPOINT_PX = 1024;
 
@@ -143,7 +147,6 @@ export function App() {
       : false,
   );
   const [mobileConversationsOpen, setMobileConversationsOpen] = useState(false);
-  const [mobileAutonomousOpen, setMobileAutonomousOpen] = useState(false);
 
   const isChat = tab === "chat";
   const isAdvancedTab =
@@ -160,27 +163,16 @@ export function App() {
     tab === "logs" ||
     tab === "security";
   const unreadCount = unreadConversations?.size ?? 0;
-  const statusIndicatorClass =
-    agentStatus?.state === "running"
-      ? "bg-ok shadow-[0_0_8px_color-mix(in_srgb,var(--ok)_60%,transparent)]"
-      : agentStatus?.state === "paused" ||
-          agentStatus?.state === "starting" ||
-          agentStatus?.state === "restarting"
-        ? "bg-warn"
-        : agentStatus?.state === "error"
-          ? "bg-danger"
-          : "bg-muted";
   const mobileChatControls = isChatMobileLayout ? (
     <div className="flex items-center gap-2 w-max">
       <button
         type="button"
         className={`inline-flex items-center gap-2 px-3 py-2 border rounded-md text-[12px] font-semibold transition-all cursor-pointer ${
           mobileConversationsOpen
-            ? "border-accent bg-accent-subtle text-accent"
-            : "border-border bg-card text-txt hover:border-accent hover:text-accent"
+            ? "border-accent bg-accent-subtle text-txt"
+            : "border-border bg-card text-txt hover:border-accent hover:text-txt"
         }`}
         onClick={() => {
-          setMobileAutonomousOpen(false);
           setMobileConversationsOpen(true);
         }}
         aria-label="Open chats panel"
@@ -205,40 +197,6 @@ export function App() {
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         )}
-      </button>
-      <button
-        type="button"
-        className={`inline-flex items-center gap-2 px-3 py-2 border rounded-md text-[12px] font-semibold transition-all cursor-pointer ${
-          mobileAutonomousOpen
-            ? "border-accent bg-accent-subtle text-accent"
-            : "border-border bg-card text-txt hover:border-accent hover:text-accent"
-        }`}
-        onClick={() => {
-          setMobileConversationsOpen(false);
-          setMobileAutonomousOpen(true);
-        }}
-        aria-label="Open status panel"
-      >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden
-        >
-          <title>Status</title>
-          <path d="M3 3v18h18" />
-          <path d="m7 14 4-4 3 3 5-6" />
-        </svg>
-        Status
-        <span
-          className={`w-2 h-2 rounded-full ${statusIndicatorClass}`}
-          aria-hidden
-        />
       </button>
     </div>
   ) : undefined;
@@ -270,14 +228,12 @@ export function App() {
   useEffect(() => {
     if (!isChatMobileLayout) {
       setMobileConversationsOpen(false);
-      setMobileAutonomousOpen(false);
     }
   }, [isChatMobileLayout]);
 
   useEffect(() => {
     if (!isChat) {
       setMobileConversationsOpen(false);
-      setMobileAutonomousOpen(false);
     }
   }, [isChat]);
 
@@ -356,15 +312,6 @@ export function App() {
                     />
                   </div>
                 )}
-
-                {mobileAutonomousOpen && (
-                  <div className="fixed inset-0 z-[120] bg-bg">
-                    <AutonomousPanel
-                      mobile
-                      onClose={() => setMobileAutonomousOpen(false)}
-                    />
-                  </div>
-                )}
               </>
             ) : (
               <>
@@ -372,7 +319,6 @@ export function App() {
                 <main className="flex flex-col flex-1 min-w-0 overflow-visible pt-3 px-3 xl:px-5">
                   <ChatView />
                 </main>
-                <AutonomousPanel />
               </>
             )}
             <CustomActionsPanel
@@ -384,7 +330,6 @@ export function App() {
               }}
             />
           </div>
-          {/* <TerminalPanel /> */}
         </div>
       ) : (
         <div className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg">
@@ -394,7 +339,6 @@ export function App() {
           >
             <ViewRouter />
           </main>
-          {/* <TerminalPanel /> */}
         </div>
       )}
       {/* Persistent game overlay — stays visible across all tabs */}

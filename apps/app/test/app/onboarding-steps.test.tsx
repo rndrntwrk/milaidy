@@ -9,11 +9,12 @@ import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // ── Hoisted mock ──────────────────────────────────────────────────────
-const { mockUseApp } = vi.hoisted(() => ({
+const { mockUseApp, mockIsNativeFn } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
+  mockIsNativeFn: { value: false },
 }));
 
-vi.mock("../../src/AppContext", () => ({
+vi.mock("@milady/app-core/state", () => ({
   useApp: () => mockUseApp(),
 }));
 
@@ -27,13 +28,23 @@ vi.mock("@milady/app-core/api", () => ({
   },
 }));
 
-vi.mock("../../src/provider-logos", () => ({
+vi.mock("@milady/app-core/providers", () => ({
   getProviderLogo: () => "/logos/placeholder.png",
+}));
+
+vi.mock("@milady/app-core/platform", () => ({
+  get isNative() {
+    return mockIsNativeFn.value;
+  },
+  isWebPlatform: () => false,
+  isElectronPlatform: () => true,
+  isIOS: false,
+  isAndroid: false,
+  platform: "web",
 }));
 
 import { ActivateStep } from "../../src/components/onboarding/ActivateStep";
 import { ConnectionStep } from "../../src/components/onboarding/ConnectionStep";
-import { IdentityStep } from "../../src/components/onboarding/IdentityStep";
 import { WakeUpStep } from "../../src/components/onboarding/WakeUpStep";
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -114,9 +125,9 @@ describe("WakeUpStep", () => {
     });
 
     const text = collectText(tree?.root as TestRenderer.ReactTestInstance);
-    expect(text).toContain("Initialization");
-    expect(text).toContain("elizaOS");
-    expect(text).toContain("Activate");
+    expect(text).toContain("onboarding.welcomeTitle");
+    expect(text).toContain("onboarding.welcomeSubtitle");
+    expect(text).toContain("onboarding.createNewAgent");
   });
 
   it("calls handleOnboardingNext when Activate is clicked", async () => {
@@ -128,7 +139,9 @@ describe("WakeUpStep", () => {
     });
 
     const buttons = findButtons(tree?.root as TestRenderer.ReactTestInstance);
-    const activateBtn = buttons.find((b) => collectText(b) === "Activate");
+    const activateBtn = buttons.find(
+      (b) => collectText(b) === "onboarding.createNewAgent",
+    );
     expect(activateBtn).toBeDefined();
     await act(async () => {
       activateBtn?.props.onClick();
@@ -144,7 +157,7 @@ describe("WakeUpStep", () => {
     });
 
     const text = collectText(tree?.root as TestRenderer.ReactTestInstance);
-    expect(text).toContain("Restore from Backup");
+    expect(text).toContain("onboarding.restoreFromBackup");
   });
 
   it("switches to import view when Restore from Backup is clicked", async () => {
@@ -156,7 +169,7 @@ describe("WakeUpStep", () => {
 
     const buttons = findButtons(tree?.root as TestRenderer.ReactTestInstance);
     const restoreBtn = buttons.find(
-      (b) => collectText(b) === "Restore from Backup",
+      (b) => collectText(b) === "onboarding.restoreFromBackup",
     );
     expect(restoreBtn).toBeDefined();
     await act(async () => {
@@ -164,70 +177,9 @@ describe("WakeUpStep", () => {
     });
 
     const text = collectText(tree?.root as TestRenderer.ReactTestInstance);
-    expect(text).toContain("Import Agent");
-    expect(text).toContain("Cancel");
-    expect(text).toContain("Restore");
-  });
-});
-
-// ===================================================================
-//  IdentityStep
-// ===================================================================
-
-describe("IdentityStep", () => {
-  beforeEach(() => mockUseApp.mockReset());
-
-  it("renders designation section with name", async () => {
-    mockUseApp.mockReturnValue(baseContext({ onboardingName: "Nova" }));
-    let tree: TestRenderer.ReactTestRenderer | undefined;
-    await act(async () => {
-      tree = TestRenderer.create(React.createElement(IdentityStep));
-    });
-
-    const text = collectText(tree?.root as TestRenderer.ReactTestInstance);
-    expect(text).toContain("Designation");
-    expect(text).toContain("My name is");
-  });
-
-  it("has Back and Confirm buttons", async () => {
-    mockUseApp.mockReturnValue(baseContext());
-    let tree: TestRenderer.ReactTestRenderer | undefined;
-    await act(async () => {
-      tree = TestRenderer.create(React.createElement(IdentityStep));
-    });
-
-    const text = collectText(tree?.root as TestRenderer.ReactTestInstance);
-    expect(text).toContain("Back");
-    expect(text).toContain("Confirm");
-  });
-
-  it("calls handleOnboardingBack when Back is clicked", async () => {
-    const back = vi.fn();
-    mockUseApp.mockReturnValue(baseContext({ handleOnboardingBack: back }));
-    let tree: TestRenderer.ReactTestRenderer | undefined;
-    await act(async () => {
-      tree = TestRenderer.create(React.createElement(IdentityStep));
-    });
-
-    const buttons = findButtons(tree?.root as TestRenderer.ReactTestInstance);
-    const backBtn = buttons.find((b) => collectText(b).includes("Back"));
-    expect(backBtn).toBeDefined();
-    await act(async () => {
-      backBtn?.props.onClick();
-    });
-    expect(back).toHaveBeenCalled();
-  });
-
-  it("has a New name reroll button", async () => {
-    mockUseApp.mockReturnValue(baseContext());
-    let tree: TestRenderer.ReactTestRenderer | undefined;
-    await act(async () => {
-      tree = TestRenderer.create(React.createElement(IdentityStep));
-    });
-
-    const buttons = findButtons(tree?.root as TestRenderer.ReactTestInstance);
-    const rerollBtn = buttons.find((b) => collectText(b).includes("New name"));
-    expect(rerollBtn).toBeDefined();
+    expect(text).toContain("onboarding.importAgent");
+    expect(text).toContain("onboarding.cancel");
+    expect(text).toContain("onboarding.restore");
   });
 });
 
@@ -246,9 +198,9 @@ describe("ConnectionStep", () => {
     });
 
     const text = collectText(tree?.root as TestRenderer.ReactTestInstance);
-    expect(text).toContain("Neural Link");
-    expect(text).toContain("Choose your AI provider");
-    expect(text).toContain("Back");
+    expect(text).toContain("onboarding.neuralLinkTitle");
+    expect(text).toContain("onboarding.chooseProvider");
+    expect(text).toContain("onboarding.back");
   });
 
   it("calls handleOnboardingBack from provider grid", async () => {
@@ -262,7 +214,9 @@ describe("ConnectionStep", () => {
     });
 
     const buttons = findButtons(tree?.root as TestRenderer.ReactTestInstance);
-    const backBtn = buttons.find((b) => collectText(b).includes("Back"));
+    const backBtn = buttons.find((b) =>
+      collectText(b).includes("onboarding.back"),
+    );
     expect(backBtn).toBeDefined();
     await act(async () => {
       backBtn?.props.onClick();
@@ -280,7 +234,42 @@ describe("ConnectionStep", () => {
     const text = collectText(tree?.root as TestRenderer.ReactTestInstance);
     // Should show provider name and change button
     expect(text).toContain("OpenAI");
-    expect(text).toContain("Change");
+    expect(text).toContain("onboarding.change");
+  });
+
+  it("shows only Eliza Cloud on mobile (isNative = true)", async () => {
+    mockIsNativeFn.value = true;
+    mockUseApp.mockReturnValue(
+      baseContext({
+        onboardingProvider: "",
+        onboardingOptions: {
+          names: ["Eliza"],
+          styles: [{ catchphrase: "default" }],
+          cloudProviders: [],
+          providers: [
+            { id: "miladycloud", name: "Eliza Cloud", description: "Free" },
+            { id: "openai", name: "OpenAI", description: "GPT API" },
+            { id: "anthropic", name: "Anthropic", description: "Claude API" },
+          ],
+          models: { small: [], large: [] },
+          openrouterModels: [],
+          inventoryProviders: [],
+          piAiModels: [],
+          piAiDefaultModel: "",
+        },
+      }),
+    );
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(ConnectionStep));
+    });
+
+    const text = collectText(tree?.root as TestRenderer.ReactTestInstance);
+    // Should show Eliza Cloud but NOT OpenAI or Anthropic
+    expect(text).toContain("Eliza Cloud");
+    expect(text).not.toContain("OpenAI");
+    expect(text).not.toContain("Anthropic");
+    mockIsNativeFn.value = false;
   });
 });
 
@@ -299,10 +288,9 @@ describe("ActivateStep", () => {
     });
 
     const text = collectText(tree?.root as TestRenderer.ReactTestInstance);
-    expect(text).toContain("Ready");
-    expect(text).toContain("Nova");
-    expect(text).toContain("is ready");
-    expect(text).toContain("Enter");
+    expect(text).toContain("onboarding.readyTitle");
+    expect(text).toContain("onboarding.companionReady");
+    expect(text).toContain("onboarding.enter");
   });
 
   it("calls handleOnboardingNext when Enter is clicked", async () => {
@@ -316,7 +304,7 @@ describe("ActivateStep", () => {
     });
 
     const buttons = findButtons(tree?.root as TestRenderer.ReactTestInstance);
-    const enterBtn = buttons.find((b) => collectText(b) === "Enter");
+    const enterBtn = buttons.find((b) => collectText(b) === "onboarding.enter");
     expect(enterBtn).toBeDefined();
     await act(async () => {
       enterBtn?.props.onClick();
@@ -332,7 +320,7 @@ describe("ActivateStep", () => {
     });
 
     const text = collectText(tree?.root as TestRenderer.ReactTestInstance);
-    expect(text).toContain("Your companion");
-    expect(text).toContain("is ready");
+    expect(text).toContain("onboarding.companionReady");
+    expect(text).toContain("onboarding.allConfigured");
   });
 });

@@ -13,17 +13,19 @@
  *   - Logs: Runtime log viewer
  */
 
+import {
+  DatabasePageView,
+  LogsPageView,
+  PluginsPageView,
+  RuntimeView,
+  SkillsView,
+} from "@milady/app-core/components";
 import type { Tab } from "@milady/app-core/navigation";
+import { useApp } from "@milady/app-core/state";
 import React, { type ReactNode, useState } from "react";
-import { useApp } from "../AppContext";
 import { CustomActionsView } from "./CustomActionsView";
-import { DatabasePageView } from "./DatabasePageView";
 import { FineTuningView } from "./FineTuningView";
 import { LifoSandboxView } from "./LifoSandboxView";
-import { LogsPageView } from "./LogsPageView";
-import { PluginsPageView } from "./PluginsPageView";
-import { RuntimeView } from "./RuntimeView";
-import { SkillsView } from "./SkillsView";
 import { TrajectoriesView } from "./TrajectoriesView";
 import { TrajectoryDetailView } from "./TrajectoryDetailView";
 import { TriggersView } from "./TriggersView";
@@ -31,7 +33,6 @@ import { TriggersView } from "./TriggersView";
 type SubTab =
   | "plugins"
   | "skills"
-  | "actions"
   | "triggers"
   | "fine-tuning"
   | "trajectories"
@@ -44,7 +45,6 @@ type SubTab =
 const SUB_TABS: Array<{ id: SubTab; label: string; description: string }> = [
   { id: "plugins", label: "Plugins", description: "Features and connectors" },
   { id: "skills", label: "Skills", description: "Custom agent skills" },
-  { id: "actions", label: "Actions", description: "Custom agent actions" },
   {
     id: "triggers",
     label: "Triggers",
@@ -240,14 +240,12 @@ const SUBTAB_ICONS: Record<string, ReactNode> = {
   ),
 };
 
-function mapTabToSubTab(tab: Tab, inModal?: boolean): SubTab {
+function mapTabToSubTab(tab: Tab): SubTab {
   switch (tab) {
     case "plugins":
       return "plugins";
     case "skills":
       return "skills";
-    case "actions":
-      return "actions";
     case "triggers":
       return "triggers";
     case "fine-tuning":
@@ -262,10 +260,8 @@ function mapTabToSubTab(tab: Tab, inModal?: boolean): SubTab {
       return "lifo";
     case "logs":
       return "logs";
-    case "security":
-      return "security";
     default:
-      return inModal ? "actions" : "plugins";
+      return "plugins";
   }
 }
 
@@ -275,7 +271,7 @@ export function AdvancedPageView({ inModal }: { inModal?: boolean } = {}) {
     string | null
   >(null);
 
-  const currentSubTab = mapTabToSubTab(tab, inModal);
+  const currentSubTab = mapTabToSubTab(tab);
   const tabs = inModal ? MODAL_SUB_TABS : SUB_TABS;
 
   const handleSubTabChange = (subTab: SubTab) => {
@@ -289,8 +285,6 @@ export function AdvancedPageView({ inModal }: { inModal?: boolean } = {}) {
         return <PluginsPageView />;
       case "skills":
         return <SkillsView />;
-      case "actions":
-        return <CustomActionsView />;
       case "triggers":
         return <TriggersView />;
       case "fine-tuning":
@@ -352,7 +346,7 @@ export function AdvancedPageView({ inModal }: { inModal?: boolean } = {}) {
                   key={subTab.id}
                   className={`px-4 py-2 text-xs font-medium border-b-2 -mb-px transition-colors ${
                     isActive
-                      ? "border-accent text-accent"
+                      ? "border-accent text-txt"
                       : "border-transparent text-muted hover:text-txt hover:border-border"
                   }`}
                   onClick={() => handleSubTabChange(subTab.id)}
@@ -376,7 +370,7 @@ export function AdvancedPageView({ inModal }: { inModal?: boolean } = {}) {
                 "--accent": "#7b8fb5",
                 "--surface": "rgba(255, 255, 255, 0.06)",
                 "--s-accent": "#7b8fb5",
-                "--s-text-accent": "#7b8fb5",
+                "--s-text-txt": "#7b8fb5",
                 "--s-accent-glow": "rgba(123, 143, 181, 0.35)",
                 "--s-accent-subtle": "rgba(123, 143, 181, 0.12)",
                 "--s-grid-line": "rgba(123, 143, 181, 0.02)",

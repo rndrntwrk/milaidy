@@ -3,8 +3,8 @@
  * receive button, address, status dots, and inline chain error.
  */
 
+import { useApp } from "@milady/app-core/state";
 import { Button } from "@milady/ui";
-import { useApp } from "../../AppContext";
 import type { ChainConfig } from "../chainConfig";
 import { CopyableAddress } from "./CopyableAddress";
 import { BSC_GAS_READY_THRESHOLD, formatBalance } from "./constants";

@@ -287,16 +287,7 @@ function createRuntimeForStreamTests(options: {
   eventService?: TestAgentEventService;
   loopRunning?: boolean;
 }): AgentRuntime {
-  const runtimeSubset: Pick<
-    AgentRuntime,
-    | "agentId"
-    | "character"
-    | "getService"
-    | "getRoomsByWorld"
-    | "getMemories"
-    | "getCache"
-    | "setCache"
-  > = {
+  const runtimeSubset = {
     agentId: "test-agent-id",
     character: { name: "StreamTestAgent" } as AgentRuntime["character"],
     getService: (serviceType: string) => {
@@ -318,7 +309,7 @@ function createRuntimeForStreamTests(options: {
     getCache: async () => null,
     setCache: async () => {},
   };
-  return runtimeSubset as AgentRuntime;
+  return runtimeSubset as unknown as AgentRuntime;
 }
 
 function createRuntimeForAutonomySurfaceTests(options: {
@@ -362,24 +353,7 @@ function createRuntimeForAutonomySurfaceTests(options: {
     } as Task,
   ];
 
-  const runtimeSubset: Pick<
-    AgentRuntime,
-    | "agentId"
-    | "character"
-    | "messageService"
-    | "getService"
-    | "ensureConnection"
-    | "getWorld"
-    | "updateWorld"
-    | "createMemory"
-    | "getMemories"
-    | "getRoomsByWorld"
-    | "getTasks"
-    | "getTask"
-    | "deleteTask"
-    | "getCache"
-    | "setCache"
-  > = {
+  const runtimeSubset = {
     agentId: "autonomy-surface-agent",
     character: { name: "AutonomySurfaceAgent" } as AgentRuntime["character"],
     messageService: {
@@ -464,26 +438,14 @@ function createRuntimeForAutonomySurfaceTests(options: {
     setCache: async () => {},
   };
 
-  return runtimeSubset as AgentRuntime;
+  return runtimeSubset as unknown as AgentRuntime;
 }
 
 function createRuntimeForWorkbenchCrudTests(options?: {
   loopRunning?: boolean;
 }): AgentRuntime {
   let tasks: Task[] = [];
-  const runtimeSubset: Pick<
-    AgentRuntime,
-    | "agentId"
-    | "character"
-    | "getSetting"
-    | "getService"
-    | "getRoomsByWorld"
-    | "getTasks"
-    | "getTask"
-    | "createTask"
-    | "updateTask"
-    | "deleteTask"
-  > = {
+  const runtimeSubset = {
     agentId: "workbench-crud-agent",
     character: { name: "WorkbenchCrudAgent" } as AgentRuntime["character"],
     getSetting: () => undefined,
@@ -537,7 +499,7 @@ function createRuntimeForWorkbenchCrudTests(options?: {
     },
   };
 
-  return runtimeSubset as AgentRuntime;
+  return runtimeSubset as unknown as AgentRuntime;
 }
 
 function createRuntimeForChatSseTests(options?: {
@@ -562,24 +524,7 @@ function createRuntimeForChatSseTests(options?: {
 }): AgentRuntime {
   const memoriesByRoom = new Map<string, Array<Record<string, unknown>>>();
 
-  const runtimeSubset: Pick<
-    AgentRuntime,
-    | "agentId"
-    | "character"
-    | "messageService"
-    | "ensureConnection"
-    | "getWorld"
-    | "updateWorld"
-    | "createMemory"
-    | "getService"
-    | "getServicesByType"
-    | "emitEvent"
-    | "getMemoriesByRoomIds"
-    | "getRoomsByWorld"
-    | "getMemories"
-    | "getCache"
-    | "setCache"
-  > = {
+  const runtimeSubset = {
     agentId: "chat-stream-agent",
     character: {
       name: "ChatStreamAgent",
@@ -665,24 +610,11 @@ function createRuntimeForChatSseTests(options?: {
     setCache: async () => {},
   };
 
-  return runtimeSubset as AgentRuntime;
+  return runtimeSubset as unknown as AgentRuntime;
 }
 
 function createRuntimeForCompatEndpointTests(): AgentRuntime {
-  const runtimeSubset: Pick<
-    AgentRuntime,
-    | "agentId"
-    | "character"
-    | "messageService"
-    | "ensureConnection"
-    | "getWorld"
-    | "updateWorld"
-    | "getService"
-    | "getRoomsByWorld"
-    | "getMemories"
-    | "getCache"
-    | "setCache"
-  > = {
+  const runtimeSubset = {
     agentId: "compat-endpoint-agent",
     character: { name: "CompatAgent" } as AgentRuntime["character"],
     messageService: {
@@ -713,7 +645,7 @@ function createRuntimeForCompatEndpointTests(): AgentRuntime {
     setCache: async () => {},
   };
 
-  return runtimeSubset as AgentRuntime;
+  return runtimeSubset as unknown as AgentRuntime;
 }
 
 function createRuntimeForCreditNoResponseTests(): AgentRuntime {
@@ -724,21 +656,7 @@ function createRuntimeForCreditNoResponseTests(): AgentRuntime {
     error: () => {},
   } as AgentRuntime["logger"];
 
-  const runtimeSubset: Pick<
-    AgentRuntime,
-    | "agentId"
-    | "character"
-    | "logger"
-    | "messageService"
-    | "ensureConnection"
-    | "getWorld"
-    | "updateWorld"
-    | "getService"
-    | "getRoomsByWorld"
-    | "getMemories"
-    | "getCache"
-    | "setCache"
-  > = {
+  const runtimeSubset = {
     agentId: "credit-no-response-agent",
     character: { name: "CreditAgent" } as AgentRuntime["character"],
     logger: runtimeLogger,
@@ -765,7 +683,7 @@ function createRuntimeForCreditNoResponseTests(): AgentRuntime {
     setCache: async () => {},
   };
 
-  return runtimeSubset as AgentRuntime;
+  return runtimeSubset as unknown as AgentRuntime;
 }
 
 function createRuntimeForCreditLiteralNoResponseTests(): AgentRuntime {
@@ -776,21 +694,7 @@ function createRuntimeForCreditLiteralNoResponseTests(): AgentRuntime {
     error: () => {},
   } as AgentRuntime["logger"];
 
-  const runtimeSubset: Pick<
-    AgentRuntime,
-    | "agentId"
-    | "character"
-    | "logger"
-    | "messageService"
-    | "ensureConnection"
-    | "getWorld"
-    | "updateWorld"
-    | "getService"
-    | "getRoomsByWorld"
-    | "getMemories"
-    | "getCache"
-    | "setCache"
-  > = {
+  const runtimeSubset = {
     agentId: "credit-literal-no-response-agent",
     character: { name: "CreditAgent" } as AgentRuntime["character"],
     logger: runtimeLogger,
@@ -817,24 +721,11 @@ function createRuntimeForCreditLiteralNoResponseTests(): AgentRuntime {
     setCache: async () => {},
   };
 
-  return runtimeSubset as AgentRuntime;
+  return runtimeSubset as unknown as AgentRuntime;
 }
 
 function createRuntimeForCreditErrorTests(): AgentRuntime {
-  const runtimeSubset: Pick<
-    AgentRuntime,
-    | "agentId"
-    | "character"
-    | "messageService"
-    | "ensureConnection"
-    | "getWorld"
-    | "updateWorld"
-    | "getService"
-    | "getRoomsByWorld"
-    | "getMemories"
-    | "getCache"
-    | "setCache"
-  > = {
+  const runtimeSubset = {
     agentId: "credit-error-agent",
     character: { name: "CreditAgent" } as AgentRuntime["character"],
     messageService: {
@@ -854,7 +745,7 @@ function createRuntimeForCreditErrorTests(): AgentRuntime {
     setCache: async () => {},
   };
 
-  return runtimeSubset as AgentRuntime;
+  return runtimeSubset as unknown as AgentRuntime;
 }
 
 // ---------------------------------------------------------------------------
@@ -963,9 +854,9 @@ describe("API Server E2E (no runtime)", () => {
       });
       const { data } = await req(port, "GET", "/api/status");
       expect(data.startup).toBeDefined();
-      expect(data.startup.phase).toBe("runtime-retry");
-      expect(data.startup.attempt).toBe(2);
-      expect(data.startup.lastError).toContain("bootstrap failed");
+      expect((data as any).startup.phase).toBe("runtime-retry");
+      expect((data as any).startup.attempt).toBe(2);
+      expect((data as any).startup.lastError).toContain("bootstrap failed");
       expect(data.state).toBe("starting");
 
       updateStartup({
@@ -2806,7 +2697,7 @@ describe("API Server E2E (no runtime)", () => {
         createTask: async () => crypto.randomUUID() as UUID,
         updateTask: async () => {},
         deleteTask: async () => {},
-      } as unknown as AgentRuntime;
+      } as unknown as unknown as AgentRuntime;
 
       const streamServer = await startApiServer({ port: 0, runtime });
       const streamPort = streamServer.port;
@@ -3124,18 +3015,6 @@ describe("API Server E2E (no runtime)", () => {
           "/api/workbench/overview",
         );
         expect(overviewResponse.status).toBe(200);
-        const autonomy = (
-          overviewResponse.data as {
-            autonomy?: {
-              enabled?: boolean;
-              thinking?: boolean;
-              lastEventAt?: unknown;
-            };
-          }
-        ).autonomy;
-        expect(autonomy?.enabled).toBe(true);
-        expect(autonomy?.thinking).toBe(true);
-        expect(typeof autonomy?.lastEventAt).toBe("number");
         const tasks = (overviewResponse.data.tasks ?? []) as Array<
           Record<string, unknown>
         >;
@@ -3388,43 +3267,6 @@ describe("API Server E2E (no runtime)", () => {
 
   // -- Autonomy --
 
-  describe("autonomy endpoints", () => {
-    it("GET /api/agent/autonomy reflects runtime availability when no runtime is configured", async () => {
-      const { status, data } = await req(port, "GET", "/api/agent/autonomy");
-      expect(status).toBe(200);
-      expect(data.enabled).toBe(false);
-      expect(data.thinking).toBe(false);
-    });
-
-    it("POST /api/agent/autonomy returns the current effective state", async () => {
-      const { data } = await req(port, "POST", "/api/agent/autonomy", {
-        enabled: false,
-      });
-      expect(data.ok).toBe(true);
-      expect(data.autonomy).toBe(false);
-      expect(data.thinking).toBe(false);
-    });
-
-    it("GET /api/agent/autonomy uses AutonomyService state when runtime is present", async () => {
-      const runtime = createRuntimeForStreamTests({
-        loopRunning: true,
-      });
-      const streamServer = await startApiServer({ port: 0, runtime });
-      try {
-        const { status, data } = await req(
-          streamServer.port,
-          "GET",
-          "/api/agent/autonomy",
-        );
-        expect(status).toBe(200);
-        expect(data.enabled).toBe(true);
-        expect(data.thinking).toBe(true);
-      } finally {
-        await streamServer.close();
-      }
-    });
-  });
-
   // -- Workbench --
 
   describe("workbench endpoints", () => {
@@ -3439,29 +3281,6 @@ describe("API Server E2E (no runtime)", () => {
       expect(Array.isArray(data.triggers)).toBe(true);
       expect(Array.isArray(data.todos)).toBe(true);
       expect(typeof data.summary).toBe("object");
-      expect(typeof data.autonomy).toBe("object");
-    });
-
-    it("GET /api/workbench/overview uses AutonomyService loop state", async () => {
-      const runtime = createRuntimeForStreamTests({
-        loopRunning: true,
-      });
-      const workbenchServer = await startApiServer({ port: 0, runtime });
-      try {
-        const { status, data } = await req(
-          workbenchServer.port,
-          "GET",
-          "/api/workbench/overview",
-        );
-        expect(status).toBe(200);
-        const autonomy = (
-          data as { autonomy?: { enabled?: boolean; thinking?: boolean } }
-        ).autonomy;
-        expect(autonomy?.enabled).toBe(true);
-        expect(autonomy?.thinking).toBe(true);
-      } finally {
-        await workbenchServer.close();
-      }
     });
 
     it("GET /api/workbench/tasks returns 503 when runtime is absent", async () => {

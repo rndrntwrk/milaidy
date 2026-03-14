@@ -20,7 +20,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockUseApp = vi.fn();
 
-vi.mock("../../src/AppContext", () => ({
+vi.mock("@milady/app-core/state", () => ({
   useApp: () => mockUseApp(),
   THEMES: [
     { id: "milady", label: "Milady" },
@@ -30,34 +30,73 @@ vi.mock("../../src/AppContext", () => ({
   ],
 }));
 
-vi.mock("../../src/components/MediaSettingsSection", () => ({
-  MediaSettingsSection: () =>
-    React.createElement(
-      "div",
-      { "data-testid": "media-settings" },
-      "MediaSettingsSection",
-    ),
+vi.mock("@milady/app-core/components", async () => {
+  const actual = await vi.importActual<
+    typeof import("@milady/app-core/components")
+  >("@milady/app-core/components");
+  return {
+    ...actual,
+  };
+});
+
+vi.mock("../../../../packages/app-core/src/components/ConfigPageView", () => ({
+  ConfigPageView: () =>
+    React.createElement("div", { "data-testid": "config-page" }, "ConfigPage"),
 }));
 
-vi.mock("../../src/components/PermissionsSection", () => ({
-  PermissionsSection: () =>
-    React.createElement(
-      "div",
-      { "data-testid": "permissions" },
-      "PermissionsSection",
-    ),
-}));
+vi.mock(
+  "../../../../packages/app-core/src/components/CodingAgentSettingsSection",
+  () => ({
+    CodingAgentSettingsSection: () =>
+      React.createElement("div", null, "CodingAgentSettingsSection"),
+  }),
+);
 
-vi.mock("../../src/components/ProviderSwitcher", () => ({
-  ProviderSwitcher: () =>
-    React.createElement(
-      "div",
-      { "data-testid": "provider-switcher" },
-      "ProviderSwitcher",
-    ),
-}));
+vi.mock(
+  "../../../../packages/app-core/src/components/MediaSettingsSection",
+  () => ({
+    MediaSettingsSection: () =>
+      React.createElement(
+        "div",
+        { "data-testid": "media-settings" },
+        "MediaSettingsSection",
+      ),
+  }),
+);
 
-vi.mock("../../src/components/VoiceConfigView", () => ({
+vi.mock(
+  "../../../../packages/app-core/src/components/MiladyCloudDashboard",
+  () => ({
+    CloudDashboard: () =>
+      React.createElement("div", null, "MiladyCloudDashboard"),
+  }),
+);
+
+vi.mock(
+  "../../../../packages/app-core/src/components/PermissionsSection",
+  () => ({
+    PermissionsSection: () =>
+      React.createElement(
+        "div",
+        { "data-testid": "permissions" },
+        "PermissionsSection",
+      ),
+  }),
+);
+
+vi.mock(
+  "../../../../packages/app-core/src/components/ProviderSwitcher",
+  () => ({
+    ProviderSwitcher: () =>
+      React.createElement(
+        "div",
+        { "data-testid": "provider-switcher" },
+        "ProviderSwitcher",
+      ),
+  }),
+);
+
+vi.mock("../../../../packages/app-core/src/components/VoiceConfigView", () => ({
   VoiceConfigView: () =>
     React.createElement(
       "div",
@@ -66,7 +105,7 @@ vi.mock("../../src/components/VoiceConfigView", () => ({
     ),
 }));
 
-import { SettingsView } from "../../src/components/SettingsView";
+import { SettingsView } from "../../../../packages/app-core/src/components/SettingsView";
 
 type SettingsState = {
   // Cloud
@@ -204,45 +243,6 @@ describe("SettingsView Sections", () => {
 
     mockUseApp.mockReset();
     mockUseApp.mockImplementation(() => cachedMock);
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Section 1: Appearance
-  // ─────────────────────────────────────────────────────────────────────────
-
-  describe("Appearance Section", () => {
-    it("renders appearance section", async () => {
-      let tree: TestRenderer.ReactTestRenderer | null = null;
-
-      await act(async () => {
-        tree = TestRenderer.create(React.createElement(SettingsView));
-      });
-
-      const appearanceText = tree?.root.findAll(
-        (node) =>
-          node.type === "div" &&
-          node.children.some(
-            (c) =>
-              typeof c === "string" &&
-              (c.includes("Appearance") ||
-                c.includes("settings.sections.appearance") ||
-                c.includes("settings.appearance")),
-          ),
-      );
-      expect(appearanceText.length).toBeGreaterThan(0);
-    });
-
-    it("renders language options", async () => {
-      let tree: TestRenderer.ReactTestRenderer | null = null;
-
-      await act(async () => {
-        tree = TestRenderer.create(React.createElement(SettingsView));
-      });
-
-      // Look for language buttons
-      const langButtons = tree?.root.findAll((node) => node.type === "button");
-      expect(langButtons.length).toBeGreaterThanOrEqual(0);
-    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -444,6 +444,19 @@ describe("SettingsView Sections", () => {
       expect(navButtons.length).toBeGreaterThan(0);
     });
 
+    it("does not render a redundant settings heading", async () => {
+      let tree: TestRenderer.ReactTestRenderer | null = null;
+
+      await act(async () => {
+        tree = TestRenderer.create(React.createElement(SettingsView));
+      });
+
+      const allText = JSON.stringify(tree?.toJSON());
+
+      expect(allText).not.toContain("nav.settings");
+      expect(allText).not.toContain("settings.customizeExperience");
+    });
+
     it("renders all expected section labels", async () => {
       let tree: TestRenderer.ReactTestRenderer | null = null;
 
@@ -452,7 +465,6 @@ describe("SettingsView Sections", () => {
       });
 
       const expectedSections = [
-        "settings.sections.appearance.label",
         "settings.sections.voice.label",
         "settings.sections.advanced.label",
       ];

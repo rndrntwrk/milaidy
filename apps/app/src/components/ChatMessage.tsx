@@ -3,11 +3,11 @@
  */
 
 import type { ConversationMessage } from "@milady/app-core/api";
+import { useTimeout } from "@milady/app-core/hooks";
+import { useApp } from "@milady/app-core/state";
 import { Button } from "@milady/ui";
 import { Check, Copy, RefreshCw, Trash2 } from "lucide-react";
 import { useCallback, useState } from "react";
-import { useApp } from "../AppContext";
-import { useTimeout } from "../hooks/useTimeout";
 import { MessageContent } from "./MessageContent";
 
 interface ChatMessageProps {
@@ -80,7 +80,7 @@ export function ChatMessage({
                 className="w-full h-full object-cover"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-[11px] font-bold text-accent bg-accent-subtle">
+              <div className="w-full h-full flex items-center justify-center text-[11px] font-bold text-txt bg-accent-subtle">
                 {agentInitial}
               </div>
             )}
@@ -95,7 +95,7 @@ export function ChatMessage({
         {!isGrouped && (
           <div className="flex items-center gap-2 mb-1">
             <span
-              className={`text-[12px] font-semibold ${isUser ? "text-muted-strong" : "text-accent"}`}
+              className={`text-[12px] font-semibold ${isUser ? "text-muted-strong" : "text-txt"}`}
             >
               {isUser ? "You" : agentName}
             </span>
@@ -169,7 +169,7 @@ export function ChatMessage({
                 variant="ghost"
                 size="icon"
                 onClick={() => onRetry(message.id)}
-                className="w-7 h-7 rounded-md text-muted hover:text-accent hover:bg-bg-hover transition-colors"
+                className="w-7 h-7 rounded-md text-muted hover:text-txt hover:bg-bg-hover transition-colors"
                 title={t("chatmessage.RetryMessage")}
                 aria-label="Retry message"
               >
@@ -217,14 +217,14 @@ export function TypingIndicator({
             className="w-full h-full object-cover"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-[11px] font-bold text-accent bg-accent-subtle">
+          <div className="w-full h-full flex items-center justify-center text-[11px] font-bold text-txt bg-accent-subtle">
             {agentInitial}
           </div>
         )}
       </div>
 
       <div className="max-w-[88%] sm:max-w-[80%] min-w-0">
-        <div className="text-[12px] font-semibold text-accent mb-1">
+        <div className="text-[12px] font-semibold text-txt mb-1">
           {agentName}
         </div>
         <div className="px-4 py-3 bg-bg-accent border border-border rounded-2xl rounded-bl-md">
@@ -264,7 +264,7 @@ export function ChatEmptyState({ agentName }: { agentName: string }) {
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          className="text-accent"
+          className="text-txt"
           aria-label="Chat icon"
         >
           <title>{t("chatmessage.Chat")}</title>
@@ -288,7 +288,7 @@ export function ChatEmptyState({ agentName }: { agentName: string }) {
               key={suggestion}
               variant="outline"
               size="sm"
-              className="px-3 py-1.5 h-7 text-xs rounded-full text-muted border-border bg-bg hover:border-accent hover:text-accent transition-colors"
+              className="px-3 py-1.5 h-7 text-xs rounded-full text-muted border-border bg-bg hover:border-accent hover:text-txt transition-colors"
             >
               {suggestion}
             </Button>

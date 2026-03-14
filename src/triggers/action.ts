@@ -127,7 +127,6 @@ export const createTriggerTaskAction: Action = {
   description:
     "Create an autonomous trigger task that executes interval, once, or cron schedules",
   validate: async (runtime, message) => {
-    if (!runtime.enableAutonomy) return false;
     if (!triggersFeatureEnabled(runtime)) return false;
     const text = message.content.text?.toLowerCase() ?? "";
     if (!text) return false;
@@ -145,13 +144,6 @@ export const createTriggerTaskAction: Action = {
       return {
         success: false,
         text: "Cannot create a trigger from empty text.",
-      };
-    }
-
-    if (!runtime.enableAutonomy) {
-      return {
-        success: false,
-        text: "Autonomy mode is disabled, so trigger creation is unavailable.",
       };
     }
 

@@ -92,7 +92,7 @@ export function LanguageDropdown({
   const triggerClass =
     variant === "companion"
       ? `flex items-center gap-1.5 h-8 px-2.5 rounded-full bg-white/5 text-white/80 hover:text-white hover:bg-white/20 border border-transparent hover:border-white/30 transition-all text-xs font-medium cursor-pointer ${open ? "bg-white/20 text-white border-white/30 shadow-sm" : ""}`
-      : `inline-flex items-center gap-1.5 h-9 px-2 sm:px-3 border border-border bg-bg text-[11px] sm:text-xs font-medium cursor-pointer transition-colors duration-200 hover:border-accent hover:text-accent rounded-md ${open ? "border-accent text-accent bg-accent/5 backdrop-blur-sm" : ""}`;
+      : `inline-flex items-center gap-1.5 h-9 px-2 sm:px-3 border border-border bg-bg text-[11px] sm:text-xs font-medium cursor-pointer transition-colors duration-200 hover:border-accent hover:text-txt rounded-md ${open ? "border-accent text-txt bg-accent/5 backdrop-blur-sm" : ""}`;
 
   const menuContent = open && (
     <ul
@@ -104,11 +104,11 @@ export function LanguageDropdown({
               top: menuPos.top,
               right: menuPos.right,
               zIndex: 10001,
-              background: "rgba(18, 22, 32, 0.96)",
-              border: "1px solid rgba(240, 178, 50, 0.18)",
+              background: "color-mix(in srgb, var(--bg) 96%, transparent)",
+              border:
+                "1px solid color-mix(in srgb, var(--accent) 18%, transparent)",
               backdropFilter: "blur(24px)",
-              boxShadow:
-                "0 8px 60px rgba(0,0,0,0.6), 0 0 40px rgba(240,178,50,0.06)",
+              boxShadow: "var(--shadow-lg)",
             }
           : undefined
       }
@@ -123,19 +123,16 @@ export function LanguageDropdown({
             className={
               variant === "companion"
                 ? "w-full flex items-center justify-between px-3 py-2 text-sm transition-colors border-0 cursor-pointer"
-                : `w-full flex items-center justify-between px-3 py-2 text-sm transition-colors hover:bg-bg-hover ${lang.id === uiLanguage ? "text-accent bg-accent/5 font-medium" : "text-txt"}`
+                : `w-full flex items-center justify-between px-3 py-2 text-sm transition-colors hover:bg-bg-hover ${lang.id === uiLanguage ? "text-txt bg-accent/5 font-medium" : "text-txt"}`
             }
             style={
               variant === "companion"
                 ? {
                     background:
                       lang.id === uiLanguage
-                        ? "rgba(240,178,50,0.1)"
+                        ? "var(--accent-subtle)"
                         : "transparent",
-                    color:
-                      lang.id === uiLanguage
-                        ? "#f0b232"
-                        : "rgba(240,238,250,0.92)",
+                    color: lang.id === uiLanguage ? "#f0b232" : "var(--text)",
                     fontWeight: lang.id === uiLanguage ? 500 : 400,
                   }
                 : undefined

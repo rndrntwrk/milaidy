@@ -90,7 +90,7 @@ export function ConfirmModal({
       className="fixed inset-0 flex items-center justify-center"
       style={{
         zIndex: 10001,
-        background: "rgba(5,7,12,0.95)",
+        background: "color-mix(in srgb, var(--bg) 95%, transparent)",
         backdropFilter: "blur(24px)",
       }}
       onClick={(e) => {
@@ -105,22 +105,22 @@ export function ConfirmModal({
       <div
         className="rounded-xl max-w-md w-full mx-4 p-6"
         style={{
-          background: "rgba(18, 22, 32, 0.96)",
-          border: "1px solid rgba(240, 178, 50, 0.18)",
+          background: "color-mix(in srgb, var(--bg) 96%, transparent)",
+          border:
+            "1px solid color-mix(in srgb, var(--accent) 18%, transparent)",
           backdropFilter: "blur(24px)",
-          boxShadow:
-            "0 8px 60px rgba(0,0,0,0.6), 0 0 40px rgba(240,178,50,0.06)",
+          boxShadow: "var(--shadow-lg)",
         }}
       >
         <h2
           className="text-base font-bold mb-3"
-          style={{ color: "rgba(240,238,250,0.92)" }}
+          style={{ color: "var(--text)" }}
         >
           {title}
         </h2>
         <p
           className="text-sm whitespace-pre-line mb-6"
-          style={{ color: "rgba(255,255,255,0.45)" }}
+          style={{ color: "var(--muted)" }}
         >
           {message}
         </p>
@@ -130,8 +130,8 @@ export function ConfirmModal({
             onClick={onCancel}
             className="px-4 py-2 text-sm rounded-md transition-colors cursor-pointer"
             style={{
-              border: "1px solid rgba(255,255,255,0.1)",
-              color: "rgba(255,255,255,0.6)",
+              border: "1px solid var(--border)",
+              color: "var(--muted)",
               background: "transparent",
             }}
           >
@@ -203,7 +203,7 @@ export function PromptModal({
       className="fixed inset-0 flex items-center justify-center"
       style={{
         zIndex: 10001,
-        background: "rgba(5,7,12,0.95)",
+        background: "color-mix(in srgb, var(--bg) 95%, transparent)",
         backdropFilter: "blur(24px)",
       }}
       onClick={(e) => {
@@ -218,22 +218,22 @@ export function PromptModal({
       <div
         className="rounded-xl max-w-md w-full mx-4 p-6"
         style={{
-          background: "rgba(18, 22, 32, 0.96)",
-          border: "1px solid rgba(240, 178, 50, 0.18)",
+          background: "color-mix(in srgb, var(--bg) 96%, transparent)",
+          border:
+            "1px solid color-mix(in srgb, var(--accent) 18%, transparent)",
           backdropFilter: "blur(24px)",
-          boxShadow:
-            "0 8px 60px rgba(0,0,0,0.6), 0 0 40px rgba(240,178,50,0.06)",
+          boxShadow: "var(--shadow-lg)",
         }}
       >
         <h2
           className="text-base font-bold mb-3"
-          style={{ color: "rgba(240,238,250,0.92)" }}
+          style={{ color: "var(--text)" }}
         >
           {title}
         </h2>
         <p
           className="text-sm whitespace-pre-line mb-4"
-          style={{ color: "rgba(255,255,255,0.45)" }}
+          style={{ color: "var(--muted)" }}
         >
           {message}
         </p>
@@ -245,9 +245,9 @@ export function PromptModal({
           onChange={(e) => setValue(e.target.value)}
           className="w-full rounded-md px-3 py-2 text-sm mb-6"
           style={{
-            background: "rgba(255,255,255,0.04)",
-            color: "rgba(240,238,250,0.92)",
-            border: "1px solid rgba(255,255,255,0.1)",
+            background: "var(--bg-hover)",
+            color: "var(--text)",
+            border: "1px solid var(--border)",
           }}
         />
         <div className="flex items-center justify-end gap-3">
@@ -256,8 +256,8 @@ export function PromptModal({
             onClick={onCancel}
             className="px-4 py-2 text-sm rounded-md transition-colors cursor-pointer"
             style={{
-              border: "1px solid rgba(255,255,255,0.1)",
-              color: "rgba(255,255,255,0.6)",
+              border: "1px solid var(--border)",
+              color: "var(--muted)",
               background: "transparent",
             }}
           >

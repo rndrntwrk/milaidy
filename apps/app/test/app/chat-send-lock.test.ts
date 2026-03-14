@@ -109,7 +109,7 @@ vi.mock("@milady/app-core/api", () => ({
   SkillScanReportSummary: {},
 }));
 
-import { AppProvider, useApp } from "../../src/AppContext";
+import { AppProvider, useApp } from "@milady/app-core/state";
 
 function createDeferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;

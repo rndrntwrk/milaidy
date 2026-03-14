@@ -1,6 +1,5 @@
 /** @vitest-environment jsdom */
 
-import { describe, expect, it } from "vitest";
 import {
   buildLifoPopoutUrl,
   generateLifoSessionId,
@@ -10,7 +9,8 @@ import {
   isLifoPopoutModeAtLocation,
   isLifoPopoutValue,
   LIFO_SYNC_CHANNEL_PREFIX,
-} from "../../src/lifo-popout";
+} from "@milady/app-core/platform";
+import { describe, expect, it } from "vitest";
 
 describe("isLifoPopoutValue", () => {
   it('returns true for ""', () => {

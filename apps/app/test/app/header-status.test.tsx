@@ -7,15 +7,11 @@ const { mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
 }));
 
-vi.mock("../../src/AppContext", () => ({
+vi.mock("@milady/app-core/state", () => ({
   useApp: () => mockUseApp(),
 }));
 
 vi.mock("@milady/app-core/hooks", () => ({
-  useBugReport: () => ({ isOpen: false, open: vi.fn(), close: vi.fn() }),
-}));
-
-vi.mock("../../src/hooks/useBugReport", () => ({
   useBugReport: () => ({ isOpen: false, open: vi.fn(), close: vi.fn() }),
 }));
 
@@ -37,6 +33,7 @@ vi.mock("@milady/app-core/navigation", () => ({
 
 vi.mock("@milady/app-core/components", () => ({
   LanguageDropdown: () => React.createElement("div", null, "LanguageDropdown"),
+  ThemeToggle: () => React.createElement("div", null, "ThemeToggle"),
 }));
 
 vi.mock("@milady/ui", () => ({
@@ -84,7 +81,7 @@ describe("header status", () => {
       walletAddresses: null,
       lifecycleBusy: false,
       lifecycleAction: null,
-      handlePauseResume: vi.fn(),
+
       handleRestart: vi.fn(),
       handleStart: vi.fn(),
       openCommandPalette: vi.fn(),
@@ -99,19 +96,10 @@ describe("header status", () => {
       setUiShellMode: vi.fn(),
       uiLanguage: "en",
       setUiLanguage: vi.fn(),
+      uiTheme: "dark",
+      setUiTheme: vi.fn(),
     };
     mockUseApp.mockReturnValue(baseAppState);
-  });
-
-  it("renders agent name via data-testid", async () => {
-    let tree: TestRenderer.ReactTestRenderer | undefined;
-    await act(async () => {
-      tree = TestRenderer.create(React.createElement(Header));
-    });
-    expect(tree).toBeDefined();
-    const agentName = tree?.root.findByProps({ "data-testid": "agent-name" });
-    expect(agentName).toBeDefined();
-    expect(agentName?.children).toContain("Milady");
   });
 
   it("renders shell toggle button", async () => {

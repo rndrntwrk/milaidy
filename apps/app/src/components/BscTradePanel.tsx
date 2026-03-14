@@ -14,9 +14,9 @@ import type {
   BscTradeQuoteResponse,
   BscTradeTxStatusResponse,
 } from "@milady/app-core/api";
+import { useApp } from "@milady/app-core/state";
 import { Button, Input } from "@milady/ui";
 import { useCallback, useState } from "react";
-import { useApp } from "../AppContext";
 import { HEX_ADDRESS_RE } from "./companion/walletUtils";
 import { formatBalance } from "./inventory/constants";
 
@@ -306,7 +306,7 @@ export function TradePanel({
               href={explorerUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-accent"
+              className="text-txt"
             >
               {t("bsctradepanel.ViewTx")} {shortHash}
             </a>
@@ -424,7 +424,7 @@ export function TradePanel({
             tradeFeedback.tone === "success"
               ? "border-green-500/40 text-green-400"
               : tradeFeedback.tone === "info"
-                ? "border-accent/40 text-accent"
+                ? "border-accent/40 text-txt"
                 : "border-red-500/40 text-red-400"
           }`}
         >
@@ -461,7 +461,7 @@ export function TradePanel({
               data-testid={`wallet-quick-amount-${amt}`}
               className={`px-2 py-0.5 border text-[10px] font-mono cursor-pointer ${
                 quickAmount === String(amt)
-                  ? "border-accent text-accent"
+                  ? "border-accent text-txt"
                   : "border-border bg-bg hover:border-accent"
               }`}
               onClick={() => setQuickAmount(String(amt))}

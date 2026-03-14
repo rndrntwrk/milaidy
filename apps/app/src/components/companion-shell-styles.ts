@@ -7,29 +7,8 @@ import type React from "react";
 
 /* ── Overlay tab set ───────────────────────────────────────────────── */
 
-export const COMPANION_OVERLAY_TABS = new Set<Tab>([
-  "companion",
-  "skills",
-  "character",
-  "character-select",
-  "settings",
-  "plugins",
-  "advanced",
-  "actions",
-  "triggers",
-  "fine-tuning",
-  "trajectories",
-  "runtime",
-  "database",
-  "logs",
-  "security",
-  "apps",
-  "connectors",
-  "knowledge",
-  "lifo",
-  "stream",
-  "wallets",
-]);
+/** Only "companion" uses the companion shell. Settings, character, etc. require native (advanced) mode. */
+export const COMPANION_OVERLAY_TABS = new Set<Tab>(["companion"]);
 
 /* ── Per-tab accent / color config ─────────────────────────────────── */
 

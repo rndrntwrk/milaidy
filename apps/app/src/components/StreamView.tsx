@@ -13,6 +13,7 @@
 
 import { client, isApiError } from "@milady/app-core/api";
 import { isElectrobunRuntime } from "@milady/app-core/bridge";
+import { useApp } from "@milady/app-core/state";
 import {
   type CSSProperties,
   useCallback,
@@ -21,7 +22,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { useApp } from "../AppContext";
 import { ActivityFeed } from "./stream/ActivityFeed";
 import { AvatarPip } from "./stream/AvatarPip";
 import { ChatContent } from "./stream/ChatContent";

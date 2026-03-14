@@ -10,9 +10,9 @@ import {
   type TrajectoryDetailResult,
   type TrajectoryLlmCall,
 } from "@milady/app-core/api";
+import { useApp } from "@milady/app-core/state";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { useApp } from "../AppContext";
 import {
   formatTrajectoryDuration,
   formatTrajectoryTimestamp,
@@ -84,7 +84,7 @@ function CodeBlock({ content, label }: { content: string; label: string }) {
           {lines > 20 && (
             <button
               type="button"
-              className="text-[10px] text-accent hover:underline"
+              className="text-[10px] text-txt hover:underline"
               onClick={() => setExpanded(!expanded)}
             >
               {expanded ? "Collapse" : "Expand"}
@@ -127,7 +127,7 @@ function LlmCallCard({
       {/* Header */}
       <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-muted/5 border-b border-border">
         <span className="text-xs font-semibold">#{index + 1}</span>
-        <span className="text-[10px] px-1.5 py-px bg-accent/10 text-accent rounded">
+        <span className="text-[10px] px-1.5 py-px bg-accent/10 text-txt rounded">
           {call.model}
         </span>
         <span className="text-[10px] text-muted">
@@ -336,7 +336,7 @@ export function TrajectoryDetailView({
           <span className="text-muted">
             {t("trajectorydetailview.Source")}{" "}
           </span>
-          <span className="text-accent">{trajectory.source}</span>
+          <span className="text-txt">{trajectory.source}</span>
         </div>
         <div>
           <span className="text-muted">
@@ -370,7 +370,7 @@ export function TrajectoryDetailView({
           <span className="text-muted">
             {t("trajectorydetailview.TotalTokens")}{" "}
           </span>
-          <span className="text-accent font-mono">
+          <span className="text-txt font-mono">
             {formatTrajectoryTokenCount(
               totalPromptTokens + totalCompletionTokens,
               { emptyLabel: "—" },

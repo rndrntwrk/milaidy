@@ -1,8 +1,9 @@
+import { StartupFailureView } from "@milady/app-core/components";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../../src/AppContext", () => ({
+vi.mock("@milady/app-core/state", () => ({
   useApp: () => ({
     uiLanguage: "en",
     t: (k: string) => {
@@ -14,8 +15,6 @@ vi.mock("../../src/AppContext", () => ({
     },
   }),
 }));
-
-import { StartupFailureView } from "../../src/components/StartupFailureView";
 
 describe("StartupFailureView", () => {
   it("renders backend-unreachable hint and open-app CTA, then triggers retry", async () => {

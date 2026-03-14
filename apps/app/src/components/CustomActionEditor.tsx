@@ -3,10 +3,10 @@ import {
   type CustomActionHandler,
   client,
 } from "@milady/app-core/api";
+import { useApp } from "@milady/app-core/state";
 import { Button } from "@milady/ui";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useApp } from "../AppContext";
 
 interface CustomActionEditorProps {
   open: boolean;
@@ -736,7 +736,7 @@ export function CustomActionEditor({
           {/* AI Generate */}
           {!action && (
             <div className="flex flex-col gap-1 border border-accent/30 bg-accent/5 p-3">
-              <span className="text-xs text-accent font-medium">
+              <span className="text-xs text-txt font-medium">
                 {t("customactioneditor.DescribeWhatYouWa")}
               </span>
               <div className="flex gap-2">
@@ -884,7 +884,7 @@ export function CustomActionEditor({
                   <button
                     type="button"
                     onClick={addHeader}
-                    className="text-xs text-accent hover:opacity-80 cursor-pointer"
+                    className="text-xs text-txt hover:opacity-80 cursor-pointer"
                   >
                     {t("customactioneditor.Add")}
                   </button>
@@ -986,7 +986,7 @@ export function CustomActionEditor({
               <button
                 type="button"
                 onClick={addParameter}
-                className="text-xs text-accent hover:opacity-80 cursor-pointer"
+                className="text-xs text-txt hover:opacity-80 cursor-pointer"
               >
                 {t("customactioneditor.AddParameter")}
               </button>

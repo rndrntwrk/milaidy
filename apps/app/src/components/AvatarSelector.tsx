@@ -6,14 +6,14 @@
  * Supports drag-and-drop for custom VRM uploads.
  */
 
-import { useCallback, useRef, useState } from "react";
 import {
   getVrmPreviewUrl,
   getVrmTitle,
   useApp,
   VRM_COUNT,
-} from "../AppContext";
-import { alertDesktopMessage } from "../utils/desktop-dialogs";
+} from "@milady/app-core/state";
+import { alertDesktopMessage } from "@milady/app-core/utils";
+import { useCallback, useRef, useState } from "react";
 
 export interface AvatarSelectorProps {
   /** Currently selected index (1-N for bundled, 0 for custom) */
@@ -126,16 +126,14 @@ export function AvatarSelector({
 
   const avatarIndices = Array.from({ length: VRM_COUNT }, (_, i) => i + 1);
   const containerClass = fullWidth
-    ? "grid gap-3 w-full"
+    ? "flex flex-row gap-2 w-full items-center"
     : "flex flex-wrap gap-3 justify-start";
-  const containerStyle = fullWidth
-    ? { gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))" }
-    : undefined;
+  const containerStyle = undefined;
   const avatarButtonClass = fullWidth
-    ? "relative w-full aspect-square shrink-0 rounded-lg overflow-hidden cursor-pointer transition-all"
+    ? "relative w-14 h-14 shrink-0 rounded-lg overflow-hidden cursor-pointer transition-all"
     : "relative w-24 h-24 shrink-0 rounded-lg overflow-hidden cursor-pointer transition-all";
   const uploadButtonClass = fullWidth
-    ? "w-full aspect-square shrink-0 rounded-lg border-2 flex flex-col items-center justify-center cursor-pointer transition-all"
+    ? "w-14 h-14 shrink-0 rounded-lg border-2 flex flex-col items-center justify-center cursor-pointer transition-all"
     : "w-24 h-24 shrink-0 rounded-lg border-2 flex flex-col items-center justify-center cursor-pointer transition-all";
 
   return (

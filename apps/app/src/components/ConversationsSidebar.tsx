@@ -2,8 +2,14 @@
  * Conversations sidebar component — left sidebar with conversation list.
  */
 
+import { useApp } from "@milady/app-core/state";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@milady/ui";
 import { useEffect, useRef, useState } from "react";
-import { useApp } from "../AppContext";
 import { ConversationListItem } from "./conversations/ConversationListItem";
 
 type ConversationsSidebarVariant = "default" | "game-modal";
@@ -34,7 +40,13 @@ export function ConversationsSidebar({
   const [editingTitle, setEditingTitle] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [menuConversation, setMenuConversation] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
+  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
   const inputRef = useRef<HTMLInputElement>(null);
+  const menuAnchorRef = useRef<HTMLDivElement>(null);
 
   // Focus input when editing starts
   useEffect(() => {
@@ -50,7 +62,9 @@ export function ConversationsSidebar({
     return bTime - aTime;
   });
 
-  const handleDoubleClick = (conv: { id: string; title: string }) => {
+  const handleStartEdit = (conv: { id: string; title: string }) => {
+    setConfirmDeleteId(null);
+    setMenuConversation(null);
     setEditingId(conv.id);
     setEditingTitle(conv.title);
   };
@@ -67,6 +81,22 @@ export function ConversationsSidebar({
   const handleEditCancel = () => {
     setEditingId(null);
     setEditingTitle("");
+  };
+
+  const openActionsMenu = (
+    event: React.MouseEvent<HTMLElement> | React.TouchEvent<HTMLElement>,
+    conv: { id: string; title: string },
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setConfirmDeleteId(null);
+    setMenuConversation(conv);
+    if ("touches" in event) {
+      const touch = event.touches[0] ?? event.changedTouches[0];
+      setMenuPosition({ x: touch?.clientX ?? 0, y: touch?.clientY ?? 0 });
+      return;
+    }
+    setMenuPosition({ x: event.clientX, y: event.clientY });
   };
 
   const handleConfirmDelete = async (id: string) => {
@@ -104,7 +134,66 @@ export function ConversationsSidebar({
       }
       data-testid="conversations-sidebar"
       data-variant={variant}
+      onPointerDown={() => setMenuConversation(null)}
     >
+      <DropdownMenu
+        open={menuConversation !== null}
+        onOpenChange={(open) => {
+          if (!open) setMenuConversation(null);
+        }}
+      >
+        <DropdownMenuTrigger asChild>
+          <div
+            ref={menuAnchorRef}
+            aria-hidden
+            className="fixed pointer-events-none h-0 w-0"
+            style={{
+              left: menuPosition.x,
+              top: menuPosition.y,
+            }}
+          />
+        </DropdownMenuTrigger>
+        {menuConversation ? (
+          <DropdownMenuContent
+            sideOffset={6}
+            align="start"
+            className="w-40"
+            onCloseAutoFocus={(event) => event.preventDefault()}
+            onClick={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+            onPointerDownOutside={() => setMenuConversation(null)}
+            onInteractOutside={() => setMenuConversation(null)}
+            avoidCollisions
+            collisionPadding={12}
+            // Radix accepts virtual anchors through the `anchorRef` equivalent only via composition;
+            // use the hidden fixed node as a physical anchor.
+          >
+            <DropdownMenuItem
+              data-testid="conv-menu-edit"
+              onClick={() => {
+                if (!menuConversation) return;
+                handleStartEdit(menuConversation);
+              }}
+            >
+              {t("conversations.rename")}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              data-testid="conv-menu-delete"
+              className="text-danger focus:text-danger"
+              onClick={() => {
+                if (!menuConversation) return;
+                setEditingId(null);
+                setEditingTitle("");
+                setConfirmDeleteId(menuConversation.id);
+                setMenuConversation(null);
+              }}
+            >
+              {t("conversations.delete")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        ) : null}
+      </DropdownMenu>
+
       {/* Mobile header with close button */}
       {!isGameModal && mobile && (
         <div className="px-3 py-2 border-b border-border flex items-center justify-between">
@@ -113,7 +202,7 @@ export function ConversationsSidebar({
           </div>
           <button
             type="button"
-            className="inline-flex items-center justify-center w-7 h-7 border border-border bg-card text-sm text-muted cursor-pointer hover:border-accent hover:text-accent transition-colors"
+            className="inline-flex items-center justify-center w-7 h-7 border border-border bg-card text-sm text-muted cursor-pointer hover:border-accent hover:text-txt transition-colors"
             onClick={onClose}
             aria-label={t("conversations.closePanel")}
           >
@@ -133,8 +222,8 @@ export function ConversationsSidebar({
           type="button"
           className={
             isGameModal
-              ? "w-full py-2 px-3 rounded-lg border border-accent/60 bg-accent/10 text-accent font-medium text-sm transition-all hover:bg-accent/20 hover:border-accent hover:shadow-[0_0_15px_rgba(240,178,50,0.15)] active:scale-[0.98]"
-              : "w-full px-3 py-1.5 border border-accent rounded-md bg-transparent text-accent text-[12px] font-medium cursor-pointer transition-colors hover:bg-accent hover:text-accent-fg"
+              ? "w-full py-2 px-3 rounded-lg border border-accent/60 bg-accent/10 text-txt font-medium text-sm transition-all hover:bg-accent/20 hover:border-accent hover:shadow-[0_0_15px_rgba(240,178,50,0.15)] active:scale-[0.98]"
+              : "w-full px-3 py-1.5 border border-accent rounded-md bg-transparent text-txt text-[12px] font-medium cursor-pointer transition-colors hover:bg-accent hover:text-accent-fg"
           }
           onClick={() => {
             handleNewConversation();
@@ -176,19 +265,19 @@ export function ConversationsSidebar({
               deletingId={deletingId}
               inputRef={inputRef}
               t={t}
+              mobile={mobile}
               onSelect={(id) => {
                 setConfirmDeleteId(null);
+                setMenuConversation(null);
                 void handleSelectConversation(id);
                 onClose?.();
               }}
-              onDoubleClick={handleDoubleClick}
               onEditingTitleChange={setEditingTitle}
               onEditSubmit={(id) => void handleEditSubmit(id)}
               onEditKeyDown={handleEditKeyDown}
-              onDelete={(id) => void handleDeleteConversation(id)}
               onConfirmDelete={(id) => void handleConfirmDelete(id)}
               onCancelDelete={() => setConfirmDeleteId(null)}
-              onSetConfirmDelete={setConfirmDeleteId}
+              onOpenActions={openActionsMenu}
             />
           ))
         )}

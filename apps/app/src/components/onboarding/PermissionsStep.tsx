@@ -1,12 +1,14 @@
-import { useApp } from "../../AppContext";
-import { PermissionsOnboardingSection } from "../PermissionsSection";
+import { PermissionsOnboardingSection } from "@milady/app-core/components";
+import { useApp } from "@milady/app-core/state";
 
 export function PermissionsStep() {
-  const { handleOnboardingNext } = useApp();
+  const { handleOnboardingNext, t } = useApp();
 
   return (
     <>
-      <div className="onboarding-section-title">System Access</div>
+      <div className="onboarding-section-title">
+        {t("onboarding.systemAccessTitle")}
+      </div>
       <div className="onboarding-divider">
         <div className="onboarding-divider-diamond" />
       </div>

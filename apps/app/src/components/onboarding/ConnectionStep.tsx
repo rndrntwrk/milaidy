@@ -4,10 +4,11 @@ import type {
   ProviderOption,
 } from "@milady/app-core/api";
 import { client } from "@milady/app-core/api";
+import { isNative } from "@milady/app-core/platform";
+import { getProviderLogo } from "@milady/app-core/providers";
+import { useApp } from "@milady/app-core/state";
+import { openExternalUrl } from "@milady/app-core/utils";
 import { useState } from "react";
-import { useApp } from "../../AppContext";
-import { getProviderLogo } from "../../provider-logos";
-import { openExternalUrl } from "../../utils/openExternalUrl";
 
 function formatRequestError(err: unknown): string {
   if (err instanceof Error) {
@@ -32,6 +33,7 @@ export function ConnectionStep() {
     handleOnboardingNext,
     handleOnboardingBack,
     setState,
+    t,
   } = useApp();
 
   const [openaiOAuthStarted, setOpenaiOAuthStarted] = useState(false);
@@ -103,11 +105,11 @@ export function ConnectionStep() {
       const msg = data.error ?? "Exchange failed";
       setOpenaiError(
         msg.includes("No active flow")
-          ? "Login session expired. Click 'Start Over' and try again."
+          ? t("onboarding.loginSessionExpired")
           : msg,
       );
     } catch (_err) {
-      setOpenaiError("Network error — check your connection and try again.");
+      setOpenaiError(t("onboarding.networkError"));
     }
   };
 
@@ -115,13 +117,13 @@ export function ConnectionStep() {
     if (!key || key.trim().length === 0) return "";
     const trimmed = key.trim();
     if (providerId === "openai" && !trimmed.startsWith("sk-")) {
-      return "Key format looks incorrect. Double-check and try again.";
+      return t("onboarding.keyFormatWarning");
     }
     if (providerId === "anthropic" && !trimmed.startsWith("sk-ant-")) {
-      return "Key format looks incorrect. Double-check and try again.";
+      return t("onboarding.keyFormatWarning");
     }
     if (trimmed.length < 20) {
-      return "Key format looks incorrect. Double-check and try again.";
+      return t("onboarding.keyFormatWarning");
     }
     return "";
   };
@@ -137,18 +139,12 @@ export function ConnectionStep() {
   };
 
   const providers = onboardingOptions?.providers ?? [];
-  const cloudProviders = providers.filter(
-    (p: ProviderOption) => p.id === "miladycloud",
-  );
-  const subscriptionProviders = providers.filter(
-    (p: ProviderOption) =>
-      p.id === "anthropic-subscription" || p.id === "openai-subscription",
-  );
-  const apiProviders = providers.filter(
-    (p: ProviderOption) =>
-      !subscriptionProviders.some((s) => s.id === p.id) &&
-      p.id !== "miladycloud",
-  );
+
+  const recommendedIds = new Set([
+    "miladycloud",
+    "anthropic-subscription",
+    "openai-subscription",
+  ]);
 
   const providerOverrides: Record<
     string,
@@ -181,6 +177,19 @@ export function ConnectionStep() {
     };
   };
 
+  // Sort providers: recommended first, then the rest
+  // On mobile (Capacitor), only Eliza Cloud is available (required for sandboxing)
+  const availableProviders = isNative
+    ? providers.filter((p: ProviderOption) => p.id === "miladycloud")
+    : providers;
+  const recommendedProviders = availableProviders.filter((p: ProviderOption) =>
+    recommendedIds.has(p.id),
+  );
+  const otherProviders = availableProviders.filter(
+    (p: ProviderOption) => !recommendedIds.has(p.id),
+  );
+  const sortedProviders = [...recommendedProviders, ...otherProviders];
+
   const piAiModels = onboardingOptions?.piAiModels ?? [];
   const piAiDefaultModel = onboardingOptions?.piAiDefaultModel ?? "";
   const normalizedPrimaryModel = onboardingPrimaryModel.trim();
@@ -207,19 +216,24 @@ export function ConnectionStep() {
   if (!onboardingProvider) {
     return (
       <>
-        <div className="onboarding-section-title">Neural Link</div>
+        <div className="onboarding-section-title">
+          {t("onboarding.neuralLinkTitle")}
+        </div>
         <div className="onboarding-divider">
           <div className="onboarding-divider-diamond" />
         </div>
-        <div className="onboarding-question">Choose your AI provider</div>
+        <div className="onboarding-question">
+          {t("onboarding.chooseProvider")}
+        </div>
         <div className="onboarding-provider-grid">
-          {cloudProviders.map((p: ProviderOption) => {
+          {sortedProviders.map((p: ProviderOption) => {
             const display = getProviderDisplay(p);
+            const isRecommended = recommendedIds.has(p.id);
             return (
               <button
                 type="button"
                 key={p.id}
-                className="onboarding-provider-card"
+                className={`onboarding-provider-card${isRecommended ? " onboarding-provider-card--recommended" : ""}`}
                 onClick={() => handleProviderSelect(p.id)}
               >
                 <img
@@ -235,56 +249,11 @@ export function ConnectionStep() {
                     </div>
                   )}
                 </div>
-              </button>
-            );
-          })}
-          {subscriptionProviders.map((p: ProviderOption) => {
-            const display = getProviderDisplay(p);
-            return (
-              <button
-                type="button"
-                key={p.id}
-                className="onboarding-provider-card"
-                onClick={() => handleProviderSelect(p.id)}
-              >
-                <img
-                  src={getProviderLogo(p.id, false)}
-                  alt={display.name}
-                  className="onboarding-provider-icon"
-                />
-                <div>
-                  <div className="onboarding-provider-name">{display.name}</div>
-                  {display.description && (
-                    <div className="onboarding-provider-desc">
-                      {display.description}
-                    </div>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-          {apiProviders.map((p: ProviderOption) => {
-            const display = getProviderDisplay(p);
-            return (
-              <button
-                type="button"
-                key={p.id}
-                className="onboarding-provider-card"
-                onClick={() => handleProviderSelect(p.id)}
-              >
-                <img
-                  src={getProviderLogo(p.id, false)}
-                  alt={display.name}
-                  className="onboarding-provider-icon"
-                />
-                <div>
-                  <div className="onboarding-provider-name">{display.name}</div>
-                  {display.description && (
-                    <div className="onboarding-provider-desc">
-                      {display.description}
-                    </div>
-                  )}
-                </div>
+                {isRecommended && (
+                  <span className="onboarding-provider-badge">
+                    {t("onboarding.recommended") ?? "Recommended"}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -295,7 +264,7 @@ export function ConnectionStep() {
             onClick={handleOnboardingBack}
             type="button"
           >
-            ← Back
+            {t("onboarding.back")}
           </button>
           <span />
         </div>
@@ -341,7 +310,7 @@ export function ConnectionStep() {
               setState("onboardingPrimaryModel", "");
             }}
           >
-            Change
+            {t("onboarding.change")}
           </button>
         </span>
       </div>
@@ -356,7 +325,7 @@ export function ConnectionStep() {
             style={{
               display: "flex",
               gap: "1rem",
-              borderBottom: "1px solid rgba(255,255,255,0.1)",
+              borderBottom: "1px solid var(--border)",
               marginBottom: "1rem",
             }}
           >
@@ -368,7 +337,7 @@ export function ConnectionStep() {
                 color:
                   onboardingMiladyCloudTab === "login"
                     ? "#f0b90b"
-                    : "rgba(240,238,250,0.4)",
+                    : "var(--muted)",
                 background: "none",
                 border: "none",
                 borderBottom:
@@ -379,7 +348,7 @@ export function ConnectionStep() {
               }}
               onClick={() => setState("onboardingMiladyCloudTab", "login")}
             >
-              Login
+              {t("onboarding.login")}
             </button>
             <button
               type="button"
@@ -393,14 +362,14 @@ export function ConnectionStep() {
                 color:
                   onboardingMiladyCloudTab === "apikey"
                     ? "#f0b90b"
-                    : "rgba(240,238,250,0.4)",
+                    : "var(--muted)",
                 background: "none",
                 border: "none",
                 cursor: "pointer",
               }}
               onClick={() => setState("onboardingMiladyCloudTab", "apikey")}
             >
-              API Key
+              {t("onboarding.apiKey")}
             </button>
           </div>
 
@@ -413,9 +382,9 @@ export function ConnectionStep() {
                     alignItems: "center",
                     gap: "0.5rem",
                     padding: "0.625rem 1rem",
-                    border: "1px solid rgba(34,197,94,0.3)",
-                    background: "rgba(34,197,94,0.1)",
-                    color: "rgb(74,222,128)",
+                    border: "1px solid var(--ok-muted)",
+                    background: "var(--ok-subtle)",
+                    color: "var(--ok)",
                     fontSize: "0.875rem",
                     borderRadius: "0.5rem",
                     justifyContent: "center",
@@ -431,10 +400,10 @@ export function ConnectionStep() {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   >
-                    <title>Connected</title>
+                    <title>{t("onboarding.connected")}</title>
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
-                  Connected
+                  {t("onboarding.connected")}
                 </div>
               ) : (
                 <button
@@ -443,21 +412,53 @@ export function ConnectionStep() {
                   onClick={handleCloudLogin}
                   disabled={miladyCloudLoginBusy}
                 >
-                  {miladyCloudLoginBusy ? "Connecting..." : "Connect Account"}
+                  {miladyCloudLoginBusy
+                    ? t("onboarding.connecting")
+                    : t("onboarding.connectAccount")}
                 </button>
               )}
-              {miladyCloudLoginError && (
-                <p
-                  style={{
-                    color: "rgb(248,113,113)",
-                    fontSize: "0.8125rem",
-                    marginTop: "0.5rem",
-                  }}
-                >
-                  {miladyCloudLoginError}
-                </p>
-              )}
-              <p className="onboarding-desc">Free credits to get started.</p>
+              {miladyCloudLoginError &&
+                (() => {
+                  const urlMatch = miladyCloudLoginError.match(
+                    /^Open this link to log in: (.+)$/,
+                  );
+                  if (urlMatch) {
+                    return (
+                      <p
+                        style={{
+                          fontSize: "0.8125rem",
+                          marginTop: "0.5rem",
+                          color: "var(--text)",
+                        }}
+                      >
+                        Open this link to log in:{" "}
+                        <a
+                          href={urlMatch[1]}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            color: "var(--text)",
+                            textDecoration: "underline",
+                          }}
+                        >
+                          Click here
+                        </a>
+                      </p>
+                    );
+                  }
+                  return (
+                    <p
+                      style={{
+                        color: "var(--danger)",
+                        fontSize: "0.8125rem",
+                        marginTop: "0.5rem",
+                      }}
+                    >
+                      {miladyCloudLoginError}
+                    </p>
+                  );
+                })()}
+              <p className="onboarding-desc">{t("onboarding.freeCredits")}</p>
             </div>
           ) : (
             <div>
@@ -467,10 +468,10 @@ export function ConnectionStep() {
                   display: "block",
                   fontSize: "0.875rem",
                   marginBottom: "0.375rem",
-                  color: "rgba(240,238,250,0.6)",
+                  color: "var(--muted)",
                 }}
               >
-                API Key
+                {t("onboarding.apiKeyLabel")}
               </label>
               <input
                 id="miladycloud-apikey"
@@ -481,14 +482,14 @@ export function ConnectionStep() {
                 onChange={handleApiKeyChange}
               />
               <p className="onboarding-desc">
-                Use this if you already have a key.{" "}
+                {t("onboarding.useExistingKey")}{" "}
                 <a
                   href="https://miladycloud.ai/dashboard/settings"
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{ color: "#f0b90b" }}
+                  style={{ color: "var(--text)" }}
                 >
-                  Get one here
+                  {t("onboarding.getOneHere")}
                 </a>
               </p>
             </div>
@@ -503,7 +504,7 @@ export function ConnectionStep() {
             style={{
               display: "flex",
               gap: "1rem",
-              borderBottom: "1px solid rgba(255,255,255,0.1)",
+              borderBottom: "1px solid var(--border)",
               marginBottom: "0.75rem",
             }}
           >
@@ -521,12 +522,12 @@ export function ConnectionStep() {
                 color:
                   onboardingSubscriptionTab === "token"
                     ? "#f0b90b"
-                    : "rgba(240,238,250,0.4)",
+                    : "var(--muted)",
                 cursor: "pointer",
               }}
               onClick={() => setState("onboardingSubscriptionTab", "token")}
             >
-              Setup Token
+              {t("onboarding.setupToken")}
             </button>
             <button
               type="button"
@@ -542,12 +543,12 @@ export function ConnectionStep() {
                 color:
                   onboardingSubscriptionTab === "oauth"
                     ? "#f0b90b"
-                    : "rgba(240,238,250,0.4)",
+                    : "var(--muted)",
                 cursor: "pointer",
               }}
               onClick={() => setState("onboardingSubscriptionTab", "oauth")}
             >
-              OAuth Login
+              {t("onboarding.oauthLogin")}
             </button>
           </div>
 
@@ -559,10 +560,10 @@ export function ConnectionStep() {
                   fontWeight: "bold",
                   display: "block",
                   marginBottom: "0.5rem",
-                  color: "rgba(240,238,250,0.7)",
+                  color: "var(--text)",
                 }}
               >
-                Enter your setup token
+                {t("onboarding.enterSetupToken")}
               </span>
               <input
                 type="password"
@@ -575,9 +576,7 @@ export function ConnectionStep() {
                 className="onboarding-desc"
                 style={{ whiteSpace: "pre-line", textAlign: "left" }}
               >
-                {
-                  'How to get your setup token:\n\n\u2022 Option A: Run  claude setup-token  in your terminal\n\n\u2022 Option B: Go to claude.ai/settings/api \u2192 "Claude Code" \u2192 "Use setup token"'
-                }
+                {t("onboarding.setupTokenInstructions")}
               </p>
             </>
           ) : anthropicConnected ? (
@@ -595,9 +594,9 @@ export function ConnectionStep() {
                   alignItems: "center",
                   gap: "0.5rem",
                   padding: "0.75rem 1.5rem",
-                  border: "1px solid rgba(34,197,94,0.3)",
-                  background: "rgba(34,197,94,0.1)",
-                  color: "rgb(74,222,128)",
+                  border: "1px solid var(--ok-muted)",
+                  background: "var(--ok-subtle)",
+                  color: "var(--ok)",
                   fontSize: "0.875rem",
                   fontWeight: "500",
                   width: "100%",
@@ -615,13 +614,13 @@ export function ConnectionStep() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 >
-                  <title>Connected</title>
+                  <title>{t("onboarding.connected")}</title>
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
-                Connected to Claude
+                {t("onboarding.connectedToClaude")}
               </div>
               <p className="onboarding-desc" style={{ textAlign: "center" }}>
-                Your Claude subscription is ready to use.
+                {t("onboarding.claudeSubscriptionReady")}
               </p>
             </div>
           ) : !anthropicOAuthStarted ? (
@@ -638,13 +637,13 @@ export function ConnectionStep() {
                 className="onboarding-confirm-btn"
                 onClick={() => void handleAnthropicStart()}
               >
-                Login with Anthropic
+                {t("onboarding.loginWithAnthropic")}
               </button>
               <p className="onboarding-desc" style={{ textAlign: "center" }}>
-                Requires a Claude Pro or Max subscription.
+                {t("onboarding.requiresClaudeSub")}
               </p>
               {anthropicError && (
-                <p style={{ fontSize: "0.75rem", color: "rgb(248,113,113)" }}>
+                <p style={{ fontSize: "0.75rem", color: "var(--danger)" }}>
                   {anthropicError}
                 </p>
               )}
@@ -662,23 +661,28 @@ export function ConnectionStep() {
                 style={{
                   fontSize: "0.875rem",
                   textAlign: "center",
-                  color: "rgba(240,238,250,0.7)",
+                  color: "var(--text)",
                 }}
               >
-                After logging in, you will receive an authorization code.
-                <br />
-                Copy and paste it below.
+                {t("onboarding.authCodeInstructions")
+                  .split("\n")
+                  .map((line, i) => (
+                    <span key={line + String(i)}>
+                      {line}
+                      {i === 0 && <br />}
+                    </span>
+                  ))}
               </p>
               <input
                 type="text"
                 className="onboarding-input"
-                placeholder="Paste authorization code..."
+                placeholder={t("onboarding.pasteAuthCode")}
                 value={anthropicCode}
                 onChange={(e) => setAnthropicCode(e.target.value)}
                 style={{ textAlign: "center" }}
               />
               {anthropicError && (
-                <p style={{ fontSize: "0.75rem", color: "rgb(248,113,113)" }}>
+                <p style={{ fontSize: "0.75rem", color: "var(--danger)" }}>
                   {anthropicError}
                 </p>
               )}
@@ -688,7 +692,7 @@ export function ConnectionStep() {
                 disabled={!anthropicCode}
                 onClick={() => void handleAnthropicExchange()}
               >
-                Connect
+                {t("onboarding.connect")}
               </button>
             </div>
           )}
@@ -713,9 +717,9 @@ export function ConnectionStep() {
                   alignItems: "center",
                   gap: "0.5rem",
                   padding: "0.75rem 1.5rem",
-                  border: "1px solid rgba(34,197,94,0.3)",
-                  background: "rgba(34,197,94,0.1)",
-                  color: "rgb(74,222,128)",
+                  border: "1px solid var(--ok-muted)",
+                  background: "var(--ok-subtle)",
+                  color: "var(--ok)",
                   fontSize: "0.875rem",
                   fontWeight: "500",
                   width: "100%",
@@ -733,13 +737,13 @@ export function ConnectionStep() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 >
-                  <title>Connected</title>
+                  <title>{t("onboarding.connected")}</title>
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
-                Connected to ChatGPT
+                {t("onboarding.connectedToChatGPT")}
               </div>
               <p className="onboarding-desc" style={{ textAlign: "center" }}>
-                Your ChatGPT subscription is ready to use.
+                {t("onboarding.chatgptSubscriptionReady")}
               </p>
             </div>
           ) : !openaiOAuthStarted ? (
@@ -756,10 +760,10 @@ export function ConnectionStep() {
                 className="onboarding-confirm-btn"
                 onClick={() => void handleOpenAIStart()}
               >
-                Login with OpenAI
+                {t("onboarding.loginWithOpenAI")}
               </button>
               <p className="onboarding-desc" style={{ textAlign: "center" }}>
-                Requires a ChatGPT Plus or Pro subscription.
+                {t("onboarding.requiresChatGPTSub")}
               </p>
             </div>
           ) : (
@@ -773,8 +777,8 @@ export function ConnectionStep() {
               <div
                 style={{
                   padding: "0.75rem",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid var(--border)",
+                  background: "var(--bg-hover)",
                   fontSize: "0.875rem",
                   borderRadius: "0.25rem",
                 }}
@@ -783,27 +787,26 @@ export function ConnectionStep() {
                   style={{
                     fontWeight: "500",
                     marginBottom: "0.25rem",
-                    color: "rgba(240,238,250,0.8)",
+                    color: "var(--text)",
                   }}
                 >
-                  Almost there!
+                  {t("onboarding.almostThere")}
                 </p>
                 <p
                   className="onboarding-desc"
                   style={{ lineHeight: "1.5", textAlign: "left" }}
                 >
-                  After logging in, your browser will redirect to{" "}
+                  {t("onboarding.redirectInstructions")}{" "}
                   <code
                     style={{
-                      background: "rgba(255,255,255,0.06)",
+                      background: "var(--bg-hover)",
                       padding: "0 0.25rem",
                       fontSize: "0.75rem",
                     }}
                   >
                     localhost:1455
                   </code>
-                  . Copy the <strong>entire URL</strong> from your browser's
-                  address bar.
+                  {t("onboarding.copyEntireUrl")}
                 </p>
               </div>
               <input
@@ -817,7 +820,7 @@ export function ConnectionStep() {
                 }}
               />
               {openaiError && (
-                <p style={{ fontSize: "0.75rem", color: "rgb(248,113,113)" }}>
+                <p style={{ fontSize: "0.75rem", color: "var(--danger)" }}>
                   {openaiError}
                 </p>
               )}
@@ -834,7 +837,7 @@ export function ConnectionStep() {
                   disabled={!openaiCallbackUrl}
                   onClick={() => void handleOpenAIExchange()}
                 >
-                  Complete Login
+                  {t("onboarding.completeLogin")}
                 </button>
                 <button
                   type="button"
@@ -844,7 +847,7 @@ export function ConnectionStep() {
                     setOpenaiCallbackUrl("");
                   }}
                 >
-                  Start Over
+                  {t("onboarding.startOver")}
                 </button>
               </div>
             </div>
@@ -866,23 +869,23 @@ export function ConnectionStep() {
                 fontWeight: "bold",
                 display: "block",
                 marginBottom: "0.5rem",
-                color: "rgba(240,238,250,0.7)",
+                color: "var(--text)",
               }}
             >
-              API Key
+              {t("onboarding.apiKeyLabel")}
             </span>
             <input
               type="password"
               className="onboarding-input"
               value={onboardingApiKey}
               onChange={handleApiKeyChange}
-              placeholder="Enter your API key..."
+              placeholder={t("onboarding.enterApiKey")}
             />
             {apiKeyFormatWarning && (
               <p
                 style={{
                   fontSize: "0.75rem",
-                  color: "rgb(248,113,113)",
+                  color: "var(--danger)",
                   marginTop: "0.5rem",
                 }}
               >
@@ -894,9 +897,7 @@ export function ConnectionStep() {
 
       {/* ollama */}
       {onboardingProvider === "ollama" && (
-        <p className="onboarding-desc">
-          No configuration needed. Ollama will be used automatically.
-        </p>
+        <p className="onboarding-desc">{t("onboarding.ollamaNoConfig")}</p>
       )}
 
       {/* pi-ai */}
@@ -908,10 +909,10 @@ export function ConnectionStep() {
               fontWeight: "bold",
               display: "block",
               marginBottom: "0.5rem",
-              color: "rgba(240,238,250,0.7)",
+              color: "var(--text)",
             }}
           >
-            Primary Model (optional)
+            {t("onboarding.primaryModelOptional")}
           </span>
           {piAiModels.length > 0 ? (
             <>
@@ -930,7 +931,7 @@ export function ConnectionStep() {
                 className="onboarding-input"
               >
                 <option value="">
-                  Use default model
+                  {t("onboarding.useDefaultModel")}
                   {piAiDefaultModel ? ` (${piAiDefaultModel})` : ""}
                 </option>
                 {piAiModels.map((model: PiAiModelOption) => (
@@ -938,7 +939,9 @@ export function ConnectionStep() {
                     {model.name} ({model.provider})
                   </option>
                 ))}
-                <option value="__custom__">Custom model...</option>
+                <option value="__custom__">
+                  {t("onboarding.customModel")}
+                </option>
               </select>
               {piAiSelectValue === "__custom__" && (
                 <input
@@ -965,10 +968,10 @@ export function ConnectionStep() {
             />
           )}
           <p className="onboarding-desc" style={{ textAlign: "left" }}>
-            Uses credentials from ~/.pi/agent/auth.json.
+            {t("onboarding.piCredentialsHint")}
             {piAiModels.length > 0
-              ? " Pick from the dropdown or choose a custom model."
-              : " Enter provider/model manually if you want an override."}
+              ? t("onboarding.piDropdownHint")
+              : t("onboarding.piManualHint")}
           </p>
         </div>
       )}
@@ -984,10 +987,10 @@ export function ConnectionStep() {
                 fontWeight: "bold",
                 display: "block",
                 marginBottom: "0.5rem",
-                color: "rgba(240,238,250,0.7)",
+                color: "var(--text)",
               }}
             >
-              Select Model
+              {t("onboarding.selectModel")}
             </span>
             <div
               style={{
@@ -1032,14 +1035,14 @@ export function ConnectionStep() {
           }}
           type="button"
         >
-          ← Back
+          {t("onboarding.back")}
         </button>
         <button
           className="onboarding-confirm-btn"
           onClick={() => handleOnboardingNext()}
           type="button"
         >
-          Confirm
+          {t("onboarding.confirm")}
         </button>
       </div>
     </>

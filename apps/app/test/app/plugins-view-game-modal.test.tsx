@@ -63,7 +63,7 @@ function ensureWindowGlobals() {
   }
 }
 
-vi.mock("../../src/AppContext", () => ({
+vi.mock("@milady/app-core/state", () => ({
   useApp: () => mockUseApp(),
 }));
 
@@ -77,7 +77,7 @@ vi.mock("@milady/app-core/api", () => ({
   },
 }));
 
-import { PluginsView } from "../../src/components/PluginsView";
+import { PluginsView } from "../../../../packages/app-core/src/components/PluginsView";
 
 function hasClass(
   node: TestRenderer.ReactTestInstance,
@@ -103,6 +103,7 @@ function createPlugin(
     id,
     name,
     description: `${name} configuration plugin`,
+    tags: [category],
     enabled: true,
     configured: true,
     envKey: null,
@@ -369,6 +370,71 @@ describe("PluginsView game modal", () => {
 
     expect(text(tree?.root)).toContain("Retake.tv");
     expect(text(tree?.root)).not.toContain("Discord");
+  });
+
+  it("shows only social-chat connectors and keeps social search/filter controls", async () => {
+    const state = baseContext([
+      createPlugin("telegram", "Telegram", "connector", {
+        tags: ["connector", "social", "social-chat", "messaging"],
+      }),
+      createPlugin("signal", "Signal", "connector", {
+        enabled: false,
+        tags: ["connector", "social", "social-chat", "messaging"],
+      }),
+      createPlugin("github", "GitHub", "connector", {
+        tags: ["connector", "integration"],
+      }),
+      createPlugin("retake", "Retake.tv", "streaming", {
+        tags: ["streaming", "broadcast"],
+      }),
+    ]);
+    mockUseApp.mockImplementation(() => state);
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(PluginsView, { mode: "social" }),
+      );
+    });
+
+    expect(text(tree?.root)).toContain("Telegram");
+    expect(text(tree?.root)).toContain("Signal");
+    expect(text(tree?.root)).not.toContain("GitHub");
+    expect(text(tree?.root)).not.toContain("Retake.tv");
+
+    const addButtons = tree?.root.findAll(
+      (node) =>
+        node.type === "button" &&
+        node.children.some((child) => child === "pluginsview.AddPlugin"),
+    );
+    expect(addButtons.length).toBe(0);
+
+    const searchInputs = tree?.root.findAll(
+      (node) =>
+        node.type === "input" && typeof node.props.placeholder === "string",
+    );
+    expect(searchInputs.length).toBe(1);
+    expect(searchInputs[0]?.props.placeholder).toBe("Search social...");
+    expect(text(tree?.root)).toContain("All (2)");
+    expect(text(tree?.root)).toContain("Enabled (1)");
+
+    state.pluginSearch = "Signal";
+    await act(async () => {
+      tree?.update(React.createElement(PluginsView, { mode: "social" }));
+    });
+    expect(text(tree?.root)).toContain("Signal");
+    expect(text(tree?.root)).not.toContain("Telegram");
+
+    state.pluginSearch = "";
+    mockUseApp.mockImplementation(() => ({
+      ...state,
+      pluginStatusFilter: "enabled",
+    }));
+    await act(async () => {
+      tree?.update(React.createElement(PluginsView, { mode: "social" }));
+    });
+    expect(text(tree?.root)).toContain("Telegram");
+    expect(text(tree?.root)).not.toContain("Signal");
   });
 
   it("renders setup links on cards and opens detail links via desktop IPC with browser fallback", async () => {

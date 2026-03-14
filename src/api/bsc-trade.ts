@@ -16,6 +16,7 @@ import type {
   BscUnsignedApprovalTx,
   BscUnsignedTradeTx,
 } from "../contracts/wallet.js";
+import { DEFAULT_PUBLIC_BSC_RPC_URLS } from "./wallet-rpc";
 
 const FETCH_TIMEOUT_MS = 15_000;
 const BSC_CHAIN_ID = 56;
@@ -47,6 +48,8 @@ const ERC20_IFACE = new ethers.Interface([
 export interface BscTradeRpcConfig {
   nodeRealBscRpcUrl?: string | null;
   quickNodeBscRpcUrl?: string | null;
+  bscRpcUrl?: string | null;
+  cloudManagedAccess?: boolean | null;
 }
 
 export interface BuildBscTradePreflightInput extends BscTradeRpcConfig {
@@ -89,13 +92,22 @@ function normalizeRpcUrl(url: string | null | undefined): string | null {
 export function resolveBscRpcUrls(input: BscTradeRpcConfig): string[] {
   const candidates = [
     normalizeRpcUrl(
-      input.nodeRealBscRpcUrl ?? process.env.NODEREAL_BSC_RPC_URL,
+      input.nodeRealBscRpcUrl !== undefined
+        ? input.nodeRealBscRpcUrl
+        : process.env.NODEREAL_BSC_RPC_URL,
     ),
     normalizeRpcUrl(
-      input.quickNodeBscRpcUrl ?? process.env.QUICKNODE_BSC_RPC_URL,
+      input.quickNodeBscRpcUrl !== undefined
+        ? input.quickNodeBscRpcUrl
+        : process.env.QUICKNODE_BSC_RPC_URL,
     ),
     // Standard plugin env key used across elizaOS EVM tooling.
-    normalizeRpcUrl(process.env.BSC_RPC_URL),
+    normalizeRpcUrl(
+      input.bscRpcUrl !== undefined ? input.bscRpcUrl : process.env.BSC_RPC_URL,
+    ),
+    ...(input.cloudManagedAccess
+      ? DEFAULT_PUBLIC_BSC_RPC_URLS.map((url) => normalizeRpcUrl(url))
+      : []),
   ].filter((v): v is string => Boolean(v));
 
   return [...new Set(candidates)];
@@ -354,7 +366,7 @@ export async function buildBscTradePreflight(
 
   if (rpcUrls.length === 0) {
     reasons.push(
-      "BSC RPC not configured. Set NODEREAL_BSC_RPC_URL and/or QUICKNODE_BSC_RPC_URL.",
+      "BSC RPC not configured. Connect Milady Cloud or set NODEREAL_BSC_RPC_URL, QUICKNODE_BSC_RPC_URL, or BSC_RPC_URL.",
     );
   } else {
     try {

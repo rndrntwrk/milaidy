@@ -6,10 +6,10 @@
  */
 
 import type {
-  MiladyClient,
-  TriggerSummary,
-  TriggerRunRecord,
   CreateTriggerRequest,
+  MiladyClient,
+  TriggerRunRecord,
+  TriggerSummary,
   UpdateTriggerRequest,
 } from "../api/client";
 
@@ -28,7 +28,9 @@ export interface TriggerActionContext {
   client: MiladyClient;
   setTriggers: (fn: (prev: TriggerSummary[]) => TriggerSummary[]) => void;
   setTriggerRunsById: (
-    fn: (prev: Record<string, TriggerRunRecord[]>) => Record<string, TriggerRunRecord[]>,
+    fn: (
+      prev: Record<string, TriggerRunRecord[]>,
+    ) => Record<string, TriggerRunRecord[]>,
   ) => void;
   setTriggerError: (error: string | null) => void;
   setTriggersLoading: (loading: boolean) => void;

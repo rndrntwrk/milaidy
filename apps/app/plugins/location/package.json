@@ -2,7 +2,13 @@
   "name": "@milady/capacitor-location",
   "version": "1.0.0",
   "private": true,
-  "description": "Location services plugin for Milady Capacitor app",
+  "description": "Reads current location, watches movement, and manages geolocation permissions.",
+  "keywords": [
+    "location",
+    "geolocation",
+    "device",
+    "permissions"
+  ],
   "main": "./dist/plugin.cjs.js",
   "module": "./src/index.ts",
   "types": "./dist/plugin.d.ts",

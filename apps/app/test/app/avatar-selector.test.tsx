@@ -4,11 +4,11 @@ import { describe, expect, it, vi } from "vitest";
 
 import { AvatarSelector } from "../../src/components/AvatarSelector";
 
-vi.mock("../../src/AppContext", () => ({
+vi.mock("@milady/app-core/state", () => ({
   useApp: () => ({ t: (k: string) => k }),
   getVrmPreviewUrl: vi.fn(() => "preview.png"),
   getVrmTitle: vi.fn(() => "Avatar"),
-  VRM_COUNT: 3,
+  VRM_COUNT: 4,
 }));
 
 describe("AvatarSelector", () => {

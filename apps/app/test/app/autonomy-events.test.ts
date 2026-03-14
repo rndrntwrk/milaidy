@@ -1,10 +1,10 @@
 import type { StreamEventEnvelope } from "@milady/app-core/api";
-import { describe, expect, it } from "vitest";
 import {
   buildAutonomyGapReplayRequests,
   hasPendingAutonomyGaps,
   mergeAutonomyEvents,
-} from "../../src/autonomy-events";
+} from "@milady/app-core/autonomy";
+import { describe, expect, it } from "vitest";
 
 function makeEvent(
   eventId: string,

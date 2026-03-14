@@ -1,7 +1,7 @@
 import type { StreamEventEnvelope } from "@milady/app-core/api";
 import { formatTime } from "@milady/app-core/components";
+import { useApp } from "@milady/app-core/state";
 import { useEffect, useRef } from "react";
-import { useApp } from "../../AppContext";
 import {
   CHANNEL_COLORS,
   getEventFrom,
@@ -79,7 +79,7 @@ export function ActivityFeed({ events }: { events: StreamEventEnvelope[] }) {
                               ? "text-green-400"
                               : channelStyle
                                 ? channelStyle.text
-                                : "text-accent"
+                                : "text-txt"
                     }`}
                   >
                     {isNewViewer

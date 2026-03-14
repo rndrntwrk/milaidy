@@ -1,22 +1,20 @@
-import { useCallback, useState } from "react";
-import {
-  getVrmBackgroundUrl,
-  getVrmPreviewUrl,
-  getVrmUrl,
-  useApp,
-} from "../AppContext";
+import { useRenderGuard } from "@milady/app-core/hooks";
+import { getVrmPreviewUrl, getVrmUrl, useApp } from "@milady/app-core/state";
+import { resolveAppAssetUrl } from "@milady/app-core/utils";
+import { memo, useCallback, useState } from "react";
 import { ChatModalView } from "./ChatModalView";
 import { CompanionHeader } from "./companion/CompanionHeader";
-import { CompanionHubNav } from "./companion/CompanionHubNav";
 import { VrmStage } from "./companion/VrmStage";
 
-export function CompanionView() {
+export const CompanionView = memo(function CompanionView() {
+  useRenderGuard("CompanionView");
   const {
     selectedVrmIndex,
     customVrmUrl,
-    customBackgroundUrl,
     uiLanguage,
     setUiLanguage,
+    uiTheme,
+    setUiTheme,
     setTab,
     setUiShellMode,
     // Header properties
@@ -30,7 +28,7 @@ export function CompanionView() {
     walletAddresses,
     lifecycleBusy,
     lifecycleAction,
-    handlePauseResume,
+
     handleRestart,
     t,
   } = useApp();
@@ -42,18 +40,13 @@ export function CompanionView() {
   const stateColor =
     agentState === "running"
       ? "text-ok border-ok"
-      : agentState === "paused" ||
-          agentState === "restarting" ||
-          agentState === "starting"
+      : agentState === "restarting" || agentState === "starting"
         ? "text-warn border-warn"
         : agentState === "error"
           ? "text-danger border-danger"
           : "text-muted border-muted";
 
   const restartBusy = lifecycleBusy && lifecycleAction === "restart";
-  const pauseResumeBusy = lifecycleBusy;
-  const pauseResumeDisabled =
-    lifecycleBusy || agentState === "restarting" || agentState === "starting";
 
   const creditColor = miladyCloudCreditsCritical
     ? "border-danger text-danger"
@@ -82,25 +75,19 @@ export function CompanionView() {
     selectedVrmIndex > 0
       ? getVrmPreviewUrl(safeSelectedVrmIndex)
       : getVrmPreviewUrl(1);
-  const vrmBackgroundUrl =
-    selectedVrmIndex === 0 && customVrmUrl
-      ? customBackgroundUrl || getVrmBackgroundUrl(1)
-      : getVrmBackgroundUrl(safeSelectedVrmIndex);
+  const worldUrl =
+    uiTheme === "dark"
+      ? resolveAppAssetUrl("worlds/companion-night.spz")
+      : resolveAppAssetUrl("worlds/companion-day.spz");
 
   return (
-    <div
-      className="absolute inset-0 overflow-hidden text-white font-display rounded-2xl bg-[radial-gradient(circle_at_50%_120%,#212942_0%,#12151e_80%)] animate-in fade-in zoom-in-95 duration-500"
-      style={{
-        backgroundImage: `url("${vrmBackgroundUrl}")`,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-      }}
-    >
+    <div className="absolute inset-0 overflow-hidden text-white font-display rounded-2xl bg-[radial-gradient(circle_at_50%_120%,#212942_0%,#12151e_80%)] animate-in fade-in zoom-in-95 duration-500">
       <div className="absolute inset-0 z-0 bg-cover opacity-60 bg-[radial-gradient(circle_at_10%_20%,rgba(255,255,255,0.03)_0%,transparent_40%),radial-gradient(circle_at_80%_80%,rgba(0,225,255,0.05)_0%,transparent_40%)] pointer-events-none" />
 
       {/* Model Layer */}
       <VrmStage
         vrmPath={vrmPath}
+        worldUrl={worldUrl}
         fallbackPreviewUrl={fallbackPreviewUrl}
         cameraProfile={cameraZoomed ? "companion_close" : "companion"}
         t={t}
@@ -116,9 +103,6 @@ export function CompanionView() {
           stateColor={stateColor}
           lifecycleBusy={lifecycleBusy}
           restartBusy={restartBusy}
-          pauseResumeBusy={pauseResumeBusy}
-          pauseResumeDisabled={pauseResumeDisabled}
-          handlePauseResume={handlePauseResume}
           handleRestart={handleRestart}
           miladyCloudEnabled={miladyCloudEnabled}
           miladyCloudConnected={miladyCloudConnected}
@@ -130,6 +114,8 @@ export function CompanionView() {
           handleSwitchToNativeShell={handleSwitchToNativeShell}
           uiLanguage={uiLanguage}
           setUiLanguage={setUiLanguage}
+          uiTheme={uiTheme}
+          setUiTheme={setUiTheme}
           t={t}
         />
 
@@ -141,14 +127,8 @@ export function CompanionView() {
         <div className="flex-1 grid grid-cols-[1fr_auto] gap-6 min-h-0 relative">
           {/* Center (Empty to show character) */}
           <div className="w-full h-full" />
-
-          {/* Right Panel: Actions + Game HUD Menu */}
-          <aside className="fixed top-1/2 -translate-y-1/2 right-6 flex flex-col items-end gap-4 z-[60]">
-            {/* Game HUD Icon Menu */}
-            <CompanionHubNav setTab={setTab} t={t} />
-          </aside>
         </div>
       </div>
     </div>
   );
-}
+});

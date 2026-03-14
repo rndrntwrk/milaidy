@@ -7,18 +7,20 @@ import {
   dispatchWindowEvent,
   SELF_STATUS_SYNC_EVENT,
 } from "@milady/app-core/events";
+import { useRenderGuard } from "@milady/app-core/hooks";
+import { useApp } from "@milady/app-core/state";
 import { Bot, Check, Cpu, Settings2 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useApp } from "../../AppContext";
 
 export interface AgentModeDropdownProps {
   variant?: "native" | "companion";
 }
 
-export function AgentModeDropdown({
+export const AgentModeDropdown = memo(function AgentModeDropdown({
   variant = "native",
 }: AgentModeDropdownProps) {
+  useRenderGuard("AgentModeDropdown");
   const { chatMode, setActionNotice, setState, t } = useApp();
   const [moreOpen, setMoreOpen] = useState(false);
   const [automationMode, setAutomationMode] =
@@ -207,7 +209,7 @@ export function AgentModeDropdown({
       : "bg-bg-elevated border-border",
     textStrong: isCompanion ? "text-white/90" : "text-txt-strong",
     textMuted: isCompanion ? "text-white/60" : "text-muted",
-    textAccent: isCompanion ? "text-white/90" : "text-accent",
+    textAccent: isCompanion ? "text-white/90" : "text-txt",
     cardBg: isCompanion
       ? "bg-black/40 border-white/10"
       : "bg-bg-accent border-border",
@@ -223,7 +225,7 @@ export function AgentModeDropdown({
       "flex-1 flex flex-col items-center justify-center py-2 px-1 text-[11px] font-medium rounded-md transition-all",
     btnCardActive: isCompanion
       ? "bg-white/20 shadow-sm border border-white/30 text-white font-semibold"
-      : "bg-bg shadow-sm border border-accent/20 text-accent font-semibold",
+      : "bg-bg shadow-sm border border-accent/20 text-txt font-semibold",
     btnCardInactive: isCompanion
       ? "text-white/60 hover:bg-white/10 hover:text-white"
       : "text-muted hover:bg-bg/50 hover:text-txt",
@@ -250,7 +252,7 @@ export function AgentModeDropdown({
 
   const triggerClass =
     variant === "native"
-      ? `inline-flex items-center justify-center w-11 h-11 min-w-[44px] min-h-[44px] border border-border bg-bg cursor-pointer text-sm leading-none hover:border-accent hover:text-accent transition-all duration-200 hover:shadow-sm hover:scale-105 active:scale-95 rounded-md ${moreOpen ? "bg-accent/10 border-accent text-accent shadow-sm" : ""}`
+      ? `inline-flex items-center justify-center w-11 h-11 min-w-[44px] min-h-[44px] border border-border bg-bg cursor-pointer text-sm leading-none hover:border-accent hover:text-txt transition-all duration-200 hover:shadow-sm hover:scale-105 active:scale-95 rounded-md ${moreOpen ? "bg-accent/10 border-accent text-txt shadow-sm" : ""}`
       : `flex items-center justify-center w-8 h-8 rounded-full bg-white/5 text-white/80 hover:text-white hover:bg-white/20 border border-transparent hover:border-white/30 transition-all cursor-pointer ${moreOpen ? "bg-white/20 text-white border-white/30 shadow-sm" : ""}`;
 
   return (
@@ -432,4 +434,4 @@ export function AgentModeDropdown({
         )}
     </div>
   );
-}
+});

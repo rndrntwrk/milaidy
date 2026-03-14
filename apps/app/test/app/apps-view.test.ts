@@ -41,14 +41,14 @@ const { mockClientFns, mockUseApp } = vi.hoisted(() => ({
 vi.mock("@milady/app-core/api", () => ({
   client: mockClientFns,
 }));
-vi.mock("../../src/AppContext", () => ({
+vi.mock("@milady/app-core/state", () => ({
   useApp: () => mockUseApp(),
 }));
 
 import {
   AppsView,
   shouldShowAppInAppsView,
-} from "../../src/components/AppsView";
+} from "../../../../packages/app-core/src/components/AppsView";
 
 function createApp(
   name: string,

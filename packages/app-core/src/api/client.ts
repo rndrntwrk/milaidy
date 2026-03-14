@@ -178,7 +178,6 @@ export type AgentState =
   | "not_started"
   | "starting"
   | "running"
-  | "paused"
   | "stopped"
   | "restarting"
   | "error";
@@ -658,6 +657,7 @@ export interface PluginInfo {
   id: string;
   name: string;
   description: string;
+  tags?: string[];
   enabled: boolean;
   configured: boolean;
   envKey: string | null;
@@ -3119,6 +3119,7 @@ export class MiladyClient {
       name?: string;
       system?: string;
       bio?: string;
+      topics?: string[];
       style?: { all?: string[]; chat?: string[]; post?: string[] };
       postExamples?: string[];
     },

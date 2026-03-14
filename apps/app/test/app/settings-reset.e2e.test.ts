@@ -21,6 +21,17 @@ import {
   vi,
 } from "vitest";
 
+vi.mock("@milady/app-core/components", async () => {
+  const actual = await vi.importActual<
+    typeof import("@milady/app-core/components")
+  >("@milady/app-core/components");
+  return {
+    ...actual,
+    ProviderSwitcher: () =>
+      React.createElement("div", null, "ProviderSwitcher"),
+  };
+});
+
 // ---------------------------------------------------------------------------
 // Part 1: API Tests for /api/agent/reset
 // ---------------------------------------------------------------------------
@@ -286,8 +297,8 @@ const { mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
 }));
 
-vi.mock("../../src/AppContext", async () => {
-  const actual = await vi.importActual("../../src/AppContext");
+vi.mock("@milady/app-core/state", async () => {
+  const actual = await vi.importActual("@milady/app-core/state");
   return {
     ...actual,
     useApp: () => mockUseApp(),
@@ -298,23 +309,64 @@ vi.mock("../../src/AppContext", async () => {
   };
 });
 
-// Mock all heavy components to isolate SettingsView testing
-vi.mock("../../src/components/MediaSettingsSection", () => ({
-  MediaSettingsSection: () =>
-    React.createElement("div", null, "MediaSettingsSection"),
+vi.mock("@milady/app-core/components", async () => {
+  const actual = await vi.importActual<
+    typeof import("@milady/app-core/components")
+  >("@milady/app-core/components");
+  return {
+    ...actual,
+  };
+});
+
+vi.mock("../../../../packages/app-core/src/components/ConfigPageView", () => ({
+  ConfigPageView: () => React.createElement("div", null, "ConfigPageView"),
 }));
-vi.mock("../../src/components/PermissionsSection", () => ({
-  PermissionsSection: () =>
-    React.createElement("div", null, "PermissionsSection"),
-}));
-vi.mock("../../src/components/ProviderSwitcher", () => ({
-  ProviderSwitcher: () => React.createElement("div", null, "ProviderSwitcher"),
-}));
-vi.mock("../../src/components/VoiceConfigView", () => ({
+
+vi.mock(
+  "../../../../packages/app-core/src/components/CodingAgentSettingsSection",
+  () => ({
+    CodingAgentSettingsSection: () =>
+      React.createElement("div", null, "CodingAgentSettingsSection"),
+  }),
+);
+
+vi.mock(
+  "../../../../packages/app-core/src/components/MediaSettingsSection",
+  () => ({
+    MediaSettingsSection: () =>
+      React.createElement("div", null, "MediaSettingsSection"),
+  }),
+);
+
+vi.mock(
+  "../../../../packages/app-core/src/components/MiladyCloudDashboard",
+  () => ({
+    CloudDashboard: () =>
+      React.createElement("div", null, "MiladyCloudDashboard"),
+  }),
+);
+
+vi.mock(
+  "../../../../packages/app-core/src/components/PermissionsSection",
+  () => ({
+    PermissionsSection: () =>
+      React.createElement("div", null, "PermissionsSection"),
+  }),
+);
+
+vi.mock(
+  "../../../../packages/app-core/src/components/ProviderSwitcher",
+  () => ({
+    ProviderSwitcher: () =>
+      React.createElement("div", null, "ProviderSwitcher"),
+  }),
+);
+
+vi.mock("../../../../packages/app-core/src/components/VoiceConfigView", () => ({
   VoiceConfigView: () => React.createElement("div", null, "VoiceConfigView"),
 }));
 
-import { SettingsView } from "../../src/components/SettingsView";
+import { SettingsView } from "../../../../packages/app-core/src/components/SettingsView";
 
 function createUIHarnessState(): AppHarnessState {
   return {

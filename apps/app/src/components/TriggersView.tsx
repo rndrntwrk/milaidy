@@ -10,11 +10,11 @@ import {
   StatusBadge,
   StatusDot,
 } from "@milady/app-core/components";
+import { useApp } from "@milady/app-core/state";
+import { confirmDesktopAction } from "@milady/app-core/utils";
 import { Button, Input } from "@milady/ui";
 import { useEffect, useMemo, useState } from "react";
 import { parsePositiveInteger } from "../../../../src/utils/number-parsing";
-import { useApp } from "../AppContext";
-import { confirmDesktopAction } from "../utils/desktop-dialogs";
 
 type TriggerType = "interval" | "once" | "cron";
 type TriggerWakeMode = "inject_now" | "next_autonomy_cycle";
@@ -585,7 +585,7 @@ export function TriggersView() {
                     {trigger.instructions.length > 120 && (
                       <button
                         type="button"
-                        className="ml-1 text-accent hover:underline cursor-pointer bg-transparent border-0 p-0 text-xs"
+                        className="ml-1 text-txt hover:underline cursor-pointer bg-transparent border-0 p-0 text-xs"
                         onClick={() => toggleInstructions(trigger.id)}
                       >
                         {isExpanded ? "show less" : "show more"}

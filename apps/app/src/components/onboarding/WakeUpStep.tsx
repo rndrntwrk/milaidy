@@ -1,9 +1,9 @@
 import { client } from "@milady/app-core/api";
+import { useApp } from "@milady/app-core/state";
 import { useCallback, useRef, useState } from "react";
-import { useApp } from "../../AppContext";
 
 export function WakeUpStep() {
-  const { handleOnboardingNext } = useApp();
+  const { handleOnboardingNext, t } = useApp();
 
   const [showImport, setShowImport] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -18,11 +18,11 @@ export function WakeUpStep() {
   const handleImportAgent = useCallback(async () => {
     if (importBusyRef.current || importBusy) return;
     if (!importFile) {
-      setImportError("Select an export file before importing.");
+      setImportError(t("onboarding.selectFileError"));
       return;
     }
     if (!importPassword || importPassword.length < 4) {
-      setImportError("Password must be at least 4 characters.");
+      setImportError(t("onboarding.passwordMinError"));
       return;
     }
     try {
@@ -54,19 +54,20 @@ export function WakeUpStep() {
       importBusyRef.current = false;
       setImportBusy(false);
     }
-  }, [importBusy, importFile, importPassword]);
+  }, [importBusy, importFile, importPassword, t]);
 
   if (showImport) {
     return (
       <>
-        <div className="onboarding-section-title">Import Agent</div>
+        <div className="onboarding-section-title">
+          {t("onboarding.importAgent")}
+        </div>
         <div className="onboarding-divider">
           <div className="onboarding-divider-diamond" />
         </div>
 
         <p className="onboarding-desc" style={{ marginBottom: "16px" }}>
-          Select an <code style={{ color: "#f0b90b" }}>.eliza-agent</code>{" "}
-          export file and enter the decryption password.
+          {t("onboarding.importDesc")}
         </p>
 
         <input
@@ -83,7 +84,7 @@ export function WakeUpStep() {
 
         <input
           type="password"
-          placeholder="Decryption password..."
+          placeholder={t("onboarding.decryptionPasswordPlaceholder")}
           value={importPassword}
           onChange={(e) => {
             setImportPassword(e.target.value);
@@ -96,7 +97,7 @@ export function WakeUpStep() {
         {importError && (
           <p
             className="onboarding-desc"
-            style={{ color: "rgba(255,100,100,0.8)", marginBottom: "8px" }}
+            style={{ color: "var(--danger)", marginBottom: "8px" }}
           >
             {importError}
           </p>
@@ -104,7 +105,7 @@ export function WakeUpStep() {
         {importSuccess && (
           <p
             className="onboarding-desc"
-            style={{ color: "rgba(100,255,100,0.8)", marginBottom: "8px" }}
+            style={{ color: "var(--ok)", marginBottom: "8px" }}
           >
             {importSuccess}
           </p>
@@ -122,7 +123,7 @@ export function WakeUpStep() {
             }}
             type="button"
           >
-            Cancel
+            {t("onboarding.cancel")}
           </button>
           <button
             className="onboarding-confirm-btn"
@@ -130,7 +131,7 @@ export function WakeUpStep() {
             onClick={() => void handleImportAgent()}
             type="button"
           >
-            {importBusy ? "Importing..." : "Restore"}
+            {importBusy ? t("onboarding.importing") : t("onboarding.restore")}
           </button>
         </div>
       </>
@@ -139,33 +140,43 @@ export function WakeUpStep() {
 
   return (
     <>
-      <div className="onboarding-section-title">Initialization</div>
+      <div className="onboarding-section-title">
+        {t("onboarding.welcomeTitle")}
+      </div>
       <div className="onboarding-divider">
         <div className="onboarding-divider-diamond" />
       </div>
 
-      <div
-        className="onboarding-question"
-        style={{ fontSize: "32px", fontWeight: 400 }}
-      >
-        elizaOS
-      </div>
-      <p className="onboarding-desc">Your autonomous AI companion awaits.</p>
+      <p className="onboarding-desc">{t("onboarding.welcomeSubtitle")}</p>
 
-      <div className="onboarding-panel-footer">
-        <button
-          className="onboarding-back-link"
-          onClick={() => setShowImport(true)}
-          type="button"
-        >
-          Restore from Backup
-        </button>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "12px",
+          width: "100%",
+          marginTop: "16px",
+        }}
+      >
         <button
           className="onboarding-confirm-btn"
           onClick={() => handleOnboardingNext()}
           type="button"
+          style={{ width: "100%" }}
         >
-          Activate
+          {t("onboarding.createNewAgent")}
+        </button>
+        <button
+          className="onboarding-confirm-btn"
+          onClick={() => setShowImport(true)}
+          type="button"
+          style={{
+            width: "100%",
+            background: "transparent",
+            border: "1px solid var(--border)",
+          }}
+        >
+          {t("onboarding.restoreFromBackup")}
         </button>
       </div>
     </>

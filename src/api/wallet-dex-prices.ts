@@ -15,6 +15,7 @@ export const DEXSCREENER_CHAIN_MAP: Record<number, string> = {
   42161: "arbitrum",
   10: "optimism",
   137: "polygon",
+  43114: "avalanche",
 };
 
 export const DEXPAPRIKA_CHAIN_MAP: Record<number, string> = {
@@ -24,6 +25,7 @@ export const DEXPAPRIKA_CHAIN_MAP: Record<number, string> = {
   42161: "arbitrum_one",
   10: "optimism",
   137: "polygon_pos",
+  43114: "avalanche",
 };
 
 /** Wrapped native token addresses for pricing native balances via DEX APIs. */
@@ -34,6 +36,7 @@ export const WRAPPED_NATIVE: Record<number, string> = {
   42161: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
   10: "0x4200000000000000000000000000000000000006",
   137: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270",
+  43114: "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7",
 };
 
 export const DEX_PRICE_TIMEOUT_MS = 10_000;

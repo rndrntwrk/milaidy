@@ -1,25 +1,26 @@
 /**
- * Character view — agent identity, personality, and avatar.
- *
- * Layout: 4 section cards
- *   1. Identity + Personality — name, avatar, bio, adjectives/topics, system prompt
- *   2. Style — 3-column style rule textareas
- *   3. Examples — collapsible chat + post examples
- *   4. Voice — voice selection + preview
- *   + Save bar at bottom
+ * Character view — roster-first character selection with optional customization.
  */
 
 import {
   type CharacterData,
   client,
+  type StylePreset,
   type VoiceConfig,
 } from "@milady/app-core/api";
+import {
+  ConfigRenderer,
+  defaultRegistry,
+  type JsonSchemaObject,
+} from "@milady/app-core/config";
 import {
   dispatchWindowEvent,
   VOICE_CONFIG_UPDATED_EVENT,
 } from "@milady/app-core/events";
+import { useTimeout } from "@milady/app-core/hooks";
+import { getVrmPreviewUrl, useApp } from "@milady/app-core/state";
 import type { ConfigUiHint } from "@milady/app-core/types";
-import { resolveApiUrl } from "@milady/app-core/utils";
+import { alertDesktopMessage } from "@milady/app-core/utils";
 import {
   PREMADE_VOICES,
   sanitizeApiKey,
@@ -27,12 +28,6 @@ import {
 } from "@milady/app-core/voice";
 import { Button, Input, TagEditor, Textarea, ThemedSelect } from "@milady/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useApp } from "../AppContext";
-import { useTimeout } from "../hooks/useTimeout";
-import { alertDesktopMessage } from "../utils/desktop-dialogs";
-import { AvatarSelector } from "./AvatarSelector";
-import type { JsonSchemaObject } from "./config-catalog";
-import { ConfigRenderer, defaultRegistry } from "./config-renderer";
 
 const DEFAULT_ELEVEN_FAST_MODEL = "eleven_flash_v2_5";
 
@@ -40,6 +35,153 @@ type CharacterConversation = NonNullable<
   CharacterData["messageExamples"]
 >[number];
 type CharacterMessage = CharacterConversation["examples"][number];
+type StyleSectionKey = "all" | "chat" | "post";
+
+const STYLE_SECTION_KEYS: StyleSectionKey[] = ["all", "chat", "post"];
+const STYLE_SECTION_PLACEHOLDERS: Record<StyleSectionKey, string> = {
+  all: "Add shared rule",
+  chat: "Add chat rule",
+  post: "Add post rule",
+};
+const STYLE_SECTION_EMPTY_STATES: Record<StyleSectionKey, string> = {
+  all: "No shared rules yet.",
+  chat: "No chat rules yet.",
+  post: "No post rules yet.",
+};
+
+const CHARACTER_PRESET_META: Record<
+  string,
+  {
+    name: string;
+    avatarIndex: number;
+    voicePresetId?: string;
+  }
+> = {
+  "uwu~": { name: "Reimu", avatarIndex: 1, voicePresetId: "sarah" },
+  "hell yeah": { name: "Marisa", avatarIndex: 2, voicePresetId: "adam" },
+  "lol k": { name: "Yukari", avatarIndex: 3, voicePresetId: "liam" },
+  "Noted.": { name: "Sakuya", avatarIndex: 4, voicePresetId: "alice" },
+  "hehe~": { name: "Koishi", avatarIndex: 2, voicePresetId: "gigi" },
+  "...": { name: "Remilia", avatarIndex: 4, voicePresetId: "lily" },
+  "locked in": { name: "Reisen", avatarIndex: 3, voicePresetId: "josh" },
+};
+
+type CharacterRosterEntry = {
+  id: string;
+  name: string;
+  avatarIndex: number;
+  voicePresetId?: string;
+  preset: StylePreset;
+};
+
+function replaceCharacterToken(value: string, name: string) {
+  return value
+    .replaceAll("{{name}}", name)
+    .replaceAll("{{agentName}}", name);
+}
+
+function buildCharacterFromPreset(
+  preset: StylePreset,
+  name: string,
+): CharacterData {
+  return {
+    name,
+    username: name,
+    bio: preset.bio.map((line) => replaceCharacterToken(line, name)),
+    system: replaceCharacterToken(preset.system, name),
+    adjectives: [...preset.adjectives],
+    topics: [...preset.topics],
+    style: {
+      all: [...preset.style.all],
+      chat: [...preset.style.chat],
+      post: [...preset.style.post],
+    },
+    messageExamples: preset.messageExamples.map((conversation) => ({
+      examples: conversation.map((message) => ({
+        name:
+          message.user === "{{agentName}}" ? name : replaceCharacterToken(message.user, name),
+        content: {
+          text: replaceCharacterToken(message.content.text, name),
+        },
+      })),
+    })),
+    postExamples: preset.postExamples.map((example) =>
+      replaceCharacterToken(example, name),
+    ),
+  };
+}
+
+function truncateCopy(value: string, max = 170) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= max) return normalized;
+  return `${normalized.slice(0, max - 1).trimEnd()}…`;
+}
+
+function resolveRosterEntries(styles: readonly StylePreset[]): CharacterRosterEntry[] {
+  return styles.map((preset, index) => {
+    const meta = CHARACTER_PRESET_META[preset.catchphrase];
+    const fallbackName = `Character ${index + 1}`;
+    return {
+      id: preset.catchphrase,
+      name: meta?.name ?? fallbackName,
+      avatarIndex: meta?.avatarIndex ?? ((index % 4) + 1),
+      voicePresetId: meta?.voicePresetId,
+      preset,
+    };
+  });
+}
+
+function findMatchingRosterEntry(
+  character: CharacterData | null,
+  avatarIndex: number,
+  roster: CharacterRosterEntry[],
+) {
+  if (!character) return null;
+  const currentName = typeof character.name === "string" ? character.name.trim() : "";
+  const exactNameMatch = roster.find((entry) => entry.name === currentName);
+  if (exactNameMatch) return exactNameMatch.id;
+
+  let bestMatch: { id: string; score: number } | null = null;
+  for (const entry of roster) {
+    let score = 0;
+    if (entry.avatarIndex === avatarIndex) score += 3;
+
+    const draftAdjectives = new Set(character.adjectives ?? []);
+    const draftTopics = new Set(character.topics ?? []);
+    for (const adjective of entry.preset.adjectives) {
+      if (draftAdjectives.has(adjective)) score += 1;
+    }
+    for (const topic of entry.preset.topics) {
+      if (draftTopics.has(topic)) score += 1;
+    }
+
+    if (
+      typeof character.system === "string" &&
+      character.system.includes(entry.preset.catchphrase)
+    ) {
+      score += 1;
+    }
+
+    if (!bestMatch || score > bestMatch.score) {
+      bestMatch = { id: entry.id, score };
+    }
+  }
+
+  return bestMatch && bestMatch.score >= 4 ? bestMatch.id : null;
+}
+
+function getStyleEntryRenderKey(
+  section: StyleSectionKey,
+  items: string[],
+  item: string,
+  index: number,
+) {
+  let occurrence = 0;
+  for (const current of items.slice(0, index + 1)) {
+    if (current === item) occurrence += 1;
+  }
+  return `${section}:${item}:${occurrence}`;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -114,6 +256,7 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
     handleSaveCharacter,
     loadCharacter,
     setState,
+    onboardingOptions,
     selectedVrmIndex,
     t,
     // Registry / Drop
@@ -245,6 +388,8 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
           const postExamples = readStringArray(parsed.postExamples);
           if (postExamples)
             handleCharacterFieldInput("postExamples", postExamples);
+          setSelectedCharacterId(null);
+          setCustomizeOpen(true);
         } catch {
           void alertDesktopMessage({
             title: "Invalid Character File",
@@ -261,21 +406,65 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
 
   /* ── Character generation state ─────────────────────────────────── */
   const [generating, setGenerating] = useState<string | null>(null);
-
-  /* ── Avatar loading state ───────────────────────────────────────── */
-  const [avatarLoading, setAvatarLoading] = useState(false);
+  const [pendingStyleEntries, setPendingStyleEntries] = useState<
+    Record<StyleSectionKey, string>
+  >({
+    all: "",
+    chat: "",
+    post: "",
+  });
+  const [styleEntryDrafts, setStyleEntryDrafts] = useState<
+    Record<StyleSectionKey, string[]>
+  >({
+    all: [],
+    chat: [],
+    post: [],
+  });
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(
+    null,
+  );
+  const [rosterStyles, setRosterStyles] = useState<StylePreset[]>(
+    onboardingOptions?.styles ?? [],
+  );
 
   /* ── Voice config state ─────────────────────────────────────────── */
   const [voiceConfig, setVoiceConfig] = useState<VoiceConfig>({});
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [voiceSaving, setVoiceSaving] = useState(false);
-  const [voiceSaveSuccess, setVoiceSaveSuccess] = useState(false);
   const [voiceSaveError, setVoiceSaveError] = useState<string | null>(null);
   const [voiceTesting, setVoiceTesting] = useState(false);
   const [voiceTestAudio, setVoiceTestAudio] = useState<HTMLAudioElement | null>(
     null,
   );
-  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+  const [selectedVoicePresetId, setSelectedVoicePresetId] = useState<
+    string | null
+  >(null);
+
+  useEffect(() => {
+    if (onboardingOptions?.styles?.length) {
+      setRosterStyles(onboardingOptions.styles);
+      return;
+    }
+
+    let cancelled = false;
+    void client
+      .getOnboardingOptions()
+      .then((options) => {
+        if (!cancelled) {
+          setRosterStyles(options.styles ?? []);
+        }
+      })
+      .catch(() => {
+        /* ignore */
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [onboardingOptions?.styles]);
+
+  const characterRoster = resolveRosterEntries(rosterStyles);
 
   /* Load voice config on mount */
   useEffect(() => {
@@ -293,7 +482,7 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
             const preset = PREMADE_VOICES.find(
               (p) => p.voiceId === tts.elevenlabs?.voiceId,
             );
-            setSelectedPresetId(preset?.id ?? "custom");
+            setSelectedVoicePresetId(preset?.id ?? "custom");
           }
         }
       } catch {
@@ -314,7 +503,7 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
   );
 
   const handleSelectPreset = useCallback((preset: VoicePreset) => {
-    setSelectedPresetId(preset.id);
+    setSelectedVoicePresetId(preset.id);
     setVoiceConfig((prev) => ({
       ...prev,
       elevenlabs: { ...(prev.elevenlabs ?? {}), voiceId: preset.voiceId },
@@ -345,42 +534,29 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
     setVoiceTesting(false);
   }, [voiceTestAudio]);
 
-  const handleVoiceSave = useCallback(async () => {
-    setVoiceSaving(true);
+  const persistVoiceConfig = useCallback(async () => {
     setVoiceSaveError(null);
-    setVoiceSaveSuccess(false);
-    try {
-      const normalizedElevenlabs = {
-        ...voiceConfig.elevenlabs,
-        modelId: voiceConfig.elevenlabs?.modelId ?? DEFAULT_ELEVEN_FAST_MODEL,
-      };
-      const sanitizedKey = sanitizeApiKey(normalizedElevenlabs?.apiKey);
-      if (sanitizedKey) normalizedElevenlabs.apiKey = sanitizedKey;
-      else delete normalizedElevenlabs.apiKey;
+    const normalizedElevenlabs = {
+      ...voiceConfig.elevenlabs,
+      modelId: voiceConfig.elevenlabs?.modelId ?? DEFAULT_ELEVEN_FAST_MODEL,
+    };
+    const sanitizedKey = sanitizeApiKey(normalizedElevenlabs?.apiKey);
+    if (sanitizedKey) normalizedElevenlabs.apiKey = sanitizedKey;
+    else delete normalizedElevenlabs.apiKey;
 
-      const normalizedVoiceConfig: VoiceConfig = {
-        ...voiceConfig,
-        provider: voiceConfig.provider ?? "elevenlabs",
-        elevenlabs: normalizedElevenlabs,
-      };
+    const normalizedVoiceConfig: VoiceConfig = {
+      ...voiceConfig,
+      provider: voiceConfig.provider ?? "elevenlabs",
+      elevenlabs: normalizedElevenlabs,
+    };
 
-      await client.updateConfig({
-        messages: {
-          tts: normalizedVoiceConfig,
-        },
-      });
-      dispatchWindowEvent(VOICE_CONFIG_UPDATED_EVENT, normalizedVoiceConfig);
-      setVoiceSaveSuccess(true);
-      setTimeout(() => setVoiceSaveSuccess(false), 2500);
-    } catch (err) {
-      setVoiceSaveError(
-        err instanceof Error
-          ? err.message
-          : "Failed to save — is the agent running?",
-      );
-    }
-    setVoiceSaving(false);
-  }, [voiceConfig, setTimeout]);
+    await client.updateConfig({
+      messages: {
+        tts: normalizedVoiceConfig,
+      },
+    });
+    dispatchWindowEvent(VOICE_CONFIG_UPDATED_EVENT, normalizedVoiceConfig);
+  }, [voiceConfig]);
 
   const d = characterDraft;
   const bioText =
@@ -389,9 +565,6 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
       : Array.isArray(d.bio)
         ? d.bio.join("\n")
         : "";
-  const styleAllText = (d.style?.all ?? []).join("\n");
-  const styleChatText = (d.style?.chat ?? []).join("\n");
-  const stylePostText = (d.style?.post ?? []).join("\n");
 
   const getCharContext = useCallback(
     () => ({
@@ -403,6 +576,24 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
     }),
     [d, bioText],
   );
+
+  useEffect(() => {
+    if (selectedCharacterId || !characterRoster.length) return;
+    const matchedId = findMatchingRosterEntry(
+      characterData,
+      selectedVrmIndex,
+      characterRoster,
+    );
+    if (matchedId) setSelectedCharacterId(matchedId);
+  }, [characterData, characterRoster, selectedCharacterId, selectedVrmIndex]);
+
+  useEffect(() => {
+    setStyleEntryDrafts({
+      all: [...(d.style?.all ?? [])],
+      chat: [...(d.style?.chat ?? [])],
+      post: [...(d.style?.post ?? [])],
+    });
+  }, [d.style]);
 
   const handleGenerate = useCallback(
     async (field: string, mode: "append" | "replace" = "replace") => {
@@ -499,6 +690,65 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
       /* ignore */
     }
   }, [handleFieldEdit]);
+
+  const handlePendingStyleEntryChange = useCallback(
+    (key: StyleSectionKey, value: string) => {
+      setPendingStyleEntries((prev) => ({ ...prev, [key]: value }));
+    },
+    [],
+  );
+
+  const handleAddStyleEntry = useCallback(
+    (key: StyleSectionKey) => {
+      const value = pendingStyleEntries[key].trim();
+      if (!value) return;
+
+      const nextItems = [...(d.style?.[key] ?? [])];
+      if (!nextItems.includes(value)) {
+        nextItems.push(value);
+        handleStyleEdit(key, nextItems.join("\n"));
+      }
+
+      setPendingStyleEntries((prev) => ({ ...prev, [key]: "" }));
+    },
+    [d.style, handleStyleEdit, pendingStyleEntries],
+  );
+
+  const handleRemoveStyleEntry = useCallback(
+    (key: StyleSectionKey, index: number) => {
+      const nextItems = [...(d.style?.[key] ?? [])];
+      nextItems.splice(index, 1);
+      handleStyleEdit(key, nextItems.join("\n"));
+    },
+    [d.style, handleStyleEdit],
+  );
+
+  const handleStyleEntryDraftChange = useCallback(
+    (key: StyleSectionKey, index: number, value: string) => {
+      setStyleEntryDrafts((prev) => {
+        const nextItems = [...(prev[key] ?? [])];
+        nextItems[index] = value;
+        return { ...prev, [key]: nextItems };
+      });
+    },
+    [],
+  );
+
+  const handleCommitStyleEntry = useCallback(
+    (key: StyleSectionKey, index: number) => {
+      const nextValue = styleEntryDrafts[key]?.[index]?.trim() ?? "";
+      const nextItems = [...(d.style?.[key] ?? [])];
+
+      if (!nextValue) {
+        nextItems.splice(index, 1);
+      } else {
+        nextItems[index] = nextValue;
+      }
+
+      handleStyleEdit(key, nextItems.join("\n"));
+    },
+    [d.style, handleStyleEdit, styleEntryDrafts],
+  );
 
   /* ── Helpers ────────────────────────────────────────────────────── */
   const sectionCls = inModal
@@ -807,224 +1057,321 @@ export function CharacterView({ inModal }: { inModal?: boolean } = {}) {
         </div>
       </div>
 
-      {/* ═══ SECTION 2: STYLE ═══ */}
-      <div className={sectionCls}>
-        <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-3">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
-            <div className="font-bold text-sm tracking-wide text-txt">
-              {t("characterview.StyleRules")}
-            </div>
-            <span className="font-medium text-[11px] text-muted tracking-wide bg-black/10 px-2 py-0.5 rounded-full border border-white/5">
-              {t("characterview.CommunicationGuid")}
-            </span>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 text-[11px] font-bold border-border/50 bg-bg/50 backdrop-blur-sm shadow-inner hover:text-accent hover:border-accent/40 transition-all text-accent"
-            onClick={() => void handleGenerate("style", "replace")}
-            disabled={generating === "style"}
-          >
-            {generating === "style" ? "generating..." : "regenerate"}
-          </Button>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-          {(["all", "chat", "post"] as const).map((key) => {
-            const val =
-              key === "all"
-                ? styleAllText
-                : key === "chat"
-                  ? styleChatText
-                  : stylePostText;
-            return (
-              <div key={key} className="flex flex-col gap-2">
-                <span className="font-bold text-[11px] text-muted uppercase tracking-widest pl-1">
-                  {key}
-                </span>
-                <Textarea
-                  value={val}
-                  rows={4}
-                  placeholder={`${key} style rules, one per line`}
-                  onChange={(e) => handleStyleEdit(key, e.target.value)}
-                  className="bg-bg/50 backdrop-blur-md border-border/50 shadow-inner focus-visible:ring-accent/50 focus-visible:border-accent rounded-xl text-xs leading-relaxed p-3 custom-scrollbar"
-                />
+      {/* ═══ SECTIONS 2-3: STYLE + EXAMPLES ═══ */}
+      <div
+        className="mt-4 grid grid-cols-1 items-start gap-6 lg:grid-cols-2"
+        data-testid="character-style-examples-grid"
+      >
+        <div
+          className={`${sectionCls} !mt-0 flex min-h-0 max-h-none flex-col overflow-hidden lg:max-h-[560px]`}
+          data-testid="character-style-editor"
+        >
+          <div className="mb-4 flex items-center justify-between gap-3 border-b border-border/40 pb-3">
+            <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+              <div className="font-bold text-sm tracking-wide text-txt">
+                {t("characterview.StyleRules")}
               </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ═══ SECTION 3: EXAMPLES ═══ */}
-      <div className={sectionCls}>
-        <div className="font-bold text-sm mb-4 border-b border-border/40 pb-3 text-txt tracking-wide">
-          {t("characterview.Examples")}
-        </div>
-
-        <div className="flex flex-col gap-5">
-          {/* Chat Examples */}
-          <details className="group">
-            <summary className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold list-none [&::-webkit-details-marker]:hidden">
-              <span className="inline-block transition-transform group-open:rotate-90 text-accent">
-                &#9654;
+              <span className="rounded-full border border-white/5 bg-black/10 px-2 py-0.5 text-[11px] font-medium tracking-wide text-muted">
+                {t("characterview.CommunicationGuid")}
               </span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 shrink-0 border-border/50 bg-bg/50 text-[11px] font-bold text-accent shadow-inner transition-all hover:border-accent/40 hover:text-accent"
+              onClick={() => void handleGenerate("style", "replace")}
+              disabled={generating === "style"}
+            >
+              {generating === "style" ? "generating..." : "regenerate"}
+            </Button>
+          </div>
 
-              {t("characterview.chatExamples")}
-              <span className="font-medium text-[11px] text-muted bg-black/10 px-2 py-0.5 rounded-full border border-white/5 ml-1">
-                {t("characterview.HowTheAgentResp")}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                className="ml-auto h-7 text-[11px] font-bold border-border/50 bg-bg/50 backdrop-blur-sm shadow-inner hover:text-accent hover:border-accent/40 transition-all text-accent"
-                onClick={(e) => {
-                  e.preventDefault();
-                  void handleGenerate("chatExamples", "replace");
-                }}
-                disabled={generating === "chatExamples"}
-              >
-                {generating === "chatExamples" ? "generating..." : "generate"}
-              </Button>
-            </summary>
-            <div className="flex flex-col gap-3 mt-4">
-              {(d.messageExamples ?? []).map((convo, ci) => (
-                <div
-                  key={convo.examples
-                    .map((msg) => `${msg.name}:${msg.content?.text ?? ""}`)
-                    .join("|")}
-                  className="p-4 border border-border/40 bg-black/10 rounded-xl shadow-inner backdrop-blur-sm"
-                >
-                  <div className="flex items-center justify-between mb-3 border-b border-border/30 pb-2">
-                    <span className="text-[11px] text-muted font-bold tracking-widest uppercase">
-                      {t("characterview.conversation")} {ci + 1}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 px-2 text-[10px] text-muted hover:text-danger hover:bg-danger/10 font-bold transition-all"
-                      onClick={() => {
-                        const updated = [...(d.messageExamples ?? [])];
-                        updated.splice(ci, 1);
-                        handleFieldEdit("messageExamples", updated);
-                      }}
-                    >
-                      {t("characterview.remove")}
-                    </Button>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    {convo.examples.map((msg, mi) => (
-                      <div
-                        key={`${msg.name}:${msg.content?.text ?? ""}`}
-                        className="flex gap-3 items-center"
-                      >
-                        <span
-                          className={`text-[11px] font-bold shrink-0 w-12 text-right uppercase tracking-wider ${msg.name === "{{user1}}" ? "text-muted" : "text-accent"}`}
-                        >
-                          {msg.name === "{{user1}}" ? "user" : "agent"}
+          <div
+            className="min-h-0 flex-1 overflow-y-auto pr-1 custom-scrollbar"
+            data-testid="character-style-editor-scroll"
+          >
+            <div className="flex flex-col gap-4">
+              {STYLE_SECTION_KEYS.map((key) => {
+                const items = d.style?.[key] ?? [];
+                return (
+                  <div
+                    key={key}
+                    className="flex flex-col gap-3 rounded-xl border border-border/40 bg-black/10 p-4 shadow-inner"
+                    data-testid={`style-section-${key}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="pl-1 text-[11px] font-bold uppercase tracking-widest text-muted">
+                          {key}
                         </span>
-                        <Input
-                          type="text"
-                          value={msg.content?.text ?? ""}
-                          onChange={(e) => {
+                        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted/70">
+                          {items.length} rule{items.length === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      {items.length > 0 ? (
+                        items.map((item, index) => (
+                          <div
+                            key={getStyleEntryRenderKey(
+                              key,
+                              items,
+                              item,
+                              index,
+                            )}
+                            className="flex items-start gap-3 rounded-lg border border-border/30 bg-bg/40 p-3"
+                            data-testid={`style-entry-${key}-${index}`}
+                          >
+                            <span className="mt-0.5 shrink-0 text-[10px] font-bold text-muted/70">
+                              {index + 1}
+                            </span>
+                            <Textarea
+                              value={styleEntryDrafts[key]?.[index] ?? item}
+                              rows={2}
+                              onChange={(e) =>
+                                handleStyleEntryDraftChange(
+                                  key,
+                                  index,
+                                  e.target.value,
+                                )
+                              }
+                              onBlur={() => handleCommitStyleEntry(key, index)}
+                              className="min-h-[72px] min-w-0 flex-1 resize-none rounded-lg border-border/50 bg-bg/50 p-2 text-xs leading-relaxed text-txt shadow-inner backdrop-blur-md transition-all focus-visible:border-accent/50 focus-visible:ring-accent/50"
+                              data-testid={`style-entry-editor-${key}-${index}`}
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 shrink-0 text-muted hover:bg-danger/10 hover:text-danger"
+                              onClick={() => handleRemoveStyleEntry(key, index)}
+                              title={t("characterview.remove")}
+                            >
+                              ×
+                            </Button>
+                          </div>
+                        ))
+                      ) : (
+                        <div
+                          className={`${hintCls} rounded-lg border border-dashed border-border/40 bg-bg/30 px-3 py-2`}
+                        >
+                          {STYLE_SECTION_EMPTY_STATES[key]}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="text"
+                        value={pendingStyleEntries[key]}
+                        placeholder={STYLE_SECTION_PLACEHOLDERS[key]}
+                        onChange={(e) =>
+                          handlePendingStyleEntryChange(key, e.target.value)
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleAddStyleEntry(key);
+                          }
+                        }}
+                        className="h-9 min-w-0 flex-1 rounded-xl border-border/50 bg-bg/50 shadow-inner backdrop-blur-md transition-all focus-visible:border-accent focus-visible:ring-accent/50"
+                        data-testid={`style-entry-input-${key}`}
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-9 shrink-0 border-border/50 bg-bg/50 px-3 text-[11px] font-bold text-txt shadow-inner transition-all hover:border-accent/40 hover:text-txt"
+                        onClick={() => handleAddStyleEntry(key)}
+                        disabled={!pendingStyleEntries[key].trim()}
+                      >
+                        + add
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div
+          className={`${sectionCls} !mt-0 flex min-h-0 max-h-none flex-col overflow-hidden lg:max-h-[560px]`}
+        >
+          <div className="mb-4 border-b border-border/40 pb-3 text-sm font-bold tracking-wide text-txt">
+            {t("characterview.Examples")}
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1 custom-scrollbar">
+            <div className="flex flex-col gap-5">
+              {/* Chat Examples */}
+              <details className="group">
+                <summary className="flex cursor-pointer list-none select-none items-center gap-2 text-xs font-bold [&::-webkit-details-marker]:hidden">
+                  <span className="inline-block transition-transform group-open:rotate-90 text-accent">
+                    &#9654;
+                  </span>
+
+                  {t("characterview.chatExamples")}
+                  <span className="ml-1 rounded-full border border-white/5 bg-black/10 px-2 py-0.5 text-[11px] font-medium text-muted">
+                    {t("characterview.HowTheAgentResp")}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="ml-auto h-7 border-border/50 bg-bg/50 text-[11px] font-bold text-accent shadow-inner transition-all hover:border-accent/40 hover:text-accent"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      void handleGenerate("chatExamples", "replace");
+                    }}
+                    disabled={generating === "chatExamples"}
+                  >
+                    {generating === "chatExamples"
+                      ? "generating..."
+                      : "generate"}
+                  </Button>
+                </summary>
+                <div className="mt-4 flex flex-col gap-3">
+                  {(d.messageExamples ?? []).map((convo, ci) => (
+                    <div
+                      key={convo.examples
+                        .map((msg) => `${msg.name}:${msg.content?.text ?? ""}`)
+                        .join("|")}
+                      className="rounded-xl border border-border/40 bg-black/10 p-4 shadow-inner backdrop-blur-sm"
+                    >
+                      <div className="mb-3 flex items-center justify-between border-b border-border/30 pb-2">
+                        <span className="text-[11px] font-bold uppercase tracking-widest text-muted">
+                          {t("characterview.conversation")} {ci + 1}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-[10px] font-bold text-muted transition-all hover:bg-danger/10 hover:text-danger"
+                          onClick={() => {
                             const updated = [...(d.messageExamples ?? [])];
-                            const convoClone = {
-                              examples: [...updated[ci].examples],
-                            };
-                            convoClone.examples[mi] = {
-                              ...convoClone.examples[mi],
-                              content: { text: e.target.value },
-                            };
-                            updated[ci] = convoClone;
+                            updated.splice(ci, 1);
                             handleFieldEdit("messageExamples", updated);
                           }}
-                          className="flex-1 bg-bg/50 backdrop-blur-md border-border/50 shadow-inner focus-visible:ring-accent/50 focus-visible:border-accent h-9 rounded-lg transition-all text-xs"
-                        />
+                        >
+                          {t("characterview.remove")}
+                        </Button>
                       </div>
-                    ))}
-                  </div>
+                      <div className="flex flex-col gap-2">
+                        {convo.examples.map((msg, mi) => (
+                          <div
+                            key={`${msg.name}:${msg.content?.text ?? ""}`}
+                            className="flex items-center gap-3"
+                          >
+                            <span
+                              className={`w-12 shrink-0 text-right text-[11px] font-bold uppercase tracking-wider ${msg.name === "{{user1}}" ? "text-muted" : "text-accent"}`}
+                            >
+                              {msg.name === "{{user1}}" ? "user" : "agent"}
+                            </span>
+                            <Input
+                              type="text"
+                              value={msg.content?.text ?? ""}
+                              onChange={(e) => {
+                                const updated = [...(d.messageExamples ?? [])];
+                                const convoClone = {
+                                  examples: [...updated[ci].examples],
+                                };
+                                convoClone.examples[mi] = {
+                                  ...convoClone.examples[mi],
+                                  content: { text: e.target.value },
+                                };
+                                updated[ci] = convoClone;
+                                handleFieldEdit("messageExamples", updated);
+                              }}
+                              className="h-9 flex-1 rounded-lg border-border/50 bg-bg/50 text-xs shadow-inner backdrop-blur-md transition-all focus-visible:border-accent/50 focus-visible:ring-accent/50"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  {(d.messageExamples ?? []).length === 0 && (
+                    <div
+                      className={`${hintCls} rounded-xl border border-white/5 bg-black/5 py-3 text-center`}
+                    >
+                      {t("characterview.noChatExamplesYet")}
+                    </div>
+                  )}
                 </div>
-              ))}
-              {(d.messageExamples ?? []).length === 0 && (
-                <div
-                  className={`${hintCls} py-3 bg-black/5 rounded-xl border border-white/5 text-center`}
-                >
-                  {t("characterview.noChatExamplesYet")}
-                </div>
-              )}
-            </div>
-          </details>
+              </details>
 
-          {/* Post Examples */}
-          <details className="group">
-            <summary className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold list-none [&::-webkit-details-marker]:hidden">
-              <span className="inline-block transition-transform group-open:rotate-90 text-accent">
-                &#9654;
-              </span>
+              {/* Post Examples */}
+              <details className="group">
+                <summary className="flex cursor-pointer list-none select-none items-center gap-2 text-xs font-bold [&::-webkit-details-marker]:hidden">
+                  <span className="inline-block transition-transform group-open:rotate-90 text-accent">
+                    &#9654;
+                  </span>
 
-              {t("characterview.postExamples")}
-              <span className="font-medium text-[11px] text-muted bg-black/10 px-2 py-0.5 rounded-full border border-white/5 ml-1">
-                {t("characterview.SocialMediaVoice")}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                className="ml-auto h-7 text-[11px] font-bold border-border/50 bg-bg/50 backdrop-blur-sm shadow-inner hover:text-accent hover:border-accent/40 transition-all text-accent"
-                onClick={(e) => {
-                  e.preventDefault();
-                  void handleGenerate("postExamples", "replace");
-                }}
-                disabled={generating === "postExamples"}
-              >
-                {generating === "postExamples" ? "generating..." : "generate"}
-              </Button>
-            </summary>
-            <div className="flex flex-col gap-2 mt-4">
-              {(d.postExamples ?? []).map((post: string, pi: number) => (
-                <div key={post} className="flex gap-2 items-center">
-                  <Input
-                    type="text"
-                    value={post}
-                    onChange={(e) => {
-                      const updated = [...(d.postExamples ?? [])];
-                      updated[pi] = e.target.value;
-                      handleFieldEdit("postExamples", updated);
+                  {t("characterview.postExamples")}
+                  <span className="ml-1 rounded-full border border-white/5 bg-black/10 px-2 py-0.5 text-[11px] font-medium text-muted">
+                    {t("characterview.SocialMediaVoice")}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="ml-auto h-7 border-border/50 bg-bg/50 text-[11px] font-bold text-accent shadow-inner transition-all hover:border-accent/40 hover:text-accent"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      void handleGenerate("postExamples", "replace");
                     }}
-                    className="flex-1 bg-bg/50 backdrop-blur-md border-border/50 shadow-inner focus-visible:ring-accent/50 focus-visible:border-accent h-9 rounded-lg transition-all text-xs"
-                  />
+                    disabled={generating === "postExamples"}
+                  >
+                    {generating === "postExamples"
+                      ? "generating..."
+                      : "generate"}
+                  </Button>
+                </summary>
+                <div className="mt-4 flex flex-col gap-2">
+                  {(d.postExamples ?? []).map((post: string, pi: number) => (
+                    <div key={post} className="flex items-center gap-2">
+                      <Input
+                        type="text"
+                        value={post}
+                        onChange={(e) => {
+                          const updated = [...(d.postExamples ?? [])];
+                          updated[pi] = e.target.value;
+                          handleFieldEdit("postExamples", updated);
+                        }}
+                        className="h-9 flex-1 rounded-lg border-border/50 bg-bg/50 text-xs shadow-inner backdrop-blur-md transition-all focus-visible:border-accent/50 focus-visible:ring-accent/50"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted hover:bg-danger/10 hover:text-danger"
+                        onClick={() => {
+                          const updated = [...(d.postExamples ?? [])];
+                          updated.splice(pi, 1);
+                          handleFieldEdit("postExamples", updated);
+                        }}
+                      >
+                        ×
+                      </Button>
+                    </div>
+                  ))}
+                  {(d.postExamples ?? []).length === 0 && (
+                    <div
+                      className={`${hintCls} rounded-xl border border-white/5 bg-black/5 py-3 text-center`}
+                    >
+                      {t("characterview.noPostExamplesYet")}
+                    </div>
+                  )}
                   <Button
                     variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted hover:text-danger hover:bg-danger/10"
+                    size="sm"
+                    className="mt-1 self-start rounded-md border border-transparent text-[11px] font-bold text-accent transition-all hover:border-accent/30 hover:bg-accent/10"
                     onClick={() => {
-                      const updated = [...(d.postExamples ?? [])];
-                      updated.splice(pi, 1);
+                      const updated = [...(d.postExamples ?? []), ""];
                       handleFieldEdit("postExamples", updated);
                     }}
                   >
-                    ×
+                    {t("characterview.AddPost")}
                   </Button>
                 </div>
-              ))}
-              {(d.postExamples ?? []).length === 0 && (
-                <div
-                  className={`${hintCls} py-3 bg-black/5 rounded-xl border border-white/5 text-center`}
-                >
-                  {t("characterview.noPostExamplesYet")}
-                </div>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-[11px] font-bold text-accent hover:bg-accent/10 border border-transparent hover:border-accent/30 transition-all rounded-md mt-1 self-start"
-                onClick={() => {
-                  const updated = [...(d.postExamples ?? []), ""];
-                  handleFieldEdit("postExamples", updated);
-                }}
-              >
-                {t("characterview.AddPost")}
-              </Button>
+              </details>
             </div>
-          </details>
+          </div>
         </div>
       </div>
 

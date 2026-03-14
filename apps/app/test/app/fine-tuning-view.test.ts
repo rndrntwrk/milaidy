@@ -50,7 +50,7 @@ const { mockClientFns, mockUseApp } = vi.hoisted(() => ({
 vi.mock("@milady/app-core/api", () => ({
   client: mockClientFns,
 }));
-vi.mock("../../src/AppContext", () => ({
+vi.mock("@milady/app-core/state", () => ({
   useApp: () => mockUseApp(),
 }));
 

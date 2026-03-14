@@ -25,7 +25,7 @@ export function TagEditor({
   items,
   onChange,
   placeholder = "add item...",
-  addLabel = "Add",
+  addLabel = "+",
   removeLabel = "×",
 }: TagEditorProps) {
   const [inputValue, setInputValue] = useState("");
@@ -64,7 +64,7 @@ export function TagEditor({
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 text-[10px] px-1.5 py-0.5 text-accent border-none hover:bg-transparent hover:text-accent/80"
+          className="h-7 w-7 text-[14px] p-0 text-accent border-none hover:bg-transparent hover:text-accent/80 font-bold"
           onClick={addItem}
         >
           {addLabel}
@@ -74,9 +74,11 @@ export function TagEditor({
         {items.map((item, i) => (
           <span
             key={item}
-            className="inline-flex items-center gap-1 px-2 py-0.5 border border-accent/60 bg-transparent rounded text-[11px] h-fit text-accent font-medium"
+            className="inline-flex items-center justify-between gap-1 px-2 py-0.5 border border-border/50 bg-black/10 rounded text-[11px] h-fit text-txt font-medium"
           >
-            {item}
+            <span className="truncate max-w-[200px]" title={item}>
+              {item}
+            </span>
             <Button
               variant="ghost"
               size="icon"

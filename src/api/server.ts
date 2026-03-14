@@ -126,7 +126,7 @@ import { handleAgentTransferRoutes } from "./agent-transfer-routes";
 import { handleAppsHyperscapeRoutes } from "./apps-hyperscape-routes";
 import { handleAppsRoutes } from "./apps-routes";
 import { handleAuthRoutes } from "./auth-routes";
-import { getAutonomyState, handleAutonomyRoutes } from "./autonomy-routes";
+
 import {
   buildBscApproveUnsignedTx,
   buildBscBuyUnsignedTx,
@@ -188,7 +188,7 @@ import {
 import { handleRegistryRoutes } from "./registry-routes";
 import { RegistryService } from "./registry-service";
 import { handleSandboxRoute } from "./sandbox-routes";
-
+import { applySignalQrOverride, handleSignalRoute } from "./signal-routes";
 import { handleSubscriptionRoutes } from "./subscription-routes";
 import { resolveTerminalRunLimits } from "./terminal-run-limits";
 import { handleTrainingRoutes } from "./training-routes";
@@ -204,6 +204,7 @@ import {
 import { TxService } from "./tx-service";
 import { generateWalletKeys, getWalletAddresses } from "./wallet";
 import { handleWalletRoutes } from "./wallet-routes";
+import { resolveWalletRpcReadiness } from "./wallet-rpc";
 import {
   loadWalletTradingProfile,
   recordWalletTradeLedgerEntry,
@@ -430,6 +431,11 @@ interface ServerState {
     string,
     import("../services/whatsapp-pairing").WhatsAppPairingSession
   >;
+  /** Active Signal pairing sessions (device linking flow). */
+  signalPairingSessions?: Map<
+    string,
+    import("../services/signal-pairing").SignalPairingSession
+  >;
 }
 
 interface ShareIngestItem {
@@ -461,10 +467,17 @@ interface PluginEntry {
   id: string;
   name: string;
   description: string;
+  tags: string[];
   enabled: boolean;
   configured: boolean;
   envKey: string | null;
-  category: "ai-provider" | "connector" | "streaming" | "database" | "feature";
+  category:
+    | "ai-provider"
+    | "connector"
+    | "streaming"
+    | "database"
+    | "app"
+    | "feature";
   /** Where the plugin comes from: "bundled" (ships with Milady) or "store" (user-installed from registry). */
   source: "bundled" | "store";
   configKeys: string[];
@@ -710,7 +723,14 @@ interface PluginIndexEntry {
   name: string;
   npmName: string;
   description: string;
-  category: "ai-provider" | "connector" | "streaming" | "database" | "feature";
+  tags?: string[];
+  category:
+    | "ai-provider"
+    | "connector"
+    | "streaming"
+    | "database"
+    | "app"
+    | "feature";
   envKey: string | null;
   configKeys: string[];
   pluginParameters?: Record<string, Record<string, unknown>>;
@@ -1014,6 +1034,7 @@ export const AGENT_EVENT_ALLOWED_STREAMS = new Set([
   "terminal",
   "game",
   "autonomy",
+
   "retake",
   "stream",
   "system",
@@ -1181,6 +1202,7 @@ export function discoverInstalledPlugins(
     let description = `Installed from registry (v${(record as Record<string, string>).version ?? "unknown"})`;
     let pluginConfigKeys: string[] = [];
     let pluginParameters: PluginParamDef[] = [];
+    let pluginTags: string[] = [];
 
     let pluginIcon: string | null = null;
     let pluginHomepage: string | undefined;
@@ -1205,6 +1227,7 @@ export function discoverInstalledPlugins(
               description?: string;
               homepage?: string;
               repository?: string | { type?: string; url?: string };
+              keywords?: string[];
               elizaos?: {
                 displayName?: string;
                 configKeys?: string[];
@@ -1219,6 +1242,7 @@ export function discoverInstalledPlugins(
             };
             if (pkg.name) name = pkg.name;
             if (pkg.description) description = pkg.description;
+            pluginTags = normalizePluginMetadataTags(pkg.keywords);
             if (pkg.elizaos?.displayName) name = pkg.elizaos.displayName;
             if (pkg.elizaos?.configKeys) {
               pluginConfigKeys = pkg.elizaos.configKeys;
@@ -1258,11 +1282,20 @@ export function discoverInstalledPlugins(
       }
     }
 
+    const resolvedDescription = resolvePluginDescription(
+      id,
+      name,
+      category,
+      description,
+    );
+    const resolvedTags = resolvePluginTags(id, category, pluginTags);
+
     entries.push({
       id,
       name,
       npmName: packageName,
-      description,
+      description: resolvedDescription,
+      tags: resolvedTags,
       enabled: false, // Will be updated against the runtime below
       configured:
         pluginConfigKeys.length === 0 || pluginParameters.some((p) => p.isSet),
@@ -1349,10 +1382,24 @@ export function discoverPluginsFromManifest(): PluginEntry[] {
             paramInfos,
           );
 
+          const description = resolvePluginDescription(
+            p.id,
+            p.name,
+            category,
+            p.description || bundledMeta.description,
+          );
+          const tags = resolvePluginTags(
+            p.id,
+            category,
+            p.tags,
+            bundledMeta.tags,
+          );
+
           return {
             id: p.id,
             name: p.name,
-            description: p.description,
+            description,
+            tags,
             enabled: false,
             configured,
             envKey,
@@ -1378,6 +1425,7 @@ export function discoverPluginsFromManifest(): PluginEntry[] {
         .sort((a, b) => a.name.localeCompare(b.name));
 
       applyWhatsAppQrOverride(entries, resolveDefaultAgentWorkspaceDir());
+      applySignalQrOverride(entries, resolveDefaultAgentWorkspaceDir());
 
       return entries;
     } catch (err) {
@@ -1464,6 +1512,66 @@ function categorizePlugin(
 
 const PLUGIN_SETUP_GUIDE_ROOT = "https://docs.milady.ai/plugin-setup-guide";
 const MILADY_REPO_ROOT = "https://github.com/milady-ai/milady";
+const PLUGIN_METADATA_TAG_STOPWORDS = new Set([
+  "plugin",
+  "plugins",
+  "eliza",
+  "elizaos",
+  "milady",
+  "elizaos-plugin",
+  "elizaos-plugins",
+  "feature",
+]);
+const SOCIAL_CHAT_CONNECTOR_IDS = new Set([
+  "telegram",
+  "discord",
+  "slack",
+  "whatsapp",
+  "signal",
+  "imessage",
+  "bluebubbles",
+  "matrix",
+  "mattermost",
+  "msteams",
+  "google-chat",
+  "feishu",
+  "line",
+  "zalo",
+  "zalouser",
+  "tlon",
+  "nextcloud-talk",
+  "blooio",
+  "twilio",
+  "twitch",
+]);
+const SOCIAL_FEED_CONNECTOR_IDS = new Set([
+  "twitter",
+  "bluesky",
+  "farcaster",
+  "instagram",
+  "nostr",
+]);
+const PLUGIN_METADATA_CATEGORY_TAGS: Record<string, string[]> = {
+  "ai-provider": ["ai-provider", "llm"],
+  connector: ["connector"],
+  streaming: ["streaming", "broadcast"],
+  database: ["database", "storage"],
+  app: ["app", "interactive"],
+  feature: ["feature"],
+};
+const PLUGIN_DESCRIPTION_OVERRIDES: Record<string, string> = {
+  slack: "Slack workspace connector for chatting with your agent",
+  signal: "Signal connector for secure chats with your agent",
+  mattermost: "Mattermost connector for team chat with your agent",
+  msteams: "Microsoft Teams connector for chatting with your agent",
+  "nextcloud-talk": "Nextcloud Talk connector for chatting with your agent",
+  blooio: "Blooio SMS connector for texting your agent",
+  github:
+    "GitHub connector for issues, pull requests, and repository automation",
+  "gmail-watch":
+    "Gmail watcher that turns new incoming emails into agent events",
+  mcp: "Model Context Protocol connector for external tools and servers",
+};
 
 const PLUGIN_SETUP_GUIDE_ANCHORS: Record<string, string> = {
   openai: "#openai",
@@ -1549,32 +1657,156 @@ function deriveMiladyRepositoryUrl(
   return `${MILADY_REPO_ROOT}/tree/main/packages/${dirName}`;
 }
 
+function normalizePluginMetadataTag(tag: string): string | null {
+  const normalized = tag
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (!normalized || PLUGIN_METADATA_TAG_STOPWORDS.has(normalized)) {
+    return null;
+  }
+  return normalized;
+}
+
+function normalizePluginMetadataTags(values: unknown): string[] {
+  if (!Array.isArray(values)) return [];
+  const tags: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const normalized = normalizePluginMetadataTag(value);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    tags.push(normalized);
+  }
+  return tags;
+}
+
+function mergePluginMetadataTags(...sources: unknown[]): string[] {
+  const tags: string[] = [];
+  const seen = new Set<string>();
+  for (const source of sources) {
+    for (const tag of normalizePluginMetadataTags(source)) {
+      if (seen.has(tag)) continue;
+      seen.add(tag);
+      tags.push(tag);
+    }
+  }
+  return tags;
+}
+
+function pluginIdTags(id: string): string[] {
+  return normalizePluginMetadataTags([id, ...id.split("-")]);
+}
+
+function connectorMetadataTags(id: string): string[] {
+  if (SOCIAL_CHAT_CONNECTOR_IDS.has(id)) {
+    return ["social", "social-chat", "messaging"];
+  }
+  if (SOCIAL_FEED_CONNECTOR_IDS.has(id)) {
+    return ["social", "social-feed"];
+  }
+  return ["integration"];
+}
+
+function resolvePluginDescription(
+  id: string,
+  name: string,
+  category: PluginEntry["category"],
+  description: string | undefined,
+): string {
+  const displayName = name.startsWith("@") ? formatPluginName(id) : name;
+  const trimmed = description?.trim();
+  if (trimmed) return trimmed;
+  if (PLUGIN_DESCRIPTION_OVERRIDES[id]) return PLUGIN_DESCRIPTION_OVERRIDES[id];
+  if (category === "ai-provider") {
+    return `${displayName} AI provider for Milady agents`;
+  }
+  if (category === "connector") {
+    if (SOCIAL_CHAT_CONNECTOR_IDS.has(id)) {
+      return `${displayName} connector for chatting with your agent`;
+    }
+    if (SOCIAL_FEED_CONNECTOR_IDS.has(id)) {
+      return `${displayName} social connector for connecting your agent to ${displayName}`;
+    }
+    return `${displayName} connector plugin for Milady agents`;
+  }
+  if (category === "streaming") {
+    return `${displayName} streaming destination for live agent broadcasts`;
+  }
+  if (category === "database") {
+    return `${displayName} storage plugin for Milady agents`;
+  }
+  if (category === "app") {
+    return `${displayName} interactive app for Milady agents`;
+  }
+  return `${displayName} plugin for Milady agents`;
+}
+
+function resolvePluginTags(
+  id: string,
+  category: PluginEntry["category"],
+  ...sources: unknown[]
+): string[] {
+  return mergePluginMetadataTags(
+    ...sources,
+    PLUGIN_METADATA_CATEGORY_TAGS[category] ?? [],
+    category === "connector" ? connectorMetadataTags(id) : [],
+    pluginIdTags(id),
+  );
+}
+
+function formatPluginName(id: string): string {
+  return id
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 function readBundledPluginPackageMetadata(
   packageRoot: string,
   dirName: string,
   npmName?: string,
-): { homepage?: string; repository?: string; icon?: string | null } {
+): {
+  description?: string;
+  homepage?: string;
+  repository?: string;
+  icon?: string | null;
+  tags?: string[];
+} {
   const pkgPath = path.join(packageRoot, "packages", dirName, "package.json");
   if (!fs.existsSync(pkgPath)) {
-    return { repository: deriveMiladyRepositoryUrl(npmName, dirName) };
+    return {
+      repository: deriveMiladyRepositoryUrl(npmName, dirName),
+      tags: [],
+    };
   }
   try {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8")) as {
+      description?: string;
       homepage?: string;
       repository?: string | { type?: string; url?: string };
+      keywords?: string[];
       logoUrl?: string;
       icon?: string;
       elizaos?: { logoUrl?: string };
     };
     return {
+      description: pkg.description?.trim() || undefined,
       homepage: pkg.homepage ?? undefined,
       repository:
         normalizeRepositoryUrl(pkg.repository) ??
         deriveMiladyRepositoryUrl(npmName, dirName),
       icon: pkg.logoUrl ?? pkg.elizaos?.logoUrl ?? pkg.icon ?? null,
+      tags: normalizePluginMetadataTags(pkg.keywords),
     };
   } catch {
-    return { repository: deriveMiladyRepositoryUrl(npmName, dirName) };
+    return {
+      repository: deriveMiladyRepositoryUrl(npmName, dirName),
+      tags: [],
+    };
   }
 }
 
@@ -7748,6 +7980,18 @@ async function handleRequest(
       error(res, "Failed to save configuration", 500);
       return;
     }
+
+    // Post-save verification: ensure the config file actually landed on disk.
+    // This catches silent write failures that previously caused onboarding
+    // to repeat on every restart.
+    if (!configFileExists()) {
+      logger.error(
+        `[milady-api] Config file does not exist after save — onboarding data will be lost on restart`,
+      );
+      error(res, "Configuration file was not persisted to disk", 500);
+      return;
+    }
+
     logger.info(
       `[milady-api] Onboarding complete for agent "${body.name}" (mode: ${(body.runMode as string) || "local"})`,
     );
@@ -7762,7 +8006,9 @@ async function handleRequest(
       method,
       pathname,
       state,
+      error,
       json,
+      readJsonBody,
     })
   ) {
     return;
@@ -7868,20 +8114,6 @@ async function handleRequest(
       readJsonBody,
       json,
       error,
-    })
-  ) {
-    return;
-  }
-
-  if (
-    await handleAutonomyRoutes({
-      req,
-      res,
-      method,
-      pathname,
-      runtime: state.runtime,
-      readJsonBody,
-      json,
     })
   ) {
     return;
@@ -8051,6 +8283,7 @@ async function handleRequest(
     }
 
     applyWhatsAppQrOverride(allPlugins, resolveDefaultAgentWorkspaceDir());
+    applySignalQrOverride(allPlugins, resolveDefaultAgentWorkspaceDir());
 
     // Inject per-provider model options into configUiHints for MODEL fields.
     // Each provider's cache is independent — no cross-population.
@@ -10529,6 +10762,33 @@ async function handleRequest(
     if (handled) return;
   }
 
+  // ── Signal routes (/api/signal/*) ─────────────────────────────────────
+  if (pathname.startsWith("/api/signal")) {
+    if (!state.signalPairingSessions) {
+      state.signalPairingSessions = new Map();
+    }
+    for (const [id, session] of state.signalPairingSessions) {
+      const status = session.getStatus();
+      if (
+        status === "disconnected" ||
+        status === "timeout" ||
+        status === "error"
+      ) {
+        session.stop();
+        state.signalPairingSessions.delete(id);
+      }
+    }
+    const handled = await handleSignalRoute(req, res, pathname, method, {
+      signalPairingSessions: state.signalPairingSessions,
+      broadcastWs: state.broadcastWs ?? undefined,
+      config: state.config,
+      runtime: state.runtime ?? undefined,
+      saveConfig: () => saveMiladyConfig(state.config),
+      workspaceDir: resolveDefaultAgentWorkspaceDir(),
+    });
+    if (handled) return;
+  }
+
   // ── POST /api/restart ───────────────────────────────────────────────────
   if (method === "POST" && pathname === "/api/restart") {
     json(res, { ok: true, message: "Restarting..." });
@@ -11225,11 +11485,8 @@ async function handleRequest(
     const evmAddress = addrs.evmAddress ?? null;
     const tradePermissionMode = resolveTradePermissionMode(state.config);
     const localSigner = Boolean(process.env.EVM_PRIVATE_KEY?.trim());
-    const bscRpcReady = Boolean(
-      process.env.NODEREAL_BSC_RPC_URL?.trim() ||
-        process.env.QUICKNODE_BSC_RPC_URL?.trim() ||
-        process.env.BSC_RPC_URL?.trim(),
-    );
+    const walletRpcReadiness = resolveWalletRpcReadiness(state.config);
+    const bscRpcReady = walletRpcReadiness.managedBscRpcReady;
     const canLocalTrade = canUseLocalTradeExecution(tradePermissionMode, false);
     const canAgentAutoTrade = canUseLocalTradeExecution(
       tradePermissionMode,
@@ -11431,6 +11688,9 @@ async function handleRequest(
         tokenAddress: body.tokenAddress,
         nodeRealBscRpcUrl: process.env.NODEREAL_BSC_RPC_URL,
         quickNodeBscRpcUrl: process.env.QUICKNODE_BSC_RPC_URL,
+        bscRpcUrl: process.env.BSC_RPC_URL,
+        cloudManagedAccess: resolveWalletRpcReadiness(state.config)
+          .cloudManagedAccess,
       });
       json(res, result);
     } catch (err) {
@@ -11468,6 +11728,9 @@ async function handleRequest(
         walletAddress: addrs.evmAddress ?? null,
         nodeRealBscRpcUrl: process.env.NODEREAL_BSC_RPC_URL,
         quickNodeBscRpcUrl: process.env.QUICKNODE_BSC_RPC_URL,
+        bscRpcUrl: process.env.BSC_RPC_URL,
+        cloudManagedAccess: resolveWalletRpcReadiness(state.config)
+          .cloudManagedAccess,
         request: {
           side: body.side as "buy" | "sell",
           tokenAddress: body.tokenAddress,
@@ -11524,6 +11787,9 @@ async function handleRequest(
         walletAddress: addrs.evmAddress ?? null,
         nodeRealBscRpcUrl: process.env.NODEREAL_BSC_RPC_URL,
         quickNodeBscRpcUrl: process.env.QUICKNODE_BSC_RPC_URL,
+        bscRpcUrl: process.env.BSC_RPC_URL,
+        cloudManagedAccess: resolveWalletRpcReadiness(state.config)
+          .cloudManagedAccess,
         request: {
           side: body.side as "buy" | "sell",
           tokenAddress: body.tokenAddress,
@@ -11575,6 +11841,9 @@ async function handleRequest(
       const rpcUrl = resolvePrimaryBscRpcUrl({
         nodeRealBscRpcUrl: process.env.NODEREAL_BSC_RPC_URL,
         quickNodeBscRpcUrl: process.env.QUICKNODE_BSC_RPC_URL,
+        bscRpcUrl: process.env.BSC_RPC_URL,
+        cloudManagedAccess: resolveWalletRpcReadiness(state.config)
+          .cloudManagedAccess,
       });
 
       if (!rpcUrl) {
@@ -11705,6 +11974,9 @@ async function handleRequest(
     const rpcUrl = resolvePrimaryBscRpcUrl({
       nodeRealBscRpcUrl: process.env.NODEREAL_BSC_RPC_URL,
       quickNodeBscRpcUrl: process.env.QUICKNODE_BSC_RPC_URL,
+      bscRpcUrl: process.env.BSC_RPC_URL,
+      cloudManagedAccess: resolveWalletRpcReadiness(state.config)
+        .cloudManagedAccess,
     });
 
     if (!rpcUrl) {
@@ -11870,6 +12142,9 @@ async function handleRequest(
             resolvePrimaryBscRpcUrl({
               nodeRealBscRpcUrl: process.env.NODEREAL_BSC_RPC_URL,
               quickNodeBscRpcUrl: process.env.QUICKNODE_BSC_RPC_URL,
+              bscRpcUrl: process.env.BSC_RPC_URL,
+              cloudManagedAccess: resolveWalletRpcReadiness(state.config)
+                .cloudManagedAccess,
             }) ?? "https://bsc-dataseed1.binance.org/",
           ),
         );
@@ -11921,6 +12196,9 @@ async function handleRequest(
     const rpcUrl = resolvePrimaryBscRpcUrl({
       nodeRealBscRpcUrl: process.env.NODEREAL_BSC_RPC_URL,
       quickNodeBscRpcUrl: process.env.QUICKNODE_BSC_RPC_URL,
+      bscRpcUrl: process.env.BSC_RPC_URL,
+      cloudManagedAccess: resolveWalletRpcReadiness(state.config)
+        .cloudManagedAccess,
     });
 
     if (!rpcUrl) {
@@ -13665,21 +13943,7 @@ async function handleRequest(
       totalTodos: 0,
       completedTodos: 0,
     };
-    const latestAutonomyEvent = [...state.eventBuffer]
-      .reverse()
-      .find(
-        (event) =>
-          event.type === "agent_event" &&
-          (event.stream === "assistant" ||
-            event.stream === "provider" ||
-            event.stream === "evaluator"),
-      );
-    const autonomyState = getAutonomyState(state.runtime);
-    const autonomy = {
-      enabled: autonomyState.enabled,
-      thinking: autonomyState.thinking,
-      lastEventAt: latestAutonomyEvent?.ts ?? null,
-    };
+
     let tasksAvailable = false;
     let triggersAvailable = false;
     let todosAvailable = false;
@@ -13774,7 +14038,6 @@ async function handleRequest(
       triggers,
       todos,
       summary,
-      autonomy,
       tasksAvailable,
       triggersAvailable,
       todosAvailable,
@@ -15557,19 +15820,6 @@ export async function startApiServer(opts?: {
     }
   }
 
-  // Autonomy is managed by the core AutonomyService + TaskService.
-  // The AutonomyService creates a recurring task (tagged "queue") that the
-  // TaskService picks up and executes on its 1 s polling interval.
-  // enableAutonomy: true on the runtime auto-creates the task during init.
-  if (opts?.runtime) {
-    addLog(
-      "info",
-      "Autonomy is always enabled — managed by the core task system",
-      "autonomy",
-      ["agent", "autonomy"],
-    );
-  }
-
   // Store the restart callback on the state so the route handler can access it.
   const onRestart = opts?.onRestart ?? null;
 
@@ -16525,6 +16775,17 @@ export async function startApiServer(opts?: {
                 }
               }
               state.whatsappPairingSessions.clear();
+            }
+            // Clean up Signal pairing sessions
+            if (state.signalPairingSessions) {
+              for (const s of state.signalPairingSessions.values()) {
+                try {
+                  s.stop();
+                } catch {
+                  /* non-fatal */
+                }
+              }
+              state.signalPairingSessions.clear();
             }
             wss.close();
             const closeTimeout = setTimeout(() => r(), 5_000);

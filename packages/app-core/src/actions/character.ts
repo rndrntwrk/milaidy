@@ -4,8 +4,7 @@
  * Pure functions for character CRUD and draft management.
  */
 
-import type { MiladyClient, CharacterData } from "../api/client";
-
+import type { CharacterData, MiladyClient } from "../api/client";
 
 export interface CharacterActionContext {
   client: MiladyClient;
@@ -87,9 +86,7 @@ export function prepareDraftForSave(
   return result;
 }
 
-export function parseMessageExamplesInput(
-  value: string,
-): Array<{
+export function parseMessageExamplesInput(value: string): Array<{
   examples: Array<{ name: string; content: { text: string } }>;
 }> {
   if (!value.trim()) return [];

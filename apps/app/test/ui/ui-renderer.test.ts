@@ -1,5 +1,5 @@
+import { sanitizeLinkHref } from "@milady/app-core/config";
 import { describe, expect, it } from "vitest";
-import { sanitizeLinkHref } from "../../src/components/ui-renderer";
 
 describe("sanitizeLinkHref", () => {
   it("blocks executable protocols", () => {

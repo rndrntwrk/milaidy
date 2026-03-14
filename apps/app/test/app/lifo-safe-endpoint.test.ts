@@ -1,5 +1,5 @@
+import { isSafeEndpointUrl } from "@milady/app-core/platform";
 import { describe, expect, it } from "vitest";
-import { isSafeEndpointUrl } from "../../src/lifo-popout";
 
 describe("isSafeEndpointUrl", () => {
   it("returns true for http://localhost:6080", () => {

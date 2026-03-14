@@ -27,11 +27,36 @@ const { mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
 }));
 
-vi.mock("../../src/AppContext", () => ({
+vi.mock("@milady/app-core/state", () => ({
   useApp: () => mockUseApp(),
   getVrmPreviewUrl: (index: number) => `mock-vrm-${index}.png`,
   VRM_COUNT: 8,
 }));
+
+vi.mock("@milady/ui", async () => {
+  const React = await import("react");
+  const actual =
+    await vi.importActual<typeof import("@milady/ui")>("@milady/ui");
+
+  return {
+    ...actual,
+    DropdownMenu: ({ children }: { children: React.ReactNode }) =>
+      React.createElement(React.Fragment, null, children),
+    DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) =>
+      React.createElement(React.Fragment, null, children),
+    DropdownMenuContent: ({
+      children,
+      ...props
+    }: React.ComponentProps<"div">) =>
+      React.createElement("div", props, children),
+    DropdownMenuItem: ({
+      children,
+      onClick,
+      ...props
+    }: React.ComponentProps<"button">) =>
+      React.createElement("button", { ...props, onClick }, children),
+  };
+});
 
 vi.mock("@milady/app-core/api", () => ({
   client: {
@@ -142,13 +167,33 @@ describe("ConversationsSidebar game-modal variant", () => {
     });
     expect(handleSelectConversation).toHaveBeenCalledWith("conv-1");
 
-    const deleteButtons = tree?.root.findAll(
-      (node) =>
-        node.type === "button" && node.props["data-testid"] === "conv-delete",
-    );
-    expect(deleteButtons.length).toBe(2);
+    const rowTrigger = tree?.root.findAllByProps({
+      "data-testid": "conv-select",
+    })[0];
     await act(async () => {
-      deleteButtons[0].props.onClick({ stopPropagation: () => {} });
+      rowTrigger.props.onContextMenu({
+        preventDefault: () => {},
+        stopPropagation: () => {},
+        clientX: 32,
+        clientY: 48,
+      });
+    });
+
+    const deleteMenuItem = tree?.root.findByProps({
+      "data-testid": "conv-menu-delete",
+    });
+    await act(async () => {
+      deleteMenuItem.props.onClick();
+    });
+
+    const confirmYes = tree?.root.findAll(
+      (node) =>
+        node.type === "button" &&
+        textOf(node).trim() === "conversations.deleteYes",
+    );
+    expect(confirmYes.length).toBe(1);
+    await act(async () => {
+      confirmYes[0].props.onClick();
     });
     expect(handleDeleteConversation).toHaveBeenCalledWith("conv-2");
   });
@@ -168,14 +213,23 @@ describe("ConversationsSidebar game-modal variant", () => {
       );
     });
 
-    const renameButtons = tree?.root.findAll(
-      (node) =>
-        node.type === "button" && node.props.title === "conversations.rename",
-    );
-    expect(renameButtons.length).toBeGreaterThan(0);
-
+    const rowTrigger = tree?.root.findAllByProps({
+      "data-testid": "conv-select",
+    })[0];
     await act(async () => {
-      renameButtons[0].props.onClick({ stopPropagation: () => {} });
+      rowTrigger.props.onContextMenu({
+        preventDefault: () => {},
+        stopPropagation: () => {},
+        clientX: 24,
+        clientY: 40,
+      });
+    });
+
+    const editMenuItem = tree?.root.findByProps({
+      "data-testid": "conv-menu-edit",
+    });
+    await act(async () => {
+      editMenuItem.props.onClick();
     });
 
     const input = tree?.root.findAll((node) => node.type === "input")[0];

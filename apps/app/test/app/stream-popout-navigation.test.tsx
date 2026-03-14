@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
+
+import { useStreamPopoutNavigation } from "@milady/app-core/hooks";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
-import { useStreamPopoutNavigation } from "../../src/hooks/useStreamPopoutNavigation";
 
 function Harness({ setTab }: { setTab: (tab: string) => void }) {
-  useStreamPopoutNavigation(setTab as (tab: never) => void);
+  useStreamPopoutNavigation(setTab);
   return null;
 }
 

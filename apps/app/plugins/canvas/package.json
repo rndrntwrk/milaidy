@@ -1,7 +1,13 @@
 {
   "name": "@milady/capacitor-canvas",
   "version": "1.0.0",
-  "description": "Milady Canvas Plugin for Capacitor - A2UI integration and canvas rendering",
+  "description": "Creates interactive canvases with layers, drawing primitives, and A2UI integration.",
+  "keywords": [
+    "canvas",
+    "drawing",
+    "rendering",
+    "a2ui"
+  ],
   "main": "./dist/plugin.cjs.js",
   "module": "./src/index.ts",
   "types": "./dist/plugin.d.ts",

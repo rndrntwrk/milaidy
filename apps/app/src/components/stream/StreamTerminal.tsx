@@ -1,6 +1,6 @@
 import { client } from "@milady/app-core/api";
+import { useApp } from "@milady/app-core/state";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useApp } from "../../AppContext";
 
 interface TerminalLine {
   id: string;
@@ -76,7 +76,7 @@ export function StreamTerminal() {
               key={line.id}
               className={
                 line.type === "command"
-                  ? "text-accent font-bold"
+                  ? "text-txt font-bold"
                   : line.type === "stderr" || line.type === "error"
                     ? "text-destructive"
                     : line.type === "exit"

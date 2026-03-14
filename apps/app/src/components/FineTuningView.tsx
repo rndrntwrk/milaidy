@@ -11,14 +11,14 @@ import {
   type TrainingTrajectoryList,
 } from "@milady/app-core/api";
 import { formatTime } from "@milady/app-core/components";
+import { useApp } from "@milady/app-core/state";
+import { confirmDesktopAction } from "@milady/app-core/utils";
 import { Button, Input } from "@milady/ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   parsePositiveFloat,
   parsePositiveInteger,
 } from "../../../../src/utils/number-parsing";
-import { useApp } from "../AppContext";
-import { confirmDesktopAction } from "../utils/desktop-dialogs";
 
 const TRAINING_EVENT_KINDS = new Set<TrainingStreamEvent["kind"]>([
   "job_started",

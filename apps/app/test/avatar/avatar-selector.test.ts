@@ -1,30 +1,32 @@
 /**
  * Tests for avatar selection logic — VRM index management, path resolution, localStorage persistence.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+
 import {
   getVrmPreviewUrl,
   getVrmTitle,
   getVrmUrl,
   VRM_COUNT,
-} from "../../src/AppContext";
+} from "@milady/app-core/state";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 describe("Avatar VRM Utilities", () => {
   describe("VRM_COUNT", () => {
-    it("is 24 for all bundled base avatars", () => {
-      expect(VRM_COUNT).toBe(24);
+    it("is 4 for all bundled base avatars", () => {
+      expect(VRM_COUNT).toBe(4);
     });
   });
 
   describe("getVrmUrl", () => {
-    it("returns correct path for base milady VRMs (1-24)", () => {
-      for (let i = 1; i <= 24; i++) {
-        expect(getVrmUrl(i)).toBe(`/vrms/milady-${i}.vrm`);
-      }
+    it("returns correct path for base milady VRMs (1-4)", () => {
+      const expectedSourceIds = [1, 4, 5, 9];
+      expectedSourceIds.forEach((sourceId, index) => {
+        expect(getVrmUrl(index + 1)).toBe(`/vrms/milady-${sourceId}.vrm`);
+      });
     });
 
     it("clamps out-of-range indices to avatar 1", () => {
-      expect(getVrmUrl(25)).toBe("/vrms/milady-1.vrm");
+      expect(getVrmUrl(5)).toBe("/vrms/milady-1.vrm");
       expect(getVrmUrl(34)).toBe("/vrms/milady-1.vrm");
       expect(getVrmUrl(-3)).toBe("/vrms/milady-1.vrm");
       expect(getVrmUrl(Number.NaN)).toBe("/vrms/milady-1.vrm");
@@ -33,14 +35,17 @@ describe("Avatar VRM Utilities", () => {
   });
 
   describe("getVrmPreviewUrl", () => {
-    it("returns correct preview path for base VRMs (1-24)", () => {
-      for (let i = 1; i <= 24; i++) {
-        expect(getVrmPreviewUrl(i)).toBe(`/vrms/previews/milady-${i}.png`);
-      }
+    it("returns correct preview path for base VRMs (1-4)", () => {
+      const expectedSourceIds = [1, 4, 5, 9];
+      expectedSourceIds.forEach((sourceId, index) => {
+        expect(getVrmPreviewUrl(index + 1)).toBe(
+          `/vrms/previews/milady-${sourceId}.png`,
+        );
+      });
     });
 
     it("clamps out-of-range preview indices to avatar 1", () => {
-      expect(getVrmPreviewUrl(25)).toBe("/vrms/previews/milady-1.png");
+      expect(getVrmPreviewUrl(5)).toBe("/vrms/previews/milady-1.png");
       expect(getVrmPreviewUrl(999)).toBe("/vrms/previews/milady-1.png");
       expect(getVrmPreviewUrl(-1)).toBe("/vrms/previews/milady-1.png");
       expect(getVrmPreviewUrl(0)).toBe("/vrms/previews/milady-1.png");
@@ -50,11 +55,13 @@ describe("Avatar VRM Utilities", () => {
   describe("getVrmTitle", () => {
     it("returns formatted title for base VRMs", () => {
       expect(getVrmTitle(1)).toBe("MILADY-01");
-      expect(getVrmTitle(24)).toBe("MILADY-24");
+      expect(getVrmTitle(2)).toBe("MILADY-04");
+      expect(getVrmTitle(3)).toBe("MILADY-05");
+      expect(getVrmTitle(4)).toBe("MILADY-09");
     });
 
     it("clamps out-of-range index to avatar 1", () => {
-      expect(getVrmTitle(25)).toBe("MILADY-01");
+      expect(getVrmTitle(5)).toBe("MILADY-01");
     });
   });
 });

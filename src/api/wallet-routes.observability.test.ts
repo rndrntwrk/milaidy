@@ -15,7 +15,12 @@ vi.mock("../diagnostics/integration-observability", () => ({
   createIntegrationTelemetrySpan: createSpanMock,
 }));
 
-const ENV_KEYS = ["ALCHEMY_API_KEY", "HELIUS_API_KEY"] as const;
+const ENV_KEYS = [
+  "ALCHEMY_API_KEY",
+  "HELIUS_API_KEY",
+  "ELIZAOS_CLOUD_API_KEY",
+  "SOLANA_RPC_URL",
+] as const;
 const ORIGINAL_ENV = Object.fromEntries(
   ENV_KEYS.map((key) => [key, process.env[key]]),
 ) as Record<(typeof ENV_KEYS)[number], string | undefined>;
@@ -30,6 +35,11 @@ function baseDeps(): WalletRouteDependencies {
     fetchSolanaBalances: vi.fn(async () => ({
       solBalance: "1",
       solValueUsd: "100",
+      tokens: [],
+    })),
+    fetchSolanaNativeBalanceViaRpc: vi.fn(async () => ({
+      solBalance: "0.5",
+      solValueUsd: "0",
       tokens: [],
     })),
     fetchEvmNfts: vi.fn(async () => []),
@@ -89,6 +99,8 @@ describe("wallet routes observability", () => {
       success: spanSuccessMock,
       failure: spanFailureMock,
     });
+    delete process.env.ELIZAOS_CLOUD_API_KEY;
+    delete process.env.SOLANA_RPC_URL;
     process.env.ALCHEMY_API_KEY = "alchemy";
     process.env.HELIUS_API_KEY = "helius";
   });

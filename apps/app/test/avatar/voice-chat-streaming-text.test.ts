@@ -1,5 +1,5 @@
+import { __voiceChatInternals } from "@milady/app-core/hooks";
 import { describe, expect, it } from "vitest";
-import { __voiceChatInternals } from "../../src/hooks/useVoiceChat";
 
 const { remainderAfter, queueableSpeechPrefix } = __voiceChatInternals;
 

@@ -8,7 +8,7 @@
   --ac-glass: rgba(255, 255, 255, 0.1);
   --ac-glass-hover: rgba(255, 255, 255, 0.2);
   --ac-glass-border: rgba(255, 255, 255, 0.15);
-  --ac-text-primary: #ffffff;
+  --ac-text-txt: #ffffff;
   --ac-text-secondary: rgba(255, 255, 255, 0.7);
 
   position: absolute;
@@ -22,7 +22,7 @@
     var(--ac-bg-light) 0%,
     var(--ac-bg-dark) 80%
   );
-  color: var(--ac-text-primary);
+  color: var(--ac-text-txt);
   font-family: var(--font-display), sans-serif;
   border-radius: 16px;
   animation: anime-screen-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
@@ -3054,7 +3054,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--accent);
+  color: var(--text);
   background: rgba(0, 225, 255, 0.05);
   border: 1px solid rgba(0, 225, 255, 0.3);
   cursor: pointer;
@@ -3085,7 +3085,7 @@
   box-shadow:
     0 0 15px rgba(0, 225, 255, 0.3),
     inset 0 0 10px rgba(0, 225, 255, 0.2);
-  border-color: var(--accent);
+  border-color: var(--text);
   color: #fff;
   text-shadow: 0 0 5px var(--accent);
 }
@@ -3109,12 +3109,12 @@
 .anime-tech-btn-primary {
   background: var(--accent);
   color: #000;
-  border-color: var(--accent);
+  border-color: var(--text);
 }
 
 .anime-tech-btn-primary:hover:not(:disabled) {
   background: #ffffff;
-  color: var(--accent);
+  color: var(--text);
 }
 
 .anime-tech-input-wrap {
@@ -3137,7 +3137,7 @@
 }
 
 .anime-tech-input-wrap:focus-within {
-  border-color: var(--accent);
+  border-color: var(--text);
   box-shadow:
     0 4px 15px rgba(0, 225, 255, 0.1),
     inset 0 -2px 10px rgba(0, 225, 255, 0.1);
@@ -3184,7 +3184,7 @@
 
 .anime-skill-card:hover {
   border-color: rgba(0, 225, 255, 0.5);
-  border-left-color: var(--accent);
+  border-left-color: var(--text);
   box-shadow:
     0 4px 20px rgba(0, 225, 255, 0.1),
     inset 2px 0 15px rgba(0, 225, 255, 0.1);
@@ -3192,7 +3192,7 @@
 }
 
 .anime-skill-card.is-active {
-  border-left-color: var(--accent);
+  border-left-color: var(--text);
   background: linear-gradient(
     135deg,
     rgba(30, 40, 60, 0.9) 0%,
@@ -3234,7 +3234,7 @@
 .anime-theme-scope textarea.border:focus,
 .anime-theme-scope select.border:focus {
   background: rgba(255, 255, 255, 0.05);
-  border-bottom-color: var(--accent);
+  border-bottom-color: var(--text);
   outline: none;
 }
 
@@ -3379,7 +3379,7 @@
   --s-text: rgba(240, 238, 250, 0.93);
   --s-text-secondary: rgba(240, 238, 250, 0.75);
   --s-text-muted: rgba(240, 238, 250, 0.55);
-  --s-text-accent: #f0b232;
+  --s-text-txt: #f0b232;
   --s-border-subtle: rgba(255, 255, 255, 0.06);
   --s-border: rgba(255, 255, 255, 0.1);
   --s-border-medium: rgba(255, 255, 255, 0.15);
@@ -3488,8 +3488,8 @@
   color: var(--s-text-secondary);
 }
 
-.s-text-accent {
-  color: var(--s-text-accent);
+.s-text-txt {
+  color: var(--s-text-txt);
 }
 
 .s-bg-subtle {
@@ -3686,7 +3686,7 @@
 }
 
 .btn.btn-ghost:hover {
-  border-color: var(--accent);
+  border-color: var(--text);
   color: var(--txt);
   opacity: 1;
 }

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { MiladyConfig } from "../config/config";
 import {
   handleWalletRoutes,
@@ -9,8 +9,15 @@ const ENV_KEYS = [
   "ALCHEMY_API_KEY",
   "INFURA_API_KEY",
   "ANKR_API_KEY",
+  "ETHEREUM_RPC_URL",
+  "BASE_RPC_URL",
+  "AVALANCHE_RPC_URL",
   "HELIUS_API_KEY",
   "BIRDEYE_API_KEY",
+  "NODEREAL_BSC_RPC_URL",
+  "QUICKNODE_BSC_RPC_URL",
+  "BSC_RPC_URL",
+  "ELIZAOS_CLOUD_API_KEY",
   "EVM_PRIVATE_KEY",
   "SOLANA_PRIVATE_KEY",
   "SOLANA_RPC_URL",
@@ -19,6 +26,12 @@ const ENV_KEYS = [
 const ORIGINAL_ENV = Object.fromEntries(
   ENV_KEYS.map((key) => [key, process.env[key]]),
 ) as Record<(typeof ENV_KEYS)[number], string | undefined>;
+
+beforeEach(() => {
+  for (const key of ENV_KEYS) {
+    delete process.env[key];
+  }
+});
 
 afterEach(() => {
   for (const key of ENV_KEYS) {
@@ -51,6 +64,11 @@ function createDeps(): WalletRouteDependencies {
     fetchSolanaBalances: vi.fn(async () => ({
       solBalance: "1",
       solValueUsd: "100",
+      tokens: [],
+    })),
+    fetchSolanaNativeBalanceViaRpc: vi.fn(async () => ({
+      solBalance: "0.5",
+      solValueUsd: "0",
       tokens: [],
     })),
     fetchEvmNfts: vi.fn(async () => []),
@@ -161,8 +179,15 @@ describe("wallet routes", () => {
     });
 
     expect(result.handled).toBe(true);
-    expect(deps.fetchEvmBalances).toHaveBeenCalledWith("0xabc", "alchemy");
+    expect(deps.fetchEvmBalances).toHaveBeenCalledWith(
+      "0xabc",
+      expect.objectContaining({
+        alchemyKey: "alchemy",
+        cloudManagedAccess: false,
+      }),
+    );
     expect(deps.fetchSolanaBalances).toHaveBeenCalledWith("So111", "helius");
+    expect(deps.fetchSolanaNativeBalanceViaRpc).not.toHaveBeenCalled();
     expect(result.payload).toEqual({
       evm: { address: "0xabc", chains: [] },
       solana: {
@@ -172,6 +197,63 @@ describe("wallet routes", () => {
         tokens: [],
       },
     });
+  });
+
+  test("uses cloud-managed fallback RPCs when Milady Cloud is connected", async () => {
+    const deps = createDeps();
+    const result = await invoke({
+      method: "GET",
+      pathname: "/api/wallet/balances",
+      deps,
+      config: {
+        env: {},
+        cloud: { apiKey: "cloud-key", enabled: true },
+      } as MiladyConfig,
+    });
+
+    expect(result.handled).toBe(true);
+    expect(deps.fetchEvmBalances).toHaveBeenCalledWith(
+      "0xabc",
+      expect.objectContaining({
+        cloudManagedAccess: true,
+        alchemyKey: null,
+        ankrKey: null,
+      }),
+    );
+    expect(deps.fetchSolanaBalances).not.toHaveBeenCalled();
+    expect(deps.fetchSolanaNativeBalanceViaRpc).toHaveBeenCalledWith(
+      "So111",
+      expect.arrayContaining(["https://api.mainnet-beta.solana.com/"]),
+    );
+    expect(result.payload).toEqual({
+      evm: { address: "0xabc", chains: [] },
+      solana: {
+        address: "So111",
+        solBalance: "0.5",
+        solValueUsd: "0",
+        tokens: [],
+      },
+    });
+  });
+
+  test("reports managed BSC RPC as ready when Milady Cloud is connected", async () => {
+    const result = await invoke({
+      method: "GET",
+      pathname: "/api/wallet/config",
+      config: {
+        env: {},
+        cloud: { apiKey: "cloud-key", enabled: true },
+      } as MiladyConfig,
+    });
+
+    expect(result.handled).toBe(true);
+    expect(result.payload).toEqual(
+      expect.objectContaining({
+        nodeRealBscRpcSet: false,
+        quickNodeBscRpcSet: false,
+        managedBscRpcReady: true,
+      }),
+    );
   });
 
   test("requires privateKey for wallet import", async () => {

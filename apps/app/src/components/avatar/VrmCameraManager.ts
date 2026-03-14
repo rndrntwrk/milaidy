@@ -2,6 +2,8 @@ import type { VRM } from "@pixiv/three-vrm";
 import * as THREE from "three";
 import type { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
+const sizeScratch = new THREE.Vector3();
+
 export type CameraProfile = "chat" | "companion" | "companion_close";
 export type InteractionMode = "free" | "orbitZoom";
 
@@ -19,6 +21,12 @@ export type CameraAnimationConfig = {
  * and VRM face-orientation correction.
  */
 export class VrmCameraManager {
+  private readonly tempBoundsSize = new THREE.Vector3();
+  private readonly tempBoundsCenter = new THREE.Vector3();
+  private readonly tempWorldPosition = new THREE.Vector3();
+  private readonly tempSecondaryWorldPosition = new THREE.Vector3();
+  private readonly tempTertiaryWorldPosition = new THREE.Vector3();
+
   /**
    * Position and scale the VRM for the active camera profile, then place the
    * camera accordingly. Updates `lookAtTarget` and `baseCameraPosition` in place.
@@ -32,18 +40,10 @@ export class VrmCameraManager {
     baseCameraPosition: THREE.Vector3,
     applyInteractionMode: (controls: OrbitControls) => void,
   ): void {
-    if (cameraProfile === "companion" || cameraProfile === "companion_close") {
-      vrm.scene.scale.set(1.78, 1.78, 1.78);
-      vrm.scene.position.set(0, -0.84, 0);
-      lookAtTarget.set(0, 0.64, 0);
-    } else {
-      vrm.scene.scale.set(1.45, 1.45, 1.45);
-      vrm.scene.position.set(0, -0.8, 0);
-      lookAtTarget.set(0, 0.5, 0);
-    }
+    this.normalizeAvatarToStage(vrm, cameraProfile);
     vrm.scene.updateMatrixWorld(true);
     camera.near = 0.1;
-    camera.far = 20.0;
+    camera.far = 100.0;
     this.applyCameraProfileToCamera(camera, controls, cameraProfile);
     this.adjustCompanionCameraForAvatarBounds(
       vrm,
@@ -62,6 +62,44 @@ export class VrmCameraManager {
     }
   }
 
+  private normalizeAvatarToStage(vrm: VRM, cameraProfile: CameraProfile): void {
+    vrm.scene.scale.setScalar(1);
+    vrm.scene.position.set(0, 0, 0);
+    vrm.scene.updateMatrixWorld(true);
+
+    const initialBounds = new THREE.Box3().setFromObject(vrm.scene);
+    if (initialBounds.isEmpty()) return;
+
+    const initialSize = initialBounds.getSize(this.tempBoundsSize);
+    const avatarHeight = Math.max(initialSize.y, 1e-3);
+    const targetHeight =
+      cameraProfile === "chat"
+        ? 1.62
+        : cameraProfile === "companion_close"
+          ? 1.72
+          : 1.76;
+    const normalizedScale = THREE.MathUtils.clamp(
+      targetHeight / avatarHeight,
+      0.75,
+      2.35,
+    );
+
+    vrm.scene.scale.setScalar(normalizedScale);
+    vrm.scene.updateMatrixWorld(true);
+
+    const normalizedBounds = new THREE.Box3().setFromObject(vrm.scene);
+    if (normalizedBounds.isEmpty()) return;
+
+    const feetAnchor = this.getAvatarFeetAnchor(vrm, normalizedBounds);
+    normalizedBounds.getCenter(this.tempBoundsCenter);
+    vrm.scene.position.set(
+      -this.tempBoundsCenter.x,
+      -feetAnchor.y,
+      -this.tempBoundsCenter.z,
+    );
+    vrm.scene.updateMatrixWorld(true);
+  }
+
   /**
    * For the companion profile, adapt camera distance so the full avatar
    * body stays in frame regardless of model dimensions.
@@ -73,14 +111,11 @@ export class VrmCameraManager {
     cameraProfile: CameraProfile,
     lookAtTarget: THREE.Vector3,
   ): void {
-    if (cameraProfile !== "companion" && cameraProfile !== "companion_close")
-      return;
-
     const bounds = new THREE.Box3().setFromObject(vrm.scene);
     if (bounds.isEmpty()) return;
 
-    const size = new THREE.Vector3();
-    const center = new THREE.Vector3();
+    const size = this.tempBoundsSize;
+    const center = this.tempBoundsCenter;
     bounds.getSize(size);
     bounds.getCenter(center);
 
@@ -92,10 +127,10 @@ export class VrmCameraManager {
       return;
     }
 
-    const verticalPadding = 1.2;
-    const horizontalPadding = 1.16;
-    const halfHeight = Math.max((size.y * verticalPadding) / 2, 0.65);
-    const halfWidth = Math.max((size.x * horizontalPadding) / 2, 0.45);
+    const verticalPadding = cameraProfile === "chat" ? 1.18 : 1.1;
+    const horizontalPadding = cameraProfile === "chat" ? 1.18 : 1.08;
+    const halfHeight = Math.max((size.y * verticalPadding) / 2, 0.58);
+    const halfWidth = Math.max((size.x * horizontalPadding) / 2, 0.4);
 
     const verticalFov = THREE.MathUtils.degToRad(camera.fov);
     const horizontalFov =
@@ -105,29 +140,83 @@ export class VrmCameraManager {
       halfHeight / Math.max(1e-4, Math.tan(verticalFov / 2));
     const distanceByWidth =
       halfWidth / Math.max(1e-4, Math.tan(horizontalFov / 2));
-    const fitDistance = Math.max(distanceByHeight, distanceByWidth, 4.62);
-    let distance = Math.min(fitDistance, 7.4);
-
-    let lookAtLift = Math.min(size.y * 0.03, 0.12);
-    let cameraLift = Math.min(size.y * 0.08, 0.26);
+    const fitDistance = Math.max(distanceByHeight, distanceByWidth);
+    const neckY = this.getAvatarNeckHeight(vrm, bounds);
+    let lookAtY = neckY;
+    let distance = fitDistance;
+    let cameraY = neckY + Math.min(size.y * 0.08, 0.18);
 
     if (cameraProfile === "companion_close") {
-      distance = distance * 0.35; // Closer camera
-      lookAtLift = size.y * 0.28; // Look at neck/upper chest height
-      cameraLift = 0; // Point straight on, no downward angle
+      lookAtY = neckY;
+      distance = Math.max(0.92, fitDistance * 0.42);
+      cameraY = neckY;
+    } else if (cameraProfile === "companion") {
+      lookAtY = neckY;
+      distance = Math.max(2.2, fitDistance * 0.76);
+      cameraY = neckY + Math.min(size.y * 0.06, 0.14);
+    } else {
+      lookAtY = THREE.MathUtils.clamp(
+        neckY - size.y * 0.08,
+        bounds.min.y + size.y * 0.38,
+        bounds.max.y - size.y * 0.16,
+      );
+      distance = Math.max(2.8, fitDistance * 1.02);
+      cameraY = lookAtY + Math.min(size.y * 0.12, 0.24);
     }
 
-    lookAtTarget.set(center.x, center.y + lookAtLift, center.z);
-    camera.position.set(
-      center.x,
-      lookAtTarget.y + cameraLift,
-      center.z + distance,
-    );
+    lookAtTarget.set(center.x, lookAtY, center.z);
+    camera.position.set(center.x, cameraY, center.z + distance);
 
     if (controls) {
-      controls.minDistance = Math.max(1.0, distance * 0.72);
-      controls.maxDistance = Math.max(7.2, distance * 1.75);
+      controls.minDistance =
+        cameraProfile === "companion_close"
+          ? Math.max(0.7, distance * 0.78)
+          : Math.max(1.4, distance * 0.7);
+      controls.maxDistance = Math.max(6.4, distance * 1.8);
     }
+  }
+
+  private getAvatarFeetAnchor(vrm: VRM, bounds: THREE.Box3): THREE.Vector3 {
+    const leftFoot = vrm.humanoid?.getNormalizedBoneNode("leftFoot");
+    const rightFoot = vrm.humanoid?.getNormalizedBoneNode("rightFoot");
+    if (leftFoot && rightFoot) {
+      leftFoot.getWorldPosition(this.tempWorldPosition);
+      rightFoot.getWorldPosition(this.tempSecondaryWorldPosition);
+      return this.tempTertiaryWorldPosition
+        .copy(this.tempWorldPosition)
+        .add(this.tempSecondaryWorldPosition)
+        .multiplyScalar(0.5);
+    }
+
+    const center = bounds.getCenter(this.tempTertiaryWorldPosition);
+    return center.set(center.x, bounds.min.y, center.z);
+  }
+
+  private getAvatarNeckHeight(vrm: VRM, bounds: THREE.Box3): number {
+    const neckNode = vrm.humanoid?.getNormalizedBoneNode("neck");
+    if (neckNode) {
+      neckNode.getWorldPosition(this.tempWorldPosition);
+      if (Number.isFinite(this.tempWorldPosition.y)) {
+        return this.tempWorldPosition.y;
+      }
+    }
+
+    const headNode = vrm.humanoid?.getNormalizedBoneNode("head");
+    const chestNode =
+      vrm.humanoid?.getNormalizedBoneNode("upperChest") ??
+      vrm.humanoid?.getNormalizedBoneNode("chest") ??
+      vrm.humanoid?.getNormalizedBoneNode("spine");
+    if (headNode && chestNode) {
+      headNode.getWorldPosition(this.tempWorldPosition);
+      chestNode.getWorldPosition(this.tempSecondaryWorldPosition);
+      const averagedY =
+        (this.tempWorldPosition.y + this.tempSecondaryWorldPosition.y) / 2;
+      if (Number.isFinite(averagedY)) {
+        return averagedY;
+      }
+    }
+
+    return bounds.min.y + Math.max(bounds.getSize(sizeScratch).y * 0.72, 0.9);
   }
 
   /**
@@ -140,10 +229,14 @@ export class VrmCameraManager {
     cameraProfile: CameraProfile,
   ): void {
     if (cameraProfile === "companion" || cameraProfile === "companion_close") {
-      camera.position.set(0, 1.34, 4.62);
+      camera.position.set(
+        0,
+        1.24,
+        cameraProfile === "companion_close" ? 1.1 : 3,
+      );
       camera.fov = cameraProfile === "companion_close" ? 22 : 28;
       if (controls) {
-        controls.minDistance = 1.0;
+        controls.minDistance = cameraProfile === "companion_close" ? 0.7 : 1.4;
         controls.maxDistance = 7.0;
         controls.minPolarAngle = Math.PI * 0.16;
         controls.maxPolarAngle = Math.PI * 0.86;
@@ -153,11 +246,11 @@ export class VrmCameraManager {
       return;
     }
 
-    camera.position.set(0, 1.12, 5.8);
+    camera.position.set(0, 1.1, 3.6);
     camera.fov = 34;
     if (controls) {
-      controls.minDistance = 2.6;
-      controls.maxDistance = 10.2;
+      controls.minDistance = 2.0;
+      controls.maxDistance = 8.0;
       controls.minPolarAngle = Math.PI * 0.06;
       controls.maxPolarAngle = Math.PI * 0.94;
       controls.minAzimuthAngle = -Infinity;

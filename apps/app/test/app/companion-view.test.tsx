@@ -7,7 +7,7 @@ const { mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
 }));
 
-vi.mock("../../src/AppContext", () => ({
+vi.mock("@milady/app-core/state", () => ({
   useApp: () => mockUseApp(),
   getVrmPreviewUrl: () => "/vrms/previews/milady-1.png",
   getVrmUrl: () => "/vrms/milady-1.vrm",
@@ -134,7 +134,7 @@ function createContext() {
     miladyCloudTopUpUrl: "",
     lifecycleBusy: false,
     lifecycleAction: null,
-    handlePauseResume: vi.fn(async () => {}),
+
     handleRestart: vi.fn(async () => {}),
     copyToClipboard: vi.fn(async () => {}),
     uiLanguage: "en",

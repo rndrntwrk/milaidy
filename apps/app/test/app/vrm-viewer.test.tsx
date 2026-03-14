@@ -15,6 +15,7 @@ vi.mock("../../src/components/avatar/VrmEngine", () => {
     getState = vi.fn(() => ({
       vrmLoaded: true,
       vrmName: "milady-1.vrm",
+      loadError: null,
       idlePlaying: false,
       idleTime: 0,
       idleTracks: 0,
@@ -22,6 +23,10 @@ vi.mock("../../src/components/avatar/VrmEngine", () => {
     setInteractionEnabled = vi.fn();
     setCameraProfile = vi.fn();
     setInteractionMode = vi.fn();
+    setPointerParallaxEnabled = vi.fn();
+    setPointerParallaxTarget = vi.fn();
+    resetPointerParallax = vi.fn();
+    setWorldUrl = vi.fn(async () => {});
     resize = vi.fn();
     dispose = vi.fn();
     isInitialized = vi.fn(() => false);

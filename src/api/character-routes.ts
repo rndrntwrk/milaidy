@@ -7,6 +7,7 @@ interface CharacterGenerateContext {
   name?: string;
   system?: string;
   bio?: string;
+  topics?: string[];
   style?: { all?: string[]; chat?: string[]; post?: string[] };
   postExamples?: string[];
 }
@@ -16,7 +17,8 @@ type CharacterGenerateField =
   | "system"
   | "style"
   | "chatExamples"
-  | "postExamples";
+  | "postExamples"
+  | "interests";
 type CharacterGenerateMode = "append" | "replace";
 
 export interface CharacterRouteState {
@@ -34,6 +36,7 @@ function buildCharacterSummary(ctx: CharacterGenerateContext): string {
     ctx.name ? `Name: ${ctx.name}` : "",
     ctx.system ? `System prompt: ${ctx.system}` : "",
     ctx.bio ? `Bio: ${ctx.bio}` : "",
+    ctx.topics?.length ? `Topics: ${ctx.topics.join(", ")}` : "",
     ctx.style?.all?.length ? `Style rules: ${ctx.style.all.join("; ")}` : "",
   ]
     .filter(Boolean)
@@ -48,7 +51,11 @@ function buildGeneratePrompt(
   const charSummary = buildCharacterSummary(context);
 
   if (field === "bio") {
-    return `Given this character:\n${charSummary}\n\nWrite a concise, compelling bio for this character (3-4 short paragraphs, one per line). Just output the bio lines, nothing else. Match the character's voice and personality.`;
+    return `Given this character:\n${charSummary}\n\nWrite a concise, compelling bio for this character (3-4 short paragraphs, one per line). Use their current interests and info to expand the bio into something more interesting and unique. Just output the bio lines, nothing else. Match the character's voice and personality.`;
+  }
+
+  if (field === "interests") {
+    return `Given this character:\n${charSummary}\n\nBased on the character's bio and current topics, generate 5-10 additional unique topics or interests that fit this character perfectly but aren't in the current list. Just output a JSON array of strings, nothing else.`;
   }
 
   if (field === "system") {
@@ -260,7 +267,8 @@ export async function handleCharacterRoutes(
       body.field !== "system" &&
       body.field !== "style" &&
       body.field !== "chatExamples" &&
-      body.field !== "postExamples"
+      body.field !== "postExamples" &&
+      body.field !== "interests"
     ) {
       error(res, `Unknown field: ${body.field}`, 400);
       return true;

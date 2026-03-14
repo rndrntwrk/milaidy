@@ -18,7 +18,7 @@ const {
   mockSetTradePermissionMode: vi.fn(),
 }));
 
-vi.mock("../../src/AppContext", () => ({
+vi.mock("@milady/app-core/state", () => ({
   useApp: () => mockUseApp(),
 }));
 
@@ -55,6 +55,10 @@ function createContext() {
       },
     ],
     activeConversationId: "conv-1",
+    onboardingLoading: false,
+    startupPhase: "ready",
+    conversationMessages: [],
+    chatSending: false,
     handleNewConversation: vi.fn(async () => {}),
     handleChatClear: vi.fn(async () => {}),
     setActionNotice: vi.fn(),
@@ -135,5 +139,44 @@ describe("ChatModalView", () => {
       (node) => node.props["data-chat-game-overlay"] === true,
     );
     expect(overlays.length).toBe(0);
+  });
+
+  it("boots a new conversation in companion dock when none is active", async () => {
+    const handleNewConversation = vi.fn(async () => {});
+    mockUseApp.mockReturnValue({
+      ...createContext(),
+      activeConversationId: null,
+      handleNewConversation,
+    });
+
+    await act(async () => {
+      TestRenderer.create(
+        React.createElement(ChatModalView, {
+          variant: "companion-dock",
+        }),
+      );
+    });
+
+    expect(handleNewConversation).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not boot a new conversation before startup restore finishes", async () => {
+    const handleNewConversation = vi.fn(async () => {});
+    mockUseApp.mockReturnValue({
+      ...createContext(),
+      activeConversationId: null,
+      onboardingLoading: true,
+      handleNewConversation,
+    });
+
+    await act(async () => {
+      TestRenderer.create(
+        React.createElement(ChatModalView, {
+          variant: "companion-dock",
+        }),
+      );
+    });
+
+    expect(handleNewConversation).not.toHaveBeenCalled();
   });
 });

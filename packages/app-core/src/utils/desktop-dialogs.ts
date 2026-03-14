@@ -1,99 +1,80 @@
-import { invokeDesktopBridgeRequest } from "../bridge";
+import { invokeDesktopBridgeRequest } from "../bridge/electrobun-rpc";
 
-type DesktopMessageBoxType = "info" | "warning" | "error" | "question";
+type DesktopDialogType = "none" | "info" | "error" | "question" | "warning";
 
-interface DesktopMessageBoxOptions {
-  type?: DesktopMessageBoxType;
-  title?: string;
+type DesktopAlertOptions = {
+  title: string;
   message: string;
   detail?: string;
-  buttons?: string[];
-  defaultId?: number;
-  cancelId?: number;
-}
+  type?: Exclude<DesktopDialogType, "question">;
+};
 
-interface DesktopMessageBoxResult {
-  response: number;
-}
-
-interface DesktopConfirmOptions {
+type DesktopConfirmOptions = {
   title: string;
-  message?: string;
+  message: string;
   detail?: string;
+  type?: Extract<DesktopDialogType, "question" | "warning">;
   confirmLabel?: string;
   cancelLabel?: string;
-  type?: DesktopMessageBoxType;
-}
+};
 
-interface DesktopAlertOptions {
+function formatFallbackDialogText(options: {
   title: string;
-  message?: string;
+  message: string;
   detail?: string;
-  buttonLabel?: string;
-  type?: DesktopMessageBoxType;
-}
-
-function buildFallbackMessage(options: {
-  title?: string;
-  message?: string;
-  detail?: string;
-}): string {
+}) {
   return [options.title, options.message, options.detail]
-    .filter(
-      (part): part is string => typeof part === "string" && part.length > 0,
-    )
+    .filter(Boolean)
     .join("\n\n");
-}
-
-async function showDesktopMessageBox(
-  options: DesktopMessageBoxOptions,
-): Promise<DesktopMessageBoxResult | null> {
-  return await invokeDesktopBridgeRequest<DesktopMessageBoxResult>({
-    rpcMethod: "desktopShowMessageBox",
-    ipcChannel: "desktop:showMessageBox",
-    params: options,
-  });
 }
 
 export async function confirmDesktopAction(
   options: DesktopConfirmOptions,
 ): Promise<boolean> {
-  const result = await showDesktopMessageBox({
-    type: options.type ?? "question",
-    title: options.title,
-    message: options.message ?? "",
-    detail: options.detail,
-    buttons: [
-      options.confirmLabel ?? "Confirm",
-      options.cancelLabel ?? "Cancel",
-    ],
-    defaultId: 0,
-    cancelId: 1,
+  const response = await invokeDesktopBridgeRequest<{ response?: number }>({
+    rpcMethod: "desktopShowMessageBox",
+    ipcChannel: "desktop:showMessageBox",
+    params: {
+      type: options.type ?? "question",
+      title: options.title,
+      message: options.message,
+      detail: options.detail,
+      buttons: [
+        options.confirmLabel ?? "Confirm",
+        options.cancelLabel ?? "Cancel",
+      ],
+      defaultId: 0,
+      cancelId: 1,
+    },
   });
 
-  if (result) {
-    return result.response === 0;
+  if (response) {
+    return response.response === 0;
   }
 
-  return window.confirm(buildFallbackMessage(options));
+  if (typeof window === "undefined") return false;
+  return window.confirm(formatFallbackDialogText(options));
 }
 
 export async function alertDesktopMessage(
   options: DesktopAlertOptions,
 ): Promise<void> {
-  const result = await showDesktopMessageBox({
-    type: options.type ?? "info",
-    title: options.title,
-    message: options.message ?? "",
-    detail: options.detail,
-    buttons: [options.buttonLabel ?? "OK"],
-    defaultId: 0,
-    cancelId: 0,
+  const response = await invokeDesktopBridgeRequest<{ response?: number }>({
+    rpcMethod: "desktopShowMessageBox",
+    ipcChannel: "desktop:showMessageBox",
+    params: {
+      type: options.type ?? "info",
+      title: options.title,
+      message: options.message,
+      detail: options.detail,
+      buttons: ["OK"],
+      defaultId: 0,
+      cancelId: 0,
+    },
   });
 
-  if (result) {
-    return;
-  }
+  if (response) return;
 
-  window.alert(buildFallbackMessage(options));
+  if (typeof window === "undefined") return;
+  window.alert(formatFallbackDialogText(options));
 }

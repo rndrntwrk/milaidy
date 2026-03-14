@@ -46,13 +46,24 @@ const { mockUseApp, mockClientFns } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("../../src/AppContext", () => ({
+vi.mock("@milady/app-core/state", () => ({
   useApp: () => mockUseApp(),
 }));
 
 vi.mock("@milady/app-core/api", () => ({
   client: mockClientFns,
 }));
+
+vi.mock("@milady/app-core/components", () => {
+  const R = require("react");
+  return {
+    DatabasePageView: () => R.createElement("div", null, "stub"),
+    LogsPageView: () => R.createElement("div", null, "stub"),
+    PluginsPageView: () => R.createElement("div", null, "stub"),
+    RuntimeView: () => R.createElement("div", null, "stub"),
+    SkillsView: () => R.createElement("div", null, "stub"),
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Mock ALL child views of AdvancedPageView to avoid react-test-renderer
@@ -62,29 +73,9 @@ vi.mock("../../src/components/CustomActionsView", () => {
   const R = require("react");
   return { CustomActionsView: () => R.createElement("div", null, "stub") };
 });
-vi.mock("../../src/components/DatabasePageView", () => {
-  const R = require("react");
-  return { DatabasePageView: () => R.createElement("div", null, "stub") };
-});
 vi.mock("../../src/components/LifoSandboxView", () => {
   const R = require("react");
   return { LifoSandboxView: () => R.createElement("div", null, "stub") };
-});
-vi.mock("../../src/components/LogsPageView", () => {
-  const R = require("react");
-  return { LogsPageView: () => R.createElement("div", null, "stub") };
-});
-vi.mock("../../src/components/PluginsPageView", () => {
-  const R = require("react");
-  return { PluginsPageView: () => R.createElement("div", null, "stub") };
-});
-vi.mock("../../src/components/RuntimeView", () => {
-  const R = require("react");
-  return { RuntimeView: () => R.createElement("div", null, "stub") };
-});
-vi.mock("../../src/components/SkillsView", () => {
-  const R = require("react");
-  return { SkillsView: () => R.createElement("div", null, "stub") };
 });
 vi.mock("../../src/components/TriggersView", () => {
   const R = require("react");

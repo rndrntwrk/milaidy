@@ -6,6 +6,9 @@ import * as THREE from "three";
  */
 export class VrmFootShadow {
   private mesh: THREE.Mesh | null = null;
+  private readonly tempLeft = new THREE.Vector3();
+  private readonly tempRight = new THREE.Vector3();
+  private readonly tempCenter = new THREE.Vector3();
 
   /** Create (or recreate) the shadow disc and add it to `scene`. */
   create(scene: THREE.Scene): void {
@@ -37,7 +40,7 @@ export class VrmFootShadow {
 
     const shadow = new THREE.Mesh(shadowGeometry, shadowMaterial);
     shadow.rotation.x = -Math.PI / 2;
-    shadow.position.set(0, -0.82, 0);
+    shadow.position.set(0, 0, 0);
     scene.add(shadow);
     this.mesh = shadow;
   }
@@ -45,9 +48,30 @@ export class VrmFootShadow {
   /** Update shadow position to follow the VRM on the ground plane. */
   update(vrm: VRM): void {
     if (!this.mesh) return;
-    this.mesh.position.x = vrm.scene.position.x || 0;
-    this.mesh.position.y = -0.82;
-    this.mesh.position.z = vrm.scene.position.z || 0;
+    vrm.scene.updateMatrixWorld(true);
+    const leftFoot = vrm.humanoid?.getNormalizedBoneNode("leftFoot");
+    const rightFoot = vrm.humanoid?.getNormalizedBoneNode("rightFoot");
+
+    if (leftFoot && rightFoot) {
+      leftFoot.getWorldPosition(this.tempLeft);
+      rightFoot.getWorldPosition(this.tempRight);
+      this.tempCenter
+        .copy(this.tempLeft)
+        .add(this.tempRight)
+        .multiplyScalar(0.5);
+      this.mesh.position.copy(this.tempCenter);
+      return;
+    }
+
+    const bounds = new THREE.Box3().setFromObject(vrm.scene);
+    if (!bounds.isEmpty()) {
+      bounds.getCenter(this.tempCenter);
+      this.mesh.position.set(
+        this.tempCenter.x,
+        bounds.min.y,
+        this.tempCenter.z,
+      );
+    }
   }
 
   /** Remove and dispose of the shadow mesh, releasing GPU resources. */

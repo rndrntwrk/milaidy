@@ -7,7 +7,6 @@ import { defineConfig } from "vite";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const miladyRoot = path.resolve(here, "../..");
-
 // The dev script sets MILADY_API_PORT; default to 31337 for standalone vite dev.
 const apiPort = Number(process.env.MILADY_API_PORT) || 31337;
 
@@ -47,13 +46,37 @@ function electronCorsPlugin(): Plugin {
   };
 }
 
+function sparkWasmDataUrlPlugin(): Plugin {
+  return {
+    name: "spark-wasm-data-url",
+    enforce: "pre",
+    transform(code, id) {
+      if (!id.includes("@sparkjsdev/spark/dist/spark.module.js")) return null;
+      const patched = code.replace(
+        /new URL\(("(?:data:application\/wasm;base64,[^"]+)"),\s*import\.meta\.url\)/g,
+        "$1",
+      );
+      if (patched === code) return null;
+      return {
+        code: patched,
+        map: null,
+      };
+    },
+  };
+}
+
 export default defineConfig({
   root: here,
   base: "./",
   publicDir: path.resolve(here, "public"),
-  plugins: [tailwindcss(), react(), electronCorsPlugin()],
+  plugins: [
+    sparkWasmDataUrlPlugin(),
+    tailwindcss(),
+    react(),
+    electronCorsPlugin(),
+  ],
   resolve: {
-    dedupe: ["react", "react-dom"],
+    dedupe: ["react", "react-dom", "three", "@sparkjsdev/spark"],
     alias: [
       /**
        * Map @milady/capacitor-* packages directly to their TS source.
@@ -72,7 +95,8 @@ export default defineConfig({
     ],
   },
   optimizeDeps: {
-    include: ["react", "react-dom"],
+    include: ["react", "react-dom", "three"],
+    exclude: ["@sparkjsdev/spark"],
   },
   build: {
     outDir: path.resolve(here, "dist"),

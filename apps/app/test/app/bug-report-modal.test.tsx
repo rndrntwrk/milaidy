@@ -13,19 +13,21 @@ const { mockUseBugReport, mockClient } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@milady/app-core/hooks", () => ({
-  useBugReport: () => mockUseBugReport(),
-}));
-
-vi.mock("../../src/hooks/useBugReport", () => ({
-  useBugReport: () => mockUseBugReport(),
-}));
+vi.mock("@milady/app-core/hooks", async () => {
+  const actual = await vi.importActual<typeof import("@milady/app-core/hooks")>(
+    "@milady/app-core/hooks",
+  );
+  return {
+    ...actual,
+    useBugReport: () => mockUseBugReport(),
+  };
+});
 
 vi.mock("@milady/app-core/api", () => ({
   client: mockClient,
 }));
 
-import { BugReportModal } from "../../src/components/BugReportModal";
+import { BugReportModal } from "../../../../packages/app-core/src/components/BugReportModal";
 
 // --- helpers ----------------------------------------------------------------
 

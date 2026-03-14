@@ -12,15 +12,19 @@
 
 import type { ConversationMessage, PluginInfo } from "@milady/app-core/api";
 import { client } from "@milady/app-core/api";
+import { paramsToSchema } from "@milady/app-core/components";
+import {
+  ConfigRenderer,
+  defaultRegistry,
+  type JsonSchemaObject,
+  type PatchOp,
+  UiRenderer,
+  type UiSpec,
+} from "@milady/app-core/config";
+import { useApp } from "@milady/app-core/state";
 import type { ConfigUiHint } from "@milady/app-core/types";
 import { Button } from "@milady/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useApp } from "../AppContext";
-import type { JsonSchemaObject } from "./config-catalog";
-import { ConfigRenderer, defaultRegistry } from "./config-renderer";
-import { paramsToSchema } from "./PluginsView";
-import { UiRenderer } from "./ui-renderer";
-import type { PatchOp, UiSpec } from "./ui-spec";
 
 /** Reject prototype-pollution keys that should never be traversed or rendered. */
 const BLOCKED_IDS = new Set(["__proto__", "constructor", "prototype"]);
@@ -667,7 +671,7 @@ function UiSpecBlock({ spec, raw }: { spec: UiSpec; raw: string }) {
         <Button
           variant="link"
           size="sm"
-          className="h-auto p-0 text-[10px] text-accent hover:underline decoration-accent/50 underline-offset-2"
+          className="h-auto p-0 text-[10px] text-txt hover:underline decoration-accent/50 underline-offset-2"
           onClick={() => setShowRaw((v) => !v)}
         >
           {showRaw ? "Hide JSON" : "View JSON"}

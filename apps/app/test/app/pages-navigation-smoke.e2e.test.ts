@@ -11,10 +11,48 @@ const { mockUseApp, noop } = vi.hoisted(() => ({
   noop: vi.fn(),
 }));
 
-vi.mock("../../src/AppContext", () => ({
+vi.mock("@milady/app-core/state", () => ({
   useApp: () => mockUseApp(),
   getVrmUrl: vi.fn(() => "mock-vrm-url"),
 }));
+
+vi.mock("@milady/app-core/components", async () => {
+  const actual = await vi.importActual<
+    typeof import("@milady/app-core/components")
+  >("@milady/app-core/components");
+  return {
+    ...actual,
+    AppsPageView: () =>
+      React.createElement("section", null, "AppsPageView Ready"),
+    BugReportModal: () => React.createElement("div", null, "BugReportModal"),
+    CloudDashboard: () =>
+      React.createElement("section", null, "MiladyCloudDashboard Ready"),
+    CommandPalette: () => React.createElement("div", null, "CommandPalette"),
+    ConnectorsPageView: () =>
+      React.createElement("section", null, "ConnectorsPageView Ready"),
+    ErrorBoundary: ({ children }: { children: React.ReactNode }) =>
+      React.createElement(React.Fragment, null, children),
+    SaveCommandModal: () =>
+      React.createElement("div", null, "SaveCommandModal"),
+    ConnectionFailedBanner: () =>
+      React.createElement("div", null, "ConnectionFailedBanner"),
+    DatabasePageView: () =>
+      React.createElement("section", null, "DatabasePageView Ready"),
+    EmotePicker: () => React.createElement("div", null, "EmotePicker"),
+    LogsPageView: () =>
+      React.createElement("section", null, "LogsPageView Ready"),
+    PairingView: () => React.createElement("div", null, "PairingView"),
+    PluginsPageView: () =>
+      React.createElement("section", null, "PluginsPageView Ready"),
+    RuntimeView: () =>
+      React.createElement("section", null, "RuntimeView Ready"),
+    SettingsView: () =>
+      React.createElement("section", null, "SettingsView Ready"),
+    SkillsView: () => React.createElement("section", null, "SkillsView Ready"),
+    SystemWarningBanner: () =>
+      React.createElement("div", null, "SystemWarningBanner"),
+  };
+});
 
 vi.mock("../../src/components/Header", () => ({
   Header: () => React.createElement("header", null, "Header"),
@@ -26,10 +64,6 @@ vi.mock("../../src/components/CommandPalette", () => ({
 
 vi.mock("../../src/components/EmotePicker", () => ({
   EmotePicker: () => React.createElement("div", null, "EmotePicker"),
-}));
-
-vi.mock("../../src/components/SaveCommandModal", () => ({
-  SaveCommandModal: () => React.createElement("div", null, "SaveCommandModal"),
 }));
 
 vi.mock("../../src/components/PairingView", () => ({
@@ -51,10 +85,6 @@ vi.mock("../../src/components/StreamView", () => ({
 vi.mock("../../src/components/ConversationsSidebar", () => ({
   ConversationsSidebar: () =>
     React.createElement("aside", null, "ConversationsSidebar"),
-}));
-
-vi.mock("../../src/components/AutonomousPanel", () => ({
-  AutonomousPanel: () => React.createElement("aside", null, "AutonomousPanel"),
 }));
 
 vi.mock("../../src/components/CustomActionsPanel", () => ({
@@ -102,18 +132,10 @@ vi.mock("../../src/components/KnowledgeView", () => ({
     React.createElement("section", null, "KnowledgeView Ready"),
 }));
 
-vi.mock("../../src/components/SettingsView", () => ({
-  SettingsView: () =>
-    React.createElement("section", null, "SettingsView Ready"),
-}));
-
 vi.mock("../../src/components/avatar/AvatarLoader", () => ({
   AvatarLoader: () => React.createElement("div", null, "AvatarLoader"),
 }));
 
-vi.mock("../../src/components/TerminalPanel", () => ({
-  TerminalPanel: () => React.createElement("footer", null, "TerminalPanel"),
-}));
 vi.mock("../../src/components/PluginsPageView", () => ({
   PluginsPageView: () =>
     React.createElement("section", null, "PluginsPageView Ready"),
@@ -143,37 +165,24 @@ vi.mock("../../src/components/TrajectoryDetailView", () => ({
     React.createElement("section", null, "TrajectoryDetailView Ready"),
 }));
 
-vi.mock("../../src/components/RuntimeView", () => ({
-  RuntimeView: () => React.createElement("section", null, "RuntimeView Ready"),
-}));
-
-vi.mock("../../src/components/DatabasePageView", () => ({
-  DatabasePageView: () =>
-    React.createElement("section", null, "DatabasePageView Ready"),
-}));
-
-vi.mock("../../src/components/LogsPageView", () => ({
-  LogsPageView: () =>
-    React.createElement("section", null, "LogsPageView Ready"),
-}));
-
 vi.mock("../../src/components/LifoSandboxView", () => ({
   LifoSandboxView: () =>
     React.createElement("section", null, "LifoSandboxView Ready"),
 }));
-vi.mock("../../src/components/MiladyCloudDashboard", () => ({
-  CloudDashboard: () =>
-    React.createElement("section", null, "MiladyCloudDashboard Ready"),
-}));
-
-vi.mock("../../src/hooks/useContextMenu", () => ({
-  useContextMenu: () => ({
-    saveCommandModalOpen: false,
-    saveCommandText: "",
-    confirmSaveCommand: noop,
-    closeSaveCommandModal: noop,
-  }),
-}));
+vi.mock("@milady/app-core/hooks", async () => {
+  const actual = await vi.importActual<typeof import("@milady/app-core/hooks")>(
+    "@milady/app-core/hooks",
+  );
+  return {
+    ...actual,
+    useContextMenu: () => ({
+      saveCommandModalOpen: false,
+      saveCommandText: "",
+      confirmSaveCommand: noop,
+      closeSaveCommandModal: noop,
+    }),
+  };
+});
 
 import { App } from "../../src/App";
 

@@ -13,9 +13,9 @@ interface RestartBannerContextStub {
 
 const mockUseApp = vi.fn<() => RestartBannerContextStub>();
 
-vi.mock("../../src/AppContext", async () => {
-  const actual = await vi.importActual<typeof import("../../src/AppContext")>(
-    "../../src/AppContext",
+vi.mock("@milady/app-core/state", async () => {
+  const actual = await vi.importActual<typeof import("@milady/app-core/state")>(
+    "@milady/app-core/state",
   );
   return {
     ...actual,
@@ -23,7 +23,7 @@ vi.mock("../../src/AppContext", async () => {
   };
 });
 
-import { RestartBanner } from "../../src/components/RestartBanner";
+import { RestartBanner } from "@milady/app-core/components";
 
 function makeContext(
   overrides: Partial<RestartBannerContextStub> = {},
@@ -139,7 +139,9 @@ describe("RestartBanner", () => {
     );
 
     const markup = renderToStaticMarkup(React.createElement(RestartBanner));
-    expect(markup).toContain("rgba(240, 178, 50, 0.15)");
+    expect(markup).toContain(
+      "color-mix(in srgb, var(--accent) 15%, var(--bg) 85%)",
+    );
     expect(markup).toContain("z-[9998]");
   });
 

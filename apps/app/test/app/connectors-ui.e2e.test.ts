@@ -1,11 +1,11 @@
 /**
- * E2E tests for Connectors UI (ConnectorsPageView, PluginsView mode="connectors").
+ * E2E tests for the Social UI (ConnectorsPageView, PluginsView mode="social").
  *
  * Tests cover:
- * 1. Platform tab (Discord, Telegram, Signal)
- * 2. Streaming tab
- * 3. Connector enable/disable
- * 4. Connector configuration
+ * 1. Social page shell rendering
+ * 2. Social-only plugin mode wiring
+ * 3. Connector enable/disable helpers
+ * 4. Connector configuration helpers
  * 5. Connection status display
  */
 
@@ -309,15 +309,15 @@ const { mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
 }));
 
-vi.mock("../../src/AppContext", async () => {
-  const actual = await vi.importActual("../../src/AppContext");
+vi.mock("@milady/app-core/state", async () => {
+  const actual = await vi.importActual("@milady/app-core/state");
   return {
     ...actual,
     useApp: () => mockUseApp(),
   };
 });
 
-vi.mock("../../src/components/PluginsView", () => ({
+vi.mock("../../../../packages/app-core/src/components/PluginsView", () => ({
   PluginsView: ({ mode }: { mode: string }) =>
     React.createElement(
       "div",
@@ -326,7 +326,7 @@ vi.mock("../../src/components/PluginsView", () => ({
     ),
 }));
 
-import { ConnectorsPageView } from "../../src/components/ConnectorsPageView";
+import { ConnectorsPageView } from "../../../../packages/app-core/src/components/ConnectorsPageView";
 
 type ConnectorState = {
   plugins: Array<{
@@ -409,115 +409,36 @@ describe("ConnectorsPageView UI", () => {
     expect(json).not.toBeNull();
   });
 
-  it("renders Platforms tab button", async () => {
+  it("shows the social PluginsView by default", async () => {
     let tree: TestRenderer.ReactTestRenderer | null = null;
 
     await act(async () => {
       tree = TestRenderer.create(React.createElement(ConnectorsPageView));
     });
 
-    const platformsButton = tree?.root.findAll(
-      (node) =>
-        node.type === "button" &&
-        node.children.some(
-          (c) => typeof c === "string" && c.includes("Platforms"),
-        ),
+    const socialView = tree?.root.findAll(
+      (node) => node.props?.["data-testid"] === "plugins-view-social",
     );
-    expect(platformsButton.length).toBeGreaterThan(0);
+    expect(socialView.length).toBe(1);
   });
 
-  it("renders Streaming tab button", async () => {
+  it("does not render platform or streaming tab buttons", async () => {
     let tree: TestRenderer.ReactTestRenderer | null = null;
 
     await act(async () => {
       tree = TestRenderer.create(React.createElement(ConnectorsPageView));
     });
 
-    const streamingButton = tree?.root.findAll(
+    const tabButtons = tree?.root.findAll(
       (node) =>
         node.type === "button" &&
         node.children.some(
-          (c) => typeof c === "string" && c.includes("Streaming"),
+          (c) =>
+            typeof c === "string" &&
+            (c.includes("Platforms") || c.includes("Streaming")),
         ),
     );
-    expect(streamingButton.length).toBeGreaterThan(0);
-  });
-
-  it("shows connectors PluginsView by default", async () => {
-    let tree: TestRenderer.ReactTestRenderer | null = null;
-
-    await act(async () => {
-      tree = TestRenderer.create(React.createElement(ConnectorsPageView));
-    });
-
-    const connectorsView = tree?.root.findAll(
-      (node) => node.props?.["data-testid"] === "plugins-view-connectors",
-    );
-    expect(connectorsView.length).toBe(1);
-  });
-
-  it("clicking Streaming tab shows streaming PluginsView", async () => {
-    let tree: TestRenderer.ReactTestRenderer | null = null;
-
-    await act(async () => {
-      tree = TestRenderer.create(React.createElement(ConnectorsPageView));
-    });
-
-    const streamingButton = tree?.root.findAll(
-      (node) =>
-        node.type === "button" &&
-        node.children.some(
-          (c) => typeof c === "string" && c.includes("Streaming"),
-        ),
-    )[0];
-
-    await act(async () => {
-      streamingButton.props.onClick();
-    });
-
-    const streamingView = tree?.root.findAll(
-      (node) => node.props?.["data-testid"] === "plugins-view-streaming",
-    );
-    expect(streamingView.length).toBe(1);
-  });
-
-  it("clicking Platforms tab switches back", async () => {
-    let tree: TestRenderer.ReactTestRenderer | null = null;
-
-    await act(async () => {
-      tree = TestRenderer.create(React.createElement(ConnectorsPageView));
-    });
-
-    // Switch to streaming
-    const streamingButton = tree?.root.findAll(
-      (node) =>
-        node.type === "button" &&
-        node.children.some(
-          (c) => typeof c === "string" && c.includes("Streaming"),
-        ),
-    )[0];
-
-    await act(async () => {
-      streamingButton.props.onClick();
-    });
-
-    // Switch back to platforms
-    const platformsButton = tree?.root.findAll(
-      (node) =>
-        node.type === "button" &&
-        node.children.some(
-          (c) => typeof c === "string" && c.includes("Platforms"),
-        ),
-    )[0];
-
-    await act(async () => {
-      platformsButton.props.onClick();
-    });
-
-    const connectorsView = tree?.root.findAll(
-      (node) => node.props?.["data-testid"] === "plugins-view-connectors",
-    );
-    expect(connectorsView.length).toBe(1);
+    expect(tabButtons.length).toBe(0);
   });
 });
 

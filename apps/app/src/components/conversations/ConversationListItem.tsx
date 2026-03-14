@@ -3,10 +3,8 @@
  */
 
 import type React from "react";
-import {
-  formatRelativeTime,
-  getLocalizedConversationTitle,
-} from "./conversation-utils";
+import { useRef } from "react";
+import { getLocalizedConversationTitle } from "./conversation-utils";
 
 interface ConversationListItemProps {
   conv: { id: string; title: string; updatedAt: string };
@@ -22,19 +20,22 @@ interface ConversationListItemProps {
     key: string,
     vars?: Record<string, string | number | boolean | null | undefined>,
   ) => string;
+  mobile: boolean;
   onSelect: (id: string) => void;
-  onDoubleClick: (conv: { id: string; title: string }) => void;
   onEditingTitleChange: (value: string) => void;
   onEditSubmit: (id: string) => void;
   onEditKeyDown: (e: React.KeyboardEvent<HTMLInputElement>, id: string) => void;
-  onDelete: (id: string) => void;
   onConfirmDelete: (id: string) => void;
   onCancelDelete: () => void;
-  onSetConfirmDelete: (id: string) => void;
+  onOpenActions: (
+    event:
+      | React.MouseEvent<HTMLButtonElement | HTMLDivElement>
+      | React.TouchEvent<HTMLButtonElement | HTMLDivElement>,
+    conv: { id: string; title: string },
+  ) => void;
 }
 
 import { Button, Input } from "@milady/ui";
-import { Edit2, Trash2 } from "lucide-react";
 
 export function ConversationListItem({
   conv,
@@ -47,16 +48,39 @@ export function ConversationListItem({
   deletingId,
   inputRef,
   t,
+  mobile,
   onSelect,
-  onDoubleClick,
   onEditingTitleChange,
   onEditSubmit,
   onEditKeyDown,
-  onDelete,
   onConfirmDelete,
   onCancelDelete,
-  onSetConfirmDelete,
+  onOpenActions,
 }: ConversationListItemProps) {
+  const longPressTimerRef = useRef<number | null>(null);
+  const suppressClickRef = useRef(false);
+
+  const clearLongPressTimer = () => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const handleTouchStart = (event: React.TouchEvent<HTMLButtonElement>) => {
+    if (!mobile) return;
+    clearLongPressTimer();
+    longPressTimerRef.current = window.setTimeout(() => {
+      suppressClickRef.current = true;
+      onOpenActions(event, conv);
+      clearLongPressTimer();
+    }, 450);
+  };
+
+  const handleTouchEnd = () => {
+    clearLongPressTimer();
+  };
+
   return (
     <div
       key={conv.id}
@@ -91,13 +115,27 @@ export function ConversationListItem({
           <Button
             variant="ghost"
             size="sm"
+            data-testid="conv-select"
             className={
               isGameModal
                 ? "flex flex-col flex-1 min-w-0 text-left cursor-pointer h-auto p-0 rounded-none bg-transparent border-none"
                 : "flex items-center gap-2 flex-1 min-w-0 bg-transparent border-0 p-0 m-0 text-left h-auto cursor-pointer rounded-none"
             }
-            onClick={() => onSelect(conv.id)}
-            onDoubleClick={() => onDoubleClick(conv)}
+            onClick={() => {
+              if (suppressClickRef.current) {
+                suppressClickRef.current = false;
+                return;
+              }
+              onSelect(conv.id);
+            }}
+            onContextMenu={(event) => {
+              if (mobile) return;
+              onOpenActions(event, conv);
+            }}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchEnd}
+            onTouchMove={handleTouchEnd}
           >
             {isUnread && (
               <span
@@ -112,7 +150,7 @@ export function ConversationListItem({
             <span
               className={
                 isGameModal
-                  ? `text-[13px] font-medium truncate leading-tight transition-colors min-w-0 ${isActive ? "text-accent text-shadow-glow" : "text-white/90 group-hover:text-white"}`
+                  ? `text-[13px] font-medium truncate leading-tight transition-colors min-w-0 ${isActive ? "text-txt text-shadow-glow" : "text-white/90 group-hover:text-white"}`
                   : "font-medium truncate text-txt min-w-0"
               }
             >
@@ -120,40 +158,7 @@ export function ConversationListItem({
             </span>
           </Button>
 
-          {/* Rename button (game-modal always visible, default on hover) */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className={
-              isGameModal
-                ? `flex items-center justify-center w-7 h-7 rounded-lg bg-transparent text-white/40 opacity-0 group-hover:opacity-100 transition-all cursor-pointer hover:bg-white/10 hover:text-white`
-                : "opacity-0 group-hover:opacity-100 h-7 w-7 text-muted hover:text-accent"
-            }
-            onClick={(e) => {
-              e.stopPropagation();
-              onDoubleClick(conv);
-            }}
-            title={t("conversations.rename")}
-          >
-            {isGameModal ? <Edit2 className="w-3.5 h-3.5" /> : "\u270E"}
-          </Button>
-
-          {/* Delete with confirm (default variant) or direct delete (game-modal) */}
-          {isGameModal ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              data-testid="conv-delete"
-              className="flex items-center justify-center w-7 h-7 rounded-lg bg-transparent text-white/40 opacity-0 group-hover:opacity-100 transition-all hover:bg-danger/20 hover:text-danger"
-              onClick={(e) => {
-                e.stopPropagation();
-                void onDelete(conv.id);
-              }}
-              title={t("conversations.delete")}
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </Button>
-          ) : confirmDeleteId === conv.id ? (
+          {confirmDeleteId === conv.id ? (
             <div className="flex items-center gap-1.5 flex-shrink-0">
               <span className="text-[10px] text-danger">
                 {t("conversations.deleteConfirm")}
@@ -170,38 +175,14 @@ export function ConversationListItem({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-6 px-1.5 py-0.5 text-[10px] text-muted shadow-sm hover:border-accent hover:text-accent disabled:opacity-50"
+                className="h-6 px-1.5 py-0.5 text-[10px] text-muted shadow-sm hover:border-accent hover:text-txt disabled:opacity-50"
                 onClick={() => onCancelDelete()}
                 disabled={deletingId === conv.id}
               >
                 {t("conversations.deleteNo")}
               </Button>
             </div>
-          ) : (
-            <Button
-              variant="ghost"
-              size="icon"
-              data-testid="conv-delete"
-              className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 h-7 w-7 text-muted hover:text-danger hover:bg-destructive-subtle"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSetConfirmDelete(conv.id);
-              }}
-              title={t("conversations.delete")}
-            >
-              {t("conversationlistitem.Times")}
-            </Button>
-          )}
-          {/* Time at absolute right of row */}
-          <span
-            className={
-              isGameModal
-                ? "text-[11px] text-white/40 shrink-0"
-                : "text-[11px] text-muted shrink-0"
-            }
-          >
-            {formatRelativeTime(conv.updatedAt, t)}
-          </span>
+          ) : null}
         </>
       )}
     </div>

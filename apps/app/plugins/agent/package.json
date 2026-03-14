@@ -1,7 +1,13 @@
 {
   "name": "@milady/capacitor-agent",
   "version": "1.0.0",
-  "description": "Milady Agent Plugin for Capacitor — agent lifecycle management",
+  "description": "Starts, stops, and monitors the embedded Milady agent runtime.",
+  "keywords": [
+    "agent-runtime",
+    "lifecycle",
+    "chat",
+    "runtime-control"
+  ],
   "main": "./dist/plugin.cjs.js",
   "module": "./src/index.ts",
   "types": "./dist/plugin.d.ts",

@@ -10,7 +10,7 @@ const mockHandlePluginConfigSave = vi.fn(async () => {});
 const mockSetActionNotice = vi.fn();
 const mockSetState = vi.fn();
 
-vi.mock("../../src/AppContext", () => ({
+vi.mock("@milady/app-core/state", () => ({
   useApp: () => mockUseApp(),
 }));
 
@@ -23,7 +23,7 @@ vi.mock("@milady/app-core/api", () => ({
   },
 }));
 
-import { PluginsView } from "../../src/components/PluginsView";
+import { PluginsView } from "../../../../packages/app-core/src/components/PluginsView";
 
 function createDeferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;

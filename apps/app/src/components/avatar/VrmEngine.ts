@@ -5,8 +5,14 @@ import {
   VRMLoaderPlugin,
   VRMUtils,
 } from "@pixiv/three-vrm";
+import type {
+  SparkRenderer as SparkRendererType,
+  SplatMesh as SparkSplatMesh,
+} from "@sparkjsdev/spark";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
   type AnimationLoaderContext,
@@ -27,13 +33,16 @@ export type { CameraAnimationConfig, CameraProfile, InteractionMode };
 export type VrmEngineState = {
   vrmLoaded: boolean;
   vrmName: string | null;
+  loadError: string | null;
   idlePlaying: boolean;
   idleTime: number;
   idleTracks: number;
+  revealStarted: boolean;
 };
 
 type UpdateCallback = () => void;
 type RendererBackend = "webgl" | "webgpu";
+type RendererPreference = "auto" | "webgl";
 type ElectrobunRuntimeWindow = Window & {
   __electrobunWindowId?: number;
   __electrobunWebviewId?: number;
@@ -57,6 +66,12 @@ type RendererLike = Pick<
   toneMappingExposure?: number;
 };
 
+type TeleportFallbackShader = {
+  uniforms: {
+    uTeleportProgress: { value: number };
+  };
+};
+
 const DEFAULT_CAMERA_ANIMATION: CameraAnimationConfig = {
   enabled: false,
   swayAmplitude: 0.06,
@@ -71,6 +86,8 @@ const KNOWN_VRM_WEBGPU_WARNING =
 
 let knownVrmWebGpuWarningFilterRefs = 0;
 let releaseKnownVrmWebGpuWarningFilterGlobal: (() => void) | null = null;
+let sharedDracoLoader: DRACOLoader | null = null;
+const DRACO_DECODER_PATH = resolveAppAssetUrl("vrm-decoders/draco/");
 
 function getRendererPixelRatio(): number {
   if (typeof window === "undefined") return 1;
@@ -136,6 +153,62 @@ function installKnownVrmWebGpuWarningFilter(): () => void {
   };
 }
 
+function getSharedDracoLoader(): DRACOLoader {
+  if (!sharedDracoLoader) {
+    sharedDracoLoader = new DRACOLoader();
+    sharedDracoLoader.setDecoderConfig({ type: "wasm" });
+    sharedDracoLoader.setDecoderPath(DRACO_DECODER_PATH);
+    sharedDracoLoader.preload();
+  }
+  return sharedDracoLoader;
+}
+
+function configureVrmGltfLoader(loader: GLTFLoader): void {
+  loader.setMeshoptDecoder(MeshoptDecoder);
+  loader.setDRACOLoader(getSharedDracoLoader());
+}
+
+function isGzipBuffer(buffer: ArrayBuffer): boolean {
+  if (buffer.byteLength < 2) return false;
+  const bytes = new Uint8Array(buffer, 0, 2);
+  return bytes[0] === 0x1f && bytes[1] === 0x8b;
+}
+
+async function decompressGzipBuffer(buffer: ArrayBuffer): Promise<ArrayBuffer> {
+  if (typeof DecompressionStream !== "function") {
+    throw new Error(
+      "This runtime does not support gzip-compressed VRM assets.",
+    );
+  }
+  const stream = new Blob([buffer])
+    .stream()
+    .pipeThrough(new DecompressionStream("gzip"));
+  return await new Response(stream).arrayBuffer();
+}
+
+async function loadGltfAsset(
+  loader: GLTFLoader,
+  url: string,
+): Promise<Awaited<ReturnType<GLTFLoader["loadAsync"]>>> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch VRM asset: ${response.status}`);
+  }
+  let buffer = await response.arrayBuffer();
+  if (!isGzipBuffer(buffer)) {
+    return await loader.loadAsync(url);
+  }
+  buffer = await decompressGzipBuffer(buffer);
+  const objectUrl = URL.createObjectURL(
+    new Blob([buffer], { type: "model/gltf-binary" }),
+  );
+  try {
+    return await loader.loadAsync(objectUrl);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 /**
  * Create the best available renderer for the current platform.
  * Electrobun's CEF desktop shell expects WebGPU for the avatar stage, while the
@@ -145,8 +218,10 @@ function installKnownVrmWebGpuWarningFilter(): () => void {
  */
 async function createRenderer(
   canvas: HTMLCanvasElement,
+  preference: RendererPreference = "auto",
 ): Promise<{ backend: RendererBackend; renderer: RendererLike }> {
   if (
+    preference !== "webgl" &&
     getPreferredAvatarRendererBackend() === "webgpu" &&
     typeof navigator !== "undefined" &&
     navigator.gpu
@@ -178,9 +253,14 @@ async function createRenderer(
 }
 
 export class VrmEngine {
+  private static sparkModulePromise: Promise<
+    typeof import("@sparkjsdev/spark")
+  > | null = null;
   private renderer: RendererLike | null = null;
   private rendererBackend: RendererBackend = "webgl";
+  private rendererPreference: RendererPreference = "auto";
   private scene: THREE.Scene | null = null;
+  private avatarRoot: THREE.Group | null = null;
   private camera: THREE.PerspectiveCamera | null = null;
   private clock = new THREE.Clock();
   private vrm: VRM | null = null;
@@ -192,9 +272,12 @@ export class VrmEngine {
   private loadingAborted = false;
   private vrmLoadRequestId = 0;
   private vrmReady = false;
+  private lastLoadError: string | null = null;
   private teleportProgress = 1.0;
   private teleportProgressUniform: { value: number } | null = null;
   private teleportDissolvedMaterials: THREE.Material[] = [];
+  private teleportFallbackShaders: TeleportFallbackShader[] = [];
+  private revealStarted = false;
   private mouthValue = 0;
   private mouthSmoothed = 0;
   private vrmName: string | null = null;
@@ -218,6 +301,15 @@ export class VrmEngine {
   private interactionEnabled = false;
   private interactionMode: InteractionMode = "free";
   private cameraProfile: CameraProfile = "chat";
+  private worldUrl: string | null = null;
+  private worldMesh: SparkSplatMesh | null = null;
+  private sparkRenderer: SparkRendererType | null = null;
+  private worldLoadRequestId = 0;
+  private pointerParallaxEnabled = false;
+  private pointerParallaxTarget = new THREE.Vector2();
+  private pointerParallaxCurrent = new THREE.Vector2();
+  private pointerParallaxPosition = new THREE.Vector3();
+  private pointerParallaxLookAt = new THREE.Vector3();
   private readyPromise: Promise<void> = Promise.resolve();
   private resolveReady: (() => void) | null = null;
   private rejectReady: ((error?: unknown) => void) | null = null;
@@ -247,6 +339,28 @@ export class VrmEngine {
     }
   };
 
+  private async loadSparkModule(): Promise<typeof import("@sparkjsdev/spark")> {
+    if (!VrmEngine.sparkModulePromise) {
+      VrmEngine.sparkModulePromise = import("@sparkjsdev/spark");
+    }
+    return VrmEngine.sparkModulePromise;
+  }
+
+  private async ensureSparkRenderer(): Promise<void> {
+    if (this.sparkRenderer || this.rendererBackend !== "webgl") return;
+    if (!this.scene || !this.renderer) return;
+
+    const { SparkRenderer } = await this.loadSparkModule();
+    const sparkRenderer = new SparkRenderer({
+      renderer: this.renderer as THREE.WebGLRenderer,
+      originDistance: 0.25,
+      view: { sortRadial: true },
+    });
+    sparkRenderer.renderOrder = -200;
+    this.scene.add(sparkRenderer);
+    this.sparkRenderer = sparkRenderer;
+  }
+
   whenReady(): Promise<void> {
     return this.readyPromise;
   }
@@ -268,7 +382,11 @@ export class VrmEngine {
     this.rejectReady = null;
   }
 
-  setup(canvas: HTMLCanvasElement, onUpdate: UpdateCallback): void {
+  setup(
+    canvas: HTMLCanvasElement,
+    onUpdate: UpdateCallback,
+    options?: { rendererPreference?: RendererPreference },
+  ): void {
     if (this.initialized && this.renderer?.domElement === canvas) {
       this.onUpdate = onUpdate;
       return;
@@ -276,12 +394,16 @@ export class VrmEngine {
     if (this.initialized) this.dispose();
     this.onUpdate = onUpdate;
     this.loadingAborted = false;
+    this.rendererPreference = options?.rendererPreference ?? "auto";
     this.resetReadyPromise();
     // Async renderer creation: tries WebGPU, falls back to WebGL.
     // setup() remains synchronous for callers; the loop starts after init resolves.
     void (async () => {
       try {
-        const { backend, renderer } = await createRenderer(canvas);
+        const { backend, renderer } = await createRenderer(
+          canvas,
+          this.rendererPreference,
+        );
         const releaseKnownWebGpuWarningFilter =
           backend === "webgpu" ? installKnownVrmWebGpuWarningFilter() : null;
         // Guard: if dispose() was called while we were awaiting, abort.
@@ -306,8 +428,16 @@ export class VrmEngine {
         this.rendererBackend = backend;
         const scene = new THREE.Scene();
         this.scene = scene;
+        const avatarRoot = new THREE.Group();
+        avatarRoot.name = "AvatarRoot";
+        scene.add(avatarRoot);
+        this.avatarRoot = avatarRoot;
+        const cameraRig = new THREE.Group();
+        cameraRig.name = "AvatarCameraRig";
+        scene.add(cameraRig);
         const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 20);
         camera.position.set(0, 1.2, 5.0);
+        cameraRig.add(camera);
         this.camera = camera;
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = false;
@@ -361,8 +491,8 @@ export class VrmEngine {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
-    if (this.scene && this.vrm) {
-      this.scene.remove(this.vrm.scene);
+    if (this.vrm?.scene.parent) {
+      this.vrm.scene.parent.remove(this.vrm.scene);
       VRMUtils.deepDispose(this.vrm.scene);
     }
     if (this.scene) {
@@ -377,6 +507,7 @@ export class VrmEngine {
     this.vrm = null;
     this.vrmReady = false;
     this.vrmName = null;
+    this.lastLoadError = null;
     this.mixer = null;
     this.idleAction = null;
     if (this.emoteTimeout !== null) {
@@ -387,12 +518,18 @@ export class VrmEngine {
     this.emoteClipCache.clear();
     this.teleportProgress = 1.0;
     this.cleanupTeleportDissolve();
+    this.disposeWorld();
+    if (this.sparkRenderer) {
+      this.sparkRenderer.removeFromParent();
+      this.sparkRenderer = null;
+    }
     if (this.renderer) {
       this.renderer.dispose();
     }
     this.renderer = null;
     this.rendererBackend = "webgl";
     this.scene = null;
+    this.avatarRoot = null;
     this.camera = null;
     this.onUpdate = null;
   }
@@ -419,9 +556,6 @@ export class VrmEngine {
       this.transitionStartLookAt.copy(this.lookAtTarget);
 
       this.cameraProfile = profile;
-      if (profile === "companion" || profile === "companion_close") {
-        this.cameraAnimation = { ...this.cameraAnimation, enabled: false };
-      }
 
       const targetLookAt = new THREE.Vector3();
       const targetPos = new THREE.Vector3();
@@ -475,9 +609,11 @@ export class VrmEngine {
     return {
       vrmLoaded: this.vrm !== null && this.vrmReady,
       vrmName: this.vrmName,
+      loadError: this.lastLoadError,
       idlePlaying,
       idleTime: this.idleAction?.time ?? 0,
       idleTracks: this.idleAction?.getClip()?.tracks.length ?? 0,
+      revealStarted: this.revealStarted,
     };
   }
   setMouthOpen(value: number): void {
@@ -491,6 +627,66 @@ export class VrmEngine {
   }
   setCameraAnimation(config: Partial<CameraAnimationConfig>): void {
     this.cameraAnimation = { ...this.cameraAnimation, ...config };
+  }
+  setPointerParallaxEnabled(enabled: boolean): void {
+    this.pointerParallaxEnabled = enabled;
+    if (!enabled) {
+      this.pointerParallaxTarget.set(0, 0);
+    }
+  }
+  setPointerParallaxTarget(x: number, y: number): void {
+    this.pointerParallaxTarget.set(
+      THREE.MathUtils.clamp(x, -1, 1),
+      THREE.MathUtils.clamp(y, -1, 1),
+    );
+  }
+  resetPointerParallax(): void {
+    this.pointerParallaxTarget.set(0, 0);
+  }
+  async setWorldUrl(url: string | null): Promise<void> {
+    await this.whenReady();
+    if (!this.scene) return;
+    const normalizedUrl = url?.trim() ? url : null;
+    if (this.worldUrl === normalizedUrl && this.worldMesh) return;
+
+    const requestId = ++this.worldLoadRequestId;
+    this.worldUrl = normalizedUrl;
+    this.disposeWorld();
+    if (!normalizedUrl) return;
+
+    await this.ensureSparkRenderer();
+    const { SplatMesh } = await this.loadSparkModule();
+    const splat = new SplatMesh({ url: normalizedUrl, maxSplats: 250_000 });
+    await splat.initialized;
+
+    if (
+      this.loadingAborted ||
+      !this.scene ||
+      requestId !== this.worldLoadRequestId
+    ) {
+      splat.dispose();
+      return;
+    }
+
+    splat.frustumCulled = false;
+    splat.renderOrder = -100;
+    const worldBounds = splat.getBoundingBox(true);
+    const worldCenter = worldBounds.getCenter(new THREE.Vector3());
+    const worldCenterBottom = new THREE.Vector3(
+      worldCenter.x,
+      worldBounds.min.y,
+      worldCenter.z,
+    );
+    const authoredScale = 1;
+    splat.quaternion.identity();
+    splat.scale.setScalar(authoredScale);
+    splat.position.set(
+      -worldCenterBottom.x * authoredScale,
+      -worldCenterBottom.y * authoredScale,
+      -worldCenterBottom.z * authoredScale,
+    );
+    this.scene.add(splat);
+    this.worldMesh = splat;
   }
   async playEmote(
     path: string,
@@ -554,17 +750,20 @@ export class VrmEngine {
     if (this.loadingAborted) return;
     const requestId = ++this.vrmLoadRequestId;
     if (this.vrm) {
-      this.scene.remove(this.vrm.scene);
+      this.vrm.scene.parent?.remove(this.vrm.scene);
       VRMUtils.deepDispose(this.vrm.scene);
       this.vrm = null;
       this.vrmReady = false;
       this.vrmName = null;
       this.mixer = null;
       this.idleAction = null;
+      this.revealStarted = false;
       this.stopEmote();
       this.emoteClipCache.clear();
     }
+    this.lastLoadError = null;
     const loader = new GLTFLoader();
+    configureVrmGltfLoader(loader);
     const webGpuNodes =
       this.rendererBackend === "webgpu"
         ? await import("@pixiv/three-vrm/nodes")
@@ -578,7 +777,17 @@ export class VrmEngine {
       }
       return new VRMLoaderPlugin(parser);
     });
-    const gltf = await loader.loadAsync(url);
+    let gltf: Awaited<ReturnType<GLTFLoader["loadAsync"]>>;
+    try {
+      gltf = await loadGltfAsset(loader, url);
+    } catch (error) {
+      if (!this.loadingAborted && requestId === this.vrmLoadRequestId) {
+        this.lastLoadError =
+          error instanceof Error ? error.message : String(error);
+        this.onUpdate?.();
+      }
+      throw error;
+    }
     if (
       this.loadingAborted ||
       !this.scene ||
@@ -620,9 +829,11 @@ export class VrmEngine {
     vrm.scene.traverse((obj) => {
       obj.frustumCulled = false;
     });
-    this.scene.add(vrm.scene);
+    const avatarParent = this.avatarRoot ?? this.scene;
+    avatarParent.add(vrm.scene);
     this.vrm = vrm;
     this.vrmName = name ?? null;
+    this.lastLoadError = null;
     vrm.springBoneManager?.reset?.();
     this.blinkController.reset();
 
@@ -643,7 +854,9 @@ export class VrmEngine {
 
   private async playTeleportReveal(vrm: VRM): Promise<void> {
     this.teleportProgress = 0.0;
+    this.revealStarted = true;
     this.cleanupTeleportDissolve();
+    let appliedNodeDissolve = false;
 
     try {
       const tsl = await import("three/tsl");
@@ -658,6 +871,7 @@ export class VrmEngine {
           : [obj.material];
         for (const mat of mats) {
           if (!mat.isNodeMaterial || mat.userData._dissolveApplied) continue;
+          appliedNodeDissolve = true;
           mat.userData._dissolveApplied = true;
           mat.userData._origOpacityNode = mat.opacityNode ?? null;
           // biome-ignore lint/suspicious/noExplicitAny: Three.js NodeMaterial emissiveNode is not in public types
@@ -743,25 +957,107 @@ export class VrmEngine {
         err,
       );
     }
+
+    if (!appliedNodeDissolve) {
+      this.applyTeleportFallbackDissolve(vrm);
+    }
+  }
+
+  private applyTeleportFallbackDissolve(vrm: VRM): void {
+    vrm.scene.traverse((obj: THREE.Object3D) => {
+      if (!(obj instanceof THREE.Mesh)) return;
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+      for (const mat of mats) {
+        if (mat.userData._dissolveApplied) continue;
+        mat.userData._dissolveApplied = true;
+        mat.userData._origTransparent = mat.transparent;
+        mat.userData._origAlphaTest = mat.alphaTest;
+        mat.userData._origOnBeforeCompile = mat.onBeforeCompile;
+        mat.userData._origCustomProgramCacheKey = mat.customProgramCacheKey;
+
+        const shaderRef: TeleportFallbackShader = {
+          uniforms: { uTeleportProgress: { value: this.teleportProgress } },
+        };
+        this.teleportFallbackShaders.push(shaderRef);
+
+        mat.transparent = true;
+        mat.alphaTest = Math.max(mat.alphaTest ?? 0, 0.01);
+        mat.onBeforeCompile = (
+          shader: Parameters<THREE.Material["onBeforeCompile"]>[0],
+        ) => {
+          shader.uniforms.uTeleportProgress =
+            shaderRef.uniforms.uTeleportProgress;
+          shader.vertexShader = `
+varying vec3 vTeleportWorldPosition;
+${shader.vertexShader}
+`.replace(
+            "#include <worldpos_vertex>",
+            `#include <worldpos_vertex>
+vTeleportWorldPosition = worldPosition.xyz;`,
+          );
+          shader.fragmentShader = `
+uniform float uTeleportProgress;
+varying vec3 vTeleportWorldPosition;
+float teleportNoiseHash(vec2 p) {
+  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+}
+${shader.fragmentShader}
+`.replace(
+            "#include <alphatest_fragment>",
+            `float teleportThreshold = mix(-0.2, 2.0, uTeleportProgress);
+float teleportDiff = vTeleportWorldPosition.y - teleportThreshold;
+float teleportRatio = clamp(teleportDiff / 0.3, 0.0, 1.0);
+float teleportNoise = teleportNoiseHash(vec2(
+  vTeleportWorldPosition.y * 40.0,
+  (vTeleportWorldPosition.x + vTeleportWorldPosition.z) * 30.0
+));
+if (teleportNoise < teleportRatio) discard;
+#include <alphatest_fragment>`,
+          );
+
+          const originalOnBeforeCompile = mat.userData._origOnBeforeCompile;
+          if (typeof originalOnBeforeCompile === "function") {
+            originalOnBeforeCompile(shader, this.renderer as never);
+          }
+        };
+        mat.customProgramCacheKey = () =>
+          `${mat.type}:teleport-dissolve-fallback`;
+        mat.needsUpdate = true;
+        this.teleportDissolvedMaterials.push(mat);
+      }
+    });
   }
 
   private cleanupTeleportDissolve(): void {
     for (const mat of this.teleportDissolvedMaterials) {
       if (mat.userData._dissolveApplied) {
-        (mat as unknown as Record<string, unknown>).opacityNode =
-          mat.userData._origOpacityNode ?? null;
-        (mat as unknown as Record<string, unknown>).emissiveNode =
-          mat.userData._origEmissiveNode ?? null;
+        if (mat.userData._origOpacityNode !== undefined) {
+          (mat as unknown as Record<string, unknown>).opacityNode =
+            mat.userData._origOpacityNode ?? null;
+        }
+        if (mat.userData._origEmissiveNode !== undefined) {
+          (mat as unknown as Record<string, unknown>).emissiveNode =
+            mat.userData._origEmissiveNode ?? null;
+        }
         mat.alphaTest = mat.userData._origAlphaTest ?? 0;
+        mat.transparent = mat.userData._origTransparent ?? mat.transparent;
+        mat.onBeforeCompile =
+          mat.userData._origOnBeforeCompile ?? mat.onBeforeCompile;
+        mat.customProgramCacheKey =
+          mat.userData._origCustomProgramCacheKey ?? mat.customProgramCacheKey;
         delete mat.userData._dissolveApplied;
         delete mat.userData._origOpacityNode;
         delete mat.userData._origEmissiveNode;
         delete mat.userData._origAlphaTest;
+        delete mat.userData._origTransparent;
+        delete mat.userData._origOnBeforeCompile;
+        delete mat.userData._origCustomProgramCacheKey;
         mat.needsUpdate = true;
       }
     }
     this.teleportDissolvedMaterials = [];
     this.teleportProgressUniform = null;
+    this.teleportFallbackShaders = [];
   }
   private get animationLoaderContext(): AnimationLoaderContext {
     return {
@@ -786,6 +1082,9 @@ export class VrmEngine {
 
         if (this.teleportProgressUniform) {
           this.teleportProgressUniform.value = this.teleportProgress;
+        }
+        for (const shader of this.teleportFallbackShaders) {
+          shader.uniforms.uTeleportProgress.value = this.teleportProgress;
         }
 
         if (this.teleportProgress >= 1.0) {
@@ -856,6 +1155,28 @@ export class VrmEngine {
         this.elapsedTime,
       );
     }
+    if (this.pointerParallaxEnabled) {
+      const follow = Math.min(1, stableDelta * 7.5);
+      this.pointerParallaxCurrent.lerp(this.pointerParallaxTarget, follow);
+      this.pointerParallaxPosition.set(
+        this.pointerParallaxCurrent.x * 0.18,
+        this.pointerParallaxCurrent.y * 0.12,
+        0,
+      );
+      camera.position.add(this.pointerParallaxPosition);
+      this.pointerParallaxLookAt
+        .copy(this.lookAtTarget)
+        .add(
+          new THREE.Vector3(
+            this.pointerParallaxCurrent.x * 0.08,
+            this.pointerParallaxCurrent.y * 0.05,
+            0,
+          ),
+        );
+    } else {
+      this.pointerParallaxCurrent.lerp(this.pointerParallaxTarget, 0.12);
+      this.pointerParallaxLookAt.copy(this.lookAtTarget);
+    }
     if (this.controls) {
       if (manualCameraActive && !this.isCameraTransitioning) {
         this.controls.update();
@@ -865,10 +1186,19 @@ export class VrmEngine {
       }
     }
     if (!manualCameraActive || this.isCameraTransitioning) {
-      camera.lookAt(this.lookAtTarget);
+      camera.lookAt(this.pointerParallaxLookAt);
     }
     renderer.render(scene, camera);
     this.onUpdate?.();
+  }
+  private disposeWorld(): void {
+    if (!this.worldMesh) {
+      this.worldMesh = null;
+      return;
+    }
+    this.worldMesh.parent?.remove(this.worldMesh);
+    this.worldMesh.dispose();
+    this.worldMesh = null;
   }
   private async loadAndPlayIdle(vrm: VRM): Promise<void> {
     if (this.loadingAborted) return;
@@ -887,6 +1217,7 @@ export class VrmEngine {
     action.play();
     action.timeScale = 1.0;
     this.idleAction = action;
+    mixer.update(1 / 60);
   }
   private async loadEmoteClipCached(
     path: string,

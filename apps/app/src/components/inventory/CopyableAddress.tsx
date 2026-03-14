@@ -2,9 +2,9 @@
  * Truncated wallet address with a copy button.
  */
 
+import { useTimeout } from "@milady/app-core/hooks";
 import { Button } from "@milady/ui";
 import { useState } from "react";
-import { useTimeout } from "../../hooks/useTimeout";
 
 export function CopyableAddress({
   address,
@@ -32,7 +32,7 @@ export function CopyableAddress({
         variant="outline"
         size="sm"
         onClick={handleCopy}
-        className="h-6 px-1.5 py-0.5 border-border bg-bg text-[10px] font-mono shadow-sm hover:border-accent hover:text-accent"
+        className="h-6 px-1.5 py-0.5 border-border bg-bg text-[10px] font-mono shadow-sm hover:border-accent hover:text-txt"
       >
         {copied ? "copied" : "copy"}
       </Button>

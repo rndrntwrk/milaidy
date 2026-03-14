@@ -1,3 +1,4 @@
+import { SecretsView } from "@milady/app-core/components";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,8 +14,6 @@ vi.mock("@milady/app-core/api", () => ({
     updateSecrets: mockUpdateSecrets,
   },
 }));
-
-import { SecretsView } from "../../src/components/SecretsView";
 
 describe("SecretsView picker keyboard behavior", () => {
   beforeEach(() => {

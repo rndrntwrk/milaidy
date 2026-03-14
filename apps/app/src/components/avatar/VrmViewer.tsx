@@ -28,8 +28,13 @@ export type VrmViewerProps = {
   cameraProfile?: CameraProfile;
   /** Interaction behavior for camera controls */
   interactiveMode?: InteractionMode;
+  /** Optional Gaussian splat world behind the avatar */
+  worldUrl?: string;
+  /** Enable springy drag/touch camera offset instead of orbit controls */
+  pointerParallax?: boolean;
   onEngineState?: (state: VrmEngineState) => void;
   onEngineReady?: (engine: VrmEngine) => void;
+  onRevealStart?: () => void;
 };
 
 export function VrmViewer(props: VrmViewerProps) {
@@ -42,19 +47,38 @@ export function VrmViewer(props: VrmViewerProps) {
   const interactionModeRef = useRef<InteractionMode>(
     props.interactiveMode ?? "free",
   );
+  const pointerParallaxRef = useRef<boolean>(props.pointerParallax ?? false);
+  const prefersWorldRendererRef = useRef<boolean>(Boolean(props.worldUrl));
   const lastStateEmitMsRef = useRef<number>(0);
   const mountedRef = useRef(true);
   const currentVrmPathRef = useRef<string>("");
+  const currentWorldPathRef = useRef<string>("");
+  const pointerStateRef = useRef<{
+    active: boolean;
+    id: number | null;
+    startX: number;
+    startY: number;
+  }>({
+    active: false,
+    id: null,
+    startX: 0,
+    startY: 0,
+  });
   const onEngineReadyRef = useRef(props.onEngineReady);
   const onEngineStateRef = useRef(props.onEngineState);
+  const onRevealStartRef = useRef(props.onRevealStart);
+  const revealStartedRef = useRef(false);
 
   mouthOpenRef.current = props.mouthOpen;
   isSpeakingRef.current = props.isSpeaking ?? false;
   interactiveRef.current = props.interactive ?? false;
   cameraProfileRef.current = props.cameraProfile ?? "chat";
   interactionModeRef.current = props.interactiveMode ?? "free";
+  pointerParallaxRef.current = props.pointerParallax ?? false;
+  prefersWorldRendererRef.current = Boolean(props.worldUrl);
   onEngineReadyRef.current = props.onEngineReady;
   onEngineStateRef.current = props.onEngineState;
+  onRevealStartRef.current = props.onRevealStart;
 
   // Setup engine once
   useEffect(() => {
@@ -69,24 +93,36 @@ export function VrmViewer(props: VrmViewerProps) {
       engineRef.current = engine;
     }
 
-    engine.setup(canvas, () => {
-      // Frame loop: guard all state-setting calls against unmount.
-      if (!mountedRef.current) return;
-      engine.setMouthOpen(mouthOpenRef.current);
-      engine.setSpeaking(isSpeakingRef.current);
-      if (onEngineStateRef.current) {
-        const now = performance.now();
-        if (now - lastStateEmitMsRef.current >= 250) {
-          lastStateEmitMsRef.current = now;
-          onEngineStateRef.current(engine.getState());
+    engine.setup(
+      canvas,
+      () => {
+        // Frame loop: guard all state-setting calls against unmount.
+        if (!mountedRef.current) return;
+        engine.setMouthOpen(mouthOpenRef.current);
+        engine.setSpeaking(isSpeakingRef.current);
+        if (onEngineStateRef.current) {
+          const now = performance.now();
+          if (now - lastStateEmitMsRef.current >= 250) {
+            lastStateEmitMsRef.current = now;
+            const state = engine.getState();
+            if (state.revealStarted && !revealStartedRef.current) {
+              revealStartedRef.current = true;
+              onRevealStartRef.current?.();
+            }
+            onEngineStateRef.current(state);
+          }
         }
-      }
-    });
+      },
+      {
+        rendererPreference: prefersWorldRendererRef.current ? "webgl" : "auto",
+      },
+    );
 
     // One-time initial camera/control setup (subsequent changes handled by effects).
     engine.setCameraProfile(cameraProfileRef.current);
     engine.setInteractionMode(interactionModeRef.current);
     engine.setInteractionEnabled(interactiveRef.current);
+    engine.setPointerParallaxEnabled(pointerParallaxRef.current);
 
     const resize = () => {
       const el = canvasRef.current;
@@ -141,6 +177,15 @@ export function VrmViewer(props: VrmViewerProps) {
     engine.setInteractionMode(props.interactiveMode ?? "free");
   }, [props.interactiveMode]);
 
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.setPointerParallaxEnabled(props.pointerParallax ?? false);
+    if (!(props.pointerParallax ?? false)) {
+      engine.resetPointerParallax();
+    }
+  }, [props.pointerParallax]);
+
   // Load VRM when path changes
   useEffect(() => {
     const engine = engineRef.current;
@@ -149,6 +194,7 @@ export function VrmViewer(props: VrmViewerProps) {
     const vrmUrl = props.vrmPath ?? DEFAULT_VRM_PATH;
     if (vrmUrl === currentVrmPathRef.current) return;
     currentVrmPathRef.current = vrmUrl;
+    revealStartedRef.current = false;
 
     const abortController = new AbortController();
 
@@ -161,7 +207,12 @@ export function VrmViewer(props: VrmViewerProps) {
           vrmUrl.split("/").pop() ?? "avatar.vrm",
         );
         if (!mountedRef.current || abortController.signal.aborted) return;
-        onEngineStateRef.current?.(engine.getState());
+        const state = engine.getState();
+        if (state.revealStarted && !revealStartedRef.current) {
+          revealStartedRef.current = true;
+          onRevealStartRef.current?.();
+        }
+        onEngineStateRef.current?.(state);
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return;
         if (currentVrmPathRef.current === vrmUrl) {
@@ -179,15 +230,102 @@ export function VrmViewer(props: VrmViewerProps) {
     };
   }, [props.vrmPath]);
 
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+
+    const worldUrl = props.worldUrl ?? "";
+    if (worldUrl === currentWorldPathRef.current) return;
+    currentWorldPathRef.current = worldUrl;
+    const abortController = new AbortController();
+
+    void (async () => {
+      try {
+        await engine.whenReady();
+        if (!mountedRef.current || abortController.signal.aborted) return;
+        await engine.setWorldUrl(worldUrl || null);
+      } catch (err) {
+        console.warn("Failed to load splat world:", err);
+      }
+    })();
+
+    return () => {
+      abortController.abort();
+      if (currentWorldPathRef.current === worldUrl) {
+        currentWorldPathRef.current = "";
+      }
+    };
+  }, [props.worldUrl]);
+
+  const updateParallaxFromPointer = (
+    clientX: number,
+    clientY: number,
+    release = false,
+  ) => {
+    const engine = engineRef.current;
+    const canvas = canvasRef.current;
+    const pointerState = pointerStateRef.current;
+    if (!engine || !canvas || !pointerParallaxRef.current) return;
+    if (release) {
+      engine.resetPointerParallax();
+      return;
+    }
+    const rect = canvas.getBoundingClientRect();
+    const deltaX = clientX - pointerState.startX;
+    const deltaY = clientY - pointerState.startY;
+    const normalizedX = rect.width > 0 ? deltaX / rect.width : 0;
+    const normalizedY = rect.height > 0 ? deltaY / rect.height : 0;
+    engine.setPointerParallaxTarget(normalizedX * 2.2, -normalizedY * 2.2);
+  };
+
   return (
     <canvas
       ref={canvasRef}
+      onPointerDown={(event) => {
+        if (!pointerParallaxRef.current) return;
+        pointerStateRef.current = {
+          active: true,
+          id: event.pointerId,
+          startX: event.clientX,
+          startY: event.clientY,
+        };
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={(event) => {
+        const pointerState = pointerStateRef.current;
+        if (
+          !pointerParallaxRef.current ||
+          !pointerState.active ||
+          pointerState.id !== event.pointerId
+        ) {
+          return;
+        }
+        updateParallaxFromPointer(event.clientX, event.clientY);
+      }}
+      onPointerUp={(event) => {
+        const pointerState = pointerStateRef.current;
+        if (pointerState.id !== event.pointerId) return;
+        pointerStateRef.current.active = false;
+        event.currentTarget.releasePointerCapture(event.pointerId);
+        updateParallaxFromPointer(event.clientX, event.clientY, true);
+      }}
+      onPointerCancel={(event) => {
+        const pointerState = pointerStateRef.current;
+        if (pointerState.id !== event.pointerId) return;
+        pointerStateRef.current.active = false;
+        updateParallaxFromPointer(event.clientX, event.clientY, true);
+      }}
       style={{
+        position: "absolute",
+        inset: 0,
         display: "block",
-        width: "100%",
-        height: "100%",
+        width: "100vw",
+        height: "100vh",
+        minWidth: "100vw",
+        minHeight: "100vh",
         background: "transparent",
-        cursor: props.interactive ? "grab" : "default",
+        cursor: props.pointerParallax || props.interactive ? "grab" : "default",
+        touchAction: props.pointerParallax ? "none" : "auto",
       }}
     />
   );

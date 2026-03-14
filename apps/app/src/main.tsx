@@ -5,7 +5,7 @@
  * features, and mounts the React application.
  */
 
-import "./styles.css";
+import "@milady/app-core/styles/styles.css";
 
 import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
@@ -28,13 +28,13 @@ import {
   SHARE_TARGET_EVENT,
   TRAY_ACTION_EVENT,
 } from "@milady/app-core/events";
+import { AppProvider } from "@milady/app-core/state";
 // Import the agent plugin
 import { Agent } from "@milady/capacitor-agent";
 import { Desktop } from "@milady/capacitor-desktop";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
-import { AppProvider } from "./AppContext";
 
 /**
  * Platform detection utilities

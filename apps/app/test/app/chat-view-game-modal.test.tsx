@@ -18,6 +18,7 @@ interface ChatViewContextStub {
   chatInput: string;
   chatSending: boolean;
   chatFirstTokenReceived: boolean;
+  companionMessageCutoffTs: number;
   conversationMessages: ChatMessage[];
   handleChatSend: (channelType?: string) => Promise<void>;
   handleChatStop: () => void;
@@ -39,14 +40,20 @@ const { mockClient, mockUseApp, mockUseVoiceChat } = vi.hoisted(() => ({
   mockUseVoiceChat: vi.fn(),
 }));
 
-vi.mock("../../src/AppContext", () => ({
+vi.mock("@milady/app-core/state", () => ({
   useApp: () => mockUseApp(),
   getVrmPreviewUrl: () => null,
 }));
 
-vi.mock("../../src/hooks/useVoiceChat", () => ({
-  useVoiceChat: () => mockUseVoiceChat(),
-}));
+vi.mock("@milady/app-core/hooks", async () => {
+  const actual = await vi.importActual<typeof import("@milady/app-core/hooks")>(
+    "@milady/app-core/hooks",
+  );
+  return {
+    ...actual,
+    useVoiceChat: () => mockUseVoiceChat(),
+  };
+});
 
 vi.mock("../../src/components/MessageContent", () => ({
   MessageContent: ({ message }: { message: { text: string } }) =>
@@ -67,6 +74,7 @@ function createContext(
     chatInput: "Hello",
     chatSending: false,
     chatFirstTokenReceived: false,
+    companionMessageCutoffTs: 0,
     conversationMessages: [],
     handleChatSend: vi.fn(async () => {}),
     handleChatStop: vi.fn(),
@@ -134,6 +142,80 @@ describe("ChatView game-modal variant", () => {
     const text = textOf(tree?.root).toLowerCase();
     expect(text).toContain("acknowledged");
     expect(text).not.toContain("via discord");
+    expect(text).toContain("milady");
+  });
+
+  it("shows only the most recent companion messages", async () => {
+    mockUseApp.mockReturnValue(
+      createContext({
+        conversationMessages: [
+          { id: "m1", role: "assistant", text: "one", timestamp: 1 },
+          { id: "m2", role: "user", text: "two", timestamp: 2 },
+          { id: "m3", role: "assistant", text: "three", timestamp: 3 },
+          { id: "m4", role: "user", text: "four", timestamp: 4 },
+          { id: "m5", role: "assistant", text: "five", timestamp: 5 },
+        ],
+      }),
+    );
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(ChatView, { variant: "game-modal" }),
+      );
+    });
+
+    const text = textOf(tree?.root).toLowerCase();
+    expect(text).not.toContain("one");
+    expect(text).toContain("two");
+    expect(text).toContain("three");
+    expect(text).toContain("four");
+    expect(text).toContain("five");
+  });
+
+  it("shows avatar typing instead of starter prompts when companion chat is empty", async () => {
+    mockUseApp.mockReturnValue(createContext({ conversationMessages: [] }));
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(ChatView, { variant: "game-modal" }),
+      );
+    });
+
+    const text = textOf(tree?.root).toLowerCase();
+    expect(text).toContain("milady");
+    expect(text).not.toContain("startaconversation");
+    expect(text).not.toContain("tell me a joke");
+  });
+
+  it("hides companion messages older than the cutoff timestamp", async () => {
+    mockUseApp.mockReturnValue(
+      createContext({
+        companionMessageCutoffTs: 4,
+        conversationMessages: [
+          { id: "m1", role: "assistant", text: "one", timestamp: 1 },
+          { id: "m2", role: "user", text: "two", timestamp: 2 },
+          { id: "m3", role: "assistant", text: "three", timestamp: 3 },
+          { id: "m4", role: "user", text: "four", timestamp: 4 },
+          { id: "m5", role: "assistant", text: "five", timestamp: 5 },
+        ],
+      }),
+    );
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(ChatView, { variant: "game-modal" }),
+      );
+    });
+
+    const text = textOf(tree?.root).toLowerCase();
+    expect(text).not.toContain("one");
+    expect(text).not.toContain("two");
+    expect(text).not.toContain("three");
+    expect(text).toContain("four");
+    expect(text).toContain("five");
   });
 
   it("keeps mic and send controls usable in game-modal", async () => {

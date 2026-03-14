@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { copyTextToClipboard } from "../../src/utils/clipboard";
 import {
   alertDesktopMessage,
   confirmDesktopAction,
-} from "../../src/utils/desktop-dialogs";
+  copyTextToClipboard,
+} from "@milady/app-core/utils";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type TestWindow = Window & {
   __MILADY_ELECTROBUN_RPC__?: {

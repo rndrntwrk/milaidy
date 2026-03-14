@@ -12,6 +12,12 @@ import {
   type VoiceConfig,
 } from "@milady/app-core/api";
 import { VOICE_CONFIG_UPDATED_EVENT } from "@milady/app-core/events";
+import {
+  useTimeout,
+  useVoiceChat,
+  type VoicePlaybackStartEvent,
+} from "@milady/app-core/hooks";
+import { getVrmPreviewUrl, useApp } from "@milady/app-core/state";
 import { Button, Textarea } from "@milady/ui";
 import { Mic, Paperclip, Send, Smile, Square } from "lucide-react";
 import {
@@ -24,12 +30,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { getVrmPreviewUrl, useApp } from "../AppContext";
-import { useTimeout } from "../hooks/useTimeout";
-import {
-  useVoiceChat,
-  type VoicePlaybackStartEvent,
-} from "../hooks/useVoiceChat";
 import { AgentActivityBox } from "./AgentActivityBox";
 import { ChatEmptyState, ChatMessage, TypingIndicator } from "./ChatMessage";
 import { MessageContent } from "./MessageContent";
@@ -44,6 +44,7 @@ function isMobileViewport(): boolean {
 
 const CHAT_INPUT_MIN_HEIGHT_PX = 38;
 const CHAT_INPUT_MAX_HEIGHT_PX = 200;
+const COMPANION_VISIBLE_MESSAGE_LIMIT = 4;
 
 /**
  * Routine coding-agent status messages that belong in the activity box, not chat.
@@ -64,35 +65,6 @@ export function isRoutineCodingAgentMessage(msg: {
 
 type ChatViewVariant = "default" | "game-modal";
 
-function GameModalMessage({
-  msg,
-  children,
-}: {
-  msg: { timestamp?: number; role?: string };
-  children: React.ReactNode;
-}) {
-  const [faded, setFaded] = useState(false);
-  useEffect(() => {
-    if (!msg.timestamp) return;
-    const age = Date.now() - msg.timestamp;
-    if (age > 60000) {
-      setFaded(true);
-    } else {
-      const timer = setTimeout(() => setFaded(true), 60000 - age);
-      return () => clearTimeout(timer);
-    }
-  }, [msg.timestamp]);
-
-  const isUser = msg.role === "user";
-  return (
-    <div
-      className={`flex w-full transition-opacity duration-1000 ${faded ? "opacity-0 pointer-events-none" : "opacity-100"} ${isUser ? "justify-end" : "justify-start"}`}
-    >
-      {children}
-    </div>
-  );
-}
-
 interface ChatViewProps {
   variant?: ChatViewVariant;
 }
@@ -106,6 +78,7 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
     chatInput,
     chatSending,
     chatFirstTokenReceived,
+    companionMessageCutoffTs,
     conversationMessages,
     handleChatSend,
     handleChatStop,
@@ -252,6 +225,13 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
           ) && !isRoutineCodingAgentMessage(msg),
       ),
     [chatFirstTokenReceived, chatSending, msgs],
+  );
+  const gameModalVisibleMsgs = useMemo(
+    () =>
+      visibleMsgs
+        .filter((message) => message.timestamp >= companionMessageCutoffTs)
+        .slice(-COMPANION_VISIBLE_MESSAGE_LIMIT),
+    [companionMessageCutoffTs, visibleMsgs],
   );
   const agentAvatarSrc =
     selectedVrmIndex > 0 ? getVrmPreviewUrl(selectedVrmIndex) : null;
@@ -452,20 +432,39 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
         style={{ zIndex: 1, scrollbarGutter: "stable both-edges" }}
       >
         {visibleMsgs.length === 0 && !chatSending ? (
-          <ChatEmptyState agentName={agentName} />
+          isGameModal ? (
+            <div className="flex flex-1 items-end py-4">
+              <div className="w-full">
+                <TypingIndicator
+                  agentName={agentName}
+                  agentAvatarSrc={agentAvatarSrc}
+                />
+              </div>
+            </div>
+          ) : (
+            <ChatEmptyState agentName={agentName} />
+          )
         ) : isGameModal ? (
           <div className="flex flex-col gap-4 py-4 w-full mt-auto">
-            {visibleMsgs.map((msg) => {
+            {gameModalVisibleMsgs.map((msg) => {
               const isUser = msg.role === "user";
               return (
-                <GameModalMessage key={msg.id} msg={msg}>
+                <div
+                  key={msg.id}
+                  className={`flex w-full ${isUser ? "justify-end" : "justify-start"}`}
+                >
                   <div
-                    className={`max-w-[85%] rounded-2xl px-4 py-3 text-[15px] leading-relaxed ${
+                    className={`max-w-[85%] rounded-2xl px-4 py-3 text-[15px] leading-relaxed shadow-[0_12px_36px_rgba(0,0,0,0.22)] ${
                       isUser
-                        ? "bg-accent/80 text-white rounded-br-sm"
-                        : "bg-black/30 text-white/90 rounded-bl-sm"
+                        ? "bg-accent/85 text-white rounded-br-sm"
+                        : "border border-white/10 bg-black/45 text-white/95 rounded-bl-sm backdrop-blur-md"
                     }`}
                   >
+                    <div
+                      className={`mb-1 text-[10px] font-semibold uppercase tracking-[0.22em] ${isUser ? "text-white/70" : "text-white/50"}`}
+                    >
+                      {isUser ? "You" : agentName}
+                    </div>
                     <div
                       className="break-words"
                       style={{ fontFamily: "var(--font-chat)" }}
@@ -473,7 +472,7 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
                       <MessageContent message={msg} />
                     </div>
                   </div>
-                </GameModalMessage>
+                </div>
               );
             })}
             {chatSending && !chatFirstTokenReceived && (
@@ -612,7 +611,7 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
               size="icon"
               className={`flex shrink-0 items-center justify-center w-[46px] h-[46px] mb-1.5 rounded-full transition-all ${
                 voice.isListening
-                  ? "bg-accent/20 text-accent"
+                  ? "bg-accent/20 text-txt"
                   : "bg-transparent text-white/50 hover:bg-white/10 hover:text-white"
               } ${isComposerLocked ? "opacity-50" : ""}`}
               onClick={voice.toggleListening}
@@ -703,7 +702,7 @@ export function ChatView({ variant = "default" }: ChatViewProps) {
             size="icon"
             className={`h-[38px] w-[38px] shrink-0 ${
               chatPendingImages.length > 0
-                ? "bg-accent/10 sm:hover:bg-accent/20 border-accent/20 text-accent/80 hover:text-accent shadow-sm"
+                ? "bg-accent/10 sm:hover:bg-accent/20 border-accent/20 text-txt/80 hover:text-txt shadow-sm"
                 : "text-muted hover:bg-black/5 hover:text-txt"
             }`}
             onClick={() => fileInputRef.current?.click()}

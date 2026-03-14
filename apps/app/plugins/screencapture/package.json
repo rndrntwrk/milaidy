@@ -1,7 +1,13 @@
 {
   "name": "@milady/capacitor-screencapture",
   "version": "1.0.0",
-  "description": "Milady Screen Capture Plugin for Capacitor - Screen recording and screenshots",
+  "description": "Captures screenshots and records the screen across web, mobile, and desktop.",
+  "keywords": [
+    "screen-capture",
+    "screenshots",
+    "screen-recording",
+    "media"
+  ],
   "main": "./dist/plugin.cjs.js",
   "module": "./src/index.ts",
   "types": "./dist/plugin.d.ts",

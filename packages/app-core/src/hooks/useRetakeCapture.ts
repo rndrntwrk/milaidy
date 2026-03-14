@@ -9,8 +9,8 @@
  * This hook just sends start/stop signals.
  */
 
-import { invokeDesktopBridgeRequest } from "../bridge";
 import { useEffect, useRef } from "react";
+import { invokeDesktopBridgeRequest } from "../bridge";
 
 const DEFAULT_FPS = 15;
 const JPEG_QUALITY = 70;

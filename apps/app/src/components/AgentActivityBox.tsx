@@ -1,6 +1,6 @@
 import type { CodingAgentSession } from "@milady/app-core/api";
 
-/** Status dot color classes — mirrors CodingAgentsSection. */
+/** Status dot color classes for coding-agent activity. */
 const STATUS_DOT: Record<string, string> = {
   active: "bg-ok",
   tool_running: "bg-accent",

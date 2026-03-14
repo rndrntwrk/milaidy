@@ -165,6 +165,7 @@
         "@milady/ui": "workspace:*",
         "@noble/curves": "^2.0.1",
         "@pixiv/three-vrm": "^3.4.5",
+        "@sparkjsdev/spark": "^0.1.10",
         "@xterm/addon-fit": "^0.10.0",
         "@xterm/xterm": "^5.5.0",
         "react": "^19.0.0",
@@ -375,7 +376,9 @@
         "@milady/capacitor-screencapture": "workspace:*",
         "@milady/capacitor-swabble": "workspace:*",
         "@milady/capacitor-talkmode": "workspace:*",
+        "@milady/ui": "workspace:*",
         "lucide-react": "^0.575.0",
+        "zod": "^4.3.6",
       },
       "devDependencies": {
         "@types/react": "^19.0.0",
@@ -1621,6 +1624,8 @@
     "@smithy/util-utf8": ["@smithy/util-utf8@4.2.1", "", { "dependencies": { "@smithy/util-buffer-from": "^4.2.1", "tslib": "^2.6.2" } }, "sha512-DSIwNaWtmzrNQHv8g7DBGR9mulSit65KSj5ymGEIAknmIN8IpbZefEep10LaMG/P/xquwbmJ1h9ectz8z6mV6g=="],
 
     "@smithy/uuid": ["@smithy/uuid@1.1.1", "", { "dependencies": { "tslib": "^2.6.2" } }, "sha512-dSfDCeihDmZlV2oyr0yWPTUfh07suS+R5OB+FZGiv/hHyK3hrFBW5rR1UYjfa57vBsrP9lciFkRPzebaV1Qujw=="],
+
+    "@sparkjsdev/spark": ["@sparkjsdev/spark@0.1.10", "", { "dependencies": { "fflate": "^0.8.2" } }, "sha512-CiijdZQuj7KPDUqIZPiEqyUkJCYo1JqR05vq/V+ElxMwqR7L70ZuZDyIKcasjZHSiPB8pGRMH8HZGqUKO9aRPQ=="],
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 

@@ -273,8 +273,8 @@ const { mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
 }));
 
-vi.mock("../../src/AppContext", async () => {
-  const actual = await vi.importActual("../../src/AppContext");
+vi.mock("@milady/app-core/state", async () => {
+  const actual = await vi.importActual("@milady/app-core/state");
   return {
     ...actual,
     useApp: () => mockUseApp(),
@@ -314,7 +314,7 @@ vi.mock("../../src/components/AvatarSelector", () => ({
     ),
 }));
 
-vi.mock("../../src/components/config-renderer", () => ({
+vi.mock("@milady/app-core/config", () => ({
   ConfigRenderer: () => React.createElement("div", null, "ConfigRenderer"),
   defaultRegistry: {},
 }));
@@ -449,6 +449,48 @@ describe("CharacterView UI", () => {
 
     const textareas = tree?.root.findAll((node) => node.type === "textarea");
     expect(textareas.length).toBeGreaterThanOrEqual(0);
+  });
+
+  it("renders the style editor in the left grid column with overflow and individual entries", async () => {
+    let tree: TestRenderer.ReactTestRenderer | null = null;
+
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(CharacterView));
+    });
+
+    const styleGrid = tree?.root.find(
+      (node) => node.props["data-testid"] === "character-style-examples-grid",
+    );
+    expect(styleGrid?.props.className).toContain("lg:grid-cols-2");
+
+    const styleEditor = tree?.root.find(
+      (node) => node.props["data-testid"] === "character-style-editor",
+    );
+    expect(styleEditor?.props.className).toContain("overflow-hidden");
+
+    const styleEditorScroll = tree?.root.find(
+      (node) => node.props["data-testid"] === "character-style-editor-scroll",
+    );
+    expect(styleEditorScroll?.props.className).toContain("overflow-y-auto");
+
+    const styleEntries =
+      tree?.root.findAll(
+        (node) =>
+          typeof node.props["data-testid"] === "string" &&
+          /^style-entry-(all|chat|post)-\d+$/.test(node.props["data-testid"]),
+      ) ?? [];
+    expect(styleEntries).toHaveLength(3);
+
+    const styleEditors =
+      tree?.root.findAll(
+        (node) =>
+          node.type === "textarea" &&
+          typeof node.props["data-testid"] === "string" &&
+          /^style-entry-editor-(all|chat|post)-\d+$/.test(
+            node.props["data-testid"],
+          ),
+      ) ?? [];
+    expect(styleEditors).toHaveLength(3);
   });
 
   it("renders adjectives tag editor", async () => {

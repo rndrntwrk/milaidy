@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
+import { openExternalUrl } from "@milady/app-core/utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { openExternalUrl } from "../../src/utils/openExternalUrl";
 
 type TestWindow = Window & {
   __MILADY_ELECTROBUN_RPC__?: {

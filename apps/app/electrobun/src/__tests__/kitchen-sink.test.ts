@@ -2085,21 +2085,6 @@ describe("Push event integrity", () => {
 // ============================================================================
 
 describe("Schema types — shape validation", () => {
-  it("AgentStatus has all required fields", () => {
-    const status: import("../rpc-schema").AgentStatus = {
-      state: "not_started",
-      agentName: null,
-      port: null,
-      startedAt: null,
-      error: null,
-    };
-    expect(status.state).toBe("not_started");
-    expect(status.agentName).toBeNull();
-    expect(status.port).toBeNull();
-    expect(status.startedAt).toBeNull();
-    expect(status.error).toBeNull();
-  });
-
   it("WindowBounds has all numeric fields", () => {
     const bounds: import("../rpc-schema").WindowBounds = {
       x: 0,
@@ -2166,26 +2151,6 @@ describe("Schema types — shape validation", () => {
     expect(item.id).toBe("quit");
     expect(item.label).toBe("Quit");
     expect(item.type).toBe("normal");
-  });
-
-  it("AgentStatus state can be all valid states", () => {
-    const states: import("../rpc-schema").AgentStatus["state"][] = [
-      "not_started",
-      "starting",
-      "running",
-      "stopped",
-      "error",
-    ];
-    for (const state of states) {
-      const s: import("../rpc-schema").AgentStatus = {
-        state,
-        agentName: null,
-        port: null,
-        startedAt: null,
-        error: null,
-      };
-      expect(s.state).toBe(state);
-    }
   });
 
   it("PipState has enabled boolean and optional windowId", () => {

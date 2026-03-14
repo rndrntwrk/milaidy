@@ -1,19 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import "../styles/xterm.css";
+import "@milady/app-core/styles/xterm.css";
 import {
   client,
   type SandboxBrowserEndpoints,
   type SandboxWindowInfo,
 } from "@milady/app-core/api";
-import { useApp } from "../AppContext";
-import { useLifoSync } from "../hooks/useLifoSync";
-import { generateLifoSessionId, isSafeEndpointUrl } from "../lifo-popout";
+import { LifoMonitorPanel } from "@milady/app-core/components";
+import { useLifoSync } from "@milady/app-core/hooks";
 import {
   createLifoRuntime,
+  generateLifoSessionId,
+  isSafeEndpointUrl,
   type LifoRuntime,
   normalizeTerminalText,
-} from "../lifo-runtime";
-import { LifoMonitorPanel } from "./LifoMonitorPanel";
+} from "@milady/app-core/platform";
+import { useApp } from "@milady/app-core/state";
 
 interface TerminalOutputEvent {
   event?: unknown;
@@ -364,7 +365,7 @@ export function LifoSandboxView({ inModal }: { inModal?: boolean } = {}) {
     : "rounded-full px-2 py-1 text-[11px] font-medium bg-card border border-border text-muted";
   const btnCls = inModal
     ? "px-3 py-1.5 rounded-md border border-[var(--border)] bg-[rgba(255,255,255,0.06)] text-xs text-[var(--txt)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-colors"
-    : "px-3 py-1.5 rounded-md border border-border bg-card text-xs text-txt hover:border-accent hover:text-accent transition-colors";
+    : "px-3 py-1.5 rounded-md border border-border bg-card text-xs text-txt hover:border-accent hover:text-txt transition-colors";
 
   return (
     <section

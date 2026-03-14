@@ -6,11 +6,36 @@ const { mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
 }));
 
-vi.mock("../../src/AppContext", () => ({
+vi.mock("@milady/app-core/state", () => ({
   useApp: () => mockUseApp(),
   getVrmPreviewUrl: (index: number) => `mock-vrm-${index}.png`,
   VRM_COUNT: 8,
 }));
+
+vi.mock("@milady/ui", async () => {
+  const React = await import("react");
+  const actual =
+    await vi.importActual<typeof import("@milady/ui")>("@milady/ui");
+
+  return {
+    ...actual,
+    DropdownMenu: ({ children }: { children: React.ReactNode }) =>
+      React.createElement(React.Fragment, null, children),
+    DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) =>
+      React.createElement(React.Fragment, null, children),
+    DropdownMenuContent: ({
+      children,
+      ...props
+    }: React.ComponentProps<"div">) =>
+      React.createElement("div", props, children),
+    DropdownMenuItem: ({
+      children,
+      onClick,
+      ...props
+    }: React.ComponentProps<"button">) =>
+      React.createElement("button", { ...props, onClick }, children),
+  };
+});
 
 import { ConversationsSidebar } from "../../src/components/ConversationsSidebar";
 
@@ -57,6 +82,10 @@ function findButtonByText(
 describe("ConversationsSidebar", () => {
   beforeEach(() => {
     mockUseApp.mockReset();
+    if (typeof document !== "undefined") {
+      document.addEventListener ??= vi.fn();
+      document.removeEventListener ??= vi.fn();
+    }
   });
 
   it("requires explicit confirmation before deleting", async () => {
@@ -68,14 +97,25 @@ describe("ConversationsSidebar", () => {
       tree = TestRenderer.create(React.createElement(ConversationsSidebar));
     });
 
-    const deleteTrigger = tree.root.findByProps({
-      "data-testid": "conv-delete",
+    const rowTrigger = tree.root.findByProps({
+      "data-testid": "conv-select",
     });
     await act(async () => {
-      deleteTrigger.props.onClick({ stopPropagation: () => {} });
+      rowTrigger.props.onContextMenu({
+        preventDefault: () => {},
+        stopPropagation: () => {},
+        clientX: 40,
+        clientY: 60,
+      });
     });
 
     expect(handleDeleteConversation).not.toHaveBeenCalled();
+    const deleteMenuItem = tree.root.findByProps({
+      "data-testid": "conv-menu-delete",
+    });
+    await act(async () => {
+      deleteMenuItem.props.onClick();
+    });
     expect(findButtonByText(tree, "conversations.deleteYes")).toBeDefined();
     expect(findButtonByText(tree, "conversations.deleteNo")).toBeDefined();
   });
@@ -89,11 +129,23 @@ describe("ConversationsSidebar", () => {
       tree = TestRenderer.create(React.createElement(ConversationsSidebar));
     });
 
-    const deleteTrigger = tree.root.findByProps({
-      "data-testid": "conv-delete",
+    const rowTrigger = tree.root.findByProps({
+      "data-testid": "conv-select",
     });
     await act(async () => {
-      deleteTrigger.props.onClick({ stopPropagation: () => {} });
+      rowTrigger.props.onContextMenu({
+        preventDefault: () => {},
+        stopPropagation: () => {},
+        clientX: 40,
+        clientY: 60,
+      });
+    });
+
+    const deleteMenuItem = tree.root.findByProps({
+      "data-testid": "conv-menu-delete",
+    });
+    await act(async () => {
+      deleteMenuItem.props.onClick();
     });
 
     const yesButton = findButtonByText(tree, "conversations.deleteYes");

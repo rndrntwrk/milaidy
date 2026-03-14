@@ -30,10 +30,7 @@ import { switchStreamSourceAction } from "../actions/switch-stream-source";
 import { terminalAction } from "../actions/terminal";
 import { EMOTE_CATALOG } from "../emotes/catalog";
 import { adminTrustProvider } from "../providers/admin-trust";
-import {
-  createAutonomousStateProvider,
-  ensureAutonomousStateTracking,
-} from "../providers/autonomous-state";
+
 import { createSessionKeyProvider } from "../providers/session-bridge";
 import {
   getSessionProviders,
@@ -67,7 +64,7 @@ export function createMiladyPlugin(config?: MiladyPluginConfig): Plugin {
       maxCharsPerFile: config?.bootstrapMaxChars,
     }),
     adminTrustProvider,
-    createAutonomousStateProvider(),
+
     createSessionKeyProvider({ defaultAgentId: agentId }),
     ...getSessionProviders({ storePath: sessionStorePath }),
   ];
@@ -150,7 +147,6 @@ export function createMiladyPlugin(config?: MiladyPluginConfig): Plugin {
 
     init: async (_pluginConfig, runtime) => {
       registerTriggerTaskWorker(runtime);
-      ensureAutonomousStateTracking(runtime);
       setCustomActionsRuntime(runtime);
     },
 

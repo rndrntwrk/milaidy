@@ -41,6 +41,7 @@ export function ChatAvatar({
   const [engineReady, setEngineReady] = useState(false);
   const [vrmLoaded, setVrmLoaded] = useState(false);
   const [showFallback, setShowFallback] = useState(false);
+  const fallbackVrmPathRef = useRef(vrmPath);
 
   const avatarVisible = engineReady || vrmLoaded || showFallback;
 
@@ -53,18 +54,26 @@ export function ChatAvatar({
     if (state.vrmLoaded) {
       setVrmLoaded(true);
       setShowFallback(false);
+      return;
+    }
+    if (state.loadError) {
+      setVrmLoaded(false);
+      setShowFallback(true);
     }
   }, []);
 
   // If a VRM fails to load, show the selected static preview in the sidebar.
   useEffect(() => {
+    fallbackVrmPathRef.current = vrmPath;
     setVrmLoaded(false);
     setShowFallback(false);
     const timer = window.setTimeout(() => {
-      setShowFallback(true);
+      if (fallbackVrmPathRef.current === vrmPath) {
+        setShowFallback(true);
+      }
     }, 4000);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [vrmPath]);
 
   // Subscribe to WebSocket emote events and trigger avatar animations.
   useEffect(() => {

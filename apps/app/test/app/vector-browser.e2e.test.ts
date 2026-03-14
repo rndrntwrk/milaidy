@@ -263,99 +263,104 @@ const { mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
 }));
 
-vi.mock("../../src/AppContext", () => ({
+vi.mock("@milady/app-core/state", () => ({
   useApp: () => mockUseApp(),
 }));
 
-// Mock Three.js to avoid WebGL issues in tests
-vi.mock("three", () => {
-  const mockVector2 = class {
-    x = 0;
-    y = 0;
-    constructor(x = 0, y = 0) {
-      this.x = x;
-      this.y = y;
-    }
-  };
-  const mockVector3 = class {
-    x = 0;
-    y = 0;
-    z = 0;
-    set(x: number, y: number, z: number) {
-      this.x = x;
-      this.y = y;
-      this.z = z;
-      return this;
-    }
-  };
-  const mockColor = class {};
-  const mockMaterial = class {
-    opacity = 1;
-    transparent = false;
-    dispose() {}
-  };
-  const mockGeometry = class {
-    setAttribute() {}
-    dispose() {}
-  };
-  const mockMesh = class {
-    position = new mockVector3();
-    scale = { setScalar: vi.fn() };
-    userData = {};
-    material = new mockMaterial();
-  };
-  const mockScene = class {
-    background = null;
-    add() {}
-    remove() {}
-  };
-  const mockCamera = class {
-    position = new mockVector3();
-    aspect = 1;
-    lookAt() {}
-    updateProjectionMatrix() {}
-  };
-  const mockRenderer = class {
-    domElement = {
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      getBoundingClientRect: () => ({
-        left: 0,
-        top: 0,
-        width: 800,
-        height: 600,
-      }),
+// Mock renderer wrapper to avoid WebGL issues in tests.
+vi.mock(
+  "../../../../packages/app-core/src/components/vector-browser-three",
+  () => {
+    const mockVector2 = class {
+      x = 0;
+      y = 0;
+      constructor(x = 0, y = 0) {
+        this.x = x;
+        this.y = y;
+      }
     };
-    setSize() {}
-    setPixelRatio() {}
-    render() {}
-    dispose() {}
-  };
-  const mockRaycaster = class {
-    setFromCamera() {}
-    intersectObjects() {
-      return [];
-    }
-  };
+    const mockVector3 = class {
+      x = 0;
+      y = 0;
+      z = 0;
+      set(x: number, y: number, z: number) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        return this;
+      }
+    };
+    const mockColor = class {};
+    const mockMaterial = class {
+      opacity = 1;
+      transparent = false;
+      dispose() {}
+    };
+    const mockGeometry = class {
+      setAttribute() {}
+      dispose() {}
+    };
+    const mockMesh = class {
+      position = new mockVector3();
+      scale = { setScalar: vi.fn() };
+      userData = {};
+      material = new mockMaterial();
+    };
+    const mockScene = class {
+      background = null;
+      add() {}
+      remove() {}
+    };
+    const mockCamera = class {
+      position = new mockVector3();
+      aspect = 1;
+      lookAt() {}
+      updateProjectionMatrix() {}
+    };
+    const mockRenderer = class {
+      domElement = {
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        getBoundingClientRect: () => ({
+          left: 0,
+          top: 0,
+          width: 800,
+          height: 600,
+        }),
+      };
+      setSize() {}
+      setPixelRatio() {}
+      render() {}
+      dispose() {}
+    };
+    const mockRaycaster = class {
+      setFromCamera() {}
+      intersectObjects() {
+        return [];
+      }
+    };
 
-  return {
-    Scene: mockScene,
-    PerspectiveCamera: mockCamera,
-    WebGLRenderer: mockRenderer,
-    SphereGeometry: mockGeometry,
-    BufferGeometry: mockGeometry,
-    MeshBasicMaterial: mockMaterial,
-    LineBasicMaterial: mockMaterial,
-    Mesh: mockMesh,
-    LineSegments: mockMesh,
-    GridHelper: mockMesh,
-    Vector2: mockVector2,
-    Vector3: mockVector3,
-    Color: mockColor,
-    Raycaster: mockRaycaster,
-    BufferAttribute: class {},
-  };
-});
+    return {
+      THREE: {
+        Scene: mockScene,
+        PerspectiveCamera: mockCamera,
+        SphereGeometry: mockGeometry,
+        BufferGeometry: mockGeometry,
+        MeshBasicMaterial: mockMaterial,
+        LineBasicMaterial: mockMaterial,
+        Mesh: mockMesh,
+        LineSegments: mockMesh,
+        GridHelper: mockMesh,
+        Vector2: mockVector2,
+        Vector3: mockVector3,
+        Color: mockColor,
+        Raycaster: mockRaycaster,
+        BufferAttribute: class {},
+      },
+      createVectorBrowserRenderer: async () => new mockRenderer(),
+    };
+  },
+);
 
 // Mock api-client
 vi.mock("@milady/app-core/api", () => ({
@@ -366,7 +371,7 @@ vi.mock("@milady/app-core/api", () => ({
 }));
 
 import { client } from "@milady/app-core/api";
-import { VectorBrowserView } from "../../src/components/VectorBrowserView";
+import { VectorBrowserView } from "../../../../packages/app-core/src/components/VectorBrowserView";
 
 // ── Component Tests ────────────────────────────────────────────────────
 

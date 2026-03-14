@@ -1,20 +1,20 @@
-import { useApp } from "../../AppContext";
+import { useApp } from "@milady/app-core/state";
 
 export function ActivateStep() {
-  const { onboardingName, handleOnboardingNext } = useApp();
+  const { onboardingName, handleOnboardingNext, t } = useApp();
 
   return (
     <>
-      <div className="onboarding-section-title">Ready</div>
+      <div className="onboarding-section-title">
+        {t("onboarding.readyTitle")}
+      </div>
       <div className="onboarding-divider">
         <div className="onboarding-divider-diamond" />
       </div>
       <div className="onboarding-question">
-        {onboardingName || "Your companion"} is ready.
+        {t("onboarding.companionReady", { name: onboardingName || "Eliza" })}
       </div>
-      <p className="onboarding-desc">
-        All systems configured. You can adjust settings anytime.
-      </p>
+      <p className="onboarding-desc">{t("onboarding.allConfigured")}</p>
       <div className="onboarding-panel-footer">
         <span />
         <button
@@ -22,7 +22,7 @@ export function ActivateStep() {
           onClick={() => handleOnboardingNext()}
           type="button"
         >
-          Enter
+          {t("onboarding.enter")}
         </button>
       </div>
     </>

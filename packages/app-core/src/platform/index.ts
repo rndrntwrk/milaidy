@@ -1,8 +1,9 @@
 /**
- * Platform utilities — LIFO popout, LIFO runtime, and onboarding permissions.
+ * Platform utilities — LIFO popout, LIFO runtime, onboarding permissions,
+ * and platform initialization helpers.
  *
  * Migrated from apps/app/src/lifo-popout.ts, lifo-runtime.ts,
- * and onboarding-permissions.ts.
+ * onboarding-permissions.ts, and main.tsx.
  */
 
 import type {
@@ -238,3 +239,22 @@ export function hasRequiredOnboardingPermissions(
 ): boolean {
   return getMissingOnboardingPermissions(permissions).length === 0;
 }
+
+// ── Platform init ───────────────────────────────────────────────────────
+
+export {
+  type DeepLinkHandlers,
+  dispatchShareTarget,
+  handleDeepLink,
+  injectPopoutApiBase,
+  isAndroid,
+  isElectronPlatform,
+  isIOS,
+  isNative,
+  isPopoutWindow,
+  isWebPlatform,
+  platform,
+  type ShareTargetFile,
+  type ShareTargetPayload,
+  setupPlatformStyles,
+} from "./init";

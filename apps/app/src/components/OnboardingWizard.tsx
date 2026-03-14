@@ -1,36 +1,52 @@
-import {
-  getVrmBackgroundUrl,
-  getVrmPreviewUrl,
-  getVrmUrl,
-  useApp,
-} from "../AppContext";
+import { LanguageDropdown } from "@milady/app-core/components";
+import type { UiLanguage } from "@milady/app-core/i18n";
+import { normalizeLanguage } from "@milady/app-core/i18n";
+import { getVrmPreviewUrl, getVrmUrl, useApp } from "@milady/app-core/state";
+import { resolveAppAssetUrl } from "@milady/app-core/utils";
 import { VrmStage } from "./companion/VrmStage";
 import { ActivateStep } from "./onboarding/ActivateStep";
 import { ConnectionStep } from "./onboarding/ConnectionStep";
-import { IdentityStep } from "./onboarding/IdentityStep";
-import { LanguageStep } from "./onboarding/LanguageStep";
+
 import { OnboardingPanel } from "./onboarding/OnboardingPanel";
 import { OnboardingStepNav } from "./onboarding/OnboardingStepNav";
 import { PermissionsStep } from "./onboarding/PermissionsStep";
+import { RpcStep } from "./onboarding/RpcStep";
 import { WakeUpStep } from "./onboarding/WakeUpStep";
 
 export function OnboardingWizard() {
-  const { onboardingStep, onboardingAvatar, customVrmUrl, t } = useApp();
+  const {
+    onboardingStep,
+    selectedVrmIndex,
+    customVrmUrl,
+    uiLanguage,
+    setState,
+    t,
+  } = useApp();
 
-  const vrmPath = customVrmUrl || getVrmUrl(onboardingAvatar || 1);
-  const fallbackPreview = getVrmPreviewUrl(onboardingAvatar || 1);
-  const bgUrl = getVrmBackgroundUrl(onboardingAvatar || 1);
+  const setUiLanguage = (lang: UiLanguage) =>
+    setState("uiLanguage", normalizeLanguage(lang));
+
+  // Use same VRM resolution logic as CompanionView for character unification
+  const safeSelectedVrmIndex = selectedVrmIndex > 0 ? selectedVrmIndex : 1;
+  const vrmPath =
+    selectedVrmIndex === 0 && customVrmUrl
+      ? customVrmUrl
+      : getVrmUrl(safeSelectedVrmIndex);
+  const fallbackPreview =
+    selectedVrmIndex > 0
+      ? getVrmPreviewUrl(safeSelectedVrmIndex)
+      : getVrmPreviewUrl(1);
+  const worldUrl = resolveAppAssetUrl("worlds/companion-day.spz");
 
   function renderStep() {
     switch (onboardingStep) {
       case "wakeUp":
         return <WakeUpStep />;
-      case "language":
-        return <LanguageStep />;
-      case "identity":
-        return <IdentityStep />;
+
       case "connection":
         return <ConnectionStep />;
+      case "rpc":
+        return <RpcStep />;
       case "senses":
         return <PermissionsStep />;
       case "activate":
@@ -42,12 +58,18 @@ export function OnboardingWizard() {
 
   return (
     <div className="onboarding-screen">
-      {/* Background */}
-      <div
-        className="onboarding-bg"
-        style={{ backgroundImage: `url(${bgUrl})` }}
-      />
+      {/* Full-screen VRM background — same as CompanionView */}
+      <div className="onboarding-bg" />
       <div className="onboarding-bg-overlay" />
+
+      {/* VRM character — fills viewport, zoomed in like companion view */}
+      <VrmStage
+        vrmPath={vrmPath}
+        worldUrl={worldUrl}
+        fallbackPreviewUrl={fallbackPreview}
+        cameraProfile="companion_close"
+        t={t}
+      />
 
       {/* Corner decorations */}
       <svg
@@ -119,22 +141,31 @@ export function OnboardingWizard() {
         />
       </svg>
 
-      {/* Left: Step Navigation */}
-      <OnboardingStepNav />
-
-      {/* Center: VRM Model */}
-      <div className="onboarding-center">
-        <VrmStage
-          vrmPath={vrmPath}
-          fallbackPreviewUrl={fallbackPreview}
-          needsFlip={false}
-          cameraProfile="companion"
+      {/* Language selector — top right */}
+      <div
+        style={{
+          position: "absolute",
+          top: "1rem",
+          right: "1rem",
+          zIndex: 50,
+          display: "flex",
+          gap: "0.5rem",
+          alignItems: "center",
+        }}
+      >
+        <LanguageDropdown
+          uiLanguage={uiLanguage}
+          setUiLanguage={setUiLanguage}
           t={t}
+          variant="companion"
         />
       </div>
 
-      {/* Right: Content Panel */}
-      <OnboardingPanel step={onboardingStep}>{renderStep()}</OnboardingPanel>
+      {/* Overlaid UI — step nav + content panel */}
+      <div className="onboarding-ui-overlay">
+        <OnboardingStepNav />
+        <OnboardingPanel step={onboardingStep}>{renderStep()}</OnboardingPanel>
+      </div>
     </div>
   );
 }

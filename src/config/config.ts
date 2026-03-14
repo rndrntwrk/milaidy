@@ -129,12 +129,33 @@ export function saveMiladyConfig(config: MiladyConfig): void {
 
   // Strip any $include directives before writing — defense-in-depth against
   // config include injection (see isBlockedObjectKey in server.ts).
-  const sanitized = stripIncludeDirectives(config) as MiladyConfig;
+  const sanitized = stripIncludeDirectives(config);
+  if (!sanitized || typeof sanitized !== "object") {
+    throw new Error(
+      `[milady-config] stripIncludeDirectives returned invalid result: ${typeof sanitized}`,
+    );
+  }
 
-  fs.writeFileSync(configPath, `${JSON.stringify(sanitized, null, 2)}\n`, {
+  const content = `${JSON.stringify(sanitized, null, 2)}\n`;
+
+  fs.writeFileSync(configPath, content, {
     encoding: "utf-8",
     mode: 0o600, // Owner read+write only — config may contain private keys in env section
   });
+
+  // Post-write verification — detect silent write failures that have caused
+  // onboarding to repeat on every restart (the file was never actually persisted).
+  if (!fs.existsSync(configPath)) {
+    throw new Error(
+      `[milady-config] Config file missing after write: ${configPath}`,
+    );
+  }
+  const stat = fs.statSync(configPath);
+  if (stat.size === 0) {
+    throw new Error(
+      `[milady-config] Config file is empty after write: ${configPath}`,
+    );
+  }
 }
 
 export function configFileExists(): boolean {

@@ -6,11 +6,11 @@
  */
 
 import { client } from "@milady/app-core/api";
+import { useTimeout } from "@milady/app-core/hooks";
+import { useApp } from "@milady/app-core/state";
 import { Button } from "@milady/ui";
 import { Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { useApp } from "../../AppContext";
-import { useTimeout } from "../../hooks/useTimeout";
 
 interface VoiceStatus {
   enabled: boolean;
@@ -102,7 +102,7 @@ export function StreamVoiceConfig({ streamLive }: { streamLive: boolean }) {
         disabled={loading}
         className={`flex items-center gap-1.5 px-2 py-1 h-7 rounded text-xs font-medium transition-colors ${
           status.enabled
-            ? "bg-accent/20 text-accent hover:bg-accent/30"
+            ? "bg-accent/20 text-txt hover:bg-accent/30"
             : "bg-surface text-muted hover:bg-surface-hover"
         }`}
         title={
@@ -135,7 +135,7 @@ export function StreamVoiceConfig({ streamLive }: { streamLive: boolean }) {
           </span>
 
           {speaking && (
-            <span className="text-accent animate-pulse">
+            <span className="text-txt animate-pulse">
               {t("streamvoiceconfig.Speaking")}
             </span>
           )}

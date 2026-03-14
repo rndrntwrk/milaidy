@@ -1,6 +1,6 @@
 import type { StreamEventEnvelope } from "@milady/app-core/api";
+import { useApp } from "@milady/app-core/state";
 import { useMemo } from "react";
-import { useApp } from "../../AppContext";
 import { CHANNEL_COLORS } from "./helpers";
 
 export function ChatTicker({ events }: { events: StreamEventEnvelope[] }) {
@@ -44,7 +44,7 @@ export function ChatTicker({ events }: { events: StreamEventEnvelope[] }) {
           const color = CHANNEL_COLORS[entry.source]?.text;
           return (
             <span key={entry.id} className="shrink-0">
-              <span className={color ?? "text-accent"}>@{entry.from}</span>
+              <span className={color ?? "text-txt"}>@{entry.from}</span>
               <span className="text-txt">: {entry.text.slice(0, 80)}</span>
             </span>
           );

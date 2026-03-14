@@ -21,11 +21,18 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import type { AgentStatus } from "../rpc-schema";
-
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+/** Internal process status for the embedded agent child process. */
+interface AgentStatus {
+  state: "not_started" | "starting" | "running" | "stopped" | "error";
+  agentName: string | null;
+  port: number | null;
+  startedAt: number | null;
+  error: string | null;
+}
 
 type SendToWebview = (message: string, payload?: unknown) => void;
 

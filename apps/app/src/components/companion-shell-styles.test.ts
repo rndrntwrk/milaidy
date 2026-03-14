@@ -13,38 +13,14 @@ import {
 } from "./companion-shell-styles";
 
 describe("COMPANION_OVERLAY_TABS", () => {
-  const expectedTabs: Tab[] = [
-    "companion",
-    "skills",
-    "character",
-    "character-select",
-    "settings",
-    "plugins",
-    "advanced",
-    "actions",
-    "triggers",
-    "fine-tuning",
-    "trajectories",
-    "runtime",
-    "database",
-    "logs",
-    "security",
-    "apps",
-    "connectors",
-    "knowledge",
-    "lifo",
-    "stream",
-    "wallets",
-  ];
+  it("contains only companion — settings/character/skills etc. require native mode", () => {
+    expect(COMPANION_OVERLAY_TABS.has("companion")).toBe(true);
+  });
 
-  for (const tab of expectedTabs) {
-    it(`contains ${tab}`, () => {
-      expect(COMPANION_OVERLAY_TABS.has(tab)).toBe(true);
-    });
-  }
-
-  it("does not treat chat as an overlay", () => {
+  it("does not treat other tabs as companion overlay", () => {
     expect(COMPANION_OVERLAY_TABS.has("chat")).toBe(false);
+    expect(COMPANION_OVERLAY_TABS.has("settings")).toBe(false);
+    expect(COMPANION_OVERLAY_TABS.has("skills")).toBe(false);
   });
 });
 

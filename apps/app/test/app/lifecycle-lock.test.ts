@@ -70,7 +70,7 @@ vi.mock("@milady/app-core/api", () => ({
   SkillScanReportSummary: {},
 }));
 
-import { AppProvider, useApp } from "../../src/AppContext";
+import { AppProvider, useApp } from "@milady/app-core/state";
 
 function createDeferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -156,6 +156,7 @@ describe("lifecycle action locking", () => {
       enabled: false,
       connected: false,
     });
+    mockClient.getCodingAgentStatus.mockResolvedValue(null);
     mockClient.getWorkbenchOverview.mockResolvedValue({
       tasks: [],
       triggers: [],

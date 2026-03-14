@@ -1,7 +1,13 @@
 {
   "name": "@milady/capacitor-desktop",
   "version": "1.0.0",
-  "description": "Milady Desktop Plugin for Capacitor - System tray, global shortcuts, auto-launch for Electron",
+  "description": "Adds tray icons, global shortcuts, notifications, and other desktop-only controls.",
+  "keywords": [
+    "desktop",
+    "electron",
+    "shortcuts",
+    "notifications"
+  ],
   "main": "./dist/plugin.cjs.js",
   "module": "./src/index.ts",
   "types": "./dist/plugin.d.ts",

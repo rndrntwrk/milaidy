@@ -54,7 +54,7 @@ function AlertPopup({ instance, events }: WidgetRenderProps) {
       <div
         className={`bg-bg/90 border border-accent/40 rounded-lg px-4 py-3 backdrop-blur-sm shadow-lg max-w-[280px] transition-opacity duration-500 ${fading ? "opacity-0" : "opacity-100"}`}
       >
-        <p className="text-xs font-medium text-accent">{shown.title}</p>
+        <p className="text-xs font-medium text-txt">{shown.title}</p>
         <p className="text-[11px] text-txt/80 mt-0.5 leading-snug">
           {shown.body}
         </p>

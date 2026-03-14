@@ -7,6 +7,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./api": "./src/api/index.ts",
+    "./config": "./src/config/index.ts",
     "./types": "./src/types/index.ts",
     "./events": "./src/events/index.ts",
     "./i18n": "./src/i18n/index.ts",
@@ -28,7 +29,8 @@
     "./styles/base.css": "./src/styles/base.css",
     "./styles/xterm.css": "./src/styles/xterm.css",
     "./styles/anime.css": "./src/styles/anime.css",
-    "./styles/onboarding-game.css": "./src/styles/onboarding-game.css"
+    "./styles/onboarding-game.css": "./src/styles/onboarding-game.css",
+    "./styles/styles.css": "./src/styles/styles.css"
   },
   "peerDependencies": {
     "react": "^19.0.0",
@@ -46,7 +48,9 @@
     "@milady/capacitor-screencapture": "workspace:*",
     "@milady/capacitor-swabble": "workspace:*",
     "@milady/capacitor-talkmode": "workspace:*",
-    "lucide-react": "^0.575.0"
+    "@milady/ui": "workspace:*",
+    "lucide-react": "^0.575.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

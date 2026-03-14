@@ -12,19 +12,19 @@ const { mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
 }));
 
-vi.mock("../../src/AppContext", () => ({
+vi.mock("@milady/app-core/state", () => ({
   useApp: () => mockUseApp(),
 }));
 
-vi.mock("../../src/components/AppsView", () => ({
+vi.mock("../../../../packages/app-core/src/components/AppsView", () => ({
   AppsView: () => React.createElement("div", null, "APPS_VIEW"),
 }));
 
-vi.mock("../../src/components/GameView", () => ({
+vi.mock("../../../../packages/app-core/src/components/GameView", () => ({
   GameView: () => React.createElement("div", null, "GAME_VIEW"),
 }));
 
-import { AppsPageView } from "../../src/components/AppsPageView";
+import { AppsPageView } from "../../../../packages/app-core/src/components/AppsPageView";
 
 function createContext(
   overrides?: Partial<AppsPageContextStub>,

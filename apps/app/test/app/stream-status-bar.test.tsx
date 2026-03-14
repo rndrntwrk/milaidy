@@ -12,7 +12,7 @@ const mockUseApp = vi.fn(() => ({
   t: (key: string) => key,
 }));
 
-vi.mock("../../src/AppContext", () => ({
+vi.mock("@milady/app-core/state", () => ({
   useApp: () => mockUseApp(),
 }));
 

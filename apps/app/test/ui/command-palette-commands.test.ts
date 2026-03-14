@@ -1,5 +1,5 @@
+import { buildCommands as buildCommandPaletteCommands } from "@milady/app-core/chat";
 import { describe, expect, it, vi } from "vitest";
-import { buildCommandPaletteCommands } from "../../src/components/command-palette-commands";
 
 function buildArgs(
   overrides: Partial<Parameters<typeof buildCommandPaletteCommands>[0]> = {},
@@ -8,7 +8,7 @@ function buildArgs(
     agentState: "running",
     activeGameViewerUrl: "",
     handleStart: vi.fn(),
-    handlePauseResume: vi.fn(),
+
     handleRestart: vi.fn(),
     setTab: vi.fn(),
     setAppsSubTab: vi.fn(),

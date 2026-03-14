@@ -12,6 +12,8 @@ import {
   type TrajectoryRecord,
   type TrajectoryStats,
 } from "@milady/app-core/api";
+import { useApp } from "@milady/app-core/state";
+import { confirmDesktopAction } from "@milady/app-core/utils";
 import {
   Button,
   DropdownMenu,
@@ -26,8 +28,6 @@ import {
   SelectValue,
 } from "@milady/ui";
 import { useCallback, useEffect, useState } from "react";
-import { useApp } from "../AppContext";
-import { confirmDesktopAction } from "../utils/desktop-dialogs";
 import {
   formatTrajectoryDuration,
   formatTrajectoryTimestamp,
@@ -195,7 +195,7 @@ export function TrajectoriesView({
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-muted">{t("trajectoriesview.Tokens")}</span>
-            <span className="font-semibold text-accent">
+            <span className="font-semibold text-txt">
               {formatTrajectoryTokenCount(
                 stats.totalPromptTokens + stats.totalCompletionTokens,
                 { emptyLabel: "0" },
@@ -310,7 +310,7 @@ export function TrajectoriesView({
           <Button
             variant="outline"
             size="sm"
-            className="h-auto min-h-[2rem] whitespace-normal break-words px-3 py-1.5 text-xs bg-card text-txt hover:text-accent shadow-sm text-left"
+            className="h-auto min-h-[2rem] whitespace-normal break-words px-3 py-1.5 text-xs bg-card text-txt hover:text-txt shadow-sm text-left"
             onClick={handleClearFilters}
           >
             {t("trajectoriesview.ClearFilters")}
@@ -321,7 +321,7 @@ export function TrajectoriesView({
           <Button
             variant="outline"
             size="sm"
-            className="h-auto min-h-[2rem] whitespace-normal break-words px-3 py-1.5 text-xs bg-card text-txt hover:text-accent shadow-sm text-left"
+            className="h-auto min-h-[2rem] whitespace-normal break-words px-3 py-1.5 text-xs bg-card text-txt hover:text-txt shadow-sm text-left"
             onClick={() => void loadTrajectories()}
             disabled={loading}
           >
@@ -335,7 +335,7 @@ export function TrajectoriesView({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-auto min-h-[2rem] whitespace-normal break-words px-3 py-1.5 text-xs bg-card text-txt hover:text-accent shadow-sm text-left"
+                className="h-auto min-h-[2rem] whitespace-normal break-words px-3 py-1.5 text-xs bg-card text-txt hover:text-txt shadow-sm text-left"
                 disabled={exporting || trajectories.length === 0}
               >
                 {exporting
@@ -461,7 +461,7 @@ export function TrajectoriesView({
                       {traj.llmCallCount}
                     </td>
                     <td className="px-2 py-1.5 text-right font-mono">
-                      <span className="text-accent">
+                      <span className="text-txt">
                         {formatTrajectoryTokenCount(
                           traj.totalPromptTokens + traj.totalCompletionTokens,
                           { emptyLabel: "0" },

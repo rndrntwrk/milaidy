@@ -296,8 +296,8 @@ const { mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
 }));
 
-vi.mock("../../src/AppContext", async () => {
-  const actual = await vi.importActual("../../src/AppContext");
+vi.mock("@milady/app-core/state", async () => {
+  const actual = await vi.importActual("@milady/app-core/state");
   return {
     ...actual,
     useApp: () => mockUseApp(),
@@ -316,17 +316,20 @@ vi.mock("@milady/app-core/api", () => ({
   },
 }));
 
-vi.mock("../../src/components/config-renderer", () => ({
+vi.mock("@milady/app-core/config", () => ({
   ConfigRenderer: () => React.createElement("div", null, "ConfigRenderer"),
   defaultRegistry: {},
 }));
 
-vi.mock("../../src/components/WhatsAppQrOverlay", () => ({
-  WhatsAppQrOverlay: () =>
-    React.createElement("div", null, "WhatsAppQrOverlay"),
-}));
+vi.mock(
+  "../../../../packages/app-core/src/components/WhatsAppQrOverlay",
+  () => ({
+    WhatsAppQrOverlay: () =>
+      React.createElement("div", null, "WhatsAppQrOverlay"),
+  }),
+);
 
-import { PluginsView } from "../../src/components/PluginsView";
+import { PluginsView } from "../../../../packages/app-core/src/components/PluginsView";
 
 type PluginInfo = {
   id: string;

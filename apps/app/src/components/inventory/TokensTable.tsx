@@ -160,7 +160,7 @@ export function TokensTable({
                       href="https://dashboard.alchemy.com/"
                       target="_blank"
                       rel="noopener"
-                      className="text-accent"
+                      className="text-txt"
                     >
                       {t("wallet.enableIt")}
                     </a>

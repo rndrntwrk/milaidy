@@ -1,4 +1,5 @@
 import { isElectrobunRuntime } from "@milady/app-core/bridge";
+import { useApp } from "@milady/app-core/state";
 import { Button, Input, Slider } from "@milady/ui";
 import {
   ChevronDown,
@@ -10,7 +11,6 @@ import {
   VolumeX,
 } from "lucide-react";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
-import { useApp } from "../../AppContext";
 import {
   type AgentMode,
   IS_POPOUT,
@@ -201,7 +201,7 @@ export function StatusBar({
                       disabled={disabled}
                       className={`w-full justify-start px-3 py-1.5 h-auto text-xs transition-colors rounded-none ${
                         streamSource.type === st
-                          ? "bg-accent/20 text-accent hover:bg-accent/30"
+                          ? "bg-accent/20 text-txt hover:bg-accent/30"
                           : disabled
                             ? "text-muted/40 opacity-50"
                             : "text-txt hover:bg-bg-muted"
@@ -247,7 +247,7 @@ export function StatusBar({
                     variant="ghost"
                     size="sm"
                     disabled={!streamAvailable || !customUrlValid}
-                    className="px-2 py-1 h-7 rounded bg-accent/20 text-accent text-[10px] font-semibold hover:bg-accent/30 transition-colors disabled:opacity-40"
+                    className="px-2 py-1 h-7 rounded bg-accent/20 text-txt text-[10px] font-semibold hover:bg-accent/30 transition-colors disabled:opacity-40"
                     onClick={() => {
                       if (customUrlValid) {
                         onSourceChange("custom-url", trimmedCustomUrl);
@@ -344,7 +344,7 @@ export function StatusBar({
             variant="ghost"
             size="sm"
             disabled={!streamAvailable}
-            className="px-2 py-0.5 h-6 rounded bg-bg-muted hover:bg-accent/20 hover:text-accent transition-colors disabled:opacity-50"
+            className="px-2 py-0.5 h-6 rounded bg-bg-muted hover:bg-accent/20 hover:text-txt transition-colors disabled:opacity-50"
             title={
               streamAvailable
                 ? "Stream settings"
@@ -399,8 +399,8 @@ export function StatusBar({
               size="sm"
               className={`px-2 py-0.5 h-6 rounded transition-colors ${
                 pinned
-                  ? "bg-accent/20 text-accent"
-                  : "bg-bg-muted hover:bg-accent/20 hover:text-accent"
+                  ? "bg-accent/20 text-txt"
+                  : "bg-bg-muted hover:bg-accent/20 hover:text-txt"
               }`}
               title={pinned ? "Unpin from top" : "Pin to top (always on top)"}
               onClick={() => {
@@ -417,7 +417,7 @@ export function StatusBar({
           <Button
             variant="ghost"
             size="sm"
-            className="px-2 py-0.5 h-6 rounded bg-bg-muted hover:bg-accent/20 hover:text-accent transition-colors"
+            className="px-2 py-0.5 h-6 rounded bg-bg-muted hover:bg-accent/20 hover:text-txt transition-colors"
             title={t("statusbar.PopOutStreamView")}
             onClick={() => {
               const apiBase = (window as unknown as Record<string, unknown>)

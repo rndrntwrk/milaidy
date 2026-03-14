@@ -10,12 +10,28 @@ const { mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
 }));
 
-vi.mock("../../src/AppContext", () => ({
+vi.mock("@milady/app-core/state", () => ({
   useApp: () => mockUseApp(),
   getVrmUrl: vi.fn(),
   getVrmPreviewUrl: vi.fn(),
   getVrmTitle: vi.fn(),
 }));
+
+vi.mock("@milady/app-core/components", async () => {
+  const actual = await vi.importActual<
+    typeof import("@milady/app-core/components")
+  >("@milady/app-core/components");
+  return {
+    ...actual,
+    AppsPageView: () => React.createElement("div", null, "AppsPageView"),
+    CommandPalette: () => React.createElement("div", null, "CommandPalette"),
+    ConnectorsPageView: () =>
+      React.createElement("div", null, "ConnectorsPageView"),
+    EmotePicker: () => React.createElement("div", null, "EmotePicker"),
+    PairingView: () => React.createElement("div", null, "PairingView"),
+    SettingsView: () => React.createElement("div", null, "SettingsView"),
+  };
+});
 
 vi.mock("../../src/components/Header", () => ({
   Header: ({ mobileLeft }: { mobileLeft?: React.ReactNode }) =>
@@ -39,9 +55,6 @@ vi.mock("../../src/components/ChatView", () => ({
 vi.mock("../../src/components/ConversationsSidebar", () => ({
   ConversationsSidebar: () =>
     React.createElement("div", null, "ConversationsSidebar"),
-}));
-vi.mock("../../src/components/AutonomousPanel", () => ({
-  AutonomousPanel: () => React.createElement("div", null, "AutonomousPanel"),
 }));
 vi.mock("../../src/components/AppsPageView", () => ({
   AppsPageView: () => React.createElement("div", null, "AppsPageView"),
@@ -67,9 +80,6 @@ vi.mock("../../src/components/KnowledgeView", () => ({
 }));
 vi.mock("../../src/components/LifoSandboxView", () => ({
   LifoSandboxView: () => React.createElement("div", null, "LifoSandboxView"),
-}));
-vi.mock("../../src/components/SettingsView", () => ({
-  SettingsView: () => React.createElement("div", null, "SettingsView"),
 }));
 vi.mock("../../src/components/avatar/AvatarLoader", () => ({
   AvatarLoader: () => React.createElement("div", null, "AvatarLoader"),
@@ -196,18 +206,13 @@ describe("app startup routing (e2e)", () => {
     const chatDrawerButton = buttons.find((node) =>
       buttonText(node).includes("Chats"),
     );
-    const statusDrawerButton = buttons.find((node) =>
-      buttonText(node).includes("Status"),
-    );
     expect(chatDrawerButton).toBeDefined();
-    expect(statusDrawerButton).toBeDefined();
 
     let renderedText = root
       .findAllByType("div")
       .map((node) => node.children.join(""))
       .join("\n");
     expect(renderedText).not.toContain("ConversationsSidebar");
-    expect(renderedText).not.toContain("AutonomousPanel");
 
     await act(async () => {
       chatDrawerButton?.props.onClick();
@@ -218,15 +223,5 @@ describe("app startup routing (e2e)", () => {
       .map((node) => node.children.join(""))
       .join("\n");
     expect(renderedText).toContain("ConversationsSidebar");
-
-    await act(async () => {
-      statusDrawerButton?.props.onClick();
-    });
-
-    renderedText = root
-      .findAllByType("div")
-      .map((node) => node.children.join(""))
-      .join("\n");
-    expect(renderedText).toContain("AutonomousPanel");
   });
 });

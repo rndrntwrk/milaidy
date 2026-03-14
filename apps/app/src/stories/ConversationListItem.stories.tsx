@@ -27,15 +27,14 @@ const baseProps = {
   deletingId: null,
   inputRef: createRef<HTMLInputElement>(),
   t: (k: string) => k,
+  mobile: false,
   onSelect: noop,
-  onDoubleClick: noop,
   onEditingTitleChange: noop,
   onEditSubmit: noop,
   onEditKeyDown: noop,
-  onDelete: noop,
   onConfirmDelete: noop,
   onCancelDelete: noop,
-  onSetConfirmDelete: noop,
+  onOpenActions: noop,
 };
 
 export const Default: Story = {

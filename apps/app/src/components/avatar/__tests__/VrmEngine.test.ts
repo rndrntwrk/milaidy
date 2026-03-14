@@ -29,7 +29,7 @@ function createMockAction() {
 }
 
 const mockAction = createMockAction();
-const hoisted = vi.hoisted(() => {
+const hoisted = (() => {
   const mockMixerInstance = {
     update: vi.fn(),
     clipAction: vi.fn(() => mockAction),
@@ -79,20 +79,34 @@ const hoisted = vi.hoisted(() => {
     factory(mockLoaderParser);
   });
   const mockLoaderLoadAsync = vi.fn();
+  const mockLoaderSetDRACOLoader = vi.fn();
+  const mockLoaderSetMeshoptDecoder = vi.fn();
+  const mockDracoLoaderSetDecoderConfig = vi.fn();
+  const mockDracoLoaderSetDecoderPath = vi.fn();
+  const mockDracoLoaderPreload = vi.fn();
   const navigatorMock = { gpu: undefined as unknown };
+  const fetchMock = vi.fn();
+  const responseArrayBufferMock = vi.fn();
 
   return {
+    mockDracoLoaderPreload,
+    mockDracoLoaderSetDecoderConfig,
+    mockDracoLoaderSetDecoderPath,
+    fetchMock,
     mockLoaderLoadAsync,
     mockLoaderParser,
     mockLoaderRegister,
+    mockLoaderSetDRACOLoader,
+    mockLoaderSetMeshoptDecoder,
     mockMixerInstance,
     mockMToonMaterialLoaderPlugin,
     mockRendererInstance,
+    responseArrayBufferMock,
     mockVRMLoaderPlugin,
     mockWebGpuRendererInstance,
     navigatorMock,
   };
-});
+})();
 
 const mockCameraInstance = {
   position: {
@@ -108,6 +122,7 @@ const mockCameraInstance = {
   fov: 25,
   near: 0.01,
   far: 1000,
+  add: vi.fn(),
   lookAt: vi.fn(),
   updateProjectionMatrix: vi.fn(),
 };
@@ -148,12 +163,22 @@ vi.mock("three", () => {
     fov = mockCameraInstance.fov;
     near = mockCameraInstance.near;
     far = mockCameraInstance.far;
+    add = mockCameraInstance.add;
     lookAt = mockCameraInstance.lookAt;
     updateProjectionMatrix = mockCameraInstance.updateProjectionMatrix;
   }
 
   class MockClock {
     getDelta = vi.fn(() => 0.016);
+  }
+
+  class MockGroup {
+    name = "";
+    position = { set: vi.fn() };
+    scale = { set: vi.fn(), setScalar: vi.fn() };
+    add = vi.fn();
+    remove = vi.fn();
+    updateMatrixWorld = vi.fn();
   }
 
   class MockAnimationMixer {
@@ -179,6 +204,7 @@ vi.mock("three", () => {
     y = 0;
     z = 0;
     set = vi.fn().mockReturnThis();
+    add = vi.fn().mockReturnThis();
     copy = vi.fn().mockReturnThis();
     sub = vi.fn().mockReturnThis();
     subVectors = vi.fn().mockReturnThis();
@@ -191,8 +217,34 @@ vi.mock("three", () => {
     multiplyScalar = vi.fn().mockReturnThis();
   }
 
+  class MockVector2 {
+    x = 0;
+    y = 0;
+    set = vi.fn((x: number, y: number) => {
+      this.x = x;
+      this.y = y;
+      return this;
+    });
+    copy = vi.fn((value: { x: number; y: number }) => {
+      this.x = value.x;
+      this.y = value.y;
+      return this;
+    });
+    sub = vi.fn().mockReturnThis();
+    lengthSq = vi.fn(() => 0);
+    multiplyScalar = vi.fn().mockReturnThis();
+    lerp = vi.fn((value: { x: number; y: number }, alpha: number) => {
+      this.x += (value.x - this.x) * alpha;
+      this.y += (value.y - this.y) * alpha;
+      return this;
+    });
+  }
+
   class MockBox3 {
     setFromObject = vi.fn().mockReturnThis();
+    isEmpty = vi.fn(() => false);
+    min = { x: 0, y: 0, z: 0 };
+    max = { x: 0, y: 1.6, z: 0 };
     getCenter = vi.fn(() => new MockVector3());
     getSize = vi.fn(() => {
       const v = new MockVector3();
@@ -206,11 +258,13 @@ vi.mock("three", () => {
   return {
     WebGLRenderer: MockWebGLRenderer,
     Scene: MockScene,
+    Group: MockGroup,
     PerspectiveCamera: MockPerspectiveCamera,
     Clock: MockClock,
     AnimationMixer: MockAnimationMixer,
     DirectionalLight: MockDirectionalLight,
     AmbientLight: MockAmbientLight,
+    Vector2: MockVector2,
     Vector3: MockVector3,
     Box3: MockBox3,
     LoopRepeat,
@@ -240,7 +294,16 @@ vi.mock("three", () => {
       },
       { findByName: vi.fn(() => null) },
     ),
-    MathUtils: { degToRad: vi.fn((deg: number) => (deg * Math.PI) / 180) },
+    MathUtils: {
+      clamp: vi.fn((value: number, min: number, max: number) =>
+        Math.min(Math.max(value, min), max),
+      ),
+      degToRad: vi.fn((deg: number) => (deg * Math.PI) / 180),
+      lerp: vi.fn(
+        (start: number, end: number, alpha: number) =>
+          start + (end - start) * alpha,
+      ),
+    },
   };
 });
 
@@ -253,6 +316,34 @@ vi.mock("three/webgpu", () => ({
     dispose = hoisted.mockWebGpuRendererInstance.dispose;
     domElement = hoisted.mockWebGpuRendererInstance.domElement;
     init = hoisted.mockWebGpuRendererInstance.init;
+  },
+}));
+
+vi.mock("@sparkjsdev/spark", () => ({
+  SparkRenderer: class MockSparkRenderer {
+    renderOrder = 0;
+    uniforms = { numSplats: { value: 0 } };
+    removeFromParent = vi.fn();
+  },
+  SplatGenerator: class MockSplatGenerator {},
+  SplatMesh: class MockSplatMesh {
+    initialized = Promise.resolve();
+    packedSplats = { numSplats: 0 };
+    isInitialized = true;
+    frustumCulled = false;
+    renderOrder = 0;
+    visible = true;
+    children: unknown[] = [];
+    position = { set: vi.fn() };
+    quaternion = { set: vi.fn() };
+    scale = { setScalar: vi.fn() };
+    getBoundingBox = vi.fn(() => ({
+      min: { y: 0 },
+      getCenter: vi.fn(() => ({ x: 0, y: 0, z: 0 })),
+      getSize: vi.fn(() => ({ x: 1, y: 1, z: 1 })),
+    }));
+    update = vi.fn();
+    dispose = vi.fn();
   },
 }));
 
@@ -270,11 +361,25 @@ vi.mock("@pixiv/three-vrm/nodes", () => ({
   MToonNodeMaterial: class MockMToonNodeMaterial {},
 }));
 
-vi.mock("three/addons/loaders/GLTFLoader.js", () => ({
+vi.mock("three/examples/jsm/loaders/GLTFLoader.js", () => ({
   GLTFLoader: class MockGLTFLoader {
     register = hoisted.mockLoaderRegister;
+    setDRACOLoader = hoisted.mockLoaderSetDRACOLoader;
+    setMeshoptDecoder = hoisted.mockLoaderSetMeshoptDecoder;
     loadAsync = hoisted.mockLoaderLoadAsync;
   },
+}));
+
+vi.mock("three/examples/jsm/loaders/DRACOLoader.js", () => ({
+  DRACOLoader: class MockDRACOLoader {
+    setDecoderConfig = hoisted.mockDracoLoaderSetDecoderConfig;
+    setDecoderPath = hoisted.mockDracoLoaderSetDecoderPath;
+    preload = hoisted.mockDracoLoaderPreload;
+  },
+}));
+
+vi.mock("three/examples/jsm/libs/meshopt_decoder.module.js", () => ({
+  MeshoptDecoder: { supported: true },
 }));
 
 vi.mock("three/examples/jsm/controls/OrbitControls.js", () => ({
@@ -298,7 +403,7 @@ vi.mock("three/examples/jsm/controls/OrbitControls.js", () => ({
   },
 }));
 
-vi.mock("../../../asset-url", () => ({
+vi.mock("@milady/app-core/utils", () => ({
   resolveAppAssetUrl: vi.fn((p: string) => `/mock/${p}`),
 }));
 
@@ -327,6 +432,9 @@ Object.assign(globalThis, {
 Object.defineProperty(globalThis, "navigator", {
   configurable: true,
   value: hoisted.navigatorMock as unknown as Navigator,
+});
+Object.assign(globalThis, {
+  fetch: hoisted.fetchMock,
 });
 
 // VrmEngine.createFootShadow accesses document.createElement
@@ -391,6 +499,12 @@ describe("VrmEngine", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     hoisted.navigatorMock.gpu = undefined;
+    hoisted.fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      arrayBuffer: hoisted.responseArrayBufferMock,
+    });
+    hoisted.responseArrayBufferMock.mockResolvedValue(new ArrayBuffer(8));
     delete (window as Window & { __electrobunWindowId?: number })
       .__electrobunWindowId;
     delete (window as Window & { __electrobunWebviewId?: number })
@@ -485,7 +599,9 @@ describe("VrmEngine", () => {
 
     it("uses WebGPURenderer when navigator.gpu is available and opted in", async () => {
       hoisted.navigatorMock.gpu = {};
-      vi.mocked(window.localStorage.getItem).mockReturnValueOnce("webgpu");
+      (
+        window.localStorage.getItem as ReturnType<typeof vi.fn>
+      ).mockReturnValueOnce("webgpu");
       const canvas = createMockCanvas();
 
       engine.setup(canvas, vi.fn());
@@ -584,6 +700,8 @@ describe("VrmEngine", () => {
           "idlePlaying",
           "idleTime",
           "idleTracks",
+          "loadError",
+          "revealStarted",
           "vrmLoaded",
           "vrmName",
         ].sort(),
@@ -696,7 +814,9 @@ describe("VrmEngine", () => {
 
     it("registers WebGPU-compatible VRM material loading when WebGPU is active", async () => {
       hoisted.navigatorMock.gpu = {};
-      vi.mocked(window.localStorage.getItem).mockReturnValueOnce("webgpu");
+      (
+        window.localStorage.getItem as ReturnType<typeof vi.fn>
+      ).mockReturnValueOnce("webgpu");
       hoisted.mockLoaderLoadAsync.mockRejectedValueOnce(
         new Error("stop-after-register"),
       );
@@ -709,6 +829,17 @@ describe("VrmEngine", () => {
       ).rejects.toThrow("stop-after-register");
 
       expect(hoisted.mockMToonMaterialLoaderPlugin).toHaveBeenCalledTimes(1);
+      expect(hoisted.mockLoaderSetMeshoptDecoder).toHaveBeenCalledWith(
+        expect.objectContaining({ supported: true }),
+      );
+      expect(hoisted.mockLoaderSetDRACOLoader).toHaveBeenCalledTimes(1);
+      expect(hoisted.mockDracoLoaderSetDecoderConfig).toHaveBeenCalledWith({
+        type: "wasm",
+      });
+      expect(hoisted.mockDracoLoaderSetDecoderPath).toHaveBeenCalledWith(
+        expect.stringContaining("vrm-decoders/draco/"),
+      );
+      expect(hoisted.mockDracoLoaderPreload).toHaveBeenCalledTimes(1);
       expect(hoisted.mockMToonMaterialLoaderPlugin).toHaveBeenCalledWith(
         hoisted.mockLoaderParser,
         expect.objectContaining({
@@ -719,6 +850,71 @@ describe("VrmEngine", () => {
         hoisted.mockLoaderParser,
         expect.any(Object),
       );
+    });
+
+    it("captures load errors in engine state", async () => {
+      hoisted.mockLoaderLoadAsync.mockRejectedValueOnce(
+        new Error("meshopt decode failed"),
+      );
+      const canvas = createMockCanvas();
+      engine.setup(canvas, vi.fn());
+      await waitForEngineReady(engine);
+
+      await expect(
+        engine.loadVrmFromUrl("http://example.com/model.vrm"),
+      ).rejects.toThrow("meshopt decode failed");
+
+      expect(engine.getState().loadError).toBe("meshopt decode failed");
+    });
+
+    it("fetches gzipped assets and parses the decompressed buffer", async () => {
+      const parseResult = { userData: { vrm: undefined } };
+      hoisted.mockLoaderLoadAsync.mockResolvedValueOnce(parseResult);
+      const compressed = new Uint8Array([0x1f, 0x8b, 0x08, 0x00]).buffer;
+      hoisted.responseArrayBufferMock.mockResolvedValueOnce(compressed);
+
+      class MockDecompressionStream {
+        readable = new ReadableStream<Uint8Array>();
+        writable = new WritableStream<Uint8Array>();
+      }
+
+      const originalDecompressionStream = globalThis.DecompressionStream;
+      Object.assign(globalThis, {
+        DecompressionStream:
+          MockDecompressionStream as unknown as typeof DecompressionStream,
+      });
+
+      const pipeThroughSpy = vi
+        .spyOn(Blob.prototype, "stream")
+        .mockReturnValue({
+          pipeThrough: vi.fn(() => new ReadableStream<Uint8Array>()),
+        } as unknown as ReturnType<Blob["stream"]>);
+      const responseArrayBuffer = vi
+        .spyOn(Response.prototype, "arrayBuffer")
+        .mockResolvedValueOnce(new ArrayBuffer(16));
+
+      const canvas = createMockCanvas();
+      engine.setup(canvas, vi.fn());
+      await waitForEngineReady(engine);
+
+      await expect(
+        engine.loadVrmFromUrl("http://example.com/model.vrm.gz"),
+      ).rejects.toThrow("Loaded asset is not a VRM");
+
+      expect(hoisted.fetchMock).toHaveBeenCalledWith(
+        "http://example.com/model.vrm.gz",
+      );
+      expect(pipeThroughSpy).toHaveBeenCalledTimes(1);
+      expect(responseArrayBuffer).toHaveBeenCalledTimes(1);
+      expect(hoisted.mockLoaderLoadAsync).toHaveBeenCalledWith(
+        expect.stringMatching(/^blob:/),
+      );
+
+      responseArrayBuffer.mockRestore();
+      pipeThroughSpy.mockRestore();
+      Object.assign(globalThis, {
+        DecompressionStream: originalDecompressionStream,
+      });
     });
   });
 });

@@ -1,7 +1,7 @@
+import { SaveCommandModal } from "@milady/app-core/components";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
-import { SaveCommandModal } from "../../src/components/SaveCommandModal";
 
 describe("SaveCommandModal keyboard behavior", () => {
   it("closes only on Escape from dialog keydown", () => {

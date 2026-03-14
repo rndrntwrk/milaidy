@@ -1,16 +1,17 @@
 // @vitest-environment jsdom
+
+import * as AppContext from "@milady/app-core/state";
 import React from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
-import * as AppContext from "../AppContext";
 import { Header } from "./Header";
 
 // Mock the AppContext
-vi.mock("../AppContext", () => ({
+vi.mock("@milady/app-core/state", () => ({
   useApp: vi.fn(),
 }));
 
-vi.mock("../hooks/useBugReport", () => ({
+vi.mock("@milady/app-core/hooks", () => ({
   useBugReport: () => ({ isOpen: false, open: vi.fn(), close: vi.fn() }),
 }));
 
@@ -32,6 +33,7 @@ vi.mock("@milady/app-core/navigation", () => ({
 
 vi.mock("@milady/app-core/components", () => ({
   LanguageDropdown: () => React.createElement("div", null, "LanguageDropdown"),
+  ThemeToggle: () => React.createElement("div", null, "ThemeToggle"),
 }));
 
 vi.mock("@milady/ui", () => ({
@@ -68,7 +70,6 @@ describe("Header", () => {
       miladyCloudTopUpUrl: "",
       lifecycleBusy: false,
       lifecycleAction: null,
-      handlePauseResume: vi.fn(),
       handleRestart: vi.fn(),
       handleStart: vi.fn(),
       loadDropStatus: vi.fn().mockResolvedValue(undefined),
@@ -77,6 +78,8 @@ describe("Header", () => {
       plugins: [],
       uiLanguage: "en",
       setUiLanguage: vi.fn(),
+      uiTheme: "dark",
+      setUiTheme: vi.fn(),
       uiShellMode: "native",
       setUiShellMode: vi.fn(),
     };
@@ -92,10 +95,6 @@ describe("Header", () => {
       throw new Error("Failed to render Header");
     }
     const root = (testRenderer as ReactTestRenderer).root;
-
-    // Check agent name
-    const agentName = root.findByProps({ "data-testid": "agent-name" });
-    expect(agentName.children).toContain("Milady");
 
     // Check shell toggle button
     const shellToggle = root.findByProps({ "data-testid": "ui-shell-toggle" });

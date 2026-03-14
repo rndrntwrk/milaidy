@@ -6,20 +6,32 @@ const { mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
 }));
 
-vi.mock("../../src/AppContext", () => ({
-  useApp: () => mockUseApp(),
-  THEMES: [{ id: "milady", label: "Milady", hint: "default" }],
-  getVrmPreviewUrl: () => "/vrms/previews/milady-1.png",
-  getVrmUrl: () => "/vrms/milady-1.vrm",
-  getVrmBackgroundUrl: () => "/vrms/backgrounds/milady-1.png",
-}));
+vi.mock("@milady/app-core/state", async () => {
+  const actual = await vi.importActual<typeof import("@milady/app-core/state")>(
+    "@milady/app-core/state",
+  );
+  return {
+    ...actual,
+    useApp: () => mockUseApp(),
+    THEMES: [{ id: "milady", label: "Milady", hint: "default" }],
+    getVrmPreviewUrl: () => "/vrms/previews/milady-1.png",
+    getVrmUrl: () => "/vrms/milady-1.vrm",
+    getVrmBackgroundUrl: () => "/vrms/backgrounds/milady-1.png",
+  };
+});
+
+vi.mock("@milady/app-core/components", async () => {
+  const actual = await vi.importActual<
+    typeof import("@milady/app-core/components")
+  >("@milady/app-core/components");
+  return {
+    ...actual,
+    PermissionsOnboardingSection: () => null,
+  };
+});
 
 vi.mock("../../src/components/AvatarSelector", () => ({
   AvatarSelector: () => null,
-}));
-
-vi.mock("../../src/components/PermissionsSection", () => ({
-  PermissionsOnboardingSection: () => null,
 }));
 
 vi.mock("../../src/components/companion/VrmStage", () => ({
@@ -42,7 +54,9 @@ function createOnboardingContext(
 ): Record<string, unknown> {
   return {
     t: (k: string) => k,
-    onboardingStep: "identity",
+    onboardingStep: "wakeUp",
+    selectedVrmIndex: 1,
+    customBackgroundUrl: "",
     onboardingOptions: {
       names: ["Milady"],
       styles: [],
@@ -116,7 +130,7 @@ describe("Onboarding language mode", () => {
       );
     }
 
-    expect(collectText(tree.root)).toContain("Designation");
+    expect(collectText(tree.root)).toContain("onboarding.welcomeTitle");
   });
 
   it("shows chinese copy when uiLanguage is zh-CN", async () => {
@@ -134,7 +148,7 @@ describe("Onboarding language mode", () => {
     }
 
     const text = collectText(tree.root);
-    expect(text).toContain("Designation");
-    expect(text).toContain("My name is");
+    expect(text).toContain("onboarding.welcomeTitle");
+    expect(text).toContain("onboarding.createNewAgent");
   });
 });

@@ -2,19 +2,13 @@
  * Lifecycle action helpers — extracted from AppContext.
  *
  * Provides pure-logic functions for agent lifecycle operations
- * (start, stop, pause, resume, restart, reset) that can be
+ * (start, stop, restart, reset) that can be
  * called from any provider implementation.
  */
 
 import type { MiladyClient } from "../api/client";
 
-export type LifecycleAction =
-  | "start"
-  | "stop"
-  | "pause"
-  | "resume"
-  | "restart"
-  | "reset";
+export type LifecycleAction = "start" | "stop" | "restart" | "reset";
 
 export interface LifecycleMessages {
   progress: string;
@@ -36,18 +30,7 @@ export const LIFECYCLE_MESSAGES: Record<LifecycleAction, LifecycleMessages> = {
     verb: "stop",
     inProgress: "stopping",
   },
-  pause: {
-    progress: "Pausing agent...",
-    success: "Agent paused.",
-    verb: "pause",
-    inProgress: "pausing",
-  },
-  resume: {
-    progress: "Resuming agent...",
-    success: "Agent resumed.",
-    verb: "resume",
-    inProgress: "resuming",
-  },
+
   restart: {
     progress: "Restarting agent...",
     success: "Agent restarted.",
@@ -93,12 +76,7 @@ export async function executeLifecycleAction(
       case "stop":
         result = await ctx.client.stopAgent();
         break;
-      case "pause":
-        result = await ctx.client.pauseAgent();
-        break;
-      case "resume":
-        result = await ctx.client.resumeAgent();
-        break;
+
       case "restart":
         result = await ctx.client.restartAgent();
         break;

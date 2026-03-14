@@ -1,5 +1,7 @@
-import { LanguageDropdown } from "@milady/app-core/components";
+import { LanguageDropdown, ThemeToggle } from "@milady/app-core/components";
+import { useBugReport } from "@milady/app-core/hooks";
 import { getTabGroups, type TabGroup } from "@milady/app-core/navigation";
+import { useApp } from "@milady/app-core/state";
 import { IconTooltip as IconButtonTooltip } from "@milady/ui";
 import {
   AlertTriangle,
@@ -12,8 +14,6 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { useApp } from "../AppContext";
-import { useBugReport } from "../hooks/useBugReport";
 import { AgentModeDropdown } from "./shared/AgentModeDropdown";
 
 const NAV_LABEL_I18N_KEY: Record<string, string> = {
@@ -33,9 +33,8 @@ interface HeaderProps {
   mobileLeft?: ReactNode;
 }
 
-export function Header({ mobileLeft }: HeaderProps) {
+export function Header(_props: HeaderProps) {
   const {
-    agentStatus,
     miladyCloudEnabled,
     miladyCloudConnected,
     miladyCloudCredits,
@@ -50,6 +49,8 @@ export function Header({ mobileLeft }: HeaderProps) {
     setUiShellMode,
     uiLanguage,
     setUiLanguage,
+    uiTheme,
+    setUiTheme,
     t,
   } = useApp();
 
@@ -94,8 +95,6 @@ export function Header({ mobileLeft }: HeaderProps) {
     [tab, tabGroups],
   );
 
-  const name = agentStatus?.agentName ?? "Milady";
-
   const creditColor = miladyCloudCreditsCritical
     ? "border-danger text-danger bg-danger/10"
     : miladyCloudCreditsLow
@@ -106,7 +105,7 @@ export function Header({ mobileLeft }: HeaderProps) {
 
   // Minimum 44px touch targets for mobile
   const iconBtnBase =
-    "inline-flex items-center justify-center w-11 h-11 min-w-[44px] min-h-[44px] border border-border/50 bg-bg/50 backdrop-blur-md cursor-pointer text-sm leading-none hover:border-accent hover:text-accent font-medium hover:-translate-y-0.5 transition-all duration-300 hover:shadow-[0_0_15px_rgba(var(--accent),0.5)] active:scale-95 rounded-xl text-txt shadow-sm";
+    "inline-flex items-center justify-center w-11 h-11 min-w-[44px] min-h-[44px] border border-border/50 bg-bg/50 backdrop-blur-md cursor-pointer text-sm leading-none hover:border-accent hover:text-txt font-medium hover:-translate-y-0.5 transition-all duration-300 hover:shadow-[0_0_15px_rgba(var(--accent),0.5)] active:scale-95 rounded-xl text-txt shadow-sm";
 
   // Shell mode toggle (companion vs native)
   const shellMode = uiShellMode ?? "companion";
@@ -125,35 +124,8 @@ export function Header({ mobileLeft }: HeaderProps) {
     <>
       <header className="border-b border-border/50 bg-bg/80 backdrop-blur-xl py-2 px-3 sm:py-3 sm:px-4 z-20 sticky top-0 w-full transition-all">
         <div className="flex items-center justify-between gap-3 min-w-0 w-full">
-          {/* Left: Agent Name or mobileLeft */}
-          <div className="flex items-center gap-2 shrink-0 min-w-0 lg:w-[260px]">
-            <div className="hidden md:block min-w-0">
-              <span
-                className="text-base font-bold text-txt-strong truncate block"
-                data-testid="agent-name"
-              >
-                {name}
-              </span>
-            </div>
-            <div className="md:hidden flex items-center gap-2 min-w-0">
-              {mobileLeft ? (
-                mobileLeft
-              ) : (
-                <div className="flex items-center gap-2">
-                  <activeGroup.icon className="w-4 h-4 text-accent" />
-                  <span className="text-[13px] font-semibold text-accent truncate">
-                    {t(
-                      NAV_LABEL_I18N_KEY[activeGroup.label] ??
-                        activeGroup.label,
-                    )}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
           {/* Center: Desktop/Tablet Nav */}
-          <nav className="hidden md:flex flex-1 items-center justify-center gap-1 overflow-x-auto whitespace-nowrap px-2 scrollbar-hide">
+          <nav className="hidden md:flex flex-1 items-center justify-left gap-1 overflow-x-auto whitespace-nowrap px-2 scrollbar-hide">
             {tabGroups.map((group: TabGroup) => {
               const primaryTab = group.tabs[0];
               const isActive = group.tabs.includes(tab);
@@ -182,7 +154,7 @@ export function Header({ mobileLeft }: HeaderProps) {
           {/* Right side controls */}
           <div className="flex shrink-0 items-center justify-end gap-2 lg:w-[260px]">
             {/* Scrollable controls */}
-            <div className="overflow-x-auto scrollbar-hide min-w-0 hidden sm:block">
+            <div className="scrollbar-hide min-w-0 hidden sm:block">
               <div className="flex items-center gap-2 w-max ml-auto pr-0.5">
                 {/* Cloud Credits */}
                 {(miladyCloudEnabled || miladyCloudConnected) &&
@@ -191,7 +163,7 @@ export function Header({ mobileLeft }: HeaderProps) {
                       href={miladyCloudTopUpUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={`inline-flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 h-11 border rounded-md font-mono text-[11px] sm:text-xs no-underline transition-all duration-200 hover:border-accent hover:text-accent hover:shadow-sm ${miladyCloudCredits === null ? "border-muted text-muted" : creditColor}`}
+                      className={`inline-flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 h-11 border rounded-md font-mono text-[11px] sm:text-xs no-underline transition-all duration-200 hover:border-accent hover:text-txt hover:shadow-sm ${miladyCloudCredits === null ? "border-muted text-muted" : creditColor}`}
                       title={t("header.CloudCreditsBalanc")}
                     >
                       <CircleDollarSign className="w-3.5 h-3.5" />
@@ -227,34 +199,19 @@ export function Header({ mobileLeft }: HeaderProps) {
                   )}
                 </button>
               </IconButtonTooltip>
-
-              <IconButtonTooltip
-                label={t("header.reportBug")}
-                shortcut="Shift+?"
-              >
-                <button
-                  type="button"
-                  onClick={openBugReport}
-                  aria-label={t("header.reportBug")}
-                  className={iconBtnBase}
-                >
-                  <Bug className="w-5 h-5" />
-                </button>
-              </IconButtonTooltip>
             </div>
 
             <div className="hidden md:flex items-center gap-2 shrink-0">
               {/* Agent Mode */}
               <AgentModeDropdown />
 
-              {/* Language Selector */}
-              {!isNativeShell && (
-                <LanguageDropdown
-                  uiLanguage={uiLanguage}
-                  setUiLanguage={setUiLanguage}
-                  t={t}
-                />
-              )}
+              {/* Language Selector + Theme Toggle */}
+              <LanguageDropdown
+                uiLanguage={uiLanguage}
+                setUiLanguage={setUiLanguage}
+                t={t}
+              />
+              <ThemeToggle uiTheme={uiTheme} setUiTheme={setUiTheme} t={t} />
             </div>
 
             {/* Mobile Hamburger */}
@@ -300,7 +257,7 @@ export function Header({ mobileLeft }: HeaderProps) {
               </div>
               <button
                 type="button"
-                className="inline-flex items-center justify-center w-11 h-11 min-w-[44px] min-h-[44px] border border-border/50 bg-card/50 backdrop-blur-sm text-txt cursor-pointer hover:border-accent hover:text-accent transition-all duration-300 hover:shadow-[0_0_15px_rgba(var(--accent),0.3)] hover:-translate-y-0.5 active:scale-95 rounded-xl"
+                className="inline-flex items-center justify-center w-11 h-11 min-w-[44px] min-h-[44px] border border-border/50 bg-card/50 backdrop-blur-sm text-txt cursor-pointer hover:border-accent hover:text-txt transition-all duration-300 hover:shadow-[0_0_15px_rgba(var(--accent),0.3)] hover:-translate-y-0.5 active:scale-95 rounded-xl"
                 onClick={() => setMobileMenuOpen(false)}
                 aria-label="Close navigation menu"
               >
@@ -335,7 +292,7 @@ export function Header({ mobileLeft }: HeaderProps) {
                         }`}
                       >
                         <Icon
-                          className={`w-4 h-4 ${isActive ? "text-accent" : "text-muted"}`}
+                          className={`w-4 h-4 ${isActive ? "text-txt" : "text-muted"}`}
                         />
                       </span>
                       <div className="flex-1 text-left">
@@ -357,13 +314,16 @@ export function Header({ mobileLeft }: HeaderProps) {
               <div className="mt-4 pt-4 border-t border-border flex flex-col gap-3">
                 <div className="flex flex-col gap-2 justify-between">
                   <AgentModeDropdown />
-                  {!isNativeShell && (
-                    <LanguageDropdown
-                      uiLanguage={uiLanguage}
-                      setUiLanguage={setUiLanguage}
-                      t={t}
-                    />
-                  )}
+                  <LanguageDropdown
+                    uiLanguage={uiLanguage}
+                    setUiLanguage={setUiLanguage}
+                    t={t}
+                  />
+                  <ThemeToggle
+                    uiTheme={uiTheme}
+                    setUiTheme={setUiTheme}
+                    t={t}
+                  />
                   <div className="flex gap-2">
                     <IconButtonTooltip label={shellToggleActionLabel}>
                       <button

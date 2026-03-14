@@ -28,6 +28,7 @@ vi.mock("../wallet-dex-prices", () => ({
     42161: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
     10: "0x4200000000000000000000000000000000000006",
     137: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270",
+    43114: "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7",
   },
 }));
 
@@ -41,6 +42,7 @@ beforeEach(() => {
   delete process.env.BSC_RPC_URL;
   delete process.env.ETHEREUM_RPC_URL;
   delete process.env.BASE_RPC_URL;
+  delete process.env.AVALANCHE_RPC_URL;
 });
 
 afterEach(() => {
@@ -136,7 +138,7 @@ describe("resolveEvmProviderKeys", () => {
 // ── DEFAULT_EVM_CHAINS ───────────────────────────────────────────────────
 
 describe("DEFAULT_EVM_CHAINS", () => {
-  it("includes Ethereum, Base, Arbitrum, Optimism, Polygon, and BSC", () => {
+  it("includes Ethereum, Base, Arbitrum, Optimism, Polygon, BSC, and Avalanche", () => {
     const names = DEFAULT_EVM_CHAINS.map((c) => c.name);
     expect(names).toContain("Ethereum");
     expect(names).toContain("Base");
@@ -144,6 +146,7 @@ describe("DEFAULT_EVM_CHAINS", () => {
     expect(names).toContain("Optimism");
     expect(names).toContain("Polygon");
     expect(names).toContain("BSC");
+    expect(names).toContain("Avalanche");
   });
 
   it("has BSC with chain ID 56", () => {

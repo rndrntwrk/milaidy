@@ -2,28 +2,23 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../../src/components/BugReportModal", () => ({
-  BugReportModal: () => React.createElement("div", null, "BugReportModal"),
-}));
-
-vi.mock("../../src/components/CommandPalette", () => ({
-  CommandPalette: () => React.createElement("div", null, "CommandPalette"),
-}));
-
-vi.mock("../../src/components/EmotePicker", () => ({
-  EmotePicker: () => React.createElement("div", null, "EmotePicker"),
-}));
+vi.mock("@milady/app-core/components", async () => {
+  const actual = await vi.importActual<
+    typeof import("@milady/app-core/components")
+  >("@milady/app-core/components");
+  return {
+    ...actual,
+    BugReportModal: () => React.createElement("div", null, "BugReportModal"),
+    CommandPalette: () => React.createElement("div", null, "CommandPalette"),
+    EmotePicker: () => React.createElement("div", null, "EmotePicker"),
+    RestartBanner: () => React.createElement("div", null, "RestartBanner"),
+    ShortcutsOverlay: () =>
+      React.createElement("div", null, "ShortcutsOverlay"),
+  };
+});
 
 vi.mock("../../src/components/MemoryDebugPanel", () => ({
   MemoryDebugPanel: () => React.createElement("div", null, "MemoryDebugPanel"),
-}));
-
-vi.mock("../../src/components/RestartBanner", () => ({
-  RestartBanner: () => React.createElement("div", null, "RestartBanner"),
-}));
-
-vi.mock("../../src/components/ShortcutsOverlay", () => ({
-  ShortcutsOverlay: () => React.createElement("div", null, "ShortcutsOverlay"),
 }));
 
 import { ShellOverlays } from "../../src/components/ShellOverlays";

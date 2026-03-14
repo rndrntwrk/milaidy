@@ -6,8 +6,8 @@
  * inside the ./inventory/ directory.
  */
 
+import { useApp } from "@milady/app-core/state";
 import { useCallback, useState } from "react";
-import { useApp } from "../AppContext";
 import { BscTradePanel, type TrackedToken } from "./BscTradePanel";
 import {
   BSC_GAS_THRESHOLD,

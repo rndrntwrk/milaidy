@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
 import {
   mapServerTasksToSessions,
   type ServerTask,
   TERMINAL_STATUSES,
-} from "../../src/pty-session-hydrate";
+} from "@milady/app-core/coding";
+import { describe, expect, it } from "vitest";
 
 /**
  * Tests for the PTY session hydration logic used in AppContext.

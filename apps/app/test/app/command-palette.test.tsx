@@ -8,16 +8,16 @@ const { mockUseApp, mockUseBugReport } = vi.hoisted(() => ({
   mockUseBugReport: vi.fn(() => ({ open: vi.fn() })),
 }));
 
-vi.mock("../../src/AppContext", () => ({
+vi.mock("@milady/app-core/state", () => ({
   useApp: () => mockUseApp(),
 }));
 
-vi.mock("../../src/hooks/useBugReport", () => ({
+vi.mock("@milady/app-core/hooks", () => ({
   useBugReport: () => mockUseBugReport(),
   BugReportProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
-import { CommandPalette } from "../../src/components/CommandPalette";
+import { CommandPalette } from "../../../../packages/app-core/src/components/CommandPalette";
 
 type PaletteContext = {
   commandPaletteOpen: boolean;
@@ -25,7 +25,7 @@ type PaletteContext = {
   commandActiveIndex: number;
   agentStatus: { state: string };
   handleStart: () => void;
-  handlePauseResume: () => void;
+
   handleRestart: () => void;
   setTab: (tab: string) => void;
   loadPlugins: () => void;
@@ -50,7 +50,7 @@ function createContext(
     commandActiveIndex: 0,
     agentStatus: { state: "running" },
     handleStart: vi.fn(),
-    handlePauseResume: vi.fn(),
+
     handleRestart: vi.fn(),
     setTab: vi.fn(),
     loadPlugins: vi.fn(),

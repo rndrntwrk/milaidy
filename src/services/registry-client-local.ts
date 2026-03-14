@@ -34,6 +34,7 @@ interface LocalPackageJson {
   version?: string;
   description?: string;
   homepage?: string;
+  keywords?: string[];
   repository?: string | { type?: string; url?: string };
   elizaos?: LocalPackageElizaConfig;
 }
@@ -44,10 +45,22 @@ interface LocalPluginManifest {
   version?: string;
   description?: string;
   homepage?: string;
+  tags?: string[];
   repository?: string | { type?: string; url?: string };
   kind?: string;
   app?: LocalPackageAppMeta;
 }
+
+const LOCAL_PLUGIN_TAG_STOPWORDS = new Set([
+  "plugin",
+  "plugins",
+  "eliza",
+  "elizaos",
+  "milady",
+  "elizaos-plugin",
+  "elizaos-plugins",
+  "feature",
+]);
 
 function uniquePaths(paths: string[]): string[] {
   const seen = new Set<string>();
@@ -105,6 +118,31 @@ async function readJsonFile<T>(filePath: string): Promise<T | null> {
   } catch {
     return null;
   }
+}
+
+function normalizeLocalTag(tag: string): string | null {
+  const normalized = tag
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (!normalized || LOCAL_PLUGIN_TAG_STOPWORDS.has(normalized)) return null;
+  return normalized;
+}
+
+function normalizeLocalTags(values: unknown): string[] {
+  if (!Array.isArray(values)) return [];
+  const tags: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const normalized = normalizeLocalTag(value);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    tags.push(normalized);
+  }
+  return tags;
 }
 
 function toLocalAppMeta(
@@ -179,6 +217,10 @@ function buildDiscoveredEntry(
     packageJson.repository ?? manifest?.repository,
   );
   const description = packageJson.description ?? manifest?.description ?? "";
+  const topics = normalizeLocalTags([
+    ...(packageJson.keywords ?? []),
+    ...(manifest?.tags ?? []),
+  ]);
   const homepage =
     packageJson.homepage ??
     manifest?.homepage ??
@@ -192,7 +234,7 @@ function buildDiscoveredEntry(
     gitUrl: repo.gitUrl,
     description,
     homepage,
-    topics: [],
+    topics,
     stars: 0,
     language: "TypeScript",
     npm: {
@@ -366,7 +408,7 @@ async function discoverNodeModulePlugins(): Promise<
         gitUrl: repo.gitUrl,
         description: packageJson.description ?? "",
         homepage: packageJson.homepage ?? null,
-        topics: [],
+        topics: normalizeLocalTags(packageJson.keywords),
         stars: 0,
         language: "TypeScript",
         npm: {

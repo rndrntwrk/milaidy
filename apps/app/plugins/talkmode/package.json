@@ -2,7 +2,13 @@
   "name": "@milady/capacitor-talkmode",
   "version": "1.0.0",
   "private": true,
-  "description": "Talk mode plugin with STT, chat, and TTS for Milady",
+  "description": "Runs voice conversations with live transcription, chat orchestration, and spoken replies.",
+  "keywords": [
+    "voice",
+    "speech-to-text",
+    "text-to-speech",
+    "conversation"
+  ],
   "main": "./dist/plugin.cjs.js",
   "module": "./src/index.ts",
   "types": "./dist/plugin.d.ts",

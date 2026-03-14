@@ -1,6 +1,5 @@
 import type { AgentRuntime } from "@elizaos/core";
 import { detectRuntimeModel } from "./agent-model";
-import { getAutonomySvc } from "./autonomy-routes";
 import type { RouteHelpers, RouteRequestMeta } from "./route-helpers";
 
 type AgentStateStatus =
@@ -22,20 +21,20 @@ export interface AgentLifecycleRouteState {
 
 export interface AgentLifecycleRouteContext
   extends RouteRequestMeta,
-    Pick<RouteHelpers, "json"> {
+    Pick<RouteHelpers, "error" | "json" | "readJsonBody"> {
   state: AgentLifecycleRouteState;
 }
 
 export async function handleAgentLifecycleRoutes(
   ctx: AgentLifecycleRouteContext,
 ): Promise<boolean> {
-  const { res, method, pathname, state, json } = ctx;
+  const { req, res, method, pathname, state, error, json, readJsonBody } = ctx;
+  const runtime = state.runtime as
+    | (AgentRuntime & { enableAutonomy?: boolean })
+    | null;
 
   // ── POST /api/agent/start ─────────────────────────────────────────────
   if (method === "POST" && pathname === "/api/agent/start") {
-    const svc = getAutonomySvc(state.runtime);
-    if (svc) await svc.disableAutonomy();
-
     state.agentState = "paused";
     state.startedAt = Date.now();
     state.model = detectRuntimeModel(state.runtime);
@@ -55,9 +54,6 @@ export async function handleAgentLifecycleRoutes(
 
   // ── POST /api/agent/stop ──────────────────────────────────────────────
   if (method === "POST" && pathname === "/api/agent/stop") {
-    const svc = getAutonomySvc(state.runtime);
-    if (svc) await svc.disableAutonomy();
-
     state.agentState = "stopped";
     state.startedAt = undefined;
     state.model = undefined;
@@ -70,9 +66,6 @@ export async function handleAgentLifecycleRoutes(
 
   // ── POST /api/agent/pause ─────────────────────────────────────────────
   if (method === "POST" && pathname === "/api/agent/pause") {
-    const svc = getAutonomySvc(state.runtime);
-    if (svc) await svc.disableAutonomy();
-
     state.agentState = "paused";
     json(res, {
       ok: true,
@@ -89,11 +82,6 @@ export async function handleAgentLifecycleRoutes(
 
   // ── POST /api/agent/resume ────────────────────────────────────────────
   if (method === "POST" && pathname === "/api/agent/resume") {
-    // Re-enable the autonomy task — first tick fires immediately
-    // because the new task is created with updatedAt: 0.
-    const svc = getAutonomySvc(state.runtime);
-    if (svc) await svc.enableAutonomy();
-
     state.agentState = "running";
     json(res, {
       ok: true,
@@ -105,6 +93,32 @@ export async function handleAgentLifecycleRoutes(
         startedAt: state.startedAt,
       },
     });
+    return true;
+  }
+
+  // ── GET /api/agent/autonomy ──────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/agent/autonomy") {
+    json(res, { enabled: runtime?.enableAutonomy === true });
+    return true;
+  }
+
+  // ── POST /api/agent/autonomy ─────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/agent/autonomy") {
+    const body = await readJsonBody<{ enabled?: unknown }>(req, res);
+    if (!body) return true;
+
+    if (typeof body.enabled !== "boolean") {
+      error(res, "enabled must be a boolean", 400);
+      return true;
+    }
+
+    if (!runtime) {
+      error(res, "Agent runtime is not available", 503);
+      return true;
+    }
+
+    runtime.enableAutonomy = body.enabled;
+    json(res, { enabled: runtime.enableAutonomy === true });
     return true;
   }
 

@@ -1,7 +1,8 @@
 import { client } from "@milady/app-core/api";
 import { STOP_EMOTE_EVENT } from "@milady/app-core/events";
+import { useRenderGuard } from "@milady/app-core/hooks";
 import { resolveAppAssetUrl } from "@milady/app-core/utils";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { AvatarLoader } from "../avatar/AvatarLoader";
 import type {
   CameraProfile,
@@ -12,39 +13,63 @@ import { VrmViewer } from "../avatar/VrmViewer";
 import { BubbleEmote } from "../BubbleEmote";
 import type { TranslatorFn } from "./walletUtils";
 
-export function VrmStage({
+export const VrmStage = memo(function VrmStage({
   vrmPath,
+  worldUrl,
   fallbackPreviewUrl,
   cameraProfile = "companion",
   t,
 }: {
   vrmPath: string;
+  worldUrl?: string;
   fallbackPreviewUrl: string;
   cameraProfile?: CameraProfile;
   t: TranslatorFn;
 }) {
+  useRenderGuard("VrmStage");
   const [vrmLoaded, setVrmLoaded] = useState(false);
   const [showVrmFallback, setShowVrmFallback] = useState(false);
   const vrmEngineRef = useRef<VrmEngine | null>(null);
+  const fallbackVrmPathRef = useRef(vrmPath);
 
-  const handleVrmEngineReady = useCallback((engine: VrmEngine) => {
-    vrmEngineRef.current = engine;
-  }, []);
+  const handleVrmEngineReady = useCallback(
+    (engine: VrmEngine) => {
+      vrmEngineRef.current = engine;
+      engine.setCameraAnimation({
+        enabled: true,
+        swayAmplitude: cameraProfile === "companion_close" ? 0.028 : 0.04,
+        bobAmplitude: cameraProfile === "companion_close" ? 0.016 : 0.022,
+        rotationAmplitude: cameraProfile === "companion_close" ? 0.008 : 0.012,
+        speed: cameraProfile === "companion_close" ? 0.48 : 0.42,
+      });
+      engine.setPointerParallaxEnabled(true);
+    },
+    [cameraProfile],
+  );
 
   const handleVrmEngineState = useCallback((state: VrmEngineState) => {
-    if (!state.vrmLoaded) return;
-    setVrmLoaded(true);
-    setShowVrmFallback(false);
+    if (state.vrmLoaded) {
+      setVrmLoaded(true);
+      setShowVrmFallback(false);
+      return;
+    }
+    if (state.loadError) {
+      setVrmLoaded(false);
+      setShowVrmFallback(true);
+    }
   }, []);
 
   useEffect(() => {
+    fallbackVrmPathRef.current = vrmPath;
     setVrmLoaded(false);
     setShowVrmFallback(false);
     const timer = window.setTimeout(() => {
-      setShowVrmFallback(true);
+      if (fallbackVrmPathRef.current === vrmPath) {
+        setShowVrmFallback(true);
+      }
     }, 4000);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [vrmPath]);
 
   // Subscribe to WebSocket emote events so the companion avatar plays emotes
   // triggered from the EmotePicker or agent actions.
@@ -75,21 +100,21 @@ export function VrmStage({
   }, [vrmLoaded]);
 
   return (
-    <div className="absolute inset-0">
+    <div className="fixed inset-0 z-0">
       <div
         className="absolute inset-0"
         style={{
-          opacity: vrmLoaded ? 1 : 0,
+          opacity: 1,
           transition: "opacity 400ms ease",
         }}
       >
         <VrmViewer
           vrmPath={vrmPath}
+          worldUrl={worldUrl}
           mouthOpen={0}
           isSpeaking={false}
-          interactive
+          pointerParallax
           cameraProfile={cameraProfile}
-          interactiveMode="orbitZoom"
           onEngineReady={handleVrmEngineReady}
           onEngineState={handleVrmEngineState}
         />
@@ -111,4 +136,4 @@ export function VrmStage({
       </div>
     </div>
   );
-}
+});

@@ -19,14 +19,20 @@ const { mockClient, mockUseApp, mockUseVoiceChat } = vi.hoisted(() => ({
   mockUseVoiceChat: vi.fn(),
 }));
 
-vi.mock("../../src/AppContext", () => ({
+vi.mock("@milady/app-core/state", () => ({
   useApp: () => mockUseApp(),
   getVrmPreviewUrl: () => null,
 }));
 
-vi.mock("../../src/hooks/useVoiceChat", () => ({
-  useVoiceChat: () => mockUseVoiceChat(),
-}));
+vi.mock("@milady/app-core/hooks", async () => {
+  const actual = await vi.importActual<typeof import("@milady/app-core/hooks")>(
+    "@milady/app-core/hooks",
+  );
+  return {
+    ...actual,
+    useVoiceChat: () => mockUseVoiceChat(),
+  };
+});
 
 vi.mock("../../src/components/ChatAvatar", () => ({
   ChatAvatar: () => null,

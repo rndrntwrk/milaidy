@@ -10,6 +10,7 @@ interface ChatViewContextStub {
   chatInput: string;
   chatSending: boolean;
   chatFirstTokenReceived: boolean;
+  companionMessageCutoffTs: number;
   conversationMessages: Array<{
     id: string;
     role: "user" | "assistant";
@@ -36,7 +37,7 @@ interface ChatViewContextStub {
   chatAgentVoiceMuted: boolean;
   t: (k: string) => string;
   handleStart: () => Promise<void>;
-  handlePauseResume: () => Promise<void>;
+
   handleRestart: () => Promise<void>;
   handleChatRetry: (id: string) => void;
   lifecycleBusy: boolean;
@@ -56,14 +57,20 @@ const { mockClient, mockUseApp, mockUseVoiceChat } = vi.hoisted(() => ({
   mockUseVoiceChat: vi.fn(),
 }));
 
-vi.mock("../../src/AppContext", () => ({
+vi.mock("@milady/app-core/state", () => ({
   useApp: () => mockUseApp(),
   getVrmPreviewUrl: () => null,
 }));
 
-vi.mock("../../src/hooks/useVoiceChat", () => ({
-  useVoiceChat: () => mockUseVoiceChat(),
-}));
+vi.mock("@milady/app-core/hooks", async () => {
+  const actual = await vi.importActual<typeof import("@milady/app-core/hooks")>(
+    "@milady/app-core/hooks",
+  );
+  return {
+    ...actual,
+    useVoiceChat: () => mockUseVoiceChat(),
+  };
+});
 
 vi.mock("../../src/components/ChatAvatar", () => ({
   ChatAvatar: () => null,
@@ -88,6 +95,7 @@ function createContext(
     chatInput: "",
     chatSending: false,
     chatFirstTokenReceived: false,
+    companionMessageCutoffTs: 0,
     conversationMessages: [],
     handleChatSend: vi.fn(async () => {}),
     handleChatStop: vi.fn(),
@@ -100,7 +108,7 @@ function createContext(
     chatMode: "simple",
     chatAgentVoiceMuted: false,
     handleStart: vi.fn(async () => {}),
-    handlePauseResume: vi.fn(async () => {}),
+
     handleRestart: vi.fn(async () => {}),
     handleChatRetry: vi.fn(),
     lifecycleBusy: false,

@@ -18,15 +18,6 @@ import type { RPCSchema } from "electrobun/bun";
 // Shared Types
 // ============================================================================
 
-// -- Agent --
-export interface AgentStatus {
-  state: "not_started" | "starting" | "running" | "stopped" | "error";
-  agentName: string | null;
-  port: number | null;
-  startedAt: number | null;
-  error: string | null;
-}
-
 // -- Desktop --
 export interface TrayMenuItem {
   id: string;
@@ -297,12 +288,6 @@ export interface MessageBoxResult {
 export type MiladyRPCSchema = {
   bun: RPCSchema<{
     requests: {
-      // ---- Agent ----
-      agentStart: { params: undefined; response: AgentStatus };
-      agentStop: { params: undefined; response: { ok: boolean } };
-      agentRestart: { params: undefined; response: AgentStatus };
-      agentStatus: { params: undefined; response: AgentStatus };
-
       // ---- Desktop: Tray ----
       desktopCreateTray: { params: TrayOptions; response: undefined };
       desktopUpdateTray: { params: Partial<TrayOptions>; response: undefined };
@@ -835,9 +820,6 @@ export type MiladyRPCSchema = {
     };
     messages: {
       // Push events FROM bun TO webview
-
-      // Agent
-      agentStatusUpdate: AgentStatus;
 
       // Gateway
       gatewayDiscovery: {

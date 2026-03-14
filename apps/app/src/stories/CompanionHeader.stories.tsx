@@ -1,7 +1,8 @@
+import type { UiLanguage } from "@milady/app-core/i18n";
+import type { UiTheme } from "@milady/app-core/state";
 import type { Meta, StoryObj } from "@storybook/react";
 import { fn } from "@storybook/test";
 import { CompanionHeader } from "../components/companion/CompanionHeader";
-import type { UiLanguage } from "../i18n/messages";
 
 const meta = {
   title: "Companion/CompanionHeader",
@@ -15,9 +16,7 @@ const meta = {
     stateColor: "text-ok border-ok",
     lifecycleBusy: false,
     restartBusy: false,
-    pauseResumeBusy: false,
-    pauseResumeDisabled: false,
-    handlePauseResume: fn(),
+
     handleRestart: fn(),
     cameraZoomed: false,
     miladyCloudEnabled: true,
@@ -31,6 +30,8 @@ const meta = {
     handleSwitchToNativeShell: fn(),
     uiLanguage: "en-US" as UiLanguage,
     setUiLanguage: fn(),
+    uiTheme: "dark" as UiTheme,
+    setUiTheme: fn(),
     t: (key: string) => key,
   },
 } satisfies Meta<typeof CompanionHeader>;
@@ -39,13 +40,6 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const DefaultRunning: Story = {};
-
-export const Paused: Story = {
-  args: {
-    agentState: "paused",
-    stateColor: "text-warn border-warn",
-  },
-};
 
 export const Thinking: Story = {
   args: {

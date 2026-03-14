@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 // Mocks — MessageContent uses useApp() and client internally
 // ---------------------------------------------------------------------------
 
-vi.mock("../../src/AppContext", () => ({
+vi.mock("@milady/app-core/state", () => ({
   useApp: () => ({
     agentStatus: { agentName: "Milady" },
     setState: vi.fn(),

@@ -1,11 +1,11 @@
 import { type CustomActionDef, client } from "@milady/app-core/api";
-import { Button, Input } from "@milady/ui";
-import { useCallback, useEffect, useState } from "react";
-import { useApp } from "../AppContext";
+import { useApp } from "@milady/app-core/state";
 import {
   alertDesktopMessage,
   confirmDesktopAction,
-} from "../utils/desktop-dialogs";
+} from "@milady/app-core/utils";
+import { Button, Input } from "@milady/ui";
+import { useCallback, useEffect, useState } from "react";
 import { CustomActionEditor } from "./CustomActionEditor";
 
 export function CustomActionsView() {
@@ -167,9 +167,6 @@ export function CustomActionsView() {
     <div className="flex flex-col h-full p-4 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold text-txt">
-          {t("customactionsview.CustomActions")}
-        </h1>
         <div className="flex items-center gap-2">
           <label className="px-3 py-1.5 text-sm border border-border bg-surface text-muted rounded cursor-pointer hover:bg-card transition-colors">
             {t("customactionsview.Import")}

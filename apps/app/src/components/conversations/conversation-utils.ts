@@ -2,7 +2,7 @@
  * Utility functions and constants for the conversations sidebar.
  */
 
-import { VRM_COUNT } from "../../AppContext";
+import { VRM_COUNT } from "@milady/app-core/state";
 
 export function getLocalizedConversationTitle(
   title: string | undefined | null,

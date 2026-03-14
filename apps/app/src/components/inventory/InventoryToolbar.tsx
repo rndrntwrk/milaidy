@@ -3,8 +3,8 @@
  */
 
 import type { createTranslator } from "@milady/app-core/i18n";
+import type { AppState } from "@milady/app-core/state";
 import { Button } from "@milady/ui";
-import type { AppState } from "../../AppContext";
 import { CHAIN_CONFIGS, PRIMARY_CHAIN_KEYS } from "../chainConfig";
 
 type InventoryToolbarStateKey =
@@ -126,7 +126,7 @@ export function InventoryToolbar({
       <Button
         variant="outline"
         size="sm"
-        className="wt__refresh h-8 px-3 shadow-sm hover:border-accent hover:text-accent"
+        className="wt__refresh h-8 px-3 shadow-sm hover:border-accent hover:text-txt"
         onClick={() =>
           inventoryView === "tokens" ? loadBalances() : loadNfts()
         }

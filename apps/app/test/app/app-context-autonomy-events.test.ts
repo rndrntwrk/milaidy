@@ -124,7 +124,7 @@ vi.mock("@milady/app-core/api", () => ({
   SkillScanReportSummary: {},
 }));
 
-import { AppProvider, useApp } from "../../src/AppContext";
+import { AppProvider, useApp } from "@milady/app-core/state";
 
 type ProbeApi = {
   snapshot: () => {

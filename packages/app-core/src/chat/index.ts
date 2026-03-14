@@ -121,7 +121,7 @@ export interface BuildCommandsArgs {
   agentState: string;
   activeGameViewerUrl: string;
   handleStart: () => void;
-  handlePauseResume: () => void;
+
   handleRestart: () => void;
   setTab: (tab: Tab) => void;
   setAppsSubTab: () => void;
@@ -138,7 +138,7 @@ export function buildCommands(args: BuildCommandsArgs): CommandItem[] {
     agentState,
     activeGameViewerUrl,
     handleStart,
-    handlePauseResume,
+
     handleRestart,
     setTab,
     setAppsSubTab,
@@ -151,9 +151,6 @@ export function buildCommands(args: BuildCommandsArgs): CommandItem[] {
   } = args;
 
   const commands: CommandItem[] = [];
-  const isRunning = agentState === "running";
-  const isPaused = agentState === "paused";
-
   // Agent control
   if (agentState === "stopped" || agentState === "not_started") {
     commands.push({
@@ -161,15 +158,6 @@ export function buildCommands(args: BuildCommandsArgs): CommandItem[] {
       label: "Start Agent",
       category: "agent",
       action: handleStart,
-    });
-  }
-  if (isRunning || isPaused) {
-    commands.push({
-      id: "pause-resume-agent",
-      label: isPaused ? "Resume Agent" : "Pause Agent",
-      category: "agent",
-      shortcut: "Space",
-      action: handlePauseResume,
     });
   }
   commands.push({

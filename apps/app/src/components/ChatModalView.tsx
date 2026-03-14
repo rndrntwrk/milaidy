@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { useApp } from "../AppContext.js";
+import { useRenderGuard } from "@milady/app-core/hooks";
+import { useApp } from "@milady/app-core/state";
+import { memo, useEffect, useState } from "react";
 
 import { ChatView } from "./ChatView.js";
 import { ConversationsSidebar } from "./ConversationsSidebar.js";
@@ -47,10 +48,18 @@ interface ChatModalViewProps {
   onRequestClose?: () => void;
 }
 
-export function ChatModalView({
+export const ChatModalView = memo(function ChatModalView({
   variant = "full-overlay",
 }: ChatModalViewProps) {
-  const { activeConversationId } = useApp();
+  useRenderGuard("ChatModalView");
+  const {
+    activeConversationId,
+    conversationMessages,
+    chatSending,
+    handleNewConversation,
+    onboardingLoading,
+    startupPhase,
+  } = useApp();
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const isNarrow = useIsNarrowViewport();
@@ -67,6 +76,28 @@ export function ChatModalView({
       setMobileSidebarOpen(false);
     }
   }, [activeConversationId]);
+
+  useEffect(() => {
+    if (
+      !isCompanionDock ||
+      onboardingLoading ||
+      startupPhase !== "ready" ||
+      activeConversationId ||
+      chatSending ||
+      conversationMessages.length > 0
+    ) {
+      return;
+    }
+    void handleNewConversation();
+  }, [
+    activeConversationId,
+    chatSending,
+    conversationMessages.length,
+    handleNewConversation,
+    isCompanionDock,
+    onboardingLoading,
+    startupPhase,
+  ]);
 
   return (
     <div
@@ -99,4 +130,4 @@ export function ChatModalView({
       </div>
     </div>
   );
-}
+});

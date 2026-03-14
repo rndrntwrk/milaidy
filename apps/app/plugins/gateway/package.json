@@ -1,7 +1,13 @@
 {
   "name": "@milady/capacitor-gateway",
   "version": "1.0.0",
-  "description": "Milady Gateway Plugin for Capacitor - WebSocket connection to Milady Gateway",
+  "description": "Connects the app to a Milady Gateway with discovery, RPC, and realtime events.",
+  "keywords": [
+    "gateway",
+    "realtime",
+    "rpc",
+    "networking"
+  ],
   "main": "./dist/plugin.cjs.js",
   "module": "./src/index.ts",
   "types": "./dist/plugin.d.ts",

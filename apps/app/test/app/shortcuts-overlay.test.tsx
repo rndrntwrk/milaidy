@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
+
+import { ShortcutsOverlay } from "@milady/app-core/components";
+import { COMMON_SHORTCUTS } from "@milady/app-core/hooks";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
-import { ShortcutsOverlay } from "../../src/components/ShortcutsOverlay";
-import { COMMON_SHORTCUTS } from "../../src/hooks/useKeyboardShortcuts";
 
 let addListenerSpy: ReturnType<typeof vi.spyOn>;
 

@@ -3,13 +3,7 @@ import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-type OnboardingStep =
-  | "wakeUp"
-  | "language"
-  | "identity"
-  | "connection"
-  | "senses"
-  | "activate";
+type OnboardingStep = "wakeUp" | "connection" | "senses" | "activate";
 
 type AppHarnessState = {
   onboardingLoading: boolean;
@@ -106,11 +100,37 @@ const { mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
 }));
 
-vi.mock("../../src/AppContext", async () => {
-  const actual = await vi.importActual("../../src/AppContext");
+vi.mock("@milady/app-core/state", async () => {
+  const actual = await vi.importActual("@milady/app-core/state");
   return {
     ...actual,
     useApp: () => mockUseApp(),
+  };
+});
+
+vi.mock("@milady/app-core/components", async () => {
+  const actual = await vi.importActual<
+    typeof import("@milady/app-core/components")
+  >("@milady/app-core/components");
+  return {
+    ...actual,
+    AppsPageView: () => React.createElement("div", null, "AppsPageView"),
+    ConnectorsPageView: () =>
+      React.createElement("div", null, "ConnectorsPageView"),
+    CommandPalette: () => React.createElement("div", null, "CommandPalette"),
+    EmotePicker: () => React.createElement("div", null, "EmotePicker"),
+    PairingView: () => React.createElement("div", null, "PairingView"),
+    PermissionsOnboardingSection: ({
+      onContinue,
+    }: {
+      onContinue: (options?: { allowPermissionBypass?: boolean }) => void;
+    }) =>
+      React.createElement(
+        "button",
+        { onClick: () => onContinue(), type: "button" },
+        "permissions-continue",
+      ),
+    SettingsView: () => React.createElement("div", null, "SettingsView"),
   };
 });
 
@@ -126,15 +146,17 @@ vi.mock("../../src/components/CommandPalette", () => ({
 vi.mock("../../src/components/EmotePicker", () => ({
   EmotePicker: () => React.createElement("div", null, "EmotePicker"),
 }));
-vi.mock("../../src/components/SaveCommandModal", () => ({
-  SaveCommandModal: () => React.createElement("div", null, "SaveCommandModal"),
+vi.mock("../../src/components/onboarding/PermissionsStep", () => ({
+  PermissionsStep: () =>
+    React.createElement(
+      "button",
+      { onClick: () => mockUseApp().handleOnboardingNext(), type: "button" },
+      "permissions-continue",
+    ),
 }));
 vi.mock("../../src/components/ConversationsSidebar", () => ({
   ConversationsSidebar: () =>
     React.createElement("div", null, "ConversationsSidebar"),
-}));
-vi.mock("../../src/components/AutonomousPanel", () => ({
-  AutonomousPanel: () => React.createElement("div", null, "AutonomousPanel"),
 }));
 vi.mock("../../src/components/CustomActionsPanel", () => ({
   CustomActionsPanel: () =>
@@ -169,9 +191,6 @@ vi.mock("../../src/components/KnowledgeView", () => ({
 vi.mock("../../src/components/LifoSandboxView", () => ({
   LifoSandboxView: () => React.createElement("div", null, "LifoSandboxView"),
 }));
-vi.mock("../../src/components/SettingsView", () => ({
-  SettingsView: () => React.createElement("div", null, "SettingsView"),
-}));
 vi.mock("../../src/components/PairingView", () => ({
   PairingView: () => React.createElement("div", null, "PairingView"),
 }));
@@ -187,9 +206,6 @@ vi.mock("../../src/components/CompanionView", () => ({
 vi.mock("../../src/components/ChatModalView.js", () => ({
   ChatModalView: () => React.createElement("div", null, "ChatModalView"),
 }));
-vi.mock("../../src/components/TerminalPanel", () => ({
-  TerminalPanel: () => React.createElement("div", null, "TerminalPanel"),
-}));
 vi.mock("../../src/components/AvatarSelector", () => ({
   AvatarSelector: () => React.createElement("div", null, "AvatarSelector"),
 }));
@@ -202,18 +218,6 @@ vi.mock("../../src/components/StreamView", () => ({
 vi.mock("../../src/components/CompanionShell", () => ({
   CompanionShell: () => React.createElement("div", null, "CompanionShell"),
   useCompanionShell: () => ({}),
-}));
-vi.mock("../../src/components/PermissionsSection", () => ({
-  PermissionsOnboardingSection: ({
-    onContinue,
-  }: {
-    onContinue: (options?: { allowPermissionBypass?: boolean }) => void;
-  }) =>
-    React.createElement(
-      "button",
-      { onClick: () => onContinue(), type: "button" },
-      "permissions-continue",
-    ),
 }));
 
 import { App } from "../../src/App";
@@ -317,6 +321,8 @@ function createHarnessState(): AppHarnessState {
     onboardingRpcSelections: {},
     onboardingRpcKeys: {},
     onboardingAvatar: 1,
+    selectedVrmIndex: 1,
+    customBackgroundUrl: "",
     onboardingRestarting: false,
     miladyCloudConnected: false,
     miladyCloudLoginBusy: false,
@@ -366,8 +372,6 @@ describe("app startup onboarding flow (e2e)", () => {
 
     const STEP_ORDER: OnboardingStep[] = [
       "wakeUp",
-      "language",
-      "identity",
       "connection",
       "senses",
       "activate",
@@ -428,16 +432,12 @@ describe("app startup onboarding flow (e2e)", () => {
 
       if (state.onboardingStep === "senses") {
         clickButton(renderedTree, "permissions-continue");
-      } else if (state.onboardingStep === "language") {
-        clickButton(renderedTree, "English");
       } else if (state.onboardingStep === "wakeUp") {
-        clickButton(renderedTree, "Activate");
-      } else if (state.onboardingStep === "identity") {
-        clickButton(renderedTree, "Confirm");
+        clickButton(renderedTree, "onboarding.createNewAgent");
       } else if (state.onboardingStep === "connection") {
-        clickButton(renderedTree, "Confirm");
+        clickButton(renderedTree, "onboarding.confirm");
       } else if (state.onboardingStep === "activate") {
-        clickButton(renderedTree, "Enter");
+        clickButton(renderedTree, "onboarding.enter");
       }
       await rerender(renderedTree);
     }
@@ -452,4 +452,35 @@ describe("app startup onboarding flow (e2e)", () => {
     expect(renderedText).toContain("ChatView");
     expect(renderedText).toContain("Header");
   });
+});
+vi.mock("@milady/app-core/components", async () => {
+  const actual = await vi.importActual<
+    typeof import("@milady/app-core/components")
+  >("@milady/app-core/components");
+  return {
+    ...actual,
+    AppsPageView: () => React.createElement("div", null, "AppsPageView"),
+    CommandPalette: () => React.createElement("div", null, "CommandPalette"),
+    ConnectorsPageView: () =>
+      React.createElement("div", null, "ConnectorsPageView"),
+    EmotePicker: () => React.createElement("div", null, "EmotePicker"),
+    PairingView: () => React.createElement("div", null, "PairingView"),
+    SaveCommandModal: () =>
+      React.createElement("div", null, "SaveCommandModal"),
+    ConnectionFailedBanner: () =>
+      React.createElement("div", null, "ConnectionFailedBanner"),
+    PermissionsOnboardingSection: ({
+      onContinue,
+    }: {
+      onContinue: (options?: { allowPermissionBypass?: boolean }) => void;
+    }) =>
+      React.createElement(
+        "button",
+        { onClick: () => onContinue(), type: "button" },
+        "permissions-continue",
+      ),
+    SettingsView: () => React.createElement("div", null, "SettingsView"),
+    SystemWarningBanner: () =>
+      React.createElement("div", null, "SystemWarningBanner"),
+  };
 });

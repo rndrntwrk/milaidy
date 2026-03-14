@@ -1,8 +1,7 @@
-import { ONBOARDING_STEPS } from "@milady/app-core/state";
-import { useApp } from "../../AppContext";
+import { ONBOARDING_STEPS, useApp } from "@milady/app-core/state";
 
 export function OnboardingStepNav() {
-  const { onboardingStep } = useApp();
+  const { onboardingStep, t } = useApp();
 
   const currentIndex = ONBOARDING_STEPS.findIndex(
     (s) => s.id === onboardingStep,
@@ -20,8 +19,8 @@ export function OnboardingStepNav() {
             <div key={step.id} className={`onboarding-step-item ${state}`}>
               <div className="onboarding-step-dot" />
               <div className="onboarding-step-info">
-                <span className="onboarding-step-name">{step.name}</span>
-                <span className="onboarding-step-sub">{step.subtitle}</span>
+                <span className="onboarding-step-name">{t(step.name)}</span>
+                <span className="onboarding-step-sub">{t(step.subtitle)}</span>
               </div>
             </div>
           );

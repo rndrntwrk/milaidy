@@ -11,6 +11,7 @@
  */
 
 import http from "node:http";
+import { client } from "@milady/app-core/api";
 // @vitest-environment jsdom
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
@@ -323,8 +324,8 @@ const { mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
 }));
 
-vi.mock("../../src/AppContext", async () => {
-  const actual = await vi.importActual("../../src/AppContext");
+vi.mock("@milady/app-core/state", async () => {
+  const actual = await vi.importActual("@milady/app-core/state");
   return {
     ...actual,
     useApp: () => mockUseApp(),
@@ -341,22 +342,35 @@ vi.mock("@milady/app-core/api", () => ({
       documents: [
         {
           id: "doc-1",
-          title: "README.md",
+          filename: "README.md",
+          contentType: "text/markdown",
+          fileSize: 1024,
           fragmentCount: 3,
-          createdAt: new Date().toISOString(),
+          createdAt: Date.now(),
+          source: "upload",
         },
         {
           id: "doc-2",
-          title: "guide.pdf",
+          filename: "guide.pdf",
+          contentType: "application/pdf",
+          fileSize: 50_000,
           fragmentCount: 10,
-          createdAt: new Date().toISOString(),
+          createdAt: Date.now(),
+          source: "upload",
         },
       ],
     }),
     getKnowledgeDocument: vi.fn().mockResolvedValue({
-      id: "doc-1",
-      title: "README.md",
-      fragmentCount: 3,
+      document: {
+        id: "doc-1",
+        filename: "README.md",
+        contentType: "text/markdown",
+        fileSize: 1024,
+        createdAt: Date.now(),
+        fragmentCount: 3,
+        source: "upload",
+        content: { text: "# README" },
+      },
     }),
     getKnowledgeFragments: vi.fn().mockResolvedValue({ fragments: [] }),
     uploadKnowledgeDocument: vi.fn().mockResolvedValue({ ok: true }),
@@ -387,9 +401,12 @@ type KnowledgeState = {
   knowledgeStats: { documentCount: number; fragmentCount: number } | null;
   knowledgeDocuments: Array<{
     id: string;
-    title: string;
+    filename: string;
+    contentType: string;
+    fileSize: number;
     fragmentCount: number;
-    createdAt: string;
+    createdAt: number;
+    source: string;
   }>;
   knowledgeLoading: boolean;
   knowledgeSearchResults: Array<{
@@ -406,15 +423,21 @@ function createKnowledgeUIState(): KnowledgeState {
     knowledgeDocuments: [
       {
         id: "doc-1",
-        title: "README.md",
+        filename: "README.md",
+        contentType: "text/markdown",
+        fileSize: 1024,
         fragmentCount: 3,
-        createdAt: new Date().toISOString(),
+        createdAt: Date.now(),
+        source: "upload",
       },
       {
         id: "doc-2",
-        title: "guide.pdf",
+        filename: "guide.pdf",
+        contentType: "application/pdf",
+        fileSize: 50_000,
         fragmentCount: 10,
-        createdAt: new Date().toISOString(),
+        createdAt: Date.now(),
+        source: "upload",
       },
     ],
     knowledgeLoading: false,
@@ -462,15 +485,56 @@ describe("KnowledgeView UI", () => {
     expect(allText).toContain("Documents");
   });
 
-  it("displays fragment count in stats", async () => {
+  it("loads fragment details when opening a document", async () => {
+    vi.mocked(client.getKnowledgeDocument).mockResolvedValueOnce({
+      document: {
+        id: "doc-1",
+        filename: "README.md",
+        contentType: "text/markdown",
+        fileSize: 1024,
+        createdAt: Date.now(),
+        fragmentCount: 3,
+        source: "upload",
+        content: { text: "# README" },
+      },
+    });
+    vi.mocked(client.getKnowledgeFragments).mockResolvedValueOnce({
+      fragments: [
+        {
+          id: "fragment-1",
+          text: "fragment body",
+          position: 1,
+          createdAt: Date.now(),
+        },
+      ],
+    });
+
     let tree: TestRenderer.ReactTestRenderer | null = null;
 
     await act(async () => {
       tree = TestRenderer.create(React.createElement(KnowledgeView));
     });
 
+    const documentButtons =
+      tree?.root.findAll(
+        (node) =>
+          node.type === "button" &&
+          typeof node.props["aria-label"] === "string" &&
+          node.props["aria-label"].startsWith("Open "),
+      ) ?? [];
+    expect(documentButtons.length).toBeGreaterThan(0);
+
+    await act(async () => {
+      documentButtons[0].props.onClick();
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
     const allText = JSON.stringify(tree?.toJSON());
-    expect(allText).toContain("Fragments");
+    expect(allText).toContain("knowledgeview.Fragments1");
+    expect(allText).toContain("fragment body");
   });
 
   it("renders upload zone", async () => {
@@ -593,10 +657,10 @@ describe("Knowledge Search Integration", () => {
       uploadKnowledgeDocument: vi.fn(),
       searchKnowledge: async (query: string) => {
         state.knowledgeSearchResults = state.knowledgeDocuments
-          .filter((d) => d.title.toLowerCase().includes(query.toLowerCase()))
+          .filter((d) => d.filename.toLowerCase().includes(query.toLowerCase()))
           .map((d) => ({
             documentId: d.id,
-            title: d.title,
+            title: d.filename,
             snippet: "Matching content...",
             score: 0.9,
           }));

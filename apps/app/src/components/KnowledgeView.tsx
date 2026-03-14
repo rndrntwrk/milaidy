@@ -14,7 +14,6 @@ import type {
   KnowledgeDocument,
   KnowledgeFragment,
   KnowledgeSearchResult,
-  KnowledgeStats,
 } from "@milady/app-core/api";
 import { client } from "@milady/app-core/api";
 import {
@@ -22,10 +21,10 @@ import {
   formatByteSize,
   formatShortDate,
 } from "@milady/app-core/components";
-import { Button, Input, SearchBar } from "@milady/ui";
+import { useApp } from "@milady/app-core/state";
+import { confirmDesktopAction } from "@milady/app-core/utils";
+import { Button, Input } from "@milady/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useApp } from "../AppContext";
-import { confirmDesktopAction } from "../utils/desktop-dialogs";
 
 const MAX_UPLOAD_REQUEST_BYTES = 32 * 1_048_576; // Must match server knowledge route limit
 const BULK_UPLOAD_TARGET_BYTES = 24 * 1_048_576;
@@ -88,49 +87,6 @@ function isSupportedKnowledgeFile(file: Pick<File, "name">): boolean {
   return false;
 }
 
-/* ── StatsCard ──────────────────────────────────────────────────────── */
-
-function StatsCard({
-  stats,
-  loading,
-  hasError,
-}: {
-  stats: KnowledgeStats | null;
-  loading: boolean;
-  hasError?: boolean;
-}) {
-  const { t } = useApp();
-  return (
-    <div className="grid grid-cols-2 gap-4 mb-8 relative z-10">
-      <div className="p-5 border border-border/40 bg-card/60 backdrop-blur-xl rounded-2xl shadow-sm hover:shadow-md transition-all">
-        <div className="text-[11px] font-bold tracking-widest uppercase text-muted mb-2 flex items-center gap-2">
-          {t("knowledgeview.Documents")}
-          <span className="w-1.5 h-1.5 rounded-full bg-accent/50 blur-[1px]" />
-        </div>
-        <div className="text-3xl font-bold tracking-tight text-txt bg-gradient-to-br from-txt to-muted bg-clip-text text-transparent">
-          {loading ? "—" : hasError ? "—" : (stats?.documentCount ?? 0)}
-        </div>
-      </div>
-      <div className="p-5 border border-border/40 bg-card/60 backdrop-blur-xl rounded-2xl shadow-sm hover:shadow-md transition-all overflow-visible group/card">
-        <div className="text-[11px] font-bold tracking-widest uppercase text-muted mb-2 flex items-center gap-2">
-          {t("knowledgeview.Fragments")}
-          <span className="relative group">
-            <span className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-border/50 bg-bg/50 text-[10px] leading-none cursor-help opacity-60 group-hover:opacity-100 transition-all font-mono hover:bg-accent/10 hover:text-accent hover:border-accent/40">
-              ?
-            </span>
-            <span className="pointer-events-none absolute left-0 top-full mt-2 w-64 p-3 rounded-xl bg-card/90 backdrop-blur-md text-txt text-xs normal-case tracking-normal leading-relaxed opacity-0 group-hover:opacity-100 transition-all border border-border/50 shadow-xl translate-y-2 group-hover:translate-y-0 z-50">
-              {t("knowledgeview.DocumentsAreSplit")}
-            </span>
-          </span>
-        </div>
-        <div className="text-3xl font-bold tracking-tight text-txt bg-gradient-to-br from-txt to-muted bg-clip-text text-transparent">
-          {loading ? "—" : hasError ? "—" : (stats?.fragmentCount ?? 0)}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ── Upload Zone ────────────────────────────────────────────────────── */
 
 function UploadZone({
@@ -191,114 +147,93 @@ function UploadZone({
   }, [includeImageDescriptions, urlInput, uploading, onUrlUpload]);
 
   return (
-    <div className="mb-8">
-      <section
-        className={`border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center transition-all duration-300 relative overflow-hidden backdrop-blur-sm ${
-          dragOver
-            ? "border-accent bg-accent/5 scale-[1.02] shadow-[0_0_30px_rgba(var(--accent),0.15)]"
-            : "border-border/40 hover:border-accent/40 bg-card/20 hover:bg-card/40"
-        } ${uploading ? "opacity-50 pointer-events-none" : ""}`}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={handleDrop}
-        aria-label="Knowledge upload dropzone"
-      >
-        <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none opacity-50" />
+    <fieldset
+      className={`w-full xl:max-w-[34rem] rounded-xl border px-3 py-2.5 transition-all ${
+        dragOver
+          ? "border-accent bg-accent/5 shadow-[0_0_20px_rgba(var(--accent),0.12)]"
+          : "border-border/40 bg-card/20 hover:border-accent/30"
+      } ${uploading ? "opacity-60 pointer-events-none" : ""}`}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={handleDrop}
+      aria-label="Knowledge upload controls"
+    >
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        multiple
+        accept=".txt,.md,.pdf,.docx,.json,.csv,.xml,.html,.png,.jpg,.jpeg,.webp,.gif"
+        onChange={handleFileSelect}
+      />
+      <input
+        {...DIRECTORY_INPUT_ATTRS}
+        ref={folderInputRef}
+        type="file"
+        className="hidden"
+        multiple
+        accept=".txt,.md,.pdf,.docx,.json,.csv,.xml,.html,.png,.jpg,.jpeg,.webp,.gif"
+        onChange={handleFileSelect}
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          variant="default"
+          size="sm"
+          className="h-8 px-3 text-[11px] font-semibold"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+        >
+          {t("knowledgeview.ChooseFiles")}
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          className="h-8 px-3 text-[11px] font-semibold"
+          onClick={() => folderInputRef.current?.click()}
+          disabled={uploading}
+        >
+          {t("knowledgeview.ChooseFolder")}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 px-3 text-[11px] font-semibold hover:text-txt"
+          onClick={() => setShowUrlInput(!showUrlInput)}
+          disabled={uploading}
+        >
+          {t("knowledgeview.AddFromURL")}
+        </Button>
+      </div>
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          className="hidden"
-          multiple
-          accept=".txt,.md,.pdf,.docx,.json,.csv,.xml,.html,.png,.jpg,.jpeg,.webp,.gif"
-          onChange={handleFileSelect}
-        />
-        <input
-          {...DIRECTORY_INPUT_ATTRS}
-          ref={folderInputRef}
-          type="file"
-          className="hidden"
-          multiple
-          accept=".txt,.md,.pdf,.docx,.json,.csv,.xml,.html,.png,.jpg,.jpeg,.webp,.gif"
-          onChange={handleFileSelect}
-        />
-        <div className="text-muted/80 text-sm font-medium mb-4 z-10">
-          {uploading ? (
-            <span className="text-accent font-bold tracking-wide flex items-center gap-2">
-              <span className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-              {uploadStatus
-                ? `Uploading ${uploadStatus.current}/${uploadStatus.total}${uploadStatus.filename ? `: ${uploadStatus.filename}` : ""}`
-                : "Uploading..."}
-            </span>
-          ) : (
-            <span className="flex items-center gap-2">
-              <span className="opacity-70">Drop files/folders here or</span>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="text-accent hover:underline decoration-accent/30 underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 rounded-sm"
-              >
-                click to browse
-              </button>
-            </span>
-          )}
-        </div>
-        <div className="text-[11px] text-muted/60 mb-6 z-10 font-medium tracking-wide bg-black/5 px-4 py-1.5 rounded-full border border-white/5">
-          {t("knowledgeview.SupportedPDFMark")}
-        </div>
-        <div className="flex flex-wrap gap-3 justify-center z-10">
-          <Button
-            variant="default"
-            size="sm"
-            className="shadow-md h-9 font-bold tracking-wide hover:shadow-[0_0_15px_rgba(var(--accent),0.3)] transition-all"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-          >
-            {t("knowledgeview.ChooseFiles")}
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            className="h-9 font-bold bg-bg/50 border-border/50 hover:border-accent/40 backdrop-blur-md shadow-sm transition-all"
-            onClick={() => folderInputRef.current?.click()}
-            disabled={uploading}
-          >
-            {t("knowledgeview.ChooseFolder")}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9 font-bold border-border/50 bg-transparent hover:bg-accent/10 hover:text-accent transition-all hover:border-accent/30 shadow-inner"
-            onClick={() => setShowUrlInput(!showUrlInput)}
-            disabled={uploading}
-          >
-            {t("knowledgeview.AddFromURL")}
-          </Button>
-        </div>
-        <label className="mt-8 inline-flex items-center gap-2.5 text-[11px] font-medium text-muted/80 cursor-pointer z-10 hover:text-muted transition-colors px-3 py-1.5 rounded-lg hover:bg-black/5">
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted/80">
+        <label className="inline-flex items-center gap-2 cursor-pointer hover:text-muted transition-colors">
           <input
             type="checkbox"
             checked={includeImageDescriptions}
             onChange={(e) => setIncludeImageDescriptions(e.target.checked)}
             disabled={uploading}
-            className="accent-accent w-3.5 h-3.5 rounded border-border/50 bg-bg/50 transition-all cursor-pointer"
+            className="accent-accent h-3.5 w-3.5 rounded border-border/50 bg-bg/50"
           />
           {t("knowledgeview.IncludeAIImageDes")}
         </label>
-      </section>
+        {(dragOver || uploading) && (
+          <span className="font-medium text-txt/80">
+            {uploadStatus
+              ? `Uploading ${uploadStatus.current}/${uploadStatus.total}${uploadStatus.filename ? `: ${uploadStatus.filename}` : ""}`
+              : "Drop files or folders to upload"}
+          </span>
+        )}
+      </div>
 
       {showUrlInput && (
-        <div className="mt-4 p-5 border border-border/40 bg-card/60 backdrop-blur-xl rounded-2xl shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
-          <div className="text-sm font-bold text-txt mb-2 tracking-wide">
+        <div className="mt-3 rounded-lg border border-border/30 bg-black/5 p-2.5 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="mb-2 text-[11px] font-medium leading-relaxed text-muted">
             {t("knowledgeview.PasteAURLToImpor")}
           </div>
-          <div className="text-[11px] text-muted mb-4 font-medium leading-relaxed bg-black/5 p-3 rounded-xl border border-white/5 inline-block">
-            {t("knowledgeview.ImageURLsCanOptio")}
-          </div>
-          <div className="flex gap-3 relative">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Input
               type="url"
               placeholder={t("knowledgeview.httpsExampleCom")}
@@ -306,11 +241,12 @@ function UploadZone({
               onChange={(e) => setUrlInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleUrlSubmit()}
               disabled={uploading}
-              className="flex-1 bg-bg/50 backdrop-blur-md border-border/50 shadow-inner focus-visible:ring-accent/50 focus-visible:border-accent h-10 rounded-xl transition-all"
+              className="h-8 flex-1 bg-bg/60 border-border/50 text-xs shadow-none"
             />
             <Button
               variant="default"
-              className="h-10 px-6 font-bold shadow-sm"
+              size="sm"
+              className="h-8 px-3 text-[11px] font-semibold"
               onClick={handleUrlSubmit}
               disabled={!urlInput.trim() || uploading}
             >
@@ -319,7 +255,7 @@ function UploadZone({
           </div>
         </div>
       )}
-    </div>
+    </fieldset>
   );
 }
 
@@ -361,7 +297,7 @@ function SearchResults({
               <span className="text-[13px] font-bold text-txt truncate">
                 {result.documentTitle || "Unknown Document"}
               </span>
-              <span className="shrink-0 text-[10px] font-bold tracking-wider px-2 py-1 bg-accent/20 text-accent rounded-md border border-accent/20">
+              <span className="shrink-0 text-[10px] font-bold tracking-wider px-2 py-1 bg-accent/20 text-txt rounded-md border border-accent/20">
                 {(result.similarity * 100).toFixed(0)}%{" "}
                 {t("knowledgeview.Match")}
               </span>
@@ -403,7 +339,7 @@ function DocumentCard({
         onClick={() => onSelect(doc.id)}
         aria-label={`Open ${doc.filename}`}
       >
-        <div className="font-bold text-sm text-txt truncate mb-2 group-hover:text-accent transition-colors">
+        <div className="font-bold text-sm text-txt truncate mb-2 group-hover:text-txt transition-colors">
           {doc.filename}
         </div>
         <div className="flex items-center gap-3 text-xs text-muted/80 font-medium">
@@ -425,7 +361,7 @@ function DocumentCard({
           {doc.source === "url" && (
             <>
               <span className="w-1 h-1 rounded-full bg-border/50" />
-              <span className="px-2 py-0.5 bg-accent/10 text-accent border border-accent/20 rounded-md text-[10px] font-bold tracking-wider">
+              <span className="px-2 py-0.5 bg-accent/10 text-txt border border-accent/20 rounded-md text-[10px] font-bold tracking-wider">
                 {t("knowledgeview.URL")}
               </span>
             </>
@@ -573,7 +509,7 @@ function DocumentDetailModal({
                         href={doc.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-accent hover:text-accent/80 font-medium underline decoration-accent/30 underline-offset-4 transition-colors break-all"
+                        className="text-txt hover:text-txt/80 font-medium underline decoration-accent/30 underline-offset-4 transition-colors break-all"
                       >
                         {doc.url}
                       </a>
@@ -633,7 +569,7 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
   const { setActionNotice } = useApp();
   const setActionNoticeRef = useRef(setActionNotice);
   setActionNoticeRef.current = setActionNotice;
-  const [stats, setStats] = useState<KnowledgeStats | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
   const [searchResults, setSearchResults] = useState<
     KnowledgeSearchResult[] | null
@@ -656,11 +592,7 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
     setLoading(true);
     setLoadError(null);
     try {
-      const [statsRes, docsRes] = await Promise.all([
-        client.getKnowledgeStats(),
-        client.listKnowledgeDocuments({ limit: 100 }),
-      ]);
-      setStats(statsRes);
+      const docsRes = await client.listKnowledgeDocuments({ limit: 100 });
       setDocuments(docsRes.documents);
       setIsServiceLoading(false);
       serviceRetryRef.current = 0;
@@ -1059,26 +991,24 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
     [loadData, setActionNotice],
   );
 
+  const handleSearchSubmit = useCallback(
+    (e?: React.FormEvent<HTMLFormElement>) => {
+      e?.preventDefault();
+      const query = searchQuery.trim();
+      if (!query) return;
+      void handleSearch(query);
+    },
+    [handleSearch, searchQuery],
+  );
+
   return (
     <div
       className={
         inModal
-          ? "max-w-4xl mx-auto h-full overflow-y-auto pb-8"
-          : "max-w-4xl mx-auto"
+          ? "max-w-6xl mx-auto h-full overflow-y-auto pb-8"
+          : "max-w-6xl mx-auto"
       }
     >
-      {!inModal && (
-        <h1 className="text-xl font-semibold text-[var(--txt)] mb-6">
-          {t("knowledgeview.KnowledgeBase")}
-        </h1>
-      )}
-
-      <StatsCard
-        stats={stats}
-        loading={loading}
-        hasError={!!(loadError || isServiceLoading)}
-      />
-
       {isServiceLoading && (
         <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded border border-[var(--border)] bg-[var(--card)] text-sm text-[var(--muted)]">
           <span className="w-4 h-4 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
@@ -1100,14 +1030,38 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
         </div>
       )}
 
-      <UploadZone
-        onFilesUpload={handleFilesUpload}
-        onUrlUpload={handleUrlUpload}
-        uploading={uploading}
-        uploadStatus={uploadStatus}
-      />
+      <div className="mb-6 flex flex-col gap-3 xl:flex-row xl:items-start">
+        <form className="min-w-0 flex-1" onSubmit={handleSearchSubmit}>
+          <div className="flex gap-2">
+            <Input
+              type="text"
+              placeholder={t("knowledge.ui.searchPlaceholder")}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              disabled={searching}
+              className="h-9 bg-bg border-border text-sm shadow-sm focus-visible:ring-1 focus-visible:ring-accent"
+            />
+            <Button
+              type="submit"
+              variant="default"
+              size="sm"
+              className="h-9 px-4 shadow-sm"
+              disabled={!searchQuery.trim() || searching}
+            >
+              {searching
+                ? t("knowledge.ui.searching")
+                : t("knowledge.ui.search")}
+            </Button>
+          </div>
+        </form>
 
-      <SearchBar onSearch={handleSearch} searching={searching} />
+        <UploadZone
+          onFilesUpload={handleFilesUpload}
+          onUrlUpload={handleUrlUpload}
+          uploading={uploading}
+          uploadStatus={uploadStatus}
+        />
+      </div>
 
       {searchResults !== null && (
         <SearchResults
@@ -1116,11 +1070,10 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
         />
       )}
 
-      {/* Document List */}
-      <div>
+      <div className="flex flex-col">
         <div className="flex items-center justify-between mb-4 border-b border-border/40 pb-3">
           <h2 className="text-sm font-bold tracking-wide text-txt">
-            {t("knowledgeview.Documents1")}
+            {t("knowledgeview.Documents")}
             <span className="ml-2 px-2 py-0.5 rounded-full bg-black/10 text-xs text-muted font-mono">
               {documents.length}
             </span>
@@ -1128,7 +1081,7 @@ export function KnowledgeView({ inModal }: { inModal?: boolean } = {}) {
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 text-[11px] font-bold border border-transparent shadow-inner hover:bg-accent/10 hover:border-accent/30 hover:text-accent transition-all"
+            className="h-7 text-[11px] font-bold border border-transparent shadow-inner hover:bg-accent/10 hover:border-accent/30 hover:text-txt transition-all"
             onClick={() => void loadData()}
             disabled={loading}
           >

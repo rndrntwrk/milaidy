@@ -56,14 +56,14 @@ import type {
 } from "../api/client";
 import type { UiLanguage } from "../i18n";
 import type { Tab } from "../navigation";
+import type { UiTheme } from "./persistence";
 
 export type UiShellMode = "companion" | "native";
 
 export type OnboardingStep =
   | "wakeUp"
-  | "language"
-  | "identity"
   | "connection"
+  | "rpc"
   | "senses"
   | "activate";
 
@@ -74,12 +74,31 @@ export interface OnboardingStepMeta {
 }
 
 export const ONBOARDING_STEPS: OnboardingStepMeta[] = [
-  { id: "wakeUp", name: "Initialize", subtitle: "System boot" },
-  { id: "language", name: "Language", subtitle: "Communication" },
-  { id: "identity", name: "Identity", subtitle: "Designation" },
-  { id: "connection", name: "Connect", subtitle: "Neural link" },
-  { id: "senses", name: "Access", subtitle: "System permissions" },
-  { id: "activate", name: "Launch", subtitle: "Ready" },
+  {
+    id: "wakeUp",
+    name: "onboarding.stepName.wakeUp",
+    subtitle: "onboarding.stepSub.wakeUp",
+  },
+  {
+    id: "connection",
+    name: "onboarding.stepName.connection",
+    subtitle: "onboarding.stepSub.connection",
+  },
+  {
+    id: "rpc",
+    name: "onboarding.stepName.rpc",
+    subtitle: "onboarding.stepSub.rpc",
+  },
+  {
+    id: "senses",
+    name: "onboarding.stepName.senses",
+    subtitle: "onboarding.stepSub.senses",
+  },
+  {
+    id: "activate",
+    name: "onboarding.stepName.activate",
+    subtitle: "onboarding.stepSub.activate",
+  },
 ];
 
 export interface OnboardingNextOptions {
@@ -100,13 +119,7 @@ export interface ActionNotice {
   text: string;
 }
 
-export type LifecycleAction =
-  | "start"
-  | "stop"
-  | "pause"
-  | "resume"
-  | "restart"
-  | "reset";
+export type LifecycleAction = "start" | "stop" | "restart" | "reset";
 
 export const LIFECYCLE_MESSAGES: Record<
   LifecycleAction,
@@ -129,18 +142,7 @@ export const LIFECYCLE_MESSAGES: Record<
     success: "Agent stopped.",
     verb: "stop",
   },
-  pause: {
-    inProgress: "pausing",
-    progress: "Pausing agent...",
-    success: "Agent paused.",
-    verb: "pause",
-  },
-  resume: {
-    inProgress: "resuming",
-    progress: "Resuming agent...",
-    success: "Agent resumed.",
-    verb: "resume",
-  },
+
   restart: {
     inProgress: "restarting",
     progress: "Restarting agent...",
@@ -161,7 +163,6 @@ export const AGENT_STATES: ReadonlySet<AgentStatus["state"]> = new Set([
   "not_started",
   "starting",
   "running",
-  "paused",
   "stopped",
   "restarting",
   "error",
@@ -207,6 +208,7 @@ export interface AppState {
   tab: Tab;
   uiShellMode: UiShellMode;
   uiLanguage: UiLanguage;
+  uiTheme: UiTheme;
   connected: boolean;
   agentStatus: AgentStatus | null;
   onboardingComplete: boolean;
@@ -253,6 +255,7 @@ export interface AppState {
   chatAvatarSpeaking: boolean;
   conversations: Conversation[];
   activeConversationId: string | null;
+  companionMessageCutoffTs: number;
   conversationMessages: ConversationMessage[];
   autonomousEvents: StreamEventEnvelope[];
   autonomousLatestEventId: string | null;
@@ -510,11 +513,12 @@ export interface AppActions {
   setTab: (tab: Tab) => void;
   setUiShellMode: (mode: UiShellMode) => void;
   setUiLanguage: (language: UiLanguage) => void;
+  setUiTheme: (theme: UiTheme) => void;
 
   // Lifecycle
   handleStart: () => Promise<void>;
   handleStop: () => Promise<void>;
-  handlePauseResume: () => Promise<void>;
+
   handleRestart: () => Promise<void>;
   handleReset: () => Promise<void>;
   retryStartup: () => void;

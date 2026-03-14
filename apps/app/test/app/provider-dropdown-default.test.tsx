@@ -25,18 +25,22 @@ vi.mock("@milady/app-core/api", () => ({
   },
 }));
 
-vi.mock("../../src/components/SubscriptionStatus", () => ({
-  SubscriptionStatus: () => null,
-}));
-vi.mock("../../src/components/ApiKeyConfig", () => ({
-  ApiKeyConfig: () => null,
-}));
-vi.mock("../../src/components/config-renderer", () => ({
+vi.mock("@milady/app-core/components", async () => {
+  const actual = await vi.importActual<
+    typeof import("@milady/app-core/components")
+  >("@milady/app-core/components");
+  return {
+    ...actual,
+    ApiKeyConfig: () => null,
+    SubscriptionStatus: () => null,
+  };
+});
+vi.mock("@milady/app-core/config", () => ({
   ConfigRenderer: () => null,
   defaultRegistry: {},
 }));
 
-import { ProviderSwitcher } from "../../src/components/ProviderSwitcher";
+import { ProviderSwitcher } from "@milady/app-core/components";
 
 // ---------------------------------------------------------------------------
 // Helpers

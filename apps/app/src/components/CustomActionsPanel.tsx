@@ -1,8 +1,8 @@
 import { type CustomActionDef, client } from "@milady/app-core/api";
+import { useApp } from "@milady/app-core/state";
+import { confirmDesktopAction } from "@milady/app-core/utils";
 import { Button, Input } from "@milady/ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useApp } from "../AppContext";
-import { confirmDesktopAction } from "../utils/desktop-dialogs";
 
 interface CustomActionsPanelProps {
   open: boolean;
@@ -261,7 +261,7 @@ export function CustomActionsPanel({
                         variant="ghost"
                         size="sm"
                         onClick={() => handleEdit(action)}
-                        className="h-6 px-2 text-xs text-accent hover:text-accent/80 hover:bg-accent/10"
+                        className="h-6 px-2 text-xs text-txt hover:text-txt/80 hover:bg-accent/10"
                         title={t("customactionspanel.EditAction")}
                       >
                         {t("customactionspanel.Edit")}

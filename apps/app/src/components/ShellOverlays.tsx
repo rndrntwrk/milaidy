@@ -6,11 +6,13 @@
  * in both the companion-shell and native-shell branches of App.tsx.
  */
 
-import { BugReportModal } from "./BugReportModal";
-import { CommandPalette } from "./CommandPalette";
-import { EmotePicker } from "./EmotePicker";
-import { RestartBanner } from "./RestartBanner";
-import { ShortcutsOverlay } from "./ShortcutsOverlay";
+import {
+  BugReportModal,
+  CommandPalette,
+  EmotePicker,
+  RestartBanner,
+  ShortcutsOverlay,
+} from "@milady/app-core/components";
 
 export interface ActionNotice {
   text: string;

@@ -7,9 +7,9 @@
  *   3. Stream source selector (stream-tab, game, custom-url)
  */
 
+import { useApp } from "@milady/app-core/state";
 import { Button, Checkbox, Input, Switch } from "@milady/ui";
 import { useState } from "react";
-import { useApp } from "../../AppContext";
 import type { StreamSourceType } from "./helpers";
 import { isSupportedStreamUrl, STREAM_SOURCE_LABELS } from "./helpers";
 import { getAllWidgets } from "./overlays/registry";
@@ -251,7 +251,7 @@ export function StreamSettings({
       onClick={() => setSection(id)}
       className={`px-3 py-1.5 text-[12px] font-medium rounded-lg transition-colors h-auto ${
         section === id
-          ? "bg-accent/20 text-accent hover:bg-accent/30"
+          ? "bg-accent/20 text-txt hover:bg-accent/30"
           : "text-muted hover:text-txt hover:bg-bg-muted"
       }`}
     >
@@ -335,12 +335,12 @@ export function StreamSettings({
                           }`}
                         />
                         <span
-                          className={`text-[13px] font-medium ${active ? "text-accent" : "text-txt"}`}
+                          className={`text-[13px] font-medium ${active ? "text-txt" : "text-txt"}`}
                         >
                           {d.name}
                         </span>
                         {active && (
-                          <span className="ml-auto text-[10px] text-accent font-semibold uppercase tracking-wide">
+                          <span className="ml-auto text-[10px] text-txt font-semibold uppercase tracking-wide">
                             {t("streamsettings.Active")}
                           </span>
                         )}
@@ -435,7 +435,7 @@ export function StreamSettings({
                         />
                         <div>
                           <div
-                            className={`text-[13px] font-medium ${active && st !== "custom-url" ? "text-accent" : "text-txt"}`}
+                            className={`text-[13px] font-medium ${active && st !== "custom-url" ? "text-txt" : "text-txt"}`}
                           >
                             {STREAM_SOURCE_LABELS[st]}
                           </div>
@@ -480,7 +480,7 @@ export function StreamSettings({
                                 onSourceChange("custom-url", trimmedCustomUrl);
                               }
                             }}
-                            className="px-2 py-1 h-auto bg-accent/20 text-accent text-[11px] font-semibold hover:bg-accent/30 transition-colors"
+                            className="px-2 py-1 h-auto bg-accent/20 text-txt text-[11px] font-semibold hover:bg-accent/30 transition-colors"
                           >
                             {t("streamsettings.Use")}
                           </Button>

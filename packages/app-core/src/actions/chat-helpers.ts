@@ -38,10 +38,7 @@ export function shouldApplyFinalStreamText(
 /**
  * Format a search result section with a label and bullet items.
  */
-export function formatSearchBullet(
-  label: string,
-  items: string[],
-): string {
+export function formatSearchBullet(label: string, items: string[]): string {
   if (items.length === 0) return `**${label}**: (none)`;
   return `**${label}**:\n${items.map((item) => `• ${item}`).join("\n")}`;
 }

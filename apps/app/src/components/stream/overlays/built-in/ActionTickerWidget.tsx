@@ -3,8 +3,8 @@
  * Follows the ChatTicker pattern.
  */
 
+import { useApp } from "@milady/app-core/state";
 import { useMemo } from "react";
-import { useApp } from "../../../../AppContext";
 import { getEventText } from "../../helpers";
 import { registerWidget } from "../registry";
 import type { WidgetDefinition, WidgetRenderProps } from "../types";
@@ -31,7 +31,7 @@ function ActionTicker({ instance, events }: WidgetRenderProps) {
         </span>
         {items.map((item) => (
           <span key={item.id} className="shrink-0">
-            <span className="text-accent/70">[{item.stream}]</span>{" "}
+            <span className="text-txt/70">[{item.stream}]</span>{" "}
             <span className="text-txt/80">{item.text.slice(0, 60)}</span>
           </span>
         ))}
