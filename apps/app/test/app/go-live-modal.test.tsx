@@ -407,6 +407,44 @@ describe("GoLiveModal", () => {
     expect(app.closeGoLiveModal).toHaveBeenCalledTimes(1);
   });
 
+  it("renders a four-step progress header and five self-contained launch mode cards", async () => {
+    mockBuildStream555StatusSummary.mockImplementation(() => makeSummary());
+    mockUseApp.mockReturnValue(makeAppContext());
+
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(GoLiveModal));
+      await Promise.resolve();
+    });
+
+    await clickButton(findButtonByText(tree.root, "Next"));
+
+    expect(
+      tree.root.findAll((node) => node.props["data-go-live-step"]).length,
+    ).toBe(4);
+    expect(
+      tree.root.findAll((node) => node.props["data-go-live-mode-card"]).length,
+    ).toBe(5);
+    expect(
+      tree.root.findAll((node) =>
+        collectNodeText(node.children).includes("Alice stays camera-full"),
+      ),
+    ).toHaveLength(0);
+
+    const playGamesCard = tree.root.find(
+      (node) => node.props["data-go-live-mode-card"] === "play-games",
+    );
+    expect(playGamesCard.props["data-selected"]).toBe("false");
+
+    await clickButton(playGamesCard);
+
+    const selectedPlayGamesCard = tree.root.find(
+      (node) => node.props["data-go-live-mode-card"] === "play-games",
+    );
+    expect(selectedPlayGamesCard.props["data-selected"]).toBe("true");
+    expectText(tree.root, "Gameplay routed to the hero frame");
+  });
+
   it("uses temporary channel subsets without mutating saved stream plugin config", async () => {
     const app = makeAppContext();
     mockBuildStream555StatusSummary.mockImplementation(() =>

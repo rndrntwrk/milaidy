@@ -379,16 +379,11 @@ describe("AppContext go-live launch contract", () => {
     });
   });
 
-  it("returns partial for camera when segment bootstrap fails", async () => {
+  it("returns success for camera with a single modern go-live step", async () => {
     const { api, tree } = await renderApp([makeStreamPlugin(readyTwitchParams())]);
     mockClient.executeAutonomyPlan.mockResolvedValueOnce(
       planResponse(
-        planStep("STREAM555_GO_LIVE", true, "go live"),
-        planStep(
-          "STREAM555_GO_LIVE_SEGMENTS",
-          false,
-          "segment bootstrap exploded",
-        ),
+        planStep("STREAM555_GO_LIVE", true, "go live connected"),
       ),
     );
 
@@ -401,16 +396,16 @@ describe("AppContext go-live launch contract", () => {
       });
     });
 
-    expect(result.state).toBe("partial");
-    expect(result.followUp).toMatchObject({
-      target: "action-log",
-      label: "Complete segment bootstrap",
+    expect(result).toMatchObject({
+      state: "success",
+      tone: "success",
+      message: "Camera is live and connected.",
     });
-    expect(result.message).toContain("segment bootstrap failed");
     expect(mockClient.executeAutonomyPlan).toHaveBeenCalledTimes(1);
-    expect(
-      mockClient.executeAutonomyPlan.mock.calls[0]?.[0]?.plan?.steps?.[0],
-    ).toMatchObject({
+    expect(mockClient.executeAutonomyPlan.mock.calls[0]?.[0]?.plan?.steps).toHaveLength(
+      1,
+    );
+    expect(mockClient.executeAutonomyPlan.mock.calls[0]?.[0]?.plan?.steps?.[0]).toMatchObject({
       toolName: "STREAM555_GO_LIVE",
       params: {
         inputType: "avatar",
@@ -484,23 +479,29 @@ describe("AppContext go-live launch contract", () => {
     });
   });
 
-  it("returns partial for reaction when orchestration follow-up is needed", async () => {
+  it("returns blocked for reaction when segment mode is unavailable and cancels the live start", async () => {
     const { api, tree } = await renderApp([makeStreamPlugin(readyTwitchParams())]);
-    mockClient.executeAutonomyPlan.mockResolvedValueOnce(
-      planResponse(
-        planStep("STREAM555_GO_LIVE", true, "reaction live"),
-        planStep(
-          "STREAM555_GO_LIVE_SEGMENTS",
-          false,
-          "bootstrap stalled",
+    mockClient.executeAutonomyPlan
+      .mockResolvedValueOnce(
+        planResponse(
+          planStep("STREAM555_GO_LIVE", true, "reaction live"),
+          planStep(
+            "STREAM555_GO_LIVE_SEGMENTS",
+            false,
+            "Segment mode is disabled",
+          ),
+          planStep(
+            "STREAM555_SEGMENT_OVERRIDE",
+            false,
+            "override skipped",
+          ),
         ),
-        planStep(
-          "STREAM555_SEGMENT_OVERRIDE",
-          false,
-          "override rejected",
+      )
+      .mockResolvedValueOnce(
+        planResponse(
+          planStep("STREAM555_END_LIVE", true, "live cancelled"),
         ),
-      ),
-    );
+      );
 
     let result!: GoLiveLaunchResult;
     await act(async () => {
@@ -511,12 +512,14 @@ describe("AppContext go-live launch contract", () => {
       });
     });
 
-    expect(result.state).toBe("partial");
-    expect(result.followUp?.label).toBe("Complete reaction orchestration");
-    expect(result.message).toContain("follow-up is required");
-    expect(result.message).toContain("segment bootstrap failed");
-    expect(result.message).toContain("segment override failed");
-    expect(mockClient.executeAutonomyPlan).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      state: "blocked",
+      tone: "error",
+    });
+    expect(result.message).toContain("requires segment orchestration");
+    expect(result.message).toContain("Segment mode is disabled");
+    expect(result.message).toContain("Live start was cancelled");
+    expect(mockClient.executeAutonomyPlan).toHaveBeenCalledTimes(2);
     expect(
       mockClient.executeAutonomyPlan.mock.calls[0]?.[0]?.plan?.steps?.[0],
     ).toMatchObject({
@@ -526,6 +529,11 @@ describe("AppContext go-live launch contract", () => {
         layoutMode: "camera-full",
         destinationPlatforms: "twitch",
       },
+    });
+    expect(
+      mockClient.executeAutonomyPlan.mock.calls[1]?.[0]?.plan?.steps?.[0],
+    ).toMatchObject({
+      toolName: "STREAM555_END_LIVE",
     });
 
     await act(async () => {
@@ -647,25 +655,16 @@ describe("AppContext go-live launch contract", () => {
     });
   });
 
-  it("returns partial for camera when legacy fallback saves the launch", async () => {
+  it("does not run legacy fallback for camera when stream555 go-live fails", async () => {
     const { api, tree } = await renderApp([
       makeStreamPlugin(readyTwitchParams()),
       makeLegacyStreamPlugin(),
     ]);
-    mockClient.executeAutonomyPlan
-      .mockResolvedValueOnce(
-        planResponse(
-          planStep("STREAM555_GO_LIVE", false, "stream555 primary failed"),
-          planStep("STREAM555_GO_LIVE_SEGMENTS", false, "segments skipped"),
-        ),
-      )
-      .mockResolvedValueOnce(
-        planResponse(
-          planStep("STREAM_STATUS", true, "status", { state: "idle" }),
-          planStep("STREAM_CONTROL", true, "started"),
-          planStep("STREAM_STATUS", true, "status", { state: "live" }),
-        ),
-      );
+    mockClient.executeAutonomyPlan.mockResolvedValueOnce(
+      planResponse(
+        planStep("STREAM555_GO_LIVE", false, "stream555 primary failed"),
+      ),
+    );
 
     let result!: GoLiveLaunchResult;
     await act(async () => {
@@ -676,9 +675,20 @@ describe("AppContext go-live launch contract", () => {
       });
     });
 
-    expect(result.state).toBe("partial");
-    expect(result.followUp?.label).toBe("Review legacy fallback");
-    expect(result.message).toContain("legacy fallback");
+    expect(result).toMatchObject({
+      state: "failed",
+      tone: "error",
+    });
+    expect(result.message).toContain("stream555 primary failed");
+    expect(mockClient.executeAutonomyPlan).toHaveBeenCalledTimes(1);
+    expect(mockClient.executeAutonomyPlan.mock.calls[0]?.[0]?.plan?.id).toBe(
+      "go-live-modal-camera",
+    );
+    expect(
+      mockClient.executeAutonomyPlan.mock.calls[0]?.[0]?.plan?.steps?.map(
+        (step: { toolName: string }) => step.toolName,
+      ),
+    ).toEqual(["STREAM555_GO_LIVE"]);
 
     await act(async () => {
       tree.unmount();

@@ -258,6 +258,15 @@ function isActionRegistrationFailure(message: string): boolean {
   );
 }
 
+function isSegmentModeUnavailableFailure(message: string): boolean {
+  const normalized = message.trim().toLowerCase();
+  return (
+    normalized.includes("segment mode is disabled") ||
+    normalized.includes("segment mode unavailable") ||
+    normalized.includes("segments are disabled")
+  );
+}
+
 export const THEMES: ReadonlyArray<{
   id: ThemeName;
   label: string;
@@ -3627,6 +3636,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         return launchResult;
       };
+      const cancelLiveAfterFailedLaunch = async (label: string) => {
+        try {
+          const cleanupPlan = await executePlanWithRetry(
+            {
+              plan: {
+                id: `${label}-cleanup`,
+                steps: [
+                  {
+                    id: "end-live",
+                    toolName: "STREAM555_END_LIVE",
+                    params: {},
+                  },
+                ],
+              },
+              request: { source: "user", sourceTrust: 1 },
+              options: { stopOnFailure: false },
+            },
+            { label: "Guided launch cleanup" },
+          );
+          return didToolActionSucceed(cleanupPlan, "STREAM555_END_LIVE");
+        } catch {
+          return false;
+        }
+      };
 
       dismissGoLiveInlineNotice();
 
@@ -3668,145 +3701,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       try {
         if (config.launchMode === "camera") {
-          let launchResult: GoLiveLaunchResult | null = null;
-          let stream555FailureReason: string | null = null;
+          if (!stream555ControlAvailable) {
+            return blocked(
+              "Camera launch requires the 555 Stream control plugin.",
+            );
+          }
 
-          if (stream555ControlAvailable) {
-            try {
-              const goLivePlan = await executePlanWithRetry(
-                {
-                  plan: {
-                    id: "go-live-modal-camera",
-                    steps: [
-                      {
-                        id: "go-live",
-                        toolName: "STREAM555_GO_LIVE",
-                        params: {
-                          ...avatarDestinationParams,
-                          layoutMode: config.layoutMode,
-                        },
-                      },
-                      {
-                        id: "segment-bootstrap",
-                        toolName: "STREAM555_GO_LIVE_SEGMENTS",
-                        params: { segmentIntent: "balanced" },
-                      },
-                    ],
+          const goLivePlan = await executePlanWithRetry(
+            {
+              plan: {
+                id: "go-live-modal-camera",
+                steps: [
+                  {
+                    id: "go-live",
+                    toolName: "STREAM555_GO_LIVE",
+                    params: {
+                      ...avatarDestinationParams,
+                      layoutMode: config.layoutMode,
+                    },
                   },
-                  request: { source: "user", sourceTrust: 1 },
-                  options: { stopOnFailure: false },
-                },
-                { label: "Guided go-live" },
-              );
+                ],
+              },
+              request: { source: "user", sourceTrust: 1 },
+              options: { stopOnFailure: false },
+            },
+            { label: "Guided go-live" },
+          );
 
-              const didGoLiveSucceed = didToolActionSucceed(
+          if (!didToolActionSucceed(goLivePlan, "STREAM555_GO_LIVE")) {
+            return failed(
+              `Camera launch failed: ${getToolActionFailureMessage(
                 goLivePlan,
                 "STREAM555_GO_LIVE",
-              );
-              const didSegmentBootstrapSucceed = didToolActionSucceed(
-                goLivePlan,
-                "STREAM555_GO_LIVE_SEGMENTS",
-              );
-
-              if (didGoLiveSucceed) {
-                setLiveSecondarySources([]);
-                setLiveBroadcastState("live");
-                if (didSegmentBootstrapSucceed) {
-                  launchResult = succeeded(
-                    "Go live executed via 555 Stream with segment orchestration.",
-                  );
-                } else {
-                  const bootstrapFailureReason = getToolActionFailureMessage(
-                    goLivePlan,
-                    "STREAM555_GO_LIVE_SEGMENTS",
-                    "segment bootstrap did not succeed",
-                  );
-                  launchResult = partial(
-                    `Go live started, but segment bootstrap failed: ${bootstrapFailureReason}`,
-                    "Complete segment bootstrap",
-                    `Camera launch is live, but segment bootstrap failed: ${bootstrapFailureReason}`,
-                  );
-                }
-              } else if (!legacyStreamAvailable) {
-                stream555FailureReason = getToolActionFailureMessage(
-                  goLivePlan,
-                  "STREAM555_GO_LIVE",
-                  "stream555 go-live action did not succeed",
-                );
-                return failed(`Go live failed: ${stream555FailureReason}`);
-              } else {
-                stream555FailureReason = getToolActionFailureMessage(
-                  goLivePlan,
-                  "STREAM555_GO_LIVE",
-                  "stream555 go-live action did not succeed",
-                );
-              }
-            } catch (err) {
-              if (!legacyStreamAvailable) {
-                return failed(
-                  `Go live execution failed: ${err instanceof Error ? err.message : "unknown error"}`,
-                );
-              }
-              stream555FailureReason =
-                err instanceof Error ? err.message : "unknown error";
-            }
+                "camera go-live action did not succeed",
+              )}`,
+            );
           }
 
-          if (!launchResult && legacyStreamAvailable) {
-            const legacyPlan = await executePlanWithRetry(
-              {
-                plan: {
-                  id: "go-live-modal-camera-legacy",
-                  steps: [
-                    {
-                      id: "status-before",
-                      toolName: "STREAM_STATUS",
-                      params: { scope: "current" },
-                    },
-                    {
-                      id: "start",
-                      toolName: "STREAM_CONTROL",
-                      params: {
-                        operation: "start",
-                        scene: resolveLiveSceneId(config.layoutMode),
-                      },
-                    },
-                    {
-                      id: "status-after",
-                      toolName: "STREAM_STATUS",
-                      params: { scope: "current" },
-                    },
-                  ],
-                },
-                request: { source: "user", sourceTrust: 1 },
-                options: { stopOnFailure: false },
-              },
-              { label: "Guided go-live fallback" },
-            );
-            const streamState = summarizeStreamState(
-              findLastToolEnvelope(legacyPlan.results, "STREAM_STATUS"),
-            );
-            if (legacyPlan.allSucceeded || streamState.live) {
-              setLiveSecondarySources([]);
-              setLiveBroadcastState("live");
-              launchResult = partial(
-                stream555FailureReason
-                  ? `Go live started via legacy fallback after 555 Stream failed: ${stream555FailureReason}. Stream state: ${streamState.label}.`
-                  : `Go live executed via legacy stream. Stream state: ${streamState.label}.`,
-                "Review legacy fallback",
-                stream555FailureReason
-                  ? `Camera launch is live via legacy fallback after primary failure: ${stream555FailureReason}`
-                  : "Camera launch is live via legacy fallback. Verify destination routing and segment orchestration.",
-              );
-            } else {
-              return failed(
-                "Legacy go-live ran but stream status still needs follow-up.",
-              );
-            }
-          }
+          setLiveSecondarySources([]);
+          setLiveBroadcastState("live");
           return completeLaunch(
             launchLabel,
-            launchResult ?? failed("Launch did not complete."),
+            succeeded("Camera is live and connected."),
           );
         } else if (config.launchMode === "radio") {
           if (!stream555ControlAvailable) {
@@ -3977,41 +3913,57 @@ export function AppProvider({ children }: { children: ReactNode }) {
             "STREAM555_SEGMENT_OVERRIDE",
           );
           if (didGoLiveSucceed) {
-            setLiveSecondarySources([]);
-            setLiveBroadcastState("live");
             launchLabel = "Reaction";
             if (didSegmentBootstrapSucceed && didSegmentOverrideSucceed) {
+              setLiveSecondarySources([]);
+              setLiveBroadcastState("live");
               return completeLaunch(
                 launchLabel,
                 succeeded("Reaction mode is live."),
               );
             }
-            const followUpReasons: string[] = [];
-            if (!didSegmentBootstrapSucceed) {
-              followUpReasons.push(
-                `segment bootstrap failed: ${getToolActionFailureMessage(
+
+            const bootstrapFailureReason = !didSegmentBootstrapSucceed
+              ? getToolActionFailureMessage(
                   plan,
                   "STREAM555_GO_LIVE_SEGMENTS",
                   "reaction segment bootstrap did not succeed",
-                )}`,
-              );
-            }
-            if (!didSegmentOverrideSucceed) {
-              followUpReasons.push(
-                `segment override failed: ${getToolActionFailureMessage(
+                )
+              : null;
+            const overrideFailureReason = !didSegmentOverrideSucceed
+              ? getToolActionFailureMessage(
                   plan,
                   "STREAM555_SEGMENT_OVERRIDE",
                   "reaction override did not succeed",
-                )}`,
+                )
+              : null;
+            const cleanupSucceeded = await cancelLiveAfterFailedLaunch(
+              "go-live-modal-reaction",
+            );
+
+            if (
+              bootstrapFailureReason &&
+              isSegmentModeUnavailableFailure(bootstrapFailureReason)
+            ) {
+              return blocked(
+                cleanupSucceeded
+                  ? `Reaction launch requires segment orchestration, but the runtime reported: ${bootstrapFailureReason}. Live start was cancelled.`
+                  : `Reaction launch requires segment orchestration, but the runtime reported: ${bootstrapFailureReason}. End live may still need operator cleanup.`,
+                "error",
               );
             }
-            return completeLaunch(
-              launchLabel,
-              partial(
-                `Reaction mode is live, but follow-up is required: ${followUpReasons.join("; ")}`,
-                "Complete reaction orchestration",
-                `Reaction launch is live, but ${followUpReasons.join("; ")}`,
-              ),
+
+            const failureReasons: string[] = [];
+            if (!didSegmentBootstrapSucceed) {
+              failureReasons.push(`segment bootstrap failed: ${bootstrapFailureReason}`);
+            }
+            if (!didSegmentOverrideSucceed) {
+              failureReasons.push(`segment override failed: ${overrideFailureReason}`);
+            }
+            return failed(
+              cleanupSucceeded
+                ? `Reaction launch failed: ${failureReasons.join("; ")}. Live start was cancelled.`
+                : `Reaction launch failed: ${failureReasons.join("; ")}. End live may still need operator cleanup.`,
             );
           } else {
             return failed(
@@ -4035,37 +3987,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
             ? catalog.games.find((game) => game.id === selectedGameId)
             : undefined;
 
-          const useCombinedGameGoLive = stream555ControlAvailable;
-          const playPlanResult = useCombinedGameGoLive
-            ? await executeGameGoLivePlan({
-                label: "Guided play games launch",
-                planId: "go-live-modal-play-games",
-                selectedGameId,
-                layoutMode: config.layoutMode,
-              })
-            : {
-                actionName: "FIVE55_GAMES_PLAY",
-                plan: await executePlanWithRetry(
-                  {
-                    plan: {
-                      id: "go-live-modal-play-games",
-                      steps: [
-                        {
-                          id: "play-autonomous",
-                          toolName: "FIVE55_GAMES_PLAY",
-                          params: {
-                            ...(selectedGameId ? { gameId: selectedGameId } : {}),
-                            mode: "spectate",
-                          },
-                        },
-                      ],
-                    },
-                    request: { source: "user", sourceTrust: 1 },
-                    options: { stopOnFailure: true },
-                  },
-                  { label: "Guided play games launch" },
-                ),
-              };
+          const playPlanResult = await executeGameGoLivePlan({
+            label: "Guided play games launch",
+            planId: "go-live-modal-play-games",
+            selectedGameId,
+            layoutMode: config.layoutMode,
+          });
           const { actionName: playActionName, plan: playPlan } = playPlanResult;
           if (!didToolActionSucceed(playPlan, playActionName)) {
             return failed(
@@ -4105,72 +4032,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           } else {
             setTab("apps");
             setAppsSubTab("games");
-          }
-
-          if (useCombinedGameGoLive) {
-            setLiveBroadcastState("live");
-            setLiveSource({
-              id: "active-game",
-              kind: "game",
-              label: resolvedGameTitle,
-              viewerUrl: launch.viewerUrl,
-            });
-            return completeLaunch(
-              launchLabel,
-              succeeded(`Launched ${resolvedGameTitle} live.`),
-            );
-          }
-
-          if (legacyStreamAvailable) {
-            const attachPlan = await executePlanWithRetry(
-              {
-                plan: {
-                  id: "go-live-modal-game-legacy-attach",
-                  steps: [
-                    {
-                      id: "status-before",
-                      toolName: "STREAM_STATUS",
-                      params: { scope: "current" },
-                    },
-                    {
-                      id: "start-game-feed",
-                      toolName: "STREAM_CONTROL",
-                      params: {
-                        operation: "start",
-                        scene: "active-pip",
-                        inputType: "website",
-                        url: launch.viewerUrl,
-                      },
-                    },
-                    {
-                      id: "status-after",
-                      toolName: "STREAM_STATUS",
-                      params: { scope: "current" },
-                    },
-                  ],
-                },
-                request: { source: "user", sourceTrust: 1 },
-                options: { stopOnFailure: false },
-              },
-              { label: "Game legacy attach" },
-            );
-            const finalStatus = summarizeStreamState(
-              findLastToolEnvelope(attachPlan.results, "STREAM_STATUS"),
-            );
-            if (!(attachPlan.allSucceeded || finalStatus.live)) {
-              return completeLaunch(
-                launchLabel,
-                partial(
-                  "Game launched, but legacy stream attach still needs follow-up.",
-                  "Attach game stream",
-                  `Game launched, but legacy stream attach still needs follow-up for ${resolvedGameTitle}.`,
-                ),
-              );
-            }
-          } else {
-            return blocked(
-              "Play Games launch requires a stream plugin to broadcast the selected game.",
-            );
           }
 
           setLiveBroadcastState("live");
@@ -4828,29 +4689,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
           request: { source: "user", sourceTrust: 1 },
           options: { stopOnFailure: false },
         }, { label: "Reaction segment override" });
-        if (didToolActionSucceed(plan, "STREAM555_SEGMENT_OVERRIDE")) {
-          const bootstrapOk = didToolActionSucceed(plan, "STREAM555_GO_LIVE_SEGMENTS");
-          if (bootstrapOk) {
-            pushQuickLayerToast(
-              "Reaction segment override queued with segment orchestration active.",
-              "success",
-              2600,
-            );
-          } else {
-            const bootstrapReason = getToolActionFailureMessage(
-              plan,
-              "STREAM555_GO_LIVE_SEGMENTS",
-              "segment orchestration needs follow-up",
-            );
-            pushActionLogFollowUp(
-              "Reaction",
-              `Reaction segment override queued, but segment orchestration needs follow-up: ${bootstrapReason}`,
-              "warning",
-            );
-          }
+        const bootstrapOk = didToolActionSucceed(plan, "STREAM555_GO_LIVE_SEGMENTS");
+        const overrideOk = didToolActionSucceed(plan, "STREAM555_SEGMENT_OVERRIDE");
+        if (bootstrapOk && overrideOk) {
+          pushQuickLayerToast(
+            "Reaction segment override queued with segment orchestration active.",
+            "success",
+            2600,
+          );
           prompt =
             "Start the next reaction segment now and keep your commentary focused on viewer engagement.";
           shouldSendOperatorMessage = true;
+        } else if (!bootstrapOk) {
+          const bootstrapReason = getToolActionFailureMessage(
+            plan,
+            "STREAM555_GO_LIVE_SEGMENTS",
+            "reaction segment orchestration is unavailable",
+          );
+          pushActionLogFollowUp(
+            "Reaction",
+            isSegmentModeUnavailableFailure(bootstrapReason)
+              ? `Reaction segment orchestration is unavailable: ${bootstrapReason}`
+              : `Reaction segment bootstrap failed: ${bootstrapReason}`,
+          );
         } else {
           const reason = getToolActionFailureMessage(
             plan,

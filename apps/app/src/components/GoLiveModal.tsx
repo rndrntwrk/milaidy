@@ -9,7 +9,6 @@ import {
 import { configRenderModeForTheme } from "./shared/configRenderMode.js";
 import { paramsToSchema } from "./PluginsView.js";
 import { ConfigRenderer, defaultRegistry } from "./config-renderer.js";
-import { SelectablePillGrid } from "./SelectablePillGrid.js";
 import { Stream555ChannelIcon } from "./Stream555ChannelIcon.js";
 import { Badge } from "./ui/Badge.js";
 import { Button } from "./ui/Button.js";
@@ -34,6 +33,13 @@ type GoLiveStep =
   | "channel-selection"
   | "segment-selection"
   | "review-and-launch";
+
+const GO_LIVE_STEP_SEQUENCE: Array<{ key: GoLiveStep; label: string }> = [
+  { key: "setup-required", label: "Setup" },
+  { key: "channel-selection", label: "Channels" },
+  { key: "segment-selection", label: "Mode" },
+  { key: "review-and-launch", label: "Review" },
+];
 
 type InlineNotice = {
   state?: "success" | "partial" | "blocked" | "failed";
@@ -85,6 +91,44 @@ function labelForLaunchMode(mode: GoLiveLaunchMode) {
       return "Reaction";
     default:
       return "Camera";
+  }
+}
+
+function goLiveStepIndex(step: GoLiveStep) {
+  return GO_LIVE_STEP_SEQUENCE.findIndex((entry) => entry.key === step);
+}
+
+function modeAvailabilityLabel(mode: GoLiveLaunchMode) {
+  switch (mode) {
+    case "camera":
+      return "Camera full";
+    case "radio":
+      return "Audio-first";
+    case "screen-share":
+      return "Alice in hold";
+    case "play-games":
+      return "Game hero";
+    case "reaction":
+      return "Segments required";
+    default:
+      return "Ready";
+  }
+}
+
+function modeSupportLabel(mode: GoLiveLaunchMode) {
+  switch (mode) {
+    case "camera":
+      return "Fastest path to verified live";
+    case "radio":
+      return "Lo-fi session with radio control";
+    case "screen-share":
+      return "Operator surface to program feed";
+    case "play-games":
+      return "Gameplay routed to the hero frame";
+    case "reaction":
+      return "Requires segment orchestration";
+    default:
+      return "Ready";
   }
 }
 
@@ -456,26 +500,36 @@ export function GoLiveModal() {
         value: "camera" as const,
         label: "Camera",
         description: "Alice on stage with the cleanest live launch.",
+        availability: modeAvailabilityLabel("camera"),
+        support: modeSupportLabel("camera"),
       },
       {
         value: "radio" as const,
         label: "Lo-fi Radio",
         description: "Live audio-first session with ambient programming mood.",
+        availability: modeAvailabilityLabel("radio"),
+        support: modeSupportLabel("radio"),
       },
       {
         value: "screen-share" as const,
         label: "Screen Share",
         description: "Broadcast the operator surface with Alice in hold.",
+        availability: modeAvailabilityLabel("screen-share"),
+        support: modeSupportLabel("screen-share"),
       },
       {
         value: "play-games" as const,
         label: "Play Games",
         description: "Launch gameplay and route it to the stream with Alice in hold.",
+        availability: modeAvailabilityLabel("play-games"),
+        support: modeSupportLabel("play-games"),
       },
       {
         value: "reaction" as const,
         label: "Reaction",
         description: "Start live with reaction orchestration ready.",
+        availability: modeAvailabilityLabel("reaction"),
+        support: modeSupportLabel("reaction"),
       },
     ],
     [],
@@ -505,6 +559,7 @@ export function GoLiveModal() {
     ],
     [channelOptions, launchMode, selectedChannels],
   );
+  const activeStepIndex = goLiveStepIndex(step);
 
   const renderSetupState = () => (
     <div className="space-y-4">
@@ -696,32 +751,59 @@ export function GoLiveModal() {
 
   const renderSegmentState = () => (
     <div className="space-y-4">
-      <SelectablePillGrid
-        value={launchMode}
-        onChange={setLaunchMode}
-        options={modeOptions}
-      />
-      <Card className="rounded-[24px] border-white/10 bg-white/[0.04] p-4">
-        <div className="flex items-center gap-3 text-white">
-          {layoutModeForLaunchMode(launchMode) === "camera-hold" ? (
-            <VideoIcon className="h-5 w-5 text-accent" />
-          ) : (
-            <CameraIcon className="h-5 w-5 text-accent" />
-          )}
-          <div>
-            <div className="text-sm font-medium">
-              {layoutModeForLaunchMode(launchMode) === "camera-hold"
-                ? "Alice camera moves to hold"
-                : "Alice stays camera-full"}
-            </div>
-            <div className="mt-1 text-sm text-white/56">
-              {layoutModeForLaunchMode(launchMode) === "camera-hold"
-                ? "Game and screen launches keep the hero feed large and move Alice into hold."
-                : "Camera-first launches keep Alice as the primary hero frame."}
-            </div>
-          </div>
-        </div>
-      </Card>
+      <div className="go-live-modal__mode-grid" data-go-live-mode-grid>
+        {modeOptions.map((option) => {
+          const active = option.value === launchMode;
+          const icon =
+            option.value === "camera" ? (
+              <CameraIcon className="h-5 w-5" />
+            ) : option.value === "radio" ? (
+              <ConnectionIcon className="h-5 w-5" />
+            ) : option.value === "play-games" ? (
+              <PlayIcon className="h-5 w-5" />
+            ) : option.value === "reaction" ? (
+              <SparkIcon className="h-5 w-5" />
+            ) : (
+              <VideoIcon className="h-5 w-5" />
+            );
+
+          return (
+            <button
+              key={option.value}
+              type="button"
+              className={`go-live-modal__mode-card${active ? " go-live-modal__mode-card--active" : ""}`}
+              onClick={() => setLaunchMode(option.value)}
+              aria-pressed={active}
+              data-go-live-mode-card={option.value}
+              data-selected={active ? "true" : "false"}
+            >
+              <span className="go-live-modal__mode-card-head">
+                <span className="go-live-modal__mode-card-icon">{icon}</span>
+                <span className="go-live-modal__mode-card-copy">
+                  <span className="go-live-modal__mode-card-title">
+                    {option.label}
+                  </span>
+                  <span className="go-live-modal__mode-card-support">
+                    {option.support}
+                  </span>
+                </span>
+                {active ? (
+                  <span className="go-live-modal__mode-card-check" aria-hidden="true">
+                    <CheckIcon className="h-4 w-4" />
+                  </span>
+                ) : null}
+              </span>
+              <span className="go-live-modal__mode-card-description">
+                {option.description}
+              </span>
+              <span className="go-live-modal__mode-card-meta">
+                {option.availability}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {activeInlineNotice ? <InlineNoticeCard notice={activeInlineNotice} /> : null}
     </div>
   );
 
@@ -754,21 +836,19 @@ export function GoLiveModal() {
     <Dialog
       open={goLiveModalOpen}
       onClose={closeGoLiveModal}
-      className="max-w-5xl overflow-hidden bg-[#060a11]/96"
+      className="go-live-modal max-w-5xl overflow-hidden bg-[#060a11]/96"
       ariaLabel="Go live"
     >
-      <div className="milady-drawer-scope max-h-[88dvh] overflow-hidden rounded-[28px]">
-        <div className="sticky top-0 z-10 border-b border-white/8 bg-[linear-gradient(180deg,rgba(10,14,22,0.96),rgba(10,14,22,0.88))] px-6 py-5 backdrop-blur-2xl">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.22em] text-white/42">
+      <div className="go-live-modal__shell milady-drawer-scope">
+        <div className="go-live-modal__header">
+          <div className="go-live-modal__header-top">
+            <div className="go-live-modal__header-copy">
+              <div className="go-live-modal__eyebrow">
                 <BroadcastIcon className="h-4 w-4" />
                 Programming Stream
               </div>
-              <div className="mt-2 text-[28px] font-semibold leading-none text-white">
-                Go Live
-              </div>
-              <div className="mt-2 max-w-2xl text-sm leading-relaxed text-white/62">
+              <div className="go-live-modal__title">Go Live</div>
+              <div className="go-live-modal__description">
                 Authenticate, choose channels, pick the launch format, and send Alice live without leaving the stage.
               </div>
             </div>
@@ -776,22 +856,43 @@ export function GoLiveModal() {
               type="button"
               variant="ghost"
               size="icon"
-              className="rounded-full"
+              className="go-live-modal__close"
               onClick={closeGoLiveModal}
               aria-label="Close go live modal"
             >
               <CloseIcon className="h-4 w-4" />
             </Button>
           </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Badge variant={step === "setup-required" ? "accent" : "outline"}>Setup</Badge>
-            <Badge variant={step === "channel-selection" ? "accent" : "outline"}>Channels</Badge>
-            <Badge variant={step === "segment-selection" ? "accent" : "outline"}>Mode</Badge>
-            <Badge variant={step === "review-and-launch" ? "accent" : "outline"}>Review</Badge>
-          </div>
+          <ol className="go-live-modal__stepper" data-go-live-stepper>
+            {GO_LIVE_STEP_SEQUENCE.map((entry, index) => {
+              const isActive = index === activeStepIndex;
+              const isComplete = activeStepIndex > index;
+              return (
+                <li
+                  key={entry.key}
+                  className={`go-live-modal__step${
+                    isActive
+                      ? " go-live-modal__step--active"
+                      : isComplete
+                        ? " go-live-modal__step--complete"
+                        : ""
+                  }`}
+                  data-go-live-step={entry.key}
+                  data-step-state={
+                    isActive ? "active" : isComplete ? "complete" : "inactive"
+                  }
+                >
+                  <span className="go-live-modal__step-index">
+                    {isComplete ? <CheckIcon className="h-3.5 w-3.5" /> : index + 1}
+                  </span>
+                  <span className="go-live-modal__step-label">{entry.label}</span>
+                </li>
+              );
+            })}
+          </ol>
         </div>
 
-        <ScrollArea className="max-h-[calc(88dvh-11rem)] px-6 py-6">
+        <ScrollArea className="go-live-modal__body">
           {step === "setup-required"
             ? renderSetupState()
             : step === "channel-selection"
@@ -801,8 +902,8 @@ export function GoLiveModal() {
                 : renderReviewState()}
         </ScrollArea>
 
-        <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 border-t border-white/8 bg-[linear-gradient(180deg,rgba(10,14,22,0.8),rgba(10,14,22,0.96))] px-6 py-4 backdrop-blur-2xl">
-          <div className="flex items-center gap-2 text-sm text-white/52">
+        <div className="go-live-modal__footer">
+          <div className="go-live-modal__footer-status">
             {streamPlugin ? (
               <>
                 <Badge variant={setupRequired ? "warning" : "success"}>
@@ -814,7 +915,7 @@ export function GoLiveModal() {
               <Badge variant="danger">555 Stream unavailable</Badge>
             )}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="go-live-modal__footer-actions">
             {step !== "setup-required" ? (
               <Button
                 type="button"
