@@ -2540,7 +2540,11 @@ export class MiladyClient {
   private async rawRequest(
     path: string,
     init?: RequestInit,
-    options?: { allowNonOk?: boolean; timeoutMs?: number },
+    options?: {
+      allowNonOk?: boolean;
+      timeoutMs?: number;
+      useAuthToken?: boolean;
+    },
   ): Promise<Response> {
     if (!this.apiAvailable) {
       throw new ApiError({
@@ -2604,9 +2608,9 @@ export class MiladyClient {
       }
     };
 
-    const token = this.apiToken;
+    const token = options?.useAuthToken === false ? null : this.apiToken;
     let res = await makeRequest(token);
-    if (res.status === 401 && !token) {
+    if (res.status === 401 && !token && options?.useAuthToken !== false) {
       const retryToken = this.apiToken;
       if (retryToken) {
         res = await makeRequest(retryToken);
@@ -2672,7 +2676,7 @@ export class MiladyClient {
   private async fetch<T>(
     path: string,
     init?: RequestInit,
-    options?: { timeoutMs?: number },
+    options?: { timeoutMs?: number; useAuthToken?: boolean },
   ): Promise<T> {
     const res = await this.rawRequest(
       path,
@@ -2756,7 +2760,9 @@ export class MiladyClient {
     expiresAt: number | null;
   }> {
     try {
-      return await this.fetch("/api/auth/status");
+      return await this.fetch("/api/auth/status", undefined, {
+        useAuthToken: false,
+      });
     } catch (err: unknown) {
       const status = (err as Error & { status?: number })?.status;
       if (status === 401) {
@@ -2776,6 +2782,8 @@ export class MiladyClient {
     const res = await this.fetch<{ token: string }>("/api/auth/pair", {
       method: "POST",
       body: JSON.stringify({ code }),
+    }, {
+      useAuthToken: false,
     });
     return res;
   }
