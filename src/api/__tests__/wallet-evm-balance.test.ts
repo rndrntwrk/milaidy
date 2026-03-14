@@ -294,6 +294,26 @@ describe("fetchEvmBalances — Direct RPC fallback", () => {
     expect(base).toBeDefined();
     expect(base?.chain).toBe("Base");
   });
+
+  it("uses cloud-managed fallback RPCs when explicit RPC URLs are absent", async () => {
+    mockFetch.mockReturnValue(
+      jsonResponse({
+        jsonrpc: "2.0",
+        id: 1,
+        result: "0x0",
+      }),
+    );
+
+    const results = await fetchEvmBalances("0xWallet", {
+      alchemyKey: null,
+      ankrKey: null,
+      cloudManagedAccess: true,
+    });
+
+    expect(results.map((r) => r.chain)).toEqual(
+      expect.arrayContaining(["Ethereum", "Base", "BSC", "Avalanche"]),
+    );
+  });
 });
 
 // ── fetchEvmBalances — multi-chain aggregation ───────────────────────────
