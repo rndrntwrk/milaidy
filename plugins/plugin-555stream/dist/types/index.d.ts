@@ -32,10 +32,21 @@ export interface ActionExample {
         action?: string;
     };
 }
+export interface ActionParameterSchema {
+    type?: string;
+    enum?: unknown[];
+}
+export interface ActionParameter {
+    name: string;
+    description?: string;
+    required?: boolean;
+    schema?: ActionParameterSchema;
+}
 export interface Action {
     name: string;
     description: string;
     similes?: string[];
+    parameters?: ActionParameter[];
     validate: (runtime: IAgentRuntime, message: Memory, state?: State) => Promise<boolean>;
     handler: (runtime: IAgentRuntime, message: Memory, state?: State, options?: Record<string, any>, callback?: HandlerCallback) => Promise<boolean>;
     examples?: ActionExample[][];
@@ -304,6 +315,17 @@ export interface StreamStartResult {
     cfSessionId?: string;
     status: string;
     inputType: string;
+    scene?: string;
+    cloudflareConnected?: boolean;
+    cloudflareState?: string;
+    destinationSync?: {
+        attempted: number;
+        applied: Array<Record<string, unknown>>;
+        skipped: Array<Record<string, unknown>>;
+        failed: Array<Record<string, unknown>>;
+    };
+    platformStatuses?: Record<string, unknown>;
+    streamStatus?: Record<string, unknown>;
     platforms?: string[];
     ingest?: {
         whip?: {
@@ -331,6 +353,10 @@ export interface StreamStatus {
     active: boolean;
     jobId?: string;
     cfSessionId?: string;
+    cloudflare?: {
+        isConnected?: boolean;
+        state?: string;
+    };
     serverFallbackActive: boolean;
     startTime?: number;
     platforms: Record<string, {

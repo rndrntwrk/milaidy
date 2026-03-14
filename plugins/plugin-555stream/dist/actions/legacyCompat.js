@@ -46,6 +46,9 @@ const DESTINATION_MAPPINGS = [
     },
 ];
 const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+const STREAM555_DEST_SYNC_ON_GO_LIVE_ENV = 'STREAM555_DEST_SYNC_ON_GO_LIVE';
+const DEFAULT_CF_CONNECT_TIMEOUT_MS = 45_000;
+const DEFAULT_CF_CONNECT_POLL_MS = 5_000;
 const BASE58_ALPHABET_MAP = new Map(BASE58_ALPHABET.split('').map((char, index) => [char, index]));
 function getService(runtime) {
     return runtime.getService('stream555') ?? null;
@@ -320,6 +323,131 @@ async function requestJson(method, baseUrl, endpoint, headers, body) {
         rawBody,
     };
 }
+function parseCsvList(value) {
+    if (!value)
+        return undefined;
+    const values = value
+        .split(',')
+        .map((entry) => entry.trim().toLowerCase())
+        .filter((entry) => entry.length > 0);
+    if (values.length === 0)
+        return undefined;
+    return [...new Set(values)];
+}
+function resolveSceneForLayoutMode(rawLayoutMode, fallbackScene) {
+    const layoutMode = rawLayoutMode?.trim().toLowerCase();
+    if (layoutMode === 'camera-hold')
+        return 'active-pip';
+    if (layoutMode === 'camera-full')
+        return 'default';
+    return fallbackScene;
+}
+function selectDestinationMappings(requestedPlatforms) {
+    if (!requestedPlatforms || requestedPlatforms.length === 0) {
+        return { mappings: DESTINATION_MAPPINGS, unsupported: [] };
+    }
+    const mappings = [];
+    const unsupported = [];
+    for (const platformId of requestedPlatforms) {
+        const mapping = DESTINATION_MAPPINGS.find((entry) => entry.platformId === platformId);
+        if (mapping) {
+            mappings.push(mapping);
+            continue;
+        }
+        unsupported.push(platformId);
+    }
+    return { mappings, unsupported };
+}
+async function applyConfiguredDestinations(service, sessionId, options, requestedPlatforms) {
+    const { mappings, unsupported } = selectDestinationMappings(requestedPlatforms);
+    const requestedPlatformSet = new Set(requestedPlatforms ?? []);
+    const applied = [];
+    const skipped = [];
+    const failed = unsupported.map((platformId) => ({
+        platformId,
+        error: 'unsupported_platform',
+    }));
+    for (const mapping of mappings) {
+        const enabled = optionBoolean(options, mapping.enabledEnv) ??
+            parseBooleanValue(trimEnv(mapping.enabledEnv)) ??
+            false;
+        const rtmpUrl = optionString(options, mapping.rtmpUrlEnv) ?? trimEnv(mapping.rtmpUrlEnv);
+        const streamKey = optionString(options, mapping.streamKeyEnv) ?? trimEnv(mapping.streamKeyEnv);
+        const hasConfig = Boolean(rtmpUrl?.trim()) || Boolean(streamKey?.trim()) || enabled;
+        if (!hasConfig) {
+            const reason = 'no_configuration';
+            if (requestedPlatformSet.has(mapping.platformId)) {
+                failed.push({ platformId: mapping.platformId, error: reason });
+            }
+            else {
+                skipped.push({ platformId: mapping.platformId, reason });
+            }
+            continue;
+        }
+        try {
+            await service.updatePlatform(mapping.platformId, {
+                ...(rtmpUrl ? { rtmpUrl } : {}),
+                ...(streamKey ? { streamKey } : {}),
+                enabled,
+            }, sessionId);
+            await service.togglePlatform(mapping.platformId, enabled, sessionId);
+            applied.push({
+                platformId: mapping.platformId,
+                enabled,
+                configured: Boolean(rtmpUrl?.trim() || streamKey?.trim()),
+            });
+        }
+        catch (error) {
+            failed.push({
+                platformId: mapping.platformId,
+                error: error.message,
+            });
+        }
+    }
+    return {
+        attempted: mappings.length + unsupported.length,
+        applied,
+        skipped,
+        failed,
+    };
+}
+async function fetchStreamReadinessSnapshot(baseUrl, headers, sessionId) {
+    const response = await requestJson('GET', baseUrl, `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/stream/status`, headers);
+    if (!response.ok) {
+        throw new Error(`stream status check failed (${response.status}): ${getErrorDetail(response)}`);
+    }
+    const cloudflare = getObject(response.data?.cloudflare);
+    const platforms = getObject(response.data?.platforms) ?? {};
+    return {
+        sessionId,
+        active: Boolean(response.data?.active),
+        jobId: getStringField(response.data, 'jobId'),
+        cfSessionId: getStringField(response.data, 'cfSessionId'),
+        cloudflareConnected: Boolean(cloudflare?.isConnected),
+        cloudflareState: getStringField(cloudflare, 'state'),
+        platforms,
+        raw: response.data,
+    };
+}
+async function waitForStreamReadiness(baseUrl, headers, sessionId, timeoutMs = DEFAULT_CF_CONNECT_TIMEOUT_MS, pollMs = DEFAULT_CF_CONNECT_POLL_MS) {
+    const deadline = Date.now() + timeoutMs;
+    let lastSnapshot;
+    while (Date.now() <= deadline) {
+        lastSnapshot = await fetchStreamReadinessSnapshot(baseUrl, headers, sessionId);
+        if (lastSnapshot.active &&
+            lastSnapshot.cfSessionId &&
+            lastSnapshot.cloudflareConnected) {
+            return { ready: true, lastSnapshot };
+        }
+        if (Date.now() >= deadline)
+            break;
+        await new Promise((resolve) => setTimeout(resolve, pollMs));
+    }
+    return { ready: false, lastSnapshot };
+}
+function isAlreadyActiveDetail(detail) {
+    return /already active/i.test(detail);
+}
 function getErrorDetail(result) {
     const fromData = result.data?.error;
     if (typeof fromData === 'string' && fromData.trim())
@@ -333,7 +461,11 @@ function sendCallback(callback, success, text, data) {
         text,
         content: success
             ? { success: true, data: data }
-            : { success: false, error: text },
+            : {
+                success: false,
+                error: text,
+                ...(data !== undefined ? { data } : {}),
+            },
     });
 }
 async function ensureSessionId(service, requestedSessionId) {
@@ -394,10 +526,79 @@ const goLiveAction = {
         try {
             const service = validateService(runtime);
             const sessionId = await ensureSessionId(service, optionString(options, 'sessionId'));
+            const baseUrl = resolveBaseUrl(service, options);
+            const headers = await resolveBearerHeaders(service, options);
             const inputType = optionString(options, 'inputType') || optionString(options, 'type') || 'screen';
             const inputUrl = optionString(options, 'inputUrl') || optionString(options, 'url');
-            const result = await service.startStream({ type: inputType, ...(inputUrl ? { url: inputUrl } : {}) }, undefined, undefined, sessionId);
-            sendCallback(callback, true, `Legacy go-live started for session ${sessionId}.`, result);
+            const scene = resolveSceneForLayoutMode(optionString(options, 'layoutMode'), optionString(options, 'scene') || 'default');
+            const applyDestinations = optionBoolean(options, 'applyDestinations') ??
+                parseBooleanValue(trimEnv(STREAM555_DEST_SYNC_ON_GO_LIVE_ENV)) ??
+                true;
+            const destinationPlatforms = parseCsvList(optionString(options, 'destinationPlatforms'));
+            const destinationSync = applyDestinations
+                ? await applyConfiguredDestinations(service, sessionId, options, destinationPlatforms)
+                : { attempted: 0, applied: [], skipped: [], failed: [] };
+            if (destinationSync.failed.length > 0) {
+                sendCallback(callback, false, `STREAM555_GO_LIVE failed: destination sync failed for ${destinationSync.failed.length} platform(s)`, {
+                    sessionId,
+                    scene,
+                    inputType,
+                    destinationSync,
+                });
+                return false;
+            }
+            const startResponse = await requestJson('POST', baseUrl, `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/stream/start`, headers, {
+                input: {
+                    type: inputType,
+                    ...(inputUrl ? { url: inputUrl } : {}),
+                },
+                options: { scene },
+            });
+            let initialSnapshot;
+            const responseCfSessionId = getStringField(startResponse.data, 'cfSessionId');
+            if (!startResponse.ok) {
+                if (startResponse.status === 409) {
+                    initialSnapshot = await fetchStreamReadinessSnapshot(baseUrl, headers, sessionId);
+                }
+                if (!(startResponse.status === 409 &&
+                    (responseCfSessionId || initialSnapshot?.cfSessionId))) {
+                    throw new Error(`stream/start failed (${startResponse.status}): ${getErrorDetail(startResponse)}`);
+                }
+            }
+            const readiness = await waitForStreamReadiness(baseUrl, headers, sessionId);
+            if (!readiness.ready) {
+                try {
+                    await service.stopStream(sessionId);
+                }
+                catch {
+                    // ignored
+                }
+                sendCallback(callback, false, `STREAM555_GO_LIVE failed: stream start did not reach Cloudflare connected state within ${DEFAULT_CF_CONNECT_TIMEOUT_MS}ms`, {
+                    sessionId,
+                    scene,
+                    inputType,
+                    destinationSync,
+                    streamStatus: readiness.lastSnapshot?.raw ?? initialSnapshot?.raw,
+                });
+                return false;
+            }
+            const result = {
+                ...(startResponse.data ?? {}),
+                sessionId,
+                status: getStringField(startResponse.data, 'status') ??
+                    (startResponse.status === 409 ? 'already-active' : 'started'),
+                inputType,
+                scene,
+                cfSessionId: readiness.lastSnapshot?.cfSessionId ??
+                    responseCfSessionId ??
+                    initialSnapshot?.cfSessionId,
+                cloudflareConnected: readiness.lastSnapshot?.cloudflareConnected ?? false,
+                cloudflareState: readiness.lastSnapshot?.cloudflareState,
+                destinationSync,
+                platformStatuses: readiness.lastSnapshot?.platforms,
+                streamStatus: readiness.lastSnapshot?.raw,
+            };
+            sendCallback(callback, true, `Legacy go-live ready for session ${sessionId}.`, result);
             return true;
         }
         catch (error) {
@@ -406,20 +607,63 @@ const goLiveAction = {
         }
     },
     examples: [],
+    parameters: [
+        { name: 'sessionId', description: 'Optional session id', required: false, schema: { type: 'string' } },
+        { name: 'inputType', description: 'camera|screen|website|avatar|radio|...', required: false, schema: { type: 'string' } },
+        { name: 'inputUrl', description: 'Optional source url for website/rtmp/file', required: false, schema: { type: 'string' } },
+        { name: 'scene', description: 'Initial scene id', required: false, schema: { type: 'string' } },
+        { name: 'layoutMode', description: 'Optional Alice layout mode (camera-full|camera-hold)', required: false, schema: { type: 'string' } },
+        { name: 'applyDestinations', description: 'Apply configured RTMP destinations before go-live (default true)', required: false, schema: { type: 'boolean' } },
+        { name: 'destinationPlatforms', description: 'Comma-separated subset of destinations to apply before go-live', required: false, schema: { type: 'string' } },
+    ],
 };
 const goLiveSegmentsAction = {
     name: 'STREAM555_GO_LIVE_SEGMENTS',
-    description: 'Legacy compatibility alias for segmented go-live. Uses STREAM555_STREAM_START and returns segment-ready status.',
+    description: 'Legacy compatibility alias for segmented go-live bootstrap on an active session.',
     similes: ['STREAM555_SEGMENTS_START'],
     validate: async (runtime) => Boolean(getService(runtime)),
     handler: async (runtime, _message, _state, options, callback) => {
         try {
             const service = validateService(runtime);
             const sessionId = await ensureSessionId(service, optionString(options, 'sessionId'));
-            const inputType = optionString(options, 'inputType') || optionString(options, 'type') || 'screen';
-            const inputUrl = optionString(options, 'inputUrl') || optionString(options, 'url');
-            const result = await service.startStream({ type: inputType, ...(inputUrl ? { url: inputUrl } : {}) }, undefined, undefined, sessionId);
-            sendCallback(callback, true, `Segment go-live started for session ${sessionId}.`, { ...result, segmentsEnabled: true });
+            const baseUrl = resolveBaseUrl(service, options);
+            const headers = await resolveBearerHeaders(service, options);
+            const segmentCount = optionNumber(options, 'segmentCount');
+            const avgSegmentDurationMs = optionNumber(options, 'avgSegmentDurationMs');
+            const segmentTypes = parseCsvList(optionString(options, 'segmentTypes'));
+            const topicHints = parseCsvList(optionString(options, 'topicHints'));
+            const optionsPayload = {
+                ...(optionString(options, 'segmentIntent')
+                    ? { segmentIntent: optionString(options, 'segmentIntent') }
+                    : {}),
+                ...(segmentTypes ? { segmentTypes } : {}),
+                ...(topicHints ? { topicHints } : {}),
+                ...(optionString(options, 'theme') ? { theme: optionString(options, 'theme') } : {}),
+                ...(typeof segmentCount === 'number' ? { segmentCount: Math.floor(segmentCount) } : {}),
+                ...(typeof avgSegmentDurationMs === 'number'
+                    ? { avgSegmentDurationMs: Math.floor(avgSegmentDurationMs) }
+                    : {}),
+                ...(optionBoolean(options, 'autoStop') !== undefined
+                    ? { autoStop: optionBoolean(options, 'autoStop') }
+                    : {}),
+            };
+            const response = await requestJson('POST', baseUrl, '/api/agent/v1/go-live/segments', headers, {
+                sessionId,
+                options: optionsPayload,
+            });
+            if (!response.ok) {
+                const detail = getErrorDetail(response);
+                if (response.status === 409 && isAlreadyActiveDetail(detail)) {
+                    sendCallback(callback, true, 'Segment orchestration already active.', {
+                        sessionId,
+                        alreadyActive: true,
+                        ...(response.data ?? {}),
+                    });
+                    return true;
+                }
+                throw new Error(`segment bootstrap failed (${response.status}): ${detail}`);
+            }
+            sendCallback(callback, true, `Segment go-live bootstrapped for session ${sessionId}.`, { sessionId, ...(response.data ?? {}), segmentsEnabled: true });
             return true;
         }
         catch (error) {
@@ -428,6 +672,16 @@ const goLiveSegmentsAction = {
         }
     },
     examples: [],
+    parameters: [
+        { name: 'sessionId', description: 'Optional session id', required: false, schema: { type: 'string' } },
+        { name: 'segmentIntent', description: 'balanced|news|reaction|gaming|qa|analysis', required: false, schema: { type: 'string' } },
+        { name: 'segmentTypes', description: 'Comma-separated segment type list', required: false, schema: { type: 'string' } },
+        { name: 'topicHints', description: 'Comma-separated topic hints', required: false, schema: { type: 'string' } },
+        { name: 'theme', description: 'Optional segment theme override', required: false, schema: { type: 'string' } },
+        { name: 'segmentCount', description: 'Optional segment count', required: false, schema: { type: 'number' } },
+        { name: 'avgSegmentDurationMs', description: 'Optional segment duration per segment (ms)', required: false, schema: { type: 'number' } },
+        { name: 'autoStop', description: 'Stop orchestration automatically when complete', required: false, schema: { type: 'boolean' } },
+    ],
 };
 const screenShareAction = {
     name: 'STREAM555_SCREEN_SHARE',
@@ -478,46 +732,12 @@ const destinationsApplyAction = {
         try {
             const service = validateService(runtime);
             const sessionId = await ensureSessionId(service, optionString(options, 'sessionId'));
-            const applied = [];
-            const skipped = [];
-            const failed = [];
-            for (const mapping of DESTINATION_MAPPINGS) {
-                const enabled = optionBoolean(options, mapping.enabledEnv) ??
-                    parseBooleanValue(trimEnv(mapping.enabledEnv)) ??
-                    false;
-                const rtmpUrl = optionString(options, mapping.rtmpUrlEnv) ?? trimEnv(mapping.rtmpUrlEnv);
-                const streamKey = optionString(options, mapping.streamKeyEnv) ?? trimEnv(mapping.streamKeyEnv);
-                const hasConfig = Boolean(rtmpUrl?.trim()) || Boolean(streamKey?.trim()) || enabled;
-                if (!hasConfig) {
-                    skipped.push({
-                        platformId: mapping.platformId,
-                        reason: 'no_configuration',
-                    });
-                    continue;
-                }
-                try {
-                    await service.updatePlatform(mapping.platformId, {
-                        ...(rtmpUrl ? { rtmpUrl } : {}),
-                        ...(streamKey ? { streamKey } : {}),
-                        enabled,
-                    }, sessionId);
-                    applied.push({
-                        platformId: mapping.platformId,
-                        enabled,
-                        configured: Boolean(streamKey?.trim()),
-                    });
-                }
-                catch (error) {
-                    failed.push({
-                        platformId: mapping.platformId,
-                        error: error.message,
-                    });
-                }
-            }
-            const success = failed.length === 0;
+            const requestedPlatforms = parseCsvList(optionString(options, 'platforms'));
+            const result = await applyConfiguredDestinations(service, sessionId, options, requestedPlatforms);
+            const success = result.failed.length === 0;
             sendCallback(callback, success, success
-                ? `Destinations applied (${applied.length} updated, ${skipped.length} skipped).`
-                : `Destination apply completed with ${failed.length} failures.`, { sessionId, applied, skipped, failed });
+                ? `Destinations applied (${result.applied.length} updated, ${result.skipped.length} skipped).`
+                : `Destination apply completed with ${result.failed.length} failures.`, { sessionId, ...result });
             return success;
         }
         catch (error) {
@@ -526,6 +746,10 @@ const destinationsApplyAction = {
         }
     },
     examples: [],
+    parameters: [
+        { name: 'sessionId', description: 'Optional session id', required: false, schema: { type: 'string' } },
+        { name: 'platforms', description: 'Optional comma-separated platform subset', required: false, schema: { type: 'string' } },
+    ],
 };
 function buildGenericAdPayload(options) {
     return {

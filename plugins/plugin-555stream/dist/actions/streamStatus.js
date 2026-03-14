@@ -4,6 +4,20 @@
  * Get current stream status.
  * Does not require approval.
  */
+function resolveStatusSessionId(service, options) {
+    const requestedSessionId = typeof options?.sessionId === 'string' && options.sessionId.trim().length > 0
+        ? options.sessionId.trim()
+        : undefined;
+    if (requestedSessionId)
+        return requestedSessionId;
+    const boundSessionId = service.getBoundSessionId();
+    if (boundSessionId)
+        return boundSessionId;
+    const configuredSessionId = service.getConfig()?.defaultSessionId?.trim();
+    if (configuredSessionId)
+        return configuredSessionId;
+    throw new Error('No session bound. Provide sessionId or start a stream first.');
+}
 export const streamStatusAction = {
     name: 'STREAM555_STREAM_STATUS',
     description: 'Get current stream status including active state, job info, platform statuses, and statistics.',
@@ -15,7 +29,7 @@ export const streamStatusAction = {
     ],
     validate: async (runtime, _message, _state) => {
         const service = runtime.getService('stream555');
-        return !!(service?.isReady());
+        return !!service;
     },
     handler: async (runtime, message, _state, options, callback) => {
         try {
@@ -29,7 +43,8 @@ export const streamStatusAction = {
                 }
                 return false;
             }
-            const status = await service.getStreamStatus();
+            const sessionId = resolveStatusSessionId(service, options);
+            const status = await service.getStreamStatus(sessionId);
             const response = formatStatusResponse(status);
             if (callback) {
                 callback({
@@ -91,6 +106,14 @@ export const streamStatusAction = {
             },
         ],
     ],
+    parameters: [
+        {
+            name: 'sessionId',
+            description: 'Optional session id override for the status lookup.',
+            required: false,
+            schema: { type: 'string' },
+        },
+    ],
 };
 function formatStatusResponse(status) {
     const lines = [];
@@ -104,6 +127,9 @@ function formatStatusResponse(status) {
         }
         if (status.cfSessionId) {
             lines.push(`**CF Session:** \`${status.cfSessionId}\``);
+        }
+        if (status.cloudflare?.isConnected !== undefined) {
+            lines.push(`**Cloudflare:** ${status.cloudflare.isConnected ? 'connected' : 'disconnected'}${status.cloudflare.state ? ` (${status.cloudflare.state})` : ''}`);
         }
         if (status.serverFallbackActive) {
             lines.push('**Fallback:** Server-side capture active');
